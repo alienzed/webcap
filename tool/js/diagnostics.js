@@ -12,9 +12,89 @@ var diagnosticsAssessmentRuntime = 'local';
 var diagnosticsAssessmentPreviewKey = '';
 var diagnosticsAssessmentPreviewVersion = 0;
 var diagnosticsAssessmentPlanTotal = null;
+var diagnosticsAssessmentLastMetricsRefresh = 0;
+var diagnosticsAssessmentMetricsRequest = null;
 
 function diagnosticsEl(id) {
   return document.getElementById(id);
+}
+
+
+// Measurements describe actual throughput, independent of whether model output
+// passed validation. Never merge the two roles or imported/local host speeds.
+function diagnosticsAssessmentMeasurement(runs, ref, visionRole) {
+  var localNative = [], localEffective = [], importedNative = [], importedEffective = [];
+  (runs || []).forEach(function (run) {
+    var probes = (run.models || {})[ref] || {};
+    Object.keys(probes).forEach(function (kind) {
+      var isVision = kind === 'vision_open' || kind === 'vision_group_aware' ||
+        kind.indexOf('vision:') === 0;
+      if (isVision !== visionRole || kind === 'vision_model_error') return;
+      var probe = probes[kind], imported = !!run.importedFrom;
+      (probe.generationSpeedSamples || []).forEach(function (rate) {
+        if (Number(rate) > 0) (imported ? importedNative : localNative).push(Number(rate));
+      });
+      (probe.throughputSamples || []).forEach(function (rate) {
+        if (Number(rate) > 0) (imported ? importedEffective : localEffective).push(Number(rate));
+      });
+    });
+  });
+  var samples = localNative.length ? localNative : localEffective.length ? localEffective :
+    importedNative.length ? importedNative : importedEffective;
+  if (!samples.length) return null;
+  samples.sort(function(a,b){return a-b;});
+  var mid = Math.floor(samples.length/2);
+  var rate = samples.length%2 ? samples[mid] : (samples[mid-1]+samples[mid])/2;
+  return {rate:rate, imported:!localNative.length&&!localEffective.length,
+    native:!!(localNative.length||(!localEffective.length&&importedNative.length)),
+    count:samples.length};
+}
+
+function diagnosticsAssessmentApplyMeasurements(row, runs) {
+  var ref=row.dataset.assessmentModel;
+  var role=row.dataset.assessmentRole;
+  [['director',false],['vision',true]].forEach(function (item) {
+    var cell=row.querySelector('[data-assessment-' + item[0] + '-speed]');
+    var supported=role===item[0]||role==='both';
+    var value=supported ? diagnosticsAssessmentMeasurement(runs,ref,item[1]) : null;
+    cell.textContent=value ? (value.native?'':'≈')+value.rate.toFixed(1)+(value.imported?'*':'') : '—';
+    cell.title=value
+      ? (value.native?'Native generation':'Effective including overhead')+
+        ' tok/s · median of '+value.count+' recorded observations · '+
+        (value.imported?'imported source hardware (not comparable locally)':'this machine')+
+        ' · independent of validation outcome'
+      : (supported?'No measured throughput available for this role.':'Model does not have this role.');
+    row.assessmentSort[item[0]+'Speed']=value&& !value.imported ? value.rate : null;
+  });
+  var output=0;
+  (runs||[]).forEach(function(run){
+    var probes=(run.models||{})[ref]||{};
+    Object.keys(probes).forEach(function(kind){
+      if(kind.indexOf('director_scene_plan_')===0 &&
+         run.protocol==='webcap-model-assessment-structured-v2' &&
+         Number((probes[kind].counts||{}).completed||0)>0)
+        output=Math.max(output,Number(probes[kind].verifiedOutputTokens||0));
+    });
+  });
+  var outputCell=row.querySelector('[data-assessment-output]');
+  outputCell.textContent=output>0?output.toLocaleString():'—';
+  outputCell.title='Largest verified visible Storyboard JSON completion (not an output/context limit). Earlier unverified output remains in probe history.';
+  row.assessmentSort.output=output||null;
+}
+
+function diagnosticsAssessmentRefreshLiveMetrics(run) {
+  if(!run || run.status!=='running' || diagnosticsActiveTab!=='assessment' ||
+     diagnosticsEl('diagnostics-modal').classList.contains('hidden') ||
+     diagnosticsAssessmentMetricsRequest || Date.now()-diagnosticsAssessmentLastMetricsRefresh<6500) return;
+  diagnosticsAssessmentLastMetricsRefresh=Date.now();
+  var id=run.id;
+  diagnosticsAssessmentMetricsRequest=modelLabRequest('/app/model-lab?summary=1').then(function(payload){
+    if(diagnosticsAssessmentRunId!==id || diagnosticsActiveTab!=='assessment')return;
+    diagnosticsEl('diagnostics-assessment-results').querySelectorAll('tbody[data-assessment-model]')
+      .forEach(function(row){diagnosticsAssessmentApplyMeasurements(row,payload.capabilityRuns||[]);});
+    diagnosticsAssessmentSortAndFilter();
+  }).catch(function(error){reportConsoleError('Model Assessment measurements',error);})
+    .finally(function(){diagnosticsAssessmentMetricsRequest=null;});
 }
 
 function diagnosticsAssessmentCounts(row, tests) {
@@ -140,6 +220,7 @@ function diagnosticsRenderAssessmentProgress(run) {
   var wasRunning = diagnosticsAssessmentRunStatus === 'running';
   diagnosticsAssessmentRunStatus = String(run.status);
   diagnosticsEl('diagnostics-assessment-run').disabled = run.status === 'running' || !diagnosticsAssessmentPlanTotal;
+  diagnosticsAssessmentRefreshLiveMetrics(run);
   if (run.status !== 'running' && diagnosticsAssessmentStoppingId === String(run.id)) diagnosticsAssessmentStoppingId = '';
   var stop = diagnosticsEl('diagnostics-assessment-stop');
   stop.classList.toggle('hidden', run.status !== 'running');
@@ -255,7 +336,8 @@ function refreshUnifiedModelAssessment() {
     var head = document.createElement('thead');
     var header = document.createElement('tr');
     [{key: '', name: 'Select'}, {key: 'model', name: 'Model'},
-      {key: 'output', name: 'Valid output'}, {key: 'speed', name: 'tok/s'},
+      {key: 'directorSpeed', name: 'Director tok/s'}, {key: 'visionSpeed', name: 'Vision tok/s'},
+      {key: 'output', name: 'Valid output'},
       {key: 'result', name: 'Assessment'}].forEach(function (column) {
       var th = document.createElement('th');
       th.scope = 'col';
@@ -308,7 +390,7 @@ function refreshUnifiedModelAssessment() {
       var runtimeModel = (kind === 'director' ? directors : vision).find(function (model) { return String(model.id || model.modelRef || '') === ref; }) || {};
       row.dataset.assessmentRuntime = String(runtimeModel.runtimeId || '').toLowerCase() === 'local' || ref.startsWith('local::') ? 'local' : 'remote';
       row.dataset.assessmentSearch = (title + ' ' + ref + ' ' + (supportsDirector ? 'director ' : '') + (supportsVision ? 'vision ' : '')).toLowerCase();
-      row.assessmentSort = { model: title.toLowerCase(), role: kind, size: null, thinking: null, speed: null, output: null, quality: null, result: 1, tested: null };
+      row.assessmentSort = { model: title.toLowerCase(), role: kind, size: null, thinking: null, directorSpeed: null, visionSpeed: null, output: null, quality: null, result: 1, tested: null };
       row.assessmentReport = report;
       var line = document.createElement('tr');
       var selection = document.createElement('td');
@@ -361,13 +443,14 @@ function refreshUnifiedModelAssessment() {
       var qualification = cell('Qualified for', '', 'qualification');
       qualification.className = 'model-assessment-qualifications';
       var thinkingLabel = supportsDirector ? 'Not verified' : 'N/A';
-      var speedCell = cell('Speed', '—', 'speed');
-      speedCell.title = 'Runtime-reported generation throughput when available; different probes and runtimes may not be directly comparable.';
+      var directorSpeed = cell('Director speed', '—', 'director-speed');
+      var visionSpeed = cell('Vision speed', '—', 'vision-speed');
       var outputCell = cell('Output', '—', 'output');
       outputCell.title = 'Largest observed completion, potentially including reasoning tokens; not a verified limit.';
       // Put headline metrics before assessment; secondary fields are details-only.
+      line.insertBefore(directorSpeed, qualification);
+      line.insertBefore(visionSpeed, qualification);
       line.insertBefore(outputCell, qualification);
-      line.insertBefore(speedCell, qualification);
       var qualityLabel = 'Not judged';
       var qualityReason = '';
       var evidence = capabilityRuns.filter(function (run) {
@@ -425,35 +508,13 @@ function refreshUnifiedModelAssessment() {
         qualification.appendChild(qualityBadge);
       }
 
-      var allTests = Object.keys(tests).map(function (probe) { return tests[probe]; });
-      var structuredTests = Object.keys(tests).filter(function (kind) { return kind.indexOf('director_scene_plan_') === 0 && Number((tests[kind].counts || {}).completed || 0) > 0; }).map(function (kind) { return tests[kind]; });
-      var speedTests = (supportsDirector ? structuredTests : allTests).filter(function (item) {
-        return !item._imported;
-      });
-      var nativeRates = speedTests.flatMap(function (entry) { return entry.generationSpeedSamples || []; }).filter(function (v) { return Number(v) > 0; });
-      var rates = nativeRates.length ? nativeRates : speedTests.flatMap(function (entry) { return entry.throughputSamples || []; })
-        .filter(function (value) { return Number(value) > 0; });
-      var outputs = structuredTests.map(function (entry) { return Number(entry.verifiedOutputTokens || 0); }).filter(function (v) { return v > 0; });
-      // Historical prose benchmark speeds are not mixed into current structured results.
-      if (rates.length) {
-        var rate = rates.reduce(function (a, b) { return a + Number(b); }, 0) / rates.length;
-        speedCell.textContent = rate.toFixed(1);
-        speedCell.title = nativeRates.length ? 'Runtime-reported generation tokens/s; compare on the same runtime/hardware.'
-          : 'Effective throughput includes processing/loading overhead; not directly comparable to generation tokens/s.';
-        row.assessmentSort.speed = rate;
-      }
-      var maxOutput = outputs.length ? Math.max.apply(null, outputs.map(Number)) : 0;
-      if (maxOutput > 0) {
-        outputCell.textContent = maxOutput.toLocaleString();
-        outputCell.title = 'Observed completion tokens in a complete, validated Storyboard JSON response; not a proven hardware or model ceiling.';
-        row.assessmentSort.output = maxOutput;
-      }
+      diagnosticsAssessmentApplyMeasurements(row, capabilityRuns);
 
       var expanded = document.createElement('tr');
       expanded.className = 'model-assessment-evidence';
       expanded.hidden = !diagnosticsAssessmentExpanded.has(key);
       var panel = document.createElement('td');
-      panel.colSpan = 5;
+      panel.colSpan = 6;
       var metadata = document.createElement('div');
       metadata.textContent = 'Role: ' + roleLabel + ' · Size: ' + sizeLabel +
         ' · Thinking: ' + thinkingLabel + ' · Last tested: ' + testedLabel +
@@ -655,6 +716,7 @@ function diagnosticsAssessmentConfig() {
   var visionRefs = diagnosticsAssessmentSelected.vision;
   if (!directorRefs.size && !visionRefs.size) throw new Error('Choose at least one model.');
   var deep = diagnosticsEl('diagnostics-assessment-deep').checked;
+  var judgeRef = String(diagnosticsEl('diagnostics-assessment-judge-model').value || '').trim();
 
   var catalog = diagnosticsAssessmentCatalog;
   var visions = (catalog.visions || []).filter(function (model) { return visionRefs.has(String(model.modelRef || '')); });
@@ -666,10 +728,12 @@ function diagnosticsAssessmentConfig() {
   var files = modelLabCurrentFiles();
   var canLab = !!sourceFolder && files.length >= 2;
   if (visions.length && !canLab) throw new Error('Open a Set with at least two media items to assess Vision models. Director assessment needs no Set.');
+  if (deep && directors.length && !judgeRef) throw new Error('Choose an LLM judge to automatically review Deep Director results.');
   return {
     folder: sourceFolder, files: files, groups: modelLabGroups(),
     depth: deep ? 'deep' : 'quick', sampleCount: deep ? 16 : 8,
-    visionModels: visions, directorModels: directors
+    visionModels: visions, directorModels: directors,
+    judgeModelRef: deep && directors.length ? judgeRef : ''
   };
 }
 
@@ -1200,6 +1264,7 @@ function wireDiagnosticsUi() {
     refreshUnifiedModelAssessment().catch(function () {});
   };
   diagnosticsEl('diagnostics-assessment-deep').onchange = diagnosticsRefreshSelectionPlan;
+  diagnosticsEl('diagnostics-assessment-judge-model').onchange = diagnosticsRefreshSelectionPlan;
   diagnosticsEl('diagnostics-assessment-stop').onclick = stopUnifiedModelAssessment;
   diagnosticsEl('diagnostics-assessment-export').onclick = exportAssessmentResults;
   diagnosticsEl('diagnostics-assessment-import').onclick = function () { diagnosticsEl('diagnostics-assessment-file').click(); };

@@ -998,7 +998,7 @@ def test_manual_rounds_use_one_worker_and_advance_after_submission(tmp_path, mon
     monkeypatch.setattr(workflow_gate, "wait_for_epoch", lambda *_: True)
     monkeypatch.setattr(workflow_gate, "release", lambda *_: None)
     submitted = []
-    def fake_render(folder_key, worker, plan, unit, _stage, enqueue_only=False, stop_queuing=None):
+    def fake_render(folder_key, worker, plan, unit, _stage, enqueue_only=False, stop_queuing=None, skip_queuing=None):
         if enqueue_only:
             return
         if plan["number"] == 1 and not submitted:
@@ -1062,7 +1062,7 @@ def test_stopping_one_manual_round_preserves_and_runs_queued_next(tmp_path, monk
     monkeypatch.setattr(workflow_gate, "release", lambda *_: None)
 
     requested = []
-    def fake_render(folder_key, worker, plan, unit, _stage, enqueue_only=False, stop_queuing=None):
+    def fake_render(folder_key, worker, plan, unit, _stage, enqueue_only=False, stop_queuing=None, skip_queuing=None):
         if enqueue_only:
             return
         if plan["number"] == 1 and not requested:

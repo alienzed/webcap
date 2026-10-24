@@ -6,6 +6,17 @@ on:
       - 'tool/js/lora_library_ui.js'
       - 'tool/css/lora_library.css'
       - 'tests/lora_library_ui.test.cjs'
+      - 'tool/js/set_scan.js'
+      - 'tool/js/primer_settings.js'
+      - 'tool/server/vision_schema_assist.py'
+      - 'tool/server/media.py'
+      - 'tool/server/caption_ops.py'
+      - 'tool/css/modals.css'
+      - 'tests/test_vision_schema_assist.py'
+      - 'tests/test_vision_schema_route.py'
+      - 'tests/test_set_scan_ui_contract.py'
+      - 'tests/test_caption_atomic.py'
+      - 'tests/test_caption_assist_reuse_contract.py'
       - 'tool/js/qa_workbench.js'
       - 'tool/js/qa_curation.js'
       - 'tool/server/qa_curation.py'
@@ -81,6 +92,8 @@ jobs:
           node --check tool/js/workspace_shell.js
           node --check tool/js/set_vl_clone.js
           node --check tool/js/media_context_actions.js
+          node --check tool/js/set_scan.js
+          node --check tool/js/primer_settings.js
       - name: Install DOM test dependency
         run: npm install --no-save --no-package-lock jsdom
       - name: Evaluation DOM ownership and navigation smoke
@@ -110,6 +123,9 @@ jobs:
         run: |
           python -m compileall -q tool/server/qa_curation.py tool/server/llm_runner.py
           python -m pytest -q tests/test_qa_curation.py
+      - name: Sight per-model and Caption Assist safe-discovery regression
+        run: |
+          python -m pytest -q tests/test_vision_schema_assist.py tests/test_vision_schema_route.py tests/test_set_scan_ui_contract.py tests/test_caption_atomic.py tests/test_caption_assist_reuse_contract.py
       - name: Set VL clone focused Python regression
         run: python -m pytest -q tests/test_set_vl_clone.py
       - name: Recovered Evaluate All behavior

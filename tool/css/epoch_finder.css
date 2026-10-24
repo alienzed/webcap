@@ -6,7 +6,7 @@
 .epoch-finder-screen.hidden{display:none}
 .epoch-finder-intro,.epoch-finder-heading,.epoch-finder-panel-heading{display:flex;align-items:center;justify-content:space-between;gap:14px}
 .epoch-finder-intro{margin-bottom:18px}
-.epoch-finder-eyebrow{font-size:11px;text-transform:uppercase;letter-spacing:.1em;opacity:.7;font-weight:750}
+.epoch-finder-eyebrow{font-size:12px;text-transform:uppercase;letter-spacing:.06em;opacity:.85;font-weight:750;border:1px solid var(--border-color,#384653);border-radius:5px;padding:3px 7px;white-space:nowrap}
 .epoch-finder-intro h2{margin:5px 0;font-size:23px;font-weight:750}
 .epoch-finder-intro p,.epoch-finder-muted{opacity:.72;font-size:12px;margin:6px 0;line-height:1.45}
 .epoch-finder-layout{display:grid;grid-template-columns:minmax(260px,325px) minmax(0,1fr);gap:18px;align-items:start}
@@ -27,18 +27,30 @@
 .epoch-finder-campaign small{display:block;opacity:.7;margin-top:4px}
 .epoch-finder-empty{padding:50px 24px;text-align:center}
 .epoch-finder-empty strong{font-size:18px}
-.epoch-finder-heading{margin:6px 0 15px}
-.epoch-finder-heading h3{font-size:21px;margin:5px 0}
-.epoch-finder-actions{display:flex;gap:6px}
+.epoch-finder-heading{margin:2px 0 9px;min-width:0}
+.epoch-finder-heading h3{font-size:22px;margin:0;line-height:1.25;overflow-wrap:anywhere}
+.epoch-finder-actions{display:flex;align-items:center;flex:0 0 auto;gap:6px}
 .epoch-finder-timeline{padding:13px;display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:9px;margin-bottom:13px}
 .epoch-finder-step{border-radius:7px;padding:10px;border:1px solid var(--border-color,#3c4d60)}
 .epoch-finder-step.current{border-color:var(--accent-color,#78a5d4);background:var(--background-secondary,#2a3c4d)}
 .epoch-finder-step.done{opacity:.8}
 .epoch-finder-step strong,.epoch-finder-step small{display:block}
 .epoch-finder-step small{font-size:11px;opacity:.7;margin-top:4px}
-.epoch-finder-metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:15px;padding:16px;margin-bottom:21px}
-.epoch-finder-metrics span{display:block;opacity:.7;font-size:11px}
-.epoch-finder-metrics strong{display:block;font-size:22px;margin:4px 0}
+.epoch-finder-metrics{display:flex;flex-wrap:wrap;align-items:center;gap:8px 20px;padding:9px 14px;margin-bottom:14px;min-height:0}
+.epoch-finder-metrics span{display:inline;opacity:.75;font-size:14px}
+.epoch-finder-metrics strong{display:inline;font-size:17px;margin:0;font-variant-numeric:tabular-nums;white-space:nowrap}
+.epoch-finder-title{display:flex;align-items:center;flex-wrap:wrap;gap:7px 12px;min-width:0}
+.epoch-finder-title h3{min-width:0}
+.epoch-finder-metrics>div{display:flex;align-items:center;gap:7px;min-width:0;flex:0 0 auto}
+.epoch-finder-metrics>.epoch-finder-muted{flex:0 1 auto;min-width:0;max-width:min(44ch,35%);margin:0 4px 0 0;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.epoch-finder-metrics>.epoch-finder-frames-metric{flex:1 1 240px;min-width:170px}
+.epoch-finder-metrics>.epoch-finder-vl-metric{flex:1 1 170px;min-width:145px}
+.epoch-finder-frames-metric>.epoch-finder-track,.epoch-finder-vl-metric>.epoch-finder-track{flex:1 1 90px;min-width:55px}
+.epoch-finder-metrics>.epoch-finder-field-metric{margin-left:auto}
+.epoch-finder-metrics>#epoch-finder-rvn-progress{flex-wrap:wrap}
+.epoch-finder-metrics>#epoch-finder-rvn-progress .epoch-finder-error:not(.hidden){flex-basis:100%;font-size:13px}
+.epoch-finder-metrics>.hidden,.epoch-finder-metrics.hidden{display:none}
+@media(max-width:850px){.epoch-finder-metrics>.epoch-finder-muted{max-width:none;flex:1 1 100%}.epoch-finder-metrics>.epoch-finder-field-metric{margin-left:0}}
 .epoch-finder-track{height:5px;background:var(--background-secondary,#344251);border-radius:5px;overflow:hidden}
 .epoch-finder-track i{display:block;height:100%;width:0;background:var(--accent-color,#78a5d4);transition:width .35s}
 .epoch-finder-panel-heading{margin:13px 0 8px}

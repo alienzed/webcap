@@ -29,6 +29,20 @@ _EPOCH_CONFIG_PATTERN = re.compile(r"^\s*epochs\s*=\s*(\d+)\s*(?:#.*)?$", re.MUL
 _DATASET_CONFIG_PATTERN = re.compile(r"^\s*dataset\s*=\s*[\"']([^\"']+)[\"']\s*(?:#.*)?$", re.MULTILINE)
 
 
+def _h3_uses_image_adapter(parsed_config):
+    """Recognize the saved H3 model variant from the checkpoint's captured config."""
+    model = parsed_config.get("model") if isinstance(parsed_config.get("model"), dict) else {}
+    source = Path(str(model.get("diffusion_model") or "").replace("\\", "/")).name
+    fused = Path(h3_premerged_image_model_path().replace("\\", "/")).name
+    merged = model.get("merge_adapters")
+    return source == fused or (
+        isinstance(merged, list) and any(
+            Path(str(item).replace("\\", "/")).name == "minimax_h3_image_training_adapter.safetensors"
+            for item in merged
+        )
+    )
+
+
 def run_summary_from_capture(record_path, stage, captured_items=0):
     """Return a compact summary of the captured config actually used by a run."""
     root = Path(str(record_path or "").strip())
@@ -46,16 +60,7 @@ def run_summary_from_capture(record_path, stage, captured_items=0):
         summary["epochs"] = epochs
     model = parsed.get("model") if isinstance(parsed.get("model"), dict) else {}
     if selected_stage == "h3":
-        model_source = Path(str(model.get("diffusion_model") or "").replace("\\", "/")).name
-        merged_source = Path(h3_premerged_image_model_path().replace("\\", "/")).name
-        merged_adapters = model.get("merge_adapters")
-        has_image_adapter = isinstance(merged_adapters, list) and any(
-            Path(str(adapter).replace("\\", "/")).name == "minimax_h3_image_training_adapter.safetensors"
-            for adapter in merged_adapters
-        )
-        summary["trainingVariant"] = "Image Adapter" if (
-            model_source == merged_source or has_image_adapter
-        ) else "Standard"
+        summary["trainingVariant"] = "Image Adapter" if _h3_uses_image_adapter(parsed) else "Standard"
     shift = model.get("shift")
     if isinstance(shift, (int, float)):
         summary["shift"] = shift
@@ -397,6 +402,7 @@ def discover_runs(folder_path, stage=""):
                     "candidateFor": stage, "modelLabel": config_meta["label"],
                     "matchType": "exact" if saved_hash == source_hash else "compatible",
                     "configHash": saved_hash, "modifiedAt": modified,
+                    "imageTrainingAdapter": _h3_uses_image_adapter(parsed_saved) if stage == "h3" else None,
                     "checkpointAvailable": True, "checkpointName": "latest", "checkpointTag": checkpoint_tag,
                     "resumePoints": _previous_resume_points(entry, checkpoint_tag),
                     "completed": completed, "epoch": highest_epoch or None, "steps": highest_step or None,
@@ -466,6 +472,7 @@ def validate_resumable_run_for_path(folder_path, stage, run_path, reference_conf
     return {"path": raw_path, "runPath": raw_path, "stage": stage,
             "matchType": "exact" if config_sha256(saved_config) == config_sha256(source_config) else "compatible",
             "modelSource": parsed_saved["model"].get("diffusion_model", ""),
+            "imageTrainingAdapter": _h3_uses_image_adapter(parsed_saved) if stage == "h3" else None,
             **point}
 
 

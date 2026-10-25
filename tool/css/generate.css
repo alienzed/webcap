@@ -1329,3 +1329,12 @@
 .test-evaluate-menu button { display: block; width: 100%; padding: 8px 10px; border: 0; border-radius: 3px; background: transparent; color: inherit; text-align: left; cursor: pointer; }
 .test-evaluate-menu button:hover, .test-evaluate-menu button:focus-visible { background: var(--hover); }
 #test-generations-vl-progress { white-space: nowrap; }
+
+/* One form, two explicit editor configurations; no duplicate or floating UI. */
+.generate-editor-toolbar {display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;margin:0 6px 12px}
+.generate-editor-tabs {display:flex;min-width:0;border:1px solid var(--border);border-radius:8px;padding:3px;background:var(--bg);gap:3px}
+.generate-editor-tabs button {font:inherit;font-size:15px;min-height:36px;padding:6px 12px;border:0;border-radius:6px;background:transparent;color:var(--muted);cursor:pointer}
+.generate-editor-tabs button.active {background:var(--accent);color:var(--bg);font-weight:700}
+.generate-editor-tabs button:disabled {opacity:.4;cursor:default}
+#generate-editor-use-working {min-height:36px;font-size:14px;white-space:nowrap}
+.generate-editor-loaded-caption {margin:0 6px 12px;color:var(--muted);font-size:13px;line-height:1.4;overflow-wrap:anywhere}

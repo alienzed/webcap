@@ -1,6 +1,6 @@
 import unittest
 
-from tool.server.storyboard_workshop import timed_shot_bounds, proposed_shot_prompt
+from tool.server.storyboard_workshop import timed_shot_bounds, proposed_shot_prompt, workshop_context_sections
 
 
 PROMPT = (
@@ -28,9 +28,30 @@ class WorkshopShotTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "one unambiguous"):
             timed_shot_bounds(PROMPT + "\nintegrated_multimodal_description:\n")
 
-    def test_rejects_missing_closing_heading(self):
-        with self.assertRaisesRegex(ValueError, "following"):
-            timed_shot_bounds("integrated_multimodal_description:\n[Shot 1]\nTest")
+    def test_shots_can_end_the_prompt_without_audio_sections(self):
+        prompt = "Subject:\nPerson\n\nintegrated_multimodal_description:\n[Shot 1]\nTest\n"
+        start, end = timed_shot_bounds(prompt)
+        self.assertEqual(prompt[start:end], "[Shot 1]\nTest")
+        self.assertEqual(
+            proposed_shot_prompt(prompt, "[Shot 1]\nChanged"),
+            "Subject:\nPerson\n\nintegrated_multimodal_description:\n[Shot 1]\nChanged\n",
+        )
+
+    def test_section_order_and_optional_context(self):
+        prompt = (
+            "overall_soundscape:\nWind\n\n"
+            "integrated_multimodal_description:\n[Shot 1]\nWalks.\n\n"
+            "Subject:\nPerson\n\nStyle / Visual Treatment:\nMoody\n"
+        )
+        start, end = timed_shot_bounds(prompt)
+        self.assertEqual(prompt[start:end], "[Shot 1]\nWalks.")
+        self.assertEqual(workshop_context_sections(prompt), {
+            "Soundscape": "Wind", "Subject": "Person", "Style / Visual Treatment": "Moody"
+        })
+        revised = proposed_shot_prompt(prompt, "[Shot 1]\nRuns.")
+        self.assertIn("Subject:\nPerson", revised)
+        self.assertIn("overall_soundscape:\nWind", revised)
+        self.assertIn("[Shot 1]\nRuns.", revised)
 
     def test_rejects_missing_numbered_shots(self):
         with self.assertRaisesRegex(ValueError, "numbered"):

@@ -6,7 +6,7 @@
     token: 0, phase: 'idle', folder: '', signature: '', rows: [], concepts: [],
     eligible: [], order: [], choices: new Set(), sizes: {}, preset: 'balanced',
     filter: 'selected', limit: 72, summary: '', jobId: '', error: '',
-    analysis: null, balanceGroups: new Set(), overriddenGroups: new Set(), availableGroups: [],
+    analysis: null, balanceGroups: new Set(), overriddenGroups: new Set(), conceptRoles: new Map(), availableGroups: [],
     status: '', missingSight: 0, ignored: 0
   };
 
@@ -110,7 +110,7 @@
     return 1 - Math.exp(-count / (role === 'core' ? 3 : 2));
   }
 
-  function deriveEligible(concepts, analysis, rows, balanceGroups, overriddenGroups) {
+  function deriveEligible(concepts, analysis, rows, balanceGroups, overriddenGroups, conceptRoles) {
     var core = new Set(analysis.coreIds);
     var supporting = new Set(analysis.supportingIds);
     var available = new Map(concepts.map(function (row) { return [row.id, row]; }));
@@ -118,8 +118,10 @@
     function include(id) {
       var row = available.get(id);
       if (!row) throw new Error('Curation result references unknown concept: ' + id);
-      var role = balanceGroups.has(row.group) && (core.has(id) || overriddenGroups.has(row.group))
-        ? 'core' : 'supporting';
+      var preference = conceptRoles.get(id);
+      if (preference === 'ignore') return;
+      var role = preference || (balanceGroups.has(row.group) && (core.has(id) || overriddenGroups.has(row.group))
+        ? 'core' : 'supporting');
       selected.set(id, {id: id, label: row.term, group: row.group, role: role,
         count: row.count, weight: row.source === 'sight'
           ? (role === 'core' ? 0.62 : 0.13)
@@ -134,7 +136,7 @@
     // Preserve the Director's per-concept defaults until the user changes a
     // group. A manually selected group can promote even omitted concepts.
     concepts.forEach(function (row) {
-      if (balanceGroups.has(row.group) && overriddenGroups.has(row.group)) include(row.id);
+      if ((balanceGroups.has(row.group) && overriddenGroups.has(row.group)) || conceptRoles.has(row.id)) include(row.id);
     });
     rows.forEach(function (row) {
       row.ids = row.inventoryIds.filter(function (id) { return selected.has(id); });
@@ -144,7 +146,7 @@
 
   function applyBalancePriorities() {
     session.eligible = deriveEligible(session.concepts, session.analysis, session.rows,
-      session.balanceGroups, session.overriddenGroups);
+      session.balanceGroups, session.overriddenGroups, session.conceptRoles);
     var ranked = rank(session.rows, session.eligible);
     session.order = ranked.order;
     session.sizes = ranked.sizes;
@@ -173,16 +175,18 @@
   }
 
   function score(row, concepts, byId, selected) {
-    var delta = 0;
+    var core = 0, supporting = 0;
     row.ids.forEach(function (id) {
       var c = byId.get(id);
       var n = selected.get(id) || 0;
-      delta += c.weight * (strength(n + 1, c.role) - strength(n, c.role));
+      var gain = c.weight * (strength(n + 1, c.role) - strength(n, c.role));
+      if (c.role === 'core') core += gain;
+      else supporting += gain;
     });
     var complexity = Number(row.analysis.sceneComplexity && row.analysis.sceneComplexity.score);
     var quality = Number.isFinite(complexity) && row.analysis.sceneComplexity
       ? 1 - Math.min(0.14, Math.max(0, complexity) * 0.14) : 1;
-    return delta * quality;
+    return {core: core * quality, supporting: supporting * quality};
   }
 
   function rank(rows, concepts) {
@@ -190,14 +194,19 @@
     var counts = new Map(concepts.map(function (feature) { return [feature.id, 0]; }));
     var remaining = rows.slice(), ordered = [], gains = [];
     while (remaining.length) {
-      var best = -1, bestScore = -Infinity;
+      var scores = remaining.map(function (row) { return score(row, concepts, byId, counts); });
+      var maxCore = scores.reduce(function (best, value) { return Math.max(best, value.core); }, 0);
+      var best = -1, bestGain = -Infinity;
       for (var i = 0; i < remaining.length; i += 1) {
-        var value = score(remaining[i], concepts, byId, counts);
-        if (value > bestScore) { bestScore = value; best = i; }
+        // Supporting variation can contribute at most 20% of the best available
+        // primary gain. Once core coverage is exhausted, supporting gains decide.
+        var gain = scores[i].core + (maxCore > 0
+          ? Math.min(scores[i].supporting, maxCore * 0.2) : scores[i].supporting);
+        if (gain > bestGain) { bestGain = gain; best = i; }
       }
       var chosen = remaining.splice(best, 1)[0];
       ordered.push(chosen.fileName);
-      gains.push(bestScore);
+      gains.push(bestGain);
       chosen.ids.forEach(function (id) { counts.set(id, counts.get(id) + 1); });
     }
     var selected = new Set(), ratios = [];
@@ -309,6 +318,9 @@
       toggle.setAttribute('aria-label', 'Prioritize balancing ' + group);
       toggle.onchange = function () {
         session.overriddenGroups.add(group);
+        session.concepts.filter(function (concept) { return concept.group === group; }).forEach(function (concept) {
+          session.conceptRoles.delete(concept.id);
+        });
         if (toggle.checked) session.balanceGroups.add(group);
         else session.balanceGroups.delete(group);
         applyBalancePriorities();
@@ -319,6 +331,36 @@
       groupChoices.appendChild(label);
     });
     priorities.appendChild(groupChoices);
+    var conceptDetails = element('details', 'qa-curation-concept-controls');
+    var conceptSummary = element('summary', '', 'Fine-tune concepts · Balance / Supporting / Ignore');
+    conceptDetails.appendChild(conceptSummary);
+    var conceptChoices = element('div', 'qa-curation-concept-choices');
+    var eligibleById = new Map(session.eligible.map(function (feature) { return [feature.id, feature]; }));
+    session.concepts.forEach(function (concept) {
+      var current = eligibleById.get(concept.id);
+      var control = element('label', 'qa-curation-concept-choice');
+      var name = element('span', '', concept.group + ' · ' + concept.term + ' (' + concept.count + ')');
+      var select = element('select');
+      [['core', 'Balance'], ['supporting', 'Supporting'], ['ignore', 'Ignore']].forEach(function (choice) {
+        var option = element('option', '', choice[1]);
+        option.value = choice[0];
+        select.appendChild(option);
+      });
+      select.value = current ? current.role : 'ignore';
+      select.setAttribute('aria-label', 'Priority for ' + concept.group + ': ' + concept.term);
+      select.onchange = function () {
+        session.conceptRoles.set(concept.id, select.value);
+        applyBalancePriorities();
+        renderQaCuration(host, session.signature);
+        var nextDetails = host.querySelector('.qa-curation-concept-controls');
+        if (nextDetails) nextDetails.open = true;
+      };
+      control.appendChild(name);
+      control.appendChild(select);
+      conceptChoices.appendChild(control);
+    });
+    conceptDetails.appendChild(conceptChoices);
+    priorities.appendChild(conceptDetails);
     if (session.preset === 'custom') priorities.appendChild(element('p', 'qa-curation-helper',
       'Manual image selections are preserved. Choose Lean, Balanced, or Broad to apply the new ranking.'));
     host.appendChild(priorities);
@@ -548,6 +590,7 @@
     session.analysis = null;
     session.balanceGroups = new Set();
     session.overriddenGroups = new Set();
+    session.conceptRoles = new Map();
     session.availableGroups = Array.from(new Set(session.concepts.map(function (c) { return c.group; }))).sort();
     session.missingSight = inventory.rows.filter(function (row) {return !row.analysis.visionSight;}).length;
     session.status = 'Step 1/3 · Indexed ' + items.length + ' images into ' + inventory.concepts.length + ' candidate concepts.';
@@ -595,6 +638,7 @@
         return core.has(c.id);
       }).map(function (c) { return c.group; }));
       session.overriddenGroups = new Set();
+      session.conceptRoles = new Map();
       session.preset = 'balanced';
       applyBalancePriorities();
       session.filter = 'selected';

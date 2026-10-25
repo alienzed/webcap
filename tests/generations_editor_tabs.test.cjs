@@ -233,3 +233,44 @@ test('generating from Loaded freezes its recipe even if reference upload overlap
   assert.equal(sent[0].references.first_frame,'submitted-ref.png');
   assert.equal(element('generate-prompt').value,'Changed Working prompt');
 });
+
+
+test('real pending Take click populates Loaded after frozen job fetch, leaving Working intact',async()=>{
+  const f=fixture(),{api,state,element,context}=f;
+  const begin=source.indexOf('  var pendingRestoreSelection = 0;');
+  const end=source.indexOf('  function startNewGeneration()',begin);
+  assert.ok(begin>0 && end>begin);
+  let resolveRequest;
+  context.requestJson=url=>{
+    assert.equal(url,'/fs/inference?job=pending&configuration=1');
+    return new Promise(resolve=>{resolveRequest=resolve;});
+  };
+  context.renderPendingStage=job=>{
+    state.activePendingJobId=job.jobId;
+    state.activeResultKey='';
+  };
+  context.renderActiveResult=result=>{
+    state.activePendingJobId='';
+    state.activeResultKey=result.jobId;
+  };
+  state.pendingJobsById={pending:{jobId:'pending',modelId:'h3',status:'running'}};
+  state.open=true;
+  vm.runInContext(source.slice(begin,end)+
+    '\nthis.selectPendingReal=selectPendingGeneration;',context);
+  const pending=context.selectPendingReal('pending');
+  assert.equal(state.editorMode,'working','request must not blank the active editor');
+  resolveRequest({job:{jobId:'pending',client:'generate',modelId:'h3',
+    generationConfiguration:{
+      sourcePrompt:'Pending captured prompt',
+      settings:{duration:4,seed:888,samplingMode:'quality',megapixels:.5},
+      loras:[{name:'pending.safetensors',strength:.7}],references:{}
+    }}});
+  await pending;
+  assert.equal(state.editorMode,'loaded');
+  assert.equal(element('generate-prompt').value,'Pending captured prompt');
+  assert.equal(element('generate-duration').value,'4');
+  assert.equal(state.lorasByModel.h3[0].name,'pending.safetensors');
+  api.switchGenerateEditorMode('working');
+  assert.equal(element('generate-prompt').value,'Working draft');
+  assert.equal(state.lorasByModel.h3[0].name,'work.safetensors');
+});

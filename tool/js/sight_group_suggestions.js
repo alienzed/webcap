@@ -112,6 +112,17 @@
         observations.push(String(quality || '') + ' ' + thing.name);
       });
     });
+    // Reuse other structured categories where the Group vocabulary itself
+    // provides an unambiguous anchor (e.g., Body terms in position evidence).
+    ['viewpoint', 'position', 'setting', 'background', 'lighting', 'surface'].forEach(function (field) {
+      (Array.isArray(inventory[field]) ? inventory[field] : []).forEach(function (value) {
+        observations.push(value);
+      });
+    });
+    (Array.isArray(inventory.colors) ? inventory.colors : []).forEach(function (color) {
+      if (!color || !color.thing || !color.color) return;
+      observations.push(String(color.color) + ' ' + String(color.thing));
+    });
     observations.forEach(function (value) {
       if (matchingTerm(value) || hasGroupAnchor(value)) add(value, 'inventory');
     });

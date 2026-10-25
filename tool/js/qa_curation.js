@@ -6,7 +6,7 @@
     token: 0, phase: 'idle', folder: '', signature: '', rows: [], concepts: [],
     eligible: [], order: [], choices: new Set(), sizes: {}, preset: 'balanced',
     filter: 'selected', limit: 72, summary: '', jobId: '', error: '',
-    analysis: null, balanceGroups: new Set(), availableGroups: [],
+    analysis: null, balanceGroups: new Set(), overriddenGroups: new Set(), availableGroups: [],
     status: '', missingSight: 0, ignored: 0
   };
 
@@ -110,7 +110,7 @@
     return 1 - Math.exp(-count / (role === 'core' ? 3 : 2));
   }
 
-  function deriveEligible(concepts, analysis, rows, balanceGroups) {
+  function deriveEligible(concepts, analysis, rows, balanceGroups, overriddenGroups) {
     var core = new Set(analysis.coreIds);
     var supporting = new Set(analysis.supportingIds);
     var available = new Map(concepts.map(function (row) { return [row.id, row]; }));
@@ -118,7 +118,8 @@
     function include(id) {
       var row = available.get(id);
       if (!row) throw new Error('Curation result references unknown concept: ' + id);
-      var role = balanceGroups.has(row.group) ? 'core' : 'supporting';
+      var role = balanceGroups.has(row.group) && (core.has(id) || overriddenGroups.has(row.group))
+        ? 'core' : 'supporting';
       selected.set(id, {id: id, label: row.term, group: row.group, role: role,
         count: row.count, weight: row.source === 'sight'
           ? (role === 'core' ? 0.62 : 0.13)
@@ -130,10 +131,10 @@
       include(id);
     });
     if (!core.size) throw new Error('Director found no core visual concepts.');
-    // A manually selected group outranks the Director even if it omitted its
-    // concepts entirely. No additional LLM call or hidden vocabulary rewriting.
+    // Preserve the Director's per-concept defaults until the user changes a
+    // group. A manually selected group can promote even omitted concepts.
     concepts.forEach(function (row) {
-      if (balanceGroups.has(row.group)) include(row.id);
+      if (balanceGroups.has(row.group) && overriddenGroups.has(row.group)) include(row.id);
     });
     rows.forEach(function (row) {
       row.ids = row.inventoryIds.filter(function (id) { return selected.has(id); });
@@ -142,7 +143,8 @@
   }
 
   function applyBalancePriorities() {
-    session.eligible = deriveEligible(session.concepts, session.analysis, session.rows, session.balanceGroups);
+    session.eligible = deriveEligible(session.concepts, session.analysis, session.rows,
+      session.balanceGroups, session.overriddenGroups);
     var ranked = rank(session.rows, session.eligible);
     session.order = ranked.order;
     session.sizes = ranked.sizes;
@@ -306,6 +308,7 @@
       toggle.setAttribute('data-curation-balance-group', group);
       toggle.setAttribute('aria-label', 'Prioritize balancing ' + group);
       toggle.onchange = function () {
+        session.overriddenGroups.add(group);
         if (toggle.checked) session.balanceGroups.add(group);
         else session.balanceGroups.delete(group);
         applyBalancePriorities();
@@ -544,6 +547,7 @@
     session.ignored = inventory.ignored;
     session.analysis = null;
     session.balanceGroups = new Set();
+    session.overriddenGroups = new Set();
     session.availableGroups = Array.from(new Set(session.concepts.map(function (c) { return c.group; }))).sort();
     session.missingSight = inventory.rows.filter(function (row) {return !row.analysis.visionSight;}).length;
     session.status = 'Step 1/3 · Indexed ' + items.length + ' images into ' + inventory.concepts.length + ' candidate concepts.';
@@ -590,6 +594,7 @@
       session.balanceGroups = new Set(session.concepts.filter(function (c) {
         return core.has(c.id);
       }).map(function (c) { return c.group; }));
+      session.overriddenGroups = new Set();
       session.preset = 'balanced';
       applyBalancePriorities();
       session.filter = 'selected';

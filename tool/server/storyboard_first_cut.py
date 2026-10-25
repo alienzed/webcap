@@ -21,11 +21,10 @@ _WORKER_RUNNING = False
 _FINISHED = {"complete", "failed", "stopped"}
 _LLM_FINISHED = {"completed", "failed", "cancelled", "stopped", "interrupted"}
 _CONTINUITY_INSTRUCTION = (
-    "Review this Scene against the Story overview, visual atmosphere, continuity "
-    "invariants, and the preceding Scene. Repair meaningful continuity gaps, "
-    "contradictions, missing generation-critical context, or prompt omissions "
-    "while preserving the Scene's intended action, chronology, and narrative "
-    "purpose. If it is already coherent and complete, leave it unchanged."
+    "Review this Scene prompt for concrete audiovisual contradictions, timing problems, "
+    "and missing details necessary for generation. Preserve the established creative choices "
+    "and surrounding authored text. Make only the corrections needed for a coherent Scene; "
+    "return it unchanged when it is already coherent."
 )
 
 

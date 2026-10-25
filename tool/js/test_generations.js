@@ -3568,10 +3568,81 @@
     updateTransport();
   }
 
+  function syncVariationGroups() {
+    var select = el('test-generations-variation-group');
+    var previous = select.value;
+    var groups = parseWildcardGroups(el('test-generations-prompt').value);
+    select.replaceChildren(new Option('None', ''));
+    groups.forEach(function(group,index) {
+      select.add(new Option('Group ' + (index + 1) + ' · ' + group.options.join(' / '), String(index)));
+    });
+    select.value = groups.some(function(group,index){ return String(index) === previous; }) ? previous : '';
+  }
+
+  function renderMatrix(status) {
+    if (resultsView !== 'matrix') return;
+    var host = el('test-generations-matrix');
+    var results = status && Array.isArray(status.results) ? status.results : [];
+    var variations = status && Array.isArray(status.variationCases) ? status.variationCases : [];
+    var columns = Math.max(1, variations.length);
+    var buckets = new Map();
+    results.forEach(function(result) {
+      var identity = candidateIdentity(result);
+      var key = String(result.candidateFile || result.sourceLoRA || identity.primary);
+      if (!buckets.has(key)) buckets.set(key, {label:identity.primary, cells:new Map()});
+      buckets.get(key).cells.set(result.variationIndex == null ? 0 : Number(result.variationIndex), result);
+    });
+    var signature=JSON.stringify([status && status.session, results.map(function(result){
+      return [resultMediaFile(result),result.rating,result.variationIndex];
+    }),variations]);
+    if (host.dataset.signature === signature) return;
+    host.dataset.signature = signature;
+    host.replaceChildren();
+    if (!buckets.size) { host.textContent = 'Generated previews will appear here.'; return; }
+    var scroller=document.createElement('div');
+    scroller.className='test-generations-matrix-scroll';
+    var board=document.createElement('div');
+    board.className='test-generations-matrix-board';
+    board.style.setProperty('--matrix-columns', String(columns));
+    var corner=document.createElement('strong');
+    corner.textContent='Checkpoint';
+    board.appendChild(corner);
+    for(var i=0;i<columns;i++){
+      var label=document.createElement('strong');
+      label.textContent=variations[i] ? variations[i].label : 'Preview';
+      board.appendChild(label);
+    }
+    var scores=testVlCandidateScores(results);
+    buckets.forEach(function(row) {
+      var heading=document.createElement('strong');
+      heading.className='test-generations-matrix-epoch';
+      heading.textContent=row.label;
+      board.appendChild(heading);
+      for(var index=0;index<columns;index++){
+        var cell=document.createElement('div');
+        cell.className='test-generations-matrix-cell';
+        var result=row.cells.get(index);
+        if(result){
+          var card=sharedTestCard(result,status,'test-generations-result-card',false);
+          renderTestVlCard(card,result,scores);
+          cell.appendChild(card);
+        }else{
+          cell.classList.add('is-empty');
+          cell.textContent='Awaiting render';
+        }
+        board.appendChild(cell);
+      }
+    });
+    scroller.appendChild(board);
+    host.appendChild(scroller);
+  }
+
   function setResultsView(mode) {
-    resultsView = mode === 'compare' ? 'compare' : 'grid';
+    resultsView = ['grid','compare','matrix'].includes(mode) ? mode : 'grid';
     var gridBtn = el('test-generations-view-grid-btn');
     var compareBtn = el('test-generations-view-compare-btn');
+    var matrixBtn = el('test-generations-view-matrix-btn');
+    var matrix = el('test-generations-matrix');
     var grid = el('test-generations-results');
     var compare = el('test-generations-compare');
     if (gridBtn) {
@@ -3582,6 +3653,9 @@
       compareBtn.classList.toggle('active', resultsView === 'compare');
       compareBtn.setAttribute('aria-selected', resultsView === 'compare' ? 'true' : 'false');
     }
+    matrixBtn.classList.toggle('active', resultsView === 'matrix');
+    matrixBtn.setAttribute('aria-selected', String(resultsView === 'matrix'));
+    matrix.classList.toggle('hidden',resultsView !== 'matrix');
     if (grid) grid.classList.toggle('hidden', resultsView !== 'grid');
     if (compare) compare.classList.toggle('hidden', resultsView !== 'compare');
     renderResults(currentStatus);
@@ -3888,6 +3962,7 @@
     }
 
     if (resultsView === 'compare') renderCompare(status || {});
+    if (resultsView === 'matrix') renderMatrix(status || {});
   }
 
   function syncActiveRunControls(status) {
@@ -4821,6 +4896,7 @@
       includeBase: el('test-generations-base-include').checked,
       prompt: prompt, settings: settings
     };
+    if (el('test-generations-variation-group').value !== '') criteria.variationGroupIndex = Number(el('test-generations-variation-group').value);
     if (wildcardIntent && wildcardIntent.prompt === prompt) {
       criteria.wildcardDimensions = wildcardIntent.dimensions;
     }
@@ -5160,6 +5236,9 @@
     el('test-generations-view-compare-btn').onclick = function () {
       setResultsView('compare');
     };
+    el('test-generations-view-matrix-btn').onclick = function () { setResultsView('matrix'); };
+    el('test-generations-prompt').addEventListener('input',syncVariationGroups);
+    syncVariationGroups();
     el('test-generations-candidates-btn').onclick = function (event) {
       event.stopPropagation();
       try { openCandidateRunMenu(this); } catch (err) { showError(err); }

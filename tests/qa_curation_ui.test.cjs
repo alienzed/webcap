@@ -180,3 +180,126 @@ test('rare approved construction survives 120-concept budget alongside frequent 
   assert.ok(inventory.concepts.some(c => c.term === 'exceptional one-off connector'),
     'single-example approved construction must remain visible to the Director');
 });
+
+
+test('user can change group balancing without another Director call', async () => {
+  const h = harness();
+  h.ctx.window.startQaCuration(entries(), 'geometry', 'same-scope');
+  await new Promise(resolve => setTimeout(resolve, 45));
+  assert.equal(h.calls.errors.length, 0, h.calls.errors.join('; '));
+  const control = group => h.root.querySelector('[data-curation-balance-group="' + group + '"]');
+  assert.equal(control('Shape').checked, true, 'Director CORE group is suggested');
+  assert.equal(control('View').checked, false, 'Director SUPPORTING group is not balanced');
+  assert.equal(h.root.querySelectorAll('[data-curation-concept]').length, 2);
+  const previous = Number(h.root.querySelector('[data-curation-selected]').textContent);
+  const view = control('View');
+  view.checked = true;
+  view.dispatchEvent(new h.ctx.window.Event('change', {bubbles:true}));
+  assert.equal(control('View').checked, true);
+  assert.equal(h.root.querySelectorAll('[data-curation-concept]').length, 4,
+    'manually promoted group must affect core evidence meters');
+  assert.equal(h.calls.submitted.length, 1, 'changing categories must not invoke Director again');
+  assert.ok(Number(h.root.querySelector('[data-curation-selected]').textContent) > 0);
+  assert.ok(previous > 0);
+  const shape = control('Shape');
+  shape.checked = false;
+  shape.dispatchEvent(new h.ctx.window.Event('change', {bubbles:true}));
+  assert.equal(control('Shape').checked, false);
+  assert.equal(h.root.querySelectorAll('[data-curation-concept]').length, 2,
+    'deselected group no longer drives core balancing');
+});
+
+test('balancing priorities never discard manual thumbnail choices', async () => {
+  const h = harness();
+  h.ctx.window.startQaCuration(entries(), 'geometry', 'same-scope');
+  await new Promise(resolve => setTimeout(resolve, 45));
+  const initial = h.root.querySelector('.qa-curation-card input[type=checkbox]');
+  initial.checked = false;
+  initial.dispatchEvent(new h.ctx.window.Event('change', {bubbles:true}));
+  const chosen = Number(h.root.querySelector('[data-curation-selected]').textContent);
+  const view = h.root.querySelector('[data-curation-balance-group="View"]');
+  view.checked = true;
+  view.dispatchEvent(new h.ctx.window.Event('change', {bubbles:true}));
+  assert.equal(Number(h.root.querySelector('[data-curation-selected]').textContent), chosen,
+    'manual media selections must survive balance-priority edits');
+  assert.match(h.root.textContent, /Manual image selections are preserved/);
+  assert.equal(h.calls.submitted.length, 1);
+  const balanced = Array.from(h.root.querySelectorAll('.qa-curation-controls button'))
+    .find(button => button.textContent.startsWith('Balanced'));
+  balanced.click();
+  assert.doesNotMatch(h.root.textContent, /Manual image selections are preserved/);
+});
+
+test('manually selected group adds concepts even when Director omitted the entire group', async () => {
+  const h = harness();
+  const originalFetch = h.ctx.fetch;
+  h.ctx.fetch = (url, options) => {
+    if (url.startsWith('/fs/director/job?')) {
+      const concepts = h.calls.submitted[0].concepts;
+      return Promise.resolve({ok:true,json:async()=>({ok:true,job:{
+        status:'completed', result:{analysis:{
+          summary:'Only Shape mattered',coreIds:concepts.filter(c=>c.group==='Shape').map(c=>c.id),
+          supportingIds:[]
+        }}
+      }})});
+    }
+    return originalFetch(url,options);
+  };
+  h.ctx.window.startQaCuration(entries(), 'geometry', 'same-scope');
+  await new Promise(resolve => setTimeout(resolve, 45));
+  assert.equal(h.calls.errors.length, 0, h.calls.errors.join('; '));
+  assert.equal(h.root.querySelectorAll('[data-curation-concept]').length, 2);
+  const view = h.root.querySelector('[data-curation-balance-group="View"]');
+  view.checked = true;
+  view.dispatchEvent(new h.ctx.window.Event('change', {bubbles:true}));
+  assert.equal(h.root.querySelectorAll('[data-curation-concept]').length, 4,
+    'group override must not be constrained by omitted LLM concept IDs');
+  assert.equal(h.calls.submitted.length, 1);
+});
+
+test('untouched Director concepts keep their original core/supporting roles', async () => {
+  const h = harness();
+  const originalFetch = h.ctx.fetch;
+  h.ctx.fetch = (url, options) => {
+    if (url.startsWith('/fs/director/job?')) {
+      const concepts = h.calls.submitted[0].concepts;
+      const shapes = concepts.filter(c => c.group === 'Shape');
+      return Promise.resolve({ok:true,json:async()=>({ok:true,job:{
+        status:'completed',result:{analysis:{
+          summary:'Mixed Shape importance',coreIds:[shapes[0].id],
+          supportingIds:[shapes[1].id]
+        }}
+      }})});
+    }
+    return originalFetch(url,options);
+  };
+  h.ctx.window.startQaCuration(entries(), 'shape', 'same-scope');
+  await new Promise(resolve => setTimeout(resolve, 45));
+  assert.equal(h.calls.errors.length, 0, h.calls.errors.join('; '));
+  assert.equal(h.root.querySelector('[data-curation-balance-group="Shape"]').checked, true);
+  assert.equal(h.root.querySelectorAll('[data-curation-concept]').length, 1,
+    'initial proposal must honor the per-concept Director result');
+  let shape = h.root.querySelector('[data-curation-balance-group="Shape"]');
+  shape.checked = false;
+  shape.dispatchEvent(new h.ctx.window.Event('change', {bubbles:true}));
+  shape = h.root.querySelector('[data-curation-balance-group="Shape"]');
+  shape.checked = true;
+  shape.dispatchEvent(new h.ctx.window.Event('change', {bubbles:true}));
+  assert.equal(h.root.querySelectorAll('[data-curation-concept]').length, 2,
+    'explicit group override promotes all available terms');
+});
+
+test('core-weighted group priority changes deterministic ranking', () => {
+  const h = harness();
+  const rows = [
+    {fileName:'shape-a.png',ids:['shape'],analysis:{}},
+    {fileName:'shape-b.png',ids:['shape'],analysis:{}},
+    {fileName:'color-a.png',ids:['color'],analysis:{}}
+  ];
+  const shapeFirst = [{id:'shape',role:'core',weight:1,count:2},
+    {id:'color',role:'supporting',weight:0.28,count:1}];
+  const colorFirst = [{id:'shape',role:'supporting',weight:0.28,count:2},
+    {id:'color',role:'core',weight:1,count:1}];
+  assert.equal(h.ctx.window.qaCurationRank(rows,shapeFirst).order[0],'shape-a.png');
+  assert.equal(h.ctx.window.qaCurationRank(rows,colorFirst).order[0],'color-a.png');
+});

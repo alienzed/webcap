@@ -32,6 +32,7 @@ A QA-only checklist sends selected media paths to the existing Create Set dialog
 - Live selected count, represented-concept count, and weighted-evidence coverage.
 - Presets reapply a proposed subset. All images allows adding exclusions back.
 - UI only changes QA-owned curation session state, not `state.focusSet`.
+- **Balance priorities (added):** display all groups represented in the bounded concept inventory, preselect groups containing Director CORE concepts while preserving their per-concept priorities until explicitly changed. Checkbox overrides determine which groups' terms get CORE coverage weight. Unchecked groups retain Director-selected terms at SUPPORTING weight; newly checked groups include even terms the Director omitted. Rank and shortlist presets recompute locally without more inference. If the user has manually changed media checkboxes, preserve their selections until a preset is explicitly chosen again. No new persistent state.
 
 ## Phase 4 — Existing Create Set handoff (implemented)
 - On explicit user action, pass the chosen source-relative paths to the existing

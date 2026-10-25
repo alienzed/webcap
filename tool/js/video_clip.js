@@ -33,6 +33,36 @@ function getVideoClipEl(id) {
   return document.getElementById(id);
 }
 
+function browseVideoClipExternalDestinations() {
+  if (!videoClipExternalSource) return;
+  var source = videoClipExternalSource;
+  var field = getVideoClipEl('video-clip-external-destination');
+  var host = getVideoClipEl('video-clip-external-folders');
+  var path = field.value.trim();
+  host.replaceChildren();
+  return fetch('/fs/media_explorer/external/destinations?destination=' + encodeURIComponent(path))
+    .then(function (response) { return response.json().then(function (body) {
+      if (!response.ok || !body.ok) throw new Error(body.error || 'Could not browse destination Sets');
+      return body;
+    }); }).then(function (body) {
+      if (videoClipExternalSource !== source || field.value.trim() !== path) return;
+      (body.folders || []).forEach(function (name) {
+        var button = document.createElement('button');
+        button.type = 'button'; button.className = 'video-clip-inline-btn';
+        button.textContent = '📁 ' + name;
+        button.onclick = function () {
+          field.value = [path, name].filter(Boolean).join('/');
+          updateVideoClipExportSummary();
+          browseVideoClipExternalDestinations();
+        };
+        host.appendChild(button);
+      });
+    }).catch(function (err) {
+      setVideoClipStatus(err.message, {kind:'error'});
+      window.reportConsoleError('Video Clip', err.message);
+    });
+}
+
 function videoClipSourceFields() {
   if (videoClipStoryboardSource)
     return { storyId: videoClipStoryboardSource.storyId, mediaPath: videoClipStoryboardSource.mediaPath };
@@ -1500,7 +1530,17 @@ function wireVideoClipModal() {
   }
 
   var destinationEl = getVideoClipEl('video-clip-external-destination');
-  if (destinationEl) destinationEl.addEventListener('input', updateVideoClipExportSummary);
+  if (destinationEl) destinationEl.addEventListener('input', function () {
+    getVideoClipEl('video-clip-external-folders').replaceChildren();
+    updateVideoClipExportSummary();
+  });
+  getVideoClipEl('video-clip-external-browse').onclick = browseVideoClipExternalDestinations;
+  getVideoClipEl('video-clip-external-up').onclick = function () {
+    if (!videoClipExternalSource) return;
+    destinationEl.value = destinationEl.value.trim().split('/').slice(0, -1).join('/');
+    updateVideoClipExportSummary();
+    browseVideoClipExternalDestinations();
+  };
   if (outputEl) {
     outputEl.addEventListener('input', updateVideoClipExportSummary);
     outputEl.addEventListener('keydown', function (e) {

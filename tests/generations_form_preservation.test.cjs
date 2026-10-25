@@ -44,6 +44,7 @@ function fixture(initial = {}) {
     },
     renderStageEmpty() { calls.push(['empty']); },
     syncPromptAssistantDependencies() {},
+    loadGenerateTakeIntoEditor(result) { context.restoreResultConfiguration(result); },
     restoreResultConfiguration(result) {
       calls.push(['restore', result.jobId]);
       editor.prompt = result.sourcePrompt;
@@ -149,6 +150,7 @@ function pendingFixture() {
       state.activePendingJobId='';
       state.activeResultKey=result.jobId;
     },
+    loadGenerateTakeIntoEditor(result) { context.restoreResultConfiguration(result); },
     restoreResultConfiguration(result) {
       calls.push(['restore', result.modelId, result.sourcePrompt, result.settings?.duration]);
       editor.prompt=result.sourcePrompt;

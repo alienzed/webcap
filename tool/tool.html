@@ -1672,6 +1672,14 @@
                 <main class="generate-main">
                     <section id="generate-create-view" class="generate-create-view" aria-label="Create">
                         <aside class="generate-create-controls" aria-label="Generation controls">
+                            <div class="generate-editor-toolbar">
+                                <div class="generate-editor-tabs" role="group" aria-label="Generation configuration">
+                                    <button id="generate-editor-working" type="button" class="active" aria-pressed="true">Working</button>
+                                    <button id="generate-editor-loaded" type="button" aria-pressed="false" disabled>Loaded Take</button>
+                                </div>
+                                <button id="generate-editor-use-working" type="button" class="review-captions-btn hidden" title="Copy this Loaded configuration into Working">Use as Working</button>
+                            </div>
+                            <div id="generate-editor-loaded-caption" class="generate-editor-loaded-caption hidden" aria-live="polite"></div>
                             <div class="generate-model-row">
                             <label class="generate-field"><span>Base Model</span><select id="generate-model" aria-label="Generate Base Model"></select></label>
                             </div>

@@ -320,6 +320,7 @@ function trainingCandidatesCompareControlHtml() {
 function trainingCandidatesFooterActionsHtml(data) {
   return '<div class="training-candidates-footer-actions">' +
     trainingCandidatesCompareControlHtml() +
+    trainingCandidatesStageAllButtonHtml(data) +
     trainingCandidatesTestGenerationsButtonHtml(data) +
   '</div>';
 }
@@ -675,6 +676,16 @@ function trainingCandidatesTestProfileId() {
       String(profile.test.stagingKey || '').trim().toLowerCase() === stage;
   });
   return matches.length === 1 ? String(matches[0].id || '') : '';
+}
+
+function trainingCandidatesStageAllButtonHtml(data) {
+  if (!trainingCandidatesTestProfileId()) return '';
+  var remaining = (data && data.savedArtifacts || []).filter(function(artifact){
+    return artifact && artifact.status === 'available' && !artifact.inTestFolder;
+  });
+  if (!remaining.length) return '';
+  return '<button type="button" class="review-captions-btn" data-training-candidates-stage-all>' +
+    'Add all saved epochs to Test · ' + remaining.length + '</button>';
 }
 
 function trainingCandidatesTestGenerationsButtonHtml(data) {
@@ -1552,6 +1563,45 @@ function renderTrainingCandidates() {
     return;
   }
   els.content.innerHTML = trainingCandidatesContentHtml(trainingWorkspaceState.candidatePayload);
+  var stageAll = els.content.querySelector('[data-training-candidates-stage-all]');
+  if (stageAll) stageAll.addEventListener('click', function(event) {
+    event.preventDefault();
+    event.stopPropagation();
+    var folder = String(trainingWorkspaceState.candidateFolder || '');
+    var jobId = String(trainingWorkspaceState.candidateJobId || '');
+    if (!folder || !jobId) throw new Error('No training run selected for staging.');
+    var artifacts = (((trainingWorkspaceState.candidatePayload || {}).analysis || {}).savedArtifacts || []);
+    var seen = new Set();
+    var epochs = artifacts.filter(function(artifact){
+      var epoch = Number(artifact.epoch);
+      if (!artifact || artifact.status !== 'available' || artifact.inTestFolder || seen.has(epoch)) return false;
+      seen.add(epoch);
+      return true;
+    });
+    stageAll.disabled = true;
+    var completed = 0;
+    function next() {
+      if (completed === epochs.length) {
+        renderTrainingCandidates();
+        return Promise.resolve();
+      }
+      var artifact = epochs[completed];
+      stageAll.textContent = 'Adding epochs · ' + completed + ' / ' + epochs.length;
+      return trainingRunnerRequest('/fs/training_candidates/copy_to_test', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({folder:folder, jobId:jobId, epoch:artifact.epoch})
+      }).then(function() {
+        artifact.inTestFolder = true;
+        completed += 1;
+        return next();
+      });
+    }
+    next().catch(function(err) {
+      stageAll.disabled = false;
+      stageAll.textContent = 'Retry remaining epochs · ' + (epochs.length - completed);
+      reportConsoleError('Training Candidates', err);
+    });
+  });
   syncTrainingCandidatesDisplayControls();
   if (trainingCandidatesComparisonActive()) wireTrainingCandidatesComparison();
   else wireTrainingCandidatesChart();

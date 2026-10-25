@@ -49,6 +49,11 @@ test('Missing and interrupted required probes are Not established, not Failed',(
   assert.equal(r.state,'Not established');
   assert.match(r.labels[1],/language_synthesis/);
 });
+test('Vision-only models are not limited by unrelated historic Storyboard evidence',()=>{
+  const r=evaluate({vision_open:passed, director_scene_plan_8192:failed('Long-form truncation')},
+    {role:'vision'});
+  assert.equal(r.state,'Passed');
+});
 test('Historical v2 scene-count-only failure is not proven invalid JSON',()=>{
   const r=evaluate({director_scene_plan_2048:{counts:{failed:1},
     error:'Storyboard structured-output validation failed: Wrong number of Storyboard Scenes.',

@@ -47,7 +47,6 @@ jobs:
           node --check tool/js/training_runner_ui.js
           python -m pytest -q tests/test_training_history_unlink.py tests/test_training_resume_discovery.py
           python -m pytest -q tests/test_training_history_ui_contract.py -k 'not training_history_promotes_recorded_epoch_and_step_progress and not training_history_loads_timing_for_completed_and_finished_early_rows'
-          python -m pytest -q tests/test_training_stabilization.py -k 'h3_checkpoint_resume_rejects_switching_image_adapter'
       - run: python -m pytest -q tests/test_training_review_ui_contract.py -k 'h3_image_shift_run_setup_validation or run_setup_uses_compact_parameter_rail_and_resume_canvas or run_setup_summary_omits_unused_video_targets_without_changing_plan'
   training-queue-edit:
     runs-on: ubuntu-latest
@@ -79,6 +78,7 @@ jobs:
         run: |
           node --check tool/js/training_review.js
           python -m pytest -q tests/test_training_stabilization.py -k 'h3_focused or h3_image_shift'
+          python -m pytest -q tests/test_training_stabilization.py -k 'h3_checkpoint_resume_rejects_switching_image_adapter'
           python -m pytest -q tests/test_training_review_ui_contract.py -k 'h3_image_shift_run_setup_validation or run_setup_uses_compact_parameter_rail_and_resume_canvas or run_setup_summary_omits_unused_video_targets_without_changing_plan'
       - name: H3 calibration preparation and probe regression
         run: python -m pytest -q tests/test_h3_probe.py tests/test_training_profiles.py

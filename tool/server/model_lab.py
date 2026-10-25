@@ -560,7 +560,7 @@ def _new_run_payload(config):
 
 def _compact_completed_run(run):
     """Discard generated content after assessment; retain only reusable measurements."""
-    if run.get("status") not in {"completed", "stopped", "error", "interrupted"}:
+    if run.get("status") != "completed":
         return
     keep = ("usage", "timings", "requestSeconds", "contextSize", "finishReason",
             "scenePlanAssessment", "verifiedOutputTokens", "visibleOutputWords",
@@ -1759,7 +1759,7 @@ def register_routes(app):
                     if _active_record(row["id"]):
                         continue
                     run = get_run(row["id"])
-                    if run.get("status") not in {"completed", "stopped", "error", "interrupted"}:
+                    if run.get("status") != "completed":
                         continue
                     before = any(isinstance(a.get("result"), dict) and
                                  any(k in a["result"] for k in ("text", "reasoning", "schema", "sight", "vocabularySight"))

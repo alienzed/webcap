@@ -105,6 +105,35 @@
     var selectedItems = items.filter(function (candidate) { return selected.has(candidate.id); });
     return selected.has(item.id) && selectedItems.length > 1 ? selectedItems : [item];
   }
+  function removeTrashedItems(paths) {
+    var removed = new Set(paths);
+    var ids = new Set(items.filter(function (entry) {
+      return entry.source === 'external' && removed.has(entry.relativePath);
+    }).map(function (entry) { return entry.id; }));
+    if (!ids.size) return;
+    var activeId = active >= 0 && items[active] ? items[active].id : '';
+    // Invalidate any in-flight listing before it can restore just-trashed files.
+    serial++;
+    if (activeRequest) activeRequest.abort();
+    activeRequest = null; loading = false;
+    items = items.filter(function (entry) { return !ids.has(entry.id); });
+    ids.forEach(function (id) {
+      var card = Array.from(el('media-explorer-grid').children).find(function (node) { return node.dataset.id === id; });
+      if (card) card.remove();
+      selected.delete(id); mediaFacts.delete(id);
+    });
+    Array.from(el('media-explorer-grid').children).forEach(function (card, index) {
+      card.dataset.index = index;
+    });
+    offset = Math.max(0, offset - ids.size);
+    total = Math.max(items.length, total - ids.size);
+    anchor = -1;
+    active = items.findIndex(function (entry) { return entry.id === activeId; });
+    selectItem(active);
+    renderSideList(); updateSelection(); count(); emptyState();
+    el('media-explorer-grid').setAttribute('aria-busy', 'false');
+    el('media-explorer-more-btn').disabled = false;
+  }
   function externalMutation(item, action) {
     var chosen = externalChoices(item);
     var names = chosen.map(function (candidate) { return candidate.relativePath; });
@@ -114,7 +143,12 @@
       if (destination === null) return;
       if (!window.confirm('Move ' + chosen.length + ' file(s) to ' + (destination || '/') + '?')) return;
     } else if (!window.confirm('Move ' + chosen.length + ' file(s) to the operating system Trash?')) return;
-    externalAction(action, {path: externalPath, files:names, destination:destination}, function () {
+    externalAction(action, {path: externalPath, files:names, destination:destination}, function (result) {
+      if (action === 'trash') {
+        if (typeof result.revision === 'number') externalRevision = result.revision;
+        removeTrashedItems(result.trashed || []);
+        return;
+      }
       selected.clear(); selectItem(-1);
       mediaFacts.clear(); externalRevision = -1;
       load(true, {refreshFilesystem:true});

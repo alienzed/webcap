@@ -130,6 +130,9 @@ def _publish(snapshot, entries):
     with _LOCK:
         if _index is not snapshot or snapshot["cancel"].is_set():
             return
+        entries = [item for item in entries if item["relativePath"] not in snapshot["removed"]]
+        if not entries:
+            return
         snapshot["items"].extend(entries)
         snapshot["by_path"].update((item["relativePath"], item) for item in entries)
         snapshot["analyzed"] += sum(bool(item.get("metadata")) for item in entries)
@@ -205,7 +208,7 @@ def _ensure_index(raw_path, *, refresh=False):
             _index["cancel"].set()
         if _metadata_job:
             _metadata_job["cancel"].set()
-        snapshot = {"root": root, "items": [], "by_path": {}, "directories": 0,
+        snapshot = {"root": root, "items": [], "by_path": {}, "removed": set(), "directories": 0,
                     "complete": False, "analyzed": 0, "revision": 0,
                     "warnings": 0, "lastWarning": "", "error": "",
                     "cancel": threading.Event()}
@@ -468,8 +471,21 @@ def trash_external_files(data):
             send2trash(str(source))
         except Exception as exc:
             raise RuntimeError(f"Trashed {len(trashed)} files before failing on {source.name}: {exc}") from exc
-        trashed.append(source.relative_to(root).as_posix())
-    return {"ok": True, "trashed": trashed}
+        relative = source.relative_to(root).as_posix()
+        trashed.append(relative)
+        # The user just removed this item. Update only that key in the live index;
+        # avoid a full filesystem rescan and prevent in-flight discovery republishing it.
+        with _LOCK:
+            if _index is not None and _index["root"] == root:
+                _index["removed"].add(relative)
+                previous = _index["by_path"].pop(relative, None)
+                if previous is not None:
+                    _index["items"][:] = [entry for entry in _index["items"] if entry["relativePath"] != relative]
+                    _index["analyzed"] = max(0, _index["analyzed"] - int(bool(previous.get("metadata"))))
+                _index["revision"] += 1
+    with _LOCK:
+        revision = _index["revision"] if _index is not None and _index["root"] == root else None
+    return {"ok": True, "trashed": trashed, "revision": revision}
 
 
 def register_routes(app):

@@ -797,6 +797,12 @@
     if (generateState.director.busy) throw new Error('Finish Prompt Assistant before loading a Take.');
     if (generateState.editorMode === 'working')
       generateState.workingSnapshot = captureGenerateEditorSnapshot();
+    // A new Loaded Take is a clean independent recipe. Never inherit another
+    // slot's LoRAs for other models or its Sweep folder/checklist selections.
+    generateState.lorasByModel = {};
+    generateState.loraMode = 'selected';
+    generateState.sweepFolderByModel = {};
+    generateState.sweepSelections = {};
     restoreResultConfiguration(result);
     generateState.editorMode = 'loaded';
     generateState.loadedSnapshot = captureGenerateEditorSnapshot();

@@ -194,18 +194,19 @@
     var counts = new Map(concepts.map(function (feature) { return [feature.id, 0]; }));
     var remaining = rows.slice(), ordered = [], gains = [];
     while (remaining.length) {
-      var best = -1, bestScore = null;
+      var scores = remaining.map(function (row) { return score(row, concepts, byId, counts); });
+      var maxCore = scores.reduce(function (best, value) { return Math.max(best, value.core); }, 0);
+      var best = -1, bestGain = -Infinity;
       for (var i = 0; i < remaining.length; i += 1) {
-        var value = score(remaining[i], concepts, byId, counts);
-        // Primary coverage wins; supporting diversity breaks primary ties.
-        if (bestScore === null || value.core > bestScore.core + 1e-9 ||
-            (Math.abs(value.core - bestScore.core) <= 1e-9 && value.supporting > bestScore.supporting)) {
-          bestScore = value; best = i;
-        }
+        // Supporting variation can contribute at most 20% of the best available
+        // primary gain. Once core coverage is exhausted, supporting gains decide.
+        var gain = scores[i].core + (maxCore > 0
+          ? Math.min(scores[i].supporting, maxCore * 0.2) : scores[i].supporting);
+        if (gain > bestGain) { bestGain = gain; best = i; }
       }
       var chosen = remaining.splice(best, 1)[0];
       ordered.push(chosen.fileName);
-      gains.push(bestScore.core + bestScore.supporting);
+      gains.push(bestGain);
       chosen.ids.forEach(function (id) { counts.set(id, counts.get(id) + 1); });
     }
     var selected = new Set(), ratios = [];

@@ -387,6 +387,7 @@ def _reusable_evidence(run):
     """
     reused = {}
     failures = {}
+    known_limits = {}
     selected = {m["modelRef"] for m in run["directorModels"] + run["allVisionModels"]}
     for item in list_runs():
         if item.get("status") in {"running", "error"}:
@@ -399,7 +400,18 @@ def _reusable_evidence(run):
             kind = str(attempt.get("kind") or "")
             ref = str(attempt.get("modelRef") or "")
             filename = str(attempt.get("file") or "")
-            if ref not in selected or not (same_protocol or kind in LEGACY_COMPATIBLE_KINDS):
+            is_scene = kind.startswith("director_scene_plan_")
+            capacity = (attempt.get("failureKind") == "capacity" or (
+                attempt.get("status") == "failed" and is_scene
+                and "capacity exhausted" in str(attempt.get("error") or "").lower()
+            ))
+            # Older capacity evidence still describes a real limit for the same
+            # Storyboard workload. Other results require protocol compatibility.
+            if ref not in selected or not (
+                same_protocol or kind in LEGACY_COMPATIBLE_KINDS
+                or (capacity and previous.get("assessmentProtocol") ==
+                    "webcap-model-assessment-structured-v3")
+            ):
                 continue
             if kind.startswith("vision_"):
                 if kind not in {"vision_open", "vision_group_aware"}:
@@ -420,6 +432,10 @@ def _reusable_evidence(run):
 ):
                     continue
             key = _attempt_key(kind, ref, filename)
+            if capacity and is_scene:
+                budget = int(kind.rsplit("_", 1)[-1])
+                known_limits[ref] = min(budget, known_limits.get(ref, budget))
+                continue
             if key in reused:
                 continue
             if attempt.get("status") == "completed":
@@ -427,7 +443,12 @@ def _reusable_evidence(run):
                 failures.pop(key, None)
             elif attempt.get("status") == "failed" and key not in failures:
                 failures[key] = True
-    return reused, failures
+    for key in list(failures):
+        kind, ref, _ = key.split("|", 2)
+        if kind.startswith("director_scene_plan_") and ref in known_limits:
+            if int(kind.rsplit("_", 1)[-1]) >= known_limits[ref]:
+                failures.pop(key)
+    return reused, failures, known_limits
 
 
 def _new_run_payload(config):
@@ -510,7 +531,7 @@ def _new_run_payload(config):
         "qualityReviews": {},
         "autoJudgeModelRef": str(config.get("judgeModelRef") or "").strip() if depth == "deep" and director_models else "",
     }
-    run["reused"], run["previousFailures"] = _reusable_evidence(run)
+    run["reused"], run["previousFailures"], run["knownLimits"] = _reusable_evidence(run)
     return run
 
 
@@ -1179,10 +1200,11 @@ def _run_director_model(run, model):
         "style": "Grounded cinematic realism with practical lighting and consistent spaces.",
     }
     capacity_reached = False
+    known_limit = (run.get("knownLimits") or {}).get(model_ref)
     for budget in ((2048, 4096, 8192, 10240, 12288, 16384) if run.get("depth") == "deep" else (2048,)):
-        if capacity_reached:
+        if capacity_reached or (known_limit is not None and budget >= known_limit):
             _skip_attempt(run, "director_scene_plan_" + str(budget), "director",
-                          model_ref, "", "Not tested: previous Storyboard tier reached capacity.")
+                          model_ref, "", "Not tested: known Storyboard capacity ceiling.")
             continue
         scene_count = max(2, budget // 256)
         contract = build_request(
@@ -1202,6 +1224,7 @@ def _run_director_model(run, model):
         )
         if attempt.get("failureKind") == "capacity":
             capacity_reached = True
+            run.setdefault("knownLimits", {})[model_ref] = budget
     reference_vision_ref = str(run.get("referenceVisionRef") or "")
     if not reference_vision_ref:
         # Director-only: exercise the actual Schema Assist contract with a
@@ -1413,6 +1436,8 @@ def _assessment_work(run):
             completed += 1
             if key in reused:
                 reused_count += 1
+        elif not attempt and _known_limit_covers(run, key):
+            skipped += 1
         elif not attempt:
             if key in previous_failures:
                 deferred += 1
@@ -1439,10 +1464,19 @@ def _assessment_work(run):
     }
 
 
+def _known_limit_covers(run, key):
+    kind, ref, _ = key.split("|", 2)
+    limit = (run.get("knownLimits") or {}).get(ref)
+    return (limit is not None and kind.startswith("director_scene_plan_")
+            and int(kind.rsplit("_", 1)[-1]) >= limit)
+
+
 def _pending_probe_plan(run):
     """Only schedule missing/failed work, using the same plan as progress."""
     missing = retry = 0
     for key in _planned_probes(run):
+        if _known_limit_covers(run, key):
+            continue
         if key in (run.get("reused") or {}):
             continue
         if key in (run.get("previousFailures") or {}):
@@ -1464,11 +1498,12 @@ def preview_run(config):
     for model in run["directorModels"] + run["visionModels"]:
         ref = model["modelRef"]
         keys = [key for key in planned if key.split("|", 2)[1] == ref]
+        limited = sum(_known_limit_covers(run, key) for key in keys)
         complete = sum(key in reused for key in keys)
-        retry = sum(key in failures and key not in reused for key in keys)
+        retry = sum(key in failures and key not in reused and not _known_limit_covers(run, key) for key in keys)
         models[ref] = {
             "planned": len(keys), "complete": complete, "reused": complete,
-            "missing": len(keys) - complete - retry, "retry": retry,
+            "missing": len(keys) - complete - retry - limited, "retry": retry, "limited": limited,
         }
     return {"plan": plan, "reused": sum(key in reused for key in planned), "models": models}
 

@@ -79,7 +79,7 @@ def test_h3_guidance_uses_one_fenced_authoring_example_without_schema_enforcemen
     assert prompt.count("--- END EXAMPLE PROMPT SHAPE ---") == 1
     assert "[Shot 3] ... and additional shots as appropriate for the Scene." in prompt
     assert "shots inherit that setup" in prompt
-    assert "what occurs at particular times" in prompt
+    assert "What occurs in this interval" in prompt
     assert schema["required"] == ["prompt"]
     assert set(schema["properties"]) == {"prompt"}
 
@@ -148,7 +148,7 @@ def test_develop_story_uses_simple_scene_schema_and_dense_scene_guidance():
     assert "sharedContextRefs" not in scene_schema["properties"]
     assert "Create exactly 12 Scenes." in prompt
     assert "GENERATION UNIT." in prompt
-    assert "Simplify or abstract elements when added specificity creates more drift than value." in prompt
+    assert "Use that time purposefully, concisely." in prompt
     assert "Choose the relationship that best serves the concept" in prompt
     assert "evolving state when continuity matters" in prompt
     assert "When Scenes are connected" in prompt
@@ -388,7 +388,7 @@ def test_individual_development_scene_uses_whole_outline_and_previous_authored_s
 def test_director_guidance_resolves_cross_scene_references_without_changing_h3_structure():
     request = storyboard_llm_contract.build_request(_story(), "", "develop_story")
     prompt = request["prompt"]
-    assert "Resolve references to other Scenes into concrete current visual facts" in prompt
+    assert "Describe the current Scene with concrete visual facts" in prompt
     assert "Comparisons between subjects visible within this Scene remain useful" in prompt
     assert "Do not invent unsupported detail" in prompt
     assert "--- BEGIN EXAMPLE PROMPT SHAPE ---" in prompt

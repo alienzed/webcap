@@ -3585,6 +3585,7 @@
     if (resultsView !== 'matrix') return;
     var host = el('test-generations-matrix');
     var results = status && Array.isArray(status.results) ? status.results : [];
+    var failures = status && Array.isArray(status.failures) ? status.failures : [];
     var variations = status && Array.isArray(status.variationCases) ? status.variationCases : [];
     var columns = Math.max(1, variations.length);
     var buckets = new Map();
@@ -3611,6 +3612,12 @@
       row.cells.set(result.variationIndex == null ? 0 : Number(result.variationIndex),result);
     });
 
+    failures.forEach(function(failure) {
+      var key = failure.kind === 'base' ? 'Base' : String(failure.candidateFile || failure.sourceLoRA || '');
+      if (!buckets.has(key)) buckets.set(key,{label:key,cells:new Map()});
+      var index=failure.variationIndex == null ? 0 : Number(failure.variationIndex);
+      if (!buckets.get(key).cells.has(index)) buckets.get(key).cells.set(index,failure);
+    });
     var rows=Array.from(buckets.entries());
     var layout=JSON.stringify([status && status.session,
       variations.map(function(v){return v.label;}),
@@ -3660,16 +3667,17 @@
         var cell=cells[rowIndex*columns+index];
         var result=row.cells.get(index);
         if(!result) continue;
-        var key=String(resultMediaFile(result) || '');
+        var failed=!!result.error;
+        var key=failed ? 'failure:' + String(result.jobId || '') : String(resultMediaFile(result) || '');
         if(cell.dataset.mediaKey === key && cell.firstElementChild){
           window.updateTestPreviewCardRating(cell.firstElementChild,result.rating||0);
           renderTestVlCard(cell.firstElementChild,result,scores);
           continue;
         }
-        var card=sharedTestCard(result,status,'test-generations-result-card',false);
+        var card=sharedTestCard(result,status,failed ? 'test-generations-result-card is-failed' : 'test-generations-result-card',false,failed);
         var video=card.querySelector('video');
         if(video) video.preload='none';
-        renderTestVlCard(card,result,scores);
+        if (!failed) renderTestVlCard(card,result,scores);
         cell.classList.remove('is-empty');
         cell.replaceChildren(card);
         cell.dataset.mediaKey=key;
@@ -3917,6 +3925,7 @@
   function renderResults(status) {
     if (resultsView === 'matrix') {
       renderMatrix(status || {});
+      syncTestVlControls();
       return;
     }
     var host = el('test-generations-results');

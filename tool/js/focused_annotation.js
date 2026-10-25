@@ -614,7 +614,7 @@ function insertFocusedAnnotationSightPhrase(phrase) {
   var end = inEditor ? input.selectionEnd : current.length;
   var left = current.slice(0, start);
   var right = current.slice(end);
-  var prefix = left.trim() ? (/[,;:.]\\s*$/.test(left) ? ' ' : ', ') : '';
+  var prefix = left.trim() ? (/[,;:.]\s*$/.test(left) ? ' ' : ', ') : '';
   var suffix = right.trim() ? ', ' : '';
   var inserted = prefix + value + suffix;
   applyEditorTextAndTriggerInput(left + inserted + right);

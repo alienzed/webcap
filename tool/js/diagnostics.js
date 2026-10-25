@@ -104,85 +104,49 @@ function diagnosticsAssessmentRefreshLiveMetrics(run) {
 }
 
 function diagnosticsAssessmentCounts(row, tests) {
-  // Required capability is not the same as optional long-form stress capacity.
-  // Failed judging is also independent of both.
-  var families = {
-    writing: ['director_scene_plan_2048'],
-    structured: row.assessmentHasSetVocabulary
-      ? ['set_vocabulary_synthesis', 'set_vocabulary_challenge']
-      : ['language_synthesis', 'language_challenge'],
-    vision: row.assessmentNeedsGroupAware ? ['vision_open', 'vision_group_aware'] : ['vision_open']
-  };
+  // This is capability discovery, not a pass/fail examination.
   var role = row.dataset.assessmentRole;
-  var needed = role === 'both' ? ['writing', 'structured', 'vision'] :
-    role === 'director' ? ['writing', 'structured'] : ['vision'];
-  var failed = [], unproven = [], running = [], limits = [];
-  needed.forEach(function (family) {
-    families[family].forEach(function (kind) {
-      var item = tests[kind] || {}, counts = item.counts || {};
-      if (Number(counts.completed || 0) > 0) return;
-      var label = modelLabAttemptLabel(kind);
-      if (Number(counts.failed || 0) > 0) {
-        if (kind === 'director_scene_plan_2048' &&
-            (item.failureKind === 'capacity' ||
-             /capacity exhausted|truncated at its token budget/i.test(item.error || ''))) {
-          unproven.push(label + ': output capacity reached before a complete Storyboard');
-          return;
-        }
-        // V2 stopped at the scene-count check, before validating the returned
-        // Scenes. It cannot prove the output was otherwise invalid.
-        if (kind === 'director_scene_plan_2048' &&
-            item._runProtocol === 'webcap-model-assessment-structured-v2' &&
-            /Wrong number of Storyboard Scenes\./.test(item.error || ''))
-          unproven.push(label + ': legacy scene-count mismatch; output validity not established');
-        else failed.push(label + (item.error ? ': ' + item.error : ': probe failed'));
-      }
-      else if (Number(counts.running || 0) > 0) running.push(label);
-      else unproven.push(label);
+  var completed = function (kind) {
+    return Number(((tests[kind] || {}).counts || {}).completed || 0) > 0;
+  };
+  var verifiedTier = Object.keys(tests).filter(function (kind) {
+    return kind.indexOf('director_scene_plan_') === 0 && completed(kind);
+  }).map(function (kind) { return Number(kind.split('_').pop()); })
+    .filter(Number.isFinite)
+    .reduce(function (highest, budget) { return Math.max(highest, budget); }, 0);
+  var structured = completed('language_synthesis') || completed('set_vocabulary_synthesis');
+  var challenge = completed('language_challenge') || completed('set_vocabulary_challenge');
+  var vision = completed('vision_open');
+  var groupAware = completed('vision_group_aware');
+  var thinking = completed('director_thinking') && !!(tests.director_thinking || {}).supported;
+  var labels = [];
+  if (verifiedTier) labels.push('Storyboard');
+  if (structured) labels.push('Schema Assist');
+  if (challenge) labels.push('Vocabulary challenge');
+  if (vision) labels.push('Sight');
+  if (groupAware) labels.push('Group-aware Sight');
+  if (thinking) labels.push('Thinking');
+  var observed = Object.keys(tests).some(function (kind) {
+    return Object.keys((tests[kind] || {}).counts || {}).some(function (status) {
+      return Number(tests[kind].counts[status] || 0) > 0;
     });
   });
-  Object.keys(tests).forEach(function (kind) {
-    if (role === 'vision' || kind.indexOf('director_scene_plan_') !== 0) return;
-    var item = tests[kind], counts = item.counts || {};
-    var evidence = item.scenePlanAssessment;
-    var label = modelLabAttemptLabel(kind);
-    // The baseline is required above; deeper tiers are informational stress tests.
-    if (Number(kind.split('_').pop()) > 2048 && Number(counts.failed || 0) > 0)
-      limits.push(label + ': ' + (item.error || 'stress probe failed'));
-    if (Number(counts.completed || 0) > 0 && evidence) {
-      // Scene count and descriptive density are advisory evidence, not qualification limits.
-    }
-  });
-  var verifiedTier = Object.keys(tests).filter(function (kind) {
-    return kind.indexOf('director_scene_plan_') === 0 &&
-      Number(((tests[kind] || {}).counts || {}).completed || 0) > 0;
-  }).map(function (kind) { return Number(kind.split('_').pop()); })
-    .filter(function (budget) { return Number.isFinite(budget); })
-    .reduce(function (largest, budget) { return Math.max(largest, budget); }, 0);
-  var state = failed.length ? 'Failed' : running.length ? 'Running' :
-    unproven.length ? 'Not established' : limits.length ? 'Limited' : 'Passed';
-  row.assessmentSort.result = ({Failed:0, 'Not established':1, Running:2, Limited:3, Passed:4})[state];
+  row.assessmentSort.result = labels.length ? 2 : observed ? 1 : 0;
   var host = row.querySelector('[data-assessment-qualification]');
   host.replaceChildren();
-  var span = document.createElement('span');
-  span.className = 'model-assessment-qualification model-assessment-' +
-    (state === 'Passed' ? 'passed' : state === 'Failed' ? 'issues' : state === 'Limited' ? 'limited' : 'untested');
-  span.textContent = (role === 'both' ? 'Director + Vision ' : role === 'director' ? 'Director ' : 'Vision ') +
-    (state === 'Passed' ? 'Verified' : state === 'Limited' ? 'Capability demonstrated · limits' : state);
-  span.title = 'Required Storyboard JSON, Schema Assist, and applicable Vision tests determine technical qualification. Deep stress-test limits and LLM judging are separate.';
-  host.appendChild(span);
-  if (role !== 'vision' && verifiedTier) {
+  var primary = document.createElement('span');
+  primary.className = 'model-assessment-qualification ' + (labels.length ? 'model-assessment-passed' : 'model-assessment-untested');
+  primary.textContent = labels.length ? labels.join(' · ') : observed ? 'Assessed' : 'Not assessed';
+  primary.title = 'Only demonstrated capabilities are shown; observations without a successful demonstration remain in the assessment history.';
+  host.appendChild(primary);
+  if (verifiedTier && role !== 'vision') {
     var tier = document.createElement('span');
     tier.className = 'model-assessment-inline-reason';
-    tier.textContent = 'Storyboard ' + (verifiedTier / 1024).toLocaleString(undefined, {maximumFractionDigits: 2}) + 'K verified';
+    tier.textContent = 'Storyboard ' + (verifiedTier / 1024).toLocaleString(undefined, {maximumFractionDigits: 2}) + 'K budget verified';
+    tier.title = 'Largest successful Storyboard request budget; not measured output tokens.';
     host.appendChild(tier);
   }
-  var reasons = state === 'Failed' ? failed : state === 'Running' ? running :
-    state === 'Not established' ? unproven : state === 'Limited' ? limits : [];
-  if (reasons.length)
-    diagnosticsAssessmentShowReason(host, reasons[0] +
-      (reasons.length > 1 ? ' (+' + (reasons.length - 1) + ' more)' : ''), reasons.join(' · '));
-  row.dataset.assessmentSanity = state;
+  row.dataset.assessmentSanity = labels.length ? 'Demonstrated' : observed ? 'Assessed' : 'Untested';
 }
 
 function diagnosticsAssessmentShowReason(host, summary, detail) {
@@ -633,66 +597,54 @@ function refreshUnifiedModelAssessment() {
       summary.appendChild(metrics);
       panel.appendChild(summary);
 
-      var familyStats = {writing:[0,0,0],stress:[0,0,0],thinking:[0,0,0],vocabulary:[0,0,0],vision:[0,0,0]};
-      var issueCounts = {};
-      Object.keys(tests).forEach(function (probe) {
-        var item = tests[probe], counts = item.counts || {};
-        var family = probe === 'director_thinking' ? 'thinking' :
-          (probe.indexOf('director_scene_plan_') === 0 && Number(probe.split('_').pop()) > 2048) ? 'stress' :
-          (probe.indexOf('director_scene_plan_') === 0 || probe.indexOf('director_writing') === 0) ? 'writing' :
-          (probe === 'vision_open' || probe === 'vision_group_aware') ? 'vision' : 'vocabulary';
-        familyStats[family][0] += Number(counts.completed || 0);
-        familyStats[family][1] += Number(counts.failed || 0);
-        familyStats[family][2] += Number(counts.skipped || 0) + Number(counts.interrupted || 0);
-        if (!item.error || !Number(counts.failed || 0)) return;
-        var reason = /capacity exhausted|truncated|token budget/i.test(item.error)
-          ? 'Output capacity reached' :
-          /exceeds the available context size|context size.*exceed/i.test(item.error)
-          ? 'Context window exceeded' :
-          /empty response|no answer text/i.test(item.error) ? 'Empty model response' :
-          /invalid|schema|validation/i.test(item.error) ? 'Invalid structured response' :
-          'Other probe failures';
-        if (family === 'stress') reason = 'Stress test · ' + reason;
-        var group = issueCounts[reason] || (issueCounts[reason] = {count:0, sample:''});
-        group.count += Number(counts.failed || 0);
-        if (!group.sample) group.sample = item.error;
-      });
       var section = document.createElement('div');
       section.className = 'model-assessment-capabilities';
       var caption = document.createElement('strong');
-      caption.textContent = 'Capabilities';
+      caption.textContent = 'Verified capabilities';
       section.appendChild(caption);
-      [['writing','Storyboard JSON'],['stress','Long-form stress (not quality grade)'],['thinking','Thinking'],['vocabulary','Schema Assist'],['vision','Sight']].forEach(function (entry) {
-        var amounts = familyStats[entry[0]];
-        if (!amounts.some(Boolean)) return;
+      [
+        ['director_scene_plan_', 'Storyboard'],
+        ['language_synthesis', 'Schema Assist'],
+        ['set_vocabulary_synthesis', 'Schema Assist'],
+        ['language_challenge', 'Vocabulary challenge'],
+        ['set_vocabulary_challenge', 'Vocabulary challenge'],
+        ['vision_open', 'Sight'],
+        ['vision_group_aware', 'Group-aware Sight']
+      ].forEach(function (spec) {
+        var passed = Object.keys(tests).some(function (probe) {
+          return (spec[0] === 'director_scene_plan_' ? probe.indexOf(spec[0]) === 0 : probe === spec[0])
+            && Number(((tests[probe] || {}).counts || {}).completed || 0) > 0;
+        });
+        if (!passed || section.textContent.indexOf(spec[1]) !== -1) return;
         var badge = document.createElement('span');
         badge.className = 'model-assessment-capability';
-        badge.textContent = entry[1] + ' · ' + amounts[0] + ' completed' +
-          (amounts[1] ? ' · ' + amounts[1] + ' failed' : '') +
-          (amounts[2] ? ' · ' + amounts[2] + ' skipped/interrupted' : '');
+        badge.textContent = spec[1];
         section.appendChild(badge);
       });
       panel.appendChild(section);
-      var problems = Object.keys(issueCounts);
-      if (problems.length) {
-        var attention = document.createElement('div');
-        attention.className = 'model-assessment-attention';
-        var heading = document.createElement('strong');
-        heading.textContent = 'Needs attention';
-        attention.appendChild(heading);
-        problems.forEach(function (reason) {
-          var finding = document.createElement('div');
-          var issue = issueCounts[reason];
-          finding.textContent = reason + ' · ' + issue.count + ' failure(s)';
-          finding.title = issue.sample;
-          attention.appendChild(finding);
+      var resetButton = document.createElement('button');
+      resetButton.type = 'button';
+      resetButton.className = 'review-captions-btn';
+      resetButton.textContent = 'Reset this model’s assessment';
+      resetButton.title = 'Delete this model’s saved assessment evidence and allow fresh tests; other models remain unchanged.';
+      resetButton.addEventListener('click', function () {
+        if (!window.confirm('Reset all saved Model Assessment evidence for ' + name +
+          '? This permanently clears this model’s results across saved runs. Other models are unaffected.')) return;
+        resetButton.disabled = true;
+        modelLabPost({action: 'reset_model', modelRef: ref}).then(function () {
+          diagnosticsAssessmentPreviewKey = '';
+          diagnosticsAssessmentExpanded.delete(key);
+          return refreshUnifiedModelAssessment();
+        }).catch(function (error) {
+          resetButton.disabled = false;
+          reportConsoleError('Model Assessment reset', error);
         });
-        panel.appendChild(attention);
-      }
+      });
+      panel.appendChild(resetButton);
       var raw = document.createElement('details');
       raw.className = 'model-assessment-raw';
       var rawTitle = document.createElement('summary');
-      rawTitle.textContent = 'Detailed probe evidence · ' + Object.keys(tests).length + ' probe types';
+      rawTitle.textContent = 'Technical evidence (advanced)';
       raw.appendChild(rawTitle);
       var provenance = document.createElement('div');
       provenance.dataset.assessmentProvenance = '';
@@ -704,7 +656,9 @@ function refreshUnifiedModelAssessment() {
       var caveat = document.createElement('div');
       caveat.textContent = 'Probe completion is not a semantic grade. Context limit is not established by these tests. Historical records may use older protocols.';
       raw.appendChild(caveat);
-      Object.keys(tests).forEach(function (probe) {
+      Object.keys(tests).filter(function (probe) {
+        return Number(((tests[probe] || {}).counts || {}).completed || 0) > 0;
+      }).forEach(function (probe) {
         var item = tests[probe];
         var detail = document.createElement('div');
         detail.dataset.assessmentInitialEvidence = '';
@@ -884,10 +838,10 @@ function diagnosticsRefreshSelectionPlan() {
     button.textContent = plan.total ? 'Complete ' + plan.total + (plan.total === 1 ? ' Test' : ' Tests') : 'Already Complete';
     button.disabled = !plan.total;
     var knownLimits = Object.keys(data.models || {}).reduce(function (n, ref) {
-      return n + Number(data.models[ref].limited || 0);
+      return n + Number(data.models[ref].limited || 0) + Number(data.models[ref].observed || 0);
     }, 0);
     status.textContent = count + ' model(s) selected · ' + data.reused + ' already complete · ' +
-      (knownLimits ? knownLimits + ' known-limit tiers · ' : '') +
+      (knownLimits ? knownLimits + ' previously assessed · ' : '') +
       plan.missing + ' missing · ' + plan.retry + ' retry';
     labels.forEach(function (label) {
       var item = data.models[label.dataset.assessmentWork];
@@ -896,7 +850,7 @@ function diagnosticsRefreshSelectionPlan() {
       label.textContent = [
         item.missing ? item.missing + ' missing' : '',
         item.retry ? item.retry + ' retry' : '',
-        item.limited ? item.limited + ' known-limit tiers' : ''
+        (Number(item.limited || 0) + Number(item.observed || 0)) ? (Number(item.limited || 0) + Number(item.observed || 0)) + ' assessed' : ''
       ].filter(Boolean).join(' · ') || 'Tests complete';
       label.title = item.complete + ' passed/reused · ' + (item.limited || 0) + ' established limit tiers · ' + item.planned + ' planned.';
     });

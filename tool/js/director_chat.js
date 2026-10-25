@@ -543,7 +543,7 @@
     if (clear) clear.disabled = state.pending || (!currentMessages().length && !(state.activeMode === 'storyboard' && (Object.keys(state.storyboardAttachments).length || state.workshop)));
     var prepare = el('director-chat-workshop-prepare');
     if (prepare) {
-      prepare.disabled = state.pending || !state.modelId || !currentMessages().some(function (message) { return message.role === 'user'; });
+      prepare.disabled = state.pending || !state.modelId || !!(state.workshop && state.workshop.shotError) || !currentMessages().some(function (message) { return message.role === 'user'; });
       prepare.textContent = state.workshopProposal ? 'Review Proposal' : 'Prepare Revision';
     }
   }
@@ -674,7 +674,8 @@
         sceneTitle: scene.sceneTitle,
         sceneIntent: scene.sceneSummary,
         durationSeconds: scene.durationSeconds,
-        timedShots: scene.shots
+        timedShots: scene.shots,
+        shotAvailability: scene.shotError || 'Timed shots attached for creative discussion'
       }, null, 2));
     }
     var attached = Object.keys(state.storyboardAttachments).map(function (key) {
@@ -796,6 +797,7 @@
 
   function prepareWorkshopRevision() {
     if (!state.workshop || state.activeMode !== 'storyboard') throw new Error('Open a Scene Workshop first.');
+    if (state.workshop.shotError) throw new Error(state.workshop.shotError);
     if (state.pending || !state.modelId) return;
     if (state.workshopProposal) { showWorkshopReview(); return; }
     var decisions = (state.modeMessages.storyboard || []).filter(function (message) {
@@ -1170,7 +1172,7 @@
   window.openStoryboardAssistant = function () { setOpen(true, 'storyboard'); };
   window.openStoryboardSceneWorkshop = function (context) {
     if (state.pending) throw new Error('Finish the current Assistant job before switching Workshop Scenes.');
-    if (!context || !context.storyId || !context.sceneId || !context.expectedPrompt || !context.shots) {
+    if (!context || !context.storyId || !context.sceneId || typeof context.expectedPrompt !== 'string') {
       throw new Error('Scene Workshop requires a complete saved Scene snapshot.');
     }
     var old = state.workshop;
@@ -1183,6 +1185,7 @@
       el('director-chat-workshop-status').textContent = '';
     }
     state.workshop = context;
+    el('director-chat-workshop-status').textContent = context.shotError ? ('Automatic shot revisions unavailable: ' + context.shotError) : '';
     setOpen(true, 'storyboard');
   };
   window.registerAssistantMode = registerContextMode;

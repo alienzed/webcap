@@ -166,7 +166,7 @@ CAPTION_ENRICHMENT_SYSTEM_PROMPT = (
 
 def build_caption_enrichment_messages(
     draft="", open_sight=None, assignments=None, tags=None, rendered_primer="",
-    preferred_sequence="",
+    preferred_sequence="", saved_sights=None,
 ):
     caption = str(draft or "").strip()
     if not caption:
@@ -185,8 +185,24 @@ def build_caption_enrichment_messages(
         "selectedAnnotations": facts,
         "otherTags": [str(tag) for tag in (tags or []) if str(tag).strip()],
     }
+    perspectives = [
+        {"model": str(row["model"]), "sight": row["sight"]}
+        for row in (saved_sights or [])
+        if isinstance(row, dict) and str(row.get("model") or "").strip()
+        and isinstance(row.get("sight"), dict)
+        and str(row["sight"].get("description") or "").strip()
+    ]
+    system_prompt = CAPTION_ENRICHMENT_SYSTEM_PROMPT
+    if len(perspectives) > 1:
+        payload["savedSightPerspectives"] = perspectives
+        system_prompt += (
+            " Multiple saved Sight analyses of the same media are provided, each labeled "
+            "by its Vision model. They are imperfect perspectives that can overlap, "
+            "emphasize different details, or disagree. Consider them together thoughtfully "
+            "when finding useful enhancements to the existing caption."
+        )
     return [
-        {"role": "system", "content": CAPTION_ENRICHMENT_SYSTEM_PROMPT},
+        {"role": "system", "content": system_prompt},
         {"role": "user", "content": "Find missing details from Sight while keeping the caption intact.\n\n" +
          json.dumps(payload, ensure_ascii=False, separators=(",", ":"))},
     ]

@@ -738,9 +738,18 @@ def caption_assist_route():
         enrich = data.get("mode") == "enrich"
         if data.get("mode") not in (None, "enrich"):
             raise ValueError("Unknown Caption Assist mode.")
+        saved_sights = None
+        if enrich and data.get("folder") and data.get("media"):
+            review = sight_review_for_media(data["folder"], data["media"])
+            saved_sights = [
+                {"model": model, "sight": sight}
+                for model, sight in sorted(review["models"].items())
+                if isinstance(sight, dict) and str(sight.get("description") or "").strip()
+            ]
         messages = build_caption_enrichment_messages(
             draft=data.get("draft", ""),
             open_sight=data.get("openSight"),
+            saved_sights=saved_sights,
             assignments=data.get("assignments"),
             tags=data.get("tags"),
             rendered_primer=data.get("renderedPrimer", ""),

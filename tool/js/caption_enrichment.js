@@ -190,6 +190,8 @@ function runCaptionAssistEnrichment() {
   var original = String(candidate.text || '');
   request.draft = original;
   request.mode = 'enrich';
+  request.folder = String(state.folder || '');
+  request.media = String(item.fileName || '');
   var session = {phase:'pending',candidate:candidate,mediaKey:item.key,
     folder:String(state.folder || ''), originalText:original,
     suggestions:[],jobId:'',token:token};

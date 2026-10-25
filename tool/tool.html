@@ -3239,12 +3239,12 @@
                 <div class="set-scan-header">
                     <div>
                         <h2 id="saved-intelligence-title">VL Workspace</h2>
-                        <div class="vl-workspace-item-navigation" aria-label="Browse visible media">
-                            <button id="vl-workspace-prev" type="button" class="review-captions-btn" title="Previous visible media" aria-label="Previous media">‹</button>
-                            <span id="vl-workspace-position" aria-live="polite"></span>
-                            <button id="vl-workspace-next" type="button" class="review-captions-btn" title="Next visible media" aria-label="Next media">›</button>
-                            <span id="saved-intelligence-file" class="set-scan-subtitle"></span>
-                        </div>
+                        <span id="saved-intelligence-file" class="set-scan-subtitle"></span>
+                    </div>
+                    <div class="vl-workspace-item-navigation" aria-label="Browse visible media">
+                        <button id="vl-workspace-prev" type="button" class="review-captions-btn" title="Previous visible media" aria-label="Previous media">‹</button>
+                        <span id="vl-workspace-position" aria-live="polite"></span>
+                        <button id="vl-workspace-next" type="button" class="review-captions-btn" title="Next visible media" aria-label="Next media">›</button>
                     </div>
                     <button id="saved-intelligence-close-btn" type="button" class="modal-close-btn" aria-label="Close VL Workspace">&times;</button>
                 </div>
@@ -3296,6 +3296,7 @@
                             <div class="editor-caption-candidate-heading">
                                 <strong id="vision-image-caption-title">Describe with VL</strong>
                                 <span id="vision-image-caption-model" class="vision-image-caption-model"></span>
+                                <button id="vl-workspace-describe-run" type="button" class="review-captions-btn vl-describe-run">Generate caption</button>
                             </div>
                             <div id="vision-image-caption-loading" class="editor-caption-focus-loading hidden" role="status">
                                 <span class="editor-caption-focus-spinner" aria-hidden="true"></span>
@@ -3306,12 +3307,12 @@
                             <div class="editor-caption-candidate-actions">
                                 <div class="editor-caption-candidate-actions-right">
                                     <button id="vision-image-caption-copy" type="button" disabled>Copy</button>
-                                    <button id="vision-image-caption-use" type="button" disabled>Use in Editor</button>
+                                    <button id="vision-image-caption-use" type="button" disabled>Apply to Editor</button>
                                     <button id="vision-image-caption-cancel" class="hidden" type="button">Cancel generation</button>
                                 </div>
                             </div>
                         </div>
-                        <button id="vl-workspace-describe-run" type="button" class="review-captions-btn vl-describe-run hidden">Generate caption</button>
+                        <p class="vl-caption-preview-note">Generated captions are previews. Only Apply to Editor replaces editor text; saving remains separate.</p>
                     </div>
                 </div>
                 <div class="set-scan-footer">Choosing a saved Sight changes the evidence used by Caption Assist and QA, not captions or tags.</div>

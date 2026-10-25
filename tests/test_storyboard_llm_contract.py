@@ -149,7 +149,7 @@ def test_develop_story_uses_simple_scene_schema_and_dense_scene_guidance():
     assert "Create exactly 12 Scenes." in prompt
     assert "GENERATION UNIT." in prompt
     assert "Use that time purposefully, concisely." in prompt
-    assert "Choose the relationship that best serves the concept" in prompt
+    assert "Use the Story\'s Scene Relationships direction when present" in prompt
     assert "evolving state when continuity matters" in prompt
     assert "When Scenes are connected" in prompt
     assert "Use entry and exit state only when a specific handoff or visible state is genuinely useful" in prompt
@@ -389,7 +389,7 @@ def test_director_guidance_resolves_cross_scene_references_without_changing_h3_s
     request = storyboard_llm_contract.build_request(_story(), "", "develop_story")
     prompt = request["prompt"]
     assert "Describe the current Scene with concrete visual facts" in prompt
-    assert "Comparisons between subjects visible within this Scene remain useful" in prompt
+    assert "Ground invented details in the Story and supplied references." in prompt
     assert "Do not invent unsupported detail" in prompt
     assert "--- BEGIN EXAMPLE PROMPT SHAPE ---" in prompt
     assert "Environment / Continuity Anchors:" in prompt

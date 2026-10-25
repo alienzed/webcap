@@ -1103,7 +1103,6 @@
     el('set-scan-vision-model').onchange = function () {
       if (setScanState.running) throw new Error('Cannot change the scanning model during an active scan.');
       setVisionModelPreference(this.value);
-      openSetIntelligence();
     };
     window.addEventListener('webcap:vision-capabilities-refreshed', function () {
       if (setScanState.open) syncPrepareSetVisionModel();

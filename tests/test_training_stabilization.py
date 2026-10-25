@@ -824,6 +824,39 @@ def test_managed_resume_records_resume_run_as_current_output(tmp_path, monkeypat
     assert payload["job"]["outputRunPath"] == str(resumed_run)
 
 
+
+def test_h3_checkpoint_resume_rejects_switching_image_adapter(tmp_path, monkeypatch):
+    _configure_root(monkeypatch, tmp_path)
+    _fake_runtime(monkeypatch)
+    monkeypatch.setattr(training_runner, "_ensure_monitor_started", lambda: None)
+    folder = _set(tmp_path)
+    ensure_training_setup(folder, MINIMAX_H3_PROFILE_ID, selected_media=["one.png"])
+    action, action_data = allocate_action(folder, resolved_profile(MINIMAX_H3_PROFILE_ID), ("h3",))
+    run = action / "output" / "standard-run"
+    (run / "global_step1").mkdir(parents=True)
+    (run / "latest").write_text("global_step1\\n", encoding="utf-8")
+    (run / "config.h3.toml").write_text((folder / "config.h3.toml").read_text(encoding="utf-8"), encoding="utf-8")
+    training_runner._write_state({"version": 3, "activeJobId": "", "jobs": [], "queuePaused": True, "queuePauseReason": "test"})
+
+    rejected, code = training_runner.start_response(
+        "sets/subject", queue=True, stages="h3", profile_id=MINIMAX_H3_PROFILE_ID, run_id="train",
+        selected_media=["one.png"], resume_action_id=action_data["actionId"],
+        resume_output_id="output/standard-run", config_settings={"h3ImageTrainingAdapter": True},
+    )
+    assert code == 400 and rejected["ok"] is False
+    assert "Image Adapter is fixed by the saved H3 checkpoint (standard)" in rejected["error"]
+    assert training_runner._read_state()["jobs"] == []
+    assert (run / "global_step1").is_dir()
+
+    accepted, code = training_runner.start_response(
+        "sets/subject", queue=True, stages="h3", profile_id=MINIMAX_H3_PROFILE_ID, run_id="train",
+        selected_media=["one.png"], resume_action_id=action_data["actionId"],
+        resume_output_id="output/standard-run", config_settings={},
+    )
+    assert code == 200 and accepted["ok"]
+    assert accepted["job"]["trainingSettings"]["h3ImageTrainingAdapter"] is False
+
+
 def test_custom_resume_creates_a_new_logical_run_without_writing_beside_source(tmp_path, monkeypatch):
     _configure_root(monkeypatch, tmp_path)
     _fake_runtime(monkeypatch)

@@ -70,12 +70,16 @@
       return terms.find(function (entry) { return entry.normalized === key; }) || null;
     }
 
+    // Vocabulary ownership is independent of each observed phrase. Resolve it
+    // once per Group instead of rescanning/sorting every Group for every phrase.
+    var uniqueAnchors = terms.filter(function (entry) {
+      return entry.normalized.length >= 5 &&
+        !AMBIGUOUS_ANCHORS[entry.normalized] &&
+        getChecklistRequirementsForTag(entry.original).length === 1;
+    });
     function hasGroupAnchor(phrase) {
       var haystack = ' ' + normalizedSightPhrase(phrase) + ' ';
-      return terms.some(function (entry) {
-        if (!entry.normalized || entry.normalized.length < 5 ||
-            AMBIGUOUS_ANCHORS[entry.normalized] ||
-            getChecklistRequirementsForTag(entry.original).length !== 1) return false;
+      return uniqueAnchors.some(function (entry) {
         return haystack.indexOf(' ' + entry.normalized + ' ') !== -1;
       });
     }

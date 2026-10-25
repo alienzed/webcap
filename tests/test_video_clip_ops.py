@@ -239,7 +239,7 @@ def test_external_video_clip_uses_canonical_worker_and_set_destination(tmp_path,
     # Frame stepping and exact Mark Start use the same validated source.
     observed = {}
     monkeypatch.setattr(video_frame_ops, "inspect_video_frame", lambda path, **kwargs:
-                        observed.setdefault("path", path) or {"ok": True})
+                        (observed.__setitem__("path", path) or {"frameIndex": 12, "timestampSec": 1.0}))
     frame = client.post("/media/video_clip_frame", json={
         "externalPath": str(external), "relativePath": "nested/source.mp4",
         "fileName": "source.mp4", "approximateTimeSec": 1,

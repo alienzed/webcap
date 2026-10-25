@@ -65,27 +65,11 @@ Director may:
 
 The human remains the editor/director. Every Scene and prompt remains directly editable.
 
-## Concept-first planning
+## Story authoring authority
 
-When developing Scenes, Director should consider the **complete concept before writing individual Scenes**.
+The complete Story concept and populated Directing Guidelines govern Scene relationships, variation, pacing, and emphasis. The Director interprets that authored direction while producing independently generatable Scenes. Missing guidelines leave creative decisions unspecified.
 
-First decide what relationship, if any, the Scenes should have. Examples include:
-
-- progression;
-- variations;
-- repeated format;
-- montage;
-- parallel moments;
-- independent alternatives;
-- another structure suggested by the concept.
-
-None is the default.
-
-Director should then decide what each Scene contributes to the whole and author the Scenes accordingly.
-
-Do not manufacture setup, conflict, escalation, resolution, or ending simply because the data object is called a Story. Do not manufacture continuity merely because one Scene appears before another.
-
-For Auto Scene count, Director chooses however many Scenes best serve the concept and provide useful coverage. When the user selects an explicit count, Director is instructed to create that many Scenes; WebCap does not fabricate or delete Scenes to enforce the request afterward.
+Auto Scene count is a Director decision. Explicit Scene counts are requested in the output contract; WebCap preserves the authored Scene records.
 
 ## Scene generation unit and directing guidelines
 
@@ -246,9 +230,9 @@ The active model-facing guidance is:
 
 That file is intentionally concise and is what Director should use for ordinary H3 prompt writing.
 
-Director should write clear observable audiovisual instructions, use dense cuts/beats where useful, keep chronology/timestamps sensible when used, preserve exact reference anchors, and include sound/dialogue/music when they actually help.
+Director authors observable, timed audiovisual content following Story Guidelines and Scene intent. H3 guidance supplies section headings, timestamp notation, dialogue syntax, and exact reference-frame alignment.
 
-WebCap does **not** require Director to emit MiniMax's documented three-field base syntax.
+WebCap stores the complete authored H3 prompt unchanged. The Workshop can selectively revise the timed-shot section when an unambiguous `integrated_multimodal_description` heading is present; other prompt shapes remain available for discussion and manual editing.
 
 The longer file:
 

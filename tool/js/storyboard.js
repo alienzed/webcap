@@ -81,7 +81,7 @@
       instruction: 'Review this H3 text-to-video prompt for coherence. Favor details that can be conveyed visually or audibly. Consolidate repeated descriptions. Preserve the existing structure and creative intent. Return the complete improved prompt, or the original unchanged if no meaningful improvement is needed.'
     },
     continuity: {
-      instruction: 'Review this Scene against the Story overview, visual atmosphere, continuity invariants, and the preceding Scene. Repair meaningful continuity gaps, contradictions, missing generation-critical context, or prompt omissions while preserving the Scene\'s intended action, chronology, and narrative purpose. If it is already coherent and complete, leave it unchanged.'
+      instruction: 'Review this Scene against supplied Story facts, invariants, and the author\'s Scene Relationships direction. Make focused corrections to inconsistent subject, prop, or environment state. Preserve authored creative decisions and return the Scene unchanged when it is coherent.'
     }
   };
 

@@ -146,6 +146,17 @@ function diagnosticsAssessmentCounts(row, tests) {
     tier.title = 'Largest successful Storyboard request budget; not measured output tokens.';
     host.appendChild(tier);
   }
+  var measuredOutput = Object.keys(tests).filter(function (kind) {
+    return kind.indexOf('director_scene_plan_') === 0 && completed(kind);
+  }).reduce(function (best, kind) {
+    return Math.max(best, Number(tests[kind].verifiedOutputTokens || 0));
+  }, 0);
+  if (measuredOutput > 0) {
+    var output = document.createElement('span');
+    output.className = 'model-assessment-inline-reason';
+    output.textContent = measuredOutput.toLocaleString() + ' visible output tokens observed';
+    host.appendChild(output);
+  }
   row.dataset.assessmentSanity = labels.length ? 'Demonstrated' : observed ? 'Assessed' : 'Untested';
 }
 

@@ -51,6 +51,49 @@ def test_inference_enqueue_starts_worker_on_demand(inference_root, monkeypatch):
 
 
 
+def test_pending_generate_configuration_requires_explicit_job_detail_request(inference_root):
+    from tool.server import app as app_module
+
+    frozen_request = {
+        "modelId": "minimax_h3", "mediaKind": "video",
+        "sourcePrompt": "Submitted multi-strap scene",
+        "settings": {"duration": 7, "megapixels": 0.5, "seed": 1234, "samplingMode": "quality"},
+        "loras": [{"name": "bikini-teardrop.safetensors", "strength": 0.85}],
+        "references": {"first_frame": "references/source.png"},
+    }
+    stored = execution_queue.enqueue(
+        inference_runner.EXECUTION_LANE,
+        {"request": frozen_request},
+        metadata={"client": "generate", "modelId": "minimax_h3", "mediaKind": "video"},
+    )
+    job_id = stored["id"]
+
+    # The shared inference list remains lightweight and must not leak the
+    # frozen request into background polling.
+    list_view = next(job for job in inference_runner.snapshot()["jobs"] if job["jobId"] == job_id)
+    assert list_view["generationConfiguration"] is None
+    assert inference_runner.job_status(job_id)["generationConfiguration"] is None
+
+    detail = inference_runner.job_status(job_id, include_configuration=True)
+    assert detail["generationConfiguration"] == {
+        "sourcePrompt": frozen_request["sourcePrompt"],
+        "settings": frozen_request["settings"],
+        "loras": frozen_request["loras"],
+        "references": frozen_request["references"],
+    }
+    web = app_module.app.test_client()
+    response = web.get("/fs/inference", query_string={"job": job_id, "configuration": "1"})
+    assert response.status_code == 200
+    assert response.get_json()["job"]["generationConfiguration"] == detail["generationConfiguration"]
+    assert web.get("/fs/inference", query_string={"job": job_id}).get_json()["job"]["generationConfiguration"] is None
+
+    # A configuration inspection never consumes or alters the queued request.
+    assert execution_queue.get_job(job_id, include_payload=True)["payload"]["request"] == frozen_request
+    rejected = web.get("/fs/inference", query_string={"job": job_id, "consume": "1", "configuration": "1"})
+    assert rejected.status_code == 400
+    assert "Cannot consume" in rejected.get_json()["error"]
+
+
 def test_inference_monitor_is_dormant_without_requested_work(inference_root):
     assert inference_runner._monitor_has_work() is False
 

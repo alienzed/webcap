@@ -671,10 +671,10 @@ def _probe_job(run, *, kind, role, model_ref, file_name="", enqueue):
     if _attempt_completed(run, kind, model_ref, file_name):
         return _completed_attempt(run, kind, model_ref, file_name)
     key = _attempt_key(kind, model_ref, file_name)
-    # Failed probes wait until all missing work for this model has been attempted.
-    if not run.get("retryPhase") and (run.get("previousFailures") or {}).get(key):
-        _mark_retry(run, kind, role, model_ref, file_name)
-        return {"kind": kind, "status": "deferred", "modelRef": model_ref, "file": file_name}
+    # A previous observed result is assessment evidence, not an invitation to
+    # run the same failed probe again. Reset this model explicitly to reassess.
+    if (run.get("previousFailures") or {}).get(key):
+        return {"kind": kind, "status": "observed", "modelRef": model_ref, "file": file_name}
 
     stop_event = _active_stop_event(run["id"])
     if stop_event is not None and stop_event.is_set():
@@ -1463,7 +1463,7 @@ def _assessment_work(run):
             skipped += 1
         elif not attempt:
             if key in previous_failures:
-                deferred += 1
+                skipped += 1
         elif attempt.get("status") == "skipped":
             skipped += 1
         elif attempt.get("status") == "running":

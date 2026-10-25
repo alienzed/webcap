@@ -756,6 +756,7 @@
     el('storyboard-workshop-review-summary').textContent = state.workshopProposal.summary;
     el('storyboard-workshop-review-error').textContent = '';
     el('storyboard-workshop-review-apply').hidden = false;
+    modal.querySelector('.storyboard-workshop-review-note').hidden = false;
     el('storyboard-workshop-review-back').textContent = 'Back to discussion';
     renderWorkshopDiff(state.workshop.shots, state.workshopProposal.shots);
     if (modal.open) modal.close();
@@ -771,6 +772,7 @@
     el('storyboard-workshop-review-summary').textContent = 'Comparison with the previously saved prompt.';
     el('storyboard-workshop-review-error').textContent = '';
     el('storyboard-workshop-review-apply').hidden = true;
+    modal.querySelector('.storyboard-workshop-review-note').hidden = true;
     el('storyboard-workshop-review-back').textContent = 'Close';
     renderWorkshopDiff(original, current);
     if (modal.open) modal.close();
@@ -1157,7 +1159,7 @@
       }
     });
     document.addEventListener('pointerdown', function (event) {
-      if (!state.open || state.pinned || drawer.contains(event.target) || toggle.contains(event.target)) return;
+      if (!state.open || state.pinned || el('storyboard-workshop-review').open || drawer.contains(event.target) || toggle.contains(event.target)) return;
       setOpen(false);
     });
     window.addEventListener('keydown', function (event) {
@@ -1184,6 +1186,7 @@
       state.modeMetricsByAssistantIndex.storyboard = {};
       state.storyboardAttachments = {};
       state.workshopProposal = null;
+      el('director-chat-workshop-status').textContent = '';
     }
     state.workshop = context;
     setOpen(true, 'storyboard');

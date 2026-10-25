@@ -2413,11 +2413,14 @@
       button.disabled = batch.status === 'stopping';
       overview.appendChild(line);
     });
-    // Active First Cuts need responsive updates; an empty queue only needs a
-    // lightweight heartbeat to discover batches started in another browser.
+    // Inactive Storyboard does not own any First Cut polling. Global Activity
+    // remains responsible for application-wide execution monitoring.
+    if (el('storyboard-workspace').classList.contains('hidden')) return;
+    if (!activeBatches.length) return;
     storyState.storyActionTimer = setTimeout(function () {
+      if (el('storyboard-workspace').classList.contains('hidden')) return;
       firstCutRequest().then(adoptFirstCutBatches).catch(reportError);
-    }, activeBatches.length ? 2000 : 30000);
+    }, 2000);
   }
 
   function cancelFirstCutBatch(id) {
@@ -5821,6 +5824,8 @@
   }
 
   function closeStoryboardActivity() {
+    if (storyState.storyActionTimer) clearTimeout(storyState.storyActionTimer);
+    storyState.storyActionTimer = 0;
     // An in-flight exact navigation must not choose a Scene after leaving Storyboard.
     storyState.navigationRequestId += 1;
     var frame = el('app-frame');
@@ -5855,6 +5860,7 @@
     storyState.director.modelId = getDirectorModelPreference('webcap.storyboard.directorModel');
     frame.classList.add('workspace-storyboard-open');
     workspace.classList.remove('hidden');
+    firstCutRequest().then(adoptFirstCutBatches).catch(reportError);
     if (typeof window.refreshAssistantModes === 'function') window.refreshAssistantModes();
     if (typeof window.syncApplicationShellContext === 'function') window.syncApplicationShellContext();
     refreshDirector();
@@ -6779,6 +6785,5 @@
   window.closeStoryboardActivity = closeStoryboardActivity;
 
   bindUi();
-  firstCutRequest().then(adoptFirstCutBatches).catch(reportError);
   syncDirectorToolsUi();
 })();

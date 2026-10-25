@@ -3760,16 +3760,40 @@
     if (resultsView === 'compare') renderCompare(currentStatus);
   }
 
+  function comparePairs(status) {
+    var results = sortedTestPreviewRows(status && Array.isArray(status.results) ? status.results : [])
+      .map(function(row) { return row.result; });
+    var variations = status && Array.isArray(status.variationCases) ? status.variationCases : [];
+    if (!variations.length) {
+      return results.slice(0, -1).map(function(result,index){return [result,results[index+1]];});
+    }
+    var byCandidate = new Map();
+    results.forEach(function(result) {
+      var key = String(result.candidateFile || result.sourceLoRA || '');
+      if (!byCandidate.has(key)) byCandidate.set(key,new Map());
+      byCandidate.get(key).set(Number(result.variationIndex),result);
+    });
+    var rows=Array.from(byCandidate.values());
+    var pairs=[];
+    for(var row=0;row<rows.length-1;row++) {
+      for(var col=0;col<variations.length;col++) {
+        if(rows[row].has(col) && rows[row+1].has(col))
+          pairs.push([rows[row].get(col),rows[row+1].get(col)]);
+      }
+    }
+    return pairs;
+  }
+
   function renderCompare(status) {
     var host = el('test-generations-compare');
     if (!host) return;
-    var results = sortedTestPreviewRows(status && Array.isArray(status.results) ? status.results : [])
-      .map(function (row) { return row.result; });
+    var pairs = comparePairs(status);
+    var results = status && Array.isArray(status.results) ? status.results : [];
     var resultFolder = String(status && status.resultFolder || '');
     var sessionName = String(status && status.session || '');
     var candidateScores = testVlCandidateScores(results);
 
-    if (results.length < 2) {
+    if (!pairs.length) {
       if (host.dataset.compareKey !== 'empty') {
         host.dataset.compareKey = 'empty';
         host.innerHTML = '<div class="test-generations-empty">At least two completed results are needed to compare.</div>';
@@ -3777,8 +3801,8 @@
       return;
     }
 
-    compareIndex = Math.max(0, Math.min(compareIndex, results.length - 2));
-    var pair = [results[compareIndex], results[compareIndex + 1]];
+    compareIndex = Math.max(0, Math.min(compareIndex, pairs.length - 1));
+    var pair = pairs[compareIndex];
     var compareKey = sessionName + '|' + pair.map(function (result, index) {
       return String(resultMediaFile(result) || result.sourceLoRA || ('result-' + (compareIndex + index)));
     }).join('|');
@@ -3787,8 +3811,8 @@
       var existingNext = host.querySelector('[data-compare-next]');
       var existingPosition = host.querySelector('[data-compare-position]');
       if (existingPrevious) existingPrevious.disabled = compareIndex <= 0;
-      if (existingNext) existingNext.disabled = compareIndex >= results.length - 2;
-      if (existingPosition) existingPosition.textContent = (compareIndex + 1) + ' / ' + (results.length - 1);
+      if (existingNext) existingNext.disabled = compareIndex >= pairs.length - 1;
+      if (existingPosition) existingPosition.textContent = (compareIndex + 1) + ' / ' + pairs.length;
       return;
     }
 
@@ -3819,13 +3843,13 @@
 
     var position = document.createElement('span');
     position.dataset.comparePosition = '1';
-    position.textContent = (compareIndex + 1) + ' / ' + (results.length - 1);
+    position.textContent = (compareIndex + 1) + ' / ' + pairs.length;
 
     var next = document.createElement('button');
     next.type = 'button';
     next.className = 'review-captions-btn';
     next.dataset.compareNext = '1';
-    next.disabled = compareIndex >= results.length - 2;
+    next.disabled = compareIndex >= pairs.length - 1;
     next.textContent = 'Next';
 
     controls.appendChild(previous);
@@ -5468,8 +5492,7 @@
         return;
       }
       if (event.target.closest('[data-compare-next]')) {
-        var results = currentStatus && Array.isArray(currentStatus.results) ? currentStatus.results : [];
-        compareIndex = Math.min(Math.max(0, results.length - 2), compareIndex + 1);
+        compareIndex = Math.min(Math.max(0, comparePairs(currentStatus).length - 1), compareIndex + 1);
         renderCompare(currentStatus);
       }
     };

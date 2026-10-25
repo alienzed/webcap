@@ -15,7 +15,7 @@ from .permissions import normalize_path_permissions
 RUN_VERSION = 1
 ASSESSMENT_PROTOCOL = "webcap-model-assessment-structured-v4"
 # Existing identical production probes can be reused; legacy prose never qualifies as JSON evidence.
-LEGACY_COMPATIBLE_KINDS = {"language_synthesis", "language_challenge", "vision_open", "vision_group_aware"}
+LEGACY_COMPATIBLE_KINDS = set()
 ROOT_NAME = "model-lab-runs"
 DEFAULT_SAMPLE_COUNT = 8
 MAX_SAMPLE_COUNT = 24
@@ -418,11 +418,7 @@ def _reusable_evidence(run):
             ))
             # Older capacity evidence still describes a real limit for the same
             # Storyboard workload. Other results require protocol compatibility.
-            if ref not in selected or not (
-                same_protocol or kind in LEGACY_COMPATIBLE_KINDS
-                or (capacity and previous.get("assessmentProtocol") ==
-                    "webcap-model-assessment-structured-v3")
-            ):
+            if ref not in selected or not same_protocol:
                 continue
             if kind.startswith("vision_"):
                 if kind not in {"vision_open", "vision_group_aware"}:
@@ -1676,6 +1672,18 @@ def reset_model_evidence(model_ref):
     return changed
 
 
+def reset_all_evidence():
+    """Explicitly discard all saved assessment runs, without touching model files."""
+    with _lock:
+        if any(_active_record(row["id"]) for row in list_runs()):
+            raise RuntimeError("Stop active assessments before resetting all evidence.")
+        count = 0
+        for path in run_root().glob("*.json") if run_root().is_dir() else []:
+            path.unlink()
+            count += 1
+    return count
+
+
 def model_catalog():
     from .storyboard_llm_runtime import list_models, list_vision_models
 
@@ -1769,6 +1777,8 @@ def register_routes(app):
                         _write_run(run)
                         count += 1
                 return jsonify({"ok": True, "compactedRuns": count})
+            if action == "reset_all":
+                return jsonify({"ok": True, "deletedRuns": reset_all_evidence()})
             if action == "reset_model":
                 return jsonify({"ok": True, "updatedRuns": reset_model_evidence(data.get("modelRef"))})
             if action == "preview":

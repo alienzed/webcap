@@ -839,6 +839,13 @@ function captionAssistCompareWords(original, proposed) {
 }
 
 function renderCaptionAssistComparison(container, item, candidate) {
+  if (!container.__captionAssistDiffBound) {
+    container.__captionAssistDiffBound = true;
+    container.addEventListener('toggle', function () {
+      // Defer costly word-by-word DOM until someone opens the comparison.
+      if (container.open) renderCaptionAssistComparison(container, state.currentItem, captionAssistCandidate);
+    });
+  }
   var original = String(item && item.caption || '');
   var revised = String(candidate && candidate.text || '');
   var visible = !!(item && candidate && candidate.mediaKey === item.key);
@@ -853,7 +860,7 @@ function renderCaptionAssistComparison(container, item, candidate) {
     container.open = false;
     return;
   }
-  var diff = captionAssistCompareWords(original, revised);
+  var diff = expanded ? captionAssistCompareWords(original, revised) : null;
   container.replaceChildren();
   var summary = document.createElement('summary');
   summary.textContent = 'Changes vs saved caption';
@@ -877,14 +884,19 @@ function renderCaptionAssistComparison(container, item, candidate) {
     row.appendChild(content);
     container.appendChild(row);
   }
-  addRow('Saved', diff.oldWords, diff.oldMatch, 'removed');
-  addRow('Proposed', diff.newWords, diff.newMatch, 'added');
+  if (expanded) {
+    addRow('Saved', diff.oldWords, diff.oldMatch, 'removed');
+    addRow('Proposed', diff.newWords, diff.newMatch, 'added');
+  }
   container.dataset.mediaKey = item.key;
   container.dataset.hasChanges = 'true';
   container.open = expanded;
 }
 
-function syncCaptionAssistCandidateUi() {
+function syncCaptionAssistCandidateUi(options) {
+  // Ordinary draft edits do not change cached Sight, assigned tags or dock
+  // position. Avoid the most expensive DOM/subtree work on every keystroke.
+  var draftEdit = !!(options && options.draftEdit) && !isFocusedQaReviewMode();
   var panel = document.getElementById('editor-caption-candidate');
   var titleEl = document.getElementById('editor-caption-candidate-title');
   var progressEl = document.getElementById('editor-caption-focus-progress');
@@ -933,7 +945,7 @@ function syncCaptionAssistCandidateUi() {
   panel.classList.toggle('is-focus-caption', focusOverlay);
   panel.classList.toggle('is-editor-docked', editorDocked);
   panel.querySelector('.editor-caption-candidate-dialog').setAttribute('aria-modal', editorDocked ? 'false' : 'true');
-  if (editorDocked) {
+  if (editorDocked && !draftEdit) {
     var editorRect = ui.editorEl.getBoundingClientRect();
     panel.style.setProperty('--caption-editor-left', Math.max(8, editorRect.left) + 'px');
     panel.style.setProperty('--caption-editor-right', Math.max(8, window.innerWidth - editorRect.right) + 'px');
@@ -1101,7 +1113,7 @@ function syncCaptionAssistCandidateUi() {
   if (document.activeElement !== textEl || String(textEl.textContent || '') !== candidateText) {
     textEl.textContent = candidateText;
   }
-  syncFocusedCaptionVisionPhrasesUi();
+  if (!draftEdit) syncFocusedCaptionVisionPhrasesUi();
 
   prevBtn.classList.toggle('hidden', !focusOpen);
   nextBtn.classList.toggle('hidden', !focusOpen);
@@ -2044,7 +2056,7 @@ function wirePrimerCaptionResetUi() {
       if (isFocusedCaptionOpen()) {
         resetFocusedCaptionUseArm();
       }
-      syncCaptionAssistCandidateUi();
+      syncCaptionAssistCandidateUi({draftEdit: true});
     });
   }
 

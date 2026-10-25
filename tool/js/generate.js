@@ -41,6 +41,10 @@
     activePendingJobId: '',
     pendingJobsById: {},
     freshDraft: false,
+    editorMode: 'working',
+    workingSnapshot: null,
+    loadedSnapshot: null,
+    loadedLabel: '',
     takesCollapsed: false,
     takesVisibleCount: TAKE_BATCH_SIZE,
     open: false
@@ -391,7 +395,7 @@
       : String((generateState.models.find(function (model) { return model.default; }) || generateState.models[0] || {}).id || '');
     generateState.modelId = selected;
     select.value = selected;
-    if (selected !== getGenerateModelPreference()) setGenerateModelPreference(selected);
+    if (generateState.editorMode === 'working' && selected !== getGenerateModelPreference()) setGenerateModelPreference(selected);
     renderModelForm();
     if (previousModelId === selected) {
       draft.forEach(function (field) { field.node.value = field.value; });
@@ -698,6 +702,116 @@
     if (fieldVisible('dimensions')) settings.dimensions = el('generate-dimensions').value;
     if (fieldVisible('seed')) settings.seed = el('generate-seed').value;
     return settings;
+  }
+
+  // The existing form is the sole editor. Keep only two in-memory snapshots,
+  // including live File objects from reference pickers (no localStorage).
+  var generateEditorFieldIds = [
+    'generate-aspect', 'generate-dimensions', 'generate-megapixels',
+    'generate-duration', 'generate-sampling-mode', 'generate-seed'
+  ];
+  function captureGenerateEditorSnapshot() {
+    var fields = {};
+    generateEditorFieldIds.forEach(function (id) { fields[id] = el(id).value; });
+    var references = {};
+    ['first_frame', 'last_frame'].forEach(function (role) {
+      var input = el('generate-reference-' + role);
+      references[role] = input.files && input.files.length ? input.files[0] : null;
+    });
+    return {
+      modelId: generateState.modelId,
+      prompt: el('generate-prompt').value,
+      promptModelId: el('generate-prompt').dataset.modelId || '',
+      fields: fields,
+      lorasByModel: JSON.parse(JSON.stringify(generateState.lorasByModel)),
+      loraMode: generateState.loraMode,
+      sweepFolderByModel: Object.assign({}, generateState.sweepFolderByModel),
+      sweepSelections: JSON.parse(JSON.stringify(generateState.sweepSelections)),
+      references: references,
+      promptLibraryActiveId: generateState.promptLibrary.activeId,
+      directorPreviousPrompt: generateState.director.previousPrompt
+    };
+  }
+
+  function applyGenerateEditorSnapshot(saved) {
+    if (!saved) throw new Error('Generation editor snapshot is missing.');
+    if (!generateState.models.some(function (model) { return model.id === saved.modelId; })) {
+      throw new Error('Saved editor Base Model is not available: ' + saved.modelId);
+    }
+    closeGenerateLoraPicker();
+    generateState.modelId = saved.modelId;
+    el('generate-model').value = saved.modelId;
+    generateState.lorasByModel = JSON.parse(JSON.stringify(saved.lorasByModel));
+    generateState.loraMode = saved.loraMode;
+    generateState.sweepFolderByModel = Object.assign({}, saved.sweepFolderByModel);
+    generateState.sweepSelections = JSON.parse(JSON.stringify(saved.sweepSelections));
+    renderModelForm();
+    el('generate-prompt').value = saved.prompt;
+    el('generate-prompt').dataset.modelId = saved.promptModelId || saved.modelId;
+    generateEditorFieldIds.forEach(function (id) { el(id).value = saved.fields[id]; });
+    ['first_frame', 'last_frame'].forEach(function (role) {
+      var input = el('generate-reference-' + role);
+      input.value = '';
+      var file = saved.references[role];
+      if (file) {
+        var transfer = new DataTransfer();
+        transfer.items.add(file);
+        input.files = transfer.files;
+      }
+      syncReferenceDropzone(role);
+    });
+    generateState.promptLibrary.activeId = saved.promptLibraryActiveId;
+    generateState.director.previousPrompt = saved.directorPreviousPrompt;
+    setPromptLibraryOpen(false);
+    renderDirector();
+  }
+
+  function renderGenerateEditorTabs() {
+    var loaded = generateState.editorMode === 'loaded';
+    var working = el('generate-editor-working');
+    var take = el('generate-editor-loaded');
+    working.classList.toggle('active', !loaded);
+    take.classList.toggle('active', loaded);
+    working.setAttribute('aria-selected', loaded ? 'false' : 'true');
+    take.setAttribute('aria-selected', loaded ? 'true' : 'false');
+    take.disabled = !generateState.loadedSnapshot;
+    el('generate-editor-use-working').classList.toggle('hidden', !loaded);
+    var label = el('generate-editor-loaded-caption');
+    label.classList.toggle('hidden', !loaded);
+    label.textContent = loaded ? generateState.loadedLabel : '';
+  }
+
+  function switchGenerateEditorMode(mode) {
+    if (mode !== 'working' && mode !== 'loaded') throw new Error('Unknown Generations editor tab: ' + mode);
+    if (generateState.director.busy) throw new Error('Finish Prompt Assistant before switching configurations.');
+    ++pendingRestoreSelection;
+    if (mode === generateState.editorMode) return;
+    if (mode === 'loaded' && !generateState.loadedSnapshot) throw new Error('Select a Take to load it.');
+    generateState[generateState.editorMode + 'Snapshot'] = captureGenerateEditorSnapshot();
+    applyGenerateEditorSnapshot(generateState[mode + 'Snapshot']);
+    generateState.editorMode = mode;
+    renderGenerateEditorTabs();
+  }
+
+  function loadGenerateTakeIntoEditor(result) {
+    if (generateState.director.busy) throw new Error('Finish Prompt Assistant before loading a Take.');
+    if (generateState.editorMode === 'working')
+      generateState.workingSnapshot = captureGenerateEditorSnapshot();
+    restoreResultConfiguration(result);
+    generateState.editorMode = 'loaded';
+    generateState.loadedSnapshot = captureGenerateEditorSnapshot();
+    var missingReferences = result.references && Object.keys(result.references).length;
+    generateState.loadedLabel = String(result.modelId || 'Take') +
+      (result.jobId ? ' · ' + result.jobId : '') +
+      (missingReferences ? ' · Reselect saved reference images before generating' : '');
+    renderGenerateEditorTabs();
+  }
+
+  function useLoadedAsWorking() {
+    if (generateState.editorMode !== 'loaded') throw new Error('Select the Loaded Take tab first.');
+    generateState.loadedSnapshot = captureGenerateEditorSnapshot();
+    generateState.workingSnapshot = captureGenerateEditorSnapshot();
+    switchGenerateEditorMode('working');
   }
 
   function restoreResultConfiguration(result) {
@@ -1771,7 +1885,8 @@
       var configuration = saved.generationConfiguration;
       if (!configuration || !String(configuration.sourcePrompt || '').trim())
         throw new Error('Pending generation has no restorable submitted configuration.');
-      restoreResultConfiguration({
+      loadGenerateTakeIntoEditor({
+        jobId: jobId,
         modelId: saved.modelId,
         sourcePrompt: configuration.sourcePrompt,
         settings: configuration.settings,
@@ -1783,13 +1898,14 @@
 
   function selectGenerationResult(result) {
     ++pendingRestoreSelection;
-    restoreResultConfiguration(result);
+    loadGenerateTakeIntoEditor(result);
     renderActiveResult(result);
   }
 
   function startNewGeneration() {
     if (generateState.director.busy) throw new Error('Wait for Prompt Assistant to finish before starting a new generation.');
     ++pendingRestoreSelection;
+    switchGenerateEditorMode('working');
     closeGenerateLoraPicker();
     resetGeneratePromptScratch();
     var model = currentModel() || generateState.models[0];
@@ -1802,6 +1918,7 @@
     generateState.activeResultKey = '';
     generateState.inspectedResult = null;
     generateState.freshDraft = true;
+    generateState.workingSnapshot = captureGenerateEditorSnapshot();
     renderStageEmpty();
     syncActiveTakeState();
     setGenerateViewMode('create');
@@ -2541,7 +2658,10 @@
     return requestJson('/fs/generate/capabilities').then(function (payload) {
       generateState.models = payload.models || [];
       generateState.unavailableModels = payload.unavailableModels || [];
+      var editing = generateState.models.length ? captureGenerateEditorSnapshot() : null;
       populateModelSelector();
+      if (editing && generateState.models.some(function (item) { return item.id === editing.modelId; }))
+        applyGenerateEditorSnapshot(editing);
 
       if (payload.available === false) {
         setStatus(String(payload.error || 'ComfyUI unavailable.'));
@@ -2653,6 +2773,16 @@
     promptAssistantInstructionHistory = createSessionPromptHistory();
     promptAssistantInstructionHistory.bind(el('generate-director-instruction'));
     bindReferenceDropzones();
+    renderGenerateEditorTabs();
+    el('generate-editor-working').onclick = function () {
+      try { switchGenerateEditorMode('working'); } catch (err) { reportError(err, 'Could not switch to Working'); }
+    };
+    el('generate-editor-loaded').onclick = function () {
+      try { switchGenerateEditorMode('loaded'); } catch (err) { reportError(err, 'Could not switch to Loaded Take'); }
+    };
+    el('generate-editor-use-working').onclick = function () {
+      try { useLoadedAsWorking(); } catch (err) { reportError(err, 'Could not copy Loaded into Working'); }
+    };
 
     el('generate-create-mode-btn').onclick = function () {
       setGenerateViewMode('create');
@@ -2703,7 +2833,7 @@
       generateState.promptLibrary.activeId = '';
       generateState.director.previousPrompt = null;
       setDirectorStatus('');
-      setGenerateModelPreference(this.value);
+      if (generateState.editorMode === 'working') setGenerateModelPreference(this.value);
       renderModelForm();
       renderDirector();
     });

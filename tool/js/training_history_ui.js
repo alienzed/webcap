@@ -307,7 +307,7 @@ function renderTrainingHistory() {
     if (run.epoch && run.expectedEpochs) details.push('epoch ' + run.epoch + ' / ' + run.expectedEpochs);
     var matchLabel = run.matchType === 'exact' ? 'exact' : 'compatible';
     var optionValue = String(run.resumeOutputId || run.runPath || '');
-    return '<option value="' + escapeHtml(optionValue) + '" data-action-id="' + escapeHtml(run.resumeActionId || '') + '" data-output-id="' + escapeHtml(run.resumeOutputId || '') + '" data-run-path="' + escapeHtml(run.runPath || '') + '" data-image-adapter="' + (run.imageTrainingAdapter === true ? 'on' : run.imageTrainingAdapter === false ? 'off' : '') + '">' +
+    return '<option value="' + escapeHtml(optionValue) + '" data-action-id="' + escapeHtml(run.resumeActionId || '') + '" data-output-id="' + escapeHtml(run.resumeOutputId || '') + '" data-run-path="' + escapeHtml(run.runPath || '') + '" data-image-adapter="' + (run.legacyMergedImageAdapter === true ? 'legacy' : run.imageTrainingAdapter === true ? 'on' : run.imageTrainingAdapter === false ? 'off' : '') + '">' +
       escapeHtml(String(run.runName || run.logicalRun || run.name || 'run') + ' - ' + trainingStageLabel(run.stage) +
         (details.length ? ' - ' + details.join(' / ') : '') + ' - ' + matchLabel) + '</option>';
   }).join('');
@@ -316,7 +316,7 @@ function renderTrainingHistory() {
     (Array.isArray(run.resumePoints) ? run.resumePoints : []).forEach(function (point) {
       var optionValue = String(run.resumeOutputId || run.runPath || '') + '::' + String(point.tag || '');
       previousOptions.push(
-        '<option value="' + escapeHtml(optionValue) + '" data-action-id="' + escapeHtml(run.resumeActionId || '') + '" data-output-id="' + escapeHtml(run.resumeOutputId || '') + '" data-run-path="' + escapeHtml(run.runPath || '') + '" data-image-adapter="' + (run.imageTrainingAdapter === true ? 'on' : run.imageTrainingAdapter === false ? 'off' : '') + '" data-checkpoint-tag="' + escapeHtml(point.tag || '') + '">' +
+        '<option value="' + escapeHtml(optionValue) + '" data-action-id="' + escapeHtml(run.resumeActionId || '') + '" data-output-id="' + escapeHtml(run.resumeOutputId || '') + '" data-run-path="' + escapeHtml(run.runPath || '') + '" data-image-adapter="' + (run.legacyMergedImageAdapter === true ? 'legacy' : run.imageTrainingAdapter === true ? 'on' : run.imageTrainingAdapter === false ? 'off' : '') + '" data-checkpoint-tag="' + escapeHtml(point.tag || '') + '">' +
         escapeHtml(String(run.runName || run.logicalRun || run.name || 'run') + ' - ' + String(point.tag || '')) + '</option>'
       );
     });

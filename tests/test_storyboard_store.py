@@ -1367,3 +1367,20 @@ def test_scene_refine_completion_is_persisted_only_for_successful_refine(storybo
         operation="write_prompt",
     )
     assert rewritten["refineComplete"] is False
+
+
+def test_story_guidelines_survive_save_reload_and_duplicate(storyboard_fs):
+    story = storyboard_store.create_story({"title": "Variation Studies"})
+    assert story["guidelines"] == {}
+    revised = storyboard_store.update_story(story["id"], {"guidelines": {
+        "visualFocus": " Athletic action ",
+        "variation": "Change choreography between examples.",
+        "pacing": "",
+    }})
+    assert revised["guidelines"] == {
+        "visualFocus": "Athletic action",
+        "variation": "Change choreography between examples.",
+    }
+    assert storyboard_store.load_story(story["id"])["guidelines"] == revised["guidelines"]
+    duplicate = storyboard_store.duplicate_story(story["id"])
+    assert duplicate["guidelines"] == revised["guidelines"]

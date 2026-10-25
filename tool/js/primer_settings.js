@@ -624,7 +624,7 @@ function syncFocusedCaptionVisionPhrasesUi() {
   var row = document.getElementById('editor-caption-vision-phrases');
   var trigger = document.getElementById('editor-caption-vision-phrases-btn');
   if (!row || !trigger) throw new Error('Caption Assist Sight tag controls are missing.');
-  var previousDetails = row.querySelector('details');
+  var previousDetails = row.querySelector('details.caption-assist-assigned-tags');
   var wasExpanded = !!(previousDetails && previousDetails.open);
   var previousScrollTop = row.scrollTop;
   var previousSightSuggestions = row.querySelector('details[data-sight-suggestions]');
@@ -641,7 +641,12 @@ function syncFocusedCaptionVisionPhrasesUi() {
   var item = state.currentItem;
   var mediaKey = item.key;
   var qaActions = isFocusedQaReviewMode() ? qaFocusReviewTagActions(mediaKey, captionAssistCandidate.text) : [];
-  var suggestions = getCaptionAssistTagSuggestions(item);
+  // Saved Sight is optional and initially collapsed. Do not search every
+  // Group vocabulary and build hundreds of buttons just to open Caption Assist.
+  var sightMetadata = (item.metadata && item.metadata.vision_sight) ||
+    (getMetadataForMedia(item.fileName) || {}).vision_sight;
+  var hasSight = !!(sightMetadata && sightMetadata.inventory);
+  var suggestions = sightSuggestionsOpen ? getCaptionAssistTagSuggestions(item) : [];
   var seen = Object.create(null);
   var combined = [];
   function addSuggestion(suggestion, action) {
@@ -710,22 +715,46 @@ function syncFocusedCaptionVisionPhrasesUi() {
     combined.slice(0, qaCount).forEach(function (entry) { qaChoices.appendChild(makeSuggestion(entry)); });
     row.appendChild(qaChoices);
   }
-  if (combined.length > qaCount) {
+  if (hasSight || combined.length > qaCount) {
     var sightDetails = document.createElement('details');
     sightDetails.className = 'caption-assist-sight-suggestions';
     sightDetails.setAttribute('data-sight-suggestions', 'true');
     sightDetails.open = sightSuggestionsOpen;
     var sightSummary = document.createElement('summary');
-    sightSummary.textContent = 'Saved Sight suggestions (' + (combined.length - qaCount) + ')';
+    sightSummary.textContent = 'Saved Sight suggestions' +
+      (sightSuggestionsOpen ? ' (' + (combined.length - qaCount) + ')' : '');
     sightSummary.title = 'Optional observations from saved Open Sight; verify before adding';
     sightDetails.appendChild(sightSummary);
     var sightChoices = document.createElement('div');
     sightChoices.className = 'caption-assist-suggestion-grid';
-    combined.slice(qaCount).forEach(function (entry) { sightChoices.appendChild(makeSuggestion(entry)); });
+    function populateSightSuggestions() {
+      if (!sightDetails.open || sightChoices.dataset.populated) return;
+      if (!state.currentItem || state.currentItem.key !== mediaKey ||
+          !captionAssistCandidate || captionAssistCandidate.mediaKey !== mediaKey) return;
+      getCaptionAssistTagSuggestions(state.currentItem).forEach(function (suggestion) {
+        addSuggestion(suggestion, 'add');
+      });
+      var entries = combined.slice(qaCount);
+      entries.forEach(function (entry) { sightChoices.appendChild(makeSuggestion(entry)); });
+      if (!entries.length) {
+        var emptySight = document.createElement('div');
+        emptySight.className = 'small';
+        emptySight.textContent = 'No saved Sight suggestions for this item.';
+        sightChoices.appendChild(emptySight);
+      }
+      sightSummary.textContent = 'Saved Sight suggestions (' + entries.length + ')';
+      sightChoices.dataset.populated = 'true';
+    }
+    if (sightSuggestionsOpen) {
+      combined.slice(qaCount).forEach(function (entry) { sightChoices.appendChild(makeSuggestion(entry)); });
+      sightChoices.dataset.populated = 'true';
+    } else {
+      sightDetails.addEventListener('toggle', populateSightSuggestions);
+    }
     sightDetails.appendChild(sightChoices);
     row.appendChild(sightDetails);
   }
-  if (!combined.length) {
+  if (!combined.length && !hasSight) {
     var empty = document.createElement('div');
     empty.className = 'small';
     empty.textContent = 'No tag suggestions.';

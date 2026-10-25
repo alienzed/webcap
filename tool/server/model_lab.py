@@ -139,10 +139,11 @@ def get_run(run_id):
         return _copy(_reconcile_interrupted(_read_raw(run_id)))
 
 
-def capability_run_summaries():
+def capability_run_summaries(rows=None, payload_cache=None):
     """Compact per-probe outcomes for Diagnostics; never expose raw model output."""
     summaries = []
-    for row in list_runs():
+    payload_cache = payload_cache if payload_cache is not None else {}
+    for row in (rows if rows is not None else list_runs(payload_cache=payload_cache)):
         if not row.get("id") or row.get("status") == "error":
             summaries.append({
                 "id": row.get("id"), "status": row.get("status"),
@@ -150,11 +151,17 @@ def capability_run_summaries():
                 "models": {},
             })
             continue
-        run = get_run(row["id"])
+        run = payload_cache.get(row["id"])
+        if run is None:
+            run = get_run(row["id"])
+            payload_cache[row["id"]] = run
         models = {}
         attempts = list(run.get("attempts") or [])
         for source in (run.get("reused") or {}).values():
-            previous = get_run(source["runId"])
+            previous = payload_cache.get(source["runId"])
+            if previous is None:
+                previous = get_run(source["runId"])
+                payload_cache[source["runId"]] = previous
             attempts.extend(a for a in previous.get("attempts") or [] if a.get("id") == source["attemptId"])
         emitted_pathologies = {}
         for attempt in attempts:
@@ -237,7 +244,7 @@ def capability_run_summaries():
     return summaries
 
 
-def list_runs():
+def list_runs(payload_cache=None):
     root = run_root()
     if not root.is_dir():
         return []
@@ -245,6 +252,9 @@ def list_runs():
     for path in root.glob("*.json"):
         try:
             payload = get_run(path.stem)
+            if payload_cache is not None:
+                payload_cache[path.stem] = payload
+                payload_cache[str(payload.get("id") or path.stem)] = payload
         except Exception as exc:
             rows.append({
                 "id": path.stem,
@@ -1655,13 +1665,16 @@ def register_routes(app):
                     response.headers["Content-Disposition"] = 'attachment; filename="webcap-assessments.json"'
                     return response
                 run_id = str(request.args.get("run") or "").strip()
+                summary_requested = request.args.get("summary") == "1"
+                cached_runs = {} if summary_requested else None
+                rows = list_runs(payload_cache=cached_runs)
                 payload = {
                     "ok": True,
-                    "runs": list_runs(),
+                    "runs": rows,
                     "models": model_catalog(),
                 }
-                if request.args.get("summary") == "1":
-                    payload["capabilityRuns"] = capability_run_summaries()
+                if summary_requested:
+                    payload["capabilityRuns"] = capability_run_summaries(rows, cached_runs)
                 if run_id:
                     payload["run"] = get_run(run_id)
                 return jsonify(payload)

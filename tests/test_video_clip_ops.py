@@ -247,6 +247,23 @@ def test_external_video_clip_uses_canonical_worker_and_set_destination(tmp_path,
     assert frame.status_code == 200, frame.get_json()
     assert observed["path"] == source
 
+    def fake_extract(path, frame_index, source_fingerprint, destination):
+        assert path == source
+        assert frame_index == 12
+        assert source_fingerprint == "same-source"
+        destination.write_bytes(b"extracted-frame")
+    monkeypatch.setattr(video_frame_ops, "extract_video_frame", fake_extract)
+    extracted = client.post("/media/video_clip_extract_frame", json={
+        "externalPath": str(external), "relativePath": "nested/source.mp4",
+        "destination": "my-set", "fileName": "source.mp4",
+        "frameIndex": 12, "sourceFingerprint": "same-source",
+        "outputName": "frame.png",
+    })
+    assert extracted.status_code == 200, extracted.get_json()
+    assert extracted.get_json()["destinationIsCurrentFolder"] is False
+    assert (root / "my-set" / "frame.png").read_bytes() == b"extracted-frame"
+    assert source.read_bytes() == b"unchanged-original"
+
     for changes, phrase in [
         ({"overwriteSource": True}, "cannot be overwritten"),
         ({"destination": "../outside"}, "Destination must be within"),

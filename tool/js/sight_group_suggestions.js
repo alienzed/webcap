@@ -46,8 +46,9 @@
   }
 
   function getSightGroupSuggestionRows(mediaItem, groupLabel) {
-    var metadata = mediaItem && (mediaItem.metadata || getMetadataForMedia(mediaItem.fileName));
-    var sight = metadata && metadata.vision_sight;
+    var itemSight = mediaItem && mediaItem.metadata && mediaItem.metadata.vision_sight;
+    var cachedMetadata = mediaItem && getMetadataForMedia(mediaItem.fileName);
+    var sight = itemSight || (cachedMetadata && cachedMetadata.vision_sight);
     if (!sight || !sight.inventory || !groupLabel) return [];
     var inventory = sight.inventory;
     var alias = String(getRequirementGroupAlias(groupLabel) || '');

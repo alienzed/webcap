@@ -4134,3 +4134,8 @@ html[data-theme="dark"] .storyboard-prompt-take-status {
   .storyboard-workshop-review-head, .storyboard-workshop-review-actions { padding: 12px; }
   .storyboard-workshop-review-content { padding: 12px; }
 }
+
+.director-chat-mode-tools:has(#director-chat-workshop-prepare:not(.hidden)) { flex-wrap: wrap; }
+#director-chat-workshop-prepare { font-weight: 750; min-height: 36px; }
+.director-chat-workshop-status { color: var(--muted); font-size: 14px; line-height: 1.35; }
+.storyboard-workshop-review-error { color: var(--danger, #e27373); font-size: 14px; font-weight: 650; }

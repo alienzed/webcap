@@ -2607,7 +2607,7 @@ def _record_skipped_inference(session_directory, job_id):
             _atomic_write_json(_status_path(session_directory), status)
 
 
-def _record_failed_inference(session_directory, job_id, candidate_label, candidate_file, exc, elapsed_ms, strength=None):
+def _record_failed_inference(session_directory, job_id, candidate_label, candidate_file, exc, elapsed_ms, strength=None, variation_index=None, candidate_kind=None):
     with _status_lock:
         status = _read_status(session_directory) or {}
         failures = status.get("failures") if isinstance(status.get("failures"), list) else []
@@ -2616,6 +2616,8 @@ def _record_failed_inference(session_directory, job_id, candidate_label, candida
         failure = {
             "jobId": job_id,
             "sourceLoRA": candidate_label,
+            "kind": candidate_kind,
+            "variationIndex": variation_index,
             "error": str(exc),
             "elapsedMs": int(elapsed_ms or 0),
         }
@@ -2848,6 +2850,8 @@ def execute_inference(job_id, request, context):
             exc,
             _candidate_elapsed_ms(started),
             strength=context.get("candidateStrength") if request.get("sweepWeights") and candidate_kind == "lora" else None,
+            variation_index=context.get("variationIndex"),
+            candidate_kind=candidate_kind,
         )
         raise
 

@@ -834,7 +834,7 @@
     requestJson('/fs/director/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: state.modelId, messages: messages })
+      body: JSON.stringify({ model: state.modelId, operation: "storyboard_workshop_shots", messages: messages })
     }).then(function (payload) {
       if (!payload.job || !payload.job.jobId) throw new Error('Workshop proposal job was not queued.');
       state.jobId = String(payload.job.jobId);

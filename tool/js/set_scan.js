@@ -1067,9 +1067,7 @@
       var button = el('vl-workspace-describe-run');
       if (button.disabled) return Promise.resolve(false);
       button.disabled = true;
-      return runVisionImageCaption(setScanState.reviewMediaItem).finally(function () {
-        button.disabled = false;
-      });
+      return runVisionImageCaption(setScanState.reviewMediaItem);
     };
     el('set-scan-preview-review').onclick = function () { openSightReviewForFile(setScanState.previewFileName); };
     el('sight-review-model').onchange = renderSightReview;

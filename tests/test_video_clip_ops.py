@@ -199,3 +199,61 @@ def test_storyboard_clip_queues_validated_overwrite_and_save_as(tmp_path, monkey
     assert named.status_code == 202
     assert named.get_json()["outputName"] == "alternate.mp4"
     assert not (tmp_path / "output" / "storyboards" / story["id"] / "takes" / scene["id"] / "alternate.mp4").exists()
+
+
+
+def test_external_video_clip_uses_canonical_worker_and_set_destination(tmp_path, monkeypatch):
+    from tool.server import video_frame_ops
+
+    external = tmp_path / "external"
+    (external / "nested").mkdir(parents=True)
+    source = external / "nested" / "source.mp4"
+    source.write_bytes(b"unchanged-original")
+    root = tmp_path / "webcap"
+    (root / "my-set").mkdir(parents=True)
+
+    monkeypatch.setattr(video_clip_ops.app_config, "FS_ROOT", root)
+    monkeypatch.setattr(video_clip_ops, "probe_media_metadata",
+                        lambda _p: {"resolution": "320x240", "duration": 10.0})
+    monkeypatch.setattr(video_clip_ops, "_ensure_clip_worker_started", lambda: None)
+    with video_clip_ops._video_clip_lock:
+        video_clip_ops._video_clip_jobs.clear()
+        video_clip_ops._video_clip_signatures.clear()
+
+    payload = {
+        "externalPath": str(external), "relativePath": "nested/source.mp4",
+        "destination": "my-set", "fileName": "source.mp4",
+        "outputName": "my-clip.mp4", "startSec": 1, "durationSec": 2,
+        "crop": {"x": 0, "y": 0, "width": 320, "height": 240},
+        "overwriteSource": False,
+    }
+    client = app_module.app.test_client()
+    response = client.post("/media/video_clip", json=payload)
+    assert response.status_code == 202, response.get_json()
+    job = video_clip_ops._video_clip_jobs[response.get_json()["jobId"]]
+    assert job["sourcePath"] == str(source)
+    assert job["outputPath"] == str(root / "my-set" / "my-clip.mp4")
+    assert source.read_bytes() == b"unchanged-original"
+    assert not (root / "my-set" / "my-clip.mp4").exists(), "worker not run during enqueue"
+
+    # Frame stepping and exact Mark Start use the same validated source.
+    observed = {}
+    monkeypatch.setattr(video_frame_ops, "inspect_video_frame", lambda path, **kwargs:
+                        observed.setdefault("path", path) or {"ok": True})
+    frame = client.post("/media/video_clip_frame", json={
+        "externalPath": str(external), "relativePath": "nested/source.mp4",
+        "fileName": "source.mp4", "approximateTimeSec": 1,
+    })
+    assert frame.status_code == 200, frame.get_json()
+    assert observed["path"] == source
+
+    for changes, phrase in [
+        ({"overwriteSource": True}, "cannot be overwritten"),
+        ({"destination": "../outside"}, "Destination must be within"),
+        ({"destination": "missing"}, "does not exist"),
+        ({"relativePath": "../outside.mp4"}, "Invalid external media path"),
+        ({"fileName": "other.mp4"}, "does not match selected media"),
+    ]:
+        rejected = client.post("/media/video_clip", json={**payload, **changes})
+        assert rejected.status_code == 400
+        assert phrase.lower() in rejected.get_json()["error"].lower()

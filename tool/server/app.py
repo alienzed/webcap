@@ -11,7 +11,7 @@ import subprocess
 import sys
 
 from . import config as app_config
-from .caption_ops import _resolve_folder, build_caption_assist_messages, build_caption_template_assist_messages, list_media_files, load_caption_text, save_caption_text, serve_media_file
+from .caption_ops import _resolve_folder, build_caption_assist_messages, build_caption_enrichment_messages, build_caption_template_assist_messages, list_media_files, load_caption_text, save_caption_text, serve_media_file
 from .caption_vision import build_caption_vision_messages, build_vision_caption_extras_messages, build_vision_image_caption_messages, build_vision_question_messages, resolve_caption_vision_media, vision_media_data_url
 from .vision_schema_assist import (
     build_vision_schema_sight_messages,
@@ -735,7 +735,15 @@ def caption_save_route():
 def caption_assist_route():
     data = request.get_json(silent=True) or {}
     try:
-        messages = build_caption_assist_messages(
+        enrich = data.get("mode") == "enrich"
+        if data.get("mode") not in (None, "enrich"):
+            raise ValueError("Unknown Caption Assist mode.")
+        messages = build_caption_enrichment_messages(
+            draft=data.get("draft", ""),
+            open_sight=data.get("openSight"),
+            assignments=data.get("assignments"),
+            tags=data.get("tags"),
+        ) if enrich else build_caption_assist_messages(
             assignments=data.get("assignments"),
             tags=data.get("tags"),
             required_phrase=data.get("requiredPhrase", ""),
@@ -756,7 +764,7 @@ def caption_assist_route():
                 "messages": messages,
             },
             context={},
-            label="Caption Assist",
+            label="Caption enrichment" if enrich else "Caption Assist",
         )
         return jsonify({"ok": True, "job": job}), 202
     except Exception as exc:

@@ -854,19 +854,24 @@ function runVisionImageCaption(mediaItemOverride) {
     return Promise.resolve(false);
   }
 
+  // Claim the selected item before async capability loading. A navigation
+  // invalidates this token even if the Vision job has not yet been queued.
+  var token = ++visionImageCaptionState.requestToken;
+  var previousText = visionImageCaptionState.mediaKey === String(mediaItem.key)
+    ? visionImageCaptionState.text : '';
+  visionImageCaptionState.open = true;
+  visionImageCaptionState.mediaKey = String(mediaItem.key || '');
+  visionImageCaptionState.jobId = '';
+  visionImageCaptionState.pending = true;
+  visionImageCaptionState.text = previousText;
+  visionImageCaptionState.error = '';
+  syncVisionImageCaptionModal();
+
   return loadCaptionVisionCapabilities().then(function () {
+    if (visionImageCaptionState.requestToken !== token || !visionImageCaptionState.open) return null;
     var model = getCaptionVisionModelId();
     if (!model) throw new Error('Select an available Vision model.');
-
-    var token = visionImageCaptionState.requestToken + 1;
-    visionImageCaptionState.open = true;
-    visionImageCaptionState.mediaKey = String(mediaItem.key || '');
     visionImageCaptionState.model = model;
-    visionImageCaptionState.jobId = '';
-    visionImageCaptionState.pending = true;
-    visionImageCaptionState.text = '';
-    visionImageCaptionState.error = '';
-    visionImageCaptionState.requestToken = token;
     syncVisionImageCaptionModal();
     setStatus('Vision Caption starting...');
     reportConsoleInfo('Describe with VL', 'Started for ' + mediaItem.fileName + '.');
@@ -894,7 +899,7 @@ function runVisionImageCaption(mediaItemOverride) {
       return true;
     });
   }).catch(function (err) {
-    if (!visionImageCaptionState.open) return false;
+    if (visionImageCaptionState.requestToken !== token || !visionImageCaptionState.open) return false;
     visionImageCaptionState.jobId = '';
     visionImageCaptionState.pending = false;
     visionImageCaptionState.error = String(err && err.message ? err.message : err);

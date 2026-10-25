@@ -703,6 +703,79 @@
     });
   }
 
+
+  function renderWorkshopDiff(before, after) {
+    var host = el('storyboard-workshop-review-diff');
+    if (!host) throw new Error('Workshop review diff markup is missing.');
+    host.replaceChildren();
+    var beforeLines = String(before || '').replace(/\r\n/g, '\n').split('\n');
+    var afterLines = String(after || '').replace(/\r\n/g, '\n').split('\n');
+    function line(kind, content) {
+      var item = document.createElement('div');
+      item.className = 'storyboard-workshop-diff-line';
+      item.dataset.kind = kind;
+      item.textContent = (kind === 'removed' ? '- ' : kind === 'added' ? '+ ' : '  ') + content;
+      host.appendChild(item);
+    }
+    // Bounded line comparison; large inputs still receive an honest before/after view.
+    if (beforeLines.length * afterLines.length > 60000) {
+      beforeLines.forEach(function (value) { line('removed', value); });
+      afterLines.forEach(function (value) { line('added', value); });
+      return;
+    }
+    var dp = Array.from({ length: beforeLines.length + 1 }, function () {
+      return Array(afterLines.length + 1).fill(0);
+    });
+    for (var i = beforeLines.length - 1; i >= 0; i -= 1) {
+      for (var j = afterLines.length - 1; j >= 0; j -= 1) {
+        dp[i][j] = beforeLines[i] === afterLines[j] ? dp[i + 1][j + 1] + 1 :
+          Math.max(dp[i + 1][j], dp[i][j + 1]);
+      }
+    }
+    var a = 0;
+    var b = 0;
+    while (a < beforeLines.length || b < afterLines.length) {
+      if (a < beforeLines.length && b < afterLines.length && beforeLines[a] === afterLines[b]) {
+        line('same', beforeLines[a++]); b += 1;
+      } else if (a < beforeLines.length && (b === afterLines.length || dp[a + 1][b] >= dp[a][b + 1])) {
+        line('removed', beforeLines[a++]);
+      } else {
+        line('added', afterLines[b++]);
+      }
+    }
+  }
+
+  function showWorkshopReview() {
+    if (!state.workshop || !state.workshopProposal) throw new Error('No prepared Scene Workshop revision is available.');
+    var modal = el('storyboard-workshop-review');
+    if (!modal) throw new Error('Scene Workshop review dialog is missing.');
+    modal.dataset.mode = 'proposal';
+    el('storyboard-workshop-review-title').textContent = 'Review Scene Revision';
+    el('storyboard-workshop-review-target').textContent = state.workshop.sceneTitle + ' · Timed shots';
+    el('storyboard-workshop-review-summary').textContent = state.workshopProposal.summary;
+    el('storyboard-workshop-review-error').textContent = '';
+    el('storyboard-workshop-review-apply').hidden = false;
+    el('storyboard-workshop-review-back').textContent = 'Back to discussion';
+    renderWorkshopDiff(state.workshop.shots, state.workshopProposal.shots);
+    if (modal.open) modal.close();
+    modal.showModal();
+  }
+
+  window.openStoryboardPromptChanges = function (original, current, title) {
+    var modal = el('storyboard-workshop-review');
+    if (!modal) throw new Error('Scene Workshop review dialog is missing.');
+    modal.dataset.mode = 'history';
+    el('storyboard-workshop-review-title').textContent = 'Last Scene Changes';
+    el('storyboard-workshop-review-target').textContent = title || 'Generation prompt';
+    el('storyboard-workshop-review-summary').textContent = 'Comparison with the previously saved prompt.';
+    el('storyboard-workshop-review-error').textContent = '';
+    el('storyboard-workshop-review-apply').hidden = true;
+    el('storyboard-workshop-review-back').textContent = 'Close';
+    renderWorkshopDiff(original, current);
+    if (modal.open) modal.close();
+    modal.showModal();
+  };
+
   function sendMessage() {
     var input = el('director-chat-input');
     if (!input || state.pending) return;

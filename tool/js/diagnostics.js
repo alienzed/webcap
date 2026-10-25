@@ -485,7 +485,7 @@ function refreshUnifiedModelAssessment() {
       var size = Number(model.sizeBytes || 0);
       var sizeLabel = diagnosticsAssessmentSize(size);
       row.assessmentSort.size = size > 0 ? size : null;
-      var qualification = cell('Qualified for', '', 'qualification');
+      var qualification = cell('Verified abilities', '', 'qualification');
       qualification.className = 'model-assessment-qualifications';
       var sizeCell = cell('Size', sizeLabel, 'size');
       sizeCell.title = size > 0 ? 'Discovered model file size; not a measurement of VRAM usage.' : 'Model size unavailable.';
@@ -628,7 +628,7 @@ function refreshUnifiedModelAssessment() {
       resetButton.textContent = 'Reset this model’s assessment';
       resetButton.title = 'Delete this model’s saved assessment evidence and allow fresh tests; other models remain unchanged.';
       resetButton.addEventListener('click', function () {
-        if (!window.confirm('Reset all saved Model Assessment evidence for ' + name +
+        if (!window.confirm('Reset all saved Model Assessment evidence for ' + title +
           '? This permanently clears this model’s results across saved runs. Other models are unaffected.')) return;
         resetButton.disabled = true;
         modelLabPost({action: 'reset_model', modelRef: ref}).then(function () {

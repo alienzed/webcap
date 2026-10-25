@@ -564,7 +564,8 @@ def _compact_completed_run(run):
         return
     keep = ("usage", "timings", "requestSeconds", "contextSize", "finishReason",
             "scenePlanAssessment", "verifiedOutputTokens", "visibleOutputWords",
-            "visibleOutputCharacters", "structureWarning", "modelId")
+            "visibleOutputCharacters", "structureWarning", "modelId",
+            "schema", "sight", "vocabularySight")
     for attempt in run.get("attempts") or []:
         if not isinstance(attempt, dict):
             continue

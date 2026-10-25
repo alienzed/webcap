@@ -200,7 +200,7 @@ function diagnosticsAssessmentSize(bytes) {
 function diagnosticsAssessmentReviewLabel(review) {
   if (!review) return 'Not judged';
   if (review.status === 'running') return 'Judging…';
-  if (review.status === 'failed') return 'Judge error';
+  if (review.status === 'failed') return 'Not measured';
   if (review.status !== 'completed') return 'Not judged';
   return (review.tasks || []).map(function (task) {
     return task.task + ' ' + task.score + '/5';
@@ -557,13 +557,8 @@ function refreshUnifiedModelAssessment() {
         qualityCell.textContent = row.assessmentSort.quality.toFixed(1) + '/5';
         qualityCell.title = 'Advisory LLM review, separate from technical qualification: ' + qualityReason;
       } else if (qualityReview) {
-        qualityCell.textContent = qualityReview.status === 'failed' ? 'Judge error' :
-          qualityReview.status === 'running' ? 'Judging…' : '—';
-        if (qualityReview.error) {
-          qualityCell.title = 'LLM judge operation: ' + qualityReview.error;
-          if (qualityReview.status === 'failed')
-            diagnosticsAssessmentShowReason(qualityCell, qualityReview.error, qualityReview.error);
-        }
+        qualityCell.textContent = qualityReview.status === 'running' ? 'Judging…' : '—';
+        if (qualityReview.error) qualityCell.title = 'Quality measurement unavailable; see Console for operation errors.';
       }
 
       diagnosticsAssessmentApplyMeasurements(row, capabilityRuns);

@@ -598,6 +598,106 @@ function appendFocusedAnnotationQuickPickRow(list, requirementLabel, term, metaT
   list.appendChild(row);
 }
 
+function insertFocusedAnnotationSightPhrase(phrase) {
+  var input = ui.editorEl;
+  var value = String(phrase || '').trim();
+  if (!input || !state.currentItem || !value) return false;
+  var current = String(input.value || '');
+  if (current.toLowerCase().indexOf(value.toLowerCase()) !== -1) {
+    setStatus('Caption already contains this Sight phrase.');
+    return false;
+  }
+  // A focused editor insertion uses its selection; a chip clicked during
+  // annotation otherwise appends without replacing any existing caption text.
+  var inEditor = document.activeElement === input;
+  var start = inEditor ? input.selectionStart : current.length;
+  var end = inEditor ? input.selectionEnd : current.length;
+  var left = current.slice(0, start);
+  var right = current.slice(end);
+  var prefix = left.trim() ? (/[,;:.]\\s*$/.test(left) ? ' ' : ', ') : '';
+  var suffix = right.trim() ? ', ' : '';
+  var inserted = prefix + value + suffix;
+  applyEditorTextAndTriggerInput(left + inserted + right);
+  input.focus();
+  input.setSelectionRange(start + inserted.length, start + inserted.length);
+  setStatus('Inserted saved Sight phrase into caption.');
+  return true;
+}
+
+function addFocusedAnnotationSightTag(requirementLabel, term) {
+  var mediaKey = state.currentItem.key;
+  var added = mergeChecklistKeywordTermsForRequirement(requirementLabel, [term], { skipRefresh: true });
+  if (!assignChecklistTagToMediaKey(mediaKey, requirementLabel, term)) {
+    throw new Error('Could not assign Sight tag: ' + term);
+  }
+  if (added.length) {
+    saveChecklistToFolderState();
+    refreshCurrentPrimerDerivedUi();
+  }
+  syncFocusedAnnotationQueue({ anchorMediaKey: mediaKey });
+}
+
+function appendFocusedAnnotationSightSuggestions(picksEl, requirementLabel) {
+  var item = state.currentItem;
+  var rows = getSightGroupSuggestionRows(item, requirementLabel).filter(function (suggestion) {
+    return suggestion.kind !== 'tag' ||
+      !hasChecklistAssignedTagForMediaKey(item.key, requirementLabel, suggestion.term);
+  });
+  if (!rows.length) return;
+  var section = document.createElement('div');
+  section.className = 'focused-annotation-set-usage';
+  var title = document.createElement('div');
+  title.className = 'focused-annotation-set-usage-title';
+  title.textContent = 'Saved Sight suggestions (' + rows.length + ')';
+  section.appendChild(title);
+
+  function appendRow(parent, suggestion) {
+    var row = document.createElement('div');
+    row.className = 'focused-annotation-quick-pick-row';
+    var primary = document.createElement('button');
+    primary.type = 'button';
+    primary.className = 'btn focused-annotation-quick-pick-btn';
+    primary.textContent = suggestion.term;
+    primary.title = (suggestion.kind === 'tag' ? 'Assign known Group tag' : 'Insert verbatim Sight phrase into caption') +
+      ' · ' + suggestion.source;
+    primary.onclick = function () {
+      if (suggestion.kind === 'tag') toggleFocusedAnnotationTerm(requirementLabel, suggestion.term);
+      else insertFocusedAnnotationSightPhrase(suggestion.term);
+    };
+    row.appendChild(primary);
+    var secondary = document.createElement('button');
+    secondary.type = 'button';
+    secondary.className = 'btn focused-annotation-inline-btn';
+    secondary.textContent = suggestion.kind === 'tag' ? 'Insert' : '+ Tag';
+    secondary.title = suggestion.kind === 'tag'
+      ? 'Insert the existing tag text into caption'
+      : 'Add this phrase as new Group vocabulary and assign it';
+    secondary.onclick = function () {
+      if (suggestion.kind === 'tag') insertFocusedAnnotationSightPhrase(suggestion.term);
+      else addFocusedAnnotationSightTag(requirementLabel, suggestion.term);
+    };
+    row.appendChild(secondary);
+    parent.appendChild(row);
+  }
+
+  var list = document.createElement('div');
+  list.className = 'focused-annotation-quick-pick-list';
+  rows.slice(0, 6).forEach(function (entry) { appendRow(list, entry); });
+  section.appendChild(list);
+  if (rows.length > 6) {
+    var more = document.createElement('details');
+    var summary = document.createElement('summary');
+    summary.textContent = 'Show remaining ' + (rows.length - 6);
+    more.appendChild(summary);
+    var remainder = document.createElement('div');
+    remainder.className = 'focused-annotation-quick-pick-list';
+    rows.slice(6).forEach(function (entry) { appendRow(remainder, entry); });
+    more.appendChild(remainder);
+    section.appendChild(more);
+  }
+  picksEl.appendChild(section);
+}
+
 function renderFocusedAnnotationQuickPicks(requirementLabel, entries) {
   var els = getFocusedAnnotationEls();
   if (!els.quickPicks) return;
@@ -651,6 +751,7 @@ function renderFocusedAnnotationQuickPicks(requirementLabel, entries) {
     usageSection.appendChild(usageList);
     picksEl.appendChild(usageSection);
   }
+  appendFocusedAnnotationSightSuggestions(picksEl, requirementLabel);
   renderFocusedAnnotationCurrentTags(picksEl);
 }
 

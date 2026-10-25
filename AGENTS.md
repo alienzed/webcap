@@ -77,6 +77,20 @@ When in doubt, ask:
 - What is the smallest explicit change?
 - Is this solving a real user workflow cost, or just reorganizing code?
 
+## On-Demand Feature Work
+
+An unused workspace must impose negligible ongoing runtime cost. Loading a classic
+script and registering lightweight handlers are acceptable; opening network
+requests, polling, timers, model discovery, large DOM rendering or expensive
+computations for a workspace never visited in this session are not.
+
+- Initialize workspace-specific work on first entry or explicit user action.
+- Stop workspace-specific recurring work on exit; restore it on re-entry when needed.
+- Keep application-wide Activity, job queues, and shared status monitoring independent.
+- Do not introduce lazy-loading frameworks or hidden state just to defer simple work.
+- Audit startup and hidden-workspace work when adding or modifying a feature.
+- Keep existing error reporting intact; do not silently swallow failed operations.
+
 ## Capability Before Design
 
 A concrete example can make the desired outcome obvious without proving the system can deliver it.

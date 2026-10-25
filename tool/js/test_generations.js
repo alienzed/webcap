@@ -3589,13 +3589,13 @@
     var buckets = new Map();
     results.forEach(function(result) {
       var identity = candidateIdentity(result);
-      var key = String(result.candidateFile || result.sourceLoRA || identity.primary);
+      var key = result.kind === 'base' ? 'Base' : String(result.candidateFile || result.sourceLoRA || identity.primary);
       if (!buckets.has(key)) buckets.set(key, {label:identity.primary, cells:new Map()});
       buckets.get(key).cells.set(result.variationIndex == null ? 0 : Number(result.variationIndex), result);
     });
     var candidateOrder = new Map();
     (status && status.candidates || []).forEach(function(candidate,index) {
-      var key=String(candidate.fileName || candidate.label || '');
+      var key=candidate.kind === 'base' ? 'Base' : String(candidate.fileName || candidate.label || '');
       if (!candidateOrder.has(key)) candidateOrder.set(key,index);
     });
     var sortedBuckets=Array.from(buckets.entries()).sort(function(a,b){
@@ -3788,11 +3788,19 @@
     }
     var byCandidate = new Map();
     results.forEach(function(result) {
-      var key = String(result.candidateFile || result.sourceLoRA || '');
+      var key = result.kind === 'base' ? 'Base' : String(result.candidateFile || result.sourceLoRA || '');
       if (!byCandidate.has(key)) byCandidate.set(key,new Map());
       byCandidate.get(key).set(Number(result.variationIndex),result);
     });
-    var rows=Array.from(byCandidate.values());
+    var candidateOrder=new Map();
+    (status && status.candidates || []).forEach(function(candidate,index) {
+      var key=candidate.kind === 'base' ? 'Base' : String(candidate.fileName || candidate.label || '');
+      if(!candidateOrder.has(key)) candidateOrder.set(key,index);
+    });
+    var rows=Array.from(byCandidate.entries()).sort(function(a,b){
+      return (candidateOrder.get(a[0]) == null ? 1e9 : candidateOrder.get(a[0])) -
+        (candidateOrder.get(b[0]) == null ? 1e9 : candidateOrder.get(b[0]));
+    }).map(function(entry){return entry[1];});
     var pairs=[];
     for(var row=0;row<rows.length-1;row++) {
       for(var col=0;col<variations.length;col++) {

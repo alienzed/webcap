@@ -220,7 +220,7 @@ def capability_run_summaries(rows=None, payload_cache=None):
             if isinstance(tokens, (int, float)) and not isinstance(tokens, bool) and 0 < tokens < 10000000:
                 entry["outputTokenSamples"].append(round(float(tokens), 2))
             if kind == "director_thinking":
-                entry["supported"] = status == "completed" and bool(str(result.get("reasoning") or "").strip())
+                entry["supported"] = status == "completed" and (bool(result.get("thinkingObserved")) or bool(str(result.get("reasoning") or "").strip()))
             if kind.startswith("director_scene_plan_"):
                 scene_assessment = result.get("scenePlanAssessment")
                 if isinstance(scene_assessment, dict):
@@ -558,7 +558,28 @@ def _new_run_payload(config):
     return run
 
 
+def _compact_completed_run(run):
+    """Discard generated content after assessment; retain only reusable measurements."""
+    if run.get("status") not in {"completed", "stopped", "error", "interrupted"}:
+        return
+    keep = ("usage", "timings", "requestSeconds", "contextSize", "finishReason",
+            "scenePlanAssessment", "verifiedOutputTokens", "visibleOutputWords",
+            "visibleOutputCharacters", "structureWarning", "modelId")
+    for attempt in run.get("attempts") or []:
+        if not isinstance(attempt, dict):
+            continue
+        result = attempt.get("result")
+        if not isinstance(result, dict):
+            continue
+        if attempt.get("kind") == "director_thinking":
+            result["thinkingObserved"] = bool(str(result.get("reasoning") or "").strip()) or bool(result.get("thinkingObserved"))
+        attempt["result"] = {key: result[key] for key in keep if key in result}
+        if "thinkingObserved" in result:
+            attempt["result"]["thinkingObserved"] = result["thinkingObserved"]
+
+
 def _write_run(run):
+    _compact_completed_run(run)
     if run.get("assessmentProtocol") == ASSESSMENT_PROTOCOL:
         run["work"] = _assessment_work(run)
     _write(_run_path(run["id"]), run)
@@ -1732,6 +1753,21 @@ def register_routes(app):
                 from .model_lab_quality import stop_review
                 run = stop_review(data.get("runId"))
                 return jsonify({"ok": True, "run": run, "runs": list_runs()})
+            if action == "compact_history":
+                count = 0
+                for row in list_runs():
+                    if _active_record(row["id"]):
+                        continue
+                    run = get_run(row["id"])
+                    if run.get("status") not in {"completed", "stopped", "error", "interrupted"}:
+                        continue
+                    before = any(isinstance(a.get("result"), dict) and
+                                 any(k in a["result"] for k in ("text", "reasoning", "schema", "sight", "vocabularySight"))
+                                 for a in run.get("attempts") or [] if isinstance(a, dict))
+                    if before:
+                        _write_run(run)
+                        count += 1
+                return jsonify({"ok": True, "compactedRuns": count})
             if action == "reset_model":
                 return jsonify({"ok": True, "updatedRuns": reset_model_evidence(data.get("modelRef"))})
             if action == "preview":

@@ -1489,6 +1489,7 @@ def handle_request(folder_path, mode, selection_criteria=None):
             include_base=criteria.get("includeBase"),
             model_id=criteria.get("modelId"),
             wildcard_dimensions=criteria.get("wildcardDimensions"),
+            variation_group_index=criteria.get("variationGroupIndex"),
         )
     raise ValueError("Unsupported Test Generations operation: " + operation)
 
@@ -2149,9 +2150,51 @@ def _project_wildcard_fields(payload):
     return visible
 
 
+def _deterministic_variation_cases(prompt, group_index, seed):
+    """Expand one flat wildcard group; freeze the other groups for every candidate."""
+    nodes = _parse_wildcard_nodes(_strip_wildcard_comments(prompt))
+    groups = [value for kind, value in nodes if kind == "group"]
+    if group_index < 0 or group_index >= len(groups):
+        raise ValueError("Selected variation group is no longer present in the prompt.")
+    if any(_wildcard_nodes_have_group(option) for group in groups for option in group):
+        raise ValueError("Exhaustive variation requires flat wildcard groups.")
+    resolved_groups = []
+    for index, group in enumerate(groups):
+        options = list(dict.fromkeys(
+            _normalize_wildcard_text(text)
+            for option in group for text in _expand_wildcard_option(option)
+        ))
+        if not options or any(not option for option in options):
+            raise ValueError("Variation options must be nonempty.")
+        resolved_groups.append(options)
+    selected = resolved_groups[group_index]
+    if len(selected) < 2:
+        raise ValueError("Select a variation group with at least two distinct options.")
+    if len(selected) > 32:
+        raise ValueError("A single exhaustive variation group supports at most 32 options.")
+    fixed = [
+        options[int(hashlib.sha256(
+            (str(seed) + ":" + str(index)).encode("utf-8")
+        ).hexdigest()[:8], 16) % len(options)]
+        for index, options in enumerate(resolved_groups)
+    ]
+    cases = []
+    for chosen in selected:
+        pieces = []
+        index = 0
+        for kind, value in nodes:
+            if kind == "literal":
+                pieces.append(value)
+            else:
+                pieces.append(chosen if index == group_index else fixed[index])
+                index += 1
+        cases.append({"label": chosen, "prompt": "".join(pieces)})
+    return cases
+
+
 def _new_inference_request(folder_path, prompt, settings=None, seed=None, name=None,
                            selected_files=None, candidate_strengths=None, include_base=True, model_id=None,
-                           aspect_ratio=None, megapixels=None, duration=None, sweep_weights=None, campaign_staging=""):
+                           aspect_ratio=None, megapixels=None, duration=None, sweep_weights=None, campaign_staging="", variation_group_index=None):
     from . import inference_runtime
 
     model = get_test_model(model_id)
@@ -2226,6 +2269,13 @@ def _new_inference_request(folder_path, prompt, settings=None, seed=None, name=N
     }
     if weights is not None:
         request["sweepWeights"] = weights
+    if variation_group_index is not None:
+        if isinstance(variation_group_index, bool) or not isinstance(variation_group_index, int):
+            raise ValueError("Variation group must be a wildcard group index.")
+        request["variationCases"] = _deterministic_variation_cases(
+            prompt, variation_group_index, normalized_settings["seed"]
+        )
+        request["variationGroupIndex"] = variation_group_index
     request.update(_workflow_evidence(model, template, normalized_settings.get("samplingMode")))
     return request, loras, include_base is not False
 
@@ -2645,7 +2695,7 @@ def execute_inference(job_id, request, context):
             _new_session_seed,
             dict(request.get("settings") or {}),
         )
-        prompt = str(request.get("prompt") or "").strip()
+        prompt = str(context.get("variationPrompt") or request.get("prompt") or "").strip()
         if not prompt:
             raise ValueError("Test inference job has no resolved prompt.")
 
@@ -2659,8 +2709,9 @@ def execute_inference(job_id, request, context):
         )
         with _status_lock:
             status_payload = _read_status(session_directory) or {}
-            status_payload["resolvedPrompt"] = prompt
-            status_payload["prompt"] = prompt
+            if not request.get("variationCases"):
+                status_payload["resolvedPrompt"] = prompt
+                status_payload["prompt"] = prompt
             _atomic_write_json(_status_path(session_directory), status_payload)
 
         comfy_lora_name = None
@@ -2752,6 +2803,8 @@ def execute_inference(job_id, request, context):
             "mediaFile": media_path.name,
             "mediaKind": model.MEDIA_KIND,
             "prompt": prompt,
+            "variationIndex": context.get("variationIndex"),
+            "variationLabel": context.get("variationLabel"),
             "seed": model.workflow_seed(workflow),
             "elapsedMs": _candidate_elapsed_ms(started),
             "samplingMode": settings.get("samplingMode", "turbo"),
@@ -2831,6 +2884,19 @@ def _enqueue_frozen_test_request(folder_path, request, loras, include_base, lega
             }
             for path in loras
         )
+    variations = request.get("variationCases") or []
+    if variations:
+        expanded = []
+        for candidate in candidates:
+            for index, variation in enumerate(variations):
+                expanded.append({
+                    **candidate,
+                    "label": candidate["label"] + " · " + variation["label"],
+                    "variationIndex": index,
+                    "variationLabel": variation["label"],
+                    "variationPrompt": variation["prompt"],
+                })
+        candidates = expanded
     payload = {
         "status": "queued",
         "modelId": model.PROFILE_ID,
@@ -2841,6 +2907,8 @@ def _enqueue_frozen_test_request(folder_path, request, loras, include_base, lega
         "sourcePrompt": str(request.get("sourcePrompt") or ""),
         "wildcardSelections": copy.deepcopy(request.get("wildcardSelections") or []),
         "wildcardDimensions": copy.deepcopy(request.get("wildcardDimensions") or []),
+        "variationCases": copy.deepcopy(variations),
+        "variationGroupIndex": request.get("variationGroupIndex"),
         "resolvedPrompt": str(request.get("prompt") or ""),
         "prompt": str(request.get("prompt") or ""),
         "total": len(candidates),
@@ -2897,6 +2965,9 @@ def _enqueue_frozen_test_request(folder_path, request, loras, include_base, lega
                 "candidateFile": candidate["file"],
                 "candidateLabel": candidate["label"],
                 "candidateIndex": index,
+                "variationIndex": candidate.get("variationIndex"),
+                "variationLabel": candidate.get("variationLabel"),
+                "variationPrompt": candidate.get("variationPrompt"),
                 "candidateProvenance": dict(candidate.get("provenance") or {}),
                 "candidateStrength": candidate.get("strength"),
                 "campaignStaging": str(request.get("campaignStaging") or ""),
@@ -3094,7 +3165,8 @@ def reconcile_startup():
 
 def enqueue(folder_path, prompt, settings=None, seed=None, name=None, selected_files=None,
             candidate_strengths=None, include_base=True, model_id=None, aspect_ratio=None, megapixels=None, duration=None,
-            sweep_weights=None, campaign_staging="", auto_vl_model="", wildcard_dimensions=None):
+            sweep_weights=None, campaign_staging="", auto_vl_model="", wildcard_dimensions=None,
+            variation_group_index=None):
     reconcile_startup()
     request, loras, include_base = _new_inference_request(
         folder_path,
@@ -3111,6 +3183,7 @@ def enqueue(folder_path, prompt, settings=None, seed=None, name=None, selected_f
         megapixels=megapixels,
         duration=duration,
         campaign_staging=campaign_staging,
+        variation_group_index=variation_group_index,
     )
     request["wildcardDimensions"] = _test_wildcard_dimensions(folder_path, prompt, wildcard_dimensions)
     latest = _enqueue_frozen_test_request(folder_path, request, loras, include_base, auto_vl_model=auto_vl_model)
@@ -3176,6 +3249,7 @@ def enqueue_repeated(folder_path, criteria):
                 sweep_weights=criteria.get("sweepWeights"),
                 auto_vl_model=vl_model,
                 wildcard_dimensions=criteria.get("wildcardDimensions"),
+                variation_group_index=criteria.get("variationGroupIndex"),
             )
         except Exception as exc:
             if not accepted:

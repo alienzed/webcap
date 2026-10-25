@@ -1126,17 +1126,28 @@
     var prompt = String(el('generate-prompt').value || '').trim();
     if (!model) throw new Error('Choose a Base Model.');
     if (!prompt) throw new Error('Enter a generation prompt.');
+    // Freeze the chosen tab's submitted values before asynchronous reference upload.
+    // Switching tabs or editing the other form cannot change this job's recipe.
+    var submission = {
+      modelId: model.id,
+      prompt: prompt,
+      settings: Object.assign({}, collectSettings()),
+      loras: selectedLoras(model.id).map(function (item) {
+        return {name:item.name, strength:item.strength};
+      }),
+      referenceFiles: captureReferenceFiles(model)
+    };
     var button = el('generate-run-btn');
     button.dataset.generateSubmitBusy = '1';
     syncPromptAssistantDependencies();
     setStatus('Preparing generation…');
 
-    return collectReferences().then(function (references) {
+    return uploadReferenceFiles(submission.referenceFiles).then(function (references) {
       return postJson('/fs/generate', {
-        modelId: model.id,
-        prompt: prompt,
-        settings: collectSettings(),
-        loras: selectedLoras(model.id),
+        modelId: submission.modelId,
+        prompt: submission.prompt,
+        settings: submission.settings,
+        loras: submission.loras,
         references: references
       });
     }).then(function (payload) {

@@ -246,7 +246,7 @@ def test_repair_scenes_is_sparse_and_prompt_is_complete_string():
     assert set(fields["properties"]) == {"summary", "entryState", "exitState", "prompt"}
     assert fields["properties"]["prompt"]["type"] == "string"
     assert "complete revised H3 prompt" in prompt
-    assert "following the supplied Director and H3 guidance" in prompt
+    assert "Return sparse updates to existing Scenes" in prompt
     assert "--- BEGIN EXAMPLE PROMPT SHAPE ---" in prompt
     assert "Environment / Continuity Anchors:" in prompt
 
@@ -326,7 +326,7 @@ def test_individual_development_outline_keeps_story_context_and_defers_prompts()
     assert "[STORY VISUAL / ATMOSPHERE]" in prompt
     assert "[STORY INVARIANTS]" in prompt
     assert "Generation prompts will be authored separately." in prompt
-    assert "This outline will be used to author each full H3 Scene separately" in prompt
+    assert "Generation prompts will be authored separately." in prompt
 
 
 def test_individual_development_scene_uses_whole_outline_and_previous_authored_scene():

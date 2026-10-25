@@ -4139,3 +4139,6 @@ html[data-theme="dark"] .storyboard-prompt-take-status {
 #director-chat-workshop-prepare { font-weight: 750; min-height: 36px; }
 .director-chat-workshop-status { color: var(--muted); font-size: 14px; line-height: 1.35; }
 .storyboard-workshop-review-error { color: var(--danger, #e27373); font-size: 14px; font-weight: 650; }
+
+#storyboard-workshop-review-apply[hidden],
+.storyboard-workshop-review-note[hidden] { display: none !important; }

@@ -15,7 +15,7 @@ def _model_limitations(model_id):
 def _add_model_limitations(blocks, model_id):
     guidance = _model_limitations(model_id)
     if guidance:
-        blocks.append("[MODEL CAPABILITIES & LIMITATIONS]\nAccount for these model limitations while preserving creative intent.\n" + guidance)
+        blocks.append("[MODEL TECHNICAL LIMITATIONS]\nUse these as generation capability information. Story Directing Guidelines remain the creative authority.\n" + guidance)
 
 
 
@@ -572,7 +572,7 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
                 "Follow USER DIRECTION as the source of the new Scene's content. "
                 "Other Story and Scene details are constraints for visual consistency or placement, not alternative creative briefs. "
                 if custom_instruction else
-                "Use the complete Story concept and outline to decide what fresh Scene belongs here. "
+                "Use the complete Story concept and outline as the new Scene\'s creative brief. "
             )
             + "Use neighbouring Scene descriptions as placement context and the supplied author direction for creative choices. "
             "Return the new Scene and its complete standalone H3 prompt in the supplied JSON schema."

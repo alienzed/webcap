@@ -136,7 +136,7 @@ function diagnosticsAssessmentCounts(row, tests) {
     });
   });
   Object.keys(tests).forEach(function (kind) {
-    if (kind.indexOf('director_scene_plan_') !== 0) return;
+    if (role === 'vision' || kind.indexOf('director_scene_plan_') !== 0) return;
     var item = tests[kind], counts = item.counts || {};
     var evidence = item.scenePlanAssessment;
     var label = modelLabAttemptLabel(kind);

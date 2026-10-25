@@ -15,6 +15,7 @@ on:
       - 'tool/js/primer_settings.js'
       - 'tool/js/generate.js'
       - 'tests/generations_form_preservation.test.cjs'
+      - 'tests/generations_editor_tabs.test.cjs'
       - 'tool/js/sight_group_suggestions.js'
       - 'tool/js/focused_annotation.js'
       - 'tests/sight_group_suggestions.test.cjs'
@@ -110,6 +111,7 @@ jobs:
           node --check tool/js/primer_settings.js
           node --check tool/js/generate.js
           node --test tests/generations_form_preservation.test.cjs
+          node --test tests/generations_editor_tabs.test.cjs
           node --check tool/js/sight_group_suggestions.js
           node --check tool/js/focused_annotation.js
           node --test tests/sight_group_suggestions.test.cjs

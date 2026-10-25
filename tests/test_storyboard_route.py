@@ -835,6 +835,12 @@ def test_workshop_context_and_atomic_shot_apply_preserve_other_sections():
     assert snapshot["expectedPrompt"] == original
     assert "Jogging." in snapshot["shots"]
     assert snapshot["guidelines"]["variation"] == "Different movement in each shot."
+    assert snapshot["extraSections"] == {
+        "Subject": "An exerciser.",
+        "Scene Overview": "Surreal workout.",
+        "Soundscape": "Wind.",
+        "Music": "Orchestra.",
+    }
     replacement = "[Shot 1] (0s–6s)\nSprinting.\n\n[Shot 2] (6s–12s)\nLeaping."
     applied = client.post("/fs/storyboard", json={
         "operation": "workshop_apply_shots", "storyId": story_id,

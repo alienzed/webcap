@@ -4142,3 +4142,22 @@ html[data-theme="dark"] .storyboard-prompt-take-status {
 
 #storyboard-workshop-review-apply[hidden],
 .storyboard-workshop-review-note[hidden] { display: none !important; }
+
+/* Optional Workshop context stays behind one compact disclosure. */
+.director-chat-mode-presets details[data-workshop-context] { min-width: 0; }
+.director-chat-mode-presets details[data-workshop-context] > summary {
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 700;
+  padding: 6px 8px;
+}
+.director-chat-workshop-context-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 0;
+}
+.director-chat-workshop-context-options .review-captions-btn {
+  min-height: 34px;
+  font-size: 14px;
+}

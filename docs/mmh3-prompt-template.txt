@@ -1,50 +1,41 @@
 # MiniMax H3 Illustrative Prompt Shape
 
-This file mirrors the canonical authoring example used by the Director.
-
-It is an authoring example, not a storage schema. Director may adapt section detail, ordering, and shot count to the Scene. WebCap stores Director-authored prompt text unchanged.
+This is a reference copy of the active example in `docs/mmh3-prompt-runtime-context.txt`. It illustrates technical sections, not a fixed shot count or creative policy. WebCap stores the complete authored prompt unchanged.
 
 --- BEGIN EXAMPLE PROMPT SHAPE ---
 
 Subject:
-Primary subject identity, appearance, wardrobe, and voice characteristics that matter throughout the Scene.
+Stable subject identity and characteristics relevant to this clip.
 
 Scene Overview:
-A concise description of the setting, action, mood, and overall intent.
+One concise statement of the Scene's premise or purpose.
 
 Environment / Continuity Anchors:
-Current spatial state, important location anchors, relevant props and their state, lighting, time of day, weather, and other visible conditions that carry through the Scene.
+Starting spatial and physical conditions, locations, props, and persistent visual facts.
 
 Style / Visual Treatment:
-Overall visual style, composition, lens and depth character, framing, and default camera movement.
+Overall visual language, lighting, and composition.
 
 integrated_multimodal_description:
 
 [Shot 1] (0s–Xs)
-What occurs in this interval, including action, performance, framing, camera behavior, synchronized sound or dialogue, and any shot-specific detail or deviation from the scene-level setup.
+Observable action and audiovisual events occurring in this interval.
 
 [Shot 2] (Xs–Ys)
-What occurs in this interval, including any changes in action, performance, framing, camera behavior, synchronized sound or dialogue, or physical state.
-
-[Shot 3] ... and additional shots as appropriate for the Scene.
+The next authored interval, including timed changes and shot-specific detail.
 
 overall_soundscape:
-Persistent diegetic ambience, environmental sound, Foley, and spatial character that define the Scene.
+Persistent diegetic ambience and environmental sound.
 
 non_diegetic_music:
-Audience-only score and its character or development when it serves the Scene.
+Audience-only score and its development.
 
 --- END EXAMPLE PROMPT SHAPE ---
 
-Scene-level sections establish shared defaults. Shots inherit them and describe what occurs at particular times.
+Use consecutive [Shot N] labels and actual timestamps spanning the requested duration. The author's creative direction determines the shot count and treatment.
 
-Exact first/last-frame modes may also receive WebCap-owned MiniMax alignment syntax derived from the selected reference roles.
+Place synchronized dialogue and sound with their shot. Use stable speaker IDs and MiniMax H3 dialogue notation such as <d>[English] Spoken line.</d>.
 
-For active Director guidance, see:
+Treat supplied Story facts, references, and invariants as established generation context. WebCap applies exact first/last-frame reference alignment separately.
 
-- `docs/storyboard-director-context.txt`
-- `docs/mmh3-prompt-runtime-context.txt`
-
-For longer reference notes, see:
-
-- `docs/mmh3-prompt-guidelines.md`
+Return the complete prompt text exactly as it should be stored and sent to H3.

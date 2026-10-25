@@ -1,49 +1,46 @@
-MINIMAX H3 STORYBOARD GUIDANCE
+MINIMAX H3 GENERATION PROMPT
 
-Author a directly usable MiniMax H3 prompt for the Scene.
+Write a directly usable prompt for one video Scene, at most 15 seconds.
 
-Establish stable and current facts at scene level once, selecting details relevant to this generation. Let shots inherit that setup and describe what happens over time: actions, synchronized events, camera changes, and changes in state, without restating unchanged facts.
+AUTHORING STRUCTURE.
+State persistent identities and starting conditions once. Timed shots describe actions, performance, changes in physical state, camera behavior, and synchronized dialogue or sound as they happen. Follow the author's Story Guidelines and Scene intent for creative decisions.
 
-ILLUSTRATIVE PROMPT SHAPE
-
-Use the following as a strong example of H3 prompt organization. Adapt the sections, detail, ordering, and shot count to the Scene.
+H3 PROMPT SHAPE
 
 --- BEGIN EXAMPLE PROMPT SHAPE ---
 
 Subject:
-Primary subject identity, appearance, wardrobe, and voice characteristics that matter throughout the Scene.
+Stable subject identity and characteristics relevant to this clip.
 
 Scene Overview:
-A concise description of the setting, action, mood, and overall intent.
+One concise statement of the Scene's premise or purpose.
 
 Environment / Continuity Anchors:
-Current spatial state, important location anchors, relevant props and their state, lighting, time of day, weather, and other visible conditions that carry through the Scene.
+Starting spatial and physical conditions, locations, props, and persistent visual facts.
 
 Style / Visual Treatment:
-Overall visual style, composition, lens and depth character, framing, and default camera movement.
+Overall visual language, lighting, and composition.
 
 integrated_multimodal_description:
 
 [Shot 1] (0s–Xs)
-What occurs in this interval, including action, performance, framing, camera behavior, synchronized sound or dialogue, and any shot-specific detail or deviation from the scene-level setup.
+Observable action and audiovisual events occurring in this interval.
 
 [Shot 2] (Xs–Ys)
-What occurs in this interval, including any changes in action, performance, framing, camera behavior, synchronized sound or dialogue, or physical state.
-
-[Shot 3] ... and additional shots as appropriate for the Scene.
+The next authored interval, including timed changes and shot-specific detail.
 
 overall_soundscape:
-Persistent diegetic ambience, environmental sound, Foley, and spatial character that define the Scene.
+Persistent diegetic ambience and environmental sound.
 
 non_diegetic_music:
-Audience-only score and its character or development when it serves the Scene.
+Audience-only score and its development.
 
 --- END EXAMPLE PROMPT SHAPE ---
 
-Keep shot timing plausible for the requested duration.
+Use consecutive [Shot N] labels and actual timestamps spanning the requested duration. The author's creative direction determines the shot count and treatment.
 
-Place shot-specific camera changes, synchronized sound, and dialogue in the relevant shot. Use stable speaker IDs when useful and MiniMax H3 dialogue notation such as <d>[English] Spoken line.</d> for spoken content.
+Place synchronized dialogue and sound with their shot. Use stable speaker IDs and MiniMax H3 dialogue notation such as <d>[English] Spoken line.</d>.
 
-Honor supplied Story facts, atmosphere, invariants, and evolving state where relevant. Author around exact first/last-frame anchors when supplied; WebCap adds mechanical reference alignment.
+Treat supplied Story facts, references, and invariants as established generation context. WebCap applies exact first/last-frame reference alignment separately.
 
 Return the complete prompt text exactly as it should be stored and sent to H3.

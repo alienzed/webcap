@@ -47,11 +47,11 @@ Scene-level sections establish defaults for the generation.
 
 Shots inherit those defaults and focus on what occurs at particular times: action, performance, framing, perspective, camera movement, synchronized events, dialogue, and changes in physical state.
 
-A Storyboard Scene is normally 10–15 seconds. Choose the shot count that best serves the material. Sustained treatment fits material that benefits from uninterrupted time.
+A Storyboard Scene lasts at most 15 seconds. The author's Story Guidelines and Scene intent determine shot count, duration allocation, and visual treatment.
 
 ## Camera and motion
 
-Scene-level visual treatment establishes overall framing, lens/depth character, and default camera movement.
+Scene-level visual treatment establishes consistent visual character, while timed shots own framing, camera movements, and their changes.
 
 Individual shots specify camera moves, framing changes, and deviations from that overall treatment.
 
@@ -101,7 +101,7 @@ WebCap may add the exact MiniMax alignment statement derived from the selected r
 
 Prompt refinement applies the requested change while preserving unrelated authored details.
 
-Previous-Scene context can help Director choose continuation, contrast, variation, repetition, or independence according to the concept.
+Previous-Scene facts may be used for a user-requested continuity review; Story Guidelines establish the creative relationship.
 
 ## Runtime scope
 

@@ -30,12 +30,11 @@
   };
   var STORYBOARD_WORKSHOP_PRIMER = [
     'You are collaborating with an author developing short AI-generated videos.',
-    'The author organizes a project into a Story and its Scenes. The Story provides an overall concept and optional creative guidelines. Scenes may form a narrative, explore independent ideas, or present variations on a theme.',
-    'Each Scene is one independently generatable clip lasting at most 15 seconds. A Scene may contain multiple timed shots.',
-    'Scene generation prompts contain established Subject, Scene Overview, Environment / Continuity Anchors, Style / Visual Treatment, overall_soundscape and non_diegetic_music sections, along with timed shots in integrated_multimodal_description.',
-    'This conversation is a creative workshop. Help the author develop the quality, interest and specificity of actions, choreography, interactions, dialogue, camera behavior, timing and visual progression.',
-    'Focus on the creative material relevant to the current discussion. Explore possibilities, ask useful questions, suggest concrete alternatives and build on decisions already made.',
-    'Respond briefly, focusing on creative goals and decisions. Ask one focused question when clarification would help. Develop details as requested.'
+    'A Story contains the concept, optional Directing Guidelines, and independently generatable Scenes.',
+    'Each Scene is one video clip lasting at most 15 seconds. A Scene prompt has established subject, environment, visual treatment and audio sections, with timed shots in integrated_multimodal_description describing actions and changes.',
+    'This is a creative workshop. Explore the author\'s current interests for the selected Scene: actions, choreography, interactions, dialogue, camera behavior, timing, and visual development.',
+    'Use the supplied Story and Scene material as source context. Build on the author\'s decisions as the discussion develops.',
+    'Respond briefly. Ask one focused question when useful. Offer concise alternatives and elaborate as the author requests.'
   ].join('\n\n');
 
   var contextualModes = {};
@@ -85,6 +84,19 @@
     }).filter(modeAvailable);
   }
 
+  function storyboardContextPresets() {
+    if (state.workshop) {
+      return Object.keys(state.workshop.extraSections || {}).map(function (label) {
+        return { label: label, section: label, title: 'Include this Scene section in the conversation' };
+      }).concat([{ label: 'Exit Workshop', exitWorkshop: true }]);
+    }
+    return [
+      { label: 'Attach Story', contextKind: 'story' },
+      { label: 'Attach Scene', contextKind: 'scene' },
+      { label: 'Clear context', clearContext: true }
+    ];
+  }
+
   function syncModeUi() {
     var row = el('director-chat-mode-row');
     var host = el('director-chat-mode-switch');
@@ -119,18 +131,25 @@
         (active ? String(active.placeholder || 'What should the Assistant do?') : 'Ask the model anything…');
     }
 
-    var presets = active && Array.isArray(active.presets) ? active.presets : [];
-    if (state.activeMode === 'storyboard') presets = [
-      { label: 'Attach Story', contextKind: 'story' },
-      { label: 'Attach Scene', contextKind: 'scene' },
-      { label: 'Clear context', clearContext: true }
-    ];
+    var presets = state.activeMode === 'storyboard'
+      ? storyboardContextPresets()
+      : (active && Array.isArray(active.presets) ? active.presets : []);
     if (toolsRow) toolsRow.classList.toggle('hidden', !presets.length);
     if (presetsHost) {
-      presetsHost.innerHTML = presets.map(function (preset, index) {
-        return '<button type="button" class="review-captions-btn" data-assistant-preset="' + String(index) +
-          '" title="' + String(preset.title || preset.label || '') + '">' + String(preset.label || 'Preset') + '</button>';
+      var wasExpanded = !!presetsHost.querySelector('details[data-workshop-context][open]');
+      var items = presets.map(function (preset, index) {
+        var selected = !!(preset.section && state.storyboardAttachments['section:' + preset.section]);
+        return '<button type="button" class="review-captions-btn' + (selected ? ' active' : '') +
+          '" data-assistant-preset="' + String(index) + '"' +
+          (preset.section ? ' aria-pressed="' + (selected ? 'true' : 'false') + '"' : '') +
+          ' title="' + String(preset.title || preset.label || '') + '">' +
+          String(preset.label || 'Preset') + '</button>';
       }).join('');
+      presetsHost.innerHTML = state.activeMode === 'storyboard' && state.workshop
+        ? '<details data-workshop-context' + (wasExpanded ? ' open' : '') +
+          '><summary>Context · ' + Object.keys(state.storyboardAttachments).length +
+          ' additional</summary><div class="director-chat-workshop-context-options">' + items + '</div></details>'
+        : items;
     }
     var prepare = el('director-chat-workshop-prepare');
     if (prepare) prepare.classList.toggle('hidden', state.activeMode !== 'storyboard' || !state.workshop);
@@ -823,6 +842,9 @@
         sceneIntent: scene.sceneSummary,
         durationSeconds: scene.durationSeconds,
         originalTimedShots: scene.shots,
+        selectedSceneSections: Object.keys(state.storyboardAttachments).map(function (key) {
+          return state.storyboardAttachments[key];
+        }),
         workshopDiscussion: decisions
       }, null, 2) }
     ];
@@ -842,6 +864,7 @@
       trackTransientLlmJob(payload.job);
       return waitForJob(payload.job);
     }).then(function (job) {
+      if (state.workshop !== scene) throw new Error('Scene Workshop changed during the proposal. Open the selected Scene and prepare again.');
       var result = job.result && typeof job.result === 'object' ? job.result : {};
       state.workshopProposal = parseWorkshopProposal(result.text);
       el('director-chat-workshop-status').textContent = 'Proposal ready for review';
@@ -1075,13 +1098,31 @@
       if (!button) return;
       if (state.activeMode === 'storyboard') {
         if (state.pending) return;
-        if (button.dataset.assistantPreset === '2') {
-          state.storyboardAttachments = {};
+        var preset = storyboardContextPresets()[Number(button.dataset.assistantPreset)];
+        if (!preset) throw new Error('Unknown Storyboard context selection.');
+        if (preset.exitWorkshop) {
           state.workshop = null;
           state.workshopProposal = null;
+          state.storyboardAttachments = {};
+          state.modeMessages.storyboard = [];
+          state.modeElapsedByAssistantIndex.storyboard = {};
+          state.modeMetricsByAssistantIndex.storyboard = {};
+          el('director-chat-workshop-status').textContent = '';
+          syncModeUi();
+        } else if (preset.section) {
+          var key = 'section:' + preset.section;
+          if (state.storyboardAttachments[key]) delete state.storyboardAttachments[key];
+          else state.storyboardAttachments[key] = {
+            label: preset.section,
+            content: state.workshop.extraSections[preset.section]
+          };
+          state.workshopProposal = null;
+          syncModeUi();
+        } else if (preset.clearContext) {
+          state.storyboardAttachments = {};
           syncModeUi();
         } else {
-          attachStoryboardContext(button.dataset.assistantPreset === '0' ? 'story' : 'scene');
+          attachStoryboardContext(preset.contextKind);
         }
         return;
       }
@@ -1169,6 +1210,20 @@
     }
   }
 
+  window.syncStoryboardAssistantStory = function (storyId, sceneIds) {
+    if (!state.workshop) return;
+    var sameStory = String(storyId || '') === state.workshop.storyId;
+    var scenePresent = Array.isArray(sceneIds) && sceneIds.indexOf(state.workshop.sceneId) !== -1;
+    if (sameStory && scenePresent) return;
+    state.workshop = null;
+    state.workshopProposal = null;
+    state.storyboardAttachments = {};
+    state.modeMessages.storyboard = [];
+    state.modeElapsedByAssistantIndex.storyboard = {};
+    state.modeMetricsByAssistantIndex.storyboard = {};
+    el('director-chat-workshop-status').textContent = '';
+    syncModeUi();
+  };
   window.openStoryboardAssistant = function () { setOpen(true, 'storyboard'); };
   window.openStoryboardSceneWorkshop = function (context) {
     if (state.pending) throw new Error('Finish the current Assistant job before switching Workshop Scenes.');

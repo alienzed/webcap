@@ -3587,67 +3587,93 @@
     var variations = status && Array.isArray(status.variationCases) ? status.variationCases : [];
     var columns = Math.max(1, variations.length);
     var buckets = new Map();
+
+    // Reserve all checkpoint rows immediately. New results only fill empty cells.
+    (status && status.candidates || []).forEach(function(candidate) {
+      var key = candidate.kind === 'base' ? 'Base' : String(candidate.fileName || candidate.label || '');
+      if (buckets.has(key)) return;
+      var provenance = candidate.provenance || {};
+      var parts = [];
+      if (provenance.sourceRunSequence) parts.push('Run ' + provenance.sourceRunSequence);
+      if (provenance.sourceEpoch != null) parts.push('Epoch ' + provenance.sourceEpoch);
+      buckets.set(key, {
+        label:candidate.kind === 'base' ? 'Base' : (parts.join(' · ') || key),
+        cells:new Map()
+      });
+    });
     results.forEach(function(result) {
       var identity = candidateIdentity(result);
       var key = result.kind === 'base' ? 'Base' : String(result.candidateFile || result.sourceLoRA || identity.primary);
-      if (!buckets.has(key)) buckets.set(key, {label:identity.primary, cells:new Map()});
-      buckets.get(key).cells.set(result.variationIndex == null ? 0 : Number(result.variationIndex), result);
+      if (!buckets.has(key)) buckets.set(key,{label:identity.primary,cells:new Map()});
+      var row=buckets.get(key);
+      row.label=identity.primary;
+      row.cells.set(result.variationIndex == null ? 0 : Number(result.variationIndex),result);
     });
-    var candidateOrder = new Map();
-    (status && status.candidates || []).forEach(function(candidate,index) {
-      var key=candidate.kind === 'base' ? 'Base' : String(candidate.fileName || candidate.label || '');
-      if (!candidateOrder.has(key)) candidateOrder.set(key,index);
-    });
-    var sortedBuckets=Array.from(buckets.entries()).sort(function(a,b){
-      return (candidateOrder.get(a[0]) == null ? 1e9 : candidateOrder.get(a[0])) -
-        (candidateOrder.get(b[0]) == null ? 1e9 : candidateOrder.get(b[0]));
-    });
-    var signature=JSON.stringify([status && status.session, results.map(function(result){
-      return [resultMediaFile(result),result.rating,result.variationIndex];
-    }),variations]);
-    if (host.dataset.signature === signature) return;
-    host.dataset.signature = signature;
-    host.replaceChildren();
-    if (!buckets.size) { host.textContent = 'Generated previews will appear here.'; return; }
-    var scroller=document.createElement('div');
-    scroller.className='test-generations-matrix-scroll';
-    var board=document.createElement('div');
-    board.className='test-generations-matrix-board';
-    board.style.setProperty('--matrix-columns', String(columns));
-    var corner=document.createElement('strong');
-    corner.textContent='Checkpoint';
-    board.appendChild(corner);
-    for(var i=0;i<columns;i++){
-      var label=document.createElement('strong');
-      label.textContent=variations[i] ? variations[i].label : 'Preview';
-      board.appendChild(label);
-    }
-    var scores=testVlCandidateScores(results);
-    sortedBuckets.forEach(function(entry) {
-      var row=entry[1];
-      var heading=document.createElement('strong');
-      heading.className='test-generations-matrix-epoch';
-      heading.textContent=row.label;
-      board.appendChild(heading);
-      for(var index=0;index<columns;index++){
-        var cell=document.createElement('div');
-        cell.className='test-generations-matrix-cell';
-        var result=row.cells.get(index);
-        if(result){
-          var card=sharedTestCard(result,status,'test-generations-result-card',false);
-          var video=card.querySelector('video');
-          if(video) video.preload='none';
-          renderTestVlCard(card,result,scores);
-          cell.appendChild(card);
-        }else{
+
+    var rows=Array.from(buckets.entries());
+    var layout=JSON.stringify([status && status.session,
+      variations.map(function(v){return v.label;}),
+      rows.map(function(entry){return entry[0];})
+    ]);
+    var board=host.querySelector('.test-generations-matrix-board');
+    if (!board || host.dataset.layout !== layout) {
+      host.replaceChildren();
+      host.dataset.layout=layout;
+      if (!rows.length) { host.textContent='Generated previews will appear here.'; return; }
+      var scroller=document.createElement('div');
+      scroller.className='test-generations-matrix-scroll';
+      board=document.createElement('div');
+      board.className='test-generations-matrix-board';
+      board.style.setProperty('--matrix-columns', String(columns));
+      var corner=document.createElement('strong');
+      corner.textContent='Checkpoint';
+      board.appendChild(corner);
+      for(var i=0;i<columns;i++){
+        var label=document.createElement('strong');
+        label.textContent=variations[i] ? variations[i].label : 'Preview';
+        board.appendChild(label);
+      }
+      rows.forEach(function(entry){
+        var heading=document.createElement('strong');
+        heading.className='test-generations-matrix-epoch';
+        board.appendChild(heading);
+        for(var index=0;index<columns;index++){
+          var cell=document.createElement('div');
+          cell.className='test-generations-matrix-cell';
           cell.classList.add('is-empty');
           cell.textContent='Awaiting render';
+          board.appendChild(cell);
         }
-        board.appendChild(cell);
+      });
+      scroller.appendChild(board);
+      host.appendChild(scroller);
+    }
+
+    var headings=board.querySelectorAll('.test-generations-matrix-epoch');
+    var cells=board.querySelectorAll('.test-generations-matrix-cell');
+    var scores=testVlCandidateScores(results);
+    rows.forEach(function(entry,rowIndex){
+      var row=entry[1];
+      headings[rowIndex].textContent=row.label;
+      for(var index=0;index<columns;index++){
+        var cell=cells[rowIndex*columns+index];
+        var result=row.cells.get(index);
+        if(!result) continue;
+        var key=String(resultMediaFile(result) || '');
+        if(cell.dataset.mediaKey === key && cell.firstElementChild){
+          window.updateTestPreviewCardRating(cell.firstElementChild,result.rating||0);
+          renderTestVlCard(cell.firstElementChild,result,scores);
+          continue;
+        }
+        var card=sharedTestCard(result,status,'test-generations-result-card',false);
+        var video=card.querySelector('video');
+        if(video) video.preload='none';
+        renderTestVlCard(card,result,scores);
+        cell.classList.remove('is-empty');
+        cell.replaceChildren(card);
+        cell.dataset.mediaKey=key;
       }
     });
-    scroller.appendChild(board);
-    host.appendChild(scroller);
   }
 
   function setResultsView(mode) {

@@ -1602,11 +1602,6 @@
     return 'Prompt sent · ' + (count === 1 ? '1 msg' : String(count) + ' msgs') + ' · ' + chars.toLocaleString() + ' chars · Inspect';
   }
 
-  function copyWildcardDirectorRequestDiagnostic(request) {
-    if (!request || !Array.isArray(request.messages)) throw new Error('Wildcard Director request diagnostic is missing its messages.');
-    return navigator.clipboard.writeText(JSON.stringify(request.messages, null, 2));
-  }
-
   function renderWildcardDirectorActivity(activity, system) {
     var card = el('test-generations-director-activity');
     var phase = el('test-generations-director-activity-phase');

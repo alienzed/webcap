@@ -371,7 +371,7 @@
     var count = Number(request.messageCount) || 0;
     var chars = Number(request.contentChars) || 0;
     var messageLabel = count === 1 ? '1 msg' : String(count) + ' msgs';
-    return 'Prompt sent · ' + messageLabel + ' · ' + chars.toLocaleString() + ' chars · Copy';
+    return 'Prompt sent · ' + messageLabel + ' · ' + chars.toLocaleString() + ' chars · Inspect';
   }
 
   function copyRequestDiagnostic(request) {
@@ -427,7 +427,7 @@
     var requestLabel = formatRequestDiagnostic(state.requestDiagnostic);
     copy.classList.toggle('hidden', !requestLabel);
     copy.textContent = requestLabel;
-    copy.title = requestLabel ? 'Copy the exact messages WebCap sent to the LLM' : '';
+    copy.title = requestLabel ? 'Inspect the exact messages WebCap sent to the LLM' : '';
 
     phaseEl.textContent = directorPhaseLabel(phase);
     detailEl.textContent = detail;
@@ -816,16 +816,7 @@
     send.onclick = sendMessage;
     stop.onclick = stopJob;
     copy.onclick = function () {
-      copyRequestDiagnostic(state.requestDiagnostic).then(function () {
-        var original = formatRequestDiagnostic(state.requestDiagnostic);
-        copy.textContent = 'Copied';
-        window.setTimeout(function () {
-          if (state.requestDiagnostic) copy.textContent = original;
-        }, 1200);
-      }).catch(function (err) {
-        if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Assistant', err);
-        throw err;
-      });
+      openDirectorRequestInspector(state.requestDiagnostic, 'Director Chat Request');
     };
     modeSwitch.onclick = function (event) {
       var button = event.target.closest('[data-assistant-mode]');

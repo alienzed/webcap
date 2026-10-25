@@ -236,8 +236,8 @@
       output.textContent = setScanState.inspectionMissingFile
         ? 'No saved Sight response for ' + setScanState.inspectionMissingFile + '.' : '';
     }
-    var file = setScanState.previewFileName || itemSelect.value || '';
-    el('set-scan-preview-name').textContent = file || 'Select a media item';
+    var file = setScanState.previewFileName || (setScanState.running ? '' : itemSelect.value || '');
+    el('set-scan-preview-name').textContent = file || (setScanState.running ? 'Awaiting first completed image' : 'Select a media item');
     el('set-scan-preview-review').disabled = !file;
     updateSightPreviewMedia(el('set-scan-preview-image'), el('set-scan-preview-video'), setScanState.folder, file);
     var observed = responses.slice().reverse().find(function (row) { return row.media === file; });
@@ -245,7 +245,7 @@
     el('set-scan-preview-text').textContent = observed
       ? String(observed.description || observed.text || 'No observation returned.')
       : saved && saved.sight && saved.sight.description ? saved.sight.description
-        : setScanState.running ? 'Inspecting image…' : 'No saved Sight for the selected model.';
+        : setScanState.running ? 'Waiting for first completed Sight…' : 'No saved Sight for the selected model.';
   }
 
   function updateSightPreviewMedia(image, video, folder, file) {
@@ -531,7 +531,6 @@
       String(index + 1) + ' of ' + String(pending.length) + ' · exploring visual details');
 
     var fileName = pending[index];
-    setScanState.previewFileName = fileName;
     renderSetIntelligence();
     return requestSight(folder, model, fileName, function () { return setScanState.stopRequested; }, groups).then(function (result) {
       if (setScanState.stopRequested) return false;
@@ -652,7 +651,7 @@
 
     setScanState.folder = folder;
     setScanState.files = files.slice();
-    setScanState.previewFileName = files[0] || '';
+    setScanState.previewFileName = '';
     setScanState.visionModel = '';
     setScanState.running = true;
     setScanState.hasRun = true;

@@ -211,7 +211,7 @@ def _story_guidelines_text(story):
         ("sceneRelationships", "Scene relationships"),
     )
     guidelines = story.get("guidelines") if isinstance(story.get("guidelines"), dict) else {}
-    return "\\n".join(label + ": " + _clean(guidelines.get(key)) for key, label in fields if _clean(guidelines.get(key)))
+    return "\n".join(label + ": " + _clean(guidelines.get(key)) for key, label in fields if _clean(guidelines.get(key)))
 
 
 def _repair_scene_plan(story):
@@ -308,7 +308,7 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
     if operation in {"expand_concept", "develop_story", "develop_story_outline", "develop_story_scene", "insert_scene", "extend_story", "write_prompt"}:
         guidance = _story_guidelines_text(story)
         if guidance:
-            director_context += "\\n\\n[STORY DIRECTING GUIDELINES - AUTHOR INTENT]\\n" + guidance
+            director_context += "\n\n[STORY DIRECTING GUIDELINES - AUTHOR INTENT]\n" + guidance
     h3_runtime_context = _read_text(H3_RUNTIME_CONTEXT_PATH, "MiniMax H3 runtime context")
 
     if operation == "define_invariants":

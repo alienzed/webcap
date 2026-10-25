@@ -4255,6 +4255,9 @@
     renderStoryStylePresetSelector();
     renderAtmosphereProposal();
     renderStoryInvariants();
+    document.querySelectorAll('[data-story-guideline]').forEach(function (input) {
+      input.value = (storyState.story.guidelines || {})[input.dataset.storyGuideline] || '';
+    });
     el('storyboard-story-status').value = storyState.story.status || 'active';
     var targetSceneCount = storyState.story.targetSceneCount;
     var targetScenesInput = el('storyboard-story-target-scenes');
@@ -4531,6 +4534,9 @@
       repairInstruction: String(storyState.story.repairInstruction || ''),
       repairComplete: !!storyState.story.repairComplete,
       invariants: storyInvariantsFromUi(),
+      guidelines: Object.fromEntries(Array.from(document.querySelectorAll('[data-story-guideline]')).map(function (input) {
+        return [input.dataset.storyGuideline, input.value];
+      })),
       loras: storyLorasFromUi(),
       directorLoraPlanning: el('storyboard-director-lora-enable').checked,
       targetSceneCount: el('storyboard-scene-count-auto').getAttribute('aria-pressed') === 'true'
@@ -6389,6 +6395,9 @@
     el('storyboard-story-aspect-ratio').addEventListener('change', function () {
       syncSceneGenerationDefaultHints();
       scheduleStorySave();
+    });
+    document.querySelectorAll('[data-story-guideline]').forEach(function (input) {
+      input.addEventListener('input', scheduleStorySave);
     });
     el('storyboard-invariants-list').addEventListener('input', scheduleStorySave);
     el('storyboard-invariants-list').addEventListener('change', scheduleStorySave);

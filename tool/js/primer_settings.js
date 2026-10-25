@@ -1145,10 +1145,8 @@ function syncCaptionAssistCandidateUi(options) {
   if (document.activeElement !== textEl || String(textEl.textContent || '') !== candidateText) {
     textEl.textContent = candidateText;
   }
-  if (!draftEdit) {
-    syncFocusedCaptionVisionPhrasesUi();
-    syncCaptionAssistEnrichmentUi(visible ? candidate : null);
-  }
+  if (!draftEdit) syncFocusedCaptionVisionPhrasesUi();
+  if (!draftEdit) syncCaptionAssistEnrichmentUi(visible ? candidate : null);
 
   prevBtn.classList.toggle('hidden', !focusOpen);
   nextBtn.classList.toggle('hidden', !focusOpen);

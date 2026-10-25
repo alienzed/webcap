@@ -3044,9 +3044,15 @@ def start_response(
             # A checkpoint resume must retain the original model variant,
             # regardless of the new-run checkbox's current default.
             validated_model = validate_resumable_run_for_path(folder_path, stages, resume_path)
-            effective_config_settings["h3ImageTrainingAdapter"] = (
-                validated_model["modelSource"] == h3_premerged_image_model_path()
-            )
+            inherited_adapter = bool(validated_model["imageTrainingAdapter"])
+            if ("h3ImageTrainingAdapter" in requested_config_settings
+                    and requested_config_settings["h3ImageTrainingAdapter"] is not inherited_adapter):
+                raise ValueError(
+                    "Image Adapter is fixed by the saved H3 checkpoint ("
+                    + ("enabled" if inherited_adapter else "standard") +
+                    "). Start a fresh run to change this variant."
+                )
+            effective_config_settings["h3ImageTrainingAdapter"] = inherited_adapter
         if (resume_path or initializer) and effective_config_settings.get("optimizerLr") not in (None, ""):
             # diffusion-pipe restores scheduler state on resume unless
             # force_constant_lr is present. Keep the user-selected LR effective

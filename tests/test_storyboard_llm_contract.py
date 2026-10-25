@@ -258,7 +258,7 @@ def test_expand_concept_still_preserves_story_context_without_scene_planning():
     assert "[CURRENT CONCEPT]" in request["prompt"]
     assert "[STORY VISUAL / ATMOSPHERE]" in request["prompt"]
     assert "[STORY INVARIANTS]" in request["prompt"]
-    assert "Do not break the concept into Scenes yet" in request["prompt"]
+    assert "Develop a practical concept overview with enough detail for later Scene planning." in request["prompt"]
     assert "rather than assuming a narrative arc" in request["prompt"]
     assert "variation-based" in request["prompt"]
 

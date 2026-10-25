@@ -271,11 +271,14 @@ def extract_video_frame(source_path, frame_index, source_fingerprint, output_pat
 def inspect_video_frame_response(data):
     data = data or {}
     folder = str(data.get("folder") or "").strip()
-    if not folder and not (data.get("storyId") or data.get("mediaPath")):
+    if not folder and not (data.get("storyId") or data.get("mediaPath")) and not (data.get("externalPath") or data.get("relativePath")):
         return jsonify({"error": "Missing folder"}), 400
     try:
         if data.get("storyId") or data.get("mediaPath"):
             source_path = resolve_storyboard_clip_source(data)
+        elif data.get("externalPath") or data.get("relativePath"):
+            from .external_media import _root, _source_file
+            source_path = _source_file(_root(data.get("externalPath")), data.get("relativePath"))
         else:
             source_folder = app_config.safe_join_fs_root(folder)
             if not source_folder.exists() or not source_folder.is_dir():

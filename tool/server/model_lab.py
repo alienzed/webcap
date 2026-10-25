@@ -443,6 +443,17 @@ def _reusable_evidence(run):
                 failures.pop(key, None)
             elif attempt.get("status") == "failed" and key not in failures:
                 failures[key] = True
+    # A demonstrated pass at or above a recorded ceiling disproves that
+    # ceiling. Preserve the success rather than suppressing future probes.
+    passed_budgets = {}
+    for key in reused:
+        kind, ref, _ = key.split("|", 2)
+        if kind.startswith("director_scene_plan_"):
+            passed_budgets[ref] = max(
+                passed_budgets.get(ref, 0), int(kind.rsplit("_", 1)[-1]))
+    for ref, limit in list(known_limits.items()):
+        if passed_budgets.get(ref, 0) >= limit:
+            known_limits.pop(ref)
     for key in list(failures):
         kind, ref, _ = key.split("|", 2)
         if kind.startswith("director_scene_plan_") and ref in known_limits:
@@ -1499,13 +1510,13 @@ def preview_run(config):
         ref = model["modelRef"]
         keys = [key for key in planned if key.split("|", 2)[1] == ref]
         limited = sum(_known_limit_covers(run, key) for key in keys)
-        complete = sum(key in reused for key in keys)
+        complete = sum(key in reused and not _known_limit_covers(run, key) for key in keys)
         retry = sum(key in failures and key not in reused and not _known_limit_covers(run, key) for key in keys)
         models[ref] = {
             "planned": len(keys), "complete": complete, "reused": complete,
             "missing": len(keys) - complete - retry - limited, "retry": retry, "limited": limited,
         }
-    return {"plan": plan, "reused": sum(key in reused for key in planned), "models": models}
+    return {"plan": plan, "reused": sum(key in reused and not _known_limit_covers(run, key) for key in planned), "models": models}
 
 
 def start_run(config):

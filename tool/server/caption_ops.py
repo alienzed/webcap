@@ -145,23 +145,28 @@ CAPTION_ASSIST_SYSTEM_PROMPT = (
 
 
 CAPTION_ENRICHMENT_SYSTEM_PROMPT = (
-    "You are a conservative visual detail editor for a training caption. "
-    "The existing caption is complete and must remain unchanged. Propose only genuinely useful, "
-    "specific visual details confidently grounded in the saved Open Sight observations which "
-    "the current caption does not yet convey. Selected annotations are trusted facts, not an "
-    "exhaustive list or a prescribed sentence structure. Do not repeat, correct, replace, "
-    "contradict or paraphrase existing caption content. Never invent details beyond Sight. "
-    "Return only JSON of the form "
-    "{\\\"suggestions\\\":[{\\\"anchor\\\":\\\"exact unique substring of caption\\\","
-    "\\\"addition\\\":\\\" text to insert immediately after anchor\\\"}]}. "
-    "Each anchor must match exactly one occurrence in the current caption, including its original "
-    "case and punctuation. Each addition includes the spaces and punctuation needed for natural "
-    "reading when placed directly after the anchor. Keep suggestions concise and independent; "
-    "use an empty suggestions array when no trustworthy missing details exist. No markdown."
+    "You are a visual caption enrichment editor. Use saved Open Sight as the main "
+    "source of visual detail. First mentally compose a complete natural-language training "
+    "caption from Sight, in the style and broad sequence demonstrated by renderedPrimer. "
+    "The rendered template is a style example, not a list of factual requirements. "
+    "User-selected annotations are true but not exhaustive. They do not limit discovery. "
+    "Compare that Sight-led description to currentCaption and propose only distinctive, "
+    "confidently grounded visual details missing from currentCaption. Never invent facts, "
+    "paraphrase existing content, or change selected-tag meanings. "
+    "The current caption must remain intact: return JSON containing a suggestions array; "
+    "each suggestion is an object with anchor and addition string fields. "
+    "Each anchor must be an exact, uniquely occurring substring from currentCaption. "
+    "Each addition must be a concise natural-language phrase with the spaces and punctuation "
+    "needed when inserted immediately after its anchor. Prefer compact insertion points "
+    "that read naturally with their surrounding text. No duplicated or conflicting details. "
+    "Return an empty suggestions array if Sight adds nothing clearly useful. No markdown."
 )
 
 
-def build_caption_enrichment_messages(draft="", open_sight=None, assignments=None, tags=None):
+def build_caption_enrichment_messages(
+    draft="", open_sight=None, assignments=None, tags=None, rendered_primer="",
+    preferred_sequence="",
+):
     caption = str(draft or "").strip()
     if not caption:
         raise ValueError("Caption enrichment requires an existing caption draft.")
@@ -174,15 +179,16 @@ def build_caption_enrichment_messages(draft="", open_sight=None, assignments=Non
     payload = {
         "currentCaption": caption,
         "openSight": open_sight,
+        "renderedPrimer": str(rendered_primer or "").strip(),
+        "preferredCaptionSequence": str(preferred_sequence or "").strip(),
         "selectedAnnotations": facts,
         "otherTags": [str(tag) for tag in (tags or []) if str(tag).strip()],
     }
     return [
         {"role": "system", "content": CAPTION_ENRICHMENT_SYSTEM_PROMPT},
-        {"role": "user", "content": "Suggest only missing visual details, as exact-anchor insertions.\\n" +
+        {"role": "user", "content": "Find missing details from Sight while keeping the caption intact.\n\n" +
          json.dumps(payload, ensure_ascii=False, separators=(",", ":"))},
     ]
-
 
 def build_caption_assist_messages(
     assignments=None,

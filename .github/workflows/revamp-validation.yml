@@ -15,6 +15,7 @@ on:
       - 'tests/test_media_context_actions_contract.py'
       - 'tool/js/primer_settings.js'
       - 'tests/caption_assist_typing_performance.test.cjs'
+      - 'tests/caption_assist_opening_sight.test.cjs'
       - 'tool/js/generate.js'
       - 'tests/generations_form_preservation.test.cjs'
       - 'tests/generations_editor_tabs.test.cjs'
@@ -131,6 +132,7 @@ jobs:
           node --test tests/epoch_screening_round_cards.test.cjs
           node --test tests/qa_curation_ui.test.cjs
           node --test tests/caption_assist_typing_performance.test.cjs
+          node --test tests/caption_assist_opening_sight.test.cjs
       - name: Inference and Training drag-to-reorder
         run: |
           node --check tool/js/job_queues.js

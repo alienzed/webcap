@@ -157,7 +157,7 @@ function diagnosticsAssessmentCounts(row, tests) {
   host.replaceChildren();
   var span = document.createElement('span');
   span.className = 'model-assessment-qualification model-assessment-' +
-    (state === 'Passed' ? 'passed' : state === 'Failed' ? 'issues' : 'untested');
+    (state === 'Passed' ? 'passed' : state === 'Failed' ? 'issues' : state === 'Limited' ? 'limited' : 'untested');
   span.textContent = (role === 'both' ? 'Director + Vision ' : role === 'director' ? 'Director ' : 'Vision ') +
     (state === 'Passed' ? 'Technical pass' : state);
   span.title = 'Required Storyboard JSON, Schema Assist, and applicable Vision tests determine technical qualification. Deep stress-test limits and LLM judging are separate.';
@@ -173,7 +173,8 @@ function diagnosticsAssessmentCounts(row, tests) {
 function diagnosticsAssessmentShowReason(host, summary, detail) {
   var label = document.createElement('span');
   label.className = 'model-assessment-inline-reason';
-  label.textContent = String(summary || '');
+  var text = String(summary || '');
+  label.textContent = text.length > 130 ? text.slice(0, 127) + '…' : text;
   label.title = String(detail || summary || '');
   host.appendChild(label);
 }

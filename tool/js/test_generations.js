@@ -1868,6 +1868,7 @@
     var target = el('test-generations-prompt');
     if (!target) return;
     target.value = String(prompt == null ? '' : prompt);
+    syncVariationGroups();
     if (wildcardIntent && wildcardIntent.prompt !== target.value) wildcardIntent = null;
   };
   function saveTestWorkspacePrompt(prompt) {
@@ -4752,6 +4753,7 @@
         : String(payload.defaultPrompt || '');
       wildcardIntent = saved.wildcardIntent && saved.wildcardIntent.prompt === prompt.value
         ? saved.wildcardIntent : null;
+      syncVariationGroups();
     }
   }
 

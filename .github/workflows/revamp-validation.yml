@@ -13,6 +13,8 @@ on:
       - 'tests/vl_workspace_tabs.test.cjs'
       - 'tests/test_media_context_actions_contract.py'
       - 'tool/js/primer_settings.js'
+      - 'tool/js/generate.js'
+      - 'tests/generations_form_preservation.test.cjs'
       - 'tool/js/sight_group_suggestions.js'
       - 'tool/js/focused_annotation.js'
       - 'tests/sight_group_suggestions.test.cjs'
@@ -106,6 +108,8 @@ jobs:
           node --check tool/js/caption_vision.js
           node --check tool/js/media_context_actions.js
           node --check tool/js/primer_settings.js
+          node --check tool/js/generate.js
+          node --test tests/generations_form_preservation.test.cjs
           node --check tool/js/sight_group_suggestions.js
           node --check tool/js/focused_annotation.js
           node --test tests/sight_group_suggestions.test.cjs

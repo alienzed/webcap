@@ -1733,19 +1733,21 @@
     renderTakes(items);
     if (generateState.activePendingJobId) {
       var completed = items.find(function (result) { return String(result.jobId || '') === generateState.activePendingJobId; });
-      if (completed) selectGenerationResult(completed);
+      if (completed) renderActiveResult(completed);
     } else if (generateState.activeResultKey) {
       var selected = items.find(function (result) { return resultKey(result) === generateState.activeResultKey; });
       if (selected) renderActiveResult(selected);
       else if (generateState.inspectedResult && resultKey(generateState.inspectedResult) === generateState.activeResultKey) {
         renderActiveResult(generateState.inspectedResult);
       } else if (items.length) {
-        selectGenerationResult(items[0]);
+        renderActiveResult(items[0]);
       } else {
-        startNewGeneration();
+        generateState.activeResultKey = '';
+        generateState.inspectedResult = null;
+        renderStageEmpty();
       }
     } else if (items.length && !generateState.freshDraft) {
-      selectGenerationResult(items[0]);
+      renderActiveResult(items[0]);
     } else {
       renderStageEmpty();
     }
@@ -2594,7 +2596,7 @@
       if (!generateState.open || navigationVersion !== generateState.navigationVersion) return;
       if (!target.storageId && !targetJobId && generateState.activeResultKey) {
         var selected = generateState.results.find(function (item) { return resultKey(item) === generateState.activeResultKey; });
-        if (selected) selectGenerationResult(selected);
+        if (selected) renderActiveResult(selected);
       }
       if (!target.storageId) return;
       return requestJson('/fs/generate/result?storageId=' + encodeURIComponent(target.storageId)).then(function (payload) {

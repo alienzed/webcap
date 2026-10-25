@@ -6,6 +6,7 @@
     token: 0, phase: 'idle', folder: '', signature: '', rows: [], concepts: [],
     eligible: [], order: [], choices: new Set(), sizes: {}, preset: 'balanced',
     filter: 'selected', limit: 72, summary: '', jobId: '', error: '',
+    analysis: null, balanceGroups: new Set(), availableGroups: [],
     status: '', missingSight: 0, ignored: 0
   };
 
@@ -89,6 +90,7 @@
     var byKey = new Map(chosen.map(function (feature) { return [feature.key, feature.id]; }));
     rows.forEach(function (row) {
       row.ids = Array.from(row.keys).map(function (key) { return byKey.get(key); }).filter(Boolean);
+      row.inventoryIds = row.ids.slice();
       delete row.keys;
     });
     return {
@@ -108,29 +110,47 @@
     return 1 - Math.exp(-count / (role === 'core' ? 3 : 2));
   }
 
-  function deriveEligible(concepts, analysis, rows) {
+  function deriveEligible(concepts, analysis, rows, balanceGroups) {
     var core = new Set(analysis.coreIds);
     var supporting = new Set(analysis.supportingIds);
     var available = new Map(concepts.map(function (row) { return [row.id, row]; }));
     var selected = new Map();
-    core.forEach(function (id) {
+    function include(id) {
       var row = available.get(id);
-      if (!row) throw new Error('Curation result references unknown core concept: ' + id);
-      selected.set(id, { id: id, label: row.term, group: row.group, role: 'core',
-        count: row.count, weight: row.source === 'sight' ? 0.62 : 1 });
-    });
+      if (!row) throw new Error('Curation result references unknown concept: ' + id);
+      var role = balanceGroups.has(row.group) ? 'core' : 'supporting';
+      selected.set(id, {id: id, label: row.term, group: row.group, role: role,
+        count: row.count, weight: row.source === 'sight'
+          ? (role === 'core' ? 0.62 : 0.13)
+          : (role === 'core' ? 1 : 0.28)});
+    }
+    core.forEach(include);
     supporting.forEach(function (id) {
-      if (selected.has(id)) throw new Error('Curation classified a concept twice: ' + id);
-      var row = available.get(id);
-      if (!row) throw new Error('Curation result references unknown supporting concept: ' + id);
-      selected.set(id, { id: id, label: row.term, group: row.group, role: 'supporting',
-        count: row.count, weight: row.source === 'sight' ? 0.13 : 0.28 });
+      if (core.has(id)) throw new Error('Curation classified a concept twice: ' + id);
+      include(id);
     });
     if (!core.size) throw new Error('Director found no core visual concepts.');
+    // A manually selected group outranks the Director even if it omitted its
+    // concepts entirely. No additional LLM call or hidden vocabulary rewriting.
+    concepts.forEach(function (row) {
+      if (balanceGroups.has(row.group)) include(row.id);
+    });
     rows.forEach(function (row) {
-      row.ids = row.ids.filter(function (id) { return selected.has(id); });
+      row.ids = row.inventoryIds.filter(function (id) { return selected.has(id); });
     });
     return Array.from(selected.values());
+  }
+
+  function applyBalancePriorities() {
+    session.eligible = deriveEligible(session.concepts, session.analysis, session.rows, session.balanceGroups);
+    var ranked = rank(session.rows, session.eligible);
+    session.order = ranked.order;
+    session.sizes = ranked.sizes;
+    // Changing priorities must not overwrite manually checked/unchecked media.
+    // Only an active preset receives its newly ranked proposed subset.
+    if (session.preset !== 'custom') {
+      session.choices = new Set(session.order.slice(0, session.sizes[session.preset]));
+    }
   }
 
   function coverage(rows, concepts, selectedFiles) {
@@ -272,6 +292,33 @@
     host.appendChild(element('p', 'qa-curation-helper',
       'Coverage is measured against available annotated evidence, not predicted LoRA accuracy.'));
     host.appendChild(element('p', 'qa-curation-summary', session.summary));
+
+    var priorities = element('section', 'qa-curation-priorities');
+    priorities.appendChild(element('h3', '', 'Balance priorities'));
+    priorities.appendChild(element('p', 'qa-curation-helper',
+      'Director suggestions are preselected. Check groups whose variations should drive the shortlist; other Director concepts remain supporting variation.'));
+    var groupChoices = element('div', 'qa-curation-balance-groups');
+    session.availableGroups.forEach(function (group) {
+      var label = element('label', 'qa-curation-balance-choice');
+      var toggle = element('input');
+      toggle.type = 'checkbox';
+      toggle.checked = session.balanceGroups.has(group);
+      toggle.setAttribute('data-curation-balance-group', group);
+      toggle.setAttribute('aria-label', 'Prioritize balancing ' + group);
+      toggle.onchange = function () {
+        if (toggle.checked) session.balanceGroups.add(group);
+        else session.balanceGroups.delete(group);
+        applyBalancePriorities();
+        renderQaCuration(host, session.signature);
+      };
+      label.appendChild(toggle);
+      label.appendChild(element('span', '', group));
+      groupChoices.appendChild(label);
+    });
+    priorities.appendChild(groupChoices);
+    if (session.preset === 'custom') priorities.appendChild(element('p', 'qa-curation-helper',
+      'Manual image selections are preserved. Choose Lean, Balanced, or Broad to apply the new ranking.'));
+    host.appendChild(priorities);
     var coreFeatures = session.eligible.filter(function (c) {return c.role==='core';})
       .sort(function(a,b) {return b.count-a.count;}).slice(0,9);
     var conceptGrid = element('div', 'qa-curation-concepts');
@@ -495,6 +542,9 @@
     session.rows = inventory.rows;
     session.concepts = inventory.concepts;
     session.ignored = inventory.ignored;
+    session.analysis = null;
+    session.balanceGroups = new Set();
+    session.availableGroups = Array.from(new Set(session.concepts.map(function (c) { return c.group; }))).sort();
     session.missingSight = inventory.rows.filter(function (row) {return !row.analysis.visionSight;}).length;
     session.status = 'Step 1/3 · Indexed ' + items.length + ' images into ' + inventory.concepts.length + ' candidate concepts.';
     session.error = '';
@@ -535,12 +585,13 @@
         throw new Error('Director did not return a validated concept priority analysis.');
       session.status = 'Step 3/3 · Choosing complementary images…';
       renderCurrent();
-      session.eligible = deriveEligible(session.concepts, result, session.rows);
-      var ranked = rank(session.rows, session.eligible);
-      session.order = ranked.order;
-      session.sizes = ranked.sizes;
-      session.choices = new Set(session.order.slice(0, session.sizes.balanced));
+      session.analysis = result;
+      var core = new Set(result.coreIds);
+      session.balanceGroups = new Set(session.concepts.filter(function (c) {
+        return core.has(c.id);
+      }).map(function (c) { return c.group; }));
       session.preset = 'balanced';
+      applyBalancePriorities();
       session.filter = 'selected';
       session.summary = String(result.summary || 'A curated mix of key constructions and supporting variation.');
       session.phase = 'ready';

@@ -1495,17 +1495,13 @@ def _known_limit_covers(run, key):
 
 
 def _pending_probe_plan(run):
-    """Only schedule missing/failed work, using the same plan as progress."""
+    """Discover untested capabilities; prior observed outcomes are not automatic retries."""
     missing = retry = 0
     for key in _planned_probes(run):
-        if _known_limit_covers(run, key):
+        if (_known_limit_covers(run, key) or key in (run.get("reused") or {})
+                or key in (run.get("previousFailures") or {})):
             continue
-        if key in (run.get("reused") or {}):
-            continue
-        if key in (run.get("previousFailures") or {}):
-            retry += 1
-        else:
-            missing += 1
+        missing += 1
     return {"missing": missing, "retry": retry, "total": missing + retry}
 
 
@@ -1523,10 +1519,12 @@ def preview_run(config):
         keys = [key for key in planned if key.split("|", 2)[1] == ref]
         limited = sum(_known_limit_covers(run, key) for key in keys)
         complete = sum(key in reused and not _known_limit_covers(run, key) for key in keys)
-        retry = sum(key in failures and key not in reused and not _known_limit_covers(run, key) for key in keys)
+        retry = 0
+        observed = sum(key in failures and key not in reused and not _known_limit_covers(run, key) for key in keys)
         models[ref] = {
             "planned": len(keys), "complete": complete, "reused": complete,
-            "missing": len(keys) - complete - retry - limited, "retry": retry, "limited": limited,
+            "missing": len(keys) - complete - observed - limited, "retry": retry,
+            "observed": observed, "limited": limited,
         }
     return {"plan": plan, "reused": sum(key in reused and not _known_limit_covers(run, key) for key in planned), "models": models}
 
@@ -1619,6 +1617,43 @@ def delete_run(run_id):
     return True
 
 
+def reset_model_evidence(model_ref):
+    """Explicitly clear one model's saved assessment evidence, keeping other models."""
+    ref = str(model_ref or "").strip()
+    if not ref:
+        raise ValueError("Model reference is required.")
+    with _lock:
+        rows = list_runs()
+        for row in rows:
+            if _active_record(row["id"]):
+                raise RuntimeError("Stop active Model Lab assessments before resetting model evidence.")
+        changed = 0
+        for row in rows:
+            if row["status"] == "error":
+                raise RuntimeError("Cannot reset evidence while an assessment file is unreadable.")
+            run = _read_raw(row["id"])
+            attempts = run.get("attempts") or []
+            kept = [a for a in attempts if str(a.get("modelRef") or "") != ref]
+            reused = run.get("reused") or {}
+            kept_reused = {k: v for k, v in reused.items()
+                           if k.split("|", 2)[1] != ref}
+            reviews = run.get("qualityReviews") or {}
+            if (len(kept) == len(attempts) and len(kept_reused) == len(reused)
+                    and ref not in reviews and ref not in (run.get("knownLimits") or {})
+                    and not any(k.split("|", 2)[1] == ref for k in (run.get("previousFailures") or {}))):
+                continue
+            run["attempts"] = kept
+            run["reused"] = kept_reused
+            run["qualityReviews"] = {k: v for k, v in reviews.items() if k != ref}
+            run["knownLimits"] = {k: v for k, v in (run.get("knownLimits") or {}).items() if k != ref}
+            run["previousFailures"] = {k: v for k, v in (run.get("previousFailures") or {}).items()
+                                       if k.split("|", 2)[1] != ref}
+            run["summary"] = _summarize(run)
+            _write_run(run)
+            changed += 1
+    return changed
+
+
 def model_catalog():
     from .storyboard_llm_runtime import list_models, list_vision_models
 
@@ -1697,6 +1732,8 @@ def register_routes(app):
                 from .model_lab_quality import stop_review
                 run = stop_review(data.get("runId"))
                 return jsonify({"ok": True, "run": run, "runs": list_runs()})
+            if action == "reset_model":
+                return jsonify({"ok": True, "updatedRuns": reset_model_evidence(data.get("modelRef"))})
             if action == "preview":
                 return jsonify({"ok": True, **preview_run(data.get("config"))})
             if action == "start":

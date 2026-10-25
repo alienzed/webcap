@@ -1083,7 +1083,7 @@ function openDirectorRequestInspector(request, title) {
     dialog = document.createElement('dialog');
     dialog.id = 'director-request-inspector';
     dialog.setAttribute('aria-label', 'LLM request');
-    dialog.style.cssText = 'width:min(760px,94vw);max-height:85vh;padding:0;border:1px solid #8888;border-radius:10px;background:var(--panel-bg,#24262b);color:var(--text-color,#eee);';
+    dialog.style.cssText = 'width:min(760px,94vw);max-height:85vh;padding:0;border:1px solid #8888;border-radius:10px;background:var(--panel,#24262b);color:var(--text,#eee);';
     dialog.innerHTML = '<header style="padding:12px 15px;display:flex;justify-content:space-between;border-bottom:1px solid #8885"><strong data-title>LLM Request</strong><button data-close type="button" aria-label="Close">×</button></header><section data-body style="max-height:67vh;overflow:auto;padding:12px 15px"></section><footer style="display:flex;justify-content:flex-end;gap:8px;padding:10px 15px;border-top:1px solid #8885"><button data-copy type="button">Copy full request</button><button data-done type="button">Close</button></footer>';
     document.body.appendChild(dialog);
     dialog.querySelector('[data-close]').onclick = function () { dialog.close(); };

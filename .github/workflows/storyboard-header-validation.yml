@@ -68,4 +68,7 @@ jobs:
           python -m pytest -q tests/test_storyboard_store.py -k story_guidelines_survive
           python -m pytest -q tests/test_storyboard_llm_contract.py -k optional_story_guidelines
       - name: Storyboard core contracts
-        run: python -m pytest -q tests/test_storyboard_llm_contract.py tests/test_storyboard_store.py tests/test_storyboard_route.py tests/test_storyboard_workshop.py
+        run: |
+          python -m pytest -q tests/test_storyboard_llm_contract.py tests/test_storyboard_workshop.py
+          python -m pytest -q tests/test_storyboard_store.py -k story_guidelines_survive
+          python -m pytest -q tests/test_storyboard_route.py -k workshop_context_and_atomic_shot

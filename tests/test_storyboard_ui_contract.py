@@ -1541,3 +1541,14 @@ def test_storyboard_queue_context_and_director_text_model_contract():
     assert "item.kind === 'storyboard' ? activityDetail(item)" in activity
     assert 'if (item.storyTitle) parts.push(item.storyTitle);' in activity
     assert "modalities.indexOf('image') === -1" in storyboard
+
+
+def test_workshop_context_opt_in_and_story_switch_cleanup():
+    chat = (ROOT / "tool" / "js" / "director_chat.js").read_text(encoding="utf-8")
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+    assert "state.workshop.extraSections" in chat
+    assert "section:' + preset.section" in chat
+    assert "selectedSceneSections: Object.keys(state.storyboardAttachments)" in chat
+    assert "window.syncStoryboardAssistantStory = function" in chat
+    assert "window.syncStoryboardAssistantStory(storyState.story" in storyboard
+    assert "state.workshopProposal = null;" in chat

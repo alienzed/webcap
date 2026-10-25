@@ -385,6 +385,8 @@ function refreshUnifiedModelAssessment() {
     summary.textContent = directors.length + ' Director models · ' + vision.length +
       ' Vision models · ' + labRuns.length + ' Model Lab runs' +
       (activeRun ? ' · Running: ' + activeRun.id + ' (' + activeRun.attemptCount + ' probes recorded)' : '');
+    summary.appendChild(document.createTextNode(' · '));
+    summary.appendChild(resetAll);
 
     var resetAll = document.createElement('button');
     resetAll.type = 'button';
@@ -403,8 +405,6 @@ function refreshUnifiedModelAssessment() {
         reportConsoleError('Model Assessment reset all', error);
       });
     });
-    summary.appendChild(document.createTextNode(' · '));
-    summary.appendChild(resetAll);
 
     var table = document.createElement('table');
     table.className = 'model-assessment-table';

@@ -804,7 +804,7 @@ function diagnosticsRefreshSelectionPlan() {
     diagnosticsAssessmentPlanTotal = null;
     labels.forEach(function (label) { label.hidden = true; label.textContent = ''; });
     status.textContent = 'Select models to see what remains.';
-    button.textContent = 'Complete Missing Tests';
+    button.textContent = 'Discover Capabilities';
     button.disabled = true;
     return;
   }
@@ -818,7 +818,7 @@ function diagnosticsRefreshSelectionPlan() {
     diagnosticsAssessmentPlanTotal = null;
     labels.forEach(function (label) { label.hidden = true; label.textContent = ''; });
     status.textContent = error.message;
-    button.textContent = 'Complete Missing Tests';
+    button.textContent = 'Discover Capabilities';
     button.disabled = true;
     return;
   }
@@ -835,23 +835,23 @@ function diagnosticsRefreshSelectionPlan() {
     if (version !== diagnosticsAssessmentPreviewVersion || diagnosticsAssessmentRunStatus === 'running') return;
     var plan = data.plan;
     diagnosticsAssessmentPlanTotal = plan.total;
-    button.textContent = plan.total ? 'Complete ' + plan.total + (plan.total === 1 ? ' Test' : ' Tests') : 'Already Complete';
+    button.textContent = plan.total ? 'Run ' + plan.total + ' untested ' + (plan.total === 1 ? 'probe' : 'probes') : 'Already Complete';
     button.disabled = !plan.total;
     var knownLimits = Object.keys(data.models || {}).reduce(function (n, ref) {
       return n + Number(data.models[ref].limited || 0) + Number(data.models[ref].observed || 0);
     }, 0);
     status.textContent = count + ' model(s) selected · ' + data.reused + ' already complete · ' +
       (knownLimits ? knownLimits + ' previously assessed · ' : '') +
-      plan.missing + ' missing · ' + plan.retry + ' retry';
+      plan.missing + ' untested';
     labels.forEach(function (label) {
       var item = data.models[label.dataset.assessmentWork];
       label.hidden = !item;
       if (!item) return;
       label.textContent = [
-        item.missing ? item.missing + ' missing' : '',
-        item.retry ? item.retry + ' retry' : '',
+        item.missing ? item.missing + ' untested' : '',
+        item.retry ? item.retry + ' to retry' : '',
         (Number(item.limited || 0) + Number(item.observed || 0)) ? (Number(item.limited || 0) + Number(item.observed || 0)) + ' assessed' : ''
-      ].filter(Boolean).join(' · ') || 'Tests complete';
+      ].filter(Boolean).join(' · ') || 'Assessed';
       label.title = item.complete + ' passed/reused · ' + (item.limited || 0) + ' established limit tiers · ' + item.planned + ' planned.';
     });
   }).catch(function (error) {
@@ -859,7 +859,7 @@ function diagnosticsRefreshSelectionPlan() {
     diagnosticsAssessmentPreviewKey = '';
     diagnosticsAssessmentPlanTotal = null;
     status.textContent = 'Could not check outstanding tests: ' + error.message;
-    button.textContent = 'Complete Missing Tests';
+    button.textContent = 'Discover Capabilities';
     button.disabled = true;
     reportConsoleError('Model Assessment preview', error);
   });

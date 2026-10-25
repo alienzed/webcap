@@ -1165,7 +1165,13 @@ def workshop_scene_context(story_id, scene_id):
     if not isinstance(scene, dict) or scene_id not in (story.get("sceneOrder") or []):
         raise FileNotFoundError("Workshop Scene does not exist.")
     prompt = str(scene.get("prompt") or "")
-    start, end = timed_shot_bounds(prompt)
+    try:
+        start, end = timed_shot_bounds(prompt)
+        shots = prompt[start:end]
+        shot_error = ""
+    except ValueError as exc:
+        shots = ""
+        shot_error = str(exc)
     return {
         "storyId": story_id,
         "sceneId": scene_id,
@@ -1175,7 +1181,8 @@ def workshop_scene_context(story_id, scene_id):
         "sceneTitle": str(scene.get("title") or ""),
         "sceneSummary": str(scene.get("summary") or ""),
         "durationSeconds": scene.get("durationSeconds"),
-        "shots": prompt[start:end],
+        "shots": shots,
+        "shotError": shot_error,
         "expectedPrompt": prompt,
     }
 

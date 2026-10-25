@@ -2064,6 +2064,8 @@ function wirePrimerCaptionResetUi() {
     throw new Error('Caption Assist controls are missing.');
   }
 
+  wireCaptionAssistEnrichment();
+
   if (!window.__captionAssistDockResizeBound) {
     window.__captionAssistDockResizeBound = true;
     window.addEventListener('resize', syncCaptionAssistEditorDock);

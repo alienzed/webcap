@@ -52,8 +52,8 @@ def test_write_prompt_gives_director_context_without_postprocessing_contract():
     assert "[STORY INVARIANTS]" in prompt
     assert "Mara has a dark bob" in prompt
     assert "[REFERENCE MODE]\nI2VA" in prompt
-    assert "Establish stable and current facts at scene level" in prompt
-    assert "Treat the Story concept, Visual / Atmosphere, and populated Directing Guidelines" in prompt
+    assert "State persistent identities and starting conditions once." in prompt
+    assert "Treat the supplied Story concept, Visual / Atmosphere, populated Directing Guidelines" in prompt
     assert "--- BEGIN EXAMPLE PROMPT SHAPE ---" in prompt
     assert "Environment / Continuity Anchors:" in prompt
     assert "integrated_multimodal_description:" in prompt
@@ -77,9 +77,10 @@ def test_h3_guidance_uses_one_fenced_authoring_example_without_schema_enforcemen
 
     assert prompt.count("--- BEGIN EXAMPLE PROMPT SHAPE ---") == 1
     assert prompt.count("--- END EXAMPLE PROMPT SHAPE ---") == 1
-    assert "[Shot 3] ... and additional shots as appropriate for the Scene." in prompt
-    assert "shots inherit that setup" in prompt
-    assert "What occurs in this interval" in prompt
+    assert "[Shot 2] (Xs–Ys)" in prompt
+    assert "[Shot 3]" not in prompt
+    assert "Timed shots describe actions" in prompt
+    assert "Observable action and audiovisual events occurring in this interval." in prompt
     assert schema["required"] == ["prompt"]
     assert set(schema["properties"]) == {"prompt"}
 
@@ -148,11 +149,10 @@ def test_develop_story_uses_simple_scene_schema_and_dense_scene_guidance():
     assert "sharedContextRefs" not in scene_schema["properties"]
     assert "Create exactly 12 Scenes." in prompt
     assert "GENERATION UNIT." in prompt
-    assert "Use that time purposefully, concisely." in prompt
-    assert "Use the Story\'s Scene Relationships direction when present" in prompt
-    assert "evolving state when continuity matters" in prompt
-    assert "Use evolving state between connected Scenes" in prompt
-    assert "Use entry and exit state only when a specific handoff or visible state is genuinely useful" in prompt
+    assert "at most 15 seconds." in prompt
+    assert "Use the supplied concept, Directing Guidelines" in prompt
+    assert "when continuity matters" not in prompt
+    assert "Use evolving state between connected Scenes" not in prompt
     assert "exactly as it should be used" in prompt
     assert "200-400 words" not in prompt
     assert "--- BEGIN EXAMPLE PROMPT SHAPE ---" in prompt
@@ -185,7 +185,7 @@ def test_insert_scene_uses_adjacent_scene_facts_not_prompt_templates():
     assert "[EXISTING SCENE OUTLINE]" in prompt
     assert "OLD FIRST PROMPT" not in prompt
     assert "EXISTING SECOND PROMPT" not in prompt
-    assert "Use neighbouring Scene descriptions as placement and continuity context." in prompt
+    assert "Use neighbouring Scene descriptions as placement context" in prompt
     assert "GENERATION UNIT." in prompt
 
 
@@ -224,7 +224,7 @@ def test_extend_story_preserves_distinction_from_redevelopment():
     assert "OLD FIRST PROMPT" not in request["prompt"]
     assert "EXISTING SECOND PROMPT" not in request["prompt"]
     assert "[LAST SCENE EXIT STATE]" not in request["prompt"]
-    assert "Plan how new Scenes contribute to the Story" in request["prompt"]
+    assert "Use the supplied concept, Directing Guidelines" in request["prompt"]
     assert "[USER DIRECTION]\nDifferent cubicle vignettes." in request["prompt"]
     assert "new Scenes as JSON" in request["prompt"]
 
@@ -258,9 +258,9 @@ def test_expand_concept_still_preserves_story_context_without_scene_planning():
     assert "[CURRENT CONCEPT]" in request["prompt"]
     assert "[STORY VISUAL / ATMOSPHERE]" in request["prompt"]
     assert "[STORY INVARIANTS]" in request["prompt"]
-    assert "Develop a practical concept overview with enough detail for later Scene planning." in request["prompt"]
-    assert "rather than assuming a narrative arc" in request["prompt"]
-    assert "variation-based" in request["prompt"]
+    assert "Expand the author\'s concept into a useful creative overview" in request["prompt"]
+    assert "Preserve established Story facts" in request["prompt"]
+    assert "variation-based" not in request["prompt"]
 
 
 def test_define_invariants_remains_context_generation_not_scene_authoring():
@@ -268,7 +268,7 @@ def test_define_invariants_remains_context_generation_not_scene_authoring():
 
     assert request["output"] == "json"
     assert request["response_schema"]["required"] == ["invariants"]
-    assert "Do not plan Scenes" in request["prompt"]
+    assert "Define stable visual identities for recurring characters and locations" in request["prompt"]
 
 
 def test_write_prompt_requires_scene_intent():
@@ -380,7 +380,8 @@ def test_individual_development_scene_uses_whole_outline_and_previous_authored_s
     assert "[COMPLETE SCENE OUTLINE]" in prompt
     assert "[CURRENT PLANNED SCENE]" in prompt
     assert "[PREVIOUS AUTHORED SCENE - RELATIONSHIP CONTEXT]" in prompt
-    assert "PREVIOUS FULL H3 PROMPT" in prompt
+    assert "She reaches the station." in prompt
+    assert "PREVIOUS FULL H3 PROMPT" not in prompt
     assert "Scene 2 of 2" in prompt
     assert "Author exactly this one planned Scene" in prompt
 
@@ -388,14 +389,13 @@ def test_individual_development_scene_uses_whole_outline_and_previous_authored_s
 def test_director_guidance_resolves_cross_scene_references_without_changing_h3_structure():
     request = storyboard_llm_contract.build_request(_story(), "", "develop_story")
     prompt = request["prompt"]
-    assert "Describe the current Scene with concrete visual facts" in prompt
-    assert "Ground invented details in the Story and supplied references." in prompt
-    assert "Ground invented details in the Story and supplied references." in prompt
+    assert "Describe the current Scene with concrete audiovisual facts" in prompt
+    assert "Preserve established identities, objects, environments" in prompt
     assert "--- BEGIN EXAMPLE PROMPT SHAPE ---" in prompt
     assert "Environment / Continuity Anchors:" in prompt
     assert "integrated_multimodal_description:" in prompt
-    assert "without restating unchanged facts" in prompt
-    assert "Use invariants for established facts" in prompt
+    assert "State persistent identities and starting conditions once" in prompt
+    assert "invariants" in prompt
 
 
 def test_refine_scene_is_isolated_unless_continuity_explicitly_requested():
@@ -409,7 +409,7 @@ def test_refine_scene_is_isolated_unless_continuity_explicitly_requested():
     assert "[PREVIOUS SCENE" not in isolated
     assert "A woman enters an empty hotel" not in isolated
     assert "[H3 GUIDANCE]" not in isolated
-    assert "For a localized request" in isolated
+    assert "Preserve all authored material outside the requested scope." in isolated
     continuity = storyboard_llm_contract.build_request(
         story, "scene-2", "refine_prompt", instruction, continuity_context=True
     )["prompt"]
@@ -429,20 +429,18 @@ def test_individual_scene_development_still_uses_previous_authored_scene_when_in
         "outline": outline, "sceneIndex": 1,
         "previousScene": {"title": "Arrival", "prompt": "PREVIOUS FULL H3 PROMPT"},
     })["prompt"]
-    assert "PREVIOUS FULL H3 PROMPT" in prompt
+    assert "PREVIOUS FULL H3 PROMPT" not in prompt
     assert '"suggestedDurationSeconds": 12' in prompt
 
 
-def test_check_coherence_only_sees_existing_prompt():
+def test_check_coherence_sees_author_guidance_without_other_scene_prompts():
     story = _story()
     prompt = storyboard_llm_contract.build_request(story, "scene-2", "check_coherence")
     text = prompt["prompt"]
-    assert "Review this H3 text-to-video prompt for coherence." in text
-    assert "Favor details that can be conveyed visually or audibly." in text
-    assert "Consolidate repeated descriptions." in text
-    assert "original unchanged if no meaningful improvement is needed" in text
+    assert "Review the H3 prompt for concrete audiovisual contradictions" in text
+    assert "Preserve the author\'s subject" in text
     assert "STORY CONCEPT" not in text
-    assert "STORY INVARIANTS" not in text
+    assert "STORY INVARIANTS" in text
     assert "PREVIOUS SCENE" not in text
     assert "OLD FIRST PROMPT" not in text
     assert "EXISTING SECOND PROMPT" in text
@@ -492,3 +490,37 @@ def test_optional_story_guidelines_in_creative_operations_not_narrow_refinement(
         story, "scene-2", "refine_prompt", instruction="Change the last smile."
     )
     assert "Vary choreography while preserving the shared format." not in narrow["prompt"]
+
+
+def test_empty_guidelines_do_not_inject_default_narrative_or_variation_rules():
+    story = _story()
+    story["guidelines"] = {}
+    for operation in ("develop_story", "develop_story_outline", "expand_concept", "extend_story"):
+        request = storyboard_llm_contract.build_request(story, "", operation, scene_count=2)
+        prompt = request["prompt"]
+        assert "[STORY DIRECTING GUIDELINES - AUTHOR INTENT]" not in prompt
+        assert "A new Scene may progress" not in prompt
+        assert "For connected material" not in prompt
+        assert "Variation / repetition:" not in prompt
+
+
+def test_explicit_continuity_refinement_receives_story_guidelines():
+    story = _story()
+    story["guidelines"] = {"sceneRelationships": "Independent vignettes; share only the location."}
+    narrow = storyboard_llm_contract.build_request(
+        story, "scene-2", "refine_prompt", instruction="Adjust one movement."
+    )["prompt"]
+    assert "Independent vignettes" not in narrow
+    contextual = storyboard_llm_contract.build_request(
+        story, "scene-2", "refine_prompt",
+        instruction="Review continuity.", continuity_context=True
+    )["prompt"]
+    assert "Independent vignettes; share only the location." in contextual
+
+
+def test_coherence_preserves_populated_author_variation_guidance():
+    story = _story()
+    story["guidelines"] = {"variation": "Repeat the exact pose as a deliberate motif."}
+    text = storyboard_llm_contract.build_request(story, "scene-2", "check_coherence")["prompt"]
+    assert "Repeat the exact pose as a deliberate motif." in text
+    assert "Consolidate repeated descriptions." not in text

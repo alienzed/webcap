@@ -2018,11 +2018,6 @@
     return 'Prompt sent · ' + (count === 1 ? '1 msg' : String(count) + ' msgs') + ' · ' + chars.toLocaleString() + ' chars · Inspect';
   }
 
-  function copyGenerateDirectorRequestDiagnostic(request) {
-    if (!request || !Array.isArray(request.messages)) throw new Error('Prompt Assistant request diagnostic is missing its messages.');
-    return navigator.clipboard.writeText(JSON.stringify(request.messages, null, 2));
-  }
-
   function directorActivityForCurrentJob(activity, queue) {
     var jobId = String(generateState.director.jobId || '');
     if (!jobId || !queue || !Array.isArray(queue.jobs)) return activity;

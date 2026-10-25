@@ -13,7 +13,7 @@ from pathlib import Path
 from . import config as app_config
 from .originals import MEDIA_ALL_EXTS
 from .video_frame_ops import VIDEO_EXTS, extract_boundary_frame_png
-from .storyboard_workshop import proposed_shot_prompt, timed_shot_bounds
+from .storyboard_workshop import proposed_shot_prompt, timed_shot_bounds, workshop_context_sections
 
 
 STORYBOARD_VERSION = 1
@@ -1183,6 +1183,7 @@ def workshop_scene_context(story_id, scene_id):
         "durationSeconds": scene.get("durationSeconds"),
         "shots": shots,
         "shotError": shot_error,
+        "extraSections": workshop_context_sections(prompt),
         "expectedPrompt": prompt,
     }
 

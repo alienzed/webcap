@@ -216,6 +216,17 @@ def _normalize_story_invariants(value):
     return result
 
 
+STORY_GUIDELINE_KEYS = ("visualFocus", "creativeDirection", "variation", "pacing", "sceneRelationships")
+
+
+def _normalize_story_guidelines(value):
+    if value is None:
+        return {}
+    if not isinstance(value, dict):
+        raise ValueError("Story guidelines must be an object.")
+    return {key: str(value.get(key) or "").strip() for key in STORY_GUIDELINE_KEYS if str(value.get(key) or "").strip()}
+
+
 def _normalize_scene_invariant_refs(value):
     if value is None:
         return []
@@ -620,6 +631,7 @@ def _normalize_story(payload, existing=None, story_id=None):
         "repairInstruction": str(payload.get("repairInstruction", current.get("repairInstruction", "")) or ""),
         "repairComplete": bool(payload.get("repairComplete", current.get("repairComplete", False))),
         "invariants": _normalize_story_invariants(payload.get("invariants", current.get("invariants", []))),
+        "guidelines": _normalize_story_guidelines(payload.get("guidelines", current.get("guidelines", {}))),
         "loras": _normalize_loras(payload.get("loras", current.get("loras", [])), allow_enabled=True),
         "directorLoraPlanning": payload.get("directorLoraPlanning", current.get("directorLoraPlanning", False)) is True,
         "directorLoraPhrases": _normalize_lora_phrase_choices(
@@ -694,6 +706,7 @@ def duplicate_story(story_id):
         "style": source.get("style") or "",
         "repairInstruction": source.get("repairInstruction") or "",
         "invariants": copy.deepcopy(source.get("invariants") or []),
+        "guidelines": copy.deepcopy(source.get("guidelines") or {}),
         "loras": copy.deepcopy(source.get("loras") or []),
         "targetSceneCount": source.get("targetSceneCount", DEFAULT_TARGET_SCENE_COUNT),
         "generationDefaults": copy.deepcopy(source.get("generationDefaults") or {}),

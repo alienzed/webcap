@@ -13,6 +13,7 @@ from pathlib import Path
 from . import config as app_config
 from .originals import MEDIA_ALL_EXTS
 from .video_frame_ops import VIDEO_EXTS, extract_boundary_frame_png
+from .storyboard_workshop import proposed_shot_prompt, timed_shot_bounds
 
 
 STORYBOARD_VERSION = 1
@@ -1150,6 +1151,55 @@ def update_scene(story_id, scene_id, payload):
     if not isinstance(current, dict):
         raise FileNotFoundError("Scene does not exist.")
     scene = _normalize_scene(scene_id, payload or {}, existing=current)
+    scenes[scene_id] = scene
+    story["scenes"] = scenes
+    story["updatedAt"] = _utc_now()
+    _write_json_atomic(_story_path(story_id), story)
+    return story, scene
+
+
+def workshop_scene_context(story_id, scene_id):
+    """Read-only snapshot, paired with its exact saved prompt for conflict checks."""
+    story = load_story(story_id)
+    scene = (story.get("scenes") or {}).get(scene_id)
+    if not isinstance(scene, dict) or scene_id not in (story.get("sceneOrder") or []):
+        raise FileNotFoundError("Workshop Scene does not exist.")
+    prompt = str(scene.get("prompt") or "")
+    start, end = timed_shot_bounds(prompt)
+    return {
+        "storyId": story_id,
+        "sceneId": scene_id,
+        "storyTitle": str(story.get("title") or ""),
+        "concept": str(story.get("concept") or ""),
+        "guidelines": story.get("guidelines") or {},
+        "sceneTitle": str(scene.get("title") or ""),
+        "sceneSummary": str(scene.get("summary") or ""),
+        "shots": prompt[start:end],
+        "expectedPrompt": prompt,
+    }
+
+
+@_serialized_mutation
+def apply_workshop_shots(story_id, scene_id, expected_prompt, replacement):
+    story = load_story(story_id)
+    scenes = story.get("scenes") if isinstance(story.get("scenes"), dict) else {}
+    current = scenes.get(scene_id)
+    if not isinstance(current, dict) or scene_id not in (story.get("sceneOrder") or []):
+        raise FileNotFoundError("Workshop Scene does not exist.")
+    if not isinstance(expected_prompt, str):
+        raise ValueError("Workshop revision requires the original Scene prompt.")
+    original = str(current.get("prompt") or "")
+    if original != expected_prompt:
+        raise RuntimeError("Scene prompt changed since Workshop began. Review the updated Scene and prepare again.")
+    revised = proposed_shot_prompt(original, replacement)
+    scene = _normalize_scene(scene_id, {
+        "prompt": revised,
+        "previousPrompt": original,
+        "previousRevision": None,
+        "promptDirectorModel": "",
+        "promptDirectorJobId": "",
+        "refineComplete": False,
+    }, existing=current)
     scenes[scene_id] = scene
     story["scenes"] = scenes
     story["updatedAt"] = _utc_now()

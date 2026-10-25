@@ -844,6 +844,40 @@
     setReviewDetailTab('qa');
   }
 
+  function vlWorkspaceVisibleMedia() {
+    return getFilteredMediaItems(false).filter(function (item) {
+      return item && isCaptionVisionSupportedMedia(item.fileName);
+    });
+  }
+
+  function vlWorkspacePosition() {
+    var items = vlWorkspaceVisibleMedia();
+    var current = setScanState.reviewMediaItem;
+    return {items: items, index: items.findIndex(function (item) {
+      return !!current && item.key === current.key;
+    })};
+  }
+
+  function syncVlWorkspaceNavigation() {
+    var position = vlWorkspacePosition();
+    var index = position.index;
+    el('vl-workspace-prev').disabled = index <= 0;
+    el('vl-workspace-next').disabled = index < 0 || index >= position.items.length - 1;
+    el('vl-workspace-position').textContent = index >= 0
+      ? String(index + 1) + ' / ' + String(position.items.length)
+      : 'Outside visible selection';
+  }
+
+  function navigateVlWorkspace(direction) {
+    if (direction !== -1 && direction !== 1) throw new Error('Unknown VL Workspace navigation direction.');
+    var position = vlWorkspacePosition();
+    var index = position.index + direction;
+    if (position.index < 0 || index < 0 || index >= position.items.length) return false;
+    var tab = el('saved-intelligence-modal').dataset.vlTab || 'sight';
+    openSavedIntelligenceForMedia(position.items[index], tab);
+    return true;
+  }
+
   function closeSavedIntelligence() {
     setScanState.reviewRequestToken += 1;
     el('saved-intelligence-modal').classList.add('hidden');
@@ -922,6 +956,7 @@
     setScanState.reviewFile = file;
     setScanState.reviewMediaItem = mediaItem;
     setScanState.reviewData = null;
+    syncVlWorkspaceNavigation();
     var token = ++setScanState.reviewRequestToken;
     el('saved-intelligence-file').textContent = file;
     el('saved-intelligence-status').textContent = 'Loading saved VL observations…';
@@ -1056,6 +1091,8 @@
     modal.addEventListener('click', function (event) {
       if (event.target === modal) closeSetIntelligence();
     });
+    el('vl-workspace-prev').onclick = function () { navigateVlWorkspace(-1); };
+    el('vl-workspace-next').onclick = function () { navigateVlWorkspace(1); };
     savedCloseBtn.onclick = closeSavedIntelligence;
     savedModal.addEventListener('click', function (event) {
       if (event.target === savedModal) closeSavedIntelligence();

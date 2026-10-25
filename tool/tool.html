@@ -1441,7 +1441,7 @@
                                                 <button id="test-generations-wildcard-btn" type="button" class="review-captions-btn test-generations-wildcard-wand" title="Generate a wildcard prompt from this Set's captions" aria-label="Generate wildcard prompt">&#10024;</button>
                                             </div>
                                         </div>
-                                        <textarea id="test-generations-prompt" rows="5"></textarea>
+                                        <textarea id="test-generations-prompt" rows="5"></textarea><label class="training-run-option"><span>Exhaustively vary</span><select id="test-generations-variation-group"><option value="">None</option></select></label>
                                     </div>
                                     <div class="test-generations-setup-options">
                                         <div class="test-generations-settings-grid">
@@ -1549,7 +1549,7 @@
                                     </select>
                                 <div class="test-generations-view-tabs" role="tablist" aria-label="Results view">
                                     <button id="test-generations-view-grid-btn" type="button" class="test-generations-view-tab active" role="tab" aria-selected="true">Grid</button>
-                                    <button id="test-generations-view-compare-btn" type="button" class="test-generations-view-tab" role="tab" aria-selected="false">Compare</button>
+                                    <button id="test-generations-view-compare-btn" type="button" class="test-generations-view-tab" role="tab" aria-selected="false">Compare</button><button id="test-generations-view-matrix-btn" type="button" class="test-generations-view-tab" role="tab" aria-selected="false">Matrix</button>
                                 </div>
                                 </div>
                             </div>
@@ -1572,7 +1572,7 @@
                                 </details>
                             </section>
                             <div id="test-generations-results" class="test-generations-results"></div>
-                            <div id="test-generations-compare" class="test-generations-compare hidden"></div>
+                            <div id="test-generations-compare" class="test-generations-compare hidden"></div><div id="test-generations-matrix" class="test-generations-matrix hidden"></div>
                             </div>
                             <section id="test-generations-epoch-info" class="epoch-info-workspace hidden" aria-label="Checkpoint inspection"></section>
                         </section>

@@ -857,3 +857,21 @@ def test_workshop_context_and_atomic_shot_apply_preserve_other_sections():
     })
     assert restored.status_code == 200
     assert restored.get_json()["scene"]["prompt"] == original
+
+
+def test_workshop_proposal_uses_fixed_structured_chat_schema(monkeypatch):
+    captured = {}
+    def fake_enqueue(client, model, contract, context, label):
+        captured.update({"client": client, "model": model, "contract": contract, "label": label})
+        return {"jobId": "shot-proposal-job", "status": "queued"}
+    monkeypatch.setattr(app_module, "enqueue_llm", fake_enqueue)
+    response = app_module.app.test_client().post("/fs/director/chat", json={
+        "model": "local::dummy.gguf",
+        "operation": "storyboard_workshop_shots",
+        "messages": [{"role": "user", "content": "Enhance Shot 2"}],
+    })
+    assert response.status_code == 202
+    assert captured["client"] == "chat"
+    assert captured["contract"]["operation"] == "storyboard_workshop_shots"
+    assert captured["contract"]["response_schema"]["required"] == ["summary", "shots"]
+    assert captured["label"] == "Storyboard Shot Proposal"

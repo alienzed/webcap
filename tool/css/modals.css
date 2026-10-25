@@ -3921,3 +3921,10 @@ html[data-theme="dark"] .app-settings-environment-check {
 #clone-set-vl-modal .vl-clone-summary { font-size: 16px; line-height: 1.5; }
 #clone-set-vl-modal .vl-clone-footer { display: flex; justify-content: flex-end; gap: 12px; padding: 14px; }
 #clone-set-vl-modal .vl-clone-footer button { font-size: 16px; }
+
+/* VL Workspace navigates only the currently visible Set media; the Prep editor is not changed. */
+.vl-workspace-item-navigation { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:8px; }
+.vl-workspace-item-navigation > button { min-width:38px; min-height:36px; font-size:22px; line-height:1; padding:4px 10px; }
+.vl-workspace-item-navigation > button:disabled { opacity:.35; cursor:default; }
+#vl-workspace-position { color:var(--muted); font-size:14px; font-variant-numeric:tabular-nums; white-space:nowrap; }
+.vl-workspace-item-navigation .set-scan-subtitle { min-width:0; overflow-wrap:anywhere; }

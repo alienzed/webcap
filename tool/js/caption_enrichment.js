@@ -119,6 +119,7 @@ function syncCaptionAssistEnrichmentUi(candidate) {
   acceptAll.disabled = discard.disabled = !pending.length;
   restore.disabled = text === active.originalText;
   done.disabled = false;
+  done.textContent = 'Edit caption';
 }
 
 function updateCaptionAssistEnrichedDraft(text) {
@@ -144,6 +145,9 @@ function resolveCaptionAssistEnrichment(row, keep) {
     updateCaptionAssistEnrichedDraft(captionAssistEnrichmentInsert(captionAssistCandidate.text, row));
   else
     syncCaptionAssistCandidateUi();
+  // Once every suggestion is resolved, return to the normal editable draft.
+  if (!captionAssistEnrichmentPendingSuggestions().length)
+    finishCaptionAssistEnrichment('done');
 }
 
 function finishCaptionAssistEnrichment(mode) {
@@ -153,6 +157,7 @@ function finishCaptionAssistEnrichment(mode) {
     captionAssistEnrichmentPendingSuggestions().slice().forEach(function (row) {
       resolveCaptionAssistEnrichment(row, true);
     });
+    // Resolving the last suggestion closes the read-only review automatically.
     return true;
   }
   if (mode === 'restore') updateCaptionAssistEnrichedDraft(session.originalText);

@@ -743,6 +743,8 @@ def caption_assist_route():
             open_sight=data.get("openSight"),
             assignments=data.get("assignments"),
             tags=data.get("tags"),
+            rendered_primer=data.get("renderedPrimer", ""),
+            preferred_sequence=data.get("preferredCaptionSequence", ""),
         ) if enrich else build_caption_assist_messages(
             assignments=data.get("assignments"),
             tags=data.get("tags"),

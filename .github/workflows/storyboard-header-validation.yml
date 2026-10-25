@@ -2,6 +2,7 @@ name: Storyboard scene header regression
 on:
   pull_request:
     paths:
+      - '.github/workflows/storyboard-header-validation.yml'
       - 'tool/css/storyboard.css'
       - 'tool/js/storyboard.js'
       - 'tool/js/director_chat.js'

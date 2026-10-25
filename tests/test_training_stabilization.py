@@ -830,6 +830,9 @@ def test_h3_checkpoint_resume_rejects_switching_image_adapter(tmp_path, monkeypa
     _fake_runtime(monkeypatch)
     monkeypatch.setattr(training_runner, "_ensure_monitor_started", lambda: None)
     monkeypatch.setattr(training_runner, "prepare_training_review", lambda *_args, **_kwargs: {})
+    monkeypatch.setattr(training_runner, "_training_disk_space", lambda _path: {
+        "state": "safe", "freeBytes": training_runner._LOW_DISK_THRESHOLD_BYTES
+    })
     folder = _set(tmp_path)
     ensure_training_setup(folder, MINIMAX_H3_PROFILE_ID, selected_media=["one.png"])
     action, action_data = allocate_action(folder, resolved_profile(MINIMAX_H3_PROFILE_ID), ("h3",))
@@ -844,7 +847,8 @@ def test_h3_checkpoint_resume_rejects_switching_image_adapter(tmp_path, monkeypa
         selected_media=["one.png"], resume_action_id=action_data["actionId"],
         resume_output_id="output/standard-run", config_settings={"h3ImageTrainingAdapter": True},
     )
-    assert code == 400 and rejected["ok"] is False
+    assert code == 400, rejected
+    assert rejected["ok"] is False
     assert "Image Adapter is fixed by the saved H3 checkpoint (standard)" in rejected["error"]
     assert training_runner._read_state()["jobs"] == []
     assert (run / "global_step1").is_dir()

@@ -3593,6 +3593,15 @@
       if (!buckets.has(key)) buckets.set(key, {label:identity.primary, cells:new Map()});
       buckets.get(key).cells.set(result.variationIndex == null ? 0 : Number(result.variationIndex), result);
     });
+    var candidateOrder = new Map();
+    (status && status.candidates || []).forEach(function(candidate,index) {
+      var key=String(candidate.fileName || candidate.label || '');
+      if (!candidateOrder.has(key)) candidateOrder.set(key,index);
+    });
+    var sortedBuckets=Array.from(buckets.entries()).sort(function(a,b){
+      return (candidateOrder.get(a[0]) == null ? 1e9 : candidateOrder.get(a[0])) -
+        (candidateOrder.get(b[0]) == null ? 1e9 : candidateOrder.get(b[0]));
+    });
     var signature=JSON.stringify([status && status.session, results.map(function(result){
       return [resultMediaFile(result),result.rating,result.variationIndex];
     }),variations]);
@@ -3614,7 +3623,8 @@
       board.appendChild(label);
     }
     var scores=testVlCandidateScores(results);
-    buckets.forEach(function(row) {
+    sortedBuckets.forEach(function(entry) {
+      var row=entry[1];
       var heading=document.createElement('strong');
       heading.className='test-generations-matrix-epoch';
       heading.textContent=row.label;
@@ -3625,6 +3635,8 @@
         var result=row.cells.get(index);
         if(result){
           var card=sharedTestCard(result,status,'test-generations-result-card',false);
+          var video=card.querySelector('video');
+          if(video) video.preload='none';
           renderTestVlCard(card,result,scores);
           cell.appendChild(card);
         }else{
@@ -3657,6 +3669,12 @@
     matrixBtn.classList.toggle('active', resultsView === 'matrix');
     matrixBtn.setAttribute('aria-selected', String(resultsView === 'matrix'));
     matrix.classList.toggle('hidden',resultsView !== 'matrix');
+    if (resultsView === 'matrix') {
+      grid.replaceChildren();
+      grid.dataset.resultScope='';
+    } else {
+      matrix.querySelectorAll('video').forEach(function(video){video.pause();});
+    }
     if (grid) grid.classList.toggle('hidden', resultsView !== 'grid');
     if (compare) compare.classList.toggle('hidden', resultsView !== 'compare');
     renderResults(currentStatus);
@@ -3862,6 +3880,10 @@
   }
 
   function renderResults(status) {
+    if (resultsView === 'matrix') {
+      renderMatrix(status || {});
+      return;
+    }
     var host = el('test-generations-results');
     if (!host) return;
     var results = status && Array.isArray(status.results) ? status.results : [];

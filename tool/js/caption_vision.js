@@ -721,6 +721,10 @@ function syncVisionImageCaptionModal() {
     state.currentItem.key === visionImageCaptionState.mediaKey
   );
   els.cancelBtn.classList.toggle('hidden', !open || !visionImageCaptionState.pending);
+  var refresh = document.getElementById('vl-workspace-describe-run');
+  if (!refresh) throw new Error('VL Workspace caption refresh control is missing.');
+  refresh.textContent = hasText ? 'Refresh caption' : 'Generate caption';
+  refresh.disabled = !!visionImageCaptionState.pending;
 }
 
 function cancelVisionImageCaptionRequest() {

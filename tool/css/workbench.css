@@ -1395,6 +1395,17 @@
 .app.shell-revamp .training-run-h3-adapter-option.hidden {
   display: none;
 }
+.app.shell-revamp .training-run-h3-adapter-inherited {
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 650;
+  line-height: 1.35;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+.app.shell-revamp .training-run-h3-adapter-inherited.hidden {
+  display: none;
+}
 
 .app.shell-revamp .training-run-h3-adapter-option input {
   width: 14px;

@@ -279,6 +279,7 @@ function renderTrainingHistory() {
           '<details class="training-history-more"><summary class="training-history-action" title="More run actions" aria-label="More run actions">&#8230;</summary><div class="training-history-more-menu">' +
             (job.folder && job.outputRoot && job.outputAvailable !== false ? '<button type="button" data-training-history-output="' + escapeHtml(job.id || '') + '">&#128193; Open output</button>' : '') +
             (job.actionAvailable !== false && job.actionPath ? '<button type="button" data-training-history-action="' + escapeHtml(job.id || '') + '">&#128451; Open action folder</button>' : '') +
+            '<button type="button" data-training-history-remove="' + escapeHtml(job.id || '') + '">Remove from History</button>' +
             '<button type="button" data-training-history-delete="' + escapeHtml(job.id || '') + '">Delete run and files…</button>' +
           '</div></details>' +
         '</div>' +
@@ -306,7 +307,7 @@ function renderTrainingHistory() {
     if (run.epoch && run.expectedEpochs) details.push('epoch ' + run.epoch + ' / ' + run.expectedEpochs);
     var matchLabel = run.matchType === 'exact' ? 'exact' : 'compatible';
     var optionValue = String(run.resumeOutputId || run.runPath || '');
-    return '<option value="' + escapeHtml(optionValue) + '" data-action-id="' + escapeHtml(run.resumeActionId || '') + '" data-output-id="' + escapeHtml(run.resumeOutputId || '') + '" data-run-path="' + escapeHtml(run.runPath || '') + '">' +
+    return '<option value="' + escapeHtml(optionValue) + '" data-action-id="' + escapeHtml(run.resumeActionId || '') + '" data-output-id="' + escapeHtml(run.resumeOutputId || '') + '" data-run-path="' + escapeHtml(run.runPath || '') + '" data-image-adapter="' + (run.legacyMergedImageAdapter === true ? 'legacy' : run.imageTrainingAdapter === true ? 'on' : run.imageTrainingAdapter === false ? 'off' : '') + '">' +
       escapeHtml(String(run.runName || run.logicalRun || run.name || 'run') + ' - ' + trainingStageLabel(run.stage) +
         (details.length ? ' - ' + details.join(' / ') : '') + ' - ' + matchLabel) + '</option>';
   }).join('');
@@ -315,7 +316,7 @@ function renderTrainingHistory() {
     (Array.isArray(run.resumePoints) ? run.resumePoints : []).forEach(function (point) {
       var optionValue = String(run.resumeOutputId || run.runPath || '') + '::' + String(point.tag || '');
       previousOptions.push(
-        '<option value="' + escapeHtml(optionValue) + '" data-action-id="' + escapeHtml(run.resumeActionId || '') + '" data-output-id="' + escapeHtml(run.resumeOutputId || '') + '" data-run-path="' + escapeHtml(run.runPath || '') + '" data-checkpoint-tag="' + escapeHtml(point.tag || '') + '">' +
+        '<option value="' + escapeHtml(optionValue) + '" data-action-id="' + escapeHtml(run.resumeActionId || '') + '" data-output-id="' + escapeHtml(run.resumeOutputId || '') + '" data-run-path="' + escapeHtml(run.runPath || '') + '" data-image-adapter="' + (run.legacyMergedImageAdapter === true ? 'legacy' : run.imageTrainingAdapter === true ? 'on' : run.imageTrainingAdapter === false ? 'off' : '') + '" data-checkpoint-tag="' + escapeHtml(point.tag || '') + '">' +
         escapeHtml(String(run.runName || run.logicalRun || run.name || 'run') + ' - ' + String(point.tag || '')) + '</option>'
       );
     });
@@ -848,6 +849,25 @@ function refreshTrainingHistory(force) {
     });
 }
 
+function removeTrainingHistoryEntry(jobId) {
+  var jobs = trainingWorkspaceState.history && Array.isArray(trainingWorkspaceState.history.jobs)
+    ? trainingWorkspaceState.history.jobs : [];
+  var job = jobs.find(function (item) { return String(item.id) === String(jobId); });
+  if (!job || !job.folder) throw new Error('Training History entry not found.');
+  if (!window.confirm('Remove "' + String(job.runName || job.id) + '" from Training History?\n\nThis removes only the history entry. Checkpoints, logs, run files, and active training remain untouched.')) return;
+  trainingRunnerRequest('/fs/training_history/job/remove', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ folder: job.folder, jobId: job.id })
+  }).then(function () {
+    setStatus('Training History entry removed; run files and checkpoints preserved.');
+    return refreshTrainingHistory(true);
+  }).catch(function (err) {
+    setStatus('Could not remove Training History entry: ' + String(err && err.message || err));
+    window.reportConsoleError('Training History Remove', err);
+  });
+}
+
 var trainingRunDeletePending = null;
 
 function closeTrainingRunDelete() {
@@ -926,6 +946,13 @@ document.addEventListener('click', function (event) {
   if (event.target.closest('#training-run-delete-close, #training-run-delete-cancel')) {
     closeTrainingRunDelete();
   }
+});
+
+document.addEventListener('click', function (event) {
+  var target = event.target.closest('[data-training-history-remove]');
+  if (!target) return;
+  event.preventDefault();
+  removeTrainingHistoryEntry(target.getAttribute('data-training-history-remove'));
 });
 
 document.addEventListener('click', function (event) {

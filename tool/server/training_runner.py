@@ -16,7 +16,7 @@ from . import config as app_config
 from .training_commands import build_h3_command_plan, build_training_command_plan
 from .training_profiles import config_for_stage, profile, resolved_profile, profile_run, profiles as training_profiles
 from .training_bundle import materialize_training_bundle
-from .training_config_files import h3_premerged_image_model_path, rewrite_toml_assignment
+from .training_config_files import rewrite_toml_assignment
 from .training_review import prepare_training_review, resolve_saved_initializer
 from .dataset_config import repeat_targets
 from .training_history import discover_runs, validate_resumable_run_for_path, resume_point_for_path, resume_point_from_directory, host_path_for_training_path, output_root_for_folder, read_history, record_job, clear_history_job, resolve_managed_resume, run_summary_from_capture
@@ -3041,12 +3041,18 @@ def start_response(
         deliberate_rewind = bool(resume_output_id and str(resume_checkpoint_tag or "").strip())
         effective_config_settings = dict(requested_config_settings)
         if resume_path and stages == "h3" and not reuse_capture:
-            # A checkpoint resume must retain the original model variant,
-            # regardless of the new-run checkbox's current default.
+            # Checkpoint resumes inherit the saved fused-model selection.
+            # Explicit conflicting settings fail rather than being ignored.
             validated_model = validate_resumable_run_for_path(folder_path, stages, resume_path)
-            effective_config_settings["h3ImageTrainingAdapter"] = (
-                validated_model["modelSource"] == h3_premerged_image_model_path()
-            )
+            inherited_adapter = bool(validated_model["imageTrainingAdapter"])
+            if ("h3ImageTrainingAdapter" in requested_config_settings
+                    and requested_config_settings["h3ImageTrainingAdapter"] is not inherited_adapter):
+                raise ValueError(
+                    "Image Adapter is fixed by the saved H3 checkpoint ("
+                    + ("enabled" if inherited_adapter else "standard") +
+                    "). Start a fresh run to change this variant."
+                )
+            effective_config_settings["h3ImageTrainingAdapter"] = inherited_adapter
         if (resume_path or initializer) and effective_config_settings.get("optimizerLr") not in (None, ""):
             # diffusion-pipe restores scheduler state on resume unless
             # force_constant_lr is present. Keep the user-selected LR effective

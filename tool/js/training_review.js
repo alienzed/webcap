@@ -204,6 +204,7 @@ function renderTrainingRunParameters(payload) {
   var presetSelect = document.getElementById('training-run-preset-select');
   var h3AdapterOption = document.getElementById('training-run-h3-adapter-option');
   var h3AdapterCheckbox = document.getElementById('training-run-h3-adapter');
+  var inheritedAdapterLabel = document.getElementById('training-run-h3-adapter-inherited');
   var h3FocusedOption = document.getElementById('training-run-h3-focused-option');
   var h3FocusedCheckbox = document.getElementById('training-run-h3-focused');
   if (!panel || !lrInput || !rankSelect || !epochsInput || !dropoutInput || !resetButton || !presetSelect) return;
@@ -228,8 +229,28 @@ function renderTrainingRunParameters(payload) {
   dropoutInput.value = String(draft.adapterDropout == null ? '' : draft.adapterDropout);
   imageShiftOption.classList.toggle('hidden', stage !== 'h3');
   imageShiftInput.value = stage === 'h3' ? String(draft.h3ImageShift == null ? '' : draft.h3ImageShift) : '';
+  var resumeH3 = stage === 'h3' && trainingWorkspaceState.reviewStartingPoint === 'resume';
+  var selectedCheckpoint = document.getElementById('training-run-checkpoint-select');
+  var manualCheckpoint = document.getElementById('training-run-resume-input');
+  var savedVariant = resumeH3 && selectedCheckpoint && selectedCheckpoint.value &&
+    !(manualCheckpoint && manualCheckpoint.value.trim()) && selectedCheckpoint.selectedOptions.length
+      ? selectedCheckpoint.selectedOptions[0].getAttribute('data-image-adapter') : '';
   h3AdapterOption.classList.toggle('hidden', stage !== 'h3');
-  h3AdapterCheckbox.checked = !!draft.h3ImageTrainingAdapter;
+  h3AdapterCheckbox.disabled = resumeH3;
+  h3AdapterCheckbox.indeterminate = resumeH3 &&
+    savedVariant !== 'on' && savedVariant !== 'off' && savedVariant !== 'legacy';
+  h3AdapterCheckbox.checked = resumeH3
+    ? (savedVariant === 'on' || savedVariant === 'legacy')
+    : !!draft.h3ImageTrainingAdapter;
+  h3AdapterOption.title = resumeH3
+    ? 'Image Adapter is fixed by the checkpoint used for this resume.'
+    : 'Enable the premerged H3 image-training adapter for a fresh run.';
+  inheritedAdapterLabel.classList.toggle('hidden', !resumeH3);
+  inheritedAdapterLabel.textContent = resumeH3
+    ? (savedVariant === 'legacy' ? 'Saved legacy adapter'
+      : savedVariant === 'on' || savedVariant === 'off' ? 'Locked to checkpoint'
+      : 'Determined from custom checkpoint at queue time')
+    : '';
   h3AdapterCheckbox.onchange = function () {
     trainingWorkspaceState.runConfigDraft.h3ImageTrainingAdapter = h3AdapterCheckbox.checked;
     trainingWorkspaceState.runConfigDirty = true;

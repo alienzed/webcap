@@ -28,7 +28,8 @@ function fixture() {
         toggle(name,on) { if (on) this.classes.add(name); else this.classes.delete(name); },
         contains(name) { return this.classes.has(name); },
       },
-      setAttribute(name,v) { this.attributes[name] = v; }
+      setAttribute(name,v) { this.attributes[name] = v; },
+      removeAttribute(name) { delete this.attributes[name]; if (name === 'data-model-id') delete this.dataset.modelId; }
     };
     nodes.set(id,node);
     return node;
@@ -61,6 +62,11 @@ function fixture() {
     setDirectorStatus() {},
     normalizeGenerateSamplingMode(value) { return value; },
     setStatus(message) { warnings.push(message); },
+    currentModel() { return state.models.find(m=>m.id===state.modelId); },
+    getGenerateModelPreference() { return 'h3'; },
+    renderStageEmpty() {},
+    syncActiveTakeState() {},
+    setGenerateViewMode() {},
     window:{reportConsoleWarning:(_,message)=>warnings.push(message)},
     renderModelForm() {
       settings.forEach(name=>element(name).value='default');
@@ -79,7 +85,7 @@ function fixture() {
   element('generate-reference-first_frame').files=[workingFile];
   context.api.renderGenerateEditorTabs = context.renderGenerateEditorTabs;
   context.renderGenerateEditorTabs();
-  return {api:context.api,state,element,warnings,workingFile};
+  return {api:context.api,state,element,warnings,workingFile,context};
 }
 const take=(name='a')=>({
   jobId:name, modelId:'h3',sourcePrompt:'Loaded prompt '+name,
@@ -164,4 +170,66 @@ test('Loaded is unavailable until a Take is selected and mode changes are explic
   assert.equal(element('generate-editor-loaded').disabled,true);
   assert.throws(()=>api.switchGenerateEditorMode('loaded'),/Select a Take/);
   assert.equal(element('generate-prompt').value,'Working draft');
+});
+
+
+test('New Generation intentionally resets Working and leaves editable Loaded intact',()=>{
+  const f=fixture(), {api,state,element,context}=f;
+  const resetFrom=source.indexOf('  function resetGeneratePromptScratch() {');
+  const resetTo=source.indexOf('  function openGenerateActivity(',resetFrom);
+  const newFrom=source.indexOf('  function startNewGeneration() {');
+  const newTo=source.indexOf('  function deleteGenerationResult(',newFrom);
+  assert.ok(resetTo>resetFrom && newTo>newFrom);
+  vm.runInContext(source.slice(resetFrom,resetTo)+source.slice(newFrom,newTo)+
+    '\nthis.startNewGeneration = startNewGeneration;',context);
+  api.loadGenerateTakeIntoEditor(take());
+  element('generate-prompt').value='Edited Loaded';
+  context.startNewGeneration();
+  assert.equal(state.editorMode,'working');
+  assert.equal(element('generate-prompt').value,'default');
+  assert.equal(element('generate-reference-first_frame').files.length,0);
+  assert.deepEqual(JSON.parse(JSON.stringify(state.lorasByModel)),{});
+  assert.equal(state.freshDraft,true);
+  api.switchGenerateEditorMode('loaded');
+  assert.equal(element('generate-prompt').value,'Edited Loaded');
+  assert.equal(state.lorasByModel.h3[0].name,'take.safetensors');
+});
+
+test('generating from Loaded freezes its recipe even if reference upload overlaps tab switching',async()=>{
+  const f=fixture(), {api,state,element,context}=f;
+  const start=source.indexOf('  function runGenerate() {');
+  const end=source.indexOf('  function frozenSweepSettings()',start);
+  assert.ok(start!==-1 && end>start);
+  let completeUpload;
+  const sent=[];
+  context.uploadReferenceFiles=()=>new Promise(resolve=>{completeUpload=resolve;});
+  context.postJson=(_url,payload)=>{sent.push(payload);return Promise.resolve({job:{jobId:'generated',status:'queued'}});};
+  context.captureReferenceFiles=()=>({first_frame:element('generate-reference-first_frame').files[0]});
+  context.selectedLoras=id=>state.lorasByModel[id] || [];
+  context.collectSettings=()=>({
+    duration:element('generate-duration').value,
+    seed:element('generate-seed').value,
+    samplingMode:element('generate-sampling-mode').value
+  });
+  context.syncPromptAssistantDependencies=()=>{};
+  context.trackGenerateJob=()=>{};
+  context.syncGenerationPreviewCard=()=>{};
+  context.reportConsoleInfo=()=>{};
+  context.reportError=err=>{throw err;};
+  vm.runInContext(source.slice(start,end)+'\nthis.runGenerate = runGenerate;',context);
+  api.loadGenerateTakeIntoEditor(take());
+  const submitted=context.runGenerate();
+  assert.equal(typeof completeUpload,'function','references must upload asynchronously');
+  api.switchGenerateEditorMode('working');
+  element('generate-prompt').value='Changed Working prompt';
+  state.lorasByModel.h3[0].strength=1.5;
+  completeUpload({first_frame:'submitted-ref.png'});
+  await submitted;
+  assert.equal(sent.length,1);
+  assert.equal(sent[0].prompt,'Loaded prompt a');
+  assert.equal(sent[0].settings.duration,'3');
+  assert.equal(sent[0].loras[0].name,'take.safetensors');
+  assert.equal(sent[0].loras[0].strength,.75);
+  assert.equal(sent[0].references.first_frame,'submitted-ref.png');
+  assert.equal(element('generate-prompt').value,'Changed Working prompt');
 });

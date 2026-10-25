@@ -379,7 +379,11 @@ function getManagedTrainingOptions() {
     initializerStage: usingInitializer ? String(trainingWorkspaceState.reviewInitializerStage || (initializer && initializer.stage) || stages) : '',
     initializerCustomPath: usingInitializer ? initializerCustomPath : '',
     forceConstantLr: '',
-    trainingSettings: Object.assign({}, trainingWorkspaceState.runConfigDraft || {})
+    trainingSettings: (function () {
+      var settings = Object.assign({}, trainingWorkspaceState.runConfigDraft || {});
+      if (usingResume) delete settings.h3ImageTrainingAdapter;
+      return settings;
+    })()
   };
 }
 

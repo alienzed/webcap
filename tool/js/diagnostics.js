@@ -76,7 +76,7 @@ function diagnosticsAssessmentApplyMeasurements(row, runs) {
     var probes=(run.models||{})[ref]||{};
     Object.keys(probes).forEach(function(kind){
       if(kind.indexOf('director_scene_plan_')===0 &&
-         ['webcap-model-assessment-structured-v2', 'webcap-model-assessment-structured-v3'].includes(run.protocol) &&
+         ['webcap-model-assessment-structured-v2', 'webcap-model-assessment-structured-v3', 'webcap-model-assessment-structured-v4'].includes(run.protocol) &&
          Number((probes[kind].counts||{}).completed||0)>0)
         output=Math.max(output,Number(probes[kind].verifiedOutputTokens||0));
     });
@@ -123,6 +123,12 @@ function diagnosticsAssessmentCounts(row, tests) {
       if (Number(counts.completed || 0) > 0) return;
       var label = modelLabAttemptLabel(kind);
       if (Number(counts.failed || 0) > 0) {
+        if (kind === 'director_scene_plan_2048' &&
+            (item.failureKind === 'capacity' ||
+             /capacity exhausted|truncated at its token budget/i.test(item.error || ''))) {
+          limits.push(label + ': output capacity reached');
+          return;
+        }
         // V2 stopped at the scene-count check, before validating the returned
         // Scenes. It cannot prove the output was otherwise invalid.
         if (kind === 'director_scene_plan_2048' &&
@@ -159,7 +165,7 @@ function diagnosticsAssessmentCounts(row, tests) {
   span.className = 'model-assessment-qualification model-assessment-' +
     (state === 'Passed' ? 'passed' : state === 'Failed' ? 'issues' : state === 'Limited' ? 'limited' : 'untested');
   span.textContent = (role === 'both' ? 'Director + Vision ' : role === 'director' ? 'Director ' : 'Vision ') +
-    (state === 'Passed' ? 'Technical pass' : state);
+    (state === 'Passed' ? 'Verified' : state === 'Limited' ? 'Capability demonstrated · limits' : state);
   span.title = 'Required Storyboard JSON, Schema Assist, and applicable Vision tests determine technical qualification. Deep stress-test limits and LLM judging are separate.';
   host.appendChild(span);
   var reasons = state === 'Failed' ? failed : state === 'Running' ? running :
@@ -541,7 +547,7 @@ function refreshUnifiedModelAssessment() {
         Object.keys(byKind).forEach(function (kind) {
           // Old Scene prompts did not use WebCap's real production contract.
           if (kind.indexOf('director_scene_plan_') === 0 &&
-              !['webcap-model-assessment-structured-v2', 'webcap-model-assessment-structured-v3'].includes(saved.protocol)) return;
+              !['webcap-model-assessment-structured-v2', 'webcap-model-assessment-structured-v3', 'webcap-model-assessment-structured-v4'].includes(saved.protocol)) return;
           var probe = byKind[kind];
           var passed = Number((probe.counts || {}).completed || 0) > 0;
           var selected = tests[kind];

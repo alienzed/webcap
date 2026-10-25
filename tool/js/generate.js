@@ -1886,9 +1886,11 @@
     var job = generateState.pendingJobsById[jobId];
     if (!job) throw new Error('Pending generation request is missing.');
     var selection = ++pendingRestoreSelection;
+    var navigationVersion = generateState.navigationVersion;
     renderPendingStage(job);
     return requestJson('/fs/inference?job=' + encodeURIComponent(jobId) + '&configuration=1').then(function (payload) {
-      if (selection !== pendingRestoreSelection || !generateState.open ||
+      if (selection !== pendingRestoreSelection || navigationVersion !== generateState.navigationVersion ||
+          !generateState.open ||
           (generateState.activePendingJobId !== jobId && generateState.activeResultKey !== jobId)) return;
       var saved = payload && payload.job;
       if (!saved || String(saved.jobId || '') !== jobId || saved.client !== 'generate')
@@ -2730,7 +2732,6 @@
     if (window.closeMediaExplorerActivity) window.closeMediaExplorerActivity();
     target = target && typeof target === 'object' ? target : {};
     var navigationVersion = ++generateState.navigationVersion;
-    ++pendingRestoreSelection; // A previous editor's pending click cannot complete after navigation.
     var targetJobId = String(target.jobId || '');
     if (targetJobId) {
       trackGenerateJob(targetJobId);
@@ -2770,7 +2771,6 @@
 
   function closeGenerateActivity() {
     generateState.navigationVersion++;
-    ++pendingRestoreSelection;
     var frame = el('app-frame');
     var workspace = el('generate-workspace');
     generateState.open = false;

@@ -147,7 +147,7 @@ def test_develop_story_uses_simple_scene_schema_and_dense_scene_guidance():
     assert "invariantRefs" not in scene_schema["properties"]
     assert "sharedContextRefs" not in scene_schema["properties"]
     assert "Create exactly 12 Scenes." in prompt
-    assert "USE EACH GENERATION UNIT WELL." in prompt
+    assert "GENERATION UNIT." in prompt
     assert "Simplify or abstract elements when added specificity creates more drift than value." in prompt
     assert "Choose the relationship that best serves the concept" in prompt
     assert "evolving state when continuity matters" in prompt
@@ -185,8 +185,8 @@ def test_insert_scene_uses_adjacent_scene_facts_not_prompt_templates():
     assert "[EXISTING SCENE OUTLINE]" in prompt
     assert "OLD FIRST PROMPT" not in prompt
     assert "EXISTING SECOND PROMPT" not in prompt
-    assert "not templates to copy" in prompt
-    assert "USE EACH GENERATION UNIT WELL." in prompt
+    assert "Use neighbouring Scene descriptions as placement and continuity context." in prompt
+    assert "GENERATION UNIT." in prompt
 
 
 def test_insert_scene_can_append_after_last_scene():
@@ -224,7 +224,7 @@ def test_extend_story_preserves_distinction_from_redevelopment():
     assert "OLD FIRST PROMPT" not in request["prompt"]
     assert "EXISTING SECOND PROMPT" not in request["prompt"]
     assert "[LAST SCENE EXIT STATE]" not in request["prompt"]
-    assert "distinct new Scene ideas before writing their prompts" in request["prompt"]
+    assert "Plan how new Scenes contribute to the Story" in request["prompt"]
     assert "[USER DIRECTION]\nDifferent cubicle vignettes." in request["prompt"]
     assert "new Scenes as JSON" in request["prompt"]
 

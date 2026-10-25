@@ -93,6 +93,8 @@ test('a removed Take changes only preview and never clears a working draft', () 
   f.render([take('job-remaining')]);
   assert.equal(f.state.activeResultKey,'job-remaining');
   assert.equal(f.editor.prompt,'My in-progress prompt');
+  // Deleting a selected Take clears the inspected result before refresh.
+  f.state.inspectedResult = null;
   f.render([]);
   assert.equal(f.state.activeResultKey,'');
   assert.equal(f.editor.prompt,'My in-progress prompt');

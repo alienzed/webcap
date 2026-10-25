@@ -104,6 +104,8 @@ function diagnosticsAssessmentRefreshLiveMetrics(run) {
 }
 
 function diagnosticsAssessmentCounts(row, tests) {
+  // Required capability is not the same as optional long-form stress capacity.
+  // Failed judging is also independent of both.
   var families = {
     writing: ['director_scene_plan_2048'],
     structured: row.assessmentHasSetVocabulary
@@ -112,48 +114,61 @@ function diagnosticsAssessmentCounts(row, tests) {
     vision: row.assessmentNeedsGroupAware ? ['vision_open', 'vision_group_aware'] : ['vision_open']
   };
   var role = row.dataset.assessmentRole;
-  var needed = role === 'both' ? ['writing', 'structured', 'vision'] : role === 'director' ? ['writing', 'structured'] : ['vision'];
-  var good = 0, bad = 0, running = 0, missing = 0;
+  var needed = role === 'both' ? ['writing', 'structured', 'vision'] :
+    role === 'director' ? ['writing', 'structured'] : ['vision'];
+  var failed = [], unproven = [], running = [], limits = [];
   needed.forEach(function (family) {
-    var total = 0, completed = 0, problems = 0, active = 0;
     families[family].forEach(function (kind) {
-      var counts = (tests[kind] || {}).counts || {};
-      Object.keys(counts).forEach(function (status) {
-        var count = Number(counts[status] || 0);
-        total += count;
-        if (status === 'completed') completed += count;
-        else if (status === 'running') active += count;
-        else problems += count;
-      });
+      var item = tests[kind] || {}, counts = item.counts || {};
+      if (Number(counts.completed || 0) > 0) return;
+      var label = modelLabAttemptLabel(kind);
+      if (Number(counts.failed || 0) > 0)
+        failed.push(label + (item.error ? ': ' + item.error : ': probe failed'));
+      else if (Number(counts.running || 0) > 0) running.push(label);
+      else unproven.push(label);
     });
-    var requiredKinds = families[family].filter(function (kind) {
-      return kind === 'director_scene_plan_2048' || kind === 'language_synthesis' || kind === 'language_challenge' ||
-        kind === 'vision_open' || kind === 'vision_group_aware';
-    });
-    var coverage = requiredKinds.every(function (kind) { return (tests[kind] || {}).counts && Number((tests[kind].counts || {}).completed || 0) > 0; });
-    if (!total) missing += 1;
-    else if (problems) bad += 1;
-    else if (active) running += 1;
-    else if (completed === total && coverage) good += 1;
-    else missing += 1;
   });
-  var state = bad ? 'Issues' : running ? 'Running' : missing ? 'Not qualified' : 'Passed';
-  row.assessmentSort.result = ({'Issues':0, 'Not qualified':1, 'Running':2, 'Passed':3})[state];
+  Object.keys(tests).forEach(function (kind) {
+    if (kind.indexOf('director_scene_plan_') !== 0) return;
+    var item = tests[kind], counts = item.counts || {};
+    var evidence = item.scenePlanAssessment;
+    var label = modelLabAttemptLabel(kind);
+    // The baseline is required above; deeper tiers are informational stress tests.
+    if (Number(kind.split('_').pop()) > 2048 && Number(counts.failed || 0) > 0)
+      limits.push(label + ': ' + (item.error || 'stress probe failed'));
+    if (Number(counts.completed || 0) > 0 && evidence) {
+      if (evidence.countMatched === false)
+        limits.push(label + ': ' + evidence.actualScenes + '/' + evidence.requestedScenes + ' scenes');
+      if (Number(evidence.validScenes || 0) > Number(evidence.detailedScenes || 0))
+        limits.push(label + ': ' + evidence.detailedScenes + '/' + evidence.validScenes + ' detailed scenes');
+    }
+  });
+  var state = failed.length ? 'Failed' : running.length ? 'Running' :
+    unproven.length ? 'Not established' : limits.length ? 'Limited' : 'Passed';
+  row.assessmentSort.result = ({Failed:0, 'Not established':1, Running:2, Limited:3, Passed:4})[state];
   var host = row.querySelector('[data-assessment-qualification]');
   host.replaceChildren();
-  function mark(title, tone, hint) {
-    var span = document.createElement('span');
-    span.className = 'model-assessment-qualification model-assessment-' + tone;
-    span.textContent = title;
-    span.title = hint;
-    host.appendChild(span);
-  }
-  mark((role === 'both' ? 'Director + Vision ' : role === 'director' ? 'Director ' : 'Vision ') +
-    (state === 'Passed' ? 'Technical pass' : state),
-    state === 'Passed' ? 'passed' : state === 'Issues' ? 'issues' : 'untested',
-    role === 'both' ? 'Requires verified Storyboard JSON and Schema Assist plus Vision.' : role === 'director' ? 'Requires Storyboard JSON and Schema Assist; quality judgment is separate.' : 'Requires completed open and group-aware Vision probes; this is not caption-accuracy grading.');
-  // Historical prose calibrations are not proof of structured Scene capacity.
+  var span = document.createElement('span');
+  span.className = 'model-assessment-qualification model-assessment-' +
+    (state === 'Passed' ? 'passed' : state === 'Failed' ? 'issues' : 'untested');
+  span.textContent = (role === 'both' ? 'Director + Vision ' : role === 'director' ? 'Director ' : 'Vision ') +
+    (state === 'Passed' ? 'Technical pass' : state);
+  span.title = 'Required Storyboard JSON, Schema Assist, and applicable Vision tests determine technical qualification. Deep stress-test limits and LLM judging are separate.';
+  host.appendChild(span);
+  var reasons = state === 'Failed' ? failed : state === 'Running' ? running :
+    state === 'Not established' ? unproven : state === 'Limited' ? limits : [];
+  if (reasons.length)
+    diagnosticsAssessmentShowReason(host, reasons[0] +
+      (reasons.length > 1 ? ' (+' + (reasons.length - 1) + ' more)' : ''), reasons.join(' · '));
   row.dataset.assessmentSanity = state;
+}
+
+function diagnosticsAssessmentShowReason(host, summary, detail) {
+  var label = document.createElement('span');
+  label.className = 'model-assessment-inline-reason';
+  label.textContent = String(summary || '');
+  label.title = String(detail || summary || '');
+  host.appendChild(label);
 }
 
 function diagnosticsAssessmentInspectResponse(runId, modelRef, kind, host) {
@@ -198,7 +213,7 @@ function diagnosticsAssessmentSize(bytes) {
 function diagnosticsAssessmentReviewLabel(review) {
   if (!review) return 'Not judged';
   if (review.status === 'running') return 'Judging…';
-  if (review.status === 'failed') return 'Review failed';
+  if (review.status === 'failed') return 'Judge error';
   if (review.status !== 'completed') return 'Not judged';
   return (review.tasks || []).map(function (task) {
     return task.task + ' ' + task.score + '/5';
@@ -555,9 +570,13 @@ function refreshUnifiedModelAssessment() {
         qualityCell.textContent = row.assessmentSort.quality.toFixed(1) + '/5';
         qualityCell.title = 'Advisory LLM review, separate from technical qualification: ' + qualityReason;
       } else if (qualityReview) {
-        qualityCell.textContent = qualityReview.status === 'failed' ? 'Failed' :
+        qualityCell.textContent = qualityReview.status === 'failed' ? 'Judge error' :
           qualityReview.status === 'running' ? 'Judging…' : '—';
-        if (qualityReview.error) qualityCell.title = qualityReview.error;
+        if (qualityReview.error) {
+          qualityCell.title = 'LLM judge operation: ' + qualityReview.error;
+          if (qualityReview.status === 'failed')
+            diagnosticsAssessmentShowReason(qualityCell, qualityReview.error, qualityReview.error);
+        }
       }
 
       diagnosticsAssessmentApplyMeasurements(row, capabilityRuns);

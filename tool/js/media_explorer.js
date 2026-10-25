@@ -3,15 +3,14 @@
   var visible = false, items = [], offset = 0, total = 0, active = -1, role = '', loading = false;
   var selected = new Set(), anchor = -1;
   var source = '', pageSize = 60, serial = 0, full = false, complete = false, activeRequest = null;
-  var exportMode = 'copy', exportItems = [];
-  function chooseExport(mode, chosen) {
-    exportMode = mode; exportItems = chosen;
+  var exportItems = [];
+  function chooseExport(chosen) {
+    exportItems = chosen;
     if (!chosen.length) return;
     var dialog = el('media-explorer-export-dialog');
-    text(el('media-explorer-export-heading'), mode === 'clip' ? 'Clip to Set' : 'Copy to Set');
+    text(el('media-explorer-export-heading'), 'Copy to Set');
     text(el('media-explorer-export-count'), chosen.length + ' source file' + (chosen.length === 1 ? '' : 's'));
-    el('media-explorer-export-trim').classList.toggle('hidden', mode !== 'clip');
-    el('media-explorer-export-submit').textContent = mode === 'clip' ? 'Export clip' : 'Copy to Set';
+    el('media-explorer-export-submit').textContent = 'Copy to Set';
     el('media-explorer-export-status').textContent = '';
     el('media-explorer-export-new-set').value = '';
     browseDestinations();
@@ -170,7 +169,7 @@
       actions.push({label:'Open in Explorer', run:function () {
         externalAction('reveal', {path:externalPath, file:item.relativePath});
       }});
-      actions.push({label:'Copy to Set', run:function () { chooseExport('copy', externalChoices(item)); }});
+      actions.push({label:'Copy to Set', run:function () { chooseExport( externalChoices(item)); }});
       if (item.mediaKind === 'video') actions.push({label:'Clip to Set', run:function () { openExternalClipEditor(item); }});
       actions.push({separator:true});
       actions.push({label:'Move to Folder…', run:function () { externalMutation(item, 'move'); }});
@@ -762,7 +761,7 @@
       copy.textContent = 'Copy to Set';
       copy.onclick = function () {
         var choices = items.filter(function (candidate) { return selected.has(candidate.id); });
-        chooseExport('copy', choices.length ? choices : [item]);
+        chooseExport( choices.length ? choices : [item]);
       }; actions.appendChild(copy);
       if (item.mediaKind === 'video') {
         var clip = document.createElement('button'); clip.type = 'button'; clip.className = 'review-captions-btn';
@@ -1206,7 +1205,7 @@
   el('media-explorer-gallery-area').addEventListener('scroll', maybeLoadMore);
   el('media-explorer-preview-stage').parentElement.addEventListener('scroll', maybeLoadMore);
   el('media-explorer-copy-selected').addEventListener('click', function () {
-    chooseExport('copy', items.filter(function (item) { return selected.has(item.id); }));
+    chooseExport( items.filter(function (item) { return selected.has(item.id); }));
   });
   el('media-explorer-export-destination').addEventListener('change', browseDestinations);
   el('media-explorer-export-up').addEventListener('click', function () {
@@ -1220,17 +1219,16 @@
     var payload = {
       path: externalPath, files: exportItems.map(function (item) { return item.relativePath; }),
       destination: el('media-explorer-export-destination').value.trim(),
-      newSet: el('media-explorer-export-new-set').value.trim(),
-      start: el('media-explorer-export-start').value, duration: el('media-explorer-export-duration').value
+      newSet: el('media-explorer-export-new-set').value.trim()
     };
     submit.disabled = true;
-    text(el('media-explorer-export-status'), exportMode === 'clip' ? 'Exporting video clip…' : 'Copying media…');
-    fetch('/fs/media_explorer/external/' + exportMode, {
+    text(el('media-explorer-export-status'), 'Copying media…');
+    fetch('/fs/media_explorer/external/copy', {
       method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)
     }).then(function (res) { return res.json().then(function (data) {
       if (!res.ok || !data.ok) throw Error(data.error || 'Export failed'); return data;
     }); }).then(function (data) {
-      var count = data.copied ? data.copied.length + ' files copied' : 'Clip exported: ' + data.clip;
+      var count = data.copied.length + ' files copied';
       text(el('media-explorer-export-status'), count + ' to ' + data.destination);
     }).catch(function (err) { text(el('media-explorer-export-status'), err.message); report(err); })
       .finally(function () { submit.disabled = false; });

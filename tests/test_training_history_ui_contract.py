@@ -230,8 +230,9 @@ def test_training_history_identifies_custom_named_runs_and_recorded_h3_variant()
     assert "runConfig.trainingVariant" in script
     assert '"trainingVariant"' in history
     assert '"minimax_h3_image_training_adapter.safetensors"' in history
-    assert 'isinstance(merged_adapters, list)' in history
-    assert 'model_source == merged_source' in history
+    assert 'isinstance(merged, list)' in history
+    assert 'def _h3_uses_premerged_image_adapter(' in history
+    assert 'def _h3_uses_image_adapter(' in history
     assert '"trainingVariant" not in item["runSummary"]' in history
 
 

@@ -388,6 +388,7 @@ def _reusable_evidence(run):
     reused = {}
     failures = {}
     known_limits = {}
+    capacity_tiers = {}
     selected = {m["modelRef"] for m in run["directorModels"] + run["allVisionModels"]}
     for item in list_runs():
         if item.get("status") in {"running", "error"}:
@@ -434,7 +435,7 @@ def _reusable_evidence(run):
             key = _attempt_key(kind, ref, filename)
             if capacity and is_scene:
                 budget = int(kind.rsplit("_", 1)[-1])
-                known_limits[ref] = min(budget, known_limits.get(ref, budget))
+                capacity_tiers.setdefault(ref, set()).add(budget)
                 continue
             if key in reused:
                 continue
@@ -451,9 +452,10 @@ def _reusable_evidence(run):
         if kind.startswith("director_scene_plan_"):
             passed_budgets[ref] = max(
                 passed_budgets.get(ref, 0), int(kind.rsplit("_", 1)[-1]))
-    for ref, limit in list(known_limits.items()):
-        if passed_budgets.get(ref, 0) >= limit:
-            known_limits.pop(ref)
+    for ref, tiers in capacity_tiers.items():
+        higher_limits = [budget for budget in tiers if budget > passed_budgets.get(ref, 0)]
+        if higher_limits:
+            known_limits[ref] = min(higher_limits)
     for key in list(failures):
         kind, ref, _ = key.split("|", 2)
         if kind.startswith("director_scene_plan_") and ref in known_limits:

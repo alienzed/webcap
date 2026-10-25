@@ -144,6 +144,53 @@ CAPTION_ASSIST_SYSTEM_PROMPT = (
 )
 
 
+CAPTION_ENRICHMENT_SYSTEM_PROMPT = (
+    "You are a visual caption enrichment editor. Use saved Open Sight as the main "
+    "source of visual detail. First mentally compose a complete natural-language training "
+    "caption from Sight, in the style and broad sequence demonstrated by renderedPrimer. "
+    "The rendered template is a style example, not a list of factual requirements. "
+    "User-selected annotations are true but not exhaustive. They do not limit discovery. "
+    "Compare that Sight-led description to currentCaption and propose only distinctive, "
+    "confidently grounded visual details missing from currentCaption. Never invent facts, "
+    "paraphrase existing content, or change selected-tag meanings. "
+    "The current caption must remain intact: return JSON containing a suggestions array; "
+    "each suggestion is an object with anchor and addition string fields. "
+    "Each anchor must be an exact substring of currentCaption, appearing exactly one occurrence " 
+    "in the whole caption, with unchanged case and punctuation. "
+    "Each addition must be a concise natural-language phrase with the spaces and punctuation "
+    "needed when inserted immediately after its anchor. Prefer compact insertion points "
+    "that read naturally with their surrounding text. No duplicated or conflicting details. "
+    "Return an empty suggestions array if Sight adds nothing clearly useful. No markdown."
+)
+
+
+def build_caption_enrichment_messages(
+    draft="", open_sight=None, assignments=None, tags=None, rendered_primer="",
+    preferred_sequence="",
+):
+    caption = str(draft or "").strip()
+    if not caption:
+        raise ValueError("Caption enrichment requires an existing caption draft.")
+    if not isinstance(open_sight, dict) or not str(open_sight.get("description") or "").strip():
+        raise ValueError("Caption enrichment requires saved Open Sight with a description.")
+    facts = [{
+        "group": str(row.get("group") or "").strip(),
+        "term": str(row.get("term") or "").strip(),
+    } for row in (assignments or []) if isinstance(row, dict) and row.get("term")]
+    payload = {
+        "currentCaption": caption,
+        "openSight": open_sight,
+        "renderedPrimer": str(rendered_primer or "").strip(),
+        "preferredCaptionSequence": str(preferred_sequence or "").strip(),
+        "selectedAnnotations": facts,
+        "otherTags": [str(tag) for tag in (tags or []) if str(tag).strip()],
+    }
+    return [
+        {"role": "system", "content": CAPTION_ENRICHMENT_SYSTEM_PROMPT},
+        {"role": "user", "content": "Find missing details from Sight while keeping the caption intact.\n\n" +
+         json.dumps(payload, ensure_ascii=False, separators=(",", ":"))},
+    ]
+
 def build_caption_assist_messages(
     assignments=None,
     tags=None,

@@ -3928,3 +3928,15 @@ html[data-theme="dark"] .app-settings-environment-check {
 .vl-workspace-item-navigation > button:disabled { opacity:.35; cursor:default; }
 #vl-workspace-position { color:var(--muted); font-size:14px; font-variant-numeric:tabular-nums; white-space:nowrap; }
 .vl-workspace-item-navigation .set-scan-subtitle { min-width:0; overflow-wrap:anywhere; }
+
+
+/* Optional Director enrichment is a read-only inline preview until accepted. */
+.caption-enrichment-preview { white-space:pre-wrap; overflow-wrap:anywhere; font-size:16px; line-height:1.65; }
+.caption-enrichment-proposal { display:inline; background:color-mix(in srgb,var(--accent) 17%,transparent); border-radius:4px; box-decoration-break:clone; padding:2px; }
+.caption-enrichment-proposal > button { display:inline-flex; margin-left:5px; padding:1px 7px; font-size:15px; border:1px solid var(--border); border-radius:5px; cursor:pointer; background:var(--panel); color:var(--text); vertical-align:baseline; }
+.caption-enrichment-proposal > button:hover { border-color:var(--accent); }
+.caption-enrichment-actions { display:flex; align-items:center; flex-wrap:wrap; justify-content:space-between; gap:10px; padding:10px 18px; border-top:1px solid var(--border-soft); }
+.caption-enrichment-actions > span { font-size:15px; color:var(--muted); }
+.caption-enrichment-actions > div { display:flex; flex-wrap:wrap; gap:7px; }
+.caption-enrichment-actions button { font-size:15px; padding:6px 10px; border:1px solid var(--border); border-radius:7px; background:var(--panel-soft); color:var(--text); cursor:pointer; }
+.caption-enrichment-actions button:disabled { opacity:.4; cursor:default; }

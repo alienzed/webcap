@@ -2285,6 +2285,16 @@
                     <div class="editor-caption-candidate-draft">
                         <button id="editor-caption-candidate-regenerate" class="editor-caption-candidate-regenerate" type="button" title="Refresh Caption · Director rewrite using current tags and cached Sight (no Vision scan)" aria-label="Refresh Caption">↻</button>
                         <div id="editor-caption-candidate-text" class="editor-caption-candidate-text"></div>
+                        <div id="editor-caption-enrichment-preview" class="editor-caption-candidate-text caption-enrichment-preview hidden" aria-label="Suggested additions within caption"></div>
+                    </div>
+                    <div id="editor-caption-enrichment-actions" class="caption-enrichment-actions hidden">
+                        <span id="editor-caption-enrichment-status" role="status"></span>
+                        <div>
+                            <button id="editor-caption-enrichment-accept-all" type="button">Accept all</button>
+                            <button id="editor-caption-enrichment-discard" type="button">Discard suggestions</button>
+                            <button id="editor-caption-enrichment-restore" type="button">Restore original</button>
+                            <button id="editor-caption-enrichment-done" type="button">Done editing</button>
+                        </div>
                     </div>
                     <details id="editor-caption-comparison" class="caption-assist-comparison hidden"></details>
                     <div id="editor-caption-vision-phrases" class="editor-caption-vision-phrases hidden"></div>
@@ -2294,6 +2304,7 @@
                                 <input id="editor-caption-vision-toggle" type="checkbox">
                                 <span>Vision</span>
                             </label>
+                            <button id="editor-caption-enrich" class="caption-vision-phrases-trigger hidden" type="button" title="Ask Director for optional missing details from saved Sight; the caption stays unchanged until you accept suggestions">✦ Enrich with Sight</button>
                             <button id="editor-caption-vision-phrases-btn" class="caption-vision-phrases-trigger hidden" type="button" title="Ask Vision for additional short descriptive details">Find extras</button>
                         </div>
                         <div class="editor-caption-candidate-actions-right">
@@ -3483,6 +3494,7 @@
         <script src="/static/js/focus_sets.js"></script>
         <script src="/static/js/stats.js"></script>
         <script src="/static/js/primer_settings.js"></script>
+        <script src="/static/js/caption_enrichment.js"></script>
         <script src="/static/js/folder_state.js"></script>
         <script src="/static/js/advanced_mappings_rules.js"></script>
         <script src="/static/js/editor.js"></script>

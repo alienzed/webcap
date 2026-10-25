@@ -263,7 +263,7 @@ function updateVideoClipExactFrameUi() {
   backBtn.disabled = videoClipExactFrameRequestPending || !videoClipTargetItem || (videoClipExactFrame && Number(videoClipExactFrame.frameIndex) <= 0);
   forwardBtn.disabled = videoClipExactFrameRequestPending || !videoClipTargetItem;
   extractBtn.disabled = videoClipExactFrameRequestPending || !videoClipTargetItem;
-  extractBtn.classList.toggle('hidden', !!videoClipStoryboardSource || !!videoClipExternalSource || (videoClipFrameExtractionOpen && !!videoClipExactFrame));
+  extractBtn.classList.toggle('hidden', !!videoClipStoryboardSource || (videoClipFrameExtractionOpen && !!videoClipExactFrame));
   extractConfirmEl.classList.toggle('hidden', !videoClipFrameExtractionOpen || !videoClipExactFrame);
   if (videoClipExactFrameRequestPending) {
     noteEl.textContent = 'Resolving exact frame...';
@@ -395,17 +395,21 @@ function beginVideoClipFrameExtraction() {
 }
 
 function saveVideoClipExtractedFrame() {
-  if (videoClipExternalSource) throw new Error('External frame extraction is unavailable in this Clip editor.');
   if (!videoClipExactFrame) throw new Error('Resolve an exact frame before extracting it');
   var frame = videoClipExactFrame;
   var requestedName = getVideoClipDefaultExtractName();
-  HttpModule.postJson('/media/video_clip_extract_frame', {
-    folder: state.folder || '',
+  var payload = {
     fileName: videoClipTargetItem.fileName,
     frameIndex: frame.frameIndex,
     sourceFingerprint: frame.sourceFingerprint,
     outputName: requestedName
-  }, function (status, responseText) {
+  };
+  Object.assign(payload, videoClipSourceFields());
+  if (videoClipExternalSource && !payload.destination) {
+    setVideoClipStatus('Choose a destination Set folder before extracting.', {kind:'error'});
+    return;
+  }
+  HttpModule.postJson('/media/video_clip_extract_frame', payload, function (status, responseText) {
     var response = null;
     try { response = JSON.parse(responseText); } catch (e) {}
     if (status !== 200 || !response || !response.ok) {
@@ -1036,7 +1040,7 @@ function openVideoClipModal(mediaItem, storyboardSource, externalSource) {
   destinationField.value = videoClipExternalSource ? (videoClipExternalSource.destination || '') : '';
   getVideoClipEl('video-clip-external-folders').replaceChildren();
   var extractFrameButton = getVideoClipEl('video-clip-extract-frame-btn');
-  if (extractFrameButton) extractFrameButton.classList.toggle('hidden', !!videoClipStoryboardSource || !!videoClipExternalSource);
+  if (extractFrameButton) extractFrameButton.classList.toggle('hidden', !!videoClipStoryboardSource);
   var sourceMetaEl = getVideoClipEl('video-clip-source-meta');
   if (!sourceMetaEl) throw new Error('Video clip source metadata is missing');
   sourceMetaEl.textContent = '';

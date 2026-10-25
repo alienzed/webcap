@@ -834,7 +834,7 @@ def test_h3_checkpoint_resume_rejects_switching_image_adapter(tmp_path, monkeypa
     action, action_data = allocate_action(folder, resolved_profile(MINIMAX_H3_PROFILE_ID), ("h3",))
     run = action / "output" / "standard-run"
     (run / "global_step1").mkdir(parents=True)
-    (run / "latest").write_text("global_step1\\n", encoding="utf-8")
+    (run / "latest").write_text("global_step1\n", encoding="utf-8")
     (run / "config.h3.toml").write_text((folder / "config.h3.toml").read_text(encoding="utf-8"), encoding="utf-8")
     training_runner._write_state({"version": 3, "activeJobId": "", "jobs": [], "queuePaused": True, "queuePauseReason": "test"})
 

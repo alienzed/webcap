@@ -6776,6 +6776,10 @@
 
   window.applyStoryboardWorkshopRevision = function (revision) {
     if (!revision || !revision.storyId || !revision.sceneId) throw new Error('Workshop Apply target is missing.');
+    if (!storyState.story || storyState.story.id !== revision.storyId ||
+        !storyState.story.scenes || !storyState.story.scenes[revision.sceneId]) {
+      throw new Error('Open the original Story and Scene before applying this Workshop revision.');
+    }
     return flushPendingSaves().then(function () {
       return request({
         operation: 'workshop_apply_shots',

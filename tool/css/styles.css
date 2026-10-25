@@ -7373,3 +7373,12 @@ html[data-theme="dark"] iframe {
 .run-analytics-epoch-media-card p {margin:3px 0;color:var(--muted);line-height:1.45;}
 .run-analytics-epoch-media-card button {align-self:flex-start;margin-top:auto;}
 @media(max-width:640px) {.run-analytics-epoch-media-head {flex-direction:column;}.run-analytics-epoch-media-grid {padding:0 12px 12px;}}
+
+/* Prompt Tests: checkpoint rows with fixed-size, playable result cards. */
+.test-generations-matrix-scroll{overflow-x:auto;max-width:100%}
+.test-generations-matrix-board{display:grid;grid-template-columns:140px repeat(var(--matrix-columns),minmax(210px,240px));gap:8px;align-items:start;width:max-content;min-width:100%;padding:8px}
+.test-generations-matrix-board>strong{font-size:12px;min-width:0;overflow-wrap:anywhere;padding:8px}
+.test-generations-matrix-epoch{position:sticky;left:0;background:var(--surface,#181b22);z-index:1}
+.test-generations-matrix-cell{width:240px;max-width:240px;min-height:50px}
+.test-generations-matrix-cell .test-generations-result-card{width:100%;max-width:100%;margin:0}
+.test-generations-matrix-cell.is-empty{font-size:12px;opacity:.65;padding:14px}

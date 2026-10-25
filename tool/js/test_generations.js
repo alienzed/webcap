@@ -1355,6 +1355,7 @@
       return {label:exact ? String(original.label || '') : 'Attribute ' + (index + 1),
         options:options,annotationGroup:exact ? String(original.annotationGroup || '') : ''};
     })};
+    syncVariationGroups();
     saveTestWorkspacePrompt(value);
     saveTestBenchState();
     el('test-generations-wildcard-status').textContent = 'Wildcard copied to Prompt.';
@@ -1867,6 +1868,7 @@
     var target = el('test-generations-prompt');
     if (!target) return;
     target.value = String(prompt == null ? '' : prompt);
+    syncVariationGroups();
     if (wildcardIntent && wildcardIntent.prompt !== target.value) wildcardIntent = null;
   };
   function saveTestWorkspacePrompt(prompt) {
@@ -3568,10 +3570,127 @@
     updateTransport();
   }
 
+  function syncVariationGroups() {
+    var select = el('test-generations-variation-group');
+    var previous = select.value;
+    var groups = parseWildcardGroups(el('test-generations-prompt').value);
+    select.replaceChildren(new Option('None', ''));
+    groups.forEach(function(group,index) {
+      select.add(new Option('Group ' + (index + 1) + ' · ' + group.options.join(' / '), String(index)));
+    });
+    select.value = groups.some(function(group,index){ return String(index) === previous; }) ? previous : '';
+  }
+
+  function renderMatrix(status) {
+    if (resultsView !== 'matrix') return;
+    var host = el('test-generations-matrix');
+    var results = status && Array.isArray(status.results) ? status.results : [];
+    var failures = status && Array.isArray(status.failures) ? status.failures : [];
+    var variations = status && Array.isArray(status.variationCases) ? status.variationCases : [];
+    var columns = Math.max(1, variations.length);
+    var buckets = new Map();
+
+    // Reserve all checkpoint rows immediately. New results only fill empty cells.
+    (status && status.candidates || []).forEach(function(candidate) {
+      var key = candidate.kind === 'base' ? 'Base' : String(candidate.fileName || candidate.label || '');
+      if (buckets.has(key)) return;
+      var provenance = candidate.provenance || {};
+      var parts = [];
+      if (provenance.sourceRunSequence) parts.push('Run ' + provenance.sourceRunSequence);
+      if (provenance.sourceEpoch != null) parts.push('Epoch ' + provenance.sourceEpoch);
+      buckets.set(key, {
+        label:candidate.kind === 'base' ? 'Base' : (parts.join(' · ') || key),
+        cells:new Map()
+      });
+    });
+    results.forEach(function(result) {
+      var identity = candidateIdentity(result);
+      var key = result.kind === 'base' ? 'Base' : String(result.candidateFile || result.sourceLoRA || identity.primary);
+      if (!buckets.has(key)) buckets.set(key,{label:identity.primary,cells:new Map()});
+      var row=buckets.get(key);
+      row.label=identity.primary;
+      row.cells.set(result.variationIndex == null ? 0 : Number(result.variationIndex),result);
+    });
+
+    failures.forEach(function(failure) {
+      var key = failure.kind === 'base' ? 'Base' : String(failure.candidateFile || failure.sourceLoRA || '');
+      if (!buckets.has(key)) buckets.set(key,{label:key,cells:new Map()});
+      var index=failure.variationIndex == null ? 0 : Number(failure.variationIndex);
+      if (!buckets.get(key).cells.has(index)) buckets.get(key).cells.set(index,failure);
+    });
+    var rows=Array.from(buckets.entries());
+    var layout=JSON.stringify([status && status.session,
+      variations.map(function(v){return v.label;}),
+      rows.map(function(entry){return entry[0];})
+    ]);
+    var board=host.querySelector('.test-generations-matrix-board');
+    if (!board || host.dataset.layout !== layout) {
+      host.replaceChildren();
+      host.dataset.layout=layout;
+      if (!rows.length) { host.textContent='Generated previews will appear here.'; return; }
+      var scroller=document.createElement('div');
+      scroller.className='test-generations-matrix-scroll';
+      board=document.createElement('div');
+      board.className='test-generations-matrix-board';
+      board.style.setProperty('--matrix-columns', String(columns));
+      var corner=document.createElement('strong');
+      corner.textContent='Checkpoint';
+      board.appendChild(corner);
+      for(var i=0;i<columns;i++){
+        var label=document.createElement('strong');
+        label.textContent=variations[i] ? variations[i].label : 'Preview';
+        board.appendChild(label);
+      }
+      rows.forEach(function(entry){
+        var heading=document.createElement('strong');
+        heading.className='test-generations-matrix-epoch';
+        board.appendChild(heading);
+        for(var index=0;index<columns;index++){
+          var cell=document.createElement('div');
+          cell.className='test-generations-matrix-cell';
+          cell.classList.add('is-empty');
+          cell.textContent='Awaiting render';
+          board.appendChild(cell);
+        }
+      });
+      scroller.appendChild(board);
+      host.appendChild(scroller);
+    }
+
+    var headings=board.querySelectorAll('.test-generations-matrix-epoch');
+    var cells=board.querySelectorAll('.test-generations-matrix-cell');
+    var scores=testVlCandidateScores(results);
+    rows.forEach(function(entry,rowIndex){
+      var row=entry[1];
+      headings[rowIndex].textContent=row.label;
+      for(var index=0;index<columns;index++){
+        var cell=cells[rowIndex*columns+index];
+        var result=row.cells.get(index);
+        if(!result) continue;
+        var failed=!!result.error;
+        var key=failed ? 'failure:' + String(result.jobId || '') : String(resultMediaFile(result) || '');
+        if(cell.dataset.mediaKey === key && cell.firstElementChild){
+          window.updateTestPreviewCardRating(cell.firstElementChild,result.rating||0);
+          renderTestVlCard(cell.firstElementChild,result,scores);
+          continue;
+        }
+        var card=sharedTestCard(result,status,failed ? 'test-generations-result-card is-failed' : 'test-generations-result-card',false,failed);
+        var video=card.querySelector('video');
+        if(video) video.preload='none';
+        if (!failed) renderTestVlCard(card,result,scores);
+        cell.classList.remove('is-empty');
+        cell.replaceChildren(card);
+        cell.dataset.mediaKey=key;
+      }
+    });
+  }
+
   function setResultsView(mode) {
-    resultsView = mode === 'compare' ? 'compare' : 'grid';
+    resultsView = ['grid','compare','matrix'].includes(mode) ? mode : 'grid';
     var gridBtn = el('test-generations-view-grid-btn');
     var compareBtn = el('test-generations-view-compare-btn');
+    var matrixBtn = el('test-generations-view-matrix-btn');
+    var matrix = el('test-generations-matrix');
     var grid = el('test-generations-results');
     var compare = el('test-generations-compare');
     if (gridBtn) {
@@ -3581,6 +3700,15 @@
     if (compareBtn) {
       compareBtn.classList.toggle('active', resultsView === 'compare');
       compareBtn.setAttribute('aria-selected', resultsView === 'compare' ? 'true' : 'false');
+    }
+    matrixBtn.classList.toggle('active', resultsView === 'matrix');
+    matrixBtn.setAttribute('aria-selected', String(resultsView === 'matrix'));
+    matrix.classList.toggle('hidden',resultsView !== 'matrix');
+    if (resultsView === 'matrix') {
+      grid.replaceChildren();
+      grid.dataset.resultScope='';
+    } else {
+      matrix.querySelectorAll('video').forEach(function(video){video.pause();});
     }
     if (grid) grid.classList.toggle('hidden', resultsView !== 'grid');
     if (compare) compare.classList.toggle('hidden', resultsView !== 'compare');
@@ -3686,16 +3814,48 @@
     if (resultsView === 'compare') renderCompare(currentStatus);
   }
 
+  function comparePairs(status) {
+    var results = sortedTestPreviewRows(status && Array.isArray(status.results) ? status.results : [])
+      .map(function(row) { return row.result; });
+    var variations = status && Array.isArray(status.variationCases) ? status.variationCases : [];
+    if (!variations.length) {
+      return results.slice(0, -1).map(function(result,index){return [result,results[index+1]];});
+    }
+    var byCandidate = new Map();
+    results.forEach(function(result) {
+      var key = result.kind === 'base' ? 'Base' : String(result.candidateFile || result.sourceLoRA || '');
+      if (!byCandidate.has(key)) byCandidate.set(key,new Map());
+      byCandidate.get(key).set(Number(result.variationIndex),result);
+    });
+    var candidateOrder=new Map();
+    (status && status.candidates || []).forEach(function(candidate,index) {
+      var key=candidate.kind === 'base' ? 'Base' : String(candidate.fileName || candidate.label || '');
+      if(!candidateOrder.has(key)) candidateOrder.set(key,index);
+    });
+    var rows=Array.from(byCandidate.entries()).sort(function(a,b){
+      return (candidateOrder.get(a[0]) == null ? 1e9 : candidateOrder.get(a[0])) -
+        (candidateOrder.get(b[0]) == null ? 1e9 : candidateOrder.get(b[0]));
+    }).map(function(entry){return entry[1];});
+    var pairs=[];
+    for(var row=0;row<rows.length-1;row++) {
+      for(var col=0;col<variations.length;col++) {
+        if(rows[row].has(col) && rows[row+1].has(col))
+          pairs.push([rows[row].get(col),rows[row+1].get(col)]);
+      }
+    }
+    return pairs;
+  }
+
   function renderCompare(status) {
     var host = el('test-generations-compare');
     if (!host) return;
-    var results = sortedTestPreviewRows(status && Array.isArray(status.results) ? status.results : [])
-      .map(function (row) { return row.result; });
+    var pairs = comparePairs(status);
+    var results = status && Array.isArray(status.results) ? status.results : [];
     var resultFolder = String(status && status.resultFolder || '');
     var sessionName = String(status && status.session || '');
     var candidateScores = testVlCandidateScores(results);
 
-    if (results.length < 2) {
+    if (!pairs.length) {
       if (host.dataset.compareKey !== 'empty') {
         host.dataset.compareKey = 'empty';
         host.innerHTML = '<div class="test-generations-empty">At least two completed results are needed to compare.</div>';
@@ -3703,8 +3863,8 @@
       return;
     }
 
-    compareIndex = Math.max(0, Math.min(compareIndex, results.length - 2));
-    var pair = [results[compareIndex], results[compareIndex + 1]];
+    compareIndex = Math.max(0, Math.min(compareIndex, pairs.length - 1));
+    var pair = pairs[compareIndex];
     var compareKey = sessionName + '|' + pair.map(function (result, index) {
       return String(resultMediaFile(result) || result.sourceLoRA || ('result-' + (compareIndex + index)));
     }).join('|');
@@ -3713,8 +3873,8 @@
       var existingNext = host.querySelector('[data-compare-next]');
       var existingPosition = host.querySelector('[data-compare-position]');
       if (existingPrevious) existingPrevious.disabled = compareIndex <= 0;
-      if (existingNext) existingNext.disabled = compareIndex >= results.length - 2;
-      if (existingPosition) existingPosition.textContent = (compareIndex + 1) + ' / ' + (results.length - 1);
+      if (existingNext) existingNext.disabled = compareIndex >= pairs.length - 1;
+      if (existingPosition) existingPosition.textContent = (compareIndex + 1) + ' / ' + pairs.length;
       return;
     }
 
@@ -3745,13 +3905,13 @@
 
     var position = document.createElement('span');
     position.dataset.comparePosition = '1';
-    position.textContent = (compareIndex + 1) + ' / ' + (results.length - 1);
+    position.textContent = (compareIndex + 1) + ' / ' + pairs.length;
 
     var next = document.createElement('button');
     next.type = 'button';
     next.className = 'review-captions-btn';
     next.dataset.compareNext = '1';
-    next.disabled = compareIndex >= results.length - 2;
+    next.disabled = compareIndex >= pairs.length - 1;
     next.textContent = 'Next';
 
     controls.appendChild(previous);
@@ -3763,6 +3923,11 @@
   }
 
   function renderResults(status) {
+    if (resultsView === 'matrix') {
+      renderMatrix(status || {});
+      syncTestVlControls();
+      return;
+    }
     var host = el('test-generations-results');
     if (!host) return;
     var results = status && Array.isArray(status.results) ? status.results : [];
@@ -3888,6 +4053,7 @@
     }
 
     if (resultsView === 'compare') renderCompare(status || {});
+    if (resultsView === 'matrix') renderMatrix(status || {});
   }
 
   function syncActiveRunControls(status) {
@@ -4596,6 +4762,7 @@
         : String(payload.defaultPrompt || '');
       wildcardIntent = saved.wildcardIntent && saved.wildcardIntent.prompt === prompt.value
         ? saved.wildcardIntent : null;
+      syncVariationGroups();
     }
   }
 
@@ -4821,6 +4988,7 @@
       includeBase: el('test-generations-base-include').checked,
       prompt: prompt, settings: settings
     };
+    if (el('test-generations-variation-group').value !== '') criteria.variationGroupIndex = Number(el('test-generations-variation-group').value);
     if (wildcardIntent && wildcardIntent.prompt === prompt) {
       criteria.wildcardDimensions = wildcardIntent.dimensions;
     }
@@ -5160,6 +5328,9 @@
     el('test-generations-view-compare-btn').onclick = function () {
       setResultsView('compare');
     };
+    el('test-generations-view-matrix-btn').onclick = function () { setResultsView('matrix'); };
+    el('test-generations-prompt').addEventListener('input',syncVariationGroups);
+    syncVariationGroups();
     el('test-generations-candidates-btn').onclick = function (event) {
       event.stopPropagation();
       try { openCandidateRunMenu(this); } catch (err) { showError(err); }
@@ -5389,8 +5560,7 @@
         return;
       }
       if (event.target.closest('[data-compare-next]')) {
-        var results = currentStatus && Array.isArray(currentStatus.results) ? currentStatus.results : [];
-        compareIndex = Math.min(Math.max(0, results.length - 2), compareIndex + 1);
+        compareIndex = Math.min(Math.max(0, comparePairs(currentStatus).length - 1), compareIndex + 1);
         renderCompare(currentStatus);
       }
     };

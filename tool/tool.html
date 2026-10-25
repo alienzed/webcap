@@ -2091,6 +2091,7 @@
                 <div id="director-chat-mode-tools" class="director-chat-mode-tools hidden" aria-label="Assistant mode tools">
                     <span>Quick</span>
                     <div id="director-chat-mode-presets" class="director-chat-mode-presets"></div>
+                    <button id="director-chat-workshop-prepare" type="button" class="review-captions-btn hidden" title="Prepare a reviewed revision of this Scene’s timed shots">Prepare Revision</button>
                 </div>
                 <div class="director-chat-model-row director-chat-model-tools">
                     <label for="director-chat-model">Model</label>
@@ -2123,6 +2124,25 @@
                     </div>
                 </div>
             </aside>
+            <dialog id="storyboard-workshop-review" class="storyboard-workshop-review" aria-labelledby="storyboard-workshop-review-title">
+                <div class="storyboard-workshop-review-head">
+                    <div>
+                        <h3 id="storyboard-workshop-review-title">Review Scene Revision</h3>
+                        <p id="storyboard-workshop-review-target"></p>
+                    </div>
+                    <button id="storyboard-workshop-review-close" type="button" class="review-captions-btn" aria-label="Close revision preview">×</button>
+                </div>
+                <div class="storyboard-workshop-review-content">
+                    <p id="storyboard-workshop-review-summary"></p>
+                    <div class="storyboard-workshop-diff-heading">Timed shots · proposed changes</div>
+                    <div id="storyboard-workshop-review-diff" class="storyboard-workshop-diff" aria-label="Changes to timed shots"></div>
+                    <p class="storyboard-workshop-review-note">Subject, Scene Overview, Environment, Style and audio remain unchanged. Applying checks the saved original before replacing the approved shots.</p>
+                </div>
+                <div class="storyboard-workshop-review-actions">
+                    <button id="storyboard-workshop-review-back" type="button" class="review-captions-btn">Back to discussion</button>
+                    <button id="storyboard-workshop-review-apply" type="button" class="storyboard-primary-btn">Apply Revision</button>
+                </div>
+            </dialog>
             <aside id="inference-queue-drawer" class="inference-queue-drawer hidden" aria-label="Job Queues" aria-hidden="true">
                 <header class="inference-queue-drawer-header">
                     <div class="inference-queue-header-copy">

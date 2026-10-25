@@ -2730,6 +2730,7 @@
     if (window.closeMediaExplorerActivity) window.closeMediaExplorerActivity();
     target = target && typeof target === 'object' ? target : {};
     var navigationVersion = ++generateState.navigationVersion;
+    ++pendingRestoreSelection; // A previous editor's pending click cannot complete after navigation.
     var targetJobId = String(target.jobId || '');
     if (targetJobId) {
       trackGenerateJob(targetJobId);
@@ -2769,6 +2770,7 @@
 
   function closeGenerateActivity() {
     generateState.navigationVersion++;
+    ++pendingRestoreSelection;
     var frame = el('app-frame');
     var workspace = el('generate-workspace');
     generateState.open = false;

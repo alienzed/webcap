@@ -290,17 +290,24 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
         original = _clean(scene.get("prompt"))
         if not original:
             raise ValueError("Scene generation prompt is required for Check Coherence.")
+        blocks = []
+        guidance = _story_guidelines_text(story)
+        if guidance:
+            blocks.append("[STORY DIRECTING GUIDELINES]\n" + guidance)
+        invariants = _story_invariants_text(story)
+        if invariants:
+            blocks.append("[STORY INVARIANTS]\n" + invariants)
+        blocks.append("[EXISTING H3 PROMPT]\n" + original)
+        blocks.append(
+            "[CURRENT TASK]\nReview the H3 prompt for concrete audiovisual contradictions, timing inconsistencies, "
+            "and duplicated explanatory text that obscures execution. Preserve the author's subject, "
+            "choreography, pacing, repetition, and creative intent. Return a minimally corrected complete "
+            "prompt, or the original unchanged when it is already coherent."
+        )
         return {
             "operation": operation,
             "output": "json",
-            "prompt": (
-                "[EXISTING H3 PROMPT]\n" + original
-                + "\n\n[CURRENT TASK]\n"
-                "Review this H3 text-to-video prompt for coherence. "
-                "Favor details that can be conveyed visually or audibly. "
-                "Consolidate repeated descriptions. Preserve the existing structure and creative intent. "
-                "Return the complete improved prompt, or the original unchanged if no meaningful improvement is needed."
-            ),
+            "prompt": "\n\n".join(blocks),
             "response_schema": _prompt_response_schema(),
         }
 
@@ -357,18 +364,13 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
         if not style:
             raise ValueError("Enter a Visual / Atmosphere description first.")
         blocks = ["[USER VISUAL INTENT]\n" + style]
-        if _story_guidelines_text(story):
-            blocks.append("[STORY DIRECTING GUIDELINES]\n" + _story_guidelines_text(story))
         concept = _clean(story.get("concept"))
         if concept:
             blocks.append("[STORY CONTEXT — FOR INTERPRETATION ONLY]\n" + concept[:3500])
         blocks.append(
-            "[TASK]\nInterpret the visual intent into practical video-generation direction. "
-            "Describe camera viewpoint or capture style, lighting, movement, texture, and mood only where useful. "
-            "Preserve the intended realism, informality, and recording medium. "
-            "Do not quote, paraphrase mechanically, or repeat the user's style label. "
-            "Do not add scene events, characters, locations, or unrelated details. "
-            "Return just 1-3 short lines of concrete visual direction, no heading or bullets."
+            "[TASK]\nTranslate the supplied visual intent into practical video-generation direction. "
+            "Describe relevant camera perspective, light, movement, texture, and mood while retaining "
+            "the author's visual identity. Return 1-3 short lines of prose."
         )
         return {"operation": operation, "output": "text", "prompt": "\n\n".join(blocks)}
     if operation == "expand_concept":
@@ -387,14 +389,10 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
         if invariants:
             blocks.append("[STORY INVARIANTS]\n" + invariants)
         blocks.append(
-            "[CURRENT TASK]\nExpand this concept into a richer creative overview that can drive later Scene planning. "
-            "First understand what kind of concept it is rather than assuming a narrative arc. Develop the experience, subjects or characters, setting, themes, recurring format, variations, visual situations, progression, relationships, or ending only where the seed actually supports them. "
-            "A concept may be narrative, episodic, repetitive, montage-like, observational, variation-based, or something else entirely. "
-            "Be creatively useful and fill in sensible connective material when the concept calls for it rather than asking questions. "
-            "Preserve explicit facts from the original concept and Story invariants. Treat the supplied Visual / Atmosphere as authoritative: "
-            "do not replace it, reinterpret it into a different style, or introduce a competing visual atmosphere. Enrich the concept within it. "
-            "Develop a practical concept overview with enough detail for later Scene planning. Stop once the creative direction is clear. "
-            "Return only the expanded concept as polished prose."
+            "[CURRENT TASK]\nExpand the author's concept into a useful creative overview for Scene planning. "
+            "Develop creative details that serve the supplied concept and Directing Guidelines. "
+            "Preserve established Story facts, invariants, and Visual / Atmosphere. "
+            "Return the expanded concept as concise polished prose."
         )
         return {
             "operation": operation,
@@ -428,14 +426,11 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
             else "Choose the Scene count that best serves the concept and the amount of useful coverage it supports. "
         )
         blocks.append(
-            "[CURRENT TASK]\nDevelop the complete concept into MiniMax H3 Scenes. "
+            "[CURRENT TASK]\nDevelop the Story into independently generatable MiniMax H3 Scenes. "
             + scene_count_guidance
-            + "Use the Story\'s Scene Relationships direction when present, and otherwise choose the relationship that serves the concept. "
-            "Decide what each Scene contributes and apply the Story\'s Variation / Repetition direction where supplied. "
-            "Keep the relationship between Scenes appropriate to the concept, preserving relevant Story facts, invariants, and evolving state when continuity matters. "
-            "Use entry and exit state only when a specific handoff or visible state is genuinely useful. "
-            "Write each Scene's complete H3 generation prompt exactly as it should be used, following the supplied Director and H3 guidance. "
-            "Return only JSON matching the supplied schema."
+            + "Use the supplied concept, Directing Guidelines, and established Story facts to author "
+            "the Scene content and relationships. Return each Scene's title, summary, optional entry/exit "
+            "state, duration, and complete H3 prompt in the supplied JSON schema."
         )
         return {
             "operation": operation,
@@ -467,12 +462,11 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
             else "Choose the Scene count that best serves the concept and useful coverage. "
         )
         blocks.append(
-            "[CURRENT TASK]\nPlan the complete Story as a concise Scene sequence without writing generation prompts yet. "
+            "[CURRENT TASK]\nPlan the Story as a concise ordered Scene outline. "
             + scene_count_guidance
-            + "Use the supplied Scene Relationships direction where present; otherwise plan a relationship suited to the concept. "
-            "For each Scene return only a short title, a useful summary / intent, optional entry and exit state when a real handoff matters, and a suggested duration. "
-            "Apply the Story\'s Variation / Repetition direction and preserve relevant Story facts, invariants, and evolving state. "
-            "This outline will be used to author each full H3 Scene separately. Return only JSON matching the supplied schema."
+            + "Use the supplied concept and Directing Guidelines. For each Scene return a title, "
+            "summary / intent, optional entry/exit state, and suggested duration. "
+            "Generation prompts will be authored separately. Return JSON matching the supplied schema."
         )
         return {
             "operation": operation,
@@ -526,7 +520,7 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
             blocks.append(
                 "[PREVIOUS AUTHORED SCENE - RELATIONSHIP CONTEXT]\n"
                 + json.dumps(previous_scene, indent=2, ensure_ascii=False)
-                + "\n\nUse the previous authored Scene as relationship and continuity context where relevant to this planned Scene."
+                + "\n\nThe planned outline and author direction establish this Scene\'s creative scope."
             )
         blocks.append(
             "[CURRENT TASK]\nAuthor exactly this one planned Scene as a complete MiniMax H3 Scene. "
@@ -589,12 +583,8 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
                 if custom_instruction else
                 "Use the complete Story concept and outline to decide what fresh Scene belongs here. "
             )
-            + "Use neighbouring Scene descriptions as placement and continuity context. "
-            "A new Scene may progress, contrast, or stand independently as the concept or user direction warrants. "
-            "Use the Story\'s Variation / Repetition direction when developing this Scene. "
-            "Use entry and exit state only when a real handoff matters. "
-            "Write the complete standalone H3 prompt following the supplied Director and H3 guidance. "
-            "Return only JSON matching the supplied schema."
+            + "Use neighbouring Scene descriptions as placement context and the supplied author direction for creative choices. "
+            "Return the new Scene and its complete standalone H3 prompt in the supplied JSON schema."
         )
         return {
             "operation": operation,
@@ -635,11 +625,8 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
             blocks.append("[USER DIRECTION]\n" + _clean(instruction))
         blocks.append(
             "[CURRENT TASK]\nAppend exactly " + str(scene_count) + " new Scenes after the existing sequence. "
-            "Consider what the existing Scene outline already covers. Plan how new Scenes contribute to the Story using the author's Scene Relationships and Variation / Repetition guidance. "
-            "For connected material, carry relevant evolving state; for independent or recurring formats, use the relationship established by the Story. "
-            "Preserve established character, location, visual language, and other Story invariants where relevant. "
-            "Write a complete standalone H3 generation prompt for each new Scene using the supplied Director and H3 guidance. "
-            "Return only the new Scenes as JSON matching the supplied schema."
+            "Use the supplied concept, Directing Guidelines, established Story facts, and existing Scene outline to author the new material. "
+            "Return only the new Scenes, each with a complete standalone H3 generation prompt, as JSON matching the supplied schema."
         )
         return {
             "operation": operation,
@@ -684,12 +671,10 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
         blocks.append(
             "[USER REPAIR INSTRUCTION]\n" + correction
             + "\n\n[CURRENT TASK]\nApply the user's instruction to the current Scene plan. "
-            "This is a targeted revision pass, not Story redevelopment. Preserve unaffected Scenes and fields. "
-            "Do not add, remove, merge, split, or reorder Scenes unless the user's instruction explicitly asks for that; this operation currently applies sparse patches to the existing Scene list. "
-            "Return only the Scene fields that actually need changing: summary, optional entryState/exitState, and/or the complete revised H3 prompt string. "
-            "When changing a prompt, author the complete prompt exactly as it should be used, following the supplied Director and H3 guidance. "
-            "Use the 1-based sceneNumber values supplied above and return each Scene at most once. "
-            "If the instruction does not require any repair, return {\"changes\":[]}."
+            "Return sparse updates to existing Scenes, preserving their order and count. "
+            "Include only fields that need changing: summary, entryState, exitState, or complete revised H3 prompt. "
+            "Use the supplied 1-based sceneNumber for each affected Scene, once per Scene. "
+            "Return {\"changes\":[]} when the instruction is already satisfied."
         )
         return {
             "operation": operation,
@@ -746,22 +731,23 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
         if not correction:
             raise ValueError("A refinement instruction is required.")
         if continuity_context:
+            relevant_guidelines = _story_guidelines_text(story)
+            if relevant_guidelines:
+                blocks.append("[STORY DIRECTING GUIDELINES]\n" + relevant_guidelines)
             previous_scene_context = _previous_scene_context(story, scene_id)
             if previous_scene_context:
                 blocks.append(
                     "[PREVIOUS SCENE - CONTINUITY FACTS ONLY]\n" + previous_scene_context
-                    + "\n\nUse these facts only when the correction requires a real Scene handoff."
+                    + "\n\nUse these facts as context for the explicitly requested continuity review."
                 )
         blocks.append("[EXISTING PROMPT]\n" + existing_prompt)
         blocks.append(
-            "[CURRENT TASK]\nMake the smallest necessary edit to this Scene's EXISTING PROMPT for this user correction:\n"
+            "[CURRENT TASK]\nApply this correction to the existing Scene prompt with the smallest relevant edit:\n"
             + correction
-            + "\n\nKeep this Scene's original subject, action, chronology, staging, visual details, and H3 prompt organization. "
-            "Do not invent a different Scene, expand the Story, or rewrite unrelated passages. "
-            "For a localized request (for example, add a smile at the end), change only the relevant action/shot. "
-            "Return changed=false and reproduce the existing prompt unchanged when the correction already holds or does not apply. "
-            "Otherwise return the complete minimally revised H3 prompt, plus only any optional Scene fields the correction actually requires. "
-            "If the change materially alters the needed screen time, you may include durationSeconds between 6 and 15 seconds."
+            + "\n\nPreserve all authored material outside the requested scope. "
+            "Return changed=false with the original prompt when the correction is already satisfied. "
+            "Otherwise return the complete minimally revised prompt and only the optional Scene fields "
+            "changed by the correction. Duration updates must be between 6 and 15 seconds."
         )
 
     return {

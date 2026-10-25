@@ -532,6 +532,21 @@ function getCaptionAssistTagSuggestions(mediaItem) {
     seen[lower] = true;
     suggestions.push({ group: group, term: term, isNew: !!group && !known, rank: rank + (known ? 0 : 1) });
   }
+  // Group-aware candidates are grounded in the same cached Sight. Keep existing
+  // unscoped detail suggestions below for backward-compatible coverage.
+  (Array.isArray(checklistItems) ? checklistItems : []).forEach(function (group) {
+    getSightGroupSuggestionRows(mediaItem, group).forEach(function (row) {
+      var term = normalizeChecklistTerm(row.term);
+      var lower = term.toLowerCase();
+      if (!term || assigned[lower] || seen[lower]) return;
+      seen[lower] = true;
+      suggestions.push({
+        group: group, term: term, kind: row.kind,
+        isNew: row.kind === 'phrase', source: row.source,
+        rank: row.kind === 'tag' ? 2 : 5
+      });
+    });
+  });
   var inventory = open.inventory || {};
   var extras = (Array.isArray(inventory.details) ? inventory.details : []).slice();
   (Array.isArray(inventory.things) ? inventory.things : []).forEach(function (thing) {
@@ -651,12 +666,20 @@ function syncFocusedCaptionVisionPhrasesUi() {
     var tagButton = document.createElement('button');
     tagButton.type = 'button';
     tagButton.className = 'caption-assist-suggestion-tag';
-    tagButton.textContent = (removing ? '− ' : '+ ') + suggestion.term;
-    tagButton.title = (removing ? 'Remove' : 'Add') + ' tag · ' + (suggestion.group || 'Other') +
-      (suggestion.isNew ? ' · new vocabulary' : '') + ' · saves immediately';
+    var phraseOnly = !removing && suggestion.kind === 'phrase';
+    tagButton.textContent = phraseOnly ? ('Insert · ' + suggestion.term) :
+      (removing ? '− ' : '+ ') + suggestion.term;
+    tagButton.title = phraseOnly
+      ? 'Insert saved Sight phrase into the draft; saved only with Apply'
+      : (removing ? 'Remove' : 'Add') + ' tag · ' + (suggestion.group || 'Other') +
+        (suggestion.isNew ? ' · new vocabulary' : '') + ' · saves immediately';
     tagButton.setAttribute('aria-label', tagButton.title);
+    tagButton.addEventListener('pointerdown', function (event) {
+      if (phraseOnly) event.preventDefault();
+    });
     tagButton.addEventListener('click', function () {
       if (removing) removeCaptionAssistAssignedTag(mediaKey, suggestion.group, suggestion.term);
+      else if (phraseOnly) insertFocusedCaptionVisionPhrase(suggestion.term);
       else acceptCaptionAssistTagSuggestion(mediaKey, suggestion);
     });
     pair.appendChild(tagButton);
@@ -664,11 +687,14 @@ function syncFocusedCaptionVisionPhrasesUi() {
       var insertButton = document.createElement('button');
       insertButton.type = 'button';
       insertButton.className = 'caption-assist-suggestion-insert';
-      insertButton.textContent = 'Insert';
-      insertButton.title = 'Insert into the draft; saved with Apply, does not assign a tag';
+      insertButton.textContent = phraseOnly ? '+ Tag' : 'Insert';
+      insertButton.title = phraseOnly
+        ? 'Explicitly add this phrase to Group vocabulary and assign it'
+        : 'Insert into the draft; saved with Apply, does not assign a tag';
       insertButton.addEventListener('pointerdown', function (event) { event.preventDefault(); });
       insertButton.addEventListener('click', function () {
-        insertFocusedCaptionVisionPhrase(suggestion.term);
+        if (phraseOnly) acceptCaptionAssistTagSuggestion(mediaKey, suggestion);
+        else insertFocusedCaptionVisionPhrase(suggestion.term);
       });
       pair.appendChild(insertButton);
     }

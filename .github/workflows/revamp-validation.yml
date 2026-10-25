@@ -13,6 +13,10 @@ on:
       - 'tests/vl_workspace_tabs.test.cjs'
       - 'tests/test_media_context_actions_contract.py'
       - 'tool/js/primer_settings.js'
+      - 'tool/js/sight_group_suggestions.js'
+      - 'tool/js/focused_annotation.js'
+      - 'tests/sight_group_suggestions.test.cjs'
+      - 'tests/focused_annotation_integration.test.js'
       - 'tool/server/vision_schema_assist.py'
       - 'tool/server/media.py'
       - 'tool/server/caption_ops.py'
@@ -102,6 +106,10 @@ jobs:
           node --check tool/js/caption_vision.js
           node --check tool/js/media_context_actions.js
           node --check tool/js/primer_settings.js
+          node --check tool/js/sight_group_suggestions.js
+          node --check tool/js/focused_annotation.js
+          node --test tests/sight_group_suggestions.test.cjs
+          node tests/focused_annotation_integration.test.js
       - name: Install DOM test dependency
         run: npm install --no-save --no-package-lock jsdom
       - name: Evaluation DOM ownership and navigation smoke

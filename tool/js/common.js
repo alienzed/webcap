@@ -1075,3 +1075,47 @@ function saveCurrentCaption() {
     return Promise.reject(err);
   }
 }
+
+function openDirectorRequestInspector(request, title) {
+  if (!request || !Array.isArray(request.messages)) throw new Error('LLM request diagnostic has no messages.');
+  var dialog = document.getElementById('director-request-inspector');
+  if (!dialog) {
+    dialog = document.createElement('dialog');
+    dialog.id = 'director-request-inspector';
+    dialog.setAttribute('aria-label', 'LLM request');
+    dialog.style.cssText = 'width:min(760px,94vw);max-height:85vh;padding:0;border:1px solid #8888;border-radius:10px;background:var(--panel-bg,#24262b);color:var(--text-color,#eee);';
+    dialog.innerHTML = '<header style="padding:12px 15px;display:flex;justify-content:space-between;border-bottom:1px solid #8885"><strong data-title>LLM Request</strong><button data-close type="button" aria-label="Close">×</button></header><section data-body style="max-height:67vh;overflow:auto;padding:12px 15px"></section><footer style="display:flex;justify-content:flex-end;gap:8px;padding:10px 15px;border-top:1px solid #8885"><button data-copy type="button">Copy full request</button><button data-done type="button">Close</button></footer>';
+    document.body.appendChild(dialog);
+    dialog.querySelector('[data-close]').onclick = function () { dialog.close(); };
+    dialog.querySelector('[data-done]').onclick = function () { dialog.close(); };
+  }
+  dialog.querySelector('[data-title]').textContent = title || 'LLM Request';
+  var body = dialog.querySelector('[data-body]');
+  body.replaceChildren();
+  var total = document.createElement('p');
+  total.style.cssText = 'margin:0 0 12px;opacity:.75;font-size:13px';
+  total.textContent = request.messages.length + ' messages · exact captured request';
+  body.appendChild(total);
+  request.messages.forEach(function (message, index) {
+    var details = document.createElement('details');
+    details.style.cssText = 'margin-bottom:8px;border:1px solid #8886;border-radius:7px;overflow:hidden';
+    details.open = index === 0;
+    var summary = document.createElement('summary');
+    summary.style.cssText = 'cursor:pointer;padding:9px 11px;font-weight:600;font-size:13px';
+    var content = String(message.content || '');
+    summary.textContent = (index + 1) + '. ' + String(message.role || 'message').toUpperCase() + ' · ' + content.length.toLocaleString() + ' characters';
+    var pre = document.createElement('pre');
+    pre.style.cssText = 'margin:0;padding:11px;white-space:pre-wrap;overflow-wrap:anywhere;max-height:45vh;overflow:auto;font:12px/1.5 Consolas,monospace;border-top:1px solid #8885;background:#8881';
+    pre.textContent = content;
+    details.append(summary, pre);
+    body.appendChild(details);
+  });
+  dialog.querySelector('[data-copy]').onclick = function () {
+    navigator.clipboard.writeText(JSON.stringify(request.messages, null, 2)).catch(function (error) {
+      if (typeof window.reportConsoleError === 'function') window.reportConsoleError('LLM request copy', error);
+      else throw error;
+    });
+  };
+  if (dialog.open) dialog.close();
+  dialog.showModal();
+}

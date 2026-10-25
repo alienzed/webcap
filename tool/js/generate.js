@@ -772,8 +772,8 @@
     var take = el('generate-editor-loaded');
     working.classList.toggle('active', !loaded);
     take.classList.toggle('active', loaded);
-    working.setAttribute('aria-selected', loaded ? 'false' : 'true');
-    take.setAttribute('aria-selected', loaded ? 'true' : 'false');
+    working.setAttribute('aria-pressed', loaded ? 'false' : 'true');
+    take.setAttribute('aria-pressed', loaded ? 'true' : 'false');
     take.disabled = !generateState.loadedSnapshot;
     el('generate-editor-use-working').classList.toggle('hidden', !loaded);
     var label = el('generate-editor-loaded-caption');

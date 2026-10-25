@@ -47,6 +47,14 @@ on:
       - 'tool/js/test_generations*.js'
       - 'tool/js/job_queues.js'
       - 'tool/js/training_runner_ui.js'
+      - 'tool/js/training_review.js'
+      - 'tool/js/training_history_ui.js'
+      - 'tool/server/training_history.py'
+      - 'tool/server/training_runner.py'
+      - 'tests/test_training_history_unlink.py'
+      - 'tests/test_training_history_ui_contract.py'
+      - 'tests/test_training_resume_discovery.py'
+      - 'tests/test_training_stabilization.py'
       - 'tool/css/workbench.css'
       - 'tests/training_queue_epoch_icons.test.cjs'
       - 'tool/css/workspace_shell.css'
@@ -152,6 +160,13 @@ jobs:
         run: cp tool/config.example.json tool/config.json
       - name: Install test essentials
         run: python -m pip install pytest Flask Pillow Werkzeug imageio websocket-client opencv-python-headless
+      - name: Training resume variant and History-only removal
+        run: |
+          node --check tool/js/training_review.js
+          node --check tool/js/training_history_ui.js
+          node --check tool/js/training_runner_ui.js
+          python -m pytest -q tests/test_training_history_unlink.py tests/test_training_resume_discovery.py tests/test_training_history_ui_contract.py
+          python -m pytest -q tests/test_training_stabilization.py -k h3_checkpoint_resume_rejects_switching_image_adapter
       - name: QA Curate Training Set Director and selection contract
         run: |
           python -m compileall -q tool/server/qa_curation.py tool/server/llm_runner.py

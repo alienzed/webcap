@@ -387,12 +387,6 @@
     return 'Prompt sent · ' + messageLabel + ' · ' + chars.toLocaleString() + ' chars · Inspect';
   }
 
-  function copyRequestDiagnostic(request) {
-    request = request && typeof request === 'object' ? request : null;
-    if (!request || !Array.isArray(request.messages)) throw new Error('LLM request diagnostic is missing its messages.');
-    return navigator.clipboard.writeText(JSON.stringify(request.messages, null, 2));
-  }
-
   function renderProgress(activity, system) {
     var phaseEl = el('director-chat-progress-phase');
     var detailEl = el('director-chat-progress-detail');

@@ -1367,3 +1367,36 @@ def test_scene_refine_completion_is_persisted_only_for_successful_refine(storybo
         operation="write_prompt",
     )
     assert rewritten["refineComplete"] is False
+
+
+def test_story_guidelines_survive_save_reload_and_duplicate(storyboard_fs):
+    story = storyboard_store.create_story({"title": "Variation Studies"})
+    assert story["guidelines"] == {}
+    revised = storyboard_store.update_story(story["id"], {"guidelines": {
+        "visualFocus": " Athletic action ",
+        "variation": "Change choreography between examples.",
+        "pacing": "",
+    }})
+    assert revised["guidelines"] == {
+        "visualFocus": "Athletic action",
+        "variation": "Change choreography between examples.",
+    }
+    assert storyboard_store.load_story(story["id"])["guidelines"] == revised["guidelines"]
+    duplicate = storyboard_store.duplicate_story(story["id"])
+    assert duplicate["guidelines"] == revised["guidelines"]
+
+
+def test_workshop_allows_discussion_without_shot_parser_support(storyboard_fs):
+    story = storyboard_store.create_story({"title": "Loose Clip"})
+    story, scene = storyboard_store.add_scene(story["id"], {
+        "title": "Concept only", "summary": "Exploring a visual idea",
+        "prompt": "An informal scene prompt with no H3 shot headings."
+    })
+    context = storyboard_store.workshop_scene_context(story["id"], scene["id"])
+    assert context["shots"] == ""
+    assert "integrated_multimodal_description" in context["shotError"]
+    assert context["sceneSummary"] == "Exploring a visual idea"
+    with pytest.raises(ValueError, match="one unambiguous"):
+        storyboard_store.apply_workshop_shots(
+            story["id"], scene["id"], context["expectedPrompt"], "[Shot 1]\nAn attempt"
+        )

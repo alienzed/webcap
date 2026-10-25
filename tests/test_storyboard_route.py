@@ -804,3 +804,74 @@ def test_storyboard_archive_preview_route_is_nondestructive(monkeypatch):
     })
     assert response.status_code == 200
     assert response.get_json()["preview"]["reclaimableBytes"] == 100
+
+
+def test_workshop_context_and_atomic_shot_apply_preserve_other_sections():
+    client = app_module.app.test_client()
+    created = client.post("/fs/storyboard", json={
+        "operation": "create_story",
+        "story": {"title": "Lunar Exercise", "concept": "A surreal workout.",
+                  "guidelines": {"variation": "Different movement in each shot."}},
+    })
+    assert created.status_code == 200
+    story_id = created.get_json()["story"]["id"]
+    original = (
+        "Subject:\nAn exerciser.\n\nScene Overview:\nSurreal workout.\n\n"
+        "integrated_multimodal_description:\n\n[Shot 1] (0s–6s)\nJogging.\n\n"
+        "[Shot 2] (6s–12s)\nJumping.\n\n"
+        "overall_soundscape:\nWind.\n\nnon_diegetic_music:\nOrchestra.\n"
+    )
+    added = client.post("/fs/storyboard", json={
+        "operation": "add_scene", "storyId": story_id,
+        "scene": {"title": "Exercise", "summary": "A lunar workout", "prompt": original},
+    })
+    assert added.status_code == 200
+    scene_id = added.get_json()["scene"]["id"]
+    context = client.post("/fs/storyboard", json={
+        "operation": "workshop_context", "storyId": story_id, "sceneId": scene_id,
+    })
+    assert context.status_code == 200
+    snapshot = context.get_json()["workshop"]
+    assert snapshot["expectedPrompt"] == original
+    assert "Jogging." in snapshot["shots"]
+    assert snapshot["guidelines"]["variation"] == "Different movement in each shot."
+    replacement = "[Shot 1] (0s–6s)\nSprinting.\n\n[Shot 2] (6s–12s)\nLeaping."
+    applied = client.post("/fs/storyboard", json={
+        "operation": "workshop_apply_shots", "storyId": story_id,
+        "sceneId": scene_id, "expectedPrompt": original, "shots": replacement,
+    })
+    assert applied.status_code == 200
+    new_scene = applied.get_json()["scene"]
+    assert "Sprinting." in new_scene["prompt"]
+    assert new_scene["prompt"].split("integrated_multimodal_description:\n", 1)[0] == original.split("integrated_multimodal_description:\n", 1)[0]
+    assert new_scene["prompt"].split("overall_soundscape:", 1)[1] == original.split("overall_soundscape:", 1)[1]
+    assert new_scene["previousPrompt"] == original
+    stale = client.post("/fs/storyboard", json={
+        "operation": "workshop_apply_shots", "storyId": story_id,
+        "sceneId": scene_id, "expectedPrompt": original, "shots": replacement,
+    })
+    assert stale.status_code == 400
+    assert "changed since Workshop" in stale.get_json()["error"]
+    restored = client.post("/fs/storyboard", json={
+        "operation": "restore_previous_prompt", "storyId": story_id, "sceneId": scene_id,
+    })
+    assert restored.status_code == 200
+    assert restored.get_json()["scene"]["prompt"] == original
+
+
+def test_workshop_proposal_uses_fixed_structured_chat_schema(monkeypatch):
+    captured = {}
+    def fake_enqueue(client, model, contract, context, label):
+        captured.update({"client": client, "model": model, "contract": contract, "label": label})
+        return {"jobId": "shot-proposal-job", "status": "queued"}
+    monkeypatch.setattr(app_module, "enqueue_llm", fake_enqueue)
+    response = app_module.app.test_client().post("/fs/director/chat", json={
+        "model": "local::dummy.gguf",
+        "operation": "storyboard_workshop_shots",
+        "messages": [{"role": "user", "content": "Enhance Shot 2"}],
+    })
+    assert response.status_code == 202
+    assert captured["client"] == "chat"
+    assert captured["contract"]["operation"] == "storyboard_workshop_shots"
+    assert captured["contract"]["response_schema"]["required"] == ["summary", "shots"]
+    assert captured["label"] == "Storyboard Shot Proposal"

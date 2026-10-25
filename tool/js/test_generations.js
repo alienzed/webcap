@@ -1599,12 +1599,7 @@
     if (!request) return '';
     var count = Number(request.messageCount) || 0;
     var chars = Number(request.contentChars) || 0;
-    return 'Prompt sent · ' + (count === 1 ? '1 msg' : String(count) + ' msgs') + ' · ' + chars.toLocaleString() + ' chars · Copy';
-  }
-
-  function copyWildcardDirectorRequestDiagnostic(request) {
-    if (!request || !Array.isArray(request.messages)) throw new Error('Wildcard Director request diagnostic is missing its messages.');
-    return navigator.clipboard.writeText(JSON.stringify(request.messages, null, 2));
+    return 'Prompt sent · ' + (count === 1 ? '1 msg' : String(count) + ' msgs') + ' · ' + chars.toLocaleString() + ' chars · Inspect';
   }
 
   function renderWildcardDirectorActivity(activity, system) {
@@ -5117,13 +5112,7 @@
     el('test-generations-director-prompt-copy').onclick = function () {
       var button = this;
       var requestDiagnostic = wildcardDirector.requestDiagnostic;
-      copyWildcardDirectorRequestDiagnostic(requestDiagnostic).then(function () {
-        var original = wildcardDirectorRequestDiagnosticLabel(requestDiagnostic);
-        button.textContent = 'Copied';
-        window.setTimeout(function () {
-          if (wildcardDirector.requestDiagnostic === requestDiagnostic) button.textContent = original;
-        }, 1200);
-      }).catch(showError);
+      openDirectorRequestInspector(requestDiagnostic, 'Test Director Request');
     };
     el('test-generations-wildcard-use-btn').onclick = function () {
       try { useGeneratedWildcard(); } catch (err) { showError(err); }

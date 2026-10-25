@@ -1956,8 +1956,8 @@
                                 <details class="storyboard-story-section" data-story-section="continuity">
                                     <summary class="storyboard-continuity-summary">
                                         <span class="storyboard-story-section-summary-copy">
-                                            <strong>Continuity</strong>
-                                            <span>Facts that should remain stable.</span>
+                                            <strong>Directing Guidelines</strong>
+                                            <span>Optional creative direction and continuity facts.</span>
                                         </span>
                                         <span class="storyboard-invariants-actions">
                                             <button id="storyboard-invariant-define" type="button" class="review-captions-btn storyboard-director-action">Define from Concept</button>
@@ -1965,6 +1965,13 @@
                                         </span>
                                     </summary>
                                     <div class="storyboard-story-section-body">
+                                        <section class="storyboard-guidelines" aria-label="Creative directing guidelines">
+                                        <label class="storyboard-field"><span>Visual Focus</span><textarea data-story-guideline="visualFocus" rows="2" placeholder="What should the audience actually see: subjects, actions, interactions, details?"></textarea></label>
+                                        <label class="storyboard-field"><span>Creative Direction</span><textarea data-story-guideline="creativeDirection" rows="2" placeholder="What qualities make this concept compelling? What should new examples have in common?"></textarea></label>
+                                        <label class="storyboard-field"><span>Variation / Repetition</span><textarea data-story-guideline="variation" rows="2" placeholder="What should vary between Scenes? What repetition is intentional?"></textarea></label>
+                                        <label class="storyboard-field"><span>Pacing / Rhythm</span><textarea data-story-guideline="pacing" rows="2" placeholder="How should shots and actions spend the available time?"></textarea></label>
+                                        <label class="storyboard-field"><span>Scene Relationships</span><textarea data-story-guideline="sceneRelationships" rows="2" placeholder="Do Scenes progress, form independent variations, repeat a format, or relate another way?"></textarea></label>
+                                        </section>
                                         <section class="storyboard-invariants" aria-label="Story invariants">
                                             <div id="storyboard-invariants-list" class="storyboard-invariants-list"></div>
                                         </section>
@@ -2084,6 +2091,8 @@
                 <div id="director-chat-mode-tools" class="director-chat-mode-tools hidden" aria-label="Assistant mode tools">
                     <span>Quick</span>
                     <div id="director-chat-mode-presets" class="director-chat-mode-presets"></div>
+                    <button id="director-chat-workshop-prepare" type="button" class="review-captions-btn hidden" title="Prepare a reviewed revision of this Scene’s timed shots">Prepare Revision</button>
+                    <span id="director-chat-workshop-status" class="director-chat-workshop-status" aria-live="polite"></span>
                 </div>
                 <div class="director-chat-model-row director-chat-model-tools">
                     <label for="director-chat-model">Model</label>
@@ -2116,6 +2125,26 @@
                     </div>
                 </div>
             </aside>
+            <dialog id="storyboard-workshop-review" class="storyboard-workshop-review" aria-labelledby="storyboard-workshop-review-title">
+                <div class="storyboard-workshop-review-head">
+                    <div>
+                        <h3 id="storyboard-workshop-review-title">Review Scene Revision</h3>
+                        <p id="storyboard-workshop-review-target"></p>
+                    </div>
+                    <button id="storyboard-workshop-review-close" type="button" class="review-captions-btn" aria-label="Close revision preview">×</button>
+                </div>
+                <div class="storyboard-workshop-review-content">
+                    <p id="storyboard-workshop-review-summary"></p>
+                    <div class="storyboard-workshop-diff-heading">Timed shots · proposed changes</div>
+                    <div id="storyboard-workshop-review-diff" class="storyboard-workshop-diff" aria-label="Changes to timed shots"></div>
+                    <p class="storyboard-workshop-review-note">Subject, Scene Overview, Environment, Style and audio remain unchanged. Applying checks the saved original before replacing the approved shots.</p>
+                    <p id="storyboard-workshop-review-error" class="storyboard-workshop-review-error" role="alert"></p>
+                </div>
+                <div class="storyboard-workshop-review-actions">
+                    <button id="storyboard-workshop-review-back" type="button" class="review-captions-btn">Back to discussion</button>
+                    <button id="storyboard-workshop-review-apply" type="button" class="storyboard-primary-btn">Apply Revision</button>
+                </div>
+            </dialog>
             <aside id="inference-queue-drawer" class="inference-queue-drawer hidden" aria-label="Job Queues" aria-hidden="true">
                 <header class="inference-queue-drawer-header">
                     <div class="inference-queue-header-copy">

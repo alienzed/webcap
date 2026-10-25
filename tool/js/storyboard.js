@@ -1273,12 +1273,7 @@
     if (!request) return '';
     var count = Number(request.messageCount) || 0;
     var chars = Number(request.contentChars) || 0;
-    return 'Prompt sent · ' + (count === 1 ? '1 msg' : String(count) + ' msgs') + ' · ' + chars.toLocaleString() + ' chars · Copy';
-  }
-
-  function copyDirectorRequestDiagnostic(request) {
-    if (!request || !Array.isArray(request.messages)) throw new Error('Director request diagnostic is missing its messages.');
-    return navigator.clipboard.writeText(JSON.stringify(request.messages, null, 2));
+    return 'Prompt sent · ' + (count === 1 ? '1 msg' : String(count) + ' msgs') + ' · ' + chars.toLocaleString() + ' chars · Inspect';
   }
 
   function renderDirectorActivity(activity, system) {
@@ -1315,7 +1310,7 @@
     copy.classList.toggle('hidden', !requestLabel);
     copy.textContent = requestLabel;
     copy.dataset.directorJobId = jobId;
-    copy.title = requestLabel ? 'Copy the exact messages WebCap sent to the LLM' : '';
+    copy.title = requestLabel ? 'Inspect the exact messages WebCap sent to the LLM' : '';
     positionDirectorActivity();
     if (!visible) return;
     // Activity owns operational telemetry; the overlay explains why editing is blocked.
@@ -4112,10 +4107,14 @@
                   '</span>' +
                 '</span>' +
                 '<div class="storyboard-prompt-actions">' +
+                  '<button type="button" class="review-captions-btn" data-storyboard-workshop title="Discuss and prepare a reviewed revision of this Scene’s timed shots.">Workshop</button>' +
                   '<button type="button" class="review-captions-btn storyboard-director-action" data-director-write title="Draft a complete H3 prompt from this Scene intent and the useful Story context.">Write with Director</button>' +
                   '<button type="button" class="review-captions-btn' +
                     (typeof scene.previousPrompt === 'string' ? '' : ' hidden') +
                     '" data-director-restore title="Restore the Scene state from before the last Director edit.">Restore Previous</button>' +
+                  '<button type="button" class="review-captions-btn' +
+                    (typeof scene.previousPrompt === 'string' ? '' : ' hidden') +
+                    '" data-storyboard-last-diff title="Inspect differences from the previous Scene prompt.">View Changes</button>' +
                 '</div>' +
               '</div>' +
               '<textarea class="storyboard-prompt-textarea" data-scene-field="prompt" rows="7" placeholder="Full model-facing prompt. Write it directly or let the Director draft it from the Scene intent.">' + escapeHtml(sceneValue(scene, 'prompt', '')) + '</textarea>' +
@@ -4258,6 +4257,9 @@
     renderStoryStylePresetSelector();
     renderAtmosphereProposal();
     renderStoryInvariants();
+    document.querySelectorAll('[data-story-guideline]').forEach(function (input) {
+      input.value = (storyState.story.guidelines || {})[input.dataset.storyGuideline] || '';
+    });
     el('storyboard-story-status').value = storyState.story.status || 'active';
     var targetSceneCount = storyState.story.targetSceneCount;
     var targetScenesInput = el('storyboard-story-target-scenes');
@@ -4534,6 +4536,9 @@
       repairInstruction: String(storyState.story.repairInstruction || ''),
       repairComplete: !!storyState.story.repairComplete,
       invariants: storyInvariantsFromUi(),
+      guidelines: Object.fromEntries(Array.from(document.querySelectorAll('[data-story-guideline]')).map(function (input) {
+        return [input.dataset.storyGuideline, input.value];
+      })),
       loras: storyLorasFromUi(),
       directorLoraPlanning: el('storyboard-director-lora-enable').checked,
       targetSceneCount: el('storyboard-scene-count-auto').getAttribute('aria-pressed') === 'true'
@@ -5807,6 +5812,18 @@
     scheduleSceneSave(sceneId);
   }
 
+  function openSceneWorkshop(sceneId) {
+    if (!storyState.story) throw new Error('Open a Story to use Scene Workshop.');
+    var storyId = storyState.story.id;
+    flushPendingSaves().then(function () {
+      return request({ operation: 'workshop_context', storyId: storyId, sceneId: sceneId });
+    }).then(function (payload) {
+      if (!payload.workshop) throw new Error('Scene Workshop context is missing.');
+      if (!storyState.story || storyState.story.id !== storyId) throw new Error('Story changed while preparing the Workshop.');
+      window.openStoryboardSceneWorkshop(payload.workshop);
+    }).catch(reportError);
+  }
+
   function handleSceneAction(event) {
     var button = event.target.closest('[data-scene-action]');
     if (!button) return;
@@ -6233,13 +6250,7 @@
       var button = this;
       var jobId = String(button.dataset.directorJobId || '');
       var requestDiagnostic = storyState.director.requestByJobId[jobId];
-      copyDirectorRequestDiagnostic(requestDiagnostic).then(function () {
-        var original = directorRequestDiagnosticLabel(requestDiagnostic);
-        button.textContent = 'Copied';
-        window.setTimeout(function () {
-          if (storyState.director.requestByJobId[jobId]) button.textContent = original;
-        }, 1200);
-      }).catch(reportError);
+      openDirectorRequestInspector(requestDiagnostic, 'Storyboard Director Request');
     };
     el('storyboard-story-action-cancel').onclick = cancelStoryAction;
     el('storyboard-first-cut-btn').onclick = startFirstCut;
@@ -6395,6 +6406,9 @@
     el('storyboard-story-aspect-ratio').addEventListener('change', function () {
       syncSceneGenerationDefaultHints();
       scheduleStorySave();
+    });
+    document.querySelectorAll('[data-story-guideline]').forEach(function (input) {
+      input.addEventListener('input', scheduleStorySave);
     });
     el('storyboard-invariants-list').addEventListener('input', scheduleStorySave);
     el('storyboard-invariants-list').addEventListener('change', scheduleStorySave);
@@ -6643,6 +6657,26 @@
         previewDirectorRequest(previewScene.dataset.sceneId, directorPreview.dataset.directorPreview);
         return;
       }
+      var workshopButton = event.target.closest('[data-storyboard-workshop]');
+      if (workshopButton) {
+        var workshopScene = workshopButton.closest('.storyboard-scene[data-scene-id]');
+        if (!workshopScene) throw new Error('Workshop Scene is missing.');
+        openSceneWorkshop(workshopScene.dataset.sceneId);
+        return;
+      }
+      var lastDiff = event.target.closest('[data-storyboard-last-diff]');
+      if (lastDiff) {
+        var lastDiffRoot = lastDiff.closest('.storyboard-scene[data-scene-id]');
+        if (!lastDiffRoot) throw new Error('Scene change preview is missing its Scene.');
+        var lastDiffScene = storyState.story.scenes[lastDiffRoot.dataset.sceneId];
+        if (typeof lastDiffScene.previousPrompt !== 'string') throw new Error('Scene has no previous prompt to compare.');
+        window.openStoryboardPromptChanges(
+          lastDiffScene.previousPrompt,
+          lastDiffRoot.querySelector('[data-scene-field="prompt"]').value,
+          lastDiffScene.title || 'Scene'
+        );
+        return;
+      }
       var directorWrite = event.target.closest('[data-director-write]');
       if (directorWrite) {
         var writeScene = directorWrite.closest('.storyboard-scene[data-scene-id]');
@@ -6746,6 +6780,32 @@
     });
   }
 
+  window.applyStoryboardWorkshopRevision = function (revision) {
+    if (!revision || !revision.storyId || !revision.sceneId) throw new Error('Workshop Apply target is missing.');
+    if (!storyState.story || storyState.story.id !== revision.storyId ||
+        !storyState.story.scenes || !storyState.story.scenes[revision.sceneId]) {
+      throw new Error('Open the original Story and Scene before applying this Workshop revision.');
+    }
+    return flushPendingSaves().then(function () {
+      return request({
+        operation: 'workshop_apply_shots',
+        storyId: revision.storyId,
+        sceneId: revision.sceneId,
+        expectedPrompt: revision.expectedPrompt,
+        shots: revision.shots
+      });
+    }).then(function (payload) {
+      if (!payload.scene || !payload.story) throw new Error('Workshop Apply response is incomplete.');
+      if (storyState.story && storyState.story.id === revision.storyId) {
+        storyState.story = payload.story;
+        renderStory();
+        setSaveState('Saved');
+        refreshLibrary();
+      }
+      return payload;
+    });
+  };
+
   window.getStoryboardAssistantContext = function (kind) {
     var story = storyState.story;
     if (!story) throw new Error('Open a Story before attaching context.');
@@ -6755,7 +6815,7 @@
         label: 'Story: ' + (story.title || story.id),
         content: JSON.stringify({
           title: story.title, concept: el('storyboard-story-concept').value,
-          style: story.style, invariants: story.invariants,
+          style: story.style, guidelines: story.guidelines, invariants: story.invariants,
           scenes: (story.sceneOrder || []).map(function (id, index) {
             var scene = story.scenes[id];
             return { number: index + 1, id: id, title: scene.title, summary: scene.summary };

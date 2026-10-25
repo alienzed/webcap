@@ -13,6 +13,7 @@ from pathlib import Path
 from . import config as app_config
 from .originals import MEDIA_ALL_EXTS
 from .video_frame_ops import VIDEO_EXTS, extract_boundary_frame_png
+from .storyboard_workshop import proposed_shot_prompt, timed_shot_bounds
 
 
 STORYBOARD_VERSION = 1
@@ -214,6 +215,17 @@ def _normalize_story_invariants(value):
             continue
         result.append({"kind": kind, "title": title, "text": text})
     return result
+
+
+STORY_GUIDELINE_KEYS = ("visualFocus", "creativeDirection", "variation", "pacing", "sceneRelationships")
+
+
+def _normalize_story_guidelines(value):
+    if value is None:
+        return {}
+    if not isinstance(value, dict):
+        raise ValueError("Story guidelines must be an object.")
+    return {key: str(value.get(key) or "").strip() for key in STORY_GUIDELINE_KEYS if str(value.get(key) or "").strip()}
 
 
 def _normalize_scene_invariant_refs(value):
@@ -620,6 +632,7 @@ def _normalize_story(payload, existing=None, story_id=None):
         "repairInstruction": str(payload.get("repairInstruction", current.get("repairInstruction", "")) or ""),
         "repairComplete": bool(payload.get("repairComplete", current.get("repairComplete", False))),
         "invariants": _normalize_story_invariants(payload.get("invariants", current.get("invariants", []))),
+        "guidelines": _normalize_story_guidelines(payload.get("guidelines", current.get("guidelines", {}))),
         "loras": _normalize_loras(payload.get("loras", current.get("loras", [])), allow_enabled=True),
         "directorLoraPlanning": payload.get("directorLoraPlanning", current.get("directorLoraPlanning", False)) is True,
         "directorLoraPhrases": _normalize_lora_phrase_choices(
@@ -694,6 +707,7 @@ def duplicate_story(story_id):
         "style": source.get("style") or "",
         "repairInstruction": source.get("repairInstruction") or "",
         "invariants": copy.deepcopy(source.get("invariants") or []),
+        "guidelines": copy.deepcopy(source.get("guidelines") or {}),
         "loras": copy.deepcopy(source.get("loras") or []),
         "targetSceneCount": source.get("targetSceneCount", DEFAULT_TARGET_SCENE_COUNT),
         "generationDefaults": copy.deepcopy(source.get("generationDefaults") or {}),
@@ -1137,6 +1151,63 @@ def update_scene(story_id, scene_id, payload):
     if not isinstance(current, dict):
         raise FileNotFoundError("Scene does not exist.")
     scene = _normalize_scene(scene_id, payload or {}, existing=current)
+    scenes[scene_id] = scene
+    story["scenes"] = scenes
+    story["updatedAt"] = _utc_now()
+    _write_json_atomic(_story_path(story_id), story)
+    return story, scene
+
+
+def workshop_scene_context(story_id, scene_id):
+    """Read-only snapshot, paired with its exact saved prompt for conflict checks."""
+    story = load_story(story_id)
+    scene = (story.get("scenes") or {}).get(scene_id)
+    if not isinstance(scene, dict) or scene_id not in (story.get("sceneOrder") or []):
+        raise FileNotFoundError("Workshop Scene does not exist.")
+    prompt = str(scene.get("prompt") or "")
+    try:
+        start, end = timed_shot_bounds(prompt)
+        shots = prompt[start:end]
+        shot_error = ""
+    except ValueError as exc:
+        shots = ""
+        shot_error = str(exc)
+    return {
+        "storyId": story_id,
+        "sceneId": scene_id,
+        "storyTitle": str(story.get("title") or ""),
+        "concept": str(story.get("concept") or ""),
+        "guidelines": story.get("guidelines") or {},
+        "sceneTitle": str(scene.get("title") or ""),
+        "sceneSummary": str(scene.get("summary") or ""),
+        "durationSeconds": scene.get("durationSeconds"),
+        "shots": shots,
+        "shotError": shot_error,
+        "expectedPrompt": prompt,
+    }
+
+
+@_serialized_mutation
+def apply_workshop_shots(story_id, scene_id, expected_prompt, replacement):
+    story = load_story(story_id)
+    scenes = story.get("scenes") if isinstance(story.get("scenes"), dict) else {}
+    current = scenes.get(scene_id)
+    if not isinstance(current, dict) or scene_id not in (story.get("sceneOrder") or []):
+        raise FileNotFoundError("Workshop Scene does not exist.")
+    if not isinstance(expected_prompt, str):
+        raise ValueError("Workshop revision requires the original Scene prompt.")
+    original = str(current.get("prompt") or "")
+    if original != expected_prompt:
+        raise RuntimeError("Scene prompt changed since Workshop began. Review the updated Scene and prepare again.")
+    revised = proposed_shot_prompt(original, replacement)
+    scene = _normalize_scene(scene_id, {
+        "prompt": revised,
+        "previousPrompt": original,
+        "previousRevision": None,
+        "promptDirectorModel": "",
+        "promptDirectorJobId": "",
+        "refineComplete": False,
+    }, existing=current)
     scenes[scene_id] = scene
     story["scenes"] = scenes
     story["updatedAt"] = _utc_now()

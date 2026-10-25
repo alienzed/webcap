@@ -866,7 +866,7 @@ def _execute_claimed(job_id, gpu_reserved):
                 chat_kwargs["max_tokens"] = overrides["maxTokens"]
             if "contextSize" in overrides:
                 chat_kwargs["context_size"] = overrides["contextSize"]
-            if client == "chat" and contract.get("operation") == "assessment_scene_plan":
+            if client == "chat" and contract.get("operation") in {"assessment_scene_plan", "storyboard_workshop_shots"}:
                 chat_kwargs["response_schema"] = contract["response_schema"]
             messages = contract.get("messages")
             caption_operation = str(contract.get("operation") or "").strip()

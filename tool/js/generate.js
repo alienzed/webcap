@@ -2015,12 +2015,7 @@
     if (!request) return '';
     var count = Number(request.messageCount) || 0;
     var chars = Number(request.contentChars) || 0;
-    return 'Prompt sent · ' + (count === 1 ? '1 msg' : String(count) + ' msgs') + ' · ' + chars.toLocaleString() + ' chars · Copy';
-  }
-
-  function copyGenerateDirectorRequestDiagnostic(request) {
-    if (!request || !Array.isArray(request.messages)) throw new Error('Prompt Assistant request diagnostic is missing its messages.');
-    return navigator.clipboard.writeText(JSON.stringify(request.messages, null, 2));
+    return 'Prompt sent · ' + (count === 1 ? '1 msg' : String(count) + ' msgs') + ' · ' + chars.toLocaleString() + ' chars · Inspect';
   }
 
   function directorActivityForCurrentJob(activity, queue) {
@@ -2940,15 +2935,7 @@
     el('generate-director-prompt-copy').onclick = function () {
       var button = this;
       var requestDiagnostic = generateState.director.requestDiagnostic;
-      copyGenerateDirectorRequestDiagnostic(requestDiagnostic).then(function () {
-        var original = generateDirectorRequestDiagnosticLabel(requestDiagnostic);
-        button.textContent = 'Copied';
-        window.setTimeout(function () {
-          if (generateState.director.requestDiagnostic === requestDiagnostic) button.textContent = original;
-        }, 1200);
-      }).catch(function (err) {
-        reportError(err);
-      });
+      openDirectorRequestInspector(requestDiagnostic, 'Generate Director Request');
     };
     window.addEventListener('resize', function () {
       if (directorActivityActive()) positionDirectorActivity();

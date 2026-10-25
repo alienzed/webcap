@@ -2899,6 +2899,18 @@ html[data-theme="dark"] .storyboard-prompt-take-status {
   display: none;
 }
 
+.storyboard-story-section .storyboard-guidelines {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+  min-width: 0;
+}
+
+.storyboard-story-section .storyboard-guidelines .storyboard-field > span {
+  font-size: 14px;
+}
+
 .storyboard-story-section .storyboard-invariants,
 .storyboard-story-section .storyboard-story-defaults,
 .storyboard-director-repair {
@@ -4071,3 +4083,62 @@ html[data-theme="dark"] .storyboard-prompt-take-status {
 .storyboard-director-scene-progress {grid-area:scene-progress;display:grid;gap:7px;width:100%;font-size:13px;color:var(--muted);}
 .storyboard-director-scene-progress.hidden {display:none;}
 .storyboard-director-scene-progress progress {display:block;width:100%;height:9px;accent-color:var(--accent);}
+
+/* Scene Workshop: compact, explicit review of only the proposed shot edits. */
+#director-chat-workshop-prepare:not(.hidden) {
+  font-weight: 700;
+}
+.storyboard-workshop-review {
+  width: min(860px, 94vw);
+  max-height: 87vh;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel);
+  color: var(--text);
+  box-shadow: 0 24px 72px rgba(0, 0, 0, .45);
+}
+.storyboard-workshop-review::backdrop { background: rgba(0, 0, 0, .66); }
+.storyboard-workshop-review-head, .storyboard-workshop-review-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 18px;
+}
+.storyboard-workshop-review-head { border-bottom: 1px solid var(--border); }
+.storyboard-workshop-review-head h3 { margin: 0; font-size: 22px; }
+.storyboard-workshop-review-head p { margin: 4px 0 0; color: var(--muted); font-size: 14px; }
+.storyboard-workshop-review-content { overflow-y: auto; max-height: 65vh; padding: 16px 18px; }
+.storyboard-workshop-review-content > p { line-height: 1.5; }
+.storyboard-workshop-diff-heading { font-weight: 700; margin: 14px 0 8px; }
+.storyboard-workshop-diff {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow-y: auto;
+  max-height: 49vh;
+  font: 14px/1.55 Consolas, ui-monospace, monospace;
+}
+.storyboard-workshop-diff-line {
+  padding: 4px 11px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  border-bottom: 1px solid rgba(128, 128, 128, .15);
+}
+.storyboard-workshop-diff-line[data-kind="removed"] { background: rgba(194, 60, 73, .18); }
+.storyboard-workshop-diff-line[data-kind="added"] { background: rgba(52, 163, 105, .19); }
+.storyboard-workshop-diff-line[data-kind="same"] { color: var(--muted); }
+.storyboard-workshop-review-note { color: var(--muted); font-size: 14px; }
+.storyboard-workshop-review-actions { border-top: 1px solid var(--border); }
+@media (max-width: 650px) {
+  .storyboard-workshop-review-head, .storyboard-workshop-review-actions { padding: 12px; }
+  .storyboard-workshop-review-content { padding: 12px; }
+}
+
+.director-chat-mode-tools:has(#director-chat-workshop-prepare:not(.hidden)) { flex-wrap: wrap; }
+#director-chat-workshop-prepare { font-weight: 750; min-height: 36px; }
+.director-chat-workshop-status { color: var(--muted); font-size: 14px; line-height: 1.35; }
+.storyboard-workshop-review-error { color: var(--danger, #e27373); font-size: 14px; font-weight: 650; }
+
+#storyboard-workshop-review-apply[hidden],
+.storyboard-workshop-review-note[hidden] { display: none !important; }

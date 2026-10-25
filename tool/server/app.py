@@ -70,6 +70,7 @@ from .storyboard_generation import generation_action as storyboard_generation_ac
 from .storyboard_assembly import current_export as storyboard_current_export, export_selected_sequence as storyboard_export_selected_sequence
 from .storyboard_archive import archive_preview as storyboard_archive_preview, archive_story as storyboard_archive_story
 from .storyboard_store import _mutation_lock as storyboard_mutation_lock
+from .storyboard_store import apply_workshop_shots as storyboard_apply_workshop_shots, workshop_scene_context as storyboard_workshop_scene_context
 from .storyboard_llm_contract import build_request as storyboard_build_llm_request
 from .storyboard_first_cut import register_routes as register_storyboard_first_cut_routes
 from .storyboard_llm_runtime import activity_status as storyboard_director_activity_status, list_vision_models, status as storyboard_director_status, manual_local_runtime
@@ -1352,6 +1353,18 @@ def storyboard_route():
                 raise ValueError("Scene prompt has pending Director work.")
             story, scene = storyboard_update_scene(story_id, scene_id, scene_payload)
             return jsonify({"ok": True, "story": story, "scene": scene})
+        if operation == "workshop_context":
+            return jsonify({"ok": True, "workshop": storyboard_workshop_scene_context(
+                story_id, str(data.get("sceneId") or "").strip()
+            )})
+        if operation == "workshop_apply_shots":
+            scene_id = str(data.get("sceneId") or "").strip()
+            if llm_storyboard_target_busy(story_id, "scenes") or llm_storyboard_target_busy(story_id, "repair") or llm_storyboard_target_busy(story_id, "scene-prompt", scene_id):
+                raise ValueError("Scene has pending Director changes. Finish that operation before applying Workshop changes.")
+            story, scene = storyboard_apply_workshop_shots(
+                story_id, scene_id, data.get("expectedPrompt"), data.get("shots")
+            )
+            return jsonify({"ok": True, "story": story, "scene": scene})
         if operation == "duplicate_scene":
             scene_id = str(data.get("sceneId") or "").strip()
             if llm_storyboard_target_busy(story_id, "scenes") or llm_storyboard_target_busy(story_id, "scene-prompt", scene_id):
@@ -1849,15 +1862,26 @@ def director_chat_route():
         messages = data.get("messages")
         if not isinstance(messages, list) or not messages:
             raise ValueError("Director Chat messages are required.")
+        operation = str(data.get("operation") or "freeform_chat").strip()
+        if operation not in {"freeform_chat", "storyboard_workshop_shots"}:
+            raise ValueError("Unsupported Director Chat operation.")
+        contract = {"operation": operation, "messages": messages}
+        if operation == "storyboard_workshop_shots":
+            contract["response_schema"] = {
+                "type": "object",
+                "required": ["summary", "shots"],
+                "additionalProperties": False,
+                "properties": {
+                    "summary": {"type": "string"},
+                    "shots": {"type": "string"},
+                },
+            }
         job = enqueue_llm(
             "chat",
             str(data.get("model") or "").strip(),
-            {
-                "operation": "freeform_chat",
-                "messages": messages,
-            },
+            contract,
             context={},
-            label="Director Chat",
+            label="Storyboard Shot Proposal" if operation == "storyboard_workshop_shots" else "Director Chat",
         )
         return jsonify({"ok": True, "job": job}), 202
     except Exception as exc:

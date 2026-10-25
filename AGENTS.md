@@ -144,6 +144,10 @@ Destructive or lossy mutations of source Set media and user-authored Set state m
 - Construct mutation arguments explicitly in code.
 - Do not introduce arbitrary code execution paths.
 
+## LLM Guidance
+
+Write model-facing instructions as positive, actionable directions describing the desired behavior. Prefer what the model should do over negated prohibitions (for example, `do not ...`), which can inadvertently prime the unwanted behavior. Keep guidance concise, concrete, and appropriate to the current task; express exceptions or boundaries through affirmative scope and explicit output contracts wherever possible. Review existing prompts for redundant or conflicting creative directives before adding new ones.
+
 ## UX Guidance
 
 Keep the UI efficient and calm.

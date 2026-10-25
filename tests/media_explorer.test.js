@@ -519,6 +519,7 @@ test('External Move to Trash only targets the selected clicked item', async () =
   ]);
   const card = f.nodes['media-explorer-grid'].children[1];
   card.querySelector('.media-explorer-item-menu').click({preventDefault(){}, stopPropagation(){}});
+  const beforeListings = f.pending.filter(request => request.url.startsWith('/fs/media_explorer/external?')).length;
   f.menus.at(-1).find(action => action.label === 'Move to Trash').run();
   const req = f.pending.at(-1);
   assert.equal(req.url, '/fs/media_explorer/external/trash');
@@ -527,7 +528,8 @@ test('External Move to Trash only targets the selected clicked item', async () =
   assert.equal(f.errors.length, 0);
   assert.equal(f.nodes['media-explorer-grid'].children.length, 1, 'remove only trashed card');
   assert.equal(f.nodes['media-explorer-grid'].children[0].dataset.id, 'a');
-  assert.equal(f.pending.length, 4, 'trash does not trigger a new gallery request');
+  assert.equal(f.pending.filter(request => request.url.startsWith('/fs/media_explorer/external?')).length,
+    beforeListings, 'trash does not trigger a new gallery request');
 });
 
 

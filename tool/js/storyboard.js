@@ -4234,6 +4234,7 @@
   }
 
   function renderStory() {
+    window.syncStoryboardAssistantStory(storyState.story && storyState.story.id, storyState.story && storyState.story.sceneOrder);
     syncDirectorToolsUi();
     var empty = el('storyboard-editor-empty');
     var editor = el('storyboard-editor-content');

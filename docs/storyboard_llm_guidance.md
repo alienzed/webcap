@@ -87,17 +87,14 @@ Do not manufacture setup, conflict, escalation, resolution, or ending simply bec
 
 For Auto Scene count, Director chooses however many Scenes best serve the concept and provide useful coverage. When the user selects an explicit count, Director is instructed to create that many Scenes; WebCap does not fabricate or delete Scenes to enforce the request afterward.
 
-## Scene density and generation-unit discipline
+## Scene generation unit and directing guidelines
 
-A Storyboard Scene is one short generation unit, normally about 10–15 seconds and never longer than 15 seconds.
+A Storyboard Scene is one independently generatable clip of at most 15 seconds. Use that time purposefully, concisely.
 
-Use that window aggressively.
+The Story's optional Directing Guidelines express the author's preferences for Visual Focus, Creative Direction, Variation / Repetition, Pacing / Rhythm, and Scene Relationships. Empty fields leave those creative choices open to Director interpretation. Technical H3 limits and output contracts remain application-owned.
 
-Unless uninterrupted time genuinely serves the material — for example a sustained conversation, a continuous physical action, or an intentionally held moment — a Scene should normally contain several meaningful shots, cuts, or distinct visual beats.
+Creative Story development and scene-writing requests receive populated guidelines. Narrow, localized prompt corrections remain focused on the specific edit. General Director guidance stays minimal instead of imposing a universal montage pace, shot count, or novelty requirement.
 
-Favor productive visual progression over idle coverage.
-
-This density expectation is independent of whether the overall concept is narrative. A variation-based or repeated-format concept should still make each generation unit useful.
 
 ## Continuity, invariants, and state
 

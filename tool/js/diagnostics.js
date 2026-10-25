@@ -122,8 +122,15 @@ function diagnosticsAssessmentCounts(row, tests) {
       var item = tests[kind] || {}, counts = item.counts || {};
       if (Number(counts.completed || 0) > 0) return;
       var label = modelLabAttemptLabel(kind);
-      if (Number(counts.failed || 0) > 0)
-        failed.push(label + (item.error ? ': ' + item.error : ': probe failed'));
+      if (Number(counts.failed || 0) > 0) {
+        // V2 stopped at the scene-count check, before validating the returned
+        // Scenes. It cannot prove the output was otherwise invalid.
+        if (kind === 'director_scene_plan_2048' &&
+            item._runProtocol === 'webcap-model-assessment-structured-v2' &&
+            /Wrong number of Storyboard Scenes\./.test(item.error || ''))
+          unproven.push(label + ': legacy scene-count mismatch; output validity not established');
+        else failed.push(label + (item.error ? ': ' + item.error : ': probe failed'));
+      }
       else if (Number(counts.running || 0) > 0) running.push(label);
       else unproven.push(label);
     });
@@ -540,7 +547,7 @@ function refreshUnifiedModelAssessment() {
           var selectedPassed = selected && Number((selected.counts || {}).completed || 0) > 0;
           if (!selected || (passed && !selectedPassed) ||
               (passed && selected._imported && !saved.importedFrom)) {
-            tests[kind] = Object.assign({}, probe, {_imported: !!saved.importedFrom, _runId: saved.id, _runStatus: saved.status});
+            tests[kind] = Object.assign({}, probe, {_imported: !!saved.importedFrom, _runId: saved.id, _runStatus: saved.status, _runProtocol: saved.protocol});
           }
         });
       });

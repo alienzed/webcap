@@ -305,6 +305,9 @@ def test_external_file_move_stays_under_root_and_refuses_collisions(tmp_path):
 def test_external_trash_uses_system_trash_not_permanent_delete(tmp_path, monkeypatch):
     root = tmp_path / "source"
     _file(root / "one.png")
+    snapshot = _finished_snapshot(root)
+    old_entry = snapshot["items"][0]
+    before_revision = snapshot["revision"]
     trash = tmp_path / "recycle"
     trash.mkdir()
     calls = []
@@ -316,8 +319,13 @@ def test_external_trash_uses_system_trash_not_permanent_delete(tmp_path, monkeyp
     monkeypatch.setattr(send2trash, "send2trash", fake_send2trash)
     result = external_media.trash_external_files({"path": str(root), "files": ["one.png"]})
     assert result["trashed"] == ["one.png"]
+    assert result["revision"] > before_revision
     assert len(calls) == 1 and (trash / "one.png").exists()
     assert not (root / "one.png").exists()
+    assert snapshot["items"] == [] and snapshot["by_path"] == {}
+    # Discovery may already have collected this file before it was trashed.
+    external_media._publish(snapshot, [old_entry])
+    assert snapshot["items"] == [], "late discovery must not resurrect trashed media"
 
 
 def test_recent_external_folders_survive_restart_and_support_forget(tmp_path, monkeypatch):

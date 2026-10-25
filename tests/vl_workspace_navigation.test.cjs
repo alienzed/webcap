@@ -22,6 +22,7 @@ function node() {
     classList:{toggle(k,v){v?classes.add(k):classes.delete(k);},contains:k=>classes.has(k),
       add:k=>classes.add(k),remove:k=>classes.delete(k)},
     setAttribute(k,v){this.attributes[k]=v;},
+    focus(){this.focused=true;},
     getAttribute(k){return this.attributes[k]||null;},
     replaceChildren(...next){this.children=next;},appendChild(x){this.children.push(x);}
   };
@@ -75,7 +76,7 @@ test('out-of-order Sight loads do not replace the newly navigated item',async()=
   const elements={};
   const ids=['saved-intelligence-modal','saved-intelligence-file','saved-intelligence-status',
     'sight-review-description','sight-review-issue','sight-review-activate',
-    'sight-review-image','sight-review-video','sight-review-model'];
+    'sight-review-image','sight-review-video','sight-review-model','saved-intelligence-close-btn'];
   ids.forEach(id=>{elements[id]=node();});
   const pending=[],tabs=[],selection=[];
   const s={reviewMediaItem:null,reviewRequestToken:0,reviewData:null};

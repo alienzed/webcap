@@ -533,7 +533,7 @@
     if (input) input.disabled = state.pending;
     if (model) model.disabled = state.pending || !state.modelsLoaded;
     if (refresh) refresh.disabled = state.pending;
-    if (clear) clear.disabled = state.pending || !currentMessages().length;
+    if (clear) clear.disabled = state.pending || (!currentMessages().length && !(state.activeMode === 'storyboard' && Object.keys(state.storyboardAttachments).length));
   }
 
   function loadModels() {

@@ -599,6 +599,7 @@
       if (state.activeMode === 'storyboard') {
         state.storyboardAttachments = {};
         state.workshopProposal = null;
+        el('director-chat-workshop-status').textContent = '';
       }
     }
     finishProgress(null);
@@ -865,6 +866,8 @@
     var scene = state.workshop;
     var button = el('storyboard-workshop-review-apply');
     button.disabled = true;
+    state.pending = true;
+    syncControls();
     button.textContent = 'Applying…';
     el('storyboard-workshop-review-error').textContent = '';
     Promise.resolve(window.applyStoryboardWorkshopRevision({
@@ -887,8 +890,10 @@
       if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Scene Workshop Apply', error);
       else throw error;
     }).finally(function () {
+      state.pending = false;
       button.disabled = false;
       button.textContent = 'Apply Revision';
+      syncControls();
     });
   }
 
@@ -903,7 +908,10 @@
     inputHistoryIndex = inputHistory.length;
     inputHistoryDraft = '';
 
-    if (state.activeMode === 'storyboard') state.workshopProposal = null;
+    if (state.activeMode === 'storyboard') {
+      state.workshopProposal = null;
+      el('director-chat-workshop-status').textContent = '';
+    }
     var messages = currentMessages();
     var elapsedMap = currentElapsedMap();
     var metricsMap = currentMetricsMap();
@@ -1043,6 +1051,23 @@
     copy.onclick = function () {
       openDirectorRequestInspector(state.requestDiagnostic, 'Director Chat Request');
     };
+    el('director-chat-workshop-prepare').onclick = function () {
+      try { prepareWorkshopRevision(); }
+      catch (error) {
+        el('director-chat-workshop-status').textContent = String(error.message || error);
+        if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Scene Workshop', error);
+        else throw error;
+      }
+    };
+    el('storyboard-workshop-review-back').onclick = function () { el('storyboard-workshop-review').close(); };
+    el('storyboard-workshop-review-close').onclick = function () { el('storyboard-workshop-review').close(); };
+    el('storyboard-workshop-review-apply').onclick = function () {
+      try { applyWorkshopRevision(); }
+      catch (error) {
+        if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Scene Workshop Apply', error);
+        else throw error;
+      }
+    };
     modeSwitch.onclick = function (event) {
       var button = event.target.closest('[data-assistant-mode]');
       if (button) setMode(button.dataset.assistantMode);
@@ -1136,7 +1161,7 @@
       setOpen(false);
     });
     window.addEventListener('keydown', function (event) {
-      if (event.key === 'Escape' && state.open) setOpen(false);
+      if (event.key === 'Escape' && state.open && !el('storyboard-workshop-review').open) setOpen(false);
     });
 
     if (state.pinned) setOpen(true);

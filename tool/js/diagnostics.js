@@ -883,16 +883,22 @@ function diagnosticsRefreshSelectionPlan() {
     diagnosticsAssessmentPlanTotal = plan.total;
     button.textContent = plan.total ? 'Complete ' + plan.total + (plan.total === 1 ? ' Test' : ' Tests') : 'Already Complete';
     button.disabled = !plan.total;
+    var knownLimits = Object.keys(data.models || {}).reduce(function (n, ref) {
+      return n + Number(data.models[ref].limited || 0);
+    }, 0);
     status.textContent = count + ' model(s) selected · ' + data.reused + ' already complete · ' +
+      (knownLimits ? knownLimits + ' known-limit tiers · ' : '') +
       plan.missing + ' missing · ' + plan.retry + ' retry';
     labels.forEach(function (label) {
       var item = data.models[label.dataset.assessmentWork];
       label.hidden = !item;
       if (!item) return;
-      label.textContent = item.missing || item.retry
-        ? [item.missing ? item.missing + ' missing' : '', item.retry ? item.retry + ' retry' : ''].filter(Boolean).join(' · ')
-        : 'Tests complete';
-      label.title = item.complete + ' of ' + item.planned + ' planned tests already complete.';
+      label.textContent = [
+        item.missing ? item.missing + ' missing' : '',
+        item.retry ? item.retry + ' retry' : '',
+        item.limited ? item.limited + ' known-limit tiers' : ''
+      ].filter(Boolean).join(' · ') || 'Tests complete';
+      label.title = item.complete + ' passed/reused · ' + (item.limited || 0) + ' established limit tiers · ' + item.planned + ' planned.';
     });
   }).catch(function (error) {
     if (version !== diagnosticsAssessmentPreviewVersion || diagnosticsAssessmentRunStatus === 'running') return;

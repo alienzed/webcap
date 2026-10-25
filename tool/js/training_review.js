@@ -239,6 +239,7 @@ function renderTrainingRunParameters(payload) {
   inheritedAdapterLabel.classList.toggle('hidden', !resumeH3);
   inheritedAdapterLabel.textContent = resumeH3
     ? (savedVariant === 'on' ? 'Image Adapter ON · checkpoint'
+      : savedVariant === 'legacy' ? 'Image Adapter: legacy merge · checkpoint'
       : savedVariant === 'off' ? 'Image Adapter OFF · checkpoint'
       : 'Image Adapter inherited from checkpoint')
     : '';

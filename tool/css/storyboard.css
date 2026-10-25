@@ -2899,6 +2899,18 @@ html[data-theme="dark"] .storyboard-prompt-take-status {
   display: none;
 }
 
+.storyboard-story-section .storyboard-guidelines {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+  min-width: 0;
+}
+
+.storyboard-story-section .storyboard-guidelines .storyboard-field > span {
+  font-size: 14px;
+}
+
 .storyboard-story-section .storyboard-invariants,
 .storyboard-story-section .storyboard-story-defaults,
 .storyboard-director-repair {

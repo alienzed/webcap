@@ -185,6 +185,7 @@ function closeCaptionAssistPresentation() {
 }
 
 function clearCaptionAssistCandidate() {
+  cancelCaptionAssistEnrichment();
   captionAssistCandidate = null;
   cancelCurrentCaptionVision();
   clearCaptionVisionResult();
@@ -199,6 +200,7 @@ function useCaptionAssistCandidate() {
     return Promise.resolve(false);
   }
 
+  cancelCaptionAssistEnrichment();
   var nextCaption = String(captionAssistCandidate.text || '');
   var priorQaFindings = isFocusedQaReviewMode()
     ? qaFocusReviewFindings(mediaItem.key).slice() : [];
@@ -1133,8 +1135,9 @@ function syncCaptionAssistCandidateUi(options) {
 
   renderCaptionAssistMissingGroups(missingEl, mediaKey, missingGroups);
   renderCaptionAssistComparison(comparisonEl, state.currentItem, visible ? candidate : null);
-  textEl.classList.toggle('hidden', !visible);
-  textEl.setAttribute('contenteditable', visible ? 'true' : 'false');
+  var enrichmentPreview = !!(visible && captionAssistEnrichmentReviewActive(candidate));
+  textEl.classList.toggle('hidden', !visible || enrichmentPreview);
+  textEl.setAttribute('contenteditable', visible && !enrichmentPreview ? 'true' : 'false');
   textEl.setAttribute('role', visible ? 'textbox' : 'document');
   textEl.setAttribute('aria-multiline', visible ? 'true' : 'false');
   var candidateText = visible ? String(candidate.text || '') : '';
@@ -1142,7 +1145,10 @@ function syncCaptionAssistCandidateUi(options) {
   if (document.activeElement !== textEl || String(textEl.textContent || '') !== candidateText) {
     textEl.textContent = candidateText;
   }
-  if (!draftEdit) syncFocusedCaptionVisionPhrasesUi();
+  if (!draftEdit) {
+    syncFocusedCaptionVisionPhrasesUi();
+    syncCaptionAssistEnrichmentUi(visible ? candidate : null);
+  }
 
   prevBtn.classList.toggle('hidden', !focusOpen);
   nextBtn.classList.toggle('hidden', !focusOpen);
@@ -2015,6 +2021,7 @@ function refreshCaptionAssistFromUi() {
 }
 
 function refreshCaptionAssistCurrentCandidate() {
+  cancelCaptionAssistEnrichment();
   var item = getPrimerResetCurrentMediaItem();
   var candidate = captionAssistCandidate;
   if (!item || !candidate || candidate.mediaKey !== item.key) {
@@ -2067,6 +2074,7 @@ function wirePrimerCaptionResetUi() {
       if (!captionAssistCandidate || !state.currentItem) return;
       if (captionAssistCandidate.mediaKey !== state.currentItem.key) return;
       captionAssistCandidate.text = String(candidateTextEl.textContent || '');
+      cancelCaptionAssistEnrichment();
       var liveRequest = buildCaptionAssistRequest(state.currentItem);
       captionAssistCandidate.omittedAssignments = getCaptionAssistOmittedAssignments(
         captionAssistCandidate.mediaKey,

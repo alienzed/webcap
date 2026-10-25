@@ -154,6 +154,16 @@
       load(true, {refreshFilesystem:true});
     });
   }
+  function openExternalClipEditor(item) {
+    if (item.source !== 'external' || item.mediaKind !== 'video')
+      throw new Error('Clip to Set requires an external video.');
+    if (typeof openVideoClipModal !== 'function')
+      throw new Error('The shared video Clip editor is unavailable.');
+    openVideoClipModal({fileName:item.fileName}, null, {
+      path:externalPath, file:item.relativePath, mediaUrl:item.mediaUrl,
+      destination:el('media-explorer-export-destination').value.trim()
+    });
+  }
   function itemActions(item) {
     var actions = [{label:'View full size', run:function () { openLoupe(items.findIndex(function (x) { return x.id === item.id; })); }}];
     if (item.source === 'external') {
@@ -161,7 +171,7 @@
         externalAction('reveal', {path:externalPath, file:item.relativePath});
       }});
       actions.push({label:'Copy to Set', run:function () { chooseExport('copy', externalChoices(item)); }});
-      if (item.mediaKind === 'video') actions.push({label:'Clip to Set', run:function () { chooseExport('clip', [item]); }});
+      if (item.mediaKind === 'video') actions.push({label:'Clip to Set', run:function () { openExternalClipEditor(item); }});
       actions.push({separator:true});
       actions.push({label:'Move to Folder…', run:function () { externalMutation(item, 'move'); }});
       actions.push({label:'Move to Trash', run:function () { externalMutation(item, 'trash'); }});
@@ -756,7 +766,7 @@
       }; actions.appendChild(copy);
       if (item.mediaKind === 'video') {
         var clip = document.createElement('button'); clip.type = 'button'; clip.className = 'review-captions-btn';
-        clip.textContent = 'Clip to Set'; clip.onclick = function () { chooseExport('clip', [item]); };
+        clip.textContent = 'Clip to Set'; clip.onclick = function () { openExternalClipEditor(item); };
         actions.appendChild(clip);
       }
     }

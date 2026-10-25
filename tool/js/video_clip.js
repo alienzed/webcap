@@ -1,5 +1,6 @@
 var videoClipTargetItem = null;
 var videoClipStoryboardSource = null;
+var videoClipExternalSource = null;
 var videoClipCropBusy = false;
 var videoClipCropRatio = null;
 var videoClipSourceResolution = null;
@@ -33,12 +34,16 @@ function getVideoClipEl(id) {
 }
 
 function videoClipSourceFields() {
-  return videoClipStoryboardSource
-    ? { storyId: videoClipStoryboardSource.storyId, mediaPath: videoClipStoryboardSource.mediaPath }
-    : { folder: state.folder || '' };
+  if (videoClipStoryboardSource)
+    return { storyId: videoClipStoryboardSource.storyId, mediaPath: videoClipStoryboardSource.mediaPath };
+  if (videoClipExternalSource)
+    return { externalPath: videoClipExternalSource.path, relativePath: videoClipExternalSource.file,
+      destination: getVideoClipEl('video-clip-external-destination').value.trim() };
+  return { folder: state.folder || '' };
 }
 
 function videoClipRefreshSource() {
+  if (videoClipExternalSource) return; // No source mutation: do not refresh Prep when exporting to a Set.
   if (videoClipStoryboardSource && typeof window.refreshStoryboardClipSource === 'function') {
     window.refreshStoryboardClipSource(videoClipStoryboardSource.storyId);
   } else {
@@ -197,7 +202,7 @@ function updateVideoClipHeaderMeta() {
   if (!metaEl || !videoEl) throw new Error('Video clip source metadata elements are missing');
   var width = Number(videoEl.videoWidth || 0);
   var height = Number(videoEl.videoHeight || 0);
-  var metadata = videoClipStoryboardSource ? null : (videoClipTargetItem ? getMetadataForMedia(videoClipTargetItem.fileName) : null);
+  var metadata = (videoClipStoryboardSource || videoClipExternalSource) ? null : (videoClipTargetItem ? getMetadataForMedia(videoClipTargetItem.fileName) : null);
   var fps = Number(metadata && metadata.fps);
   var duration = Number(videoEl.duration || 0);
   var parts = [];
@@ -360,6 +365,7 @@ function beginVideoClipFrameExtraction() {
 }
 
 function saveVideoClipExtractedFrame() {
+  if (videoClipExternalSource) throw new Error('External frame extraction is unavailable in this Clip editor.');
   if (!videoClipExactFrame) throw new Error('Resolve an exact frame before extracting it');
   var frame = videoClipExactFrame;
   var requestedName = getVideoClipDefaultExtractName();
@@ -468,7 +474,7 @@ function normalizeVideoClipOutputName(name) {
 }
 
 function shouldVideoClipOverwriteSource(outputName) {
-  if (isVideoClipInSrcVideosFolder() || !videoClipTargetItem || !videoClipTargetItem.fileName) {
+  if (videoClipExternalSource || isVideoClipInSrcVideosFolder() || !videoClipTargetItem || !videoClipTargetItem.fileName) {
     return false;
   }
   var rawOutput = String(outputName || '').trim().toLowerCase();
@@ -565,7 +571,7 @@ function isVideoClipInSrcVideosFolder() {
 }
 
 function updateVideoClipSourceTransport() {
-  var showSourceSkips = isVideoClipInSrcVideosFolder();
+  var showSourceSkips = !!videoClipExternalSource || isVideoClipInSrcVideosFolder();
   ['video-clip-source-skip-controls', 'video-clip-source-skip-controls-end'].forEach(function (id) {
     var el = getVideoClipEl(id);
     if (el) el.classList.toggle('hidden', !showSourceSkips);
@@ -593,10 +599,10 @@ function parseResolutionText(value) {
 }
 
 function getVideoClipResolution(fileName) {
-  var text = videoClipStoryboardSource ? '' : getResolutionForMedia(fileName);
+  var text = (videoClipStoryboardSource || videoClipExternalSource) ? '' : getResolutionForMedia(fileName);
   var parsed = parseResolutionText(text);
   if (parsed) return parsed;
-  var row = !videoClipStoryboardSource && typeof getMetadataForMedia === 'function' ? getMetadataForMedia(fileName) : null;
+  var row = !videoClipStoryboardSource && !videoClipExternalSource && typeof getMetadataForMedia === 'function' ? getMetadataForMedia(fileName) : null;
   if (row && row.resolution) {
     parsed = parseResolutionText(row.resolution);
     if (parsed) return parsed;
@@ -927,6 +933,7 @@ function closeVideoClipModal() {
   videoClipCropEditActive = false;
   videoClipTargetItem = null;
   videoClipStoryboardSource = null;
+  videoClipExternalSource = null;
   videoClipSourceResolution = null;
   videoClipOverwriteSourceMode = false;
   videoClipLastExportSignature = '';
@@ -971,7 +978,7 @@ function closeVideoClipModal() {
   updateVideoClipCropButtons();
 }
 
-function openVideoClipModal(mediaItem, storyboardSource) {
+function openVideoClipModal(mediaItem, storyboardSource, externalSource) {
   if (!mediaItem || !mediaItem.fileName || !isVideoFileName(mediaItem.fileName)) {
     setVideoClipStatus('Clip is only available for video files.', { kind: 'error' });
     setStatus('Clip is only available for video files.');
@@ -991,8 +998,15 @@ function openVideoClipModal(mediaItem, storyboardSource) {
 
   videoClipTargetItem = mediaItem;
   videoClipStoryboardSource = storyboardSource || null;
+  videoClipExternalSource = externalSource || null;
+  var destinationSection = getVideoClipEl('video-clip-external-destination-section');
+  var destinationField = getVideoClipEl('video-clip-external-destination');
+  if (!destinationSection || !destinationField) throw new Error('Clip destination controls are missing');
+  destinationSection.classList.toggle('hidden', !videoClipExternalSource);
+  destinationField.value = videoClipExternalSource ? (videoClipExternalSource.destination || '') : '';
+  getVideoClipEl('video-clip-external-folders').replaceChildren();
   var extractFrameButton = getVideoClipEl('video-clip-extract-frame-btn');
-  if (extractFrameButton) extractFrameButton.classList.toggle('hidden', !!videoClipStoryboardSource);
+  if (extractFrameButton) extractFrameButton.classList.toggle('hidden', !!videoClipStoryboardSource || !!videoClipExternalSource);
   var sourceMetaEl = getVideoClipEl('video-clip-source-meta');
   if (!sourceMetaEl) throw new Error('Video clip source metadata is missing');
   sourceMetaEl.textContent = '';
@@ -1018,7 +1032,7 @@ function openVideoClipModal(mediaItem, storyboardSource) {
   updateVideoClipExactFrameUi();
 
   var stem = mediaItem.fileName.replace(/\.[^.]+$/, '');
-  outputEl.value = isVideoClipInSrcVideosFolder() ? (stem + '_clip') : mediaItem.fileName;
+  outputEl.value = (videoClipExternalSource || isVideoClipInSrcVideosFolder()) ? (stem + '_clip') : mediaItem.fileName;
   outputEl.disabled = false;
   startEl.value = '0';
   trimEndEl.value = '2.000';
@@ -1032,6 +1046,7 @@ function openVideoClipModal(mediaItem, storyboardSource) {
 
   var src = videoClipStoryboardSource
     ? '/fs/storyboard/media?story=' + encodeURIComponent(videoClipStoryboardSource.storyId) + '&path=' + encodeURIComponent(videoClipStoryboardSource.mediaPath) + '&t=' + Date.now()
+    : videoClipExternalSource ? videoClipExternalSource.mediaUrl
     : '/caption/media?folder=' + encodeURIComponent(state.folder || '') + '&media=' + encodeURIComponent(mediaItem.fileName) + '&t=' + Date.now();
   videoEl.src = src;
   videoEl.onloadedmetadata = function () {
@@ -1128,6 +1143,8 @@ function getVideoClipPayload(overwrite) {
     overwriteSource: !!videoClipOverwriteSourceMode
   };
   Object.assign(payload, videoClipSourceFields());
+  if (videoClipExternalSource && !payload.destination)
+    throw new Error('Choose a destination Set folder before exporting.');
   if (videoClipExactStart) {
     payload.exactStart = {
       frameIndex: videoClipExactStart.frameIndex,
@@ -1139,7 +1156,9 @@ function getVideoClipPayload(overwrite) {
 
 function getVideoClipPayloadSignature(payload) {
   return [
-    String(payload.folder || ''),
+    String(payload.folder || payload.externalPath || ''),
+    String(payload.relativePath || ''),
+    String(payload.destination || ''),
     String(payload.fileName || ''),
     String(payload.outputName || ''),
     formatVideoClipSeconds(payload.startSec),
@@ -1172,13 +1191,13 @@ function finalizeVideoClipJob(payload, status, message) {
   if (status === 'completed') {
     rememberVideoClipExportPayload(payload);
     updateVideoClipTimelineUi();
-    if (!videoClipStoryboardSource && payload && payload.overwriteSource && payload.fileName) {
+    if (!videoClipStoryboardSource && !videoClipExternalSource && payload && payload.overwriteSource && payload.fileName) {
       markMediaMutated(payload.fileName, 'best_effort');
       bumpMediaCacheBustToken(payload.fileName);
       state.pendingSelectFileName = payload.fileName;
     }
     setStatus(payload && payload.overwriteSource ? 'In-place clip exported.' : 'Clip exported.');
-    if (!videoClipStoryboardSource && payload && payload.overwriteSource && payload.fileName) {
+    if (!videoClipStoryboardSource && !videoClipExternalSource && payload && payload.overwriteSource && payload.fileName) {
       Promise.resolve(saveFolderStateForCurrentRoot()).catch(function (err) {
         if (window.console && console.warn) {
           console.warn('[VideoClip] Could not persist clip mutation state:', err);
@@ -1480,6 +1499,8 @@ function wireVideoClipModal() {
     };
   }
 
+  var destinationEl = getVideoClipEl('video-clip-external-destination');
+  if (destinationEl) destinationEl.addEventListener('input', updateVideoClipExportSummary);
   if (outputEl) {
     outputEl.addEventListener('input', updateVideoClipExportSummary);
     outputEl.addEventListener('keydown', function (e) {

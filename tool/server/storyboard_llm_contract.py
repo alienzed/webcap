@@ -393,8 +393,7 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
             "Be creatively useful and fill in sensible connective material when the concept calls for it rather than asking questions. "
             "Preserve explicit facts from the original concept and Story invariants. Treat the supplied Visual / Atmosphere as authoritative: "
             "do not replace it, reinterpret it into a different style, or introduce a competing visual atmosphere. Enrich the concept within it. "
-            "Do not break the concept into Scenes yet and do not write MiniMax H3 prompts. Aim for roughly 500-1000 words total when the concept supports it; "
-            "treat that as a useful target, not a minimum to pad toward. Stop once the concept is fully developed. "
+            "Develop a practical concept overview with enough detail for later Scene planning. Stop once the creative direction is clear. "
             "Return only the expanded concept as polished prose."
         )
         return {

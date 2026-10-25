@@ -1273,7 +1273,7 @@
     if (!request) return '';
     var count = Number(request.messageCount) || 0;
     var chars = Number(request.contentChars) || 0;
-    return 'Prompt sent · ' + (count === 1 ? '1 msg' : String(count) + ' msgs') + ' · ' + chars.toLocaleString() + ' chars · Copy';
+    return 'Prompt sent · ' + (count === 1 ? '1 msg' : String(count) + ' msgs') + ' · ' + chars.toLocaleString() + ' chars · Inspect';
   }
 
   function copyDirectorRequestDiagnostic(request) {
@@ -1315,7 +1315,7 @@
     copy.classList.toggle('hidden', !requestLabel);
     copy.textContent = requestLabel;
     copy.dataset.directorJobId = jobId;
-    copy.title = requestLabel ? 'Copy the exact messages WebCap sent to the LLM' : '';
+    copy.title = requestLabel ? 'Inspect the exact messages WebCap sent to the LLM' : '';
     positionDirectorActivity();
     if (!visible) return;
     // Activity owns operational telemetry; the overlay explains why editing is blocked.
@@ -6233,13 +6233,7 @@
       var button = this;
       var jobId = String(button.dataset.directorJobId || '');
       var requestDiagnostic = storyState.director.requestByJobId[jobId];
-      copyDirectorRequestDiagnostic(requestDiagnostic).then(function () {
-        var original = directorRequestDiagnosticLabel(requestDiagnostic);
-        button.textContent = 'Copied';
-        window.setTimeout(function () {
-          if (storyState.director.requestByJobId[jobId]) button.textContent = original;
-        }, 1200);
-      }).catch(reportError);
+      openDirectorRequestInspector(requestDiagnostic, 'Storyboard Director Request');
     };
     el('storyboard-story-action-cancel').onclick = cancelStoryAction;
     el('storyboard-first-cut-btn').onclick = startFirstCut;

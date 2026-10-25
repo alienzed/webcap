@@ -456,7 +456,10 @@ def clip_video_response(data):
     overwrite_source = bool(data.get("overwriteSource"))
 
     storyboard_source = bool(data.get("storyId") or data.get("mediaPath"))
-    if not folder and not storyboard_source:
+    external_source = bool(data.get("externalPath") or data.get("relativePath"))
+    if external_source and storyboard_source:
+        return jsonify({"error": "Choose one clip source type"}), 400
+    if not folder and not storyboard_source and not external_source:
         return jsonify({"error": "Missing folder"}), 400
 
     try:
@@ -464,6 +467,20 @@ def clip_video_response(data):
             from .video_frame_ops import resolve_storyboard_clip_source
             source_path = resolve_storyboard_clip_source(data)
             src_folder = source_path.parent
+        elif external_source:
+            from .external_media import _root, _source_file
+            from .external_exports import _safe_destination_dir
+            source_path = _source_file(_root(data.get("externalPath")), data.get("relativePath"))
+            src_folder = source_path.parent
+            if media_name != source_path.name:
+                return jsonify({"error": "External source filename does not match selected media"}), 400
+            if not str(data.get("destination") or "").strip():
+                return jsonify({"error": "Choose an existing destination Set folder"}), 400
+            target_folder = _safe_destination_dir(data.get("destination"))
+            if not target_folder.is_dir():
+                return jsonify({"error": "Destination Set folder does not exist"}), 400
+            if overwrite_source:
+                return jsonify({"error": "External video sources cannot be overwritten"}), 400
         else:
             src_folder = safe_join_fs_root(folder)
             if not src_folder.exists() or not src_folder.is_dir():
@@ -503,7 +520,7 @@ def clip_video_response(data):
 
         crop_rect = _parse_crop_rect(data.get("crop"), src_w, src_h)
 
-        in_src_videos = not storyboard_source and src_folder.name.lower() == "src_videos"
+        in_src_videos = not storyboard_source and not external_source and src_folder.name.lower() == "src_videos"
         if overwrite_source:
             if in_src_videos:
                 return jsonify({"error": "Source overwrite is not allowed inside src_videos"}), 400
@@ -513,7 +530,7 @@ def clip_video_response(data):
             # If user is inside src_videos, export to the parent set folder.
             # Otherwise export to the current folder.
             output_name = _normalize_output_name(output_name_raw)
-            set_folder = src_folder.parent if in_src_videos else src_folder
+            set_folder = target_folder if external_source else (src_folder.parent if in_src_videos else src_folder)
             out_path = set_folder / output_name
             if out_path == source_path:
                 return jsonify({"error": "Use source overwrite mode when the output name matches the source"}), 400

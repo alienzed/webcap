@@ -2623,6 +2623,24 @@ html[data-theme="dark"] .app-settings-radio-label {
   font-size: 12px;
 }
 
+#video-clip-external-destination {
+  flex: 1 1 135px;
+  min-width: 0;
+  min-height: 30px;
+  padding: 5px 7px;
+  border: 1px solid rgba(148, 163, 184, 0.32);
+  border-radius: 4px;
+  background: #0f172a;
+  color: #f8fafc;
+  font-size: 12px;
+}
+
+#video-clip-external-folders {
+  max-height: 120px;
+  overflow-y: auto;
+  align-content: start;
+}
+
 #video-clip-output-input:disabled {
   color: #94a3b8;
   background: #111827;

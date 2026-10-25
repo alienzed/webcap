@@ -5,7 +5,7 @@ const vm = require('node:vm');
 
 // Minimal DOM fixture: exercise the actual classic script and its async requests.
 function fixture(hash = '#/media') {
-  const nodes = {}, pending = [], errors = [], closed = [], menus = [];
+  const nodes = {}, pending = [], errors = [], closed = [], menus = [], clipCalls = [];
   let document;
   class Element {
     constructor(tag = 'div') {
@@ -100,6 +100,7 @@ function fixture(hash = '#/media') {
     document, window, console, URLSearchParams, AbortController, Set, Map, setTimeout, clearTimeout,
     getComputedStyle: () => ({gridTemplateColumns:'240px 240px'}),
     showContextMenu: (x, y, actions) => menus.push(actions),
+    openVideoClipModal: (...args) => clipCalls.push(args),
     fetch: (url, options) => new Promise((resolve, reject) => pending.push({url, options, resolve, reject}))
   });
   const settle = async (request, items, ok = true, extra = {}) => {
@@ -107,7 +108,7 @@ function fixture(hash = '#/media') {
     await new Promise(resolve => setImmediate(resolve));
   };
   const key = (target, key, extra = {}) => document.listeners.keydown({target, key, preventDefault() {}, ...extra});
-  return {nodes, buttons, modeButtons, pending, errors, closed, menus, window, settle, key};
+  return {nodes, buttons, modeButtons, pending, errors, closed, menus, clipCalls, window, settle, key};
 }
 const media = (id, kind = 'image') => ({id, fileName:id + '.png', mediaKind:kind, mediaUrl:'/media/' + id, role:'generated', source:'generate', rating:null});
 
@@ -506,6 +507,31 @@ test('External media context menu exposes safe file actions without the inspecto
   assert.ok(f.pending.at(-1).url.includes('/external?'), 'mutation requests authoritative refresh');
 });
 
+
+test('External Clip to Set opens the shared clip editor without using the basic export dialog', async () => {
+  const f = fixture(); f.window.openMediaExplorerActivity();
+  await f.settle(f.pending[0], []);
+  f.buttons.find(button => button.dataset.mediaSource === 'external').click();
+  f.nodes['media-explorer-external-path'].value = '/tmp/videos';
+  f.nodes['media-explorer-open-path'].click();
+  await f.settle(f.pending.at(-1), [
+    {...media('clip', 'video'), fileName:'source.mp4', source:'external',
+      relativePath:'nested/source.mp4', role:'source',
+      mediaUrl:'/fs/media_explorer/external/media?path=videos&file=nested%2Fsource.mp4'}
+  ]);
+  const card = f.nodes['media-explorer-grid'].children[0];
+  card.querySelector('.media-explorer-item-menu').click({preventDefault(){}, stopPropagation(){}});
+  const before = f.pending.length;
+  f.menus.at(-1).find(action => action.label === 'Clip to Set').run();
+  assert.equal(f.clipCalls.length, 1);
+  assert.equal(f.clipCalls[0][0].fileName, 'source.mp4');
+  assert.equal(f.clipCalls[0][1], null);
+  assert.equal(f.clipCalls[0][2].path, '/tmp/videos');
+  assert.equal(f.clipCalls[0][2].file, 'nested/source.mp4');
+  assert.match(f.clipCalls[0][2].mediaUrl, /external\/media/);
+  assert.equal(f.nodes['media-explorer-export-dialog'].open, false);
+  assert.equal(f.pending.length, before, 'editor handoff makes no export request');
+});
 
 test('External Move to Trash only targets the selected clicked item', async () => {
   const f = fixture(); f.window.openMediaExplorerActivity();

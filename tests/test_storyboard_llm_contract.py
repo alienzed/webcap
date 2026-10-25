@@ -53,7 +53,7 @@ def test_write_prompt_gives_director_context_without_postprocessing_contract():
     assert "Mara has a dark bob" in prompt
     assert "[REFERENCE MODE]\nI2VA" in prompt
     assert "Establish stable and current facts at scene level" in prompt
-    assert "Let the concept determine the structure" in prompt
+    assert "Treat the Story concept, Visual / Atmosphere, and populated Directing Guidelines" in prompt
     assert "--- BEGIN EXAMPLE PROMPT SHAPE ---" in prompt
     assert "Environment / Continuity Anchors:" in prompt
     assert "integrated_multimodal_description:" in prompt
@@ -473,3 +473,22 @@ def test_extend_story_uses_only_last_exit_state_as_continuity_handoff():
     prompt = storyboard_llm_contract.build_request(story, "", "extend_story", scene_count=2)["prompt"]
     assert "[LAST SCENE EXIT STATE]\nMara reaches the locked lift." in prompt
     assert "EXISTING SECOND PROMPT" not in prompt
+
+
+def test_optional_story_guidelines_in_creative_operations_not_narrow_refinement():
+    story = _story()
+    story["guidelines"] = {
+        "visualFocus": "Athletic movement and compelling visual actions.",
+        "variation": "Vary choreography while preserving the shared format.",
+        "pacing": "Quick setups and energetic action.",
+    }
+    for operation in ("develop_story", "develop_story_outline", "expand_concept", "write_prompt", "repair_scenes"):
+        request = storyboard_llm_contract.build_request(
+            story, "scene-2", operation, instruction="Improve shot movement."
+        )
+        assert "Athletic movement and compelling visual actions." in request["prompt"], operation
+        assert "Vary choreography while preserving the shared format." in request["prompt"], operation
+    narrow = storyboard_llm_contract.build_request(
+        story, "scene-2", "refine_prompt", instruction="Change the last smile."
+    )
+    assert "Vary choreography while preserving the shared format." not in narrow["prompt"]

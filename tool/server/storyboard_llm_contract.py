@@ -305,7 +305,7 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
         }
 
     director_context = _read_text(DIRECTOR_CONTEXT_PATH, "Storyboard director context")
-    if operation in {"expand_concept", "develop_story", "develop_story_outline", "develop_story_scene", "insert_scene", "extend_story", "write_prompt"}:
+    if operation in {"expand_concept", "develop_story", "develop_story_outline", "develop_story_scene", "insert_scene", "extend_story", "write_prompt", "repair_scenes"}:
         guidance = _story_guidelines_text(story)
         if guidance:
             director_context += "\n\n[STORY DIRECTING GUIDELINES - AUTHOR INTENT]\n" + guidance
@@ -357,6 +357,8 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
         if not style:
             raise ValueError("Enter a Visual / Atmosphere description first.")
         blocks = ["[USER VISUAL INTENT]\n" + style]
+        if _story_guidelines_text(story):
+            blocks.append("[STORY DIRECTING GUIDELINES]\n" + _story_guidelines_text(story))
         concept = _clean(story.get("concept"))
         if concept:
             blocks.append("[STORY CONTEXT — FOR INTERPRETATION ONLY]\n" + concept[:3500])
@@ -373,7 +375,7 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
         concept = _clean(story.get("concept"))
         if not concept:
             raise ValueError("Story concept / overview is required to expand a Story.")
-        blocks = []
+        blocks = ["[DIRECTOR CONTEXT]\n" + director_context]
         title = _clean(story.get("title"))
         if title:
             blocks.append("[STORY TITLE]\n" + title)
@@ -429,8 +431,8 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
         blocks.append(
             "[CURRENT TASK]\nDevelop the complete concept into MiniMax H3 Scenes. "
             + scene_count_guidance
-            + "Consider the complete concept before writing individual Scenes. First decide what relationship, if any, the Scenes should have: progression, variations, repeated format, montage, parallel moments, independent alternatives, or another structure suggested by the concept. "
-            "Choose the relationship that best serves the concept, decide what each Scene contributes to the whole, then author each Scene distinctly; preserve intentional repeated structure without mechanically repeating wording, actions, or example language. "
+            + "Use the Story\'s Scene Relationships direction when present, and otherwise choose the relationship that serves the concept. "
+            "Decide what each Scene contributes and apply the Story\'s Variation / Repetition direction where supplied. "
             "Keep the relationship between Scenes appropriate to the concept, preserving relevant Story facts, invariants, and evolving state when continuity matters. "
             "Use entry and exit state only when a specific handoff or visible state is genuinely useful. "
             "Write each Scene's complete H3 generation prompt exactly as it should be used, following the supplied Director and H3 guidance. "
@@ -468,9 +470,9 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
         blocks.append(
             "[CURRENT TASK]\nPlan the complete Story as a concise Scene sequence without writing generation prompts yet. "
             + scene_count_guidance
-            + "Consider the complete concept before planning individual Scenes. Decide the relationship between Scenes that best serves the concept: progression, variations, repeated format, montage, parallel moments, independent alternatives, or another appropriate structure. "
+            + "Use the supplied Scene Relationships direction where present; otherwise plan a relationship suited to the concept. "
             "For each Scene return only a short title, a useful summary / intent, optional entry and exit state when a real handoff matters, and a suggested duration. "
-            "Keep each planned Scene meaningfully distinct while preserving relevant Story facts, invariants, and evolving state. "
+            "Apply the Story\'s Variation / Repetition direction and preserve relevant Story facts, invariants, and evolving state. "
             "This outline will be used to author each full H3 Scene separately. Return only JSON matching the supplied schema."
         )
         return {
@@ -525,7 +527,7 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
             blocks.append(
                 "[PREVIOUS AUTHORED SCENE - RELATIONSHIP CONTEXT]\n"
                 + json.dumps(previous_scene, indent=2, ensure_ascii=False)
-                + "\n\nUse the previous authored Scene to preserve continuity when appropriate and keep this Scene meaningfully distinct."
+                + "\n\nUse the previous authored Scene as relationship and continuity context where relevant to this planned Scene."
             )
         blocks.append(
             "[CURRENT TASK]\nAuthor exactly this one planned Scene as a complete MiniMax H3 Scene. "
@@ -588,9 +590,9 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
                 if custom_instruction else
                 "Use the complete Story concept and outline to decide what fresh Scene belongs here. "
             )
-            + "Neighbouring Scene descriptions are placement/continuity context, not templates to copy. "
+            + "Use neighbouring Scene descriptions as placement and continuity context. "
             "A new Scene may progress, contrast, or stand independently as the concept or user direction warrants. "
-            "Do not rephrase neighbouring actions to create a superficially different Scene. "
+            "Use the Story\'s Variation / Repetition direction when developing this Scene. "
             "Use entry and exit state only when a real handoff matters. "
             "Write the complete standalone H3 prompt following the supplied Director and H3 guidance. "
             "Return only JSON matching the supplied schema."
@@ -634,13 +636,9 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
             blocks.append("[USER DIRECTION]\n" + _clean(instruction))
         blocks.append(
             "[CURRENT TASK]\nAppend exactly " + str(scene_count) + " new Scenes after the existing sequence. "
-            "First consider what each existing Scene already covers, then decide on distinct new Scene ideas before writing their prompts. "
-            "The existing outline is a record of covered material, not example wording or a template to repeat. "
-            "Give each new Scene its own substantive action, development, situation, or visual idea; changing only a few words, props, or camera angles does not make a new Scene. "
-            "For an ongoing narrative, move events forward and preserve relevant evolving state. "
-            "For episodic, montage, or repeated-format material, retain the format when appropriate but introduce genuinely different moments. "
-            "Preserve intentional recurring characters, locations, visual language, and other Story invariants. "
-            "Keep the new Scenes distinct from existing Scenes and from one another without forcing unrelated novelty. "
+            "Consider what the existing Scene outline already covers. Plan how new Scenes contribute to the Story using the author's Scene Relationships and Variation / Repetition guidance. "
+            "For connected material, carry relevant evolving state; for independent or recurring formats, use the relationship established by the Story. "
+            "Preserve established character, location, visual language, and other Story invariants where relevant. "
             "Write a complete standalone H3 generation prompt for each new Scene using the supplied Director and H3 guidance. "
             "Return only the new Scenes as JSON matching the supplied schema."
         )

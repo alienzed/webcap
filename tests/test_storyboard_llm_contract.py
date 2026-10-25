@@ -100,7 +100,7 @@ def test_refine_prompt_preserves_existing_prompt_and_keeps_scene_fields_optional
     assert "OLD FIRST PROMPT" not in prompt
     assert "[STORY CONCEPT / OVERVIEW]" not in prompt
     assert "full MiniMax H3 prompt" not in prompt
-    assert "Make the smallest necessary edit" in prompt
+    assert "smallest relevant edit" in prompt
     assert "Keep the camera behind her" in prompt
     assert schema["required"] == ["changed", "prompt"]
     assert {"summary", "entryState", "exitState", "durationSeconds"}.issubset(schema["properties"])
@@ -226,7 +226,7 @@ def test_extend_story_preserves_distinction_from_redevelopment():
     assert "[LAST SCENE EXIT STATE]" not in request["prompt"]
     assert "Use the supplied concept, Directing Guidelines" in request["prompt"]
     assert "[USER DIRECTION]\nDifferent cubicle vignettes." in request["prompt"]
-    assert "new Scenes as JSON" in request["prompt"]
+    assert "new Scenes, each with a complete standalone H3 generation prompt, as JSON" in request["prompt"]
 
 
 def test_extend_story_rejects_invalid_scene_count():

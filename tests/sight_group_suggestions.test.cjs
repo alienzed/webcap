@@ -85,6 +85,19 @@ test('description splitting retains coordinate color phrases and short verbatim 
     row.term==='White tiled wall with a window'&&row.source==='description'));
 });
 
+test('partial item metadata still reads the existing metadata cache',()=>{
+  const f=fixture();
+  const cached=media('A red wall', {background:['red wall']}).metadata;
+  // The item carries partial metadata, but its saved Sight is in the Set cache.
+  const sandbox={window:{},getMetadataForMedia:()=>cached,
+    getRequirementGroupAlias:()=>'',getChecklistKeywordTermsForRequirement:()=>[],
+    getChecklistRequirementsForTag:()=>[]};
+  vm.createContext(sandbox);
+  vm.runInContext(fs.readFileSync('tool/js/sight_group_suggestions.js','utf8'),sandbox);
+  assert.equal(sandbox.window.getSightGroupSuggestionRows(
+    {fileName:'one.jpg',metadata:{}},'Background')[0].term,'red wall');
+});
+
 test('empty and missing evidence is a normal no-suggestion result',()=>{
   const f=fixture();
   assert.equal(f.get({fileName:'no.jpg',metadata:{}},'Background').length,0);

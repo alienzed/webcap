@@ -144,6 +144,46 @@ CAPTION_ASSIST_SYSTEM_PROMPT = (
 )
 
 
+CAPTION_ENRICHMENT_SYSTEM_PROMPT = (
+    "You are a conservative visual detail editor for a training caption. "
+    "The existing caption is complete and must remain unchanged. Propose only genuinely useful, "
+    "specific visual details confidently grounded in the saved Open Sight observations which "
+    "the current caption does not yet convey. Selected annotations are trusted facts, not an "
+    "exhaustive list or a prescribed sentence structure. Do not repeat, correct, replace, "
+    "contradict or paraphrase existing caption content. Never invent details beyond Sight. "
+    "Return only JSON of the form "
+    "{\\\"suggestions\\\":[{\\\"anchor\\\":\\\"exact unique substring of caption\\\","
+    "\\\"addition\\\":\\\" text to insert immediately after anchor\\\"}]}. "
+    "Each anchor must match exactly one occurrence in the current caption, including its original "
+    "case and punctuation. Each addition includes the spaces and punctuation needed for natural "
+    "reading when placed directly after the anchor. Keep suggestions concise and independent; "
+    "use an empty suggestions array when no trustworthy missing details exist. No markdown."
+)
+
+
+def build_caption_enrichment_messages(draft="", open_sight=None, assignments=None, tags=None):
+    caption = str(draft or "").strip()
+    if not caption:
+        raise ValueError("Caption enrichment requires an existing caption draft.")
+    if not isinstance(open_sight, dict) or not str(open_sight.get("description") or "").strip():
+        raise ValueError("Caption enrichment requires saved Open Sight with a description.")
+    facts = [{
+        "group": str(row.get("group") or "").strip(),
+        "term": str(row.get("term") or "").strip(),
+    } for row in (assignments or []) if isinstance(row, dict) and row.get("term")]
+    payload = {
+        "currentCaption": caption,
+        "openSight": open_sight,
+        "selectedAnnotations": facts,
+        "otherTags": [str(tag) for tag in (tags or []) if str(tag).strip()],
+    }
+    return [
+        {"role": "system", "content": CAPTION_ENRICHMENT_SYSTEM_PROMPT},
+        {"role": "user", "content": "Suggest only missing visual details, as exact-anchor insertions.\\n" +
+         json.dumps(payload, ensure_ascii=False, separators=(",", ":"))},
+    ]
+
+
 def build_caption_assist_messages(
     assignments=None,
     tags=None,

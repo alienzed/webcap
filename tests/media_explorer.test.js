@@ -523,8 +523,11 @@ test('External Move to Trash only targets the selected clicked item', async () =
   const req = f.pending.at(-1);
   assert.equal(req.url, '/fs/media_explorer/external/trash');
   assert.deepEqual(JSON.parse(req.options.body).files, ['b.png']);
-  await f.settle(req, []);
+  await f.settle(req, [], true, {trashed:['b.png'], revision:3});
   assert.equal(f.errors.length, 0);
+  assert.equal(f.nodes['media-explorer-grid'].children.length, 1, 'remove only trashed card');
+  assert.equal(f.nodes['media-explorer-grid'].children[0].dataset.id, 'a');
+  assert.equal(f.pending.length, 4, 'trash does not trigger a new gallery request');
 });
 
 

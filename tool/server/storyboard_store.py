@@ -1174,6 +1174,7 @@ def workshop_scene_context(story_id, scene_id):
         "guidelines": story.get("guidelines") or {},
         "sceneTitle": str(scene.get("title") or ""),
         "sceneSummary": str(scene.get("summary") or ""),
+        "durationSeconds": scene.get("durationSeconds"),
         "shots": prompt[start:end],
         "expectedPrompt": prompt,
     }

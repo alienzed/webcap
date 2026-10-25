@@ -329,28 +329,15 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
         blocks.append("[STORY CONCEPT]\n" + concept)
         existing = _story_invariants_text(story)
         if existing:
-            blocks.append(
-                "[EXISTING STORY INVARIANTS]\n"
-                + existing
-                + "\n\nDo not repeat an existing character or location invariant with the same subject."
-            )
+            blocks.append("[EXISTING STORY INVARIANTS]\n" + existing)
         blocks.append(
-            "[CURRENT TASK]\nIdentify recurring characters and recurring locations from this Story concept that should "
-            "have stable visual definitions across independently generated Scenes. Return only character and location "
-            "invariants. Preserve explicit Story facts. For a recurring character, produce a concrete reusable physical "
-            "identity rather than a generic role. Include only stable visible traits that materially help reproduce the "
-            "intended design, such as age range, appearance or skin tone when relevant, hair, build, face shape, or "
-            "distinguishing features; do not fill every category mechanically. If the concept leaves needed visual identity "
-            "unspecified, choose a coherent grounded design and keep it internally consistent. Omit scene-specific wardrobe "
-            "unless the concept makes it a defining persistent feature. For a recurring location, describe only stable "
-            "physical details that materially help reproduce it, such as layout, architecture, materials, or fixed features. "
-            "If the concept clearly requires missing visual detail for reproducibility, choose a sensible concrete detail "
-            "and keep it grounded; do not invent plot events, "
-            "relationships, one-off extras, or new locations. Do not plan Scenes.\n\n"
-            "Return exactly this JSON shape:\n"
-            "{\"invariants\":[{\"kind\":\"character\",\"title\":\"Elena\",\"text\":\"Woman in her early 30s with shoulder-length dark brown wavy hair, slim build, oval face, and a small mole beneath her left eye.\"},"
-            "{\"kind\":\"location\",\"title\":\"Elena's apartment\",\"text\":\"Small older apartment with faded green walls, narrow rooms, dark wood trim, and two brass wall sconces.\"}]}\n"
-            "If there are no useful recurring characters or locations, return {\"invariants\":[]}."
+            "[CURRENT TASK]\nDefine stable visual identities for recurring characters and locations "
+            "in this Story. Reuse existing invariants and preserve explicit Story facts. "
+            "For characters, describe consistent physical appearance and distinctive visible traits. "
+            "For locations, describe consistent layout, materials, and fixed features. "
+            "Choose grounded details that aid reproducible generation. "
+            "Return only JSON matching the supplied invariant schema, with an empty invariants array "
+            "when no recurring identity needs defining."
         )
         return {
             "operation": operation,
@@ -519,8 +506,12 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
         if isinstance(previous_scene, dict):
             blocks.append(
                 "[PREVIOUS AUTHORED SCENE - RELATIONSHIP CONTEXT]\n"
-                + json.dumps(previous_scene, indent=2, ensure_ascii=False)
-                + "\n\nThe planned outline and author direction establish this Scene\'s creative scope."
+                + json.dumps({
+                    key: previous_scene.get(key)
+                    for key in ("title", "summary", "entryState", "exitState")
+                    if _clean(previous_scene.get(key))
+                }, indent=2, ensure_ascii=False)
+                + "\n\nThe planned outline and author direction establish this Scene's creative scope."
             )
         blocks.append(
             "[CURRENT TASK]\nAuthor exactly this one planned Scene as a complete MiniMax H3 Scene. "

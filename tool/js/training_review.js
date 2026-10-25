@@ -204,6 +204,7 @@ function renderTrainingRunParameters(payload) {
   var presetSelect = document.getElementById('training-run-preset-select');
   var h3AdapterOption = document.getElementById('training-run-h3-adapter-option');
   var h3AdapterCheckbox = document.getElementById('training-run-h3-adapter');
+  var inheritedAdapterLabel = document.getElementById('training-run-h3-adapter-inherited');
   var h3FocusedOption = document.getElementById('training-run-h3-focused-option');
   var h3FocusedCheckbox = document.getElementById('training-run-h3-focused');
   if (!panel || !lrInput || !rankSelect || !epochsInput || !dropoutInput || !resetButton || !presetSelect) return;
@@ -228,7 +229,20 @@ function renderTrainingRunParameters(payload) {
   dropoutInput.value = String(draft.adapterDropout == null ? '' : draft.adapterDropout);
   imageShiftOption.classList.toggle('hidden', stage !== 'h3');
   imageShiftInput.value = stage === 'h3' ? String(draft.h3ImageShift == null ? '' : draft.h3ImageShift) : '';
-  h3AdapterOption.classList.toggle('hidden', stage !== 'h3');
+  var resumeH3 = stage === 'h3' && trainingWorkspaceState.reviewStartingPoint === 'resume';
+  var selectedCheckpoint = document.getElementById('training-run-checkpoint-select');
+  var manualCheckpoint = document.getElementById('training-run-resume-input');
+  var savedVariant = resumeH3 && selectedCheckpoint && selectedCheckpoint.value &&
+    !(manualCheckpoint && manualCheckpoint.value.trim()) && selectedCheckpoint.selectedOptions.length
+      ? selectedCheckpoint.selectedOptions[0].getAttribute('data-image-adapter') : '';
+  h3AdapterOption.classList.toggle('hidden', stage !== 'h3' || resumeH3);
+  inheritedAdapterLabel.classList.toggle('hidden', !resumeH3);
+  inheritedAdapterLabel.textContent = resumeH3
+    ? (savedVariant === 'on' ? 'Image Adapter ON · checkpoint'
+      : savedVariant === 'off' ? 'Image Adapter OFF · checkpoint'
+      : 'Image Adapter inherited from checkpoint')
+    : '';
+  inheritedAdapterLabel.title = resumeH3 ? 'Checkpoint resumes preserve their original H3 model variant. Start Fresh to change Image Adapter.' : '';
   h3AdapterCheckbox.checked = !!draft.h3ImageTrainingAdapter;
   h3AdapterCheckbox.onchange = function () {
     trainingWorkspaceState.runConfigDraft.h3ImageTrainingAdapter = h3AdapterCheckbox.checked;

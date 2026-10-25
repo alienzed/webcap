@@ -52,6 +52,7 @@ def test_discovery_is_current_set_shallow_and_uses_relative_output_ids(tmp_path,
     runs = training_history.discover_runs(folder, "h3")
     assert [item["path"] for item in runs] == [str(run)]
     assert runs[0]["resumeActionId"] == data["actionId"] and runs[0]["resumeOutputId"] == "output/managed-run" and runs[0]["matchType"] == "exact"
+    assert runs[0]["imageTrainingAdapter"] is False
 
 def test_direct_custom_validation_and_managed_resolution(tmp_path, monkeypatch):
     _configure_root(monkeypatch, tmp_path); folder = _set(tmp_path); source = folder / "config.h3.toml"; _write_h3_config(source, tmp_path / "configured-out")
@@ -100,9 +101,12 @@ def test_h3_premerged_checkpoint_can_resume_without_rewriting_set_model(tmp_path
     resolved = training_history.validate_resumable_run_for_path(folder, "h3", str(run))
     assert resolved["checkpointAvailable"] is True
     assert resolved["matchType"] == "compatible"
+    assert resolved["imageTrainingAdapter"] is True
     managed = training_history.resolve_managed_resume(folder, action_data["actionId"], "output/fused-run", "h3")
     assert managed["runPath"] == run
-    assert [item["path"] for item in training_history.discover_runs(folder, "h3")] == [str(run)]
+    discovered = training_history.discover_runs(folder, "h3")
+    assert [item["path"] for item in discovered] == [str(run)]
+    assert discovered[0]["imageTrainingAdapter"] is True
     assert "standard-h3" in source.read_text(encoding="utf-8")
 
 
@@ -122,3 +126,16 @@ def test_checkpoint_resume_verifies_against_captured_model_and_rejects_mismatch(
         training_history.validate_resumable_run_for_path(
             folder, "h3", str(recorded), reference_config_path=captured
         )
+
+
+def test_legacy_merged_image_adapter_is_detected_from_saved_config():
+    assert training_history._h3_uses_image_adapter({
+        "model": {
+            "diffusion_model": "/models/standard.safetensors",
+            "merge_adapters": ["/models/minimax_h3_image_training_adapter.safetensors"],
+        }
+    })
+    assert not training_history._h3_uses_image_adapter({"model": {
+        "diffusion_model": "/models/standard.safetensors",
+        "merge_adapters": ["/models/other-adapter.safetensors"],
+    }})

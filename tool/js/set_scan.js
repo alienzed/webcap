@@ -87,6 +87,25 @@
     return items.filter(function (item) { return !!item.issue || !item.structured; }).length;
   }
 
+  function syncPrepareSetVisionModel() {
+    var selector = el('set-scan-vision-model');
+    var header = el('app-header-vision-model');
+    if (!selector || !header) throw new Error('Prepare Set Vision model controls are missing.');
+    var selected = getCaptionVisionModelId();
+    selector.replaceChildren();
+    Array.prototype.forEach.call(header.options, function (option) {
+      selector.appendChild(option.cloneNode(true));
+    });
+    if (selected && !Array.prototype.some.call(selector.options, function (option) { return option.value === selected; })) {
+      var option = document.createElement('option');
+      option.value = selected;
+      option.textContent = selected;
+      selector.appendChild(option);
+    }
+    selector.value = selected;
+    selector.disabled = setScanState.running || header.disabled;
+  }
+
   function renderSetIntelligence() {
     var modal = el('set-scan-modal');
     var stopBtn = el('set-scan-stop-btn');
@@ -119,6 +138,7 @@
     }
 
     modal.classList.toggle('hidden', !setScanState.open);
+    syncPrepareSetVisionModel();
     scopeToggle.disabled = setScanState.running;
     var scopeCount = setScanState.running ? setScanState.files.length : getSetIntelligenceScopeFiles().length;
     scopeSummary.textContent = (scopeToggle.checked ? 'Entire Set' : 'Current training selection') +
@@ -1080,6 +1100,17 @@
       var files = setScanState.sightItems.filter(function (item) { return !!item.issue || !item.structured; }).map(function (item) { return item.file; });
       if (files.length) runSetIntelligence('open', files);
     };
+    el('set-scan-vision-model').onchange = function () {
+      if (setScanState.running) throw new Error('Cannot change the scanning model during an active scan.');
+      setVisionModelPreference(this.value);
+      openSetIntelligence();
+    };
+    window.addEventListener('webcap:vision-capabilities-refreshed', function () {
+      if (setScanState.open) syncPrepareSetVisionModel();
+    });
+    window.addEventListener('webcap:vision-model-changed', function () {
+      if (setScanState.open && !setScanState.running) openSetIntelligence();
+    });
     entireSetToggle.onchange = openSetIntelligence;
     responseSelect.onchange = selectRawResponse;
     primaryBtn.onclick = continueToVocabulary;

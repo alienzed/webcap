@@ -1853,15 +1853,26 @@ def director_chat_route():
         messages = data.get("messages")
         if not isinstance(messages, list) or not messages:
             raise ValueError("Director Chat messages are required.")
+        operation = str(data.get("operation") or "freeform_chat").strip()
+        if operation not in {"freeform_chat", "storyboard_workshop_shots"}:
+            raise ValueError("Unsupported Director Chat operation.")
+        contract = {"operation": operation, "messages": messages}
+        if operation == "storyboard_workshop_shots":
+            contract["response_schema"] = {
+                "type": "object",
+                "required": ["summary", "shots"],
+                "additionalProperties": False,
+                "properties": {
+                    "summary": {"type": "string"},
+                    "shots": {"type": "string"},
+                },
+            }
         job = enqueue_llm(
             "chat",
             str(data.get("model") or "").strip(),
-            {
-                "operation": "freeform_chat",
-                "messages": messages,
-            },
+            contract,
             context={},
-            label="Director Chat",
+            label="Storyboard Shot Proposal" if operation == "storyboard_workshop_shots" else "Director Chat",
         )
         return jsonify({"ok": True, "job": job}), 202
     except Exception as exc:

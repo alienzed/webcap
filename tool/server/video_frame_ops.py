@@ -300,14 +300,23 @@ def inspect_video_frame_response(data):
 def extract_video_frame_response(data):
     data = data or {}
     folder = str(data.get("folder") or "").strip()
-    if not folder:
+    external_source = bool(data.get("externalPath") or data.get("relativePath"))
+    if not folder and not external_source:
         return jsonify({"error": "Missing folder"}), 400
     try:
-        source_folder = app_config.safe_join_fs_root(folder)
-        if not source_folder.exists() or not source_folder.is_dir():
-            return jsonify({"error": "Source folder does not exist"}), 404
-        source_path = source_folder / _safe_media_name(data.get("fileName") or data.get("media") or "")
-        destination_folder = _set_media_folder(source_folder)
+        if external_source:
+            from .external_media import _root, _source_file
+            from .external_exports import _safe_destination_dir
+            if not str(data.get("destination") or "").strip():
+                raise RuntimeError("Choose a destination Set folder before extracting")
+            source_path = _source_file(_root(data.get("externalPath")), data.get("relativePath"))
+            destination_folder = _safe_destination_dir(data.get("destination"))
+        else:
+            source_folder = app_config.safe_join_fs_root(folder)
+            if not source_folder.exists() or not source_folder.is_dir():
+                return jsonify({"error": "Source folder does not exist"}), 404
+            source_path = source_folder / _safe_media_name(data.get("fileName") or data.get("media") or "")
+            destination_folder = _set_media_folder(source_folder)
         if not destination_folder.exists() or not destination_folder.is_dir():
             raise RuntimeError("Set media folder does not exist")
         output_name = _safe_frame_output_name(data.get("outputName"))
@@ -316,8 +325,9 @@ def extract_video_frame_response(data):
         return jsonify({
             "ok": True,
             "outputName": output_name,
-            "destinationFolder": str(Path(folder).parent) if destination_folder != source_folder else folder,
-            "destinationIsCurrentFolder": destination_folder == source_folder,
+            "destinationFolder": str(data.get("destination")) if external_source else
+                (str(Path(folder).parent) if destination_folder != source_folder else folder),
+            "destinationIsCurrentFolder": False if external_source else destination_folder == source_folder,
         })
     except RuntimeError as exc:
         message = str(exc)

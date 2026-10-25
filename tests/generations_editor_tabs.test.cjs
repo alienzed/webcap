@@ -114,6 +114,25 @@ test('loading a completed Take isolates all Working fields, LoRAs and File refer
   assert.equal(element('generate-editor-loaded').disabled,false);
 });
 
+test('Loaded never inherits other-model LoRAs or Sweep selections from Working',()=>{
+  const f=fixture(), {api,state,element}=f;
+  api.loadGenerateTakeIntoEditor({
+    modelId:'image',sourcePrompt:'A different model',settings:{seed:27,dimensions:'512x512'},
+    loras:[{name:'image-only.safetensors',strength:.55}],references:{}
+  });
+  assert.equal(state.editorMode,'loaded');
+  assert.equal(state.modelId,'image');
+  assert.equal(element('generate-prompt').value,'A different model');
+  assert.equal(state.lorasByModel.h3,undefined,'Working H3 LoRA must not appear in Loaded');
+  assert.deepEqual(JSON.parse(JSON.stringify(state.sweepSelections)),{});
+  assert.deepEqual(JSON.parse(JSON.stringify(state.sweepFolderByModel)),{});
+  assert.equal(state.lorasByModel.image[0].name,'image-only.safetensors');
+  api.switchGenerateEditorMode('working');
+  assert.equal(state.modelId,'h3');
+  assert.equal(state.lorasByModel.h3[0].name,'work.safetensors');
+  assert.equal(state.sweepSelections['h3|shapes']['strap.safetensors'],true);
+});
+
 test('each tab retains editable settings, LoRAs and references on repeated switching',()=>{
   const f=fixture(), {api,state,element}=f;
   api.loadGenerateTakeIntoEditor(take());

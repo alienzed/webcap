@@ -83,7 +83,7 @@
     var modes = [{ id: 'storyboard', label: 'Storyboard' }].concat(availableModes());
     var active = activeContextMode();
 
-    if (state.activeMode !== 'chat' && (!active || !modeAvailable(active))) {
+    if (state.activeMode !== 'chat' && state.activeMode !== 'storyboard' && (!active || !modeAvailable(active))) {
       state.activeMode = 'chat';
       active = null;
     }

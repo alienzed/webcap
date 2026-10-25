@@ -1355,6 +1355,7 @@
       return {label:exact ? String(original.label || '') : 'Attribute ' + (index + 1),
         options:options,annotationGroup:exact ? String(original.annotationGroup || '') : ''};
     })};
+    syncVariationGroups();
     saveTestWorkspacePrompt(value);
     saveTestBenchState();
     el('test-generations-wildcard-status').textContent = 'Wildcard copied to Prompt.';

@@ -13,7 +13,7 @@ from .permissions import normalize_path_permissions
 
 
 RUN_VERSION = 1
-ASSESSMENT_PROTOCOL = "webcap-model-assessment-structured-v3"
+ASSESSMENT_PROTOCOL = "webcap-model-assessment-structured-v4"
 # Existing identical production probes can be reused; legacy prose never qualifies as JSON evidence.
 LEGACY_COMPATIBLE_KINDS = {"language_synthesis", "language_challenge", "vision_open", "vision_group_aware"}
 ROOT_NAME = "model-lab-runs"
@@ -178,6 +178,7 @@ def capability_run_summaries():
             by_kind = models.setdefault(ref, {})
             entry = by_kind.setdefault(kind, {"status": "", "error": "", "counts": {}})
             entry["pathologies"] = sorted(emitted_pathologies.get((ref, kind), set()))
+            entry["failureKind"] = str(attempt.get("failureKind") or "")
             status = str(attempt.get("status") or "interrupted")
             entry["counts"][status] = entry["counts"].get(status, 0) + 1
             result = attempt.get("result") or {}
@@ -808,7 +809,7 @@ def _probe_job(run, *, kind, role, model_ref, file_name="", enqueue):
                     finishedAt=_now_iso(),
                     result=result,
                 )
-                if validation_error:
+                if validation_error and failure_kind != "capacity":
                     _mark_retry(run, kind, role, model_ref, file_name)
                 try:
                     job_status(job_id, consume=True)
@@ -1177,12 +1178,17 @@ def _run_director_model(run, model):
                     "indicator leads to an unexpected mechanical discovery."),
         "style": "Grounded cinematic realism with practical lighting and consistent spaces.",
     }
-    for budget in ((2048, 4096, 8192, 16384) if run.get("depth") == "deep" else (2048,)):
+    capacity_reached = False
+    for budget in ((2048, 4096, 8192, 10240, 12288, 16384) if run.get("depth") == "deep" else (2048,)):
+        if capacity_reached:
+            _skip_attempt(run, "director_scene_plan_" + str(budget), "director",
+                          model_ref, "", "Not tested: previous Storyboard tier reached capacity.")
+            continue
         scene_count = max(2, budget // 256)
         contract = build_request(
             {**story, "targetSceneCount": scene_count}, "", "develop_story"
         )
-        _probe_job(
+        attempt = _probe_job(
             run, kind="director_scene_plan_" + str(budget), role="director", model_ref=model_ref,
             enqueue=lambda budget=budget, contract=contract: enqueue(
                 "chat", model_ref, {
@@ -1194,6 +1200,8 @@ def _run_director_model(run, model):
                 label="Model Assessment · Storyboard JSON " + str(budget),
             ),
         )
+        if attempt.get("failureKind") == "capacity":
+            capacity_reached = True
     reference_vision_ref = str(run.get("referenceVisionRef") or "")
     if not reference_vision_ref:
         # Director-only: exercise the actual Schema Assist contract with a
@@ -1373,7 +1381,7 @@ def _planned_probes(run):
         include("director_thinking", ref)
         include("director_scene_plan_2048", ref)
         if run.get("depth") == "deep":
-            for budget in (4096, 8192, 16384):
+            for budget in (4096, 8192, 10240, 12288, 16384):
                 include("director_scene_plan_" + str(budget), ref)
         if run.get("referenceVisionRef"):
             include("set_vocabulary_synthesis", ref)

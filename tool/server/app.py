@@ -42,7 +42,7 @@ from .run_ops import train_run_response
 from .training_profiles import profiles as training_profiles
 from .training_runner import TrainingStateError, log_response as training_runner_log_response, log_path_for_job as training_runner_log_path_for_job, output_path_for_job as training_runner_output_path_for_job, action_path_for_job as training_runner_action_path_for_job, candidate_run_available as training_runner_candidate_run_available, candidate_run_folder_path as training_runner_candidate_run_folder_path, candidate_epoch_folder_path as training_runner_candidate_epoch_folder_path, candidate_test_folder_path as training_runner_candidate_test_folder_path, save_candidate_epoch_response as training_runner_save_candidate_epoch_response, copy_candidate_epoch_to_test_response as training_runner_copy_candidate_epoch_to_test_response, remove_candidate_epoch_from_test_response as training_runner_remove_candidate_epoch_from_test_response, select_candidate_epoch_response as training_runner_select_candidate_epoch_response, candidate_epoch_profile_response as training_runner_candidate_epoch_profile_response, clear_candidate_epoch_selection_response as training_runner_clear_candidate_epoch_selection_response, start_response as training_runner_start_response, status_response as training_runner_status_response, gpu_status_response as training_runner_gpu_status_response, stop_response as training_runner_stop_response, finish_schedule_response as training_runner_finish_schedule_response, validate_response as training_runner_validate_response, reorder_response as training_runner_reorder_response, update_queued_epochs_response as training_runner_update_queued_epochs_response, resume_queue_response as training_runner_resume_queue_response, history_metrics_response as training_runner_history_metrics_response, candidate_analysis_response as training_runner_candidate_analysis_response, recover_state_response as training_runner_recover_state_response, reconcile_startup as reconcile_training_startup, start_observer as start_training_runner_observer
 from .training_run_delete import preview as training_run_delete_preview, delete as training_run_delete_execute
-from .training_history import history_payload as training_history_payload, all_history_payload as training_all_history_payload, discovered_run_output_path, history_job_output_path
+from .training_history import history_payload as training_history_payload, all_history_payload as training_all_history_payload, discovered_run_output_path, history_job_output_path, clear_history_job as training_clear_history_job
 from .training_archive import preview as training_archive_preview, finalize as training_archive_finalize, list_archives as training_archive_list, archive_metrics as training_archive_metrics
 from .smart_set import create_set_from_results_response, smart_set_materialize_response, superset_search_response
 from .set_vl_clone import preview_vl_set_clone, clone_set_with_vl_captions
@@ -3089,6 +3089,24 @@ def training_history_all_route():
         return jsonify({"ok": True, "history": training_all_history_payload(request.args.get("q", ""), request.args.get("folder", ""))})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 400
+
+
+@app.route("/fs/training_history/job/remove", methods=["POST"])
+def training_history_remove_route():
+    """Unlist one history entry; preserve every checkpoint, log and run artifact."""
+    data = request.get_json(silent=True) or {}
+    folder = str(data.get("folder") or "").strip()
+    job_id = str(data.get("jobId") or "").strip()
+    if not folder or not job_id:
+        return jsonify({"ok": False, "error": "Folder and Training History job ID are required."}), 400
+    try:
+        removed = training_clear_history_job(safe_join_fs_root(folder), job_id)
+        if not removed:
+            return jsonify({"ok": False, "error": "Training History entry not found."}), 404
+        return jsonify({"ok": True, "removedHistory": 1})
+    except (OSError, ValueError) as exc:
+        app.logger.exception("Training History removal failed")
+        return jsonify({"ok": False, "error": str(exc)}), 409
 
 
 @app.route("/fs/training_history/job/delete/preview", methods=["POST"])

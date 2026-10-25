@@ -2302,7 +2302,10 @@ def inference_route():
             job_id = str(request.args.get("job") or "").strip()
             if job_id:
                 consume = str(request.args.get("consume") or "").strip().lower() in {"1", "true", "yes"}
-                return jsonify({"ok": True, "job": inference_job_status(job_id, consume=consume)})
+                configuration = str(request.args.get("configuration") or "").strip().lower() in {"1", "true", "yes"}
+                return jsonify({"ok": True, "job": inference_job_status(
+                    job_id, consume=consume, include_configuration=configuration,
+                )})
             return jsonify({"ok": True, "queue": inference_snapshot(include_terminal=False)})
         data = request.get_json(silent=True) or {}
         return jsonify({

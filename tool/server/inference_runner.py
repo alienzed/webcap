@@ -194,12 +194,14 @@ def _job_view(job):
         "progress": copy.deepcopy(details.get("providerProgress") or {}),
         "result": copy.deepcopy(result),
         "error": str(job.get("error") or ""),
+        # Queue snapshots deliberately omit payload. Only explicit job-detail
+        # requests may project the frozen generation configuration.
         "generationConfiguration": {
-            "sourcePrompt": str((job.get("payload") or {}).get("request", {}).get("sourcePrompt") or ""),
-            "settings": copy.deepcopy((job.get("payload") or {}).get("request", {}).get("settings") or {}),
-            "loras": copy.deepcopy((job.get("payload") or {}).get("request", {}).get("loras") or []),
-            "references": copy.deepcopy((job.get("payload") or {}).get("request", {}).get("references") or {}),
-        } if metadata.get("client") == "generate" else None,
+            "sourcePrompt": str((job["payload"].get("request") or {}).get("sourcePrompt") or ""),
+            "settings": copy.deepcopy((job["payload"].get("request") or {}).get("settings") or {}),
+            "loras": copy.deepcopy((job["payload"].get("request") or {}).get("loras") or []),
+            "references": copy.deepcopy((job["payload"].get("request") or {}).get("references") or {}),
+        } if metadata.get("client") == "generate" and isinstance(job.get("payload"), dict) else None,
     }
 
 
@@ -832,10 +834,12 @@ def snapshot(include_terminal=False):
     }
 
 
-def job_status(job_id, consume=False):
+def job_status(job_id, consume=False, include_configuration=False):
     job_id = str(job_id or "").strip()
+    if consume and include_configuration:
+        raise ValueError("Cannot consume a job while reading its generation configuration.")
     try:
-        job = execution_get_job(job_id)
+        job = execution_get_job(job_id, include_payload=include_configuration)
         if (
             consume
             and str(job.get("status") or "") in {"completed", "failed", "cancelled", "stopped", "interrupted"}

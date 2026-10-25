@@ -1754,13 +1754,42 @@
     syncPromptAssistantDependencies();
   }
 
+  // Pending Take configuration is requested only on an explicit click.
+  // Never let a late response overwrite a newly selected Take or draft.
+  var pendingRestoreSelection = 0;
+  function selectPendingGeneration(jobId) {
+    var job = generateState.pendingJobsById[jobId];
+    if (!job) throw new Error('Pending generation request is missing.');
+    var selection = ++pendingRestoreSelection;
+    renderPendingStage(job);
+    return requestJson('/fs/inference?job=' + encodeURIComponent(jobId) + '&configuration=1').then(function (payload) {
+      if (selection !== pendingRestoreSelection || !generateState.open ||
+          (generateState.activePendingJobId !== jobId && generateState.activeResultKey !== jobId)) return;
+      var saved = payload && payload.job;
+      if (!saved || String(saved.jobId || '') !== jobId || saved.client !== 'generate')
+        throw new Error('Could not retrieve the selected pending generation.');
+      var configuration = saved.generationConfiguration;
+      if (!configuration || !String(configuration.sourcePrompt || '').trim())
+        throw new Error('Pending generation has no restorable submitted configuration.');
+      restoreResultConfiguration({
+        modelId: saved.modelId,
+        sourcePrompt: configuration.sourcePrompt,
+        settings: configuration.settings,
+        loras: configuration.loras,
+        references: configuration.references
+      });
+    });
+  }
+
   function selectGenerationResult(result) {
+    ++pendingRestoreSelection;
     restoreResultConfiguration(result);
     renderActiveResult(result);
   }
 
   function startNewGeneration() {
     if (generateState.director.busy) throw new Error('Wait for Prompt Assistant to finish before starting a new generation.');
+    ++pendingRestoreSelection;
     closeGenerateLoraPicker();
     resetGeneratePromptScratch();
     var model = currentModel() || generateState.models[0];
@@ -2648,19 +2677,10 @@
       }
       var pending = event.target.closest('.generate-take-card.is-pending[data-generation-job-id]');
       if (pending) {
-        var pendingJob = generateState.pendingJobsById[String(pending.dataset.generationJobId || '')];
-        if (!pendingJob) throw new Error('Pending generation request is missing.');
         try {
-          var configuration = pendingJob.generationConfiguration;
-          if (!configuration) throw new Error('Pending generation is missing its saved configuration.');
-          restoreResultConfiguration({
-            modelId: pendingJob.modelId,
-            sourcePrompt: configuration.sourcePrompt,
-            settings: configuration.settings,
-            loras: configuration.loras,
-            references: configuration.references
+          selectPendingGeneration(String(pending.dataset.generationJobId || '')).catch(function (err) {
+            reportError(err, 'Configuration restore blocked');
           });
-          renderPendingStage(pendingJob);
         } catch (err) { reportError(err, 'Configuration restore blocked'); }
         return;
       }

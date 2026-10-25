@@ -115,3 +115,116 @@ test('reopening Generations restores configuration only for explicit target sele
   assert.match(open,/selectGenerationResult\(payload\.result\)/);
   assert.doesNotMatch(open,/if \(selected\) selectGenerationResult\(selected\)/);
 });
+
+
+// Execute the production pending Take selection code, not a separately
+// reimplemented approximation. Queue polling remains read-only.
+const pendingBegin = source.indexOf('  var pendingRestoreSelection = 0;');
+const pendingEnd = source.indexOf('  function startNewGeneration()', pendingBegin);
+assert.ok(pendingBegin > -1 && pendingEnd > pendingBegin, 'explicit pending Take selector is present');
+const pendingCode = source.slice(pendingBegin, pendingEnd) +
+  '\nthis.selectPending = selectPendingGeneration; this.selectCompleted = selectGenerationResult;';
+
+function pendingFixture() {
+  const calls = [], requests = [];
+  const editor = { prompt:'Unsaved draft', loras:['draft-lora'], duration:'8' };
+  const state = {open:true, activePendingJobId:'', activeResultKey:'',
+    pendingJobsById: {
+      a:{jobId:'a', modelId:'minimax_h3', status:'queued'},
+      b:{jobId:'b', modelId:'minimax_h3', status:'running'}
+    }};
+  const context = {
+    generateState:state,
+    encodeURIComponent,
+    requestJson(url) {
+      return new Promise((resolve, reject) => requests.push({url, resolve, reject}));
+    },
+    renderPendingStage(job) {
+      calls.push(['preview-pending', job.jobId]);
+      state.activePendingJobId=job.jobId;
+      state.activeResultKey='';
+    },
+    renderActiveResult(result) {
+      calls.push(['preview-done', result.jobId]);
+      state.activePendingJobId='';
+      state.activeResultKey=result.jobId;
+    },
+    restoreResultConfiguration(result) {
+      calls.push(['restore', result.modelId, result.sourcePrompt, result.settings?.duration]);
+      editor.prompt=result.sourcePrompt;
+      editor.loras=result.loras;
+      editor.duration=result.settings?.duration;
+    },
+  };
+  vm.createContext(context);
+  vm.runInContext(pendingCode, context);
+  return {state, editor, calls, requests, choosePending:context.selectPending, chooseCompleted:context.selectCompleted};
+}
+
+function pendingDetail(jobId, overrides={}) {
+  return {job:{
+    jobId, client:'generate', modelId:'minimax_h3',
+    generationConfiguration:{
+      sourcePrompt:'Frozen prompt ' + jobId,
+      settings:{duration:'3', seed:42, samplingMode:'quality'},
+      loras:[{name:'multi-strap.safetensors', strength:0.65}],
+      references:{first_frame:'refs/a.png'},
+    },
+    ...overrides,
+  }};
+}
+
+test('explicit click on a pending Take loads its real saved prompt, settings and LoRAs', async () => {
+  const f = pendingFixture();
+  const selection = f.choosePending('a');
+  assert.equal(f.requests.length, 1);
+  assert.equal(f.requests[0].url, '/fs/inference?job=a&configuration=1');
+  assert.equal(f.editor.prompt, 'Unsaved draft', 'do not alter draft while awaiting saved configuration');
+  assert.equal(f.state.activePendingJobId, 'a');
+  f.requests[0].resolve(pendingDetail('a'));
+  await selection;
+  assert.equal(f.editor.prompt, 'Frozen prompt a');
+  assert.equal(f.editor.duration, '3');
+  assert.deepEqual(JSON.parse(JSON.stringify(f.editor.loras)), [{name:'multi-strap.safetensors', strength:0.65}]);
+});
+
+test('late pending restore cannot replace a completed Take the user selected afterward', async () => {
+  const f = pendingFixture();
+  const selection = f.choosePending('a');
+  f.chooseCompleted({
+    jobId:'done', modelId:'minimax_h3', sourcePrompt:'Completed Take',
+    settings:{duration:'6'}, loras:[{name:'completed.safetensors', strength:1}],
+  });
+  f.requests[0].resolve(pendingDetail('a'));
+  await selection;
+  assert.equal(f.editor.prompt, 'Completed Take');
+  assert.equal(f.state.activeResultKey, 'done');
+  assert.deepEqual(JSON.parse(JSON.stringify(f.editor.loras)), [{name:'completed.safetensors', strength:1}]);
+});
+
+test('rapid pending selection and draft navigation discard stale responses', async () => {
+  const f = pendingFixture();
+  const a=f.choosePending('a');
+  const b=f.choosePending('b');
+  f.requests[1].resolve(pendingDetail('b'));
+  await b;
+  f.requests[0].resolve(pendingDetail('a'));
+  await a;
+  assert.equal(f.editor.prompt, 'Frozen prompt b');
+  // Simulate starting a new draft before an on-demand detail request resolves.
+  const c=f.choosePending('a');
+  f.state.activePendingJobId='';
+  f.state.activeResultKey='';
+  f.editor.prompt='New unsaved draft';
+  f.requests[2].resolve(pendingDetail('a'));
+  await c;
+  assert.equal(f.editor.prompt, 'New unsaved draft');
+});
+
+test('missing frozen pending request fails visibly instead of blanking draft', async () => {
+  const f = pendingFixture();
+  const selection=f.choosePending('a');
+  f.requests[0].resolve(pendingDetail('a', {generationConfiguration:null}));
+  await assert.rejects(selection, /no restorable submitted configuration/);
+  assert.equal(f.editor.prompt, 'Unsaved draft');
+});

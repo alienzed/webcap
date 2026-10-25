@@ -134,3 +134,29 @@ test('Focus Annotate insertion updates only the editor through existing autosave
   assert.equal(sandbox.insert('white wall'),false);
   assert.equal(saved,1);
 });
+
+test('Sight anchor ownership is checked once per vocabulary term, not per observation',()=>{
+  var ownershipCalls = 0;
+  var vocabulary = ['triangle cups', 'teardrop cups', 'simple string straps', 'ring connectors'];
+  var context = {
+    window:{},
+    getMetadataForMedia:()=>({}),
+    getRequirementGroupAlias:()=>'',
+    getChecklistKeywordTermsForRequirement:()=>vocabulary,
+    getChecklistRequirementsForTag:()=>{
+      ownershipCalls++;
+      return ['BT Shape'];
+    }
+  };
+  vm.createContext(context);
+  vm.runInContext(fs.readFileSync('tool/js/sight_group_suggestions.js','utf8'),context);
+  var descriptions=Array.from({length:80},(_,i)=>'distinct scene '+i+' with triangle cups');
+  var item={fileName:'a.jpg',metadata:{vision_sight:{
+    description:'A bikini top with triangle cups',
+    inventory:{details:descriptions}
+  }}};
+  var rows=context.window.getSightGroupSuggestionRows(item,'BT Shape');
+  assert.equal(ownershipCalls,vocabulary.length,
+    'cross-Group ownership is a property of each term, not each matched phrase');
+  assert.ok(rows.length>=80, 'all eligible observations are retained');
+});

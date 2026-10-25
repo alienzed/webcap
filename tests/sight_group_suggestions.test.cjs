@@ -66,6 +66,15 @@ test('novel phrases can map to custom groups via distinct vocabulary anchors', (
   assert.ok(!f.get(item,'Background').some(row=>row.term==='triangle bikini top'));
 });
 
+test('cross-category body and color evidence can support strongly anchored groups',()=>{
+  const f=fixture();
+  const item=media('A yellow bikini top with triangle cups, arms raised', {
+    position:['triangle'], colors:[{thing:'bikini',color:'yellow'}],
+    things:[{name:'bikini top',qualities:[]}]});
+  assert.ok(f.get(item,'BT Shape').some(x=>x.term==='triangle'&&x.kind==='tag'));
+  assert.ok(f.get(item,'Clothing').some(x=>x.term==='yellow bikini'&&x.kind==='phrase'));
+});
+
 test('common and ambiguous words are not enough to classify unrelated objects', () => {
   const f=fixture();
   const item=media('A standing lamp with ring connectors in side view', {

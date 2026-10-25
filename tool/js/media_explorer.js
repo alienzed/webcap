@@ -169,7 +169,7 @@
       actions.push({label:'Open in Explorer', run:function () {
         externalAction('reveal', {path:externalPath, file:item.relativePath});
       }});
-      actions.push({label:'Copy to Set', run:function () { chooseExport( externalChoices(item)); }});
+      actions.push({label:'Copy to Set', run:function () { chooseExport(externalChoices(item)); }});
       if (item.mediaKind === 'video') actions.push({label:'Clip to Set', run:function () { openExternalClipEditor(item); }});
       actions.push({separator:true});
       actions.push({label:'Move to Folder…', run:function () { externalMutation(item, 'move'); }});
@@ -761,7 +761,7 @@
       copy.textContent = 'Copy to Set';
       copy.onclick = function () {
         var choices = items.filter(function (candidate) { return selected.has(candidate.id); });
-        chooseExport( choices.length ? choices : [item]);
+        chooseExport(choices.length ? choices : [item]);
       }; actions.appendChild(copy);
       if (item.mediaKind === 'video') {
         var clip = document.createElement('button'); clip.type = 'button'; clip.className = 'review-captions-btn';
@@ -1205,7 +1205,7 @@
   el('media-explorer-gallery-area').addEventListener('scroll', maybeLoadMore);
   el('media-explorer-preview-stage').parentElement.addEventListener('scroll', maybeLoadMore);
   el('media-explorer-copy-selected').addEventListener('click', function () {
-    chooseExport( items.filter(function (item) { return selected.has(item.id); }));
+    chooseExport(items.filter(function (item) { return selected.has(item.id); }));
   });
   el('media-explorer-export-destination').addEventListener('change', browseDestinations);
   el('media-explorer-export-up').addEventListener('click', function () {

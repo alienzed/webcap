@@ -386,6 +386,26 @@ function refreshUnifiedModelAssessment() {
       ' Vision models · ' + labRuns.length + ' Model Lab runs' +
       (activeRun ? ' · Running: ' + activeRun.id + ' (' + activeRun.attemptCount + ' probes recorded)' : '');
 
+    var resetAll = document.createElement('button');
+    resetAll.type = 'button';
+    resetAll.className = 'review-captions-btn';
+    resetAll.textContent = 'Reset all assessments';
+    resetAll.title = 'Permanently clear all saved Model Assessment results, not model files.';
+    resetAll.addEventListener('click', function () {
+      if (!window.confirm('Permanently reset ALL Model Assessment evidence? This does not delete models or other WebCap data.')) return;
+      resetAll.disabled = true;
+      modelLabPost({action: 'reset_all'}).then(function () {
+        diagnosticsAssessmentPreviewKey = '';
+        diagnosticsAssessmentExpanded.clear();
+        return refreshUnifiedModelAssessment();
+      }).catch(function (error) {
+        resetAll.disabled = false;
+        reportConsoleError('Model Assessment reset all', error);
+      });
+    });
+    summary.appendChild(document.createTextNode(' · '));
+    summary.appendChild(resetAll);
+
     var table = document.createElement('table');
     table.className = 'model-assessment-table';
     var head = document.createElement('thead');

@@ -776,6 +776,122 @@
     modal.showModal();
   };
 
+
+  function parseWorkshopProposal(raw) {
+    var value = String(raw || '').trim();
+    var fence = String.fromCharCode(96).repeat(3);
+    if (value.startsWith(fence) && value.endsWith(fence)) {
+      var start = value.indexOf('\n');
+      if (start >= 0) value = value.slice(start + 1, -3).trim();
+    }
+    var proposed;
+    try { proposed = JSON.parse(value); }
+    catch (error) { throw new Error('Director returned invalid Workshop JSON: ' + error.message); }
+    if (!proposed || typeof proposed.summary !== 'string' || typeof proposed.shots !== 'string' ||
+        !proposed.summary.trim() || !proposed.shots.trim()) {
+      throw new Error('Workshop proposal requires a summary and complete replacement shots.');
+    }
+    if (!/^\s*\[Shot\s+\d+\]/im.test(proposed.shots)) {
+      throw new Error('Workshop proposal requires numbered [Shot N] entries.');
+    }
+    return { summary: proposed.summary.trim(), shots: proposed.shots.trim() };
+  }
+
+  function prepareWorkshopRevision() {
+    if (!state.workshop || state.activeMode !== 'storyboard') throw new Error('Open a Scene Workshop first.');
+    if (state.pending || !state.modelId) return;
+    if (state.workshopProposal) { showWorkshopReview(); return; }
+    var decisions = (state.modeMessages.storyboard || []).filter(function (message) {
+      return message && (message.role === 'assistant' || message.role === 'user');
+    });
+    if (!decisions.some(function (message) { return message.role === 'user'; })) {
+      throw new Error('Discuss an improvement before preparing the revision.');
+    }
+    var scene = state.workshop;
+    var instructions = [
+      'Prepare a focused revision of the timed shots in a short AI-generated video Scene.',
+      'Use the creative decisions in the workshop conversation to author a complete replacement timed-shot section.',
+      'Preserve established identities, visual facts and the intended duration while improving the elements discussed.',
+      'Write numbered [Shot N] entries with appropriate time intervals and concrete visual actions.',
+      'The application keeps Subject, Scene Overview, Environment, Style and audio unchanged by replacing only timed-shot text.',
+      'Return one JSON object with string fields "summary" (brief intended changes) and "shots" (complete replacement timed-shot text).'
+    ].join('\n');
+    var messages = [
+      { role: 'system', content: instructions },
+      { role: 'user', content: JSON.stringify({
+        storyConcept: scene.concept,
+        directingGuidelines: scene.guidelines,
+        sceneIntent: scene.sceneSummary,
+        durationSeconds: scene.durationSeconds,
+        originalTimedShots: scene.shots,
+        workshopDiscussion: decisions
+      }, null, 2) }
+    ];
+    state.pending = true;
+    state.jobId = '';
+    el('director-chat-workshop-status').textContent = 'Preparing shot proposal…';
+    startProgress();
+    syncControls();
+    requestJson('/fs/director/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: state.modelId, messages: messages })
+    }).then(function (payload) {
+      if (!payload.job || !payload.job.jobId) throw new Error('Workshop proposal job was not queued.');
+      state.jobId = String(payload.job.jobId);
+      state.requestDiagnostic = payload.job.request || null;
+      trackTransientLlmJob(payload.job);
+      return waitForJob(payload.job);
+    }).then(function (job) {
+      var result = job.result && typeof job.result === 'object' ? job.result : {};
+      state.workshopProposal = parseWorkshopProposal(result.text);
+      el('director-chat-workshop-status').textContent = 'Proposal ready for review';
+      showWorkshopReview();
+    }).catch(function (error) {
+      el('director-chat-workshop-status').textContent = 'Proposal failed: ' + String(error.message || error);
+      if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Scene Workshop', error);
+      else throw error;
+    }).finally(function () {
+      state.pending = false;
+      state.jobId = '';
+      finishProgress(null);
+      syncControls();
+    });
+  }
+
+  function applyWorkshopRevision() {
+    if (!state.workshopProposal || !state.workshop) throw new Error('A prepared Scene revision is required.');
+    var proposal = state.workshopProposal;
+    var scene = state.workshop;
+    var button = el('storyboard-workshop-review-apply');
+    button.disabled = true;
+    button.textContent = 'Applying…';
+    el('storyboard-workshop-review-error').textContent = '';
+    Promise.resolve(window.applyStoryboardWorkshopRevision({
+      storyId: scene.storyId,
+      sceneId: scene.sceneId,
+      expectedPrompt: scene.expectedPrompt,
+      shots: proposal.shots
+    })).then(function (payload) {
+      if (!payload || !payload.scene || typeof payload.scene.prompt !== 'string') {
+        throw new Error('Workshop Apply did not return an updated Scene.');
+      }
+      scene.expectedPrompt = payload.scene.prompt;
+      scene.shots = proposal.shots;
+      state.workshopProposal = null;
+      el('director-chat-workshop-status').textContent = 'Revision applied · previous version saved';
+      el('storyboard-workshop-review').close();
+      syncControls();
+    }).catch(function (error) {
+      el('storyboard-workshop-review-error').textContent = String(error.message || error);
+      if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Scene Workshop Apply', error);
+      else throw error;
+    }).finally(function () {
+      button.disabled = false;
+      button.textContent = 'Apply Revision';
+    });
+  }
+
   function sendMessage() {
     var input = el('director-chat-input');
     if (!input || state.pending) return;

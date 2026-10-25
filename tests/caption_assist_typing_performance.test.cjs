@@ -56,7 +56,7 @@ test('unchanged comparisons remain hidden and previous item does not bleed throu
 
 test('normal draft edits bypass costly Sight, but QA review retains live tag actions',()=>{
   const sync = source.slice(source.indexOf('function syncCaptionAssistCandidateUi('),
-    source.indexOf('function ',source.indexOf('function syncCaptionAssistCandidateUi(')+10));
+    source.indexOf('function wirePrimerCaptionResetUi('));
   assert.match(sync,/var draftEdit = !!\(options && options\.draftEdit\) && !isFocusedQaReviewMode\(\)/);
   assert.match(sync,/if \(!draftEdit\) syncFocusedCaptionVisionPhrasesUi\(\)/);
   assert.match(sync,/if \(editorDocked && !draftEdit\)/);

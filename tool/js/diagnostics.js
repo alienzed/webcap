@@ -126,7 +126,7 @@ function diagnosticsAssessmentCounts(row, tests) {
         if (kind === 'director_scene_plan_2048' &&
             (item.failureKind === 'capacity' ||
              /capacity exhausted|truncated at its token budget/i.test(item.error || ''))) {
-          limits.push(label + ': output capacity reached');
+          unproven.push(label + ': output capacity reached before a complete Storyboard');
           return;
         }
         // V2 stopped at the scene-count check, before validating the returned
@@ -150,12 +150,15 @@ function diagnosticsAssessmentCounts(row, tests) {
     if (Number(kind.split('_').pop()) > 2048 && Number(counts.failed || 0) > 0)
       limits.push(label + ': ' + (item.error || 'stress probe failed'));
     if (Number(counts.completed || 0) > 0 && evidence) {
-      if (evidence.countMatched === false)
-        limits.push(label + ': ' + evidence.actualScenes + '/' + evidence.requestedScenes + ' scenes');
-      if (Number(evidence.validScenes || 0) > Number(evidence.detailedScenes || 0))
-        limits.push(label + ': ' + evidence.detailedScenes + '/' + evidence.validScenes + ' detailed scenes');
+      // Scene count and descriptive density are advisory evidence, not qualification limits.
     }
   });
+  var verifiedTier = Object.keys(tests).filter(function (kind) {
+    return kind.indexOf('director_scene_plan_') === 0 &&
+      Number(((tests[kind] || {}).counts || {}).completed || 0) > 0;
+  }).map(function (kind) { return Number(kind.split('_').pop()); })
+    .filter(function (budget) { return Number.isFinite(budget); })
+    .reduce(function (largest, budget) { return Math.max(largest, budget); }, 0);
   var state = failed.length ? 'Failed' : running.length ? 'Running' :
     unproven.length ? 'Not established' : limits.length ? 'Limited' : 'Passed';
   row.assessmentSort.result = ({Failed:0, 'Not established':1, Running:2, Limited:3, Passed:4})[state];
@@ -168,6 +171,12 @@ function diagnosticsAssessmentCounts(row, tests) {
     (state === 'Passed' ? 'Verified' : state === 'Limited' ? 'Capability demonstrated · limits' : state);
   span.title = 'Required Storyboard JSON, Schema Assist, and applicable Vision tests determine technical qualification. Deep stress-test limits and LLM judging are separate.';
   host.appendChild(span);
+  if (role !== 'vision' && verifiedTier) {
+    var tier = document.createElement('span');
+    tier.className = 'model-assessment-inline-reason';
+    tier.textContent = 'Storyboard ' + (verifiedTier / 1024).toLocaleString(undefined, {maximumFractionDigits: 2}) + 'K verified';
+    host.appendChild(tier);
+  }
   var reasons = state === 'Failed' ? failed : state === 'Running' ? running :
     state === 'Not established' ? unproven : state === 'Limited' ? limits : [];
   if (reasons.length)

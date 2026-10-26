@@ -4161,3 +4161,42 @@ html[data-theme="dark"] .storyboard-prompt-take-status {
   min-height: 34px;
   font-size: 14px;
 }
+
+
+/* Shared review surface for Define from Concept and Storyboard Chat suggestions. */
+.storyboard-guidelines-review { width: min(780px, 94vw); }
+.storyboard-guidelines-review-fields { display: grid; gap: 14px; margin-top: 12px; }
+.storyboard-guidelines-review-intro { margin: 0; color: var(--muted); font-size: 15px; }
+.storyboard-guidelines-review-item {
+  display: grid;
+  gap: 9px;
+  padding: 13px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+}
+.storyboard-guidelines-review-item.is-skipped { opacity: .55; }
+.storyboard-guidelines-review-choice { display: flex; gap: 10px; align-items: center; font-size: 17px; cursor: pointer; }
+.storyboard-guidelines-review-choice input { width: 18px; height: 18px; accent-color: var(--accent); }
+.storyboard-guidelines-review-before {
+  padding: 9px 11px;
+  border-left: 3px solid var(--border);
+  color: var(--muted);
+  font-size: 15px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.storyboard-guidelines-review-item textarea {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 76px;
+  padding: 10px 11px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--input-bg, var(--panel));
+  color: var(--text);
+  font: inherit;
+  font-size: 16px;
+  resize: vertical;
+}
+#director-chat-story-prepare:not(.hidden) { font-weight: 700; min-height: 36px; }

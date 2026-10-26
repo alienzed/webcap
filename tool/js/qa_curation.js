@@ -308,8 +308,8 @@
       var target = e.target;
       if (target && (target.closest('input, select, textarea, [contenteditable="true"]'))) return;
       if (e.key === 'Enter' && !e.repeat) {
-        // Native button Enter remains native; elsewhere it triggers the primary decision.
-        if (target && target.closest('button')) return;
+        // Keep native Enter for secondary buttons; the primary decision works from anywhere else.
+        if (target && target.closest('button:not(.qa-curation-review-decision)')) return;
         e.preventDefault();
         var primary = panel.querySelector('.qa-curation-review-decision');
         if (primary) primary.click();
@@ -327,13 +327,14 @@
       }
     }
     function render() {
+      var retainedFocus = document.activeElement && document.activeElement.className;
       panel.replaceChildren();
       var heading = element('div', 'qa-curation-review-top');
       heading.appendChild(element('strong', '', 'Curate Review'));
       heading.appendChild(button('Close', close));
       panel.appendChild(heading);
       var tabs = element('div', 'qa-curation-review-tabs');
-      [['selected', 'Originally included'], ['excluded', 'Originally excluded']].forEach(function(part) {
+      [['selected', 'Review original inclusions'], ['excluded', 'Review original exclusions']].forEach(function(part) {
         var ctl = button(part[1], function() { group = part[0]; cursor = 0; render(); });
         ctl.setAttribute('aria-pressed', String(group === part[0]));
         tabs.appendChild(ctl);
@@ -402,7 +403,7 @@
         explanation.appendChild(line);
       });
       if (!matched.length) explanation.appendChild(element('span', '', 'No prioritized concepts'));
-      explanation.appendChild(element('small', '', 'Evidence coverage, not visual quality.'));
+      explanation.appendChild(element('small', '', 'Bars show representation among available items, not an ideal target or visual quality.'));
       var actions = element('div', 'qa-curation-review-actions');
       var prev = button('← Previous', function() { next(-1); }); prev.disabled = cursor === 0; actions.appendChild(prev);
       var decision = button(included ? 'Remove' : 'Include', function() {
@@ -425,6 +426,7 @@
       actions.appendChild(option);
       explanation.appendChild(actions);
       panel.appendChild(explanation);
+      if (retainedFocus === 'qa-curation-review-decision') decision.focus();
     }
     document.body.appendChild(overlay);
     document.addEventListener('keydown', keydown);

@@ -1907,7 +1907,6 @@
         jobId: payload.jobId
       }).then(function () {
         var suggestions = payload.guidelineSuggestions || {};
-        var names = STORY_GUIDELINE_LABELS;
         var offered = ['visualFocus', 'creativeDirection', 'variation', 'pacing'].filter(function (key) {
           return typeof suggestions[key] === 'string' && suggestions[key].trim() &&
             !String((storyState.story.guidelines || {})[key] || '').trim() &&

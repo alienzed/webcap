@@ -30,8 +30,8 @@ def build_request(model_id, operation, prompt="", instruction="", settings=None,
     blocks = [
         "[DIRECTOR CONTEXT]\n"
         "You are helping write one standalone image or video generation prompt inside WebCap Generate. "
-        "There is no Story or Scene continuity unless the user explicitly supplies it. Preserve explicit facts, "
-        "avoid inventing unrelated narrative, and return only the complete model-facing prompt without commentary."
+        "There is no Story or Scene continuity unless the user explicitly supplies it. "
+        "Do not invent unrelated narrative."
     ]
 
     if model_id == "minimax_h3":
@@ -68,8 +68,7 @@ def build_request(model_id, operation, prompt="", instruction="", settings=None,
         blocks.append("[USER IDEA]\n" + prompt)
         blocks.append(
             "[CURRENT TASK]\nTurn the user idea into a polished prompt for the selected generation model. "
-            "Preserve the requested subject and intent; add useful production detail only where it supports that intent. "
-            "Return only the complete prompt text."
+            "Add useful production detail only where it supports the user's intent. Return only the prompt."
         )
     else:
         if not prompt:
@@ -80,7 +79,7 @@ def build_request(model_id, operation, prompt="", instruction="", settings=None,
         blocks.append(
             "[CURRENT TASK]\nApply this correction with the smallest coherent change:\n"
             + instruction
-            + "\n\nPreserve unrelated prompt details and return only the complete revised prompt text."
+            + "\n\nPreserve unrelated details and return only the revised prompt."
         )
 
     return {

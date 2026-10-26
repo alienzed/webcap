@@ -387,8 +387,21 @@ def _client_result(client, context, llm_result, job_id="", frozen_contract=None)
     if operation == "define_invariants":
         from .storyboard_store import apply_defined_invariants
         story, added_count = apply_defined_invariants(story_id, llm_result.get("data"))
+        proposed = llm_result.get("data") or {}
+        guidelines = proposed.get("guidelines")
+        if not isinstance(guidelines, dict):
+            raise ValueError("Director did not return Story guideline proposals.")
+        from .storyboard_store import STORY_GUIDELINE_KEYS
+        expected = ("visualFocus", "creativeDirection", "variation", "pacing")
+        if any(not isinstance(guidelines.get(key), str) for key in expected):
+            raise ValueError("Director returned invalid Story guideline proposals.")
+        suggestions = {
+            key: guidelines[key].strip() for key in expected
+            if guidelines[key].strip() and not (story.get("guidelines") or {}).get(key)
+        }
         return {
             "storyId": story["id"],
+            "guidelineSuggestions": suggestions,
             "addedCount": added_count,
             "model": llm_result["model"],
             "finishReason": llm_result.get("finishReason"),

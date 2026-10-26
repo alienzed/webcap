@@ -327,6 +327,9 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
         if title:
             blocks.append("[STORY TITLE]\n" + title)
         blocks.append("[STORY CONCEPT]\n" + concept)
+        existing_guidelines = _story_guidelines_text(story)
+        if existing_guidelines:
+            blocks.append("[EXISTING STORY GUIDELINES]\n" + existing_guidelines)
         existing = _story_invariants_text(story)
         if existing:
             blocks.append("[EXISTING STORY INVARIANTS]\n" + existing)
@@ -337,7 +340,12 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
             "For locations, describe consistent layout, materials, and fixed features. "
             "Choose grounded details that aid reproducible generation. "
             "Return only JSON matching the supplied invariant schema, with an empty invariants array "
-            "when no recurring identity needs defining."
+            "when no recurring identity needs defining. "
+            "Also propose four concise Story Directing Guidelines from the concept: visualFocus (observable priorities), "
+            "creativeDirection (qualities that make the concept compelling), variation (what changes or deliberately repeats "
+            "across Scenes), and pacing (how actions and shots use time). Existing guidelines are authoritative: "
+            "return an empty string for any already populated field rather than rewriting it. "
+            "Do not invent story facts or turn guidelines into mandatory Scene prescriptions."
         )
         return {
             "operation": operation,

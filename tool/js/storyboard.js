@@ -1898,6 +1898,31 @@
         operation: 'define_invariants',
         jobId: payload.jobId
       }).then(function () {
+        var suggestions = payload.guidelineSuggestions || {};
+        var names = {
+          visualFocus: 'Visual Focus',
+          creativeDirection: 'Creative Direction',
+          variation: 'Variation / Repetition',
+          pacing: 'Pacing / Rhythm'
+        };
+        var offered = Object.keys(names).filter(function (key) {
+          return typeof suggestions[key] === 'string' && suggestions[key].trim() &&
+            !String((storyState.story.guidelines || {})[key] || '').trim() &&
+            !String(document.querySelector('[data-story-guideline="' + key + '"]').value || '').trim();
+        });
+        if (offered.length) {
+          var proposal = offered.map(function (key) {
+            return names[key] + ':\n' + suggestions[key].trim();
+          }).join('\n\n');
+          if (window.confirm('Add these suggested Story guidelines to empty fields?\n\n' + proposal)) {
+            offered.forEach(function (key) {
+              var field = document.querySelector('[data-story-guideline="' + key + '"]');
+              if (field.value.trim()) return;
+              field.value = suggestions[key].trim();
+            });
+            scheduleStorySave();
+          }
+        }
         reportConsoleInfo('Storyboard', 'Defined ' + String(payload.addedCount || 0) + ' new Story invariant' + (Number(payload.addedCount || 0) === 1 ? '' : 's') + ' from the concept.');
         return consumeDirectorJob(payload.jobId);
       });

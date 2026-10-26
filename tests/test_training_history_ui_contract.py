@@ -291,11 +291,13 @@ def test_h3_image_adapter_resume_is_inherited_not_selectable():
     runner = (ROOT / "tool" / "js" / "training_runner_ui.js").read_text(encoding="utf-8")
     backend = (ROOT / "tool" / "server" / "training_runner.py").read_text(encoding="utf-8")
     assert 'id="training-run-h3-adapter-inherited"' in html
-    assert "h3AdapterOption.classList.toggle('hidden', stage !== 'h3')" in review
+    assert "h3MethodOption.classList.toggle('hidden', stage !== 'h3')" in review
     assert "h3AdapterCheckbox.disabled = resumeH3" in review
     assert "h3AdapterCheckbox.indeterminate = resumeH3" in review
     assert "savedVariant === 'on' || savedVariant === 'legacy'" in review
     assert "savedVariant === 'off'" in review
+    assert 'data-h3-method=' in history
+    assert 'id="training-run-h3-method"' in html
     assert "data-image-adapter=" in history
-    assert "if (usingResume) delete settings.h3ImageTrainingAdapter;" in runner
+    assert "if (usingResume) { delete settings.h3ImageTrainingAdapter; delete settings.h3TrainingMethod; }" in runner
     assert "Start a fresh run to change this variant" in backend

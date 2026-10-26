@@ -145,6 +145,7 @@ function trainingRunTemplateSettings(payload) {
     adapterDropout: settings.adapterDropout == null || settings.adapterDropout === '' ? '0' : String(settings.adapterDropout),
     h3ImageShift: stage === 'h3' ? String(settings.h3ImageShift == null ? 1 : settings.h3ImageShift) : undefined,
     h3ImageTrainingAdapter: false,
+    h3TrainingMethod: "cfg",
     h3FocusedBlocks: false
   };
 }
@@ -202,6 +203,8 @@ function renderTrainingRunParameters(payload) {
   var imageShiftInput = document.getElementById('training-run-h3-image-shift-input');
   var resetButton = document.getElementById('training-run-parameters-reset');
   var presetSelect = document.getElementById('training-run-preset-select');
+  var h3MethodOption = document.getElementById('training-run-h3-method-option');
+  var h3MethodSelect = document.getElementById('training-run-h3-method');
   var h3AdapterOption = document.getElementById('training-run-h3-adapter-option');
   var h3AdapterCheckbox = document.getElementById('training-run-h3-adapter');
   var inheritedAdapterLabel = document.getElementById('training-run-h3-adapter-inherited');
@@ -235,7 +238,20 @@ function renderTrainingRunParameters(payload) {
   var savedVariant = resumeH3 && selectedCheckpoint && selectedCheckpoint.value &&
     !(manualCheckpoint && manualCheckpoint.value.trim()) && selectedCheckpoint.selectedOptions.length
       ? selectedCheckpoint.selectedOptions[0].getAttribute('data-image-adapter') : '';
-  h3AdapterOption.classList.toggle('hidden', stage !== 'h3');
+  h3MethodOption.classList.toggle('hidden', stage !== 'h3');
+  h3MethodSelect.disabled = resumeH3;
+  h3MethodSelect.value = resumeH3 ? 'checkpoint' : (draft.h3TrainingMethod || 'cfg');
+  if (resumeH3 && selectedCheckpoint && selectedCheckpoint.value) {
+    var savedMethod = selectedCheckpoint.selectedOptions[0].getAttribute('data-h3-method');
+    if (savedMethod && ['cfg', 'ostris', 'image', 'plain'].indexOf(savedMethod) !== -1) h3MethodSelect.value = savedMethod;
+  }
+  h3MethodSelect.onchange = function () {
+    trainingWorkspaceState.runConfigDraft.h3TrainingMethod = h3MethodSelect.value;
+    trainingWorkspaceState.runConfigDraft.h3ImageTrainingAdapter = h3MethodSelect.value === 'image';
+    trainingWorkspaceState.runConfigDirty = true;
+    updateTrainingRunParameterState();
+  };
+  h3AdapterOption.classList.toggle('hidden', true);
   h3AdapterCheckbox.disabled = resumeH3;
   h3AdapterCheckbox.indeterminate = resumeH3 &&
     savedVariant !== 'on' && savedVariant !== 'off' && savedVariant !== 'legacy';
@@ -302,6 +318,7 @@ function renderTrainingRunParameters(payload) {
       throw new Error('Unknown training run setup mode: ' + presetSelect.value);
     }
     trainingWorkspaceState.runConfigDraft.h3ImageTrainingAdapter = !!draft.h3ImageTrainingAdapter;
+    trainingWorkspaceState.runConfigDraft.h3TrainingMethod = draft.h3TrainingMethod || "cfg";
     trainingWorkspaceState.runConfigDraft.h3FocusedBlocks = !!draft.h3FocusedBlocks;
     if (stage === 'h3') trainingWorkspaceState.runConfigDraft.h3ImageShift = draft.h3ImageShift;
     trainingWorkspaceState.runConfigDirty = true;

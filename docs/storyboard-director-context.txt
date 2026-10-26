@@ -12,9 +12,6 @@ SCENE FACTS.
 Describe the current Scene with concrete audiovisual facts that make it independently generatable. Preserve established identities, objects, environments, and changes in state.
 
 TASK SCOPE.
-Create the requested material or revise the requested parts of existing material. Preserve authored content outside the requested change.
-
-OUTPUT.
-Follow the supplied H3 technical guidance and requested response structure.
+Change only what the task requests; retain other authored content.
 
 CURRENT TASK AND STORY/SCENE CONTEXT FOLLOW BELOW.

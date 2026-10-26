@@ -710,7 +710,7 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
         if not _clean(scene.get("summary")):
             raise ValueError("Scene summary / intent is required to write a prompt.")
         blocks.append(
-            "[CURRENT TASK]\nWrite the complete MiniMax H3 generation prompt for this Scene, using the supplied guidance and Scene context."
+            "[CURRENT TASK]\nWrite the complete MiniMax H3 generation prompt for this Scene exactly as it should be used, following the supplied guidance and Scene context."
         )
     else:
         existing_prompt = _clean(scene.get("prompt"))

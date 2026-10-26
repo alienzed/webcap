@@ -1719,6 +1719,49 @@ def qa_review_route():
         return jsonify({"ok": False, "error": str(exc)}), 400
 
 
+@app.route("/fs/qa/curate/draft", methods=["GET", "POST", "DELETE"])
+def qa_curate_draft_route():
+    """Small, Set-owned Curate draft. Never writes media metadata or folder state."""
+    try:
+        folder = str((request.args if request.method == "GET" else
+                      (request.get_json(silent=True) or {})).get("folder") or "").strip()
+        path = _resolve_folder(folder) / ".webcap_curate.json"
+        if request.method == "GET":
+            if not path.exists():
+                return jsonify({"ok": True, "draft": None})
+            with path.open("r", encoding="utf-8") as stream:
+                draft = json.load(stream)
+            if not isinstance(draft, dict) or draft.get("version") != 1:
+                raise ValueError("Unsupported Curate draft version.")
+            return jsonify({"ok": True, "draft": draft})
+        if request.method == "DELETE":
+            path.unlink(missing_ok=True)
+            return jsonify({"ok": True})
+        data = request.get_json(silent=True) or {}
+        draft = data.get("draft")
+        if not isinstance(draft, dict) or draft.get("version") != 1:
+            raise ValueError("Invalid Curate draft.")
+        if len(json.dumps(draft, ensure_ascii=False)) > 350000:
+            raise ValueError("Curate draft exceeds 350 KB.")
+        import tempfile
+        temp_path = None
+        try:
+            with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=path.parent,
+                    prefix=".webcap_curate.", suffix=".tmp", delete=False) as stream:
+                temp_path = Path(stream.name)
+                json.dump(draft, stream, ensure_ascii=False)
+                stream.flush()
+                os.fsync(stream.fileno())
+            os.replace(temp_path, path)
+        finally:
+            if temp_path is not None and temp_path.exists():
+                temp_path.unlink()
+        return jsonify({"ok": True})
+    except Exception as exc:
+        app.logger.exception("QA CURATE DRAFT FAILED: %s", exc)
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
 @app.route("/fs/qa/curate", methods=["POST"])
 def qa_curate_route():
     """Optional QA-only Director interpretation of aggregated Set concepts."""

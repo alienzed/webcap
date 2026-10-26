@@ -7,8 +7,47 @@
     eligible: [], order: [], choices: new Set(), sizes: {}, preset: 'balanced',
     filter: 'selected', limit: 72, summary: '', jobId: '', error: '',
     analysis: null, balanceGroups: new Set(), overriddenGroups: new Set(), conceptRoles: new Map(), availableGroups: [],
-    status: '', missingSight: 0, ignored: 0
+    status: '', missingSight: 0, ignored: 0, draftStale: false, initialChoices: []
   };
+
+  var draftWrite = Promise.resolve();
+  function draftPayload() {
+    return {version:1, signature:session.signature, focus:session.focus,
+      analysis:session.analysis, summary:session.summary,
+      choices:Array.from(session.choices), initialChoices:session.initialChoices, preset:session.preset,
+      balanceGroups:Array.from(session.balanceGroups),
+      overriddenGroups:Array.from(session.overriddenGroups),
+      conceptRoles:Array.from(session.conceptRoles)};
+  }
+  function saveDraft() {
+    if (!session.analysis || session.phase !== 'ready') return;
+    var folder = session.folder, draft = draftPayload();
+    draftWrite = draftWrite.catch(function() {}).then(function() {
+      return request('/fs/qa/curate/draft', {folder:folder, draft:draft});
+    }).catch(function(err) { window.reportConsoleError('QA Curate · Save draft',err); });
+  }
+  function restoreDraft(draft) {
+    if (!draft || draft.version !== 1 || !draft.analysis) return false;
+    if (!Array.isArray(draft.choices) || !Array.isArray(draft.balanceGroups) ||
+        !Array.isArray(draft.overriddenGroups) || !Array.isArray(draft.conceptRoles))
+      throw new Error('Curate draft contains invalid selections.');
+    session.analysis = draft.analysis;
+    session.initialChoices = Array.isArray(draft.initialChoices) ? draft.initialChoices : draft.choices.slice();
+    session.balanceGroups = new Set(draft.balanceGroups);
+    session.overriddenGroups = new Set(draft.overriddenGroups);
+    session.conceptRoles = new Map(draft.conceptRoles);
+    session.preset = 'custom';
+    applyBalancePriorities();
+    session.choices = new Set(draft.choices.filter(function(file) {
+      return session.rows.some(function(row) { return row.fileName === file; });
+    }));
+    session.summary = String(draft.summary || '');
+    session.phase = 'ready';
+    session.status = draft.signature === session.signature ? 'Saved Curate draft restored.'
+      : 'Saved Curate draft restored · source evidence changed; review before creating a Set.';
+    session.draftStale = draft.signature !== session.signature;
+    return true;
+  }
 
   function normalize(value) {
     return String(value || '').trim().replace(/\s+/g, ' ');
@@ -281,6 +320,176 @@
     });
   }
 
+
+  function openCurateReview(host, startGroup) {
+    var group = startGroup || 'selected', cursor = 0, autoNext = false;
+    var originalFocus = document.activeElement;
+    var overlay = element('div', 'qa-curation-review');
+    overlay.setAttribute('role', 'dialog');
+    overlay.setAttribute('aria-modal', 'true');
+    overlay.setAttribute('aria-label', 'Curate review');
+    var panel = element('div', 'qa-curation-review-panel');
+    overlay.appendChild(panel);
+    // Navigation order is fixed for this review, so a changed choice can be reconsidered.
+    var selectedOrder = session.order.filter(function(file) { return session.choices.has(file); });
+    var excludedOrder = session.order.filter(function(file) { return !session.choices.has(file); });
+    function list() { return group === 'selected' ? selectedOrder : excludedOrder; }
+    function close() {
+      document.removeEventListener('keydown', keydown);
+      overlay.remove();
+      renderQaCuration(host, session.signature);
+      if (originalFocus && originalFocus.isConnected) originalFocus.focus();
+    }
+    function next(n) { cursor = Math.max(0, Math.min(list().length - 1, cursor + n)); render(); }
+    function keydown(e) {
+      if (!overlay.isConnected) return;
+      if (e.key === 'Escape') { e.preventDefault(); close(); return; }
+      var target = e.target;
+      if (target && (target.closest('input, select, textarea, [contenteditable="true"]'))) return;
+      if (e.key === 'Enter' && !e.repeat) {
+        // Keep native Enter for secondary buttons; the primary decision works from anywhere else.
+        if (target && target.closest('button:not(.qa-curation-review-decision)')) return;
+        e.preventDefault();
+        var primary = panel.querySelector('.qa-curation-review-decision');
+        if (primary) primary.click();
+        return;
+      }
+      if (e.key === 'ArrowLeft') { e.preventDefault(); next(-1); }
+      if (e.key === 'ArrowRight') { e.preventDefault(); next(1); }
+      if (e.key === 'Tab') {
+        var controls = Array.from(panel.querySelectorAll('button:not(:disabled), input:not(:disabled)'));
+        if (e.shiftKey && document.activeElement === controls[0]) {
+          e.preventDefault(); controls[controls.length - 1].focus();
+        } else if (!e.shiftKey && document.activeElement === controls[controls.length - 1]) {
+          e.preventDefault(); controls[0].focus();
+        }
+      }
+    }
+    function render() {
+      var retainedFocus = document.activeElement && document.activeElement.className;
+      panel.replaceChildren();
+      var heading = element('div', 'qa-curation-review-top');
+      heading.appendChild(element('strong', '', 'Curate Review'));
+      heading.appendChild(button('Close', close));
+      panel.appendChild(heading);
+      var tabs = element('div', 'qa-curation-review-tabs');
+      [['selected', 'Review original inclusions'], ['excluded', 'Review original exclusions']].forEach(function(part) {
+        var ctl = button(part[1], function() { group = part[0]; cursor = 0; render(); });
+        ctl.setAttribute('aria-pressed', String(group === part[0]));
+        tabs.appendChild(ctl);
+      });
+      panel.appendChild(tabs);
+      var items = list();
+      if (!items.length) { panel.appendChild(element('p', '', 'No media in this group.')); return; }
+      var name = items[cursor], row = session.rows.find(function(r) { return r.fileName === name; });
+      if (!row) throw new Error('Curate Review missing media: ' + name);
+      var included = session.choices.has(name);
+      var imageArea = element('div', 'qa-curation-review-image');
+      var media = element(isPreviewVideoFileName(name) ? 'video' : 'img');
+      media.src = mediaGridMediaUrl({fileName: name, key: name});
+      if (media.tagName === 'VIDEO') { media.controls = true; media.playsInline = true; media.preload = 'metadata'; }
+      else media.alt = name;
+      imageArea.appendChild(media);
+      panel.appendChild(imageArea);
+      var explanation = element('div', 'qa-curation-review-evidence');
+      explanation.appendChild(element('strong', 'qa-curation-review-counter',
+        (included ? 'INCLUDED' : 'EXCLUDED') + ' · ' + (cursor + 1) + ' / ' + items.length));
+      var withChange = new Set(session.choices);
+      if (included) withChange.delete(name); else withChange.add(name);
+      var before = coverage(session.rows, session.eligible, session.choices).ratio * 100;
+      var after = coverage(session.rows, session.eligible, withChange).ratio * 100;
+      var delta = after - before;
+      explanation.appendChild(element('strong', 'qa-curation-review-verdict',
+        (included ? 'Remove: ' : 'Include: ') + (delta > 0 ? '+' : '') + delta.toFixed(2) + ' coverage points'));
+      var bar = element('div', 'qa-curation-review-bar');
+      var fill = element('div', 'qa-curation-review-bar-fill');
+      fill.style.width = before.toFixed(2) + '%';
+      function preview(show) {
+        fill.style.width = (show ? after : before).toFixed(2) + '%';
+        conceptPreviews.forEach(function(update) { update(show); });
+      }
+      bar.appendChild(fill);
+      explanation.appendChild(bar);
+      explanation.appendChild(element('span', 'qa-curation-review-numbers',
+        'Current ' + before.toFixed(1) + '% → With change ' + after.toFixed(1) + '%'));
+      var matched = row.ids.map(function(id) { return session.eligible.find(function(c) { return c.id === id; }); }).filter(Boolean);
+      var counts = new Map();
+      session.rows.forEach(function(r) {
+        if (session.choices.has(r.fileName)) r.ids.forEach(function(id) {
+          counts.set(id, (counts.get(id) || 0) + 1);
+        });
+      });
+      // Compare like-for-like concepts within each group and role, not raw
+      // counts across unrelated concepts. This is descriptive, not a target.
+      var conceptPreviews = [];
+      var shown = matched.filter(function(c) { return c.role === 'core'; }).slice(0, 4);
+      if (!shown.length) shown = matched.slice(0, 4);
+      shown.forEach(function(c) {
+        var count = counts.get(c.id) || 0;
+        var projected = count + (included ? -1 : 1);
+        var max = Math.max(1, c.count);
+        var peers = session.eligible.filter(function(p) {
+          return p.group === c.group && p.role === c.role;
+        });
+        var line = element('div', 'qa-curation-review-concept');
+        line.appendChild(element('strong', '', c.label));
+        var meter = element('div', 'qa-curation-review-concept-meter');
+        var fill = element('div', 'qa-curation-review-concept-fill');
+        meter.appendChild(fill);
+        line.appendChild(meter);
+        var countLabel = element('span', '', '');
+        line.appendChild(countLabel);
+        function update(show) {
+          var n = show ? projected : count;
+          var relative = strength(n, c.role) / strength(max, c.role);
+          var peerMean = peers.reduce(function(sum, p) {
+            var peerCount = (counts.get(p.id) || 0) +
+              (show && row.ids.includes(p.id) ? (included ? -1 : 1) : 0);
+            return sum + strength(peerCount, p.role) / strength(Math.max(1, p.count), p.role);
+          }, 0) / peers.length;
+          // Border intensity indicates relative divergence, not a hard failure.
+          var divergence = peers.length > 1 ? Math.abs(relative - peerMean) : 0;
+          meter.style.setProperty('--curate-divergence', Math.min(0.75, divergence).toFixed(3));
+          fill.style.width = (100 * n / max) + '%';
+          countLabel.textContent = n + ' / ' + max;
+        }
+        update(false);
+        conceptPreviews.push(update);
+        explanation.appendChild(line);
+      });
+      if (!matched.length) explanation.appendChild(element('span', '', 'No prioritized concepts'));
+      explanation.appendChild(element('small', '', 'Bars show representation among available items, not an ideal target or visual quality.'));
+      var actions = element('div', 'qa-curation-review-actions');
+      var prev = button('← Previous', function() { next(-1); }); prev.disabled = cursor === 0; actions.appendChild(prev);
+      var decision = button(included ? 'Remove' : 'Include', function() {
+        if (included) session.choices.delete(name); else session.choices.add(name);
+        session.preset = 'custom';
+        if (autoNext && cursor < items.length - 1) cursor += 1;
+        saveDraft();
+        render();
+      }, 'qa-curation-review-decision');
+      decision.addEventListener('mouseenter', function() { preview(true); });
+      decision.addEventListener('mouseleave', function() { preview(false); });
+      decision.addEventListener('focus', function() { preview(true); });
+      decision.addEventListener('blur', function() { preview(false); });
+      actions.appendChild(decision);
+      var forward = button('Next →', function() { next(1); });
+      forward.disabled = cursor === items.length - 1; actions.appendChild(forward);
+      var option = element('label', 'qa-curation-review-option');
+      var checkbox = element('input'); checkbox.type = 'checkbox'; checkbox.checked = autoNext;
+      checkbox.onchange = function() { autoNext = checkbox.checked; };
+      option.appendChild(checkbox); option.appendChild(element('span', '', 'Auto-advance'));
+      actions.appendChild(option);
+      explanation.appendChild(actions);
+      panel.appendChild(explanation);
+      if (retainedFocus === 'qa-curation-review-decision') decision.focus();
+    }
+    document.body.appendChild(overlay);
+    document.addEventListener('keydown', keydown);
+    render();
+    panel.querySelector('button').focus();
+  }
+
   function showProposal(host) {
     var title = element('h2', 'qa-curation-heading', 'Your training shortlist');
     host.appendChild(title);
@@ -303,6 +512,8 @@
     host.appendChild(element('p', 'qa-curation-helper',
       'Coverage is measured against available annotated evidence, not predicted LoRA accuracy.'));
     host.appendChild(element('p', 'qa-curation-summary', session.summary));
+    if (session.draftStale) host.appendChild(element('p', 'qa-curation-status', 'Source evidence changed since analysis. Selections preserved; reanalyze to update priorities.'));
+    else if (session.status) host.appendChild(element('p', 'qa-curation-helper', session.status));
 
     var priorities = element('section', 'qa-curation-priorities');
     priorities.appendChild(element('h3', '', 'Balance priorities'));
@@ -324,6 +535,7 @@
         if (toggle.checked) session.balanceGroups.add(group);
         else session.balanceGroups.delete(group);
         applyBalancePriorities();
+        saveDraft();
         renderQaCuration(host, session.signature);
       };
       label.appendChild(toggle);
@@ -395,6 +607,7 @@
         function () {
           session.preset = name;
           session.choices = new Set(session.order.slice(0, session.sizes[name]));
+          saveDraft();
           renderQaCuration(host, session.signature);
         }, 'review-captions-btn' + (active ? ' qa-curation-active' : ''));
       control.setAttribute('aria-pressed', active ? 'true' : 'false');
@@ -402,6 +615,20 @@
     });
     host.appendChild(presets);
 
+    host.appendChild(button('Reset selections to original recommendation', function() {
+      session.choices = new Set(session.initialChoices);
+      session.preset = 'custom';
+      saveDraft();
+      renderQaCuration(host, session.signature);
+    }));
+    var reviews = element('div', 'qa-curation-controls');
+    reviews.appendChild(button('Review included · Full screen', function() {
+      openCurateReview(host, 'selected');
+    }, 'qa-curation-primary'));
+    reviews.appendChild(button('Review excluded · Full screen', function() {
+      openCurateReview(host, 'excluded');
+    }));
+    host.appendChild(reviews);
     var controls = element('div', 'qa-curation-controls');
     ['selected', 'all'].forEach(function (filter) {
       var ctl = button(filter === 'selected' ? 'Selected' : 'All images',
@@ -444,6 +671,7 @@
         if (input.checked) session.choices.add(fileName);
         else session.choices.delete(fileName);
         session.preset = 'custom';
+        saveDraft();
         card.classList.toggle('is-selected', input.checked);
         updateStats(host);
         if (session.filter === 'selected' && !input.checked) {
@@ -500,10 +728,12 @@
     }));
     header.appendChild(element('span', '', 'Training Set Curation'));
     host.appendChild(header);
-    if (session.signature !== signature || qaCurrentCurationSignature() !== session.signature ||
-        String(state.folder || '') !== session.folder) {
+    if (String(state.folder || '') !== session.folder) {
       host.appendChild(element('p', 'qa-curation-status', 'The training selection changed. Return to QA and analyze it again.'));
       return;
+    }
+    if (session.phase === 'ready' && qaCurrentCurationSignature() !== session.signature) {
+      session.draftStale = true;
     }
     if (session.phase !== 'ready') {
       host.appendChild(element('h2', 'qa-curation-heading',
@@ -578,7 +808,6 @@
       throw new Error('QA Curation needs grouped annotations or saved visual Sight.');
     }
     var model = String(getDirectorModelPreference() || '').trim();
-    if (!model) throw new Error('Choose a Director model for QA Curation.');
     session.input = items;
     session.focus = String(focus || '');
     session.folder = String(state.folder || '');
@@ -596,8 +825,29 @@
     session.status = 'Step 1/3 · Indexed ' + items.length + ' images into ' + inventory.concepts.length + ' candidate concepts.';
     session.error = '';
     session.jobId = '';
+    session.draftStale = false;
     window.qaShowCuration();
     renderCurrent();
+    draftWrite.catch(function() {}).then(function() {
+      return fetch('/fs/qa/curate/draft?folder=' + encodeURIComponent(session.folder));
+    }).then(function(resp) {
+      return resp.json().then(function(body) {
+        if (!resp.ok || !body.ok) throw new Error(body.error || 'Curate draft read failed.');
+        return body.draft;
+      });
+    }).then(function(draft) {
+      if (token !== session.token) return null;
+      if (restoreDraft(draft)) { renderCurrent(); return null; }
+      if (!model) throw new Error('Choose a Director model for QA Curation.');
+      return beginDirector();
+    }).catch(function(err) {
+      if (token !== session.token) return;
+      session.phase = 'failed';
+      session.error = String(err.message || err);
+      window.reportConsoleError('QA Curate draft',err);
+      renderCurrent();
+    });
+    function beginDirector() {
     session.status = 'Step 2/3 · Asking Director what matters for training…';
     renderCurrent();
     request('/fs/qa/curate', {
@@ -645,6 +895,9 @@
       session.summary = String(result.summary || 'A curated mix of key constructions and supporting variation.');
       session.phase = 'ready';
       session.jobId = '';
+      session.initialChoices = Array.from(session.choices);
+      session.draftStale = false;
+      saveDraft();
       renderCurrent();
     }).catch(function (err) {
       if (token !== session.token) return;
@@ -653,6 +906,7 @@
       window.reportConsoleError('QA Curation', err);
       renderCurrent();
     });
+    }
   }
 
   window.startQaCuration = startQaCuration;

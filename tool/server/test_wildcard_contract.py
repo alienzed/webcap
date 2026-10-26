@@ -240,8 +240,7 @@ def build_request(captions, set_name="", focus="", vocabulary=None, annotations=
         "tag name, leave annotationGroup empty for that dimension rather than claiming a tag mapping.\n"
         "- Do not recombine mutually exclusive shapes into one choice. "
         "Independently vary actual components, but keep each resolved prompt physically meaningful.\n"
-        "- Recombine attributes across dimensions so tests exercise independently selectable properties, "
-        "not merely replay complete caption fragments.\n"
+        
         "- The observed concept-tag inventory is the main evidence: each group and tag is distinct, "
         "and counts describe prevalence in the selected run. "
         "The sampled captions illustrate natural phrasing, not an exhaustive list.\n"
@@ -256,13 +255,13 @@ def build_request(captions, set_name="", focus="", vocabulary=None, annotations=
         "[GENERAL RULES]\n"
         "- Each caption is prefixed with [count=N] frequency metadata. Use the count as evidence of prevalence; it is not caption text.\n"
         "- Keep stable subject tokens, identity terms, and consistently recurring descriptors outside wildcard braces.\n"
-        "- Put concrete interchangeable alternatives in {a|b|c} groups; leave consistent terms outside braces.\n"
+        
         "- Consolidate obvious synonymous wording only when the alternatives mean the same thing.\n"
         "- Put shared nouns and grammar outside braces; use the shortest interchangeable option that keeps every result natural. "
         "Whole phrases are appropriate only for a genuinely inseparable single attribute.\n"
         "- Write the wildcard as natural caption prose. Prefer complete, readable sentences over comma-heavy fragments.\n"
-        "- Preserve useful sentence or paragraph breaks when the caption content supports them; do not collapse unrelated ideas into one run-on line.\n"
-        "- Keep the resulting caption grammatically usable for every alternative. Avoid nested wildcard braces.\n"
+        
+        "- Keep every resolved caption grammatical; avoid nested wildcard braces.\n"
         "- stableTerms should summarize meaningful common content, not punctuation or filler words.\n"
         "- variationGroups must correspond to concrete wildcard dimensions in the wildcard and list their concrete options.\n\n"
         "[SET CAPTIONS]\n"

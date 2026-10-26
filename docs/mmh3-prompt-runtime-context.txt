@@ -40,4 +40,3 @@ Place synchronized dialogue and sound with their shot. Use stable speaker IDs an
 
 Treat supplied Story facts, references, and invariants as established generation context. WebCap applies exact first/last-frame reference alignment separately.
 
-Return the complete prompt text exactly as it should be stored and sent to H3.

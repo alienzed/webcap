@@ -710,9 +710,7 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
         if not _clean(scene.get("summary")):
             raise ValueError("Scene summary / intent is required to write a prompt.")
         blocks.append(
-            "[CURRENT TASK]\nWrite the complete MiniMax H3 generation prompt for this Scene exactly as it should be used. "
-            "Follow the supplied Director and H3 guidance, preserving relevant Story facts, invariants, evolving state, and exact visual anchors. "
-            "When an exact first/last-frame reference is attached, respect that visual anchor; WebCap will add only the required mechanical alignment statement."
+            "[CURRENT TASK]\nWrite the complete MiniMax H3 generation prompt for this Scene exactly as it should be used, following the supplied guidance and Scene context."
         )
     else:
         existing_prompt = _clean(scene.get("prompt"))

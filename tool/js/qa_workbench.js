@@ -1446,7 +1446,7 @@
     var findings = [];
     candidates.forEach(function (row) {
       var canonical = [row.sourceKey, row.targetKey].sort().join('\u0003');
-      if (seenPairs[canonical] || findings.length >= 3) return;
+      if (seenPairs[canonical] || findings.length >= 12) return;
       seenPairs[canonical] = true;
       var sourceFiles = filesByKey[row.sourceKey] || [];
       var targetLookup = {};

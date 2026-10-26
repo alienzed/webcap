@@ -728,10 +728,12 @@
     }));
     header.appendChild(element('span', '', 'Training Set Curation'));
     host.appendChild(header);
-    if (String(state.folder || '') !== session.folder ||
-        (session.signature !== signature && !session.draftStale)) {
+    if (String(state.folder || '') !== session.folder) {
       host.appendChild(element('p', 'qa-curation-status', 'The training selection changed. Return to QA and analyze it again.'));
       return;
+    }
+    if (session.phase === 'ready' && qaCurrentCurationSignature() !== session.signature) {
+      session.draftStale = true;
     }
     if (session.phase !== 'ready') {
       host.appendChild(element('h2', 'qa-curation-heading',

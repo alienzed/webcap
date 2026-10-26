@@ -2103,6 +2103,7 @@
                     <span>Quick</span>
                     <div id="director-chat-mode-presets" class="director-chat-mode-presets"></div>
                     <button id="director-chat-workshop-prepare" type="button" class="review-captions-btn hidden" title="Prepare a reviewed revision of this Scene’s timed shots">Prepare Revision</button>
+                    <button id="director-chat-story-prepare" type="button" class="review-captions-btn hidden" title="Propose reviewed edits to this Story’s Directing Guidelines">Propose Story Changes</button>
                     <span id="director-chat-workshop-status" class="director-chat-workshop-status" aria-live="polite"></span>
                 </div>
                 <div class="director-chat-model-row director-chat-model-tools">
@@ -2154,6 +2155,24 @@
                 <div class="storyboard-workshop-review-actions">
                     <button id="storyboard-workshop-review-back" type="button" class="review-captions-btn">Back to discussion</button>
                     <button id="storyboard-workshop-review-apply" type="button" class="storyboard-primary-btn">Apply Revision</button>
+                </div>
+            </dialog>
+            <dialog id="storyboard-guidelines-review" class="storyboard-workshop-review storyboard-guidelines-review" aria-labelledby="storyboard-guidelines-review-title">
+                <div class="storyboard-workshop-review-head">
+                    <div>
+                        <h3 id="storyboard-guidelines-review-title">Review Story Guidelines</h3>
+                        <p id="storyboard-guidelines-review-summary"></p>
+                    </div>
+                    <button id="storyboard-guidelines-review-close" type="button" class="review-captions-btn" aria-label="Close guideline review">×</button>
+                </div>
+                <div class="storyboard-workshop-review-content">
+                    <p class="storyboard-guidelines-review-intro">Approve individual fields and edit suggested wording before applying. Everything else stays unchanged.</p>
+                    <div id="storyboard-guidelines-review-fields" class="storyboard-guidelines-review-fields"></div>
+                    <p id="storyboard-guidelines-review-error" class="storyboard-workshop-review-error" role="alert"></p>
+                </div>
+                <div class="storyboard-workshop-review-actions">
+                    <button id="storyboard-guidelines-review-cancel" type="button" class="review-captions-btn">Back</button>
+                    <button id="storyboard-guidelines-review-apply" type="button" class="storyboard-primary-btn">Apply Selected</button>
                 </div>
             </dialog>
             <aside id="inference-queue-drawer" class="inference-queue-drawer hidden" aria-label="Job Queues" aria-hidden="true">

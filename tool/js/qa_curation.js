@@ -7,14 +7,14 @@
     eligible: [], order: [], choices: new Set(), sizes: {}, preset: 'balanced',
     filter: 'selected', limit: 72, summary: '', jobId: '', error: '',
     analysis: null, balanceGroups: new Set(), overriddenGroups: new Set(), conceptRoles: new Map(), availableGroups: [],
-    status: '', missingSight: 0, ignored: 0, draftStale: false
+    status: '', missingSight: 0, ignored: 0, draftStale: false, initialChoices: []
   };
 
   var draftWrite = Promise.resolve();
   function draftPayload() {
     return {version:1, signature:session.signature, focus:session.focus,
       analysis:session.analysis, summary:session.summary,
-      choices:Array.from(session.choices), preset:session.preset,
+      choices:Array.from(session.choices), initialChoices:session.initialChoices, preset:session.preset,
       balanceGroups:Array.from(session.balanceGroups),
       overriddenGroups:Array.from(session.overriddenGroups),
       conceptRoles:Array.from(session.conceptRoles)};
@@ -24,7 +24,7 @@
     var folder = session.folder, draft = draftPayload();
     draftWrite = draftWrite.catch(function() {}).then(function() {
       return request('/fs/qa/curate/draft', {folder:folder, draft:draft});
-    }).catch(function(err) { window.reportConsoleError('QA Curate · Save draft',err); throw err; });
+    }).catch(function(err) { window.reportConsoleError('QA Curate · Save draft',err); });
   }
   function restoreDraft(draft) {
     if (!draft || draft.version !== 1 || !draft.analysis) return false;
@@ -32,6 +32,7 @@
         !Array.isArray(draft.overriddenGroups) || !Array.isArray(draft.conceptRoles))
       throw new Error('Curate draft contains invalid selections.');
     session.analysis = draft.analysis;
+    session.initialChoices = Array.isArray(draft.initialChoices) ? draft.initialChoices : draft.choices.slice();
     session.balanceGroups = new Set(draft.balanceGroups);
     session.overriddenGroups = new Set(draft.overriddenGroups);
     session.conceptRoles = new Map(draft.conceptRoles);
@@ -614,6 +615,12 @@
     });
     host.appendChild(presets);
 
+    host.appendChild(button('Reset selections to original recommendation', function() {
+      session.choices = new Set(session.initialChoices);
+      session.preset = 'custom';
+      saveDraft();
+      renderQaCuration(host, session.signature);
+    }));
     var reviews = element('div', 'qa-curation-controls');
     reviews.appendChild(button('Review included · Full screen', function() {
       openCurateReview(host, 'selected');
@@ -721,8 +728,8 @@
     }));
     header.appendChild(element('span', '', 'Training Set Curation'));
     host.appendChild(header);
-    if (session.signature !== signature || qaCurrentCurationSignature() !== session.signature ||
-        String(state.folder || '') !== session.folder) {
+    if (String(state.folder || '') !== session.folder ||
+        (session.signature !== signature && !session.draftStale)) {
       host.appendChild(element('p', 'qa-curation-status', 'The training selection changed. Return to QA and analyze it again.'));
       return;
     }
@@ -884,6 +891,7 @@
       session.summary = String(result.summary || 'A curated mix of key constructions and supporting variation.');
       session.phase = 'ready';
       session.jobId = '';
+      session.initialChoices = Array.from(session.choices);
       session.draftStale = false;
       saveDraft();
       renderCurrent();

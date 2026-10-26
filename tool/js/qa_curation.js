@@ -828,7 +828,9 @@
     session.draftStale = false;
     window.qaShowCuration();
     renderCurrent();
-    fetch('/fs/qa/curate/draft?folder=' + encodeURIComponent(session.folder)).then(function(resp) {
+    draftWrite.catch(function() {}).then(function() {
+      return fetch('/fs/qa/curate/draft?folder=' + encodeURIComponent(session.folder));
+    }).then(function(resp) {
       return resp.json().then(function(body) {
         if (!resp.ok || !body.ok) throw new Error(body.error || 'Curate draft read failed.');
         return body.draft;

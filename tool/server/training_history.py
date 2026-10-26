@@ -48,6 +48,19 @@ def _h3_uses_image_adapter(parsed_config):
     )
 
 
+def _h3_training_method(parsed_config):
+    model = parsed_config.get("model") if isinstance(parsed_config.get("model"), dict) else {}
+    if _h3_uses_image_adapter(parsed_config):
+        return "image"
+    merged = model.get("merge_adapters")
+    if isinstance(merged, list) and any(
+        Path(str(item).replace("\\\\", "/")).name.startswith("minimax_h3_training_adapter_v")
+        for item in merged
+    ):
+        return "ostris"
+    return "cfg" if model.get("cfg", 1) > 1 else "plain"
+
+
 def run_summary_from_capture(record_path, stage, captured_items=0):
     """Return a compact summary of the captured config actually used by a run."""
     root = Path(str(record_path or "").strip())
@@ -65,7 +78,7 @@ def run_summary_from_capture(record_path, stage, captured_items=0):
         summary["epochs"] = epochs
     model = parsed.get("model") if isinstance(parsed.get("model"), dict) else {}
     if selected_stage == "h3":
-        summary["trainingVariant"] = "Image Adapter" if _h3_uses_image_adapter(parsed) else "Standard"
+        summary["trainingVariant"] = {"image": "Image Adapter", "ostris": "Ostris", "cfg": "CFG", "plain": "Standard"}[_h3_training_method(parsed)]
     shift = model.get("shift")
     if isinstance(shift, (int, float)):
         summary["shift"] = shift
@@ -408,6 +421,7 @@ def discover_runs(folder_path, stage=""):
                     "matchType": "exact" if saved_hash == source_hash else "compatible",
                     "configHash": saved_hash, "modifiedAt": modified,
                     "imageTrainingAdapter": _h3_uses_premerged_image_adapter(parsed_saved) if stage == "h3" else None,
+                    "h3TrainingMethod": _h3_training_method(parsed_saved) if stage == "h3" else None,
                     "legacyMergedImageAdapter": (
                         _h3_uses_image_adapter(parsed_saved) and not _h3_uses_premerged_image_adapter(parsed_saved)
                     ) if stage == "h3" else None,
@@ -480,6 +494,7 @@ def validate_resumable_run_for_path(folder_path, stage, run_path, reference_conf
     return {"path": raw_path, "runPath": raw_path, "stage": stage,
             "matchType": "exact" if config_sha256(saved_config) == config_sha256(source_config) else "compatible",
             "modelSource": parsed_saved["model"].get("diffusion_model", ""),
+            "h3ResumeModel": {key: parsed_saved["model"].get(key) for key in ("diffusion_model", "merge_adapters", "cfg")} if stage == "h3" else None,
             "imageTrainingAdapter": _h3_uses_premerged_image_adapter(parsed_saved) if stage == "h3" else None,
             "legacyMergedImageAdapter": (
                 _h3_uses_image_adapter(parsed_saved) and not _h3_uses_premerged_image_adapter(parsed_saved)

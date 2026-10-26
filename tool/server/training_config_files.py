@@ -395,8 +395,8 @@ def apply_h3_training_method(config_text, method):
         return apply_h3_premerged_image_model(source)
     if method not in ("cfg", "ostris"):
         raise ValueError("Unknown H3 training method: " + str(method))
-    if Path(str(model.get("diffusion_model") or "").replace("\\\\", "/")).name == Path(
-        h3_premerged_image_model_path().replace("\\\\", "/")
+    if Path(str(model.get("diffusion_model") or "").replace("\\", "/")).name == Path(
+        h3_premerged_image_model_path().replace("\\", "/")
     ).name:
         raise ValueError("CFG and Ostris require the standard H3 base model, not the premerged checkpoint.")
     if method == "cfg":

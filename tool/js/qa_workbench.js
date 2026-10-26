@@ -679,7 +679,11 @@
         vocabulary: checklistItems.map(function (group) {
           return { group: group, alias: getRequirementGroupAlias(group), terms: getChecklistKeywordTermsForRequirement(group) };
         }),
-        items: inputItems
+        items: inputItems,
+        statisticalCandidates: qaBuildAssociationFindings(items).map(function (finding) {
+          return { title: finding.title, summary: finding.summary, files: finding.files.slice(),
+            evidence: finding.facts.map(function (fact) { return fact.value + ' ' + fact.label; }) };
+        })
     };
     qaRequestJson('/fs/qa/deep-scan', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },

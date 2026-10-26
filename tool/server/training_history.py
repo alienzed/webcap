@@ -54,7 +54,7 @@ def _h3_training_method(parsed_config):
         return "image"
     merged = model.get("merge_adapters")
     if isinstance(merged, list) and any(
-        Path(str(item).replace("\\\\", "/")).name.startswith("minimax_h3_training_adapter_v")
+        Path(str(item).replace("\\", "/")).name.startswith("minimax_h3_training_adapter_v")
         for item in merged
     ):
         return "ostris"

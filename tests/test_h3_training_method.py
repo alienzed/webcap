@@ -1,7 +1,5 @@
 """Run-captured H3 guidance methods must be exclusive and checkpoint-stable."""
 import tomllib
-from pathlib import Path
-
 import pytest
 
 from tool.server import config as app_config
@@ -11,11 +9,11 @@ from tool.server.training_config_files import (
 from tool.server.training_history import _h3_training_method
 
 
-SOURCE = '[model]\\ntype = "minimax_h3"\\ndiffusion_model = "/models/standard_h3.safetensors"\\nshift = 8\\ncfg = 4\\n'
+SOURCE = '[model]\ntype = "minimax_h3"\ndiffusion_model = "/models/standard_h3.safetensors"\nshift = 8\ncfg = 4\n'
 
 
 def test_cfg_method_removes_any_previous_adapter_and_keeps_guidance():
-    original = SOURCE + 'merge_adapters = ["/models/old.safetensors"]\\n'
+    original = SOURCE + 'merge_adapters = ["/models/old.safetensors"]\n'
     saved = tomllib.loads(apply_h3_training_method(original, "cfg"))
     assert saved["model"]["cfg"] == 4
     assert "merge_adapters" not in saved["model"]

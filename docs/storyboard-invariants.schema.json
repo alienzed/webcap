@@ -6,9 +6,19 @@
   "type": "object",
   "additionalProperties": false,
   "required": [
-    "invariants"
+    "invariants", "guidelines"
   ],
   "properties": {
+    "guidelines": {
+      "type": "object", "additionalProperties": false,
+      "required": ["visualFocus", "creativeDirection", "variation", "pacing"],
+      "properties": {
+        "visualFocus": {"type": "string"},
+        "creativeDirection": {"type": "string"},
+        "variation": {"type": "string"},
+        "pacing": {"type": "string"}
+      }
+    },
     "invariants": {
       "type": "array",
       "items": {

@@ -1825,6 +1825,7 @@ def qa_deep_scan_route():
             contract = build_set_review_request(
                 items, data.get("vocabulary"), data.get("trainingFocus"), data.get("primer"),
                 sight_evidence=visual_evidence,
+                statistical_candidates=data.get("statisticalCandidates"),
             )
             if data.get("preflight") is True:
                 # Deliberately approximate: not a tokenizer or a hard capacity gate.

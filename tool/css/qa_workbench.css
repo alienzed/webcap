@@ -820,3 +820,21 @@
 .qa-curation-review-option input { width:21px; height:21px; }
 @media(max-height:740px) { .qa-curation-review { overflow-y:auto; } .qa-curation-review-panel { min-height:710px; } }
 @media(max-width:700px) { .qa-curation-review { padding:6px; } .qa-curation-review-actions { gap:6px; } .qa-curation-review button { padding:8px 10px; } .qa-curation-review .qa-curation-review-decision { min-width:110px; } }
+
+/* Large-screen Curate review: image and evidence share the monitor, not a narrow column. */
+@media(min-width:1100px) {
+  .qa-curation-review { padding:clamp(18px,2.5vh,40px); }
+  .qa-curation-review-panel { width:min(2000px,88vw); gap:16px; }
+  .qa-curation-review-panel > .qa-curation-review-image { min-height:0; }
+  .qa-curation-review-panel { display:grid; grid-template-columns:minmax(0,1.3fr) minmax(480px,1fr); grid-template-rows:auto auto minmax(0,1fr); align-items:stretch; }
+  .qa-curation-review-top,.qa-curation-review-tabs { grid-column:1 / -1; }
+  .qa-curation-review-image { grid-column:1; grid-row:3; min-height:0; }
+  .qa-curation-review-evidence { grid-column:2; grid-row:3; align-content:center; gap:14px; padding:20px 26px; overflow:auto; background:var(--panel-soft,#27313d); border-radius:14px; }
+  .qa-curation-review button { font-size:20px; min-height:54px; }
+  .qa-curation-review-counter { font-size:24px; }
+  .qa-curation-review-verdict { font-size:30px; }
+  .qa-curation-review-bar { height:30px; }
+  .qa-curation-review-numbers,.qa-curation-review-concept,.qa-curation-review-option { font-size:19px; }
+  .qa-curation-review-concept progress { height:20px; }
+  .qa-curation-review .qa-curation-review-decision { min-height:78px; font-size:26px; min-width:190px; }
+}

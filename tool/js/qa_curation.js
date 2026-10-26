@@ -304,7 +304,17 @@
     function next(n) { cursor = Math.max(0, Math.min(list().length - 1, cursor + n)); render(); }
     function keydown(e) {
       if (!overlay.isConnected) return;
-      if (e.key === 'Escape') { e.preventDefault(); close(); }
+      if (e.key === 'Escape') { e.preventDefault(); close(); return; }
+      var target = e.target;
+      if (target && (target.closest('input, select, textarea, [contenteditable="true"]'))) return;
+      if (e.key === 'Enter' && !e.repeat) {
+        // Native button Enter remains native; elsewhere it triggers the primary decision.
+        if (target && target.closest('button')) return;
+        e.preventDefault();
+        var primary = panel.querySelector('.qa-curation-review-decision');
+        if (primary) primary.click();
+        return;
+      }
       if (e.key === 'ArrowLeft') { e.preventDefault(); next(-1); }
       if (e.key === 'ArrowRight') { e.preventDefault(); next(1); }
       if (e.key === 'Tab') {

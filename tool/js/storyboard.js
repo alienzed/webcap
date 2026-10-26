@@ -3,6 +3,14 @@
 
   // Session-only submitted instructions, independent of saved Story/Scene prompts.
   var sceneRefineHistory, sceneRevisionHistory, sceneCreationHistory;
+  var storyboardGuidelineReview = null;
+  var STORY_GUIDELINE_LABELS = {
+    visualFocus: 'Visual Focus',
+    creativeDirection: 'Creative Direction',
+    variation: 'Variation / Repetition',
+    pacing: 'Pacing / Rhythm',
+    sceneRelationships: 'Scene Relationships'
+  };
 
   var storyState = {
     stories: [],
@@ -1899,29 +1907,22 @@
         jobId: payload.jobId
       }).then(function () {
         var suggestions = payload.guidelineSuggestions || {};
-        var names = {
-          visualFocus: 'Visual Focus',
-          creativeDirection: 'Creative Direction',
-          variation: 'Variation / Repetition',
-          pacing: 'Pacing / Rhythm'
-        };
-        var offered = Object.keys(names).filter(function (key) {
+        var names = STORY_GUIDELINE_LABELS;
+        var offered = ['visualFocus', 'creativeDirection', 'variation', 'pacing'].filter(function (key) {
           return typeof suggestions[key] === 'string' && suggestions[key].trim() &&
             !String((storyState.story.guidelines || {})[key] || '').trim() &&
             !String(document.querySelector('[data-story-guideline="' + key + '"]').value || '').trim();
         });
         if (offered.length) {
-          var proposal = offered.map(function (key) {
-            return names[key] + ':\n' + suggestions[key].trim();
-          }).join('\n\n');
-          if (window.confirm('Add these suggested Story guidelines to empty fields?\n\n' + proposal)) {
-            offered.forEach(function (key) {
-              var field = document.querySelector('[data-story-guideline="' + key + '"]');
-              if (field.value.trim()) return;
-              field.value = suggestions[key].trim();
-            });
-            scheduleStorySave();
-          }
+          var changes = {};
+          offered.forEach(function (key) { changes[key] = suggestions[key].trim(); });
+          showReviewedGuidelines({
+            storyId: storyId,
+            title: 'Review Director Suggestions',
+            summary: 'Define from Concept · ' + String(offered.length) + ' suggested guidelines',
+            expectedGuidelines: storyState.story.guidelines || {},
+            changes: changes
+          });
         }
         reportConsoleInfo('Storyboard', 'Defined ' + String(payload.addedCount || 0) + ' new Story invariant' + (Number(payload.addedCount || 0) === 1 ? '' : 's') + ' from the concept.');
         return consumeDirectorJob(payload.jobId);
@@ -6806,6 +6807,135 @@
     });
   }
 
+  function showReviewedGuidelines(proposal) {
+    if (!proposal || !storyState.story || String(storyState.story.id) !== String(proposal.storyId)) {
+      throw new Error('Open the original Story to review its guideline changes.');
+    }
+    var expected = proposal.expectedGuidelines || {};
+    var changes = proposal.changes || {};
+    var keys = Object.keys(STORY_GUIDELINE_LABELS).filter(function (key) {
+      return Object.prototype.hasOwnProperty.call(changes, key) &&
+        typeof changes[key] === 'string' && changes[key].trim() !== String(expected[key] || '').trim();
+    });
+    if (Object.keys(changes).some(function (key) { return !Object.prototype.hasOwnProperty.call(STORY_GUIDELINE_LABELS, key); })) {
+      throw new Error('Director proposed an unknown Story guideline.');
+    }
+    if (!keys.length) throw new Error('Director proposed no changed Story guidelines.');
+    var modal = el('storyboard-guidelines-review');
+    var host = el('storyboard-guidelines-review-fields');
+    if (!modal || !host) throw new Error('Story guideline review dialog is missing.');
+    storyboardGuidelineReview = {
+      storyId: proposal.storyId,
+      expectedGuidelines: expected,
+      onApplied: proposal.onApplied
+    };
+    el('storyboard-guidelines-review-title').textContent = proposal.title || 'Review Story Guidelines';
+    el('storyboard-guidelines-review-summary').textContent = proposal.summary || 'Review the proposed changes.';
+    el('storyboard-guidelines-review-error').textContent = '';
+    host.replaceChildren();
+    keys.forEach(function (key) {
+      var item = document.createElement('section');
+      item.className = 'storyboard-guidelines-review-item';
+      var label = document.createElement('label');
+      label.className = 'storyboard-guidelines-review-choice';
+      var checked = document.createElement('input');
+      checked.type = 'checkbox';
+      checked.checked = true;
+      checked.dataset.guidelineSelect = key;
+      var name = document.createElement('strong');
+      name.textContent = STORY_GUIDELINE_LABELS[key];
+      label.append(checked, name);
+      var before = document.createElement('div');
+      before.className = 'storyboard-guidelines-review-before';
+      before.textContent = String(expected[key] || '').trim() || 'Currently empty';
+      var after = document.createElement('textarea');
+      after.dataset.guidelineProposal = key;
+      after.value = changes[key].trim();
+      after.rows = 3;
+      after.setAttribute('aria-label', 'Proposed ' + STORY_GUIDELINE_LABELS[key]);
+      checked.onchange = function () {
+        after.disabled = !checked.checked;
+        item.classList.toggle('is-skipped', !checked.checked);
+      };
+      item.append(label, before, after);
+      host.appendChild(item);
+    });
+    if (modal.open) modal.close();
+    modal.showModal();
+  }
+
+  function applyReviewedGuidelines() {
+    var review = storyboardGuidelineReview;
+    if (!review || !storyState.story || String(storyState.story.id) !== String(review.storyId)) {
+      throw new Error('Open the original Story before applying the reviewed guidelines.');
+    }
+    var modal = el('storyboard-guidelines-review');
+    var error = el('storyboard-guidelines-review-error');
+    var changes = {};
+    var expected = {};
+    modal.querySelectorAll('[data-guideline-select]:checked').forEach(function (checkbox) {
+      var key = checkbox.dataset.guidelineSelect;
+      var value = modal.querySelector('[data-guideline-proposal="' + key + '"]').value.trim();
+      if (value !== String(review.expectedGuidelines[key] || '').trim()) {
+        changes[key] = value;
+        expected[key] = String(review.expectedGuidelines[key] || '');
+      }
+    });
+    if (!Object.keys(changes).length) {
+      error.textContent = 'Select at least one actual change to apply.';
+      return;
+    }
+    var button = el('storyboard-guidelines-review-apply');
+    button.disabled = true;
+    error.textContent = '';
+    return flushPendingSaves().then(function () {
+      return request({
+        operation: 'apply_reviewed_guidelines',
+        storyId: review.storyId,
+        expected: expected,
+        changes: changes
+      });
+    }).then(function (payload) {
+      if (!payload.story || String(payload.story.id) !== String(review.storyId)) {
+        throw new Error('Story guideline Apply returned an incomplete Story.');
+      }
+      storyState.story = payload.story;
+      Object.keys(changes).forEach(function (key) {
+        document.querySelector('[data-story-guideline="' + key + '"]').value = (payload.story.guidelines || {})[key] || '';
+      });
+      setSaveState('Saved');
+      modal.close();
+      if (typeof review.onApplied === 'function') review.onApplied(payload.story);
+      storyboardGuidelineReview = null;
+    }).catch(function (err) {
+      error.textContent = String(err.message || err);
+      reportError(err);
+    }).finally(function () {
+      button.disabled = false;
+    });
+  }
+
+  window.openStoryboardGuidelineReview = showReviewedGuidelines;
+  window.getStoryboardGuidelineSnapshot = function (storyId) {
+    if (!storyState.story || String(storyState.story.id) !== String(storyId)) {
+      throw new Error('Open the attached Story before proposing guideline changes.');
+    }
+    return flushPendingSaves().then(function () {
+      if (!storyState.story || String(storyState.story.id) !== String(storyId)) {
+        throw new Error('The attached Story changed while preparing its guidelines.');
+      }
+      var story = storyState.story;
+      return {
+        storyId: story.id,
+        title: story.title,
+        concept: story.concept,
+        style: story.style,
+        guidelines: Object.assign({}, story.guidelines || {}),
+        invariants: story.invariants || []
+      };
+    });
+  };
+
   window.applyStoryboardWorkshopRevision = function (revision) {
     if (!revision || !revision.storyId || !revision.sceneId) throw new Error('Workshop Apply target is missing.');
     if (!storyState.story || storyState.story.id !== revision.storyId ||
@@ -6869,6 +6999,10 @@
   window.openStoryboardActivity = openStoryboardActivity;
   window.getStoryboardRouteTarget = getStoryboardRouteTarget;
   window.closeStoryboardActivity = closeStoryboardActivity;
+
+  el('storyboard-guidelines-review-close').onclick = function () { el('storyboard-guidelines-review').close(); };
+  el('storyboard-guidelines-review-cancel').onclick = function () { el('storyboard-guidelines-review').close(); };
+  el('storyboard-guidelines-review-apply').onclick = applyReviewedGuidelines;
 
   bindUi();
   syncDirectorToolsUi();

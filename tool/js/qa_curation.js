@@ -7,8 +7,46 @@
     eligible: [], order: [], choices: new Set(), sizes: {}, preset: 'balanced',
     filter: 'selected', limit: 72, summary: '', jobId: '', error: '',
     analysis: null, balanceGroups: new Set(), overriddenGroups: new Set(), conceptRoles: new Map(), availableGroups: [],
-    status: '', missingSight: 0, ignored: 0
+    status: '', missingSight: 0, ignored: 0, draftStale: false
   };
+
+  var draftWrite = Promise.resolve();
+  function draftPayload() {
+    return {version:1, signature:session.signature, focus:session.focus,
+      analysis:session.analysis, summary:session.summary,
+      choices:Array.from(session.choices), preset:session.preset,
+      balanceGroups:Array.from(session.balanceGroups),
+      overriddenGroups:Array.from(session.overriddenGroups),
+      conceptRoles:Array.from(session.conceptRoles)};
+  }
+  function saveDraft() {
+    if (!session.analysis || session.phase !== 'ready') return;
+    var folder = session.folder, draft = draftPayload();
+    draftWrite = draftWrite.catch(function() {}).then(function() {
+      return request('/fs/qa/curate/draft', {folder:folder, draft:draft});
+    }).catch(function(err) { window.reportConsoleError('QA Curate · Save draft',err); throw err; });
+  }
+  function restoreDraft(draft) {
+    if (!draft || draft.version !== 1 || !draft.analysis) return false;
+    if (!Array.isArray(draft.choices) || !Array.isArray(draft.balanceGroups) ||
+        !Array.isArray(draft.overriddenGroups) || !Array.isArray(draft.conceptRoles))
+      throw new Error('Curate draft contains invalid selections.');
+    session.analysis = draft.analysis;
+    session.balanceGroups = new Set(draft.balanceGroups);
+    session.overriddenGroups = new Set(draft.overriddenGroups);
+    session.conceptRoles = new Map(draft.conceptRoles);
+    session.preset = 'custom';
+    applyBalancePriorities();
+    session.choices = new Set(draft.choices.filter(function(file) {
+      return session.rows.some(function(row) { return row.fileName === file; });
+    }));
+    session.summary = String(draft.summary || '');
+    session.phase = 'ready';
+    session.status = draft.signature === session.signature ? 'Saved Curate draft restored.'
+      : 'Saved Curate draft restored · source evidence changed; review before creating a Set.';
+    session.draftStale = draft.signature !== session.signature;
+    return true;
+  }
 
   function normalize(value) {
     return String(value || '').trim().replace(/\s+/g, ' ');
@@ -426,6 +464,7 @@
         if (included) session.choices.delete(name); else session.choices.add(name);
         session.preset = 'custom';
         if (autoNext && cursor < items.length - 1) cursor += 1;
+        saveDraft();
         render();
       }, 'qa-curation-review-decision');
       decision.addEventListener('mouseenter', function() { preview(true); });
@@ -472,6 +511,8 @@
     host.appendChild(element('p', 'qa-curation-helper',
       'Coverage is measured against available annotated evidence, not predicted LoRA accuracy.'));
     host.appendChild(element('p', 'qa-curation-summary', session.summary));
+    if (session.draftStale) host.appendChild(element('p', 'qa-curation-status', 'Source evidence changed since analysis. Selections preserved; reanalyze to update priorities.'));
+    else if (session.status) host.appendChild(element('p', 'qa-curation-helper', session.status));
 
     var priorities = element('section', 'qa-curation-priorities');
     priorities.appendChild(element('h3', '', 'Balance priorities'));
@@ -493,6 +534,7 @@
         if (toggle.checked) session.balanceGroups.add(group);
         else session.balanceGroups.delete(group);
         applyBalancePriorities();
+        saveDraft();
         renderQaCuration(host, session.signature);
       };
       label.appendChild(toggle);
@@ -564,6 +606,7 @@
         function () {
           session.preset = name;
           session.choices = new Set(session.order.slice(0, session.sizes[name]));
+          saveDraft();
           renderQaCuration(host, session.signature);
         }, 'review-captions-btn' + (active ? ' qa-curation-active' : ''));
       control.setAttribute('aria-pressed', active ? 'true' : 'false');
@@ -621,6 +664,7 @@
         if (input.checked) session.choices.add(fileName);
         else session.choices.delete(fileName);
         session.preset = 'custom';
+        saveDraft();
         card.classList.toggle('is-selected', input.checked);
         updateStats(host);
         if (session.filter === 'selected' && !input.checked) {
@@ -755,7 +799,6 @@
       throw new Error('QA Curation needs grouped annotations or saved visual Sight.');
     }
     var model = String(getDirectorModelPreference() || '').trim();
-    if (!model) throw new Error('Choose a Director model for QA Curation.');
     session.input = items;
     session.focus = String(focus || '');
     session.folder = String(state.folder || '');
@@ -773,8 +816,27 @@
     session.status = 'Step 1/3 · Indexed ' + items.length + ' images into ' + inventory.concepts.length + ' candidate concepts.';
     session.error = '';
     session.jobId = '';
+    session.draftStale = false;
     window.qaShowCuration();
     renderCurrent();
+    fetch('/fs/qa/curate/draft?folder=' + encodeURIComponent(session.folder)).then(function(resp) {
+      return resp.json().then(function(body) {
+        if (!resp.ok || !body.ok) throw new Error(body.error || 'Curate draft read failed.');
+        return body.draft;
+      });
+    }).then(function(draft) {
+      if (token !== session.token) return null;
+      if (restoreDraft(draft)) { renderCurrent(); return null; }
+      if (!model) throw new Error('Choose a Director model for QA Curation.');
+      return beginDirector();
+    }).catch(function(err) {
+      if (token !== session.token) return;
+      session.phase = 'failed';
+      session.error = String(err.message || err);
+      window.reportConsoleError('QA Curate draft',err);
+      renderCurrent();
+    });
+    function beginDirector() {
     session.status = 'Step 2/3 · Asking Director what matters for training…';
     renderCurrent();
     request('/fs/qa/curate', {
@@ -822,6 +884,8 @@
       session.summary = String(result.summary || 'A curated mix of key constructions and supporting variation.');
       session.phase = 'ready';
       session.jobId = '';
+      session.draftStale = false;
+      saveDraft();
       renderCurrent();
     }).catch(function (err) {
       if (token !== session.token) return;
@@ -830,6 +894,7 @@
       window.reportConsoleError('QA Curation', err);
       renderCurrent();
     });
+    }
   }
 
   window.startQaCuration = startQaCuration;

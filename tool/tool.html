@@ -928,6 +928,14 @@
                                                         <input id="training-run-h3-adapter" type="checkbox">
                                                         <span>Use image training adapter</span>
                                                     </label>
+                                                    <label id="training-run-h3-method-option" class="training-run-h3-method-option hidden">
+                                                        <span>H3 training method</span>
+                                                        <select id="training-run-h3-method">
+                                                            <option value="cfg">CFG augmentation (default)</option>
+                                                            <option value="ostris">Ostris training adapter</option>
+                                                            <option value="image">Image-adapted checkpoint</option>
+                                                        </select>
+                                                    </label>
                                                     <span id="training-run-h3-adapter-inherited" class="training-run-h3-adapter-inherited hidden" aria-live="polite"></span>
                                                 </div>
                                                 <select id="training-run-starting-point-select">

@@ -380,26 +380,42 @@
           counts.set(id, (counts.get(id) || 0) + 1);
         });
       });
-      // Each relevant group has its own scale so one item remains visible.
-      // This is a representation count, not a quality or training-success score.
+      // Compare like-for-like concepts within each group and role, not raw
+      // counts across unrelated concepts. This is descriptive, not a target.
       var conceptPreviews = [];
-      matched.slice(0, 3).forEach(function(c) {
+      var shown = matched.filter(function(c) { return c.role === 'core'; }).slice(0, 4);
+      if (!shown.length) shown = matched.slice(0, 4);
+      shown.forEach(function(c) {
         var count = counts.get(c.id) || 0;
         var projected = count + (included ? -1 : 1);
         var max = Math.max(1, c.count);
+        var peers = session.eligible.filter(function(p) {
+          return p.group === c.group && p.role === c.role;
+        });
         var line = element('div', 'qa-curation-review-concept');
         line.appendChild(element('strong', '', c.label));
         var meter = element('div', 'qa-curation-review-concept-meter');
         var fill = element('div', 'qa-curation-review-concept-fill');
-        fill.style.width = (100 * count / max) + '%';
         meter.appendChild(fill);
         line.appendChild(meter);
-        var countLabel = element('span', '', count + ' / ' + max);
+        var countLabel = element('span', '', '');
         line.appendChild(countLabel);
-        conceptPreviews.push(function(show) {
-          fill.style.width = (100 * (show ? projected : count) / max) + '%';
-          countLabel.textContent = (show ? projected : count) + ' / ' + max;
-        });
+        function update(show) {
+          var n = show ? projected : count;
+          var relative = strength(n, c.role) / strength(max, c.role);
+          var peerMean = peers.reduce(function(sum, p) {
+            var peerCount = (counts.get(p.id) || 0) +
+              (show && row.ids.includes(p.id) ? (included ? -1 : 1) : 0);
+            return sum + strength(peerCount, p.role) / strength(Math.max(1, p.count), p.role);
+          }, 0) / peers.length;
+          // Border intensity indicates relative divergence, not a hard failure.
+          var divergence = peers.length > 1 ? Math.abs(relative - peerMean) : 0;
+          meter.style.setProperty('--curate-divergence', Math.min(0.75, divergence).toFixed(3));
+          fill.style.width = (100 * n / max) + '%';
+          countLabel.textContent = n + ' / ' + max;
+        }
+        update(false);
+        conceptPreviews.push(update);
         explanation.appendChild(line);
       });
       if (!matched.length) explanation.appendChild(element('span', '', 'No prioritized concepts'));

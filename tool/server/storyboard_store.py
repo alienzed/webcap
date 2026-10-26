@@ -856,6 +856,30 @@ def apply_lora_plan(story_id, expected_updated_at, story_wide, scenes):
     _write_json_atomic(_story_path(story_id), updated)
     return updated
 
+
+@_serialized_mutation
+def apply_reviewed_story_guidelines(story_id, expected, changes):
+    """Apply only explicitly approved Story guideline fields, checking stale edits."""
+    if not isinstance(expected, dict) or not isinstance(changes, dict) or not changes:
+        raise ValueError("Reviewed Story guidelines require expected values and selected changes.")
+    if set(changes) - set(STORY_GUIDELINE_KEYS):
+        raise ValueError("Reviewed Story guidelines contain an unknown field.")
+    if any(key not in expected or not isinstance(expected[key], str)
+           or not isinstance(value, str) for key, value in changes.items()):
+        raise ValueError("Reviewed Story guideline values must be strings with expected originals.")
+
+    story = load_story(story_id)
+    current = story.get("guidelines") or {}
+    for key in changes:
+        if str(current.get(key) or "") != expected[key]:
+            raise RuntimeError("Story guideline changed since review: " + key + ". Prepare a fresh proposal.")
+
+    story["guidelines"] = _normalize_story_guidelines({**current, **changes})
+    story["updatedAt"] = _utc_now()
+    _write_json_atomic(_story_path(story_id), story)
+    return story
+
+
 @_serialized_mutation
 def update_story(story_id, payload):
     current = load_story(story_id)

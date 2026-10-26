@@ -1072,7 +1072,6 @@
     if (state.activeMode === 'storyboard') {
       state.storyGuidelineProposal = null;
       state.workshopProposal = null;
-      state.storyGuidelineProposal = null;
       el('director-chat-workshop-status').textContent = '';
     }
     var messages = currentMessages();
@@ -1348,11 +1347,11 @@
       }
     });
     document.addEventListener('pointerdown', function (event) {
-      if (!state.open || state.pinned || el('storyboard-workshop-review').open || drawer.contains(event.target) || toggle.contains(event.target)) return;
+      if (!state.open || state.pinned || el('storyboard-workshop-review').open || el('storyboard-guidelines-review').open || drawer.contains(event.target) || toggle.contains(event.target)) return;
       setOpen(false);
     });
     window.addEventListener('keydown', function (event) {
-      if (event.key === 'Escape' && state.open && !el('storyboard-workshop-review').open) setOpen(false);
+      if (event.key === 'Escape' && state.open && !el('storyboard-workshop-review').open && !el('storyboard-guidelines-review').open) setOpen(false);
     });
 
     if (state.pinned) setOpen(true);
@@ -1390,6 +1389,7 @@
       state.modeMetricsByAssistantIndex.storyboard = {};
       state.storyboardAttachments = {};
       state.workshopProposal = null;
+      state.storyGuidelineProposal = null;
       el('director-chat-workshop-status').textContent = '';
     }
     state.workshop = context;

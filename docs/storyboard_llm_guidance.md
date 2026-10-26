@@ -84,11 +84,11 @@ Creative Story development and scene-writing requests receive populated guidelin
 
 ## Continuity, invariants, and state
 
-Continuity is context, not a default requirement.
+Narrative continuity is not a default requirement. Established visual identities should remain consistent whenever they recur.
 
 Story invariants are supplied to Director as authoritative context where relevant. They are **not** blocks of prose that WebCap later pastes into every Scene prompt.
 
-Director should preserve explicit facts that matter to the current Scene, but independently generated clips will naturally vary. Text repetition cannot guarantee pixel-level continuity.
+Director should preserve established visual characteristics in relevant Scenes; independently generated clips may still vary despite consistent descriptions. Text repetition cannot guarantee pixel-level continuity.
 
 When stronger continuity is genuinely needed, the human can make it explicit through:
 
@@ -129,7 +129,7 @@ It does not create Scenes or H3 prompts.
 
 ### `define_invariants`
 
-Suggest concise recurring Story facts that are useful enough to preserve across relevant Scenes.
+Define recurring characters using distinctive, concrete, unambiguous visual traits, including identifying physical features and specific clothing. Define recurring locations as visually minimal environments, with as few objects, furnishings, and decorations as the Story permits; specify basic geometry, surfaces, colors, and essential fixed features unambiguously. Preserve facts already established by the concept.
 
 Invariants remain Story context. They are not prompt fragments for WebCap to inject later.
 

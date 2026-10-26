@@ -12,9 +12,6 @@ H3 PROMPT SHAPE
 Subject:
 Stable subject identity and characteristics relevant to this clip.
 
-Scene Overview:
-One concise statement of the Scene's premise or purpose.
-
 Environment / Continuity Anchors:
 Starting spatial and physical conditions, locations, props, and persistent visual facts.
 

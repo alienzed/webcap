@@ -240,10 +240,10 @@ function renderTrainingRunParameters(payload) {
       ? selectedCheckpoint.selectedOptions[0].getAttribute('data-image-adapter') : '';
   h3MethodOption.classList.toggle('hidden', stage !== 'h3');
   h3MethodSelect.disabled = resumeH3;
-  h3MethodSelect.value = resumeH3 && savedVariant === 'on' ? 'image' : (draft.h3TrainingMethod || 'cfg');
+  h3MethodSelect.value = resumeH3 ? 'checkpoint' : (draft.h3TrainingMethod || 'cfg');
   if (resumeH3 && selectedCheckpoint && selectedCheckpoint.value) {
     var savedMethod = selectedCheckpoint.selectedOptions[0].getAttribute('data-h3-method');
-    if (savedMethod && ['cfg', 'ostris', 'image'].indexOf(savedMethod) !== -1) h3MethodSelect.value = savedMethod;
+    if (savedMethod && ['cfg', 'ostris', 'image', 'plain'].indexOf(savedMethod) !== -1) h3MethodSelect.value = savedMethod;
   }
   h3MethodSelect.onchange = function () {
     trainingWorkspaceState.runConfigDraft.h3TrainingMethod = h3MethodSelect.value;

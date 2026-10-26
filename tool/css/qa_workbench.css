@@ -851,3 +851,9 @@
   .qa-curation-review-concept-meter { height:44px; }
   .qa-curation-review-concept strong { font-size:21px; }
 }
+
+/* Peer-relative balance cue: subtle emphasis only, never a quality verdict. */
+.qa-curation-review-concept-meter {
+  box-shadow: inset 0 0 0 3px rgba(240,165,77,var(--curate-divergence,0));
+  transition: box-shadow .18s ease;
+}

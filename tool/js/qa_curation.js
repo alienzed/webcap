@@ -354,6 +354,7 @@
       var bar = element('div', 'qa-curation-review-bar');
       var fill = element('div', 'qa-curation-review-bar-fill');
       fill.style.width = before.toFixed(2) + '%';
+      function preview(show) { fill.style.width = (show ? after : before).toFixed(2) + '%'; }
       bar.appendChild(fill);
       explanation.appendChild(bar);
       explanation.appendChild(element('span', 'qa-curation-review-numbers',
@@ -379,12 +380,17 @@
       explanation.appendChild(element('small', '', 'Evidence coverage, not visual quality.'));
       var actions = element('div', 'qa-curation-review-actions');
       var prev = button('← Previous', function() { next(-1); }); prev.disabled = cursor === 0; actions.appendChild(prev);
-      actions.appendChild(button(included ? 'Remove' : 'Include', function() {
+      var decision = button(included ? 'Remove' : 'Include', function() {
         if (included) session.choices.delete(name); else session.choices.add(name);
         session.preset = 'custom';
         if (autoNext && cursor < items.length - 1) cursor += 1;
         render();
-      }, 'qa-curation-review-decision'));
+      }, 'qa-curation-review-decision');
+      decision.addEventListener('mouseenter', function() { preview(true); });
+      decision.addEventListener('mouseleave', function() { preview(false); });
+      decision.addEventListener('focus', function() { preview(true); });
+      decision.addEventListener('blur', function() { preview(false); });
+      actions.appendChild(decision);
       var forward = button('Next →', function() { next(1); });
       forward.disabled = cursor === items.length - 1; actions.appendChild(forward);
       var option = element('label', 'qa-curation-review-option');

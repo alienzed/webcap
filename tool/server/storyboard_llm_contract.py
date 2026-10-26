@@ -733,7 +733,8 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
         blocks.append(
             "[CURRENT TASK]\nApply this correction to the existing Scene prompt with the smallest relevant edit:\n"
             + correction
-            + "\n\nReturn changed=false with the original prompt when the correction is already satisfied. "
+            + "\n\nPreserve all authored material outside the requested scope. "
+            "Return changed=false with the original prompt when the correction is already satisfied. "
             "Otherwise return the complete minimally revised prompt and only the optional Scene fields "
             "changed by the correction. Duration updates must be between 6 and 15 seconds."
         )

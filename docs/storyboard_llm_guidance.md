@@ -77,7 +77,9 @@ A Storyboard Scene is one independently generatable clip of at most 15 seconds. 
 
 The Story's optional Directing Guidelines express the author's preferences for Visual Focus, Creative Direction, Variation / Repetition, Pacing / Rhythm, and Scene Relationships. Empty fields leave those creative choices open to Director interpretation. Technical H3 limits and output contracts remain application-owned.
 
-Creative Story development and scene-writing requests receive populated guidelines. Narrow, localized prompt corrections remain focused on the specific edit. General Director guidance stays minimal instead of imposing a universal montage pace, shot count, or novelty requirement.
+Creative Story development and scene-writing requests receive populated guidelines. Narrow, localized prompt corrections remain focused on the specific edit.
+
+**Reviewed edits:** Define from Concept offers its guideline suggestions in an in-app, individually selectable review rather than a browser confirmation. Storyboard Chat can propose structured updates to any of the five guideline fields when a Story is attached or its Scene Workshop is active. It never writes them directly: only explicitly approved fields are saved, with original-value checks preventing stale proposals from overwriting later author edits. General Director guidance stays minimal instead of imposing a universal montage pace, shot count, or novelty requirement.
 
 
 ## Continuity, invariants, and state

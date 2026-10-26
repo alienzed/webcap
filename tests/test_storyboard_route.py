@@ -881,3 +881,44 @@ def test_workshop_proposal_uses_fixed_structured_chat_schema(monkeypatch):
     assert captured["contract"]["operation"] == "storyboard_workshop_shots"
     assert captured["contract"]["response_schema"]["required"] == ["summary", "shots"]
     assert captured["label"] == "Storyboard Shot Proposal"
+
+
+def test_storyboard_reviewed_guidelines_route_applies_only_approved_fields():
+    client = app_module.app.test_client()
+    story = client.post("/fs/storyboard", json={
+        "operation": "create_story",
+        "story": {"title": "Director workshop", "guidelines": {"visualFocus": "Old view", "pacing": "Gentle."}},
+    }).get_json()["story"]
+    result = client.post("/fs/storyboard", json={
+        "operation": "apply_reviewed_guidelines", "storyId": story["id"],
+        "expected": {"pacing": "Gentle."}, "changes": {"pacing": "Quick transitions."},
+    })
+    assert result.status_code == 200
+    assert result.get_json()["story"]["guidelines"] == {
+        "visualFocus": "Old view", "pacing": "Quick transitions.",
+    }
+    stale = client.post("/fs/storyboard", json={
+        "operation": "apply_reviewed_guidelines", "storyId": story["id"],
+        "expected": {"pacing": "Gentle."}, "changes": {"pacing": "Another direction."},
+    })
+    assert stale.status_code == 400
+    assert "changed since review" in stale.get_json()["error"]
+
+
+def test_director_chat_story_guideline_proposal_uses_structured_schema(monkeypatch):
+    captured = {}
+    def capture(client, model, contract, context=None, label=""):
+        captured.update({"client": client, "contract": contract, "label": label})
+        return {"jobId": "fake-guidelines-1"}
+
+    monkeypatch.setattr(app_module, "enqueue_llm", capture)
+    response = app_module.app.test_client().post("/fs/director/chat", json={
+        "model": "director", "operation": "storyboard_story_guidelines",
+        "messages": [{"role": "user", "content": "We decided to change the pacing."}],
+    })
+    assert response.status_code == 202
+    assert captured["client"] == "chat"
+    assert captured["contract"]["operation"] == "storyboard_story_guidelines"
+    fields = captured["contract"]["response_schema"]["properties"]["guidelines"]["properties"]
+    assert set(fields) == {"visualFocus", "creativeDirection", "variation", "pacing", "sceneRelationships"}
+    assert captured["label"] == "Storyboard Guideline Proposal"

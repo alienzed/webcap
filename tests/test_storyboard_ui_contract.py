@@ -1552,3 +1552,26 @@ def test_workshop_context_opt_in_and_story_switch_cleanup():
     assert "window.syncStoryboardAssistantStory = function" in chat
     assert "window.syncStoryboardAssistantStory(storyState.story" in storyboard
     assert "state.workshopProposal = null;" in chat
+
+
+def test_story_guidelines_use_reviewed_chat_and_define_from_concept_changes():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    story = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+    chat = (ROOT / "tool" / "js" / "director_chat.js").read_text(encoding="utf-8")
+    app = (ROOT / "tool" / "server" / "app.py").read_text(encoding="utf-8")
+    llm = (ROOT / "tool" / "server" / "llm_runner.py").read_text(encoding="utf-8")
+
+    assert 'id="storyboard-guidelines-review"' in html
+    assert 'id="storyboard-guidelines-review-fields"' in html
+    assert 'id="director-chat-story-prepare"' in html
+    assert 'window.confirm(\'Add these suggested Story guidelines' not in story
+    assert 'showReviewedGuidelines({' in story
+    assert "function applyReviewedGuidelines()" in story
+    assert "operation: 'apply_reviewed_guidelines'" in story
+    assert "window.getStoryboardGuidelineSnapshot = function (storyId)" in story
+    assert "function prepareStoryChanges()" in chat
+    assert "function parseStoryGuidelineProposal(raw)" in chat
+    assert "operation: 'storyboard_story_guidelines'" in chat
+    assert "window.openStoryboardGuidelineReview({" in chat
+    assert '"storyboard_story_guidelines"' in app
+    assert '"storyboard_story_guidelines"' in llm

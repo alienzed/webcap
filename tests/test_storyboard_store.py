@@ -1400,3 +1400,61 @@ def test_workshop_allows_discussion_without_shot_parser_support(storyboard_fs):
         storyboard_store.apply_workshop_shots(
             story["id"], scene["id"], context["expectedPrompt"], "[Shot 1]\nAn attempt"
         )
+
+
+def test_reviewed_guidelines_apply_only_selected_fields_and_preserve_other_story_content(storyboard_fs):
+    story = storyboard_store.create_story({
+        "title": "Varying scenes",
+        "concept": "Two competing moods",
+        "guidelines": {"visualFocus": "Watch the hands.", "pacing": "Slow changes."},
+    })
+    updated = storyboard_store.apply_reviewed_story_guidelines(
+        story["id"],
+        expected={"pacing": "Slow changes."},
+        changes={"pacing": "Abrupt cuts."},
+    )
+    assert updated["concept"] == "Two competing moods"
+    assert updated["guidelines"] == {
+        "visualFocus": "Watch the hands.",
+        "pacing": "Abrupt cuts.",
+    }
+    assert storyboard_store.load_story(story["id"])["guidelines"] == updated["guidelines"]
+
+
+def test_reviewed_guidelines_reject_stale_values_without_partial_writes(storyboard_fs):
+    story = storyboard_store.create_story({
+        "title": "Still images", "guidelines": {"visualFocus": "A glass of water."}
+    })
+    storyboard_store.update_story(story["id"], {"guidelines": {"visualFocus": "A broken glass."}})
+    with pytest.raises(RuntimeError, match="changed since review"):
+        storyboard_store.apply_reviewed_story_guidelines(
+            story["id"],
+            expected={"visualFocus": "A glass of water.", "pacing": ""},
+            changes={"visualFocus": "Close-up glass.", "pacing": "Fast."},
+        )
+    assert storyboard_store.load_story(story["id"])["guidelines"] == {"visualFocus": "A broken glass."}
+
+
+def test_reviewed_guidelines_can_explicitly_clear_a_field(storyboard_fs):
+    story = storyboard_store.create_story({"guidelines": {"variation": "Repeat each shot."}})
+    updated = storyboard_store.apply_reviewed_story_guidelines(
+        story["id"], expected={"variation": "Repeat each shot."}, changes={"variation": ""}
+    )
+    assert updated["guidelines"] == {}
+
+
+def test_reviewed_guidelines_reject_unknown_unexpected_or_non_string_fields(storyboard_fs):
+    story = storyboard_store.create_story({"title": "Valid"})
+    with pytest.raises(ValueError, match="unknown field"):
+        storyboard_store.apply_reviewed_story_guidelines(
+            story["id"], expected={"concept": ""}, changes={"concept": "Changed"}
+        )
+    with pytest.raises(ValueError, match="expected originals"):
+        storyboard_store.apply_reviewed_story_guidelines(
+            story["id"], expected={}, changes={"pacing": "Quick"}
+        )
+    with pytest.raises(ValueError, match="must be strings"):
+        storyboard_store.apply_reviewed_story_guidelines(
+            story["id"], expected={"pacing": ""}, changes={"pacing": ["Quick"]}
+        )
+    assert storyboard_store.load_story(story["id"])["guidelines"] == {}

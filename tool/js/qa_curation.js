@@ -354,7 +354,10 @@
       var bar = element('div', 'qa-curation-review-bar');
       var fill = element('div', 'qa-curation-review-bar-fill');
       fill.style.width = before.toFixed(2) + '%';
-      function preview(show) { fill.style.width = (show ? after : before).toFixed(2) + '%'; }
+      function preview(show) {
+        fill.style.width = (show ? after : before).toFixed(2) + '%';
+        conceptPreviews.forEach(function(update) { update(show); });
+      }
       bar.appendChild(fill);
       explanation.appendChild(bar);
       explanation.appendChild(element('span', 'qa-curation-review-numbers',
@@ -366,14 +369,26 @@
           counts.set(id, (counts.get(id) || 0) + 1);
         });
       });
+      // Each relevant group has its own scale so one item remains visible.
+      // This is a representation count, not a quality or training-success score.
+      var conceptPreviews = [];
       matched.slice(0, 3).forEach(function(c) {
         var count = counts.get(c.id) || 0;
         var projected = count + (included ? -1 : 1);
+        var max = Math.max(1, c.count);
         var line = element('div', 'qa-curation-review-concept');
-        line.appendChild(element('span', '', c.label + ' · ' + count + ' → ' + projected + ' selected'));
-        var meter = element('progress');
-        meter.max = Math.max(1, c.count); meter.value = count;
+        line.appendChild(element('strong', '', c.label));
+        var meter = element('div', 'qa-curation-review-concept-meter');
+        var fill = element('div', 'qa-curation-review-concept-fill');
+        fill.style.width = (100 * count / max) + '%';
+        meter.appendChild(fill);
         line.appendChild(meter);
+        var countLabel = element('span', '', count + ' / ' + max);
+        line.appendChild(countLabel);
+        conceptPreviews.push(function(show) {
+          fill.style.width = (100 * (show ? projected : count) / max) + '%';
+          countLabel.textContent = (show ? projected : count) + ' / ' + max;
+        });
         explanation.appendChild(line);
       });
       if (!matched.length) explanation.appendChild(element('span', '', 'No prioritized concepts'));

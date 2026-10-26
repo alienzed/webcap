@@ -1380,6 +1380,23 @@
   font-weight: 650;
 }
 
+.app.shell-revamp .training-run-h3-method-option {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 4px;
+  min-width: 0;
+  margin: 0;
+  font-size: 14px;
+  color: var(--text);
+}
+.app.shell-revamp .training-run-h3-method-option.hidden { display: none; }
+.app.shell-revamp .training-run-h3-method-option select {
+  width: 100%;
+  min-width: 0;
+  min-height: 34px;
+  font-size: 14px;
+}
+
 .app.shell-revamp .training-run-h3-adapter-option {
   display: inline-flex;
   align-items: center;

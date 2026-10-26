@@ -381,7 +381,7 @@ function getManagedTrainingOptions() {
     forceConstantLr: '',
     trainingSettings: (function () {
       var settings = Object.assign({}, trainingWorkspaceState.runConfigDraft || {});
-      if (usingResume) delete settings.h3ImageTrainingAdapter;
+      if (usingResume) { delete settings.h3ImageTrainingAdapter; delete settings.h3TrainingMethod; }
       return settings;
     })()
   };

@@ -838,3 +838,16 @@
   .qa-curation-review-concept progress { height:20px; }
   .qa-curation-review .qa-curation-review-decision { min-height:78px; font-size:26px; min-width:190px; }
 }
+
+/* Large, immediately legible concept representation bars. */
+.qa-curation-review-concept { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:8px 14px; align-items:center; }
+.qa-curation-review-concept strong { grid-column:1 / -1; font-size:19px; }
+.qa-curation-review-concept-meter { height:32px; min-width:0; border-radius:8px; overflow:hidden; background:#18212b; border:1px solid var(--border,#54616c); }
+.qa-curation-review-concept-fill { height:100%; background:var(--accent,#8fb9e2); transition:width .18s ease; }
+.qa-curation-review-concept > span { min-width:72px; text-align:right; font-size:21px; font-variant-numeric:tabular-nums; }
+@media(min-width:1100px) {
+  .qa-curation-review-image { grid-column:1; }
+  .qa-curation-review-panel { grid-template-columns:minmax(0,1.6fr) minmax(440px,1fr); }
+  .qa-curation-review-concept-meter { height:44px; }
+  .qa-curation-review-concept strong { font-size:21px; }
+}

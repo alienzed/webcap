@@ -15,7 +15,7 @@ def test_training_history_promotes_recorded_epoch_and_step_progress():
     assert 'progress["lr"] = learning_rate_matches[-1].strip()' in progress
 
 
-def test_training_history_keeps_metadata_without_history_only_deletion():
+def test_training_history_has_separate_safe_unlink_and_destructive_delete():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     script = (ROOT / "tool" / "js" / "training_history_ui.js").read_text(encoding="utf-8")
     workspace = (ROOT / "tool" / "js" / "training_workspace.js").read_text(encoding="utf-8")
@@ -31,6 +31,10 @@ def test_training_history_keeps_metadata_without_history_only_deletion():
     assert '@app.route("/fs/training_history/job/clear"' not in app
     assert "def clear_history(folder_path=None)" not in history
     assert "def clear_history_job(" in history
+    assert 'data-training-history-remove="' in script
+    assert '/fs/training_history/job/remove' in script
+    assert '@app.route("/fs/training_history/job/remove"' in app
+    assert "training_clear_history_job(" in app
     assert 'data-training-history-delete="' in script
     assert 'data-training-history-finalize="' in script
 
@@ -226,8 +230,9 @@ def test_training_history_identifies_custom_named_runs_and_recorded_h3_variant()
     assert "runConfig.trainingVariant" in script
     assert '"trainingVariant"' in history
     assert '"minimax_h3_image_training_adapter.safetensors"' in history
-    assert 'isinstance(merged_adapters, list)' in history
-    assert 'model_source == merged_source' in history
+    assert 'isinstance(merged, list)' in history
+    assert 'def _h3_uses_premerged_image_adapter(' in history
+    assert 'def _h3_uses_image_adapter(' in history
     assert '"trainingVariant" not in item["runSummary"]' in history
 
 
@@ -277,3 +282,22 @@ def test_training_history_hides_internal_job_id_and_redundant_run_number():
     assert "job.id || runIdentity" not in script
     assert "escapeHtml(runIdentity)" not in script
     assert "job.runName, job.sequence" in script
+
+
+def test_h3_image_adapter_resume_is_inherited_not_selectable():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    review = (ROOT / "tool" / "js" / "training_review.js").read_text(encoding="utf-8")
+    history = (ROOT / "tool" / "js" / "training_history_ui.js").read_text(encoding="utf-8")
+    runner = (ROOT / "tool" / "js" / "training_runner_ui.js").read_text(encoding="utf-8")
+    backend = (ROOT / "tool" / "server" / "training_runner.py").read_text(encoding="utf-8")
+    assert 'id="training-run-h3-adapter-inherited"' in html
+    assert "h3MethodOption.classList.toggle('hidden', stage !== 'h3')" in review
+    assert "h3AdapterCheckbox.disabled = resumeH3" in review
+    assert "h3AdapterCheckbox.indeterminate = resumeH3" in review
+    assert "savedVariant === 'on' || savedVariant === 'legacy'" in review
+    assert "savedVariant === 'off'" in review
+    assert 'data-h3-method=' in history
+    assert 'id="training-run-h3-method"' in html
+    assert "data-image-adapter=" in history
+    assert "if (usingResume) { delete settings.h3ImageTrainingAdapter; delete settings.h3TrainingMethod; }" in runner
+    assert "Start a fresh run to change this variant" in backend

@@ -81,3 +81,17 @@ The persistent set TOMLs remain the editable baseline. Learning rate, rank, epoc
 Generated dataset repeats are intentionally decoupled from the run's selected Epochs value. Repeat counts are solved against `training.repeat_reference_epochs` (90 by default); the actual run epochs still drive the captured config and estimated total work.
 
 For successful managed runs, WebCap records cumulative active training time: runner process time including startup, compilation, caching, checkpoints, and shutdown, while excluding queued and paused time. Explicit Resume inherits its parent run's total. Older history calculates a total lazily from complete timestamped log lineage when possible; incomplete legacy lineage intentionally has no displayed total.
+
+## H3 guidance preservation
+
+For fresh MiniMax H3 runs, **H3 training method** offers three exclusive choices:
+
+- **CFG augmentation (default):** captures `[model] cfg = 4` and removes `merge_adapters`.
+- **Ostris training adapter:** captures `[model] merge_adapters = ["{MODELS_ROOT}/Stable-diffusion/mh3/minimax_h3_training_adapter_v3.safetensors"]` and removes `cfg`, letting diffusion-pipe use its default of 1. The ordinary H3 checkpoint remains the diffusion model.
+- **Image-adapted checkpoint:** the existing premerged model selection; also removes `cfg` and `merge_adapters`.
+
+Download the `minimax_h3_training_adapter_v3.safetensors` file from https://huggingface.co/ostris/minimax_h3_training_adapter/tree/main and put it under the configured models root at `Stable-diffusion/mh3/minimax_h3_training_adapter_v3.safetensors`. WebCap validates its presence when queuing an Ostris run; the adapter is merged by diffusion-pipe at model initialization. The model file is not downloaded automatically. The selected method changes only the immutable captured run config, never the set-owned TOML.
+
+On **Resume**, the method is not selectable: the captured checkpoint's recorded diffusion model, adapter list, and CFG are inherited exactly, including the adapter version, rather than substituting the current default. **Fine-tune from saved LoRA** creates a new run and permits a new choice.
+
+Diffusion-pipe documents CFG augmentation and a training adapter as alternatives, not techniques to combine. The Ostris adapter has community reports of running with diffusion-pipe, but no guarantee of better concept learning or likeness. Compare with your existing CFG baseline at matched dataset and training settings.

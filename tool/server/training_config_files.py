@@ -378,6 +378,48 @@ def apply_h3_premerged_image_model(config_text):
     return rewrite_toml_assignment(source, "cfg", section="model")
 
 
+def h3_ostris_training_adapter_path():
+    """Fixed WebCap install location for the FL2VA Ostris training adapter."""
+    return app_config.fill_template_placeholders(
+        "{MODELS_ROOT}/Stable-diffusion/mh3/minimax_h3_training_adapter_v3.safetensors", ""
+    )
+
+
+def apply_h3_training_method(config_text, method):
+    """Capture exactly one H3 guidance-preservation method for a new run."""
+    source = str(config_text)
+    model = tomllib.loads(source).get("model", {})
+    if model.get("type") != "minimax_h3":
+        raise ValueError("H3 training method requires a MiniMax H3 config.")
+    if method == "image":
+        return apply_h3_premerged_image_model(source)
+    if method not in ("cfg", "ostris"):
+        raise ValueError("Unknown H3 training method: " + str(method))
+    if Path(str(model.get("diffusion_model") or "").replace("\\", "/")).name == Path(
+        h3_premerged_image_model_path().replace("\\", "/")
+    ).name:
+        raise ValueError("CFG and Ostris require the standard H3 base model, not the premerged checkpoint.")
+    if method == "cfg":
+        source = rewrite_toml_assignment(source, "merge_adapters", section="model")
+        return rewrite_toml_assignment(source, "cfg", "4", "model")
+    source = rewrite_toml_assignment(source, "cfg", section="model")
+    return rewrite_toml_assignment(
+        source, "merge_adapters", json.dumps([h3_ostris_training_adapter_path()]), "model"
+    )
+
+
+def apply_h3_resumed_model(config_text, captured_model):
+    """Resume with the *recorded* model and adapter version, not today's UI defaults."""
+    if not isinstance(captured_model, dict) or not str(captured_model.get("diffusion_model") or "").strip():
+        raise ValueError("Saved H3 checkpoint has no recorded model source.")
+    source = str(config_text)
+    for key in ("diffusion_model", "merge_adapters", "cfg"):
+        value = captured_model.get(key)
+        source = rewrite_toml_assignment(source, key, json.dumps(value) if value is not None else None, "model")
+    tomllib.loads(source)
+    return source
+
+
 def apply_h3_focused_blocks(config_text):
     """Capture-only PEFT exclusion: freeze H3 blocks 0-19 and both text refiners."""
     config = tomllib.loads(str(config_text))

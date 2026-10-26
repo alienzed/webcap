@@ -928,12 +928,23 @@
                                                         <input id="training-run-h3-adapter" type="checkbox">
                                                         <span>Use image training adapter</span>
                                                     </label>
+                                                    <span id="training-run-h3-adapter-inherited" class="training-run-h3-adapter-inherited hidden" aria-live="polite"></span>
                                                 </div>
                                                 <select id="training-run-starting-point-select">
                                                     <option value="fresh">Fresh</option>
                                                     <option value="resume">Resume from checkpoint</option>
                                                     <option value="initializer">Fine-tune from saved LoRA</option>
                                                 </select>
+                                                    <label id="training-run-h3-method-option" class="training-run-h3-method-option hidden">
+                                                        <span>H3 training method</span>
+                                                        <select id="training-run-h3-method">
+                                                            <option value="cfg">CFG augmentation (default)</option>
+                                                            <option value="ostris">Ostris training adapter</option>
+                                                            <option value="image">Image-adapted checkpoint</option>
+                                                            <option value="plain" disabled>Standard (saved checkpoint)</option>
+                                                            <option value="checkpoint" disabled>Inherited from checkpoint</option>
+                                                        </select>
+                                                    </label>
                                                 <label id="training-run-h3-focused-option" class="training-run-h3-adapter-option hidden" title="Experimental: LoRA trains DiT blocks 20–49, excluding blocks 0–19 and the text refiner. Changes captured training config only.">
                                                     <input id="training-run-h3-focused" type="checkbox">
                                                     <span>Focused H3 blocks (20–49)</span>

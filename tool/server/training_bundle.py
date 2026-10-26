@@ -13,7 +13,7 @@ from .dataset_prep import (
     resolve_prepared_caption_text,
     write_prepared_caption,
 )
-from .training_config_files import apply_captured_initializer, apply_h3_focused_blocks, apply_h3_premerged_image_model, apply_review_config_settings, with_dataset_path, with_output_dir
+from .training_config_files import apply_captured_initializer, apply_h3_focused_blocks, apply_h3_premerged_image_model, apply_h3_training_method, apply_h3_resumed_model, apply_review_config_settings, with_dataset_path, with_output_dir
 from .training_profiles import resolved_profile
 from .training_runtime import to_wsl_path
 from .training_review import validate_managed_review_stage
@@ -550,7 +550,11 @@ def materialize_training_bundle(
         stage_config_settings = config_settings.get(stage) if isinstance(config_settings, dict) else None
         if isinstance(stage_config_settings, dict):
             config_text = apply_review_config_settings(config_text, stage_config_settings)
-            if stage == "h3" and stage_config_settings.get("h3ImageTrainingAdapter"):
+            if stage == "h3" and stage_config_settings.get("h3ResumeModel") is not None:
+                config_text = apply_h3_resumed_model(config_text, stage_config_settings["h3ResumeModel"])
+            elif stage == "h3" and "h3TrainingMethod" in stage_config_settings:
+                config_text = apply_h3_training_method(config_text, stage_config_settings["h3TrainingMethod"])
+            elif stage == "h3" and stage_config_settings.get("h3ImageTrainingAdapter"):
                 config_text = apply_h3_premerged_image_model(config_text)
             if stage == "h3" and stage_config_settings.get("h3FocusedBlocks"):
                 config_text = apply_h3_focused_blocks(config_text)

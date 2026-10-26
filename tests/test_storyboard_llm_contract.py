@@ -267,7 +267,8 @@ def test_define_invariants_remains_context_generation_not_scene_authoring():
     request = storyboard_llm_contract.build_request(_story(), "", "define_invariants")
 
     assert request["output"] == "json"
-    assert request["response_schema"]["required"] == ["invariants"]
+    assert request["response_schema"]["required"] == ["invariants", "guidelines"]
+    assert set(request["response_schema"]["properties"]["guidelines"]["required"]) == {"visualFocus", "creativeDirection", "variation", "pacing"}
     assert "Define stable visual identities for recurring characters and locations" in request["prompt"]
 
 

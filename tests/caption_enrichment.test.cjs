@@ -28,6 +28,7 @@ function fixture() {
     captionAssistCandidate:candidate,
     isFocusedQaReviewMode(){return false;},isCaptionAssistRunning(){return false;},
     getMetadataForMedia(){return {};},
+    captionAssistSightFingerprint(sight){return sight && sight.description || '';},
     buildCaptionAssistRequest(){return {model:'director-a',assignments:[],tags:[],
       openSight:{description:'A swimsuit with ring connectors.'}};},
     getCaptionAssistOmittedAssignments(){return [];},
@@ -59,7 +60,7 @@ test('enrichment accepts verbatim unique anchor insertions, rejects malformed an
   assert.throws(()=>p('not json','A swimsuit.'),SyntaxError);
 });
 
-test('proposals remain separate until accepted; reject and restore never overwrite original',()=>{
+test('proposals remain separate until accepted; final decision returns to editable draft',()=>{
   const f=fixture(),c=f.ctx,candidate=f.candidate;
   c.captionAssistEnrichment={candidate,mediaKey:candidate.mediaKey,phase:'review',
     originalText:candidate.text,jobId:'',
@@ -74,7 +75,20 @@ test('proposals remain separate until accepted; reject and restore never overwri
   assert.equal(candidate.text,'A woman posing in a swimsuit, front view.');
   c.resolveCaptionAssistEnrichment(c.captionAssistEnrichment.suggestions[1],true);
   assert.equal(candidate.text,'A woman posing in a swimsuit, front view and soft side lighting.');
-  c.finishCaptionAssistEnrichment('restore');
+  assert.equal(c.captionAssistEnrichment,null,'last decision returns to editable draft');
+  assert.equal(c.finishCaptionAssistEnrichment('restore'),false,'review is already complete');
+  assert.equal(candidate.text,'A woman posing in a swimsuit, front view and soft side lighting.');
+});
+
+test('restore is available before the last enrichment suggestion is resolved',()=>{
+  const f=fixture(),c=f.ctx,candidate=f.candidate;
+  c.captionAssistEnrichment={candidate,mediaKey:candidate.mediaKey,phase:'review',
+    originalText:candidate.text,jobId:'',suggestions:[
+      {anchor:'swimsuit',addition:' with metal rings',pending:true},
+      {anchor:'front view',addition:' and soft side lighting',pending:true}]};
+  c.resolveCaptionAssistEnrichment(c.captionAssistEnrichment.suggestions[0],true);
+  assert.equal(candidate.text,'A woman posing in a swimsuit with metal rings, front view.');
+  assert.equal(c.finishCaptionAssistEnrichment('restore'),true);
   assert.equal(candidate.text,'A woman posing in a swimsuit, front view.');
   assert.equal(c.captionAssistEnrichment,null);
 });

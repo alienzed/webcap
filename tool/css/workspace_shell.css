@@ -2527,7 +2527,12 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
 .director-chat-attachments-toggle[aria-expanded="true"] {
   border-color: color-mix(in srgb, var(--accent) 62%, var(--border));
 }
-.director-chat-attachments-body { padding: 0 14px 10px; }
+.director-chat-attachments-body {
+  padding: 0 14px 10px;
+  max-height: min(27vh, 310px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
 .director-chat-attachments-note {
   margin: 0 0 10px;
   color: var(--muted);
@@ -2537,10 +2542,7 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
 .director-chat-attachments-list {
   display: grid;
   gap: 12px;
-  max-height: min(40vh, 460px);
   min-height: 0;
-  overflow-y: auto;
-  overscroll-behavior: contain;
 }
 .director-chat-attachment {
   min-width: 0;

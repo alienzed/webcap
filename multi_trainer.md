@@ -69,12 +69,12 @@ References: [Fizgig CLI](https://github.com/shootthesound/Fizgig/blob/main/docs/
 
 Add a small versioned, repo-shipped <code>tool/server/training_capabilities.json</code> and a validation/lookup helper (<code>tool/server/training_capabilities.py</code>). It is explicitly justified by two real trainers with divergent options; it is **not** an extensible plugin framework.
 
-- One stable feature ID per user-visible Training option or operation; also declare essential implicit backend features (caching, output discovery, progress, lifecycle). Enumerate the capability IDs once in the validator, not in independent frontend/backend copies.
-- **Trainer × model/stage** lookup, not just trainer-wide booleans. Support status: <code>native</code>, <code>translated</code>, <code>unavailable</code>, or <code>unverified</code>. Only the first two enable operations. A supported feature declares allowed type/range/values and, if different, its user-facing label/help text. <code>unavailable</code>/<code>unverified</code> include a short reason.
+- One stable feature ID per **trainer-sensitive** Run Setup field, accepted backend setting or lifecycle/evaluation operation. Keep shared trainer-independent WebCap actions (e.g. queue reorder, run name) in one small inventory instead of duplicating them for every trainer/model. Canonical IDs live in a small Python validator; the frontend consumes the resolved capability payload.
+- Trainer × model/stage lookup (with compact model overrides). Status: `native`, `translated`, `unavailable`, `unverified`; only the first two enable operations **after integration tests pass**. Declare type/range/allowed values, relevant defaults, and a concise reason for unsupported features. Don't confuse upstream support with delivered WebCap behavior.
 - Distinguish **shared WebCap features** (run name, set selection, queue reorder, etc.) from **trainer-dependent features** and **model-dependent features**. Shared features remain in the coverage inventory even when they need no CLI argument.
 - Publish the selected manifest subset through the existing Training setup/validation response or one lightweight route. The UI disables/hides unsupported features *with an accessible explanation*; do not introduce more persistent UI state.
-- The backend validates selected feature IDs, values, model, and trainer against the **same manifest** when queuing. An unknown capability or unsupported non-default selection is a visible error. Never silently drop or reinterpret a requested option.
-- Store the selected <code>trainerId</code>, manifest schema/version, resolved effective settings, training variant and executable/model path identities with the **captured run/job**. Later Settings changes must not silently change a queued job's command. An absent trainer field in pre-existing jobs means the existing Diffusion Pipe implementation; no migration or alternate run discovery is needed.
+- Backend validation checks trainer/model and **every submitted trainer-dependent value** both during preflight **and** queue admission. The frontend **omits** disabled/inapplicable controls from new-run requests instead of submitting hidden stale defaults. Explicit unsupported fields fail visibly rather than being silently dropped. Leave old DP Resume/Continue payloads intact.
+- Store `trainerId`, capability schema/version, effective run settings, model/adapter identity and selected runtime with the captured action/job and persisted History/public views. Keep physical `outputRunPath` distinct from selected native resume-state path. Later Settings changes must not modify queued commands. Old jobs without `trainerId` continue as DP; no migration.
 - Keep actual CLI arg ordering, TOML materialization, parsers and filesystem actions in Python. The manifest cannot specify arbitrary shell commands, code, extensions, or filesystem paths.
 
 Illustrative shape only (Phase 1 must produce the full manifest):
@@ -113,11 +113,13 @@ Illustrative shape only (Phase 1 must produce the full manifest):
 
 The implementation may use model overrides rather than repeat each feature per stage; keep the shipped format small and inspectable. Do not expose a declared "native" feature in WebCap until its execution and lifecycle tests pass. The sample above does not imply enabled MVP support for every Fizgig feature.
 
-### 3.2 Coverage rules (non-negotiable)
+### 3.2 Exhaustive coverage without a generic framework
 
-A coverage test must enumerate **every**: (a) current Run Setup input/preset/starting-point action, (b) Training model/stage/selection/review/advanced-config operation, (c) queue and history action, (d) saved-artifact and Evaluation/Archive/Delete operation, and (e) backend per-run setting accepted at <code>start_response</code>. It checks that every trainer/model has an explicit status for each relevant ID. New controls without a manifest entry fail CI. New manifest features without a validator/renderer/implementation mapping also fail CI.
+Inventory **every WebCap-offered Training feature**, not every possible upstream trainer flag: current Run Setup fields, presets, starting points, profile/stage and reviewed data options; every accepted `config_settings`, initializer, resume and runtime key in the validate/start route; queue/History/Continue operations; Candidate Analysis, Test staging, Screening/Campaigns, selected epoch, Archive and Delete. Record trainer-dependent entries with a feature ID, applicable model/stage, DP and Fizgig support status, implementation/validation owner and focused test. Record shared actions once.
 
-Do not confuse this with documenting every Fizgig CLI flag in the WebCap UI. Fizgig-only options not yet offered belong in a **separately documented future-feature inventory**, and do not become silently configurable via raw command strings. The exhaustive promise applies to **the entire WebCap-offered feature surface**, not unsupported hypothetical trainers.
+Build a focused coverage test from the **audited code-owned map of training controls and backend request keys**; new controls/accepted fields require an explicit capability/handler entry and unsupported submissions fail visibly. Don't implement brittle scraping of every DOM node, gigantic per-model copies of shared actions, dynamic command-plugin systems, or a policy engine. Fizgig-only options not yet exposed by WebCap belong in an inert future-feature list.
+
+The tables below are the **initial audit seed**, not an automatically complete or already-implemented matrix. Phase 0 must reconcile missing controls and actual backend fields before Phase 1 adds any selection UI.
 
 ### 3.3 Initial feature inventory — Run Setup and model options
 
@@ -232,33 +234,31 @@ Trainer-specific operations actually required:
 
 These may be plain functions and explicit dispatch; do not introduce abstract base classes, dynamic loaders, dependency injection or generic lifecycle registries.
 
-### 4.2 Captured run identity
+### 4.2 Captured run identity and independent path roles
 
-Stay under the current logical run's <code>captures/</code>, <code>jobs/</code> and <code>output/</code> ownership. Do not create a new global <code>.webcap*</code> root or persist a parallel checkpoint database.
+Reuse `training_action.allocate_action` and its existing `captures/`, `jobs/`, `output/` ownership. `training_bundle.materialize_training_bundle` already creates one captured media/caption snapshot, inspected DP TOMLs and review plan. Keep them unchanged; never repurpose the Set's editable `config.h3.toml` as a Fizgig config.
 
-For Fizgig's image-only MVP, write into the captured action:
+For Fizgig image-only MVP, add only a **generated** `fizgig_dataset.toml` beside existing captured artifacts and a capture-local derived cache directory. Record effective command settings, trainer/version and base/adapter identity in existing action/job and capture summary structures; avoid an unnecessary second `fizgig_run.json` state copy.
 
 ~~~text
-captures/<capture-id>/
-  media/                        # Existing WebCap snapshot; captions next to images
-  dataset.h3.toml               # Existing DP/Set capture left unchanged
-  config.h3.toml                # Existing DP/Set capture left unchanged
-  fizgig_dataset.toml           # Generated, native Fizgig dataset + cache paths
-  fizgig_run.json               # Human-inspectable resolved CLI settings/model identities
-  summary.json, ...             # Existing manifest/review evidence
-  fizgig_cache/                 # Capture-local latents/text cache
-jobs/<job-id>/
-  runner.sh, pid, run.log, result.json, action ...
-output/
-  <fizgig-run-identity>/
-    <name>-000005.safetensors
-    <name>-000005-state/
-    <name>.safetensors
+<logical-training-action>/
+  captures/<capture-id>/
+    media/...                    # immutable copied items and .txt captions
+    config.h3.toml, dataset.h3.toml, summary.json, ...
+    fizgig_dataset.toml          # native dataset generated for this captured run
+    fizgig_cache/                # cache of this one capture (derived)
+  jobs/<job-id>/
+    runner.sh, pid, run.log, result.json, action ...
+  output/<native-run>/
+    <name>-000065.safetensors    # tested/exported LoRA
+    <name>-000065-state/         # optimizer/EMA/RNG state for Resume
+    <name>.safetensors           # final alias, not a separate epoch
     .fizgig_loss_<name>.jsonl
-    ...
 ~~~
 
-Exact subdirectory naming may use the existing logical run's output slug; capture and output identity must be unambiguous, especially across Resume and older-state branches. Do not create or modify the source Set's new trainer TOMLs implicitly. Existing editable <code>config.h3.toml</code> remains Diffusion Pipe-specific; a Fizgig run shows its generated effective settings rather than claiming that editing unsupported DP TOML keys changes Fizgig training.
+**Distinct identities:** `actionPath` owns the logical experiment; `outputRunPath` names the physical trainer output directory used for History, Test provenance, Archive and Delete; the native `resumeStatePath` (proposed explicit job field) names the `-state/` directory passed to Fizgig `--resume`. DP retains its current `resumeFromCheckpoint` = output-run-directory behavior. This separation is mandatory at `_new_job`, job serialization and every consumer; **never treat a nested state directory as the trainer run**.
+
+Action-owned cache is the simplest first implementation. Check actual WSL versus mounted-Windows IO performance on the training machine before changing placement. A different cache root is future work only with explicit ownership and cleanup—not a new background cache service or globally indexed reuse system.
 
 ### 4.3 One normalized checkpoint record
 
@@ -285,11 +285,11 @@ Resolve from the selected run's recorded directory, never broad-scan the models 
 
 ### 5.1 Dataset and caching
 
-1. Capture media/captions once through <code>training_bundle.py</code>, then **translate from captured review evidence**, not from a second read of mutable Set media. Preserve selected items, caption text, distinct reviewed groups, effective repeat weights and supported buckets.
-2. For Fizgig construct native <code>[general]</code>/<code>[[datasets]]</code> using exact captured directories and dedicated capture cache paths. Validate image count and exposure/repeat intent against the WebCap review summary. For unsupported DP-only TOML constructs or bucket semantics, show the discrepancy before queueing; do not silently discard them.
-3. Cache latents, then text, then train as one **user-initiated** queued job with visible phases. Reuse only caches proven valid against captured image/caption fingerprints and model/encoder/transform settings. If text changes, refresh text cache; if images or encoding inputs change, refresh the appropriate caches. Do not launch background cache work merely because the Training workspace opens.
-4. Explicitly differentiate photo, clip and voice cache needs. Start with H3 photos, then separately validate temporal buckets, frame rate, optional audio VAE and clip-still settings before marking video/audio supported.
-5. Use only known model files and paths from configured model root/explicit Fizgig settings. Verify actual files at launch. Never switch automatically from INT8 to a different base variant or re-enable a frozen training adapter because it happened to be used in an earlier manual run.
+1. Capture selected Set media and latest caption sidecars **once** through the current `training_bundle.py` path, including reviewed groups and fallbacks. Translate only from the captured media, not a second mutable Set scan. Verify input names, count and caption contents against the capture in tests.
+2. Translate the selected *captured* image stanzas to Fizgig `[general]`/`[[datasets]]` with dedicated cache paths. DP Review can express fixed bucket shapes, multiple image buckets, direct/custom TOML stanzas and weighted repeats; Fizgig buckets by target area with different semantics. Test input membership and effective exposures. Show actual bucket differences; warn where visually/materially relevant. Refuse a **specific launch** only if required files or essential weighting cannot be represented; do not silently train a different selected input set.
+3. Run **latent cache → text cache → train** as phases of one user-triggered queued job, with visible phase/progress/failures. No automatic scan/cache on opening the workspace. Derived cache belongs to its captured action, not to a second copy of the Set.
+4. History Continue/Resume reuses its recorded original capture and valid cache. Verify how the installed Fizgig version rebuilds missing cache. Do not add cross-run cache-sharing, fingerprint indexes or a second capture snapshot in the MVP.
+5. First enable **H3 still images**. Selected unsupported video/audio is a visible configuration issue, not silently omitted. Add video/voice only after separately verifying capture, frames/FPS, audio VAE, optional clip stills, temporal roles and inference compatibility.
 
 ### 5.2 Variant and parameter semantics
 
@@ -300,24 +300,26 @@ Resolve from the selected run's recorded directory, never broad-scan the models 
 - Do not silently apply current DP Character/Clothing preset's unsupported fields to Fizgig. Define tested trainer-specific preset values or keep Custom as the initial supported mode.
 - Persist every effective optimizer/training flag in the captured run summary. Show meaningful parameters in History without mislabeling EMA as dropout or runtime frozen adapters as fused checkpoints.
 
-### 5.3 Pause, Finish, Resume, and recovery
+### 5.3 Pause, Finish, Resume and recovery
 
-**Semantics are user-facing outcomes, not command name parity.**
+The common API describes **outcomes**, not identical command switches.
 
-| Operation | Diffusion Pipe (unchanged) | Fizgig target |
+| Operation | Diffusion Pipe (unchanged) | Fizgig implementation |
 | --- | --- | --- |
-| Pause | Existing <code>save_quit</code> and validated <code>latest</code> checkpoint | Write <code>.pause_requested</code>, await epoch boundary and newly verified state directory, then hold queue |
-| Resume | <code>--resume_from_checkpoint</code> from DeepSpeed run with compatible config | <code>--resume &lt;state-dir&gt;</code> with compatible frozen flags and recorded cache/model identity |
-| Finish | Existing save-and-quit, then advance queue | Must stop cleanly **and make the last actually exported LoRA explicit**; do not assert a new export at the stopping epoch unless evidence proves it |
-| Continue History | Transfer recorded capture/history safely to a new queued job | Restore native state; extend <code>max_train_epochs</code> when continuing a completed state |
-| Older-point rewind | DP candidate revision in same trainer directory | Use an isolated Fizgig output branch/revision to preserve earlier exported files and JSONL |
-| Cancel queued | Forget queued intent, preserve files | Same shared contract |
+| Pause | `save_quit` and verified DeepSpeed `latest`; current-step timing | Touch `.pause_requested` inside the **known physical output run**; await epoch-boundary save of `name-NNNNNN-state/`; verify state, then keep queue paused |
+| Resume | `--resume_from_checkpoint <physical-run>` (optionally saved `global_step`) | `--resume <native-state-dir>`; use separately recorded physical `outputRunPath` and original model/capture settings |
+| Finish | Current DP save-then-advance queue | Request native stop after current epoch, verify resumable state, advance queue and report **latest actually exported LoRA epoch** independently of stop epoch |
+| Continue History | Transfer captured ownership and allow total-epoch extension | Reuse captured Fizgig input, matching state, and explicitly extend `--max_train_epochs` if necessary |
+| Rewind | Existing DP candidate revision in same run directory | Isolate Fizgig output **branch/revision** when resuming an older state; preserve original exports and JSONL |
+| Queued cancel | Forget queued intent, leave output | Same shared WebCap behavior |
 
-**Known Fizgig gap:** an epoch-boundary Pause can write the resumable state without forcing a numbered LoRA export when the epoch is outside the configured save cadence. Therefore **Pause success is not proof of a newly testable export**. Before enabling Fizgig Finish/Finish-after-epoch, prove a reliable native final-export action (or implement and test a narrow upstream change); otherwise declare Finish unavailable, leave Pause functional, and tell the user exactly why. Do not silently use an older export while labeling it as the latest.
+**Important semantic difference:** Fizgig may save a **resumable state at epoch E** on Pause/Finish without exporting an epoch-E `.safetensors` when its export cadence skips E. Don't claim an unsaved candidate or label the older exported epoch as E. A truthful Finish can stop/advance while clearly showing: `Finished at epoch E · Latest exported LoRA epoch L`. A guarantee to export at E would be a separate capability requiring a proven native mechanism, not a reason to block basic Finish.
 
-**Recovery:** the existing PID/script/result record is authoritative for live process identity. Fizgig may exit with code 0 for its requested Pause, which must not be mistaken for completed target epochs. Record requested action and verify native state evidence. Missing/ambiguous runtime evidence must surface as an operation failure or recoverable queue state, never indefinite GPU ownership. Startup never auto-resumes a paused queue. Keep existing exact process verification and shared GPU FIFO semantics.
+**Resume fidelity:** Fizgig states contain `training_state.json`, `lora.safetensors`, `optimizer.pt`, and optionally `ema.pt`/`rng.pt`. Its loader can silently use **fresh optimizer moments** if optimization type/architecture is incompatible. For WebCap's **full-state Resume**, verify trainer/architecture, base and adapter identity, rank, LoRA type, optimizer, EMA and captured dataset before starting; show a deliberate weights-only continuation as a **different action**, never a hidden fallback. Current upstream supports LR adjustment through `resume_lr.py`; test the installed version/scheduler behavior and record the effective LR.
 
-On native Resume, use the original recorded flags/models/dataset cache that the state expects. Do not assume a newly captured different Set input is compatible with Fizgig state restoration; validate on a representative run. A Resume from a pruned state is unavailable even if the corresponding LoRA export exists. If user explicitly chooses an older state, never overwrite another branch's exports or step-loss curve.
+**Runner proof and restart:** Existing exact PID/script/result evidence owns the managed runtime and shared GPU lane. Fizgig's requested Pause can exit **code 0**; use the recorded action and newly verified state to distinguish requested Pause/Finish from natural completion. Preserve action intent before process exit. Don't use a zero exit code alone as a completed-run signal. On WebCap restart reconcile only positively verified live processes; never auto-unpause or hold GPU indefinitely on uncertain evidence.
+
+**Path and revision plumbing:** Explicitly update `_new_job`, `_launch_job`, History discovery and Continue, checkpointed-stop, Candidate provenance and Archive/Delete to distinguish `actionPath`, `outputRunPath` and `resumeStatePath`. DP's `_rewrite_resume_latest` mutates its `latest` marker and is **not applicable to Fizgig**. Fizgig rewrites its own loss JSONL on Resume, so older-state rewind must use a distinct output branch rather than altering original candidate evidence.
 
 ### 5.4 Analysis and generated artifacts
 

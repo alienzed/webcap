@@ -1,6 +1,6 @@
 # Multi-trainer Training — implementation detail plan
 
-**Status:** Proposed; planning only, no runtime changes made.
+**Status:** Code-audited proposal; planning only. WebCap `main` and upstream Fizgig source reviewed 2026-10-27; verify the installed training-machine revision before implementing.
 **Target:** WebCap, initially Diffusion Pipe + Fizgig for MiniMax H3.
 **Updated:** 2026-10-27.
 **Primary contracts:** [AGENTS.md](AGENTS.md), [Training Runner Contract](docs/training_runner_contract.md), [GPU Coordination](docs/gpu_coordination_invariants.md), [Filesystem State](docs/filesystem_state_contract.md).
@@ -37,19 +37,31 @@ The long-term aim is trainer independence at the WebCap workflow level, **not** 
 | Selection and Test | <code>training_runner.py</code>, <code>training_run_manifest.py</code>, <code>training_test_paths.py</code>, <code>epoch_test_bench.py</code>, <code>epoch_finder.py</code> | Resolve normalized exported LoRA paths; preserve Test filename/provenance rules |
 | Lifecycle cleanup | <code>training_archive.py</code>, <code>training_run_delete.py</code> | Trainer-aware retained files; exact run ownership, no cross-run cleanup |
 
-Current Diffusion Pipe behavior is not just a different CLI: **checkpoint save** writes <code>save_quit</code>, **resumable state** is a DeepSpeed directory referenced by <code>latest</code>, **exported LoRAs** live under <code>epochN/</code>, **loss** comes from TensorBoard, and **Resume** may write into the existing physical trainer-run directory. Those assumptions occur across runner, history, candidate analysis, archive and tests. Keep them intact behind the Diffusion Pipe case.
+### 2.1 Code-audit findings that change the plan
 
-Verified upstream Fizgig H3 behavior:
+- **API/metadata plumbing:** `tool/js/training_runner_ui.js` (`getManagedTrainingOptions`, `validateTrainingRunner`, `startManagedTraining`) → `tool/server/app.py` (`/fs/training_runner/validate`, `/start`) → `training_runner.validate_response/start_response` → `_new_job`. None currently receives a trainer choice. Thread `trainerId` through both paths, action/capture/job metadata, `_public_job`, `training_history.record_job`'s explicit whitelist, and History Continue in `training_history_ui.js`. Persist per-run choice independently of later Settings changes.
+- **Runner and preflight:** `training_runner._build_runner_script` hardcodes DeepSpeed, optionally one DP H3 `--cache_only` phase, and the proven shell/PID/log/result wrapper. `training_preflight.py` requires DeepSpeed/`train.py`, and `training_runtime.py` has a DP-only cwd/activation. Preserve wrapper; branch commands, phases and checks. Fizgig needs separate latent and text cache phases.
+- **Different path roles:** `_new_job` sets `outputRunPath = resumeFromCheckpoint`; correct for current DP Resume (run folder), **incorrect for Fizgig** (nested `-state/` directory). `outputRunPath` must always mean the **physical native output run directory**. Keep the Fizgig state-to-resume path separately and update affected history, continuation, PID/recovery, Candidate, Archive and Delete readers.
+- **History isn't presentation-only:** `training_history.discover_runs` checks the DP editable model config plus `latest`/`global_stepN/`; `training_candidates` requires two TensorBoard streams and `epochN/` exported LoRAs. `epoch_finder`, `training_archive`, Test staging and selected-epoch metadata consume the same assumptions. Integrate their *reader seams*, not just the launcher.
+- **Capture owner exists:** `training_bundle.materialize_training_bundle` already snapshots selected media, captions, inspected config, Review subsets and generated plan under the action's `captures/`. `training_action.allocate_action` owns `captures/`, `jobs/`, `output/`. Do not recapture the Set, invent a second snapshot, or introduce a new global cache root.
+- **Ostris behavior changed:** DP's `apply_h3_training_method("ostris")` now selects a **premerged Ostris-v3 H3 checkpoint** and clears `cfg`/`merge_adapters`; it is **not** runtime-merged. The DP Image option is another premerged base. Fizgig `--training_adapter` is a *frozen runtime adapter* and is a different choice.
+- **Settings are re-read at launch:** `training_runner._launch_job` currently reads `_training_settings()` when dequeuing. For new jobs, snapshot the effective trainer executable, Python environment, WSL distro, cwd and model/adapter identity on queue admission; a Settings change must not mutate queued intent. Preserve old DP jobs.
+- **Fizgig Resume fidelity:** `_load_state` restores optimizer/EMA/RNG when compatible but can use a **fresh optimizer** for mismatched optimizer/architecture. WebCap must not describe that as an equivalent full-state resume. Fizgig's `training/resume_lr.py` supports a user-selected LR change (recent upstream); verify the installed version and actual optimizer/scheduler behavior.
+
+DP's `save_quit`, `latest`, `global_stepN/`, `epochN/` and TensorBoard code remain unchanged as the Diffusion Pipe branch. The new logic must represent Fizgig's own native command, state and artifact contracts.
+
+Source-reviewed upstream Fizgig H3 behavior (installed training-machine revision still needs checking):
 
 - Three-step launch: cache VAE latents, cache text embeddings, then train; its dataset TOML uses <code>[general]</code> + <code>[[datasets]]</code> and explicit cache directories.
 - <code>--family minimax</code>, <code>--dit</code>, <code>--vae</code>, <code>--text_encoder</code>, <code>--network_dim</code>, <code>--network_alpha</code>, <code>--learning_rate</code>, <code>--max_train_epochs</code>, and <code>--save_every_n_epochs</code> are CLI parameters.
 - Numbered LoRA exports are <code>&lt;name&gt;-000065.safetensors</code>; the final export is <code>&lt;name&gt;.safetensors</code>. Resumable optimizer/state directories are distinct: <code>&lt;name&gt;-000065-state/</code>. Native Resume is <code>--resume &lt;state-dir&gt;</code>, with otherwise compatible original arguments.
 - <code>.pause_requested</code> asks for an epoch-boundary save-and-exit. <code>.save_now</code> and <code>.sample_now</code> request on-demand actions. Step loss is <code>.fizgig_loss_&lt;name&gt;.jsonl</code>, records <code>s/e/l/lr</code>, rather than Diffusion Pipe's TensorBoard event contract.
 - Fizgig supports EMA, precision/block-swap planning, frozen runtime training adapters and H3-specific <code>--family_option</code> values. The training adapter **is not included** in the exported LoRA.
-- A frozen Fizgig **Context LoRA** is not automatically equivalent to Diffusion Pipe's trainable "initialize from saved LoRA." "LoRA dropout" is not the same feature as Fizgig's **caption dropout**. Fizgig H3 <code>shift</code> must not be assumed equivalent to Diffusion Pipe <code>image_shift</code> without a behavioral test.
+- A frozen Fizgig **Context LoRA** is **not** equivalent to Diffusion Pipe's trainable "initialize from saved LoRA." "LoRA dropout" is not Fizgig's **caption dropout**. Fizgig H3 `shift` must not be assumed equivalent to Diffusion Pipe `image_shift` without a behavioral test.
+- Recent Fizgig code supports changing LR on Resume via `training/resume_lr.py` (v8.8.3 release notes). Conversely, optimizer/architecture mismatch can cause a **weights-only continuation with fresh optimizer moments** rather than a complete stateful Resume.
 - Fizgig upstream supports H3 photos/clips/audio and Krea2. WebCap's existing H3 profile captures images/video, not voice-only assets. Upstream support does **not** mean that complete WebCap workflow is integrated or verified.
 
-References: [Fizgig CLI](https://github.com/shootthesound/Fizgig/blob/main/docs/CLI.md), [Fizgig H3 driver](https://github.com/shootthesound/Fizgig/blob/main/src/fizgig/minimax/driver.py), [Fizgig step log](https://github.com/shootthesound/Fizgig/blob/main/src/fizgig/training/step_log.py).
+References: [Fizgig CLI](https://github.com/shootthesound/Fizgig/blob/main/docs/CLI.md), [Fizgig H3 driver](https://github.com/shootthesound/Fizgig/blob/main/src/fizgig/minimax/driver.py), [Fizgig step log](https://github.com/shootthesound/Fizgig/blob/main/src/fizgig/training/step_log.py), [Fizgig state loader](https://github.com/shootthesound/Fizgig/blob/main/src/fizgig/families/train.py), [Fizgig Resume LR](https://github.com/shootthesound/Fizgig/blob/main/src/fizgig/training/resume_lr.py).
 
 ## 3. Capability manifest: exhaustive and enforceable
 
@@ -126,7 +138,7 @@ Legend: **D** = currently available through WebCap+Diffusion Pipe; **F** = upstr
 | <code>h3.image_shift</code> | D, config <code>image_shift</code> | T; Fizgig <code>shift</code> selects a sigma density, equivalence unverified |
 | <code>h3.focused_blocks</code> | D, module exclusions (20–49) | T; <code>photo_blocks=20-49</code> is an effective backward-cut window, not necessarily identical |
 | <code>h3.method.cfg</code> | D, config <code>cfg=4</code> | U until proved; do not silently choose low-noise or another mode |
-| <code>h3.method.ostris</code> | D, model merge adapter | T; Fizgig frozen <code>--training_adapter</code> has different placement/semantics |
+| `h3.method.ostris` | D, **premerged Ostris-v3 checkpoint** (not runtime merge) | T; Fizgig frozen runtime `--training_adapter` is not equivalent |
 | <code>h3.method.image</code> | D, **premerged base checkpoint** | T; Fizgig runtime adapter and fused base are distinct variants; require explicit model choice |
 | <code>h3.image_adapter_legacy</code> (currently hidden) | D legacy/capture behavior | U in UI; declare explicitly so hidden inputs cannot leak into Fizgig |
 | <code>run.start.fresh</code> | D | F |
@@ -134,7 +146,7 @@ Legend: **D** = currently available through WebCap+Diffusion Pipe; **F** = upstr
 | <code>run.start.resume_custom</code> | D | F with validated state dir and exact trainer/model identity |
 | <code>run.start.initializer</code> (saved/custom LoRA) | D | U until a **trainable initialization** equivalent is verified; frozen Context LoRA is different |
 | <code>run.continue_history</code> | D | F after history integration; raise total epoch ceiling explicitly |
-| <code>run.resume.lr_override</code> | D, <code>force_constant_lr</code> | T; optimizer/scheduler restoration and LR override must be tested |
+| `run.resume.lr_override` | D, `force_constant_lr` | **F** in current Fizgig source (`resume_lr.py`, v8.8.3+); test installed runtime and scheduler |
 | <code>run.resume.rewind</code> / candidate revision | D, older <code>global_step</code> | T; older Fizgig state must branch output instead of overwriting existing exports/curve |
 | <code>run.resume.adapter_inheritance</code> | D, checkpoint-locked selection | F principle; record and validate Fizgig frozen adapter/base/EMA settings too |
 | <code>run.save_frequency</code> (from TOML) | D | F; native <code>--save_every_n_epochs</code> |
@@ -185,7 +197,7 @@ Legend: **D** = currently available through WebCap+Diffusion Pipe; **F** = upstr
 | <code>history.remove_record_only</code> | D | S, preserve all artifacts |
 | <code>history.checkpoint_picker</code> | D, DeepSpeed | F, list available native **state** dirs only |
 | <code>candidate.saved_epochs</code> | D, <code>epochN/</code> | F, flat numbered files; distinguish final alias and step snapshots |
-| <code>candidate.loss_analysis</code> / stable regions | D, TensorBoard step + epoch streams | T, aggregate Fizgig JSONL into equivalent normalized evidence |
+| `candidate.loss_analysis` / stable regions | D, TensorBoard step+epoch streams with wall time | T; Fizgig JSONL lacks wall time. No invented timestamps; only compatible step/epoch evidence and available metrics |
 | <code>candidate.select_epoch</code>, persist/reselect/clear | D | S using normalized exported artifact + existing manifest |
 | <code>candidate.copy_one</code>, <code>candidate.copy_all</code>, remove | D | S after path-normalized discovery and sidecar provenance |
 | <code>candidate.save_and_select</code> | D | S after export/path validation |
@@ -281,7 +293,7 @@ Resolve from the selected run's recorded directory, never broad-scan the models 
 
 ### 5.2 Variant and parameter semantics
 
-- **Do not merge training methods by label.** DP's <code>cfg=4</code>, DP's merged Ostris adapter, DP's premerged image checkpoint, and Fizgig's frozen runtime adapter are distinct implementations. Represent them as explicit available variants/choices under the selected trainer.
+- **Do not merge training methods by label.** DP's `cfg=4`, **premerged Ostris-v3 checkpoint**, premerged Image checkpoint, and Fizgig's frozen runtime adapter are distinct implementations. Represent explicit available variants/choices under the selected trainer.
 - The initial Fizgig default is the normal configured base with **runtime adapter off** unless selected. Captured metadata must show base/adapter paths, adapter type and strength. A Resume inherits those exact values and rejects conflicts.
 - Fizgig <code>caption_dropout</code> is separate from WebCap <code>adapterDropout</code>. Disable the latter for Fizgig until a genuine LoRA dropout implementation is proven; provide a clearly labeled native caption-dropout control if desired.
 - Require behavioral checks before mapping H3 image shift/noise distribution, DP CFG training, LoRA initialization, or forced resume LR. If no equivalent exists, show a concise unsupported explanation rather than a fake mapping.
@@ -310,7 +322,7 @@ On native Resume, use the original recorded flags/models/dataset cache that the 
 ### 5.4 Analysis and generated artifacts
 
 - Convert Fizgig JSONL <code>s/e/l/lr</code> into the existing normalized step-loss and completed-epoch analysis inputs; test epoch boundaries, moving averages, partial/truncated records, Resume branch filtering, and missing metrics. Keep DP TensorBoard decoding untouched.
-- Timestamps and time-to-selected metrics are not necessarily present in Fizgig's loss JSONL. Use only authoritative log/job timestamps where available; otherwise display an unavailable metric rather than inventing it.
+- Fizgig's step-loss JSONL has **no wall-time field**. Use only trustworthy job/log timestamps when available; omit time-to-selected and timestamp-dependent metrics rather than inventing them.
 - Discover Fizgig numbered LoRAs with a bounded filename parser inside the recorded run; resolve their source for current Training Candidate double-click, Copy to Test, Save/Select, model profiles, Campaigns and Manual Screening. The general Test-folder mechanism already accepts directly staged <code>.safetensors</code>, but managed-run analysis currently does not.
 - Preserve the one-Set Test root, source provenance sidecars and names such as <code>&lt;run&gt;__epoch65.safetensors</code>. It must be possible to select/test a Fizgig checkpoint without manual copying.
 - **Archive:** retain exact selected/explicit extra exported LoRAs, associated chosen lineage/evidence, and required metadata; never use DP <code>epochN/</code> and <code>global_stepN/</code> pruning assumptions on Fizgig. Preview exact deletions before proceeding.

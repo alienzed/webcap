@@ -313,6 +313,8 @@ function maybeRunCaptionAssistEnrichment() {
     captionAssistEnrichmentLookahead = null;
     return presentCaptionAssistEnrichmentTask(warmed, candidate);
   }
+  if (captionAssistEnrichmentLookahead && captionAssistEnrichmentLookahead.mediaKey === item.key)
+    cancelCaptionAssistEnrichmentLookahead(); // Inputs changed before adoption.
   var cached = captionAssistEnrichmentCache.get(input.fingerprint);
   if (cached) {
     if (cached.handled || !cached.suggestions.length) return Promise.resolve(true);

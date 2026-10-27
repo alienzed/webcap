@@ -104,7 +104,7 @@ Illustrative shape only (Phase 1 must produce the full manifest):
         "run.caption_dropout": {"status": "native", "min": 0, "max": 1},
         "run.ema": {"status": "native", "min": 0, "max": 0.9999},
         "h3.focused_photo_blocks": {"status": "translated"},
-        "lifecycle.finish": {"status": "unverified", "reason": "Must guarantee an export for the actual stopping epoch"}
+        "lifecycle.finish": {"status": "translated", "note": "Epoch-boundary stop; state and exported LoRA epochs may differ"}
       }
     }
   }
@@ -152,7 +152,7 @@ Legend: **D** = currently available through WebCap+Diffusion Pipe; **F** = upstr
 | <code>run.resume.rewind</code> / candidate revision | D, older <code>global_step</code> | T; older Fizgig state must branch output instead of overwriting existing exports/curve |
 | <code>run.resume.adapter_inheritance</code> | D, checkpoint-locked selection | F principle; record and validate Fizgig frozen adapter/base/EMA settings too |
 | <code>run.save_frequency</code> (from TOML) | D | F; native <code>--save_every_n_epochs</code> |
-| <code>run.advanced_config</code> (raw TOMLs) | D | U as direct passthrough; show generated effective Fizgig config and explicit supported overrides only |
+| `run.advanced_config` (raw DP TOMLs) | D | U as passthrough; initially show **read-only native Fizgig dataset/parameters**, with explicit supported overrides |
 | <code>run.manual_command</code> | D | F after same capture/command builder is integrated |
 | <code>run.diagnostics</code> | D | F after Fizgig-specific path/Python/model/cache probes |
 
@@ -171,7 +171,7 @@ Legend: **D** = currently available through WebCap+Diffusion Pipe; **F** = upstr
 | <code>data.video_inputs</code> | D (model-dependent) | F upstream H3; out of image MVP until video cache + fps/frames tested |
 | <code>data.audio_only_inputs</code> | Not offered by WebCap H3 profile | F upstream, separate capture/UI scope; not implicit support |
 | <code>data.video_still_training</code> | H3 role-dependent | F via <code>clip_still</code>/<code>clip_still_as_photo</code>, requires explicit cache/config pair |
-| <code>data.existing_capture_reuse</code> | D | T; cache reuse only with matching captured input/encoder identity |
+| `data.existing_capture_reuse` (History Continue) | D | F only with original recorded captured input; no cross-capture cache sharing in MVP |
 | <code>cache.latents</code> | D, managed DP cache | F, explicit Fizgig stage 1 |
 | <code>cache.text</code> | D, managed DP cache | F, explicit Fizgig stage 2 |
 | <code>cache.invalidations</code> | D, DP cache rules | T, caption edits invalidate text; image edits invalidate both |
@@ -191,7 +191,7 @@ Legend: **D** = currently available through WebCap+Diffusion Pipe; **F** = upstr
 | <code>queue.cancel_unstarted</code> | S | S, never delete trainer output |
 | <code>lifecycle.pause</code> | D, <code>save_quit</code>, current step | F, <code>.pause_requested</code>, epoch boundary; different latency |
 | <code>lifecycle.resume_queue</code> | D | F after state verification; no automatic restart on boot |
-| <code>lifecycle.finish</code> and scheduled Finish | D | T; must provide truthful last exported epoch and not claim a missing final LoRA |
+| `lifecycle.finish` and scheduled Finish | D | T; native epoch-boundary stop/advance, with **latest actual exported LoRA** separate from stop/resume-state epoch |
 | <code>runtime.process_recovery</code> (PID/result evidence) | D | S runner identity, F subprocess; verify completion vs pause exit |
 | <code>runtime.progress</code> (phase, epoch/step, ETA, LR, loss) | D | F from log/JSONL; no fabricated checkpoint ETA |
 | <code>runtime.log</code>, reveal log, Console errors | S | S |
@@ -323,7 +323,7 @@ The common API describes **outcomes**, not identical command switches.
 
 ### 5.4 Analysis and generated artifacts
 
-- Convert Fizgig JSONL <code>s/e/l/lr</code> into the existing normalized step-loss and completed-epoch analysis inputs; test epoch boundaries, moving averages, partial/truncated records, Resume branch filtering, and missing metrics. Keep DP TensorBoard decoding untouched.
+- Parse Fizgig JSONL `s/e/l/lr` independently, normalize **actual** step/epoch evidence and use the shared scoring functions only when their invariants apply. DP Candidate Analysis uses TensorBoard `wallTime` for epoch assignment/revision filtering; never fabricate it to force a fit. Test incomplete epochs, duplicate step IDs under accumulation, Resume branches, missing metrics and the absence of wall times. DP TensorBoard readers remain unchanged.
 - Fizgig's step-loss JSONL has **no wall-time field**. Use only trustworthy job/log timestamps when available; omit time-to-selected and timestamp-dependent metrics rather than inventing them.
 - Discover Fizgig numbered LoRAs with a bounded filename parser inside the recorded run; resolve their source for current Training Candidate double-click, Copy to Test, Save/Select, model profiles, Campaigns and Manual Screening. The general Test-folder mechanism already accepts directly staged <code>.safetensors</code>, but managed-run analysis currently does not.
 - Preserve the one-Set Test root, source provenance sidecars and names such as <code>&lt;run&gt;__epoch65.safetensors</code>. It must be possible to select/test a Fizgig checkpoint without manual copying.
@@ -344,7 +344,7 @@ Each phase is a self-contained, reviewable change with focused tests. Keep Diffu
 - Probe Fizgig CLI and representative states/logs on the **training machine** (the development machine is not authoritative for live training). Especially verify save/finish export, resume path and preserved model settings, LoRA loading in H3 inference, and H3 image dataset translation.
 - Declare the exact Phase 3 Fizgig photo feature subset; show gaps as unavailable rather than promising untested parity.
 
-**Gate:** source-backed complete inventory; baseline tests passing unchanged; representative sample Fizgig file layout and loss JSONL recorded as test fixtures. No launcher modification until this gate passes.
+**Gate:** source-backed complete inventory; frozen DP command/config baseline; current tests passing; representative Fizgig saved-state, numbered export, cache and loss JSONL fixtures; installed upstream differences noted. No shared launcher change until this gate passes.
 
 ### Phase 1 — Capability declaration and UI contract (behavior-preserving)
 
@@ -353,11 +353,11 @@ Each phase is a self-contained, reviewable change with focused tests. Keep Diffu
 **Tasks**
 
 - Introduce versioned trainer/model/feature matrix, validate full coverage and native option constraints, and return the chosen capability subset with Run Setup state.
-- Add Fizgig installation path, Python executable/venv path and optional explicit missing model paths in **Settings**; default trainer stored there; narrow per-run trainer selector in Run Setup, H3 only initially.
+- Add Fizgig installation path and Python executable/venv to **Settings**, plus default trainer. Reuse existing WSL distribution and configured model root absent a demonstrated need for another. Use a narrow per-run selector in Run Setup (H3 only initially).
 - Keep control hierarchy calm. Make unsupported controls disabled with short reason, not giant explanatory panels. Choosing a trainer refreshes only dependent fields and does not overwrite unrelated drafts.
-- Ensure backend rejects any unsupported option even if submitted directly. Existing runs with no <code>trainerId</code> continue as Diffusion Pipe without migration.
+- Thread `trainerId` and selected effective settings through `getManagedTrainingOptions`, both validate/start payloads, both Python endpoints, `_new_job`, persisted/public history and History Continue. Backend rejects unsupported options even when the client bypasses disabled controls. Existing jobs without `trainerId` remain DP without migration.
 
-**Gate:** DOM/control-to-manifest and request-validation coverage tests pass; all existing DP controls and defaults unchanged; no Fizgig button queues work yet.
+**Gate:** reviewed training-control/backend-field coverage, both-route validation tests, DP controls/defaults unchanged; no Fizgig launch button before actual runtime is integrated.
 
 ### Phase 2 — Capture, native configuration and command generation
 
@@ -369,7 +369,7 @@ Each phase is a self-contained, reviewable change with focused tests. Keep Diffu
 - Build explicit cache-latents, cache-text and training argv using the configured Fizgig Python; map only verified controls. Ensure model files/adapter state are declared and paths are correctly quoted/converted for WSL. No raw user-supplied shell fragment.
 - Preserve existing queue admission, GPU ownership, frozen captures, manual command, status and log ownership. Capture trainer and effective parameters before the external process starts.
 - Verify that parameter changes do not accidentally trigger DP config rewrites in Fizgig mode, and that existing DP command snapshots remain byte-equivalent where practical.
-- Provide Fizgig-specific diagnostics; do not require DeepSpeed/<code>train.py</code> for Fizgig, and do not require Fizgig for DP.
+- Provide trainer-specific diagnostics: Fizgig Python executable, scripts, cached data and models; DeepSpeed/`train.py` remain DP-only requirements. Freeze the effective runtime at queue admission and have `_launch_job` use that snapshot rather than reading the current Settings for Fizgig.
 
 **Gate:** dry-run exact generated CLI equals a manually proven reference on the training machine; dataset item/caption/weight counts checked; DP tests green; one explicitly user-launched small Fizgig training succeeds.
 
@@ -382,8 +382,8 @@ Each phase is a self-contained, reviewable change with focused tests. Keep Diffu
 - Show actual phases (cache latents, cache text, train), epochs/steps/loss/LR, elapsed and anchored ETA via Fizgig log/JSONL. Cache stages can be indeterminate where no reliable count exists.
 - Discover native resume-state directories directly, distinguish them from LoRA exports; surface state availability in History/picker.
 - Implement epoch-boundary Pause with <code>.pause_requested</code>, confirm state creation, preserve queue pause. Respect code-0 requested exits and runtime PID proof on restart.
-- Implement Resume/Continue and epoch extension from recorded native state. Test state pruning and model/adapter inheritance. Treat an older-state resume as an isolated output branch.
-- Validate a true final-export guarantee before enabling Fizgig Finish and scheduled Finish. Do not claim equivalence from a graceful exit alone.
+- Implement native Resume/Continue and epoch extension using recorded optimizer/EMA/RNG state, the supported explicit LR override, pruned-state availability and locked model/adapter flags. A deliberate weights-only continuation must be named as such. Older-state rewind uses an isolated physical output branch/revision.
+- Enable Fizgig Finish/scheduled Finish as a verified epoch-boundary stop-and-advance: expose completed state and last **actually exported** LoRA separately. Do not claim a new export at the stop epoch. A guaranteed new final export is a separate capability requiring a proven native mechanism.
 
 **Gate:** real Pause → restarted WebCap → explicit Resume → completed training passes without lost optimizer state, changed adapter flags, orphan GPU reservation or overwritten outputs; DP Pause/Finish/Resume/Continue tests stay green.
 
@@ -393,7 +393,7 @@ Each phase is a self-contained, reviewable change with focused tests. Keep Diffu
 
 **Tasks**
 
-- Normalize Fizgig numbered exports, final alias, distinct resume states, loss series and epoch selection into the current candidate shape. Keep existing DP TensorBoard and <code>epochN/</code> path.
+- Normalize Fizgig numbered exports, final alias, separate resume state, timestamp-free JSONL step/epoch evidence and selection into the current candidate shape. Leave DP TensorBoard and `epochN/` logic unchanged.
 - Make Copy One/All, double-click Test staging, Save/Select, stable-region analysis and a durable Selected Epoch work with recorded Fizgig run identity.
 - Expose Fizgig managed saved exports in Manual Screening and Campaigns without making users copy files manually; existing staged-file source remains valid.
 - Preserve Test session provenance, per-LoRA ratings, comparison source, model profile metadata and revision-safe filenames.
@@ -439,10 +439,10 @@ Run focused tests at each phase, then the relevant full suite and the repository
 
 These are the only issues that should interrupt implementation for a product decision; ordinary differences should be resolved by the explicit capability mapping.
 
-1. **Finish parity:** Does current Fizgig reliably export a testable LoRA at the epoch where user requests Finish, even outside the save cadence? Current source indicates Pause may only write state. If not, decide between a narrow tested upstream enhancement and temporarily disabling Fizgig Finish with an explicit explanation.
-2. **LoRA initialization parity:** Verify whether Fizgig can initialize *trainable weights* from an existing H3 LoRA. A frozen Context LoRA must not masquerade as "Fine-tune from saved LoRA."
-3. **DP image-shift / CFG equivalence:** Verify with actual trainer code/test, not matching names. If no equivalent, explicitly unavailable in Fizgig mode.
-4. **Video/repeats parity:** If a reviewed Set requests data weighting or temporal buckets Fizgig cannot faithfully express, stop that **specific launch** with a useful supported-options explanation. Do not silently train a different dataset.
+1. **Finish only if stronger export semantics are required:** Ordinary Finish may stop at E while the latest LoRA exported is L. Label both truthfully; only a user requirement for **a new LoRA at E** needs a separate tested mechanism or decision.
+2. **LoRA initialization:** Current Fizgig CLI exposes state Resume and frozen Context LoRA, **not a verified trainable-LoRA initializer**. Disable the unrelated WebCap starting point for Fizgig until verified rather than delaying the image MVP.
+3. **H3 image-shift / CFG equivalence:** Verify with trainer code and representative output, never by similar labels; mark unavailable in Fizgig mode when not equivalent, without blocking other features.
+4. **Data translation:** For still-image MVP, preserve selected image/caption membership. Warn on real bucket differences rather than adding speculative gates. Fail a **specific launch** only if essential weighting or required files cannot be represented; video is future verified work.
 5. **Historical/state branches:** If Fizgig Resume from an older state cannot be safely directed into an isolated output branch, postpone older-point rewind; never overwrite an existing evaluation candidate.
 
 Everything else should proceed in the smallest reviewable phase with unsupported capabilities declared as such.
@@ -450,7 +450,7 @@ Everything else should proceed in the smallest reviewable phase with unsupported
 ## 9. Definition of done
 
 - Training configuration is **model-aware and trainer-aware**; one declared, tested capability source controls UI and backend validation, without duplicating unsupported lists.
-- H3 images can be trained on Fizgig **entirely from WebCap**, including captured Set input, caching, progress, manual command, pause/resume, history, saved epoch discovery and Evaluation, with clear honest support for Finish.
+- H3 still images can be trained on Fizgig **entirely from WebCap**, including captured Set input, caching, progress, manual command, full-state pause/resume, history, epoch discovery and Evaluation. Finish reports its actual stop epoch and most recent exported LoRA independently; new job trainer/runtime identity is frozen.
 - Existing Diffusion Pipe runs, queued intent, checkpoint resumes, model variants, Test copies and history/archiving behave exactly as before. The selected trainer is stored with every new job and never guessed from a filename.
 - Both trainers produce the **same WebCap-visible concepts** (run, progress, exported LoRA, resumable state, selected epoch) while preserving any real timing, optimization and file-format differences.
 - All supported feature rows have tests; all unsupported or unverified rows are visible and do not silently execute. No new queues, hidden state, automatic scan/cache jobs, generic framework or broad filesystem migrations.

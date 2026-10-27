@@ -106,6 +106,16 @@ def _validate_attachments(attachments):
     return result
 
 
+def _validate_workshop(workshop):
+    if workshop is None:
+        return None
+    if (not isinstance(workshop, dict) or not isinstance(workshop.get("storyId"), str)
+            or not isinstance(workshop.get("sceneId"), str)
+            or not isinstance(workshop.get("expectedPrompt"), str)):
+        raise ValueError("Assistant Workshop snapshot is invalid.")
+    return workshop
+
+
 def _summary(chat):
     return {key: chat[key] for key in ("id", "mode", "title", "createdAt", "updatedAt", "revision")}
 
@@ -130,7 +140,7 @@ def create_chat(mode):
         chat_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ") + "-" + uuid.uuid4().hex[:8]
         now = _now()
         chat = {"id": chat_id, "mode": mode, "title": "New chat", "createdAt": now,
-                "updatedAt": now, "revision": 0, "messages": [], "draft": "", "attachments": {}}
+                "updatedAt": now, "revision": 0, "messages": [], "draft": "", "attachments": {}, "workshop": None}
         _write(_path(chat_id), chat)
         _set_active(mode, chat_id)
         return chat
@@ -160,6 +170,7 @@ def save_chat(chat_id, payload):
         chat.update(title=title.strip(), draft=draft,
                     messages=_validate_messages(payload.get("messages")),
                     attachments=_validate_attachments(payload.get("attachments", {})),
+                    workshop=_validate_workshop(payload.get("workshop")),
                     revision=chat["revision"] + 1, updatedAt=_now())
         _write(path, chat)
         return chat

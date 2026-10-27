@@ -20,7 +20,7 @@ function fixture() {
   const tags = {a: ['red scarf'], b: [], c: ['portrait'], d: ['flower']};
   const assignments = {c: [{requirement: 'Clothing', term: 'halter top'}]};
   const ratings = {a: 5, b: 0, c: 3, d: 2};
-  const stats = {tags: 0, ai: 0, incomplete: 0, mismatch: 0};
+  const stats = {tags: 0, ai: 0, mismatch: 0};
   let stars = {values: [], includeNoStar: false};
   let flags = [];
   const ui = {
@@ -29,7 +29,6 @@ function fixture() {
     advancedFilterReviewedEl: {checked: false},
     advancedFilterUnreviewedEl: {checked: false},
     advancedFilterNeedsAiValidationEl: {checked: false},
-    advancedFilterIncompleteEl: {checked: false},
     advancedFilterUntaggedEl: {checked: false},
     advancedFilterInvalidArEl: {checked: false}
   };
@@ -44,10 +43,6 @@ function fixture() {
     getAdvancedStarFilterState: () => stars,
     getAdvancedFlagFilterValues: () => flags,
     getRatingForMediaKey: key => ratings[key] || 0,
-    computeRequirementProgressForMediaKey: key => {
-      stats.incomplete++;
-      return {total: 1, completed: key === 'b' || key === 'd' ? 0 : 1};
-    },
     isAiValidatedForItem: item => { stats.ai++; return item.key === 'a' || item.key === 'c'; },
     hasTagMismatchForText: key => { stats.mismatch++; return key === 'b' || key === 'c'; },
     hasSupportedAspectBucket: ar => ar !== '2:1'
@@ -62,12 +57,11 @@ function fixture() {
   };
 }
 
-test('captionless, review state, stars, flags, incomplete, AI, mismatch, and invalid aspect filters retain results', () => {
+test('captionless, review state, stars, flags, AI, mismatch, and invalid aspect filters retain results', () => {
   const cases = [
     ['advancedFilterMissingCaptionsEl', ['b']],
     ['advancedFilterReviewedEl', ['a', 'd']],
     ['advancedFilterUnreviewedEl', ['b', 'c']],
-    ['advancedFilterIncompleteEl', ['b', 'd']],
     ['advancedFilterNeedsAiValidationEl', ['b', 'd']],
     ['advancedFilterUntaggedEl', ['b', 'c']],
     ['advancedFilterInvalidArEl', ['c']]

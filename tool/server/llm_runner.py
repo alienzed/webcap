@@ -397,7 +397,7 @@ def _client_result(client, context, llm_result, job_id="", frozen_contract=None)
             raise ValueError("Director returned invalid Story guideline proposals.")
         suggestions = {
             key: guidelines[key].strip() for key in expected
-            if guidelines[key].strip() and not (story.get("guidelines") or {}).get(key)
+            if guidelines[key].strip() and (context.get("refreshGuidelines") is True or not (story.get("guidelines") or {}).get(key))
         }
         return {
             "storyId": story["id"],

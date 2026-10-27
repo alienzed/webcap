@@ -543,6 +543,7 @@ function useFocusedCaptionPrefetchForCurrentItem() {
     var adoptedPrefetch = prefetch;
     focusedCaptionPrefetch = null;
     candidate.missingGroups = getCaptionAssistMissingGroups(candidate.mediaKey);
+    candidate.prefetched = true;
     captionAssistCandidate = candidate;
     syncCaptionAssistCandidateUi();
     setStatus(

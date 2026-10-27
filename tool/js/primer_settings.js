@@ -1633,17 +1633,43 @@ function cancelCaptionAssistJob(jobId) {
   });
 }
 
+// A text match is a useful review hint, not proof that a natural-language
+// caption lacks the selected fact. Leave new auto-Primer drafts alone.
+function getCaptionAssistTagMismatchHints(mediaItem, request) {
+  var draft = String(request.draft || '').trim();
+  if (!draft || request.sightLed) return [];
+  var savedCaption = String(mediaItem.caption || '').trim();
+  if (!savedCaption && draft === String(buildAutoPrimer(mediaItem.fileName, mediaItem.key) || '').trim()) {
+    return [];
+  }
+  return getCaptionAssistOmittedCorrections(
+    mediaItem.key, draft, request.assignments, request.tags
+  ).map(function (entry) {
+    return { group: entry.group, term: entry.term };
+  });
+}
+
 function requestCaptionAssistCandidate(mediaItem, request, options) {
   var opts = options || {};
   var sourceMediaKey = String(mediaItem && mediaItem.key || '').trim();
   if (!sourceMediaKey) return Promise.reject(new Error('Caption Assist requires a selected media item.'));
   if (!request || !request.model) return Promise.reject(new Error('Select a Director model before using Caption Assist.'));
   var missingGroups = getCaptionAssistMissingGroups(sourceMediaKey);
+  // Explicit candidate repair owns its requested corrections. Otherwise give
+  // the Director the text-match gaps in the submitted draft as review hints.
+  // Keep the original request unchanged for lookahead fingerprint matching.
+  var submittedRequest = request;
+  if (!Object.prototype.hasOwnProperty.call(request, 'corrections')) {
+    var mismatchHints = getCaptionAssistTagMismatchHints(mediaItem, request);
+    if (mismatchHints.length) {
+      submittedRequest = Object.assign({}, request, { tagMismatches: mismatchHints });
+    }
+  }
 
   return captionAssistRequestJson('/caption/assist', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(request)
+    body: JSON.stringify(submittedRequest)
   }).then(function (payload) {
     if (!payload.job || !payload.job.jobId) throw new Error('Caption Assist did not return a queued job.');
     trackTransientLlmJob(payload.job);

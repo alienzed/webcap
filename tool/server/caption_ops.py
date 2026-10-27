@@ -216,6 +216,7 @@ def build_caption_assist_messages(
     rendered_primer="",
     preferred_sequence="",
     corrections=None,
+    tag_mismatches=None,
     open_sight=None,
     context_sight=None,
     sight_led=False,
@@ -272,6 +273,21 @@ def build_caption_assist_messages(
             "term": term,
             "note": note,
         })
+    mismatch_hints = []
+    seen_mismatches = set()
+    for raw in tag_mismatches if isinstance(tag_mismatches, list) else []:
+        if not isinstance(raw, dict):
+            continue
+        group = str(raw.get("group") or "").strip()
+        term = str(raw.get("term") or "").strip()
+        if not term:
+            continue
+        key = (group.casefold(), term.casefold())
+        if key in seen_mismatches:
+            continue
+        seen_mismatches.add(key)
+        mismatch_hints.append({"group": group, "term": term})
+
     if not grouped and not other_tags and not required_phrase and not draft and not open_sight and not context_sight:
         raise ValueError("Caption Assist needs selected annotations, a required phrase, or an existing draft.")
 
@@ -287,6 +303,8 @@ def build_caption_assist_messages(
         "openSight": open_sight if isinstance(open_sight, dict) else None,
         "contextSight": context_sight if isinstance(context_sight, dict) else None,
     }
+    if mismatch_hints and not repair_corrections:
+        payload["tagMismatches"] = mismatch_hints
     if preferred_sequence:
         ordering = (
             "preferredCaptionSequence is the user's preferred order for caption content. Follow its broad sequence, "
@@ -306,6 +324,12 @@ def build_caption_assist_messages(
             "as intact as practical. Every item in corrections is a verified selected fact that the current candidate "
             "omitted or mishandled; explicitly fix those items while preserving all other valid caption content. "
         )
+    mismatch_guidance = (
+        "tagMismatches lists selected annotations that WebCap's text matching did not recognize in currentDraft. "
+        "They are review hints, not confirmed errors: the draft may already express these facts in natural wording. "
+        "Check each meaning, preserve adequately expressed details, and make small additions or clarifications for "
+        "genuinely absent selected facts while keeping the rest of the draft intact. "
+    ) if mismatch_hints and not repair_corrections else ""
     sight_guidance = (
         "This item has no user-selected tags or authored draft. Compose a substantive new training caption "
         "from the specific, visually supported facts in openSight, treating captionTemplate and renderedPrimer "
@@ -322,6 +346,7 @@ def build_caption_assist_messages(
         "rather than omitting it. Do not invent details unsupported by selected annotations, the required phrase, "
         "the draft, or visual evidence. "
         + repair_instruction
+        + mismatch_guidance
         + sight_guidance
         + ordering +
         "Do not use annotation group order or captionTemplate placeholder order as caption order.\n\n"

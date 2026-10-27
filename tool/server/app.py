@@ -765,6 +765,7 @@ def caption_assist_route():
             rendered_primer=data.get("renderedPrimer", ""),
             preferred_sequence=data.get("preferredCaptionSequence", ""),
             corrections=data.get("corrections"),
+            tag_mismatches=data.get("tagMismatches"),
             open_sight=data.get("openSight"),
             context_sight=data.get("contextSight"),
             sight_led=data.get("sightLed") is True,

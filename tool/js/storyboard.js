@@ -4,6 +4,7 @@
   // Session-only submitted instructions, independent of saved Story/Scene prompts.
   var sceneRefineHistory, sceneRevisionHistory, sceneCreationHistory;
   var storyboardGuidelineReview = null;
+  var storyboardDefineGuidelineDrafts = Object.create(null);
   var STORY_GUIDELINE_LABELS = {
     visualFocus: 'Visual Focus',
     creativeDirection: 'Creative Direction',
@@ -1872,7 +1873,33 @@
     syncDirectorPendingControls();
   }
 
-  function defineInvariants() {
+  function openDefinedGuidelineDraft(storyId) {
+    if (!storyState.story || String(storyState.story.id) !== String(storyId)) return false;
+    // Preserve edits when switching away from this review before rebuilding it.
+    rememberDefinedGuidelineDraft();
+    var cached = storyboardDefineGuidelineDrafts[storyId];
+    var current = storyState.story.guidelines || {};
+    var fields = ['visualFocus', 'creativeDirection', 'variation', 'pacing'];
+    if (!cached && !fields.some(function (key) { return String(current[key] || '').trim(); })) return false;
+    var values = cached ? Object.assign({}, cached.values) : {};
+    if (!cached) fields.forEach(function (key) { values[key] = String(current[key] || ''); });
+    var concept = el('storyboard-story-concept').value.trim();
+    var summary = cached ? 'Define from Concept · Previous values' : 'Define from Concept · Saved guidelines';
+    if (cached && cached.sourceConcept !== concept) summary += ' · Concept changed; Refresh to update';
+    showReviewedGuidelines({
+      storyId: storyId,
+      source: 'define',
+      sourceConcept: cached ? cached.sourceConcept : concept,
+      title: 'Review Director Suggestions',
+      summary: summary,
+      expectedGuidelines: current,
+      changes: values,
+      selected: cached ? cached.selected : null
+    });
+    return true;
+  }
+
+  function defineInvariants(refresh) {
     if (!storyState.story) return;
     var storyId = storyState.story.id;
     var directorTarget = { kind: 'concept', storyId: storyId };
@@ -1880,6 +1907,7 @@
       reportError(new Error('That Director target already has pending work.'));
       return;
     }
+    if (refresh !== true && openDefinedGuidelineDraft(storyId)) return;
     var modelId = storyState.director.modelId;
     if (!modelId) {
       reportError(new Error('Choose a Storyboard Director model first.'));
@@ -1891,6 +1919,12 @@
       return;
     }
 
+    if (refresh === true) {
+      rememberDefinedGuidelineDraft();
+      var reviewModal = el('storyboard-guidelines-review');
+      if (reviewModal.open) reviewModal.close();
+      storyboardGuidelineReview = null;
+    }
     var saveBarrier = flushPendingSaves();
     setDirectorPending(directorTarget, true);
     startDirectorActivity();
@@ -1908,20 +1942,24 @@
       }).then(function () {
         var suggestions = payload.guidelineSuggestions || {};
         var offered = ['visualFocus', 'creativeDirection', 'variation', 'pacing'].filter(function (key) {
-          return typeof suggestions[key] === 'string' && suggestions[key].trim() &&
-            !String((storyState.story.guidelines || {})[key] || '').trim() &&
-            !String(document.querySelector('[data-story-guideline="' + key + '"]').value || '').trim();
+          return typeof suggestions[key] === 'string' && suggestions[key].trim();
         });
         if (offered.length) {
           var changes = {};
           offered.forEach(function (key) { changes[key] = suggestions[key].trim(); });
-          showReviewedGuidelines({
-            storyId: storyId,
-            title: 'Review Director Suggestions',
-            summary: 'Define from Concept · ' + String(offered.length) + ' suggested guidelines',
-            expectedGuidelines: storyState.story.guidelines || {},
-            changes: changes
-          });
+          storyboardDefineGuidelineDrafts[storyId] = {
+            sourceConcept: concept, values: changes, selected: {}
+          };
+          if (storyState.story && String(storyState.story.id) === String(storyId) &&
+              !el('storyboard-guidelines-review').open) {
+            openDefinedGuidelineDraft(storyId);
+          }
+        } else {
+          reportError(new Error('Director returned no guideline suggestions; previous values were retained.'));
+          if (storyState.story && String(storyState.story.id) === String(storyId) &&
+              !el('storyboard-guidelines-review').open) {
+            openDefinedGuidelineDraft(storyId);
+          }
         }
         reportConsoleInfo('Storyboard', 'Defined ' + String(payload.addedCount || 0) + ' new Story invariant' + (Number(payload.addedCount || 0) === 1 ? '' : 's') + ' from the concept.');
         return consumeDirectorJob(payload.jobId);
@@ -6442,7 +6480,7 @@
       event.preventDefault();
       event.stopPropagation();
     });
-    el('storyboard-invariant-define').addEventListener('click', defineInvariants);
+    el('storyboard-invariant-define').addEventListener('click', function () { defineInvariants(false); });
     el('storyboard-invariant-add').addEventListener('click', function () {
       var continuitySection = document.querySelector('[data-story-section="continuity"]');
       if (continuitySection) continuitySection.open = true;
@@ -6806,31 +6844,56 @@
     });
   }
 
+  function rememberDefinedGuidelineDraft() {
+    var review = storyboardGuidelineReview;
+    if (!review || review.source !== 'define') return;
+    var modal = el('storyboard-guidelines-review');
+    var values = {};
+    var selected = {};
+    modal.querySelectorAll('[data-guideline-proposal]').forEach(function (input) {
+      values[input.dataset.guidelineProposal] = input.value;
+    });
+    modal.querySelectorAll('[data-guideline-select]').forEach(function (input) {
+      selected[input.dataset.guidelineSelect] = input.checked;
+    });
+    storyboardDefineGuidelineDrafts[review.storyId] = {
+      sourceConcept: review.sourceConcept,
+      values: values,
+      selected: selected
+    };
+  }
+
   function showReviewedGuidelines(proposal) {
     if (!proposal || !storyState.story || String(storyState.story.id) !== String(proposal.storyId)) {
       throw new Error('Open the original Story to review its guideline changes.');
     }
     var expected = proposal.expectedGuidelines || {};
     var changes = proposal.changes || {};
-    var keys = Object.keys(STORY_GUIDELINE_LABELS).filter(function (key) {
-      return Object.prototype.hasOwnProperty.call(changes, key) &&
-        typeof changes[key] === 'string' && changes[key].trim() !== String(expected[key] || '').trim();
-    });
+    var source = proposal.source === 'define' ? 'define' : '';
     if (Object.keys(changes).some(function (key) { return !Object.prototype.hasOwnProperty.call(STORY_GUIDELINE_LABELS, key); })) {
       throw new Error('Director proposed an unknown Story guideline.');
     }
-    if (!keys.length) throw new Error('Director proposed no changed Story guidelines.');
+    var keys = Object.keys(STORY_GUIDELINE_LABELS).filter(function (key) {
+      return Object.prototype.hasOwnProperty.call(changes, key) &&
+        typeof changes[key] === 'string' &&
+        (source === 'define' || changes[key].trim() !== String(expected[key] || '').trim());
+    });
+    if (!keys.length) throw new Error('Director proposed no Story guidelines to review.');
     var modal = el('storyboard-guidelines-review');
     var host = el('storyboard-guidelines-review-fields');
     if (!modal || !host) throw new Error('Story guideline review dialog is missing.');
+    rememberDefinedGuidelineDraft();
     storyboardGuidelineReview = {
       storyId: proposal.storyId,
-      expectedGuidelines: expected,
+      source: source,
+      sourceConcept: proposal.sourceConcept || '',
+      expectedGuidelines: Object.assign({}, expected),
       onApplied: proposal.onApplied
     };
     el('storyboard-guidelines-review-title').textContent = proposal.title || 'Review Story Guidelines';
     el('storyboard-guidelines-review-summary').textContent = proposal.summary || 'Review the proposed changes.';
     el('storyboard-guidelines-review-error').textContent = '';
+    el('storyboard-guidelines-review-refresh').classList.toggle('hidden', source !== 'define');
     host.replaceChildren();
     keys.forEach(function (key) {
       var item = document.createElement('section');
@@ -6839,7 +6902,7 @@
       label.className = 'storyboard-guidelines-review-choice';
       var checked = document.createElement('input');
       checked.type = 'checkbox';
-      checked.checked = true;
+      checked.checked = !proposal.selected || proposal.selected[key] !== false;
       checked.dataset.guidelineSelect = key;
       var name = document.createElement('strong');
       name.textContent = STORY_GUIDELINE_LABELS[key];
@@ -6852,13 +6915,18 @@
       after.value = changes[key].trim();
       after.rows = 3;
       after.setAttribute('aria-label', 'Proposed ' + STORY_GUIDELINE_LABELS[key]);
+      after.disabled = !checked.checked;
+      item.classList.toggle('is-skipped', !checked.checked);
       checked.onchange = function () {
         after.disabled = !checked.checked;
         item.classList.toggle('is-skipped', !checked.checked);
+        rememberDefinedGuidelineDraft();
       };
+      after.oninput = rememberDefinedGuidelineDraft;
       item.append(label, before, after);
       host.appendChild(item);
     });
+    rememberDefinedGuidelineDraft();
     if (modal.open) modal.close();
     modal.showModal();
   }
@@ -6903,10 +6971,14 @@
         document.querySelector('[data-story-guideline="' + key + '"]').value = (payload.story.guidelines || {})[key] || '';
       });
       setSaveState('Saved');
+      rememberDefinedGuidelineDraft();
       modal.close();
       if (typeof review.onApplied === 'function') review.onApplied(payload.story);
       storyboardGuidelineReview = null;
     }).catch(function (err) {
+      if (String(err.message || err) === 'Unknown Storyboard operation.') {
+        err = new Error('The running WebCap server does not support this Storyboard operation yet. Restart the WebCap server, then retry Apply Selected. (Server: Unknown Storyboard operation.)');
+      }
       error.textContent = String(err.message || err);
       reportError(err);
     }).finally(function () {
@@ -7002,6 +7074,12 @@
   el('storyboard-guidelines-review-close').onclick = function () { el('storyboard-guidelines-review').close(); };
   el('storyboard-guidelines-review-cancel').onclick = function () { el('storyboard-guidelines-review').close(); };
   el('storyboard-guidelines-review-apply').onclick = applyReviewedGuidelines;
+  el('storyboard-guidelines-review-refresh').onclick = function () {
+    if (!storyboardGuidelineReview || storyboardGuidelineReview.source !== 'define') {
+      throw new Error('Only Define from Concept reviews can refresh suggestions here.');
+    }
+    defineInvariants(true);
+  };
 
   bindUi();
   syncDirectorToolsUi();

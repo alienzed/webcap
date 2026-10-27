@@ -267,3 +267,74 @@ def test_tagged_caption_assist_path_does_not_enable_sight_led():
     assert "request.draft.trim() === autoPrimer" in primer
     assert "request.sightLed = true;" in primer
     assert 'sight_led=data.get("sightLed") is True' in app
+
+
+def test_caption_assist_tag_mismatch_hints_are_advisory_not_verified_errors():
+    messages = caption_ops.build_caption_assist_messages(
+        assignments=[{"group": "Hair", "term": "braid"}],
+        tags=["earrings"],
+        draft="A person with a braided hairstyle.",
+        tag_mismatches=[
+            {"group": "Hair", "term": "braid"},
+            {"group": "", "term": "earrings"},
+            {"group": "Hair", "term": "braid"},
+            {"term": ""},
+            "invalid",
+        ],
+    )
+    content = messages[1]["content"]
+    payload = json.loads(content.split("\n\n", 1)[1])
+    assert payload["tagMismatches"] == [
+        {"group": "Hair", "term": "braid"}, {"group": "", "term": "earrings"}
+    ]
+    assert payload["currentDraft"] == "A person with a braided hairstyle."
+    assert "review hints, not confirmed errors" in content
+    assert "preserve adequately expressed details" in content
+    assert "targeted repair of currentDraft" not in content
+
+
+def test_caption_assist_no_tag_mismatch_has_no_extra_guidance():
+    messages = caption_ops.build_caption_assist_messages(
+        assignments=[{"group": "Hair", "term": "braid"}],
+        draft="A person with a braid.",
+    )
+    content = messages[1]["content"]
+    assert "tagMismatches" not in content
+    assert "review hints, not confirmed errors" not in content
+
+
+def test_explicit_caption_candidate_repairs_supersede_tag_mismatch_hints():
+    messages = caption_ops.build_caption_assist_messages(
+        assignments=[{"group": "Hair", "term": "braid"}],
+        draft="A person posing.",
+        tag_mismatches=[{"group": "Hair", "term": "braid"}],
+        corrections=[{"group": "Hair", "term": "braid", "note": "Confirmed omission."}],
+    )
+    content = messages[1]["content"]
+    payload = json.loads(content.split("\n\n", 1)[1])
+    assert "tagMismatches" not in payload
+    assert payload["corrections"][0]["note"] == "Confirmed omission."
+    assert "targeted repair of currentDraft" in content
+
+
+def test_caption_assist_route_forwards_tag_mismatch_hints(monkeypatch):
+    from tool.server import app as app_module
+
+    captured = {}
+
+    def enqueue(client, model, contract, context=None, label=""):
+        captured["contract"] = contract
+        return {"jobId": "caption-mismatch"}
+
+    monkeypatch.setattr(app_module, "enqueue_llm", enqueue)
+    with app_module.app.test_client() as client:
+        response = client.post("/caption/assist", json={
+            "model": "remote-1::qwen",
+            "assignments": [{"group": "Hair", "term": "braid"}],
+            "draft": "A person posing.",
+            "tagMismatches": [{"group": "Hair", "term": "braid"}],
+        })
+    assert response.status_code == 202
+    content = captured["contract"]["messages"][1]["content"]
+    payload = json.loads(content.split("\n\n", 1)[1])
+    assert payload["tagMismatches"] == [{"group": "Hair", "term": "braid"}]

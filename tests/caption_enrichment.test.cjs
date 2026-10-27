@@ -266,6 +266,10 @@ test('automatic enrichment skips missing Sight, outdated candidates and QA revie
   await c.maybeRunCaptionAssistEnrichment();
   assert.equal(f.requests.length,0);
   f.candidate.sourceCaption='';
+  f.current.caption='Caption saved elsewhere.';
+  await c.maybeRunCaptionAssistEnrichment();
+  assert.equal(f.requests.length,0,'stale originally-empty source captions must not auto-run');
+  delete f.candidate.sourceCaption;
   c.isFocusedQaReviewMode=()=>true;
   await c.maybeRunCaptionAssistEnrichment();
   assert.equal(f.requests.length,0);

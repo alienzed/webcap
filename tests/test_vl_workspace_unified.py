@@ -80,8 +80,16 @@ def test_vl_workspace_header_groups_tabs_with_title_and_keeps_narrow_navigation(
     assert title < tabs < navigation < close
     assert section.count('<nav class="vl-workspace-tabs"') == 1
     assert section.count('</nav>') == 1
+    for button_id in ("vl-workspace-prev", "vl-workspace-next"):
+        button_markup = next(line for line in section.splitlines() if f'id="{button_id}"' in line)
+        assert 'review-captions-btn' not in button_markup
 
     css = read("tool/css/modals.css")
+    nav_button_css = css.split('.vl-workspace-item-navigation > button {', 1)[1].split('}', 1)[0]
+    assert 'display:grid;' in nav_button_css
+    assert 'place-items:center;' in nav_button_css
+    assert 'border:1px solid var(--border-soft);' in nav_button_css
+    assert 'min-width:9ch;' in css
     assert 'flex-wrap:nowrap;' in css
     assert 'grid-template-areas:"heading navigation close" "tabs tabs tabs";' in css
     assert '#saved-intelligence-modal .vl-workspace-tabs { grid-area:tabs; overflow-x:auto;' in css

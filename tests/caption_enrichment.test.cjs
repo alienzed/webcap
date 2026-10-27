@@ -270,3 +270,47 @@ test('automatic enrichment skips missing Sight, outdated candidates and QA revie
   await c.maybeRunCaptionAssistEnrichment();
   assert.equal(f.requests.length,0);
 });
+
+
+test('running enrichment discards output when the Sight evidence changes mid-request',async()=>{
+  const f=automaticFixture(),c=f.ctx;
+  const current=c.maybeRunCaptionAssistEnrichment();
+  await Promise.resolve();
+  f.current.metadata.vision_sight={description:'Revised Sight shows a different outfit.'};
+  f.complete(0,[{anchor:'swimsuit',addition:' with metal rings'}]);
+  assert.equal(await current,false);
+  assert.equal(c.captionAssistEnrichment,null);
+  assert.equal(c.captionAssistEnrichmentCache.size,0);
+  assert.equal(f.cancelled.length,0,'completed jobs should not receive a stale cancellation');
+  assert.ok(f.statuses.some(x=>x.includes('inputs changed during enrichment')));
+});
+
+test('a newly queued lookahead cancels the previous item and keeps only useful results',async()=>{
+  const f=automaticFixture(),c=f.ctx;
+  const itemB={key:'item-b',fileName:'b.jpg',metadata:{vision_sight:{description:'Sight B'}}};
+  const itemC={key:'item-c',fileName:'c.jpg',metadata:{vision_sight:{description:'Sight C'}}};
+  const b=c.warmCaptionAssistEnrichment(itemB,{mediaKey:'item-b',text:'A studio.'});
+  await Promise.resolve();
+  const z=c.warmCaptionAssistEnrichment(itemC,{mediaKey:'item-c',text:'A studio.'});
+  await Promise.resolve();
+  assert.equal(f.requests.length,2);
+  assert.deepEqual(f.cancelled,['enrich-1']);
+  f.complete(0,[{anchor:'studio',addition:' B detail'}]);
+  f.complete(1,[{anchor:'studio',addition:' C detail'}]);
+  await Promise.all([b,z]);
+  assert.equal(c.captionAssistEnrichmentCache.size,1);
+  assert.equal(c.captionAssistEnrichmentLookahead.mediaKey,'item-c');
+});
+
+test('late Director enqueue is cancelled after leaving a speculative item',async()=>{
+  const f=automaticFixture(),c=f.ctx;
+  let finishSubmit;
+  c.captionAssistRequestJson=()=>new Promise(resolve=>{finishSubmit=resolve;});
+  const itemB={key:'item-b',fileName:'b.jpg',metadata:{vision_sight:{description:'Sight B'}}};
+  const pending=c.warmCaptionAssistEnrichment(itemB,{mediaKey:'item-b',text:'A studio.'});
+  await c.cancelCaptionAssistEnrichmentLookahead();
+  finishSubmit({job:{jobId:'late-job'}});
+  assert.equal(await pending,false);
+  assert.deepEqual(f.cancelled,['late-job']);
+  assert.equal(c.captionAssistEnrichmentCache.size,0);
+});

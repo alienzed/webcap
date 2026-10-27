@@ -1094,24 +1094,22 @@ function syncCaptionAssistCandidateUi(options) {
   if (omittedAssignments.length) {
     var omissionLabel = document.createElement('strong');
     omissionLabel.className = 'caption-assist-reconcile-label';
-    omissionLabel.textContent = 'Selected annotations to reconcile (' + omittedAssignments.length + ')';
+    omissionLabel.textContent = 'Reconcile (' + omittedAssignments.length + ')';
+    omissionLabel.title = 'Selected annotations missing from this caption';
     omissionsEl.appendChild(omissionLabel);
     var omissionList = document.createElement('div');
     omissionList.className = 'caption-assist-reconcile-list';
     (candidate.omittedCorrections || []).forEach(function (entry) {
       var row = document.createElement('div');
       row.className = 'caption-assist-reconcile-row';
-      var title = document.createElement('span');
-      title.className = 'caption-assist-reconcile-term';
-      title.textContent = (entry.group ? entry.group + ' — ' : '') + entry.term;
-      row.appendChild(title);
-      var actions = document.createElement('span');
-      actions.className = 'caption-assist-reconcile-actions';
       var insert = document.createElement('button');
       insert.type = 'button';
-      insert.className = 'caption-assist-fix-btn';
-      insert.textContent = 'Insert';
-      insert.title = 'Insert into the draft at the cursor; only saved with Apply';
+      insert.className = 'caption-assist-reconcile-insert';
+      insert.textContent = entry.term;
+      insert.title = (entry.group ? entry.group + ' · ' : '') +
+        'Click to insert into the draft; saved only with Apply';
+      insert.setAttribute('aria-label', 'Insert ' + entry.term + ' into caption' +
+        (entry.group ? ' (' + entry.group + ')' : ''));
       insert.addEventListener('pointerdown', function (event) { event.preventDefault(); });
       insert.addEventListener('click', function () {
         var phrase = entry.group
@@ -1119,20 +1117,22 @@ function syncCaptionAssistCandidateUi(options) {
           : renderChecklistTermWithAffixes(entry.term, mediaKey);
         insertFocusedCaptionVisionPhrase(phrase || entry.term);
       });
-      actions.appendChild(insert);
+      row.appendChild(insert);
       var remove = document.createElement('button');
       remove.type = 'button';
-      remove.className = 'caption-vision-phrase-insert';
-      remove.textContent = 'Remove tag';
-      remove.title = 'Unassign this tag from the item immediately';
+      remove.className = 'caption-assist-reconcile-remove';
+      remove.textContent = '×';
+      remove.title = 'Remove tag from this item immediately';
+      remove.setAttribute('aria-label', 'Remove tag ' + entry.term +
+        (entry.group ? ' (' + entry.group + ')' : ''));
       remove.addEventListener('click', function () {
         removeCaptionAssistAssignedTag(mediaKey, entry.group, entry.term);
       });
-      actions.appendChild(remove);
-      row.appendChild(actions);
+      row.appendChild(remove);
       omissionList.appendChild(row);
     });
     omissionsEl.appendChild(omissionList);
+
   }
 
   renderCaptionAssistMissingGroups(missingEl, mediaKey, missingGroups);

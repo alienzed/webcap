@@ -63,6 +63,15 @@ def test_qa_handoff_reuses_current_caption_alternatives_without_overwriting_save
     assert "startFocusedReview(target.key);" in handoff
 
 
+def test_caption_window_labels_saved_and_preloaded_results_without_new_ui():
+    primer = source("tool/js/primer_settings.js")
+    focus = source("tool/js/focused_caption.js")
+    assert "restoredFromSaved: true," in primer
+    assert "candidate.restoredFromSaved ? ' · Saved draft'" in primer
+    assert "candidate.prefetched ? ' · Preloaded'" in primer
+    assert "candidate.prefetched = true;" in focus
+
+
 def test_refresh_and_regenerate_still_explicitly_invoke_director():
     primer = source("tool/js/primer_settings.js")
     focus = source("tool/js/focused_caption.js")

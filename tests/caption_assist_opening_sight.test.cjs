@@ -53,7 +53,30 @@ test('opening Caption Assist does not scan Group vocabulary or construct hidden 
   assert.equal(h.getSightCalls(),1,'toggle cannot duplicate work on the same panel');
 });
 
-test('subsequent sync retains expanded Sight and independently collapsed assigned tags',()=>{
+test('Sight phrase label stays compact while insertion and Tag actions remain distinct',()=>{
+  const h=harness();
+  const inserted=[];
+  const tagged=[];
+  h.ctx.getCaptionAssistTagSuggestions=()=>[{group:'Scene',term:'Bed or lounge area',kind:'phrase'}];
+  h.ctx.insertFocusedCaptionVisionPhrase=term=>inserted.push(term);
+  h.ctx.acceptCaptionAssistTagSuggestion=(key,suggestion)=>tagged.push([key,suggestion.term]);
+  h.ctx.sync();
+  const details=h.row.querySelector('[data-sight-suggestions]');
+  details.open=true;
+  details.dispatchEvent(new h.dom.window.Event('toggle'));
+  const phrase=details.querySelector('.caption-assist-suggestion-tag');
+  const addTag=details.querySelector('.caption-assist-suggestion-insert');
+  assert.equal(phrase.textContent,'Bed or lounge area');
+  assert.match(phrase.title,/Insert saved Sight phrase/);
+  assert.equal(addTag.textContent,'+ Tag');
+  phrase.click();
+  assert.deepEqual(inserted,['Bed or lounge area']);
+  assert.deepEqual(tagged,[]);
+  addTag.click();
+  assert.deepEqual(tagged,[['one','Bed or lounge area']]);
+});
+
+test('subsequent sync retains expanded Sight without duplicating assigned tags',()=>{
   const h=harness();
   h.ctx.getChecklistAssignmentEntriesForMediaKey=()=>[{requirement:'BT Shape',term:'ring connectors'}];
   h.ctx.sync();
@@ -62,10 +85,24 @@ test('subsequent sync retains expanded Sight and independently collapsed assigne
   detail.dispatchEvent(new h.dom.window.Event('toggle'));
   h.ctx.sync();
   assert.equal(h.row.querySelector('[data-sight-suggestions]').open,true);
-  assert.equal(h.row.querySelector('.caption-assist-assigned-tags').open,false,
-    'assigned tag disclosure must not inherit the Sight disclosure state');
+  assert.equal(h.row.querySelector('.caption-assist-assigned-tags'),null);
+  assert.doesNotMatch(h.row.textContent,/Assigned tags/i);
   assert.ok(h.row.querySelector('[data-sight-suggestions] button'));
   assert.ok(h.getSightCalls()>=2);
+});
+
+test('QA remove actions remain available without the duplicate tag list',()=>{
+  const h=harness();
+  const removals=[];
+  h.ctx.isFocusedQaReviewMode=()=>true;
+  h.ctx.qaFocusReviewTagActions=()=>[{action:'remove',group:'Framing',term:'front view'}];
+  h.ctx.removeCaptionAssistAssignedTag=(key,group,term)=>removals.push([key,group,term]);
+  h.ctx.sync();
+  assert.equal(h.row.querySelector('.caption-assist-assigned-tags'),null);
+  const action=h.row.querySelector('.caption-assist-qa-suggestions .caption-assist-suggestion-tag');
+  assert.ok(action,'QA removal should still be reachable');
+  action.click();
+  assert.deepEqual(removals,[['one','Framing','front view']]);
 });
 
 test('no recorded Sight retains previous empty suggestions behavior',()=>{

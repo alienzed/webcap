@@ -45,7 +45,13 @@ test('Attach is visibly pending and completes only when the Story snapshot is av
   const state = { pending: false, attachmentPending: false, storyboardAttachments: {}, storyGuidelineProposal: {} };
   let refreshes = 0;
   const window = { getStoryboardAssistantContext: () => deferred };
-  const context = vm.createContext({ state, window, Promise, syncModeUi: () => { refreshes++; } });
+  const context = vm.createContext({
+    state, window, Promise, syncModeUi: () => { refreshes++; },
+    scheduleSessionSave: () => {},
+    el: id => id === 'director-chat-attachments-toggle'
+      ? { setAttribute: () => {} }
+      : { textContent: '' }
+  });
   const fn = vm.runInContext('(' + part(chat, '  function attachStoryboardContext(kind) {', '  function renderWorkshopDiff(').trim() + ')', context);
   const pending = fn('story');
   assert.equal(state.attachmentPending, true);
@@ -58,25 +64,19 @@ test('Attach is visibly pending and completes only when the Story snapshot is av
   assert.ok(refreshes >= 2);
 });
 
-test('Changing Stories clears a prior Story attachment and its discussion', () => {
+test('Navigating between Stories does not mutate Assistant context or conversation', () => {
   const state = {
     workshop: null,
     storyboardAttachments: { 'story:old-story': { label: 'Story: Old', content: '{}' } },
     storyGuidelineProposal: { text: 'pending' },
-    modeMessages: { storyboard: [{ role: 'user', content: 'Discuss old story' }] },
-    modeElapsedByAssistantIndex: { storyboard: { '1': 100 } },
-    modeMetricsByAssistantIndex: { storyboard: { '1': {} } }
+    modeMessages: { storyboard: [{ role: 'user', content: 'Discuss old story' }] }
   };
   const window = {};
-  const context = vm.createContext({
-    state, window, el: () => ({ textContent: '' }), syncModeUi: () => {}
-  });
-  vm.runInContext(part(chat, '  window.syncStoryboardAssistantStory = function (storyId, sceneIds) {', '  window.openStoryboardAssistant = function'), context);
-  window.syncStoryboardAssistantStory('old-story', []);
-  assert.equal(Object.keys(state.storyboardAttachments).length, 1);
+  const context = vm.createContext({ state, window });
+  vm.runInContext(part(chat, '  window.syncStoryboardAssistantStory = function', '  window.openStoryboardAssistant = function'), context);
   window.syncStoryboardAssistantStory('new-story', []);
-  assert.equal(Object.keys(state.storyboardAttachments).length, 0);
-  assert.equal(state.modeMessages.storyboard.length, 0);
+  assert.equal(Object.keys(state.storyboardAttachments).length, 1);
+  assert.equal(state.modeMessages.storyboard[0].content, 'Discuss old story');
 });
 
 test('Story attachment flushes pending edits before constructing the snapshot', async () => {

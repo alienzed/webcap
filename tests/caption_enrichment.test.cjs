@@ -318,3 +318,23 @@ test('late Director enqueue is cancelled after leaving a speculative item',async
   assert.deepEqual(f.cancelled,['late-job']);
   assert.equal(c.captionAssistEnrichmentCache.size,0);
 });
+
+
+test('changed next-item draft cancels its mismatched lookahead instead of duplicating it',async()=>{
+  const f=automaticFixture(),c=f.ctx;
+  const next={key:'item-b',fileName:'b.jpg',caption:'',metadata:{
+    vision_sight:{description:'Studio with a bright backdrop.'}
+  }};
+  const ahead=c.warmCaptionAssistEnrichment(next,{mediaKey:'item-b',text:'An original caption.'});
+  await Promise.resolve();
+  c.state.currentItem=next;
+  c.captionAssistCandidate={mediaKey:'item-b',text:'A revised caption.'};
+  const current=c.maybeRunCaptionAssistEnrichment();
+  await Promise.resolve();
+  assert.equal(f.requests.length,2);
+  assert.deepEqual(f.cancelled,['enrich-1']);
+  f.complete(0,[]);
+  f.complete(1,[]);
+  await Promise.all([ahead,current]);
+  assert.equal(c.captionAssistEnrichmentCache.size,1);
+});

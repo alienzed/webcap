@@ -272,6 +272,16 @@ def test_define_invariants_remains_context_generation_not_scene_authoring():
     assert "Define stable visual identities for recurring characters and locations" in request["prompt"]
 
 
+def test_define_invariants_refreshes_existing_guidelines_only_on_request():
+    story = _story()
+    story["guidelines"] = {"visualFocus": "Old focus"}
+    default = storyboard_llm_contract.build_request(story, "", "define_invariants")
+    refreshed = storyboard_llm_contract.build_request(story, "", "define_invariants", refresh_guidelines=True)
+    assert "return an empty string for any already populated field" in default["prompt"]
+    assert "Refresh the four guideline proposals" in refreshed["prompt"]
+    assert "[EXISTING STORY GUIDELINES]" in refreshed["prompt"]
+
+
 def test_write_prompt_requires_scene_intent():
     story = _story()
     story["scenes"]["scene-2"]["summary"] = ""

@@ -2676,13 +2676,18 @@
     }, []);
   }
 
+  function qaSavedCaptionAlternative(item) {
+    if (!item) return '';
+    var existing = String(qaWorkbenchState.qaAlternatives[item.fileName] || '');
+    if (!existing.trim()) return '';
+    var current = qaCurrentItemSignatureMap([item]);
+    return qaWorkbenchState.aiItemSignatures[item.fileName] === current[item.fileName] ? existing : '';
+  }
+
   function qaFocusReviewAlternative(mediaKey) {
     if (!qaFocusReviewCurrent()) return '';
     var item = (state.items || []).find(function (row) { return row && row.key === mediaKey; });
-    if (!item) return '';
-    var current = qaCurrentItemSignatureMap([item]);
-    if (qaWorkbenchState.aiItemSignatures[item.fileName] !== current[item.fileName]) return '';
-    return String(qaWorkbenchState.qaAlternatives[item.fileName] || '');
+    return qaSavedCaptionAlternative(item);
   }
 
   function qaFocusReviewQuality(mediaKey) {
@@ -3147,8 +3152,22 @@
     });
     if (!target) throw new Error('QA review target is missing from the current Set: ' + clean[0]);
 
-    // QA chooses the items that need attention. Caption Assist performs a
-    // fresh per-item Sight/Director pass, not a replay of historical patches.
+    // A current saved QA caption alternative is already a Director response.
+    // Hand it to Caption Assist as a draft; preserve any existing user-edited draft.
+    var existing = qaSavedCaptionAlternative(target);
+    if (existing && !captionAssistSavedCandidatesByMedia[target.key]) {
+      var request = buildCaptionAssistRequest(target);
+      persistCaptionAssistCandidate({
+        mediaKey: target.key,
+        text: existing,
+        sourceCaption: String(target.caption || ''),
+        annotationsAtGeneration: JSON.stringify([request.assignments, request.tags]),
+        model: qaWorkbenchState.aiModel,
+        sightFingerprint: captionAssistSightFingerprint(request.openSight)
+      }, false);
+    }
+    // Other QA findings are not full caption responses; those still use
+    // Caption Assist's normal per-item Sight/Director path.
     activateFocusSet(clean, source || 'Quality Assurance', 'qa');
     selectPathMedia(target).then(function () {
       startFocusedReview(target.key);

@@ -292,7 +292,6 @@ function sanitizeFolderState(data) {
       unreviewed_only: !!mediaFilters.unreviewed_only,
       needs_ai_validation_only: !!mediaFilters.needs_ai_validation_only,
       tag_mismatch_only: !!mediaFilters.tag_mismatch_only,
-      incomplete_only: !!mediaFilters.incomplete_only,
       invalid_ar_only: !!mediaFilters.invalid_ar_only,
       stars: mediaFilterStars,
       flags: mediaFilterFlags
@@ -534,7 +533,6 @@ function snapshotFolderStateFromDom() {
     unreviewed_only: !!(ui.advancedFilterUnreviewedEl && ui.advancedFilterUnreviewedEl.checked),
     needs_ai_validation_only: !!(ui.advancedFilterNeedsAiValidationEl && ui.advancedFilterNeedsAiValidationEl.checked),
     tag_mismatch_only: !!(ui.advancedFilterUntaggedEl && ui.advancedFilterUntaggedEl.checked),
-    incomplete_only: !!(ui.advancedFilterIncompleteEl && ui.advancedFilterIncompleteEl.checked),
     invalid_ar_only: !!(ui.advancedFilterInvalidArEl && ui.advancedFilterInvalidArEl.checked),
     stars: (typeof getAdvancedStarFilterValues === 'function') ? getAdvancedStarFilterValues() : [],
     flags: (typeof getAdvancedFlagFilterValues === 'function') ? getAdvancedFlagFilterValues() : []
@@ -658,9 +656,6 @@ function applyFolderStateToDom(folderState) {
   }
   if (ui.advancedFilterUntaggedEl) {
     ui.advancedFilterUntaggedEl.checked = !!(clean.media_filters && clean.media_filters.tag_mismatch_only);
-  }
-  if (ui.advancedFilterIncompleteEl) {
-    ui.advancedFilterIncompleteEl.checked = !!(clean.media_filters && clean.media_filters.incomplete_only);
   }
   if (ui.advancedFilterInvalidArEl) {
     ui.advancedFilterInvalidArEl.checked = !!(clean.media_filters && clean.media_filters.invalid_ar_only);

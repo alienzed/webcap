@@ -15,6 +15,9 @@ on:
       - 'tests/set_scan_live_preview.test.cjs'
       - 'tests/test_media_context_actions_contract.py'
       - 'tool/js/primer_settings.js'
+      - 'tool/js/ai_validation.js'
+      - 'tests/ai_validation_contract.test.js'
+      - 'tests/caption_assist_apply_validation.test.cjs'
       - 'tool/js/item_details.js'
       - 'tool/js/checklist_state.js'
       - 'tool/js/media.js'
@@ -129,6 +132,11 @@ jobs:
         run: |
           node --check tool/js/set_scan.js
           node --test tests/set_scan_live_preview.test.cjs
+      - name: Caption Assist acceptance and AI validation receipts
+        run: |
+          node --check tool/js/primer_settings.js
+          node --check tool/js/ai_validation.js
+          node --test tests/ai_validation_contract.test.js tests/caption_assist_apply_validation.test.cjs
       - name: JavaScript syntax
         run: |
           node --check tool/js/epoch_finder.js

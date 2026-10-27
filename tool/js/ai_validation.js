@@ -319,6 +319,60 @@ function aiValidationSuggestCurrentItem() {
   });
 }
 
+// A human explicitly accepting a Caption Assist candidate is a validation action.
+// This is not called by autosave, generated candidates, or ordinary editor changes.
+function aiValidationRecordAcceptedCaption(mediaItem, acceptedCaption, expectedFolder) {
+  var folder = String(expectedFolder || '');
+  var key = String(mediaItem && mediaItem.key || '');
+  var text = String(acceptedCaption || '');
+  function currentSavedItem() {
+    if (!folder || folder !== String(state.folder || '') ||
+        !state.currentItem || state.currentItem.key !== key) {
+      throw new Error('The selected Set or item changed during Caption Assist validation.');
+    }
+    var current = (state.items || []).find(function (item) { return item && item.key === key; });
+    if (!current || String(current.caption || '') !== text || !text.trim()) {
+      throw new Error('Caption Assist validation requires the accepted caption to be saved first.');
+    }
+    return current;
+  }
+
+  // A new Sight result invalidates a receipt that was accepted without Sight.
+  // No Vision request or second user confirmation is needed here.
+  currentSavedItem();
+  if (aiValidationSavePending) {
+    return Promise.reject(new Error('Another AI validation save is already in progress.'));
+  }
+  var previousReceipt = aiValidationReceiptsByMedia[key];
+  var recordedReceipt = null;
+  aiValidationSavePending = true;
+  aiValidationRefreshUi();
+  return Promise.resolve(saveMediaAnnotationState(key)).then(function (ok) {
+    if (!ok) throw new Error('Could not persist the accepted caption annotations.');
+    var saved = currentSavedItem();
+    recordedReceipt = {
+      version: 1,
+      content: aiValidationCurrentInput(saved),
+      sight: aiValidationSightInput(saved)
+    };
+    aiValidationReceiptsByMedia[key] = recordedReceipt;
+    return Promise.resolve(saveFolderStateForCurrentRoot()).then(function (savedOk) {
+      if (!savedOk) throw new Error('Could not persist the Caption Assist AI validation receipt.');
+      return true;
+    });
+  }).catch(function (err) {
+    if (recordedReceipt && aiValidationReceiptsByMedia[key] === recordedReceipt) {
+      if (previousReceipt) aiValidationReceiptsByMedia[key] = previousReceipt;
+      else delete aiValidationReceiptsByMedia[key];
+    }
+    reportConsoleError('AI Validation · Caption Assist', err);
+    throw err;
+  }).finally(function () {
+    aiValidationSavePending = false;
+    aiValidationRefreshUi();
+  });
+}
+
 function aiValidationCompleteCurrentItem() {
   var item = state && state.currentItem;
   if (!item || aiValidationRequestPending || aiValidationApplyPending || aiValidationSavePending) return Promise.resolve(false);

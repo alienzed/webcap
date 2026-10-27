@@ -352,7 +352,9 @@ test('a successful empty Enrich result shows quiet feedback beside the button, n
   c.syncCaptionAssistEnrichmentUi(f.candidate);
   const note=f.nodes['editor-caption-enrichment-empty'];
   assert.equal(note.classList.contains('hidden'),false);
-  assert.equal(note.textContent,'✓ No additional details found');
+  const html=fs.readFileSync('tool/tool.html','utf8');
+  assert.match(html,/id="editor-caption-enrichment-empty"[^>]*role="status"[^>]*>✓ No additional details found<\/span>/,
+    'the actual HTML supplies the accessible, quiet completion text');
   assert.equal(f.nodes['editor-caption-enrichment-preview'].classList.contains('hidden'),true);
   assert.equal(f.nodes['editor-caption-enrichment-actions'].classList.contains('hidden'),true);
   assert.equal(f.nodes['editor-caption-enrich'].disabled,false,'the user may request a fresh review');

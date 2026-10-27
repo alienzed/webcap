@@ -688,7 +688,7 @@ function computeTagMatchProgressForText(mediaKey, captionText) {
 }
 
 // Filtering needs a boolean, not a full progress/tooltip report for every item.
- // Short-circuit on the first missing annotation and tokenize the caption only once.
+// Short-circuit on the first missing annotation and tokenize the caption only once.
 function hasTagMismatchForText(mediaKey, captionText) {
   var grouped = getChecklistAssignmentEntriesForMediaKey(mediaKey);
   var unscoped = getUnscopedTagsForMediaKey(mediaKey);

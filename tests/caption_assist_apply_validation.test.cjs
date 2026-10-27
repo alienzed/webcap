@@ -28,7 +28,7 @@ function fixture({ focused = true, qa = false, caption = 'Old caption', candidat
     ui: { editorEl: { value: caption, focus() { entries.push('focus'); } } },
     captionAssistCandidate: { mediaKey: 'photo.jpg', text: candidate },
     captionAssistApplyPending: false,
-    getPrimerResetCurrentMediaItem() { return this.state.currentItem; },
+    getPrimerResetCurrentMediaItem() { return item; },
     cancelCaptionAssistEnrichment() {},
     cancelCurrentCaptionVision() { entries.push('stop-vision'); return Promise.resolve(); },
     isFocusedCaptionOpen() { return focused; },

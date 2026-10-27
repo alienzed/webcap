@@ -249,6 +249,7 @@ function startCaptionAssistEnrichmentTask(item, candidate, input) {
           captionAssistCandidate !== task.candidate ||
           task.candidate.text !== task.originalText ||
           !currentInput || currentInput.fingerprint !== task.fingerprint) {
+        task.jobId = ''; // Response was already consumed; only discard its stale suggestions.
         cancelCaptionAssistEnrichment();
         setStatus('Caption or Sight inputs changed during enrichment; old suggestions were discarded.');
         return false;

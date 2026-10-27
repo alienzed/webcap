@@ -1901,10 +1901,6 @@ function blendFocusedCaptionVisionPhrase(phrase) {
 
 var captionAssistSightPreparation = false;
 function runCaptionAssist() {
-  if (captionAssistSightPreparation) {
-    setStatus('Caption Assist is preparing Sight for an item.');
-    return Promise.resolve(false);
-  }
   var item = getPrimerResetCurrentMediaItem();
   if (!item) return Promise.resolve(false);
   var sourceKey = item.key;
@@ -1912,6 +1908,10 @@ function runCaptionAssist() {
   if (captionAssistSavedCandidatesByMedia[sourceKey]) {
     if (!startedFocused) captionAssistPresentationMediaKey = sourceKey;
     return Promise.resolve(restoreCaptionAssistCandidate(item));
+  }
+  if (captionAssistSightPreparation) {
+    setStatus('Caption Assist is preparing Sight for an item.');
+    return Promise.resolve(false);
   }
   if (!getDirectorModelPreference('webcap.director.model')) {
     setStatus('Select a Director model before using Caption Assist.');
@@ -2185,19 +2185,6 @@ function wirePrimerCaptionResetUi() {
   if (!candidateDismissBtn.__captionAssistBound) {
     candidateDismissBtn.__captionAssistBound = true;
     candidateDismissBtn.addEventListener('click', function () {
-      dismissCaptionAssistCandidate();
-    });
-  }
-
-  if (!candidatePanel.__captionAssistBackdropBound) {
-    candidatePanel.__captionAssistBackdropBound = true;
-    candidatePanel.addEventListener('click', function (event) {
-      if (event.target !== candidatePanel) return;
-      if (isFocusedCaptionOpen()) {
-        if (!stopFocusedCaption('Focus Caption ended.')) return;
-        renderFileList();
-        return;
-      }
       dismissCaptionAssistCandidate();
     });
   }

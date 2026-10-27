@@ -408,7 +408,7 @@ def test_focus_caption_prefetch_is_one_deep_request_validated_and_ephemeral():
 def test_focus_caption_prefetch_is_cancelled_at_lifecycle_boundaries():
     focus = _read("tool/js/focused_caption.js")
 
-    assert "function cancelFocusedCaptionPrefetch()" in focus
+    assert "function cancelFocusedCaptionPrefetch(preserveEnrichmentForMediaKey)" in focus
     assert "return cancelCaptionAssistJob(prefetch.jobId)" in focus
     assert "prefetch.discarded = true;" in focus
     assert "captionAssistPendingJobId === 'prefetch'" in focus
@@ -949,7 +949,7 @@ def test_advance_does_not_cancel_lookahead_during_sight_without_job_id():
     move = focus.split("function moveFocusedCaption(delta, options)", 1)[1].split(
         "function advanceFocusedCaption()", 1
     )[0]
-    assert "keepPrefetch ? true : cancelFocusedCaptionPrefetch()" in move
+    assert "keepPrefetch ? true : cancelFocusedCaptionPrefetch(nextMediaKey)" in move
 
 
 def test_focus_caption_lookahead_is_adopted_without_cancel_on_next():
@@ -961,7 +961,7 @@ def test_focus_caption_lookahead_is_adopted_without_cancel_on_next():
         "function getFocusedCaptionEntryKeys", 1
     )[0]
     assert "focusedCaptionPrefetch.index === nextIndex" in move
-    assert "keepPrefetch ? true : cancelFocusedCaptionPrefetch()" in move
+    assert "keepPrefetch ? true : cancelFocusedCaptionPrefetch(nextMediaKey)" in move
     assert "captionAssistRequestFingerprint(state.currentItem, latestRequest) !== prefetch.fingerprint" in adopt
     assert "if (!candidate)" in adopt
     assert "startFocusedCaptionPrefetch(candidate.mediaKey);" in adopt

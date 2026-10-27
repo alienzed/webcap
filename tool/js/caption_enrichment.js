@@ -197,7 +197,7 @@ function captionAssistEnrichmentInputs(item, candidate) {
 function captionAssistEnrichmentInputsMatchCandidate(item, candidate, input) {
   var request = input.request;
   return (!candidate.model || candidate.model === request.model) &&
-    (!candidate.sourceCaption || candidate.sourceCaption === String(item.caption || '')) &&
+    (typeof candidate.sourceCaption !== 'string' || candidate.sourceCaption === String(item.caption || '')) &&
     (!candidate.annotationsAtGeneration ||
       candidate.annotationsAtGeneration === JSON.stringify([request.assignments, request.tags])) &&
     (!candidate.sightFingerprint ||

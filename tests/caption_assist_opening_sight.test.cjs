@@ -76,3 +76,68 @@ test('no recorded Sight retains previous empty suggestions behavior',()=>{
   assert.equal(h.row.querySelector('[data-sight-suggestions]'),null);
   assert.match(h.row.textContent,/No tag suggestions/);
 });
+
+const omissionsStart = source.indexOf("  omissionsEl.classList.toggle('hidden', !omittedAssignments.length);");
+const omissionsEnd = source.indexOf('  renderCaptionAssistMissingGroups(', omissionsStart);
+assert.ok(omissionsStart > 0 && omissionsEnd > omissionsStart, 'Caption Assist reconciliation UI must exist');
+
+test('reconciliation phrase inserts without changing tags; x removes the assigned tag', () => {
+  const dom = new JSDOM('<div id="omissions" class="hidden"></div>');
+  const el = dom.window.document.getElementById('omissions');
+  const inserts = [];
+  const removals = [];
+  const ctx = {
+    document: dom.window.document,
+    renderChecklistGroupTermWithAffixes: (group, term, key) => group + ':' + term + ':' + key,
+    renderChecklistTermWithAffixes: term => term,
+    insertFocusedCaptionVisionPhrase: phrase => inserts.push(phrase),
+    removeCaptionAssistAssignedTag: (key, group, term) => removals.push([key, group, term])
+  };
+  vm.createContext(ctx);
+  vm.runInContext(
+    'function renderOmissions(omissionsEl, omittedAssignments, candidate, mediaKey) {\n' +
+    source.slice(omissionsStart, omissionsEnd) +
+    '\n}\nthis.renderOmissions = renderOmissions;',
+    ctx
+  );
+  const entry = {group: 'Framing', term: 'framed from knees to lower back'};
+  const candidate = {omittedAssignments: [entry], omittedCorrections: [entry]};
+  ctx.renderOmissions(el, candidate.omittedAssignments, candidate, 'one');
+
+  assert.equal(el.classList.contains('hidden'), false);
+  assert.equal(el.querySelector('.caption-assist-reconcile-label').textContent, 'Reconcile (1)');
+  const phrase = el.querySelector('.caption-assist-reconcile-insert');
+  const remove = el.querySelector('.caption-assist-reconcile-remove');
+  assert.equal(el.querySelectorAll('button').length, 2);
+  assert.equal(phrase.textContent, entry.term, 'group is not repeated as visible text');
+  assert.match(phrase.title, /Framing/);
+  assert.match(phrase.title, /insert/);
+  assert.equal(remove.textContent, '×');
+  assert.match(remove.getAttribute('aria-label'), /Remove tag/);
+
+  const pointerdown = new dom.window.Event('pointerdown', {bubbles: true, cancelable: true});
+  phrase.dispatchEvent(pointerdown);
+  assert.equal(pointerdown.defaultPrevented, true, 'inserting preserves draft selection');
+  phrase.click();
+  assert.deepEqual(inserts, ['Framing:framed from knees to lower back:one']);
+  assert.deepEqual(removals, [], 'inserting must not remove the assigned tag');
+  remove.click();
+  assert.deepEqual(removals, [['one', 'Framing', entry.term]]);
+  assert.equal(inserts.length, 1, 'remove click must not insert');
+});
+
+test('reconciliation is hidden when no annotations are omitted', () => {
+  const dom = new JSDOM('<div id="omissions"></div>');
+  const el = dom.window.document.getElementById('omissions');
+  const ctx = {document: dom.window.document};
+  vm.createContext(ctx);
+  vm.runInContext(
+    'function renderOmissions(omissionsEl, omittedAssignments, candidate, mediaKey) {\n' +
+    source.slice(omissionsStart, omissionsEnd) +
+    '\n}\nthis.renderOmissions = renderOmissions;',
+    ctx
+  );
+  ctx.renderOmissions(el, [], {omittedCorrections: []}, 'one');
+  assert.equal(el.classList.contains('hidden'), true);
+  assert.equal(el.children.length, 0);
+});

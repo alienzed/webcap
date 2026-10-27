@@ -65,6 +65,7 @@ from .h3_probe import h3_probe_log, h3_probe_status, prepare_h3_probe, start_h3_
 from .permissions import normalize_path_permissions, run_with_directory_repair
 from .folder_state_store import FolderStateReadError, FolderStateUnsafeWriteError, read_folder_state, reject_wholesale_state_map_clear, write_folder_state_with_owned_drafts, set_media_annotation_state, set_media_rating, write_folder_state_atomic
 from .storage_manager import clear_set_generated_sight as storage_clear_set_generated_sight, cancel_scan as storage_cancel_scan, measure as storage_measure, open_path as storage_open_path, overview as storage_overview, purge as storage_purge, scan_status as storage_scan_status, start_scan as storage_start_scan
+from .director_chat_history import create_chat as create_director_chat, delete_chat as delete_director_chat, list_chats as list_director_chats, open_chat as open_director_chat, save_chat as save_director_chat
 from .storyboard_store import add_scene as storyboard_add_scene, add_take_upload as storyboard_add_take_upload, apply_developed_plan as storyboard_apply_developed_plan, clear_scene_reference as storyboard_clear_scene_reference, create_story as storyboard_create_story, delete_scene as storyboard_delete_scene, delete_story as storyboard_delete_story, delete_take as storyboard_delete_take, duplicate_scene as storyboard_duplicate_scene, duplicate_story as storyboard_duplicate_story, list_stories as storyboard_list_stories, load_story as storyboard_load_story, label_take as storyboard_label_take, rate_take as storyboard_rate_take, remove_take as storyboard_remove_take, reorder_scenes as storyboard_reorder_scenes, resolve_story_media as storyboard_resolve_media, restore_previous_concept as storyboard_restore_previous_concept, restore_previous_prompt as storyboard_restore_previous_prompt, restore_scene as storyboard_restore_scene, restore_scene_repairs as storyboard_restore_scene_repairs, restore_take as storyboard_restore_take, select_take as storyboard_select_take, set_scene_reference_from_take as storyboard_set_scene_reference_from_take, set_scene_reference_upload as storyboard_set_scene_reference_upload, update_scene as storyboard_update_scene, update_story as storyboard_update_story
 from .storyboard_store import apply_reviewed_story_guidelines as storyboard_apply_reviewed_story_guidelines
 from .storyboard_generation import generation_action as storyboard_generation_action, generation_capabilities as storyboard_generation_capabilities, generation_queue as storyboard_generation_queue, generation_status as storyboard_generation_status, start_generation as storyboard_start_generation, regenerate_take as storyboard_regenerate_take
@@ -1901,6 +1902,33 @@ def qa_concept_check_route():
         return jsonify({"ok": True, "job": job}), 202
     except Exception as exc:
         app.logger.exception("QA CONCEPT CHECK FAILED: %s", exc)
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
+@app.route("/fs/director/chats", methods=["GET", "POST"])
+def director_chats_route():
+    try:
+        if request.method == "GET":
+            return jsonify({"ok": True, **list_director_chats()})
+        data = request.get_json(silent=True) or {}
+        return jsonify({"ok": True, "chat": create_director_chat(str(data.get("mode") or ""))}), 201
+    except Exception as exc:
+        app.logger.exception("DIRECTOR CHAT HISTORY FAILED: %s", exc)
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
+@app.route("/fs/director/chats/<chat_id>", methods=["GET", "PUT", "DELETE"])
+def director_chat_session_route(chat_id):
+    try:
+        if request.method == "GET":
+            return jsonify({"ok": True, "chat": open_director_chat(chat_id)})
+        if request.method == "DELETE":
+            return jsonify({"ok": True, "deleted": delete_director_chat(chat_id)})
+        return jsonify({"ok": True, "chat": save_director_chat(chat_id, request.get_json(silent=True) or {})})
+    except FileNotFoundError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 404
+    except Exception as exc:
+        app.logger.exception("DIRECTOR CHAT HISTORY FAILED: %s", exc)
         return jsonify({"ok": False, "error": str(exc)}), 400
 
 

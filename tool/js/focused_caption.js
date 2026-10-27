@@ -1075,6 +1075,14 @@ function wireFocusedCaption() {
         renderFileList();
         return;
       }
+      if (captionAssistEnrichmentReviewActive(captionAssistCandidate)) {
+        // Review takes keyboard ownership until suggestions are resolved or Edit is chosen.
+        // Block other media shortcuts too, while preserving scrolling, Tab, and button Enter.
+        if (!event.altKey && !event.ctrlKey && !event.metaKey &&
+            (/^Arrow(?:Left|Right|Up|Down)$/.test(key) || /^[a-z0-5]$/i.test(key)))
+          event.stopImmediatePropagation();
+        return;
+      }
       if (key === 'ArrowLeft' || key === 'ArrowUp') {
         event.preventDefault();
         event.stopImmediatePropagation();

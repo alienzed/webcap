@@ -17,10 +17,18 @@ on:
       - 'tool/js/item_details.js'
       - 'tool/js/checklist_state.js'
       - 'tool/js/media.js'
+      - 'tool/js/constants.js'
+      - 'tool/js/folder_state.js'
+      - 'tool/js/main.js'
+      - 'tool/js/ui.js'
+      - 'tool/server/smart_set.py'
+      - 'tests/test_folder_state_ui_contract.py'
+      - 'tests/test_file_ops_routes.py'
       - 'tool/js/media_grid_state.js'
       - 'tool/js/media_grid_actions.js'
       - 'tests/tag_mismatch_filter.test.cjs'
       - 'tests/media_filter_efficiency.test.cjs'
+      - 'tests/qa_incomplete_health_retention.test.cjs'
       - 'tool/js/caption_enrichment.js'
       - 'tests/caption_enrichment.test.cjs'
       - 'tests/test_caption_enrichment.py'
@@ -224,14 +232,23 @@ jobs:
           node --check tool/js/item_details.js
           node --check tool/js/checklist_state.js
           node --check tool/js/media.js
+          node --check tool/js/constants.js
+          node --check tool/js/folder_state.js
+          node --check tool/js/main.js
+          node --check tool/js/smart_set.js
+          node --check tool/js/ui.js
+          node --check tool/js/qa_workbench.js
           node --check tool/js/media_grid_state.js
           node --check tool/js/media_grid_actions.js
           node --test tests/tag_mismatch_filter.test.cjs
           node --test tests/media_filter_efficiency.test.cjs
+          node --test tests/qa_incomplete_health_retention.test.cjs
           node --test tests/caption_assist_tag_mismatch.test.cjs
       - name: Prepare isolated config
         run: cp tool/config.example.json tool/config.json
       - name: Install focused test essentials
         run: python -m pip install pytest Flask Pillow Werkzeug imageio websocket-client opencv-python-headless
+      - name: Retired Incomplete filter and SuperSet compatibility
+        run: python -m pytest -q tests/test_folder_state_ui_contract.py tests/test_file_ops_routes.py -k 'superset_search or incomplete_media_filter_is_retired or folder_state_reads_legacy'
       - name: Verify Director prompt and route
         run: python -m pytest -q tests/test_caption_atomic.py -k 'tag_mismatch or explicit_caption_candidate_repairs or caption_assist_corrections_make_retry'

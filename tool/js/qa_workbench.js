@@ -1732,7 +1732,10 @@
     };
     items.forEach(function (item) {
       if (!item.hasCaption) health.captionless.push(item.fileName);
-      if (mediaItemHasIncompleteRequirementGroups(item)) health.incomplete.push(item.fileName);
+      var requirementProgress = computeRequirementProgressForMediaKey(item.key);
+      if (requirementProgress.total > 0 && requirementProgress.completed < requirementProgress.total) {
+        health.incomplete.push(item.fileName);
+      }
       if (!(state.reviewedSet && state.reviewedSet.has(item.key))) health.unreviewed.push(item.fileName);
       if (mediaItemHasTagMismatch(item)) health.mismatch.push(item.fileName);
       var aspect = String(item && item.metadata && item.metadata.aspect || '').trim();

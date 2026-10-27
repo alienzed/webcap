@@ -341,15 +341,6 @@ function mediaItemMatchesFilterQuery(item, query, mode) {
   return query.positive.some(termMatches);
 }
 
-function mediaItemHasIncompleteRequirementGroups(item) {
-  if (!item || !item.key) return false;
-  if (typeof computeRequirementProgressForMediaKey !== 'function') return false;
-  var progress = computeRequirementProgressForMediaKey(item.key);
-  if (!progress || !isFinite(progress.total) || !isFinite(progress.completed)) return false;
-  if (progress.total <= 0) return false;
-  return progress.completed < progress.total;
-}
-
 function mediaItemHasTagMismatch(item) {
   if (!item || !item.key) return false;
   return hasTagMismatchForText(item.key, item.caption || '');
@@ -364,7 +355,6 @@ function getFilteredMediaItems(ignoreFocusSet) {
   var reviewedOnly = !!(ui.advancedFilterReviewedEl && ui.advancedFilterReviewedEl.checked);
   var unreviewedOnly = !!(ui.advancedFilterUnreviewedEl && ui.advancedFilterUnreviewedEl.checked);
   var needsAiValidationOnly = !!(ui.advancedFilterNeedsAiValidationEl && ui.advancedFilterNeedsAiValidationEl.checked);
-  var incompleteOnly = !!(ui.advancedFilterIncompleteEl && ui.advancedFilterIncompleteEl.checked);
   var tagMismatchOnly = !!(ui.advancedFilterUntaggedEl && ui.advancedFilterUntaggedEl.checked);
   var starFilterState = getAdvancedStarFilterState();
   var flagFilterValues = getAdvancedFlagFilterValues();
@@ -409,9 +399,6 @@ function getFilteredMediaItems(ignoreFocusSet) {
       return !(typeof hasSupportedAspectBucket === 'function' && hasSupportedAspectBucket(ar));
     });
   }
-  if (incompleteOnly) {
-    mediaItems = mediaItems.filter(mediaItemHasIncompleteRequirementGroups);
-  }
   // Text and validation need caption/tag work; process only remaining items.
   if (String(q || '').trim()) {
     mediaItems = mediaItems.filter(function (item) {
@@ -441,7 +428,6 @@ function hasAnyActiveMediaFilter() {
   if (ui.advancedFilterReviewedEl && ui.advancedFilterReviewedEl.checked) return true;
   if (ui.advancedFilterUnreviewedEl && ui.advancedFilterUnreviewedEl.checked) return true;
   if (ui.advancedFilterNeedsAiValidationEl && ui.advancedFilterNeedsAiValidationEl.checked) return true;
-  if (ui.advancedFilterIncompleteEl && ui.advancedFilterIncompleteEl.checked) return true;
   if (ui.advancedFilterUntaggedEl && ui.advancedFilterUntaggedEl.checked) return true;
   if (ui.advancedFilterInvalidArEl && ui.advancedFilterInvalidArEl.checked) return true;
   if (ui.advancedFilterSupersetEl && ui.advancedFilterSupersetEl.checked) return true;

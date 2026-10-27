@@ -499,6 +499,7 @@
     });
     var draft = state.draftByMode[mode] || '';
     var attachments = mode === 'storyboard' ? JSON.parse(JSON.stringify(state.storyboardAttachments)) : {};
+    var workshop = mode === 'storyboard' ? JSON.parse(JSON.stringify(state.workshop)) : null;
     var title = state.sessionByMode[mode] ? state.sessionByMode[mode].title : 'New chat';
     if (title === 'New chat') {
       var first = messages.find(function (message) { return message.role === 'user' && message.content.trim(); });
@@ -523,7 +524,7 @@
           method: 'PUT', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             expectedRevision: current.revision, title: title,
-            messages: messages, draft: draft, attachments: attachments
+            messages: messages, draft: draft, attachments: attachments, workshop: workshop
           })
         });
       }).then(function (payload) {
@@ -578,7 +579,7 @@
       state.modeElapsedByAssistantIndex.storyboard = {};
       state.modeMetricsByAssistantIndex.storyboard = {};
       state.storyboardAttachments = Object.assign({}, chat.attachments || {});
-      state.workshop = null;
+      state.workshop = chat.workshop || null;
       state.workshopProposal = null;
       state.storyGuidelineProposal = null;
     }
@@ -646,7 +647,8 @@
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           expectedRevision: chat.revision, title: chat.title,
-          messages: chat.messages, draft: chat.draft, attachments: chat.attachments
+          messages: chat.messages, draft: chat.draft, attachments: chat.attachments,
+          workshop: chat.workshop || null
         })
       });
     }).then(function (result) {
@@ -1832,6 +1834,7 @@
           state.workshopProposal = null;
           state.storyGuidelineProposal = null;
           // Exiting a Workshop must never destroy the conversation.
+          scheduleSessionSave();
           el('director-chat-workshop-status').textContent = '';
           syncModeUi();
         } else if (preset.section) {
@@ -1971,6 +1974,7 @@
     state.workshop = context;
     el('director-chat-workshop-status').textContent = context.shotError ? ('Automatic shot revisions unavailable: ' + context.shotError) : '';
     setOpen(true, 'storyboard');
+    scheduleSessionSave();
   };
   window.registerAssistantMode = registerContextMode;
   window.refreshAssistantModes = syncModeUi;

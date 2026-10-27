@@ -922,3 +922,25 @@ def test_director_chat_story_guideline_proposal_uses_structured_schema(monkeypat
     fields = captured["contract"]["response_schema"]["properties"]["guidelines"]["properties"]
     assert set(fields) == {"visualFocus", "creativeDirection", "variation", "pacing", "sceneRelationships"}
     assert captured["label"] == "Storyboard Guideline Proposal"
+
+
+def test_storyboard_chat_preserves_inline_story_reference_in_director_request(monkeypatch):
+    captured = {}
+
+    def capture(client, model, contract, context=None, label=""):
+        captured.update({"client": client, "contract": contract})
+        return {"jobId": "story-reference-1"}
+
+    monkeypatch.setattr(app_module, "enqueue_llm", capture)
+    story_text = '[ATTACHED STORYBOARD REFERENCE - supplied inline in this request]\\nStory: Escape: {"concept":"Lost rover"}'
+    messages = [
+        {"role": "system", "content": "Storyboard creative workshop."},
+        {"role": "user", "content": story_text + "\\n[AUTHOR MESSAGE]\\nWhat is the premise?"},
+    ]
+    response = app_module.app.test_client().post("/fs/director/chat", json={
+        "model": "director", "messages": messages,
+    })
+    assert response.status_code == 202
+    assert captured["client"] == "chat"
+    assert captured["contract"]["messages"] == messages
+    assert story_text in captured["contract"]["messages"][-1]["content"]

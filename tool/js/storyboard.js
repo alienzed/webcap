@@ -7035,37 +7035,44 @@
   };
 
   window.getStoryboardAssistantContext = function (kind) {
-    var story = storyState.story;
-    if (!story) throw new Error('Open a Story before attaching context.');
-    if (kind === 'story') {
-      return {
-        key: 'story:' + story.id,
-        label: 'Story: ' + (story.title || story.id),
-        content: JSON.stringify({
-          title: story.title, concept: el('storyboard-story-concept').value,
-          style: story.style, guidelines: story.guidelines, invariants: story.invariants,
-          scenes: (story.sceneOrder || []).map(function (id, index) {
-            var scene = story.scenes[id];
-            return { number: index + 1, id: id, title: scene.title, summary: scene.summary };
-          })
-        }, null, 2)
-      };
-    }
-    if (kind === 'scene') {
-      var id = storyState.activeSceneId || (story.sceneOrder || [])[0];
-      var scene = story.scenes[id];
+    var original = storyState.story;
+    if (!original) throw new Error('Open a Story before attaching context.');
+    if (kind !== 'story' && kind !== 'scene') throw new Error('Unknown Storyboard attachment type: ' + kind);
+    var storyId = original.id;
+    var sceneId = kind === 'scene' ? (storyState.activeSceneId || (original.sceneOrder || [])[0]) : '';
+
+    // Attach the authoritative current draft, including pending Story and Scene edits.
+    return flushPendingSaves().then(function () {
+      var story = storyState.story;
+      if (!story || story.id !== storyId) {
+        throw new Error('The Story changed while preparing its chat attachment. Attach again.');
+      }
+      if (kind === 'story') {
+        return {
+          key: 'story:' + story.id,
+          label: 'Story: ' + (story.title || story.id),
+          content: JSON.stringify({
+            title: story.title, concept: story.concept,
+            style: story.style, guidelines: story.guidelines, invariants: story.invariants,
+            scenes: (story.sceneOrder || []).map(function (id, index) {
+              var scene = story.scenes[id];
+              return { number: index + 1, id: id, title: scene.title, summary: scene.summary };
+            })
+          }, null, 2)
+        };
+      }
+      var scene = story.scenes[sceneId];
       if (!scene) throw new Error('Select a Scene before attaching context.');
       return {
-        key: 'scene:' + story.id + ':' + id,
-        label: 'Scene ' + ((story.sceneOrder || []).indexOf(id) + 1),
+        key: 'scene:' + story.id + ':' + sceneId,
+        label: 'Scene ' + ((story.sceneOrder || []).indexOf(sceneId) + 1),
         content: JSON.stringify({
           title: scene.title, summary: scene.summary,
           entryState: scene.entryState, exitState: scene.exitState,
           prompt: scene.prompt, notes: scene.notes
         }, null, 2)
       };
-    }
-    throw new Error('Unknown Storyboard attachment type: ' + kind);
+    });
   };
 
   window.openStoryboardActivity = openStoryboardActivity;

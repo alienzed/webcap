@@ -28,7 +28,16 @@
     systemStatusRequest: null,
     activityLastMemory: null,
     activityLoadBaseline: null,
-    activityLoadModelId: ''
+    activityLoadModelId: '',
+    sessionByMode: { chat: null, storyboard: null },
+    sessionActiveByMode: {},
+    sessionList: [],
+    sessionReady: false,
+    sessionWrite: Promise.resolve(),
+    sessionTimer: 0,
+    sessionDirty: { chat: false, storyboard: false },
+    sessionError: false,
+    draftByMode: { chat: '', storyboard: '' }
   };
   var STORYBOARD_WORKSHOP_PRIMER = [
     'You are collaborating with an author developing short AI-generated videos.',
@@ -370,6 +379,294 @@
         return payload;
       });
     });
+  }
+
+  // Chat sessions are independent of Story navigation. Only explicitly attached
+  // reference snapshots are persisted alongside their conversation.
+  function persistentMode(mode) {
+    return mode === 'chat' || mode === 'storyboard';
+  }
+
+  function showSessionStatus(message, error) {
+    var status = el('director-chat-save-status');
+    if (status) {
+      status.textContent = message;
+      status.dataset.error = error ? 'true' : 'false';
+    }
+    state.sessionError = !!error;
+    if (error && typeof window.reportConsoleError === 'function') {
+      window.reportConsoleError('Assistant conversation save', error);
+    }
+  }
+
+  function upsertSessionSummary(chat) {
+    var summary = {
+      id: chat.id, mode: chat.mode, title: chat.title,
+      createdAt: chat.createdAt, updatedAt: chat.updatedAt, revision: chat.revision
+    };
+    state.sessionList = state.sessionList.filter(function (item) { return item.id !== chat.id; });
+    state.sessionList.unshift(summary);
+    state.sessionList.sort(function (a, b) { return b.updatedAt.localeCompare(a.updatedAt); });
+    renderSessionHistory();
+  }
+
+  function renderSessionHistory() {
+    var list = el('director-chat-history-list');
+    var button = el('director-chat-history-toggle');
+    var panel = el('director-chat-history-panel');
+    if (!list || !button || !panel) return;
+    var expanded = button.getAttribute('aria-expanded') === 'true';
+    panel.classList.toggle('hidden', !expanded);
+    list.replaceChildren();
+    if (!state.sessionList.length) {
+      var empty = document.createElement('p');
+      empty.textContent = 'No saved conversations yet.';
+      list.appendChild(empty);
+    }
+    state.sessionList.forEach(function (chat) {
+      var item = document.createElement('div');
+      item.className = 'director-chat-history-item';
+      if (state.sessionByMode[state.activeMode] &&
+          state.sessionByMode[state.activeMode].id === chat.id) item.classList.add('is-current');
+
+      var open = document.createElement('button');
+      open.type = 'button';
+      open.className = 'review-captions-btn';
+      open.textContent = (chat.mode === 'storyboard' ? 'Storyboard · ' : '') + chat.title;
+      open.title = chat.title + ' · ' + new Date(chat.updatedAt).toLocaleString();
+      open.onclick = function () { selectSession(chat.id); };
+      item.appendChild(open);
+
+      var rename = document.createElement('button');
+      rename.type = 'button';
+      rename.className = 'review-captions-btn';
+      rename.textContent = 'Rename';
+      rename.title = 'Rename conversation';
+      rename.onclick = function () {
+        item.replaceChildren();
+        var input = document.createElement('input');
+        input.value = chat.title;
+        input.setAttribute('aria-label', 'Conversation title');
+        var save = document.createElement('button');
+        save.type = 'button';
+        save.className = 'review-captions-btn';
+        save.textContent = 'Save';
+        save.onclick = function () {
+          renameSession(chat.id, input.value.trim());
+        };
+        var cancel = document.createElement('button');
+        cancel.type = 'button';
+        cancel.className = 'review-captions-btn';
+        cancel.textContent = 'Cancel';
+        cancel.onclick = renderSessionHistory;
+        item.append(input, save, cancel);
+        input.focus();
+        input.select();
+        input.onkeydown = function (event) {
+          if (event.key === 'Enter') save.click();
+          if (event.key === 'Escape') renderSessionHistory();
+        };
+      };
+      item.appendChild(rename);
+
+      var remove = document.createElement('button');
+      remove.type = 'button';
+      remove.className = 'review-captions-btn';
+      remove.textContent = 'Delete';
+      remove.title = 'Permanently delete this saved conversation';
+      remove.onclick = function () { deleteSession(chat.id); };
+      item.appendChild(remove);
+      list.appendChild(item);
+    });
+  }
+
+  function showSessionFailure(error) {
+    showSessionStatus('Save failed: ' + String(error.message || error), error);
+    syncControls();
+  }
+
+  function persistSession(mode) {
+    if (!persistentMode(mode)) return Promise.resolve();
+    if (!state.sessionReady) return Promise.reject(new Error('Assistant conversation history has not loaded.'));
+    var messages = (mode === 'chat' ? state.messages : state.modeMessages.storyboard || []).map(function (message) {
+      return { role: message.role, content: message.content };
+    });
+    var draft = state.draftByMode[mode] || '';
+    var attachments = mode === 'storyboard' ? JSON.parse(JSON.stringify(state.storyboardAttachments)) : {};
+    var title = state.sessionByMode[mode] ? state.sessionByMode[mode].title : 'New chat';
+    if (title === 'New chat') {
+      var first = messages.find(function (message) { return message.role === 'user' && message.content.trim(); });
+      if (first) title = first.content.replace(/\\s+/g, ' ').trim().slice(0, 72);
+    }
+    state.sessionDirty[mode] = false;
+    showSessionStatus('Saving…', false);
+    var action = state.sessionWrite.catch(function () {}).then(function () {
+      var session = state.sessionByMode[mode];
+      var ready = session ? Promise.resolve(session) : requestJson('/fs/director/chats', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode: mode })
+      }).then(function (payload) {
+        state.sessionByMode[mode] = payload.chat;
+        state.sessionActiveByMode[mode] = payload.chat.id;
+        upsertSessionSummary(payload.chat);
+        return payload.chat;
+      });
+      return ready.then(function (current) {
+        return requestJson('/fs/director/chats/' + encodeURIComponent(current.id), {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            expectedRevision: current.revision, title: title,
+            messages: messages, draft: draft, attachments: attachments
+          })
+        });
+      }).then(function (payload) {
+        state.sessionByMode[mode] = payload.chat;
+        upsertSessionSummary(payload.chat);
+        if (!state.sessionDirty[mode]) showSessionStatus('Saved', false);
+        return payload.chat;
+      });
+    });
+    state.sessionWrite = action;
+    return action.catch(function (error) {
+      state.sessionDirty[mode] = true;
+      showSessionFailure(error);
+      throw error;
+    });
+  }
+
+  function scheduleSessionSave() {
+    var mode = state.activeMode;
+    if (!persistentMode(mode) || !state.sessionReady) return;
+    state.sessionDirty[mode] = true;
+    showSessionStatus('Unsaved changes', false);
+    if (state.sessionTimer) clearTimeout(state.sessionTimer);
+    state.sessionTimer = setTimeout(function () {
+      state.sessionTimer = 0;
+      persistSession(mode).catch(function () {});
+    }, 450);
+  }
+
+  function flushSessionSave() {
+    if (state.sessionTimer) {
+      clearTimeout(state.sessionTimer);
+      state.sessionTimer = 0;
+    }
+    var mode = state.activeMode;
+    return state.sessionDirty[mode] ? persistSession(mode) : state.sessionWrite;
+  }
+
+  function restoreSession(chat) {
+    if (!chat || !persistentMode(chat.mode) || !Array.isArray(chat.messages)) {
+      throw new Error('Saved Assistant conversation is invalid.');
+    }
+    state.sessionByMode[chat.mode] = chat;
+    state.sessionActiveByMode[chat.mode] = chat.id;
+    if (chat.mode === 'chat') {
+      state.messages = chat.messages.slice();
+      state.elapsedByAssistantIndex = {};
+      state.metricsByAssistantIndex = {};
+    } else {
+      state.modeMessages.storyboard = chat.messages.slice();
+      state.modeElapsedByAssistantIndex.storyboard = {};
+      state.modeMetricsByAssistantIndex.storyboard = {};
+      state.storyboardAttachments = Object.assign({}, chat.attachments || {});
+      state.workshop = null;
+      state.workshopProposal = null;
+      state.storyGuidelineProposal = null;
+    }
+    state.draftByMode[chat.mode] = chat.draft || '';
+    state.sessionDirty[chat.mode] = false;
+    if (state.activeMode === chat.mode) {
+      el('director-chat-input').value = state.draftByMode[chat.mode];
+      syncModeUi();
+    }
+    upsertSessionSummary(chat);
+    showSessionStatus('Saved', false);
+  }
+
+  function loadSessionHistory() {
+    return requestJson('/fs/director/chats').then(function (payload) {
+      state.sessionList = payload.chats || [];
+      state.sessionActiveByMode = payload.activeByMode || {};
+      return Promise.all(['chat', 'storyboard'].filter(function (mode) {
+        return state.sessionActiveByMode[mode];
+      }).map(function (mode) {
+        return requestJson('/fs/director/chats/' + encodeURIComponent(state.sessionActiveByMode[mode]))
+          .then(function (result) { restoreSession(result.chat); });
+      }));
+    }).then(function () {
+      state.sessionReady = true;
+      renderSessionHistory();
+      syncModeUi();
+    }).catch(function (error) {
+      showSessionFailure(error);
+    });
+  }
+
+  function selectSession(chatId) {
+    if (!state.sessionReady || state.pending || state.attachmentPending) return;
+    flushSessionSave().then(function () {
+      return requestJson('/fs/director/chats/' + encodeURIComponent(chatId));
+    }).then(function (result) {
+      state.activeMode = result.chat.mode;
+      restoreSession(result.chat);
+      finishProgress(null);
+      syncModeUi();
+    }).catch(showSessionFailure);
+  }
+
+  function renameSession(chatId, title) {
+    if (!title || state.pending) return;
+    selectSessionForEdit(chatId, function (chat) { chat.title = title; });
+  }
+
+  function selectSessionForEdit(chatId, edit) {
+    if (!state.sessionReady || state.pending) return;
+    flushSessionSave().then(function () {
+      return requestJson('/fs/director/chats/' + encodeURIComponent(chatId));
+    }).then(function (result) {
+      var chat = result.chat;
+      edit(chat);
+      return requestJson('/fs/director/chats/' + encodeURIComponent(chat.id), {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          expectedRevision: chat.revision, title: chat.title,
+          messages: chat.messages, draft: chat.draft, attachments: chat.attachments
+        })
+      });
+    }).then(function (result) {
+      state.sessionByMode[result.chat.mode] = result.chat.id === (state.sessionByMode[result.chat.mode] || {}).id
+        ? result.chat : state.sessionByMode[result.chat.mode];
+      upsertSessionSummary(result.chat);
+      showSessionStatus('Saved', false);
+    }).catch(showSessionFailure);
+  }
+
+  function deleteSession(chatId) {
+    if (!state.sessionReady || state.pending) return;
+    var chat = state.sessionList.find(function (item) { return item.id === chatId; });
+    if (!chat || !window.confirm('Permanently delete conversation "' + chat.title + '"?')) return;
+    flushSessionSave().then(function () {
+      return requestJson('/fs/director/chats/' + encodeURIComponent(chatId), { method: 'DELETE' });
+    }).then(function () {
+      state.sessionList = state.sessionList.filter(function (item) { return item.id !== chatId; });
+      var current = state.sessionByMode[chat.mode];
+      if (current && current.id === chatId) {
+        state.sessionByMode[chat.mode] = null;
+        state.sessionActiveByMode[chat.mode] = null;
+        if (chat.mode === 'chat') state.messages = [];
+        else {
+          state.modeMessages.storyboard = [];
+          state.storyboardAttachments = {};
+          state.workshop = null;
+        }
+        state.draftByMode[chat.mode] = '';
+        if (state.activeMode === chat.mode) el('director-chat-input').value = '';
+      }
+      renderSessionHistory();
+      syncModeUi();
+      showSessionStatus('Deleted', false);
+    }).catch(showSessionFailure);
   }
 
   function formatElapsed(ms) {

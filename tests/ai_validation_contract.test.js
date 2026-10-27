@@ -132,3 +132,86 @@ test('Validate & Next cannot issue receipt when annotation save fails', async ()
   assert.equal(receiptWrites, 0);
   assert.equal(c.isAiValidatedForItem(item), false);
 });
+
+
+test('Accepted Caption Assist caption writes a durable validation receipt after annotations', async () => {
+  const c = harness();
+  const item = { key: 'accepted.jpg', fileName: 'accepted.jpg', caption: 'Edited human-approved caption',
+    metadata: { vision_sight: { description: 'Saved observation', inventory: { scene: 'outdoors' } } } };
+  c.state.items = [item]; c.state.currentItem = item;
+  const saved = [];
+  c.getChecklistAssignmentEntriesForMediaKey = () => [{ requirement: 'Framing', term: 'Portrait' }];
+  c.saveMediaAnnotationState = async key => { saved.push('annotations:' + key); return true; };
+  c.saveFolderStateForCurrentRoot = async () => {
+    saved.push('receipt');
+    assert.equal(c.aiValidationReceiptsByMedia[item.key].content, c.aiValidationCurrentInput(item));
+    assert.equal(c.aiValidationReceiptsByMedia[item.key].sight, c.aiValidationSightInput(item));
+    return true;
+  };
+  c.reportConsoleError = (_, error) => { throw error; };
+
+  assert.equal(await c.aiValidationRecordAcceptedCaption(item, item.caption, 'set'), true);
+  assert.deepEqual(saved, ['annotations:accepted.jpg', 'receipt']);
+  assert.equal(c.isAiValidatedForItem(item), true, 'Needs AI Validation should no longer include this item');
+  item.caption += ' changed after acceptance';
+  assert.equal(c.isAiValidatedForItem(item), false, 'Further caption edits invalidate the receipt');
+});
+
+test('Explicit caption acceptance without saved Sight validates current inputs until new Sight arrives', async () => {
+  const c = harness();
+  const item = { key: 'fresh.jpg', fileName: 'fresh.jpg', caption: 'The caption was checked.', metadata: {} };
+  c.state.items = [item]; c.state.currentItem = item;
+  c.saveMediaAnnotationState = async () => true;
+  c.saveFolderStateForCurrentRoot = async () => true;
+  c.reportConsoleError = (_, error) => { throw error; };
+
+  assert.equal(await c.aiValidationRecordAcceptedCaption(item, item.caption, 'set'), true);
+  assert.equal(c.aiValidationReceiptsByMedia[item.key].sight, '');
+  assert.equal(c.isAiValidatedForItem(item), true);
+  item.metadata.vision_sight = { description: 'New Sight', inventory: { count: 2 } };
+  assert.equal(c.isAiValidatedForItem(item), false, 'Fresh Sight requires new acceptance');
+});
+
+test('Failed annotation or receipt writes do not leave a falsely validated Caption Assist item', async () => {
+  const c = harness();
+  const item = { key: 'fail.jpg', fileName: 'fail.jpg', caption: 'Accepted caption', metadata: {} };
+  c.state.items = [item]; c.state.currentItem = item;
+  const errors = [];
+  c.reportConsoleError = (_, error) => { errors.push(error.message); };
+  let receiptWrites = 0;
+  c.saveMediaAnnotationState = async () => false;
+  c.saveFolderStateForCurrentRoot = async () => { receiptWrites += 1; return true; };
+  await assert.rejects(c.aiValidationRecordAcceptedCaption(item, item.caption, 'set'), /persist the accepted caption annotations/);
+  assert.equal(receiptWrites, 0);
+  assert.equal(c.isAiValidatedForItem(item), false);
+
+  c.saveMediaAnnotationState = async () => true;
+  c.saveFolderStateForCurrentRoot = async () => { receiptWrites += 1; return false; };
+  await assert.rejects(c.aiValidationRecordAcceptedCaption(item, item.caption, 'set'), /persist the Caption Assist AI validation receipt/);
+  assert.equal(c.isAiValidatedForItem(item), false);
+  assert.equal(c.aiValidationReceiptsByMedia[item.key], undefined);
+  assert.equal(c.aiValidationSavePending, false);
+  assert.equal(errors.length, 2);
+});
+
+test('Caption acceptance refuses unsaved text and item changes during async annotation writes', async () => {
+  const c = harness();
+  const item = { key: 'first.jpg', fileName: 'first.jpg', caption: 'Saved text', metadata: {} };
+  const other = { key: 'next.jpg', fileName: 'next.jpg', caption: '', metadata: {} };
+  c.state.items = [item, other]; c.state.currentItem = item;
+  assert.throws(() => c.aiValidationRecordAcceptedCaption(item, 'Not yet saved', 'set'), /saved first/);
+  assert.throws(() => c.aiValidationRecordAcceptedCaption(item, item.caption, 'wrong folder'), /selected Set or item changed/);
+
+  let finishAnnotations;
+  c.saveMediaAnnotationState = () => new Promise(resolve => { finishAnnotations = resolve; });
+  let receiptWrites = 0;
+  c.saveFolderStateForCurrentRoot = async () => { receiptWrites += 1; return true; };
+  c.reportConsoleError = () => {};
+  const pending = c.aiValidationRecordAcceptedCaption(item, item.caption, 'set');
+  assert.equal(c.isAiValidatedForItem(item), false);
+  c.state.currentItem = other;
+  finishAnnotations(true);
+  await assert.rejects(pending, /selected Set or item changed/);
+  assert.equal(receiptWrites, 0);
+  assert.equal(c.isAiValidatedForItem(item), false);
+});

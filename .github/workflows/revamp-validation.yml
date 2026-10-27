@@ -137,6 +137,10 @@ jobs:
           node --check tool/js/primer_settings.js
           node --check tool/js/ai_validation.js
           node --test tests/ai_validation_contract.test.js tests/caption_assist_apply_validation.test.cjs
+      - name: Caption enrichment empty-result feedback
+        run: |
+          node --check tool/js/caption_enrichment.js
+          node --test tests/caption_enrichment.test.cjs
       - name: JavaScript syntax
         run: |
           node --check tool/js/epoch_finder.js

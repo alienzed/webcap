@@ -8,10 +8,11 @@ const source = fs.readFileSync('tool/js/caption_enrichment.js','utf8');
 function fixture() {
   let resolveJob, resolveStart;
   const candidate = {mediaKey:'item-a',text:'A woman posing in a swimsuit, front view.'};
-  const logs=[], calls=[], classes=new Set(), nodes={};
+  const logs=[], calls=[], nodes={};
   function node() {
+    const classes=new Set();
     const n={textContent:'',disabled:false,className:'',children:[],attributes:{},
-      classList:{toggle(name,bool){bool?classes.add(name):classes.delete(name);}},
+      classList:{toggle(name,bool){bool?classes.add(name):classes.delete(name);},contains(name){return classes.has(name);}},
       appendChild(child){this.children.push(child);},replaceChildren(){this.children=[];},
       setAttribute(name,v){this.attributes[name]=v;},
       addEventListener(name,fn){this['on'+name]=fn;}};
@@ -337,4 +338,90 @@ test('changed next-item draft cancels its mismatched lookahead instead of duplic
   f.complete(1,[]);
   await Promise.all([ahead,current]);
   assert.equal(c.captionAssistEnrichmentCache.size,1);
+});
+
+
+test('a successful empty Enrich result shows quiet feedback beside the button, not an empty review',async()=>{
+  const f=fixture(),c=f.ctx;
+  const first=c.runCaptionAssistEnrichment();
+  f.resolveStart()({job:{jobId:'enrich-empty'}});
+  await Promise.resolve();await Promise.resolve();
+  f.resolveJob()({result:{text:'{"suggestions":[]}' }});
+  assert.equal(await first,true);
+  assert.equal(c.captionAssistEnrichment.phase,'empty');
+  c.syncCaptionAssistEnrichmentUi(f.candidate);
+  const note=f.nodes['editor-caption-enrichment-empty'];
+  assert.equal(note.classList.contains('hidden'),false);
+  const html=fs.readFileSync('tool/tool.html','utf8');
+  assert.match(html,/id="editor-caption-enrichment-empty"[^>]*role="status"[^>]*>✓ No additional details found<\/span>/,
+    'the actual HTML supplies the accessible, quiet completion text');
+  assert.equal(f.nodes['editor-caption-enrichment-preview'].classList.contains('hidden'),true);
+  assert.equal(f.nodes['editor-caption-enrichment-actions'].classList.contains('hidden'),true);
+  assert.equal(f.nodes['editor-caption-enrich'].disabled,false,'the user may request a fresh review');
+  assert.equal(f.candidate.text,'A woman posing in a swimsuit, front view.');
+
+  f.candidate.text+=' A new phrase.';
+  c.syncCaptionAssistEnrichmentUi(f.candidate);
+  assert.equal(note.classList.contains('hidden'),true,'changing the draft clears the stale confirmation');
+
+  c.cancelCaptionAssistEnrichment();
+  f.candidate.text='A woman posing in a swimsuit, front view.';
+  c.syncCaptionAssistEnrichmentUi(f.candidate);
+  assert.equal(note.classList.contains('hidden'),true,'the confirmation does not leak after exit');
+});
+
+test('an explicit Enrich retry clears empty feedback while running and can show suggestions',async()=>{
+  const f=fixture(),c=f.ctx;
+  const first=c.runCaptionAssistEnrichment();
+  f.resolveStart()({job:{jobId:'enrich-empty'}});
+  await Promise.resolve();await Promise.resolve();
+  f.resolveJob()({result:{text:'{"suggestions":[]}' }});
+  await first;
+  c.syncCaptionAssistEnrichmentUi(f.candidate);
+  assert.equal(f.nodes['editor-caption-enrichment-empty'].classList.contains('hidden'),false);
+
+  const refreshed=c.runCaptionAssistEnrichment();
+  c.syncCaptionAssistEnrichmentUi(f.candidate);
+  assert.equal(f.nodes['editor-caption-enrichment-empty'].classList.contains('hidden'),true);
+  assert.equal(f.nodes['editor-caption-enrich'].textContent,'✦ Director reviewing…');
+  f.resolveStart()({job:{jobId:'enrich-refreshed'}});
+  await Promise.resolve();await Promise.resolve();
+  f.resolveJob()({result:{text:'{"suggestions":[{"anchor":"swimsuit","addition":" with metal rings"}]}' }});
+  assert.equal(await refreshed,true);
+  c.syncCaptionAssistEnrichmentUi(f.candidate);
+  assert.equal(c.captionAssistEnrichment.phase,'review');
+  assert.equal(f.nodes['editor-caption-enrichment-empty'].classList.contains('hidden'),true);
+  assert.equal(f.nodes['editor-caption-enrichment-preview'].classList.contains('hidden'),false);
+});
+
+test('cached and lookahead empty results remain visible only when their own item is opened',async()=>{
+  const f=automaticFixture(),c=f.ctx;
+  const first=c.maybeRunCaptionAssistEnrichment();
+  await Promise.resolve();
+  f.complete(0,[]);
+  await first;
+  assert.equal(c.captionAssistEnrichment.phase,'empty');
+  c.cancelCaptionAssistEnrichment();
+  const restored=c.maybeRunCaptionAssistEnrichment();
+  await restored;
+  assert.equal(f.requests.length,1,'cached empty results should not make extra requests');
+  assert.equal(c.captionAssistEnrichment.phase,'empty','cached completion restores its UI state');
+
+  const next={key:'item-b',fileName:'b.jpg',caption:'',metadata:{
+    vision_sight:{description:'A window-lit studio.'}
+  }};
+  const candidate={mediaKey:'item-b',text:'A person inside a studio.',model:'director-a'};
+  const lookahead=c.warmCaptionAssistEnrichment(next,candidate);
+  await Promise.resolve();
+  f.complete(1,[]);
+  await lookahead;
+  assert.equal(c.captionAssistEnrichment.candidate,f.candidate,
+    'background lookahead never displays on the previous item');
+
+  c.state.currentItem=next;
+  c.captionAssistCandidate=candidate;
+  await c.maybeRunCaptionAssistEnrichment();
+  assert.equal(f.requests.length,2);
+  assert.equal(c.captionAssistEnrichment.candidate,candidate);
+  assert.equal(c.captionAssistEnrichment.phase,'empty');
 });

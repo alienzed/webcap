@@ -3984,6 +3984,8 @@ html[data-theme="dark"] .app-settings-environment-check {
 .caption-enrichment-actions > div { display:flex; flex-wrap:wrap; gap:7px; }
 .caption-enrichment-actions button { font-size:15px; padding:6px 10px; border:1px solid var(--border); border-radius:7px; background:var(--panel-soft); color:var(--text); cursor:pointer; }
 .caption-enrichment-actions button:disabled { opacity:.4; cursor:default; }
+.caption-enrichment-empty-note { color:var(--muted); font-size:14px; line-height:1.4; white-space:nowrap; }
+.editor-caption-candidate-actions-left:has(.caption-enrichment-empty-note:not(.hidden)) { flex-wrap:wrap; }
 
 /* Prepare Set uses the same persisted Vision model choice as the app header. */
 .set-scan-model-picker { display:flex; align-items:center; gap:8px; font-size:16px; }

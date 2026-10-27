@@ -59,6 +59,7 @@ function syncCaptionAssistEnrichmentUi(candidate) {
   if (captionAssistEnrichment && captionAssistEnrichment.candidate !== candidate)
     cancelCaptionAssistEnrichment();
   var button = document.getElementById('editor-caption-enrich');
+  var emptyNote = document.getElementById('editor-caption-enrichment-empty');
   var preview = document.getElementById('editor-caption-enrichment-preview');
   var actions = document.getElementById('editor-caption-enrichment-actions');
   var status = document.getElementById('editor-caption-enrichment-status');
@@ -66,7 +67,7 @@ function syncCaptionAssistEnrichmentUi(candidate) {
   var discard = document.getElementById('editor-caption-enrichment-discard');
   var restore = document.getElementById('editor-caption-enrichment-restore');
   var done = document.getElementById('editor-caption-enrichment-done');
-  if (!button || !preview || !actions || !status || !acceptAll || !discard || !restore || !done)
+  if (!button || !emptyNote || !preview || !actions || !status || !acceptAll || !discard || !restore || !done)
     throw new Error('Caption enrichment controls are missing.');
   var item = candidate && state.currentItem;
   var sight = item && ((item.metadata && item.metadata.vision_sight) ||
@@ -79,6 +80,12 @@ function syncCaptionAssistEnrichmentUi(candidate) {
   button.title = hasSight ? 'Propose optional details using saved Sight; existing caption stays intact' :
     'Saved Sight required. Refresh Sight in Details first.';
   button.textContent = busy ? '✦ Director reviewing…' : '✦ Enrich with Sight';
+  // An empty result is a successful review, not a silent no-op. Keep the
+  // confirmation with the Enrich action until its draft changes or is replaced.
+  var empty = !!(candidate && item && item.key === candidate.mediaKey &&
+    !isFocusedQaReviewMode() && active && active.phase === 'empty' &&
+    active.candidate === candidate && active.originalText === String(candidate.text || ''));
+  emptyNote.classList.toggle('hidden', !empty);
   var reviewing = captionAssistEnrichmentReviewActive(candidate);
   preview.classList.toggle('hidden', !reviewing);
   actions.classList.toggle('hidden', !reviewing && !busy);
@@ -263,7 +270,6 @@ function startCaptionAssistEnrichmentTask(item, candidate, input) {
     task.suggestions = parsed.suggestions;
     captionAssistEnrichmentRemember(task);
     if (captionAssistEnrichment === task) {
-      if (task.phase === 'empty') captionAssistEnrichment = null;
       syncCaptionAssistCandidateUi();
       setStatus(task.suggestions.length
         ? 'Review proposed details inline; none have been applied.'
@@ -287,12 +293,12 @@ function presentCaptionAssistEnrichmentTask(task, candidate) {
   if (!task || task.cancelled) return Promise.resolve(false);
   cancelCaptionAssistEnrichment();
   task.candidate = candidate;
+  captionAssistEnrichment = task;
+  syncCaptionAssistCandidateUi();
   if (task.phase === 'empty') {
     setStatus('Director found no additional details to suggest.');
     return Promise.resolve(true);
   }
-  captionAssistEnrichment = task;
-  syncCaptionAssistCandidateUi();
   if (task.phase === 'pending') setStatus('Director examining saved Sight for missing caption details…');
   else setStatus('Review proposed details inline; none have been applied.');
   return task.promise || Promise.resolve(true);
@@ -317,10 +323,11 @@ function maybeRunCaptionAssistEnrichment() {
     cancelCaptionAssistEnrichmentLookahead(); // Inputs changed before adoption.
   var cached = captionAssistEnrichmentCache.get(input.fingerprint);
   if (cached) {
-    if (cached.handled || !cached.suggestions.length) return Promise.resolve(true);
+    if (cached.handled) return Promise.resolve(true);
     return presentCaptionAssistEnrichmentTask({
       candidate:candidate, mediaKey:item.key, folder:String(state.folder || ''),
-      fingerprint:input.fingerprint, originalText:input.original, phase:'review', jobId:'',
+      fingerprint:input.fingerprint, originalText:input.original,
+      phase:cached.suggestions.length ? 'review' : 'empty', jobId:'',
       suggestions:cached.suggestions.map(function (row) {
         return {anchor:row.anchor, addition:row.addition, pending:true};
       })

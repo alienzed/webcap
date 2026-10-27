@@ -379,9 +379,16 @@ def apply_h3_premerged_image_model(config_text):
 
 
 def h3_ostris_training_adapter_path():
-    """Fixed WebCap install location for the FL2VA Ostris training adapter."""
+    """Fixed source adapter path used by the standalone H3 premerge exporter."""
     return app_config.fill_template_placeholders(
         "{MODELS_ROOT}/Stable-diffusion/mh3/minimax_h3_training_adapter_v3.safetensors", ""
+    )
+
+
+def h3_premerged_ostris_model_path():
+    """Verified Ostris v3-fused H3 checkpoint, exported outside training."""
+    return app_config.fill_template_placeholders(
+        "{MODELS_ROOT}/Stable-diffusion/mh3/minimax_h3_fl2va_pruned_int8_convrot_ostris_v3_fused.safetensors", ""
     )
 
 
@@ -395,17 +402,19 @@ def apply_h3_training_method(config_text, method):
         return apply_h3_premerged_image_model(source)
     if method not in ("cfg", "ostris"):
         raise ValueError("Unknown H3 training method: " + str(method))
-    if Path(str(model.get("diffusion_model") or "").replace("\\", "/")).name == Path(
-        h3_premerged_image_model_path().replace("\\", "/")
-    ).name:
-        raise ValueError("CFG and Ostris require the standard H3 base model, not the premerged checkpoint.")
+    source_model = Path(str(model.get("diffusion_model") or "").replace("\\", "/")).name
+    premerged_models = {
+        Path(path().replace("\\", "/")).name
+        for path in (h3_premerged_image_model_path, h3_premerged_ostris_model_path)
+    }
+    if source_model in premerged_models:
+        raise ValueError("CFG and Ostris require the standard H3 base model, not a premerged checkpoint.")
     if method == "cfg":
         source = rewrite_toml_assignment(source, "merge_adapters", section="model")
         return rewrite_toml_assignment(source, "cfg", "4", "model")
-    source = rewrite_toml_assignment(source, "cfg", section="model")
-    return rewrite_toml_assignment(
-        source, "merge_adapters", json.dumps([h3_ostris_training_adapter_path()]), "model"
-    )
+    source = rewrite_toml_assignment(source, "diffusion_model", json.dumps(h3_premerged_ostris_model_path()), "model")
+    source = rewrite_toml_assignment(source, "merge_adapters", section="model")
+    return rewrite_toml_assignment(source, "cfg", section="model")
 
 
 def apply_h3_resumed_model(config_text, captured_model):

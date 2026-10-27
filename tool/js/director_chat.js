@@ -34,6 +34,7 @@
     sessionList: [],
     sessionReady: false,
     sessionWrite: Promise.resolve(),
+    sessionSaving: false,
     sessionTimer: 0,
     sessionDirty: { chat: false, storyboard: false },
     sessionError: false,
@@ -501,10 +502,11 @@
     var title = state.sessionByMode[mode] ? state.sessionByMode[mode].title : 'New chat';
     if (title === 'New chat') {
       var first = messages.find(function (message) { return message.role === 'user' && message.content.trim(); });
-      if (first) title = first.content.replace(/\\s+/g, ' ').trim().slice(0, 72);
+      if (first) title = first.content.replace(/\s+/g, ' ').trim().slice(0, 72);
     }
     state.sessionDirty[mode] = false;
     showSessionStatus('Saving…', false);
+    state.sessionSaving = true;
     var action = state.sessionWrite.catch(function () {}).then(function () {
       var session = state.sessionByMode[mode];
       var ready = session ? Promise.resolve(session) : requestJson('/fs/director/chats', {
@@ -532,6 +534,7 @@
       });
     });
     state.sessionWrite = action;
+    action.finally(function () { if (state.sessionWrite === action) state.sessionSaving = false; }).catch(function () {});
     return action.catch(function (error) {
       state.sessionDirty[mode] = true;
       showSessionFailure(error);
@@ -1101,6 +1104,8 @@
       return;
     }
     var mode = state.activeMode;
+    state.pending = true;
+    syncControls();
     flushSessionSave().then(function () {
       return requestJson('/fs/director/chats', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -1132,7 +1137,10 @@
       finishProgress(null);
       syncModeUi();
       el('director-chat-input').focus();
-    }).catch(showSessionFailure);
+    }).catch(showSessionFailure).finally(function () {
+      state.pending = false;
+      syncControls();
+    });
   }
 
   function jobRequest(jobId) {
@@ -1248,6 +1256,7 @@
       }
       state.storyboardAttachments[item.key] = item;
       state.storyGuidelineProposal = null;
+      scheduleSessionSave();
     }).catch(function (err) {
       if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Storyboard attachment', err);
       else throw err;
@@ -1803,10 +1812,7 @@
           state.workshop = null;
           state.workshopProposal = null;
           state.storyGuidelineProposal = null;
-          state.storyboardAttachments = {};
-          state.modeMessages.storyboard = [];
-          state.modeElapsedByAssistantIndex.storyboard = {};
-          state.modeMetricsByAssistantIndex.storyboard = {};
+          // Exiting a Workshop must never destroy the conversation.
           el('director-chat-workshop-status').textContent = '';
           syncModeUi();
         } else if (preset.section) {
@@ -1817,10 +1823,12 @@
             content: state.workshop.extraSections[preset.section]
           };
           state.workshopProposal = null;
+          scheduleSessionSave();
           syncModeUi();
         } else if (preset.clearContext) {
           state.storyGuidelineProposal = null;
           state.storyboardAttachments = {};
+          scheduleSessionSave();
           syncModeUi();
         } else {
           attachStoryboardContext(preset.contextKind);
@@ -1909,7 +1917,8 @@
     });
 
     window.addEventListener('beforeunload', function (event) {
-      if (state.sessionTimer || state.sessionDirty.chat || state.sessionDirty.storyboard || state.sessionError) {
+      if (state.sessionTimer || state.sessionSaving || state.sessionDirty.chat ||
+          state.sessionDirty.storyboard || state.sessionError) {
         event.preventDefault();
         event.returnValue = '';
       }
@@ -1922,31 +1931,9 @@
     }
   }
 
-  window.syncStoryboardAssistantStory = function (storyId, sceneIds) {
-    var currentStory = String(storyId || '');
-    var oldAttachment = Object.keys(state.storyboardAttachments).some(function (key) {
-      if (key.indexOf('story:') === 0) return key !== 'story:' + currentStory;
-      if (key.indexOf('scene:') === 0) {
-        var prefix = 'scene:' + currentStory + ':';
-        return key.indexOf(prefix) !== 0 ||
-          !Array.isArray(sceneIds) || sceneIds.indexOf(key.slice(prefix.length)) === -1;
-      }
-      return false;
-    });
-    var workshopChanged = !!state.workshop && (
-      currentStory !== state.workshop.storyId ||
-      !Array.isArray(sceneIds) || sceneIds.indexOf(state.workshop.sceneId) === -1
-    );
-    if (!oldAttachment && !workshopChanged) return;
-    state.workshop = null;
-    state.workshopProposal = null;
-    state.storyGuidelineProposal = null;
-    state.storyboardAttachments = {};
-    state.modeMessages.storyboard = [];
-    state.modeElapsedByAssistantIndex.storyboard = {};
-    state.modeMetricsByAssistantIndex.storyboard = {};
-    el('director-chat-workshop-status').textContent = '';
-    syncModeUi();
+  window.syncStoryboardAssistantStory = function () {
+    // Story navigation has no authority to mutate Assistant conversations or
+    // their explicitly attached reference snapshots.
   };
   window.openStoryboardAssistant = function () { setOpen(true, 'storyboard'); };
   window.openStoryboardSceneWorkshop = function (context) {
@@ -1956,10 +1943,8 @@
     }
     var old = state.workshop;
     if (!old || old.storyId !== context.storyId || old.sceneId !== context.sceneId || old.expectedPrompt !== context.expectedPrompt) {
-      state.modeMessages.storyboard = [];
-      state.modeElapsedByAssistantIndex.storyboard = {};
-      state.modeMetricsByAssistantIndex.storyboard = {};
-      state.storyboardAttachments = {};
+      // Opening another Workshop changes the current working excerpt but does
+      // not delete the conversation or its previously attached references.
       state.workshopProposal = null;
       state.storyGuidelineProposal = null;
       el('director-chat-workshop-status').textContent = '';

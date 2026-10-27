@@ -110,6 +110,31 @@ def test_h3_premerged_checkpoint_can_resume_without_rewriting_set_model(tmp_path
     assert "standard-h3" in source.read_text(encoding="utf-8")
 
 
+def test_h3_premerged_ostris_checkpoint_is_discoverable_and_resumeable(tmp_path, monkeypatch):
+    _configure_root(monkeypatch, tmp_path)
+    from tool.server.training_config_files import h3_premerged_ostris_model_path
+    monkeypatch.setitem(app_config.config["filesystem"], "models", str(tmp_path / "models"))
+    folder = _set(tmp_path)
+    action, _ = _action(folder)
+    source = folder / "config.h3.toml"
+    _write_h3_config(source, action / "output", model="standard-h3")
+    fused = h3_premerged_ostris_model_path()
+    run = _checkpoint(action / "output", "ostris-fused-run",
+                      source.read_text(encoding="utf-8").replace("standard-h3", fused))
+    validated = training_history.validate_resumable_run_for_path(folder, "h3", str(run))
+    assert validated["imageTrainingAdapter"] is False
+    assert validated["h3ResumeModel"]["diffusion_model"] == fused
+    assert validated["h3ResumeModel"]["merge_adapters"] is None
+    discovered = training_history.discover_runs(folder, "h3")
+    assert [item["path"] for item in discovered] == [str(run)]
+    assert discovered[0]["h3TrainingMethod"] == "ostris"
+    assert discovered[0]["imageTrainingAdapter"] is False
+    assert training_history._h3_training_method({"model": {
+        "diffusion_model": "/models/standard.safetensors",
+        "merge_adapters": ["/models/minimax_h3_training_adapter_v3.safetensors"],
+    }}) == "ostris"
+
+
 def test_checkpoint_resume_verifies_against_captured_model_and_rejects_mismatch(tmp_path, monkeypatch):
     _configure_root(monkeypatch, tmp_path)
     folder = _set(tmp_path)

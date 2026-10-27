@@ -1414,7 +1414,7 @@ def test_superset_search_matches_current_folder_and_subfolders_with_filters(tmp_
     ]
 
 
-def test_superset_search_uses_scoped_tags_for_search_incomplete_and_mismatch(tmp_path, monkeypatch):
+def test_superset_search_uses_scoped_tags_for_search_and_mismatch(tmp_path, monkeypatch):
     monkeypatch.setattr(smart_set_module.app_config, "get_config_snapshot", lambda: {"requirements": {}})
     fs_root = tmp_path / "fs_root"
     source_dir = fs_root / "sets" / "scoped"
@@ -1475,12 +1475,15 @@ def test_superset_search_uses_scoped_tags_for_search_incomplete_and_mismatch(tmp
     assert mismatch_response.status_code == 200
     assert [row["media_name"] for row in mismatch_response.get_json()["results"]] == ["mismatch.png"]
 
-    incomplete_response = client.post(
+    # Existing saved/legacy criteria must not silently retain a retired filter.
+    legacy_response = client.post(
         "/fs/superset_search",
         json={"criteria": {"source_folder": "sets/scoped", "incomplete_only": True}},
     )
-    assert incomplete_response.status_code == 200
-    assert [row["media_name"] for row in incomplete_response.get_json()["results"]] == ["incomplete.png"]
+    assert legacy_response.status_code == 200
+    assert [row["media_name"] for row in legacy_response.get_json()["results"]] == [
+        "good.png", "incomplete.png", "mismatch.png"
+    ]
 
 
 

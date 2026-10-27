@@ -698,7 +698,7 @@ function syncFocusedCaptionVisionPhrasesUi() {
     tagButton.type = 'button';
     tagButton.className = 'caption-assist-suggestion-tag';
     var phraseOnly = !removing && suggestion.kind === 'phrase';
-    tagButton.textContent = phraseOnly ? ('Insert · ' + suggestion.term) :
+    tagButton.textContent = phraseOnly ? suggestion.term :
       (removing ? '− ' : '+ ') + suggestion.term;
     tagButton.title = phraseOnly
       ? 'Insert saved Sight phrase into the draft; saved only with Apply'

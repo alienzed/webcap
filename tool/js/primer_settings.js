@@ -652,8 +652,6 @@ function syncFocusedCaptionVisionPhrasesUi() {
   var row = document.getElementById('editor-caption-vision-phrases');
   var trigger = document.getElementById('editor-caption-vision-phrases-btn');
   if (!row || !trigger) throw new Error('Caption Assist Sight tag controls are missing.');
-  var previousDetails = row.querySelector('details.caption-assist-assigned-tags');
-  var wasExpanded = !!(previousDetails && previousDetails.open);
   var previousScrollTop = row.scrollTop;
   var previousSightSuggestions = row.querySelector('details[data-sight-suggestions]');
   var sightSuggestionsOpen = !!(previousSightSuggestions && previousSightSuggestions.open);
@@ -700,7 +698,7 @@ function syncFocusedCaptionVisionPhrasesUi() {
     tagButton.type = 'button';
     tagButton.className = 'caption-assist-suggestion-tag';
     var phraseOnly = !removing && suggestion.kind === 'phrase';
-    tagButton.textContent = phraseOnly ? ('Insert · ' + suggestion.term) :
+    tagButton.textContent = phraseOnly ? suggestion.term :
       (removing ? '− ' : '+ ') + suggestion.term;
     tagButton.title = phraseOnly
       ? 'Insert saved Sight phrase into the draft; saved only with Apply'
@@ -789,35 +787,6 @@ function syncFocusedCaptionVisionPhrasesUi() {
     row.appendChild(empty);
   }
 
-  var assignments = getChecklistAssignmentEntriesForMediaKey(mediaKey).map(function (entry) {
-    return { group: String(entry.requirement || ''), term: String(entry.term || '') };
-  });
-  getUnscopedTagsForMediaKey(mediaKey).forEach(function (term) {
-    assignments.push({ group: '', term: term });
-  });
-  if (assignments.length) {
-    var details = document.createElement('details');
-    details.className = 'caption-assist-assigned-tags';
-    details.open = wasExpanded;
-    var summary = document.createElement('summary');
-    summary.textContent = 'Assigned tags (' + assignments.length + ') · click to remove';
-    details.appendChild(summary);
-    var list = document.createElement('div');
-    list.className = 'caption-vision-phrase-list';
-    assignments.forEach(function (entry) {
-      var button = document.createElement('button');
-      button.type = 'button';
-      button.className = 'caption-vision-phrase-insert';
-      button.textContent = '× ' + entry.term + ' · ' + (entry.group || 'Other');
-      button.title = 'Remove tag from this item';
-      button.addEventListener('click', function () {
-        removeCaptionAssistAssignedTag(mediaKey, entry.group, entry.term);
-      });
-      list.appendChild(button);
-    });
-    details.appendChild(list);
-    row.appendChild(details);
-  }
   row.scrollTop = previousScrollTop;
 }
 function applyQaCaptionPatch(patch) {

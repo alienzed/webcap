@@ -2,7 +2,6 @@
 var captionAssistEnrichment = null;
 var captionAssistEnrichmentLookahead = null; // at most one speculative Director job
 var captionAssistEnrichmentCache = new Map(); // small, session-only parsed suggestions
-var captionAssistEnrichmentSequence = 0;
 
 function parseCaptionAssistEnrichment(text, caption) {
   var raw = String(text || '').trim().replace(/^\x60{3}(?:json)?\s*/i, '').replace(/\s*\x60{3}$/, '');
@@ -28,7 +27,6 @@ function parseCaptionAssistEnrichment(text, caption) {
 function cancelCaptionAssistEnrichment() {
   var old = captionAssistEnrichment;
   captionAssistEnrichment = null;
-  captionAssistEnrichmentSequence++;
   if (!old) return Promise.resolve(false);
   old.cancelled = true;
   if (!old.jobId || old.phase !== 'pending') return Promise.resolve(false);
@@ -244,14 +242,17 @@ function startCaptionAssistEnrichmentTask(item, candidate, input) {
     return waitForCaptionAssistJob(payload.job);
   }).then(function (job) {
     if (task.cancelled || !job) return false;
-    if (captionAssistEnrichment === task &&
-        (state.folder !== task.folder || !state.currentItem ||
-         state.currentItem.key !== task.mediaKey ||
-         captionAssistCandidate !== task.candidate ||
-         task.candidate.text !== task.originalText)) {
-      cancelCaptionAssistEnrichment();
-      setStatus('Caption changed during enrichment; old suggestions were discarded.');
-      return false;
+    if (captionAssistEnrichment === task) {
+      var currentInput = captionAssistEnrichmentInputs(state.currentItem, task.candidate);
+      if (state.folder !== task.folder || !state.currentItem ||
+          state.currentItem.key !== task.mediaKey ||
+          captionAssistCandidate !== task.candidate ||
+          task.candidate.text !== task.originalText ||
+          !currentInput || currentInput.fingerprint !== task.fingerprint) {
+        cancelCaptionAssistEnrichment();
+        setStatus('Caption or Sight inputs changed during enrichment; old suggestions were discarded.');
+        return false;
+      }
     }
     var parsed = parseCaptionAssistEnrichment(job.result && job.result.text, task.originalText);
     if (parsed.rejected.length)

@@ -1130,7 +1130,9 @@
         state.storyGuidelineProposal = null;
         var attachedKey = 'story:' + proposal.storyId;
         if (state.storyboardAttachments[attachedKey]) {
-          state.storyboardAttachments[attachedKey] = window.getStoryboardAssistantContext('story');
+          // The Story provider now returns a Promise after flushing saves.
+          // Reuse the normal attach path so no Promise is stored as reference data.
+          attachStoryboardContext('story');
         }
         if (state.workshop && state.workshop.storyId === proposal.storyId) {
           state.workshop.guidelines = Object.assign({}, story.guidelines || {});

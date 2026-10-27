@@ -277,8 +277,8 @@ function buildPluralTokenVariants(token) {
   return out;
 }
 
-function captionContainsTagWithAllowances(captionText, tagText) {
-  var captionTokens = canonicalizeMatchText(captionText).split(' ').filter(Boolean);
+function captionContainsTagWithAllowances(captionText, tagText, preparedCaptionTokens) {
+  var captionTokens = preparedCaptionTokens || canonicalizeMatchText(captionText).split(' ').filter(Boolean);
   var tagTokens = canonicalizeMatchText(tagText).split(' ').filter(Boolean);
   if (!captionTokens.length || !tagTokens.length) return false;
   if (captionTokens.length < tagTokens.length) return false;
@@ -685,6 +685,29 @@ function computeTagMatchProgressForText(mediaKey, captionText) {
     else missing.push(annotation.label);
   });
   return { completed: completed, total: annotations.length, missing: missing };
+}
+
+// Filtering needs a boolean, not a full progress/tooltip report for every item.
+ // Short-circuit on the first missing annotation and tokenize the caption only once.
+function hasTagMismatchForText(mediaKey, captionText) {
+  var grouped = getChecklistAssignmentEntriesForMediaKey(mediaKey);
+  var unscoped = getUnscopedTagsForMediaKey(mediaKey);
+  if (!grouped.length && !unscoped.length) return true;
+
+  var captionTokens = canonicalizeMatchText(captionText).split(' ').filter(Boolean);
+  for (var i = 0; i < grouped.length; i += 1) {
+    var entry = grouped[i];
+    if (!checklistGroupTermAppearsInCaptionText(
+      entry.requirement, entry.term, mediaKey, captionText, captionTokens
+    )) return true;
+  }
+  for (var j = 0; j < unscoped.length; j += 1) {
+    var tag = unscoped[j];
+    var rendered = renderChecklistTermWithAffixes(tag, mediaKey);
+    if (!((rendered && captionContainsPhrase(captionText, rendered)) ||
+      captionContainsTagWithAllowances(captionText, tag, captionTokens))) return true;
+  }
+  return false;
 }
 
 function computeTagMatchProgressForMediaKey(mediaKey) {

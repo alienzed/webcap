@@ -26,6 +26,8 @@ def test_roundtrip_persists_messages_draft_and_explicit_snapshot(sessions):
             {"role": "assistant", "content": "Scene 4 feels abrupt."},
         ],
         "draft": "Let's rewrite Scene 4",
+        "workshop": {"storyId": "story-1", "sceneId": "scene-4",
+                     "expectedPrompt": "Original timed shots", "shots": "[Shot 1] ..."},
         "attachments": {
             "story:example": {
                 "key": "story:example", "label": "Story: Test",
@@ -37,6 +39,7 @@ def test_roundtrip_persists_messages_draft_and_explicit_snapshot(sessions):
     assert saved["revision"] == 1
     assert history.open_chat(created["id"])["messages"][1]["content"] == "Scene 4 feels abrupt."
     assert history.open_chat(created["id"])["draft"] == "Let's rewrite Scene 4"
+    assert history.open_chat(created["id"])["workshop"]["sceneId"] == "scene-4"
     assert "section:Lighting" in history.open_chat(created["id"])["attachments"]
 
     on_disk = json.loads((sessions / created["id"] / "conversation.json").read_text())

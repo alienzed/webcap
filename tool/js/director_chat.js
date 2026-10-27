@@ -1594,6 +1594,7 @@
       scene.expectedPrompt = payload.scene.prompt;
       scene.shots = proposal.shots;
       state.workshopProposal = null;
+      scheduleSessionSave();
       el('director-chat-workshop-status').textContent = 'Revision applied · previous version saved';
       el('storyboard-workshop-review').close();
       syncControls();

@@ -20,6 +20,7 @@ on:
       - 'tool/js/media_grid_state.js'
       - 'tool/js/media_grid_actions.js'
       - 'tests/tag_mismatch_filter.test.cjs'
+      - 'tests/media_filter_efficiency.test.cjs'
       - 'tool/js/caption_enrichment.js'
       - 'tests/caption_enrichment.test.cjs'
       - 'tests/test_caption_enrichment.py'
@@ -226,6 +227,7 @@ jobs:
           node --check tool/js/media_grid_state.js
           node --check tool/js/media_grid_actions.js
           node --test tests/tag_mismatch_filter.test.cjs
+          node --test tests/media_filter_efficiency.test.cjs
           node --test tests/caption_assist_tag_mismatch.test.cjs
       - name: Prepare isolated config
         run: cp tool/config.example.json tool/config.json

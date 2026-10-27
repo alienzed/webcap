@@ -320,12 +320,16 @@ function mediaItemMatchesFilterQuery(item, query, mode) {
   var label = String(item && item.label || '').toLowerCase();
   var fileName = String(item && item.fileName || '').toLowerCase();
   var caption = String(item && item.caption || '').toLowerCase();
-  var tags = getTagsForMediaKey(item && item.key).join(' ').toLowerCase();
-  var haystack = label + '\n' + fileName + '\n' + caption + '\n' + tags;
+  var haystack = label + '\n' + fileName + '\n' + caption;
+  var tagHaystack = null;
   var termMatches = function (term) {
     var scopedMatch = mediaFilterScopedTermMatches(item && item.key, term);
     if (scopedMatch !== null) return scopedMatch;
-    return mediaFilterTermMatches(haystack, term);
+    if (mediaFilterTermMatches(haystack, term)) return true;
+    if (tagHaystack === null) {
+      tagHaystack = getTagsForMediaKey(item && item.key).join(' ').toLowerCase();
+    }
+    return mediaFilterTermMatches(tagHaystack, term);
   };
   for (var i = 0; i < query.negative.length; i += 1) {
     if (termMatches(query.negative[i])) return false;
@@ -372,12 +376,7 @@ function getFilteredMediaItems(ignoreFocusSet) {
     mediaItems = mediaItems.filter(function (item) { return !!allow[item.key]; });
   }
 
-  // Filter logic (by label, fileName, or caption)
-  if (String(q || '').trim()) {
-    mediaItems = mediaItems.filter(function (item) {
-      return mediaItemMatchesFilterQuery(item, queryTerms, textMatchMode);
-    });
-  }
+  // Cheap state filters shrink the set before caption/tag matching.
   if (missingCaptionsOnly) {
     mediaItems = mediaItems.filter(function (item) { return !item.hasCaption; });
   }
@@ -387,12 +386,6 @@ function getFilteredMediaItems(ignoreFocusSet) {
   if (unreviewedOnly) {
     mediaItems = mediaItems.filter(function (item) { return !(state.reviewedSet && state.reviewedSet.has(item.key)); });
   }
-  if (needsAiValidationOnly) {
-    mediaItems = mediaItems.filter(function (item) { return !isAiValidatedForItem(item); });
-  }
-  if (incompleteOnly) {
-    mediaItems = mediaItems.filter(mediaItemHasIncompleteRequirementGroups);
-  }
   if (starFilterState.values.length || starFilterState.includeNoStar) {
     mediaItems = mediaItems.filter(function (item) {
       var rating = (typeof getRatingForMediaKey === 'function') ? getRatingForMediaKey(item.key) : 0;
@@ -401,15 +394,12 @@ function getFilteredMediaItems(ignoreFocusSet) {
     });
   }
   if (flagFilterValues.length) {
+    var wantsNoFlag = flagFilterValues.indexOf('no_flag') !== -1;
     mediaItems = mediaItems.filter(function (item) {
       var itemFlag = String((state.flags && state.flags[item.key]) || '').toLowerCase();
-      var wantsNoFlag = flagFilterValues.indexOf('no_flag') !== -1;
       if (!itemFlag) return wantsNoFlag;
       return flagFilterValues.indexOf(itemFlag) !== -1;
     });
-  }
-  if (tagMismatchOnly) {
-    mediaItems = mediaItems.filter(mediaItemHasTagMismatch);
   }
   var showInvalidArOnly = !!(ui.advancedFilterInvalidArEl && ui.advancedFilterInvalidArEl.checked);
   if (showInvalidArOnly) {
@@ -418,6 +408,21 @@ function getFilteredMediaItems(ignoreFocusSet) {
       if (!ar) return false;
       return !(typeof hasSupportedAspectBucket === 'function' && hasSupportedAspectBucket(ar));
     });
+  }
+  if (incompleteOnly) {
+    mediaItems = mediaItems.filter(mediaItemHasIncompleteRequirementGroups);
+  }
+  // Text and validation need caption/tag work; process only remaining items.
+  if (String(q || '').trim()) {
+    mediaItems = mediaItems.filter(function (item) {
+      return mediaItemMatchesFilterQuery(item, queryTerms, textMatchMode);
+    });
+  }
+  if (needsAiValidationOnly) {
+    mediaItems = mediaItems.filter(function (item) { return !isAiValidatedForItem(item); });
+  }
+  if (tagMismatchOnly) {
+    mediaItems = mediaItems.filter(mediaItemHasTagMismatch);
   }
   return mediaItems;
 }

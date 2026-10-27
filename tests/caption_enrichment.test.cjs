@@ -8,7 +8,7 @@ const source = fs.readFileSync('tool/js/caption_enrichment.js','utf8');
 function fixture() {
   let resolveJob, resolveStart, syncRenderer=false;
   const candidate = {mediaKey:'item-a',text:'A woman posing in a swimsuit, front view.'};
-  const logs=[], calls=[], nodes={};
+  const logs=[], calls=[], nodes={}, listeners={};
   function node() {
     const classes=new Set();
     const n={textContent:'',disabled:false,className:'',children:[],attributes:{},focusCount:0,
@@ -20,15 +20,19 @@ function fixture() {
     return n;
   }
   const document={
+    activeElement:null,
     getElementById(id){return nodes[id]||(nodes[id]=node());},
     createElement(){return node();},
-    createTextNode(text){return {textContent:text};}
+    createTextNode(text){return {textContent:text};},
+    addEventListener(type,fn){listeners[type]=fn;}
   };
   const ctx={document,Promise,JSON,console,
     state:{folder:'set-a',currentItem:{key:'item-a',fileName:'a.jpg',
       metadata:{vision_sight:{description:'A swimsuit with ring connectors.'}}}},
     captionAssistCandidate:candidate,
     isFocusedQaReviewMode(){return false;},isCaptionAssistRunning(){return false;},
+    isFocusedCaptionOpen(){return false;},
+    isEditableElement(el){return !!(el && el.isContentEditable);},
     getMetadataForMedia(){return {};},
     captionAssistSightFingerprint(sight){return sight && sight.description || '';},
     buildCaptionAssistRequest(){return {model:'director-a',assignments:[],tags:[],
@@ -48,7 +52,7 @@ function fixture() {
   };
   vm.createContext(ctx);
   vm.runInContext(source,ctx);
-  return {ctx,candidate,nodes,logs,calls,enableUiSync(){syncRenderer=true;},
+  return {ctx,candidate,nodes,logs,calls,listeners,enableUiSync(){syncRenderer=true;},
     resolveStart:()=>resolveStart,resolveJob:()=>resolveJob};
 }
 
@@ -511,6 +515,11 @@ test('active enrichment review owns arrows and media shortcuts without stealing 
     ui:{previewFocusCaptionBtnEl:button(),previewFocusCaptionSkipBtnEl:button()},
     focusedCaptionState:{open:true},captionAssistCandidate:{mediaKey:'item-a'},
     captionAssistEnrichmentReviewActive(){return reviewing;},
+    captionAssistEnrichmentBlocksMediaShortcut(event){
+      return reviewing && !(doc.activeElement && doc.activeElement.isContentEditable) &&
+        !event.altKey && !event.ctrlKey && !event.metaKey &&
+        (/^Arrow(?:Left|Right|Up|Down)$/.test(event.key) || /^[a-z0-5]$/i.test(event.key));
+    },
     isEditableElement(element){return !!(element && element.isContentEditable);},
     moveFocusedCaption(delta){moves.push(delta);},
     syncFocusedCaptionControls(){},renderFileList(){},
@@ -540,6 +549,27 @@ test('active enrichment review owns arrows and media shortcuts without stealing 
   doc.activeElement={isContentEditable:true};
   assert.equal(key('ArrowLeft').defaultPrevented,false);
   assert.deepEqual(moves,[1],'actual contenteditable caret keeps arrow keys');
+});
+
+test('standalone Caption Assist review also blocks media shortcuts and releases them on exit',()=>{
+  const f=fixture(),c=f.ctx,candidate=f.candidate;
+  c.captionAssistEnrichment={candidate,mediaKey:candidate.mediaKey,phase:'review',
+    originalText:candidate.text,jobId:'',suggestions:[]};
+  c.wireCaptionAssistEnrichment();
+  assert.equal(typeof f.listeners.keydown,'function');
+  function key(value) {
+    const event={key:value,defaultPrevented:false,repeat:false,
+      ctrlKey:false,metaKey:false,altKey:false,
+      stopImmediatePropagation(){this.stopped=true;}};
+    f.listeners.keydown(event);
+    return event;
+  }
+  for(const value of ['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','r','s','1'])
+    assert.equal(key(value).stopped,true,'review should own '+value+' even without Focus Caption');
+  assert.equal(key('Enter').stopped,undefined,'native suggestion-button Enter stays available');
+  assert.equal(key('Tab').stopped,undefined);
+  c.captionAssistEnrichment=null;
+  assert.equal(key('ArrowRight').stopped,undefined,'global shortcuts return after review');
 });
 
 test('review visuals distinguish the read-only focusable preview from contenteditable draft',()=>{

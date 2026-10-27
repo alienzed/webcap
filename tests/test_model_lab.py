@@ -7,6 +7,32 @@ import pytest
 from tool.server import model_lab
 
 
+def test_skipped_capacity_retry_preserves_measured_failure():
+    attempt = {"kind": "director_scene_plan_2048", "modelRef": "local::writer",
+               "status": "failed", "failureKind": "capacity", "error": "truncated",
+               "result": {"usage": {"completion_tokens": 2048}, "requestSeconds": 40}}
+    run = {"id": "measured", "status": "completed", "attempts": [attempt,
+           {**attempt, "status": "skipped", "result": {}, "error": "known ceiling"}]}
+    summary = model_lab.capability_run_summaries([run], {"measured": run})[0]
+    probe = summary["models"]["local::writer"]["director_scene_plan_2048"]
+    assert probe["status"] == "failed"
+    assert probe["throughputSamples"] == [51.2]
+
+
+@pytest.mark.parametrize("reference", ["", "local::vision"])
+def test_failed_synthesis_does_not_offer_unrunnable_challenge(monkeypatch, reference):
+    run = {"directorModels": [{"modelRef": "local::writer"}], "referenceVisionRef": reference}
+    keys = model_lab._planned_probes(run)
+    run["previousFailures"] = {key: True for key in keys[:-1]}
+    assert model_lab._pending_probe_plan(run)["total"] == 0
+    assert model_lab._assessment_work(run)["remaining"] == 0
+    run["visionModels"] = []
+    monkeypatch.setattr(model_lab, "_new_run_payload", lambda config: run)
+    assert model_lab.preview_run({})["models"]["local::writer"]["missing"] == 0
+    run["reused"] = {keys[-2]: {}}
+    assert model_lab._pending_probe_plan(run)["missing"] == 1
+
+
 def test_status_reader_cannot_hold_open_journal_during_atomic_replace(monkeypatch):
     run = {"id": "read-write-race", "version": 1, "status": "completed", "attempts": []}
     model_lab._write_run(run)
@@ -328,7 +354,7 @@ def test_deep_assessment_freezes_depth_and_expanded_sample(monkeypatch):
 def test_deep_assessment_director_probe_budgets_exist():
     source = (Path(__file__).resolve().parents[1] / "tool" / "server" / "model_lab.py").read_text(encoding="utf-8")
     assert 'if run.get("depth") == "deep":' in source
-    assert "(2048, 4096, 8192, 16384)" in source
+    assert "(2048, 4096, 8192, 10240, 12288, 16384)" in source
     assert 'kind="director_scene_plan_" + str(budget)' in source
 
 
@@ -354,15 +380,15 @@ def test_compatible_completed_probe_reused_across_runs():
     assert next_run["reused"]["director_scene_plan_2048|local::director.gguf|"]["runId"] == previous["id"]
 
 
-def test_failed_probe_is_deferred_until_retry_pass():
+def test_observed_failure_is_not_automatically_retried():
     run = model_lab._new_run_payload({"directorModels": [_director()]})
     run["previousFailures"] = {"director_scene_plan_2048|local::director.gguf|": True}
     outcome = model_lab._probe_job(
         run, kind="director_scene_plan_2048", role="director",
-        model_ref="local::director.gguf", enqueue=lambda: pytest.fail("should defer"),
+        model_ref="local::director.gguf", enqueue=lambda: pytest.fail("should reuse observed failure"),
     )
-    assert outcome["status"] == "deferred"
-    assert len(run["deferredRetries"]) == 1
+    assert outcome["status"] == "observed"
+    assert not run.get("deferredRetries")
 
 
 def test_completed_assessment_has_no_pending_probes():
@@ -381,7 +407,7 @@ def test_failed_and_missing_probes_are_counted_separately():
     run = model_lab._new_run_payload({"directorModels": [director]})
     key = model_lab._attempt_key("director_thinking", director["modelRef"])
     run["previousFailures"] = {key: True}
-    assert model_lab._pending_probe_plan(run) == {"missing": 3, "retry": 1, "total": 4}
+    assert model_lab._pending_probe_plan(run) == {"missing": 3, "retry": 0, "total": 3}
 
 
 def test_assessment_does_not_consider_historical_prose_structured_evidence():
@@ -393,7 +419,7 @@ def test_assessment_does_not_consider_historical_prose_structured_evidence():
 def test_planned_work_counts_actual_probe_suite_and_reused_evidence():
     run = model_lab._new_run_payload({"directorModels": [_director()], "depth": "deep"})
     planned = model_lab._planned_probes(run)
-    assert len(planned) == 7  # thinking, four JSON tiers, two Schema Assist probes
+    assert len(planned) == 9  # thinking, six JSON tiers, two Schema Assist probes
     run["reused"] = {
         planned[0]: {"runId": "earlier", "attemptId": "a"},
         planned[1]: {"runId": "earlier", "attemptId": "b"},
@@ -401,10 +427,10 @@ def test_planned_work_counts_actual_probe_suite_and_reused_evidence():
     run["previousFailures"] = {planned[2]: True}
     work = model_lab._assessment_work(run)
     assert work == {
-        "planned": 7, "completed": 2, "reused": 2, "skipped": 0,
-        "failed": 0, "deferred": 1, "running": 0, "remaining": 5, "resolved": 2,
+        "planned": 9, "completed": 2, "reused": 2, "skipped": 1,
+        "failed": 0, "deferred": 0, "running": 0, "remaining": 6, "resolved": 3,
     }
-    assert model_lab._pending_probe_plan(run) == {"missing": 4, "retry": 1, "total": 5}
+    assert model_lab._pending_probe_plan(run) == {"missing": 6, "retry": 0, "total": 6}
 
 
 def test_attempts_and_retries_never_inflate_assessment_denominator():
@@ -493,10 +519,11 @@ def test_assessment_preview_reuses_exact_start_plan_without_creating_a_run():
     model_lab._write_run(earlier)
     before = [row["id"] for row in model_lab.list_runs()]
     preview = model_lab.preview_run(config)
-    assert preview["plan"] == {"missing": 1, "retry": 1, "total": 2}
+    assert preview["plan"] == {"missing": 0, "retry": 0, "total": 0}
     assert preview["reused"] == 2
     assert preview["models"][_director()["modelRef"]] == {
-        "planned": 4, "complete": 2, "reused": 2, "missing": 1, "retry": 1
+        "planned": 4, "complete": 2, "reused": 2, "missing": 0, "retry": 0,
+        "observed": 1, "limited": 1
     }
     assert [row["id"] for row in model_lab.list_runs()] == before
     run = model_lab._new_run_payload(config)
@@ -512,11 +539,11 @@ def test_assessment_preview_when_complete_reports_zero_work():
         "kind": kind, "status": "completed"
     } for i, kind in enumerate(("director_thinking", "director_scene_plan_2048",
         "director_scene_plan_4096", "director_scene_plan_8192",
-        "director_scene_plan_16384", "language_synthesis", "language_challenge"))]
+        "director_scene_plan_10240", "director_scene_plan_12288", "director_scene_plan_16384", "language_synthesis", "language_challenge"))]
     model_lab._write_run(original)
     preview = model_lab.preview_run(config)
     assert preview["plan"]["total"] == 0
-    assert preview["models"][_director()["modelRef"]]["complete"] == 7
+    assert preview["models"][_director()["modelRef"]]["complete"] == 9
     assert len(model_lab.list_runs()) == 1
 
 

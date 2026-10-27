@@ -171,11 +171,14 @@ def capability_run_summaries(rows=None, payload_cache=None):
                 emitted_pathologies.setdefault((attempt.get("modelRef"), kind), set()).add(reason)
         # Keep one effective outcome per exact probe identity. A recovered failure
         # is not an enduring failure, and historical retries are not extra coverage.
+        # Skipping a known failure does not erase its outcome or measured speed.
         by_probe = {}
         for attempt in attempts:
             key = _attempt_key(attempt.get("kind"), attempt.get("modelRef"), attempt.get("file"))
             prior = by_probe.get(key)
-            if prior is None or attempt.get("status") == "completed" or prior.get("status") != "completed":
+            if (prior is None or attempt.get("status") == "completed"
+                    or (prior.get("status") != "completed"
+                        and not (attempt.get("status") == "skipped" and prior.get("status") == "failed"))):
                 by_probe[key] = attempt
         for attempt in by_probe.values():
             ref = str(attempt.get("modelRef") or "")
@@ -1477,7 +1480,7 @@ def _assessment_work(run):
             completed += 1
             if key in reused:
                 reused_count += 1
-        elif not attempt and _known_limit_covers(run, key):
+        elif not attempt and (_known_limit_covers(run, key) or _failed_prerequisite(run, key)):
             skipped += 1
         elif not attempt:
             if key in previous_failures:
@@ -1512,11 +1515,19 @@ def _known_limit_covers(run, key):
             and int(kind.rsplit("_", 1)[-1]) >= limit)
 
 
+def _failed_prerequisite(run, key):
+    kind, ref, file = key.split("|", 2)
+    if kind not in ("set_vocabulary_challenge", "language_challenge"):
+        return False
+    synthesis = _attempt_key(kind.replace("_challenge", "_synthesis"), ref, file)
+    return synthesis in (run.get("previousFailures") or {}) and synthesis not in (run.get("reused") or {})
+
+
 def _pending_probe_plan(run):
     """Discover untested capabilities; prior observed outcomes are not automatic retries."""
     missing = retry = 0
     for key in _planned_probes(run):
-        if (_known_limit_covers(run, key) or key in (run.get("reused") or {})
+        if (_known_limit_covers(run, key) or _failed_prerequisite(run, key) or key in (run.get("reused") or {})
                 or key in (run.get("previousFailures") or {})):
             continue
         missing += 1
@@ -1535,7 +1546,9 @@ def preview_run(config):
     for model in run["directorModels"] + run["visionModels"]:
         ref = model["modelRef"]
         keys = [key for key in planned if key.split("|", 2)[1] == ref]
-        limited = sum(_known_limit_covers(run, key) for key in keys)
+        limited = sum(_known_limit_covers(run, key)
+                      or (key not in reused and key not in failures and _failed_prerequisite(run, key))
+                      for key in keys)
         complete = sum(key in reused and not _known_limit_covers(run, key) for key in keys)
         retry = 0
         observed = sum(key in failures and key not in reused and not _known_limit_covers(run, key) for key in keys)

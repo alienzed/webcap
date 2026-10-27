@@ -1921,7 +1921,7 @@ def director_chats_route():
 def director_chat_session_route(chat_id):
     try:
         if request.method == "GET":
-            return jsonify({"ok": True, "chat": open_director_chat(chat_id)})
+            return jsonify({"ok": True, "chat": open_director_chat(chat_id, activate=request.args.get("inspect") != "1")})
         if request.method == "DELETE":
             return jsonify({"ok": True, "deleted": delete_director_chat(chat_id)})
         return jsonify({"ok": True, "chat": save_director_chat(chat_id, request.get_json(silent=True) or {})})

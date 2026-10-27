@@ -380,9 +380,10 @@ function getNextFocusedCaptionTarget(fromIndex) {
   return null;
 }
 
-function cancelFocusedCaptionPrefetch() {
+function cancelFocusedCaptionPrefetch(preserveEnrichmentForMediaKey) {
+  var enrichmentCancellation = cancelCaptionAssistEnrichmentLookahead(preserveEnrichmentForMediaKey);
   var prefetch = focusedCaptionPrefetch;
-  if (!prefetch) return Promise.resolve(false);
+  if (!prefetch) return enrichmentCancellation;
   focusedCaptionPrefetch = null;
   prefetch.discarded = true;
   if (
@@ -392,7 +393,7 @@ function cancelFocusedCaptionPrefetch() {
     captionAssistPendingJobId = '';
     updatePrimerCaptionResetUi();
   }
-  var cancellations = [];
+  var cancellations = [enrichmentCancellation];
   if (prefetch.jobId && !prefetch.candidate) {
     cancellations.push(cancelCaptionAssistJob(prefetch.jobId).catch(function (err) {
       reportConsoleWarning('Focus Caption', 'Could not cancel speculative Caption Assist job: ' + String(err && err.message ? err.message : err));
@@ -469,7 +470,20 @@ function startFocusedCaptionPrefetch(sourceMediaKey) {
       focusedCaptionState.itemKey !== String(sourceMediaKey || '') ||
       captionAssistPendingJobId) return Promise.resolve(false);
   var target = getNextFocusedCaptionTarget(focusedCaptionState.itemIndex);
-  if (!target || captionAssistSavedCandidatesByMedia[target.itemKey]) return Promise.resolve(false);
+  if (!target) return cancelCaptionAssistEnrichmentLookahead();
+  var saved = captionAssistSavedCandidatesByMedia[target.itemKey];
+  if (saved) {
+    // Saved next drafts need no second Director caption; warm only their enrichment.
+    return cancelFocusedCaptionPrefetch(target.itemKey).then(function () {
+      if (!focusedCaptionState.open || isFocusedCaptionReviewMode() ||
+          focusedCaptionState.itemKey !== String(sourceMediaKey || '')) return false;
+      return warmCaptionAssistEnrichment(target.item, {
+        mediaKey:target.itemKey, text:saved.text, model:saved.model,
+        sourceCaption:saved.sourceCaption, sightFingerprint:saved.sightFingerprint,
+        annotationsAtGeneration:saved.annotationsAtGeneration
+      });
+    });
+  }
   if (focusedCaptionPrefetch && !focusedCaptionPrefetch.discarded &&
       focusedCaptionPrefetch.itemKey === target.itemKey) return focusedCaptionPrefetch.promise;
 
@@ -509,6 +523,7 @@ function startFocusedCaptionPrefetch(sourceMediaKey) {
     }).then(function (candidate) {
       if (!active() || !candidate) return null;
       prefetch.candidate = candidate;
+      warmCaptionAssistEnrichment(target.item, candidate);
       return candidate;
     }).catch(function (err) {
       prefetch.sightPending = false;
@@ -565,6 +580,7 @@ function useFocusedCaptionPrefetchForCurrentItem() {
         focusedCaptionState.discrepancySourceLabel || 'QA'
       );
     }
+    maybeRunCaptionAssistEnrichment();
     if (!isFocusedQaReviewMode()) startFocusedCaptionPrefetch(candidate.mediaKey);
     return true;
   }
@@ -874,9 +890,10 @@ function moveFocusedCaption(delta, options) {
   }
   var step = delta < 0 ? -1 : 1;
   var nextIndex = focusedCaptionState.itemIndex + step;
+  var nextMediaKey = focusedCaptionState.itemKeys[nextIndex] || '';
   var keepPrefetch = focusedCaptionPrefetch && focusedCaptionPrefetch.index === nextIndex;
   return cancelFocusedCaptionCurrentRequest().then(function () {
-    return keepPrefetch ? true : cancelFocusedCaptionPrefetch();
+    return keepPrefetch ? true : cancelFocusedCaptionPrefetch(nextMediaKey);
   }).then(function () {
     return cancelCurrentCaptionVision();
   }).then(function () {

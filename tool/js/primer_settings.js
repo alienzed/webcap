@@ -168,6 +168,7 @@ function restoreCaptionAssistCandidate(mediaItem) {
     (saved.model && saved.model !== String(request.model || '')) ||
     (saved.sightFingerprint && saved.sightFingerprint !== captionAssistSightFingerprint(request.openSight));
   setStatus(changed ? 'Saved caption candidate restored; inputs changed. Refresh Caption if needed.' : 'Saved caption candidate restored.');
+  if (!changed) maybeRunCaptionAssistEnrichment();
   return true;
 }
 var captionAssistPresentationMediaKey = '';
@@ -2040,6 +2041,7 @@ function runCaptionAssistAfterSight(draftOverride) {
       captionAssistPendingJobId = '';
       updatePrimerCaptionResetUi();
       syncFocusedCaptionAfterAssist(sourceMediaKey);
+      if (result === true) maybeRunCaptionAssistEnrichment();
       if (result === true && isFocusedCaptionOpen() &&
           state.currentItem && state.currentItem.key === sourceMediaKey) {
         startFocusedCaptionPrefetch(sourceMediaKey);

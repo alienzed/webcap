@@ -86,7 +86,8 @@ function sanitizeFolderState(data) {
         text: value.text,
         annotationsAtGeneration: String(value.annotationsAtGeneration || ''),
         sourceCaption: String(value.sourceCaption || ''),
-        model: String(value.model || '')
+        model: String(value.model || ''),
+        sightFingerprint: String(value.sightFingerprint || '')
       };
     });
   }

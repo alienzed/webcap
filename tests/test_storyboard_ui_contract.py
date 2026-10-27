@@ -1575,3 +1575,18 @@ def test_story_guidelines_use_reviewed_chat_and_define_from_concept_changes():
     assert "window.openStoryboardGuidelineReview({" in chat
     assert '"storyboard_story_guidelines"' in app
     assert '"storyboard_story_guidelines"' in llm
+
+
+def test_define_from_concept_review_reopens_previous_values_and_refreshes_explicitly():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    story = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+    assert 'id="storyboard-guidelines-review-refresh"' in html
+    assert "storyboardDefineGuidelineDrafts = Object.create(null)" in story
+    assert "function openDefinedGuidelineDraft(storyId)" in story
+    assert "if (refresh !== true && openDefinedGuidelineDraft(storyId)) return;" in story
+    assert "function rememberDefinedGuidelineDraft()" in story
+    assert "after.oninput = rememberDefinedGuidelineDraft" in story
+    assert "checked.onchange = function () {" in story
+    assert "defineInvariants(true);" in story
+    assert "source: 'define'" in story
+    assert "operation: 'apply_reviewed_guidelines'" in story

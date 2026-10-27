@@ -275,7 +275,7 @@ def approved_lora_vocabulary(story, scene_id):
             "with the Scene: " + ", ".join(chosen) + "\nNever write loader syntax.") if chosen else ""
 
 
-def build_request(story, scene_id, operation, instruction="", development=None, scene_count=1, continuity_context=False):
+def build_request(story, scene_id, operation, instruction="", development=None, scene_count=1, continuity_context=False, refresh_guidelines=False):
     if not isinstance(story, dict):
         raise ValueError("Story data must be an object.")
     operation = _clean(operation).lower()
@@ -343,9 +343,10 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
             "when no recurring identity needs defining. "
             "Also propose four concise Story Directing Guidelines from the concept: visualFocus (observable priorities), "
             "creativeDirection (qualities that make the concept compelling), variation (what changes or deliberately repeats "
-            "across Scenes), and pacing (how actions and shots use time). Existing guidelines are authoritative: "
-            "return an empty string for any already populated field rather than rewriting it. "
-            "Do not invent story facts or turn guidelines into mandatory Scene prescriptions."
+            "across Scenes), and pacing (how actions and shots use time). "
+            + ("Refresh the four guideline proposals using the concept and existing guidelines as context. "
+               if refresh_guidelines else "Existing guidelines are authoritative: return an empty string for any already populated field. ")
+            + "Do not invent story facts or turn guidelines into mandatory Scene prescriptions."
         )
         return {
             "operation": operation,

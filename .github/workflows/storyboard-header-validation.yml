@@ -70,7 +70,7 @@ jobs:
           python -m pytest -q tests/test_storyboard_llm_contract.py -k optional_story_guidelines
       - name: Reviewed Story guideline changes
         run: |
-          python -m pytest -q tests/test_storyboard_store.py tests/test_storyboard_route.py tests/test_storyboard_ui_contract.py -k 'reviewed_guidelines or chat_story_guideline_proposal or story_guidelines_use_reviewed'
+          python -m pytest -q tests/test_storyboard_store.py tests/test_storyboard_route.py tests/test_storyboard_ui_contract.py -k 'reviewed_guidelines or chat_story_guideline_proposal or story_guidelines_use_reviewed or define_from_concept_review'
       - name: Storyboard core contracts
         run: |
           python -m pytest -q tests/test_storyboard_llm_contract.py tests/test_storyboard_workshop.py

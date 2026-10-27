@@ -2082,6 +2082,8 @@ def storyboard_director_route():
             return jsonify({"ok": True, "job": job}), 202
 
         contract_kwargs = {"instruction": instruction}
+        if operation == "define_invariants":
+            contract_kwargs["refresh_guidelines"] = data.get("refreshGuidelines") is True
         if operation == "extend_story":
             contract_kwargs["scene_count"] = data.get("sceneCount")
         if development is not None:
@@ -2157,6 +2159,7 @@ def storyboard_director_route():
                 "operation": operation,
                 "replaceExisting": replace_existing,
                 "sourceInstruction": instruction,
+                **({"refreshGuidelines": data.get("refreshGuidelines") is True} if operation == "define_invariants" else {}),
                 **({"sceneCount": data.get("sceneCount")} if operation == "extend_story" else {}),
                 "thinking": data.get("thinking") is True,
                 **({"deferredApply": True} if operation in {"develop_story_outline", "develop_story_scene"} else {}),

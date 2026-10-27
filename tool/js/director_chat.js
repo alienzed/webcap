@@ -613,6 +613,8 @@
 
   function selectSession(chatId) {
     if (!state.sessionReady || state.pending || state.attachmentPending) return;
+    state.pending = true;
+    syncControls();
     flushSessionSave().then(function () {
       return requestJson('/fs/director/chats/' + encodeURIComponent(chatId));
     }).then(function (result) {
@@ -620,7 +622,10 @@
       restoreSession(result.chat);
       finishProgress(null);
       syncModeUi();
-    }).catch(showSessionFailure);
+    }).catch(showSessionFailure).finally(function () {
+      state.pending = false;
+      syncControls();
+    });
   }
 
   function renameSession(chatId, title) {
@@ -630,8 +635,10 @@
 
   function selectSessionForEdit(chatId, edit) {
     if (!state.sessionReady || state.pending) return;
+    state.pending = true;
+    syncControls();
     flushSessionSave().then(function () {
-      return requestJson('/fs/director/chats/' + encodeURIComponent(chatId));
+      return requestJson('/fs/director/chats/' + encodeURIComponent(chatId) + '?inspect=1');
     }).then(function (result) {
       var chat = result.chat;
       edit(chat);
@@ -647,13 +654,18 @@
         ? result.chat : state.sessionByMode[result.chat.mode];
       upsertSessionSummary(result.chat);
       showSessionStatus('Saved', false);
-    }).catch(showSessionFailure);
+    }).catch(showSessionFailure).finally(function () {
+      state.pending = false;
+      syncControls();
+    });
   }
 
   function deleteSession(chatId) {
     if (!state.sessionReady || state.pending) return;
     var chat = state.sessionList.find(function (item) { return item.id === chatId; });
     if (!chat || !window.confirm('Permanently delete conversation "' + chat.title + '"?')) return;
+    state.pending = true;
+    syncControls();
     flushSessionSave().then(function () {
       return requestJson('/fs/director/chats/' + encodeURIComponent(chatId), { method: 'DELETE' });
     }).then(function () {
@@ -674,7 +686,10 @@
       renderSessionHistory();
       syncModeUi();
       showSessionStatus('Deleted', false);
-    }).catch(showSessionFailure);
+    }).catch(showSessionFailure).finally(function () {
+      state.pending = false;
+      syncControls();
+    });
   }
 
   function formatElapsed(ms) {
@@ -1045,7 +1060,7 @@
     if (send) send.disabled = state.pending || state.attachmentPending ||
       (persistentMode(state.activeMode) && !state.sessionReady) || !state.modelId ||
       !String(input && input.value || '').trim();
-    if (input) input.disabled = state.pending;
+    if (input) input.disabled = state.pending || (persistentMode(state.activeMode) && !state.sessionReady);
     if (model) model.disabled = state.pending || !state.modelsLoaded;
     if (refresh) refresh.disabled = state.pending;
     if (clear) clear.disabled = state.pending || (persistentMode(state.activeMode) && !state.sessionReady);
@@ -1257,7 +1272,11 @@
       state.storyboardAttachments[item.key] = item;
       state.storyGuidelineProposal = null;
       scheduleSessionSave();
+      el('director-chat-attachments-toggle').setAttribute('aria-expanded', 'true');
+      syncModeUi();
+      el('director-chat-attachments-status').textContent = 'Attached ' + item.label + '.';
     }).catch(function (err) {
+      el('director-chat-workshop-status').textContent = 'Attach failed: ' + String(err.message || err);
       if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Storyboard attachment', err);
       else throw err;
     }).finally(function () {

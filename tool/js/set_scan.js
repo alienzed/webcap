@@ -569,9 +569,13 @@
         }
         return saveSightAttempt(folder, model, fileName, result, issue);
       }).then(function () {
-          if (!result.sight) recordSetIntelligenceFailure('Sight', fileName, issue);
-          return !!result.sight;
-        });
+        if (!result.sight) {
+          recordSetIntelligenceFailure('Sight', fileName, issue);
+          // False means the scan was stopped; an invalid response is a gap.
+          return null;
+        }
+        return true;
+      });
     }).catch(function (err) {
       setScanState.currentVisionJobId = '';
       if (setScanState.stopRequested) return false;

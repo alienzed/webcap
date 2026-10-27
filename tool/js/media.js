@@ -348,12 +348,7 @@ function mediaItemHasIncompleteRequirementGroups(item) {
 
 function mediaItemHasTagMismatch(item) {
   if (!item || !item.key) return false;
-  if (typeof getTagsForMediaKey !== 'function') return false;
-  var tags = getTagsForMediaKey(item.key);
-  if (!tags.length) return true;
-  if (typeof computeTagMatchProgressForText !== 'function') return false;
-  var progress = computeTagMatchProgressForText(item.key, item.caption || '');
-  return !!(progress && progress.total > 0 && progress.completed < progress.total);
+  return hasTagMismatchForText(item.key, item.caption || '');
 }
 
 function getFilteredMediaItems(ignoreFocusSet) {
@@ -948,7 +943,7 @@ async function renderFileList() {
     mediaGridUpdateEntryVisibility(mediaItems, { skipHeader: true });
   }
   if (typeof mediaGridRefreshFromCurrentFilters === 'function') {
-    mediaGridRefreshFromCurrentFilters();
+    mediaGridRefreshFromCurrentFilters(mediaItems);
   }
   renderFocusSetControls();
   if (typeof updateSidebarSurfaceTools === 'function') {

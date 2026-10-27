@@ -308,7 +308,7 @@
     if (description) {
       description.textContent = state.activeMode === 'storyboard'
         ? (state.workshop ? 'Scene Workshop · ' + state.workshop.sceneTitle : (state.attachmentPending ? 'Attaching Storyboard context…' : 'Storyboard creative workshop · ' + (Object.keys(state.storyboardAttachments).map(function (key) { return state.storyboardAttachments[key].label; }).join(', ') || 'Attach a Story or Scene')))
-        : (active ? String(active.description || active.label || '') : 'Session-only freeform model conversation');
+        : (active ? String(active.description || active.label || '') : 'Saved Assistant conversation');
     }
     if (input) {
       input.placeholder = state.activeMode === 'storyboard' ? 'Discuss a creative improvement or ask a focused question…' :
@@ -355,10 +355,15 @@
       if (!mode || !modeAvailable(mode)) modeId = 'chat';
     }
     if (state.pending || state.activeMode === modeId) return;
+    var input = el('director-chat-input');
+    if (persistentMode(state.activeMode) && state.sessionReady) {
+      state.draftByMode[state.activeMode] = input.value;
+      if (state.sessionDirty[state.activeMode]) flushSessionSave().catch(showSessionFailure);
+    }
     state.activeMode = modeId;
+    if (persistentMode(modeId)) input.value = state.draftByMode[modeId] || '';
     finishProgress(null);
     syncModeUi();
-    var input = el('director-chat-input');
     if (input) input.focus();
   }
 
@@ -1034,11 +1039,15 @@
     var model = el('director-chat-model');
     var refresh = el('director-chat-model-refresh');
     var clear = el('director-chat-clear');
-    if (send) send.disabled = state.pending || state.attachmentPending || !state.modelId || !String(input && input.value || '').trim();
+    if (send) send.disabled = state.pending || state.attachmentPending ||
+      (persistentMode(state.activeMode) && !state.sessionReady) || !state.modelId ||
+      !String(input && input.value || '').trim();
     if (input) input.disabled = state.pending;
     if (model) model.disabled = state.pending || !state.modelsLoaded;
     if (refresh) refresh.disabled = state.pending;
-    if (clear) clear.disabled = state.pending || (!currentMessages().length && !(state.activeMode === 'storyboard' && (Object.keys(state.storyboardAttachments).length || state.workshop)));
+    if (clear) clear.disabled = state.pending || (persistentMode(state.activeMode) && !state.sessionReady);
+    var history = el('director-chat-history-toggle');
+    if (history) history.disabled = state.pending || !state.sessionReady;
     var prepare = el('director-chat-workshop-prepare');
     if (prepare) {
       prepare.disabled = state.pending || !state.modelId || !!(state.workshop && state.workshop.shotError) || !currentMessages().some(function (message) { return message.role === 'user'; });
@@ -1083,27 +1092,47 @@
   }
 
   function newChat() {
-    if (state.activeMode === 'chat') {
-      state.messages = [];
-      state.elapsedByAssistantIndex = {};
-      state.metricsByAssistantIndex = {};
-    } else {
+    if (state.pending || !state.sessionReady) return;
+    if (!persistentMode(state.activeMode)) {
       state.modeMessages[state.activeMode] = [];
       state.modeElapsedByAssistantIndex[state.activeMode] = {};
       state.modeMetricsByAssistantIndex[state.activeMode] = {};
-      if (state.activeMode === 'storyboard') {
+      syncModeUi();
+      return;
+    }
+    var mode = state.activeMode;
+    flushSessionSave().then(function () {
+      return requestJson('/fs/director/chats', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode: mode })
+      });
+    }).then(function (payload) {
+      var chat = payload.chat;
+      state.sessionByMode[mode] = chat;
+      state.sessionActiveByMode[mode] = chat.id;
+      state.draftByMode[mode] = '';
+      state.sessionDirty[mode] = false;
+      if (mode === 'chat') {
+        state.messages = [];
+        state.elapsedByAssistantIndex = {};
+        state.metricsByAssistantIndex = {};
+      } else {
+        state.modeMessages.storyboard = [];
+        state.modeElapsedByAssistantIndex.storyboard = {};
+        state.modeMetricsByAssistantIndex.storyboard = {};
         state.storyboardAttachments = {};
+        state.workshop = null;
         state.workshopProposal = null;
         state.storyGuidelineProposal = null;
         el('director-chat-workshop-status').textContent = '';
       }
-    }
-    finishProgress(null);
-    syncModeUi();
-    renderMessages();
-    syncControls();
-    var input = el('director-chat-input');
-    if (input) input.focus();
+      el('director-chat-input').value = '';
+      upsertSessionSummary(chat);
+      showSessionStatus('Saved', false);
+      finishProgress(null);
+      syncModeUi();
+      el('director-chat-input').focus();
+    }).catch(showSessionFailure);
   }
 
   function jobRequest(jobId) {
@@ -1553,15 +1582,19 @@
   function sendMessage() {
     var input = el('director-chat-input');
     if (!input || state.pending || state.attachmentPending) return;
-
     var content = String(input.value || '').trim();
     if (!content || !state.modelId) return;
+    var activeChatMode = state.activeMode;
+    if (persistentMode(activeChatMode) && !state.sessionReady) {
+      showSessionFailure(new Error('Conversation history must load before sending a message.'));
+      return;
+    }
 
     if (!inputHistory.length || inputHistory[inputHistory.length - 1] !== content) inputHistory.push(content);
     inputHistoryIndex = inputHistory.length;
     inputHistoryDraft = '';
 
-    if (state.activeMode === 'storyboard') {
+    if (activeChatMode === 'storyboard') {
       state.storyGuidelineProposal = null;
       state.workshopProposal = null;
       el('director-chat-workshop-status').textContent = '';
@@ -1572,6 +1605,12 @@
     var mode = activeContextMode();
     messages.push({ role: 'user', content: content });
     input.value = '';
+    if (persistentMode(activeChatMode)) {
+      state.draftByMode[activeChatMode] = '';
+      if (state.sessionTimer) clearTimeout(state.sessionTimer);
+      state.sessionTimer = 0;
+      state.sessionDirty[activeChatMode] = true;
+    }
     state.pending = true;
     state.jobId = '';
     renderMessages();
@@ -1580,27 +1619,29 @@
 
     var startedAt = performance.now();
     var requestError = null;
-    var requestPromise;
-
-    if (mode) {
-      requestPromise = Promise.resolve(mode.execute({
-        instruction: content,
-        modelId: state.modelId
-      })).then(function (result) {
-        result = result && typeof result === 'object' ? result : {};
-        messages.push({
-          role: 'assistant',
-          content: String(result.text || mode.successMessage || (mode.label + ' completed.'))
+    // Commit the user's words BEFORE asking the model. A refresh or failed
+    // inference can never discard the user's last sent message.
+    var saved = persistentMode(activeChatMode) ? persistSession(activeChatMode) : Promise.resolve();
+    var requestPromise = saved.then(function () {
+      if (mode) {
+        return Promise.resolve(mode.execute({
+          instruction: content,
+          modelId: state.modelId
+        })).then(function (result) {
+          result = result && typeof result === 'object' ? result : {};
+          messages.push({
+            role: 'assistant',
+            content: String(result.text || mode.successMessage || (mode.label + ' completed.'))
+          });
+          elapsedMap[messages.length - 1] = performance.now() - startedAt;
         });
-        elapsedMap[messages.length - 1] = performance.now() - startedAt;
-      });
-    } else {
-      requestPromise = requestJson('/fs/director/chat', {
+      }
+      return requestJson('/fs/director/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           model: state.modelId,
-          messages: state.activeMode === 'storyboard' ? storyboardRequestMessages(messages) : messages
+          messages: activeChatMode === 'storyboard' ? storyboardRequestMessages(messages) : messages
         })
       }).then(function (payload) {
         if (!payload.job || !payload.job.jobId) throw new Error('Assistant did not return a queued job.');
@@ -1616,7 +1657,10 @@
         elapsedMap[assistantIndex] = performance.now() - startedAt;
         metricsMap[assistantIndex] = completedResponseMetrics(result);
       });
-    }
+    }).then(function () {
+      // Keep the response visible while its durable save completes.
+      if (persistentMode(activeChatMode)) return persistSession(activeChatMode);
+    });
 
     requestPromise.catch(function (err) {
       requestError = err;
@@ -1700,6 +1744,11 @@
     pin.onclick = function () { setPinned(!state.pinned); };
     close.onclick = function () { setOpen(false); };
     clear.onclick = newChat;
+    el('director-chat-history-toggle').onclick = function () {
+      var button = el('director-chat-history-toggle');
+      button.setAttribute('aria-expanded', button.getAttribute('aria-expanded') === 'true' ? 'false' : 'true');
+      renderSessionHistory();
+    };
     send.onclick = sendMessage;
     stop.onclick = stopJob;
     copy.onclick = function () {
@@ -1809,6 +1858,10 @@
         inputHistoryIndex = inputHistory.length;
         inputHistoryDraft = input.value;
       }
+      if (persistentMode(state.activeMode) && state.sessionReady) {
+        state.draftByMode[state.activeMode] = input.value;
+        scheduleSessionSave();
+      }
       syncControls();
     });
     input.addEventListener('keydown', function (event) {
@@ -1855,6 +1908,13 @@
       if (event.key === 'Escape' && state.open && !el('storyboard-workshop-review').open && !el('storyboard-guidelines-review').open) setOpen(false);
     });
 
+    window.addEventListener('beforeunload', function (event) {
+      if (state.sessionTimer || state.sessionDirty.chat || state.sessionDirty.storyboard || state.sessionError) {
+        event.preventDefault();
+        event.returnValue = '';
+      }
+    });
+    loadSessionHistory();
     if (state.pinned) setOpen(true);
     else {
       syncPinnedUi();

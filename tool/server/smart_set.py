@@ -103,40 +103,6 @@ def _parse_filter_query(raw: str) -> dict:
     return out
 
 
-def _effective_requirement_catalog(folder_state: dict) -> dict[str, list[str]]:
-    cfg = app_config.get_config_snapshot()
-    cfg_requirements = cfg.get("requirements") if isinstance(cfg, dict) else {}
-    cfg_items = cfg_requirements.get("items") if isinstance(cfg_requirements, dict) else []
-    cfg_keywords = cfg_requirements.get("keywordsByItem") if isinstance(cfg_requirements, dict) else {}
-
-    folder_items = folder_state.get("caption_requirements")
-    requirements = folder_items if isinstance(folder_items, list) else (cfg_items if isinstance(cfg_items, list) else [])
-    folder_keywords = folder_state.get("caption_requirement_keywords")
-    if not isinstance(folder_keywords, dict):
-        folder_keywords = {}
-    if not isinstance(cfg_keywords, dict):
-        cfg_keywords = {}
-
-    out = {}
-    for raw_group in requirements:
-        group = str(raw_group or "").strip()
-        if not group:
-            continue
-        seen = set()
-        terms = []
-        for source in (folder_keywords.get(group), cfg_keywords.get(group)):
-            values = source if isinstance(source, list) else str(source or "").split(",")
-            for raw_term in values:
-                term = re.sub(r"\s+", " ", str(raw_term or "").strip())
-                key = term.casefold()
-                if not term or key in seen:
-                    continue
-                seen.add(key)
-                terms.append(term)
-        out[group] = terms
-    return out
-
-
 def _normalize_group_tags_for_media(folder_state: dict, media_name: str) -> dict[str, list[str]]:
     raw_map = folder_state.get("caption_group_tags_by_media")
     raw_groups = raw_map.get(media_name) if isinstance(raw_map, dict) else None
@@ -390,42 +356,6 @@ def _parse_star_filter(value: str) -> dict:
     return {"include_no_star": include_no_star, "values": values}
 
 
-def _parse_requirement_terms(raw: str) -> list[str]:
-    out = []
-    seen = set()
-    for part in str(raw or "").split(","):
-        term = re.sub(r"\s+", " ", str(part or "").strip())
-        key = term.lower()
-        if not term or key in seen:
-            continue
-        seen.add(key)
-        out.append(term)
-    return out
-
-
-def _requirement_key(label: str) -> str:
-    return str(label or "").strip().lower()
-
-
-def _match_has_incomplete_requirements(match: dict, folder_state: dict) -> bool:
-    catalog = _effective_requirement_catalog(folder_state)
-    if not catalog:
-        return False
-    media_name = str(match.get("media_name") or "")
-    scoped_groups = _normalize_group_tags_for_media(folder_state, media_name)
-
-    total = 0
-    completed = 0
-    for label, configured_terms in catalog.items():
-        assigned_terms = scoped_groups.get(label, [])
-        if not configured_terms and not assigned_terms:
-            continue
-        total += 1
-        if assigned_terms:
-            completed += 1
-    return total > 0 and completed < total
-
-
 def _map_aspect_ratio_to_bucket(aspect: str) -> str:
     norm = str(aspect or "").strip().lower()
     if not norm:
@@ -550,7 +480,6 @@ def _collect_superset_matches(criteria: dict) -> list[dict]:
     missing_captions_only = bool(criteria.get("missing_captions_only"))
     reviewed_only = bool(criteria.get("reviewed_only"))
     unreviewed_only = bool(criteria.get("unreviewed_only"))
-    incomplete_only = bool(criteria.get("incomplete_only"))
     tag_mismatch_only = bool(criteria.get("tag_mismatch_only") or criteria.get("untagged_only"))
     invalid_ar_only = bool(criteria.get("invalid_ar_only"))
     star_filter = _parse_star_filter(criteria.get("star_filter") or "")
@@ -614,8 +543,6 @@ def _collect_superset_matches(criteria: dict) -> list[dict]:
             if reviewed_only and not reviewed:
                 continue
             if unreviewed_only and reviewed:
-                continue
-            if incomplete_only and not _match_has_incomplete_requirements(match, folder_state):
                 continue
             if tag_mismatch_only and not _match_has_tag_mismatch(match, folder_state):
                 continue

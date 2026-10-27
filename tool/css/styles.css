@@ -7134,22 +7134,42 @@ html[data-theme="dark"] iframe {
   display: inline-flex;
   align-items: center;
   flex: 0 1 auto;
-  flex-wrap: wrap;
-  gap: 6px;
+  gap: 4px;
   max-width: 100%;
   padding: 2px 3px 2px 8px;
   border: 1px solid var(--border-soft);
   border-radius: 6px;
   background: var(--panel);
 }
-.caption-assist-reconcile-term { min-width: 0; overflow-wrap: anywhere; }
-.caption-assist-reconcile-actions { display: inline-flex; flex: 0 0 auto; gap: 3px; align-items: center; }
-#editor-caption-candidate-omissions .caption-assist-fix-btn,
-#editor-caption-candidate-omissions .caption-vision-phrase-insert {
-  min-height: 25px;
-  padding: 2px 6px;
-  font-size: 12px;
+.caption-assist-reconcile-insert {
+  min-width: 0;
+  padding: 2px 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  overflow-wrap: anywhere;
+  cursor: pointer;
 }
+.caption-assist-reconcile-insert:hover,
+.caption-assist-reconcile-insert:focus-visible { text-decoration: underline; }
+.caption-assist-reconcile-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 24px;
+  min-height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+.caption-assist-reconcile-remove:hover { background: var(--hover); color: var(--text); }
 .editor-caption-candidate.is-focus-caption .editor-caption-candidate-draft {
   margin: 10px 14px 0;
   border: 1px solid var(--border-soft);

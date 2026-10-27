@@ -632,7 +632,7 @@ function renderChecklistGroupTermWithAffixes(requirementLabel, termText, mediaKe
   );
 }
 
-function checklistGroupTermAppearsInCaptionText(requirementLabel, termText, mediaKey, captionText) {
+function checklistGroupTermAppearsInCaptionText(requirementLabel, termText, mediaKey, captionText, preparedCaptionTokens) {
   var key = resolveChecklistTermMediaKey(mediaKey);
   var term = normalizeChecklistTerm(termText);
   if (!term) return false;
@@ -641,7 +641,7 @@ function checklistGroupTermAppearsInCaptionText(requirementLabel, termText, medi
   if (rendered && rendered.toLowerCase() !== term.toLowerCase()) {
     return captionContainsPhrase(text, rendered);
   }
-  return captionContainsTagWithAllowances(text, term);
+  return captionContainsTagWithAllowances(text, term, preparedCaptionTokens);
 }
 
 function checklistGroupTermAppearsInCurrentCaption(requirementLabel, termText, mediaKey) {

@@ -1932,6 +1932,7 @@
       return directorRequest({
         storyId: storyId,
         operation: 'define_invariants',
+        refreshGuidelines: refresh === true,
         model: modelId
       });
     }).then(function (payload) {

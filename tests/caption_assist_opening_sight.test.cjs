@@ -53,7 +53,7 @@ test('opening Caption Assist does not scan Group vocabulary or construct hidden 
   assert.equal(h.getSightCalls(),1,'toggle cannot duplicate work on the same panel');
 });
 
-test('subsequent sync retains expanded Sight and independently collapsed assigned tags',()=>{
+test('subsequent sync retains expanded Sight without duplicating assigned tags',()=>{
   const h=harness();
   h.ctx.getChecklistAssignmentEntriesForMediaKey=()=>[{requirement:'BT Shape',term:'ring connectors'}];
   h.ctx.sync();
@@ -62,10 +62,24 @@ test('subsequent sync retains expanded Sight and independently collapsed assigne
   detail.dispatchEvent(new h.dom.window.Event('toggle'));
   h.ctx.sync();
   assert.equal(h.row.querySelector('[data-sight-suggestions]').open,true);
-  assert.equal(h.row.querySelector('.caption-assist-assigned-tags').open,false,
-    'assigned tag disclosure must not inherit the Sight disclosure state');
+  assert.equal(h.row.querySelector('.caption-assist-assigned-tags'),null);
+  assert.doesNotMatch(h.row.textContent,/Assigned tags/i);
   assert.ok(h.row.querySelector('[data-sight-suggestions] button'));
   assert.ok(h.getSightCalls()>=2);
+});
+
+test('QA remove actions remain available without the duplicate tag list',()=>{
+  const h=harness();
+  const removals=[];
+  h.ctx.isFocusedQaReviewMode=()=>true;
+  h.ctx.qaFocusReviewTagActions=()=>[{action:'remove',group:'Framing',term:'front view'}];
+  h.ctx.removeCaptionAssistAssignedTag=(key,group,term)=>removals.push([key,group,term]);
+  h.ctx.sync();
+  assert.equal(h.row.querySelector('.caption-assist-assigned-tags'),null);
+  const action=h.row.querySelector('.caption-assist-qa-suggestions .caption-assist-suggestion-tag');
+  assert.ok(action,'QA removal should still be reachable');
+  action.click();
+  assert.deepEqual(removals,[['one','Framing','front view']]);
 });
 
 test('no recorded Sight retains previous empty suggestions behavior',()=>{

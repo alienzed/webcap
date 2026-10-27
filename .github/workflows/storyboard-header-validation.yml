@@ -13,6 +13,7 @@ on:
       - 'tool/js/session_prompt_history.js'
       - 'tool/tool.html'
       - 'tests/session_prompt_history.test.cjs'
+      - 'tests/director_chat_storyboard_attachment.test.cjs'
       - 'tool/js/diagnostics.js'
       - 'tool/server/model_lab.py'
       - 'tool/server/storyboard_llm_runtime.py'
@@ -41,7 +42,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - run: node --check tool/js/storyboard.js && node --check tool/js/diagnostics.js
+      - run: node --check tool/js/storyboard.js && node --check tool/js/director_chat.js && node --check tool/js/diagnostics.js
+      - name: Storyboard Chat attached context
+        run: node --test tests/director_chat_storyboard_attachment.test.cjs
       - name: RAM-only instruction history
         run: |
           node --check tool/js/session_prompt_history.js

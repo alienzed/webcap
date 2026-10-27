@@ -47,6 +47,14 @@ function captionAssistEnrichmentPendingSuggestions() {
   return captionAssistEnrichment.suggestions.filter(function (row) { return row.pending; });
 }
 
+function captionAssistEnrichmentBlocksMediaShortcut(event) {
+  return !!(event && !event.defaultPrevented &&
+    captionAssistEnrichmentReviewActive(captionAssistCandidate) &&
+    !isEditableElement(document.activeElement) &&
+    !event.altKey && !event.ctrlKey && !event.metaKey &&
+    (/^Arrow(?:Left|Right|Up|Down)$/.test(event.key) || /^[a-z0-5]$/i.test(event.key)));
+}
+
 function captionAssistEnrichmentInsert(text, row) {
   var at = text.indexOf(row.anchor);
   if (at < 0 || text.indexOf(row.anchor, at + row.anchor.length) !== -1)
@@ -394,6 +402,14 @@ function runCaptionAssistEnrichment() {
 }
 
 function wireCaptionAssistEnrichment() {
+  if (!document.__captionEnrichmentKeyboardBound) {
+    document.__captionEnrichmentKeyboardBound = true;
+    document.addEventListener('keydown', function (event) {
+      // Focus Caption has its own capture handler; protect standalone Caption Assist too.
+      if (!isFocusedCaptionOpen() && captionAssistEnrichmentBlocksMediaShortcut(event))
+        event.stopImmediatePropagation();
+    }, true);
+  }
   var actions = {
     'editor-caption-enrich': runCaptionAssistEnrichment,
     'editor-caption-enrichment-accept-all': function () { finishCaptionAssistEnrichment('accept'); },

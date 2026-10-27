@@ -147,7 +147,10 @@ test('combined cheap filters prune candidates before text, AI and Tag Mismatch w
   f.setFlags([]);
   f.ui.advancedFilterMissingCaptionsEl.checked = false;
   f.ui.filterEl.value = 'green hat';
-  assert.deepEqual(f.keys(), ['c'], 'combining text, AI and mismatch still uses AND');
+  assert.deepEqual(f.keys(), [], 'AI-validated item is correctly excluded by Needs AI Validation');
   assert.equal(f.stats.ai, 1, 'AI check only for text match');
   assert.equal(f.stats.mismatch, 0, 'Tag Mismatch is skipped when AI filter rejects item');
+  f.ui.advancedFilterNeedsAiValidationEl.checked = false;
+  assert.deepEqual(f.keys(), ['c'], 'removing AI filter preserves the text and mismatch match');
+  assert.equal(f.stats.mismatch, 1, 'Tag Mismatch checks only the final candidate');
 });

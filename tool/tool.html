@@ -2077,7 +2077,7 @@
                 <header class="director-chat-drawer-header">
                     <div class="director-chat-header-copy">
                         <strong>Assistant</strong>
-                        <span id="director-chat-mode-description">Session-only freeform model conversation</span>
+                        <span id="director-chat-mode-description">Assistant conversation</span>
                     </div>
                     <div class="director-chat-header-actions">
                         <button id="director-chat-pin" type="button" class="director-chat-pin" title="Pin Assistant" aria-label="Pin Assistant" aria-pressed="false">
@@ -2087,10 +2087,15 @@
                                 <path d="M12 14v6"></path>
                             </svg>
                         </button>
+                        <button id="director-chat-history-toggle" type="button" class="review-captions-btn" aria-expanded="false" aria-controls="director-chat-history-panel">History</button>
                         <button id="director-chat-clear" type="button" class="review-captions-btn">New chat</button>
                         <button id="director-chat-close" type="button" class="director-chat-close" aria-label="Close Assistant">×</button>
                     </div>
                 </header>
+                <section id="director-chat-history-panel" class="director-chat-history-panel hidden" aria-label="Saved Assistant conversations">
+                    <div class="director-chat-history-heading">Saved conversations <span id="director-chat-save-status" aria-live="polite"></span></div>
+                    <div id="director-chat-history-list" class="director-chat-history-list"></div>
+                </section>
                 <div id="director-chat-mode-row" class="director-chat-mode-row hidden" aria-label="Assistant mode">
                     <span>Mode</span>
                     <div id="director-chat-mode-switch" class="director-chat-mode-switch" role="group" aria-label="Assistant mode"></div>
@@ -2108,7 +2113,7 @@
                         <button id="director-chat-attachments-copy-all" type="button" class="review-captions-btn" title="Copy every attached reference exactly as supplied to Storyboard Chat">Copy all</button>
                     </div>
                     <div id="director-chat-attachments-body" class="director-chat-attachments-body hidden">
-                        <p class="director-chat-attachments-note">Attached snapshot sent with each message. Reattach to capture new Story or Scene edits.</p>
+                        <p class="director-chat-attachments-note">Explicitly attached snapshots are saved with this conversation. Inspect or copy the supplied text here.</p>
                         <div id="director-chat-attachments-list" class="director-chat-attachments-list"></div>
                     </div>
                     <p id="director-chat-attachments-status" class="director-chat-attachments-status" aria-live="polite"></p>

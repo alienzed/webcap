@@ -14,6 +14,12 @@ on:
       - 'tests/vl_workspace_navigation.test.cjs'
       - 'tests/test_media_context_actions_contract.py'
       - 'tool/js/primer_settings.js'
+      - 'tool/js/item_details.js'
+      - 'tool/js/checklist_state.js'
+      - 'tool/js/media.js'
+      - 'tool/js/media_grid_state.js'
+      - 'tool/js/media_grid_actions.js'
+      - 'tests/tag_mismatch_filter.test.cjs'
       - 'tool/js/caption_enrichment.js'
       - 'tests/caption_enrichment.test.cjs'
       - 'tests/test_caption_enrichment.py'
@@ -214,6 +220,12 @@ jobs:
       - name: Verify matched-tag hint submission
         run: |
           node --check tool/js/primer_settings.js
+          node --check tool/js/item_details.js
+          node --check tool/js/checklist_state.js
+          node --check tool/js/media.js
+          node --check tool/js/media_grid_state.js
+          node --check tool/js/media_grid_actions.js
+          node --test tests/tag_mismatch_filter.test.cjs
           node --test tests/caption_assist_tag_mismatch.test.cjs
       - name: Prepare isolated config
         run: cp tool/config.example.json tool/config.json

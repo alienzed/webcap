@@ -3309,10 +3309,15 @@
         <div id="saved-intelligence-modal" class="set-scan-modal hidden" role="dialog" aria-modal="true" aria-labelledby="saved-intelligence-title">
             <div class="set-scan-dialog saved-intelligence-dialog">
                 <div class="set-scan-header">
-                    <div>
+                    <div class="vl-workspace-heading">
                         <h2 id="saved-intelligence-title">VL Workspace</h2>
                         <span id="saved-intelligence-file" class="set-scan-subtitle"></span>
                     </div>
+                    <nav class="vl-workspace-tabs" aria-label="VL tools">
+                        <button id="vl-workspace-tab-sight" type="button" data-vl-tab="sight" aria-pressed="true">Saved Sight</button>
+                        <button id="vl-workspace-tab-ask" type="button" data-vl-tab="ask" aria-pressed="false">Ask VL</button>
+                        <button id="vl-workspace-tab-describe" type="button" data-vl-tab="describe" aria-pressed="false">Describe with VL</button>
+                    </nav>
                     <div class="vl-workspace-item-navigation" aria-label="Browse visible media">
                         <button id="vl-workspace-prev" type="button" class="review-captions-btn" title="Previous visible media" aria-label="Previous media">‹</button>
                         <span id="vl-workspace-position" aria-live="polite"></span>
@@ -3320,11 +3325,6 @@
                     </div>
                     <button id="saved-intelligence-close-btn" type="button" class="modal-close-btn" aria-label="Close VL Workspace">&times;</button>
                 </div>
-                <nav class="vl-workspace-tabs" aria-label="VL tools">
-                    <button id="vl-workspace-tab-sight" type="button" data-vl-tab="sight" aria-pressed="true">Saved Sight</button>
-                    <button id="vl-workspace-tab-ask" type="button" data-vl-tab="ask" aria-pressed="false">Ask VL</button>
-                    <button id="vl-workspace-tab-describe" type="button" data-vl-tab="describe" aria-pressed="false">Describe with VL</button>
-                </nav>
                 <div id="saved-intelligence-status" class="set-scan-summary"></div>
                 <div class="sight-review-body">
                     <div class="sight-review-preview">

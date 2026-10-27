@@ -316,11 +316,11 @@ def test_caption_assist_and_focus_caption_share_the_same_large_modal_presentatio
     assert ".editor-caption-candidate.is-focus-caption .editor-caption-candidate-text" not in css
     assert "panel.classList.toggle('is-focus-caption'" in primer
 
-    assert "if (event.target !== candidatePanel) return;" in primer
-    assert "if (isFocusedCaptionOpen()) {" in primer
+    assert "__captionAssistBackdropBound" not in primer
+    assert "candidateDismissBtn.addEventListener('click', function () {" in primer
     assert "dismissCaptionAssistCandidate();" in primer
+    assert "if (event.key !== 'Escape') return;" in primer
     assert "event.stopImmediatePropagation();" in primer
-    assert "}, true);" in primer
 
 
 def test_caption_assist_flags_selected_annotations_omitted_by_candidate():
@@ -769,18 +769,15 @@ def test_normal_caption_assist_regenerate_stays_open_and_can_cancel():
     assert "if (!captionAssistCandidate && !isCaptionAssistPresentationOpenFor(mediaKey)) return;" in wire
 
 
-def test_focus_caption_outside_click_refreshes_list_without_double_handling_backdrop():
+def test_focus_caption_requires_explicit_close_instead_of_dismissing_on_outside_click():
     focus = _read("tool/js/focused_caption.js")
+    primer = _read("tool/js/primer_settings.js")
 
-    assert "var panel = document.getElementById('editor-caption-candidate');" in focus
-    assert "if (panel && panel.contains(event.target)) return;" in focus
-    outside_start = focus.index("if (!document.__focusedCaptionOutsideClickBound)")
-    outside_end = focus.index("if (!window.__focusedCaptionResizeBound)", outside_start)
-    outside = focus[outside_start:outside_end]
-    assert "if (!stopFocusedCaption(focusedCaptionModeLabel() + ' ended.')) {" in outside
-    assert "event.preventDefault();" in outside
-    assert "event.stopImmediatePropagation();" in outside
-    assert "renderFileList();" in outside
+    assert "__focusedCaptionOutsideClickBound" not in focus
+    assert "__captionAssistBackdropBound" not in primer
+    assert "ui.previewFocusCaptionBtnEl.addEventListener('click', function () {" in focus
+    assert "candidateDismissBtn.addEventListener('click', function () {" in primer
+    assert "if (key === 'Escape') {" in focus
 
 
 def test_caption_vision_enablement_is_runtime_sticky_and_shared_with_caption_assist():

@@ -47,8 +47,10 @@ def test_restoring_focus_draft_resumes_one_deep_prefetch_without_regenerating_sa
     assert "cancelFocusedCaptionPrefetch().then(function () {" in restore
     assert "startFocusedCaptionPrefetch(restoredKey);" in prepare
     prefetch = focus.split("function startFocusedCaptionPrefetch(sourceMediaKey)", 1)[1].split("function useFocusedCaptionPrefetchForCurrentItem()", 1)[0]
-    assert "if (!target || captionAssistSavedCandidatesByMedia[target.itemKey]) return Promise.resolve(false);" in prefetch
-    assert prefetch.index("captionAssistSavedCandidatesByMedia[target.itemKey]") < prefetch.index("requestCaptionAssistCandidate(target.item, request")
+    assert "var saved = captionAssistSavedCandidatesByMedia[target.itemKey];" in prefetch
+    assert "return warmCaptionAssistEnrichment(target.item, {" in prefetch
+    assert "warmCaptionAssistEnrichment(target.item, candidate);" in prefetch
+    assert prefetch.index("warmCaptionAssistEnrichment(target.item, {") < prefetch.index("requestCaptionAssistCandidate(target.item, request")
 
 
 def test_qa_handoff_reuses_current_caption_alternatives_without_overwriting_saved_drafts():

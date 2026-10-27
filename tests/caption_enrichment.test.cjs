@@ -199,6 +199,7 @@ function automaticFixture() {
   const candidate={mediaKey:current.key,text:'A woman in a swimsuit.',model};
   const ctx={
     Promise,JSON,Map,console,
+    document:{getElementById(){return {focus(){}};}},
     state:{folder:'set-a',currentItem:current},
     captionAssistCandidate:candidate, focusedCaptionState:{open:true},
     isFocusedQaReviewMode(){return false;},isCaptionAssistRunning(){return false;},

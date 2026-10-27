@@ -51,6 +51,18 @@ def test_restoring_focus_draft_resumes_one_deep_prefetch_without_regenerating_sa
     assert prefetch.index("captionAssistSavedCandidatesByMedia[target.itemKey]") < prefetch.index("requestCaptionAssistCandidate(target.item, request")
 
 
+def test_qa_handoff_reuses_current_caption_alternatives_without_overwriting_saved_drafts():
+    qa = source("tool/js/qa_workbench.js")
+    saved = qa.split("function qaSavedCaptionAlternative(item)", 1)[1].split("function qaFocusReviewAlternative(", 1)[0]
+    assert "qaWorkbenchState.qaAlternatives[item.fileName]" in saved
+    assert "qaWorkbenchState.aiItemSignatures[item.fileName] === current[item.fileName]" in saved
+    handoff = qa.split("function qaReviewCaptionFiles(files, source, findingId)", 1)[1].split("function qaInspectFinding(", 1)[0]
+    assert "var existing = qaSavedCaptionAlternative(target);" in handoff
+    assert "if (existing && !captionAssistSavedCandidatesByMedia[target.key])" in handoff
+    assert "persistCaptionAssistCandidate({" in handoff
+    assert "startFocusedReview(target.key);" in handoff
+
+
 def test_refresh_and_regenerate_still_explicitly_invoke_director():
     primer = source("tool/js/primer_settings.js")
     focus = source("tool/js/focused_caption.js")

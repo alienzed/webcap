@@ -979,6 +979,7 @@
     syncVlWorkspaceNavigation();
     var token = ++setScanState.reviewRequestToken;
     el('saved-intelligence-file').textContent = file;
+    el('saved-intelligence-file').title = file;
     el('saved-intelligence-status').textContent = 'Loading saved VL observations…';
     el('sight-review-description').textContent = '';
     el('sight-review-issue').textContent = '';

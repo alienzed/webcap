@@ -2343,7 +2343,7 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
 }
 
 .director-chat-header-copy strong {
-  font-size: 17px;
+  font-size: 18px;
   line-height: 1.15;
 }
 
@@ -2516,7 +2516,7 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
   width: auto;
   min-height: 34px;
   padding: 6px 11px;
-  font-size: 14px;
+  font-size: 16px;
 }
 .director-chat-attachments-toggle {
   flex: 1 1 auto;
@@ -2566,23 +2566,23 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
 .director-chat-attachment-head strong {
   min-width: 0;
   overflow-wrap: anywhere;
-  font-size: 16px;
+  font-size: 18px;
 }
 .director-chat-attachment-field { padding: 11px; }
 .director-chat-attachment-field + .director-chat-attachment-field {
   border-top: 1px solid color-mix(in srgb, var(--border) 65%, transparent);
 }
 .director-chat-attachment-field-head strong {
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 700;
 }
 .director-chat-attachment-head button,
 .director-chat-attachment-field-head button {
   flex: 0 0 auto;
   width: auto;
-  min-height: 30px;
+  min-height: 32px;
   padding: 4px 10px;
-  font-size: 14px;
+  font-size: 16px;
 }
 .director-chat-attachment-field pre {
   margin: 6px 0 0;
@@ -2593,7 +2593,7 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
   border-radius: 6px;
   background: var(--panel);
   color: var(--text);
-  font: 14px/1.5 ui-monospace, Consolas, monospace;
+  font: 16px/1.5 ui-monospace, Consolas, monospace;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   user-select: text;

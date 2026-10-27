@@ -2106,6 +2106,17 @@
                     <button id="director-chat-story-prepare" type="button" class="review-captions-btn hidden" title="Propose reviewed edits to this Story’s Directing Guidelines">Propose Story Changes</button>
                     <span id="director-chat-workshop-status" class="director-chat-workshop-status" aria-live="polite"></span>
                 </div>
+                <section id="director-chat-attachments" class="director-chat-attachments hidden" aria-label="Attached Storyboard context">
+                    <div class="director-chat-attachments-bar">
+                        <button id="director-chat-attachments-toggle" type="button" class="review-captions-btn director-chat-attachments-toggle" aria-expanded="false" aria-controls="director-chat-attachments-body">View attached context</button>
+                        <button id="director-chat-attachments-copy-all" type="button" class="review-captions-btn" title="Copy every attached reference exactly as supplied to Storyboard Chat">Copy all</button>
+                    </div>
+                    <div id="director-chat-attachments-body" class="director-chat-attachments-body hidden">
+                        <p class="director-chat-attachments-note">Attached snapshot sent with each message. Reattach to capture new Story or Scene edits.</p>
+                        <div id="director-chat-attachments-list" class="director-chat-attachments-list"></div>
+                    </div>
+                    <p id="director-chat-attachments-status" class="director-chat-attachments-status" aria-live="polite"></p>
+                </section>
                 <div class="director-chat-model-row director-chat-model-tools">
                     <label for="director-chat-model">Model</label>
                     <select id="director-chat-model" aria-label="Assistant model">

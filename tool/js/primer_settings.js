@@ -1201,8 +1201,9 @@ function syncCaptionAssistCandidateUi(options) {
       : (useArmed ? 'Press Enter again' : (focusOpen ? (focusHasCaptionChange ? 'Save & Next' : 'Accept & Next') : 'Apply & Validate')));
   useBtn.title = pending ? 'Stop generation or wait before applying'
     : (captionAssistApplyPending ? 'Saving caption and AI validation…'
-      : (focusOpen ? 'Save caption, mark AI Validated, and advance to the next item'
-        : 'Save this caption and mark it AI Validated'));
+      : (isFocusedQaReviewMode() ? 'Apply caption and continue QA review'
+        : (focusOpen ? 'Save caption, mark AI Validated, and advance to the next item'
+          : 'Save this caption and mark it AI Validated')));
 
   var currentRequest = visible ? buildCaptionAssistRequest(state.currentItem) : null;
   var tagsChanged = !!(visible && candidate.annotationsAtGeneration &&

@@ -99,7 +99,7 @@ def _validate_attachments(attachments):
     result = {}
     for key, value in attachments.items():
         if (not isinstance(key, str) or not isinstance(value, dict)
-                or value.get("key") != key or not isinstance(value.get("label"), str)
+                or ("key" in value and value["key"] != key) or not isinstance(value.get("label"), str)
                 or not isinstance(value.get("content"), str)):
             raise ValueError("Assistant conversation contains an invalid attachment.")
         result[key] = {"key": key, "label": value["label"], "content": value["content"]}

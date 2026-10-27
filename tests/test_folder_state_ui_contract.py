@@ -49,6 +49,10 @@ def test_incomplete_media_filter_is_retired_without_removing_checklist_progress(
     details = _read("tool/js/item_details.js")
     assert "function computeRequirementProgressForMediaKey(" in details
     assert "var progress = computeRequirementProgressForMediaKey(currentMediaKey);" in details
+    qa = _read("tool/js/qa_workbench.js")
+    assert "var requirementProgress = computeRequirementProgressForMediaKey(item.key);" in qa
+    assert "health.incomplete.push(item.fileName);" in qa
+    assert "mediaItemHasIncompleteRequirementGroups" not in qa
 
     folder_state = _read("tool/js/folder_state.js")
     assert "media_filters: {" in folder_state

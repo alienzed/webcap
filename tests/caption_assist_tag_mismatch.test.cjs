@@ -15,13 +15,13 @@ function harness({caption = '', draft = '', assignments = [], tags = [], correct
   const request = {model: 'director', draft, assignments, tags, sightLed};
   if (corrections !== undefined) request.corrections = corrections;
   const calls = [];
-  let matchChecks = 0;
+  const checkedDrafts = [];
   const sandbox = {
     Object, String, Promise, JSON,
     buildAutoPrimer: () => 'Auto primer from selected tags',
     getCaptionAssistMissingGroups: () => [],
     getCaptionAssistOmittedCorrections(_key, text, grouped, unscoped) {
-      matchChecks += 1;
+      checkedDrafts.push(text);
       return [
         ...grouped.map(row => ({group: row.group, term: row.term})),
         ...unscoped.map(term => ({group: '', term}))
@@ -39,7 +39,7 @@ function harness({caption = '', draft = '', assignments = [], tags = [], correct
   };
   vm.createContext(sandbox);
   vm.runInContext(primer.slice(start, end) + '\nthis.submit = requestCaptionAssistCandidate;', sandbox);
-  return {item, request, calls, getChecks: () => matchChecks, submit: () => sandbox.submit(item, request)};
+  return {item, request, calls, getCheckedDrafts: () => checkedDrafts.slice(), submit: () => sandbox.submit(item, request)};
 }
 
 test('existing caption sends only selected facts that local text checking did not find', async () => {
@@ -56,7 +56,7 @@ test('existing caption sends only selected facts that local text checking did no
   assert.equal(candidate.text, 'Proposed caption');
   assert.equal(h.item.caption, 'A person wearing a red top.');
   assert.equal(h.request.tagMismatches, undefined, 'input remains immutable for lookahead fingerprints');
-  assert.equal(h.getChecks(), 1, 'local matching is only done at submission');
+  assert.deepEqual(h.getCheckedDrafts(), [h.request.draft, 'Proposed caption'], 'checks submitted draft and returned candidate');
 });
 
 test('correctly matched captions send no unnecessary mismatch hints', async () => {
@@ -75,7 +75,7 @@ test('captionless auto-Primer and Sight-led requests are left alone', async () =
     assignments: [{group: 'Hair', term: 'long braid'}]
   });
   await primerOnly.submit();
-  assert.equal(primerOnly.getChecks(), 0);
+  assert.deepEqual(primerOnly.getCheckedDrafts(), ['Proposed caption'], 'only the returned candidate is checked');
   assert.equal('tagMismatches' in primerOnly.calls[0], false);
   const sightLed = harness({draft: 'A draft', sightLed: true, tags: ['earrings']});
   await sightLed.submit();
@@ -100,7 +100,7 @@ test('explicit candidate repair corrections are not blended with text-match hint
   await h.submit();
   assert.equal('tagMismatches' in h.calls[0], false);
   assert.deepEqual(h.calls[0].corrections, corrections);
-  assert.equal(h.getChecks(), 0);
+  assert.deepEqual(h.getCheckedDrafts(), ['Proposed caption'], 'explicit repair skips initial hints');
 });
 
 test('untagged media does not invent mismatch corrections', async () => {

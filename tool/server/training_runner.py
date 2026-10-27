@@ -3059,11 +3059,11 @@ def start_response(
             effective_config_settings.pop("h3TrainingMethod", None)
         if stages == "h3" and not resume_path and "h3TrainingMethod" in effective_config_settings:
             if effective_config_settings["h3TrainingMethod"] == "ostris":
-                from .training_config_files import h3_ostris_training_adapter_path
+                from .training_config_files import h3_premerged_ostris_model_path
                 from .training_history import host_path_for_training_path
-                adapter_path = h3_ostris_training_adapter_path()
-                if not host_path_for_training_path(adapter_path).is_file():
-                    raise FileNotFoundError("Ostris H3 training adapter not found: " + adapter_path)
+                model_path = h3_premerged_ostris_model_path()
+                if not host_path_for_training_path(model_path).is_file():
+                    raise FileNotFoundError("Premerged Ostris v3 H3 checkpoint not found: " + model_path)
         if (resume_path or initializer) and effective_config_settings.get("optimizerLr") not in (None, ""):
             # diffusion-pipe restores scheduler state on resume unless
             # force_constant_lr is present. Keep the user-selected LR effective

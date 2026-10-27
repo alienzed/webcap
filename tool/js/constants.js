@@ -97,7 +97,6 @@ ui = {
   advancedFilterFlagEl: document.getElementById('advanced-filter-flag'),
   advancedFilterInvalidArEl: document.getElementById('advanced-filter-invalid-ar'),
   advancedFilterUntaggedEl: document.getElementById('advanced-filter-untagged'),
-  advancedFilterIncompleteEl: document.getElementById('advanced-filter-incomplete'),
   advancedFilterSupersetEl: document.getElementById('advanced-filter-superset'),
   focusSetFilterControlsEl: document.getElementById('focus-set-filter-controls'),
   focusSetGridControlsEl: document.getElementById('focus-set-grid-controls'),

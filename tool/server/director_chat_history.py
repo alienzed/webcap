@@ -136,10 +136,11 @@ def create_chat(mode):
         return chat
 
 
-def open_chat(chat_id):
+def open_chat(chat_id, *, activate=True):
     with _LOCK:
         chat = _read(_path(chat_id))
-        _set_active(chat["mode"], chat_id)
+        if activate:
+            _set_active(chat["mode"], chat_id)
         return chat
 
 

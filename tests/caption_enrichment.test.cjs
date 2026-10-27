@@ -6,14 +6,15 @@ const vm = require('node:vm');
 
 const source = fs.readFileSync('tool/js/caption_enrichment.js','utf8');
 function fixture() {
-  let resolveJob, resolveStart;
+  let resolveJob, resolveStart, syncRenderer=false;
   const candidate = {mediaKey:'item-a',text:'A woman posing in a swimsuit, front view.'};
   const logs=[], calls=[], nodes={};
   function node() {
     const classes=new Set();
-    const n={textContent:'',disabled:false,className:'',children:[],attributes:{},
+    const n={textContent:'',disabled:false,className:'',children:[],attributes:{},focusCount:0,
       classList:{toggle(name,bool){bool?classes.add(name):classes.delete(name);},contains(name){return classes.has(name);}},
-      appendChild(child){this.children.push(child);},replaceChildren(){this.children=[];},
+      appendChild(child){this.children.push(child);},replaceChildren(...children){this.children=children;},
+      focus(){this.focusCount++;},
       setAttribute(name,v){this.attributes[name]=v;},
       addEventListener(name,fn){this['on'+name]=fn;}};
     return n;
@@ -34,7 +35,10 @@ function fixture() {
       openSight:{description:'A swimsuit with ring connectors.'}};},
     getCaptionAssistOmittedAssignments(){return [];},
     getCaptionAssistOmittedCorrections(){return [];},
-    resetFocusedCaptionUseArm(){},syncCaptionAssistCandidateUi(){calls.push('sync');},
+    resetFocusedCaptionUseArm(){},syncCaptionAssistCandidateUi(){
+      calls.push('sync');
+      if(syncRenderer) ctx.syncCaptionAssistEnrichmentUi(ctx.captionAssistCandidate);
+    },
     setStatus(msg){logs.push(['status',msg]);},
     reportConsoleWarning(label,msg){logs.push(['warn',msg]);},
     reportConsoleError(label,err){logs.push(['error',String(err)]);},
@@ -44,7 +48,8 @@ function fixture() {
   };
   vm.createContext(ctx);
   vm.runInContext(source,ctx);
-  return {ctx,candidate,nodes,logs,calls,resolveStart:()=>resolveStart,resolveJob:()=>resolveJob};
+  return {ctx,candidate,nodes,logs,calls,enableUiSync(){syncRenderer=true;},
+    resolveStart:()=>resolveStart,resolveJob:()=>resolveJob};
 }
 
 test('enrichment accepts verbatim unique anchor insertions, rejects malformed and duplicates',()=>{
@@ -92,6 +97,65 @@ test('restore is available before the last enrichment suggestion is resolved',()
   assert.equal(c.finishCaptionAssistEnrichment('restore'),true);
   assert.equal(candidate.text,'A woman posing in a swimsuit, front view.');
   assert.equal(c.captionAssistEnrichment,null);
+});
+
+test('overlapping Sight suggestions cannot blank the preview or overwrite the draft',()=>{
+  const f=fixture(),c=f.ctx,candidate=f.candidate;
+  candidate.text='A swimsuit, front view against a wall.';
+  c.captionAssistEnrichment={candidate,mediaKey:candidate.mediaKey,phase:'review',
+    originalText:candidate.text,jobId:'',suggestions:[
+      {anchor:'swimsuit',addition:' with metal rings',pending:true},
+      {anchor:'swimsuit, front view',addition:' in soft light',pending:true},
+      {anchor:'wall',addition:' with blue paint',pending:true}]};
+  f.enableUiSync();
+  c.syncCaptionAssistEnrichmentUi(candidate);
+  const preview=f.nodes['editor-caption-enrichment-preview'];
+  assert.equal(preview.children.filter(x=>x.className==='caption-enrichment-proposal').length,3);
+  c.resolveCaptionAssistEnrichment(c.captionAssistEnrichment.suggestions[0],true);
+  assert.equal(candidate.text,'A swimsuit with metal rings, front view against a wall.');
+  assert.equal(c.captionAssistEnrichment.suggestions[1].pending,false,
+    'conflicting anchor must be skipped after the accepted edit');
+  assert.equal(preview.children.filter(x=>x.className==='caption-enrichment-proposal').length,1);
+  assert.match(preview.children.map(x=>x.textContent || '').join(''),'A swimsuit with metal rings, front view against a wall.');
+  assert.match(f.nodes['editor-caption-enrichment-status'].textContent,/1 conflicting skipped/);
+  assert.equal(preview.focusCount,1,'focus stays inside the review after a suggestion button is replaced');
+  assert.ok(f.logs.some(entry=>entry[0]==='warn' && /conflicting suggestion/.test(entry[1])),
+    'discarding a stale suggestion must be visible in diagnostics');
+  c.resolveCaptionAssistEnrichment(c.captionAssistEnrichment.suggestions[2],true);
+  assert.equal(c.captionAssistEnrichment,null);
+  assert.equal(candidate.text,'A swimsuit with metal rings, front view against a wall with blue paint.');
+  assert.equal(f.nodes['editor-caption-candidate-text'].focusCount,1,
+    'last review action restores focus to the real draft');
+});
+
+test('accept all skips anchors invalidated by earlier suggestions and leaves a focused draft',()=>{
+  const f=fixture(),c=f.ctx,candidate=f.candidate;
+  candidate.text='A swimsuit, front view against a wall.';
+  c.captionAssistEnrichment={candidate,mediaKey:candidate.mediaKey,phase:'review',
+    originalText:candidate.text,jobId:'',suggestions:[
+      {anchor:'swimsuit',addition:' with rings',pending:true},
+      {anchor:'swimsuit, front view',addition:' with details',pending:true},
+      {anchor:'wall',addition:' with paint',pending:true}]};
+  f.enableUiSync();
+  c.syncCaptionAssistEnrichmentUi(candidate);
+  assert.equal(c.finishCaptionAssistEnrichment('accept'),true);
+  assert.equal(c.captionAssistEnrichment,null);
+  assert.equal(candidate.text,'A swimsuit with rings, front view against a wall with paint.');
+  assert.equal(f.nodes['editor-caption-candidate-text'].focusCount,1);
+});
+
+test('Edit caption exits review and focuses the existing contenteditable draft without applying proposals',()=>{
+  const f=fixture(),c=f.ctx,candidate=f.candidate;
+  c.captionAssistEnrichment={candidate,mediaKey:candidate.mediaKey,phase:'review',
+    originalText:candidate.text,jobId:'',suggestions:[
+      {anchor:'swimsuit',addition:' with rings',pending:true}]};
+  f.enableUiSync();
+  c.syncCaptionAssistEnrichmentUi(candidate);
+  assert.match(f.nodes['editor-caption-enrichment-status'].textContent,/Review mode .*Accept\/reject or Edit caption/);
+  assert.equal(c.finishCaptionAssistEnrichment('done'),true);
+  assert.equal(candidate.text,'A woman posing in a swimsuit, front view.');
+  assert.equal(c.captionAssistEnrichment,null);
+  assert.equal(f.nodes['editor-caption-candidate-text'].focusCount,1);
 });
 
 test('enrichment is opt-in, keeps draft during generation and discards cancelled result',async()=>{

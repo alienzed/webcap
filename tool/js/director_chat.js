@@ -105,6 +105,173 @@
     ];
   }
 
+  var renderedStoryboardAttachmentSnapshot = '';
+
+  function storyboardAttachmentItems() {
+    return Object.keys(state.storyboardAttachments).map(function (key) {
+      var item = state.storyboardAttachments[key];
+      if (!item || typeof item.label !== 'string' || typeof item.content !== 'string') {
+        throw new Error('Storyboard Chat attachment has invalid reference content: ' + key);
+      }
+      return { key: key, label: item.label, content: item.content };
+    });
+  }
+
+  function storyboardAttachmentCopyAll() {
+    return storyboardAttachmentItems().map(function (item) {
+      return item.label + ':\n' + item.content;
+    }).join('\n\n');
+  }
+
+  function storyboardAttachmentFields(item) {
+    var parsed;
+    try { parsed = JSON.parse(item.content); }
+    catch (err) { return [{ label: 'Reference text', text: item.content }]; }
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return [{ label: 'Reference text', text: item.content }];
+    }
+    var labels = {
+      title: 'Title',
+      concept: 'Concept / Overview',
+      style: 'Visual / Atmosphere',
+      summary: 'Summary',
+      entryState: 'Entry State',
+      exitState: 'Exit State',
+      prompt: 'Generation Prompt',
+      notes: 'Notes',
+      invariants: 'Invariants',
+      scenes: 'Scenes'
+    };
+    var guidelineLabels = {
+      visualFocus: 'Visual Focus',
+      creativeDirection: 'Creative Direction',
+      variation: 'Variation / Repetition',
+      pacing: 'Pacing / Rhythm',
+      sceneRelationships: 'Scene Relationships'
+    };
+    function valueText(value) {
+      return typeof value === 'string' ? value : JSON.stringify(value, null, 2);
+    }
+    function displayLabel(key) {
+      return labels[key] || key.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/^./, function (first) { return first.toUpperCase(); });
+    }
+    var fields = [];
+    Object.keys(parsed).forEach(function (key) {
+      var value = parsed[key];
+      if (key === 'guidelines' && value && typeof value === 'object' && !Array.isArray(value)) {
+        var guidelineKeys = Object.keys(value);
+        if (!guidelineKeys.length) fields.push({ label: 'Directing Guidelines', text: '{}' });
+        guidelineKeys.forEach(function (name) {
+          fields.push({ label: 'Guidelines · ' + (guidelineLabels[name] || displayLabel(name)), text: valueText(value[name]) });
+        });
+      } else if ((key === 'scenes' || key === 'invariants') && Array.isArray(value) && value.length) {
+        value.forEach(function (entry, index) {
+          var name = key === 'scenes'
+            ? 'Scene ' + String(entry && entry.number || index + 1) + (entry && entry.title ? ' · ' + entry.title : '')
+            : 'Invariant ' + String(index + 1) + (entry && entry.title ? ' · ' + entry.title : '');
+          fields.push({ label: name, text: valueText(entry) });
+        });
+      } else {
+        fields.push({ label: displayLabel(key), text: valueText(value) });
+      }
+    });
+    return fields;
+  }
+
+  function copyStoryboardAttachment(text, label) {
+    var status = el('director-chat-attachments-status');
+    var promise;
+    try {
+      if (!navigator.clipboard || typeof navigator.clipboard.writeText !== 'function') {
+        throw new Error('Clipboard access is unavailable. Select the reference text to copy it manually.');
+      }
+      promise = navigator.clipboard.writeText(text);
+    } catch (err) {
+      promise = Promise.reject(err);
+    }
+    return Promise.resolve(promise).then(function () {
+      status.textContent = 'Copied ' + label + '.';
+    }).catch(function (err) {
+      status.textContent = 'Copy failed: ' + String(err.message || err);
+      if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Storyboard context copy', err);
+      else console.error('[Storyboard context copy]', err);
+    });
+  }
+
+  function renderStoryboardAttachmentViewer() {
+    var panel = el('director-chat-attachments');
+    var toggle = el('director-chat-attachments-toggle');
+    var body = el('director-chat-attachments-body');
+    var list = el('director-chat-attachments-list');
+    var status = el('director-chat-attachments-status');
+    if (!panel || !toggle || !body || !list || !status) {
+      throw new Error('Storyboard Chat attachment viewer markup is missing.');
+    }
+    var items = storyboardAttachmentItems();
+    var visible = state.activeMode === 'storyboard' && items.length > 0;
+    panel.classList.toggle('hidden', !visible);
+    if (!visible) {
+      toggle.setAttribute('aria-expanded', 'false');
+      body.classList.add('hidden');
+      renderedStoryboardAttachmentSnapshot = '';
+      list.replaceChildren();
+      status.textContent = '';
+      return;
+    }
+    var expanded = toggle.getAttribute('aria-expanded') === 'true';
+    toggle.textContent = (expanded ? 'Hide' : 'View') + ' attached context · ' + items.length;
+    body.classList.toggle('hidden', !expanded);
+    if (!expanded) return;
+    var snapshot = JSON.stringify(items);
+    if (snapshot === renderedStoryboardAttachmentSnapshot) return;
+    renderedStoryboardAttachmentSnapshot = snapshot;
+    status.textContent = '';
+    var previousScroll = list.scrollTop;
+    list.replaceChildren();
+    items.forEach(function (item) {
+      var container = document.createElement('section');
+      container.className = 'director-chat-attachment';
+      var header = document.createElement('div');
+      header.className = 'director-chat-attachment-head';
+      var title = document.createElement('strong');
+      title.textContent = item.label;
+      var copyReference = document.createElement('button');
+      copyReference.type = 'button';
+      copyReference.className = 'review-captions-btn';
+      copyReference.textContent = 'Copy reference';
+      copyReference.setAttribute('aria-label', 'Copy ' + item.label + ' reference');
+      copyReference.onclick = function () {
+        copyStoryboardAttachment(item.label + ':\n' + item.content, item.label);
+      };
+      header.append(title, copyReference);
+      container.appendChild(header);
+      storyboardAttachmentFields(item).forEach(function (field) {
+        var section = document.createElement('section');
+        section.className = 'director-chat-attachment-field';
+        var line = document.createElement('div');
+        line.className = 'director-chat-attachment-field-head';
+        var name = document.createElement('strong');
+        name.textContent = field.label;
+        var copy = document.createElement('button');
+        copy.type = 'button';
+        copy.className = 'review-captions-btn';
+        copy.textContent = 'Copy field';
+        copy.setAttribute('aria-label', 'Copy ' + field.label + ' from ' + item.label);
+        copy.onclick = function () {
+          copyStoryboardAttachment(field.text, field.label);
+        };
+        var value = document.createElement('pre');
+        value.textContent = field.text || '(empty)';
+        value.classList.toggle('is-empty', !field.text);
+        line.append(name, copy);
+        section.append(line, value);
+        container.appendChild(section);
+      });
+      list.appendChild(container);
+    });
+    list.scrollTop = previousScroll;
+  }
+
   function syncModeUi() {
     var row = el('director-chat-mode-row');
     var host = el('director-chat-mode-switch');
@@ -167,6 +334,7 @@
     if (prepare) prepare.classList.toggle('hidden', state.activeMode !== 'storyboard' || !state.workshop);
     var storyPrepare = el('director-chat-story-prepare');
     storyPrepare.classList.toggle('hidden', state.activeMode !== 'storyboard' || !guidelineStoryId());
+    renderStoryboardAttachmentViewer();
     renderMessages();
     syncControls();
   }
@@ -962,7 +1130,9 @@
         state.storyGuidelineProposal = null;
         var attachedKey = 'story:' + proposal.storyId;
         if (state.storyboardAttachments[attachedKey]) {
-          state.storyboardAttachments[attachedKey] = window.getStoryboardAssistantContext('story');
+          // The Story provider now returns a Promise after flushing saves.
+          // Reuse the normal attach path so no Promise is stored as reference data.
+          attachStoryboardContext('story');
         }
         if (state.workshop && state.workshop.storyId === proposal.storyId) {
           state.workshop.guidelines = Object.assign({}, story.guidelines || {});
@@ -1237,6 +1407,15 @@
     stop.onclick = stopJob;
     copy.onclick = function () {
       openDirectorRequestInspector(state.requestDiagnostic, 'Director Chat Request');
+    };
+    var contextToggle = el('director-chat-attachments-toggle');
+    contextToggle.onclick = function () {
+      var expanded = contextToggle.getAttribute('aria-expanded') === 'true';
+      contextToggle.setAttribute('aria-expanded', expanded ? 'false' : 'true');
+      renderStoryboardAttachmentViewer();
+    };
+    el('director-chat-attachments-copy-all').onclick = function () {
+      copyStoryboardAttachment(storyboardAttachmentCopyAll(), 'all attached references');
     };
     el('director-chat-story-prepare').onclick = function () {
       try { prepareStoryChanges(); }

@@ -47,6 +47,14 @@ function captionAssistEnrichmentPendingSuggestions() {
   return captionAssistEnrichment.suggestions.filter(function (row) { return row.pending; });
 }
 
+function captionAssistEnrichmentBlocksMediaShortcut(event) {
+  return !!(event && !event.defaultPrevented &&
+    captionAssistEnrichmentReviewActive(captionAssistCandidate) &&
+    !isEditableElement(document.activeElement) &&
+    !event.altKey && !event.ctrlKey && !event.metaKey &&
+    (/^Arrow(?:Left|Right|Up|Down)$/.test(event.key) || /^[a-z0-5]$/i.test(event.key)));
+}
+
 function captionAssistEnrichmentInsert(text, row) {
   var at = text.indexOf(row.anchor);
   if (at < 0 || text.indexOf(row.anchor, at + row.anchor.length) !== -1)
@@ -89,7 +97,7 @@ function syncCaptionAssistEnrichmentUi(candidate) {
   var reviewing = captionAssistEnrichmentReviewActive(candidate);
   preview.classList.toggle('hidden', !reviewing);
   actions.classList.toggle('hidden', !reviewing && !busy);
-  preview.replaceChildren();
+  if (!reviewing) preview.replaceChildren();
   if (busy) {
     acceptAll.disabled = discard.disabled = restore.disabled = done.disabled = true;
     status.textContent = 'Director looking for missing visual details…';
@@ -98,14 +106,26 @@ function syncCaptionAssistEnrichmentUi(candidate) {
   if (!reviewing) return;
 
   var text = String(candidate.text || '');
+  var skipped = 0;
   var pending = captionAssistEnrichmentPendingSuggestions().map(function (row, i) {
-    return { row: row, i: i, at: text.indexOf(row.anchor) + row.anchor.length };
-  }).sort(function (a,b) {return a.at - b.at || a.i - b.i;});
+    var start = text.indexOf(row.anchor);
+    if (start < 0 || text.indexOf(row.anchor, start + row.anchor.length) !== -1) {
+      row.pending = false; // Another accepted addition invalidated this exact anchor.
+      skipped += 1;
+      return null;
+    }
+    return { row: row, i: i, at: start + row.anchor.length };
+  }).filter(Boolean).sort(function (a,b) {return a.at - b.at || a.i - b.i;});
+  if (skipped) {
+    active.skipped = (active.skipped || 0) + skipped;
+    reportConsoleWarning('Caption enrichment',
+      skipped + ' conflicting suggestion(s) skipped after another addition changed their anchor.');
+  }
+  // Build before replacing visible content; an unusable suggestion must never blank the draft.
+  var nodes = [];
   var offset = 0;
   pending.forEach(function (part) {
-    if (part.at < offset || part.at < part.row.anchor.length)
-      throw new Error('Caption enrichment anchor is no longer valid.');
-    preview.appendChild(document.createTextNode(text.slice(offset, part.at)));
+    nodes.push(document.createTextNode(text.slice(offset, part.at)));
     var mark = document.createElement('span');
     mark.className = 'caption-enrichment-proposal';
     var addition = document.createElement('span');
@@ -122,13 +142,13 @@ function syncCaptionAssistEnrichmentUi(candidate) {
     }
     action('✓', 'Keep suggestion', true);
     action('×', 'Reject suggestion', false);
-    preview.appendChild(mark);
+    nodes.push(mark);
     offset = part.at;
   });
-  preview.appendChild(document.createTextNode(text.slice(offset)));
-  status.textContent = pending.length
-    ? pending.length + ' proposed detail' + (pending.length === 1 ? '' : 's') + ' · accept or reject individually'
-    : 'All suggestions reviewed. Continue editing or restore the original.';
+  nodes.push(document.createTextNode(text.slice(offset)));
+  preview.replaceChildren.apply(preview, nodes);
+  status.textContent = 'Review mode · ' + pending.length + ' to review · Accept/reject or Edit caption' +
+    (active.skipped ? ' · ' + active.skipped + ' conflicting skipped' : '');
   acceptAll.disabled = discard.disabled = !pending.length;
   restore.disabled = text === active.originalText;
   done.disabled = false;
@@ -159,8 +179,12 @@ function resolveCaptionAssistEnrichment(row, keep) {
   else
     syncCaptionAssistCandidateUi();
   // Once every suggestion is resolved, return to the normal editable draft.
-  if (!captionAssistEnrichmentPendingSuggestions().length)
+  if (!captionAssistEnrichmentPendingSuggestions().length) {
     finishCaptionAssistEnrichment('done');
+  } else {
+    // The clicked suggestion button was replaced during rendering.
+    document.getElementById('editor-caption-enrichment-preview').focus({preventScroll: true});
+  }
 }
 
 function finishCaptionAssistEnrichment(mode) {
@@ -168,9 +192,12 @@ function finishCaptionAssistEnrichment(mode) {
   var session = captionAssistEnrichment;
   if (mode === 'accept') {
     captionAssistEnrichmentPendingSuggestions().slice().forEach(function (row) {
-      resolveCaptionAssistEnrichment(row, true);
+      if (captionAssistEnrichmentReviewActive(captionAssistCandidate) && row.pending)
+        resolveCaptionAssistEnrichment(row, true);
     });
-    // Resolving the last suggestion closes the read-only review automatically.
+    // Another accepted addition may have invalidated the remaining anchors.
+    if (captionAssistEnrichmentReviewActive(captionAssistCandidate))
+      finishCaptionAssistEnrichment('done');
     return true;
   }
   if (mode === 'restore') updateCaptionAssistEnrichedDraft(session.originalText);
@@ -180,6 +207,8 @@ function finishCaptionAssistEnrichment(mode) {
   if (cached) cached.handled = true; // Explicit review is not offered again automatically.
   cancelCaptionAssistEnrichment();
   syncCaptionAssistCandidateUi();
+  // Review actions return directly to the real contenteditable draft.
+  document.getElementById('editor-caption-candidate-text').focus({preventScroll: true});
   return true;
 }
 
@@ -373,6 +402,14 @@ function runCaptionAssistEnrichment() {
 }
 
 function wireCaptionAssistEnrichment() {
+  if (!document.__captionEnrichmentKeyboardBound) {
+    document.__captionEnrichmentKeyboardBound = true;
+    document.addEventListener('keydown', function (event) {
+      // Focus Caption has its own capture handler; protect standalone Caption Assist too.
+      if (!isFocusedCaptionOpen() && captionAssistEnrichmentBlocksMediaShortcut(event))
+        event.stopImmediatePropagation();
+    }, true);
+  }
   var actions = {
     'editor-caption-enrich': runCaptionAssistEnrichment,
     'editor-caption-enrichment-accept-all': function () { finishCaptionAssistEnrichment('accept'); },

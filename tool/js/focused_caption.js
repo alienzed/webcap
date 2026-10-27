@@ -1075,6 +1075,11 @@ function wireFocusedCaption() {
         renderFileList();
         return;
       }
+      if (captionAssistEnrichmentReviewActive(captionAssistCandidate)) {
+        // Review owns media shortcuts; keep native scrolling, Tab and button Enter.
+        if (captionAssistEnrichmentBlocksMediaShortcut(event)) event.stopImmediatePropagation();
+        return;
+      }
       if (key === 'ArrowLeft' || key === 'ArrowUp') {
         event.preventDefault();
         event.stopImmediatePropagation();

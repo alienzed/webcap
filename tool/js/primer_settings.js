@@ -1163,6 +1163,7 @@ function syncCaptionAssistCandidateUi(options) {
   renderCaptionAssistMissingGroups(missingEl, mediaKey, missingGroups);
   renderCaptionAssistComparison(comparisonEl, state.currentItem, visible ? candidate : null);
   var enrichmentPreview = !!(visible && captionAssistEnrichmentReviewActive(candidate));
+  textEl.parentElement.classList.toggle('is-enrichment-review', enrichmentPreview);
   textEl.classList.toggle('hidden', !visible || enrichmentPreview);
   textEl.setAttribute('contenteditable', visible && !enrichmentPreview ? 'true' : 'false');
   textEl.setAttribute('role', visible ? 'textbox' : 'document');

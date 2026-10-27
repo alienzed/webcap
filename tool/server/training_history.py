@@ -13,7 +13,7 @@ from pathlib import Path, PurePosixPath
 import tomllib
 
 from . import config as app_config
-from .training_config_files import output_dir_from_config, training_config_path, h3_premerged_image_model_path
+from .training_config_files import output_dir_from_config, training_config_path, h3_premerged_image_model_path, h3_premerged_ostris_model_path
 from .training_action import managed_actions_for_folder, read_action
 from .training_profiles import config_for_id, config_for_stage
 from .training_run_manifest import selected_epoch as selected_run_epoch
@@ -52,6 +52,9 @@ def _h3_training_method(parsed_config):
     model = parsed_config.get("model") if isinstance(parsed_config.get("model"), dict) else {}
     if _h3_uses_image_adapter(parsed_config):
         return "image"
+    source = Path(str(model.get("diffusion_model") or "").replace("\\", "/")).name
+    if source == Path(h3_premerged_ostris_model_path().replace("\\", "/")).name:
+        return "ostris"
     merged = model.get("merge_adapters")
     if isinstance(merged, list) and any(
         Path(str(item).replace("\\", "/")).name.startswith("minimax_h3_training_adapter_v")
@@ -399,9 +402,12 @@ def discover_runs(folder_path, stage=""):
                     continue
                 saved_config, parsed_saved = _saved_config_for_candidate(entry, config_meta, wanted_identity)
                 if saved_config is None and stage == "h3":
-                    image_identity = dict(wanted_identity)
-                    image_identity["diffusion_model"] = h3_premerged_image_model_path()
-                    saved_config, parsed_saved = _saved_config_for_candidate(entry, config_meta, image_identity)
+                    for fused_path in (h3_premerged_image_model_path(), h3_premerged_ostris_model_path()):
+                        variant_identity = dict(wanted_identity)
+                        variant_identity["diffusion_model"] = fused_path
+                        saved_config, parsed_saved = _saved_config_for_candidate(entry, config_meta, variant_identity)
+                        if saved_config is not None:
+                            break
                 if saved_config is None:
                     app_config.debug_print("[training_history] Skipping", entry, ": no matching", stage, "model config.")
                     continue
@@ -485,9 +491,12 @@ def validate_resumable_run_for_path(folder_path, stage, run_path, reference_conf
         # only in the captured config, leaving the set's template unchanged.
         # Managed checkpoint identity is verified against its saved config;
         # do not treat other unrelated model files as interchangeable.
-        image_identity = dict(wanted_identity)
-        image_identity["diffusion_model"] = h3_premerged_image_model_path()
-        saved_config, parsed_saved = _saved_config_for_candidate(directory, config_meta, image_identity)
+        for fused_path in (h3_premerged_image_model_path(), h3_premerged_ostris_model_path()):
+            variant_identity = dict(wanted_identity)
+            variant_identity["diffusion_model"] = fused_path
+            saved_config, parsed_saved = _saved_config_for_candidate(directory, config_meta, variant_identity)
+            if saved_config is not None:
+                break
     if saved_config is None:
         raise ValueError("Resume directory has no readable compatible saved config: " + raw_path)
     point = resume_point_from_directory(folder_path, stage, raw_path)

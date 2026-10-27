@@ -4,7 +4,7 @@ import pytest
 
 from tool.server import config as app_config
 from tool.server.training_config_files import (
-    apply_h3_training_method, apply_h3_resumed_model, h3_ostris_training_adapter_path,
+    apply_h3_training_method, apply_h3_resumed_model, h3_premerged_ostris_model_path,
 )
 from tool.server.training_history import _h3_training_method
 
@@ -25,10 +25,11 @@ def test_ostris_method_replaces_cfg_with_one_fixed_model_file(tmp_path, monkeypa
     captured = apply_h3_training_method(SOURCE, "ostris")
     saved = tomllib.loads(captured)
     assert "cfg" not in saved["model"]
-    assert saved["model"]["diffusion_model"] == "/models/standard_h3.safetensors"
-    assert saved["model"]["merge_adapters"] == [h3_ostris_training_adapter_path()]
+    assert saved["model"]["diffusion_model"] == h3_premerged_ostris_model_path()
+    assert "merge_adapters" not in saved["model"]
     assert saved["model"]["shift"] == 8
     assert _h3_training_method(saved) == "ostris"
+    assert h3_premerged_ostris_model_path().endswith("minimax_h3_fl2va_pruned_int8_convrot_ostris_v3_fused.safetensors")
     assert tomllib.loads(SOURCE)["model"]["cfg"] == 4
 
 

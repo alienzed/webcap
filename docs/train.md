@@ -87,10 +87,10 @@ For successful managed runs, WebCap records cumulative active training time: run
 For fresh MiniMax H3 runs, **H3 training method** offers three exclusive choices:
 
 - **CFG augmentation (default):** captures `[model] cfg = 4` and removes `merge_adapters`.
-- **Ostris training adapter:** captures `[model] merge_adapters = ["{MODELS_ROOT}/Stable-diffusion/mh3/minimax_h3_training_adapter_v3.safetensors"]` and removes `cfg`, letting diffusion-pipe use its default of 1. The ordinary H3 checkpoint remains the diffusion model.
+- **Ostris training adapter:** selects the separately premerged `{MODELS_ROOT}/Stable-diffusion/mh3/minimax_h3_fl2va_pruned_int8_convrot_ostris_v3_fused.safetensors`, removing `cfg` and `merge_adapters`. Training never merges the adapter at startup.
 - **Image-adapted checkpoint:** the existing premerged model selection; also removes `cfg` and `merge_adapters`.
 
-Download the `minimax_h3_training_adapter_v3.safetensors` file from https://huggingface.co/ostris/minimax_h3_training_adapter/tree/main and put it under the configured models root at `Stable-diffusion/mh3/minimax_h3_training_adapter_v3.safetensors`. WebCap validates its presence when queuing an Ostris run; the adapter is merged by diffusion-pipe at model initialization. The model file is not downloaded automatically. The selected method changes only the immutable captured run config, never the set-owned TOML.
+Create and verify the fused Ostris v3 model offline using `tool/server/h3_premerge_export.py`, the standard INT8 ConvRot H3 checkpoint and the `minimax_h3_training_adapter_v3.safetensors` file from https://huggingface.co/ostris/minimax_h3_training_adapter/tree/main. Publish the verified checkpoint at `{MODELS_ROOT}/Stable-diffusion/mh3/minimax_h3_fl2va_pruned_int8_convrot_ostris_v3_fused.safetensors`. WebCap checks that file exists before queuing and never attempts to merge during training. The selected method changes only the captured run config, never the set-owned TOML. The existing exporter must pass its full-fusion and reload verification before the checkpoint is considered ready.
 
 On **Resume**, the method is not selectable: the captured checkpoint's recorded diffusion model, adapter list, and CFG are inherited exactly, including the adapter version, rather than substituting the current default. **Fine-tune from saved LoRA** creates a new run and permits a new choice.
 

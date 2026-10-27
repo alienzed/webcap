@@ -204,8 +204,10 @@ function mediaGridPruneSelectionToItems(items) {
   }
 }
 
-function mediaGridSyncItemsToCurrentView() {
-  var items = mediaGridGetVisibleItems();
+function mediaGridSyncItemsToCurrentView(visibleItems) {
+  var items = (Array.isArray(visibleItems) ? visibleItems : mediaGridGetVisibleItems()).filter(function (item) {
+    return !!(item && item.key && item.fileName);
+  });
   mediaGridState.baseItems = items;
   mediaGridPruneSelectionToItems(items);
   mediaGridState.items = items;

@@ -81,7 +81,7 @@ function openMediaGridSurface() {
   closeMediaGridViewer();
   mediaGridCaptureWorkspaceState();
   mediaGridBeginSession();
-  mediaGridSyncItemsToCurrentView();
+  mediaGridSyncItemsToCurrentView(items);
   mediaGridSeedSelectionFromCurrentItem();
   mediaGridEnsureMainWorkbenchVisible();
   surfaceEls.surface.classList.remove('hidden');
@@ -95,7 +95,7 @@ function openMediaGridSurface() {
   if (typeof renderPreviewHeaderMeta === 'function') {
     renderPreviewHeaderMeta();
   }
-  renderMediaGridSurface();
+  renderMediaGridSurface(items);
 }
 
 function closeMediaGridSurface() {
@@ -107,8 +107,8 @@ function closeMediaGridSurface() {
   mediaGridRestoreItemWorkspace(previousWorkspaceState);
 }
 
-function renderMediaGridSurface() {
-  mediaGridSyncItemsToCurrentView();
+function renderMediaGridSurface(visibleItems) {
+  mediaGridSyncItemsToCurrentView(visibleItems);
   mediaGridEnsureMainWorkbenchVisible();
   renderMediaGridSurfaceHeader();
   renderMediaGridCanvas();
@@ -353,9 +353,9 @@ function mediaGridRefreshAfterMutation() {
   renderMediaGridSurface();
 }
 
-function mediaGridRefreshFromCurrentFilters() {
+function mediaGridRefreshFromCurrentFilters(visibleItems) {
   if (!mediaGridState.open) return;
-  renderMediaGridSurface();
+  renderMediaGridSurface(visibleItems);
 }
 
 function mediaGridHandleKeydown(e) {

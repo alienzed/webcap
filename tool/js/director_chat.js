@@ -28,7 +28,17 @@
     systemStatusRequest: null,
     activityLastMemory: null,
     activityLoadBaseline: null,
-    activityLoadModelId: ''
+    activityLoadModelId: '',
+    sessionByMode: { chat: null, storyboard: null },
+    sessionActiveByMode: {},
+    sessionList: [],
+    sessionReady: false,
+    sessionWrite: Promise.resolve(),
+    sessionSaving: false,
+    sessionTimer: 0,
+    sessionDirty: { chat: false, storyboard: false },
+    sessionError: false,
+    draftByMode: { chat: '', storyboard: '' }
   };
   var STORYBOARD_WORKSHOP_PRIMER = [
     'You are collaborating with an author developing short AI-generated videos.',
@@ -299,7 +309,7 @@
     if (description) {
       description.textContent = state.activeMode === 'storyboard'
         ? (state.workshop ? 'Scene Workshop · ' + state.workshop.sceneTitle : (state.attachmentPending ? 'Attaching Storyboard context…' : 'Storyboard creative workshop · ' + (Object.keys(state.storyboardAttachments).map(function (key) { return state.storyboardAttachments[key].label; }).join(', ') || 'Attach a Story or Scene')))
-        : (active ? String(active.description || active.label || '') : 'Session-only freeform model conversation');
+        : (active ? String(active.description || active.label || '') : 'Saved Assistant conversation');
     }
     if (input) {
       input.placeholder = state.activeMode === 'storyboard' ? 'Discuss a creative improvement or ask a focused question…' :
@@ -346,10 +356,15 @@
       if (!mode || !modeAvailable(mode)) modeId = 'chat';
     }
     if (state.pending || state.activeMode === modeId) return;
+    var input = el('director-chat-input');
+    if (persistentMode(state.activeMode) && state.sessionReady) {
+      state.draftByMode[state.activeMode] = input.value;
+      if (state.sessionDirty[state.activeMode]) flushSessionSave().catch(showSessionFailure);
+    }
     state.activeMode = modeId;
+    if (persistentMode(modeId)) input.value = state.draftByMode[modeId] || '';
     finishProgress(null);
     syncModeUi();
-    var input = el('director-chat-input');
     if (input) input.focus();
   }
 
@@ -369,6 +384,313 @@
         }
         return payload;
       });
+    });
+  }
+
+  // Chat sessions are independent of Story navigation. Only explicitly attached
+  // reference snapshots are persisted alongside their conversation.
+  function persistentMode(mode) {
+    return mode === 'chat' || mode === 'storyboard';
+  }
+
+  function showSessionStatus(message, error) {
+    var status = el('director-chat-save-status');
+    if (status) {
+      status.textContent = message;
+      status.dataset.error = error ? 'true' : 'false';
+    }
+    state.sessionError = !!error;
+    if (error && typeof window.reportConsoleError === 'function') {
+      window.reportConsoleError('Assistant conversation save', error);
+    }
+  }
+
+  function upsertSessionSummary(chat) {
+    var summary = {
+      id: chat.id, mode: chat.mode, title: chat.title,
+      createdAt: chat.createdAt, updatedAt: chat.updatedAt, revision: chat.revision
+    };
+    state.sessionList = state.sessionList.filter(function (item) { return item.id !== chat.id; });
+    state.sessionList.unshift(summary);
+    state.sessionList.sort(function (a, b) { return b.updatedAt.localeCompare(a.updatedAt); });
+    renderSessionHistory();
+  }
+
+  function renderSessionHistory() {
+    var list = el('director-chat-history-list');
+    var button = el('director-chat-history-toggle');
+    var panel = el('director-chat-history-panel');
+    if (!list || !button || !panel) return;
+    var expanded = button.getAttribute('aria-expanded') === 'true';
+    panel.classList.toggle('hidden', !expanded);
+    list.replaceChildren();
+    if (!state.sessionList.length) {
+      var empty = document.createElement('p');
+      empty.textContent = 'No saved conversations yet.';
+      list.appendChild(empty);
+    }
+    state.sessionList.forEach(function (chat) {
+      var item = document.createElement('div');
+      item.className = 'director-chat-history-item';
+      if (state.sessionByMode[state.activeMode] &&
+          state.sessionByMode[state.activeMode].id === chat.id) item.classList.add('is-current');
+
+      var open = document.createElement('button');
+      open.type = 'button';
+      open.className = 'review-captions-btn';
+      open.textContent = (chat.mode === 'storyboard' ? 'Storyboard · ' : '') + chat.title;
+      open.title = chat.title + ' · ' + new Date(chat.updatedAt).toLocaleString();
+      open.onclick = function () { selectSession(chat.id); };
+      item.appendChild(open);
+
+      var rename = document.createElement('button');
+      rename.type = 'button';
+      rename.className = 'review-captions-btn';
+      rename.textContent = 'Rename';
+      rename.title = 'Rename conversation';
+      rename.onclick = function () {
+        item.replaceChildren();
+        var input = document.createElement('input');
+        input.value = chat.title;
+        input.setAttribute('aria-label', 'Conversation title');
+        var save = document.createElement('button');
+        save.type = 'button';
+        save.className = 'review-captions-btn';
+        save.textContent = 'Save';
+        save.onclick = function () {
+          renameSession(chat.id, input.value.trim());
+        };
+        var cancel = document.createElement('button');
+        cancel.type = 'button';
+        cancel.className = 'review-captions-btn';
+        cancel.textContent = 'Cancel';
+        cancel.onclick = renderSessionHistory;
+        item.append(input, save, cancel);
+        input.focus();
+        input.select();
+        input.onkeydown = function (event) {
+          if (event.key === 'Enter') save.click();
+          if (event.key === 'Escape') renderSessionHistory();
+        };
+      };
+      item.appendChild(rename);
+
+      var remove = document.createElement('button');
+      remove.type = 'button';
+      remove.className = 'review-captions-btn';
+      remove.textContent = 'Delete';
+      remove.title = 'Permanently delete this saved conversation';
+      remove.onclick = function () { deleteSession(chat.id); };
+      item.appendChild(remove);
+      list.appendChild(item);
+    });
+  }
+
+  function showSessionFailure(error) {
+    showSessionStatus('Save failed: ' + String(error.message || error), error);
+    syncControls();
+  }
+
+  function persistSession(mode) {
+    if (!persistentMode(mode)) return Promise.resolve();
+    if (!state.sessionReady) return Promise.reject(new Error('Assistant conversation history has not loaded.'));
+    var messages = (mode === 'chat' ? state.messages : state.modeMessages.storyboard || []).map(function (message) {
+      return { role: message.role, content: message.content };
+    });
+    var draft = state.draftByMode[mode] || '';
+    var attachments = mode === 'storyboard' ? JSON.parse(JSON.stringify(state.storyboardAttachments)) : {};
+    var workshop = mode === 'storyboard' ? JSON.parse(JSON.stringify(state.workshop)) : null;
+    var title = state.sessionByMode[mode] ? state.sessionByMode[mode].title : 'New chat';
+    if (title === 'New chat') {
+      var first = messages.find(function (message) { return message.role === 'user' && message.content.trim(); });
+      if (first) title = first.content.replace(/\s+/g, ' ').trim().slice(0, 72);
+    }
+    state.sessionDirty[mode] = false;
+    showSessionStatus('Saving…', false);
+    state.sessionSaving = true;
+    var action = state.sessionWrite.catch(function () {}).then(function () {
+      var session = state.sessionByMode[mode];
+      var ready = session ? Promise.resolve(session) : requestJson('/fs/director/chats', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode: mode })
+      }).then(function (payload) {
+        state.sessionByMode[mode] = payload.chat;
+        state.sessionActiveByMode[mode] = payload.chat.id;
+        upsertSessionSummary(payload.chat);
+        return payload.chat;
+      });
+      return ready.then(function (current) {
+        return requestJson('/fs/director/chats/' + encodeURIComponent(current.id), {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            expectedRevision: current.revision, title: title,
+            messages: messages, draft: draft, attachments: attachments, workshop: workshop
+          })
+        });
+      }).then(function (payload) {
+        state.sessionByMode[mode] = payload.chat;
+        upsertSessionSummary(payload.chat);
+        if (!state.sessionDirty[mode]) showSessionStatus('Saved', false);
+        return payload.chat;
+      });
+    });
+    state.sessionWrite = action;
+    action.finally(function () { if (state.sessionWrite === action) state.sessionSaving = false; }).catch(function () {});
+    return action.catch(function (error) {
+      state.sessionDirty[mode] = true;
+      showSessionFailure(error);
+      throw error;
+    });
+  }
+
+  function scheduleSessionSave() {
+    var mode = state.activeMode;
+    if (!persistentMode(mode) || !state.sessionReady) return;
+    state.sessionDirty[mode] = true;
+    showSessionStatus('Unsaved changes', false);
+    if (state.sessionTimer) clearTimeout(state.sessionTimer);
+    state.sessionTimer = setTimeout(function () {
+      state.sessionTimer = 0;
+      persistSession(mode).catch(function () {});
+    }, 450);
+  }
+
+  function flushSessionSave() {
+    if (state.sessionTimer) {
+      clearTimeout(state.sessionTimer);
+      state.sessionTimer = 0;
+    }
+    var mode = state.activeMode;
+    return state.sessionDirty[mode] ? persistSession(mode) : state.sessionWrite;
+  }
+
+  function restoreSession(chat) {
+    if (!chat || !persistentMode(chat.mode) || !Array.isArray(chat.messages)) {
+      throw new Error('Saved Assistant conversation is invalid.');
+    }
+    state.sessionByMode[chat.mode] = chat;
+    state.sessionActiveByMode[chat.mode] = chat.id;
+    if (chat.mode === 'chat') {
+      state.messages = chat.messages.slice();
+      state.elapsedByAssistantIndex = {};
+      state.metricsByAssistantIndex = {};
+    } else {
+      state.modeMessages.storyboard = chat.messages.slice();
+      state.modeElapsedByAssistantIndex.storyboard = {};
+      state.modeMetricsByAssistantIndex.storyboard = {};
+      state.storyboardAttachments = Object.assign({}, chat.attachments || {});
+      state.workshop = chat.workshop || null;
+      state.workshopProposal = null;
+      state.storyGuidelineProposal = null;
+    }
+    state.draftByMode[chat.mode] = chat.draft || '';
+    state.sessionDirty[chat.mode] = false;
+    if (state.activeMode === chat.mode) {
+      el('director-chat-input').value = state.draftByMode[chat.mode];
+      syncModeUi();
+    }
+    upsertSessionSummary(chat);
+    showSessionStatus('Saved', false);
+  }
+
+  function loadSessionHistory() {
+    return requestJson('/fs/director/chats').then(function (payload) {
+      state.sessionList = payload.chats || [];
+      state.sessionActiveByMode = payload.activeByMode || {};
+      return Promise.all(['chat', 'storyboard'].filter(function (mode) {
+        return state.sessionActiveByMode[mode];
+      }).map(function (mode) {
+        return requestJson('/fs/director/chats/' + encodeURIComponent(state.sessionActiveByMode[mode]))
+          .then(function (result) { restoreSession(result.chat); });
+      }));
+    }).then(function () {
+      state.sessionReady = true;
+      renderSessionHistory();
+      syncModeUi();
+    }).catch(function (error) {
+      showSessionFailure(error);
+    });
+  }
+
+  function selectSession(chatId) {
+    if (!state.sessionReady || state.pending || state.attachmentPending) return;
+    state.pending = true;
+    syncControls();
+    flushSessionSave().then(function () {
+      return requestJson('/fs/director/chats/' + encodeURIComponent(chatId));
+    }).then(function (result) {
+      state.activeMode = result.chat.mode;
+      restoreSession(result.chat);
+      finishProgress(null);
+      syncModeUi();
+    }).catch(showSessionFailure).finally(function () {
+      state.pending = false;
+      syncControls();
+    });
+  }
+
+  function renameSession(chatId, title) {
+    if (!title || state.pending) return;
+    selectSessionForEdit(chatId, function (chat) { chat.title = title; });
+  }
+
+  function selectSessionForEdit(chatId, edit) {
+    if (!state.sessionReady || state.pending) return;
+    state.pending = true;
+    syncControls();
+    flushSessionSave().then(function () {
+      return requestJson('/fs/director/chats/' + encodeURIComponent(chatId) + '?inspect=1');
+    }).then(function (result) {
+      var chat = result.chat;
+      edit(chat);
+      return requestJson('/fs/director/chats/' + encodeURIComponent(chat.id), {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          expectedRevision: chat.revision, title: chat.title,
+          messages: chat.messages, draft: chat.draft, attachments: chat.attachments,
+          workshop: chat.workshop || null
+        })
+      });
+    }).then(function (result) {
+      state.sessionByMode[result.chat.mode] = result.chat.id === (state.sessionByMode[result.chat.mode] || {}).id
+        ? result.chat : state.sessionByMode[result.chat.mode];
+      upsertSessionSummary(result.chat);
+      showSessionStatus('Saved', false);
+    }).catch(showSessionFailure).finally(function () {
+      state.pending = false;
+      syncControls();
+    });
+  }
+
+  function deleteSession(chatId) {
+    if (!state.sessionReady || state.pending) return;
+    var chat = state.sessionList.find(function (item) { return item.id === chatId; });
+    if (!chat || !window.confirm('Permanently delete conversation "' + chat.title + '"?')) return;
+    state.pending = true;
+    syncControls();
+    flushSessionSave().then(function () {
+      return requestJson('/fs/director/chats/' + encodeURIComponent(chatId), { method: 'DELETE' });
+    }).then(function () {
+      state.sessionList = state.sessionList.filter(function (item) { return item.id !== chatId; });
+      var current = state.sessionByMode[chat.mode];
+      if (current && current.id === chatId) {
+        state.sessionByMode[chat.mode] = null;
+        state.sessionActiveByMode[chat.mode] = null;
+        if (chat.mode === 'chat') state.messages = [];
+        else {
+          state.modeMessages.storyboard = [];
+          state.storyboardAttachments = {};
+          state.workshop = null;
+        }
+        state.draftByMode[chat.mode] = '';
+        if (state.activeMode === chat.mode) el('director-chat-input').value = '';
+      }
+      renderSessionHistory();
+      syncModeUi();
+      showSessionStatus('Deleted', false);
+    }).catch(showSessionFailure).finally(function () {
+      state.pending = false;
+      syncControls();
     });
   }
 
@@ -737,11 +1059,15 @@
     var model = el('director-chat-model');
     var refresh = el('director-chat-model-refresh');
     var clear = el('director-chat-clear');
-    if (send) send.disabled = state.pending || state.attachmentPending || !state.modelId || !String(input && input.value || '').trim();
-    if (input) input.disabled = state.pending;
+    if (send) send.disabled = state.pending || state.attachmentPending ||
+      (persistentMode(state.activeMode) && !state.sessionReady) || !state.modelId ||
+      !String(input && input.value || '').trim();
+    if (input) input.disabled = state.pending || (persistentMode(state.activeMode) && !state.sessionReady);
     if (model) model.disabled = state.pending || !state.modelsLoaded;
     if (refresh) refresh.disabled = state.pending;
-    if (clear) clear.disabled = state.pending || (!currentMessages().length && !(state.activeMode === 'storyboard' && (Object.keys(state.storyboardAttachments).length || state.workshop)));
+    if (clear) clear.disabled = state.pending || (persistentMode(state.activeMode) && !state.sessionReady);
+    var history = el('director-chat-history-toggle');
+    if (history) history.disabled = state.pending || !state.sessionReady;
     var prepare = el('director-chat-workshop-prepare');
     if (prepare) {
       prepare.disabled = state.pending || !state.modelId || !!(state.workshop && state.workshop.shotError) || !currentMessages().some(function (message) { return message.role === 'user'; });
@@ -786,27 +1112,52 @@
   }
 
   function newChat() {
-    if (state.activeMode === 'chat') {
-      state.messages = [];
-      state.elapsedByAssistantIndex = {};
-      state.metricsByAssistantIndex = {};
-    } else {
+    if (state.pending || !state.sessionReady) return;
+    if (!persistentMode(state.activeMode)) {
       state.modeMessages[state.activeMode] = [];
       state.modeElapsedByAssistantIndex[state.activeMode] = {};
       state.modeMetricsByAssistantIndex[state.activeMode] = {};
-      if (state.activeMode === 'storyboard') {
+      syncModeUi();
+      return;
+    }
+    var mode = state.activeMode;
+    state.pending = true;
+    syncControls();
+    flushSessionSave().then(function () {
+      return requestJson('/fs/director/chats', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode: mode })
+      });
+    }).then(function (payload) {
+      var chat = payload.chat;
+      state.sessionByMode[mode] = chat;
+      state.sessionActiveByMode[mode] = chat.id;
+      state.draftByMode[mode] = '';
+      state.sessionDirty[mode] = false;
+      if (mode === 'chat') {
+        state.messages = [];
+        state.elapsedByAssistantIndex = {};
+        state.metricsByAssistantIndex = {};
+      } else {
+        state.modeMessages.storyboard = [];
+        state.modeElapsedByAssistantIndex.storyboard = {};
+        state.modeMetricsByAssistantIndex.storyboard = {};
         state.storyboardAttachments = {};
+        state.workshop = null;
         state.workshopProposal = null;
         state.storyGuidelineProposal = null;
         el('director-chat-workshop-status').textContent = '';
       }
-    }
-    finishProgress(null);
-    syncModeUi();
-    renderMessages();
-    syncControls();
-    var input = el('director-chat-input');
-    if (input) input.focus();
+      el('director-chat-input').value = '';
+      upsertSessionSummary(chat);
+      showSessionStatus('Saved', false);
+      finishProgress(null);
+      syncModeUi();
+      el('director-chat-input').focus();
+    }).catch(showSessionFailure).finally(function () {
+      state.pending = false;
+      syncControls();
+    });
   }
 
   function jobRequest(jobId) {
@@ -922,7 +1273,12 @@
       }
       state.storyboardAttachments[item.key] = item;
       state.storyGuidelineProposal = null;
+      scheduleSessionSave();
+      el('director-chat-attachments-toggle').setAttribute('aria-expanded', 'true');
+      syncModeUi();
+      el('director-chat-attachments-status').textContent = 'Attached ' + item.label + '.';
     }).catch(function (err) {
+      el('director-chat-workshop-status').textContent = 'Attach failed: ' + String(err.message || err);
       if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Storyboard attachment', err);
       else throw err;
     }).finally(function () {
@@ -1238,6 +1594,7 @@
       scene.expectedPrompt = payload.scene.prompt;
       scene.shots = proposal.shots;
       state.workshopProposal = null;
+      scheduleSessionSave();
       el('director-chat-workshop-status').textContent = 'Revision applied · previous version saved';
       el('storyboard-workshop-review').close();
       syncControls();
@@ -1256,15 +1613,19 @@
   function sendMessage() {
     var input = el('director-chat-input');
     if (!input || state.pending || state.attachmentPending) return;
-
     var content = String(input.value || '').trim();
     if (!content || !state.modelId) return;
+    var activeChatMode = state.activeMode;
+    if (persistentMode(activeChatMode) && !state.sessionReady) {
+      showSessionFailure(new Error('Conversation history must load before sending a message.'));
+      return;
+    }
 
     if (!inputHistory.length || inputHistory[inputHistory.length - 1] !== content) inputHistory.push(content);
     inputHistoryIndex = inputHistory.length;
     inputHistoryDraft = '';
 
-    if (state.activeMode === 'storyboard') {
+    if (activeChatMode === 'storyboard') {
       state.storyGuidelineProposal = null;
       state.workshopProposal = null;
       el('director-chat-workshop-status').textContent = '';
@@ -1275,6 +1636,12 @@
     var mode = activeContextMode();
     messages.push({ role: 'user', content: content });
     input.value = '';
+    if (persistentMode(activeChatMode)) {
+      state.draftByMode[activeChatMode] = '';
+      if (state.sessionTimer) clearTimeout(state.sessionTimer);
+      state.sessionTimer = 0;
+      state.sessionDirty[activeChatMode] = true;
+    }
     state.pending = true;
     state.jobId = '';
     renderMessages();
@@ -1283,27 +1650,29 @@
 
     var startedAt = performance.now();
     var requestError = null;
-    var requestPromise;
-
-    if (mode) {
-      requestPromise = Promise.resolve(mode.execute({
-        instruction: content,
-        modelId: state.modelId
-      })).then(function (result) {
-        result = result && typeof result === 'object' ? result : {};
-        messages.push({
-          role: 'assistant',
-          content: String(result.text || mode.successMessage || (mode.label + ' completed.'))
+    // Commit the user's words BEFORE asking the model. A refresh or failed
+    // inference can never discard the user's last sent message.
+    var saved = persistentMode(activeChatMode) ? persistSession(activeChatMode) : Promise.resolve();
+    var requestPromise = saved.then(function () {
+      if (mode) {
+        return Promise.resolve(mode.execute({
+          instruction: content,
+          modelId: state.modelId
+        })).then(function (result) {
+          result = result && typeof result === 'object' ? result : {};
+          messages.push({
+            role: 'assistant',
+            content: String(result.text || mode.successMessage || (mode.label + ' completed.'))
+          });
+          elapsedMap[messages.length - 1] = performance.now() - startedAt;
         });
-        elapsedMap[messages.length - 1] = performance.now() - startedAt;
-      });
-    } else {
-      requestPromise = requestJson('/fs/director/chat', {
+      }
+      return requestJson('/fs/director/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           model: state.modelId,
-          messages: state.activeMode === 'storyboard' ? storyboardRequestMessages(messages) : messages
+          messages: activeChatMode === 'storyboard' ? storyboardRequestMessages(messages) : messages
         })
       }).then(function (payload) {
         if (!payload.job || !payload.job.jobId) throw new Error('Assistant did not return a queued job.');
@@ -1319,7 +1688,10 @@
         elapsedMap[assistantIndex] = performance.now() - startedAt;
         metricsMap[assistantIndex] = completedResponseMetrics(result);
       });
-    }
+    }).then(function () {
+      // Keep the response visible while its durable save completes.
+      if (persistentMode(activeChatMode)) return persistSession(activeChatMode);
+    });
 
     requestPromise.catch(function (err) {
       requestError = err;
@@ -1403,6 +1775,11 @@
     pin.onclick = function () { setPinned(!state.pinned); };
     close.onclick = function () { setOpen(false); };
     clear.onclick = newChat;
+    el('director-chat-history-toggle').onclick = function () {
+      var button = el('director-chat-history-toggle');
+      button.setAttribute('aria-expanded', button.getAttribute('aria-expanded') === 'true' ? 'false' : 'true');
+      renderSessionHistory();
+    };
     send.onclick = sendMessage;
     stop.onclick = stopJob;
     copy.onclick = function () {
@@ -1457,10 +1834,8 @@
           state.workshop = null;
           state.workshopProposal = null;
           state.storyGuidelineProposal = null;
-          state.storyboardAttachments = {};
-          state.modeMessages.storyboard = [];
-          state.modeElapsedByAssistantIndex.storyboard = {};
-          state.modeMetricsByAssistantIndex.storyboard = {};
+          // Exiting a Workshop must never destroy the conversation.
+          scheduleSessionSave();
           el('director-chat-workshop-status').textContent = '';
           syncModeUi();
         } else if (preset.section) {
@@ -1471,10 +1846,12 @@
             content: state.workshop.extraSections[preset.section]
           };
           state.workshopProposal = null;
+          scheduleSessionSave();
           syncModeUi();
         } else if (preset.clearContext) {
           state.storyGuidelineProposal = null;
           state.storyboardAttachments = {};
+          scheduleSessionSave();
           syncModeUi();
         } else {
           attachStoryboardContext(preset.contextKind);
@@ -1511,6 +1888,10 @@
       if (!applyingHistoryValue) {
         inputHistoryIndex = inputHistory.length;
         inputHistoryDraft = input.value;
+      }
+      if (persistentMode(state.activeMode) && state.sessionReady) {
+        state.draftByMode[state.activeMode] = input.value;
+        scheduleSessionSave();
       }
       syncControls();
     });
@@ -1558,6 +1939,14 @@
       if (event.key === 'Escape' && state.open && !el('storyboard-workshop-review').open && !el('storyboard-guidelines-review').open) setOpen(false);
     });
 
+    window.addEventListener('beforeunload', function (event) {
+      if (state.sessionTimer || state.sessionSaving || state.sessionDirty.chat ||
+          state.sessionDirty.storyboard || state.sessionError) {
+        event.preventDefault();
+        event.returnValue = '';
+      }
+    });
+    loadSessionHistory();
     if (state.pinned) setOpen(true);
     else {
       syncPinnedUi();
@@ -1565,31 +1954,9 @@
     }
   }
 
-  window.syncStoryboardAssistantStory = function (storyId, sceneIds) {
-    var currentStory = String(storyId || '');
-    var oldAttachment = Object.keys(state.storyboardAttachments).some(function (key) {
-      if (key.indexOf('story:') === 0) return key !== 'story:' + currentStory;
-      if (key.indexOf('scene:') === 0) {
-        var prefix = 'scene:' + currentStory + ':';
-        return key.indexOf(prefix) !== 0 ||
-          !Array.isArray(sceneIds) || sceneIds.indexOf(key.slice(prefix.length)) === -1;
-      }
-      return false;
-    });
-    var workshopChanged = !!state.workshop && (
-      currentStory !== state.workshop.storyId ||
-      !Array.isArray(sceneIds) || sceneIds.indexOf(state.workshop.sceneId) === -1
-    );
-    if (!oldAttachment && !workshopChanged) return;
-    state.workshop = null;
-    state.workshopProposal = null;
-    state.storyGuidelineProposal = null;
-    state.storyboardAttachments = {};
-    state.modeMessages.storyboard = [];
-    state.modeElapsedByAssistantIndex.storyboard = {};
-    state.modeMetricsByAssistantIndex.storyboard = {};
-    el('director-chat-workshop-status').textContent = '';
-    syncModeUi();
+  window.syncStoryboardAssistantStory = function () {
+    // Story navigation has no authority to mutate Assistant conversations or
+    // their explicitly attached reference snapshots.
   };
   window.openStoryboardAssistant = function () { setOpen(true, 'storyboard'); };
   window.openStoryboardSceneWorkshop = function (context) {
@@ -1599,10 +1966,8 @@
     }
     var old = state.workshop;
     if (!old || old.storyId !== context.storyId || old.sceneId !== context.sceneId || old.expectedPrompt !== context.expectedPrompt) {
-      state.modeMessages.storyboard = [];
-      state.modeElapsedByAssistantIndex.storyboard = {};
-      state.modeMetricsByAssistantIndex.storyboard = {};
-      state.storyboardAttachments = {};
+      // Opening another Workshop changes the current working excerpt but does
+      // not delete the conversation or its previously attached references.
       state.workshopProposal = null;
       state.storyGuidelineProposal = null;
       el('director-chat-workshop-status').textContent = '';
@@ -1610,6 +1975,7 @@
     state.workshop = context;
     el('director-chat-workshop-status').textContent = context.shotError ? ('Automatic shot revisions unavailable: ' + context.shotError) : '';
     setOpen(true, 'storyboard');
+    scheduleSessionSave();
   };
   window.registerAssistantMode = registerContextMode;
   window.refreshAssistantModes = syncModeUi;

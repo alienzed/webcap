@@ -68,3 +68,22 @@ def test_ask_and_describe_retain_own_job_lifecycle_with_explicit_media():
     assert "closeVlWorkspace();" in vision
     assert "runVisionImageCaption();" not in read("tool/js/media_context_actions.js")
     assert "openAskVisionQuestion();" not in read("tool/js/media_context_actions.js")
+
+
+def test_vl_workspace_header_groups_tabs_with_title_and_keeps_narrow_navigation():
+    html = read("tool/tool.html")
+    section = html.split('id="saved-intelligence-modal"', 1)[1].split('id="saved-intelligence-status"', 1)[0]
+    title = section.index('id="saved-intelligence-title"')
+    tabs = section.index('<nav class="vl-workspace-tabs"')
+    navigation = section.index('class="vl-workspace-item-navigation"')
+    close = section.index('id="saved-intelligence-close-btn"')
+    assert title < tabs < navigation < close
+    assert section.count('<nav class="vl-workspace-tabs"') == 1
+    assert section.count('</nav>') == 1
+
+    css = read("tool/css/modals.css")
+    assert 'flex-wrap:nowrap;' in css
+    assert 'grid-template-areas:"heading navigation close" "tabs tabs tabs";' in css
+    assert '#saved-intelligence-modal .vl-workspace-tabs { grid-area:tabs; overflow-x:auto;' in css
+    assert '#saved-intelligence-file { display:block; overflow:hidden; text-overflow:ellipsis;' in css
+    assert "el('saved-intelligence-file').title = file;" in read("tool/js/set_scan.js")

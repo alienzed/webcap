@@ -12,6 +12,7 @@ on:
       - 'tests/test_vl_workspace_unified.py'
       - 'tests/vl_workspace_tabs.test.cjs'
       - 'tests/vl_workspace_navigation.test.cjs'
+      - 'tests/set_scan_live_preview.test.cjs'
       - 'tests/test_media_context_actions_contract.py'
       - 'tool/js/primer_settings.js'
       - 'tool/js/item_details.js'
@@ -124,6 +125,10 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+      - name: Prepare Set Sight live preview
+        run: |
+          node --check tool/js/set_scan.js
+          node --test tests/set_scan_live_preview.test.cjs
       - name: JavaScript syntax
         run: |
           node --check tool/js/epoch_finder.js

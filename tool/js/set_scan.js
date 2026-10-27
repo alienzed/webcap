@@ -256,8 +256,11 @@
       output.textContent = setScanState.inspectionMissingFile
         ? 'No saved Sight response for ' + setScanState.inspectionMissingFile + '.' : '';
     }
-    var file = setScanState.previewFileName || itemSelect.value || '';
-    el('set-scan-preview-name').textContent = file || 'Select a media item';
+    // While scanning, this card follows completed Sight only. The current
+    // in-flight item is already identified in the progress status above.
+    var file = setScanState.previewFileName || (setScanState.running ? '' : itemSelect.value) || '';
+    el('set-scan-preview-name').textContent = file ||
+      (setScanState.running ? 'Waiting for completed Sight' : 'Select a media item');
     el('set-scan-preview-review').disabled = !file;
     updateSightPreviewMedia(el('set-scan-preview-image'), el('set-scan-preview-video'), setScanState.folder, file);
     var observed = responses.slice().reverse().find(function (row) { return row.media === file; });
@@ -265,7 +268,7 @@
     el('set-scan-preview-text').textContent = observed
       ? String(observed.description || observed.text || 'No observation returned.')
       : saved && saved.sight && saved.sight.description ? saved.sight.description
-        : setScanState.running ? 'Inspecting image…' : 'No saved Sight for the selected model.';
+        : setScanState.running ? 'The first completed Sight will appear here while the next item is processing.' : 'No saved Sight for the selected model.';
   }
 
   function updateSightPreviewMedia(image, video, folder, file) {
@@ -335,7 +338,8 @@
       text: String(text || ''),
       description: sight && sight.description ? String(sight.description) : ''
     };
-    setScanState.previewFileName = String(fileName || '');
+    // An inference response belongs in the raw report immediately, but only
+    // saved structured Sight should advance the live inspection preview.
     setScanState.rawResponses.push(response);
     setScanState.rawResponseIndex = setScanState.rawResponses.length - 1;
     setScanState.currentRawResponse = response;
@@ -551,18 +555,27 @@
       String(index + 1) + ' of ' + String(pending.length) + ' · exploring visual details');
 
     var fileName = pending[index];
-    setScanState.previewFileName = fileName;
-    renderSetIntelligence();
     return requestSight(folder, model, fileName, function () { return setScanState.stopRequested; }, groups).then(function (result) {
       if (setScanState.stopRequested) return false;
       showRawResponse(fileName, 'Sight', result.text, result.sight);
       var issue = result.warning || (result.sight ? '' : 'Unstructured Vision response');
       var save = result.sight ? saveSight(folder, model, fileName, result.sight) : Promise.resolve(null);
-      return save.then(function () { return saveSightAttempt(folder, model, fileName, result, issue); })
-        .then(function () {
-          if (!result.sight) recordSetIntelligenceFailure('Sight', fileName, issue);
-          return !!result.sight;
-        });
+      return save.then(function () {
+        if (result.sight) {
+          // Show the finished image and its description together, once Sight
+          // is saved and the Review action can load it.
+          setScanState.previewFileName = fileName;
+          renderSetIntelligence();
+        }
+        return saveSightAttempt(folder, model, fileName, result, issue);
+      }).then(function () {
+        if (!result.sight) {
+          recordSetIntelligenceFailure('Sight', fileName, issue);
+          // False means the scan was stopped; an invalid response is a gap.
+          return null;
+        }
+        return true;
+      });
     }).catch(function (err) {
       setScanState.currentVisionJobId = '';
       if (setScanState.stopRequested) return false;
@@ -667,12 +680,13 @@
       rawResponses: setScanState.rawResponses.slice(),
       rawResponseIndex: setScanState.rawResponseIndex,
       currentRawResponse: setScanState.currentRawResponse,
+      previewFileName: setScanState.previewFileName,
       coverage: Object.assign({}, setScanState.coverage)
     };
 
     setScanState.folder = folder;
     setScanState.files = files.slice();
-    setScanState.previewFileName = files[0] || '';
+    setScanState.previewFileName = '';
     setScanState.visionModel = '';
     setScanState.running = true;
     setScanState.hasRun = true;
@@ -752,6 +766,7 @@
         setScanState.rawResponses = previousReport.rawResponses;
         setScanState.rawResponseIndex = previousReport.rawResponseIndex;
         setScanState.currentRawResponse = previousReport.currentRawResponse;
+        setScanState.previewFileName = previousReport.previewFileName;
         setScanState.coverage = previousReport.coverage;
         setSetIntelligenceStatus(
           'Set Intelligence refresh failed',

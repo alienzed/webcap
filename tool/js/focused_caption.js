@@ -469,7 +469,7 @@ function startFocusedCaptionPrefetch(sourceMediaKey) {
       focusedCaptionState.itemKey !== String(sourceMediaKey || '') ||
       captionAssistPendingJobId) return Promise.resolve(false);
   var target = getNextFocusedCaptionTarget(focusedCaptionState.itemIndex);
-  if (!target) return Promise.resolve(false);
+  if (!target || captionAssistSavedCandidatesByMedia[target.itemKey]) return Promise.resolve(false);
   if (focusedCaptionPrefetch && !focusedCaptionPrefetch.discarded &&
       focusedCaptionPrefetch.itemKey === target.itemKey) return focusedCaptionPrefetch.promise;
 
@@ -748,8 +748,15 @@ function prepareFocusedCaptionCurrentItem() {
     return Promise.resolve(false);
   }
   if (captionAssistSavedCandidatesByMedia[state.currentItem.key]) {
-    restoreCaptionAssistCandidate(state.currentItem);
-    return Promise.resolve(true);
+    var restoredKey = state.currentItem.key;
+    var restored = restoreCaptionAssistCandidate(state.currentItem);
+    if (isFocusedCaptionReviewMode()) return Promise.resolve(restored);
+    return cancelFocusedCaptionPrefetch().then(function () {
+      if (restored && focusedCaptionState.open && focusedCaptionState.itemKey === restoredKey) {
+        startFocusedCaptionPrefetch(restoredKey);
+      }
+      return restored;
+    });
   }
   if (isFocusedQaReviewMode()) {
     var alternative = qaFocusReviewAlternative(state.currentItem.key);
@@ -1073,21 +1080,6 @@ function wireFocusedCaption() {
         event.stopImmediatePropagation();
         armOrUseFocusedCaptionCandidate();
       }
-    }, true);
-  }
-  if (!document.__focusedCaptionOutsideClickBound) {
-    document.__focusedCaptionOutsideClickBound = true;
-    document.addEventListener('pointerdown', function (event) {
-      if (!focusedCaptionState.open || !event || !event.target) return;
-      var panel = document.getElementById('editor-caption-candidate');
-      if (panel && panel.contains(event.target)) return;
-      if (event.target.closest && event.target.closest('#preview-open-focus-caption-btn, #preview-open-focus-review-btn, #preview-focus-caption-skip-btn, #preview-focus-caption-dismiss-qa-btn')) return;
-      if (!stopFocusedCaption(focusedCaptionModeLabel() + ' ended.')) {
-        event.preventDefault();
-        event.stopImmediatePropagation();
-        return;
-      }
-      renderFileList();
     }, true);
   }
   if (!window.__focusedCaptionResizeBound) {

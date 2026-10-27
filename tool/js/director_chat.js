@@ -8,6 +8,7 @@
     activeMode: 'chat',
     messages: [],
     storyboardAttachments: {},
+    attachmentPending: false,
     workshop: null,
     workshopProposal: null,
     storyGuidelineProposal: null,
@@ -34,7 +35,7 @@
     'A Story contains the concept, optional Directing Guidelines, and independently generatable Scenes.',
     'Each Scene is one video clip lasting at most 15 seconds. A Scene prompt has established subject, environment, visual treatment and audio sections, with timed shots in integrated_multimodal_description describing actions and changes.',
     'This is a creative workshop. Explore the author\'s current interests for the selected Scene: actions, choreography, interactions, dialogue, camera behavior, timing, and visual development.',
-    'Use the supplied Story and Scene material as source context. Build on the author\'s decisions as the discussion develops.',
+    'Storyboard references are supplied as readable text inside the request, including inline material in the latest user message. Use that text as source context and build on the author\'s decisions as the discussion develops.',
     'Respond briefly. Ask one focused question when useful. Offer concise alternatives and elaborate as the author requests.'
   ].join('\n\n');
 
@@ -130,7 +131,7 @@
 
     if (description) {
       description.textContent = state.activeMode === 'storyboard'
-        ? (state.workshop ? 'Scene Workshop · ' + state.workshop.sceneTitle : 'Storyboard creative workshop · ' + (Object.keys(state.storyboardAttachments).map(function (key) { return state.storyboardAttachments[key].label; }).join(', ') || 'Attach a Story or Scene'))
+        ? (state.workshop ? 'Scene Workshop · ' + state.workshop.sceneTitle : (state.attachmentPending ? 'Attaching Storyboard context…' : 'Storyboard creative workshop · ' + (Object.keys(state.storyboardAttachments).map(function (key) { return state.storyboardAttachments[key].label; }).join(', ') || 'Attach a Story or Scene')))
         : (active ? String(active.description || active.label || '') : 'Session-only freeform model conversation');
     }
     if (input) {
@@ -145,12 +146,16 @@
     if (presetsHost) {
       var wasExpanded = !!presetsHost.querySelector('details[data-workshop-context][open]');
       var items = presets.map(function (preset, index) {
-        var selected = !!(preset.section && state.storyboardAttachments['section:' + preset.section]);
+        var selected = !!(
+          (preset.section && state.storyboardAttachments['section:' + preset.section]) ||
+          (preset.contextKind === 'story' && Object.keys(state.storyboardAttachments).some(function (key) { return key.indexOf('story:') === 0; })) ||
+          (preset.contextKind === 'scene' && Object.keys(state.storyboardAttachments).some(function (key) { return key.indexOf('scene:') === 0; }))
+        );
         return '<button type="button" class="review-captions-btn' + (selected ? ' active' : '') +
           '" data-assistant-preset="' + String(index) + '"' +
-          (preset.section ? ' aria-pressed="' + (selected ? 'true' : 'false') + '"' : '') +
+          ((preset.section || preset.contextKind) ? ' aria-pressed="' + (selected ? 'true' : 'false') + '"' : '') +
           ' title="' + String(preset.title || preset.label || '') + '">' +
-          String(preset.label || 'Preset') + '</button>';
+          (state.attachmentPending && preset.contextKind ? 'Attaching…' : (selected && preset.contextKind === 'story' ? 'Story attached' : (selected && preset.contextKind === 'scene' ? 'Scene attached' : String(preset.label || 'Preset')))) + '</button>';
       }).join('');
       presetsHost.innerHTML = state.activeMode === 'storyboard' && state.workshop
         ? '<details data-workshop-context' + (wasExpanded ? ' open' : '') +
@@ -564,7 +569,7 @@
     var model = el('director-chat-model');
     var refresh = el('director-chat-model-refresh');
     var clear = el('director-chat-clear');
-    if (send) send.disabled = state.pending || !state.modelId || !String(input && input.value || '').trim();
+    if (send) send.disabled = state.pending || state.attachmentPending || !state.modelId || !String(input && input.value || '').trim();
     if (input) input.disabled = state.pending;
     if (model) model.disabled = state.pending || !state.modelsLoaded;
     if (refresh) refresh.disabled = state.pending;
@@ -710,18 +715,37 @@
         shotAvailability: scene.shotError || 'Timed shots attached for creative discussion'
       }, null, 2));
     }
+    var outbound = messages.slice();
     var attached = Object.keys(state.storyboardAttachments).map(function (key) {
       var item = state.storyboardAttachments[key];
       return item.label + ':\n' + item.content;
     });
-    if (attached.length) context.push('[OPTIONAL ATTACHED REFERENCE MATERIAL]\n' + attached.join('\n\n'));
-    return [{ role: 'system', content: context.join('\n\n') }].concat(messages);
+    if (attached.length) {
+      // Put the actual reference alongside the current user request. Some chat
+      // templates give system-only reference text less weight than user content.
+      var last = outbound.length - 1;
+      if (last < 0 || outbound[last].role !== 'user') {
+        throw new Error('Storyboard attachment requires a current user message.');
+      }
+      outbound[last] = {
+        role: 'user',
+        content: '[ATTACHED STORYBOARD REFERENCE - supplied inline in this request]\n'
+          + attached.join('\n\n')
+          + '\n[END ATTACHED STORYBOARD REFERENCE]\n\n[AUTHOR MESSAGE]\n'
+          + outbound[last].content
+      };
+    }
+    return [{ role: 'system', content: context.join('\n\n') }].concat(outbound);
   }
 
   function attachStoryboardContext(kind) {
-    if (state.pending) return;
+    if (state.pending || state.attachmentPending) return;
     if (typeof window.getStoryboardAssistantContext !== 'function') throw new Error('Storyboard context provider is missing.');
-    return Promise.resolve(window.getStoryboardAssistantContext(kind)).then(function (item) {
+    state.attachmentPending = true;
+    syncModeUi();
+    return Promise.resolve().then(function () {
+      return window.getStoryboardAssistantContext(kind);
+    }).then(function (item) {
       if (!item || !item.key || !item.content) throw new Error('No Storyboard ' + kind + ' available to attach.');
       if (kind === 'story') {
         Object.keys(state.storyboardAttachments).forEach(function (key) {
@@ -730,13 +754,14 @@
       }
       state.storyboardAttachments[item.key] = item;
       state.storyGuidelineProposal = null;
-      syncModeUi();
     }).catch(function (err) {
-      if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Assistant', err);
-      throw err;
+      if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Storyboard attachment', err);
+      else throw err;
+    }).finally(function () {
+      state.attachmentPending = false;
+      syncModeUi();
     });
   }
-
 
   function renderWorkshopDiff(before, after) {
     var host = el('storyboard-workshop-review-diff');
@@ -1060,7 +1085,7 @@
 
   function sendMessage() {
     var input = el('director-chat-input');
-    if (!input || state.pending) return;
+    if (!input || state.pending || state.attachmentPending) return;
 
     var content = String(input.value || '').trim();
     if (!content || !state.modelId) return;
@@ -1246,7 +1271,7 @@
       var button = event.target.closest('[data-assistant-preset]');
       if (!button) return;
       if (state.activeMode === 'storyboard') {
-        if (state.pending) return;
+        if (state.pending || state.attachmentPending) return;
         var preset = storyboardContextPresets()[Number(button.dataset.assistantPreset)];
         if (!preset) throw new Error('Unknown Storyboard context selection.');
         if (preset.exitWorkshop) {
@@ -1362,10 +1387,21 @@
   }
 
   window.syncStoryboardAssistantStory = function (storyId, sceneIds) {
-    if (!state.workshop) return;
-    var sameStory = String(storyId || '') === state.workshop.storyId;
-    var scenePresent = Array.isArray(sceneIds) && sceneIds.indexOf(state.workshop.sceneId) !== -1;
-    if (sameStory && scenePresent) return;
+    var currentStory = String(storyId || '');
+    var oldAttachment = Object.keys(state.storyboardAttachments).some(function (key) {
+      if (key.indexOf('story:') === 0) return key !== 'story:' + currentStory;
+      if (key.indexOf('scene:') === 0) {
+        var prefix = 'scene:' + currentStory + ':';
+        return key.indexOf(prefix) !== 0 ||
+          !Array.isArray(sceneIds) || sceneIds.indexOf(key.slice(prefix.length)) === -1;
+      }
+      return false;
+    });
+    var workshopChanged = !!state.workshop && (
+      currentStory !== state.workshop.storyId ||
+      !Array.isArray(sceneIds) || sceneIds.indexOf(state.workshop.sceneId) === -1
+    );
+    if (!oldAttachment && !workshopChanged) return;
     state.workshop = null;
     state.workshopProposal = null;
     state.storyGuidelineProposal = null;

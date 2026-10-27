@@ -116,7 +116,7 @@ test('overlapping Sight suggestions cannot blank the preview or overwrite the dr
   assert.equal(c.captionAssistEnrichment.suggestions[1].pending,false,
     'conflicting anchor must be skipped after the accepted edit');
   assert.equal(preview.children.filter(x=>x.className==='caption-enrichment-proposal').length,1);
-  assert.match(preview.children.map(x=>x.textContent || '').join(''),'A swimsuit with metal rings, front view against a wall.');
+  assert.match(preview.children.map(x=>x.textContent || '').join(''),/A swimsuit with metal rings, front view against a wall/);
   assert.match(f.nodes['editor-caption-enrichment-status'].textContent,/1 conflicting skipped/);
   assert.equal(preview.focusCount,1,'focus stays inside the review after a suggestion button is replaced');
   assert.ok(f.logs.some(entry=>entry[0]==='warn' && /conflicting suggestion/.test(entry[1])),
@@ -488,4 +488,67 @@ test('cached and lookahead empty results remain visible only when their own item
   assert.equal(f.requests.length,2);
   assert.equal(c.captionAssistEnrichment.candidate,candidate);
   assert.equal(c.captionAssistEnrichment.phase,'empty');
+});
+
+
+test('active enrichment review owns arrows and media shortcuts without stealing button Enter',()=>{
+  const file=fs.readFileSync('tool/js/focused_caption.js','utf8');
+  const start=file.indexOf('function wireFocusedCaption() {');
+  const stop=file.indexOf('\nwireFocusedCaption();',start);
+  assert.ok(start>=0 && stop>start);
+  const sourceWire=file.slice(start,stop);
+  let reviewing=true;
+  const moves=[];
+  const listeners={};
+  function button(){return {addEventListener(){}};}
+  const doc={
+    activeElement:null,
+    getElementById(){return button();},
+    addEventListener(type,handler){listeners[type]=handler;}
+  };
+  const ctx={
+    document:doc,window:{addEventListener(){}},
+    ui:{previewFocusCaptionBtnEl:button(),previewFocusCaptionSkipBtnEl:button()},
+    focusedCaptionState:{open:true},captionAssistCandidate:{mediaKey:'item-a'},
+    captionAssistEnrichmentReviewActive(){return reviewing;},
+    isEditableElement(element){return !!(element && element.isContentEditable);},
+    moveFocusedCaption(delta){moves.push(delta);},
+    syncFocusedCaptionControls(){},renderFileList(){},
+    stopFocusedCaption(){return true;}
+  };
+  vm.createContext(ctx);
+  vm.runInContext(sourceWire+'\nwireFocusedCaption();',ctx);
+  function key(name) {
+    const event={key:name,defaultPrevented:false,repeat:false,
+      ctrlKey:false,metaKey:false,altKey:false,
+      preventDefault(){this.defaultPrevented=true;},
+      stopImmediatePropagation(){this.stopped=true;}};
+    listeners.keydown(event);
+    return event;
+  }
+  ['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','s','r','1'].forEach(name=>{
+    const event=key(name);
+    assert.equal(event.stopped,true,'review should block '+name+' from global shortcuts');
+    assert.equal(event.defaultPrevented,false,'review should preserve native text scrolling');
+  });
+  assert.deepEqual(moves,[]);
+  assert.equal(key('Enter').stopped,undefined,'Enter must still activate focused accept/reject buttons');
+  assert.equal(key('Tab').stopped,undefined,'Tab must keep working during review');
+  reviewing=false;
+  assert.equal(key('ArrowRight').defaultPrevented,true);
+  assert.deepEqual(moves,[1],'normal focus navigation remains intact after review');
+  doc.activeElement={isContentEditable:true};
+  assert.equal(key('ArrowLeft').defaultPrevented,false);
+  assert.deepEqual(moves,[1],'actual contenteditable caret keeps arrow keys');
+});
+
+test('review visuals distinguish the read-only focusable preview from contenteditable draft',()=>{
+  const html=fs.readFileSync('tool/tool.html','utf8');
+  const css=fs.readFileSync('tool/css/modals.css','utf8');
+  const primer=fs.readFileSync('tool/js/primer_settings.js','utf8');
+  assert.match(html,/id="editor-caption-enrichment-preview"[^>]*role="region"[^>]*tabindex="0"/);
+  assert.match(css,/\.editor-caption-candidate-draft\.is-enrichment-review\s*\{/);
+  assert.match(css,/\.caption-enrichment-preview:focus-visible/);
+  assert.match(primer,/textEl\.parentElement\.classList\.toggle\('is-enrichment-review', enrichmentPreview\)/);
+  assert.match(primer,/textEl\.setAttribute\('contenteditable', visible && !enrichmentPreview \? 'true' : 'false'\)/);
 });

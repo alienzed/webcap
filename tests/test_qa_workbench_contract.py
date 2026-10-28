@@ -108,17 +108,21 @@ def test_qa_deep_scan_is_native_structured_and_merges_into_current_scope():
     assert "window.openAssistant({ mode: 'review-dataset' })" not in qa
 
 
-def test_focused_qa_freezes_set_identity_and_invalidates_context_changes():
+def test_focused_qa_keeps_captured_set_during_filter_and_annotation_changes():
     qa = _read("tool/js/qa_workbench.js")
     run = qa.split("function qaRunNextDeepScanBatch()", 1)[1].split("function qaConceptCoverageCounts()", 1)[0]
+    assert "var scan = qaWorkbenchState.deepScanScope;" in run
     assert "var token = qaWorkbenchState.deepScanSessionToken;" in run
-    assert "var folder = String(state.folder || '')" in run
-    assert "qaBuildDeepScanSignature(qaGetTrainingItems())" in run
-    assert "qaInvalidateDeepScanSession('Deep QA inputs changed." in run
-    assert "qaInvalidateDeepScanSession('Deep QA stopped because the review scope changed.');" in qa
+    assert "var folder = scan.folder, model = scan.model;" in run
+    assert "qaDeepScanNextItemBatch(scan, token)" in run
+    assert "qaInvalidateDeepScanSession('Deep QA inputs changed." not in run
+    assert "qaWorkbenchState.deepScanScope = scan;" in qa
+    assert "deepScanScopeFiles: qaWorkbenchState.deepScanScopeFiles.slice()" in qa
+    assert "if (!qaWorkbenchState.deepScanSessionActive) qaRestoreReview(inputSignature);" in qa
+    assert "qaInvalidateDeepScanSession('Deep QA stopped because the Set changed.');" in qa
     assert "qaWorkbenchState.deepScanJobId = '';" in qa
     assert "qaReviewMode: qaWorkbenchState.qaReviewMode" in qa
-    assert "saved.qaReviewMode !== 'set-review-v1'" in qa
+    assert "saved.qaReviewMode === 'progressive-v1'" in qa
 
 
 def test_qa_isolated_styles_keep_large_editorial_typography():

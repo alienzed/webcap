@@ -1,5 +1,7 @@
 # Studio Director — conversational production contract and incremental delivery
 
+> **Direction update — 2026-10-28:** [Studio Director build specification](studio-director-build-spec.md) is the current design direction for the next implementation. It supersedes conflicting requirements below, including the fixed five-field authoring UX, automatic opening model question, separate preparation entry points, and zero-or-one-Scene creation scope. This document remains implementation history and audit context; its old checklists are not the new delivery plan. Existing authored data and Takes remain subject to preservation requirements. The new specification is a design, not a claim of shipped behavior.
+
 Status: **living implementation contract** initially audited at `95dd999b4678d02c10b81df059886ac3c4594ed4`, with initial implementation phases merged through **PRs #758–761** and production-slate workflow clarification audited against `main` at `ca1246c0041f1dd0ffeaa83dc4363f452703b33d` (2026-10-27). Historical finding tables and old unchecked phase items describe their audit baseline, not the latest implementation status; verify current code before each new change. This update modifies **the plan only**. Follow `AGENTS.md`, `docs/filesystem_state_contract.md` and `docs/gpu_coordination_invariants.md`.
 
 ## 2026-10-28 simplified five-field creative contract

@@ -329,8 +329,10 @@
     }
 
     if (description) {
-      description.textContent = state.activeMode === 'storyboard'
-        ? (state.workshop ? 'Working on ' + state.workshop.sceneTitle : (state.attachmentPending ? 'Attaching selected context…' : 'Writer’s Workshop · ' + (Object.keys(state.storyboardAttachments).map(function (key) { return state.storyboardAttachments[key].label; }).join(', ') || 'Explore an idea')))
+      description.textContent = studio
+        ? (state.attachmentPending ? 'Connecting Story…'
+          : 'Working with: ' + studioWorkingStoryLabel() +
+            (state.workshop ? ' · Scene: ' + state.workshop.sceneTitle : ''))
         : (active ? String(active.description || active.label || '') : 'Saved Assistant conversation');
     }
     if (input) {
@@ -1248,23 +1250,17 @@
     var title = el('director-studio-flow-title');
     var description = el('director-studio-flow-description');
     var capture = el('director-studio-capture');
-    if (attached) {
-      title.textContent = 'Concept / overview · Visual / atmosphere';
-      description.textContent = 'Review these fields and Invariants in the attached Project. Scenes and Takes stay untouched.';
-      capture.textContent = 'Review fields';
-    } else {
-      title.textContent = 'Concept / overview · Visual / atmosphere';
-      description.textContent = 'Capture these fields and optional Invariants in a new Project, or attach an existing one.';
-      capture.textContent = 'Review fields';
-    }
+    title.textContent = 'Working with: ' + studioWorkingStoryLabel();
+    description.textContent = 'Concept / overview · Visual / atmosphere · Invariants';
+    capture.textContent = attached ? 'Review Story changes' : 'Review new Story';
     capture.disabled = state.pending || state.attachmentPending || !state.sessionReady || !state.modelId || !discussed;
     var useOpen = el('director-studio-flow-target');
     var canAttachOpen = !!openId && openId !== attached;
     useOpen.classList.toggle('hidden', !canAttachOpen);
     if (canAttachOpen) {
       el('director-studio-flow-target-label').textContent = attached
-        ? 'Want to work on the Project currently open in Studio instead?'
-        : 'Already working in a Project?';
+        ? 'A different Story is open in Studio.'
+        : 'Already have a Story open?';
       el('director-studio-attach-current').disabled = state.pending || state.attachmentPending;
     }
   }
@@ -1353,6 +1349,18 @@
       return key.indexOf('story:') === 0;
     }).map(function (key) { return key.slice(6); });
     return ids.length === 1 ? ids[0] : '';
+  }
+
+  function studioWorkingStoryLabel() {
+    var storyId = studioAttachedStoryId();
+    if (!storyId) return 'New Story';
+    if (state.studioStoryAccess && state.studioStoryAccess.storyId === storyId) {
+      return String(state.studioStoryAccess.label || storyId);
+    }
+    var snapshot = state.storyboardAttachments['story:' + storyId];
+    return snapshot && snapshot.label
+      ? String(snapshot.label).replace(/^Story:\s*/i, '') || storyId
+      : storyId;
   }
 
   function studioActionStatus(message, error) {

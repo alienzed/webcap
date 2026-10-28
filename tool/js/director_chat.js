@@ -38,7 +38,8 @@
     sessionTimer: 0,
     sessionDirty: { chat: false, storyboard: false },
     sessionError: false,
-    draftByMode: { chat: '', storyboard: '' }
+    draftByMode: { chat: '', storyboard: '' },
+    studioIntroPending: false
   };
   var STORYBOARD_WORKSHOP_PRIMER = [
     'You are collaborating with an author developing short AI-generated videos.',
@@ -289,7 +290,8 @@
     var input = el('director-chat-input');
     var toolsRow = el('director-chat-mode-tools');
     var presetsHost = el('director-chat-mode-presets');
-    var modes = [{ id: 'storyboard', label: 'Storyboard' }].concat(availableModes());
+    var studioVisible = !!document.querySelector('#storyboard-workspace:not(.hidden)');
+    var modes = (studioVisible ? [{ id: 'storyboard', label: 'Studio Director' }] : []).concat(availableModes());
     var active = activeContextMode();
 
     if (state.activeMode !== 'chat' && state.activeMode !== 'storyboard' && (!active || !modeAvailable(active))) {
@@ -297,7 +299,19 @@
       active = null;
     }
 
-    if (row) row.classList.toggle('hidden', !modes.length);
+    var studio = state.activeMode === 'storyboard';
+    var drawer = el('director-chat-drawer');
+    drawer.classList.toggle('studio-director', studio);
+    el('app-frame').classList.toggle('studio-director-active', studio && state.open);
+    el('director-chat-title').textContent = studio ? 'Studio Director' : 'Assistant';
+    el('director-studio-starters').classList.toggle('hidden', !studio);
+    el('director-chat-empty-title').textContent = studio ? "Let's make something" : 'Your conversation';
+    el('director-chat-empty-description').textContent = studio
+      ? (state.studioIntroPending ? 'Director is discovering a starting question…' : 'Start with a feeling, a moment, or an unfinished idea. Director will ask one question at a time.')
+      : 'Start a conversation with the selected model.';
+    el('director-studio-retry').classList.toggle('hidden',
+      !studio || !!currentMessages().length || state.pending || !state.sessionReady);
+    if (row) row.classList.toggle('hidden', studio || !modes.length);
     if (host) {
       host.innerHTML = '<button type="button" class="review-captions-btn' + (state.activeMode === 'chat' ? ' active' : '') + '" data-assistant-mode="chat">Chat</button>' +
         modes.map(function (mode) {
@@ -308,11 +322,11 @@
 
     if (description) {
       description.textContent = state.activeMode === 'storyboard'
-        ? (state.workshop ? 'Scene Workshop · ' + state.workshop.sceneTitle : (state.attachmentPending ? 'Attaching Storyboard context…' : 'Storyboard creative workshop · ' + (Object.keys(state.storyboardAttachments).map(function (key) { return state.storyboardAttachments[key].label; }).join(', ') || 'Attach a Story or Scene')))
+        ? (state.workshop ? 'Working on ' + state.workshop.sceneTitle : (state.attachmentPending ? 'Attaching selected context…' : 'Writer’s Workshop · ' + (Object.keys(state.storyboardAttachments).map(function (key) { return state.storyboardAttachments[key].label; }).join(', ') || 'Explore an idea')))
         : (active ? String(active.description || active.label || '') : 'Saved Assistant conversation');
     }
     if (input) {
-      input.placeholder = state.activeMode === 'storyboard' ? 'Discuss a creative improvement or ask a focused question…' :
+      input.placeholder = state.activeMode === 'storyboard' ? 'What are you imagining? You can start anywhere…' :
         (active ? String(active.placeholder || 'What should the Assistant do?') : 'Ask the model anything…');
     }
 
@@ -1257,6 +1271,17 @@
     return [{ role: 'system', content: context.join('\n\n') }].concat(outbound);
   }
 
+  function studioDirectorRequestMessages(messages) {
+    return requestJson('/fs/studio/director/guidance?targetModel=minimax_h3').then(function (payload) {
+      if (!payload.system || typeof payload.system !== 'string') {
+        throw new Error('Studio Director production guidance is missing.');
+      }
+      var outbound = storyboardRequestMessages(messages);
+      outbound[0] = { role: 'system', content: payload.system + '\n\n' + outbound[0].content };
+      return outbound;
+    });
+  }
+
   function attachStoryboardContext(kind) {
     if (state.pending || state.attachmentPending) return;
     if (typeof window.getStoryboardAssistantContext !== 'function') throw new Error('Storyboard context provider is missing.');
@@ -1667,13 +1692,14 @@
           elapsedMap[messages.length - 1] = performance.now() - startedAt;
         });
       }
-      return requestJson('/fs/director/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: state.modelId,
-          messages: activeChatMode === 'storyboard' ? storyboardRequestMessages(messages) : messages
-        })
+      return (activeChatMode === 'storyboard'
+        ? studioDirectorRequestMessages(messages)
+        : Promise.resolve(messages)).then(function (outboundMessages) {
+        return requestJson('/fs/director/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ model: state.modelId, messages: outboundMessages })
+        });
       }).then(function (payload) {
         if (!payload.job || !payload.job.jobId) throw new Error('Assistant did not return a queued job.');
         state.jobId = String(payload.job.jobId);

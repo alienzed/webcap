@@ -1254,15 +1254,15 @@
     var capture = el('director-studio-capture');
     title.textContent = 'Working with: ' + studioWorkingStoryLabel();
     description.textContent = 'Concept / overview · Visual / atmosphere · Invariants';
-    capture.textContent = attached ? 'Review Story changes' : 'Review new Story';
+    capture.textContent = attached ? 'Review Project changes' : 'Review new Project';
     capture.disabled = state.pending || state.attachmentPending || !state.sessionReady || !state.modelId || !discussed;
     var useOpen = el('director-studio-flow-target');
     var canAttachOpen = !!openId && openId !== attached;
     useOpen.classList.toggle('hidden', !canAttachOpen);
     if (canAttachOpen) {
       el('director-studio-flow-target-label').textContent = attached
-        ? 'A different Story is open in Studio.'
-        : 'Already have a Story open?';
+        ? 'A different Project is open in Studio.'
+        : 'Already have a Project open?';
       el('director-studio-attach-current').disabled = state.pending || state.attachmentPending;
     }
   }
@@ -1351,7 +1351,7 @@
 
   function studioWorkingStoryLabel() {
     var storyId = studioAttachedStoryId();
-    if (!storyId) return 'New Story';
+    if (!storyId) return 'New Project';
     if (state.studioStoryAccess && state.studioStoryAccess.storyId === storyId) {
       return String(state.studioStoryAccess.label || storyId);
     }
@@ -1446,6 +1446,7 @@
     el('studio-project-invariants').replaceChildren();
     proposal.invariants.forEach(addStudioProjectInvariant);
     el('studio-project-include-scene').checked = !!proposal.firstScene;
+    el('studio-project-continue').checked = true;
     el('studio-project-first-scene-fields').classList.toggle('hidden', !proposal.firstScene);
     el('studio-project-scene-title').value = proposal.firstScene ? proposal.firstScene.title : '';
     el('studio-project-scene-summary').value = proposal.firstScene ? proposal.firstScene.summary : '';
@@ -1543,6 +1544,7 @@
     syncControls();
     el('studio-project-error').textContent = '';
     var createdStory = null;
+    var continueWithProject = el('studio-project-continue').checked;
     requestJson('/fs/studio/director/project-create', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ proposal: proposal })
@@ -1552,8 +1554,19 @@
       state.studioProjectProposal = null;
       el('studio-project-review').close();
       var name = payload.story.title || 'Untitled Project';
+      if (continueWithProject) {
+        // The author explicitly approved this read grant in the Create review.
+        // Conversation history stays independent of which Project is open in Studio.
+        state.studioStoryAccess = {storyId: payload.story.id, label: name};
+        state.studioAccessIndex = null;
+        el('director-studio-access-status').textContent = 'Connected to ' + name + '. No fields read yet.';
+        el('director-studio-access-data').classList.add('hidden');
+        syncModeUi();
+      }
       recordStudioOperation('project.create', 'Created Project: ' + name, payload.story.id, payload.story.sceneOrder);
-      studioActionStatus('Project created: ' + name + '. Open it from the Studio Library.', false);
+      studioActionStatus(continueWithProject
+        ? 'Project created and connected: ' + name + '. You can prepare Scenes from this conversation.'
+        : 'Project created: ' + name + '. Open it from the Studio Library.', false);
       return persistSession('storyboard').then(function () {
         return window.refreshStudioDirectorStoryIfOpen(payload.story.id);
       });

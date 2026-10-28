@@ -147,16 +147,16 @@
     input.addEventListener('click', updatePicker);
     input.addEventListener('keydown', function (e) {
       if ($('studio-blocks-picker').classList.contains('hidden')) return;
-      if (e.key === 'Escape') { e.preventDefault(); hidePicker(); return; }
+      if (e.key === 'Escape') { e.preventDefault(); e.stopImmediatePropagation(); hidePicker(); return; }
       if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-        e.preventDefault();
+        e.preventDefault(); e.stopImmediatePropagation();
         active = (active + (e.key === 'ArrowDown' ? 1 : -1) + pickerItems.length) % pickerItems.length;
         Array.from($('studio-blocks-picker').children).forEach(function (b, i) { b.classList.toggle('active', i === active); });
       }
       if ((e.key === 'Enter' || e.key === 'Tab') && pickerItems.length) {
-        e.preventDefault(); insert(pickerItems[active]);
+        e.preventDefault(); e.stopImmediatePropagation(); insert(pickerItems[active]);
       }
-    });
+    }, true);
     // The catalog is only fetched when opening Blocks or requesting slash suggestions.
     input.addEventListener('input', function () {
       if (!slashMatch() || catalogLoaded || catalogLoading) return;
@@ -164,7 +164,6 @@
       load().catch(error).finally(function () { catalogLoading = false; });
     });
     $('director-chat-send').addEventListener('click', hidePicker);
-    input.addEventListener('keydown', function (e) { if (e.key === 'Enter' && !e.shiftKey) hidePicker(); });
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bind);
   else bind();

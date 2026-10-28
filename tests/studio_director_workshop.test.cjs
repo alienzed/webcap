@@ -109,7 +109,7 @@ test('Studio exposes Concept, Style and Invariants as one contextual capture, no
     'director-studio-attach-current', 'director-studio-more'
   ]) assert.match(html, new RegExp('id="' + id + '"'));
   assert.match(html, /Concept \/ overview · Visual \/ atmosphere · Invariants/);
-  assert.match(html, />Review new Story<\/button>/);
+  assert.match(html, />Review new Project<\/button>/);
   assert.match(html, /Concept \/ overview <small>\(including Core Appeal\)<\/small>/);
   assert.match(html, /Visual \/ atmosphere <small>\(optional\)<\/small>/);
   const composer = sliceHtml('<div class="director-chat-composer">', '<textarea id="director-chat-input"');
@@ -145,13 +145,13 @@ test('Studio field capture keeps existing Project targets explicit', () => {
   vm.runInContext(slice('  function studioAttachedStoryId() {', '  function studioActionStatus('), context);
   const update = vm.runInContext('(' + slice('  function syncStudioFlow() {', '  function captureStudioCreativeBrief() {').trim() + ')', context);
   update();
-  assert.equal(node('director-studio-capture').textContent, 'Review new Story');
-  assert.equal(node('director-studio-flow-title').textContent, 'Working with: New Story');
+  assert.equal(node('director-studio-capture').textContent, 'Review new Project');
+  assert.equal(node('director-studio-flow-title').textContent, 'Working with: New Project');
   assert.equal(node('director-studio-flow-target').classList.hidden, false);
   state.storyboardAttachments['story:story-1'] = {label: 'Story', content: '{}'};
   update();
   assert.equal(node('director-studio-flow-target').classList.hidden, true);
-  assert.equal(node('director-studio-capture').textContent, 'Review Story changes');
+  assert.equal(node('director-studio-capture').textContent, 'Review Project changes');
   assert.equal(node('director-studio-flow-title').textContent, 'Working with: Story');
   assert.equal(node('director-studio-flow').classList.hidden, false);
 });
@@ -329,11 +329,11 @@ test('Studio target is taken from the explicit Story grant, never whichever Stor
   const sync = vm.runInContext('(' + slice('  function syncStudioFlow() {', '  function captureStudioCreativeBrief() {').trim() + ')', context);
   sync();
   assert.equal(node('director-studio-flow-title').textContent, 'Working with: My Story');
-  assert.equal(node('director-studio-capture').textContent, 'Review Story changes');
+  assert.equal(node('director-studio-capture').textContent, 'Review Project changes');
   assert.equal(node('director-studio-flow-target').classList.hidden, false);
-  assert.match(node('director-studio-flow-target-label').textContent, /different Story/);
+  assert.match(node('director-studio-flow-target-label').textContent, /different Project/);
   state.studioStoryAccess = null;
   sync();
-  assert.equal(node('director-studio-flow-title').textContent, 'Working with: New Story');
-  assert.equal(node('director-studio-capture').textContent, 'Review new Story');
+  assert.equal(node('director-studio-flow-title').textContent, 'Working with: New Project');
+  assert.equal(node('director-studio-capture').textContent, 'Review new Project');
 });

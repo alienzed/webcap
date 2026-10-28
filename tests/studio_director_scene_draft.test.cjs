@@ -149,3 +149,65 @@ test('Studio brief review limits Apply to explicitly checked Story fields', () =
   assert.match(apply, /\/fs\/studio\/director\/brief'/);
   assert.match(source, /\/fs\/studio\/director\/brief\/undo/);
 });
+
+
+test('Review Create Project persists explicit continuation without touching unbound conversations', async () => {
+  const code = part('  function applyStudioProject() {', '  function parseStudioBriefDraft(raw) {');
+  async function create(continueChecked) {
+    let persisted, refreshed, receipt, message;
+    const state = {
+      studioProjectProposal: {concept: 'A comic train station scene'},
+      studioStoryAccess: null, studioAccessIndex: [],
+      pending: false,
+    };
+    const nodes = {
+      'studio-project-title': {value: 'The Station'},
+      'studio-project-concept': {value: 'A comic train station scene'},
+      'studio-project-style': {value: 'Muted pastel palette'},
+      'studio-project-invariants': {querySelectorAll: () => []},
+      'studio-project-include-scene': {checked: false},
+      'studio-project-continue': {checked: continueChecked},
+      'studio-project-error': {textContent: ''},
+      'studio-project-review': {close() {this.closed = true;}},
+      'director-studio-access-status': {textContent: ''},
+      'director-studio-access-data': {classList: {add() {}}},
+    };
+    const context = vm.createContext({
+      state, Promise, JSON, String, Error,
+      el: id => {
+        if (!nodes[id]) throw Error('Unexpected Studio control: ' + id);
+        return nodes[id];
+      },
+      syncControls() {}, syncModeUi() {},
+      requestJson: async (url, opts) => {
+        assert.equal(url, '/fs/studio/director/project-create');
+        const payload = JSON.parse(opts.body);
+        assert.equal(payload.proposal.concept, 'A comic train station scene');
+        return {story: {id: 'story-created', title: 'The Station', sceneOrder: []}};
+      },
+      recordStudioOperation: (kind, label, storyId) => {
+        receipt = {kind, label, storyId};
+      },
+      studioActionStatus: text => {message = text;},
+      persistSession: async mode => {
+        assert.equal(mode, 'storyboard');
+        persisted = state.studioStoryAccess && {...state.studioStoryAccess};
+      },
+      window: {refreshStudioDirectorStoryIfOpen: async id => {refreshed = id;}},
+    });
+    vm.runInContext(code, context);
+    vm.runInContext('applyStudioProject()', context);
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(state.pending, false);
+    assert.equal(nodes['studio-project-review'].closed, true);
+    assert.equal(receipt.kind, 'project.create');
+    assert.equal(receipt.storyId, 'story-created');
+    assert.equal(refreshed, 'story-created');
+    assert.match(message, /Project created/);
+    return persisted;
+  }
+  const attached = await create(true);
+  assert.equal(attached.storyId, 'story-created');
+  assert.equal(attached.label, 'The Station');
+  assert.equal(await create(false), null);
+});

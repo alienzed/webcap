@@ -3336,8 +3336,8 @@
     if (workspace) workspace.classList.toggle('story-library-compact', storyState.storyLibraryCompact);
     if (button) {
       button.setAttribute('aria-pressed', storyState.storyLibraryCompact ? 'true' : 'false');
-      button.setAttribute('title', storyState.storyLibraryCompact ? 'Expand Stories' : 'Collapse Stories to icons');
-      button.setAttribute('aria-label', storyState.storyLibraryCompact ? 'Expand Stories' : 'Collapse Stories to icons');
+      button.setAttribute('title', storyState.storyLibraryCompact ? 'Expand Projects' : 'Collapse Projects to icons');
+      button.setAttribute('aria-label', storyState.storyLibraryCompact ? 'Expand Projects' : 'Collapse Projects to icons');
       button.textContent = storyState.storyLibraryCompact ? '›' : '‹';
     }
   }
@@ -3347,7 +3347,7 @@
     if (!host) return;
     var stories = Array.isArray(storyState.stories) ? storyState.stories : [];
     if (!stories.length) {
-      host.innerHTML = '<div class="storyboard-library-empty">No Stories yet.</div>';
+      host.innerHTML = '<div class="storyboard-library-empty">No Projects yet.</div>';
       return;
     }
 
@@ -3373,10 +3373,10 @@
         if (story.status && story.status !== 'active') meta.push(story.status);
         meta.push(String(Number(story.sceneCount || 0)) + ' scene' + (Number(story.sceneCount || 0) === 1 ? '' : 's'));
         return '<div class="storyboard-story-row' + (active ? ' active' : '') + '" data-story-id="' + escapeHtml(story.id) + '">' +
-          '<button type="button" class="storyboard-story-open" data-story-open title="' + escapeHtml(story.title || 'Untitled Story') + '">' +
+          '<button type="button" class="storyboard-story-open" data-story-open title="' + escapeHtml(story.title || 'Untitled Project') + '">' +
             storyRailIconHtml(story) +
             '<span class="storyboard-story-row-copy">' +
-              '<strong>' + escapeHtml(story.title || 'Untitled Story') + '</strong>' +
+              '<strong>' + escapeHtml(story.title || 'Untitled Project') + '</strong>' +
               '<span>' + escapeHtml(meta.join(' · ')) + '</span>' +
             '</span>' +
           '</button>' +
@@ -3396,7 +3396,7 @@
 
     var html = '';
     if (pinned.length) html += '<div class="storyboard-list-section-title">Pinned</div>' + rows(pinned);
-    if (mainStories.length) html += '<div class="storyboard-list-section-title">Stories</div>' + rows(mainStories);
+    if (mainStories.length) html += '<div class="storyboard-list-section-title">Projects</div>' + rows(mainStories);
     if (archived.length) html += '<div class="storyboard-list-section-title">Archived</div>' + rows(archived);
     host.innerHTML = html;
   }
@@ -4384,7 +4384,7 @@
       return request({
         operation: 'create_story',
         story: {
-          title: 'Untitled Story',
+          title: 'Untitled Project',
           concept: '',
           style: '',
           invariants: [],
@@ -4416,7 +4416,7 @@
   function deleteStory(storyId, title) {
     if (!storyId) return;
     var deletedWasOpen = !!(storyState.story && storyState.story.id === storyId);
-    title = String(title || 'Untitled Story');
+    title = String(title || 'Untitled Project');
     if (!window.confirm(
       'Delete "' + title + '" and permanently remove all of its Scenes, Takes, references, and exports? This cannot be undone.'
     )) return;
@@ -4514,7 +4514,7 @@
       var bytes = Number(preview.reclaimableBytes || 0);
       var size = bytes >= 1073741824 ? (bytes / 1073741824).toFixed(2) + ' GiB'
         : (bytes / 1048576).toFixed(1) + ' MiB';
-      var message = 'Archive "' + (story.title || 'Untitled Story') + '"?\\n\\n' +
+      var message = 'Archive "' + (story.title || 'Untitled Project') + '"?\\n\\n' +
         'Keep the exported movie and the complete Story/Take recipes.\\n' +
         'Permanently delete ' + count + ' generated Take file(s), reclaiming ' + size + '.\\n' +
         'Imported Takes and conditioning references are retained.\\n' +

@@ -17,6 +17,10 @@ on:
       - 'tests/director_chat_persistence.test.cjs'
       - 'tests/test_director_chat_history.py'
       - 'tool/server/director_chat_history.py'
+      - 'tool/server/studio_director.py'
+      - 'tests/test_studio_director.py'
+      - 'tests/studio_director_workshop.test.cjs'
+      - 'tool/js/workspace_shell.js'
       - 'tool/js/diagnostics.js'
       - 'tool/server/model_lab.py'
       - 'tool/server/storyboard_llm_runtime.py'
@@ -48,6 +52,10 @@ jobs:
       - run: node --check tool/js/storyboard.js && node --check tool/js/director_chat.js && node --check tool/js/diagnostics.js
       - name: Assistant conversation persistence
         run: node --test tests/director_chat_persistence.test.cjs
+      - name: Studio Director Writer's Workshop
+        run: |
+          node --check tool/js/workspace_shell.js
+          node --test tests/studio_director_workshop.test.cjs
       - name: Storyboard Chat attached context
         run: node --test tests/director_chat_storyboard_attachment.test.cjs
       - name: RAM-only instruction history
@@ -58,8 +66,8 @@ jobs:
       - run: cp tool/config.example.json tool/config.json
       - run: python -m pip install pytest Flask Pillow Werkzeug imageio websocket-client opencv-python-headless
       - run: python -m compileall -q tool/server
-      - name: Assistant session store and API
-        run: python -m pytest -q tests/test_director_chat_history.py
+      - name: Assistant session store and Studio guidance API
+        run: python -m pytest -q tests/test_director_chat_history.py tests/test_studio_director.py
       - run: node --check tool/js/model_lab.js
       - run: python -m pytest -q tests/test_storyboard_header_regression.py tests/test_director_thinking_mvp.py tests/test_model_assessment_thinking_unified.py
       - name: Atomic individual Scene development

@@ -2325,6 +2325,127 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
   display: none;
 }
 
+/* Studio Director is a creative workbench, not the compact general Chat drawer. */
+.director-chat-drawer.studio-director {
+  width: min(1020px, calc(100% - 70px));
+  border-radius: 16px;
+}
+.app-frame.director-chat-pinned.studio-director-active {
+  grid-template-columns: 42px minmax(0, 1fr) clamp(470px, 49vw, 900px);
+}
+.app-frame.shell-immersive.director-chat-pinned.studio-director-active {
+  grid-template-columns: minmax(0, 1fr) clamp(470px, 49vw, 900px);
+}
+.director-chat-drawer.studio-director .director-chat-drawer-header {
+  min-height: 86px;
+  padding: 16px 20px;
+}
+.director-chat-drawer.studio-director .director-chat-header-copy strong {
+  font-size: 26px;
+  line-height: 1.15;
+}
+.director-chat-drawer.studio-director .director-chat-header-copy span {
+  font-size: 14px;
+}
+.director-chat-drawer.studio-director .director-chat-header-actions .review-captions-btn {
+  min-height: 39px;
+  padding: 7px 13px;
+  font-size: 14px;
+}
+.director-chat-drawer.studio-director .director-chat-messages {
+  padding: 24px 28px;
+}
+.director-chat-drawer.studio-director .director-chat-message {
+  max-width: min(92%, 850px);
+  margin-bottom: 22px;
+}
+.director-chat-drawer.studio-director .director-chat-message-label {
+  font-size: 14px;
+}
+.director-chat-drawer.studio-director .director-chat-message-body {
+  font-size: 17px;
+  padding: 18px 20px;
+  line-height: 1.6;
+  border-radius: 12px;
+}
+.director-chat-drawer.studio-director .director-chat-empty {
+  padding: 28px;
+  margin: 22px 28px;
+  text-align: left;
+  font-size: 16px;
+}
+.director-chat-empty strong { display: block; font-size: 23px; line-height: 1.25; }
+.director-chat-empty p { margin: 10px 0; }
+.director-chat-drawer.studio-director #director-studio-retry:not(.hidden) {
+  margin-top: 12px;
+  min-height: 44px;
+  padding: 10px 16px;
+  font-size: 16px;
+}
+.director-chat-drawer.studio-director .director-chat-composer {
+  padding: 16px 22px 22px;
+}
+.director-chat-drawer.studio-director .director-chat-composer textarea {
+  min-height: 132px;
+  max-height: 360px;
+  font-size: 18px;
+  line-height: 1.5;
+  padding: 15px 17px;
+}
+.director-chat-drawer.studio-director .director-chat-composer-footer .review-captions-btn {
+  min-height: 46px;
+  min-width: 116px;
+  padding: 10px 19px;
+  font-size: 16px;
+  font-weight: 700;
+}
+.director-chat-drawer.studio-director .director-chat-composer-hint { font-size: 14px; }
+.director-studio-starters { display: flex; flex-wrap: wrap; gap: 9px; margin-bottom: 12px; }
+.director-studio-starters.hidden { display: none; }
+.director-studio-starters button {
+  min-height: 42px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel-soft);
+  color: var(--text);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  padding: 8px 15px;
+  cursor: pointer;
+}
+.director-studio-starters button:hover,
+.director-studio-starters button:focus-visible {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, var(--panel-soft));
+}
+@media (max-width: 880px) {
+  .director-chat-drawer.studio-director { width: calc(100% - 20px); right: 10px; }
+  .app-frame.director-chat-pinned.studio-director-active {
+    grid-template-columns: 42px minmax(0, 1fr);
+    grid-template-areas: "header header" "rail workspace" "rail status";
+  }
+  .app-frame.shell-immersive.director-chat-pinned.studio-director-active {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "workspace" "status";
+  }
+  .app-frame.director-chat-pinned.studio-director-active .director-chat-drawer {
+    position: absolute;
+    grid-area: auto;
+    z-index: 74;
+    top: 10px;
+    right: 10px;
+    bottom: calc(var(--shell-status-height) + 10px);
+    width: calc(100% - 20px);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+  }
+  .director-chat-drawer.studio-director .director-chat-messages { padding: 16px; }
+  .director-chat-drawer.studio-director .director-chat-drawer-header { padding: 12px; }
+  .director-chat-drawer.studio-director .director-chat-header-copy strong { font-size: 22px; }
+}
+
+
 .director-chat-drawer-header {
   min-height: 62px;
   display: flex;

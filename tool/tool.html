@@ -106,7 +106,7 @@
                         <circle cx="12" cy="12" r="3"></circle>
                     </svg>
                 </button>
-                <button id="activity-storyboard-btn" type="button" class="activity-rail-btn" title="Storyboard" aria-label="Storyboard" aria-pressed="false" aria-controls="storyboard-workspace">
+                <button id="activity-storyboard-btn" type="button" class="activity-rail-btn" title="Studio" aria-label="Studio" aria-pressed="false" aria-controls="storyboard-workspace">
                     <svg class="activity-rail-icon" viewBox="0 0 24 24" aria-hidden="true">
                         <rect x="4" y="4" width="16" height="16" rx="2"></rect>
                         <path d="M4 9h16"></path>
@@ -1862,7 +1862,7 @@
                     </section>
                 </main>
             </section>
-            <section id="storyboard-workspace" class="storyboard-workspace hidden" data-workspace-root="storyboard" aria-label="Storyboard workspace">
+            <section id="storyboard-workspace" class="storyboard-workspace hidden" data-workspace-root="storyboard" aria-label="Studio workspace">
                 <aside class="storyboard-library" aria-label="Stories">
                     <header class="storyboard-library-header">
                         <strong>Stories</strong>
@@ -2076,7 +2076,7 @@
             <aside id="director-chat-drawer" class="director-chat-drawer hidden" aria-label="Assistant" aria-hidden="true">
                 <header class="director-chat-drawer-header">
                     <div class="director-chat-header-copy">
-                        <strong>Assistant</strong>
+                        <strong id="director-chat-title">Assistant</strong>
                         <span id="director-chat-mode-description">Assistant conversation</span>
                         <span id="director-chat-save-status" aria-live="polite"></span>
                     </div>
@@ -2138,9 +2138,16 @@
                 </div>
                 <div id="director-chat-messages" class="director-chat-messages" aria-live="polite"></div>
                 <div id="director-chat-empty" class="director-chat-empty">
-                    Start a freeform conversation with the selected model.
+                    <strong id="director-chat-empty-title">Your creative workshop</strong>
+                    <p id="director-chat-empty-description">Tell Director what interests you. You can start with a single moment, a feeling, or nothing at all.</p>
+                    <button id="director-studio-retry" type="button" class="review-captions-btn hidden">Start Writer's Workshop</button>
                 </div>
                 <div class="director-chat-composer">
+                    <div id="director-studio-starters" class="director-studio-starters hidden" aria-label="Creative conversation starters">
+                        <button type="button" data-studio-starter="hook">Find the hook</button>
+                        <button type="button" data-studio-starter="scene">Sketch a Scene</button>
+                        <button type="button" data-studio-starter="feasibility">Make it renderable</button>
+                    </div>
                     <textarea id="director-chat-input" rows="4" placeholder="Ask the model anything…"></textarea>
                     <div class="director-chat-composer-footer">
                         <span class="director-chat-composer-hint">Enter to send · Shift+Enter for newline</span>
@@ -2999,11 +3006,11 @@
                         </section>
                         <section class="app-settings-section">
                             <div class="app-settings-section-header">
-                                <div class="app-settings-section-title">Generation Model Capabilities &amp; Limitations</div>
-                                <div class="app-settings-section-copy">Optional advice for Director when planning or writing for each target model. Not appended directly to generation prompts.</div>
+                                <div class="app-settings-section-title">Production Playbook</div>
+                                <div class="app-settings-section-copy">Your practical strengths, weaknesses, techniques, and lessons for each video-generation model. Studio Director reads the selected playbook when you converse; the built-in technical prompt contract stays separate. These notes are not silently appended to generation prompts.</div>
                             </div>
                             <div class="app-settings-form-grid">
-                                <label class="app-settings-field app-settings-field-wide"><span class="app-settings-field-label">MiniMax H3</span><textarea id="app-settings-model-guidance-minimax_h3" rows="4" placeholder="A few practical limitations and preferred workarounds"></textarea></label>
+                                <label class="app-settings-field app-settings-field-wide"><span class="app-settings-field-label">MiniMax H3 — working methods &amp; lessons</span><textarea id="app-settings-model-guidance-minimax_h3" rows="7" placeholder="Reliable actions, known failure modes, techniques that worked in your Takes…"></textarea></label>
                                 <label class="app-settings-field app-settings-field-wide"><span class="app-settings-field-label">Krea 2</span><textarea id="app-settings-model-guidance-krea2_raw" rows="3" placeholder="Optional model-specific guidance"></textarea></label>
                             </div>
                         </section>

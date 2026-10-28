@@ -224,7 +224,7 @@ def test_extend_story_preserves_distinction_from_redevelopment():
     assert "OLD FIRST PROMPT" not in request["prompt"]
     assert "EXISTING SECOND PROMPT" not in request["prompt"]
     assert "[LAST SCENE EXIT STATE]" not in request["prompt"]
-    assert "Use the supplied concept, Directing Guidelines" in request["prompt"]
+    assert "Use the Project Concept, Visual / atmosphere, Invariants" in request["prompt"]
     assert "[USER DIRECTION]\nDifferent cubicle vignettes." in request["prompt"]
     assert "new Scenes, each with a complete standalone H3 generation prompt, as JSON" in request["prompt"]
 

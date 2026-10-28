@@ -2401,6 +2401,22 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
 }
 .director-chat-drawer.studio-director .director-chat-composer-hint { font-size: 14px; }
 /* A single contextual capture surface, kept separate from the chat composer. */
+.director-studio-operation-history {
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 8px 20px;
+  border-top: 1px solid var(--border);
+  font-size: 13px;
+  color: var(--muted);
+  max-height: min(30vh, 240px);
+  overflow: auto;
+}
+.director-studio-operation-history.hidden { display: none; }
+.director-studio-operation-history summary { cursor: pointer; font-weight: 600; }
+.director-studio-operation-list { display: grid; gap: 8px; padding: 10px 0; }
+.director-studio-operation-item { display: grid; gap: 3px; }
+.director-studio-operation-item strong { color: var(--text); font-weight: 600; }
+.director-studio-operation-item small { color: var(--muted); font-size: 12px; }
 .director-studio-flow {
   flex: 0 1 auto;
   min-height: 0;

@@ -62,3 +62,10 @@ def test_unconfigured_h3_studio_still_has_production_expertise(monkeypatch):
     assert "[Shot 1]" not in text
     assert "USER'S H3 PRODUCTION PLAYBOOK" not in text
     assert "[Shot 1]" in result["promptContract"]
+
+
+def test_freeform_workshop_does_not_claim_mutations_or_dump_full_scene():
+    text = guidance("minimax_h3")["system"]
+    assert "dialogue stays dialogue" in text
+    assert "never announce 'Storyboard updated'" in text
+    assert "A separate WebCap operation" in text

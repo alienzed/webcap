@@ -48,6 +48,46 @@ These are implementation-level boundaries verified after the earlier plan was wr
 
 **Audit provenance:** `AGENTS.md`; `docs/filesystem_state_contract.md`; `storyboard_store.py`; `studio_director.py`; `director_chat_history.py`; `director_chat.js`; `storyboard.js`; `storyboard_llm_contract.py`; `storyboard_llm_guidance.md`; `mmh3-prompt-runtime-context.txt`; `app_settings.js`; `storage_manager.py`; `workspace_shell.css`; `tests/studio_director_scene_draft.test.cjs`; `tests/test_director_chat_history.py`. This is a static code/contract audit, not a real-model or browser run. A follow-up H3-expertise audit also inspected the actual generation adapter and official MiniMax base prompt guidance; production-behavior claims still require real generation testing.
 
+## 2026-10-28 implementation track — conversational Studio and scoped Story knowledge
+
+**Current main:** `cb9082280b06d5726e6abf57a4f8d1526413865c`. This subsection supersedes older assumptions that the Writer's Workshop should expose many model/extraction commands or keep Story snapshots as its primary ongoing access mechanism. Existing Storyboard editor, Takes, prompts, model queues, and reviewed persistence remain authoritative. The real UI names are **Concept / overview**, **Visual / atmosphere**, and **Invariants**; Core Appeal belongs within Concept.
+
+**Observed code seams:**
+- `director_chat.js:sendMessage` already uses the freeform `/fs/director/chat` route by default. Structured extraction requests use explicit `studio_*_draft` operation schemas, and reviewed Apply uses dedicated routes. **Keep these separated**; do not put a tool-call schema on ordinary creative chat turns.
+- Reviewed `applyStudioProject`, `applyStudioSceneDraft`, `applyStudioScenes`, and `applyStudioBrief` currently append synthetic `assistant` messages to `modeMessages.storyboard`. These aren't LLM dialogue and can mislead both the author and subsequent model requests. `director_chat_history.py` persists only role/content plus snapshot attachments and workshop; operation receipts have no separate home.
+- `attachStoryboardContext` calls `getStoryboardAssistantContext`, which flushes pending editor saves and stores a static text snapshot in `attachments{}`. `storyboardRequestMessages` copies that text into the last outbound user message **on every turn**. This is reference injection, not on-demand Story access.
+- `studioDirectorRequestMessages` injects production guidance and one workbench status statement; the `ACTIONS` catalog in `studio_director.py` is advisory, **not model tool access**. The LLM cannot truthfully claim to have inspected current Story data without a real read.
+- `director_chat_history.py` currently offers revisioned `conversation.json` in app-data state. Scene and Story data remain in the owner-local Story store. Do not create a competing Story mirror, transcript copy or new app-private root.
+
+### Phase C1 — Separate communication from operations (implement first)
+
+- [ ] Keep `messages[]` strictly user/LLM freeform turns. On successful Apply, store **only a compact receipt** (operation type, target IDs, time, one short description), in a bounded optional `operations[]` alongside each existing conversation. Leave old messages unchanged for compatibility. Ordinary chat never receives those receipts as a fabricated assistant turn.
+- [ ] Render operation history in its **own collapsible panel**, independent from the chat composer and transcript; reviewed extraction stays in existing editable review dialogs. Preserve authoritative Story revision/undo records separately.
+- [ ] Narrow the Studio conversational persona: discuss exactly the subject requested (dialogue should stay dialogue); never print full Scene sections by default, output JSON or claim “Storyboard updated” from an ordinary model response. Expose real errors to global Console.
+- **Gate:** Python history roundtrip/legacy save/revision conflict tests, Node transcript isolation and UI tests, focused Director regression. A browser smoke check is still required before declaring UX finished.
+
+### Phase C2 — Explicit Story access scope, not copied context
+
+- [ ] Introduce an optional conversation-owned `storyAccess` **reference grant** (Story ID, explicit scope, no stored Story bodies); it survives reopening but does **not** bind the conversation permanently to navigation. The current `attachments{}` are historical snapshots and must remain readable, not silently reinterpreted as access grants. Detach and switch Story access explicitly.
+- [ ] Add a minimal **read-only scoped resolver** using `storyboard_store.load_story` and authoritative stable Scene IDs. Permit narrowly enumerated reads: Story brief, Scene index, selected Scene intent, selected prompt fields, and Take metadata as actually supported. Enforce declared scope/identities on the server; reject missing/deleted IDs. Do not read video content or report visual evidence the model has not been given.
+- [ ] WebCap may resolve a targeted read **out of band** and supply exactly the relevant bounded result to the next LLM request; the chat transcript must not acquire the request/JSON/response. Keep a small inspectable in-session read log and show the exact available fields. Do not send the full Story on every message. Validate local model/tool-request capability before enabling autonomous multi-step reads; if unsupported, keep explicit targeted retrieval and do not fake it.
+- **Gate:** server denied/allowed scope, open/closed Story, pending-save coordination, deleted Scene, no auto-rebind on navigation, old snapshot backward compatibility, actual-model capability probe, and a conversation asking about an attached Scene without dumping irrelevant fields.
+
+### Phase C3 — WebCap-controlled extraction and reviewed application
+
+- [ ] One **Capture selected fields** surface uses the real names Concept / overview, Visual / atmosphere, and Invariants. It routes to the already existing `studio_project_draft` or `studio_brief_draft` and their reviewed Apply depending on an explicit new/existing target, without a second chat mode.
+- [ ] Capture selected Scene intents, dialogue or prompt text using bounded private `studio_*_draft` operations. Keep discussion text concise and human; show full proposed values only in the relevant review form. Reject attempts to change unrelated Scene fields/Take data without approval.
+- [ ] Make the selected target and inputs inspectable **before** the private extraction; don't silently use the currently open Story as a conversation binding. Preserve field-scoped conflicts, stable IDs, atomic writes, and owner-local Undo.
+- **Gate:** new Project with no Scenes, existing Project, multi-Scene insertion at start/between/end, rejected conflicts, no transcript payloads, cancellation, failed save and reconnect.
+
+### Phase C4 — Simplify the workbench after the contracts are proven
+
+- [ ] Consolidate redundant quick tools and command piles. Keep **one clear conversation**, a small Story access/selection header, contextual Capture to review, and optional separate operation history. Existing Storyboard buttons may prefill editable instructions but may not send silently.
+- [ ] Real browser test for first-time idea → reviewed Concept/Style/Invariants, dialogue-only discussion, Story attach/read access inspector, reopen chat, private action/Apply, and Scene/Take preservation.
+- **Gate:** no Storyboard redesign, no new parallel source of truth, keyboard and narrow-width usability, existing General Chat and production flow unaffected.
+
+**Implement safely:** separate PRs in order; complete review and focused CI before merging each. Plan statuses must be updated from real merged code, never from mockups. Do not introduce a generic tool router or autonomous agent if the local LLM tool capability is unverified.
+
 ## Severity-ranked codebase findings (main)
 
 The audit distinguishes **confirmed workflow defects**, partial implementations, and future choices. Scope is Studio Director and its integration only; **do not rebuild Storyboard**.

@@ -44,7 +44,8 @@
     studioProjectProposal: null,
     studioScenesProposal: null,
     studioBriefProposal: null,
-    studioBriefUndo: null
+    studioBriefUndo: null,
+    studioOperations: []
   };
   var STORYBOARD_WORKSHOP_PRIMER = [
     'You are collaborating with an author developing short AI-generated videos.',
@@ -364,6 +365,7 @@
     var storyPrepare = el('director-chat-story-prepare');
     storyPrepare.classList.toggle('hidden', state.activeMode !== 'storyboard' || !guidelineStoryId());
     renderStoryboardAttachmentViewer();
+    renderStudioOperations();
     renderMessages();
     syncControls();
   }
@@ -519,6 +521,7 @@
     var draft = state.draftByMode[mode] || '';
     var attachments = mode === 'storyboard' ? JSON.parse(JSON.stringify(state.storyboardAttachments)) : {};
     var workshop = mode === 'storyboard' ? JSON.parse(JSON.stringify(state.workshop)) : null;
+    var operations = mode === 'storyboard' ? state.studioOperations.slice() : [];
     var title = state.sessionByMode[mode] ? state.sessionByMode[mode].title : 'New chat';
     if (title === 'New chat') {
       var first = messages.find(function (message) { return message.role === 'user' && message.content.trim(); });
@@ -543,7 +546,8 @@
           method: 'PUT', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             expectedRevision: current.revision, title: title,
-            messages: messages, draft: draft, attachments: attachments, workshop: workshop
+            messages: messages, draft: draft, attachments: attachments, workshop: workshop,
+            operations: operations
           })
         });
       }).then(function (payload) {
@@ -599,6 +603,7 @@
       state.modeMetricsByAssistantIndex.storyboard = {};
       state.storyboardAttachments = Object.assign({}, chat.attachments || {});
       state.workshop = chat.workshop || null;
+      state.studioOperations = Array.isArray(chat.operations) ? chat.operations.slice() : [];
       state.studioSceneProposal = null;
       state.studioProjectProposal = null;
       state.studioScenesProposal = null;
@@ -1077,6 +1082,36 @@
     host.scrollTop = host.scrollHeight;
   }
 
+  function renderStudioOperations() {
+    var host = el('director-studio-operation-history');
+    var list = el('director-studio-operation-list');
+    var studio = state.activeMode === 'storyboard';
+    var entries = state.studioOperations || [];
+    host.classList.toggle('hidden', !studio || !entries.length);
+    if (!studio || !entries.length) { list.replaceChildren(); return; }
+    el('director-studio-operation-summary').textContent = 'Studio changes · ' + entries.length;
+    list.replaceChildren();
+    entries.slice().reverse().forEach(function (item) {
+      var row = document.createElement('div');
+      row.className = 'director-studio-operation-item';
+      var name = document.createElement('strong');
+      name.textContent = item.label;
+      var meta = document.createElement('small');
+      meta.textContent = item.storyId + ' · ' + new Date(item.at).toLocaleString();
+      row.append(name, meta);
+      list.appendChild(row);
+    });
+  }
+
+  function recordStudioOperation(kind, label, storyId, sceneIds) {
+    state.studioOperations.push({
+      kind: kind, label: String(label || '').slice(0, 200), storyId: String(storyId || ''),
+      sceneIds: (sceneIds || []).slice(0, 8), at: new Date().toISOString()
+    });
+    state.studioOperations = state.studioOperations.slice(-25);
+    renderStudioOperations();
+  }
+
   function syncStudioFlow() {
     var studio = state.activeMode === 'storyboard';
     var discussed = (state.modeMessages.storyboard || []).some(function (message) {
@@ -1388,12 +1423,7 @@
       state.studioProjectProposal = null;
       el('studio-project-review').close();
       var name = payload.story.title || 'Untitled Project';
-      state.modeMessages.storyboard.push({
-        role: 'assistant', content: 'Created Studio Project "' + name + '" (' + payload.story.id + ') with ' +
-          payload.story.sceneOrder.length + ' tentative Scene(s). It is in the Studio Library; ' +
-          'the conversation and its context have not changed.'
-      });
-      renderMessages();
+      recordStudioOperation('project.create', 'Created Project: ' + name, payload.story.id, payload.story.sceneOrder);
       studioActionStatus('Project created: ' + name + '. Open it from the Studio Library.', false);
       return persistSession('storyboard').then(function () {
         return window.refreshStudioDirectorStoryIfOpen(payload.story.id);
@@ -1580,12 +1610,8 @@
       state.studioBriefUndo = {storyId: proposal.storyId, revisionId: result.revisionId};
       state.studioBriefProposal = null;
       el('studio-brief-review').close();
-      state.modeMessages.storyboard.push({
-        role: 'assistant', content: 'Applied approved Story brief fields: ' +
-          Object.keys(changes).join(', ') + '. Other Scene data and Takes were preserved. ' +
-          'Undo is available while the result remains unchanged.'
-      });
-      renderMessages();
+      recordStudioOperation('brief.apply', 'Updated ' + Object.keys(changes).join(', '),
+        proposal.storyId, []);
       studioActionStatus('Story brief updated. Undo is available.', false);
       return persistSession('storyboard').then(function () {
         return window.refreshStudioDirectorStoryIfOpen(proposal.storyId);
@@ -1623,8 +1649,11 @@
         throw new Error('Concept / Style / Invariants Undo returned an unexpected Project.');
       }
       state.studioBriefUndo = null;
+      recordStudioOperation('brief.undo', 'Reverted last Concept / Style / Invariants change', receipt.storyId, []);
       studioActionStatus('Last Concept / Style / Invariants change undone.', false);
-      return window.refreshStudioDirectorStoryIfOpen(receipt.storyId);
+      return persistSession('storyboard').then(function () {
+        return window.refreshStudioDirectorStoryIfOpen(receipt.storyId);
+      });
     }).catch(function (error) {
       studioActionStatus('Concept / Style / Invariants Undo failed: ' + String(error.message || error), true);
       if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Studio Brief Undo', error);
@@ -1833,13 +1862,8 @@
       applied = true;
       state.studioScenesProposal = null;
       el('studio-scenes-review').close();
-      state.modeMessages.storyboard.push({
-        role: 'assistant',
-        content: 'Created ' + payload.scenes.length + ' tentative Scene(s) in ' +
-          (proposal.storyTitle || proposal.storyId) + ', with their order saved. ' +
-          'No existing prompts or Takes were changed.'
-      });
-      renderMessages();
+      recordStudioOperation('scenes.create', 'Created ' + payload.scenes.length + ' tentative Scenes',
+        proposal.storyId, payload.scenes.map(function (scene) { return scene.id; }));
       studioActionStatus(payload.scenes.length + ' Scenes created.', false);
       return persistSession('storyboard').then(function () {
         return window.refreshStudioDirectorStoryIfOpen(proposal.storyId);
@@ -2051,8 +2075,7 @@
       var receipt = 'Created tentative Scene ' + index + (title ? ' · ' + title : '') +
         ' in ' + (proposal.storyTitle || proposal.storyId) +
         '. Its intent is saved; the production prompt and Takes remain empty.';
-      state.modeMessages.storyboard.push({ role: 'assistant', content: receipt });
-      renderMessages();
+      recordStudioOperation('scene.create', receipt, proposal.storyId, [created.id]);
       studioActionStatus(receipt, false);
       return persistSession('storyboard').catch(function (error) {
         studioActionStatus(receipt + ' Conversation receipt could not be saved: ' + String(error.message || error), true);
@@ -2168,6 +2191,7 @@
         state.metricsByAssistantIndex = {};
       } else {
         state.modeMessages.storyboard = [];
+        state.studioOperations = [];
         state.modeElapsedByAssistantIndex.storyboard = {};
         state.modeMetricsByAssistantIndex.storyboard = {};
         if (!preserveContext) {

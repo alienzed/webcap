@@ -164,3 +164,20 @@ test('Studio is a label change, not a storage migration', () => {
   assert.match(shell, /closeStudioDirectorOnExit/);
   assert.match(html, /id="storyboard-workspace"/);
 });
+
+
+test('Studio keeps model dialogue and reviewed operation receipts in separate data', () => {
+  assert.match(html, /id="director-studio-operation-history"/);
+  assert.match(html, /id="director-studio-operation-list"/);
+  assert.match(source, /function recordStudioOperation\(/);
+  assert.match(source, /operations: operations/);
+  assert.match(source, /state\.studioOperations = Array\.isArray\(chat\.operations\)/);
+  assert.match(source, /recordStudioOperation\('project\.create'/);
+  assert.match(source, /recordStudioOperation\('brief\.apply'/);
+  assert.match(source, /recordStudioOperation\('scenes\.create'/);
+  assert.match(source, /recordStudioOperation\('scene\.create'/);
+  assert.doesNotMatch(source, /modeMessages\.storyboard\.push\(\{ role: 'assistant', content: receipt \}\)/);
+  const section = slice('  function renderStudioOperations() {', '  function syncStudioFlow() {');
+  assert.doesNotMatch(section, /modeMessages/);
+  assert.match(section, /createElement\('div'\)/);
+});

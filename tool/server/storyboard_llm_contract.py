@@ -340,13 +340,8 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
             "For locations, describe consistent layout, materials, and fixed features. "
             "Choose grounded details that aid reproducible generation. "
             "Return only JSON matching the supplied invariant schema, with an empty invariants array "
-            "when no recurring identity needs defining. "
-            "Also propose four concise Story Directing Guidelines from the concept: visualFocus (observable priorities), "
-            "creativeDirection (qualities that make the concept compelling), variation (what changes or deliberately repeats "
-            "across Scenes), and pacing (how actions and shots use time). "
-            + ("Refresh the four guideline proposals using the concept and existing guidelines as context. "
-               if refresh_guidelines else "Existing guidelines are authoritative: return an empty string for any already populated field. ")
-            + "Do not invent story facts or turn guidelines into mandatory Scene prescriptions."
+            "when no recurring identity needs defining. Preserve existing Project Concept, Visual / atmosphere "
+            "and author-approved legacy Directing Guidelines without creating new guideline fields."
         )
         return {
             "operation": operation,

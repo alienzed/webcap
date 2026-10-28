@@ -1,7 +1,7 @@
 /* Studio Blocks: owns its library editor and opt-in slash insertion. */
 (function () {
   'use strict';
-  var blocks = [], selected = null, dirty = false, pickerItems = [], active = 0;
+  var blocks = [], selected = null, dirty = false, pickerItems = [], active = 0, catalogLoaded = false, catalogLoading = false;
   var $ = function (id) { return document.getElementById(id); };
   function error(e) {
     $('studio-blocks-status').textContent = e.message || String(e);
@@ -53,12 +53,13 @@
   }
   async function load() {
     blocks = (await api()).blocks;
+    catalogLoaded = true;
     renderList();
     updatePicker();
   }
   async function open() {
     $('studio-blocks-dialog').showModal();
-    try { await load(); if (!selected) show(null); }
+    try { await load(); if (!selected && !dirty) show(null); }
     catch (e) { error(e); }
   }
   async function save() {
@@ -158,10 +159,12 @@
     });
     // The catalog is only fetched when opening Blocks or requesting slash suggestions.
     input.addEventListener('input', function () {
-      if (!slashMatch() || blocks.length) return;
-      load().catch(error);
+      if (!slashMatch() || catalogLoaded || catalogLoading) return;
+      catalogLoading = true;
+      load().catch(error).finally(function () { catalogLoading = false; });
     });
     $('director-chat-send').addEventListener('click', hidePicker);
+    input.addEventListener('keydown', function (e) { if (e.key === 'Enter' && !e.shiftKey) hidePicker(); });
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bind);
   else bind();

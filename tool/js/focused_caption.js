@@ -823,8 +823,11 @@ function finishFocusedCaption() {
   stopFocusedCaption();
   renderFileList();
   if (wasQa) {
-    showFocusedCaptionToast('QA Focus Review · reached end of prepared items');
-    setStatus('QA Focus Review reached the end of prepared items. Skip keeps items available for this round.');
+    var message = qaDeepScanIsActive()
+      ? 'Caught up — Deep QA is still running. New findings will appear in Quality Assurance.'
+      : 'QA Focus Review · reached end of prepared items. Skipped findings remain available.';
+    showFocusedCaptionToast(message);
+    setStatus(message);
   } else {
     showFocusedCaptionToast(label + ' complete · ' + completedCount + ' item' + (completedCount === 1 ? '' : 's'));
     setStatus(label + ' complete.');
@@ -858,7 +861,7 @@ function navigateFocusedCaptionToIndex(index, direction) {
   syncFocusedCaptionControls();
   syncCaptionAssistCandidateUi();
   syncFocusedCaptionPanelGeometry();
-  return selectPathMedia(targetItem).then(function () {
+  return selectPathMedia(targetItem, isFocusedQaReviewMode() ? { allowOutsideFilter: true } : undefined).then(function () {
     return true;
   }).catch(function (err) {
     var message = String(err && err.message ? err.message : err);

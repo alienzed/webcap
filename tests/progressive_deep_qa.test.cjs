@@ -266,3 +266,28 @@ test('dismissing an item persists its finding until meaningful input changes', (
   signature = 's2';
   assert.equal(sandbox.dismissed(finding, item, signature), false);
 });
+test('resume uses the recorded scope even when the visible Media List changed', () => {
+  const sandbox = {
+    qaWorkbenchState: {
+      qaReviewMode: 'progressive-v1',
+      deepScanScopeFiles: ['a.jpg', 'b.jpg'],
+      deepScanStage: 'paused', deepScanSessionActive: false,
+      aiModel: 'local::test', deepScanTrainingFocus: 'outfits', trainingFocus: 'outfits'
+    },
+    getDirectorModelPreference() { return 'local::test'; }
+  };
+  vm.createContext(sandbox);
+  vm.runInContext(
+    functionSource('qaCanResumeDeepScan', 'qaRunDeepScan') +
+    '\nthis.canResume = qaCanResumeDeepScan;',
+    sandbox
+  );
+  assert.equal(sandbox.canResume(), true);
+  sandbox.qaWorkbenchState.deepScanStage = 'complete';
+  assert.equal(sandbox.canResume(), false);
+  sandbox.qaWorkbenchState.deepScanStage = 'paused';
+  sandbox.qaWorkbenchState.trainingFocus = 'new purpose';
+  assert.equal(sandbox.canResume(), false);
+  const run = functionSource('qaRunDeepScan', 'qaInputsUpdated');
+  assert.match(run, /continuing \? qaDeepScanScopeItems\(\) : qaGetTrainingItems\(\)/);
+});

@@ -679,7 +679,11 @@
         vocabulary: checklistItems.map(function (group) {
           return { group: group, alias: getRequirementGroupAlias(group), terms: getChecklistKeywordTermsForRequirement(group) };
         }),
-        items: inputItems
+        items: inputItems,
+        statisticalCandidates: qaBuildAssociationFindings(items).map(function (finding) {
+          return { title: finding.title, summary: finding.summary, files: finding.files.slice(),
+            evidence: finding.facts.map(function (fact) { return fact.value + ' ' + fact.label; }) };
+        })
     };
     qaRequestJson('/fs/qa/deep-scan', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -1442,7 +1446,7 @@
     var findings = [];
     candidates.forEach(function (row) {
       var canonical = [row.sourceKey, row.targetKey].sort().join('\u0003');
-      if (seenPairs[canonical] || findings.length >= 3) return;
+      if (seenPairs[canonical] || findings.length >= 12) return;
       seenPairs[canonical] = true;
       var sourceFiles = filesByKey[row.sourceKey] || [];
       var targetLookup = {};

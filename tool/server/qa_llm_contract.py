@@ -624,7 +624,7 @@ def normalize_result(data, allowed_files=None, captions_by_file=None, recheck=Fa
     return result
 
 
-def build_set_review_request(items, vocabulary=None, training_focus="", primer="", sight_evidence=None):
+def build_set_review_request(items, vocabulary=None, training_focus="", primer="", sight_evidence=None, statistical_candidates=None):
     """Compact, set-wide discovery. No per-item caption judgment or asserted edits."""
     if not isinstance(items, list) or not items:
         raise ValueError("Deep QA needs a non-empty training selection.")
@@ -702,19 +702,32 @@ def build_set_review_request(items, vocabulary=None, training_focus="", primer="
          "count": int(row.get("count") or 0), "examples": list(row.get("examples") or [])[:3]}
         for row in selected
     ]
+    anomalies = []
+    for candidate in (statistical_candidates if isinstance(statistical_candidates, list) else [])[:16]:
+        if not isinstance(candidate, dict):
+            continue
+        files = [str(name).strip() for name in (candidate.get("files") or [])[:5]
+                 if str(name).strip() in seen]
+        if files:
+            anomalies.append({"pattern": _clean(candidate.get("title"))[:150],
+                              "statistics": _clean(candidate.get("summary"))[:240],
+                              "files": files})
+
     payload = {"trainingFocus": _clean(training_focus), "captionPrimer": str(primer or "").strip(),
                "vocabulary": groups, "items": compact,
                "sightCoverage": {"current": int(evidence.get("itemCount") or 0), "selected": len(compact)},
-               "savedVisualObservations": visual}
+               "savedVisualObservations": visual, "statisticalAnomalies": anomalies}
     prompt = (
         "[ROLE]\nYou review a LoRA training Set for consequential semantic omissions remaining after normal tagging and captioning.\n"
         "Human-approved tags are compact proxies for captions; they are not exhaustive descriptions of the media.\n\n"
-        "[GOAL]\nFind up to FIVE of the most important omissions or inconsistencies in what the Set currently teaches.\n"
+        "[GOAL]\nFind up to FIVE actionable annotation mistakes, especially statistically unusual missing or extra tags.\n"
         "Especially consider meaningful visual dimensions that may be absent from BOTH tags and captions, "
         "including dimensions not yet represented in the vocabulary. Think independently about the training objective.\n\n"
         "[RULES]\n"
         "- This is discovery, not a verdict about unseen pixels. Do not claim a particular media item is wrong without visual evidence.\n"
-        "- Prefer systematic, training-relevant omissions over style, balance, rare vocabulary, or trivial wording.\n"
+        "- Investigate statisticalAnomalies first, comparing the named files against their tags and saved Sight.\n"
+        "- A correlation is a hypothesis: viewpoint and visibility often justify exceptions, including rear views hiding facial traits.\n"
+        "- Prioritize specific likely human annotation mistakes over distribution or balance critiques.\n"
         "- Compare semantic meaning, not just exact tag spellings; a missing tag isn't proof of a missing visual attribute.\n"
         "- Supply a short candidate-file shortlist (up to five), each with a specific reason based on supplied tags. "
         "These are priority examples to inspect, NOT confirmed defective images. A zero-length shortlist is valid only "

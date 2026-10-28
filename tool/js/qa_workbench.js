@@ -935,7 +935,7 @@
         var needed = Number(capacity.estimatedTokens || 0);
         if (known && needed > known) {
           var proceed = window.confirm(
-            'Deep QA may exceed this Director model\\'s context.\\n\\n' +
+            "Deep QA may exceed this Director model's context.\n\n" +
             'Estimated requirement: ~' + needed.toLocaleString() + ' tokens (including response allowance)\\n' +
             'Known context: ' + known.toLocaleString() + ' tokens\\n\\nProceed anyway?'
           );

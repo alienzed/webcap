@@ -11,8 +11,21 @@
   };
 
   var draftWrite = Promise.resolve();
+  // Keep the exact QA input signature in memory, but persist a bounded fingerprint.
+  // Legacy drafts used the complete signature; both formats remain readable.
+  function compactSignature(signature) {
+    var first = 2166136261, second = 2246822519;
+    for (var i = 0; i < signature.length; i += 1) {
+      var code = signature.charCodeAt(i);
+      first = Math.imul(first ^ code, 16777619);
+      second = Math.imul(second ^ code, 3266489917);
+    }
+    return 'v2:' + signature.length.toString(36) + ':' +
+      (first >>> 0).toString(16).padStart(8, '0') +
+      (second >>> 0).toString(16).padStart(8, '0');
+  }
   function draftPayload() {
-    return {version:1, signature:session.signature, focus:session.focus,
+    return {version:1, signature:compactSignature(session.signature), focus:session.focus,
       analysis:session.analysis, summary:session.summary,
       choices:Array.from(session.choices), initialChoices:session.initialChoices, preset:session.preset,
       balanceGroups:Array.from(session.balanceGroups),
@@ -31,21 +44,34 @@
     if (!Array.isArray(draft.choices) || !Array.isArray(draft.balanceGroups) ||
         !Array.isArray(draft.overriddenGroups) || !Array.isArray(draft.conceptRoles))
       throw new Error('Curate draft contains invalid selections.');
+    var available = new Set(session.rows.map(function(row) { return row.fileName; }));
+    var choices = draft.choices.filter(function(file) { return available.has(file); });
+    session.choices = new Set(choices);
+    session.initialChoices = (Array.isArray(draft.initialChoices)
+      ? draft.initialChoices : draft.choices).filter(function(file) { return available.has(file); });
+    session.summary = String(draft.summary || '');
+    // Concept IDs are positional. Never interpret old IDs against a changed
+    // inventory, even when the saved filenames still exist.
+    if (draft.signature !== session.signature &&
+        draft.signature !== compactSignature(session.signature)) {
+      session.analysis = null;
+      session.preset = ['lean', 'balanced', 'broad'].includes(draft.preset)
+        ? draft.preset : 'custom';
+      session.phase = 'stale';
+      session.status = 'Source evidence changed. Saved image choices are preserved; reanalyze before creating a Set.';
+      session.draftStale = true;
+      return true;
+    }
     session.analysis = draft.analysis;
-    session.initialChoices = Array.isArray(draft.initialChoices) ? draft.initialChoices : draft.choices.slice();
     session.balanceGroups = new Set(draft.balanceGroups);
     session.overriddenGroups = new Set(draft.overriddenGroups);
     session.conceptRoles = new Map(draft.conceptRoles);
     session.preset = 'custom';
     applyBalancePriorities();
-    session.choices = new Set(draft.choices.filter(function(file) {
-      return session.rows.some(function(row) { return row.fileName === file; });
-    }));
-    session.summary = String(draft.summary || '');
+    session.choices = new Set(choices);
     session.phase = 'ready';
-    session.status = draft.signature === session.signature ? 'Saved Curate draft restored.'
-      : 'Saved Curate draft restored · source evidence changed; review before creating a Set.';
-    session.draftStale = draft.signature !== session.signature;
+    session.status = 'Saved Curate draft restored.';
+    session.draftStale = false;
     return true;
   }
 
@@ -512,8 +538,7 @@
     host.appendChild(element('p', 'qa-curation-helper',
       'Coverage is measured against available annotated evidence, not predicted LoRA accuracy.'));
     host.appendChild(element('p', 'qa-curation-summary', session.summary));
-    if (session.draftStale) host.appendChild(element('p', 'qa-curation-status', 'Source evidence changed since analysis. Selections preserved; reanalyze to update priorities.'));
-    else if (session.status) host.appendChild(element('p', 'qa-curation-helper', session.status));
+    if (session.status) host.appendChild(element('p', 'qa-curation-helper', session.status));
 
     var priorities = element('section', 'qa-curation-priorities');
     priorities.appendChild(element('h3', '', 'Balance priorities'));
@@ -563,6 +588,7 @@
       select.onchange = function () {
         session.conceptRoles.set(concept.id, select.value);
         applyBalancePriorities();
+        saveDraft();
         renderQaCuration(host, session.signature);
         var nextDetails = host.querySelector('.qa-curation-concept-controls');
         if (nextDetails) nextDetails.open = true;
@@ -727,13 +753,27 @@
       window.qaShowOverviewFromCuration();
     }));
     header.appendChild(element('span', '', 'Training Set Curation'));
+    if (session.phase === 'ready') {
+      header.appendChild(button('Reanalyze', function() { window.qaReanalyzeCuration(); }));
+    }
     host.appendChild(header);
     if (String(state.folder || '') !== session.folder) {
       host.appendChild(element('p', 'qa-curation-status', 'The training selection changed. Return to QA and analyze it again.'));
       return;
     }
     if (session.phase === 'ready' && qaCurrentCurationSignature() !== session.signature) {
+      session.phase = 'stale';
       session.draftStale = true;
+      session.status = 'Curation inputs changed. Saved image choices are preserved; reanalyze before creating a Set.';
+    }
+    if (session.phase === 'stale') {
+      host.appendChild(element('h2', 'qa-curation-heading', 'Your shortlist needs fresh analysis'));
+      host.appendChild(element('p', 'qa-curation-status', session.status));
+      host.appendChild(element('p', 'qa-curation-helper',
+        session.choices.size + ' saved selections still match media in the current Set.'));
+      host.appendChild(button('Reanalyze current selection',
+        function() { window.qaReanalyzeCuration(); }, 'qa-curation-primary'));
+      return;
     }
     if (session.phase !== 'ready') {
       host.appendChild(element('h2', 'qa-curation-heading',
@@ -801,7 +841,11 @@
     renderCurrent();
   }
 
-  function startQaCuration(items, focus, signature) {
+  function startQaCuration(items, focus, signature, options) {
+    var reanalyze = !!(options && options.reanalyze);
+    var priorChoices = reanalyze && session.folder === String(state.folder || '')
+      ? new Set(session.choices) : null;
+    var priorPreset = reanalyze ? session.preset : '';
     var token = ++session.token;
     var inventory = buildInventory(items);
     if (!inventory.concepts.length) {
@@ -817,6 +861,9 @@
     session.concepts = inventory.concepts;
     session.ignored = inventory.ignored;
     session.analysis = null;
+    session.choices = new Set();
+    session.initialChoices = [];
+    session.preset = 'balanced';
     session.balanceGroups = new Set();
     session.overriddenGroups = new Set();
     session.conceptRoles = new Map();
@@ -828,6 +875,16 @@
     session.draftStale = false;
     window.qaShowCuration();
     renderCurrent();
+    if (reanalyze) {
+      if (!model) {
+        session.phase = 'failed';
+        session.error = 'Choose a Director model for QA Curation.';
+        renderCurrent();
+        return;
+      }
+      beginDirector();
+      return;
+    }
     draftWrite.catch(function() {}).then(function() {
       return fetch('/fs/qa/curate/draft?folder=' + encodeURIComponent(session.folder));
     }).then(function(resp) {
@@ -889,13 +946,21 @@
       }).map(function (c) { return c.group; }));
       session.overriddenGroups = new Set();
       session.conceptRoles = new Map();
-      session.preset = 'balanced';
+      session.preset = ['lean', 'balanced', 'broad'].includes(priorPreset)
+        ? priorPreset : 'balanced';
       applyBalancePriorities();
+      session.initialChoices = Array.from(session.choices);
+      if (priorChoices && priorPreset === 'custom') {
+        var currentFiles = new Set(session.rows.map(function(row) { return row.fileName; }));
+        session.choices = new Set(Array.from(priorChoices).filter(function(file) {
+          return currentFiles.has(file);
+        }));
+        session.preset = 'custom';
+      }
       session.filter = 'selected';
       session.summary = String(result.summary || 'A curated mix of key constructions and supporting variation.');
       session.phase = 'ready';
       session.jobId = '';
-      session.initialChoices = Array.from(session.choices);
       session.draftStale = false;
       saveDraft();
       renderCurrent();

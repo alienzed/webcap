@@ -19,7 +19,7 @@ ACTIONS = (
     {"name": "conversation.discuss", "status": "available", "description": "Discuss and challenge an idea; one question at a time."},
     {"name": "context.attach", "status": "available", "description": "Author explicitly attaches an inspectable Story or Scene snapshot."},
     {"name": "project.brief.propose", "status": "planned", "description": "Extract Concept, Style and Invariants for human-reviewed Apply."},
-    {"name": "scene.draft", "status": "planned", "description": "Draft a tentative Scene at an author-selected placement."},
+    {"name": "scene.draft", "status": "available", "description": "Extract one tentative Scene from discussion; review its text and placement, then apply explicitly to an attached Story."},
     {"name": "scene.revise", "status": "planned", "description": "Propose an explicit, reviewable Scene revision."},
     {"name": "scene.move", "status": "planned", "description": "Reorder Scenes using stable IDs and author approval."},
     {"name": "scene.prompt.propose", "status": "planned", "description": "Draft a model-ready prompt from a reviewed Scene intent."},

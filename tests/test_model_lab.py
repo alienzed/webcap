@@ -7,6 +7,31 @@ import pytest
 from tool.server import model_lab
 
 
+def test_output_cutoff_does_not_skip_larger_assessments(monkeypatch):
+    calls = []
+    monkeypatch.setattr(model_lab, "_probe_job", lambda run, **kwargs:
+                        calls.append(kwargs["kind"]) or {"failureKind": "capacity"})
+    monkeypatch.setattr(model_lab, "_run_schema_pair", lambda *args: None)
+    run = {"depth": "deep", "knownLimits": {"local::director.gguf": 2048}}
+    model_lab._run_director_model(run, _director())
+    assert calls == ["director_thinking"] + ["director_scene_plan_" + str(budget)
+        for budget in (2048, 4096, 8192, 10240, 12288, 16384)]
+
+
+def test_historical_cutoff_only_resolves_that_exact_probe(monkeypatch):
+    previous = {"id": "cutoff", "assessmentProtocol": model_lab.ASSESSMENT_PROTOCOL,
+                "attempts": [{"id": "a", "kind": "director_scene_plan_2048",
+                              "modelRef": "local::director.gguf", "status": "failed",
+                              "failureKind": "capacity"}]}
+    monkeypatch.setattr(model_lab, "list_runs", lambda: [{"id": "cutoff", "status": "completed"}])
+    monkeypatch.setattr(model_lab, "get_run", lambda _: previous)
+    run = model_lab._new_run_payload({"directorModels": [_director()], "depth": "deep"})
+    assert run["knownLimits"] == {}
+    assert run["previousFailures"] == {"director_scene_plan_2048|local::director.gguf|": True}
+    run["knownLimits"] = {"local::director.gguf": 2048}  # Old saved state has no scheduling authority.
+    assert model_lab._pending_probe_plan(run)["missing"] == 8
+
+
 def test_skipped_capacity_retry_preserves_measured_failure():
     attempt = {"kind": "director_scene_plan_2048", "modelRef": "local::writer",
                "status": "failed", "failureKind": "capacity", "error": "truncated",

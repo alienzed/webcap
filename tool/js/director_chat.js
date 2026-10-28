@@ -621,6 +621,7 @@
       state.sessionReady = true;
       renderSessionHistory();
       syncModeUi();
+      maybeOpenNewStudioConversation();
     }).catch(function (error) {
       showSessionFailure(error);
     });
@@ -1125,6 +1126,68 @@
     });
   }
 
+  function startStudioWorkshop() {
+    if (!state.open || state.activeMode !== 'storyboard' || !state.sessionReady ||
+        !state.modelsLoaded || state.pending || state.studioIntroPending ||
+        currentMessages().length || !state.sessionByMode.storyboard) return;
+    if (!state.modelId) {
+      finishProgress(new Error('Select an available Director model to begin Writer\'s Workshop.'));
+      return;
+    }
+    state.studioIntroPending = true;
+    state.pending = true;
+    state.jobId = '';
+    syncModeUi();
+    startProgress();
+    var startedAt = performance.now();
+    var opening = [{
+      role: 'user',
+      content: "Let's develop an idea together. Ask me questions one at a time, " +
+        "help me discover what makes it interesting, and let's figure out how to make it work as a video."
+    }];
+    studioDirectorRequestMessages(opening).then(function (messages) {
+      return requestJson('/fs/director/chat', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: state.modelId, messages: messages })
+      });
+    }).then(function (payload) {
+      if (!payload.job || !payload.job.jobId) throw new Error('Studio Director did not return a queued job.');
+      state.jobId = String(payload.job.jobId);
+      state.requestDiagnostic = payload.job.request || null;
+      trackTransientLlmJob(payload.job);
+      return waitForJob(payload.job);
+    }).then(function (job) {
+      var result = job.result && typeof job.result === 'object' ? job.result : {};
+      var answer = String(result.text || '').trim();
+      if (!answer) throw new Error('Studio Director returned an empty opening question.');
+      var messages = state.modeMessages.storyboard;
+      messages.push({ role: 'assistant', content: answer });
+      var index = messages.length - 1;
+      state.modeElapsedByAssistantIndex.storyboard[index] = performance.now() - startedAt;
+      state.modeMetricsByAssistantIndex.storyboard[index] = completedResponseMetrics(result);
+      renderMessages();
+      return persistSession('storyboard');
+    }).then(function () {
+      finishProgress(null);
+    }).catch(function (error) {
+      finishProgress(error);
+      el('director-chat-empty-description').textContent = 'Director could not start: ' +
+        String(error.message || error) + '. Use Start Writer\'s Workshop to retry.';
+      if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Studio Director', error);
+      else throw error;
+    }).finally(function () {
+      state.studioIntroPending = false;
+      state.pending = false;
+      state.jobId = '';
+      syncModeUi();
+    });
+  }
+
+  function maybeOpenNewStudioConversation() {
+    if (state.open && state.activeMode === 'storyboard' && state.sessionReady &&
+        state.modelsLoaded && !state.pending && !state.sessionByMode.storyboard) newChat();
+  }
+
   function newChat() {
     if (state.pending || !state.sessionReady) return;
     if (!persistentMode(state.activeMode)) {
@@ -1135,6 +1198,7 @@
       return;
     }
     var mode = state.activeMode;
+    var created = false;
     state.pending = true;
     syncControls();
     flushSessionSave().then(function () {
@@ -1146,6 +1210,7 @@
       var chat = payload.chat;
       state.sessionByMode[mode] = chat;
       state.sessionActiveByMode[mode] = chat.id;
+      created = true;
       state.draftByMode[mode] = '';
       state.sessionDirty[mode] = false;
       if (mode === 'chat') {
@@ -1171,6 +1236,7 @@
     }).catch(showSessionFailure).finally(function () {
       state.pending = false;
       syncControls();
+      if (created && mode === 'storyboard' && state.open && state.activeMode === mode) startStudioWorkshop();
     });
   }
 
@@ -1775,6 +1841,7 @@
     if (state.open) {
       syncModeUi();
       (state.modelsLoaded ? Promise.resolve() : loadModels()).then(function () {
+        if (state.activeMode === 'storyboard') maybeOpenNewStudioConversation();
         var input = el('director-chat-input');
         if (input) input.focus();
       });
@@ -1797,10 +1864,29 @@
     var presetsHost = el('director-chat-mode-presets');
     if (!toggle || !drawer || !pin || !close || !clear || !send || !stop || !copy || !input || !model || !refresh || !modeSwitch || !presetsHost) return;
 
-    toggle.onclick = function () { setOpen(!state.open); };
+    toggle.onclick = function () {
+      if (state.open && state.activeMode === 'chat') setOpen(false);
+      else setOpen(true, 'chat');
+    };
     pin.onclick = function () { setPinned(!state.pinned); };
     close.onclick = function () { setOpen(false); };
     clear.onclick = newChat;
+    el('director-studio-retry').onclick = startStudioWorkshop;
+    el('director-studio-starters').onclick = function (event) {
+      var button = event.target.closest('[data-studio-starter]');
+      if (!button || state.pending || state.activeMode !== 'storyboard') return;
+      var ideas = {
+        hook: "What makes this idea worth watching? Help me find the core appeal.",
+        scene: "Let's sketch one achievable Scene from what we've discussed. Don't create it yet; let's decide what really happens.",
+        feasibility: "Challenge this idea against MiniMax H3's practical strengths and weaknesses. What's the simplest renderable version?"
+      };
+      var suggestion = ideas[button.dataset.studioStarter];
+      if (!suggestion) throw new Error('Unknown Studio Director conversation starter.');
+      var editor = el('director-chat-input');
+      editor.value = suggestion;
+      editor.dispatchEvent(new Event('input', { bubbles: true }));
+      editor.focus();
+    };
     el('director-chat-history-toggle').onclick = function () {
       var button = el('director-chat-history-toggle');
       button.setAttribute('aria-expanded', button.getAttribute('aria-expanded') === 'true' ? 'false' : 'true');
@@ -1985,6 +2071,9 @@
     // their explicitly attached reference snapshots.
   };
   window.openStoryboardAssistant = function () { setOpen(true, 'storyboard'); };
+  window.closeStudioDirectorOnExit = function () {
+    if (state.open && state.activeMode === 'storyboard') setOpen(false);
+  };
   window.openStoryboardSceneWorkshop = function (context) {
     if (state.pending) throw new Error('Finish the current Assistant job before switching Workshop Scenes.');
     if (!context || !context.storyId || !context.sceneId || typeof context.expectedPrompt !== 'string') {

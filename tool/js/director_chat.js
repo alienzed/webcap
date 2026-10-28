@@ -1117,6 +1117,11 @@
       sceneIds: (sceneIds || []).slice(0, 8), at: new Date().toISOString()
     });
     state.studioOperations = state.studioOperations.slice(-25);
+    if (state.studioStoryAccess && state.studioStoryAccess.storyId === String(storyId || '')) {
+      state.studioAccessIndex = null;
+      el('director-studio-access-data').classList.add('hidden');
+      el('director-studio-access-status').textContent = 'Story changed. Inspect fields again for current values.';
+    }
     renderStudioOperations();
   }
 
@@ -3175,6 +3180,13 @@
     };
     el('director-chat-attachments-copy-all').onclick = function () {
       copyStoryboardAttachment(storyboardAttachmentCopyAll(), 'all attached references');
+    };
+    el('director-chat-attachments-clear').onclick = function () {
+      if (state.pending || state.attachmentPending) return;
+      state.storyboardAttachments = {};
+      state.storyGuidelineProposal = null;
+      scheduleSessionSave();
+      syncModeUi();
     };
     el('director-chat-story-prepare').onclick = function () {
       try { prepareStoryChanges(); }

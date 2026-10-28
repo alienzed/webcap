@@ -67,7 +67,7 @@ test('Studio drafting is a staged proposal, not a silent Story mutation', () => 
 
 test('Studio project proposals remain separate from conversation and must be reviewed', () => {
   for (const name of [
-    'director-studio-prepare-project', 'studio-project-review', 'studio-project-concept',
+    'director-studio-capture', 'studio-project-review', 'studio-project-concept',
     'studio-project-style', 'studio-project-invariants', 'studio-project-include-scene',
     'studio-project-create'
   ]) assert.match(html, new RegExp('id="' + name + '"'));
@@ -131,7 +131,7 @@ test('Scene sequence parser rejects invalid or overlarge batches', () => {
 
 test('Studio brief review limits Apply to explicitly checked Story fields', () => {
   for (const id of [
-    'director-studio-propose-brief', 'studio-brief-review',
+    'director-studio-capture', 'studio-brief-review',
     'studio-brief-concept-selected', 'studio-brief-style-selected',
     'studio-brief-invariants-selected', 'studio-brief-apply',
     'director-studio-undo-brief'

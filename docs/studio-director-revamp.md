@@ -2,6 +2,16 @@
 
 Status: **living implementation contract** initially audited at `95dd999b4678d02c10b81df059886ac3c4594ed4`, with initial implementation phases merged through **PRs #758–761** and production-slate workflow clarification audited against `main` at `ca1246c0041f1dd0ffeaa83dc4363f452703b33d` (2026-10-27). Historical finding tables and old unchecked phase items describe their audit baseline, not the latest implementation status; verify current code before each new change. This update modifies **the plan only**. Follow `AGENTS.md`, `docs/filesystem_state_contract.md` and `docs/gpu_coordination_invariants.md`.
 
+## 2026-10-28 simplified five-field creative contract
+
+**Project** is the intended user-facing name for the existing Story entity. Keep current `story` IDs, storage, paths and APIs; do not migrate data just for wording. A Project can be one clip, a montage or a longer work.
+
+The only independent creative fields are Project **Concept / overview** (`story.concept`), **Visual / atmosphere** (`story.style`), **Invariants** (`story.invariants`), and Scene **Intent** (`scene.summary`) and **H3 Prompt** (`scene.prompt`). Concept owns purpose, appeal and any cross-Scene structure; Visual owns shared look; Invariants own fixed facts; Intent owns one Scene's on-screen action and function; Prompt is a separate, editable generation instruction. MH3 renders from the saved Prompt, not directly from Intent. Titles, Scene order, generation settings, Takes, references, and existing optional data remain real production fields, not extra creative planning sources.
+
+Deprecate **new** Directing Guidelines as a separate creative workflow. Existing populated `guidelines` are legacy authored context: preserve them on disk and in existing Projects, continue honoring their meaning until an explicitly reviewed consolidation, and never silently erase or reinterpret them. Do not invent a Scene group/Sequence layer until a concrete workflow exceeds the five-field contract.
+
+**Acceptance journeys:** (1) freeform brainstorm → explicit capture → editable Project review → reviewed Create (zero or one optional Intent-only Scene); (2) explicit attachment of an existing Project → read current selected facts → discuss → reviewed field-scoped Update; (3) discuss Scene(s) → reviewed Intent insert → separately prepare and review H3 prompts → generate Takes from saved prompts. Conversation alone is not a save action. Check the actual LLM and browser behavior separately from contract tests.
+
 ## North star
 
 One creator turns an idea, gag, visual, episode, or developing narrative into **renderable short video Scenes** using one Studio Director conversation. Director is a creative collaborator **and** an operator of documented WebCap capabilities; it is not a generic chat pretending to be a video editor.

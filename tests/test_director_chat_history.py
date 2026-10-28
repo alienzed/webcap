@@ -116,3 +116,46 @@ def test_history_routes(sessions):
     assert client.get("/fs/director/chats/" + chat_id).json["chat"]["draft"] == "More ideas"
     assert client.delete("/fs/director/chats/" + chat_id).status_code == 200
     assert client.get("/fs/director/chats/" + chat_id).status_code == 404
+
+
+def test_studio_operations_are_separate_from_dialogue_and_bounded(sessions):
+    chat = history.create_chat("storyboard")
+    assert chat["operations"] == []
+    receipt = {
+        "kind": "brief.apply", "label": "Updated Concept / overview",
+        "storyId": "story-1", "sceneIds": [], "at": "2026-10-28T12:00:00Z",
+    }
+    saved = history.save_chat(chat["id"], {
+        "expectedRevision": 0, "title": "Working idea", "draft": "",
+        "messages": [{"role": "user", "content": "Use that as the concept"}],
+        "attachments": {}, "operations": [receipt],
+    })
+    assert saved["messages"] == [{"role": "user", "content": "Use that as the concept"}]
+    assert saved["operations"] == [receipt]
+    # Legacy clients that omit operations may still update a conversation.
+    next_saved = history.save_chat(chat["id"], {
+        "expectedRevision": 1, "title": "Working idea", "draft": "",
+        "messages": saved["messages"], "attachments": {},
+    })
+    assert next_saved["operations"] == [receipt]
+    with pytest.raises(ValueError, match="25"):
+        history.save_chat(chat["id"], {
+            "expectedRevision": 2, "title": "Working idea", "draft": "",
+            "messages": saved["messages"], "attachments": {},
+            "operations": [receipt] * 26,
+        })
+    assert history.open_chat(chat["id"])["operations"] == [receipt]
+
+
+def test_studio_receipts_reject_full_scene_or_extra_payload(sessions):
+    chat = history.create_chat("storyboard")
+    with pytest.raises(ValueError, match="invalid fields"):
+        history.save_chat(chat["id"], {
+            "expectedRevision": 0, "title": "Test", "draft": "",
+            "messages": [], "attachments": {},
+            "operations": [{
+                "kind": "scene.create", "label": "Created",
+                "storyId": "story-1", "sceneIds": [], "at": "2026-10-28T12:00:00Z",
+                "prompt": "A giant prompt that does not belong in history",
+            }],
+        })

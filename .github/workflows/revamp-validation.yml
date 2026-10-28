@@ -107,6 +107,8 @@ on:
       - 'tool/js/run_analytics.js'
       - 'tests/test_insights_sidebar_navigation.test.cjs'
       - '.github/workflows/revamp-validation.yml'
+      - 'tests/progressive_deep_qa.test.cjs'
+      - 'tests/test_progressive_deep_qa.py'
   push:
     branches:
       - main
@@ -269,3 +271,27 @@ jobs:
         run: python -m pytest -q tests/test_folder_state_ui_contract.py tests/test_file_ops_routes.py -k 'superset_search or incomplete_media_filter_is_retired or folder_state_reads_legacy'
       - name: Verify Director prompt and route
         run: python -m pytest -q tests/test_caption_atomic.py -k 'tag_mismatch or explicit_caption_candidate_repairs or caption_assist_corrections_make_retry'
+
+  progressive-deep-qa:
+    name: Progressive Deep QA / QA Focus Review
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Syntax and progressive queue contracts
+        run: |
+          node --check tool/js/qa_workbench.js
+          node --test tests/progressive_deep_qa.test.cjs
+      - name: Prepare test runtime
+        run: |
+          cp tool/config.example.json tool/config.json
+          python -m pip install pytest Flask Pillow Werkzeug imageio websocket-client opencv-python-headless
+      - name: Existing QA + progressive backend contracts
+        run: |
+          python -m compileall -q tool/server/qa_llm_contract.py tool/server/app.py
+          python -m pytest -q tests/test_progressive_deep_qa.py tests/test_qa_workbench_contract.py tests/test_qa_focused_set_review.py tests/test_qa_llm_contract.py tests/test_qa_deep_scan_route.py

@@ -1,6 +1,6 @@
 # Studio Director — conversational production contract and incremental delivery
 
-Status: agreed product vision; implementation phases tracked below. This is a **design contract**, not an assertion that unimplemented actions already work. Follow `AGENTS.md` and `docs/filesystem_state_contract.md`.
+Status: **audited plan** against main commit 95434633d4ad65702bf55df8bb9f1c3b9e35b710 (2026-10-27). Codebase statuses and revised gates below take precedence over older proposals. This is a design contract, not implemented code. Follow AGENTS.md and docs/filesystem_state_contract.md.
 
 ## North star
 
@@ -33,55 +33,74 @@ Creative discovery is flexible; production operations are precise. The initial u
 
 Current Story attachment serializes Overview, Guidelines and only Scene titles/summaries; a specific Scene attachment contains prompt. A 'whole project' context action must **truthfully show exactly what is included**. The working Workshop snapshot currently also injects context implicitly. No new silent context. Current chat request puts attached references in the latest user message on *every turn*; this is convenient but not equivalent to immutable historical attachment messages. Make attachment a historical event in a later safe phase with explicit migrations and tests.
 
+
+## Severity-ranked codebase findings (main)
+
+The audit distinguishes **confirmed workflow defects**, partial implementations, and future choices. Scope is Studio Director and its integration only; **do not rebuild Storyboard**.
+
+| Severity | Confirmed finding | Code reference | Concrete plan response |
+| --- | --- | --- | --- |
+| **P0 · missing** | Director cannot create a new Story from an unbound conversation. The current Scene-draft flow requires exactly one attached existing Story. | tool/js/director_chat.js:1133-1140,1200-1220; tool/server/app.py:1910-1934 | Add reviewed Project creation, optionally with first tentative Scene, reusing Story creation/store primitives. No implicit Story binding or opening. |
+| **P0 · partial** | Current tentative insertion is serialized and atomic for Story JSON, but conflict checking compares whole-Story updatedAt. Existing editor update_story/update_scene/reorder operations lack general expected-field checks; prompt/Guideline review handles only selected fields. | tool/server/storyboard_store.py:861-939,1207-1218,1252-1280,1648-1660; tool/js/storyboard.js:4660-4830 | New Director Apply actions check **only fields actually changed** and relevant Scene order, after coordinating pending saves; commit all selected changes once; guarded Undo. Do not broadly rewrite the existing editor. |
+| **P1 · partial** | Explicit attachment snapshots are mutable map entries and are inserted into the last user message **every turn**. Whole-Story context contains Scene titles/summaries, not full Scene prompts. Workshop has a separate implicit Scene snapshot. | tool/js/director_chat.js:1539-1618; tool/js/storyboard.js:7037+ | Historical, immutable, inspectable attachment events; accurate field/scope labeling and exact outbound-request inspection. No navigation-driven changes or silent refresh. |
+| **P1 · missing** | Long conversations resend the entire transcript and attachments. There is no token budget or reviewed compaction; the runtime permits truncated freeform results. | tool/js/director_chat.js:1359-1415,1942-2041; tool/server/director_chat_history.py:84-188; tool/server/storyboard_llm_runtime.py:1934-2055 | Show approximate context use, retain full archive, offer explicit editable decision-preserving compression for outbound prompts; no silently lost turns, background summaries or duplicate raw output storage. |
+| **P1 · partial** | Studio production guidance always includes the full H3 prompt skeleton during brainstorming, then stacks legacy Workshop primer. Old Storyboard operations separately add Director context, Guidelines and H3 syntax. Human docs still describe Guidelines as primary. | tool/server/studio_director.py:12-70; tool/js/director_chat.js:43-52,1539-1587; tool/server/storyboard_llm_contract.py:278-439; docs/storyboard_llm_guidance.md | Assign one owner per guidance type; inject full H3 syntax only for prompt-writing jobs; measure before/after actual payload tokens; preserve legacy operation results until parity passes. |
+| **P1 · partial** | A wide pinned Studio drawer, large composer, persistent History, real model loading and an editable Scene proposal already work. No user-adjustable width, no unified brief review tray, and several Director buttons still own separate workflows. | tool/css/workspace_shell.css:2291-2525; tool/tool.html:2076-2190; tool/js/director_chat.js:1169-1358; tool/js/storyboard.js:1648-2338 | Extend **only** Studio Director with resize/expand and contextual proposal/context displays; keep the Scene editor, existing buttons, Takes and generation UI intact. |
+| **P2 · partial/missing** | Settings already edits generation_model_guidance for MiniMax H3 and Studio consumes it. Storage Manager does not inventory Director conversations for count/size/bulk clearing. | tool/js/app_settings.js:50-51,342,384; tool/server/config.py:397-403; tool/server/studio_director.py:45-70; tool/server/storage_manager.py:1059-1138 | Reuse existing editable guidance, don't add a second Playbook store; add explicit Settings/Storage Manager session category management without touching Stories/Takes. |
+
+### Confirmed existing capabilities: do not rebuild
+
+- **Complete:** Story creation, stable Story/Scene IDs and ordering, prompt-free tentative Scene insertion at start/end/before/after, app-data chat/draft persistence, initial Workshop question on explicit opening, explicit Scene review, model progress, atomic Story JSON writes, existing prompt revision/restore, Take controls.
+- **Partial:** human-readable action catalog (not an executable API), Scene/Guideline review/Apply, revisions and Undo only for selected existing workflows, project context viewer, docked UI.
+- **Missing:** unbound reviewed Project creation, unified Concept/Style/Invariants extraction, field-scoped reviewed multi-field Apply/Undo, attachment history events, explicit context compaction, chat Storage Manager scope, consistently routed Director buttons.
+- **Architecture:** retain plain JS, existing Flask routes, storyboard_store mutation lock, centralized filesystem helpers. No generic service layer, agent runner, framework, database or new Story schema solely for tidiness. A common dispatcher is only justified after two concrete implemented actions expose true repeated logic.
+
 ## Logical data contract (v2 target; v1 disk stays compatible)
 
-```json
-{
-  "project": {
-    "id": "story-existing-uuid",
-    "title": "Optional working title",
-    "creative": {
-      "concept": "Short premise and what makes it interesting.",
-      "coreAppeal": "Explicit subsection of concept, NOT a second duplicate source",
-      "style": "Optional overall visual/tonal identity",
-      "invariants": [{"id": "stable-id", "kind": "character", "name": "…", "description": "…"}]
-    },
-    "sceneOrder": ["scene-a"],
-    "scenes": {
-      "scene-a": {
-        "title": "Optional working title",
-        "intent": "What happens and why this moment exists",
-        "generationPrompt": "Derived and editable when production-ready",
-        "production": {"durationSeconds": 6, "aspectRatio": null},
-        "takes": "Unchanged existing take manifest"
+**Authoritative storage stays v1** in output/storyboards/<story-id>/story.json. The term Project is UI language, not a second object. The following mapping supersedes the previously illustrative v2 object:
+
+| Meaning to Director | Actual canonical field | Compatibility rule |
+| --- | --- | --- |
+| Concept, with Core Appeal | story.concept | Core Appeal is a clear subsection or sentence **within** Concept. No persisted coreAppeal or creative object. |
+| Creative vibe / visual identity | story.style | Use existing Style string and visual controls. |
+| Established facts | story.invariants[] | Existing entries are {kind,title,text}; **no stable invariant ID** exists (storyboard_store.py:200-219). Avoid automatic UUID migration. |
+| Renderable Scene and order | story.scenes[scene-id], story.sceneOrder[] | Scene IDs are stable; numbering is presentation only. |
+| Tentative Scene intent / title | scene.summary, scene.title | No new intent field; title may be blank; prompt may be blank. |
+| Model-ready prompt | scene.prompt | Existing prompt is authoritative, editable and never implicitly regenerated. |
+| Physical/production state | existing durationSeconds, aspectRatio, samplingMode, references, takes, takeOrder, etc. | Preserve generation settings, references, old Takes and provenance. |
+| Legacy authored planning | story.guidelines; scene.entryState / exitState / notes / invariantRefs / sharedContextRefs | Continue displaying and honoring existing populated values until reviewed consolidation. Default new extraction does not need to populate them. |
+
+**Identity caveat:** Scene invariantRefs resolve by **{kind,title}**, not invariant UUID (storyboard_store.py:231-251,392-414). Renaming a referenced invariant must explicitly coordinate its references in reviewed Apply or surface a conflict; don't silently break them. Story/Scene reference-frame metadata is separate.
+
+**Scene count:** targetSceneCount can be null for Auto (storyboard_store.py:324-336). The legacy New Story UI initializes 12 (storyboard.js:4410-4430); **Studio Director's unbound create must not** assume 12 Scenes or a Story arc.
+
+**Unbound project.create extraction schema (proposed):**
+
+    {
+      "schemaVersion": 1,
+      "operation": "project.create",
+      "proposal": {
+        "title": "",
+        "concept": "Premise. Core Appeal: the audience anticipates the accident.",
+        "style": "",
+        "invariants": [{"kind": "character", "title": "Coach", "text": "Blue windbreaker"}],
+        "firstScene": {"title": "", "summary": "The coach demonstrates the move."}
       }
     }
-  }
-}
-```
 
-This is a **logical view**, not the current wire/storage schema. Until a reviewed migration, map `creative.concept→story.concept`, `creative.style→story.style`, `creative.invariants→story.invariants`, `scene.intent→scene.summary`, `generationPrompt→scene.prompt`, duration/aspect ratio/takes unchanged. Existing entryState/exitState/notes/guidelines remain readable and editable in legacy UI; Director's default new-authoring path doesn't force them. **Core Appeal lives *within* Concept**, as an identifiable section or sentence, rather than persisted twice.
+All proposal values are editable. firstScene, style and invariants are optional; empty title is valid, empty Scene list is valid. Require at least an approved Concept or first-Scene idea for a meaningful creation action, but don't force a full Story. One reviewed, serialized operation constructs a new Story and optional first Scene under **one authoritative JSON commit**, with supporting Take directories initialized and any pre-commit failure rolled back. Return stable IDs and an explicit **Open Project** action; do not auto-attach, navigate, or rewrite the conversation.
 
 ### Playbook (Settings, future phase)
 
-```json
-{
-  "version": 1,
-  "modelId": "current-model-id",
-  "technicalContractSource": "bundled runtime context, read-only",
-  "workingMethods": ["Keep one reliably renderable physical action per short clip"],
-  "knownRisks": ["Multiple coordinated characters/fast multi-step causality"],
-  "promptConventions": "Model-specific, editable production guidance",
-  "userLessons": ["Observations from actual Takes, marked as experience not universal fact"],
-  "updatedAt": "ISO-8601"
-}
-```
+**Partially implemented already:** Settings owns editable generation_model_guidance[minimax_h3] and studio_director.py reads it. Keep **that as the only user-editable source**; no parallel playbooks.json, duplicated concept fields, or per-Story Playbook copies. Additional headings (successes, observed risks, user lessons) can be sections of the existing text, not required new schema. Immutable H3 technical/runtime constraints stay in code / docs/mmh3-prompt-runtime-context.txt.
 
-Store user customizations in app-data state through one owner/helper. Settings exposes inspect/edit/reset. Do not silently alter model guidance elsewhere. The existing `generation_model_guidance` config must be reconciled, not doubled.
+**Ownership and injection order:** (1) validated technical/runtime constraints; (2) explicitly approved Story/Scene facts and current user's direction; (3) optional model-specific practical tips; (4) task-scoped response schema. Studio Writer's Workshop voice lives in studio_director.py. H3 full prompt shape is owned by mmh3-prompt-runtime-context.txt and used for production prompts, **not repeatedly for ordinary brainstorming**. Legacy operation-specific prompts stay in storyboard_llm_contract.py during transition. Audit duplicate language in STORYBOARD_WORKSHOP_PRIMER, storyboard-director-context.txt and storyboard_llm_guidance.md; remove only confirmed redundant model-facing instructions after parity checks.
 
 ### Conversation metadata
 
-Retain `{id,mode,title,revision,messages,draft,attachments,workshop}` in the existing app-data session store. Extend later with a compact array of **action receipts** `{actionId,type,targetIds,expectedVersion,outcome,timestamp,summary}` and recoverable proposal state. No transcript duplication inside a Story. No automatic Story binding. Settings + Storage Manager offer size/count, explicit clear, and an optional retention policy. A conversation can remain valid when its associated Story is deleted.
+Retain current app-data state/director_chats/<timestamp-id>/conversation.json and its existing fields (director_chat_history.py:24-35,136-177). Preserve **original** transcript indefinitely until the user explicitly deletes it; compaction must not rewrite earlier turns. Future attachments are immutable, inspectable **historical events**, each recording the supplied snapshot, source label/ID and time; reattaching makes a new event, not a live link. No copy of the whole transcript in story.json. Store action receipts as small target/field/outcome/time summaries and optional bounded inverse patches, not duplicated prompt/response logs.
+
+**Context budgeting:** ordinary replies stay freeform. For each actual request, assemble workshop voice, relevant explicitly chosen historical context, recent turns and (after review) an editable concise creative-decision summary. Determine advertised/configured model context size when possible, reserve room for output and overhead, show token **estimates** as estimates. If too large, explain and offer **Compact / Select less** before sending; no hidden history truncation or automatic summary replacement. Preserve Core Appeal and committed creative decisions in the reviewed compaction. Conversation remains readable if its referenced Story is deleted. Session count/bytes and explicit clear by category belong in Settings and Storage Manager; defer auto-retention until demonstrated need.
 
 ## Text-based Director API (one documented action catalog)
 

@@ -1185,11 +1185,14 @@
 
   function maybeOpenNewStudioConversation() {
     if (state.open && state.activeMode === 'storyboard' && state.sessionReady &&
-        state.modelsLoaded && !state.pending && !state.sessionByMode.storyboard) newChat();
+        state.modelsLoaded && !state.pending && !state.sessionByMode.storyboard) {
+      newChat({ preserveContext: !!state.workshop || !!Object.keys(state.storyboardAttachments).length });
+    }
   }
 
-  function newChat() {
+  function newChat(options) {
     if (state.pending || !state.sessionReady) return;
+    var preserveContext = !!(options && options.preserveContext);
     if (!persistentMode(state.activeMode)) {
       state.modeMessages[state.activeMode] = [];
       state.modeElapsedByAssistantIndex[state.activeMode] = {};
@@ -1221,8 +1224,10 @@
         state.modeMessages.storyboard = [];
         state.modeElapsedByAssistantIndex.storyboard = {};
         state.modeMetricsByAssistantIndex.storyboard = {};
-        state.storyboardAttachments = {};
-        state.workshop = null;
+        if (!preserveContext) {
+          state.storyboardAttachments = {};
+          state.workshop = null;
+        }
         state.workshopProposal = null;
         state.storyGuidelineProposal = null;
         el('director-chat-workshop-status').textContent = '';
@@ -1236,7 +1241,8 @@
     }).catch(showSessionFailure).finally(function () {
       state.pending = false;
       syncControls();
-      if (created && mode === 'storyboard' && state.open && state.activeMode === mode) startStudioWorkshop();
+      if (created && mode === 'storyboard' && !preserveContext &&
+          state.open && state.activeMode === mode) startStudioWorkshop();
     });
   }
 

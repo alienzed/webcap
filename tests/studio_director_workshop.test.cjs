@@ -83,11 +83,11 @@ test('Studio combines server-owned production guidance with opted-in reference s
     requestJson: async () => ({ system: 'Actual H3 production instructions' })
   });
   vm.runInContext(
-    slice('  function storyboardRequestMessages(messages) {', '  function attachStoryboardContext(kind) {'),
+    slice('  function storyboardRequestMessages(messages, includePrimer) {', '  function attachStoryboardContext(kind) {'),
     context
   );
   vm.runInContext(
-    slice('  function studioDirectorRequestMessages(messages) {', '  function storyboardRequestMessages(messages) {'),
+    slice('  function studioDirectorRequestMessages(messages) {', '  function storyboardRequestMessages(messages, includePrimer) {'),
     context
   );
   const request = await vm.runInContext(
@@ -148,7 +148,7 @@ test('Studio field capture keeps existing Project targets explicit', () => {
   state.storyboardAttachments['story:story-1'] = {label: 'Story', content: '{}'};
   update();
   assert.equal(node('director-studio-flow-target').classList.hidden, true);
-  assert.match(node('director-studio-flow-description').textContent, /explicitly attached Project/);
+  assert.match(node('director-studio-flow-description').textContent, /attached Project/);
   assert.equal(node('director-studio-flow').classList.hidden, false);
 });
 

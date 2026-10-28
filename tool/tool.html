@@ -2142,18 +2142,36 @@
                     <p id="director-chat-empty-description">Tell Director what interests you. You can start with a single moment, a feeling, or nothing at all.</p>
                     <button id="director-studio-retry" type="button" class="review-captions-btn hidden">Start Writer's Workshop</button>
                 </div>
-                <div class="director-chat-composer">
-                    <div id="director-studio-starters" class="director-studio-starters hidden" aria-label="Creative conversation starters">
-                        <button type="button" data-studio-starter="hook">Find the hook</button>
-                        <button type="button" data-studio-starter="scene">Sketch a Scene</button>
-                        <button type="button" data-studio-starter="feasibility">Make it renderable</button>
-                        <button id="director-studio-propose-brief" type="button" title="Propose reviewed Concept, Style, and Invariant changes for an explicitly attached Project">Update Brief</button>
-                        <button id="director-studio-prepare-project" type="button" class="studio-primary-action" title="Review a new Studio project from this conversation">Prepare Project</button>
-                        <button id="director-studio-prepare-scenes" type="button" class="studio-primary-action" title="Review a sequence of tentative Scenes and where to insert them">Prepare Scenes</button>
-                        <button id="director-studio-prepare-scene" type="button" class="studio-primary-action" title="Extract one tentative Scene from this conversation, then review before creating it">Prepare a Scene</button>
+                <section id="director-studio-flow" class="director-studio-flow hidden" aria-label="Capture creative work">
+                    <div class="director-studio-flow-main">
+                        <div class="director-studio-flow-copy">
+                            <strong id="director-studio-flow-title">Bring the idea into Studio</strong>
+                            <p id="director-studio-flow-description">Capture the Concept and Style you've developed together.</p>
+                        </div>
+                        <button id="director-studio-capture" type="button" class="studio-primary-action">Review creative brief</button>
+                    </div>
+                    <div id="director-studio-flow-target" class="director-studio-flow-target hidden">
+                        <span id="director-studio-flow-target-label"></span>
+                        <button id="director-studio-attach-current" type="button" class="review-captions-btn">Use open Project</button>
+                    </div>
+                    <div class="director-studio-flow-secondary">
+                        <details id="director-studio-more">
+                            <summary>More creative actions</summary>
+                            <div id="director-studio-starters" class="director-studio-starters" aria-label="Other Studio actions">
+                                <button type="button" data-studio-starter="hook">Explore the hook</button>
+                                <button type="button" data-studio-starter="scene">Sketch a Scene</button>
+                                <button type="button" data-studio-starter="feasibility">Check H3 feasibility</button>
+                                <button id="director-studio-propose-brief" type="button" title="Propose reviewed changes to an explicitly attached Project">Update attached brief</button>
+                                <button id="director-studio-prepare-project" type="button" title="Prepare an independent new Project">Create new Project</button>
+                                <button id="director-studio-prepare-scenes" type="button" title="Review multiple tentative Scenes and their placement">Prepare Scenes</button>
+                                <button id="director-studio-prepare-scene" type="button" title="Review one tentative Scene and its placement">Prepare a Scene</button>
+                            </div>
+                        </details>
+                        <button id="director-studio-undo-brief" type="button" class="review-captions-btn hidden">Undo brief change</button>
                     </div>
                     <span id="director-studio-action-status" class="director-studio-action-status hidden" aria-live="polite"></span>
-                    <button id="director-studio-undo-brief" type="button" class="review-captions-btn hidden">Undo last Brief change</button>
+                </section>
+                <div class="director-chat-composer">
                     <textarea id="director-chat-input" rows="4" placeholder="Ask the model anything…"></textarea>
                     <div class="director-chat-composer-footer">
                         <span class="director-chat-composer-hint">Enter to send · Shift+Enter for newline</span>

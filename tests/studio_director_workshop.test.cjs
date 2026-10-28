@@ -154,7 +154,7 @@ test('Studio field capture keeps existing Project targets explicit', () => {
 
 test('General Chat retains its own model request path', () => {
   const send = slice('  function sendMessage() {', '  function syncPinnedUi() {');
-  assert.match(send, /activeChatMode === 'storyboard'\s*\? studioDirectorRequestMessages\(messages\)/);
+  assert.match(send, /activeChatMode === 'storyboard'\s*\? studioDirectorChatRequestMessages\(messages\)/);
   assert.match(send, /: Promise\.resolve\(messages\)/);
 });
 
@@ -195,4 +195,53 @@ test('Studio Story access is a reference grant, not inline Story text', () => {
   assert.match(source, /function readStudioStoryScope\(/);
   assert.match(source, /!state\.studioStoryAccess \|\| \(key\.indexOf\('story:'\) !== 0/);
   assert.match(source, /toolsRow\.classList\.toggle\('hidden', studio \|\| !presets\.length\)/);
+});
+
+
+test('Director can request exactly one scoped Story read without adding tool text to chat', async () => {
+  const functions = slice('  function parseStudioReadRequest(text) {', '  function storyboardRequestMessages(messages, includePrimer) {');
+  const view = {textContent: '', classList: {remove() {}}};
+  const status = {textContent: ''};
+  let outbound;
+  const messages = [{role: 'user', content: 'What is the dialogue in Scene 2?'}];
+  const context = vm.createContext({
+    Promise, JSON, String, Number, Error,
+    state: {studioStoryAccess: {storyId: 'story-1'}, modelId: 'model', jobId: ''},
+    el: id => id === 'director-studio-access-data' ? view : status,
+    readStudioStoryScope: (field, sceneId) => Promise.resolve(field === 'index'
+      ? {data: [{id: 'scene-1'}, {id: 'scene-2'}]}
+      : {storyId: 'story-1', storyUpdatedAt: 'now', field, sceneId,
+         data: {id: sceneId, summary: 'The speaker asks a question.'}}),
+    studioDirectorRequestMessages: m => Promise.resolve(m),
+    requestJson: (url, options) => {
+      outbound = JSON.parse(options.body).messages;
+      return Promise.resolve({job: {jobId: 'job-next'}});
+    },
+    trackTransientLlmJob: () => {},
+    waitForJob: () => Promise.resolve({result: {text: 'She should say, "Really?"'}})
+  });
+  vm.runInContext(functions, context);
+  const parse = vm.runInContext('parseStudioReadRequest', context);
+  const resume = vm.runInContext('resumeStudioAfterRead', context);
+  assert.equal(parse('A normal conversational reply'), null);
+  assert.equal(parse('[[WEBCAP_READ:brief]]').field, 'brief');
+  assert.equal(parse('[[WEBCAP_READ:scene:2]]').position, 2);
+  assert.throws(() => parse('[[WEBCAP_READ:scene]]'), /invalid Scene selection/);
+  const result = await resume(messages, {field: 'scene', position: 2});
+  assert.equal(result.text, 'She should say, "Really?"');
+  assert.equal(messages.length, 1);
+  assert.equal(messages[0].content, 'What is the dialogue in Scene 2?');
+  assert.match(outbound[outbound.length - 1].content, /WEBCAP CURRENT STORY READ/);
+  assert.match(view.textContent, /speaker asks a question/);
+  assert.match(status.textContent, /Director read scene/);
+});
+
+test('Ordinary chat uses on-demand read only when Story access exists', () => {
+  const send = slice('  function sendMessage() {', '  function syncPinnedUi() {');
+  assert.match(send, /studioDirectorChatRequestMessages\(messages\)/);
+  assert.match(send, /resumeStudioAfterRead\(messages, read\)/);
+  const scoped = slice('  function studioDirectorChatRequestMessages(messages) {', '  function parseStudioReadRequest(text) {');
+  assert.match(scoped, /if \(state\.studioStoryAccess\)/);
+  assert.match(scoped, /\[\[WEBCAP_READ:brief\]\]/);
+  assert.doesNotMatch(scoped, /state\.modeMessages\.storyboard\.push/);
 });

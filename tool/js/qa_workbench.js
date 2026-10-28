@@ -601,7 +601,7 @@
     var jobId = String(job.jobId || '');
     qaWorkbenchState.deepScanJobId = jobId;
     qaPublishDeepScanActivity('Director review');
-    renderQaWorkbench();
+    qaSyncDeepScanLiveUi();
 
     function poll(current) {
       var status = String(current && current.status || '');
@@ -1020,8 +1020,9 @@
   }
 
   function qaDeepCoverageCounts(items) {
+    if (qaWorkbenchState.qaReviewMode === 'progressive-v1') items = qaDeepScanScopeItems();
     var signatures = qaCurrentItemSignatureMap(items);
-    var counts = { actionable: 0, clean: 0, failed: 0, unchecked: 0 };
+    var counts = { actionable: 0, clean: 0, withoutSight: 0, failed: 0, unchecked: 0 };
     if (qaWorkbenchState.qaReviewMode === 'set-review-v1') {
       counts.unchecked = items.length; // Set-level review does not certify individual media.
       return counts;
@@ -1035,7 +1036,9 @@
             qaFocusReviewHasAction(item.key, file, item.caption || '', finding);
         });
         counts[hasFinding ? 'actionable' : 'clean'] += 1;
-      } else if (qaWorkbenchState.deepScanSkipped[file]) {
+      } else if (qaWorkbenchState.deepScanSkipped[file] === 'no_sight') {
+        counts.withoutSight += 1;
+      } else if (qaWorkbenchState.deepScanSkipped[file] === 'failed') {
         counts.failed += 1;
       } else {
         counts.unchecked += 1;
@@ -2223,9 +2226,12 @@
       qaWorkbenchState.deepScanSessionActive ? 'Deep QA running' : 'Run Deep QA',
       '', 'qa-start'
     ));
-    if (reviewReady && !qaWorkbenchState.deepScanSessionActive) {
-      heroActions.appendChild(qaCreateButton('Review & Fix saved findings', '', 'qa-focus-review'));
-    }
+    var reviewButton = qaCreateButton('Review & Fix saved findings', '', 'qa-focus-review');
+    reviewButton.id = 'qa-deep-review-ready';
+    var ready = qaDeepScanReadyCount();
+    reviewButton.textContent = 'Review & Fix ' + ready + ' saved finding' + (ready === 1 ? '' : 's');
+    reviewButton.classList.toggle('hidden', !ready);
+    heroActions.appendChild(reviewButton);
     var deepWrap = document.createElement('div');
     deepWrap.className = 'qa-deep-scan-wrap';
     if (qaWorkbenchState.deepScanSessionActive) {
@@ -2237,6 +2243,7 @@
     note.className = 'qa-deep-scan-note';
     var coveragePartial = qaWorkbenchState.aiCoverageTotal > 0
       && qaWorkbenchState.aiCoverageValid < qaWorkbenchState.aiCoverageTotal;
+    note.id = 'qa-deep-scan-live-status';
     note.textContent = qaWorkbenchState.deepScanStatus || (
       coveragePartial
         ? ('AI findings retained · ' + qaWorkbenchState.aiCoverageValid + '/' + qaWorkbenchState.aiCoverageTotal + ' inputs still current')
@@ -2246,6 +2253,7 @@
     heroActions.appendChild(deepWrap);
     var deepCoverage = document.createElement('div');
     deepCoverage.className = 'qa-deep-scan-note';
+    deepCoverage.id = 'qa-deep-scan-live-coverage';
     deepCoverage.textContent = 'Deep QA: ' + (qaWorkbenchState.aiScopeSignature === qaBuildDeepScanSignature(items)
       ? 'Set review current · ' + qaWorkbenchState.aiFindings.length + ' investigations'
       : 'Set review not current');
@@ -2810,10 +2818,13 @@
       qaWorkbenchState.browseIndex = 0;
       qaWorkbenchState.statusMessage = '';
       if (folderChanged || scopeChanged || !qaWorkbenchState.deepScanInputSignature) {
-        if (qaWorkbenchState.deepScanSessionActive && (folderChanged || scopeChanged)) {
-          qaInvalidateDeepScanSession('Deep QA stopped because the review scope changed.');
+        if (qaWorkbenchState.deepScanSessionActive && folderChanged) {
+          qaInvalidateDeepScanSession('Deep QA stopped because the Set changed.');
         }
-        qaRestoreReview(inputSignature);
+        // Media filters and Focus Sets are views. A running scan keeps its
+        // captured scope and findings; never restore a different selection
+        // into its active receipt while the user reviews results.
+        if (!qaWorkbenchState.deepScanSessionActive) qaRestoreReview(inputSignature);
       } else if (inputsChanged) {
         // Same selection: discard any prior pending restore, not current in-memory findings.
         qaReviewLoadToken += 1;
@@ -2849,9 +2860,9 @@
   // Review membership is session-only. Deep QA owns durable evidence; Caption
   // Assist owns candidate generation. No second QA result store is introduced.
   function qaFocusReviewCurrent() {
+    // A live queue is a review session, not a temporary Media List filter.
     return qaFocusReviewState.active &&
-      qaFocusReviewState.folder === String(state.folder || '') &&
-      qaFocusReviewState.scopeKey === qaBuildScopeKey(qaGetTrainingItems());
+      qaFocusReviewState.folder === String(state.folder || '');
   }
 
   function qaFocusReviewTagActionsForFinding(mediaKey, fileName, finding) {
@@ -3316,7 +3327,7 @@
   }
 
   function qaStartFocusReview() {
-    var items = qaGetTrainingItems();
+    var items = qaDeepScanScopeItems();
     if (!items.length) {
       setStatus('QA Focus Review needs at least one item in the current training selection.');
       return;
@@ -3338,9 +3349,9 @@
     var loadToken = ++session.loadToken;
     // Reuse current findings: restoring the same receipt would clear active Concept Check work.
     var restore = qaWorkbenchState.deepScanSessionActive || qaWorkbenchState.deepScanJobId ||
-      qaWorkbenchState.deepScanSubmitting || qaWorkbenchState.conceptSession ||
-      qaWorkbenchState.conceptPreflightPending || qaWorkbenchState.aiFindings.length ||
-      qaWorkbenchState.conceptFindings.length
+      qaWorkbenchState.deepScanSubmitting || qaWorkbenchState.qaReviewMode === 'progressive-v1' ||
+      qaWorkbenchState.conceptSession || qaWorkbenchState.conceptPreflightPending ||
+      qaWorkbenchState.aiFindings.length || qaWorkbenchState.conceptFindings.length
       ? Promise.resolve()
       : qaRestoreReview(qaBuildDeepScanSignature(items));
     restore.then(function () {

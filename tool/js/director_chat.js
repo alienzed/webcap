@@ -1299,6 +1299,17 @@
     });
   }
 
+  function studioDirectorRequestMessages(messages) {
+    return requestJson('/fs/studio/director/guidance?targetModel=minimax_h3').then(function (payload) {
+      if (!payload.system || typeof payload.system !== 'string') {
+        throw new Error('Studio Director production guidance is missing.');
+      }
+      var outbound = storyboardRequestMessages(messages);
+      outbound[0] = { role: 'system', content: payload.system + '\n\n' + outbound[0].content };
+      return outbound;
+    });
+  }
+
   function storyboardRequestMessages(messages) {
     var context = [STORYBOARD_WORKSHOP_PRIMER];
     if (state.workshop) {
@@ -1335,17 +1346,6 @@
       };
     }
     return [{ role: 'system', content: context.join('\n\n') }].concat(outbound);
-  }
-
-  function studioDirectorRequestMessages(messages) {
-    return requestJson('/fs/studio/director/guidance?targetModel=minimax_h3').then(function (payload) {
-      if (!payload.system || typeof payload.system !== 'string') {
-        throw new Error('Studio Director production guidance is missing.');
-      }
-      var outbound = storyboardRequestMessages(messages);
-      outbound[0] = { role: 'system', content: payload.system + '\n\n' + outbound[0].content };
-      return outbound;
-    });
   }
 
   function attachStoryboardContext(kind) {

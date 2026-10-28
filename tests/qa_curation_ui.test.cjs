@@ -153,6 +153,7 @@ test('cancel while enqueue is in flight cancels the late queued Director job', a
     throw new Error('Unexpected Director call after stop: ' + url);
   };
   h.ctx.window.startQaCuration(entries().slice(0, 3), 'construction', 'same-scope');
+  await new Promise(resolve => setTimeout(resolve, 0));
   assert.equal(typeof finishEnqueue, 'function');
   h.ctx.window.stopQaCuration();
   finishEnqueue({ok: true, json: async () => ({

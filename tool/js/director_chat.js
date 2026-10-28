@@ -1158,6 +1158,8 @@
     if (state.pending || state.attachmentPending) return;
     state.studioStoryAccess = null;
     state.studioAccessIndex = null;
+    // Disconnect removes active snapshot references too; saved dialogue remains intact.
+    state.storyboardAttachments = {};
     state.studioSceneProposal = null;
     state.studioScenesProposal = null;
     state.studioBriefProposal = null;
@@ -2432,7 +2434,9 @@
       }, null, 2));
     }
     var outbound = messages.slice();
-    var attached = (state.studioStoryAccess ? [] : Object.keys(state.storyboardAttachments)).map(function (key) {
+    var attached = Object.keys(state.storyboardAttachments).filter(function (key) {
+      return !state.studioStoryAccess || (key.indexOf('story:') !== 0 && key.indexOf('scene:') !== 0);
+    }).map(function (key) {
       var item = state.storyboardAttachments[key];
       return item.label + ':\n' + item.content;
     });

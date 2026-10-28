@@ -193,6 +193,6 @@ test('Studio Story access is a reference grant, not inline Story text', () => {
   assert.match(source, /state\.studioStoryAccess = chat\.storyAccess \|\| null/);
   assert.match(source, /function grantStudioStoryAccess\(/);
   assert.match(source, /function readStudioStoryScope\(/);
-  assert.match(source, /studioStoryAccess \? \[\] : Object\.keys\(state\.storyboardAttachments\)/);
+  assert.match(source, /!state\.studioStoryAccess \|\| \(key\.indexOf\('story:'\) !== 0/);
   assert.match(source, /toolsRow\.classList\.toggle\('hidden', studio \|\| !presets\.length\)/);
 });

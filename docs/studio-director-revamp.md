@@ -146,12 +146,12 @@ The UI buttons ('Revise Scene', 'Develop', 'Prepare prompt', etc.) prefill **ins
 - [x] Reopening sessions does not restart; general Chat does not inherit Studio instructions. Model unavailable => conspicuous retry/failure, no fabricated reply.
 - [x] Add tests and inspect CI; no Story mutations.
 
-### Phase 1 — Structured action proposal, extraction and review (first action in PR #753)
+### Phase 1 — Structured action proposal, extraction and review (first action in PR #754)
 
 - [x] `scene.draft`: an explicit **Prepare a Scene** action extracts exactly one tentative Scene from conversation into an editable review. Apply creates it at Start/End/Before/After using a stable ID, no prompt or ghost Scenes, optimistic Story version guard, and an action receipt in conversation. Requires explicitly attached Story reference; the current workspace does not silently pick a target. Future work: persist in-progress proposals across refresh and support creating a new Project directly from the conversation.
 - [ ] Add versioned action catalog and schema; prototype representative small local models with `conversation.ask` and `project.brief.propose`; enforce no silent mutation.
 - [ ] 'Capture creative brief' extraction against explicit Story, with Concept/Style/Invariants review and atomic change receipt.
-- [ ] 'Draft one tentative Scene' including placement before/after/first/last (zero Scenes valid); one reviewed commit; never infer destination solely from navigation.
+- [x] 'Draft one tentative Scene' including placement before/after/first/last (zero Scenes valid); one reviewed commit; never infer destination solely from navigation.
 - [ ] Enhance context viewer with full field selection, exact request inspector and historical attachment events.
 
 ### Phase 2 — Scene life cycle

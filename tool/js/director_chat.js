@@ -2420,6 +2420,12 @@
 
   function studioDirectorChatRequestMessages(messages) {
     return studioDirectorRequestMessages(messages).then(function (outbound) {
+      outbound[0] = {role: 'system', content: outbound[0].content + '\n' +
+        'REVIEWED FIELD CAPTURE: If and only if the author explicitly asks to set, save, or ' +
+        'capture the agreed Concept / overview, Visual / atmosphere, or Invariants, ' +
+        'respond ONLY with [[WEBCAP_PREPARE:fields]]. WebCap will privately prepare an editable ' +
+        'review proposal for the existing attached Story or a new Project if none is attached. ' +
+        'This token never applies changes. Otherwise converse naturally.'};
       if (state.studioStoryAccess) {
         outbound[0] = {role: 'system', content: outbound[0].content + '\n' +
           'ON-DEMAND STORY READ: If the author asks about current Story details you have not been given, ' +
@@ -2432,6 +2438,15 @@
       }
       return outbound;
     });
+  }
+
+  function parseStudioCaptureRequest(text) {
+    var value = String(text || '').trim();
+    if (value === '[[WEBCAP_PREPARE:fields]]') return true;
+    if (value.indexOf('[[WEBCAP_PREPARE:') !== -1) {
+      throw new Error('Director returned an invalid capture request.');
+    }
+    return false;
   }
 
   function parseStudioReadRequest(text) {
@@ -2939,6 +2954,7 @@
 
     var startedAt = performance.now();
     var requestError = null;
+    var pendingCapture = false;
     // Commit the user's words BEFORE asking the model. A refresh or failed
     // inference can never discard the user's last sent message.
     var saved = persistentMode(activeChatMode) ? persistSession(activeChatMode) : Promise.resolve();
@@ -2977,6 +2993,11 @@
         var read = parseStudioReadRequest(result.text);
         return read ? resumeStudioAfterRead(messages, read) : result;
       }).then(function (result) {
+        if (activeChatMode === 'storyboard' && parseStudioCaptureRequest(result.text)) {
+          // A model proposal request is operational control, not assistant dialogue.
+          pendingCapture = true;
+          return;
+        }
         messages.push({ role: 'assistant', content: String(result.text || '') });
         var assistantIndex = messages.length - 1;
         elapsedMap[assistantIndex] = performance.now() - startedAt;
@@ -2999,6 +3020,11 @@
       renderMessages();
       syncControls();
       if (input) input.focus();
+      if (pendingCapture && !requestError) {
+        // The author's explicit request starts only a reviewed, private proposal.
+        if (studioAttachedStoryId()) prepareStudioBrief();
+        else prepareStudioProject();
+      }
     });
   }
 

@@ -1291,11 +1291,7 @@
     syncStudioFlow();
     el('director-studio-prepare-scene').disabled = state.pending || !state.sessionReady ||
       state.activeMode !== 'storyboard';
-    el('director-studio-prepare-project').disabled = state.pending || !state.sessionReady ||
-      state.activeMode !== 'storyboard' || !state.modelId;
     el('director-studio-prepare-scenes').disabled = state.pending || !state.sessionReady ||
-      state.activeMode !== 'storyboard' || !state.modelId;
-    el('director-studio-propose-brief').disabled = state.pending || !state.sessionReady ||
       state.activeMode !== 'storyboard' || !state.modelId;
     var briefUndo = el('director-studio-undo-brief');
     briefUndo.classList.toggle('hidden', state.activeMode !== 'storyboard' || !state.studioBriefUndo);
@@ -3141,9 +3137,7 @@
       if (this.open && state.studioStoryAccess && !state.studioAccessIndex) loadStudioAccessIndex();
     };
     el('director-studio-prepare-scene').onclick = prepareStudioSceneDraft;
-    el('director-studio-prepare-project').onclick = prepareStudioProject;
     el('director-studio-prepare-scenes').onclick = prepareStudioScenes;
-    el('director-studio-propose-brief').onclick = prepareStudioBrief;
     el('director-studio-undo-brief').onclick = undoStudioBrief;
     el('studio-brief-close').onclick = function () { el('studio-brief-review').close(); };
     el('studio-brief-discard').onclick = function () { el('studio-brief-review').close(); };
@@ -3172,21 +3166,6 @@
     el('studio-scene-draft-discard').onclick = function () { el('studio-scene-draft-review').close(); };
     el('studio-scene-draft-close').onclick = function () { el('studio-scene-draft-review').close(); };
     el('studio-scene-draft-apply').onclick = applyStudioSceneDraft;
-    el('director-studio-starters').onclick = function (event) {
-      var button = event.target.closest('[data-studio-starter]');
-      if (!button || state.pending || state.activeMode !== 'storyboard') return;
-      var ideas = {
-        hook: "What makes this idea worth watching? Help me find the core appeal.",
-        scene: "Let's sketch one achievable Scene from what we've discussed. Don't create it yet; let's decide what really happens.",
-        feasibility: "Challenge this idea against MiniMax H3's practical strengths and weaknesses. What's the simplest renderable version?"
-      };
-      var suggestion = ideas[button.dataset.studioStarter];
-      if (!suggestion) throw new Error('Unknown Studio Director conversation starter.');
-      var editor = el('director-chat-input');
-      editor.value = suggestion;
-      editor.dispatchEvent(new Event('input', { bubbles: true }));
-      editor.focus();
-    };
     el('director-chat-history-toggle').onclick = function () {
       var button = el('director-chat-history-toggle');
       button.setAttribute('aria-expanded', button.getAttribute('aria-expanded') === 'true' ? 'false' : 'true');

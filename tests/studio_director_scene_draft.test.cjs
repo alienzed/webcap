@@ -96,3 +96,34 @@ test('Unbound Project parser accepts zero Scenes and refuses invented or invalid
     title: '', concept: '', style: '', rationale: '', invariants: []
   })), /at least an idea/);
 });
+
+
+test('Studio offers reviewed multi-Scene insert with arbitrary placement', () => {
+  for (const id of [
+    'director-studio-prepare-scenes', 'studio-scenes-review', 'studio-scenes-rows',
+    'studio-scenes-placement', 'studio-scenes-apply', 'studio-scenes-add'
+  ]) assert.match(html, new RegExp('id="' + id + '"'));
+  const prep = part('  function prepareStudioScenes() {', '  function applyStudioScenes() {');
+  assert.match(prep, /operation: 'studio_scene_sequence_draft'/);
+  assert.match(prep, /studioAttachedStoryId\(\)/);
+  assert.match(prep, /window\.flushStudioDirectorStoryEdits\(storyId\)/);
+  assert.doesNotMatch(prep, /\/fs\/studio\/director\/scenes-draft/);
+  const apply = part('  function applyStudioScenes() {', '  function parseStudioSceneDraft(raw) {');
+  assert.match(apply, /expectedSceneOrder: proposal\.sceneOrder/);
+  assert.match(apply, /\/fs\/studio\/director\/scenes-draft/);
+  assert.match(apply, /persistSession\('storyboard'\)/);
+  assert.match(source, /option\('before\|' \+ id/);
+  assert.match(source, /option\('after\|' \+ id/);
+});
+
+test('Scene sequence parser rejects invalid or overlarge batches', () => {
+  const context = vm.createContext({ JSON, Array, String, Error });
+  const parse = vm.runInContext('(' + part('  function parseStudioScenesDraft(raw) {', '  function addStudioScenesRow(').trim() + ')', context);
+  assert.equal(parse(JSON.stringify({scenes: [{title: '', summary: 'One'}], rationale: ''})).scenes.length, 1);
+  assert.throws(() => parse('bad json'), /invalid Scene sequence JSON/);
+  assert.throws(() => parse(JSON.stringify({scenes: [], rationale: ''})), /one to eight/);
+  assert.throws(() => parse(JSON.stringify({
+    scenes: Array.from({length: 9}, (_, i) => ({title: '', summary: 'Scene ' + i})),
+    rationale: ''
+  })), /one to eight/);
+});

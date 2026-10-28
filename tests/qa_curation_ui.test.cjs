@@ -119,8 +119,9 @@ test('scope changes fail visibly instead of using a stale curated selection', as
   h.ctx.qaCurrentCurationSignature = () => 'first-scope';
   h.ctx.window.startQaCuration(entries(), 'training', 'first-scope');
   await new Promise(resolve => setTimeout(resolve, 40));
+  h.ctx.qaCurrentCurationSignature = () => 'new-scope';
   h.ctx.window.renderQaCuration(h.root, 'new-scope');
-  assert.match(h.root.textContent, /selection changed/);
+  assert.match(h.root.textContent, /inputs changed/i);
   assert.equal(h.root.querySelector('[data-curation-create]'), null);
 });
 

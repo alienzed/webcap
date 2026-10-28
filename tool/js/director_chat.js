@@ -1600,6 +1600,8 @@
         });
       }
       state.storyboardAttachments[item.key] = item;
+      if (kind === 'story') state.studioSceneProposal = null;
+      studioActionStatus('', false);
       state.storyGuidelineProposal = null;
       scheduleSessionSave();
       el('director-chat-attachments-toggle').setAttribute('aria-expanded', 'true');
@@ -2286,11 +2288,14 @@
       }
     });
     document.addEventListener('pointerdown', function (event) {
-      if (!state.open || state.pinned || el('storyboard-workshop-review').open || el('storyboard-guidelines-review').open || drawer.contains(event.target) || toggle.contains(event.target)) return;
+      if (!state.open || state.pinned || el('storyboard-workshop-review').open ||
+          el('storyboard-guidelines-review').open || el('studio-scene-draft-review').open ||
+          drawer.contains(event.target) || toggle.contains(event.target)) return;
       setOpen(false);
     });
     window.addEventListener('keydown', function (event) {
-      if (event.key === 'Escape' && state.open && !el('storyboard-workshop-review').open && !el('storyboard-guidelines-review').open) setOpen(false);
+      if (event.key === 'Escape' && state.open && !el('storyboard-workshop-review').open &&
+          !el('storyboard-guidelines-review').open && !el('studio-scene-draft-review').open) setOpen(false);
     });
 
     window.addEventListener('beforeunload', function (event) {

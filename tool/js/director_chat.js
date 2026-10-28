@@ -1077,6 +1077,49 @@
     host.scrollTop = host.scrollHeight;
   }
 
+  function syncStudioFlow() {
+    var studio = state.activeMode === 'storyboard';
+    var discussed = (state.modeMessages.storyboard || []).some(function (message) {
+      return message && message.role === 'user' && String(message.content || '').trim();
+    });
+    var flow = el('director-studio-flow');
+    flow.classList.toggle('hidden', !studio || !discussed);
+    if (!studio || !discussed) return;
+    var attached = studioAttachedStoryId();
+    var open = window.getStoryboardRouteTarget();
+    var openId = String(open && open.storyId || '');
+    var title = el('director-studio-flow-title');
+    var description = el('director-studio-flow-description');
+    var capture = el('director-studio-capture');
+    if (attached) {
+      title.textContent = 'Concept / overview · Visual / atmosphere';
+      description.textContent = 'Review these fields and Invariants in the attached Project. Scenes and Takes stay untouched.';
+      capture.textContent = 'Review fields';
+    } else {
+      title.textContent = 'Concept / overview · Visual / atmosphere';
+      description.textContent = 'Capture these fields and optional Invariants in a new Project, or attach an existing one.';
+      capture.textContent = 'Review fields';
+    }
+    capture.disabled = state.pending || state.attachmentPending || !state.sessionReady || !state.modelId;
+    var useOpen = el('director-studio-flow-target');
+    var canAttachOpen = !!openId && openId !== attached;
+    useOpen.classList.toggle('hidden', !canAttachOpen);
+    if (canAttachOpen) {
+      el('director-studio-flow-target-label').textContent = attached
+        ? 'Want to work on the Project currently open in Studio instead?'
+        : 'Already working in a Project?';
+      el('director-studio-attach-current').disabled = state.pending || state.attachmentPending;
+    }
+  }
+
+  function captureStudioCreativeBrief() {
+    if (state.pending || state.attachmentPending || state.activeMode !== 'storyboard') return;
+    // The existing explicit Story attachment identifies the editable target.
+    // A conversation without one can always create a new independent Project.
+    if (studioAttachedStoryId()) prepareStudioBrief();
+    else prepareStudioProject();
+  }
+
   function syncControls() {
     var send = el('director-chat-send');
     var input = el('director-chat-input');
@@ -1092,6 +1135,7 @@
     if (clear) clear.disabled = state.pending || (persistentMode(state.activeMode) && !state.sessionReady);
     var history = el('director-chat-history-toggle');
     if (history) history.disabled = state.pending || !state.sessionReady;
+    syncStudioFlow();
     el('director-studio-prepare-scene').disabled = state.pending || !state.sessionReady ||
       state.activeMode !== 'storyboard';
     el('director-studio-prepare-project').disabled = state.pending || !state.sessionReady ||
@@ -1233,7 +1277,7 @@
     el('studio-project-concept').value = proposal.concept;
     el('studio-project-style').value = proposal.style;
     el('studio-project-rationale').textContent = proposal.rationale ||
-      'Review the creative brief before creating anything.';
+      'Review Concept, Style and Invariants before creating anything.';
     el('studio-project-error').textContent = '';
     el('studio-project-invariants').replaceChildren();
     proposal.invariants.forEach(addStudioProjectInvariant);
@@ -1382,7 +1426,7 @@
     }
     var result;
     try { result = JSON.parse(value); }
-    catch (error) { throw new Error('Director returned invalid creative brief JSON: ' + error.message); }
+    catch (error) { throw new Error('Director returned invalid Concept / Style / Invariants JSON: ' + error.message); }
     if (!result || typeof result !== 'object' || Array.isArray(result) ||
         typeof result.concept !== 'string' || typeof result.style !== 'string' ||
         typeof result.rationale !== 'string' || !Array.isArray(result.invariants) ||
@@ -1392,14 +1436,14 @@
             typeof item.text !== 'string' ||
             ['character', 'location', 'visual', 'world', 'sound', 'custom'].indexOf(item.kind) === -1;
         })) {
-      throw new Error('Creative brief must have Concept, Style, Invariants and rationale.');
+      throw new Error('The proposal must contain Concept, Style, Invariants and a rationale.');
     }
     return result;
   }
 
   function showStudioBriefReview() {
     var proposal = state.studioBriefProposal;
-    if (!proposal) throw new Error('Prepare a creative brief first.');
+    if (!proposal) throw new Error('Prepare Concept, Style and Invariants before reviewing.');
     el('studio-brief-target').textContent = 'Project: ' + (proposal.storyTitle || proposal.storyId);
     el('studio-brief-rationale').textContent = proposal.rationale;
     el('studio-brief-concept-before').textContent = 'Current: ' + (proposal.expected.concept || '(empty)');
@@ -1426,7 +1470,7 @@
     if (!state.modelId) { studioActionStatus('Select a Director model.', true); return; }
     var storyId = studioAttachedStoryId();
     if (!storyId) {
-      studioActionStatus('Attach one Project explicitly before proposing Brief changes.', true);
+      studioActionStatus('Attach a Project explicitly before updating Concept, Style or Invariants.', true);
       return;
     }
     var discussion = (state.modeMessages.storyboard || []).filter(function (message) {
@@ -1475,7 +1519,7 @@
             rationale: draft.rationale
           };
           finishProgress(null);
-          studioActionStatus('Brief ready for editable review. Nothing has changed.', false);
+          studioActionStatus('Concept, Style and Invariants ready for review. Nothing has changed.', false);
           showStudioBriefReview();
         });
     }).catch(function (error) {
@@ -1548,7 +1592,7 @@
       });
     }).catch(function (error) {
       if (applied) {
-        studioActionStatus('Brief was applied, but history save or refresh failed: ' +
+        studioActionStatus('Selected Concept, Style or Invariants changes were applied, but history save or refresh failed: ' +
           String(error.message || error), true);
       } else {
         el('studio-brief-error').textContent = 'Apply was not confirmed: ' +
@@ -1576,13 +1620,13 @@
       });
     }).then(function (payload) {
       if (!payload.story || payload.story.id !== receipt.storyId) {
-        throw new Error('Brief Undo did not return the expected Story.');
+        throw new Error('Concept / Style / Invariants Undo returned an unexpected Project.');
       }
       state.studioBriefUndo = null;
-      studioActionStatus('Last reviewed Brief change undone.', false);
+      studioActionStatus('Last Concept / Style / Invariants change undone.', false);
       return window.refreshStudioDirectorStoryIfOpen(receipt.storyId);
     }).catch(function (error) {
-      studioActionStatus('Brief Undo failed: ' + String(error.message || error), true);
+      studioActionStatus('Concept / Style / Invariants Undo failed: ' + String(error.message || error), true);
       if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Studio Brief Undo', error);
       else throw error;
     }).finally(function () {
@@ -2216,14 +2260,28 @@
       if (!payload.system || typeof payload.system !== 'string') {
         throw new Error('Studio Director production guidance is missing.');
       }
-      var outbound = storyboardRequestMessages(messages);
-      outbound[0] = { role: 'system', content: payload.system + '\n\n' + outbound[0].content };
+      var outbound = storyboardRequestMessages(messages, false);
+      // Conversation context is opt-in. The workbench state only tells Director
+      // what WebCap can review next; it is not a fresh Story or Scene attachment.
+      var storyRefs = Object.keys(state.storyboardAttachments || {}).filter(function (key) {
+        return key.indexOf('story:') === 0;
+      });
+      var workbench = storyRefs.length === 1
+        ? 'A Project snapshot is explicitly attached (' + storyRefs[0].slice(6) +
+          '). The author can review changes to its Concept, Style and Invariants.'
+        : 'No Project is attached to this conversation. Reviewing Concept, Style and Invariants ' +
+          'will propose creating a new Project. Editing an existing Project requires an explicit attachment.';
+      outbound[0] = { role: 'system', content: payload.system +
+        '\n\nSTUDIO WORKBENCH STATE (controls, not saved Story facts):\n' + workbench +
+        '\nWhen choices are clear, offer to review Concept / overview, Visual / atmosphere and Invariants. ' +
+        'Keep exploring when they are still tentative; never claim a proposal was saved.\n' +
+        outbound[0].content };
       return outbound;
     });
   }
 
-  function storyboardRequestMessages(messages) {
-    var context = [STORYBOARD_WORKSHOP_PRIMER];
+  function storyboardRequestMessages(messages, includePrimer) {
+    var context = includePrimer === false ? [] : [STORYBOARD_WORKSHOP_PRIMER];
     if (state.workshop) {
       var scene = state.workshop;
       context.push('[CURRENT STORY AND SCENE - CREATIVE WORKING CONTEXT]\n' + JSON.stringify({
@@ -2789,6 +2847,8 @@
     close.onclick = function () { setOpen(false); };
     clear.onclick = newChat;
     el('director-studio-retry').onclick = startStudioWorkshop;
+    el('director-studio-capture').onclick = captureStudioCreativeBrief;
+    el('director-studio-attach-current').onclick = function () { return attachStoryboardContext('story'); };
     el('director-studio-prepare-scene').onclick = prepareStudioSceneDraft;
     el('director-studio-prepare-project').onclick = prepareStudioProject;
     el('director-studio-prepare-scenes').onclick = prepareStudioScenes;

@@ -2400,6 +2400,81 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
   font-weight: 700;
 }
 .director-chat-drawer.studio-director .director-chat-composer-hint { font-size: 14px; }
+/* A single contextual capture surface, kept separate from the chat composer. */
+.director-studio-flow {
+  flex: 0 1 auto;
+  min-height: 0;
+  max-height: min(37vh, 270px);
+  overflow-y: auto;
+  padding: 14px 22px;
+  background: var(--panel-soft);
+  border-top: 1px solid var(--border);
+}
+.director-studio-flow.hidden { display: none; }
+.director-studio-flow-main {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  justify-content: space-between;
+}
+.director-studio-flow-copy { min-width: 0; }
+.director-studio-flow-copy strong { font-size: 17px; }
+.director-studio-flow-copy p {
+  font-size: 15px;
+  line-height: 1.4;
+  color: var(--muted);
+  margin: 4px 0 0;
+}
+.director-studio-flow-main > button {
+  flex: 0 0 auto;
+  min-height: 45px;
+  padding: 8px 16px;
+  font-size: 16px;
+  font-weight: 700;
+  border: 1px solid var(--accent);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--accent) 16%, var(--panel-soft));
+  color: var(--text);
+  cursor: pointer;
+}
+.director-studio-flow-main > button:disabled { opacity: .55; cursor: not-allowed; }
+.director-studio-flow-target {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 10px 0 0;
+  font-size: 15px;
+  color: var(--muted);
+}
+.director-studio-flow-target.hidden { display: none; }
+.director-studio-flow-target button { font-size: 15px; padding: 7px 11px; }
+.director-studio-flow-secondary {
+  display: flex;
+  gap: 15px;
+  align-items: baseline;
+  margin-top: 10px;
+  font-size: 15px;
+}
+.director-studio-flow-secondary details { min-width: 0; }
+.director-studio-flow-secondary summary {
+  cursor: pointer;
+  color: var(--muted);
+}
+.director-studio-flow-secondary details[open] { flex: 1; }
+.director-studio-flow-secondary .director-studio-starters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-top: 10px;
+  margin-bottom: 0;
+}
+.director-studio-flow-secondary .director-studio-starters button { font-size: 15px; min-height: 40px; }
+@media (max-width: 670px) {
+  .director-studio-flow { padding: 12px 16px; max-height: 36vh; }
+  .director-studio-flow-main { align-items: stretch; flex-direction: column; gap: 10px; }
+  .director-studio-flow-main > button { align-self: flex-start; }
+}
 .director-studio-starters { display: flex; flex-wrap: wrap; gap: 9px; margin-bottom: 12px; }
 .director-studio-starters.hidden { display: none; }
 .director-studio-starters button {

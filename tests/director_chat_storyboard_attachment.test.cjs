@@ -25,7 +25,7 @@ test('Story attachment is inline in the current user request, not only in the sy
     }
   };
   const context = vm.createContext({ state, STORYBOARD_WORKSHOP_PRIMER: 'Storyboard primer', JSON });
-  const fn = vm.runInContext('(' + part(chat, '  function storyboardRequestMessages(messages) {', '  function attachStoryboardContext(kind) {').trim() + ')', context);
+  const fn = vm.runInContext('(' + part(chat, '  function storyboardRequestMessages(messages, includePrimer) {', '  function attachStoryboardContext(kind) {').trim() + ')', context);
   const history = [{ role: 'user', content: 'What is the premise?' }, { role: 'assistant', content: 'A search.' }, { role: 'user', content: 'What happens in Scene 1?' }];
   const outbound = fn(history);
   assert.equal(outbound.length, 4);
@@ -146,7 +146,7 @@ test('Attached Story fields are individually readable and copyable without losin
   assert.ok(all.includes('Scene 1:\n'));
   assert.ok(all.includes('Camera:\nPan slowly across the ridge.'));
   const outbound = vm.runInContext(
-    '(' + part(chat, '  function storyboardRequestMessages(messages) {', '  function attachStoryboardContext(kind) {').trim() + ')',
+    '(' + part(chat, '  function storyboardRequestMessages(messages, includePrimer) {', '  function attachStoryboardContext(kind) {').trim() + ')',
     vm.createContext({ state, STORYBOARD_WORKSHOP_PRIMER: 'Storyboard primer', JSON })
   )([{ role: 'user', content: 'What should the camera do?' }]);
   assert.ok(outbound[1].content.includes(all));

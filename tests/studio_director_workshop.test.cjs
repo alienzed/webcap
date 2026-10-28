@@ -83,11 +83,11 @@ test('Studio combines server-owned production guidance with opted-in reference s
     requestJson: async () => ({ system: 'Actual H3 production instructions' })
   });
   vm.runInContext(
-    slice('  function storyboardRequestMessages(messages) {', '  function attachStoryboardContext(kind) {'),
+    slice('  function storyboardRequestMessages(messages, includePrimer) {', '  function attachStoryboardContext(kind) {'),
     context
   );
   vm.runInContext(
-    slice('  function studioDirectorRequestMessages(messages) {', '  function storyboardRequestMessages(messages) {'),
+    slice('  function studioDirectorRequestMessages(messages) {', '  function storyboardRequestMessages(messages, includePrimer) {'),
     context
   );
   const request = await vm.runInContext(
@@ -97,6 +97,59 @@ test('Studio combines server-owned production guidance with opted-in reference s
   assert.match(request[0].content, /Actual H3 production instructions/);
   assert.match(request[1].content, /Something joyful/);
   assert.match(request[1].content, /Tell me about Scene 1/);
+  assert.match(request[0].content, /STUDIO WORKBENCH STATE/);
+  assert.doesNotMatch(request[0].content, /Existing conversation primer/);
+});
+
+test('Studio exposes Concept, Style and Invariants as one contextual capture, not a composer toolbar', () => {
+  for (const id of [
+    'director-studio-flow', 'director-studio-capture', 'director-studio-flow-target',
+    'director-studio-attach-current', 'director-studio-more'
+  ]) assert.match(html, new RegExp('id="' + id + '"'));
+  assert.match(html, /Concept \/ overview · Visual \/ atmosphere/);
+  assert.match(html, />Review fields<\/button>/);
+  assert.match(html, /Concept \/ overview <small>\(including Core Appeal\)<\/small>/);
+  assert.match(html, /Visual \/ atmosphere <small>\(optional\)<\/small>/);
+  const composer = sliceHtml('<div class="director-chat-composer">', '<textarea id="director-chat-input"');
+  assert.doesNotMatch(composer, /director-studio-prepare|director-studio-starters/);
+  assert.match(source, /captureStudioCreativeBrief/);
+  assert.match(source, /if \(studioAttachedStoryId\(\)\) prepareStudioBrief\(\)/);
+});
+
+function sliceHtml(start, end) {
+  const i = html.indexOf(start);
+  const j = html.indexOf(end, i + start.length);
+  assert.ok(i >= 0 && j > i);
+  return html.slice(i, j);
+}
+
+test('Studio field capture keeps existing Project targets explicit', () => {
+  const state = {
+    activeMode: 'storyboard', modeMessages: {storyboard: [{role: 'user', content: 'A visual gag'}]},
+    storyboardAttachments: {}, pending: false, attachmentPending: false,
+    sessionReady: true, modelId: 'local'
+  };
+  const nodes = {};
+  function node(id) {
+    if (!nodes[id]) nodes[id] = {
+      classList: { hidden: false, toggle(name, value) { if (name === 'hidden') this.hidden = value; } }
+    };
+    return nodes[id];
+  }
+  const context = vm.createContext({
+    state, el: node, String, Object,
+    window: { getStoryboardRouteTarget: () => ({storyId: 'story-1'}) }
+  });
+  vm.runInContext(slice('  function studioAttachedStoryId() {', '  function studioActionStatus('), context);
+  const update = vm.runInContext('(' + slice('  function syncStudioFlow() {', '  function captureStudioCreativeBrief() {').trim() + ')', context);
+  update();
+  assert.equal(node('director-studio-capture').textContent, 'Review fields');
+  assert.equal(node('director-studio-flow-target').classList.hidden, false);
+  state.storyboardAttachments['story:story-1'] = {label: 'Story', content: '{}'};
+  update();
+  assert.equal(node('director-studio-flow-target').classList.hidden, true);
+  assert.match(node('director-studio-flow-description').textContent, /attached Project/);
+  assert.equal(node('director-studio-flow').classList.hidden, false);
 });
 
 test('General Chat retains its own model request path', () => {

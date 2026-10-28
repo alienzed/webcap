@@ -886,9 +886,13 @@
         itemReview: true, folder: scan.folder, model: scan.model,
         trainingFocus: scan.trainingFocus,
         items: batch,
-        deterministicFindings: qaDeepScanFindingPayload(currentItems.filter(function (item) {
-          return batch.some(function (row) { return row.fileName === item.fileName; });
-        }))
+        deterministicFindings: scan.supportingFindings.map(function (finding) {
+          return Object.assign({}, finding, {
+            files: finding.files.filter(function (file) {
+              return batch.some(function (row) { return row.fileName === file; });
+            })
+          });
+        }).filter(function (finding) { return finding.files.length > 0; })
       })
     }).then(function (payload) {
       if (!qaDeepScanCurrent(scan, token)) {
@@ -1454,6 +1458,9 @@
       }),
       files: scopeFiles, inputs: inputs, inputsByFile: byFile,
       signatures: qaCurrentItemSignatureMap(items),
+      // Supporting context is also frozen: later Media List filters must not
+      // silently change the interpretation of an already-started scan.
+      supportingFindings: qaDeepScanFindingPayload(items),
       attempted: {}, orderedFiles: scopeFiles.slice()
     };
     qaWorkbenchState.aiModel = model;

@@ -3323,17 +3323,16 @@
       keys = qaOrderFocusReviewKeys(keys);
       if (keys.length) {
         session.opening = true;
-        var token = session.token;
-        var target = session.items.find(function (item) { return item.key === keys[0]; });
-        selectPathMedia(target).then(function () {
-          if (!qaFocusReviewCurrent() || session.token !== token || !session.autoOpen) return;
+        try {
+          // Open the focused review before navigation so its explicit QA scope
+          // owns selection while the Media List filter remains untouched.
           if (startFocusedQaReview(keys)) session.autoOpen = false;
-        }).catch(function (err) {
+        } catch (err) {
           reportConsoleError('QA Focus Review · Open', err);
           setStatus('Could not open QA Focus Review: ' + String(err && err.message || err));
-        }).then(function () {
+        } finally {
           session.opening = false;
-        });
+        }
       }
     }
   }
@@ -3737,6 +3736,7 @@
   window.getQaTrainingItemsForAssistant = getQaTrainingItemsForAssistant;
   window.qaInputsUpdated = qaInputsUpdated;
   window.qaStartFocusReview = qaStartFocusReview;
+  window.qaDeepScanIsActive = function () { return qaWorkbenchState.deepScanSessionActive; };
   window.qaFocusReviewMarkHandled = qaFocusReviewMarkHandled;
   window.qaFocusReviewRefreshAfterApply = qaFocusReviewRefreshAfterApply;
   window.qaFocusReviewStopped = qaFocusReviewStopped;

@@ -2147,7 +2147,9 @@
                         <button type="button" data-studio-starter="hook">Find the hook</button>
                         <button type="button" data-studio-starter="scene">Sketch a Scene</button>
                         <button type="button" data-studio-starter="feasibility">Make it renderable</button>
+                        <button id="director-studio-prepare-scene" type="button" class="studio-primary-action" title="Extract one tentative Scene from this conversation, then review before creating it">Prepare a Scene</button>
                     </div>
+                    <span id="director-studio-action-status" class="director-studio-action-status hidden" aria-live="polite"></span>
                     <textarea id="director-chat-input" rows="4" placeholder="Ask the model anything…"></textarea>
                     <div class="director-chat-composer-footer">
                         <span class="director-chat-composer-hint">Enter to send · Shift+Enter for newline</span>
@@ -2157,6 +2159,30 @@
                     </div>
                 </div>
             </aside>
+            <dialog id="studio-scene-draft-review" class="studio-scene-draft-review" aria-labelledby="studio-scene-draft-review-title">
+                <header class="studio-scene-draft-header">
+                    <div>
+                        <h2 id="studio-scene-draft-review-title">Prepare a Scene</h2>
+                        <p>One tentative Scene, extracted from the conversation. Nothing is created until you approve.</p>
+                    </div>
+                    <button id="studio-scene-draft-close" type="button" class="review-captions-btn">Close</button>
+                </header>
+                <div class="studio-scene-draft-content">
+                    <p id="studio-scene-draft-target" class="studio-scene-draft-target"></p>
+                    <p id="studio-scene-draft-rationale" class="studio-scene-draft-rationale"></p>
+                    <label for="studio-scene-draft-title">Working title <small>(optional)</small></label>
+                    <input id="studio-scene-draft-title" type="text" placeholder="Untitled Scene">
+                    <label for="studio-scene-draft-summary">What happens <small>(editable Scene intent)</small></label>
+                    <textarea id="studio-scene-draft-summary" rows="6" placeholder="A single clear, renderable moment…"></textarea>
+                    <label for="studio-scene-draft-placement">Place the new Scene</label>
+                    <select id="studio-scene-draft-placement" aria-label="New Scene placement"></select>
+                    <p id="studio-scene-draft-error" class="studio-scene-draft-error" aria-live="polite"></p>
+                </div>
+                <footer class="studio-scene-draft-footer">
+                    <button id="studio-scene-draft-discard" type="button" class="review-captions-btn">Back to conversation</button>
+                    <button id="studio-scene-draft-apply" type="button">Create tentative Scene</button>
+                </footer>
+            </dialog>
             <dialog id="storyboard-workshop-review" class="storyboard-workshop-review" aria-labelledby="storyboard-workshop-review-title">
                 <div class="storyboard-workshop-review-head">
                     <div>

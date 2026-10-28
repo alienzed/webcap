@@ -889,6 +889,46 @@ def update_story(story_id, payload):
 
 
 @_serialized_mutation
+def apply_reviewed_studio_brief(story_id, expected_updated_at, changes):
+    """Apply reviewed Concept/Style plus additive Invariants without losing Scene refs.
+
+    Field edits are one atomic user-approved operation. Legacy guidelines,
+    Scenes, Takes and unrelated project metadata remain unchanged.
+    """
+    current = load_story(story_id)
+    if str(current.get("updatedAt") or "") != str(expected_updated_at or ""):
+        raise RuntimeError("Studio project changed during creative review; extract again.")
+    if not isinstance(changes, dict) or not changes or set(changes) - {"concept", "style", "addInvariants"}:
+        raise ValueError("Review must select allowed creative fields to change.")
+    for field in ("concept", "style"):
+        if field in changes and not isinstance(changes[field], str):
+            raise ValueError("Reviewed " + field + " must be text.")
+    additions = changes.get("addInvariants", [])
+    if not isinstance(additions, list):
+        raise ValueError("Reviewed Invariants must be a list.")
+    if any(not isinstance(i, dict) or set(i) != {"kind", "title", "text"}
+           or i.get("kind") not in {"visual", "character", "location", "world", "sound", "custom"}
+           or not isinstance(i.get("title"), str)
+           or not isinstance(i.get("text"), str) or not i["text"].strip()
+           for i in additions):
+        raise ValueError("Reviewed Invariants must include kind, title and text.")
+    existing = current.get("invariants") or []
+    keys = {(item["kind"], item["title"].casefold()) for item in existing}
+    for item in additions:
+        key = (item["kind"], item["title"].casefold())
+        if key in keys:
+            raise ValueError("Invariant already exists: " + item["title"] + ". Edit it in Studio first.")
+        keys.add(key)
+    # Story normalization preserves all other fields and existing Scene IDs.
+    payload = {key: changes[key] for key in ("concept", "style") if key in changes}
+    if additions:
+        payload["invariants"] = [*existing, *additions]
+    updated = _normalize_story(payload, existing=current, story_id=story_id)
+    _write_json_atomic(_story_path(story_id), updated)
+    return updated
+
+
+@_serialized_mutation
 def add_scene(story_id, payload=None):
     story = load_story(story_id)
     scene_id = _new_id("scene")

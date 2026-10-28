@@ -66,24 +66,29 @@ def test_qa_deep_scan_contract_is_structured_semantic_and_scope_grounded():
 
 
 def test_qa_deep_scan_normalizer_rejects_invented_files():
-    with pytest.raises(ValueError, match="invented a filename"):
-        normalize_result(
-            {
-                "summary": "One terminology issue.",
-                "findings": [{
-                    "category": "captioning",
-                    "priority": "normal",
-                    "confidence": "high",
-                    "title": "Color terminology drifts",
-                    "summary": "Red and crimson describe the same configured color.",
-                    "why": "Splitting one concept across wording may weaken consistency.",
-                    "files": ["invented.jpg"],
-                    "evidence": ["red / crimson"],
-                    "patches": [],
-                }],
-            },
-            allowed_files=["one.jpg", "two.jpg"],
-        )
+    # Batch normalizers preserve valid findings and surface invalid ones in
+    # findingWarnings, rather than failing the whole multi-item batch.
+    result = normalize_result(
+        {
+            "summary": "One terminology issue.",
+            "findings": [{
+                "category": "captioning",
+                "priority": "normal",
+                "confidence": "high",
+                "trainingValue": "high",
+                "title": "Color terminology drifts",
+                "summary": "Red and crimson describe the same configured color.",
+                "why": "Splitting one concept across wording may weaken consistency.",
+                "files": ["invented.jpg"],
+                "evidence": ["red / crimson"],
+                "patches": [],
+                "tagActions": [],
+            }],
+        },
+        allowed_files=["one.jpg", "two.jpg"],
+    )
+    assert result["findings"] == []
+    assert "invented a filename" in " ".join(result["findingWarnings"])
 
 
 def test_qa_deep_scan_normalizer_validates_exact_caption_patches():
@@ -94,6 +99,7 @@ def test_qa_deep_scan_normalizer_validates_exact_caption_patches():
                 "category": "captioning",
                 "priority": "normal",
                 "confidence": "high",
+                "trainingValue": "high",
                 "title": "Color wording conflicts",
                 "summary": "The caption uses the wrong configured color.",
                 "why": "Cached visual evidence and annotations agree on red.",
@@ -106,6 +112,7 @@ def test_qa_deep_scan_normalizer_validates_exact_caption_patches():
                     "replacementText": "crimson",
                     "anchorText": "",
                 }],
+                "tagActions": [],
             }],
         },
         allowed_files=["one.jpg"],

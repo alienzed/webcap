@@ -1120,6 +1120,105 @@
     renderStudioOperations();
   }
 
+  function renderStudioStoryAccess() {
+    var access = state.studioStoryAccess;
+    var visible = state.activeMode === 'storyboard' && !!access;
+    el('director-studio-access').classList.toggle('hidden', !visible);
+    if (visible) el('director-studio-access-summary').textContent = 'Story access · ' + access.label;
+  }
+
+  function grantStudioStoryAccess() {
+    if (state.pending || state.attachmentPending || state.activeMode !== 'storyboard') return;
+    state.attachmentPending = true;
+    syncControls();
+    return Promise.resolve().then(function () {
+      return window.getStoryboardAssistantAccessTarget();
+    }).then(function (target) {
+      if (!target || !target.storyId) throw new Error('Studio did not return a Story ID.');
+      state.studioStoryAccess = {storyId: target.storyId, label: target.label || target.storyId};
+      state.studioAccessIndex = null;
+      state.studioSceneProposal = null;
+      state.studioScenesProposal = null;
+      state.studioBriefProposal = null;
+      el('director-studio-access-data').classList.add('hidden');
+      el('director-studio-access-status').textContent = 'Granted access. No fields read yet.';
+      scheduleSessionSave();
+      syncModeUi();
+    }).catch(function (error) {
+      studioActionStatus('Story access failed: ' + String(error.message || error), true);
+      if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Studio Story access', error);
+      else throw error;
+    }).finally(function () {
+      state.attachmentPending = false;
+      syncControls();
+    });
+  }
+
+  function clearStudioStoryAccess() {
+    if (state.pending || state.attachmentPending) return;
+    state.studioStoryAccess = null;
+    state.studioAccessIndex = null;
+    state.studioSceneProposal = null;
+    state.studioScenesProposal = null;
+    state.studioBriefProposal = null;
+    el('director-studio-access-data').classList.add('hidden');
+    scheduleSessionSave();
+    syncModeUi();
+  }
+
+  function readStudioStoryScope(field, sceneId) {
+    var chat = state.sessionByMode.storyboard;
+    if (!chat || !state.studioStoryAccess || !chat.id) {
+      return Promise.reject(new Error('Grant access in a saved Studio conversation first.'));
+    }
+    var url = '/fs/studio/director/story-read?chatId=' + encodeURIComponent(chat.id) +
+      '&field=' + encodeURIComponent(field) + '&sceneId=' + encodeURIComponent(sceneId || '');
+    return flushSessionSave().then(function () { return requestJson(url); });
+  }
+
+  function loadStudioAccessIndex() {
+    if (!state.studioStoryAccess || state.studioAccessIndex) return Promise.resolve();
+    return readStudioStoryScope('index', '').then(function (result) {
+      if (!Array.isArray(result.data)) throw new Error('Story index returned invalid data.');
+      state.studioAccessIndex = result.data;
+      var scene = el('director-studio-access-scene');
+      scene.replaceChildren();
+      result.data.forEach(function (item, index) {
+        var option = document.createElement('option');
+        option.value = item.id;
+        option.textContent = 'Scene ' + (index + 1) + (item.title ? ' · ' + item.title : '');
+        scene.appendChild(option);
+      });
+      el('director-studio-access-status').textContent = 'Read Scene index (' + result.data.length + ' Scenes).';
+    }).catch(function (error) {
+      el('director-studio-access-status').textContent = 'Read failed: ' + String(error.message || error);
+      if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Studio Story read', error);
+      else throw error;
+    });
+  }
+
+  function inspectStudioStoryScope() {
+    var field = el('director-studio-access-field').value;
+    var needsScene = ['scene', 'prompt', 'takes'].indexOf(field) !== -1;
+    var scene = el('director-studio-access-scene');
+    var storyId = state.studioStoryAccess && state.studioStoryAccess.storyId;
+    if (!storyId) throw new Error('Choose a Story to inspect.');
+    return (needsScene ? loadStudioAccessIndex() : Promise.resolve()).then(function () {
+      if (needsScene && !scene.value) throw new Error('Select a Scene first.');
+      return readStudioStoryScope(field, needsScene ? scene.value : '');
+    }).then(function (result) {
+      if (result.storyId !== storyId) throw new Error('Story changed while reading fields.');
+      var output = el('director-studio-access-data');
+      output.textContent = JSON.stringify(result.data, null, 2);
+      output.classList.remove('hidden');
+      el('director-studio-access-status').textContent = 'Read ' + field + ' from the saved Story. Not sent to Director.';
+    }).catch(function (error) {
+      el('director-studio-access-status').textContent = 'Read failed: ' + String(error.message || error);
+      if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Studio Story read', error);
+      else throw error;
+    });
+  }
+
   function syncStudioFlow() {
     var studio = state.activeMode === 'storyboard';
     var discussed = (state.modeMessages.storyboard || []).some(function (message) {

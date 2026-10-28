@@ -1092,13 +1092,13 @@
     var description = el('director-studio-flow-description');
     var capture = el('director-studio-capture');
     if (attached) {
-      title.textContent = 'Concept, Style & Invariants';
-      description.textContent = 'Review changes to the explicitly attached Project. Scenes and Takes stay untouched.';
-      capture.textContent = 'Review Concept, Style & Invariants';
+      title.textContent = 'Concept / overview · Visual / atmosphere';
+      description.textContent = 'Review these fields and Invariants in the attached Project. Scenes and Takes stay untouched.';
+      capture.textContent = 'Review fields';
     } else {
-      title.textContent = 'Concept, Style & Invariants';
-      description.textContent = 'Review proposed values and create a new Project, or explicitly attach an existing one.';
-      capture.textContent = 'Review Concept, Style & Invariants';
+      title.textContent = 'Concept / overview · Visual / atmosphere';
+      description.textContent = 'Capture these fields and optional Invariants in a new Project, or attach an existing one.';
+      capture.textContent = 'Review fields';
     }
     capture.disabled = state.pending || state.attachmentPending || !state.sessionReady || !state.modelId;
     var useOpen = el('director-studio-flow-target');
@@ -2273,7 +2273,7 @@
           'will propose creating a new Project. Editing an existing Project requires an explicit attachment.';
       outbound[0] = { role: 'system', content: payload.system +
         '\n\nSTUDIO WORKBENCH STATE (controls, not saved Story facts):\n' + workbench +
-        '\nWhen creative choices are clear, naturally offer to review Concept, Style and Invariants. ' +
+        '\nWhen choices are clear, offer to review Concept / overview, Visual / atmosphere and Invariants. ' +
         'Keep exploring when they are still tentative; never claim a proposal was saved.\n' +
         outbound[0].content };
       return outbound;

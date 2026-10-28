@@ -245,3 +245,22 @@ test('Ordinary chat uses on-demand read only when Story access exists', () => {
   assert.match(scoped, /\[\[WEBCAP_READ:brief\]\]/);
   assert.doesNotMatch(scoped, /state\.modeMessages\.storyboard\.push/);
 });
+
+test('Explicit conversation capture prepares separate review, never auto-applies Story data', () => {
+  const code = slice('  function parseStudioCaptureRequest(text) {', '  function parseStudioReadRequest(text) {');
+  const context = vm.createContext({String, Error});
+  vm.runInContext(code, context);
+  const parse = vm.runInContext('parseStudioCaptureRequest', context);
+  assert.equal(parse('[[WEBCAP_PREPARE:fields]]'), true);
+  assert.equal(parse('We could use a warmer visual atmosphere.'), false);
+  assert.throws(() => parse('[[WEBCAP_PREPARE:unknown]]'), /invalid capture request/);
+  const chat = slice('  function studioDirectorChatRequestMessages(messages) {',
+    '  function parseStudioCaptureRequest(text) {');
+  assert.match(chat, /author explicitly asks to set, save, or/);
+  const send = slice('  function sendMessage() {', '  function syncPinnedUi() {');
+  assert.match(send, /pendingCapture = true/);
+  assert.match(send, /if \(studioAttachedStoryId\(\)\) prepareStudioBrief\(\)/);
+  assert.match(send, /else prepareStudioProject\(\)/);
+  assert.doesNotMatch(send, /\/fs\/studio\/director\/brief[^\w]/);
+  assert.doesNotMatch(send, /\/fs\/studio\/director\/project-create/);
+});

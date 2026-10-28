@@ -268,3 +268,102 @@ def test_multi_scene_extract_schema_is_bounded(monkeypatch):
     assert schema["properties"]["scenes"]["maxItems"] == 8
     assert schema["properties"]["scenes"]["minItems"] == 1
     assert schema["additionalProperties"] is False
+
+
+def test_studio_brief_apply_is_field_scoped_and_undoable(isolated_storyboard):
+    client = isolated_storyboard
+    story = storyboard_store.create_story({"title": "Brief", "concept": "Old", "style": "Original"})
+    story, scene = storyboard_store.add_scene(story["id"], {"summary": "Keep", "prompt": "Untouched prompt"})
+    before = {"concept": story["concept"], "style": story["style"]}
+    # Unrelated Story edits do not invalidate field-scoped review.
+    storyboard_store.update_story(story["id"], {"title": "Edited elsewhere"})
+    response = client.post("/fs/studio/director/brief", json={
+        "storyId": story["id"], "expected": before,
+        "changes": {"concept": "New idea. Core Appeal: anticipation.", "style": "Warm sunlight."},
+    })
+    assert response.status_code == 200, response.json
+    changed = response.json["story"]
+    assert changed["title"] == "Edited elsewhere"
+    assert changed["scenes"][scene["id"]]["prompt"] == "Untouched prompt"
+    assert len(changed["studioRevisions"]) == 1
+    # Normal editor saves do not destroy owner-local Undo.
+    normal_save = storyboard_store.update_story(story["id"], {"title": "Later title"})
+    assert len(normal_save["studioRevisions"]) == 1
+    undone = client.post("/fs/studio/director/brief/undo", json={
+        "storyId": story["id"], "revisionId": response.json["revisionId"],
+    })
+    assert undone.status_code == 200
+    assert undone.json["story"]["concept"] == "Old"
+    assert undone.json["story"]["style"] == "Original"
+    assert undone.json["story"]["title"] == "Later title"
+    assert undone.json["story"]["scenes"][scene["id"]]["prompt"] == "Untouched prompt"
+    assert undone.json["story"]["studioRevisions"] == []
+
+
+def test_studio_brief_conflict_does_not_clobber_later_edits(isolated_storyboard):
+    client = isolated_storyboard
+    story = storyboard_store.create_story({"concept": "First", "style": "Original"})
+    storyboard_store.update_story(story["id"], {"style": "Changed by editor"})
+    response = client.post("/fs/studio/director/brief", json={
+        "storyId": story["id"], "expected": {"style": "Original"},
+        "changes": {"style": "Director style"},
+    })
+    assert response.status_code == 400
+    assert "changed since review" in response.json["error"]
+    assert storyboard_store.load_story(story["id"])["style"] == "Changed by editor"
+
+
+def test_studio_brief_preserves_referenced_invariants_and_undo_safety(isolated_storyboard):
+    client = isolated_storyboard
+    invariant = {"kind": "character", "title": "Coach", "text": "Blue jacket"}
+    story = storyboard_store.create_story({"concept": "A gag", "invariants": [invariant]})
+    story, scene = storyboard_store.add_scene(story["id"], {
+        "summary": "First", "invariantRefs": [{"kind": "character", "title": "Coach"}]
+    })
+    rename = client.post("/fs/studio/director/brief", json={
+        "storyId": story["id"], "expected": {"invariants": [invariant]},
+        "changes": {"invariants": [{"kind": "character", "title": "Trainer", "text": "Blue jacket"}]},
+    })
+    assert rename.status_code == 400
+    assert "referenced by Scene" in rename.json["error"]
+    revised = client.post("/fs/studio/director/brief", json={
+        "storyId": story["id"], "expected": {"invariants": [invariant]},
+        "changes": {"invariants": [{**invariant, "text": "Blue jacket and white hat"}]},
+    })
+    assert revised.status_code == 200
+    rev = revised.json["revisionId"]
+    storyboard_store.update_story(story["id"], {"concept": "New concept"})
+    undone = client.post("/fs/studio/director/brief/undo", json={
+        "storyId": story["id"], "revisionId": rev
+    })
+    assert undone.status_code == 200
+    assert undone.json["story"]["invariants"] == [invariant]
+    assert undone.json["story"]["concept"] == "New concept"
+    # A later edit to the affected field blocks an obsolete Undo.
+    updated = client.post("/fs/studio/director/brief", json={
+        "storyId": story["id"], "expected": {"style": ""},
+        "changes": {"style": "Another style"},
+    }).json
+    storyboard_store.update_story(story["id"], {"style": "Changed again"})
+    denied = client.post("/fs/studio/director/brief/undo", json={
+        "storyId": story["id"], "revisionId": updated["revisionId"],
+    })
+    assert denied.status_code == 400
+    assert storyboard_store.load_story(story["id"])["style"] == "Changed again"
+
+
+def test_studio_brief_extraction_schema(monkeypatch):
+    from tool.server import app as application
+    result = {}
+    def fake_enqueue(client, model, contract, context, label):
+        result["contract"] = contract
+        return {"jobId": "brief", "status": "queued"}
+    monkeypatch.setattr(application, "enqueue_llm", fake_enqueue)
+    response = app.test_client().post("/fs/director/chat", json={
+        "model": "local-test", "operation": "studio_brief_draft",
+        "messages": [{"role": "user", "content": "Refine the Concept"}],
+    })
+    assert response.status_code == 202
+    schema = result["contract"]["response_schema"]
+    assert schema["additionalProperties"] is False
+    assert schema["properties"]["invariants"]["maxItems"] == 30

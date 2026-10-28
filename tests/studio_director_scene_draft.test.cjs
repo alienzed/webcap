@@ -127,3 +127,25 @@ test('Scene sequence parser rejects invalid or overlarge batches', () => {
     rationale: ''
   })), /one to eight/);
 });
+
+
+test('Studio brief review limits Apply to explicitly checked Story fields', () => {
+  for (const id of [
+    'director-studio-propose-brief', 'studio-brief-review',
+    'studio-brief-concept-selected', 'studio-brief-style-selected',
+    'studio-brief-invariants-selected', 'studio-brief-apply',
+    'director-studio-undo-brief'
+  ]) assert.match(html, new RegExp('id="' + id + '"'));
+  const prep = part('  function prepareStudioBrief() {', '  function applyStudioBrief() {');
+  assert.match(prep, /studioAttachedStoryId\(\)/);
+  assert.match(prep, /window\.flushStudioDirectorStoryEdits\(storyId\)/);
+  assert.match(prep, /operation: 'studio_brief_draft'/);
+  assert.doesNotMatch(prep, /\/fs\/studio\/director\/brief'/);
+  const apply = part('  function applyStudioBrief() {', '  function undoStudioBrief() {');
+  assert.match(apply, /studio-brief-concept-selected/);
+  assert.match(apply, /studio-brief-style-selected/);
+  assert.match(apply, /studio-brief-invariants-selected/);
+  assert.match(apply, /expected: expected, changes: changes/);
+  assert.match(apply, /\/fs\/studio\/director\/brief'/);
+  assert.match(source, /\/fs\/studio\/director\/brief\/undo/);
+});

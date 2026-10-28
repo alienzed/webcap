@@ -42,7 +42,9 @@
     studioIntroPending: false,
     studioSceneProposal: null,
     studioProjectProposal: null,
-    studioScenesProposal: null
+    studioScenesProposal: null,
+    studioBriefProposal: null,
+    studioBriefUndo: null
   };
   var STORYBOARD_WORKSHOP_PRIMER = [
     'You are collaborating with an author developing short AI-generated videos.',
@@ -600,6 +602,7 @@
       state.studioSceneProposal = null;
       state.studioProjectProposal = null;
       state.studioScenesProposal = null;
+      state.studioBriefProposal = null;
       state.workshopProposal = null;
       state.storyGuidelineProposal = null;
     }
@@ -1095,6 +1098,11 @@
       state.activeMode !== 'storyboard' || !state.modelId;
     el('director-studio-prepare-scenes').disabled = state.pending || !state.sessionReady ||
       state.activeMode !== 'storyboard' || !state.modelId;
+    el('director-studio-propose-brief').disabled = state.pending || !state.sessionReady ||
+      state.activeMode !== 'storyboard' || !state.modelId;
+    var briefUndo = el('director-studio-undo-brief');
+    briefUndo.classList.toggle('hidden', state.activeMode !== 'storyboard' || !state.studioBriefUndo);
+    briefUndo.disabled = state.pending || !state.studioBriefUndo;
     var prepare = el('director-chat-workshop-prepare');
     if (prepare) {
       prepare.disabled = state.pending || !state.modelId || !!(state.workshop && state.workshop.shotError) || !currentMessages().some(function (message) { return message.role === 'user'; });
@@ -1185,8 +1193,8 @@
     return proposal;
   }
 
-  function addStudioProjectInvariant(item) {
-    var host = el('studio-project-invariants');
+  function addStudioProjectInvariant(item, destination) {
+    var host = el(typeof destination === 'string' ? destination : 'studio-project-invariants');
     var row = document.createElement('div');
     row.className = 'studio-project-invariant';
     row.style.cssText = 'display:grid;grid-template-columns:minmax(0,130px) minmax(0,1fr) auto;gap:8px;margin:8px 0;';
@@ -1363,6 +1371,225 @@
     });
   }
 
+
+
+  function parseStudioBriefDraft(raw) {
+    var value = String(raw || '').trim();
+    var fence = String.fromCharCode(96).repeat(3);
+    if (value.startsWith(fence) && value.endsWith(fence)) {
+      var newline = value.indexOf('\n');
+      if (newline >= 0) value = value.slice(newline + 1, -3).trim();
+    }
+    var result;
+    try { result = JSON.parse(value); }
+    catch (error) { throw new Error('Director returned invalid creative brief JSON: ' + error.message); }
+    if (!result || typeof result !== 'object' || Array.isArray(result) ||
+        typeof result.concept !== 'string' || typeof result.style !== 'string' ||
+        typeof result.rationale !== 'string' || !Array.isArray(result.invariants) ||
+        result.invariants.length > 30 || result.invariants.some(function (item) {
+          return !item || typeof item !== 'object' || Array.isArray(item) ||
+            typeof item.kind !== 'string' || typeof item.title !== 'string' ||
+            typeof item.text !== 'string' ||
+            ['character', 'location', 'visual', 'world', 'sound', 'custom'].indexOf(item.kind) === -1;
+        })) {
+      throw new Error('Creative brief must have Concept, Style, Invariants and rationale.');
+    }
+    return result;
+  }
+
+  function showStudioBriefReview() {
+    var proposal = state.studioBriefProposal;
+    if (!proposal) throw new Error('Prepare a creative brief first.');
+    el('studio-brief-target').textContent = 'Project: ' + (proposal.storyTitle || proposal.storyId);
+    el('studio-brief-rationale').textContent = proposal.rationale;
+    el('studio-brief-concept-before').textContent = 'Current: ' + (proposal.expected.concept || '(empty)');
+    el('studio-brief-style-before').textContent = 'Current: ' + (proposal.expected.style || '(empty)');
+    el('studio-brief-concept').value = proposal.draft.concept;
+    el('studio-brief-style').value = proposal.draft.style;
+    el('studio-brief-concept-selected').checked = proposal.draft.concept !== proposal.expected.concept;
+    el('studio-brief-style-selected').checked = proposal.draft.style !== proposal.expected.style;
+    el('studio-brief-invariants-selected').checked =
+      JSON.stringify(proposal.draft.invariants) !== JSON.stringify(proposal.expected.invariants);
+    el('studio-brief-invariants').replaceChildren();
+    proposal.draft.invariants.forEach(function (item) {
+      addStudioProjectInvariant(item, 'studio-brief-invariants');
+    });
+    el('studio-brief-error').textContent = '';
+    var dialog = el('studio-brief-review');
+    if (dialog.open) dialog.close();
+    dialog.showModal();
+  }
+
+  function prepareStudioBrief() {
+    if (state.pending || state.activeMode !== 'storyboard' || !state.sessionReady) return;
+    if (state.studioBriefProposal) { showStudioBriefReview(); return; }
+    if (!state.modelId) { studioActionStatus('Select a Director model.', true); return; }
+    var storyId = studioAttachedStoryId();
+    if (!storyId) {
+      studioActionStatus('Attach one Project explicitly before proposing Brief changes.', true);
+      return;
+    }
+    var discussion = (state.modeMessages.storyboard || []).filter(function (message) {
+      return message && (message.role === 'assistant' || message.role === 'user');
+    });
+    state.pending = true;
+    state.jobId = '';
+    studioActionStatus('Preparing Concept, Style and Invariants for review…', false);
+    startProgress();
+    syncControls();
+    Promise.resolve().then(function () {
+      return window.flushStudioDirectorStoryEdits(storyId);
+    }).then(function () {
+      return requestJson('/fs/storyboard?story=' + encodeURIComponent(storyId));
+    }).then(function (payload) {
+      var story = payload.story;
+      if (!story || story.id !== storyId) throw new Error('Attached Project is unavailable.');
+      var expected = { concept: story.concept, style: story.style, invariants: story.invariants };
+      var input = {
+        task: 'Propose narrowly scoped creative brief changes that the author has actually discussed. ' +
+          'Return the FULL revised Concept, Style and Invariant list as reviewable suggestions. ' +
+          'Core Appeal stays within Concept. Preserve established details and unrelated facts. ' +
+          'Do not change Scenes or prompts. Prefer no change where ideas remain undecided. ' +
+          'Any changes must be reviewed by the author before WebCap stores them.',
+        project: { id: story.id, title: story.title, concept: story.concept,
+          style: story.style, invariants: story.invariants, guidelines: story.guidelines },
+        discussion: discussion
+      };
+      return studioDirectorRequestMessages([{ role: 'user', content: JSON.stringify(input) }])
+        .then(function (messages) {
+          return requestJson('/fs/director/chat', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({model: state.modelId, operation: 'studio_brief_draft', messages: messages})
+          });
+        }).then(function (result) {
+          if (!result.job || !result.job.jobId) throw new Error('Creative brief extraction was not queued.');
+          state.jobId = String(result.job.jobId);
+          state.requestDiagnostic = result.job.request || null;
+          trackTransientLlmJob(result.job);
+          return waitForJob(result.job);
+        }).then(function (job) {
+          var result = job.result && typeof job.result === 'object' ? job.result : {};
+          var draft = parseStudioBriefDraft(result.text);
+          state.studioBriefProposal = {
+            storyId: storyId, storyTitle: story.title, expected: expected, draft: draft,
+            rationale: draft.rationale
+          };
+          finishProgress(null);
+          studioActionStatus('Brief ready for editable review. Nothing has changed.', false);
+          showStudioBriefReview();
+        });
+    }).catch(function (error) {
+      finishProgress(error);
+      studioActionStatus('Creative brief proposal failed: ' + String(error.message || error), true);
+      if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Studio Brief proposal', error);
+      else throw error;
+    }).finally(function () {
+      state.pending = false;
+      state.jobId = '';
+      syncControls();
+    });
+  }
+
+  function applyStudioBrief() {
+    var proposal = state.studioBriefProposal;
+    if (!proposal || state.pending) return;
+    var changes = {};
+    if (el('studio-brief-concept-selected').checked) changes.concept = el('studio-brief-concept').value.trim();
+    if (el('studio-brief-style-selected').checked) changes.style = el('studio-brief-style').value.trim();
+    if (el('studio-brief-invariants-selected').checked) {
+      changes.invariants = Array.prototype.map.call(
+        el('studio-brief-invariants').querySelectorAll('.studio-project-invariant'), function (row) {
+          var fields = row.querySelectorAll('select, input, textarea');
+          return {kind: fields[0].value, title: fields[1].value.trim(), text: fields[2].value.trim()};
+        }
+      );
+      if (changes.invariants.some(function (item) { return !item.text; })) {
+        el('studio-brief-error').textContent = 'Every retained invariant needs a description.';
+        return;
+      }
+    }
+    Object.keys(changes).forEach(function (key) {
+      if (JSON.stringify(changes[key]) === JSON.stringify(proposal.expected[key])) delete changes[key];
+    });
+    if (!Object.keys(changes).length) {
+      el('studio-brief-error').textContent = 'Select at least one actual change.';
+      return;
+    }
+    var expected = {};
+    Object.keys(changes).forEach(function (field) {
+      expected[field] = proposal.expected[field];
+    });
+    state.pending = true;
+    syncControls();
+    el('studio-brief-error').textContent = '';
+    var applied = false;
+    Promise.resolve().then(function () {
+      return window.flushStudioDirectorStoryEdits(proposal.storyId);
+    }).then(function () {
+      return requestJson('/fs/studio/director/brief', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({storyId: proposal.storyId, expected: expected, changes: changes})
+      });
+    }).then(function (result) {
+      if (!result.story || !result.revisionId) throw new Error('Brief Apply did not return its revision ID.');
+      applied = true;
+      state.studioBriefUndo = {storyId: proposal.storyId, revisionId: result.revisionId};
+      state.studioBriefProposal = null;
+      el('studio-brief-review').close();
+      state.modeMessages.storyboard.push({
+        role: 'assistant', content: 'Applied approved Story brief fields: ' +
+          Object.keys(changes).join(', ') + '. Other Scene data and Takes were preserved. ' +
+          'Undo is available while the result remains unchanged.'
+      });
+      renderMessages();
+      studioActionStatus('Story brief updated. Undo is available.', false);
+      return persistSession('storyboard').then(function () {
+        return window.refreshStudioDirectorStoryIfOpen(proposal.storyId);
+      });
+    }).catch(function (error) {
+      if (applied) {
+        studioActionStatus('Brief was applied, but history save or refresh failed: ' +
+          String(error.message || error), true);
+      } else {
+        el('studio-brief-error').textContent = 'Apply was not confirmed: ' +
+          String(error.message || error) + '. Refresh the current Story if the connection was lost.';
+      }
+      if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Studio Brief Apply', error);
+      else throw error;
+    }).finally(function () {
+      state.pending = false;
+      syncControls();
+    });
+  }
+
+  function undoStudioBrief() {
+    var receipt = state.studioBriefUndo;
+    if (!receipt || state.pending) return;
+    state.pending = true;
+    syncControls();
+    Promise.resolve().then(function () {
+      return window.flushStudioDirectorStoryEdits(receipt.storyId);
+    }).then(function () {
+      return requestJson('/fs/studio/director/brief/undo', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(receipt)
+      });
+    }).then(function (payload) {
+      if (!payload.story || payload.story.id !== receipt.storyId) {
+        throw new Error('Brief Undo did not return the expected Story.');
+      }
+      state.studioBriefUndo = null;
+      studioActionStatus('Last reviewed Brief change undone.', false);
+      return window.refreshStudioDirectorStoryIfOpen(receipt.storyId);
+    }).catch(function (error) {
+      studioActionStatus('Brief Undo failed: ' + String(error.message || error), true);
+      if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Studio Brief Undo', error);
+      else throw error;
+    }).finally(function () {
+      state.pending = false;
+      syncControls();
+    });
+  }
 
   function parseStudioScenesDraft(raw) {
     var value = String(raw || '').trim();
@@ -1907,6 +2134,7 @@
         state.studioSceneProposal = null;
         state.studioProjectProposal = null;
         state.studioScenesProposal = null;
+        state.studioBriefProposal = null;
         state.storyGuidelineProposal = null;
         el('director-chat-workshop-status').textContent = '';
       }
@@ -2407,6 +2635,7 @@
       state.studioSceneProposal = null;
       state.studioProjectProposal = null;
       state.studioScenesProposal = null;
+      state.studioBriefProposal = null;
       el('director-chat-workshop-status').textContent = '';
     }
     var messages = currentMessages();
@@ -2563,6 +2792,15 @@
     el('director-studio-prepare-scene').onclick = prepareStudioSceneDraft;
     el('director-studio-prepare-project').onclick = prepareStudioProject;
     el('director-studio-prepare-scenes').onclick = prepareStudioScenes;
+    el('director-studio-propose-brief').onclick = prepareStudioBrief;
+    el('director-studio-undo-brief').onclick = undoStudioBrief;
+    el('studio-brief-close').onclick = function () { el('studio-brief-review').close(); };
+    el('studio-brief-discard').onclick = function () { el('studio-brief-review').close(); };
+    el('studio-brief-apply').onclick = applyStudioBrief;
+    el('studio-brief-add-invariant').onclick = function () {
+      addStudioProjectInvariant(null, 'studio-brief-invariants');
+      el('studio-brief-invariants-selected').checked = true;
+    };
     el('studio-scenes-close').onclick = function () { el('studio-scenes-review').close(); };
     el('studio-scenes-discard').onclick = function () { el('studio-scenes-review').close(); };
     el('studio-scenes-apply').onclick = applyStudioScenes;

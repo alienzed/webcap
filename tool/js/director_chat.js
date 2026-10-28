@@ -2458,6 +2458,14 @@
         'respond ONLY with [[WEBCAP_PREPARE:fields]]. WebCap will privately prepare an editable ' +
         'review proposal for the existing attached Story or a new Project if none is attached. ' +
         'This token never applies changes. Otherwise converse naturally.'};
+      if (studioAttachedStoryId()) {
+        outbound[0] = {role: 'system', content: outbound[0].content + '\n' +
+          'REVIEWED SCENE CAPTURE: When the author explicitly asks to capture ONE agreed clip ' +
+          'as a Scene, respond ONLY with [[WEBCAP_PREPARE:scene]]. For an explicit request ' +
+          'to capture multiple distinct Scenes, respond ONLY with [[WEBCAP_PREPARE:scenes]]. ' +
+          'WebCap prepares editable Scene intents for separate author review and approval. ' +
+          'These tokens do not save anything; otherwise continue the creative conversation.'};
+      }
       if (state.studioStoryAccess) {
         outbound[0] = {role: 'system', content: outbound[0].content + '\n' +
           'ON-DEMAND STORY READ: If the author asks about current Story details you have not been given, ' +
@@ -2474,11 +2482,13 @@
 
   function parseStudioCaptureRequest(text) {
     var value = String(text || '').trim();
-    if (value === '[[WEBCAP_PREPARE:fields]]') return true;
+    if (value === '[[WEBCAP_PREPARE:fields]]') return 'fields';
+    if (value === '[[WEBCAP_PREPARE:scene]]') return 'scene';
+    if (value === '[[WEBCAP_PREPARE:scenes]]') return 'scenes';
     if (value.indexOf('[[WEBCAP_PREPARE:') !== -1) {
       throw new Error('Director returned an invalid capture request.');
     }
-    return false;
+    return '';
   }
 
   function parseStudioReadRequest(text) {
@@ -2986,7 +2996,7 @@
 
     var startedAt = performance.now();
     var requestError = null;
-    var pendingCapture = false;
+    var pendingCapture = '';
     // Commit the user's words BEFORE asking the model. A refresh or failed
     // inference can never discard the user's last sent message.
     var saved = persistentMode(activeChatMode) ? persistSession(activeChatMode) : Promise.resolve();
@@ -3025,9 +3035,10 @@
         var read = parseStudioReadRequest(result.text);
         return read ? resumeStudioAfterRead(messages, read) : result;
       }).then(function (result) {
-        if (activeChatMode === 'storyboard' && parseStudioCaptureRequest(result.text)) {
-          // A model proposal request is operational control, not assistant dialogue.
-          pendingCapture = true;
+        var capture = activeChatMode === 'storyboard' ? parseStudioCaptureRequest(result.text) : '';
+        if (capture) {
+          // The model selects a proposal path, never an authoritative mutation.
+          pendingCapture = capture;
           return;
         }
         messages.push({ role: 'assistant', content: String(result.text || '') });
@@ -3054,8 +3065,9 @@
       if (input) input.focus();
       if (pendingCapture && !requestError) {
         // The author's explicit request starts only a reviewed, private proposal.
-        if (studioAttachedStoryId()) prepareStudioBrief();
-        else prepareStudioProject();
+        if (pendingCapture === 'fields') captureStudioCreativeBrief();
+        else if (pendingCapture === 'scene') prepareStudioSceneDraft();
+        else if (pendingCapture === 'scenes') prepareStudioScenes();
       }
     });
   }

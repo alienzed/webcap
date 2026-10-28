@@ -82,8 +82,14 @@ test('Studio combines server-owned production guidance with opted-in reference s
     STORYBOARD_WORKSHOP_PRIMER: 'Existing conversation primer',
     requestJson: async () => ({ system: 'Actual H3 production instructions' })
   });
-  const functions = slice('  function storyboardRequestMessages(messages) {', '  function attachStoryboardContext(kind) {');
-  vm.runInContext(functions, context);
+  vm.runInContext(
+    slice('  function storyboardRequestMessages(messages) {', '  function attachStoryboardContext(kind) {'),
+    context
+  );
+  vm.runInContext(
+    slice('  function studioDirectorRequestMessages(messages) {', '  function storyboardRequestMessages(messages) {'),
+    context
+  );
   const request = await vm.runInContext(
     'studioDirectorRequestMessages([{role:"user",content:"Tell me about Scene 1"}])',
     context

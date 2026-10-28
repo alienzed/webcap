@@ -1907,7 +1907,6 @@
       reportError(new Error('That Director target already has pending work.'));
       return;
     }
-    if (refresh !== true && openDefinedGuidelineDraft(storyId)) return;
     var modelId = storyState.director.modelId;
     if (!modelId) {
       reportError(new Error('Choose a Storyboard Director model first.'));
@@ -1919,12 +1918,6 @@
       return;
     }
 
-    if (refresh === true) {
-      rememberDefinedGuidelineDraft();
-      var reviewModal = el('storyboard-guidelines-review');
-      if (reviewModal.open) reviewModal.close();
-      storyboardGuidelineReview = null;
-    }
     var saveBarrier = flushPendingSaves();
     setDirectorPending(directorTarget, true);
     startDirectorActivity();
@@ -1941,28 +1934,7 @@
         operation: 'define_invariants',
         jobId: payload.jobId
       }).then(function () {
-        var suggestions = payload.guidelineSuggestions || {};
-        var offered = ['visualFocus', 'creativeDirection', 'variation', 'pacing'].filter(function (key) {
-          return typeof suggestions[key] === 'string' && suggestions[key].trim();
-        });
-        if (offered.length) {
-          var changes = {};
-          offered.forEach(function (key) { changes[key] = suggestions[key].trim(); });
-          storyboardDefineGuidelineDrafts[storyId] = {
-            sourceConcept: concept, values: changes, selected: {}
-          };
-          if (storyState.story && String(storyState.story.id) === String(storyId) &&
-              !el('storyboard-guidelines-review').open) {
-            openDefinedGuidelineDraft(storyId);
-          }
-        } else {
-          reportError(new Error('Director returned no guideline suggestions; previous values were retained.'));
-          if (storyState.story && String(storyState.story.id) === String(storyId) &&
-              !el('storyboard-guidelines-review').open) {
-            openDefinedGuidelineDraft(storyId);
-          }
-        }
-        reportConsoleInfo('Storyboard', 'Defined ' + String(payload.addedCount || 0) + ' new Story invariant' + (Number(payload.addedCount || 0) === 1 ? '' : 's') + ' from the concept.');
+        reportConsoleInfo('Storyboard', 'Defined ' + String(payload.addedCount || 0) + ' new Project invariant' + (Number(payload.addedCount || 0) === 1 ? '' : 's') + ' from the concept.');
         return consumeDirectorJob(payload.jobId);
       });
     }).catch(function (err) {

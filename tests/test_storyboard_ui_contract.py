@@ -1577,16 +1577,18 @@ def test_story_guidelines_use_reviewed_chat_and_define_from_concept_changes():
     assert '"storyboard_story_guidelines"' in llm
 
 
-def test_define_from_concept_review_reopens_previous_values_and_refreshes_explicitly():
+def test_define_invariants_does_not_generate_new_guidelines_and_preserves_legacy_editor():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     story = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
-    assert 'id="storyboard-guidelines-review-refresh"' in html
-    assert "storyboardDefineGuidelineDrafts = Object.create(null)" in story
+    assert 'class="storyboard-legacy-guidelines"' in html
+    assert 'data-story-guideline="visualFocus"' in html
     assert "function openDefinedGuidelineDraft(storyId)" in story
-    assert "if (refresh !== true && openDefinedGuidelineDraft(storyId)) return;" in story
     assert "function rememberDefinedGuidelineDraft()" in story
-    assert "after.oninput = rememberDefinedGuidelineDraft" in story
-    assert "checked.onchange = function () {" in story
-    assert "defineInvariants(true);" in story
-    assert "source: 'define'" in story
     assert "operation: 'apply_reviewed_guidelines'" in story
+    start = story.index("  function defineInvariants(refresh) {")
+    end = story.index("\n  function ", start + 10)
+    current_define = story[start:end]
+    assert "operation: 'define_invariants'" in current_define
+    assert "openDefinedGuidelineDraft(storyId)" not in current_define
+    assert "payload.guidelineSuggestions" not in current_define
+    assert "reportConsoleInfo('Storyboard'" in current_define

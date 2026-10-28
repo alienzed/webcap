@@ -267,19 +267,22 @@ def test_define_invariants_remains_context_generation_not_scene_authoring():
     request = storyboard_llm_contract.build_request(_story(), "", "define_invariants")
 
     assert request["output"] == "json"
-    assert request["response_schema"]["required"] == ["invariants", "guidelines"]
-    assert set(request["response_schema"]["properties"]["guidelines"]["required"]) == {"visualFocus", "creativeDirection", "variation", "pacing"}
+    assert request["response_schema"]["required"] == ["invariants"]
+    assert set(request["response_schema"]["properties"]) == {"invariants"}
+    assert "propose four" not in request["prompt"]
     assert "Define stable visual identities for recurring characters and locations" in request["prompt"]
 
 
-def test_define_invariants_refreshes_existing_guidelines_only_on_request():
+def test_define_invariants_preserves_legacy_context_without_generating_new_guidelines():
     story = _story()
     story["guidelines"] = {"visualFocus": "Old focus"}
     default = storyboard_llm_contract.build_request(story, "", "define_invariants")
     refreshed = storyboard_llm_contract.build_request(story, "", "define_invariants", refresh_guidelines=True)
-    assert "return an empty string for any already populated field" in default["prompt"]
-    assert "Refresh the four guideline proposals" in refreshed["prompt"]
-    assert "[EXISTING STORY GUIDELINES]" in refreshed["prompt"]
+    assert default["response_schema"]["required"] == ["invariants"]
+    assert default["response_schema"] == refreshed["response_schema"]
+    assert "[EXISTING STORY GUIDELINES]" in default["prompt"]
+    assert "Old focus" in refreshed["prompt"]
+    assert "Refresh the four guideline proposals" not in refreshed["prompt"]
 
 
 def test_write_prompt_requires_scene_intent():

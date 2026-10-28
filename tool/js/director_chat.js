@@ -368,7 +368,8 @@
     var prepare = el('director-chat-workshop-prepare');
     if (prepare) prepare.classList.toggle('hidden', state.activeMode !== 'storyboard' || !state.workshop);
     var storyPrepare = el('director-chat-story-prepare');
-    storyPrepare.classList.toggle('hidden', state.activeMode !== 'storyboard' || !guidelineStoryId());
+    // Legacy guideline proposals are retired; saved values remain editable in Studio.
+    storyPrepare.classList.add('hidden');
     renderStoryboardAttachmentViewer();
     renderStudioStoryAccess();
     renderStudioOperations();

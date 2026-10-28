@@ -70,3 +70,15 @@ def test_freeform_workshop_does_not_claim_mutations_or_dump_full_scene():
     assert "dialogue stays dialogue" in text
     assert "never announce 'Storyboard updated'" in text
     assert "A separate WebCap operation" in text
+
+def test_five_field_contract_has_explicit_ownership_and_review_boundary():
+    text = guidance("minimax_h3")["system"]
+    for phrase in (
+        "story.concept", "story.style", "story.invariants",
+        "scene.summary", "scene.prompt", "MH3 Take generation",
+        "existing Directing Guidelines",
+    ):
+        assert phrase.casefold() in text.casefold()
+    assert "honor them until separately reviewed" in text
+    assert "reviewed insertion" in text
+    assert "conversation alone never edits them" in text

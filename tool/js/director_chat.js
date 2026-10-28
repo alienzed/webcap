@@ -1277,7 +1277,7 @@
     el('studio-project-concept').value = proposal.concept;
     el('studio-project-style').value = proposal.style;
     el('studio-project-rationale').textContent = proposal.rationale ||
-      'Review the creative brief before creating anything.';
+      'Review Concept, Style and Invariants before creating anything.';
     el('studio-project-error').textContent = '';
     el('studio-project-invariants').replaceChildren();
     proposal.invariants.forEach(addStudioProjectInvariant);
@@ -1426,7 +1426,7 @@
     }
     var result;
     try { result = JSON.parse(value); }
-    catch (error) { throw new Error('Director returned invalid creative brief JSON: ' + error.message); }
+    catch (error) { throw new Error('Director returned invalid Concept / Style / Invariants JSON: ' + error.message); }
     if (!result || typeof result !== 'object' || Array.isArray(result) ||
         typeof result.concept !== 'string' || typeof result.style !== 'string' ||
         typeof result.rationale !== 'string' || !Array.isArray(result.invariants) ||
@@ -1436,14 +1436,14 @@
             typeof item.text !== 'string' ||
             ['character', 'location', 'visual', 'world', 'sound', 'custom'].indexOf(item.kind) === -1;
         })) {
-      throw new Error('Creative brief must have Concept, Style, Invariants and rationale.');
+      throw new Error('The proposal must contain Concept, Style, Invariants and a rationale.');
     }
     return result;
   }
 
   function showStudioBriefReview() {
     var proposal = state.studioBriefProposal;
-    if (!proposal) throw new Error('Prepare a creative brief first.');
+    if (!proposal) throw new Error('Prepare Concept, Style and Invariants before reviewing.');
     el('studio-brief-target').textContent = 'Project: ' + (proposal.storyTitle || proposal.storyId);
     el('studio-brief-rationale').textContent = proposal.rationale;
     el('studio-brief-concept-before').textContent = 'Current: ' + (proposal.expected.concept || '(empty)');
@@ -1470,7 +1470,7 @@
     if (!state.modelId) { studioActionStatus('Select a Director model.', true); return; }
     var storyId = studioAttachedStoryId();
     if (!storyId) {
-      studioActionStatus('Attach one Project explicitly before proposing Brief changes.', true);
+      studioActionStatus('Attach a Project explicitly before updating Concept, Style or Invariants.', true);
       return;
     }
     var discussion = (state.modeMessages.storyboard || []).filter(function (message) {
@@ -1519,7 +1519,7 @@
             rationale: draft.rationale
           };
           finishProgress(null);
-          studioActionStatus('Brief ready for editable review. Nothing has changed.', false);
+          studioActionStatus('Concept, Style and Invariants ready for review. Nothing has changed.', false);
           showStudioBriefReview();
         });
     }).catch(function (error) {
@@ -1592,7 +1592,7 @@
       });
     }).catch(function (error) {
       if (applied) {
-        studioActionStatus('Brief was applied, but history save or refresh failed: ' +
+        studioActionStatus('Selected Concept, Style or Invariants changes were applied, but history save or refresh failed: ' +
           String(error.message || error), true);
       } else {
         el('studio-brief-error').textContent = 'Apply was not confirmed: ' +
@@ -1620,13 +1620,13 @@
       });
     }).then(function (payload) {
       if (!payload.story || payload.story.id !== receipt.storyId) {
-        throw new Error('Brief Undo did not return the expected Story.');
+        throw new Error('Concept / Style / Invariants Undo returned an unexpected Project.');
       }
       state.studioBriefUndo = null;
-      studioActionStatus('Last reviewed Brief change undone.', false);
+      studioActionStatus('Last Concept / Style / Invariants change undone.', false);
       return window.refreshStudioDirectorStoryIfOpen(receipt.storyId);
     }).catch(function (error) {
-      studioActionStatus('Brief Undo failed: ' + String(error.message || error), true);
+      studioActionStatus('Concept / Style / Invariants Undo failed: ' + String(error.message || error), true);
       if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Studio Brief Undo', error);
       else throw error;
     }).finally(function () {
@@ -2269,11 +2269,11 @@
       var workbench = storyRefs.length === 1
         ? 'A Project snapshot is explicitly attached (' + storyRefs[0].slice(6) +
           '). The author can review changes to its Concept, Style and Invariants.'
-        : 'No Project is attached to this conversation. Capturing a creative brief ' +
+        : 'No Project is attached to this conversation. Reviewing Concept, Style and Invariants ' +
           'will propose creating a new Project. Editing an existing Project requires an explicit attachment.';
       outbound[0] = { role: 'system', content: payload.system +
         '\n\nSTUDIO WORKBENCH STATE (controls, not saved Story facts):\n' + workbench +
-        '\nWhen creative choices are clear, naturally offer to review a creative brief. ' +
+        '\nWhen creative choices are clear, naturally offer to review Concept, Style and Invariants. ' +
         'Keep exploring when they are still tentative; never claim a proposal was saved.\n' +
         outbound[0].content };
       return outbound;

@@ -24,7 +24,7 @@ def test_writer_workshop_uses_existing_h3_prompt_contract_and_user_playbook(monk
 def test_action_catalog_marks_future_mutations_as_planned():
     by_name = {action["name"]: action for action in ACTIONS}
     assert by_name["conversation.discuss"]["status"] == "available"
-    assert by_name["scene.draft"]["status"] == "planned"
+    assert by_name["scene.draft"]["status"] == "available"
     assert by_name["project.brief.propose"]["status"] == "planned"
 
 

@@ -145,6 +145,9 @@ test('cancel while enqueue is in flight cancels the late queued Director job', a
   let finishEnqueue;
   const cancelled = [];
   h.ctx.fetch = (url, opts) => {
+    if (url.startsWith('/fs/qa/curate/draft?')) {
+      return Promise.resolve({ok: true, json: async () => ({ok: true, draft: null})});
+    }
     if (url === '/fs/qa/curate') return new Promise(resolve => { finishEnqueue = resolve; });
     if (url === '/fs/director/job') {
       cancelled.push(JSON.parse(opts.body));

@@ -1863,17 +1863,17 @@
                 </main>
             </section>
             <section id="storyboard-workspace" class="storyboard-workspace hidden" data-workspace-root="storyboard" aria-label="Studio workspace">
-                <aside class="storyboard-library" aria-label="Stories">
+                <aside class="storyboard-library" aria-label="Projects">
                     <header class="storyboard-library-header">
                         <strong>Stories</strong>
                         <div class="storyboard-library-header-actions">
                             <button id="storyboard-library-compact-toggle" type="button" class="review-captions-btn storyboard-library-compact-toggle" aria-pressed="false" title="Collapse Stories to icons" aria-label="Collapse Stories to icons">‹</button>
-                            <button id="storyboard-new-btn" type="button" class="storyboard-primary-btn">New Story</button>
+                            <button id="storyboard-new-btn" type="button" class="storyboard-primary-btn">New Project</button>
                         </div>
                     </header>
                     <div id="storyboard-library-list" class="storyboard-library-list"></div>
                 </aside>
-                <section class="storyboard-editor" aria-label="Story editor">
+                <section class="storyboard-editor" aria-label="Project editor">
                     <aside id="storyboard-director-activity" class="storyboard-director-activity hidden" aria-live="polite">
                         <strong>Director</strong>
                         <span id="storyboard-director-activity-phase">Preparing…</span>
@@ -1894,12 +1894,12 @@
                         </div>
                         <button id="storyboard-director-stop" type="button" class="director-stop-btn hidden">Stop</button>
                     </aside>
-                    <div id="storyboard-editor-empty" class="storyboard-editor-empty">Create or open a Story to begin.</div>
+                    <div id="storyboard-editor-empty" class="storyboard-editor-empty">Create or open a Project to begin.</div>
                     <div id="storyboard-editor-content" class="storyboard-editor-scroll hidden">
                         <div id="storyboard-story-authoring" class="storyboard-story-authoring">
                             <div id="storyboard-story-overview" class="storyboard-story-fields storyboard-story-overview-surface">
                                 <div class="storyboard-story-panel-heading">
-                                    <strong>Story Overview</strong>
+                                    <strong>Project Overview</strong>
                                     <div class="storyboard-story-heading-actions">
                                         <div class="storyboard-story-action-wrap">
                                             <button id="storyboard-first-cut-btn" type="button" class="storyboard-primary-btn storyboard-director-action" title="Take this Story from its current concept through Director refinement and queue one first Take per Scene.">First Cut</button>
@@ -1912,14 +1912,14 @@
                                             <button id="storyboard-story-action-cancel" data-story-action-cancel type="button" class="review-captions-btn">Cancel</button>
                                         </div>
                                         </div>
-                                        <button id="storyboard-story-toggle" type="button" class="review-captions-btn" aria-expanded="true" aria-controls="storyboard-story-authoring">Hide Story Overview</button>
+                                        <button id="storyboard-story-toggle" type="button" class="review-captions-btn" aria-expanded="true" aria-controls="storyboard-story-authoring">Hide Project Overview</button>
                                     </div>
                                 </div>
 
                                 <details class="storyboard-story-section" data-story-section="story" open>
                                     <summary>
                                         <span class="storyboard-story-section-summary-copy">
-                                            <strong>Story</strong>
+                                            <strong>Project</strong>
                                             <span>Identity, concept, and visual language.</span>
                                         </span>
                                     </summary>
@@ -1945,7 +1945,7 @@
                                                     <button id="storyboard-restore-concept-btn" type="button" class="storyboard-field-action-btn hidden">Restore Original</button>
                                                 </div>
                                             </div>
-                                            <textarea id="storyboard-story-concept" rows="6" placeholder="High-level grounded overview of the Story."></textarea>
+                                            <textarea id="storyboard-story-concept" rows="6" placeholder="High-level grounded overview of the Project."></textarea>
                                         </div>
                                         <div class="storyboard-field storyboard-style-field">
                                             <div class="storyboard-field-header">
@@ -2242,7 +2242,7 @@
             <dialog id="studio-project-review" class="studio-scene-draft-review" aria-labelledby="studio-project-review-title">
                 <header class="studio-scene-draft-header">
                     <div>
-                        <h2 id="studio-project-review-title">Review New Story</h2>
+                        <h2 id="studio-project-review-title">Review New Project</h2>
                         <p>An idea can become a Project without a title, finished outline or Scenes. Nothing is created until you approve.</p>
                     </div>
                     <button id="studio-project-close" type="button" class="review-captions-btn">Close</button>
@@ -2265,11 +2265,12 @@
                         <label for="studio-project-scene-summary">What happens</label>
                         <textarea id="studio-project-scene-summary" rows="3"></textarea>
                     </div>
+                    <label for="studio-project-continue"><input id="studio-project-continue" type="checkbox" checked> Continue with this Project in Director</label>
                     <p id="studio-project-error" class="studio-scene-draft-error" aria-live="polite"></p>
                 </div>
                 <footer class="studio-scene-draft-footer">
                     <button id="studio-project-discard" type="button" class="review-captions-btn">Back to conversation</button>
-                    <button id="studio-project-create" type="button">Create Story</button>
+                    <button id="studio-project-create" type="button">Create Project</button>
                 </footer>
             </dialog>
             <dialog id="studio-scenes-review" class="studio-scene-draft-review" aria-labelledby="studio-scenes-review-title">

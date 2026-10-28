@@ -296,9 +296,9 @@ test('Studio owns a separate context workspace beside the conversation', () => {
   assert.match(css, /\.director-chat-drawer\.studio-director \.director-chat-messages \{\s*min-height: 0/);
 });
 
-test('Read scope disconnect preserves historical attachments and failed index reads propagate', () => {
+test('Disconnect revokes legacy Story context and failed index reads propagate', () => {
   const disconnect = slice('  function clearStudioStoryAccess() {', '  function readStudioStoryScope(');
-  assert.doesNotMatch(disconnect, /state\.storyboardAttachments = \{\}/);
+  assert.match(disconnect, /state\.storyboardAttachments = \{\}/);
   const readIndex = slice('  function loadStudioAccessIndex() {', '  function inspectStudioStoryScope() {');
   assert.match(readIndex, /throw error;/);
   assert.match(readIndex, /state\.studioAccessIndex = result\.data/);

@@ -1601,7 +1601,6 @@
       }
       state.storyboardAttachments[item.key] = item;
       if (kind === 'story') state.studioSceneProposal = null;
-      studioActionStatus('', false);
       state.storyGuidelineProposal = null;
       scheduleSessionSave();
       el('director-chat-attachments-toggle').setAttribute('aria-expanded', 'true');

@@ -1851,6 +1851,15 @@ def qa_deep_scan_route():
                               context={}, label="QA Set Review")
             return jsonify({"ok": True, "job": job}), 202
 
+        # Progressive Deep QA reuses the existing item-level contract in bounded batches.
+        # Sight is cached evidence: this route never requests a fresh Vision scan.
+        if data.get("itemReview") is True:
+            if len(items) > 4:
+                raise ValueError("Progressive Deep QA supports at most four items per batch.")
+            for row in items:
+                sight = (row.get("analysis") or {}).get("visionSight") if isinstance(row, dict) else None
+                if not isinstance(sight, dict) or not sight.get("description") or not isinstance(sight.get("inventory"), dict):
+                    raise ValueError("Progressive Deep QA requires saved Sight for every item.")
         from .qa_llm_contract import build_request as build_qa_llm_request
         contract = build_qa_llm_request(
             items,

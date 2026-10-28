@@ -41,7 +41,8 @@
     draftByMode: { chat: '', storyboard: '' },
     studioIntroPending: false,
     studioSceneProposal: null,
-    studioProjectProposal: null
+    studioProjectProposal: null,
+    studioScenesProposal: null
   };
   var STORYBOARD_WORKSHOP_PRIMER = [
     'You are collaborating with an author developing short AI-generated videos.',
@@ -598,6 +599,7 @@
       state.workshop = chat.workshop || null;
       state.studioSceneProposal = null;
       state.studioProjectProposal = null;
+      state.studioScenesProposal = null;
       state.workshopProposal = null;
       state.storyGuidelineProposal = null;
     }
@@ -1091,6 +1093,8 @@
       state.activeMode !== 'storyboard';
     el('director-studio-prepare-project').disabled = state.pending || !state.sessionReady ||
       state.activeMode !== 'storyboard' || !state.modelId;
+    el('director-studio-prepare-scenes').disabled = state.pending || !state.sessionReady ||
+      state.activeMode !== 'storyboard' || !state.modelId;
     var prepare = el('director-chat-workshop-prepare');
     if (prepare) {
       prepare.disabled = state.pending || !state.modelId || !!(state.workshop && state.workshop.shotError) || !currentMessages().some(function (message) { return message.role === 'user'; });
@@ -1352,6 +1356,232 @@
           '. Check Studio Library before retrying to avoid a duplicate.';
       }
       if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Studio Project Apply', error);
+      else throw error;
+    }).finally(function () {
+      state.pending = false;
+      syncControls();
+    });
+  }
+
+
+  function parseStudioScenesDraft(raw) {
+    var value = String(raw || '').trim();
+    var fence = String.fromCharCode(96).repeat(3);
+    if (value.startsWith(fence) && value.endsWith(fence)) {
+      var newline = value.indexOf('\n');
+      if (newline >= 0) value = value.slice(newline + 1, -3).trim();
+    }
+    var result;
+    try { result = JSON.parse(value); }
+    catch (error) { throw new Error('Director returned invalid Scene sequence JSON: ' + error.message); }
+    if (!result || typeof result !== 'object' || Array.isArray(result) ||
+        !Array.isArray(result.scenes) || result.scenes.length < 1 || result.scenes.length > 8 ||
+        typeof result.rationale !== 'string' || result.scenes.some(function (item) {
+          return !item || typeof item !== 'object' || Array.isArray(item) ||
+            typeof item.title !== 'string' || typeof item.summary !== 'string' || !item.summary.trim();
+        })) {
+      throw new Error('Director must return one to eight titled/described Scenes and a rationale.');
+    }
+    return result;
+  }
+
+  function addStudioScenesRow(item) {
+    var row = document.createElement('section');
+    row.className = 'studio-scenes-row';
+    row.style.cssText = 'display:grid;gap:8px;margin:0 0 20px;padding:15px;border:1px solid var(--border);border-radius:10px;';
+    var header = document.createElement('div');
+    header.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:12px;';
+    var label = document.createElement('strong');
+    label.textContent = 'Tentative Scene';
+    var remove = document.createElement('button');
+    remove.type = 'button';
+    remove.className = 'review-captions-btn';
+    remove.textContent = 'Remove';
+    remove.onclick = function () { row.remove(); };
+    header.append(label, remove);
+    var title = document.createElement('input');
+    title.setAttribute('aria-label', 'Tentative Scene title');
+    title.placeholder = 'Working title (optional)';
+    title.maxLength = 240;
+    title.value = item.title || '';
+    var summary = document.createElement('textarea');
+    summary.setAttribute('aria-label', 'Tentative Scene description');
+    summary.placeholder = 'What happens in this one generatable clip?';
+    summary.rows = 3;
+    summary.value = item.summary || '';
+    row.append(header, title, summary);
+    el('studio-scenes-rows').appendChild(row);
+  }
+
+  function showStudioScenesReview() {
+    var proposal = state.studioScenesProposal;
+    if (!proposal) throw new Error('Prepare Scenes before reviewing them.');
+    el('studio-scenes-target').textContent = 'Project: ' + (proposal.storyTitle || proposal.storyId);
+    el('studio-scenes-rationale').textContent = proposal.rationale;
+    el('studio-scenes-error').textContent = '';
+    var host = el('studio-scenes-rows');
+    host.replaceChildren();
+    proposal.drafts.forEach(addStudioScenesRow);
+    var placement = el('studio-scenes-placement');
+    placement.replaceChildren();
+    function option(value, label) {
+      var node = document.createElement('option');
+      node.value = value;
+      node.textContent = label;
+      placement.appendChild(node);
+    }
+    option('end', 'At the end');
+    option('start', 'At the beginning');
+    proposal.sceneOrder.forEach(function (id, index) {
+      var scene = proposal.scenes[id] || {};
+      var text = 'Scene ' + (index + 1) + (scene.title ? ' · ' + scene.title : '');
+      option('before|' + id, 'Before ' + text);
+      option('after|' + id, 'After ' + text);
+    });
+    placement.value = 'end';
+    var dialog = el('studio-scenes-review');
+    if (dialog.open) dialog.close();
+    dialog.showModal();
+  }
+
+  function prepareStudioScenes() {
+    if (state.pending || state.activeMode !== 'storyboard' || !state.sessionReady) return;
+    if (state.studioScenesProposal) { showStudioScenesReview(); return; }
+    if (!state.modelId) { studioActionStatus('Select a Director model.', true); return; }
+    var storyId = studioAttachedStoryId();
+    if (!storyId) {
+      studioActionStatus('Attach one Project explicitly before preparing a Scene sequence.', true);
+      return;
+    }
+    var discussion = (state.modeMessages.storyboard || []).filter(function (message) {
+      return message && (message.role === 'assistant' || message.role === 'user');
+    });
+    if (!discussion.some(function (message) { return message.role === 'user'; })) {
+      studioActionStatus('Discuss the Scenes first, then prepare a sequence.', true);
+      return;
+    }
+    state.pending = true;
+    state.jobId = '';
+    studioActionStatus('Preparing a Scene sequence for review…', false);
+    startProgress();
+    syncControls();
+    Promise.resolve().then(function () {
+      return window.flushStudioDirectorStoryEdits(storyId);
+    }).then(function () {
+      return requestJson('/fs/storyboard?story=' + encodeURIComponent(storyId));
+    }).then(function (payload) {
+      var story = payload.story;
+      if (!story || story.id !== storyId) throw new Error('Attached Project is no longer available.');
+      var order = (story.sceneOrder || []).slice();
+      var input = {
+        task: 'Extract between one and eight distinct tentative Scenes from the agreed discussion. ' +
+          'Keep each Scene independently generatable and preserve the core appeal. ' +
+          'Use as many Scenes as the author explicitly requested, up to eight; otherwise ' +
+          'select a modest number that fits the discussion. Return title, concise specific ' +
+          'what-happens description, and brief rationale. Do not write H3 prompts or modify existing Scenes.',
+        project: {
+          id: story.id, title: story.title, concept: story.concept, style: story.style,
+          invariants: story.invariants,
+          currentScenes: order.map(function (id, index) {
+            var scene = story.scenes[id];
+            return { id: id, position: index + 1, title: scene.title, summary: scene.summary };
+          })
+        },
+        discussion: discussion
+      };
+      return studioDirectorRequestMessages([{ role: 'user', content: JSON.stringify(input) }])
+        .then(function (messages) {
+          return requestJson('/fs/director/chat', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ model: state.modelId, operation: 'studio_scene_sequence_draft', messages: messages })
+          });
+        }).then(function (result) {
+          if (!result.job || !result.job.jobId) throw new Error('Sequence extraction was not queued.');
+          state.jobId = String(result.job.jobId);
+          state.requestDiagnostic = result.job.request || null;
+          trackTransientLlmJob(result.job);
+          return waitForJob(result.job);
+        }).then(function (job) {
+          var result = job.result && typeof job.result === 'object' ? job.result : {};
+          var draft = parseStudioScenesDraft(result.text);
+          state.studioScenesProposal = {
+            storyId: storyId, storyTitle: story.title, sceneOrder: order,
+            scenes: story.scenes, drafts: draft.scenes, rationale: draft.rationale
+          };
+          finishProgress(null);
+          studioActionStatus('Scene sequence prepared; review the whole block before creating.', false);
+          showStudioScenesReview();
+        });
+    }).catch(function (error) {
+      finishProgress(error);
+      studioActionStatus('Scene sequence failed: ' + String(error.message || error), true);
+      if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Studio Scene sequence', error);
+      else throw error;
+    }).finally(function () {
+      state.pending = false;
+      state.jobId = '';
+      syncControls();
+    });
+  }
+
+  function applyStudioScenes() {
+    var proposal = state.studioScenesProposal;
+    if (!proposal || state.pending) return;
+    var drafts = Array.prototype.map.call(el('studio-scenes-rows').querySelectorAll('.studio-scenes-row'), function (row) {
+      return {
+        title: row.querySelector('input').value.trim(),
+        summary: row.querySelector('textarea').value.trim()
+      };
+    });
+    if (!drafts.length || drafts.length > 8 || drafts.some(function (item) { return !item.summary; })) {
+      el('studio-scenes-error').textContent = 'Review between one and eight Scenes with descriptions.';
+      return;
+    }
+    var pieces = el('studio-scenes-placement').value.split('|');
+    var placement = pieces[0];
+    var relativeSceneId = pieces[1] || '';
+    state.pending = true;
+    syncControls();
+    el('studio-scenes-error').textContent = '';
+    var applied = false;
+    Promise.resolve().then(function () {
+      return window.flushStudioDirectorStoryEdits(proposal.storyId);
+    }).then(function () {
+      return requestJson('/fs/studio/director/scenes-draft', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          storyId: proposal.storyId, expectedSceneOrder: proposal.sceneOrder,
+          scenes: drafts, placement: placement, relativeSceneId: relativeSceneId
+        })
+      });
+    }).then(function (payload) {
+      if (!payload.story || !Array.isArray(payload.scenes) ||
+          payload.scenes.length !== drafts.length || payload.story.id !== proposal.storyId) {
+        throw new Error('Scene sequence Apply returned an incomplete result.');
+      }
+      applied = true;
+      state.studioScenesProposal = null;
+      el('studio-scenes-review').close();
+      state.modeMessages.storyboard.push({
+        role: 'assistant',
+        content: 'Created ' + payload.scenes.length + ' tentative Scene(s) in ' +
+          (proposal.storyTitle || proposal.storyId) + ', with their order saved. ' +
+          'No existing prompts or Takes were changed.'
+      });
+      renderMessages();
+      studioActionStatus(payload.scenes.length + ' Scenes created.', false);
+      return persistSession('storyboard').then(function () {
+        return window.refreshStudioDirectorStoryIfOpen(proposal.storyId);
+      });
+    }).catch(function (error) {
+      if (applied) {
+        studioActionStatus('Scenes were created, but history save or refresh failed: ' +
+          String(error.message || error), true);
+      } else {
+        el('studio-scenes-error').textContent = 'Apply could not be confirmed: ' +
+          String(error.message || error) + '. Refresh Project before retrying.';
+      }
+      if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Studio Scene sequence Apply', error);
       else throw error;
     }).finally(function () {
       state.pending = false;
@@ -1676,6 +1906,7 @@
         state.workshopProposal = null;
         state.studioSceneProposal = null;
         state.studioProjectProposal = null;
+        state.studioScenesProposal = null;
         state.storyGuidelineProposal = null;
         el('director-chat-workshop-status').textContent = '';
       }
@@ -2175,6 +2406,7 @@
       state.workshopProposal = null;
       state.studioSceneProposal = null;
       state.studioProjectProposal = null;
+      state.studioScenesProposal = null;
       el('director-chat-workshop-status').textContent = '';
     }
     var messages = currentMessages();
@@ -2330,6 +2562,17 @@
     el('director-studio-retry').onclick = startStudioWorkshop;
     el('director-studio-prepare-scene').onclick = prepareStudioSceneDraft;
     el('director-studio-prepare-project').onclick = prepareStudioProject;
+    el('director-studio-prepare-scenes').onclick = prepareStudioScenes;
+    el('studio-scenes-close').onclick = function () { el('studio-scenes-review').close(); };
+    el('studio-scenes-discard').onclick = function () { el('studio-scenes-review').close(); };
+    el('studio-scenes-apply').onclick = applyStudioScenes;
+    el('studio-scenes-add').onclick = function () {
+      if (el('studio-scenes-rows').children.length >= 8) {
+        el('studio-scenes-error').textContent = 'Review up to eight Scenes at a time.';
+        return;
+      }
+      addStudioScenesRow({ title: '', summary: '' });
+    };
     el('studio-project-close').onclick = function () { el('studio-project-review').close(); };
     el('studio-project-discard').onclick = function () { el('studio-project-review').close(); };
     el('studio-project-create').onclick = applyStudioProject;

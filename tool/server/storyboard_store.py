@@ -1001,6 +1001,61 @@ def add_tentative_scene_at(story_id, expected_updated_at, scene_draft, placement
     return story, scene
 
 
+
+@_serialized_mutation
+def add_tentative_scenes_at(story_id, expected_scene_order, drafts, placement, relative_scene_id=""):
+    """Insert a reviewed block of 1–8 tentative Scenes with one Story commit.
+
+    Check only the structural field being modified, so unrelated Concept or
+    Scene edits do not invalidate a reviewed placement.
+    """
+    story = load_story(story_id)
+    order = list(story.get("sceneOrder") or [])
+    if not isinstance(expected_scene_order, list) or order != expected_scene_order:
+        raise RuntimeError("Scene order changed during review. Prepare a fresh placement.")
+    if not isinstance(drafts, list) or not 1 <= len(drafts) <= 8:
+        raise ValueError("Create between one and eight tentative Scenes per review.")
+    if placement not in {"start", "end", "before", "after"}:
+        raise ValueError("Select start, end, before or after.")
+    relative_scene_id = str(relative_scene_id or "").strip()
+    if placement in {"before", "after"}:
+        if relative_scene_id not in order:
+            raise ValueError("Selected neighboring Scene no longer exists.")
+        index = order.index(relative_scene_id) + (1 if placement == "after" else 0)
+    else:
+        index = 0 if placement == "start" else len(order)
+
+    new_scenes = []
+    for item in drafts:
+        if not isinstance(item, dict) or set(item) != {"title", "summary"}:
+            raise ValueError("Each tentative Scene needs only a title and summary.")
+        title, summary = item["title"], item["summary"]
+        if not isinstance(title, str) or not isinstance(summary, str) or not summary.strip():
+            raise ValueError("Each tentative Scene needs a description.")
+        if len(title) > 240 or len(summary) > 10000:
+            raise ValueError("Tentative Scene text is too long.")
+        new_scenes.append(_normalize_scene(_new_id("scene"), item))
+
+    updated = copy.deepcopy(story)
+    for offset, scene in enumerate(new_scenes):
+        updated["scenes"][scene["id"]] = scene
+        updated["sceneOrder"].insert(index + offset, scene["id"])
+    updated["updatedAt"] = _utc_now()
+    created_directories = []
+    try:
+        # Prepare required empty Take directories first, then publish Story JSON.
+        for scene in new_scenes:
+            folder = _story_dir(story_id) / "takes" / scene["id"]
+            folder.mkdir(parents=True, exist_ok=False)
+            created_directories.append(folder)
+        _write_json_atomic(_story_path(story_id), updated)
+    except Exception:
+        for folder in reversed(created_directories):
+            folder.rmdir()
+        raise
+    return updated, new_scenes
+
+
 @_serialized_mutation
 def apply_concept_expansion(story_id, expanded_concept):
     story = load_story(story_id)

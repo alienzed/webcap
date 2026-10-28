@@ -2148,6 +2148,7 @@
                         <button type="button" data-studio-starter="scene">Sketch a Scene</button>
                         <button type="button" data-studio-starter="feasibility">Make it renderable</button>
                         <button id="director-studio-prepare-project" type="button" class="studio-primary-action" title="Review a new Studio project from this conversation">Prepare Project</button>
+                        <button id="director-studio-prepare-scenes" type="button" class="studio-primary-action" title="Review a sequence of tentative Scenes and where to insert them">Prepare Scenes</button>
                         <button id="director-studio-prepare-scene" type="button" class="studio-primary-action" title="Extract one tentative Scene from this conversation, then review before creating it">Prepare a Scene</button>
                     </div>
                     <span id="director-studio-action-status" class="director-studio-action-status hidden" aria-live="polite"></span>
@@ -2191,6 +2192,28 @@
                 <footer class="studio-scene-draft-footer">
                     <button id="studio-project-discard" type="button" class="review-captions-btn">Back to conversation</button>
                     <button id="studio-project-create" type="button">Create Project</button>
+                </footer>
+            </dialog>
+            <dialog id="studio-scenes-review" class="studio-scene-draft-review" aria-labelledby="studio-scenes-review-title">
+                <header class="studio-scene-draft-header">
+                    <div>
+                        <h2 id="studio-scenes-review-title">Review Scene Sequence</h2>
+                        <p>Up to eight tentative Scenes, in their proposed order. Edit or remove any Scene before applying the whole block.</p>
+                    </div>
+                    <button id="studio-scenes-close" type="button" class="review-captions-btn">Close</button>
+                </header>
+                <div class="studio-scene-draft-content">
+                    <p id="studio-scenes-target" class="studio-scene-draft-target"></p>
+                    <p id="studio-scenes-rationale" class="studio-scene-draft-rationale"></p>
+                    <div id="studio-scenes-rows"></div>
+                    <button id="studio-scenes-add" type="button" class="review-captions-btn">Add a Scene</button>
+                    <label for="studio-scenes-placement">Insert the sequence</label>
+                    <select id="studio-scenes-placement"></select>
+                    <p id="studio-scenes-error" class="studio-scene-draft-error" aria-live="polite"></p>
+                </div>
+                <footer class="studio-scene-draft-footer">
+                    <button id="studio-scenes-discard" type="button" class="review-captions-btn">Back to conversation</button>
+                    <button id="studio-scenes-apply" type="button">Create reviewed Scenes</button>
                 </footer>
             </dialog>
             <dialog id="studio-scene-draft-review" class="studio-scene-draft-review" aria-labelledby="studio-scene-draft-review-title">

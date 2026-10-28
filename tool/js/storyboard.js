@@ -7034,6 +7034,33 @@
     });
   };
 
+  window.flushStudioDirectorStoryEdits = function (storyId) {
+    // Authoritative Story saves remain owned by Studio. Never switch Stories
+    // just because the Director is editing an explicitly attached reference.
+    if (!storyState.story || storyState.story.id !== storyId) return Promise.resolve();
+    return flushPendingSaves();
+  };
+
+  window.refreshStudioDirectorStoryIfOpen = function (storyId) {
+    // Refresh only the Story already open in the editor. A conversation may
+    // have targeted a different Story explicitly; navigation remains untouched.
+    if (!storyState.story || storyState.story.id !== storyId) return refreshLibrary();
+    return flushPendingSaves().then(function () {
+      if (!storyState.story || storyState.story.id !== storyId) return null;
+      return request(null, 'story=' + encodeURIComponent(storyId));
+    }).then(function (payload) {
+      if (payload && payload.story) {
+        if (payload.story.id !== storyId) throw new Error('Studio refresh returned the wrong Story.');
+        if (storyState.story && storyState.story.id === storyId) {
+          storyState.story = payload.story;
+          renderStory();
+          setSaveState('Saved');
+        }
+      }
+      return refreshLibrary();
+    });
+  };
+
   window.getStoryboardAssistantContext = function (kind) {
     var original = storyState.story;
     if (!original) throw new Error('Open a Story before attaching context.');

@@ -2913,12 +2913,19 @@
       qaFocusReviewTagActionsForFinding(mediaKey, fileName, finding).length > 0;
   }
 
+  function qaFocusReviewIsDismissed(finding, item, signature) {
+    if (qaWorkbenchState.dispositions[finding.id]) return true;
+    var receipt = qaWorkbenchState.dispositions[finding.id + '|' + item.fileName];
+    return !!(receipt && receipt.status === 'dismissed' && receipt.signature === signature);
+  }
+
   function qaFocusReviewCandidateFindings(item) {
     if (!item) return [];
     var current = qaCurrentItemSignatureMap([item]);
+    var signature = current[item.fileName];
     var found = qaWorkbenchState.aiFindings.concat(qaWorkbenchState.conceptFindings).filter(function (finding) {
       return (finding.category === 'captioning' || finding.category === 'consistency') &&
-        !qaWorkbenchState.dispositions[finding.id] &&
+        !qaFocusReviewIsDismissed(finding, item, signature) &&
         (finding.files || []).indexOf(item.fileName) !== -1 &&
         (finding.source === 'concept' ? finding.inputSignatures[item.fileName] === qaConceptInputSignatures([item])[item.fileName] : qaWorkbenchState.aiItemSignatures[item.fileName] === current[item.fileName]);
     });
@@ -2926,7 +2933,7 @@
     // deterministic item-level tag action. Other QA observations stay in QA.
     qaWorkbenchState.deterministicFindings.forEach(function (finding) {
       if (finding.sourceLabel === 'WebCap + Vision' &&
-          !qaWorkbenchState.dispositions[finding.id] &&
+          !qaFocusReviewIsDismissed(finding, item, signature) &&
           (finding.files || []).indexOf(item.fileName) !== -1) found.push(finding);
     });
     return found.filter(function (finding) {
@@ -3214,9 +3221,23 @@
 
   function qaFocusReviewMarkHandled(mediaKey, disposition) {
     if (!qaFocusReviewCurrent()) throw new Error('QA Focus Review round is no longer current.');
-    qaFocusReviewState.handled[String(mediaKey || '')] = String(disposition || 'applied');
-    delete qaFocusReviewState.queued[String(mediaKey || '')];
-    delete qaFocusReviewState.reviewFindings[String(mediaKey || '')];
+    var key = String(mediaKey || '');
+    var status = String(disposition || 'applied');
+    if (status === 'dismissed') {
+      var item = (state.items || []).find(function (row) { return row && row.key === key; });
+      if (!item) throw new Error('Cannot dismiss a QA item missing from the current Set.');
+      var signature = qaCurrentItemSignatureMap([item])[item.fileName];
+      (qaFocusReviewState.reviewFindings[key] || []).forEach(function (finding) {
+        qaWorkbenchState.dispositions[finding.id + '|' + item.fileName] = {
+          status: 'dismissed', signature: signature
+        };
+      });
+      // A dismissal is a human decision, not merely a transient queue cursor.
+      qaSaveReview();
+    }
+    qaFocusReviewState.handled[key] = status;
+    delete qaFocusReviewState.queued[key];
+    delete qaFocusReviewState.reviewFindings[key];
     qaSyncFocusReviewButton();
     qaSyncFocusReview(); // Refill only the immediate lookahead after a reviewed item.
   }
@@ -3282,7 +3303,8 @@
       var pending = session.reviewFindings[item.key] || [];
       // Preserve reviewed-but-unresolved actions across a saved annotation change.
       pending.forEach(function (finding) {
-        if (qaFocusReviewHasAction(item.key, item.fileName, item.caption || '', finding) &&
+        if (!qaFocusReviewIsDismissed(finding, item, qaCurrentItemSignatureMap([item])[item.fileName]) &&
+            qaFocusReviewHasAction(item.key, item.fileName, item.caption || '', finding) &&
             !candidates.some(function (row) { return row.id === finding.id; })) candidates.push(finding);
       });
       candidatesByKey[item.key] = candidates;

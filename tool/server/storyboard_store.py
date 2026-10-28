@@ -696,6 +696,70 @@ def create_story(payload):
     return story
 
 
+
+@_serialized_mutation
+def create_studio_project(proposal):
+    """Publish one reviewed Story and optional tentative Scene as a single visible unit.
+
+    Stage the complete Story directory on the owning output filesystem. A failed
+    validation or pre-publication write never exposes a partial Story.
+    """
+    if not isinstance(proposal, dict) or set(proposal) - {"title", "concept", "style", "invariants", "firstScene"}:
+        raise ValueError("Studio project proposal has unsupported fields.")
+    title = proposal.get("title", "")
+    concept = proposal.get("concept", "")
+    style = proposal.get("style", "")
+    invariants = proposal.get("invariants", [])
+    if any(not isinstance(value, str) for value in (title, concept, style)):
+        raise ValueError("Studio project title, concept and style must be text.")
+    if len(title) > 240 or len(concept) > 20000 or len(style) > 10000:
+        raise ValueError("Studio project text is too long.")
+    if not isinstance(invariants, list) or len(invariants) > 30:
+        raise ValueError("Studio project supports at most 30 invariants.")
+
+    first = proposal.get("firstScene")
+    if first is not None:
+        if not isinstance(first, dict) or set(first) != {"title", "summary"}:
+            raise ValueError("Initial Scene must contain only title and summary.")
+        if not isinstance(first["title"], str) or not isinstance(first["summary"], str):
+            raise ValueError("Initial Scene title and description must be text.")
+        if not first["summary"].strip() or len(first["summary"]) > 10000 or len(first["title"]) > 240:
+            raise ValueError("Initial Scene needs a short description.")
+    if not concept.strip() and first is None:
+        raise ValueError("Describe the idea or an initial Scene before creating a project.")
+
+    story = _normalize_story({
+        "title": title, "concept": concept, "style": style,
+        "invariants": invariants, "targetSceneCount": None,
+    })
+    if first is not None:
+        scene_id = _new_id("scene")
+        scene = _normalize_scene(scene_id, first)
+        story["scenes"][scene_id] = scene
+        story["sceneOrder"].append(scene_id)
+
+    root = storyboard_root()
+    root.mkdir(parents=True, exist_ok=True)
+    destination = root / story["id"]
+    if destination.exists():
+        raise FileExistsError("Studio project ID already exists.")
+    stage = Path(tempfile.mkdtemp(prefix=".studio-create-", dir=root))
+    published = False
+    try:
+        (stage / "takes").mkdir()
+        for scene_id in story["sceneOrder"]:
+            (stage / "takes" / scene_id).mkdir()
+        _write_json_atomic(stage / STORY_FILE, story)
+        if destination.exists():
+            raise FileExistsError("Studio project ID already exists.")
+        os.rename(stage, destination)
+        published = True
+    finally:
+        if not published and stage.exists():
+            shutil.rmtree(stage)
+    return story
+
+
 @_serialized_mutation
 def duplicate_story(story_id):
     source = load_story(story_id)

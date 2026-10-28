@@ -2147,11 +2147,13 @@
                         <button type="button" data-studio-starter="hook">Find the hook</button>
                         <button type="button" data-studio-starter="scene">Sketch a Scene</button>
                         <button type="button" data-studio-starter="feasibility">Make it renderable</button>
+                        <button id="director-studio-propose-brief" type="button" title="Propose reviewed Concept, Style, and Invariant changes for an explicitly attached Project">Update Brief</button>
                         <button id="director-studio-prepare-project" type="button" class="studio-primary-action" title="Review a new Studio project from this conversation">Prepare Project</button>
                         <button id="director-studio-prepare-scenes" type="button" class="studio-primary-action" title="Review a sequence of tentative Scenes and where to insert them">Prepare Scenes</button>
                         <button id="director-studio-prepare-scene" type="button" class="studio-primary-action" title="Extract one tentative Scene from this conversation, then review before creating it">Prepare a Scene</button>
                     </div>
                     <span id="director-studio-action-status" class="director-studio-action-status hidden" aria-live="polite"></span>
+                    <button id="director-studio-undo-brief" type="button" class="review-captions-btn hidden">Undo last Brief change</button>
                     <textarea id="director-chat-input" rows="4" placeholder="Ask the model anything…"></textarea>
                     <div class="director-chat-composer-footer">
                         <span class="director-chat-composer-hint">Enter to send · Shift+Enter for newline</span>
@@ -2161,6 +2163,34 @@
                     </div>
                 </div>
             </aside>
+            <dialog id="studio-brief-review" class="studio-scene-draft-review" aria-labelledby="studio-brief-review-title">
+                <header class="studio-scene-draft-header">
+                    <div>
+                        <h2 id="studio-brief-review-title">Review Creative Brief</h2>
+                        <p>Select and edit only the fields you want to change. Other Story and Scene content stays intact.</p>
+                    </div>
+                    <button id="studio-brief-close" type="button" class="review-captions-btn">Close</button>
+                </header>
+                <div class="studio-scene-draft-content">
+                    <p id="studio-brief-target" class="studio-scene-draft-target"></p>
+                    <p id="studio-brief-rationale" class="studio-scene-draft-rationale"></p>
+                    <label for="studio-brief-concept"><input id="studio-brief-concept-selected" type="checkbox" checked> Concept / Core Appeal</label>
+                    <p id="studio-brief-concept-before" class="studio-scene-draft-rationale"></p>
+                    <textarea id="studio-brief-concept" rows="5"></textarea>
+                    <label for="studio-brief-style"><input id="studio-brief-style-selected" type="checkbox" checked> Style</label>
+                    <p id="studio-brief-style-before" class="studio-scene-draft-rationale"></p>
+                    <textarea id="studio-brief-style" rows="3"></textarea>
+                    <label><input id="studio-brief-invariants-selected" type="checkbox"> Invariants</label>
+                    <p class="studio-scene-draft-rationale">Names and types referenced by Scenes must remain stable. Edit descriptions freely; coordinated renames require separate review.</p>
+                    <div id="studio-brief-invariants"></div>
+                    <button id="studio-brief-add-invariant" type="button" class="review-captions-btn">Add invariant</button>
+                    <p id="studio-brief-error" class="studio-scene-draft-error" aria-live="polite"></p>
+                </div>
+                <footer class="studio-scene-draft-footer">
+                    <button id="studio-brief-discard" type="button" class="review-captions-btn">Back to conversation</button>
+                    <button id="studio-brief-apply" type="button">Apply Selected</button>
+                </footer>
+            </dialog>
             <dialog id="studio-project-review" class="studio-scene-draft-review" aria-labelledby="studio-project-review-title">
                 <header class="studio-scene-draft-header">
                     <div>

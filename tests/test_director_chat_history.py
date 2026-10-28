@@ -159,3 +159,28 @@ def test_studio_receipts_reject_full_scene_or_extra_payload(sessions):
                 "prompt": "A giant prompt that does not belong in history",
             }],
         })
+
+
+def test_studio_story_access_is_reference_only_and_survives_reopen(sessions):
+    chat = history.create_chat("storyboard")
+    assert chat["storyAccess"] is None
+    saved = history.save_chat(chat["id"], {
+        "expectedRevision": 0, "title": "Story development",
+        "messages": [{"role": "user", "content": "Let's talk about Scene 1"}],
+        "draft": "", "attachments": {},
+        "storyAccess": {"storyId": "story-123", "label": "A Story"},
+    })
+    assert saved["storyAccess"] == {"storyId": "story-123", "label": "A Story"}
+    assert "concept" not in json.dumps(saved["storyAccess"])
+    assert history.open_chat(chat["id"])["storyAccess"]["storyId"] == "story-123"
+    edited = history.save_chat(chat["id"], {
+        "expectedRevision": 1, "title": "Story development",
+        "messages": saved["messages"], "draft": "", "attachments": {},
+    })
+    assert edited["storyAccess"] == saved["storyAccess"]
+    revoked = history.save_chat(chat["id"], {
+        "expectedRevision": 2, "title": "Story development",
+        "messages": saved["messages"], "draft": "", "attachments": {},
+        "storyAccess": None,
+    })
+    assert revoked["storyAccess"] is None

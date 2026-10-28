@@ -367,3 +367,44 @@ def test_studio_brief_extraction_schema(monkeypatch):
     schema = result["contract"]["response_schema"]
     assert schema["additionalProperties"] is False
     assert schema["properties"]["invariants"]["maxItems"] == 30
+
+
+def test_studio_read_access_is_explicit_and_scoped(isolated_storyboard):
+    client = isolated_storyboard
+    story = storyboard_store.create_story({
+        "title": "Example", "concept": "A visual gag", "style": "Handheld",
+        "invariants": [{"kind": "character", "title": "Hero", "text": "Red coat"}],
+    })
+    story, scene = storyboard_store.add_scene(story["id"], {
+        "title": "One", "summary": "A character waits",
+        "prompt": "Generation prompt", "notes": "Keep the gag simple",
+    })
+    c = client.post("/fs/director/chats", json={"mode": "storyboard"})
+    chat = c.json["chat"]
+    base = f"/fs/studio/director/story-read?chatId={chat['id']}"
+    denied = client.get(base + "&field=brief")
+    assert denied.status_code == 400
+    grant = client.put("/fs/director/chats/" + chat["id"], json={
+        "expectedRevision": 0, "title": "Access test", "draft": "",
+        "messages": [], "attachments": {},
+        "storyAccess": {"storyId": story["id"], "label": "Example"},
+    })
+    assert grant.status_code == 200, grant.json
+    brief = client.get(base + "&field=brief")
+    assert brief.status_code == 200, brief.json
+    assert brief.json["data"]["concept"] == "A visual gag"
+    assert brief.json["data"]["style"] == "Handheld"
+    assert "scenes" not in brief.json["data"]
+    index = client.get(base + "&field=index")
+    assert index.status_code == 200
+    assert index.json["data"][0]["id"] == scene["id"]
+    details = client.get(base + "&field=scene&sceneId=" + scene["id"])
+    assert details.status_code == 200
+    assert details.json["data"]["summary"] == "A character waits"
+    assert "prompt" not in details.json["data"]
+    prompt = client.get(base + "&field=prompt&sceneId=" + scene["id"])
+    assert prompt.status_code == 200
+    assert prompt.json["data"]["prompt"] == "Generation prompt"
+    assert client.get(base + "&field=scene&sceneId=not-a-scene").status_code == 400
+    assert client.get(base + "&field=everything").status_code == 400
+    assert storyboard_store.load_story(story["id"])["concept"] == "A visual gag"

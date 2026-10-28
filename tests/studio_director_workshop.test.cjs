@@ -14,9 +14,11 @@ function slice(start, end) {
   return source.slice(a, b);
 }
 
-test('Studio has visible creative starters and spacious, independent UX', () => {
+test('Studio keeps Scene preparation behind one small disclosure', () => {
   assert.match(html, /id="director-studio-starters"/);
-  assert.match(html, /data-studio-starter="hook"/);
+  assert.match(html, /<summary>Scenes<\/summary>/);
+  assert.match(html, /id="director-studio-prepare-scenes"/);
+  assert.doesNotMatch(html, /data-studio-starter=/);
   assert.match(html, /id="director-studio-retry"/);
   assert.match(html, /Production Playbook/);
   const css = fs.readFileSync(path.join(__dirname, '..', 'tool/css/workspace_shell.css'), 'utf8');

@@ -15,11 +15,12 @@ _H3_RUNTIME = Path(__file__).resolve().parents[2] / "docs" / "mmh3-prompt-runtim
 # they are not direct LLM tools or promises of automatic mutation.
 ACTIONS = (
     {"name": "conversation.discuss", "status": "available", "description": "Explore ideas in ordinary dialogue."},
-    {"name": "context.attach", "status": "available", "description": "Explicitly attach and inspect a Story/Scene snapshot."},
+    {"name": "context.attach", "status": "available", "description": "Explicitly grant Story field access or inspect older snapshots."},
+    {"name": "context.read", "status": "available", "description": "WebCap may privately retrieve a scoped current Story field after author grant; never a write."},
     {"name": "project.create", "status": "available", "description": "Prepare an editable new Project with an optional first Scene; reviewed Create."},
     {"name": "scene.draft", "status": "available", "description": "Prepare one tentative Scene for reviewed insertion anywhere."},
     {"name": "scene.sequence.draft", "status": "available", "description": "Prepare one to eight tentative Scenes for atomic reviewed insertion anywhere."},
-    {"name": "project.brief.propose", "status": "planned", "description": "Propose Concept, Style and Invariant changes."},
+    {"name": "project.brief.propose", "status": "available", "description": "Propose field-scoped Concept, Style and Invariant changes for reviewed Apply."},
     {"name": "scene.revise", "status": "planned", "description": "Propose a reviewed change to a selected Scene."},
     {"name": "scene.move", "status": "planned", "description": "Propose a reviewed reorder."},
     {"name": "scene.prompt.propose", "status": "planned", "description": "Draft a reviewed H3 prompt in Writer's Workshop."},
@@ -59,7 +60,8 @@ _H3_STUDIO_CORE = (
     "Prepare Scenes (one to eight, start/between/end); all require visible approval. "
     "Other Storyboard editor/development controls remain separate. "
     "Conversation alone does not create, apply, generate, or view a Take. "
-    "Only explicit attached snapshots describe Story/Scene facts; Studio navigation does not change chat context.\n"
+    "An explicit Story access grant permits scoped, on-demand reads, but supplies no Story facts until read. "
+    "Old snapshots remain historical references; Studio navigation never changes conversation context.\n"
 )
 
 

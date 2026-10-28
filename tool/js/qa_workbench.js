@@ -3772,6 +3772,11 @@
   window.qaCurrentCurationSignature = function () {
     return qaBuildDeepScanSignature(qaGetTrainingItems());
   };
+  window.qaReanalyzeCuration = function () {
+    var items = qaGetTrainingItems();
+    startQaCuration(qaBuildDeepScanItems(items), qaWorkbenchState.trainingFocus,
+      qaBuildDeepScanSignature(items), {reanalyze: true});
+  };
   window.qaShowCuration = function () { qaWorkbenchState.view = 'curate'; renderQaWorkbench(); };
   window.qaShowOverviewFromCuration = function () { qaWorkbenchState.view = 'overview'; renderQaWorkbench(); };
   window.renderQaWorkbench = renderQaWorkbench;

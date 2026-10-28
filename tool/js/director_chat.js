@@ -1163,8 +1163,9 @@
     if (state.pending || state.attachmentPending) return;
     state.studioStoryAccess = null;
     state.studioAccessIndex = null;
-    // A read grant is independent from historical snapshot attachments.
-    // "Clear snapshots" remains a separate explicit action.
+    // Disconnect revokes all active context, including legacy snapshots that
+    // could otherwise keep supplying Story data after the grant is removed.
+    state.storyboardAttachments = {};
     state.studioSceneProposal = null;
     state.studioScenesProposal = null;
     state.studioBriefProposal = null;

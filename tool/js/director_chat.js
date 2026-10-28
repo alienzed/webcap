@@ -1105,7 +1105,7 @@
 
   function recordStudioOperation(kind, label, storyId, sceneIds) {
     state.studioOperations.push({
-      kind: kind, label: label, storyId: String(storyId || ''),
+      kind: kind, label: String(label || '').slice(0, 200), storyId: String(storyId || ''),
       sceneIds: (sceneIds || []).slice(0, 8), at: new Date().toISOString()
     });
     state.studioOperations = state.studioOperations.slice(-25);

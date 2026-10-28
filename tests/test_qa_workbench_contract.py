@@ -91,7 +91,11 @@ def test_qa_deep_scan_is_native_structured_and_merges_into_current_scope():
     assert "statisticalCandidates: statisticalCandidates" in computed
     assert ".concat(qaBuildAssociationFindings(items))" not in computed
     assert ".concat(qaBuildUnderrepresentedFindings(items, groups))" not in computed
-    assert ".concat(qaBuildOverrepresentedFindings(items, groups))" not in computed
+    # Representation patterns are only statistical candidates; they do not
+    # become direct correction findings without semantic verification.
+    assert ".concat(qaBuildOverrepresentedFindings(items, groups))" in computed
+    direct_findings = computed.split("var findings = []", 1)[1].split("return {", 1)[0]
+    assert "qaBuildOverrepresentedFindings" not in direct_findings
     assert "representationObservations" in computed
     assert "deepScanSessionToken" in qa
     assert "qaCurrentItemSignatureMap" in qa

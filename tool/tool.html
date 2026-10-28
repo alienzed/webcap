@@ -2097,6 +2097,8 @@
                     <div class="director-chat-history-heading">Saved conversations</div>
                     <div id="director-chat-history-list" class="director-chat-history-list"></div>
                 </section>
+                <div class="director-chat-layout">
+                    <div class="director-chat-conversation">
                 <div id="director-chat-mode-row" class="director-chat-mode-row hidden" aria-label="Assistant mode">
                     <span>Mode</span>
                     <div id="director-chat-mode-switch" class="director-chat-mode-switch" role="group" aria-label="Assistant mode"></div>
@@ -2143,6 +2145,17 @@
                     <p id="director-chat-empty-description">Tell Director what interests you. You can start with a single moment, a feeling, or nothing at all.</p>
                     <button id="director-studio-retry" type="button" class="review-captions-btn hidden">Start Writer's Workshop</button>
                 </div>
+                <div class="director-chat-composer">
+                    <textarea id="director-chat-input" rows="4" placeholder="Ask the model anything…"></textarea>
+                    <div class="director-chat-composer-footer">
+                        <span class="director-chat-composer-hint">Enter to send · Shift+Enter for newline</span>
+                        <div class="director-chat-composer-actions">
+                            <button id="director-chat-send" type="button" class="review-captions-btn">Send</button>
+                        </div>
+                    </div>
+                </div>
+                    </div>
+                    <div class="director-chat-sidebar">
                 <section id="director-studio-flow" class="director-studio-flow hidden" aria-label="Capture Concept / overview, Visual / atmosphere and Invariants">
                     <div class="director-studio-flow-main">
                         <div class="director-studio-flow-copy">
@@ -2197,13 +2210,6 @@
                     </div>
                     <span id="director-studio-action-status" class="director-studio-action-status hidden" aria-live="polite"></span>
                 </section>
-                <div class="director-chat-composer">
-                    <textarea id="director-chat-input" rows="4" placeholder="Ask the model anything…"></textarea>
-                    <div class="director-chat-composer-footer">
-                        <span class="director-chat-composer-hint">Enter to send · Shift+Enter for newline</span>
-                        <div class="director-chat-composer-actions">
-                            <button id="director-chat-send" type="button" class="review-captions-btn">Send</button>
-                        </div>
                     </div>
                 </div>
             </aside>

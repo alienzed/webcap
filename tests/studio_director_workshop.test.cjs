@@ -181,3 +181,18 @@ test('Studio keeps model dialogue and reviewed operation receipts in separate da
   assert.doesNotMatch(section, /modeMessages/);
   assert.match(section, /createElement\('div'\)/);
 });
+
+
+test('Studio Story access is a reference grant, not inline Story text', () => {
+  for (const id of [
+    'director-studio-access', 'director-studio-access-summary',
+    'director-studio-access-field', 'director-studio-access-scene',
+    'director-studio-access-read', 'director-studio-access-clear'
+  ]) assert.match(html, new RegExp('id="' + id + '"'));
+  assert.match(source, /storyAccess: storyAccess/);
+  assert.match(source, /state\.studioStoryAccess = chat\.storyAccess \|\| null/);
+  assert.match(source, /function grantStudioStoryAccess\(/);
+  assert.match(source, /function readStudioStoryScope\(/);
+  assert.match(source, /!state\.studioStoryAccess \|\| \(key\.indexOf\('story:'\) !== 0/);
+  assert.match(source, /toolsRow\.classList\.toggle\('hidden', studio \|\| !presets\.length\)/);
+});

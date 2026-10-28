@@ -126,6 +126,19 @@ def _validate_operations(operations):
     return result
 
 
+def _validate_story_access(access):
+    """One explicit conversation-owned read grant, never copied Story content."""
+    if access is None:
+        return None
+    if not isinstance(access, dict) or set(access) != {"storyId", "label"}:
+        raise ValueError("Studio Story access must identify one Story.")
+    story_id, label = access["storyId"], access["label"]
+    if (not isinstance(story_id, str) or not story_id or len(story_id) > 160
+            or not isinstance(label, str) or not label.strip() or len(label) > 240):
+        raise ValueError("Studio Story access contains invalid identifiers.")
+    return {"storyId": story_id, "label": label.strip()}
+
+
 def _validate_workshop(workshop):
     if workshop is None:
         return None
@@ -160,7 +173,7 @@ def create_chat(mode):
         chat_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ") + "-" + uuid.uuid4().hex[:8]
         now = _now()
         chat = {"id": chat_id, "mode": mode, "title": "New chat", "createdAt": now,
-                "updatedAt": now, "revision": 0, "messages": [], "draft": "", "attachments": {}, "workshop": None, "operations": []}
+                "updatedAt": now, "revision": 0, "messages": [], "draft": "", "attachments": {}, "workshop": None, "operations": [], "storyAccess": None}
         _write(_path(chat_id), chat)
         _set_active(mode, chat_id)
         return chat
@@ -192,6 +205,7 @@ def save_chat(chat_id, payload):
                     attachments=_validate_attachments(payload.get("attachments", {})),
                     workshop=_validate_workshop(payload.get("workshop")),
                     operations=_validate_operations(payload.get("operations", chat.get("operations", []))),
+                    storyAccess=_validate_story_access(payload.get("storyAccess", chat.get("storyAccess"))),
                     revision=chat["revision"] + 1, updatedAt=_now())
         _write(path, chat)
         return chat

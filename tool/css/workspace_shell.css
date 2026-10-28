@@ -2401,6 +2401,23 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
 }
 .director-chat-drawer.studio-director .director-chat-composer-hint { font-size: 14px; }
 /* A single contextual capture surface, kept separate from the chat composer. */
+.director-studio-access {
+  flex: 0 0 auto;
+  padding: 9px 20px;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 13px;
+  max-height: 28vh;
+  overflow: auto;
+}
+.director-studio-access.hidden { display: none; }
+.director-studio-access summary { color: var(--text); cursor: pointer; font-weight: 700; }
+.director-studio-access p { margin: 8px 0; }
+.director-studio-access-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.director-studio-access-controls select { min-height: 34px; max-width: 100%; }
+.director-studio-access-controls button { min-height: 34px; }
+.director-studio-access-data { padding: 12px; border-radius: 8px; overflow: auto; max-height: 220px; background: var(--panel-soft); color: var(--text); font-size: 12px; }
+.director-studio-access-data.hidden { display: none; }
 .director-studio-operation-history {
   flex: 0 0 auto;
   margin: 0;

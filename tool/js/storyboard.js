@@ -7061,6 +7061,19 @@
     });
   };
 
+  window.getStoryboardAssistantAccessTarget = function () {
+    // A read grant needs an exact target, never a navigation-dependent live bind.
+    var current = storyState.story;
+    if (!current) throw new Error('Open a Story before granting Studio access.');
+    var storyId = current.id;
+    return flushPendingSaves().then(function () {
+      if (!storyState.story || storyState.story.id !== storyId) {
+        throw new Error('The Story changed while granting access. Try again.');
+      }
+      return { storyId: storyId, label: storyState.story.title || storyId };
+    });
+  };
+
   window.getStoryboardAssistantContext = function (kind) {
     var original = storyState.story;
     if (!original) throw new Error('Open a Story before attaching context.');

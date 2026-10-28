@@ -84,3 +84,37 @@ def guidance(target_model="minimax_h3"):
         "promptContract": prompt_contract,
         "actions": list(ACTIONS),
     }
+
+
+def read_story_scope(story, field, scene_id=""):
+    """Read one authoritative, bounded field group for an explicitly granted Story.
+
+    No prompt assembly here: the caller decides if the retrieved data should be
+    supplied privately to a specific model request. This never changes the Story.
+    """
+    if not isinstance(story, dict) or not story.get("id"):
+        raise ValueError("Studio Story data is unavailable.")
+    if field == "brief":
+        data = {key: story.get(key) for key in ("title", "concept", "style", "invariants")}
+    elif field == "index":
+        data = [
+            {"id": sid, "position": position, "title": story["scenes"][sid].get("title", ""),
+             "summary": story["scenes"][sid].get("summary", "")}
+            for position, sid in enumerate(story.get("sceneOrder", []), 1)
+        ]
+    elif field in {"scene", "prompt", "takes"}:
+        if not scene_id or scene_id not in story.get("sceneOrder", []) or scene_id not in story.get("scenes", {}):
+            raise ValueError("Select an existing Scene in the granted Story.")
+        scene = story["scenes"][scene_id]
+        if field == "scene":
+            data = {key: scene.get(key) for key in ("id", "title", "summary", "entryState", "exitState", "notes")}
+        elif field == "prompt":
+            data = {"id": scene_id, "prompt": scene.get("prompt", ""), "durationSeconds": scene.get("durationSeconds")}
+        else:
+            data = {"id": scene_id, "takeIds": list(scene.get("takeOrder") or [])}
+    else:
+        raise ValueError("Unsupported Studio Story read scope.")
+    import json
+    if len(json.dumps(data, ensure_ascii=False)) > 32000:
+        raise ValueError("Story field selection is too large. Select a narrower field or Scene.")
+    return data

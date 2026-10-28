@@ -2108,6 +2108,27 @@
                     <button id="director-chat-story-prepare" type="button" class="review-captions-btn hidden" title="Propose reviewed edits to this Story’s Directing Guidelines">Propose Story Changes</button>
                     <span id="director-chat-workshop-status" class="director-chat-workshop-status" aria-live="polite"></span>
                 </div>
+                <section id="director-studio-access" class="director-studio-access hidden" aria-label="Story read access">
+                    <details id="director-studio-access-details">
+                        <summary id="director-studio-access-summary">Story access</summary>
+                        <p>Director has permission to request specific Story fields. Nothing is sent to the model simply by granting access.</p>
+                        <div class="director-studio-access-controls">
+                            <label for="director-studio-access-field">Field group</label>
+                            <select id="director-studio-access-field">
+                                <option value="brief">Concept / overview, Visual / atmosphere, Invariants</option>
+                                <option value="index">Scene index</option>
+                                <option value="scene">Selected Scene intent</option>
+                                <option value="prompt">Selected Scene prompt</option>
+                                <option value="takes">Selected Scene Take IDs</option>
+                            </select>
+                            <select id="director-studio-access-scene" class="hidden" aria-label="Select a Scene"></select>
+                            <button id="director-studio-access-read" type="button" class="review-captions-btn">Inspect fields</button>
+                            <button id="director-studio-access-clear" type="button" class="review-captions-btn">Disconnect</button>
+                        </div>
+                        <p id="director-studio-access-status" aria-live="polite">No fields read in this session.</p>
+                        <pre id="director-studio-access-data" class="director-studio-access-data hidden"></pre>
+                    </details>
+                </section>
                 <section id="director-chat-attachments" class="director-chat-attachments hidden" aria-label="Attached Storyboard context">
                     <div class="director-chat-attachments-bar">
                         <button id="director-chat-attachments-toggle" type="button" class="review-captions-btn director-chat-attachments-toggle" aria-expanded="false" aria-controls="director-chat-attachments-body">View attached context</button>

@@ -8,6 +8,8 @@
     activeMode: 'chat',
     messages: [],
     storyboardAttachments: {},
+    studioStoryAccess: null,
+    studioAccessIndex: null,
     attachmentPending: false,
     workshop: null,
     workshopProposal: null,
@@ -339,7 +341,7 @@
     var presets = state.activeMode === 'storyboard'
       ? storyboardContextPresets()
       : (active && Array.isArray(active.presets) ? active.presets : []);
-    if (toolsRow) toolsRow.classList.toggle('hidden', !presets.length);
+    if (toolsRow) toolsRow.classList.toggle('hidden', studio || !presets.length);
     if (presetsHost) {
       var wasExpanded = !!presetsHost.querySelector('details[data-workshop-context][open]');
       var items = presets.map(function (preset, index) {
@@ -365,6 +367,7 @@
     var storyPrepare = el('director-chat-story-prepare');
     storyPrepare.classList.toggle('hidden', state.activeMode !== 'storyboard' || !guidelineStoryId());
     renderStoryboardAttachmentViewer();
+    renderStudioStoryAccess();
     renderStudioOperations();
     renderMessages();
     syncControls();
@@ -522,6 +525,7 @@
     var attachments = mode === 'storyboard' ? JSON.parse(JSON.stringify(state.storyboardAttachments)) : {};
     var workshop = mode === 'storyboard' ? JSON.parse(JSON.stringify(state.workshop)) : null;
     var operations = mode === 'storyboard' ? state.studioOperations.slice() : [];
+    var storyAccess = mode === 'storyboard' ? state.studioStoryAccess : null;
     var title = state.sessionByMode[mode] ? state.sessionByMode[mode].title : 'New chat';
     if (title === 'New chat') {
       var first = messages.find(function (message) { return message.role === 'user' && message.content.trim(); });
@@ -547,7 +551,7 @@
           body: JSON.stringify({
             expectedRevision: current.revision, title: title,
             messages: messages, draft: draft, attachments: attachments, workshop: workshop,
-            operations: operations
+            operations: operations, storyAccess: storyAccess
           })
         });
       }).then(function (payload) {
@@ -602,6 +606,8 @@
       state.modeElapsedByAssistantIndex.storyboard = {};
       state.modeMetricsByAssistantIndex.storyboard = {};
       state.storyboardAttachments = Object.assign({}, chat.attachments || {});
+      state.studioStoryAccess = chat.storyAccess || null;
+      state.studioAccessIndex = null;
       state.workshop = chat.workshop || null;
       state.studioOperations = Array.isArray(chat.operations) ? chat.operations.slice() : [];
       state.studioSceneProposal = null;
@@ -709,6 +715,8 @@
         else {
           state.modeMessages.storyboard = [];
           state.storyboardAttachments = {};
+          state.studioStoryAccess = null;
+          state.studioAccessIndex = null;
           state.workshop = null;
         }
         state.draftByMode[chat.mode] = '';
@@ -1112,14 +1120,115 @@
     renderStudioOperations();
   }
 
+  function renderStudioStoryAccess() {
+    var access = state.studioStoryAccess;
+    var visible = state.activeMode === 'storyboard' && !!access;
+    el('director-studio-access').classList.toggle('hidden', !visible);
+    if (visible) el('director-studio-access-summary').textContent = 'Story access · ' + access.label;
+  }
+
+  function grantStudioStoryAccess() {
+    if (state.pending || state.attachmentPending || state.activeMode !== 'storyboard') return;
+    state.attachmentPending = true;
+    syncControls();
+    return Promise.resolve().then(function () {
+      return window.getStoryboardAssistantAccessTarget();
+    }).then(function (target) {
+      if (!target || !target.storyId) throw new Error('Studio did not return a Story ID.');
+      state.studioStoryAccess = {storyId: target.storyId, label: target.label || target.storyId};
+      state.studioAccessIndex = null;
+      state.studioSceneProposal = null;
+      state.studioScenesProposal = null;
+      state.studioBriefProposal = null;
+      el('director-studio-access-data').classList.add('hidden');
+      el('director-studio-access-status').textContent = 'Granted access. No fields read yet.';
+      scheduleSessionSave();
+      syncModeUi();
+    }).catch(function (error) {
+      studioActionStatus('Story access failed: ' + String(error.message || error), true);
+      if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Studio Story access', error);
+      else throw error;
+    }).finally(function () {
+      state.attachmentPending = false;
+      syncControls();
+    });
+  }
+
+  function clearStudioStoryAccess() {
+    if (state.pending || state.attachmentPending) return;
+    state.studioStoryAccess = null;
+    state.studioAccessIndex = null;
+    // Disconnect removes active snapshot references too; saved dialogue remains intact.
+    state.storyboardAttachments = {};
+    state.studioSceneProposal = null;
+    state.studioScenesProposal = null;
+    state.studioBriefProposal = null;
+    el('director-studio-access-data').classList.add('hidden');
+    scheduleSessionSave();
+    syncModeUi();
+  }
+
+  function readStudioStoryScope(field, sceneId) {
+    var chat = state.sessionByMode.storyboard;
+    if (!chat || !state.studioStoryAccess || !chat.id) {
+      return Promise.reject(new Error('Grant access in a saved Studio conversation first.'));
+    }
+    var url = '/fs/studio/director/story-read?chatId=' + encodeURIComponent(chat.id) +
+      '&field=' + encodeURIComponent(field) + '&sceneId=' + encodeURIComponent(sceneId || '');
+    return flushSessionSave().then(function () { return requestJson(url); });
+  }
+
+  function loadStudioAccessIndex() {
+    if (!state.studioStoryAccess || state.studioAccessIndex) return Promise.resolve();
+    return readStudioStoryScope('index', '').then(function (result) {
+      if (!Array.isArray(result.data)) throw new Error('Story index returned invalid data.');
+      state.studioAccessIndex = result.data;
+      var scene = el('director-studio-access-scene');
+      scene.replaceChildren();
+      result.data.forEach(function (item, index) {
+        var option = document.createElement('option');
+        option.value = item.id;
+        option.textContent = 'Scene ' + (index + 1) + (item.title ? ' · ' + item.title : '');
+        scene.appendChild(option);
+      });
+      el('director-studio-access-status').textContent = 'Read Scene index (' + result.data.length + ' Scenes).';
+    }).catch(function (error) {
+      el('director-studio-access-status').textContent = 'Read failed: ' + String(error.message || error);
+      if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Studio Story read', error);
+      else throw error;
+    });
+  }
+
+  function inspectStudioStoryScope() {
+    var field = el('director-studio-access-field').value;
+    var needsScene = ['scene', 'prompt', 'takes'].indexOf(field) !== -1;
+    var scene = el('director-studio-access-scene');
+    var storyId = state.studioStoryAccess && state.studioStoryAccess.storyId;
+    if (!storyId) throw new Error('Choose a Story to inspect.');
+    return (needsScene ? loadStudioAccessIndex() : Promise.resolve()).then(function () {
+      if (needsScene && !scene.value) throw new Error('Select a Scene first.');
+      return readStudioStoryScope(field, needsScene ? scene.value : '');
+    }).then(function (result) {
+      if (result.storyId !== storyId) throw new Error('Story changed while reading fields.');
+      var output = el('director-studio-access-data');
+      output.textContent = JSON.stringify(result.data, null, 2);
+      output.classList.remove('hidden');
+      el('director-studio-access-status').textContent = 'Read ' + field + ' from the saved Story. Not sent to Director.';
+    }).catch(function (error) {
+      el('director-studio-access-status').textContent = 'Read failed: ' + String(error.message || error);
+      if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Studio Story read', error);
+      else throw error;
+    });
+  }
+
   function syncStudioFlow() {
     var studio = state.activeMode === 'storyboard';
     var discussed = (state.modeMessages.storyboard || []).some(function (message) {
       return message && message.role === 'user' && String(message.content || '').trim();
     });
     var flow = el('director-studio-flow');
-    flow.classList.toggle('hidden', !studio || !discussed);
-    if (!studio || !discussed) return;
+    flow.classList.toggle('hidden', !studio);
+    if (!studio) return;
     var attached = studioAttachedStoryId();
     var open = window.getStoryboardRouteTarget();
     var openId = String(open && open.storyId || '');
@@ -1135,7 +1244,7 @@
       description.textContent = 'Capture these fields and optional Invariants in a new Project, or attach an existing one.';
       capture.textContent = 'Review fields';
     }
-    capture.disabled = state.pending || state.attachmentPending || !state.sessionReady || !state.modelId;
+    capture.disabled = state.pending || state.attachmentPending || !state.sessionReady || !state.modelId || !discussed;
     var useOpen = el('director-studio-flow-target');
     var canAttachOpen = !!openId && openId !== attached;
     useOpen.classList.toggle('hidden', !canAttachOpen);
@@ -1226,6 +1335,7 @@
   }
 
   function studioAttachedStoryId() {
+    if (state.studioStoryAccess) return state.studioStoryAccess.storyId;
     var ids = Object.keys(state.storyboardAttachments).filter(function (key) {
       return key.indexOf('story:') === 0;
     }).map(function (key) { return key.slice(6); });
@@ -2196,6 +2306,8 @@
         state.modeMetricsByAssistantIndex.storyboard = {};
         if (!preserveContext) {
           state.storyboardAttachments = {};
+          state.studioStoryAccess = null;
+          state.studioAccessIndex = null;
           state.workshop = null;
         }
         state.workshopProposal = null;
@@ -2290,11 +2402,13 @@
       var storyRefs = Object.keys(state.storyboardAttachments || {}).filter(function (key) {
         return key.indexOf('story:') === 0;
       });
-      var workbench = storyRefs.length === 1
-        ? 'A Project snapshot is explicitly attached (' + storyRefs[0].slice(6) +
-          '). The author can review changes to its Concept, Style and Invariants.'
-        : 'No Project is attached to this conversation. Reviewing Concept, Style and Invariants ' +
-          'will propose creating a new Project. Editing an existing Project requires an explicit attachment.';
+      var workbench = state.studioStoryAccess
+        ? 'The author granted read access to Story ' + state.studioStoryAccess.storyId +
+          '. WebCap can retrieve bounded current fields separately. No Story content was read ' +
+          'for this request, so never claim to have inspected it.'
+        : storyRefs.length === 1
+          ? 'A historical Story snapshot is attached (' + storyRefs[0].slice(6) + ').'
+          : 'No Story access was granted; review of fields would propose creating a Project.';
       outbound[0] = { role: 'system', content: payload.system +
         '\n\nSTUDIO WORKBENCH STATE (controls, not saved Story facts):\n' + workbench +
         '\nWhen choices are clear, offer to review Concept / overview, Visual / atmosphere and Invariants. ' +
@@ -2320,7 +2434,9 @@
       }, null, 2));
     }
     var outbound = messages.slice();
-    var attached = Object.keys(state.storyboardAttachments).map(function (key) {
+    var attached = Object.keys(state.storyboardAttachments).filter(function (key) {
+      return !state.studioStoryAccess || (key.indexOf('story:') !== 0 && key.indexOf('scene:') !== 0);
+    }).map(function (key) {
       var item = state.storyboardAttachments[key];
       return item.label + ':\n' + item.content;
     });
@@ -2872,7 +2988,15 @@
     clear.onclick = newChat;
     el('director-studio-retry').onclick = startStudioWorkshop;
     el('director-studio-capture').onclick = captureStudioCreativeBrief;
-    el('director-studio-attach-current').onclick = function () { return attachStoryboardContext('story'); };
+    el('director-studio-attach-current').onclick = grantStudioStoryAccess;
+    el('director-studio-access-clear').onclick = clearStudioStoryAccess;
+    el('director-studio-access-read').onclick = inspectStudioStoryScope;
+    el('director-studio-access-field').onchange = function () {
+      el('director-studio-access-scene').classList.toggle('hidden', ['scene', 'prompt', 'takes'].indexOf(this.value) < 0);
+    };
+    el('director-studio-access-details').ontoggle = function () {
+      if (this.open && state.studioStoryAccess && !state.studioAccessIndex) loadStudioAccessIndex();
+    };
     el('director-studio-prepare-scene').onclick = prepareStudioSceneDraft;
     el('director-studio-prepare-project').onclick = prepareStudioProject;
     el('director-studio-prepare-scenes').onclick = prepareStudioScenes;

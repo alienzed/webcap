@@ -63,3 +63,36 @@ test('Studio drafting is a staged proposal, not a silent Story mutation', () => 
   assert.match(apply, /persistSession\('storyboard'\)/);
   assert.match(apply, /refreshStudioDirectorStoryIfOpen\(proposal\.storyId\)/);
 });
+
+
+test('Studio project proposals remain separate from conversation and must be reviewed', () => {
+  for (const name of [
+    'director-studio-prepare-project', 'studio-project-review', 'studio-project-concept',
+    'studio-project-style', 'studio-project-invariants', 'studio-project-include-scene',
+    'studio-project-create'
+  ]) assert.match(html, new RegExp('id="' + name + '"'));
+  const prep = part('  function prepareStudioProject() {', '  function applyStudioProject() {');
+  assert.match(prep, /operation: 'studio_project_draft'/);
+  assert.match(prep, /showStudioProjectReview\(\)/);
+  assert.doesNotMatch(prep, /\/fs\/studio\/director\/project-create/);
+  const apply = part('  function applyStudioProject() {', '  function parseStudioSceneDraft(raw) {');
+  assert.match(apply, /\/fs\/studio\/director\/project-create/);
+  assert.match(apply, /persistSession\('storyboard'\)/);
+  assert.match(apply, /refreshStudioDirectorStoryIfOpen/);
+  assert.doesNotMatch(apply, /state\.storyboardAttachments\s*=/);
+});
+
+test('Unbound Project parser accepts zero Scenes and refuses invented or invalid structure', () => {
+  const context = vm.createContext({ JSON, String, Error, Array });
+  const parse = vm.runInContext('(' + part('  function parseStudioProjectDraft(raw) {', '  function addStudioProjectInvariant(').trim() + ')', context);
+  const project = parse(JSON.stringify({
+    title: '', concept: 'A single simple idea', style: '', rationale: '',
+    invariants: []
+  }));
+  assert.equal(project.firstScene, undefined);
+  assert.equal(project.title, '');
+  assert.throws(() => parse('{}'), /Project proposal must contain/);
+  assert.throws(() => parse(JSON.stringify({
+    title: '', concept: '', style: '', rationale: '', invariants: []
+  })), /at least an idea/);
+});

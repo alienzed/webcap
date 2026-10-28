@@ -857,6 +857,10 @@ function syncApplicationShellContext() {
   var generateOpen = navigation.activity === 'generate';
   var testOpen = navigation.activity === 'test';
   var storyboardOpen = navigation.activity === 'storyboard';
+  // Closing Studio hides its Director workbench, never its persistent chat.
+  if (!storyboardOpen && typeof window.closeStudioDirectorOnExit === 'function') {
+    window.closeStudioDirectorOnExit();
+  }
   var storageOpen = navigation.activity === 'storage';
   if (setControl) setControl.classList.toggle('hidden', generateOpen || storyboardOpen || navigation.activity === 'media');
   if (typeof window.syncInferenceQueueSurface === 'function') {
@@ -880,7 +884,7 @@ function syncApplicationShellContext() {
     if (navigation.activity === 'media') workspaceTitle.textContent = 'Media Explorer';
     else if (storageOpen) workspaceTitle.textContent = 'Storage';
     else if (generateOpen) workspaceTitle.textContent = 'Generate';
-    else if (storyboardOpen) workspaceTitle.textContent = 'Storyboard';
+    else if (storyboardOpen) workspaceTitle.textContent = 'Studio';
     else if (testOpen) workspaceTitle.textContent = 'Evaluation';
     else if (surface === 'training') workspaceTitle.textContent = 'Training';
     else if (surface === 'reviewOutput') workspaceTitle.textContent = 'Quality Assurance';

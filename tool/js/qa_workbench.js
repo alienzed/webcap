@@ -730,7 +730,7 @@
     if (review) {
       var ready = qaDeepScanReadyCount();
       review.classList.toggle('hidden', !ready);
-      review.textContent = 'Review & Fix ' + ready + ' saved finding' + (ready === 1 ? '' : 's');
+      review.textContent = 'Review & Fix ' + ready + ' item' + (ready === 1 ? '' : 's');
     }
     var coverage = document.getElementById('qa-deep-scan-live-coverage');
     if (coverage) coverage.textContent = 'Deep QA: ' + qaCoverageLine(qaDeepCoverageCounts(qaDeepScanScopeItems()), false);
@@ -864,13 +864,16 @@
       return true;
     });
     if (!pending.length) {
-      qaWorkbenchState.deepScanSessionActive = false;
       qaWorkbenchState.deepScanStage = 'complete';
       qaWorkbenchState.deepScanJobId = '';
       qaWorkbenchState.deepScanSubmitting = false;
       qaDeepScanProgress(scan, 'Finished');
-      qaFinishDeepScanActivity('completed');
+      // Keep the run active until this final receipt is durable. A failed
+      // completion write must enter the ordinary visible error path.
       return qaSaveReview(true).then(function () {
+        if (!qaDeepScanCurrent(scan, token)) return;
+        qaWorkbenchState.deepScanSessionActive = false;
+        qaFinishDeepScanActivity('completed');
         qaSyncDeepScanLiveUi();
         renderQaWorkbench();
         reportConsoleInfo('Deep QA', qaWorkbenchState.deepScanStatus);
@@ -2255,7 +2258,7 @@
     var reviewButton = qaCreateButton('Review & Fix saved findings', '', 'qa-focus-review');
     reviewButton.id = 'qa-deep-review-ready';
     var ready = qaDeepScanReadyCount();
-    reviewButton.textContent = 'Review & Fix ' + ready + ' saved finding' + (ready === 1 ? '' : 's');
+    reviewButton.textContent = 'Review & Fix ' + ready + ' item' + (ready === 1 ? '' : 's');
     reviewButton.classList.toggle('hidden', !ready);
     heroActions.appendChild(reviewButton);
     var deepWrap = document.createElement('div');

@@ -1163,7 +1163,8 @@
     if (state.pending || state.attachmentPending) return;
     state.studioStoryAccess = null;
     state.studioAccessIndex = null;
-    // Disconnect removes active snapshot references too; saved dialogue remains intact.
+    // Disconnect revokes all active context, including legacy snapshots that
+    // could otherwise keep supplying Story data after the grant is removed.
     state.storyboardAttachments = {};
     state.studioSceneProposal = null;
     state.studioScenesProposal = null;
@@ -1200,7 +1201,7 @@
     }).catch(function (error) {
       el('director-studio-access-status').textContent = 'Read failed: ' + String(error.message || error);
       if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Studio Story read', error);
-      else throw error;
+      throw error;
     });
   }
 

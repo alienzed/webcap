@@ -276,3 +276,30 @@ test('Story changes invalidate scoped read previews and legacy snapshots remain 
   assert.match(controls, /scheduleSessionSave\(\)/);
   assert.doesNotMatch(controls, /modeMessages\.storyboard =/);
 });
+
+test('Studio owns a separate context workspace beside the conversation', () => {
+  const layout = html.indexOf('class="director-chat-layout"');
+  const conversation = html.indexOf('class="director-chat-conversation"', layout);
+  const sidebar = html.indexOf('class="director-chat-sidebar"', conversation);
+  const chat = html.indexOf('id="director-chat-messages"', conversation);
+  const composer = html.indexOf('class="director-chat-composer"', chat);
+  const flow = html.indexOf('id="director-studio-flow"', sidebar);
+  const access = html.indexOf('id="director-studio-access"', flow);
+  const changes = html.indexOf('id="director-studio-operation-history"', flow);
+  assert.ok(layout > 0 && conversation > layout);
+  assert.ok(chat > conversation && composer > chat && composer < sidebar);
+  assert.ok(sidebar > composer && flow > sidebar && access > flow && changes > flow);
+  const css = fs.readFileSync(path.join(__dirname, '..', 'tool/css/workspace_shell.css'), 'utf8');
+  assert.match(css, /\.director-chat-drawer\.studio-director \.director-chat-layout \{\s*display: grid/);
+  assert.match(css, /grid-template-columns: minmax\(0, 1fr\) minmax\(260px, 35%\)/);
+  assert.match(css, /@container \(max-width: 820px\)/);
+  assert.match(css, /\.director-chat-drawer\.studio-director \.director-chat-messages \{\s*min-height: 0/);
+});
+
+test('Disconnect revokes legacy Story context and failed index reads propagate', () => {
+  const disconnect = slice('  function clearStudioStoryAccess() {', '  function readStudioStoryScope(');
+  assert.match(disconnect, /state\.storyboardAttachments = \{\}/);
+  const readIndex = slice('  function loadStudioAccessIndex() {', '  function inspectStudioStoryScope() {');
+  assert.match(readIndex, /throw error;/);
+  assert.match(readIndex, /state\.studioAccessIndex = result\.data/);
+});

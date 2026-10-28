@@ -8,6 +8,8 @@
     activeMode: 'chat',
     messages: [],
     storyboardAttachments: {},
+    studioStoryAccess: null,
+    studioAccessIndex: null,
     attachmentPending: false,
     workshop: null,
     workshopProposal: null,
@@ -339,7 +341,7 @@
     var presets = state.activeMode === 'storyboard'
       ? storyboardContextPresets()
       : (active && Array.isArray(active.presets) ? active.presets : []);
-    if (toolsRow) toolsRow.classList.toggle('hidden', !presets.length);
+    if (toolsRow) toolsRow.classList.toggle('hidden', studio || !presets.length);
     if (presetsHost) {
       var wasExpanded = !!presetsHost.querySelector('details[data-workshop-context][open]');
       var items = presets.map(function (preset, index) {
@@ -365,6 +367,7 @@
     var storyPrepare = el('director-chat-story-prepare');
     storyPrepare.classList.toggle('hidden', state.activeMode !== 'storyboard' || !guidelineStoryId());
     renderStoryboardAttachmentViewer();
+    renderStudioStoryAccess();
     renderStudioOperations();
     renderMessages();
     syncControls();
@@ -522,6 +525,7 @@
     var attachments = mode === 'storyboard' ? JSON.parse(JSON.stringify(state.storyboardAttachments)) : {};
     var workshop = mode === 'storyboard' ? JSON.parse(JSON.stringify(state.workshop)) : null;
     var operations = mode === 'storyboard' ? state.studioOperations.slice() : [];
+    var storyAccess = mode === 'storyboard' ? state.studioStoryAccess : null;
     var title = state.sessionByMode[mode] ? state.sessionByMode[mode].title : 'New chat';
     if (title === 'New chat') {
       var first = messages.find(function (message) { return message.role === 'user' && message.content.trim(); });
@@ -547,7 +551,7 @@
           body: JSON.stringify({
             expectedRevision: current.revision, title: title,
             messages: messages, draft: draft, attachments: attachments, workshop: workshop,
-            operations: operations
+            operations: operations, storyAccess: storyAccess
           })
         });
       }).then(function (payload) {
@@ -602,6 +606,8 @@
       state.modeElapsedByAssistantIndex.storyboard = {};
       state.modeMetricsByAssistantIndex.storyboard = {};
       state.storyboardAttachments = Object.assign({}, chat.attachments || {});
+      state.studioStoryAccess = chat.storyAccess || null;
+      state.studioAccessIndex = null;
       state.workshop = chat.workshop || null;
       state.studioOperations = Array.isArray(chat.operations) ? chat.operations.slice() : [];
       state.studioSceneProposal = null;
@@ -709,6 +715,8 @@
         else {
           state.modeMessages.storyboard = [];
           state.storyboardAttachments = {};
+          state.studioStoryAccess = null;
+          state.studioAccessIndex = null;
           state.workshop = null;
         }
         state.draftByMode[chat.mode] = '';
@@ -1118,8 +1126,8 @@
       return message && message.role === 'user' && String(message.content || '').trim();
     });
     var flow = el('director-studio-flow');
-    flow.classList.toggle('hidden', !studio || !discussed);
-    if (!studio || !discussed) return;
+    flow.classList.toggle('hidden', !studio);
+    if (!studio) return;
     var attached = studioAttachedStoryId();
     var open = window.getStoryboardRouteTarget();
     var openId = String(open && open.storyId || '');
@@ -1135,7 +1143,7 @@
       description.textContent = 'Capture these fields and optional Invariants in a new Project, or attach an existing one.';
       capture.textContent = 'Review fields';
     }
-    capture.disabled = state.pending || state.attachmentPending || !state.sessionReady || !state.modelId;
+    capture.disabled = state.pending || state.attachmentPending || !state.sessionReady || !state.modelId || !discussed;
     var useOpen = el('director-studio-flow-target');
     var canAttachOpen = !!openId && openId !== attached;
     useOpen.classList.toggle('hidden', !canAttachOpen);
@@ -1226,6 +1234,7 @@
   }
 
   function studioAttachedStoryId() {
+    if (state.studioStoryAccess) return state.studioStoryAccess.storyId;
     var ids = Object.keys(state.storyboardAttachments).filter(function (key) {
       return key.indexOf('story:') === 0;
     }).map(function (key) { return key.slice(6); });
@@ -2196,6 +2205,8 @@
         state.modeMetricsByAssistantIndex.storyboard = {};
         if (!preserveContext) {
           state.storyboardAttachments = {};
+          state.studioStoryAccess = null;
+          state.studioAccessIndex = null;
           state.workshop = null;
         }
         state.workshopProposal = null;
@@ -2290,11 +2301,13 @@
       var storyRefs = Object.keys(state.storyboardAttachments || {}).filter(function (key) {
         return key.indexOf('story:') === 0;
       });
-      var workbench = storyRefs.length === 1
-        ? 'A Project snapshot is explicitly attached (' + storyRefs[0].slice(6) +
-          '). The author can review changes to its Concept, Style and Invariants.'
-        : 'No Project is attached to this conversation. Reviewing Concept, Style and Invariants ' +
-          'will propose creating a new Project. Editing an existing Project requires an explicit attachment.';
+      var workbench = state.studioStoryAccess
+        ? 'The author granted read access to Story ' + state.studioStoryAccess.storyId +
+          '. WebCap can retrieve bounded current fields separately. No Story content was read ' +
+          'for this request, so never claim to have inspected it.'
+        : storyRefs.length === 1
+          ? 'A historical Story snapshot is attached (' + storyRefs[0].slice(6) + ').'
+          : 'No Story access was granted; review of fields would propose creating a Project.';
       outbound[0] = { role: 'system', content: payload.system +
         '\n\nSTUDIO WORKBENCH STATE (controls, not saved Story facts):\n' + workbench +
         '\nWhen choices are clear, offer to review Concept / overview, Visual / atmosphere and Invariants. ' +
@@ -2320,7 +2333,7 @@
       }, null, 2));
     }
     var outbound = messages.slice();
-    var attached = Object.keys(state.storyboardAttachments).map(function (key) {
+    var attached = (state.studioStoryAccess ? [] : Object.keys(state.storyboardAttachments)).map(function (key) {
       var item = state.storyboardAttachments[key];
       return item.label + ':\n' + item.content;
     });
@@ -2872,7 +2885,15 @@
     clear.onclick = newChat;
     el('director-studio-retry').onclick = startStudioWorkshop;
     el('director-studio-capture').onclick = captureStudioCreativeBrief;
-    el('director-studio-attach-current').onclick = function () { return attachStoryboardContext('story'); };
+    el('director-studio-attach-current').onclick = grantStudioStoryAccess;
+    el('director-studio-access-clear').onclick = clearStudioStoryAccess;
+    el('director-studio-access-read').onclick = inspectStudioStoryScope;
+    el('director-studio-access-field').onchange = function () {
+      el('director-studio-access-scene').classList.toggle('hidden', ['scene', 'prompt', 'takes'].indexOf(this.value) < 0);
+    };
+    el('director-studio-access-details').ontoggle = function () {
+      if (this.open && state.studioStoryAccess && !state.studioAccessIndex) loadStudioAccessIndex();
+    };
     el('director-studio-prepare-scene').onclick = prepareStudioSceneDraft;
     el('director-studio-prepare-project').onclick = prepareStudioProject;
     el('director-studio-prepare-scenes').onclick = prepareStudioScenes;

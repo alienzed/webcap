@@ -33,7 +33,8 @@ def test_action_catalog_marks_future_mutations_as_planned():
     assert by_name["scene.draft"]["status"] == "available"
     assert by_name["project.create"]["status"] == "available"
     assert by_name["scene.sequence.draft"]["status"] == "available"
-    assert by_name["project.brief.propose"]["status"] == "planned"
+    assert by_name["project.brief.propose"]["status"] == "available"
+    assert by_name["context.read"]["status"] == "available"
 
 
 def test_studio_guidance_api_is_read_only():

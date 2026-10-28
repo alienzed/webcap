@@ -20,6 +20,7 @@
         <link rel="stylesheet" href="/static/css/checklist.css">
         <link rel="stylesheet" href="/static/css/workspace_shell.css">
         <link rel="stylesheet" href="/static/css/storyboard.css">
+<link rel="stylesheet" href="/static/css/studio_blocks.css">
         <link rel="stylesheet" href="/static/css/generate.css">
         <link rel="stylesheet" href="/static/css/storage_manager.css">
         <link rel="stylesheet" href="/static/css/media_explorer.css">
@@ -1868,7 +1869,8 @@
                         <strong>Projects</strong>
                         <div class="storyboard-library-header-actions">
                             <button id="storyboard-library-compact-toggle" type="button" class="review-captions-btn storyboard-library-compact-toggle" aria-pressed="false" title="Collapse Projects to icons" aria-label="Collapse Stories to icons">‹</button>
-                            <button id="storyboard-new-btn" type="button" class="storyboard-primary-btn">New Project</button>
+                            <button id="studio-blocks-open" type="button" class="review-captions-btn">Blocks</button>
+<button id="storyboard-new-btn" type="button" class="storyboard-primary-btn">New Project</button>
                         </div>
                     </header>
                     <div id="storyboard-library-list" class="storyboard-library-list"></div>
@@ -2150,6 +2152,7 @@
                 </div>
                 <div class="director-chat-composer">
                     <textarea id="director-chat-input" rows="4" placeholder="Ask the model anything…"></textarea>
+
                     <div class="director-chat-composer-footer">
                         <span class="director-chat-composer-hint">Enter to send · Shift+Enter for newline</span>
                         <div class="director-chat-composer-actions">
@@ -3793,6 +3796,7 @@
         <script src="/static/js/qa_curation.js"></script>
         <script src="/static/js/session_prompt_history.js"></script>
         <script src="/static/js/director_chat.js"></script>
+<script src="/static/js/studio_blocks.js"></script>
         <script src="/static/js/review_assistant.js"></script>
         <script src="/static/js/inference_queue.js"></script>
             <script src="/static/js/job_queues.js"></script>
@@ -3812,5 +3816,22 @@
         <script src="/static/js/epoch_info.js"></script>
         <script src="/static/js/storyboard.js"></script>
         <script src="/static/js/main.js"></script>
+<dialog id="studio-blocks-dialog" class="studio-blocks-dialog" aria-labelledby="studio-blocks-heading">
+  <div class="studio-blocks-head"><h2 id="studio-blocks-heading">Studio Blocks</h2><button id="studio-blocks-close" type="button" class="review-captions-btn">Close</button></div>
+  <div class="studio-blocks-layout">
+    <aside class="studio-blocks-library">
+      <input id="studio-blocks-search" type="search" placeholder="Search Blocks…" aria-label="Search Blocks">
+      <button id="studio-blocks-new" type="button" class="storyboard-primary-btn">New Block</button>
+      <div id="studio-blocks-list" class="studio-blocks-list"></div>
+    </aside>
+    <section class="studio-blocks-edit" aria-label="Block editor">
+      <label>Type<select id="studio-blocks-type"><option value="idea">Idea</option><option value="guidance">Guidance</option></select></label>
+      <label>Name<input id="studio-blocks-title" maxlength="120" placeholder="Name this Block"></label>
+      <label>Content<textarea id="studio-blocks-content" rows="12" placeholder="Reusable creative material or guidance…"></textarea></label>
+      <p id="studio-blocks-status" role="status"></p>
+      <div class="studio-blocks-actions"><button id="studio-blocks-copy" type="button" class="review-captions-btn" aria-label="Copy Block content" title="Copy content to clipboard">⧉ Copy</button><button id="studio-blocks-delete" type="button" class="review-captions-btn">Delete</button><button id="studio-blocks-save" type="button" class="storyboard-primary-btn">Save Block</button></div>
+    </section>
+  </div>
+</dialog>
     </body>
 </html>

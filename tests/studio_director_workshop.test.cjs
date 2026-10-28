@@ -154,7 +154,7 @@ test('Studio field capture keeps existing Project targets explicit', () => {
 
 test('General Chat retains its own model request path', () => {
   const send = slice('  function sendMessage() {', '  function syncPinnedUi() {');
-  assert.match(send, /activeChatMode === 'storyboard'\s*\? studioDirectorRequestMessages\(messages\)/);
+  assert.match(send, /activeChatMode === 'storyboard'\s*\? studioDirectorChatRequestMessages\(messages\)/);
   assert.match(send, /: Promise\.resolve\(messages\)/);
 });
 

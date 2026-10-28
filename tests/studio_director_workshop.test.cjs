@@ -106,8 +106,10 @@ test('Studio exposes Concept, Style and Invariants as one contextual capture, no
     'director-studio-flow', 'director-studio-capture', 'director-studio-flow-target',
     'director-studio-attach-current', 'director-studio-more'
   ]) assert.match(html, new RegExp('id="' + id + '"'));
-  assert.match(html, /Review Concept, Style &amp; Invariants/);
-  assert.match(html, /Concept <small>\(including Core Appeal\)<\/small>/);
+  assert.match(html, /Concept \/ overview · Visual \/ atmosphere/);
+  assert.match(html, />Review fields<\/button>/);
+  assert.match(html, /Concept \/ overview <small>\(including Core Appeal\)<\/small>/);
+  assert.match(html, /Visual \/ atmosphere <small>\(optional\)<\/small>/);
   const composer = sliceHtml('<div class="director-chat-composer">', '<textarea id="director-chat-input"');
   assert.doesNotMatch(composer, /director-studio-prepare|director-studio-starters/);
   assert.match(source, /captureStudioCreativeBrief/);
@@ -141,7 +143,7 @@ test('Studio field capture keeps existing Project targets explicit', () => {
   vm.runInContext(slice('  function studioAttachedStoryId() {', '  function studioActionStatus('), context);
   const update = vm.runInContext('(' + slice('  function syncStudioFlow() {', '  function captureStudioCreativeBrief() {').trim() + ')', context);
   update();
-  assert.equal(node('director-studio-capture').textContent, 'Review Concept, Style & Invariants');
+  assert.equal(node('director-studio-capture').textContent, 'Review fields');
   assert.equal(node('director-studio-flow-target').classList.hidden, false);
   state.storyboardAttachments['story:story-1'] = {label: 'Story', content: '{}'};
   update();

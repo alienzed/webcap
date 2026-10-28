@@ -1865,9 +1865,9 @@
             <section id="storyboard-workspace" class="storyboard-workspace hidden" data-workspace-root="storyboard" aria-label="Studio workspace">
                 <aside class="storyboard-library" aria-label="Projects">
                     <header class="storyboard-library-header">
-                        <strong>Stories</strong>
+                        <strong>Projects</strong>
                         <div class="storyboard-library-header-actions">
-                            <button id="storyboard-library-compact-toggle" type="button" class="review-captions-btn storyboard-library-compact-toggle" aria-pressed="false" title="Collapse Stories to icons" aria-label="Collapse Stories to icons">‹</button>
+                            <button id="storyboard-library-compact-toggle" type="button" class="review-captions-btn storyboard-library-compact-toggle" aria-pressed="false" title="Collapse Projects to icons" aria-label="Collapse Stories to icons">‹</button>
                             <button id="storyboard-new-btn" type="button" class="storyboard-primary-btn">New Project</button>
                         </div>
                     </header>
@@ -1902,7 +1902,7 @@
                                     <strong>Project Overview</strong>
                                     <div class="storyboard-story-heading-actions">
                                         <div class="storyboard-story-action-wrap">
-                                            <button id="storyboard-first-cut-btn" type="button" class="storyboard-primary-btn storyboard-director-action" title="Take this Story from its current concept through Director refinement and queue one first Take per Scene.">First Cut</button>
+                                            <button id="storyboard-first-cut-btn" type="button" class="storyboard-primary-btn storyboard-director-action" title="Take this Project from its current concept through Director refinement and queue one first Take per Scene.">First Cut</button>
                                         <div id="storyboard-story-action-card" class="storyboard-story-action-card hidden" aria-live="polite">
                                             <div class="storyboard-story-action-copy">
                                                 <strong id="storyboard-story-action-phase">Preparing</strong>
@@ -1929,11 +1929,11 @@
                                             <span>Icon</span>
                                             <div class="storyboard-icon-picker">
                                                 <input id="storyboard-story-icon" type="hidden" value="">
-                                                <button id="storyboard-story-icon-trigger" type="button" class="storyboard-icon-picker-trigger" aria-haspopup="true" aria-expanded="false" title="Choose Story icon">
+                                                <button id="storyboard-story-icon-trigger" type="button" class="storyboard-icon-picker-trigger" aria-haspopup="true" aria-expanded="false" title="Choose Project icon">
                                                     <span id="storyboard-story-icon-preview" class="storyboard-icon-picker-preview" aria-hidden="true"></span>
                                                     <span id="storyboard-story-icon-label">Auto</span>
                                                 </button>
-                                                <div id="storyboard-story-icon-menu" class="storyboard-icon-picker-menu hidden" role="menu" aria-label="Choose Story icon"></div>
+                                                <div id="storyboard-story-icon-menu" class="storyboard-icon-picker-menu hidden" role="menu" aria-label="Choose Project icon"></div>
                                             </div>
                                         </div>
                                         <label class="storyboard-field"><span>Status</span><select id="storyboard-story-status"><option value="active">Active</option><option value="complete">Complete</option><option value="archived" disabled>Archived (recipe retained)</option></select></label>
@@ -1982,7 +1982,7 @@
                                         <label class="storyboard-field"><span>Scene Relationships</span><textarea data-story-guideline="sceneRelationships" rows="2" placeholder="Do Scenes progress, form independent variations, repeat a format, or relate another way?"></textarea></label>
                                         </section>
                                         </details>
-                                        <section class="storyboard-invariants" aria-label="Story invariants">
+                                        <section class="storyboard-invariants" aria-label="Project invariants">
                                             <div id="storyboard-invariants-list" class="storyboard-invariants-list"></div>
                                         </section>
                                     </div>
@@ -2000,8 +2000,8 @@
                                         <input id="storyboard-story-target-scenes" type="number" min="2" max="50" step="1" value="12" aria-label="Target Scene count">
                                         <span>scenes</span>
                                     </label>
-                                    <button id="storyboard-scene-count-auto" type="button" class="review-captions-btn storyboard-scene-count-auto" aria-pressed="false" title="Let Director choose the Scene count from the Story">Auto</button>
-                                    <label class="storyboard-develop-individual" title="Plan the Story once, then author each full Scene in a separate Director request.">
+                                    <button id="storyboard-scene-count-auto" type="button" class="review-captions-btn storyboard-scene-count-auto" aria-pressed="false" title="Let Director choose the Scene count from the Project">Auto</button>
+                                    <label class="storyboard-develop-individual" title="Plan the Project once, then author each full Scene in a separate Director request.">
                                         <input id="storyboard-develop-individual" type="checkbox">
                                         <span>One at a time</span>
                                     </label>
@@ -2014,7 +2014,7 @@
                                 <summary>
                                     <span class="storyboard-story-section-summary-copy">
                                         <strong>Scene Defaults</strong>
-                                        <span>Generation settings inherited by Scenes; does not affect the Story definition.</span>
+                                        <span>Generation settings inherited by Scenes; does not affect the Project definition.</span>
                                     </span>
                                 </summary>
                                 <div class="storyboard-story-section-body storyboard-scene-defaults-body">
@@ -2029,9 +2029,9 @@
                                         <button id="storyboard-director-lora-suggest" type="button" class="review-captions-btn">Suggest LoRAs</button>
                                     </div>
                                     <span id="storyboard-director-lora-status" class="storyboard-reference-empty" aria-live="polite"></span>
-                                    <section class="storyboard-story-loras" aria-label="Story LoRAs">
+                                    <section class="storyboard-story-loras" aria-label="Project LoRAs">
                                         <div class="storyboard-scene-defaults-subheading">
-                                            <strong>Story LoRAs</strong>
+                                            <strong>Project LoRAs</strong>
                                             <span>Inherited by all Scenes unless overridden.</span>
                                             <button id="storyboard-story-lora-refresh" type="button" class="review-captions-btn" data-storyboard-lora-refresh title="Rescan available LoRAs from ComfyUI.">Refresh</button>
                                         </div>
@@ -2053,9 +2053,9 @@
                                 <div class="storyboard-scenes-heading-left">
                                     <div class="storyboard-scenes-heading-title">
                                         <div class="storyboard-scenes-title-row">
-                                            <button id="storyboard-story-show" type="button" class="review-captions-btn hidden" aria-expanded="false" aria-controls="storyboard-story-authoring">Show Story Overview</button>
+                                            <button id="storyboard-story-show" type="button" class="review-captions-btn hidden" aria-expanded="false" aria-controls="storyboard-story-authoring">Show Project Overview</button>
                                             <strong id="storyboard-workspace-mode-title">Scenes</strong>
-                                            <button id="storyboard-generate-scenes-btn" type="button" class="review-captions-btn" title="Queue one new Take for every Scene in this Story.">Generate</button>
+                                            <button id="storyboard-generate-scenes-btn" type="button" class="review-captions-btn" title="Queue one new Take for every Scene in this Project.">Generate</button>
                                             <button id="storyboard-cancel-takes-btn" type="button" class="review-captions-btn hidden" title="Cancel this Story's queued Take generation. The current Take will finish.">Cancel Takes</button>
                                         </div>
                                         <span id="storyboard-progress-summary" class="storyboard-progress-summary"></span>
@@ -2064,7 +2064,7 @@
                                 <div class="storyboard-scenes-heading-actions">
                                     <button id="storyboard-scenes-focus-btn" type="button" class="review-captions-btn hidden">← Scenes</button>
                                     <button id="storyboard-scenes-sequence-btn" type="button" class="review-captions-btn">Sequence</button>
-                                    <button type="button" class="review-captions-btn" onclick="openStoryboardAssistant()" title="Discuss the Story with the Assistant without changing scenes">Chat</button>
+                                    <button type="button" class="review-captions-btn" onclick="openStoryboardAssistant()" title="Discuss the Project with Director without changing Scenes">Chat</button>
                                      <button id="storyboard-director-tools-btn" type="button" class="review-captions-btn storyboard-director-action" title="Open Director Tools">Director Tools</button>
 
                                 </div>

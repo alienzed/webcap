@@ -76,10 +76,12 @@ These are implementation-level boundaries verified after the earlier plan was wr
 
 ### Phase C3 — WebCap-controlled extraction and reviewed application
 
-- [ ] One **Capture selected fields** surface uses the real names Concept / overview, Visual / atmosphere, and Invariants. It routes to the already existing `studio_project_draft` or `studio_brief_draft` and their reviewed Apply depending on an explicit new/existing target, without a second chat mode.
+- [x] One **Capture selected fields** surface uses the real names Concept / overview, Visual / atmosphere, and Invariants. It routes to the already existing `studio_project_draft` or `studio_brief_draft` and their reviewed Apply depending on an explicit new/existing target, without a second chat mode.
 - [ ] Capture selected Scene intents, dialogue or prompt text using bounded private `studio_*_draft` operations. Keep discussion text concise and human; show full proposed values only in the relevant review form. Reject attempts to change unrelated Scene fields/Take data without approval.
 - [ ] Make the selected target and inputs inspectable **before** the private extraction; don't silently use the currently open Story as a conversation binding. Preserve field-scoped conflicts, stable IDs, atomic writes, and owner-local Undo.
 - **Gate:** new Project with no Scenes, existing Project, multi-Scene insertion at start/between/end, rejected conflicts, no transcript payloads, cancellation, failed save and reconnect.
+
+**Conversational handoff (PR #768 candidate):** when the author explicitly says “use that as the Concept” or otherwise directs capture of Concept / overview, Visual / atmosphere, or Invariants, Director may return one small private `WEBCAP_PREPARE:fields` signal. WebCap routes it to the **existing** structured draft request and editable new-Project or selected-Story review, without inserting that signal into `messages[]` or applying changes. Ordinary discussions remain freeform; this is not a universal per-turn classifier. Real local-model reliability still needs an end-to-end probe, and the author can always use the visible Review fields action.
 
 ### Phase C4 — Simplify the workbench after the contracts are proven
 

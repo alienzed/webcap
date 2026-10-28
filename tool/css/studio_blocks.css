@@ -1,0 +1,19 @@
+.studio-blocks-dialog{width:min(960px,94vw);max-height:88vh;border:1px solid var(--border-color,#555);border-radius:14px;padding:20px;background:var(--panel-bg,#202124);color:var(--text-color,#eee)}
+.studio-blocks-dialog::backdrop{background:rgba(0,0,0,.6)}
+.studio-blocks-head,.studio-blocks-actions{display:flex;align-items:center;justify-content:space-between;gap:14px}
+.studio-blocks-head h2{font-size:26px;margin:0 0 14px}
+.studio-blocks-layout{display:grid;grid-template-columns:minmax(220px,34%) 1fr;gap:20px;min-height:390px}
+.studio-blocks-library,.studio-blocks-edit{display:flex;flex-direction:column;gap:12px;min-width:0}
+.studio-blocks-edit label{display:flex;flex-direction:column;gap:6px;font-size:16px}
+.studio-blocks-dialog input,.studio-blocks-dialog textarea,.studio-blocks-dialog select{box-sizing:border-box;width:100%;min-width:0;padding:10px;font:inherit;border-radius:7px;background:var(--input-bg,#292b2e);color:inherit;border:1px solid #666}
+.studio-blocks-dialog textarea{resize:vertical;flex:1}
+.studio-blocks-list{overflow:auto;max-height:55vh;display:flex;flex-direction:column;gap:5px}
+.studio-blocks-list-item{display:flex;justify-content:space-between;align-items:center;gap:10px;text-align:left;padding:11px;border:1px solid transparent;border-radius:8px;background:transparent;color:inherit;font-size:16px;cursor:pointer}
+.studio-blocks-list-item.selected,.studio-blocks-list-item:hover{background:rgba(130,145,180,.16);border-color:#707b91}
+.studio-blocks-list-item small{font-size:13px;opacity:.75}
+.studio-blocks-picker{position:absolute;bottom:100%;left:0;right:0;z-index:20;padding:6px;border-radius:10px;background:var(--panel-bg,#24262a);border:1px solid #777;max-height:280px;overflow:auto;box-shadow:0 8px 26px #0007}
+.director-chat-composer{position:relative}
+.studio-blocks-picker.hidden{display:none}
+.studio-blocks-picker button{display:block;width:100%;padding:9px 12px;text-align:left;background:transparent;color:inherit;border:0;border-radius:6px;font:inherit}
+.studio-blocks-picker button:hover,.studio-blocks-picker button.active{background:rgba(130,145,180,.25)}
+@media(max-width:640px){.studio-blocks-layout{grid-template-columns:1fr}.studio-blocks-list{max-height:180px}}

@@ -106,6 +106,26 @@ def _validate_attachments(attachments):
     return result
 
 
+def _validate_operations(operations):
+    """Small author-visible receipts, never a copy of LLM extraction or Story data."""
+    if not isinstance(operations, list) or len(operations) > 25:
+        raise ValueError("Studio operation history must contain at most 25 receipts.")
+    allowed = {"project.create", "scene.create", "scenes.create", "brief.apply", "brief.undo"}
+    result = []
+    for item in operations:
+        if not isinstance(item, dict) or set(item) != {"kind", "label", "storyId", "sceneIds", "at"}:
+            raise ValueError("Studio operation receipt has invalid fields.")
+        if (item["kind"] not in allowed or not isinstance(item["label"], str)
+                or not item["label"].strip() or len(item["label"]) > 200
+                or not isinstance(item["storyId"], str) or len(item["storyId"]) > 160
+                or not isinstance(item["at"], str) or len(item["at"]) > 45
+                or not isinstance(item["sceneIds"], list) or len(item["sceneIds"]) > 8
+                or any(not isinstance(scene_id, str) or len(scene_id) > 160 for scene_id in item["sceneIds"])):
+            raise ValueError("Studio operation receipt is invalid.")
+        result.append({key: item[key] for key in ("kind", "label", "storyId", "sceneIds", "at")})
+    return result
+
+
 def _validate_workshop(workshop):
     if workshop is None:
         return None
@@ -140,7 +160,7 @@ def create_chat(mode):
         chat_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ") + "-" + uuid.uuid4().hex[:8]
         now = _now()
         chat = {"id": chat_id, "mode": mode, "title": "New chat", "createdAt": now,
-                "updatedAt": now, "revision": 0, "messages": [], "draft": "", "attachments": {}, "workshop": None}
+                "updatedAt": now, "revision": 0, "messages": [], "draft": "", "attachments": {}, "workshop": None, "operations": []}
         _write(_path(chat_id), chat)
         _set_active(mode, chat_id)
         return chat
@@ -171,6 +191,7 @@ def save_chat(chat_id, payload):
                     messages=_validate_messages(payload.get("messages")),
                     attachments=_validate_attachments(payload.get("attachments", {})),
                     workshop=_validate_workshop(payload.get("workshop")),
+                    operations=_validate_operations(payload.get("operations", chat.get("operations", []))),
                     revision=chat["revision"] + 1, updatedAt=_now())
         _write(path, chat)
         return chat

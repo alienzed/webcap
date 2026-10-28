@@ -373,8 +373,15 @@
     syncControls();
   }
 
+  function studioWorkspaceVisible() {
+    return !!document.querySelector('#storyboard-workspace:not(.hidden)');
+  }
+
   function setMode(modeId) {
     modeId = String(modeId || 'chat');
+    // Studio Director is not a global Assistant mode. Navigation cannot
+    // expose a stale Studio conversation in the ordinary Assistant drawer.
+    if (modeId === 'storyboard' && !studioWorkspaceVisible()) modeId = 'chat';
     if (modeId !== 'chat' && modeId !== 'storyboard') {
       var mode = contextualModes[modeId];
       if (!mode || !modeAvailable(mode)) modeId = 'chat';
@@ -3052,7 +3059,11 @@
   }
 
   function setOpen(open, modeId) {
+    if (open && !studioWorkspaceVisible()) modeId = 'chat';
     if (modeId) setMode(modeId);
+    // Changing modes is intentionally blocked during an active request.
+    // Do not show its Studio UI in another workspace while the request finishes.
+    if (open && !studioWorkspaceVisible() && state.activeMode === 'storyboard') open = false;
     state.open = !!open;
     if (!state.open && state.pinned) {
       state.pinned = false;
@@ -3358,7 +3369,11 @@
   };
   window.openStoryboardAssistant = function () { setOpen(true, 'storyboard'); };
   window.closeStudioDirectorOnExit = function () {
-    if (state.open && state.activeMode === 'storyboard') setOpen(false);
+    if (state.activeMode !== 'storyboard') return;
+    if (state.open) setOpen(false);
+    // Leave the globally available Assistant on Chat when it is safe to
+    // switch. In-flight Studio work retains its own conversation until done.
+    if (!state.pending) setMode('chat');
   };
   window.openStoryboardSceneWorkshop = function (context) {
     if (state.pending) throw new Error('Finish the current Assistant job before switching Workshop Scenes.');

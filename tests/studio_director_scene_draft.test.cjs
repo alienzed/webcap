@@ -28,7 +28,7 @@ test('Studio scene reviewer has editable intent, placement and approval controls
 test('Only explicitly attached Story ID qualifies as a Scene target', () => {
   const state = { storyboardAttachments: {} };
   const context = vm.createContext({ state, Object });
-  const target = vm.runInContext('(' + part('  function studioAttachedStoryId() {', '  function studioActionStatus(').trim() + ')', context);
+  const target = vm.runInContext('(' + part('  function studioAttachedStoryId() {', '  function studioWorkingStoryLabel() {').trim() + ')', context);
   assert.equal(target(), '');
   state.storyboardAttachments['scene:other:scene-a'] = { label: 'Scene' };
   assert.equal(target(), '');

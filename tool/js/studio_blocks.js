@@ -1,169 +1,98 @@
-/* Studio Blocks: owns its library editor and opt-in slash insertion. */
+/* Standalone Studio Blocks library. No Director integration. */
 (function () {
   'use strict';
-  var blocks = [], selected = null, dirty = false, pickerItems = [], active = 0, catalogLoaded = false, catalogLoading = false;
-  var $ = function (id) { return document.getElementById(id); };
-  function error(e) {
-    $('studio-blocks-status').textContent = e.message || String(e);
-    if (window.reportConsoleError) window.reportConsoleError('Studio Blocks', e);
-    else console.error('[Studio Blocks]', e);
+  var blocks = [], selectedId = null;
+  function el(id) { return document.getElementById(id); }
+  function report(error) {
+    el('studio-blocks-status').textContent = String(error.message || error);
+    if (window.reportConsoleError) window.reportConsoleError('Studio Blocks', error);
+    else console.error('[Studio Blocks]', error);
   }
   async function api(path, options) {
     var response = await fetch('/fs/studio-blocks' + (path || ''), options);
-    var result = await response.json();
-    if (!response.ok) throw new Error(result.error || 'Studio Blocks request failed.');
-    return result;
+    var data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Studio Blocks request failed.');
+    return data;
   }
-  function readEditor() {
-    return { type: $('studio-blocks-type').value, title: $('studio-blocks-title').value, content: $('studio-blocks-content').value };
+  function current() { return blocks.find(function (b) { return b.id === selectedId; }); }
+  function edit(block) {
+    selectedId = block ? block.id : null;
+    el('studio-blocks-type').value = block ? block.type : 'idea';
+    el('studio-blocks-title').value = block ? block.title : '';
+    el('studio-blocks-content').value = block ? block.content : '';
+    el('studio-blocks-delete').disabled = !block;
+    el('studio-blocks-status').textContent = '';
+    render();
   }
-  function confirmDiscard() { return !dirty || window.confirm('Discard unsaved Block edits?'); }
-  function show(block) {
-    if (!confirmDiscard()) return;
-    selected = block ? block.id : null;
-    $('studio-blocks-type').value = block ? block.type : 'idea';
-    $('studio-blocks-title').value = block ? block.title : '';
-    $('studio-blocks-content').value = block ? block.content : '';
-    $('studio-blocks-delete').disabled = !block;
-    $('studio-blocks-status').textContent = '';
-    dirty = false;
-    renderList();
-    $('studio-blocks-title').focus();
-  }
-  function matching(query) {
-    var needle = query.toLocaleLowerCase();
-    return blocks.filter(function (b) {
-      return (b.title + ' ' + b.type + ' ' + b.content).toLocaleLowerCase().includes(needle);
-    }).sort(function (a, b) { return a.title.localeCompare(b.title); });
-  }
-  function renderList() {
-    var list = $('studio-blocks-list'), query = $('studio-blocks-search').value;
+  function render() {
+    var needle = el('studio-blocks-search').value.toLocaleLowerCase();
+    var list = el('studio-blocks-list');
     list.replaceChildren();
-    matching(query).forEach(function (block) {
-      var button = document.createElement('button');
-      button.type = 'button';
-      button.className = 'studio-blocks-list-item' + (selected === block.id ? ' selected' : '');
-      var name = document.createElement('strong'), type = document.createElement('small');
-      name.textContent = block.title;
-      type.textContent = block.type === 'idea' ? 'Idea' : 'Guidance';
-      button.append(name, type);
-      button.onclick = function () { show(block); };
-      list.append(button);
-    });
+    blocks.filter(function (b) { return (b.title + ' ' + b.type + ' ' + b.content).toLocaleLowerCase().includes(needle); })
+      .sort(function (a, b) { return a.title.localeCompare(b.title); })
+      .forEach(function (b) {
+        var button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'studio-blocks-list-item' + (selectedId === b.id ? ' selected' : '');
+        var name = document.createElement('strong'), kind = document.createElement('small');
+        name.textContent = b.title;
+        kind.textContent = b.type === 'idea' ? 'Idea' : 'Guidance';
+        button.append(name, kind);
+        button.onclick = function () { edit(b); };
+        list.append(button);
+      });
+    if (!list.childElementCount) list.textContent = needle ? 'No matching Blocks.' : 'No Blocks yet. Create your first one.';
   }
-  async function load() {
+  async function reload() {
     blocks = (await api()).blocks;
-    catalogLoaded = true;
-    renderList();
-    updatePicker();
+    render();
   }
   async function open() {
-    $('studio-blocks-dialog').showModal();
-    try { await load(); if (!selected && !dirty) show(null); }
-    catch (e) { error(e); }
+    el('studio-blocks-dialog').showModal();
+    try {
+      await reload();
+      edit(current() || null);
+    } catch (error) { report(error); }
   }
   async function save() {
-    var data = readEditor();
+    var block = current();
+    var payload = { type: el('studio-blocks-type').value, title: el('studio-blocks-title').value,
+      content: el('studio-blocks-content').value };
     try {
-      var previous = blocks.find(function (b) { return b.id === selected; });
-      var path = previous ? '/' + encodeURIComponent(previous.id) : '';
-      var result = await api(path, { method: previous ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(Object.assign({}, data, previous ? { revision: previous.revision } : {})) });
-      dirty = false;
-      await load();
-      show(result.block);
-      $('studio-blocks-status').textContent = 'Saved.';
-    } catch (e) { error(e); }
+      var result = await api(block ? '/' + encodeURIComponent(block.id) : '', {
+        method: block ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      await reload();
+      edit(result.block);
+      el('studio-blocks-status').textContent = 'Saved.';
+    } catch (error) { report(error); }
   }
   async function remove() {
-    var previous = blocks.find(function (b) { return b.id === selected; });
-    if (!previous || !window.confirm('Permanently delete "' + previous.title + '"?')) return;
+    var block = current();
+    if (!block || !confirm('Delete Block "' + block.title + '"?')) return;
     try {
-      await api('/' + encodeURIComponent(previous.id), { method: 'DELETE', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ revision: previous.revision }) });
-      dirty = false;
-      selected = null;
-      await load();
-      show(null);
-    } catch (e) { error(e); }
+      await api('/' + encodeURIComponent(block.id), { method: 'DELETE' });
+      await reload();
+      edit(null);
+    } catch (error) { report(error); }
   }
-  function studioActive() {
-    var root = $('storyboard-workspace'), drawer = $('director-chat-drawer');
-    return root && !root.classList.contains('hidden') && drawer && drawer.classList.contains('studio-director');
-  }
-  function slashMatch() {
-    var input = $('director-chat-input');
-    if (!input || !studioActive() || $('studio-blocks-dialog').open) return null;
-    var before = input.value.slice(0, input.selectionStart);
-    var match = /(^|\s)\/([\w -]*)$/.exec(before);
-    if (!match || input.selectionStart !== input.selectionEnd) return null;
-    return { start: input.selectionStart - match[2].length - 1, end: input.selectionStart, query: match[2] };
-  }
-  function hidePicker() {
-    $('studio-blocks-picker').classList.add('hidden');
-    pickerItems = [];
-  }
-  function insert(block) {
-    var input = $('director-chat-input'), match = slashMatch();
-    if (!match) return;
-    var snapshot = '[Studio Block · ' + block.type + ': ' + block.title + ']\n' + block.content + '\n[/Studio Block]';
-    input.setRangeText(snapshot, match.start, match.end, 'end');
-    input.dispatchEvent(new Event('input', { bubbles: true }));
-    hidePicker();
-    input.focus();
-  }
-  function updatePicker() {
-    var target = $('studio-blocks-picker'), match = slashMatch();
-    if (!match) return hidePicker();
-    pickerItems = matching(match.query).slice(0, 9);
-    active = 0;
-    target.replaceChildren();
-    pickerItems.forEach(function (block, index) {
-      var button = document.createElement('button');
-      button.type = 'button';
-      button.setAttribute('role', 'option');
-      button.textContent = block.title + ' · ' + block.type;
-      button.className = index === active ? 'active' : '';
-      button.onmousedown = function (e) { e.preventDefault(); };
-      button.onclick = function () { insert(block); };
-      target.append(button);
-    });
-    target.classList.toggle('hidden', !pickerItems.length);
+  async function copy() {
+    var text = el('studio-blocks-content').value;
+    try {
+      await navigator.clipboard.writeText(text);
+      el('studio-blocks-status').textContent = 'Copied to clipboard.';
+    } catch (error) { report(error); }
   }
   function bind() {
-    $('studio-blocks-open').onclick = open;
-    $('studio-blocks-close').onclick = function () { if (confirmDiscard()) $('studio-blocks-dialog').close(); };
-    $('studio-blocks-dialog').addEventListener('cancel', function (e) { if (!confirmDiscard()) e.preventDefault(); });
-    $('studio-blocks-new').onclick = function () { show(null); };
-    $('studio-blocks-save').onclick = save;
-    $('studio-blocks-delete').onclick = remove;
-    $('studio-blocks-search').oninput = renderList;
-    ['studio-blocks-type', 'studio-blocks-title', 'studio-blocks-content'].forEach(function (id) {
-      $(id).addEventListener('input', function () { dirty = true; });
-      $(id).addEventListener('change', function () { dirty = true; });
-    });
-    var input = $('director-chat-input');
-    input.addEventListener('input', updatePicker);
-    input.addEventListener('click', updatePicker);
-    input.addEventListener('keydown', function (e) {
-      if ($('studio-blocks-picker').classList.contains('hidden')) return;
-      if (e.key === 'Escape') { e.preventDefault(); e.stopImmediatePropagation(); hidePicker(); return; }
-      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-        e.preventDefault(); e.stopImmediatePropagation();
-        active = (active + (e.key === 'ArrowDown' ? 1 : -1) + pickerItems.length) % pickerItems.length;
-        Array.from($('studio-blocks-picker').children).forEach(function (b, i) { b.classList.toggle('active', i === active); });
-      }
-      if ((e.key === 'Enter' || e.key === 'Tab') && pickerItems.length) {
-        e.preventDefault(); e.stopImmediatePropagation(); insert(pickerItems[active]);
-      }
-    }, true);
-    // The catalog is only fetched when opening Blocks or requesting slash suggestions.
-    input.addEventListener('input', function () {
-      if (!slashMatch() || catalogLoaded || catalogLoading) return;
-      catalogLoading = true;
-      load().catch(error).finally(function () { catalogLoading = false; });
-    });
-    $('director-chat-send').addEventListener('click', hidePicker);
+    el('studio-blocks-open').onclick = open;
+    el('studio-blocks-close').onclick = function () { el('studio-blocks-dialog').close(); };
+    el('studio-blocks-new').onclick = function () { edit(null); el('studio-blocks-title').focus(); };
+    el('studio-blocks-save').onclick = save;
+    el('studio-blocks-delete').onclick = remove;
+    el('studio-blocks-copy').onclick = copy;
+    el('studio-blocks-search').oninput = render;
+    edit(null);
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bind);
   else bind();

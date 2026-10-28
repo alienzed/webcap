@@ -782,7 +782,7 @@ def test_storyboard_compact_header_places_controls_with_their_owned_surfaces():
 
     story_heading = html.split('class="storyboard-story-panel-heading"', 1)[1].split('</div>\n\n                                <details', 1)[0]
     scenes_heading = html.split('class="storyboard-scenes-heading"', 1)[1].split('</div>\n                            <div id="storyboard-scene-progression"', 1)[0]
-    assert "<strong>Story Overview</strong>" in story_heading
+    assert "<strong>Project Overview</strong>" in story_heading
     assert 'id="storyboard-story-toggle"' in story_heading
     assert '>Hide Story</button>' in story_heading
     assert 'id="storyboard-story-toggle"' not in scenes_heading
@@ -950,7 +950,7 @@ def test_storyboard_story_context_has_persisted_local_collapsible_sections():
     assert "width: 100%;" in css
 
     payload_block = storyboard.split("function storyPayloadFromUi()", 1)[1].split("\n  function ", 1)[0]
-    assert 'storyboard-list-section-title">Stories</div>' in storyboard
+    assert 'storyboard-list-section-title">Projects</div>' in storyboard
 
 
 

@@ -70,7 +70,7 @@ _H3_STUDIO_CORE = (
     "cannot guarantee continuity. Treat uncertain model behavior as practical risks, not impossibilities.\n"
     "AVAILABLE AUTHOR-REVIEWED ACTIONS: Review new Project (optional first Scene); "
     "review Concept / overview, Visual / atmosphere and Invariants for an explicitly selected Project; "
-    "prepare a Scene or up to eight Scenes for reviewed insertion (start/between/end). "
+    "Prepare a Scene or Prepare Scenes (up to eight) for reviewed insertion (start/between/end). "
     "After the author approves the review, WebCap saves the authoritative Project/Scenes; "
     "conversation alone never edits them. "
     "Other Storyboard editor/development controls remain separate. "

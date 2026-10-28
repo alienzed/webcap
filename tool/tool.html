@@ -2147,6 +2147,7 @@
                         <button type="button" data-studio-starter="hook">Find the hook</button>
                         <button type="button" data-studio-starter="scene">Sketch a Scene</button>
                         <button type="button" data-studio-starter="feasibility">Make it renderable</button>
+                        <button id="director-studio-prepare-project" type="button" class="studio-primary-action" title="Review a new Studio project from this conversation">Prepare Project</button>
                         <button id="director-studio-prepare-scene" type="button" class="studio-primary-action" title="Extract one tentative Scene from this conversation, then review before creating it">Prepare a Scene</button>
                     </div>
                     <span id="director-studio-action-status" class="director-studio-action-status hidden" aria-live="polite"></span>
@@ -2159,6 +2160,39 @@
                     </div>
                 </div>
             </aside>
+            <dialog id="studio-project-review" class="studio-scene-draft-review" aria-labelledby="studio-project-review-title">
+                <header class="studio-scene-draft-header">
+                    <div>
+                        <h2 id="studio-project-review-title">Review New Project</h2>
+                        <p>An idea can become a Project without a title, finished outline or Scenes. Nothing is created until you approve.</p>
+                    </div>
+                    <button id="studio-project-close" type="button" class="review-captions-btn">Close</button>
+                </header>
+                <div class="studio-scene-draft-content">
+                    <p id="studio-project-rationale" class="studio-scene-draft-rationale"></p>
+                    <label for="studio-project-title">Working title <small>(optional)</small></label>
+                    <input id="studio-project-title" type="text" maxlength="240" placeholder="Untitled Project">
+                    <label for="studio-project-concept">Concept and core appeal</label>
+                    <textarea id="studio-project-concept" rows="5" placeholder="What makes this idea worth watching?"></textarea>
+                    <label for="studio-project-style">Style <small>(optional)</small></label>
+                    <textarea id="studio-project-style" rows="2"></textarea>
+                    <label>Invariants <small>(optional; only genuinely persistent facts)</small></label>
+                    <div id="studio-project-invariants"></div>
+                    <button id="studio-project-add-invariant" type="button" class="review-captions-btn">Add invariant</button>
+                    <label for="studio-project-include-scene"><input id="studio-project-include-scene" type="checkbox"> Include first tentative Scene</label>
+                    <div id="studio-project-first-scene-fields" class="hidden">
+                        <label for="studio-project-scene-title">Scene title <small>(optional)</small></label>
+                        <input id="studio-project-scene-title" type="text" maxlength="240">
+                        <label for="studio-project-scene-summary">What happens</label>
+                        <textarea id="studio-project-scene-summary" rows="3"></textarea>
+                    </div>
+                    <p id="studio-project-error" class="studio-scene-draft-error" aria-live="polite"></p>
+                </div>
+                <footer class="studio-scene-draft-footer">
+                    <button id="studio-project-discard" type="button" class="review-captions-btn">Back to conversation</button>
+                    <button id="studio-project-create" type="button">Create Project</button>
+                </footer>
+            </dialog>
             <dialog id="studio-scene-draft-review" class="studio-scene-draft-review" aria-labelledby="studio-scene-draft-review-title">
                 <header class="studio-scene-draft-header">
                     <div>

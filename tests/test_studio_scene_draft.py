@@ -100,3 +100,80 @@ def test_structured_scene_draft_request_has_one_scene_only(monkeypatch):
     assert schema["additionalProperties"] is False
     assert set(schema["required"]) == {"title", "summary", "rationale"}
     assert "scenes" not in schema["properties"]
+
+
+def test_studio_can_create_unbound_project_with_optional_first_scene(isolated_storyboard):
+    client = isolated_storyboard
+    response = client.post("/fs/studio/director/project-create", json={
+        "proposal": {
+            "title": "", "concept": "A deliberately simple sight gag. Core Appeal: anticipation.",
+            "style": "", "invariants": [{"kind": "character", "title": "Coach", "text": "Blue jacket"}],
+            "firstScene": {"title": "", "summary": "A coach waits for the ball."},
+        },
+    })
+    assert response.status_code == 201, response.json
+    story = response.json["story"]
+    assert story["title"] == ""
+    assert story["targetSceneCount"] is None
+    assert len(story["sceneOrder"]) == 1
+    scene = story["scenes"][story["sceneOrder"][0]]
+    assert scene["prompt"] == ""
+    assert scene["takeOrder"] == []
+    assert storyboard_store.load_story(story["id"]) == story
+    folder = storyboard_store.storyboard_root() / story["id"]
+    assert (folder / "takes" / scene["id"]).is_dir()
+
+
+def test_studio_project_can_start_with_no_scene_and_no_title(isolated_storyboard):
+    response = isolated_storyboard.post("/fs/studio/director/project-create", json={
+        "proposal": {"title": "", "concept": "A weather event.", "style": "", "invariants": []},
+    })
+    assert response.status_code == 201
+    assert response.json["story"]["sceneOrder"] == []
+    assert response.json["story"]["targetSceneCount"] is None
+
+
+def test_studio_project_validation_and_atomic_pre_publish_failure(isolated_storyboard, monkeypatch):
+    client = isolated_storyboard
+    before = {story["id"] for story in storyboard_store.list_stories()}
+    for invalid in (
+        {"title": "", "concept": "", "style": "", "invariants": []},
+        {"concept": "Idea", "prompt": "Not allowed"},
+        {"concept": "Idea", "firstScene": {"title": "", "summary": ""}},
+    ):
+        response = client.post("/fs/studio/director/project-create", json={"proposal": invalid})
+        assert response.status_code == 400
+    assert {story["id"] for story in storyboard_store.list_stories()} == before
+
+    def failing_write(path, data):
+        raise OSError("simulated disk failure")
+
+    monkeypatch.setattr(storyboard_store, "_write_json_atomic", failing_write)
+    response = client.post("/fs/studio/director/project-create", json={
+        "proposal": {"concept": "A simple visual gag"}
+    })
+    assert response.status_code == 400
+    assert "simulated disk failure" in response.json["error"]
+    assert {story["id"] for story in storyboard_store.list_stories()} == before
+    assert not list(storyboard_store.storyboard_root().glob(".studio-create-*"))
+
+
+def test_studio_project_extraction_schema_is_bounded(monkeypatch):
+    from tool.server import app as application
+    captured = {}
+
+    def fake_enqueue(client, model, contract, context, label):
+        captured["contract"] = contract
+        return {"jobId": "project-job", "status": "queued"}
+
+    monkeypatch.setattr(application, "enqueue_llm", fake_enqueue)
+    result = app.test_client().post("/fs/director/chat", json={
+        "model": "local-test", "operation": "studio_project_draft",
+        "messages": [{"role": "user", "content": "A funny idea"}],
+    })
+    assert result.status_code == 202
+    schema = captured["contract"]["response_schema"]
+    assert schema["additionalProperties"] is False
+    assert set(schema["required"]) == {"title", "concept", "style", "invariants", "rationale"}
+    assert schema["properties"]["invariants"]["maxItems"] == 30
+    assert "firstScene" in schema["properties"]

@@ -902,6 +902,42 @@ def add_scene(story_id, payload=None):
 
 
 @_serialized_mutation
+def add_tentative_scene_at(story_id, expected_updated_at, scene_draft, placement, relative_scene_id=""):
+    """Atomically create exactly one prompt-free Scene in an explicit position.
+
+    Placement, creative text and target ID come from a human-reviewed proposal.
+    No Scene is generated, deleted or renumbered implicitly.
+    """
+    story = load_story(story_id)
+    if str(story.get("updatedAt") or "") != str(expected_updated_at or ""):
+        raise RuntimeError("Studio project changed during Scene review. Refresh the proposal before applying.")
+    if not isinstance(scene_draft, dict) or set(scene_draft) != {"title", "summary"}:
+        raise ValueError("Tentative Scene must contain only title and summary.")
+    title, summary = scene_draft["title"], scene_draft["summary"]
+    if not isinstance(title, str) or not isinstance(summary, str) or not summary.strip():
+        raise ValueError("Tentative Scene needs a description of what happens.")
+    if placement not in {"start", "end", "before", "after"}:
+        raise ValueError("Choose start, end, before or after for the new Scene.")
+    order = list(story.get("sceneOrder") or [])
+    relative_scene_id = str(relative_scene_id or "").strip()
+    if placement in {"before", "after"}:
+        if relative_scene_id not in order:
+            raise ValueError("The relative Scene no longer exists; review placement again.")
+        index = order.index(relative_scene_id) + (1 if placement == "after" else 0)
+    else:
+        index = 0 if placement == "start" else len(order)
+    scene_id = _new_id("scene")
+    scene = _normalize_scene(scene_id, {"title": title, "summary": summary})
+    story["scenes"][scene_id] = scene
+    order.insert(index, scene_id)
+    story["sceneOrder"] = order
+    story["updatedAt"] = _utc_now()
+    _write_json_atomic(_story_path(story_id), story)
+    (_story_dir(story_id) / "takes" / scene_id).mkdir(parents=True, exist_ok=True)
+    return story, scene
+
+
+@_serialized_mutation
 def apply_concept_expansion(story_id, expanded_concept):
     story = load_story(story_id)
     expanded = str(expanded_concept or "").strip()

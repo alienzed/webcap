@@ -1416,19 +1416,27 @@
     return poll(job);
   }
 
+  function qaCanResumeDeepScan() {
+    return qaWorkbenchState.qaReviewMode === 'progressive-v1' &&
+      qaWorkbenchState.deepScanScopeFiles.length > 0 &&
+      qaWorkbenchState.deepScanStage !== 'complete' &&
+      !qaWorkbenchState.deepScanSessionActive &&
+      qaWorkbenchState.aiModel === String(getDirectorModelPreference() || '').trim() &&
+      qaWorkbenchState.deepScanTrainingFocus === qaWorkbenchState.trainingFocus;
+  }
+
   function qaRunDeepScan() {
     if (qaWorkbenchState.conceptSession) { setStatus('Stop the concept check before Deep QA.'); return; }
     if (qaWorkbenchState.deepScanSessionActive || qaWorkbenchState.deepScanJobId || qaWorkbenchState.deepScanSubmitting) return;
-    var items = qaGetTrainingItems();
+    // Resume captured membership regardless of current filter. Only an
+    // explicitly new scan after completion captures a new Media List selection.
+    var continuing = qaCanResumeDeepScan();
+    var items = continuing ? qaDeepScanScopeItems() : qaGetTrainingItems();
     if (!items.length) throw new Error('Deep QA requires selected media.');
     var model = String(getDirectorModelPreference() || '').trim();
     if (!model) throw new Error('Select a Director model for Deep QA.');
     var folder = String(state.folder || '');
     var scopeKey = qaBuildScopeKey(items);
-    var continuing = qaWorkbenchState.qaReviewMode === 'progressive-v1' &&
-      qaWorkbenchState.aiScopeSignature === scopeKey &&
-      qaWorkbenchState.aiModel === model &&
-      qaWorkbenchState.deepScanTrainingFocus === qaWorkbenchState.trainingFocus;
     if (!continuing) {
       qaWorkbenchState.aiFindings = [];
       qaWorkbenchState.captionQuality = {};
@@ -2240,7 +2248,8 @@
       heroActions.appendChild(qaNotice);
     }
     heroActions.appendChild(qaCreateButton(
-      qaWorkbenchState.deepScanSessionActive ? 'Deep QA running' : 'Run Deep QA',
+      qaWorkbenchState.deepScanSessionActive ? 'Deep QA running' :
+        (qaCanResumeDeepScan() ? 'Resume Deep QA' : 'Run Deep QA'),
       '', 'qa-start'
     ));
     var reviewButton = qaCreateButton('Review & Fix saved findings', '', 'qa-focus-review');
@@ -2840,10 +2849,15 @@
         if (qaWorkbenchState.deepScanSessionActive && folderChanged) {
           qaInvalidateDeepScanSession('Deep QA stopped because the Set changed.');
         }
-        // Media filters and Focus Sets are views. A running scan keeps its
-        // captured scope and findings; never restore a different selection
-        // into its active receipt while the user reviews results.
-        if (!qaWorkbenchState.deepScanSessionActive) qaRestoreReview(inputSignature);
+        // Media filters and Focus Sets are views. Keep the last progressive
+        // run's receipts/queue across filtered views, even after it finishes.
+        // Switching Sets still restores the new Set's own QA state.
+        var keepProgressiveScope = !folderChanged &&
+          qaWorkbenchState.qaReviewMode === 'progressive-v1' &&
+          qaWorkbenchState.deepScanScopeFiles.length > 0;
+        if (!qaWorkbenchState.deepScanSessionActive && !keepProgressiveScope) {
+          qaRestoreReview(inputSignature);
+        }
       } else if (inputsChanged) {
         // Same selection: discard any prior pending restore, not current in-memory findings.
         qaReviewLoadToken += 1;

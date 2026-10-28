@@ -106,6 +106,8 @@ TEMPLATES_DIR = TOOL_DIR / "templates"
 app = Flask(__name__, static_folder=None)
 register_model_lab_routes(app)
 register_storyboard_first_cut_routes(app)
+from .studio_blocks import register_routes as register_studio_blocks_routes
+register_studio_blocks_routes(app)
 
 
 

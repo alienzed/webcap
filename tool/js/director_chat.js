@@ -39,7 +39,8 @@
     sessionDirty: { chat: false, storyboard: false },
     sessionError: false,
     draftByMode: { chat: '', storyboard: '' },
-    studioIntroPending: false
+    studioIntroPending: false,
+    studioSceneProposal: null
   };
   var STORYBOARD_WORKSHOP_PRIMER = [
     'You are collaborating with an author developing short AI-generated videos.',
@@ -594,6 +595,7 @@
       state.modeMetricsByAssistantIndex.storyboard = {};
       state.storyboardAttachments = Object.assign({}, chat.attachments || {});
       state.workshop = chat.workshop || null;
+      state.studioSceneProposal = null;
       state.workshopProposal = null;
       state.storyGuidelineProposal = null;
     }
@@ -1083,6 +1085,8 @@
     if (clear) clear.disabled = state.pending || (persistentMode(state.activeMode) && !state.sessionReady);
     var history = el('director-chat-history-toggle');
     if (history) history.disabled = state.pending || !state.sessionReady;
+    el('director-studio-prepare-scene').disabled = state.pending || !state.sessionReady ||
+      state.activeMode !== 'storyboard';
     var prepare = el('director-chat-workshop-prepare');
     if (prepare) {
       prepare.disabled = state.pending || !state.modelId || !!(state.workshop && state.workshop.shotError) || !currentMessages().some(function (message) { return message.role === 'user'; });
@@ -1123,6 +1127,232 @@
       select.innerHTML = '<option value="">Director unavailable</option>';
       syncControls();
       if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Assistant', err);
+    });
+  }
+
+  function studioAttachedStoryId() {
+    var ids = Object.keys(state.storyboardAttachments).filter(function (key) {
+      return key.indexOf('story:') === 0;
+    }).map(function (key) { return key.slice(6); });
+    return ids.length === 1 ? ids[0] : '';
+  }
+
+  function studioActionStatus(message, error) {
+    var status = el('director-studio-action-status');
+    status.classList.toggle('hidden', !message);
+    status.textContent = message || '';
+    status.dataset.error = error ? 'true' : 'false';
+  }
+
+  function parseStudioSceneDraft(raw) {
+    var value = String(raw || '').trim();
+    var fence = String.fromCharCode(96).repeat(3);
+    if (value.startsWith(fence) && value.endsWith(fence)) {
+      var newline = value.indexOf('\n');
+      if (newline >= 0) value = value.slice(newline + 1, -3).trim();
+    }
+    var draft;
+    try { draft = JSON.parse(value); }
+    catch (error) { throw new Error('Director returned invalid Scene draft JSON: ' + error.message); }
+    if (!draft || typeof draft !== 'object' || Array.isArray(draft) ||
+        typeof draft.title !== 'string' || typeof draft.summary !== 'string' ||
+        typeof draft.rationale !== 'string' || !draft.summary.trim()) {
+      throw new Error('Scene draft must include a title, description and rationale.');
+    }
+    return {
+      title: draft.title.trim(),
+      summary: draft.summary.trim(),
+      rationale: draft.rationale.trim()
+    };
+  }
+
+  function showStudioSceneDraftReview() {
+    var proposal = state.studioSceneProposal;
+    if (!proposal) throw new Error('Prepare a Studio Scene before reviewing it.');
+    var dialog = el('studio-scene-draft-review');
+    el('studio-scene-draft-target').textContent = 'Project: ' + (proposal.storyTitle || proposal.storyId);
+    el('studio-scene-draft-rationale').textContent = proposal.rationale ||
+      'A tentative Scene. No prompt, Takes or generation job will be created.';
+    el('studio-scene-draft-title').value = proposal.title;
+    el('studio-scene-draft-summary').value = proposal.summary;
+    el('studio-scene-draft-error').textContent = '';
+    var placement = el('studio-scene-draft-placement');
+    placement.replaceChildren();
+    function option(value, label) {
+      var node = document.createElement('option');
+      node.value = value;
+      node.textContent = label;
+      placement.appendChild(node);
+    }
+    option('end', 'At the end');
+    option('start', 'At the beginning');
+    proposal.sceneOrder.forEach(function (sceneId, index) {
+      var scene = proposal.scenes[sceneId] || {};
+      var name = 'Scene ' + (index + 1) + (scene.title ? ' · ' + scene.title : '');
+      option('before|' + sceneId, 'Before ' + name);
+      option('after|' + sceneId, 'After ' + name);
+    });
+    placement.value = proposal.placement || 'end';
+    if (dialog.open) dialog.close();
+    dialog.showModal();
+  }
+
+  function prepareStudioSceneDraft() {
+    if (state.pending || state.activeMode !== 'storyboard' || !state.sessionReady) return;
+    if (!state.modelId) {
+      studioActionStatus('Select a Director model before preparing a Scene.', true);
+      return;
+    }
+    if (state.studioSceneProposal) {
+      showStudioSceneDraftReview();
+      return;
+    }
+    var storyId = studioAttachedStoryId();
+    if (!storyId) {
+      studioActionStatus('Attach one Story using the explicit context controls before preparing a Scene.', true);
+      return;
+    }
+    var discussion = (state.modeMessages.storyboard || []).filter(function (message) {
+      return message && (message.role === 'assistant' || message.role === 'user');
+    });
+    if (!discussion.some(function (message) { return message.role === 'user'; })) {
+      studioActionStatus('Explore the idea with Director first, then prepare a Scene from your conversation.', true);
+      return;
+    }
+    state.pending = true;
+    state.jobId = '';
+    studioActionStatus('Extracting one tentative Scene for review…', false);
+    startProgress();
+    syncControls();
+    Promise.resolve().then(function () {
+      return window.flushStudioDirectorStoryEdits(storyId);
+    }).then(function () {
+      return requestJson('/fs/storyboard?story=' + encodeURIComponent(storyId));
+    }).then(function (payload) {
+      var story = payload.story;
+      if (!story || story.id !== storyId) throw new Error('Attached Story was not found.');
+      var order = story.sceneOrder || [];
+      state.studioSceneProposal = null;
+      var input = {
+        task: 'Draft exactly ONE tentative, feasible Scene from this creative discussion. ' +
+          'Select the strongest agreed direction. Keep the core appeal. ' +
+          'Return a short working title (it may be blank), a concrete description of what ' +
+          'happens and why it matters, and a brief production rationale. ' +
+          'No generation prompt, new project or existing Scene edits yet.',
+        project: {
+          id: story.id, title: story.title, concept: story.concept,
+          style: story.style, invariants: story.invariants, guidelines: story.guidelines,
+          currentScenes: order.map(function (id, index) {
+            var scene = story.scenes[id];
+            return { id: id, position: index + 1, title: scene.title, intent: scene.summary };
+          })
+        },
+        discussion: discussion.slice(-60)
+      };
+      return studioDirectorRequestMessages([{ role: 'user', content: JSON.stringify(input, null, 2) }])
+        .then(function (messages) {
+          return requestJson('/fs/director/chat', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              model: state.modelId, operation: 'studio_scene_draft', messages: messages
+            })
+          });
+        }).then(function (response) {
+          if (!response.job || !response.job.jobId) throw new Error('Scene draft job was not queued.');
+          state.jobId = String(response.job.jobId);
+          state.requestDiagnostic = response.job.request || null;
+          trackTransientLlmJob(response.job);
+          return waitForJob(response.job);
+        }).then(function (job) {
+          var result = job.result && typeof job.result === 'object' ? job.result : {};
+          var draft = parseStudioSceneDraft(result.text);
+          state.studioSceneProposal = {
+            storyId: storyId,
+            storyTitle: story.title,
+            expectedUpdatedAt: story.updatedAt,
+            sceneOrder: order.slice(),
+            scenes: story.scenes,
+            title: draft.title,
+            summary: draft.summary,
+            rationale: draft.rationale,
+            placement: 'end'
+          };
+          finishProgress(null);
+          studioActionStatus('Scene draft ready. Review and choose its position before creating.', false);
+          showStudioSceneDraftReview();
+        });
+    }).catch(function (error) {
+      finishProgress(error);
+      studioActionStatus('Scene proposal failed: ' + String(error.message || error), true);
+      if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Studio Scene proposal', error);
+      else throw error;
+    }).finally(function () {
+      state.pending = false;
+      state.jobId = '';
+      syncControls();
+    });
+  }
+
+  function applyStudioSceneDraft() {
+    var proposal = state.studioSceneProposal;
+    if (!proposal || state.pending) return;
+    var title = el('studio-scene-draft-title').value.trim();
+    var summary = el('studio-scene-draft-summary').value.trim();
+    var placementValue = el('studio-scene-draft-placement').value.split('|');
+    var placement = placementValue[0];
+    var relativeSceneId = placementValue[1] || '';
+    if (!summary) {
+      el('studio-scene-draft-error').textContent = 'Describe what happens before creating this Scene.';
+      return;
+    }
+    var apply = el('studio-scene-draft-apply');
+    apply.disabled = true;
+    state.pending = true;
+    syncControls();
+    el('studio-scene-draft-error').textContent = '';
+    var created = null;
+    Promise.resolve().then(function () {
+      return window.flushStudioDirectorStoryEdits(proposal.storyId);
+    }).then(function () {
+      return requestJson('/fs/studio/director/scene-draft', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          storyId: proposal.storyId,
+          expectedUpdatedAt: proposal.expectedUpdatedAt,
+          scene: { title: title, summary: summary },
+          placement: placement,
+          relativeSceneId: relativeSceneId
+        })
+      });
+    }).then(function (payload) {
+      if (!payload.scene || !payload.story || payload.story.id !== proposal.storyId) {
+        throw new Error('Scene creation returned an incomplete result.');
+      }
+      created = payload.scene;
+      state.studioSceneProposal = null;
+      el('studio-scene-draft-review').close();
+      var index = payload.story.sceneOrder.indexOf(created.id) + 1;
+      var receipt = 'Created tentative Scene ' + index + (title ? ' · ' + title : '') +
+        ' in ' + (proposal.storyTitle || proposal.storyId) +
+        '. Its intent is saved; the production prompt and Takes remain empty.';
+      state.modeMessages.storyboard.push({ role: 'assistant', content: receipt });
+      renderMessages();
+      studioActionStatus(receipt, false);
+      return persistSession('storyboard').catch(function (error) {
+        studioActionStatus(receipt + ' Conversation receipt could not be saved: ' + String(error.message || error), true);
+      }).then(function () {
+        return window.refreshStudioDirectorStoryIfOpen(proposal.storyId);
+      });
+    }).catch(function (error) {
+      var message = String(error.message || error);
+      if (!created) el('studio-scene-draft-error').textContent = message;
+      studioActionStatus((created ? 'Scene created, but workspace refresh failed: ' : 'Scene creation failed: ') + message, true);
+      if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Studio Scene Apply', error);
+      else throw error;
+    }).finally(function () {
+      state.pending = false;
+      apply.disabled = false;
+      syncControls();
     });
   }
 
@@ -1229,6 +1459,7 @@
           state.workshop = null;
         }
         state.workshopProposal = null;
+        state.studioSceneProposal = null;
         state.storyGuidelineProposal = null;
         el('director-chat-workshop-status').textContent = '';
       }
@@ -1725,6 +1956,7 @@
     if (activeChatMode === 'storyboard') {
       state.storyGuidelineProposal = null;
       state.workshopProposal = null;
+      state.studioSceneProposal = null;
       el('director-chat-workshop-status').textContent = '';
     }
     var messages = currentMessages();
@@ -1878,6 +2110,10 @@
     close.onclick = function () { setOpen(false); };
     clear.onclick = newChat;
     el('director-studio-retry').onclick = startStudioWorkshop;
+    el('director-studio-prepare-scene').onclick = prepareStudioSceneDraft;
+    el('studio-scene-draft-discard').onclick = function () { el('studio-scene-draft-review').close(); };
+    el('studio-scene-draft-close').onclick = function () { el('studio-scene-draft-review').close(); };
+    el('studio-scene-draft-apply').onclick = applyStudioSceneDraft;
     el('director-studio-starters').onclick = function (event) {
       var button = event.target.closest('[data-studio-starter]');
       if (!button || state.pending || state.activeMode !== 'storyboard') return;

@@ -1322,11 +1322,13 @@
     state.pending = true;
     syncControls();
     el('studio-project-error').textContent = '';
+    var createdStory = null;
     requestJson('/fs/studio/director/project-create', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ proposal: proposal })
     }).then(function (payload) {
       if (!payload.story || !payload.story.id) throw new Error('Project creation returned no authoritative Story ID.');
+      createdStory = payload.story;
       state.studioProjectProposal = null;
       el('studio-project-review').close();
       var name = payload.story.title || 'Untitled Project';
@@ -1341,8 +1343,14 @@
         return window.refreshStudioDirectorStoryIfOpen(payload.story.id);
       });
     }).catch(function (error) {
-      el('studio-project-error').textContent = 'Create failed: ' + String(error.message || error) +
-        '. Check Studio Library before retrying if the request may have completed.';
+      var detail = String(error.message || error);
+      if (createdStory) {
+        studioActionStatus('Project ' + (createdStory.title || createdStory.id) +
+          ' was created, but the conversation save or Library refresh failed: ' + detail, true);
+      } else {
+        el('studio-project-error').textContent = 'Creation could not be confirmed: ' + detail +
+          '. Check Studio Library before retrying to avoid a duplicate.';
+      }
       if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Studio Project Apply', error);
       else throw error;
     }).finally(function () {

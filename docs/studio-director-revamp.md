@@ -139,14 +139,16 @@ The UI buttons ('Revise Scene', 'Develop', 'Prepare prompt', etc.) prefill **ins
 
 ## Phased implementation and acceptance gates
 
-### Phase 0 — This branch: documentation, model-aware Writer's Workshop, legible Studio Director foundation
-- [ ] Save this decision contract.
-- [ ] Studio nav label; Studio Director identity and generous workspace typography.
-- [ ] New Studio Director conversation automatically begins an actual model exchange on explicit open, using concise implicit creative guidance, without fabricating a persisted user message; ask one question at a time.
-- [ ] Reopening sessions does not restart; general Chat does not inherit Studio instructions. Model unavailable => conspicuous retry/failure, no fabricated reply.
-- [ ] Add tests and inspect CI; no Story mutations.
+### Phase 0 — Shipped in PR #752: documentation, Writer's Workshop and legible Studio Director foundation
+- [x] Save this decision contract.
+- [x] Studio nav label; Studio Director identity and generous workspace typography.
+- [x] New Studio Director conversation automatically begins an actual model exchange on explicit open, using concise implicit creative guidance, without fabricating a persisted user message; ask one question at a time.
+- [x] Reopening sessions does not restart; general Chat does not inherit Studio instructions. Model unavailable => conspicuous retry/failure, no fabricated reply.
+- [x] Add tests and inspect CI; no Story mutations.
 
-### Phase 1 — Structured action proposal, extraction and review
+### Phase 1 — Structured action proposal, extraction and review (first action in PR #753)
+
+- [x] `scene.draft`: an explicit **Prepare a Scene** action extracts exactly one tentative Scene from conversation into an editable review. Apply creates it at Start/End/Before/After using a stable ID, no prompt or ghost Scenes, optimistic Story version guard, and an action receipt in conversation. Requires explicitly attached Story reference; the current workspace does not silently pick a target. Future work: persist in-progress proposals across refresh and support creating a new Project directly from the conversation.
 - [ ] Add versioned action catalog and schema; prototype representative small local models with `conversation.ask` and `project.brief.propose`; enforce no silent mutation.
 - [ ] 'Capture creative brief' extraction against explicit Story, with Concept/Style/Invariants review and atomic change receipt.
 - [ ] 'Draft one tentative Scene' including placement before/after/first/last (zero Scenes valid); one reviewed commit; never infer destination solely from navigation.

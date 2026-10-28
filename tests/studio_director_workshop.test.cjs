@@ -264,3 +264,15 @@ test('Explicit conversation capture prepares separate review, never auto-applies
   assert.doesNotMatch(send, /\/fs\/studio\/director\/brief[^\w]/);
   assert.doesNotMatch(send, /\/fs\/studio\/director\/project-create/);
 });
+
+test('Story changes invalidate scoped read previews and legacy snapshots remain clearable', () => {
+  assert.match(html, /id="director-chat-attachments-clear"/);
+  const record = slice('  function recordStudioOperation(', '  function renderStudioStoryAccess() {');
+  assert.match(record, /state\.studioAccessIndex = null/);
+  assert.match(record, /Inspect fields again/);
+  const controls = slice("    el('director-chat-attachments-copy-all').onclick", "    el('director-chat-story-prepare').onclick");
+  assert.match(controls, /director-chat-attachments-clear/);
+  assert.match(controls, /state\.storyboardAttachments = \{\}/);
+  assert.match(controls, /scheduleSessionSave\(\)/);
+  assert.doesNotMatch(controls, /modeMessages\.storyboard =/);
+});

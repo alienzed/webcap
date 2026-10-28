@@ -2142,13 +2142,13 @@
                     <p id="director-chat-empty-description">Tell Director what interests you. You can start with a single moment, a feeling, or nothing at all.</p>
                     <button id="director-studio-retry" type="button" class="review-captions-btn hidden">Start Writer's Workshop</button>
                 </div>
-                <section id="director-studio-flow" class="director-studio-flow hidden" aria-label="Capture Concept, Style and Invariants">
+                <section id="director-studio-flow" class="director-studio-flow hidden" aria-label="Capture Concept / overview, Visual / atmosphere and Invariants">
                     <div class="director-studio-flow-main">
                         <div class="director-studio-flow-copy">
-                            <strong id="director-studio-flow-title">Concept, Style &amp; Invariants</strong>
-                            <p id="director-studio-flow-description">Review the values Director proposes for a new Project.</p>
+                            <strong id="director-studio-flow-title">Concept / overview · Visual / atmosphere</strong>
+                            <p id="director-studio-flow-description">Capture these fields and optional Invariants from the discussion.</p>
                         </div>
-                        <button id="director-studio-capture" type="button" class="studio-primary-action">Review Concept, Style &amp; Invariants</button>
+                        <button id="director-studio-capture" type="button" class="studio-primary-action">Review fields</button>
                     </div>
                     <div id="director-studio-flow-target" class="director-studio-flow-target hidden">
                         <span id="director-studio-flow-target-label"></span>
@@ -2161,7 +2161,7 @@
                                 <button type="button" data-studio-starter="hook">Explore the hook</button>
                                 <button type="button" data-studio-starter="scene">Sketch a Scene</button>
                                 <button type="button" data-studio-starter="feasibility">Check H3 feasibility</button>
-                                <button id="director-studio-propose-brief" type="button" title="Propose reviewed changes to an explicitly attached Project">Update Concept / Style / Invariants</button>
+                                <button id="director-studio-propose-brief" type="button" title="Propose reviewed changes to an explicitly attached Project">Update Story fields</button>
                                 <button id="director-studio-prepare-project" type="button" title="Prepare an independent new Project">Create new Project</button>
                                 <button id="director-studio-prepare-scenes" type="button" title="Review multiple tentative Scenes and their placement">Prepare Scenes</button>
                                 <button id="director-studio-prepare-scene" type="button" title="Review one tentative Scene and its placement">Prepare a Scene</button>
@@ -2184,7 +2184,7 @@
             <dialog id="studio-brief-review" class="studio-scene-draft-review" aria-labelledby="studio-brief-review-title">
                 <header class="studio-scene-draft-header">
                     <div>
-                        <h2 id="studio-brief-review-title">Review Concept, Style &amp; Invariants</h2>
+                        <h2 id="studio-brief-review-title">Review Story fields</h2>
                         <p>Select and edit only the fields you want to change. Other Story and Scene content stays intact.</p>
                     </div>
                     <button id="studio-brief-close" type="button" class="review-captions-btn">Close</button>
@@ -2192,10 +2192,10 @@
                 <div class="studio-scene-draft-content">
                     <p id="studio-brief-target" class="studio-scene-draft-target"></p>
                     <p id="studio-brief-rationale" class="studio-scene-draft-rationale"></p>
-                    <label for="studio-brief-concept"><input id="studio-brief-concept-selected" type="checkbox" checked> Concept <small>(including Core Appeal)</small></label>
+                    <label for="studio-brief-concept"><input id="studio-brief-concept-selected" type="checkbox" checked> Concept / overview <small>(including Core Appeal)</small></label>
                     <p id="studio-brief-concept-before" class="studio-scene-draft-rationale"></p>
                     <textarea id="studio-brief-concept" rows="5"></textarea>
-                    <label for="studio-brief-style"><input id="studio-brief-style-selected" type="checkbox" checked> Style</label>
+                    <label for="studio-brief-style"><input id="studio-brief-style-selected" type="checkbox" checked> Visual / atmosphere</label>
                     <p id="studio-brief-style-before" class="studio-scene-draft-rationale"></p>
                     <textarea id="studio-brief-style" rows="3"></textarea>
                     <label><input id="studio-brief-invariants-selected" type="checkbox"> Invariants</label>
@@ -2212,7 +2212,7 @@
             <dialog id="studio-project-review" class="studio-scene-draft-review" aria-labelledby="studio-project-review-title">
                 <header class="studio-scene-draft-header">
                     <div>
-                        <h2 id="studio-project-review-title">Create Project · Concept, Style &amp; Invariants</h2>
+                        <h2 id="studio-project-review-title">Create Project</h2>
                         <p>An idea can become a Project without a title, finished outline or Scenes. Nothing is created until you approve.</p>
                     </div>
                     <button id="studio-project-close" type="button" class="review-captions-btn">Close</button>
@@ -2221,9 +2221,9 @@
                     <p id="studio-project-rationale" class="studio-scene-draft-rationale"></p>
                     <label for="studio-project-title">Working title <small>(optional)</small></label>
                     <input id="studio-project-title" type="text" maxlength="240" placeholder="Untitled Project">
-                    <label for="studio-project-concept">Concept <small>(including Core Appeal)</small></label>
+                    <label for="studio-project-concept">Concept / overview <small>(including Core Appeal)</small></label>
                     <textarea id="studio-project-concept" rows="5" placeholder="What makes this idea worth watching?"></textarea>
-                    <label for="studio-project-style">Style <small>(optional)</small></label>
+                    <label for="studio-project-style">Visual / atmosphere <small>(optional)</small></label>
                     <textarea id="studio-project-style" rows="2"></textarea>
                     <label>Invariants <small>(optional; only genuinely persistent facts)</small></label>
                     <div id="studio-project-invariants"></div>

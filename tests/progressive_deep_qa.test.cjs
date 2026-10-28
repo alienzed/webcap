@@ -122,6 +122,8 @@ test('the review queue is independent from filters and can receive new findings'
     qaFocusReviewCurrent: () => true,
     qaFocusReviewCandidateFindings: item => available[item.key] ? [{ id: item.key }] : [],
     qaFocusReviewHasAction: () => true,
+    qaFocusReviewIsDismissed: () => false,
+    qaCurrentItemSignatureMap: () => ({ 'a.jpg': 's1', 'b.jpg': 's1' }),
     qaOrderFocusReviewKeys: keys => keys,
     isFocusedQaReviewMode: () => true,
     focusedCaptionState: { itemKey: 'a' },

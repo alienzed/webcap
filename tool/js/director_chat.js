@@ -1092,13 +1092,13 @@
     var description = el('director-studio-flow-description');
     var capture = el('director-studio-capture');
     if (attached) {
-      title.textContent = 'Develop the attached Project';
-      description.textContent = 'Review changes to its Concept, Core Appeal, Style and Invariants. Scenes stay untouched.';
-      capture.textContent = 'Review creative brief';
+      title.textContent = 'Concept, Style & Invariants';
+      description.textContent = 'Review changes to the explicitly attached Project. Scenes and Takes stay untouched.';
+      capture.textContent = 'Review Concept, Style & Invariants';
     } else {
-      title.textContent = 'Bring this idea into Studio';
-      description.textContent = 'Extract Concept, Core Appeal and Style into a new Project. You can edit everything before saving.';
-      capture.textContent = 'Capture Concept & Style';
+      title.textContent = 'Concept, Style & Invariants';
+      description.textContent = 'Review proposed values and create a new Project, or explicitly attach an existing one.';
+      capture.textContent = 'Review Concept, Style & Invariants';
     }
     capture.disabled = state.pending || state.attachmentPending || !state.sessionReady || !state.modelId;
     var useOpen = el('director-studio-flow-target');

@@ -86,7 +86,7 @@ def test_progressive_review_receipts_are_scope_bound_and_do_not_touch_annotation
     assert "saved.qaReviewMode === 'progressive-v1'" in source
     assert "qaWorkbenchState.deepScanScope = scan;" in source
     assert "qaWorkbenchState.deepScanScopeFiles = scopeFiles.slice();" in source
-    assert "if (!qaWorkbenchState.deepScanSessionActive) qaRestoreReview(inputSignature);" in source
+    assert "if (!qaWorkbenchState.deepScanSessionActive && !keepProgressiveScope)" in source
     assert "qaDeepScanScopeItems()" in source
     assert "qaSyncFocusReview();" in source
     assert "qaStartFocusReview();" in source

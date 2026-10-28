@@ -331,7 +331,7 @@
 
     if (description) {
       description.textContent = studio
-        ? (state.attachmentPending ? 'Connecting Story…'
+        ? (state.attachmentPending ? 'Connecting Project…'
           : 'Working with: ' + studioWorkingStoryLabel() +
             (state.workshop ? ' · Scene: ' + state.workshop.sceneTitle : ''))
         : (active ? String(active.description || active.label || '') : 'Saved Assistant conversation');
@@ -1131,7 +1131,7 @@
     if (state.studioStoryAccess && state.studioStoryAccess.storyId === String(storyId || '')) {
       state.studioAccessIndex = null;
       el('director-studio-access-data').classList.add('hidden');
-      el('director-studio-access-status').textContent = 'Story changed. Inspect fields again for current values.';
+      el('director-studio-access-status').textContent = 'Project changed. Inspect fields again for current values.';
     }
     renderStudioOperations();
   }
@@ -1140,7 +1140,7 @@
     var access = state.studioStoryAccess;
     var visible = state.activeMode === 'storyboard' && !!access;
     el('director-studio-access').classList.toggle('hidden', !visible);
-    if (visible) el('director-studio-access-summary').textContent = 'Story access · ' + access.label;
+    if (visible) el('director-studio-access-summary').textContent = 'Project access · ' + access.label;
   }
 
   function grantStudioStoryAccess() {
@@ -1161,7 +1161,7 @@
       scheduleSessionSave();
       syncModeUi();
     }).catch(function (error) {
-      studioActionStatus('Story access failed: ' + String(error.message || error), true);
+      studioActionStatus('Project access failed: ' + String(error.message || error), true);
       if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Studio Story access', error);
       else throw error;
     }).finally(function () {
@@ -1188,7 +1188,7 @@
   function readStudioStoryScope(field, sceneId) {
     var chat = state.sessionByMode.storyboard;
     if (!chat || !state.studioStoryAccess || !chat.id) {
-      return Promise.reject(new Error('Grant access in a saved Studio conversation first.'));
+      return Promise.reject(new Error('Connect a Project in this Studio conversation first.'));
     }
     var url = '/fs/studio/director/story-read?chatId=' + encodeURIComponent(chat.id) +
       '&field=' + encodeURIComponent(field) + '&sceneId=' + encodeURIComponent(sceneId || '');
@@ -1226,7 +1226,7 @@
       if (needsScene && !scene.value) throw new Error('Select a Scene first.');
       return readStudioStoryScope(field, needsScene ? scene.value : '');
     }).then(function (result) {
-      if (result.storyId !== storyId) throw new Error('Story changed while reading fields.');
+      if (result.storyId !== storyId) throw new Error('Project changed while reading fields.');
       var output = el('director-studio-access-data');
       output.textContent = JSON.stringify(result.data, null, 2);
       output.classList.remove('hidden');
@@ -2091,7 +2091,7 @@
     }
     var storyId = studioAttachedStoryId();
     if (!storyId) {
-      studioActionStatus('Attach one Story using the explicit context controls before preparing a Scene.', true);
+      studioActionStatus('Connect a Project before preparing a Scene.', true);
       return;
     }
     var discussion = (state.modeMessages.storyboard || []).filter(function (message) {

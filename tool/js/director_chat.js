@@ -40,7 +40,8 @@
     sessionError: false,
     draftByMode: { chat: '', storyboard: '' },
     studioIntroPending: false,
-    studioSceneProposal: null
+    studioSceneProposal: null,
+    studioProjectProposal: null
   };
   var STORYBOARD_WORKSHOP_PRIMER = [
     'You are collaborating with an author developing short AI-generated videos.',
@@ -596,6 +597,7 @@
       state.storyboardAttachments = Object.assign({}, chat.attachments || {});
       state.workshop = chat.workshop || null;
       state.studioSceneProposal = null;
+      state.studioProjectProposal = null;
       state.workshopProposal = null;
       state.storyGuidelineProposal = null;
     }
@@ -1087,6 +1089,8 @@
     if (history) history.disabled = state.pending || !state.sessionReady;
     el('director-studio-prepare-scene').disabled = state.pending || !state.sessionReady ||
       state.activeMode !== 'storyboard';
+    el('director-studio-prepare-project').disabled = state.pending || !state.sessionReady ||
+      state.activeMode !== 'storyboard' || !state.modelId;
     var prepare = el('director-chat-workshop-prepare');
     if (prepare) {
       prepare.disabled = state.pending || !state.modelId || !!(state.workshop && state.workshop.shotError) || !currentMessages().some(function (message) { return message.role === 'user'; });
@@ -1142,6 +1146,209 @@
     status.classList.toggle('hidden', !message);
     status.textContent = message || '';
     status.dataset.error = error ? 'true' : 'false';
+  }
+
+
+  function parseStudioProjectDraft(raw) {
+    var value = String(raw || '').trim();
+    var fence = String.fromCharCode(96).repeat(3);
+    if (value.startsWith(fence) && value.endsWith(fence)) {
+      var newline = value.indexOf('\n');
+      if (newline >= 0) value = value.slice(newline + 1, -3).trim();
+    }
+    var proposal;
+    try { proposal = JSON.parse(value); }
+    catch (error) { throw new Error('Director returned invalid Project JSON: ' + error.message); }
+    if (!proposal || Array.isArray(proposal) || typeof proposal !== 'object' ||
+        ['title', 'concept', 'style', 'rationale'].some(function (field) { return typeof proposal[field] !== 'string'; }) ||
+        !Array.isArray(proposal.invariants) ||
+        proposal.invariants.length > 30 ||
+        proposal.invariants.some(function (item) {
+          return !item || typeof item !== 'object' || Array.isArray(item) ||
+            typeof item.kind !== 'string' || typeof item.title !== 'string' || typeof item.text !== 'string' ||
+            ['visual', 'character', 'location', 'world', 'sound', 'custom'].indexOf(item.kind) === -1;
+        }) ||
+        (proposal.firstScene != null && (
+          typeof proposal.firstScene !== 'object' || Array.isArray(proposal.firstScene) ||
+          typeof proposal.firstScene.title !== 'string' || typeof proposal.firstScene.summary !== 'string' ||
+          !proposal.firstScene.summary.trim()
+        ))) {
+      throw new Error('Project proposal must contain Concept, Style, optional Invariants, and an optional first Scene.');
+    }
+    if (!proposal.concept.trim() && !proposal.firstScene) {
+      throw new Error('Director needs at least an idea or first Scene to prepare a Project.');
+    }
+    return proposal;
+  }
+
+  function addStudioProjectInvariant(item) {
+    var host = el('studio-project-invariants');
+    var row = document.createElement('div');
+    row.className = 'studio-project-invariant';
+    row.style.cssText = 'display:grid;grid-template-columns:minmax(0,130px) minmax(0,1fr) auto;gap:8px;margin:8px 0;';
+    var kind = document.createElement('select');
+    kind.setAttribute('aria-label', 'Invariant type');
+    ['character', 'location', 'visual', 'world', 'sound', 'custom'].forEach(function (value) {
+      var option = document.createElement('option');
+      option.value = value;
+      option.textContent = value.charAt(0).toUpperCase() + value.slice(1);
+      kind.appendChild(option);
+    });
+    kind.value = item && item.kind || 'character';
+    var title = document.createElement('input');
+    title.placeholder = 'Name';
+    title.setAttribute('aria-label', 'Invariant name');
+    title.value = item && item.title || '';
+    var remove = document.createElement('button');
+    remove.type = 'button';
+    remove.className = 'review-captions-btn';
+    remove.textContent = 'Remove';
+    remove.onclick = function () { row.remove(); };
+    var details = document.createElement('textarea');
+    details.placeholder = 'Only what must stay consistent';
+    details.setAttribute('aria-label', 'Invariant detail');
+    details.rows = 2;
+    details.style.gridColumn = '1 / -1';
+    details.value = item && item.text || '';
+    row.append(kind, title, remove, details);
+    host.appendChild(row);
+  }
+
+  function showStudioProjectReview() {
+    var proposal = state.studioProjectProposal;
+    if (!proposal) throw new Error('Prepare a Project before opening review.');
+    el('studio-project-title').value = proposal.title;
+    el('studio-project-concept').value = proposal.concept;
+    el('studio-project-style').value = proposal.style;
+    el('studio-project-rationale').textContent = proposal.rationale ||
+      'Review the creative brief before creating anything.';
+    el('studio-project-error').textContent = '';
+    el('studio-project-invariants').replaceChildren();
+    proposal.invariants.forEach(addStudioProjectInvariant);
+    el('studio-project-include-scene').checked = !!proposal.firstScene;
+    el('studio-project-first-scene-fields').classList.toggle('hidden', !proposal.firstScene);
+    el('studio-project-scene-title').value = proposal.firstScene ? proposal.firstScene.title : '';
+    el('studio-project-scene-summary').value = proposal.firstScene ? proposal.firstScene.summary : '';
+    var dialog = el('studio-project-review');
+    if (dialog.open) dialog.close();
+    dialog.showModal();
+  }
+
+  function prepareStudioProject() {
+    if (state.pending || state.activeMode !== 'storyboard' || !state.sessionReady) return;
+    if (state.studioProjectProposal) { showStudioProjectReview(); return; }
+    if (!state.modelId) { studioActionStatus('Choose a Director model first.', true); return; }
+    var discussion = (state.modeMessages.storyboard || []).filter(function (message) {
+      return message && (message.role === 'assistant' || message.role === 'user');
+    });
+    if (!discussion.some(function (message) { return message.role === 'user'; })) {
+      studioActionStatus('Discuss an idea first, then prepare a Project.', true);
+      return;
+    }
+    state.pending = true;
+    state.jobId = '';
+    studioActionStatus('Preparing a new Project for review…', false);
+    startProgress();
+    syncControls();
+    var input = {
+      task: 'Extract only the agreed creative direction into ONE new Studio Project. ' +
+        'Provide an editable title (may be blank), concise Concept including the core appeal, ' +
+        'optional Style, and only essential Invariants. Include firstScene only if one concrete ' +
+        'tentative clip has actually emerged. It is fine to have no first Scene or no full outline. ' +
+        'Do not invent a fixed Scene count or prepare a generation prompt. ' +
+        'Use a short rationale. Nothing should be created yet.',
+      discussion: discussion
+    };
+    studioDirectorRequestMessages([{ role: 'user', content: JSON.stringify(input) }])
+      .then(function (messages) {
+        return requestJson('/fs/director/chat', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ model: state.modelId, operation: 'studio_project_draft', messages: messages })
+        });
+      }).then(function (payload) {
+        if (!payload.job || !payload.job.jobId) throw new Error('Project extraction was not queued.');
+        state.jobId = String(payload.job.jobId);
+        state.requestDiagnostic = payload.job.request || null;
+        trackTransientLlmJob(payload.job);
+        return waitForJob(payload.job);
+      }).then(function (job) {
+        var result = job.result && typeof job.result === 'object' ? job.result : {};
+        state.studioProjectProposal = parseStudioProjectDraft(result.text);
+        finishProgress(null);
+        studioActionStatus('Project ready for review. Nothing has been created.', false);
+        showStudioProjectReview();
+      }).catch(function (error) {
+        finishProgress(error);
+        studioActionStatus('Project proposal failed: ' + String(error.message || error), true);
+        if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Studio Project proposal', error);
+        else throw error;
+      }).finally(function () {
+        state.pending = false;
+        state.jobId = '';
+        syncControls();
+      });
+  }
+
+  function applyStudioProject() {
+    if (!state.studioProjectProposal || state.pending) return;
+    var proposal = {
+      title: el('studio-project-title').value.trim(),
+      concept: el('studio-project-concept').value.trim(),
+      style: el('studio-project-style').value.trim(),
+      invariants: []
+    };
+    var rows = el('studio-project-invariants').querySelectorAll('.studio-project-invariant');
+    rows.forEach(function (row) {
+      var fields = row.querySelectorAll('select, input, textarea');
+      var text = fields[2].value.trim();
+      if (text) proposal.invariants.push({
+        kind: fields[0].value, title: fields[1].value.trim(), text: text
+      });
+    });
+    if (el('studio-project-include-scene').checked) {
+      proposal.firstScene = {
+        title: el('studio-project-scene-title').value.trim(),
+        summary: el('studio-project-scene-summary').value.trim()
+      };
+      if (!proposal.firstScene.summary) {
+        el('studio-project-error').textContent = 'Describe the first Scene or uncheck it.';
+        return;
+      }
+    }
+    if (!proposal.concept && !proposal.firstScene) {
+      el('studio-project-error').textContent = 'Describe the idea or include a first Scene.';
+      return;
+    }
+    state.pending = true;
+    syncControls();
+    el('studio-project-error').textContent = '';
+    requestJson('/fs/studio/director/project-create', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ proposal: proposal })
+    }).then(function (payload) {
+      if (!payload.story || !payload.story.id) throw new Error('Project creation returned no authoritative Story ID.');
+      state.studioProjectProposal = null;
+      el('studio-project-review').close();
+      var name = payload.story.title || 'Untitled Project';
+      state.modeMessages.storyboard.push({
+        role: 'assistant', content: 'Created Studio Project "' + name + '" (' + payload.story.id + ') with ' +
+          payload.story.sceneOrder.length + ' tentative Scene(s). It is in the Studio Library; ' +
+          'the conversation and its context have not changed.'
+      });
+      renderMessages();
+      studioActionStatus('Project created: ' + name + '. Open it from the Studio Library.', false);
+      return persistSession('storyboard').then(function () {
+        return window.refreshStudioDirectorStoryIfOpen(payload.story.id);
+      });
+    }).catch(function (error) {
+      el('studio-project-error').textContent = 'Create failed: ' + String(error.message || error) +
+        '. Check Studio Library before retrying if the request may have completed.';
+      if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Studio Project Apply', error);
+      else throw error;
+    }).finally(function () {
+      state.pending = false;
+      syncControls();
+    });
   }
 
   function parseStudioSceneDraft(raw) {
@@ -1460,6 +1667,7 @@
         }
         state.workshopProposal = null;
         state.studioSceneProposal = null;
+        state.studioProjectProposal = null;
         state.storyGuidelineProposal = null;
         el('director-chat-workshop-status').textContent = '';
       }
@@ -1958,6 +2166,7 @@
       state.storyGuidelineProposal = null;
       state.workshopProposal = null;
       state.studioSceneProposal = null;
+      state.studioProjectProposal = null;
       el('director-chat-workshop-status').textContent = '';
     }
     var messages = currentMessages();
@@ -2112,6 +2321,14 @@
     clear.onclick = newChat;
     el('director-studio-retry').onclick = startStudioWorkshop;
     el('director-studio-prepare-scene').onclick = prepareStudioSceneDraft;
+    el('director-studio-prepare-project').onclick = prepareStudioProject;
+    el('studio-project-close').onclick = function () { el('studio-project-review').close(); };
+    el('studio-project-discard').onclick = function () { el('studio-project-review').close(); };
+    el('studio-project-create').onclick = applyStudioProject;
+    el('studio-project-add-invariant').onclick = function () { addStudioProjectInvariant(); };
+    el('studio-project-include-scene').onchange = function () {
+      el('studio-project-first-scene-fields').classList.toggle('hidden', !this.checked);
+    };
     el('studio-scene-draft-discard').onclick = function () { el('studio-scene-draft-review').close(); };
     el('studio-scene-draft-close').onclick = function () { el('studio-scene-draft-review').close(); };
     el('studio-scene-draft-apply').onclick = applyStudioSceneDraft;

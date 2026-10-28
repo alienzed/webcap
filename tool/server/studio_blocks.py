@@ -4,7 +4,6 @@ import os
 import tempfile
 import threading
 import uuid
-from datetime import datetime, timezone
 
 from flask import jsonify, request
 from . import config as app_config
@@ -60,8 +59,7 @@ def register_routes(app):
                 if request.method == "GET":
                     return jsonify({"blocks": blocks})
                 data = _validated(request.get_json(silent=True))
-                now = datetime.now(timezone.utc).isoformat()
-                item = dict(data, id=uuid.uuid4().hex, revision=1, createdAt=now, updatedAt=now)
+                item = dict(data, id=uuid.uuid4().hex)
                 blocks.append(item)
                 _save(blocks)
                 return jsonify({"block": item}), 201
@@ -75,22 +73,19 @@ def register_routes(app):
     def studio_blocks_item(block_id):
         try:
             payload = request.get_json(silent=True)
-            if not isinstance(payload, dict) or type(payload.get("revision")) is not int:
-                raise ValueError("Expected Studio Block revision is required.")
+            if request.method == "PUT" and not isinstance(payload, dict):
+                raise ValueError("Studio Block data is required.")
             with _LOCK:
                 blocks = _load()
                 item = next((b for b in blocks if b.get("id") == block_id), None)
                 if item is None:
                     return jsonify({"error": "Studio Block not found."}), 404
-                if item.get("revision") != payload["revision"]:
-                    return jsonify({"error": "Studio Block changed. Reload it before applying your edit."}), 409
                 if request.method == "DELETE":
                     blocks.remove(item)
                     _save(blocks)
                     return jsonify({"ok": True})
                 data = _validated(payload)
-                updated = dict(item, **data, revision=item["revision"] + 1,
-                               updatedAt=datetime.now(timezone.utc).isoformat())
+                updated = dict(item, **data)
                 blocks[blocks.index(item)] = updated
                 _save(blocks)
                 return jsonify({"block": updated})

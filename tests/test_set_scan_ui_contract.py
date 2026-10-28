@@ -142,3 +142,16 @@ def test_sight_review_large_live_preview_and_explicit_source_switch():
     assert "model_collection=\"vision_sight_attempts\"" in backend
     assert 'next_info["vision_sights"] = cached["vision_sights"]' in media
     assert 'next_info["vision_sight_attempts"] = cached["vision_sight_attempts"]' in media
+
+def test_prepare_set_sight_progress_has_elapsed_and_estimated_remaining():
+    html = _read("tool/tool.html")
+    scan = _read("tool/js/set_scan.js")
+    css = _read("tool/css/modals.css")
+    assert 'id="set-scan-timing"' in html
+    assert ".set-scan-timing" in css
+    assert "function estimatedSetSightRemainingSeconds()" in scan
+    assert "scanElapsed / setScanState.completed * (setScanState.total - setScanState.completed)" in scan
+    assert "setScanState.sightStartedAt = pending.length ? Date.now() / 1000 : 0;" in scan
+    assert "window.setInterval(updateSetSightTiming, 1000)" in scan
+    assert "window.clearInterval(setSightTimingTimer)" in scan
+    assert "setScanState.activityFinishedAt = Date.now() / 1000;" in scan

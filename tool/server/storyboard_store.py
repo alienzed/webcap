@@ -651,6 +651,7 @@ def _normalize_story(payload, existing=None, story_id=None):
         "removedScenes": removed_scenes,
         "development": copy.deepcopy(current.get("development")) if isinstance(current.get("development"), dict) else None,
         "previousSceneRepair": copy.deepcopy(current.get("previousSceneRepair")) if isinstance(current.get("previousSceneRepair"), dict) else None,
+        "studioRevisions": copy.deepcopy(current.get("studioRevisions") or []),
     }
 
 
@@ -942,6 +943,106 @@ def apply_reviewed_story_guidelines(story_id, expected, changes):
     story["updatedAt"] = _utc_now()
     _write_json_atomic(_story_path(story_id), story)
     return story
+
+
+
+STUDIO_BRIEF_FIELDS = {"concept", "style", "invariants"}
+
+
+def _studio_invariant_links_preserved(story, proposed_invariants):
+    existing = {
+        (entry["kind"], entry["title"].casefold())
+        for entry in story.get("invariants", [])
+        if entry.get("kind") in {"character", "location"} and entry.get("title")
+    }
+    proposed = {
+        (entry["kind"], entry["title"].casefold())
+        for entry in proposed_invariants
+        if entry.get("kind") in {"character", "location"} and entry.get("title")
+    }
+    removed = existing - proposed
+    if not removed:
+        return
+    for scene_id, scene in (story.get("scenes") or {}).items():
+        for ref in scene.get("invariantRefs") or []:
+            key = (str(ref.get("kind") or "").lower(), str(ref.get("title") or "").casefold())
+            if key in removed:
+                raise RuntimeError(
+                    "Invariant " + key[1] + " is referenced by Scene " + scene_id
+                    + ". Keep its name/type or review the Scene reference changes separately."
+                )
+
+
+@_serialized_mutation
+def apply_studio_brief(story_id, expected, changes):
+    """Commit only approved Story brief fields with their own optimistic checks."""
+    if not isinstance(expected, dict) or not isinstance(changes, dict) or not changes:
+        raise ValueError("Select at least one approved brief field.")
+    if set(changes) - STUDIO_BRIEF_FIELDS or set(expected) - STUDIO_BRIEF_FIELDS:
+        raise ValueError("Studio brief contains unsupported fields.")
+    if set(changes) - set(expected):
+        raise ValueError("Every selected change needs an authoritative original.")
+    story = load_story(story_id)
+    approved = {}
+    for field, value in changes.items():
+        before = story.get(field)
+        if before != expected[field]:
+            raise RuntimeError("Story " + field + " changed since review. Prepare again.")
+        if field in {"concept", "style"}:
+            if not isinstance(value, str) or len(value) > 20000:
+                raise ValueError("Studio brief text must be shorter than 20,000 characters.")
+            after = value.strip()
+        else:
+            if not isinstance(value, list) or len(value) > 30:
+                raise ValueError("Story supports at most 30 invariants.")
+            if any(not isinstance(x, dict) or not isinstance(x.get("text"), str)
+                   or not x["text"].strip() for x in value):
+                raise ValueError("Every selected invariant must have a description.")
+            after = _normalize_story_invariants(value)
+            if len(after) != len(value):
+                raise ValueError("Every invariant must be valid and non-empty.")
+            _studio_invariant_links_preserved(story, after)
+        if after != before:
+            approved[field] = {"before": copy.deepcopy(before), "after": copy.deepcopy(after)}
+    if not approved:
+        raise ValueError("No actual Story brief changes were selected.")
+    updated = copy.deepcopy(story)
+    for field, record in approved.items():
+        updated[field] = record["after"]
+    revisions = list(story.get("studioRevisions") or [])
+    revision_id = _new_id("brief")
+    revisions.append({
+        "id": revision_id, "at": _utc_now(), "fields": approved,
+    })
+    updated["studioRevisions"] = revisions[-10:]
+    updated["updatedAt"] = _utc_now()
+    _write_json_atomic(_story_path(story_id), updated)
+    return updated, revision_id
+
+
+@_serialized_mutation
+def undo_studio_brief(story_id, revision_id):
+    """Undo only the latest selected brief fields while their after-values match."""
+    story = load_story(story_id)
+    revisions = list(story.get("studioRevisions") or [])
+    if not revisions or revisions[-1].get("id") != revision_id:
+        raise RuntimeError("Only the latest Studio brief change can be undone.")
+    entry = revisions[-1]
+    fields = entry.get("fields") or {}
+    if not fields or set(fields) - STUDIO_BRIEF_FIELDS:
+        raise RuntimeError("Studio revision metadata is invalid.")
+    for field, record in fields.items():
+        if story.get(field) != record["after"]:
+            raise RuntimeError("Story " + field + " changed since Apply; Undo was not performed.")
+    if "invariants" in fields:
+        _studio_invariant_links_preserved(story, fields["invariants"]["before"])
+    updated = copy.deepcopy(story)
+    for field, record in fields.items():
+        updated[field] = copy.deepcopy(record["before"])
+    updated["studioRevisions"] = revisions[:-1]
+    updated["updatedAt"] = _utc_now()
+    _write_json_atomic(_story_path(story_id), updated)
+    return updated
 
 
 @_serialized_mutation

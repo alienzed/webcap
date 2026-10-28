@@ -157,3 +157,110 @@ test('progressive scan never uses fresh Sight or automatically edits captions', 
   assert.ok(request.includes('items: batch'));
   assert.ok(request.includes('qaSaveReview(true)'));
 });
+
+test('normal media selection remains filtered; explicit QA navigation can request a filtered-out item', async () => {
+  const media = fs.readFileSync('tool/js/media.js', 'utf8');
+  const start = media.indexOf('function selectPathMedia(mediaItem, options)');
+  const end = media.indexOf('function selectNextCaptionlessMediaItem(', start);
+  assert.ok(start >= 0 && end > start);
+  const observed = [];
+  const sandbox = {
+    getFilteredMediaItems: () => [],
+    state: { folder: 'set', items: [] },
+    renderFileList() {},
+    XMLHttpRequest: class {
+      open() { observed.push('requested'); }
+      send() { throw new Error('navigation started'); }
+    }
+  };
+  vm.createContext(sandbox);
+  vm.runInContext(media.slice(start, end) + '\nthis.select = selectPathMedia;', sandbox);
+  await assert.rejects(sandbox.select({ key: 'hidden', fileName: 'hidden.jpg' }), /outside the current filtered list/);
+  assert.equal(observed.length, 0);
+  await assert.rejects(sandbox.select({ key: 'hidden', fileName: 'hidden.jpg' }, { allowOutsideFilter: true }), /navigation started/);
+  assert.deepEqual(observed, ['requested']);
+});
+
+test('only QA guided navigation opts out of the live Media List filter', async () => {
+  const focus = fs.readFileSync('tool/js/focused_caption.js', 'utf8');
+  const start = focus.indexOf('function navigateFocusedCaptionToIndex(');
+  const end = focus.indexOf('function hasFocusedReviewUnsavedChanges()', start);
+  assert.ok(start >= 0 && end > start);
+  const seen = [];
+  let qa = true;
+  const sandbox = {
+    focusedCaptionState: { open: true, itemKeys: ['hidden'], itemIndex: 0, itemKey: 'hidden' },
+    isFocusedQaReviewMode: () => qa,
+    state: { currentItem: { key: 'another' } },
+    resetFocusedCaptionUseArm() {},
+    findFocusedCaptionMediaItemByKey: () => ({ key: 'hidden', fileName: 'hidden.jpg' }),
+    syncFocusedCaptionControls() {},
+    syncCaptionAssistCandidateUi() {},
+    syncFocusedCaptionPanelGeometry() {},
+    selectPathMedia(_media, options) { seen.push(options); return Promise.resolve(true); },
+    stopFocusedCaption() { throw Error('Unexpected guided-review navigation failure'); }
+  };
+  vm.createContext(sandbox);
+  vm.runInContext(focus.slice(start, end) + '\nthis.navigate = navigateFocusedCaptionToIndex;', sandbox);
+  assert.equal(await sandbox.navigate(0, 1), true);
+  assert.equal(seen[0].allowOutsideFilter, true);
+  qa = false;
+  assert.equal(await sandbox.navigate(0, 1), true);
+  assert.equal(seen[1], undefined);
+});
+
+test('QA review opens its guided workflow before navigating to a hidden item', () => {
+  const seen = [];
+  const item = { key: 'a', fileName: 'a.jpg', caption: 'A shirt.' };
+  const sandbox = {
+    qaFocusReviewState: {
+      active: true, folder: 'set', scopeKey: 'captured', items: [item],
+      queued: {}, handled: {}, reviewFindings: {}, autoOpen: true, opening: false, token: 1
+    },
+    qaFocusReviewCurrent: () => true,
+    qaFocusReviewCandidateFindings: () => [{ id: 'finding' }],
+    qaFocusReviewHasAction: () => true,
+    isFocusedQaReviewMode: () => false,
+    qaOrderFocusReviewKeys: keys => keys,
+    qaSyncFocusReviewButton() {},
+    startFocusedQaReview(keys) { seen.push(...keys); return true; },
+    state: { folder: 'set' }
+  };
+  vm.createContext(sandbox);
+  vm.runInContext(functionSource('qaSyncFocusReview', 'qaStartFocusReview') + '\nthis.sync = qaSyncFocusReview;', sandbox);
+  sandbox.sync();
+  assert.deepEqual(seen, ['a']);
+  assert.equal(sandbox.qaFocusReviewState.autoOpen, false);
+});
+
+test('dismissing an item persists its finding until meaningful input changes', () => {
+  const item = { key: 'a', fileName: 'a.jpg', caption: 'A red shirt.' };
+  const finding = { id: 'finding-a' };
+  let signature = 's1';
+  let saved = 0;
+  const sandbox = {
+    qaWorkbenchState: { dispositions: {} },
+    qaFocusReviewState: {
+      handled: {}, queued: { a: true }, reviewFindings: { a: [finding] }
+    },
+    qaFocusReviewCurrent: () => true,
+    qaCurrentItemSignatureMap: () => ({ 'a.jpg': signature }),
+    qaSaveReview() { saved += 1; },
+    qaSyncFocusReviewButton() {},
+    qaSyncFocusReview() {},
+    state: { items: [item] }
+  };
+  vm.createContext(sandbox);
+  vm.runInContext(
+    functionSource('qaFocusReviewIsDismissed', 'qaFocusReviewCandidateFindings') +
+    functionSource('qaFocusReviewMarkHandled', 'qaFocusReviewStopped') +
+    '\nthis.dismissed = qaFocusReviewIsDismissed; this.handle = qaFocusReviewMarkHandled;',
+    sandbox
+  );
+  sandbox.handle('a', 'dismissed');
+  assert.equal(saved, 1);
+  assert.equal(sandbox.qaWorkbenchState.dispositions['finding-a|a.jpg'].signature, 's1');
+  assert.equal(sandbox.dismissed(finding, item, signature), true);
+  signature = 's2';
+  assert.equal(sandbox.dismissed(finding, item, signature), false);
+});

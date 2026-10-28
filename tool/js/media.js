@@ -571,12 +571,13 @@ function getAdvancedFlagFilterValues() {
   }).filter(Boolean);
 }
 
-function selectPathMedia(mediaItem) {
+function selectPathMedia(mediaItem, options) {
+  var opts = options || {};
   var visibleMedia = getFilteredMediaItems(false);
   var isVisible = !!(mediaItem && mediaItem.key && visibleMedia.some(function (item) {
     return item && item.key === mediaItem.key;
   }));
-  if (!isVisible) {
+  if (!isVisible && !opts.allowOutsideFilter) {
     var label = mediaItem && (mediaItem.label || mediaItem.fileName || mediaItem.key);
     return Promise.reject(new Error('Cannot select an item outside the current filtered list: ' + String(label || 'unknown item')));
   }

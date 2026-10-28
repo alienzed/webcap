@@ -1077,6 +1077,49 @@
     host.scrollTop = host.scrollHeight;
   }
 
+  function syncStudioFlow() {
+    var studio = state.activeMode === 'storyboard';
+    var discussed = (state.modeMessages.storyboard || []).some(function (message) {
+      return message && message.role === 'user' && String(message.content || '').trim();
+    });
+    var flow = el('director-studio-flow');
+    flow.classList.toggle('hidden', !studio || !discussed);
+    if (!studio || !discussed) return;
+    var attached = studioAttachedStoryId();
+    var open = window.getStoryboardRouteTarget();
+    var openId = String(open && open.storyId || '');
+    var title = el('director-studio-flow-title');
+    var description = el('director-studio-flow-description');
+    var capture = el('director-studio-capture');
+    if (attached) {
+      title.textContent = 'Develop the attached Project';
+      description.textContent = 'Review changes to its Concept, Core Appeal, Style and Invariants. Scenes stay untouched.';
+      capture.textContent = 'Review creative brief';
+    } else {
+      title.textContent = 'Bring this idea into Studio';
+      description.textContent = 'Extract Concept, Core Appeal and Style into a new Project. You can edit everything before saving.';
+      capture.textContent = 'Capture Concept & Style';
+    }
+    capture.disabled = state.pending || state.attachmentPending || !state.sessionReady || !state.modelId;
+    var useOpen = el('director-studio-flow-target');
+    var canAttachOpen = !!openId && openId !== attached;
+    useOpen.classList.toggle('hidden', !canAttachOpen);
+    if (canAttachOpen) {
+      el('director-studio-flow-target-label').textContent = attached
+        ? 'Want to work on the Project currently open in Studio instead?'
+        : 'Already working in a Project?';
+      el('director-studio-attach-current').disabled = state.pending || state.attachmentPending;
+    }
+  }
+
+  function captureStudioCreativeBrief() {
+    if (state.pending || state.attachmentPending || state.activeMode !== 'storyboard') return;
+    // The existing explicit Story attachment identifies the editable target.
+    // A conversation without one can always create a new independent Project.
+    if (studioAttachedStoryId()) prepareStudioBrief();
+    else prepareStudioProject();
+  }
+
   function syncControls() {
     var send = el('director-chat-send');
     var input = el('director-chat-input');
@@ -1092,6 +1135,7 @@
     if (clear) clear.disabled = state.pending || (persistentMode(state.activeMode) && !state.sessionReady);
     var history = el('director-chat-history-toggle');
     if (history) history.disabled = state.pending || !state.sessionReady;
+    syncStudioFlow();
     el('director-studio-prepare-scene').disabled = state.pending || !state.sessionReady ||
       state.activeMode !== 'storyboard';
     el('director-studio-prepare-project').disabled = state.pending || !state.sessionReady ||
@@ -2216,14 +2260,28 @@
       if (!payload.system || typeof payload.system !== 'string') {
         throw new Error('Studio Director production guidance is missing.');
       }
-      var outbound = storyboardRequestMessages(messages);
-      outbound[0] = { role: 'system', content: payload.system + '\n\n' + outbound[0].content };
+      var outbound = storyboardRequestMessages(messages, false);
+      // Conversation context is opt-in. The workbench state only tells Director
+      // what WebCap can review next; it is not a fresh Story or Scene attachment.
+      var storyRefs = Object.keys(state.storyboardAttachments || {}).filter(function (key) {
+        return key.indexOf('story:') === 0;
+      });
+      var workbench = storyRefs.length === 1
+        ? 'A Project snapshot is explicitly attached (' + storyRefs[0].slice(6) +
+          '). The author can review changes to its Concept, Style and Invariants.'
+        : 'No Project is attached to this conversation. Capturing a creative brief ' +
+          'will propose creating a new Project. Editing an existing Project requires an explicit attachment.';
+      outbound[0] = { role: 'system', content: payload.system +
+        '\n\nSTUDIO WORKBENCH STATE (controls, not saved Story facts):\n' + workbench +
+        '\nWhen creative choices are clear, naturally offer to review a creative brief. ' +
+        'Keep exploring when they are still tentative; never claim a proposal was saved.\n' +
+        outbound[0].content };
       return outbound;
     });
   }
 
-  function storyboardRequestMessages(messages) {
-    var context = [STORYBOARD_WORKSHOP_PRIMER];
+  function storyboardRequestMessages(messages, includePrimer) {
+    var context = includePrimer === false ? [] : [STORYBOARD_WORKSHOP_PRIMER];
     if (state.workshop) {
       var scene = state.workshop;
       context.push('[CURRENT STORY AND SCENE - CREATIVE WORKING CONTEXT]\n' + JSON.stringify({
@@ -2789,6 +2847,8 @@
     close.onclick = function () { setOpen(false); };
     clear.onclick = newChat;
     el('director-studio-retry').onclick = startStudioWorkshop;
+    el('director-studio-capture').onclick = captureStudioCreativeBrief;
+    el('director-studio-attach-current').onclick = function () { return attachStoryboardContext('story'); };
     el('director-studio-prepare-scene').onclick = prepareStudioSceneDraft;
     el('director-studio-prepare-project').onclick = prepareStudioProject;
     el('director-studio-prepare-scenes').onclick = prepareStudioScenes;

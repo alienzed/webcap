@@ -3086,7 +3086,12 @@
     if (state.open) {
       syncModeUi();
       (state.modelsLoaded ? Promise.resolve() : loadModels()).then(function () {
-        if (state.activeMode === 'storyboard') maybeOpenNewStudioConversation();
+        // An async model refresh may finish after Studio was closed or left.
+        if (!state.open) return;
+        if (state.activeMode === 'storyboard') {
+          if (!studioWorkspaceVisible()) return;
+          maybeOpenNewStudioConversation();
+        }
         var input = el('director-chat-input');
         if (input) input.focus();
       });

@@ -122,7 +122,7 @@ def test_focused_qa_keeps_captured_set_during_filter_and_annotation_changes():
     assert "qaInvalidateDeepScanSession('Deep QA inputs changed." not in run
     assert "qaWorkbenchState.deepScanScope = scan;" in qa
     assert "deepScanScopeFiles: qaWorkbenchState.deepScanScopeFiles.slice()" in qa
-    assert "if (!qaWorkbenchState.deepScanSessionActive) qaRestoreReview(inputSignature);" in qa
+    assert "if (!qaWorkbenchState.deepScanSessionActive && !keepProgressiveScope)" in qa
     assert "qaInvalidateDeepScanSession('Deep QA stopped because the Set changed.');" in qa
     assert "qaWorkbenchState.deepScanJobId = '';" in qa
     assert "qaReviewMode: qaWorkbenchState.qaReviewMode" in qa

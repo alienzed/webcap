@@ -3057,8 +3057,8 @@
           var expected = state.pendingReadAck;
           state.pendingReadAck = null;
           var reply = String(result.text || '');
-          var line = reply.split('\\n').find(function (item) { return /^RECEIVED:/i.test(item.trim()); }) || '';
-          var received = line.replace(/^\\s*RECEIVED:\\s*/i, '').split(',').map(function (key) { return key.trim(); });
+          var line = reply.split(String.fromCharCode(10)).find(function (item) { return /^RECEIVED:/i.test(item.trim()); }) || '';
+          var received = line.trim().replace(/^RECEIVED:/i, '').trim().split(',').map(function (key) { return key.trim(); });
           var missing = expected.filter(function (key) { return received.indexOf(key) === -1; });
           var extra = received.filter(function (key) { return key && expected.indexOf(key) === -1; });
           var feedback = missing.length || extra.length

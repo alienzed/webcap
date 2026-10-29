@@ -35,7 +35,7 @@ test('Studio has a wide conversation and a real side-panel Read/Write workbench'
 test('New Director conversation is passive until the author explicitly sends', () => {
   const newChat = part('  function newChat(options) {', '  function jobRequest(jobId) {');
   assert.doesNotMatch(newChat, /startStudioWorkshop\(/);
-  assert.match(newChat, /persistSession/);
+  assert.match(newChat, /flushSessionSave/);
   assert.match(newChat, /state\.modeMessages\.storyboard = \[\]/);
   assert.match(source, /director-studio-retry'\)\.classList\.add\('hidden'\)/);
 });
@@ -110,7 +110,7 @@ test('Ordinary Studio conversation has no model-requested hidden Read or capture
 test('Readiness proposals are bounded, inspectable, read-only and do not block Write', () => {
   assert.match(source, /\[\[WEBCAP_READINESS\]\]/);
   assert.match(source, /window\.studioDirectorWorkbench\.updateReadiness/);
-  assert.match(workbench, /input.*checkbox/);
+  assert.match(workbench, /checkbox\.type = 'checkbox'/);
   assert.match(workbench, /checkbox\.disabled = true/);
   assert.match(workbench, /content\.textContent = item\.content/);
   assert.match(workbench, /recommendations\.readHints/);

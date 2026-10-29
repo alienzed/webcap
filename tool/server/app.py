@@ -2182,6 +2182,17 @@ def director_chat_route():
                         "required": ["title", "summary"],
                         "properties": {"title": {"type": "string"}, "summary": {"type": "string"}},
                     },
+                    "firstScenes": {
+                        "type": "array", "maxItems": 12,
+                        "items": {
+                            "type": "object", "additionalProperties": False,
+                            "required": ["title", "summary"],
+                            "properties": {
+                                "title": {"type": "string"},
+                                "summary": {"type": "string", "minLength": 1},
+                            },
+                        },
+                    },
                     "rationale": {"type": "string"},
                 },
             }

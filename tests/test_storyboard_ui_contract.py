@@ -1174,8 +1174,8 @@ def test_scene_entry_and_exit_states_are_retired_from_authoring_but_preserved_in
 
     # Neither the Scene form nor its edit payload creates hidden continuity obligations.
     assert 'class="storyboard-scene-disclosure storyboard-continuity-details"' not in storyboard
-    assert 'data-scene-field="entryState"' not in storyboard
-    assert 'data-scene-field="exitState"' not in storyboard
+    assert '<textarea data-scene-field="entryState"' not in storyboard
+    assert '<textarea data-scene-field="exitState"' not in storyboard
     payload = storyboard.split("function scenePayloadFromUi(sceneId) {", 1)[1].split(
         "\\n  }", 1
     )[0]

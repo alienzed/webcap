@@ -3887,7 +3887,7 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
 
 
 /* Director design audit: action-local hierarchy and a non-blocking narrow task sheet. */
-#studio-dw-open-actions, #studio-dw-close-actions { display: none; }
+#studio-dw-quick-read, #studio-dw-quick-write, #studio-dw-close-actions { display: none; }
 .studio-director-workbench .studio-dw-heading {align-items:start;justify-content:space-between;flex-direction:row;}
 .studio-director-workbench .studio-dw-heading > div {display:flex;flex-direction:column;gap:4px;min-width:0;}
 .studio-director-workbench .studio-dw-heading span {overflow-wrap:anywhere;}
@@ -3905,7 +3905,7 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
 #studio-dw-assessment-content {white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;font-size:16px;max-height:min(65vh,700px);overflow:auto;}
 #studio-dw-assessment-dialog {max-width:min(760px,96vw);max-height:calc(100dvh - 40px);}
 @container (max-width:820px) {
-  .director-chat-drawer.studio-director #studio-dw-open-actions {display:inline-flex;align-items:center;}
+  .director-chat-drawer.studio-director #studio-dw-quick-read,\n  .director-chat-drawer.studio-director #studio-dw-quick-write {display:inline-flex;align-items:center;}
   .director-chat-drawer.studio-director .director-chat-layout {display:flex;flex-direction:column;}
   .director-chat-drawer.studio-director .director-chat-conversation {height:100%;}
   .director-chat-drawer.studio-director .director-chat-sidebar {
@@ -3936,6 +3936,22 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
 @container (max-width:820px) {
   .director-chat-drawer.studio-director .director-chat-drawer-header {gap:8px;}
   .director-chat-drawer.studio-director .director-chat-header-actions {gap:6px;}
-  .director-chat-drawer.studio-director #studio-dw-open-actions {min-height:40px;font-size:15px;}
+  .director-chat-drawer.studio-director #studio-dw-quick-read,\n  .director-chat-drawer.studio-director #studio-dw-quick-write {min-height:40px;font-size:15px;font-weight:700;}
   .director-chat-drawer.studio-director .director-chat-sidebar {background:var(--panel-soft);}
+}
+
+/* Keep Read and Write visible as direct actions even in the compact Studio layout. */
+@container (max-width:820px) {
+  .director-chat-drawer.studio-director .director-chat-drawer-header {flex-wrap:wrap;}
+  .director-chat-drawer.studio-director .director-chat-header-actions {flex-wrap:wrap;justify-content:flex-end;}
+  .director-chat-drawer.studio-director #studio-dw-quick-read,
+  .director-chat-drawer.studio-director #studio-dw-quick-write {
+    border:1px solid var(--accent,#628fd1);
+    border-radius:8px;
+    font-size:15px;
+  }
+  .director-chat-drawer.studio-director #studio-dw-quick-read[aria-expanded="true"],
+  .director-chat-drawer.studio-director #studio-dw-quick-write[aria-expanded="true"] {
+    background:var(--accent,#628fd1);color:var(--bg);
+  }
 }

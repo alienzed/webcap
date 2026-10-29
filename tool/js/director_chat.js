@@ -1087,15 +1087,19 @@
       var body = document.createElement('div');
       body.className = 'director-chat-message-body';
       body.textContent = message.content;
-      if (message.role === 'user' && message.content.indexOf('[WEBCAP EXPLICIT READ]') !== -1) {
-        var marker = message.content.indexOf('[WEBCAP EXPLICIT READ]');
-        var closing = message.content.indexOf('[END WEBCAP READ]', marker);
+      if (message.role === 'user' && (message.content.indexOf('[WEBCAP EXPLICIT READ]') !== -1 ||
+          message.content.indexOf('[WEBCAP APPLIED FIELD VALUES]') !== -1)) {
+        var applied = message.content.indexOf('[WEBCAP APPLIED FIELD VALUES]') !== -1;
+        var startMark = applied ? '[WEBCAP APPLIED FIELD VALUES]' : '[WEBCAP EXPLICIT READ]';
+        var endMark = applied ? '[END WEBCAP APPLY]' : '[END WEBCAP READ]';
+        var marker = message.content.indexOf(startMark);
+        var closing = message.content.indexOf(endMark, marker);
         if (closing !== -1) {
           var details = document.createElement('details');
           var heading = document.createElement('summary');
-          heading.textContent = 'Read context · inspect exact fields delivered';
+          heading.textContent = applied ? 'Applied content · inspect saved fields' : 'Read context · inspect exact fields delivered';
           var content = document.createElement('pre');
-          content.textContent = message.content.slice(marker, closing + '[END WEBCAP READ]'.length);
+          content.textContent = message.content.slice(marker, closing + endMark.length);
           details.append(heading, content);
           body.textContent = message.content.slice(0, marker).trim();
           body.appendChild(details);
@@ -2531,6 +2535,7 @@
         'followed by the exact received field identifiers separated by comma and space. ' +
         'Then discuss the contents substantively; a receipt alone is not an assessment. ' +
         'Never claim to have inspected unavailable saved fields. ' +
+        'A WEBCAP APPLIED FIELD VALUES event contains author-reviewed saved content and supersedes older Read snapshots. ' +
         'READINESS: After your conversational reply, emit a final delimited machine-readable block ' +
         '[[WEBCAP_READINESS]]JSON[[END_WEBCAP_READINESS]]. JSON is an object containing checks ' +
         '(up to 10 objects with name, scope, ready, content), readHints (0-5 field identifiers), ' +
@@ -3293,6 +3298,23 @@
       if (kind === 'scene') return prepareStudioSceneDraft();
       if (kind === 'scenes') return prepareStudioScenes();
       throw new Error('Unsupported reviewed Write operation: ' + kind);
+    },
+    recordApplied: function (kind, story, selected) {
+      if (!story || !story.id || !selected || typeof selected !== 'object') {
+        throw new Error('Reviewed Apply receipt requires saved Project data.');
+      }
+      var body = {
+        operation: kind, projectId: story.id, projectTitle: story.title,
+        savedAt: story.updatedAt, fields: selected
+      };
+      state.modeMessages.storyboard.push({role:'user',
+        content:'Reviewed Studio Apply completed. The following saved fields are now authoritative.' +
+          String.fromCharCode(10) + '[WEBCAP APPLIED FIELD VALUES]' +
+          String.fromCharCode(10) + JSON.stringify(body, null, 2) +
+          String.fromCharCode(10) + '[END WEBCAP APPLY]'});
+      renderMessages();
+      state.sessionDirty.storyboard = true;
+      return persistSession('storyboard');
     },
     updateReadiness: function (value) {
       state.studioReadiness = value;

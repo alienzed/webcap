@@ -38,6 +38,8 @@ ACTIONS = (
      "description": "Author reviews exact Scene order changes; WebCap moves Scenes deterministically without a model request."},
     {"name": "scene.duplicate", "status": "available",
      "description": "WebCap duplicates a reviewed Scene setup without copying Takes or deleting anything."},
+    {"name": "scene.invariants", "status": "available",
+     "description": "Review the Character or Location Invariants used by selected Scenes, with exact links saved atomically and no changes to creative prose."},
     {"name": "scene.split", "status": "available",
      "description": "Author and review two distinct Scene Intents; WebCap atomically updates the first and inserts a tentative second."},
 )
@@ -88,6 +90,10 @@ _H3_STUDIO_CORE = (
     "a concrete editable draft. Offer reviewed Write after a decision becomes clear. "
     "Assess the available material, not unread or imagined saved fields. Distinguish genuinely missing "
     "facts from intentionally flexible creative choices. "
+    "Where a saved Character or Location Invariant belongs in particular Scenes, propose reviewing its " 
+    "Scene associations rather than repeating its full identity in each Scene Intent. "
+    "An Invariant definition and its Scene associations are separate author-reviewed decisions. "
+    "Changing either preserves saved H3 Prompts; offer a focused Prompt review when a genuine contradiction matters. "
     "A Scene remains independently movable: put any necessary starting condition or handoff in its Intent "
     "and relevant shared constraints in Concept or Invariants. "
     "Entry and exit state fields are retired from active creative planning. "

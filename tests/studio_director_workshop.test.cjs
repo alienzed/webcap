@@ -222,3 +222,17 @@ test('large explicit Read selections report their true size and refuse silent tr
   assert.match(workbench,/length > 48000/);
   assert.match(workbench,/Narrow the selection to a Project overview/);
 });
+
+test('Character and Location associations use reviewed deterministic multi-Scene edits', () => {
+  assert.match(html,/value="scene-invariants">Use Invariant in Scenes/);
+  assert.match(html,/id="studio-dw-invariant-review"/);
+  assert.match(workbench,/function prepareInvariantLinks\(storyId\)/);
+  assert.match(workbench,/function applyInvariantLinks\(\)/);
+  const prepare = workbench.split('  function prepareInvariantLinks(storyId) {')[1]
+    .split('  function applyInvariantLinks() {')[0];
+  assert.doesNotMatch(prepare,/makeProposal|\/fs\/director\/chat/);
+  const apply = workbench.split('  function applyInvariantLinks() {')[1]
+    .split('  function prepareSplitScene(storyId) {')[0];
+  assert.match(apply,/\/fs\/studio\/director\/scene-invariants/);
+  assert.match(apply,/recordApplied/);
+});

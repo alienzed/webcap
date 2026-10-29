@@ -330,3 +330,13 @@ def test_shipped_scene_operations_are_valid_studio_write_hints(sessions):
         })
         assert saved["readiness"]["writeHint"] == hint
     assert history.open_chat(chat["id"])["revision"] == 4
+
+def test_scene_invariant_association_is_valid_guided_write_hint(sessions):
+    chat = history.create_chat("storyboard")
+    saved = history.save_chat(chat["id"], {
+        "expectedRevision": 0, "title": "Character continuity",
+        "messages": [], "draft": "",
+        "readiness": {"checks": [], "readHints": [],
+                      "writeHint": "scene-invariants", "sceneId": ""},
+    })
+    assert saved["readiness"]["writeHint"] == "scene-invariants"

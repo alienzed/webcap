@@ -1,6 +1,6 @@
 (function () {
   'use strict';
-  var readStory = null, writeStory = null, projects = [], proposedScene = null, proposedStructure = null, proposedBatch = null, proposedSplit = null, playbookExpected = null;
+  var readStory = null, writeStory = null, projects = [], proposedScene = null, proposedStructure = null, proposedBatch = null, proposedSplit = null, proposedInvariantLinks = null, playbookExpected = null;
   var readiness = [], recommendations = {readHints:[],writeHint:'',sceneId:''};
   var readinessStale = false;
   var readChoices = {}, writeOperationChosen = false, lastReadSource = null;
@@ -271,6 +271,7 @@
     el('studio-dw-write-scene-row').classList.toggle('hidden', operation !== 'scene-edit' && operation !== 'scene-split' && !structural);
     el('studio-dw-write-fields').classList.toggle('hidden', operation !== 'scene-edit');
     el('studio-dw-batch-controls').classList.toggle('hidden', operation !== 'scenes-batch');
+    el('studio-dw-invariant-controls').classList.toggle('hidden', operation !== 'scene-invariants');
     el('studio-dw-move-target-row').classList.toggle('hidden', operation !== 'scene-move');
     el('studio-dw-move-placement-row').classList.toggle('hidden', operation !== 'scene-move');
     el('studio-dw-write-project').disabled = operation === 'new-project' || operation === 'playbook';
@@ -307,6 +308,7 @@
       label.append(input, document.createTextNode('Scene ' + (index+1) + ' · ' + (story.scenes[id].title || 'Untitled')));
       batchHost.appendChild(label);
     });
+    renderInvariantChoices(story);
     var preferredScene = recommendations.sceneId || activeTarget().sceneId;
     if (preferredScene && story.scenes && story.scenes[preferredScene])
       select.value = preferredScene;
@@ -448,6 +450,11 @@
   function writePrepare() {
     var bridge = window.studioDirectorBridge, operation = el('studio-dw-write-operation').value,
       id = el('studio-dw-write-project').value;
+    if (operation === 'scene-invariants') {
+      if (!id) {status('Select a Project.',true);return;}
+      prepareInvariantLinks(id);
+      return;
+    }
     if (operation === 'scene-move' || operation === 'scene-duplicate') {
       if (!id) {status('Select a destination Project.', true);return;}
       prepareStructure(operation, id);
@@ -487,6 +494,122 @@
       .then(function (story) {return editScene(story,sceneId,fields);})
       .catch(function (e) {status('Scene revision failed: ' + String(e.message || e),true);})
       .finally(function () { el('studio-dw-write-prepare').disabled = false; });
+  }
+  function renderInvariantChoices(story) {
+    var select = el('studio-dw-invariant-choice'), previous = select.value;
+    select.replaceChildren();
+    (story.invariants || []).filter(function (entry) {
+      return ['character','location'].indexOf(entry.kind) !== -1 && entry.title;
+    }).forEach(function (entry) {
+      option(select, JSON.stringify({kind:entry.kind,title:entry.title}),
+        (entry.kind === 'character' ? 'Character · ' : 'Location · ') + entry.title);
+    });
+    if (Array.from(select.options).some(function (entry) {return entry.value === previous;}))
+      select.value = previous;
+    renderInvariantScenes(story);
+  }
+  function renderInvariantScenes(story) {
+    var host = el('studio-dw-invariant-scenes');
+    host.replaceChildren();
+    if (!story || !el('studio-dw-invariant-choice').value) {
+      host.textContent = 'Define a Character or Location Invariant in the Project first.';
+      return;
+    }
+    var target = JSON.parse(el('studio-dw-invariant-choice').value);
+    (story.sceneOrder || []).forEach(function (id,index) {
+      var scene = story.scenes[id], row = document.createElement('label'),
+        check = document.createElement('input');
+      check.type = 'checkbox';
+      check.value = id;
+      check.checked = (scene.invariantRefs || []).some(function (ref) {
+        return ref.kind === target.kind && ref.title.toLowerCase() === target.title.toLowerCase();
+      });
+      row.append(check, document.createTextNode('Scene ' + (index + 1) + ' · ' + (scene.title || 'Untitled')));
+      host.appendChild(row);
+    });
+  }
+  function prepareInvariantLinks(storyId) {
+    var choice = el('studio-dw-invariant-choice').value;
+    if (!choice) {status('Choose a Character or Location Invariant.',true);return;}
+    var target = JSON.parse(choice), host = el('studio-dw-invariant-scenes');
+    var selected = new Set(Array.from(host.querySelectorAll('input:checked')).map(function (node) {
+      return node.value;
+    }));
+    var button = el('studio-dw-write-prepare');
+    button.disabled = true;
+    Promise.resolve().then(function () {
+      return window.flushStudioDirectorStoryEdits(storyId);
+    }).then(function () {return loadStory(storyId);})
+      .then(function (story) {
+        var exists = (story.invariants || []).some(function (entry) {
+          return entry.kind === target.kind && entry.title.toLowerCase() === target.title.toLowerCase();
+        });
+        if (!exists) throw new Error('The selected Invariant is no longer in the Project.');
+        var changes = (story.sceneOrder || []).reduce(function (items,id) {
+          var before = story.scenes[id].invariantRefs || [];
+          var currently = before.some(function (ref) {
+            return ref.kind === target.kind && ref.title.toLowerCase() === target.title.toLowerCase();
+          });
+          var linked = selected.has(id);
+          if (currently !== linked) items.push({
+            sceneId:id,expectedRefs:before,linked:linked
+          });
+          return items;
+        },[]);
+        if (!changes.length) {
+          status('These Scenes already have the selected Invariant associations.',false);
+          return;
+        }
+        proposedInvariantLinks = {storyId:storyId,kind:target.kind,title:target.title,changes:changes};
+        var diff = el('studio-dw-invariant-diff');
+        diff.replaceChildren();
+        changes.forEach(function (entry) {
+          var note = document.createElement('p'), scene = story.scenes[entry.sceneId];
+          note.textContent = (entry.linked ? 'Use in: ' : 'Unlink from: ') +
+            (scene.title || entry.sceneId) + ' (' + (story.sceneOrder.indexOf(entry.sceneId) + 1) + ')';
+          diff.appendChild(note);
+        });
+        el('studio-dw-invariant-summary').textContent =
+          target.kind + ' · ' + target.title + ' · ' + changes.length + ' Scene associations';
+        el('studio-dw-invariant-error').textContent = '';
+        el('studio-dw-invariant-review').showModal();
+      }).catch(function (error) {
+        status('Scene association review failed: ' + String(error.message || error),true);
+      }).finally(function () {button.disabled=false;});
+  }
+  function applyInvariantLinks() {
+    if (!proposedInvariantLinks) throw new Error('No reviewed Scene associations exist.');
+    var proposal = proposedInvariantLinks, button = el('studio-dw-invariant-apply');
+    button.disabled = true;
+    var applied = false;
+    Promise.resolve().then(function () {
+      return window.flushStudioDirectorStoryEdits(proposal.storyId);
+    }).then(function () {
+      return api('/fs/studio/director/scene-invariants', {
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify(proposal)
+      });
+    }).then(function (result) {
+      if (!result.story || !result.savedLinksByScene)
+        throw new Error('Association Apply returned no authoritative saved links.');
+      applied = true;
+      proposedInvariantLinks = null;
+      el('studio-dw-invariant-review').close();
+      return window.studioDirectorBridge.recordApplied('scene.invariant-links',result.story,{
+        invariant:{kind:proposal.kind,title:proposal.title},
+        scenes:result.savedLinksByScene
+      }).then(function () {
+        status('Reviewed Scene associations saved.',false);
+        if (typeof window.refreshStudioDirectorStoryIfOpen === 'function')
+          return window.refreshStudioDirectorStoryIfOpen(result.story.id);
+      });
+    }).catch(function (error) {
+      var message = String(error.message || error);
+      el('studio-dw-invariant-error').textContent = applied
+        ? 'Scene links saved, but conversation recording or refresh failed: ' + message
+        : 'Apply was not confirmed: ' + message;
+      status('Scene association Apply: ' + message,true);
+    }).finally(function () {button.disabled=false;});
   }
   function prepareSplitScene(storyId) {
     var sceneId = el('studio-dw-write-scene').value, button = el('studio-dw-write-prepare');
@@ -936,7 +1059,7 @@
         project:'Update Project', 'new-project':'Create Project', scene:'Add Scene',
         scenes:'Add Scenes', 'scene-edit':'Revise Scene', 'scenes-batch':'Revise several Scenes',
         'scene-move':'Move Scene', 'scene-duplicate':'Duplicate Scene',
-        'scene-split':'Split Scene', playbook:'Revise H3 Playbook'
+        'scene-split':'Split Scene', 'scene-invariants':'Use Invariant in Scenes', playbook:'Revise H3 Playbook'
       };
       nextButton.textContent = 'Review next step · ' + (names[recommendations.writeHint] || 'Studio Write');
       nextButton.onclick = openRecommendedWrite;
@@ -1002,7 +1125,7 @@
       var list = Array.isArray(result) ? result : result && result.checks;
       var allowed = ['Concept','Characters','Setting','Action','Dialogue','Visual / atmosphere',
         'Visual focus','Structure / formula','Variation / repetition','Production feasibility'];
-      var operations = ['', 'project','new-project','scene','scenes','scene-edit','scenes-batch','scene-move','scene-duplicate','scene-split','playbook'];
+      var operations = ['', 'project','new-project','scene','scenes','scene-edit','scenes-batch','scene-move','scene-duplicate','scene-split','scene-invariants','playbook'];
       if (!Array.isArray(list) || list.length > 30 ||
           list.some(function (item) {
             return !item || typeof item !== 'object' || Array.isArray(item) ||
@@ -1111,6 +1234,7 @@
     el('studio-dw-playbook-open').onclick=preparePlaybook;
     el('studio-dw-assessment-close').onclick=function(){el('studio-dw-assessment-dialog').close();};
     el('studio-dw-write-scene').onchange=showWriteContext;
+    el('studio-dw-invariant-choice').onchange=function () {renderInvariantScenes(writeStory);showWriteContext();};
     el('studio-dw-move-target').onchange=showWriteContext;
     el('studio-dw-move-placement').onchange=showWriteContext;
     el('studio-dw-read-send').onclick=readSend;
@@ -1118,6 +1242,10 @@
     el('studio-dw-scene-apply').onclick=applyScene;
     el('studio-dw-structure-apply').onclick=applyStructure;
     el('studio-dw-batch-apply').onclick=applyBatchScenes;
+    el('studio-dw-invariant-apply').onclick=applyInvariantLinks;
+    ['studio-dw-invariant-close','studio-dw-invariant-cancel'].forEach(function (id) {
+      el(id).onclick=function () {el('studio-dw-invariant-review').close();};
+    });
     el('studio-dw-split-apply').onclick=applySplitScene;
     ['studio-dw-split-close','studio-dw-split-cancel'].forEach(function (id) {
       el(id).onclick=function () {el('studio-dw-split-review').close();};

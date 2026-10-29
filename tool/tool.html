@@ -2196,6 +2196,7 @@
                       <option value="scene-edit">Revise Scene</option>
                       <option value="scenes-batch">Revise several Scenes</option>
                       <option value="scene-split">Split Scene</option>
+                      <option value="scene-invariants">Use Invariant in Scenes</option>
                       <option value="scene-move">Move Scene</option>
                       <option value="scene-duplicate">Duplicate Scene</option>
                     </select></label>
@@ -2207,6 +2208,11 @@
                         <option value="after">After</option>
                       </select>
                     </label>
+                    <div id="studio-dw-invariant-controls" class="hidden">
+                      <label>Character or Location<select id="studio-dw-invariant-choice"></select></label>
+                      <p>Select the Scenes that use this Invariant. Existing associations are already checked.</p>
+                      <div id="studio-dw-invariant-scenes" class="studio-dw-scene-list"></div>
+                    </div>
                     <div id="studio-dw-batch-controls" class="hidden">
                       <p>Choose the Scenes and fields to develop together.</p>
                       <div id="studio-dw-batch-scenes" class="studio-dw-scene-list"></div>
@@ -2337,6 +2343,20 @@
               <footer class="studio-scene-draft-footer">
                 <button id="studio-dw-split-cancel" type="button" class="review-captions-btn">Back to conversation</button>
                 <button id="studio-dw-split-apply" type="button">Apply reviewed split</button>
+              </footer>
+            </dialog>
+            <dialog id="studio-dw-invariant-review" class="studio-scene-draft-review" aria-labelledby="studio-dw-invariant-title">
+              <header class="studio-scene-draft-header"><div><h2 id="studio-dw-invariant-title">Review Scene associations</h2>
+                <p>Save these exact Character/Location links. Other creative and production fields remain unchanged.</p></div>
+                <button id="studio-dw-invariant-close" type="button" class="review-captions-btn">Close</button></header>
+              <div class="studio-scene-draft-content">
+                <p id="studio-dw-invariant-summary"></p>
+                <div id="studio-dw-invariant-diff"></div>
+                <p id="studio-dw-invariant-error" role="alert"></p>
+              </div>
+              <footer class="studio-scene-draft-footer">
+                <button id="studio-dw-invariant-cancel" type="button" class="review-captions-btn">Back to conversation</button>
+                <button id="studio-dw-invariant-apply" type="button">Apply reviewed associations</button>
               </footer>
             </dialog>
             <dialog id="studio-dw-batch-review" class="studio-scene-draft-review" aria-labelledby="studio-dw-batch-title">

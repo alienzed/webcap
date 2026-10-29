@@ -2497,6 +2497,10 @@
       if (!payload.system || typeof payload.system !== 'string') {
         throw new Error('Studio Director production guidance is missing.');
       }
+      if (!Array.isArray(payload.actions)) throw new Error('Studio Director capability catalog is missing.');
+      var capabilities = payload.actions.map(function (action) {
+        return action.name + ' (' + action.status + '): ' + action.description;
+      }).join(String.fromCharCode(10));
       var outbound = [{role:'system', content:''}].concat(messages); // No hidden workshop/attachment re-injection.
       // Conversation context is opt-in. The workbench state only tells Director
       // what WebCap can review next; it is not a fresh Story or Scene attachment.
@@ -2511,6 +2515,7 @@
           ? 'A historical Story snapshot is attached (' + storyRefs[0].slice(6) + ').'
           : 'No Story access was granted; review of fields would propose creating a Project.';
       outbound[0] = { role: 'system', content: payload.system +
+        '\n\nCURRENT WEBCAP CAPABILITIES (available vs planned):\n' + capabilities +
         '\n\nSTUDIO WORKBENCH STATE (controls, not saved Story facts):\n' + workbench +
         '\nWhen choices are clear, offer to review Concept / overview, Visual / atmosphere and Invariants. ' +
         'Keep exploring when they are still tentative; never claim a proposal was saved.\n' +

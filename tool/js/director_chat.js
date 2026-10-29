@@ -1521,6 +1521,15 @@
       });
     }
     row.append(kind, title, remove, details);
+    if (destination === 'studio-brief-invariants' && original) {
+      var saved = document.createElement('small');
+      saved.style.gridColumn = '1 / -1';
+      saved.textContent = 'Saved ' + original.kind + ' · ' + original.title +
+        ': ' + original.text +
+        (original.kind !== kind.value || original.title !== title.value
+          ? ' · A reviewed rename also updates linked Scene references.' : '');
+      row.appendChild(saved);
+    }
     host.appendChild(row);
   }
 

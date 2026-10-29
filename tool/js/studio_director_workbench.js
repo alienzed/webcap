@@ -235,7 +235,10 @@
       .map(function (node) { return node.value; });
     if (!sceneId || !fields.length) { status('Choose a Scene and at least one field.', true);return; }
     el('studio-dw-write-prepare').disabled = true;
-    loadStory(id).then(function (story) {return editScene(story,sceneId,fields);})
+    Promise.resolve().then(function () {
+      return window.flushStudioDirectorStoryEdits(id);
+    }).then(function () {return loadStory(id);})
+      .then(function (story) {return editScene(story,sceneId,fields);})
       .catch(function (e) {status('Scene revision failed: ' + String(e.message || e),true);})
       .finally(function () { el('studio-dw-write-prepare').disabled = false; });
   }
@@ -290,11 +293,13 @@
     });
     var button = el('studio-dw-scene-apply');
     button.disabled = true;
-    api('/fs/studio/director/scene-fields', {
+    Promise.resolve().then(function () {
+      return window.flushStudioDirectorStoryEdits(proposedScene.storyId);
+    }).then(function () {return api('/fs/studio/director/scene-fields', {
       method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({storyId:proposedScene.storyId,sceneId:proposedScene.sceneId,
         expected:proposedScene.expected,changes:changes})
-    }).then(function (result) {
+    });}).then(function (result) {
       if (!result.scene) throw new Error('Scene Apply returned no saved Scene.');
       el('studio-dw-scene-review').close(); proposedScene=null;
       status('Reviewed Scene changes applied to saved content. Read explicitly to share the new values.',false);

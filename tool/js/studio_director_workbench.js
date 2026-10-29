@@ -2,6 +2,7 @@
   'use strict';
   var readStory = null, writeStory = null, projects = [], proposedScene = null, playbookExpected = null;
   var readiness = [], recommendations = {readHints:[],writeHint:'',sceneId:''};
+  var readinessStale = false;
   var readChoices = {}, writeOperationChosen = false, lastReadSource = null;
   var lastQuickAction = 'read';
   var sceneFields = ['summary', 'prompt', 'title'];
@@ -418,13 +419,22 @@
       status('Scene Apply failed: ' + String(err.message || err),true);
     }).finally(function () {button.disabled=false;});
   }
+  function setReadinessFreshness(stale) {
+    readinessStale = !!stale;
+    var label = el('studio-dw-readiness-freshness');
+    label.textContent = readinessStale
+      ? (readiness.length ? 'Outdated · latest exchange not assessed' : 'Latest exchange not assessed')
+      : (readiness.length ? 'Assessed for latest reply · advisory only' : 'Not assessed yet');
+    var empty = el('studio-dw-readiness-list').querySelector('p');
+    if (empty) empty.textContent = readinessStale ? 'No current assessment.' : 'Not assessed yet';
+  }
   function renderReadiness(list) {
     readiness = list;
     var host = el('studio-dw-readiness-list');
     host.replaceChildren();
     if (!list.length) {
       var empty = document.createElement('p');
-      empty.textContent = 'Not assessed yet.';
+      empty.textContent = readinessStale ? 'No current assessment.' : 'Not assessed yet.';
       host.appendChild(empty);
       return;
     }
@@ -476,29 +486,42 @@
       status('', false);
       updateScope();
     },
+    setReadinessFreshness:setReadinessFreshness,
     updateReadiness:function (result, restoring) {
-    var list = Array.isArray(result) ? result : result && result.checks;
-    if (!Array.isArray(list)) { status('Director readiness response was invalid.',true);return; }
-    var allowed = ['Concept','Characters','Setting','Action','Dialogue','Visual / atmosphere',
-      'Visual focus','Structure / formula','Variation / repetition','Production feasibility'];
-    var valid=list.filter(function (item) {return item && allowed.indexOf(item.name)!==-1 &&
-      (item.scope==='project'||item.scope==='scene') && typeof item.ready==='boolean' &&
-      typeof item.content==='string' && item.content.length<=8000;}).slice(0,30);
-    if (valid.length!==list.length) status('Some Director readiness proposals were invalid; review the conversation.',true);
-    recommendations = {
-      readHints:Array.isArray(result.readHints) ? result.readHints.filter(function (key) {
-        return typeof key==='string' && key.length<=120;}).slice(0,15) : [],
-      writeHint:['project','new-project','scene','scenes','scene-edit','playbook'].indexOf(result.writeHint) !== -1 ?
-        result.writeHint : '',
-      sceneId:typeof result.sceneId === 'string' ? result.sceneId : ''
-    };
-    renderReadiness(valid);
-    if (!restoring && window.studioDirectorBridge && window.studioDirectorBridge.updateReadiness)
-      window.studioDirectorBridge.updateReadiness({
-        checks:valid,readHints:recommendations.readHints,
-        writeHint:recommendations.writeHint,sceneId:recommendations.sceneId
+      var list = Array.isArray(result) ? result : result && result.checks;
+      var allowed = ['Concept','Characters','Setting','Action','Dialogue','Visual / atmosphere',
+        'Visual focus','Structure / formula','Variation / repetition','Production feasibility'];
+      var operations = ['', 'project','new-project','scene','scenes','scene-edit','playbook'];
+      if (!Array.isArray(list) || list.length > 30 ||
+          list.some(function (item) {
+            return !item || typeof item !== 'object' || Array.isArray(item) ||
+              Object.keys(item).sort().join(',') !== 'content,name,ready,scope' ||
+              allowed.indexOf(item.name) < 0 ||
+              ['project','scene'].indexOf(item.scope) < 0 ||
+              typeof item.ready !== 'boolean' ||
+              typeof item.content !== 'string' || item.content.length > 8000;
+          })) {
+        status('Director readiness has invalid or unsupported assessments.',true);
+        return false;
+      }
+      var hints = result && result.readHints === undefined ? [] : result.readHints;
+      var writeHint = result && result.writeHint === undefined ? '' : result.writeHint;
+      var sceneId = result && result.sceneId === undefined ? '' : result.sceneId;
+      if (!Array.isArray(hints) || hints.length > 15 ||
+          hints.some(function(key) {return typeof key !== 'string' || key.length > 120;}) ||
+          operations.indexOf(writeHint) < 0 || typeof sceneId !== 'string' || sceneId.length > 160) {
+        status('Director readiness recommendations do not match the saved contract.',true);
+        return false;
+      }
+      recommendations = {readHints:hints, writeHint:writeHint, sceneId:sceneId};
+      setReadinessFreshness(!!(restoring && result && result.stale));
+      renderReadiness(list);
+      if (!restoring) window.studioDirectorBridge.updateReadiness({
+        checks:list,readHints:hints,writeHint:writeHint,sceneId:sceneId,stale:false
       });
-  }};
+      return true;
+    }
+  };
 
   function bind() {
     var rail = el('studio-director-workbench');if (!rail) return;
@@ -562,6 +585,7 @@
       el(id).onclick=function () {el('studio-dw-scene-review').close();};
     });
     renderReadiness(readiness);
+    setReadinessFreshness(false);
     updateScope();
   }
   if (document.readyState==='loading') document.addEventListener('DOMContentLoaded',bind);

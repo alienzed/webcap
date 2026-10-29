@@ -2612,6 +2612,46 @@
     });
   }
 
+  // The creative assessment is advisory. Preserve the last accepted content
+  // across an unassessed exchange, including a reload of saved chat history.
+  function markStudioReadinessOutdated() {
+    state.studioReadiness = Object.assign({}, state.studioReadiness, {stale:true});
+    state.sessionDirty.storyboard = true;
+    window.studioDirectorWorkbench.setReadinessFreshness(true);
+  }
+
+  // Conservative recovery for common LLM JSON formatting mistakes. Never
+  // invent readiness fields or evaluate text as JavaScript.
+  function parseStudioReadinessJson(raw) {
+    var source = String(raw || '').trim().replace(/^\uFEFF/, '');
+    try { return JSON.parse(source); }
+    catch (originalError) {
+      var repaired = source.replace(/^\`\`\`(?:json)?\s*/i, '').replace(/\s*\`\`\`$/, '');
+      // Remove trailing commas ONLY outside JSON strings.
+      var inside = false, escaped = false, output = '';
+      for (var i = 0; i < repaired.length; i++) {
+        var c = repaired[i];
+        if (inside) {
+          output += c;
+          if (escaped) escaped = false;
+          else if (c === '\\') escaped = true;
+          else if (c === '"') inside = false;
+        } else if (c === '"') {
+          inside = true; output += c;
+        } else if (c === ',') {
+          var next = i + 1;
+          while (next < repaired.length && /\s/.test(repaired[next])) next++;
+          if (repaired[next] !== '}' && repaired[next] !== ']') output += c;
+        } else output += c;
+      }
+      try { return JSON.parse(output); }
+      catch (repairError) {
+        throw new Error('Readiness JSON parse failed: ' + originalError.message +
+          '; conservative repair failed: ' + repairError.message);
+      }
+    }
+  }
+
   function storyboardRequestMessages(messages, includePrimer) {
     var context = includePrimer === false ? [] : [STORYBOARD_WORKSHOP_PRIMER];
     if (state.workshop) {
@@ -3035,6 +3075,7 @@
     var metricsMap = currentMetricsMap();
     var mode = activeContextMode();
     messages.push({ role: 'user', content: content });
+    if (activeChatMode === 'storyboard') markStudioReadinessOutdated();
     input.value = '';
     if (persistentMode(activeChatMode)) {
       state.draftByMode[activeChatMode] = '';
@@ -3114,30 +3155,45 @@
           var readyEnd = assistantText.indexOf('[[END_WEBCAP_READINESS]]');
           if (readyStart >= 0 && readyEnd > readyStart) {
             var readyJson = assistantText.slice(readyStart + '[[WEBCAP_READINESS]]'.length, readyEnd).trim();
-            try {
-              var readinessData = JSON.parse(readyJson);
-              if (window.studioDirectorWorkbench) window.studioDirectorWorkbench.updateReadiness(readinessData);
-              assistantText = (assistantText.slice(0, readyStart) +
-                assistantText.slice(readyEnd + '[[END_WEBCAP_READINESS]]'.length)).trim();
-              if (!assistantText) throw new Error('Director returned only readiness, without conversational content.');
-            } catch (readyError) {
-              if (typeof window.reportConsoleError === 'function')
-                window.reportConsoleError('Studio readiness', readyError);
-              studioActionStatus('Director readiness was malformed; conversation text preserved.', true);
-              if (window.studioDirectorWorkbench) window.studioDirectorWorkbench.updateReadiness({
-                checks:[], readHints:[], writeHint:'', sceneId:''
-              });
+            // Remove the metadata from the visible conversation independently of parsing.
+            assistantText = (assistantText.slice(0, readyStart) +
+              assistantText.slice(readyEnd + '[[END_WEBCAP_READINESS]]'.length)).trim();
+            var readinessData = null;
+            try { readinessData = parseStudioReadinessJson(readyJson); }
+            catch (parseError) {
+              window.reportConsoleError('Studio readiness JSON', parseError);
+              studioActionStatus('Assessment outdated: Director returned unparseable JSON.', true);
+              window.studioDirectorWorkbench.setStatus('Assessment outdated · JSON parsing failed.', true);
+            }
+            if (readinessData !== null) {
+              try {
+                if (!window.studioDirectorWorkbench.updateReadiness(readinessData))
+                  throw new Error('Readiness JSON parsed, but its fields did not match the expected contract.');
+                studioActionStatus('Director assessment updated.', false);
+                window.studioDirectorWorkbench.setStatus('Assessment updated.', false);
+              } catch (processingError) {
+                window.reportConsoleError('Studio readiness fields', processingError);
+                studioActionStatus('Assessment outdated: readiness fields were invalid.', true);
+                window.studioDirectorWorkbench.setStatus('Assessment outdated · invalid readiness fields.', true);
+              }
+            }
+            if (state.studioReadiness.stale)
+              window.studioDirectorWorkbench.setReadinessFreshness(true);
+            if (!assistantText) {
+              assistantText = 'Director returned assessment data but no conversational reply.';
+              window.reportConsoleError('Studio Director conversation',
+                new Error('Director supplied readiness without a conversational reply; JSON validity is independent.'));
             }
           } else {
-            var omitted = 'Director did not supply the requested readiness assessment. Previous checkmarks cleared.';
-            if (window.studioDirectorWorkbench) {
-              window.studioDirectorWorkbench.updateReadiness({
-                checks:[],readHints:[],writeHint:'',sceneId:''
-              });
-              window.studioDirectorWorkbench.setStatus(omitted, true);
+            if (readyStart >= 0) {
+              // A truncated metadata block is not conversational content.
+              assistantText = assistantText.slice(0, readyStart).trim() ||
+                'Director returned an incomplete assessment without a conversational reply.';
+              window.reportConsoleError('Studio readiness JSON',
+                new Error('Director started a readiness block but omitted its end delimiter.'));
             }
-            if (typeof window.reportConsoleError === 'function')
-              window.reportConsoleError('Studio readiness', new Error(omitted));
+            studioActionStatus('Assessment outdated: latest reply was not assessed.', false);
+            window.studioDirectorWorkbench.setStatus('Assessment outdated · no complete readiness block.', false);
           }
         }
         messages.push({ role: 'assistant', content: assistantText });
@@ -3541,9 +3597,7 @@
         operation: kind, projectId: story.id, projectTitle: story.title,
         savedAt: story.updatedAt, fields: selected
       };
-      if (window.studioDirectorWorkbench) window.studioDirectorWorkbench.updateReadiness({
-        checks:[],readHints:[],writeHint:'',sceneId:''
-      });
+      markStudioReadinessOutdated();
       state.modeMessages.storyboard.push({role:'user',
         content:'Reviewed Studio Apply completed. The following saved fields are now authoritative.' +
           String.fromCharCode(10) + '[WEBCAP APPLIED FIELD VALUES]' +

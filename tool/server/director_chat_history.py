@@ -130,7 +130,9 @@ def _validate_readiness(value):
     """Bounded, explicitly model-proposed conversation working state; never Project authority."""
     if value is None:
         return {"checks": [], "readHints": [], "writeHint": "", "sceneId": ""}
-    if not isinstance(value, dict) or set(value) != {"checks", "readHints", "writeHint", "sceneId"}:
+    if (not isinstance(value, dict) or
+            not {"checks", "readHints", "writeHint", "sceneId"}.issubset(value) or
+            not set(value).issubset({"checks", "readHints", "writeHint", "sceneId", "stale"})):
         raise ValueError("Studio readiness must contain checks, Read hints and Write hint.")
     checks = value["checks"]
     if not isinstance(checks, list) or len(checks) > 30:
@@ -152,8 +154,13 @@ def _validate_readiness(value):
         raise ValueError("Studio Write recommendation is invalid.")
     if not isinstance(value["sceneId"], str) or len(value["sceneId"]) > 160:
         raise ValueError("Studio Scene recommendation is invalid.")
-    return {"checks": checks, "readHints": read_hints,
-            "writeHint": value["writeHint"], "sceneId": value["sceneId"]}
+    if "stale" in value and not isinstance(value["stale"], bool):
+        raise ValueError("Studio readiness freshness flag must be a boolean.")
+    result = {"checks": checks, "readHints": read_hints,
+              "writeHint": value["writeHint"], "sceneId": value["sceneId"]}
+    if "stale" in value:
+        result["stale"] = value["stale"]
+    return result
 
 
 def _validate_story_access(access):

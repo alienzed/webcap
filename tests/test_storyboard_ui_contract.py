@@ -1168,14 +1168,23 @@ def test_storyboard_scene_progress_cards_mark_saved_refinements():
     assert ".storyboard-scene-progress-step .storyboard-scene-progress-refined" in css
 
 
-def test_storyboard_scene_continuity_is_collapsible():
+def test_scene_entry_and_exit_states_are_retired_from_authoring_but_preserved_in_storage():
     storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+    store = (ROOT / "tool" / "server" / "storyboard_store.py").read_text(encoding="utf-8")
 
-    assert 'class="storyboard-scene-disclosure storyboard-continuity-details"' in storyboard
-    assert "<span>Continuity</span>" in storyboard
-    assert "Entry + Exit defined" in storyboard
-    assert 'data-scene-field="entryState"' in storyboard
-    assert 'data-scene-field="exitState"' in storyboard
+    # Neither the Scene form nor its edit payload creates hidden continuity obligations.
+    assert 'class="storyboard-scene-disclosure storyboard-continuity-details"' not in storyboard
+    assert 'data-scene-field="entryState"' not in storyboard
+    assert 'data-scene-field="exitState"' not in storyboard
+    payload = storyboard.split("function scenePayloadFromUi(sceneId) {", 1)[1].split(
+        "\\n  }", 1
+    )[0]
+    assert "field('entryState')" not in payload
+    assert "field('exitState')" not in payload
+
+    # Existing authored values remain readable and retained by normal edits.
+    assert 'value.get("entryState", current.get("entryState", ""))' in store
+    assert 'value.get("exitState", current.get("exitState", ""))' in store
 
 
 def test_storyboard_scene_uses_large_visible_generation_and_conditioning_inspector():

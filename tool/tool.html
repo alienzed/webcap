@@ -2162,6 +2162,46 @@
                 </div>
                     </div>
                     <div class="director-chat-sidebar">
+                <section id="studio-director-workbench" class="studio-director-workbench" aria-label="Director actions and feedback">
+                  <div class="studio-dw-heading"><strong>Director desk</strong><span>Expert guidance · reviewed changes</span></div>
+                  <div class="studio-dw-actions">
+                    <button id="studio-dw-read" type="button" aria-expanded="false" aria-controls="studio-dw-read-panel">Read…</button>
+                    <button id="studio-dw-write" type="button" aria-expanded="false" aria-controls="studio-dw-write-panel">Write…</button>
+                  </div>
+                  <div id="studio-dw-status" class="studio-dw-status" role="status" aria-live="polite">Choose Read to share saved fields, or Write to review a proposal.</div>
+                  <section id="studio-dw-read-panel" class="studio-dw-panel hidden" aria-label="Read selected saved fields">
+                    <h3>Read saved material</h3>
+                    <label>Project<select id="studio-dw-read-project"></select></label>
+                    <div id="studio-dw-project-fields" class="studio-dw-field-list" aria-label="Project fields"></div>
+                    <details id="studio-dw-scenes">
+                      <summary>Scenes · choose individual fields</summary>
+                      <div id="studio-dw-scene-fields" class="studio-dw-scene-list"></div>
+                    </details>
+                    <button id="studio-dw-read-send" type="button" class="studio-dw-primary">Send selected fields to Director</button>
+                  </section>
+                  <section id="studio-dw-write-panel" class="studio-dw-panel hidden" aria-label="Write reviewed content">
+                    <h3>Write a proposal</h3>
+                    <label>Destination<select id="studio-dw-write-project"></select></label>
+                    <label>Operation<select id="studio-dw-write-operation">
+                      <option value="project">Revise Project fields</option>
+                      <option value="new-project">Create a Project</option>
+                      <option value="scene">Create a Scene</option>
+                      <option value="scenes">Create several Scenes</option>
+                      <option value="scene-edit">Revise existing Scene</option>
+                    </select></label>
+                    <label id="studio-dw-write-scene-row" class="hidden">Scene<select id="studio-dw-write-scene"></select></label>
+                    <div id="studio-dw-write-fields" class="studio-dw-field-list hidden">
+                      <label><input type="checkbox" value="summary" checked> Intent</label>
+                      <label><input type="checkbox" value="prompt"> H3 Prompt</label>
+                      <label><input type="checkbox" value="title"> Title</label>
+                    </div>
+                    <button id="studio-dw-write-prepare" type="button" class="studio-dw-primary">Prepare editable review</button>
+                  </section>
+                  <section class="studio-dw-readiness" aria-label="Director readiness proposals">
+                    <div class="studio-dw-readiness-heading"><strong>Creative readiness</strong><small>Director proposals, not saved fields</small></div>
+                    <div id="studio-dw-readiness-list" class="studio-dw-readiness-list"><p>Director will assess material during conversation.</p></div>
+                  </section>
+                </section>
                 <section id="director-studio-flow" class="director-studio-flow hidden" aria-label="Active Story and proposed field changes">
                     <div class="director-studio-flow-main">
                         <div class="director-studio-flow-copy">
@@ -2214,6 +2254,20 @@
                     </div>
                 </div>
             </aside>
+            <dialog id="studio-dw-scene-review" class="studio-scene-draft-review" aria-labelledby="studio-dw-scene-review-title">
+              <header class="studio-scene-draft-header"><div><h2 id="studio-dw-scene-review-title">Review Scene changes</h2>
+                <p>Editable proposals for selected existing fields. Unselected fields and Takes are preserved.</p></div>
+                <button id="studio-dw-scene-close" type="button" class="review-captions-btn">Close</button></header>
+              <div class="studio-scene-draft-content">
+                <p id="studio-dw-scene-target"></p>
+                <div id="studio-dw-scene-editors"></div>
+                <p id="studio-dw-scene-error" role="alert"></p>
+              </div>
+              <footer class="studio-scene-draft-footer">
+                <button id="studio-dw-scene-cancel" type="button" class="review-captions-btn">Back to conversation</button>
+                <button id="studio-dw-scene-apply" type="button">Apply selected fields</button>
+              </footer>
+            </dialog>
             <dialog id="studio-brief-review" class="studio-scene-draft-review" aria-labelledby="studio-brief-review-title">
                 <header class="studio-scene-draft-header">
                     <div>
@@ -3796,6 +3850,7 @@
         <script src="/static/js/qa_curation.js"></script>
         <script src="/static/js/session_prompt_history.js"></script>
         <script src="/static/js/director_chat.js"></script>
+        <script src="/static/js/studio_director_workbench.js"></script>
 <script src="/static/js/studio_blocks.js"></script>
         <script src="/static/js/review_assistant.js"></script>
         <script src="/static/js/inference_queue.js"></script>

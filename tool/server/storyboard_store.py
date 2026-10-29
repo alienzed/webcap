@@ -1423,6 +1423,37 @@ def extend_director_story(story_id, plan, model_id=""):
     return story, added_ids
 
 
+STUDIO_SCENE_FIELDS = {"title", "summary", "prompt"}
+
+
+@_serialized_mutation
+def apply_studio_scene_fields(story_id, scene_id, expected, changes):
+    """Commit a reviewed, field-scoped Scene revision without touching Takes or settings."""
+    if not isinstance(expected, dict) or not isinstance(changes, dict) or not changes:
+        raise ValueError("Select at least one Scene field to apply.")
+    if set(changes) - STUDIO_SCENE_FIELDS or set(expected) != set(changes):
+        raise ValueError("Reviewed Scene fields must match exact supported originals.")
+    if any(not isinstance(value, str) or len(value) > 60000
+           or not isinstance(expected[key], str) for key, value in changes.items()):
+        raise ValueError("Reviewed Scene field values must be text with saved originals.")
+
+    story = load_story(story_id)
+    current = (story.get("scenes") or {}).get(scene_id)
+    if not isinstance(current, dict) or scene_id not in (story.get("sceneOrder") or []):
+        raise FileNotFoundError("Selected Scene no longer exists.")
+    for key in changes:
+        if str(current.get(key) or "") != expected[key]:
+            raise RuntimeError("Scene " + key + " changed since review. Read the current value and review again.")
+    clean = {key: value.strip() for key, value in changes.items()}
+    if "title" in clean and len(clean["title"]) > 240:
+        raise ValueError("Scene title is too long.")
+    revised = _normalize_scene(scene_id, clean, existing=current)
+    story["scenes"][scene_id] = revised
+    story["updatedAt"] = _utc_now()
+    _write_json_atomic(_story_path(story_id), story)
+    return story, revised
+
+
 @_serialized_mutation
 def update_scene(story_id, scene_id, payload):
     story = load_story(story_id)

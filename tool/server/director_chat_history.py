@@ -160,7 +160,12 @@ def _validate_readiness(value):
     if capture is not None:
         if not isinstance(capture, dict):
             raise ValueError("Studio creative capture is invalid.")
-        if capture.get("field") == "invariant":
+        if capture.get("field") == "scene":
+            if (set(capture) != {"field", "content", "sceneId", "title"}
+                    or not isinstance(capture["title"], str) or len(capture["title"]) > 240
+                    or capture["sceneId"] != ""):
+                raise ValueError("Studio creative capture Scene identity is invalid.")
+        elif capture.get("field") == "invariant":
             if (set(capture) != {"field", "content", "sceneId", "kind", "title", "beforeKind", "beforeTitle"}
                     or capture["kind"] not in {"character", "location", "visual", "world", "sound", "custom"}
                     or not isinstance(capture["title"], str) or not capture["title"].strip()

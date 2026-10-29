@@ -279,3 +279,25 @@ def test_studio_creative_capture_persists_without_authorizing_project_mutation(s
                 {"field": "style", "content": "Neon", "sceneId": "scene-12"}},
         })
     assert history.open_chat(chat["id"])["revision"] == 1
+
+def test_studio_invariant_capture_roundtrip_and_explicit_existing_identity(sessions):
+    chat = history.create_chat("storyboard")
+    base = {"checks": [], "readHints": [], "writeHint": "project", "sceneId": ""}
+    capture = {
+        "field": "invariant", "content": "Alice has dark hair and a red scarf.",
+        "sceneId": "", "kind": "character", "title": "Alicia",
+        "beforeKind": "character", "beforeTitle": "Alice",
+    }
+    saved = history.save_chat(chat["id"], {
+        "expectedRevision": 0, "title": "Character development", "messages": [],
+        "draft": "", "readiness": {**base, "capture": capture},
+    })
+    assert saved["readiness"]["capture"] == capture
+    assert history.open_chat(chat["id"])["readiness"]["capture"] == capture
+    assert saved["operations"] == []
+    invalid = {**capture, "beforeKind": ""}
+    with pytest.raises(ValueError, match="Invariant identity"):
+        history.save_chat(chat["id"], {
+            "expectedRevision": 1, "title": "Invalid", "messages": [],
+            "draft": "", "readiness": {**base, "capture": invalid},
+        })

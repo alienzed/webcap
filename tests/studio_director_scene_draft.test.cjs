@@ -60,7 +60,7 @@ test('Studio drafting is a staged proposal, not a silent Story mutation', () => 
   assert.match(apply, /expectedUpdatedAt: proposal\.expectedUpdatedAt/);
   assert.match(apply, /placement: placement/);
   assert.match(apply, /relativeSceneId: relativeSceneId/);
-  assert.match(apply, /persistSession\('storyboard'\)/);
+  assert.match(apply, /studioDirectorBridge\.recordApplied\(/);
   assert.match(apply, /refreshStudioDirectorStoryIfOpen\(proposal\.storyId\)/);
 });
 
@@ -77,7 +77,7 @@ test('Studio project proposals remain separate from conversation and must be rev
   assert.doesNotMatch(prep, /\/fs\/studio\/director\/project-create/);
   const apply = part('  function applyStudioProject() {', '  function parseStudioSceneDraft(raw) {');
   assert.match(apply, /\/fs\/studio\/director\/project-create/);
-  assert.match(apply, /persistSession\('storyboard'\)/);
+  assert.match(apply, /studioDirectorBridge\.recordApplied\(/);
   assert.match(apply, /refreshStudioDirectorStoryIfOpen/);
   assert.doesNotMatch(apply, /state\.storyboardAttachments\s*=/);
 });
@@ -111,7 +111,7 @@ test('Studio offers reviewed multi-Scene insert with arbitrary placement', () =>
   const apply = part('  function applyStudioScenes() {', '  function parseStudioSceneDraft(raw) {');
   assert.match(apply, /expectedSceneOrder: proposal\.sceneOrder/);
   assert.match(apply, /\/fs\/studio\/director\/scenes-draft/);
-  assert.match(apply, /persistSession\('storyboard'\)/);
+  assert.match(apply, /studioDirectorBridge\.recordApplied\(/);
   assert.match(source, /option\('before\|' \+ id/);
   assert.match(source, /option\('after\|' \+ id/);
 });
@@ -121,11 +121,11 @@ test('Scene sequence parser rejects invalid or overlarge batches', () => {
   const parse = vm.runInContext('(' + part('  function parseStudioScenesDraft(raw) {', '  function addStudioScenesRow(').trim() + ')', context);
   assert.equal(parse(JSON.stringify({scenes: [{title: '', summary: 'One'}], rationale: ''})).scenes.length, 1);
   assert.throws(() => parse('bad json'), /invalid Scene sequence JSON/);
-  assert.throws(() => parse(JSON.stringify({scenes: [], rationale: ''})), /one to eight/);
+  assert.throws(() => parse(JSON.stringify({scenes: [], rationale: ''})), /one to 32/);
   assert.throws(() => parse(JSON.stringify({
-    scenes: Array.from({length: 9}, (_, i) => ({title: '', summary: 'Scene ' + i})),
+    scenes: Array.from({length: 33}, (_, i) => ({title: '', summary: 'Scene ' + i})),
     rationale: ''
-  })), /one to eight/);
+  })), /one to 32/);
 });
 
 
@@ -166,6 +166,7 @@ test('Review Create Project persists explicit continuation without touching unbo
       'studio-project-style': {value: 'Muted pastel palette'},
       'studio-project-invariants': {querySelectorAll: () => []},
       'studio-project-include-scene': {checked: false},
+      'studio-project-extra-scenes': {querySelectorAll: () => []},
       'studio-project-continue': {checked: continueChecked},
       'studio-project-error': {textContent: ''},
       'studio-project-review': {close() {this.closed = true;}},
@@ -193,7 +194,15 @@ test('Review Create Project persists explicit continuation without touching unbo
         assert.equal(mode, 'storyboard');
         persisted = state.studioStoryAccess && {...state.studioStoryAccess};
       },
-      window: {refreshStudioDirectorStoryIfOpen: async id => {refreshed = id;}},
+      window: {
+        refreshStudioDirectorStoryIfOpen: async id => {refreshed = id;},
+        studioDirectorBridge: {recordApplied: async (kind, story, fields) => {
+          assert.equal(kind, 'project.create');
+          assert.equal(story.id, 'story-created');
+          assert.equal(fields.concept, 'A comic train station scene');
+          persisted = state.studioStoryAccess && {...state.studioStoryAccess};
+        }}
+      },
     });
     vm.runInContext(code, context);
     vm.runInContext('applyStudioProject()', context);

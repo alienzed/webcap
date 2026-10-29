@@ -723,8 +723,8 @@ def create_studio_project(proposal):
     if first is not None and many is not None:
         raise ValueError("Use one initial Scene list, not two competing sources.")
     initial = [first] if first is not None else (many if many is not None else [])
-    if not isinstance(initial, list) or len(initial) > 12:
-        raise ValueError("Project creation supports at most twelve reviewed initial Scenes.")
+    if not isinstance(initial, list) or len(initial) > 32:
+        raise ValueError("Project creation supports at most 32 reviewed initial Scenes.")
     for item in initial:
         if not isinstance(item, dict) or set(item) != {"title", "summary"}:
             raise ValueError("Each initial Scene needs only title and summary.")
@@ -1111,7 +1111,7 @@ def add_tentative_scene_at(story_id, expected_updated_at, scene_draft, placement
 
 @_serialized_mutation
 def add_tentative_scenes_at(story_id, expected_scene_order, drafts, placement, relative_scene_id=""):
-    """Insert a reviewed block of 1–8 tentative Scenes with one Story commit.
+    """Insert a reviewed block of up to 32 tentative Scenes with one Story commit.
 
     Check only the structural field being modified, so unrelated Concept or
     Scene edits do not invalidate a reviewed placement.
@@ -1120,8 +1120,8 @@ def add_tentative_scenes_at(story_id, expected_scene_order, drafts, placement, r
     order = list(story.get("sceneOrder") or [])
     if not isinstance(expected_scene_order, list) or order != expected_scene_order:
         raise RuntimeError("Scene order changed during review. Prepare a fresh placement.")
-    if not isinstance(drafts, list) or not 1 <= len(drafts) <= 8:
-        raise ValueError("Create between one and eight tentative Scenes per review.")
+    if not isinstance(drafts, list) or not 1 <= len(drafts) <= 32:
+        raise ValueError("Create between one and 32 tentative Scenes per review.")
     if placement not in {"start", "end", "before", "after"}:
         raise ValueError("Select start, end, before or after.")
     relative_scene_id = str(relative_scene_id or "").strip()

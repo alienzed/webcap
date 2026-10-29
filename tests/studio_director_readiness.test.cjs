@@ -93,3 +93,19 @@ test('workbench exposes freshness and only accepted assessments are stored',()=>
   assert.match(director,/markStudioReadinessOutdated\(\)/);
   assert.match(director,/state\.studioReadiness = Object\.assign\(\{\}, state\.studioReadiness, \{stale:true\}\)/);
 });
+
+test('capture is optional, bounded and remains editable authoring material, not an applied action', () => {
+  const capture = {field:'concept', content:'A complete, original creative premise.', sceneId:''};
+  const proposal = {...valid, capture};
+  assert.deepEqual(parse(JSON.stringify(proposal)).capture, capture);
+  const response = processResponse('A concise suggestion.\n[[WEBCAP_READINESS]]'+
+    JSON.stringify(proposal)+'[[END_WEBCAP_READINESS]]');
+  assert.equal(response.text, 'A concise suggestion.');
+  assert.deepEqual(response.state.studioReadiness.capture, capture);
+  assert.match(director, /reviewCapture: function \(capture, storyId\)/);
+  assert.match(director, /showStudioBriefReview\(\)/);
+  assert.match(workbench, /creativeCapture = capture/);
+  assert.match(workbench, /'Review ' \+ fieldName \+ ' change'/);
+  assert.match(workbench, /return showSceneReview\(story, sceneTarget/);
+  assert.match(workbench, /setReadinessFreshness/);
+});

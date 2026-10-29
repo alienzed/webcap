@@ -3871,8 +3871,8 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
 .studio-director-workbench .studio-dw-readiness-list {display:flex;flex-direction:column;gap:8px;margin-top:12px;}
 .studio-director-workbench .studio-dw-readiness-list details {border:1px solid var(--border);border-radius:8px;padding:8px 10px;}
 .studio-director-workbench .studio-dw-readiness-list summary {display:flex;gap:10px;align-items:center;list-style:none;}
-.studio-director-workbench .studio-dw-readiness-list summary:before {content:"□";font-size:21px;}
-.studio-director-workbench .studio-dw-readiness-list details[data-ready="true"] summary:before {content:"☑";}
+.studio-director-workbench .studio-dw-readiness-list summary input {margin:0;accent-color:var(--accent,#628fd1);}
+.studio-director-workbench .studio-dw-readiness-list summary span {flex:1;}
 .studio-director-workbench .studio-dw-readiness-list pre,
 .director-chat-message-body details pre {white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;font-size:15px;max-height:320px;overflow-y:auto;padding:8px;border-radius:8px;background:var(--panel-soft);}
 #studio-dw-scene-editors label {display:flex;flex-direction:column;align-items:stretch;gap:7px;margin:12px 0;}
@@ -3881,3 +3881,6 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
   .director-chat-drawer.studio-director .director-chat-layout {display:flex;flex-direction:column;}
   .director-chat-drawer.studio-director .director-chat-sidebar {max-height:45%;border-left:0;border-top:1px solid var(--border);}
 }
+
+.studio-project-extra-scene {display:flex;flex-direction:column;gap:8px;margin:12px 0;padding:12px;border:1px solid var(--border);border-radius:8px;}
+.studio-project-extra-scene input,.studio-project-extra-scene textarea {width:100%;font-size:16px;}

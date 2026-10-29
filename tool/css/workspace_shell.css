@@ -3924,3 +3924,18 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
 @media (prefers-reduced-motion:reduce) {
   .director-chat-drawer.studio-director .director-chat-sidebar {transition:none;}
 }
+
+/* LLM-authored receipt status stays next to the corresponding Read event. */
+.director-chat-read-receipt {margin:6px 0 14px;padding:4px 10px;font-size:14px;color:var(--muted);border-left:2px solid var(--accent,#628fd1);}
+.director-chat-read-receipt[data-error="true"] {color:var(--danger,#f87171);border-left-color:currentColor;}
+.studio-director-workbench .studio-dw-panel {background:transparent;}
+.studio-director-workbench .studio-dw-readiness-list {gap:8px;}
+.studio-director-workbench .studio-dw-undo button:disabled {opacity:.5;cursor:wait;}
+#studio-dw-assessment-dialog .studio-scene-draft-header {display:flex;align-items:center;justify-content:space-between;gap:12px;}
+#studio-dw-assessment-dialog .studio-scene-draft-content {min-width:0;overflow-y:auto;}
+@container (max-width:820px) {
+  .director-chat-drawer.studio-director .director-chat-drawer-header {gap:8px;}
+  .director-chat-drawer.studio-director .director-chat-header-actions {gap:6px;}
+  .director-chat-drawer.studio-director #studio-dw-open-actions {min-height:40px;font-size:15px;}
+  .director-chat-drawer.studio-director .director-chat-sidebar {background:var(--panel-soft);}
+}

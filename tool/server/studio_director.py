@@ -38,6 +38,8 @@ ACTIONS = (
      "description": "Author reviews exact Scene order changes; WebCap moves Scenes deterministically without a model request."},
     {"name": "scene.duplicate", "status": "available",
      "description": "WebCap duplicates a reviewed Scene setup without copying Takes or deleting anything."},
+    {"name": "scene.invariants", "status": "available",
+     "description": "Review the Character or Location Invariants used by selected Scenes, with exact links saved atomically and no changes to creative prose."},
     {"name": "scene.split", "status": "available",
      "description": "Author and review two distinct Scene Intents; WebCap atomically updates the first and inserts a tentative second."},
 )

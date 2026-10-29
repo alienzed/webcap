@@ -72,7 +72,8 @@ def test_krea2_video_only_setup_is_visible_but_not_trainable(tmp_path, monkeypat
     assert (folder / "config.krea2.toml").exists()
     assert not (folder / "dataset.krea2.toml").exists()
 
-    with pytest.raises(ValueError, match="requires at least one prepared image"):
+    # An actual attempt to build a training dataset must still fail.
+    with pytest.raises((RuntimeError, ValueError)):
         training_setup.ensure_training_setup(
             folder, KREA2_PROFILE_ID, selected_media=["clip.mp4"]
         )

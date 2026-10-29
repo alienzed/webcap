@@ -2453,7 +2453,7 @@
       if (!payload.system || typeof payload.system !== 'string') {
         throw new Error('Studio Director production guidance is missing.');
       }
-      var outbound = storyboardRequestMessages(messages, false);
+      var outbound = [{role:'system', content:''}].concat(messages); // No hidden workshop/attachment re-injection.
       // Conversation context is opt-in. The workbench state only tells Director
       // what WebCap can review next; it is not a fresh Story or Scene attachment.
       var storyRefs = Object.keys(state.storyboardAttachments || {}).filter(function (key) {
@@ -2477,22 +2477,20 @@
 
   function studioDirectorChatRequestMessages(messages) {
     return studioDirectorRequestMessages(messages).then(function (outbound) {
-      outbound[0] = {role: 'system', content: outbound[0].content + '\n' +
-        'REVIEWED FIELD CAPTURE: If and only if the author explicitly asks to set, save, or ' +
-        'capture the agreed Concept / overview, Visual / atmosphere, or Invariants, ' +
-        'respond ONLY with [[WEBCAP_PREPARE:fields]]. WebCap will privately prepare an editable ' +
-        'review proposal for the existing attached Story or a new Project if none is attached. ' +
-        'This token never applies changes. Otherwise converse naturally.'};
-      if (state.studioStoryAccess) {
-        outbound[0] = {role: 'system', content: outbound[0].content + '\n' +
-          'ON-DEMAND STORY READ: If the author asks about current Story details you have not been given, ' +
-          'respond ONLY with one of these exact standalone tokens: ' +
-          '[[WEBCAP_READ:brief]], [[WEBCAP_READ:index]], [[WEBCAP_READ:scene:N]], ' +
-          '[[WEBCAP_READ:prompt:N]], [[WEBCAP_READ:takes:N]], where N is a 1-based Scene number. ' +
-          'WebCap will privately retrieve the requested fields and ask you to answer again. ' +
-          'Do not use the token for ordinary brainstorming, and never claim a read or update without evidence. ' +
-          'The tokens are not conversation content and do not grant write access.'};
-      }
+      outbound[0].content += '\n\nCONTEXT DELIVERY CONTRACT: Only explicitly supplied Read fields are available. ' +
+        'For a WEBCAP EXPLICIT READ, begin your natural answer with a line RECEIVED: ' +
+        'followed by the exact received field identifiers separated by comma and space. ' +
+        'Then discuss the contents substantively; a receipt alone is not an assessment. ' +
+        'Never claim to have inspected unavailable saved fields. ' +
+        'READINESS: After your conversational reply, emit a final delimited machine-readable block ' +
+        '[[WEBCAP_READINESS]]JSON[[END_WEBCAP_READINESS]]. JSON is an array of up to 10 ' +
+        'objects with name, scope, ready, content. Name is one of Concept, Characters, Setting, ' +
+        'Action, Dialogue, Visual / atmosphere, Visual focus, Structure / formula, ' +
+        'Variation / repetition, Production feasibility. Scope is project or scene. ' +
+        'Content is the complete proposed text for that single category, not a summary of the Project. ' +
+        'Ready is true when materially developed, false when incomplete. Include only relevant categories ' +
+        'actually supported by this conversation; do not invent facts to complete checkboxes. ' +
+        'Keep the normal reply brief and focus on the author\'s intent.';
       return outbound;
     });
   }
@@ -3074,7 +3072,26 @@
               window.reportConsoleError('Studio Read acknowledgement', new Error(feedback));
           }
         }
-        messages.push({ role: 'assistant', content: String(result.text || '') });
+        var assistantText = String(result.text || '');
+        if (activeChatMode === 'storyboard') {
+          var readyStart = assistantText.indexOf('[[WEBCAP_READINESS]]');
+          var readyEnd = assistantText.indexOf('[[END_WEBCAP_READINESS]]');
+          if (readyStart >= 0 && readyEnd > readyStart) {
+            var readyJson = assistantText.slice(readyStart + '[[WEBCAP_READINESS]]'.length, readyEnd).trim();
+            try {
+              var readinessData = JSON.parse(readyJson);
+              if (window.studioDirectorWorkbench) window.studioDirectorWorkbench.updateReadiness(readinessData);
+              assistantText = (assistantText.slice(0, readyStart) +
+                assistantText.slice(readyEnd + '[[END_WEBCAP_READINESS]]'.length)).trim();
+              if (!assistantText) throw new Error('Director returned only readiness, without conversational content.');
+            } catch (readyError) {
+              if (typeof window.reportConsoleError === 'function')
+                window.reportConsoleError('Studio readiness', readyError);
+              studioActionStatus('Director readiness was malformed; conversation text preserved.', true);
+            }
+          }
+        }
+        messages.push({ role: 'assistant', content: assistantText });
         var assistantIndex = messages.length - 1;
         elapsedMap[assistantIndex] = performance.now() - startedAt;
         metricsMap[assistantIndex] = completedResponseMetrics(result);

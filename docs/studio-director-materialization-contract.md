@@ -37,6 +37,21 @@ Only then fix **observed** friction in small slices. Most likely follow-ups are 
 
 ---
 
+## Additional completion checkpoint — October 29, 2026
+
+The following work followed the initial PRs #796–803. It **completes existing workflows** rather than replacing the five-field Studio model.
+
+| Shipped phase | Effect | Verification |
+|---|---|---|
+| [#806](https://github.com/alienzed/webcap/pull/806) — Studio Blocks slash | The existing global Idea/Guidance library is available through typed `/` autocomplete in the Director composer. Inserting a Block is an explicit, editable text insertion; it does not send hidden context, run an LLM, or mutate Projects. The picker loads only on demand while using Studio. | Focused Studio syntax/client checks; visual browser verification still needed |
+| [#808](https://github.com/alienzed/webcap/pull/808) — Guided Write | Readiness `writeHint` now covers reviewed move, duplicate, split, and multi-Scene revision; one contextual next-step affordance opens the correct Write selection. Deterministic Scene move/duplicate review and the review of completed authored text no longer require a loaded LLM. | Focused Studio and history checks; real-model suggestion quality unverified |
+| [#809](https://github.com/alienzed/webcap/pull/809) — Scene Invariant associations | Select an existing Character/Location Invariant and the Scenes that use it; WebCap reviews only changed links and saves them atomically with per-Scene CAS. Prompts, creative prose, Takes and technical settings remain untouched. No new creative field or LLM request for literal links. | Focused store and UI contract checks; real browser UX unverified |
+| Current polish slice | Show true Project positions in multi-Scene review; distinguish backend-saved Scene edits from chat-receipt/refresh failures. | Focused Studio regression coverage |
+
+**What still needs evidence or completion:** The user-facing Director is not yet proven to route a *specific fully expressed natural-language Scene move* all the way into an exact prefilled preview: `writeHint` chooses the right operation, but target resolution remains author-reviewed. One model-authored capture per response remains the existing limit, so arbitrary mixed Project+Scene edits are not a single atomic chat-driven proposal. The effect of changed Invariants on already-saved H3 Prompts is *not* automatically repaired; Director should offer a targeted review when useful. Compound Scene Undo/draft continuity, large-Project context recall, visual focus/keyboard polish, and real local-model/browser acceptance remain explicit gaps. Reuse existing WebCap surfaces; do not implement a generic action executor or auto-inject Studio Blocks.
+
+---
+
 ## 1. North star and definition of done
 
 **An author expresses an ordinary creative intention naturally; Studio Director helps develop the material and identifies the right creative home for it; WebCap shows a clear, editable, minimal review and deterministically materializes exactly the approved changes in the saved Project/Scenes.** The author should *not* have to learn field names or decompose an ordinary intention into several independent Write operations.

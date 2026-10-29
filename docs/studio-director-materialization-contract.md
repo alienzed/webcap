@@ -4,6 +4,39 @@
 
 **Authority:** Follow `AGENTS.md` and `docs/filesystem_state_contract.md`. This document is the *current* Studio Director creative collaboration and implementation plan. `docs/studio-director-revamp.md` records architectural context and earlier phase history; `docs/studio-director-ia-audit.md`, `docs/studio-director-design-audit.md` and `docs/studio-director-side-panel-implementation.md` are dated snapshots, not current outstanding-task lists. `docs/storyboard_llm_guidance.md` owns the existing lower-level Storyboard LLM/generation contracts, not the Studio Director user-experience roadmap. Current code wins over all docs when a statement describes what has shipped.
 
+## Implementation checkpoint — current main after PRs #796–803 (2026-10-29)
+
+**This section supersedes the original baseline statuses and phased to-do wording below.** The capability matrix and phases in Sections 3–10 remain the historical rationale and full acceptance specification; do not reimplement actions recorded here. Recheck current code and tests before additional changes. Current merged baseline: `47dd1bc8f64274b39dcab2e36844ce7cce00e551`.
+
+| Previously missing journey | Delivered implementation | Verification level |
+|---|---|---|
+| Complete conversational material → focused editable reviewed field | PR #796: optional bounded capture in existing readiness response; direct Project Title/Concept/Style and existing Scene Title/Intent/Prompt reviews; no duplicate LLM extraction | Studio client/history checks; real-model initiative and browser UX **unverified** |
+| Literal Scene move and duplicate | PR #797: reviewed deterministic move/duplicate, expected Scene order, duplicate source freshness, no Take deletion | Focused store and client CI |
+| Coordinated edits to several existing Scenes | PR #798: one structured proposal and editable per-field review, one atomic Story JSON write with selected field CAS; preserves all unselected Scenes/Prompts/Takes | Focused store and client CI |
+| Named Invariant add/edit/rename from conversation | PR #799: explicit Invariant identity in capture and matching reviewed original row, linked active Scene reference rename via existing scoped `invariantOps` | Focused history/client and Invariant-store CI |
+| Direct new Scene from developed conversation | PR #800: use existing tentative Scene placement review without a second draft; selected Project, stable Scene order and current state remain authoritative | Focused history/client and existing Scene-store CI |
+| Split Scene | PR #801: one model proposal for two Intents, reviewed replacement of original Intent + new tentative Scene inserted immediately after; atomic Story metadata commit; old Prompt/Takes remain | Focused split-store and client CI |
+| Knowledge and Read scope coherence | PR #803: current action catalog, no retired Guidelines in active Write drafts, 48k-character explicit Read size guard, full H3 prompt guidance only for selected H3 Prompt drafting | Focused Studio CI |
+
+All seven PRs were merged on 2026-10-29. These are **functional completion increments**, not a new architecture or UI revamp. They reuse `storyboard_store.py`, current Studio workbench, the existing local LLM request path, file-backed state, and reviewed Apply.
+
+### What's deliberately not claimed complete
+
+- **No actual local Director-model behavioral test or browser walkthrough was executed** using this repository connector. In particular, the model's optional capture metadata may be absent, vague, mismatched, or too frequent. Successful parser/schema/unit tests do not establish reliable creative initiative. The explicit Write/Prepare fallback remains valid.
+- **One offered conversational capture per assistant response**, not a simultaneous direct capture of arbitrary cross-Project/Scene fields. Broad reviewed Project changes and reviewed multi-Scene changes already work through explicit Write. Before adding a multi-capture protocol, demonstrate a real conversation where breaking one intent into several reviews is materially painful.
+- **Scene Undo is not yet a unified durable feature.** The latest Project brief has guarded Undo; Scene batch/move/split/duplicate edits are saved with conflict checks but not a persistent compound Undo receipt. For a split or duplicate, deleting a Scene as “Undo” would be unsafe once Takes exist. A future narrowly scoped pre-Take revert needs a demonstrated user journey, explicit conflict checks and truthful limitations.
+- **Scene removal remains intentionally outside Director.** The existing manual delete path purges generated Take metadata/artifacts; do not expose it as a casual creative operation. A “merge Scenes” journey is currently accomplished through reviewed revision of the retained Scene, leaving the other Scene intact.
+- **Long conversation compaction and full auto-assessment of an entire 15+ Scene Project are not proven.** Read supports Project briefs, Scene overview selections and exact full fields with a visible size cap. Do not auto-inject unread Project content, deduplicate repeated creative prose speculatively, or claim more context than was sent.
+- **The live experience still needs visual polish verification:** target clarity; useful one-click Review placement; modal readability; model activity feedback; after-Apply return to the same conversation; focus and narrow layouts. Avoid “feature complete” wording until those journeys have actually been exercised.
+
+### Next required acceptance pass, not a new architectural phase
+
+Run WebCap locally with the intended Director model and a real Project containing several recurring Invariants and at least 15 Scenes. Walk these cases in order: natural Concept capture; Character Invariant definition and explicit rename with linked Scenes; direct Scene insertion; targeted Scene Intent/Prompt; move and duplicate; batch move of dialogue between two Scenes; split one overloaded Scene; Read Project+overviews; stale/concurrent edit conflict; reopen conversation; and no model connected. Record **the model's actual reply**, exact Read/capture payload, number of LLM requests, number of author clicks to Apply, saved values/IDs/order, error and Undo behavior, and whether each next action was obvious. Test full and narrow Studio layouts.
+
+Only then fix **observed** friction in small slices. Most likely follow-ups are more reliable capture suggestions and clear multi-target review/Undo, but do not build those speculatively. Live local-model and graphical browser verification are concrete dependencies unavailable from GitHub-only implementation.
+
+---
+
 ## 1. North star and definition of done
 
 **An author expresses an ordinary creative intention naturally; Studio Director helps develop the material and identifies the right creative home for it; WebCap shows a clear, editable, minimal review and deterministically materializes exactly the approved changes in the saved Project/Scenes.** The author should *not* have to learn field names or decompose an ordinary intention into several independent Write operations.

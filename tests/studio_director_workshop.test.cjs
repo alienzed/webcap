@@ -54,7 +54,7 @@ test('Only explicitly supplied conversation content is sent; legacy snapshots ar
         description: 'Explicitly delivered fields only'}]
     })
   });
-  vm.runInContext(part('  function studioDirectorRequestMessages(messages) {',
+  vm.runInContext(part('  function studioDirectorRequestMessages(messages, includePromptContract) {',
     '  function studioDirectorChatRequestMessages(messages) {'), context);
   const result = await vm.runInContext(
     'studioDirectorRequestMessages([{role:"user",content:"Develop the idea"}])', context);

@@ -1833,7 +1833,7 @@
           'Do not change Scenes or prompts. Prefer no change where ideas remain undecided. ' +
           'Any changes must be reviewed by the author before WebCap stores them.',
         project: { id: story.id, title: story.title, concept: story.concept,
-          style: story.style, invariants: story.invariants, guidelines: story.guidelines },
+          style: story.style, invariants: story.invariants },
         discussion: discussion
       };
       return studioDirectorRequestMessages([{ role: 'user', content: JSON.stringify(input) }])
@@ -2308,7 +2308,7 @@
           'No generation prompt, new project or existing Scene edits yet.',
         project: {
           id: story.id, title: story.title, concept: story.concept,
-          style: story.style, invariants: story.invariants, guidelines: story.guidelines,
+          style: story.style, invariants: story.invariants,
           currentScenes: order.map(function (id, index) {
             var scene = story.scenes[id];
             return { id: id, position: index + 1, title: scene.title, intent: scene.summary };

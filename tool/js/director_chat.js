@@ -1521,6 +1521,15 @@
       });
     }
     row.append(kind, title, remove, details);
+    if (destination === 'studio-brief-invariants' && original) {
+      var saved = document.createElement('small');
+      saved.style.gridColumn = '1 / -1';
+      saved.textContent = 'Saved ' + original.kind + ' · ' + original.title +
+        ': ' + original.text +
+        (original.kind !== kind.value || original.title !== title.value
+          ? ' · A reviewed rename also updates linked Scene references.' : '');
+      row.appendChild(saved);
+    }
     host.appendChild(row);
   }
 
@@ -1764,9 +1773,13 @@
     var suggested = proposal.draft.invariants || [];
     var matched = new Set();
     var reviewed = existing.map(function (before) {
+      var redirect = (proposal.renames || []).find(function (rename) {
+        return rename.beforeKind === before.kind &&
+          rename.beforeTitle.toLowerCase() === before.title.toLowerCase();
+      });
       var index = suggested.findIndex(function (item) {
-        return item.kind === before.kind &&
-          item.title.toLowerCase() === before.title.toLowerCase();
+        return item.kind === (redirect ? redirect.afterKind : before.kind) &&
+          item.title.toLowerCase() === (redirect ? redirect.afterTitle : before.title).toLowerCase();
       });
       if (index >= 0) matched.add(index);
       return {item:index >= 0 ? suggested[index] : before, original:before};
@@ -2657,8 +2670,12 @@
         'OPTIONAL CREATIVE CAPTURE: Only when you have a COMPLETE, author-acceptable final field value ' +
         'already developed in this reply or the ongoing conversation, you may add one capture object ' +
         '{field, content, sceneId} to the same readiness JSON. field is title, concept, style, ' +
-        'summary, or prompt; content is the COMPLETE replacement field text, not an instruction or summary; ' +
+        'summary, prompt or invariant; content is the COMPLETE replacement field text, not an instruction or summary; ' +
         'sceneId is the exact known saved Scene ID for Scene fields, otherwise empty. ' +
+        'For field invariant include kind (character/location/visual/world/sound/custom), title, ' +
+        'beforeKind and beforeTitle along with field/content/sceneId; use beforeKind/beforeTitle only ' +
+        'when editing an exact existing Invariant identity (including renames), else both empty. ' +
+        'Do not infer that a renamed character is a new additional person. ' +
         'Never guess IDs, confuse proposal with saved content, include any field without a clear destination, ' +
         'or propose a capture for open-ended exploration. Omit capture when not ready; ' +
         'WebCap will bind it to a freshly selected saved destination and require editable review. ' +
@@ -3668,7 +3685,7 @@
     },
     reviewCapture: function (capture, storyId) {
       if (!this.isReady()) return Promise.reject(new Error('Director is busy or unavailable.'));
-      if (!storyId || !capture || ['title','concept','style'].indexOf(capture.field) === -1 ||
+      if (!storyId || !capture || ['title','concept','style','invariant'].indexOf(capture.field) === -1 ||
           typeof capture.content !== 'string' || !capture.content.trim()) {
         return Promise.reject(new Error('Choose a saved Project and a complete creative field proposal.'));
       }
@@ -3686,11 +3703,35 @@
         if (!story || story.id !== storyId) throw new Error('Selected Project is unavailable.');
         var expected = {title:story.title,concept:story.concept,style:story.style,invariants:story.invariants};
         var proposed = {title:story.title,concept:story.concept,style:story.style,invariants:story.invariants};
-        proposed[capture.field] = capture.content;
+        var renames = [];
+        if (capture.field === 'invariant') {
+          var after = {kind:capture.kind, title:capture.title.trim(), text:capture.content.trim()};
+          proposed.invariants = (story.invariants || []).slice();
+          if (capture.beforeKind && capture.beforeTitle) {
+            var index = proposed.invariants.findIndex(function (item) {
+              return item.kind === capture.beforeKind &&
+                item.title.toLowerCase() === capture.beforeTitle.toLowerCase();
+            });
+            if (index < 0) throw new Error('The referenced Invariant no longer exists. Read and select the saved identity.');
+            var before = proposed.invariants[index];
+            proposed.invariants[index] = after;
+            renames.push({
+              beforeKind:before.kind,beforeTitle:before.title,
+              afterKind:after.kind,afterTitle:after.title
+            });
+          } else {
+            if (proposed.invariants.some(function (item) {
+              return item.kind === after.kind && item.title.toLowerCase() === after.title.toLowerCase();
+            })) throw new Error('An Invariant with this identity already exists. Review it as an update instead.');
+            proposed.invariants.push(after);
+          }
+        } else {
+          proposed[capture.field] = capture.content;
+        }
         state.studioStoryAccess = {storyId:storyId,label:story.title || storyId};
         state.studioBriefProposal = {
-          storyId:storyId,storyTitle:story.title,expected:expected,draft:proposed,
-          rationale:'Director developed this field in conversation. Review and edit before saving.'
+          storyId:storyId,storyTitle:story.title,expected:expected,draft:proposed,renames:renames,
+          rationale:'Director developed this material in conversation. Review and edit before saving.'
         };
         showStudioBriefReview();
         studioActionStatus('Review the developed ' + capture.field + ' without another model request.',false);

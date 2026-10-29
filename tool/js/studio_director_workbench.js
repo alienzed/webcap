@@ -8,7 +8,7 @@
   var sceneFields = ['summary', 'prompt', 'title'];
   var projectFields = ['title', 'concept', 'style', 'invariants'];
   var labels = {title:'Title', concept:'Concept', style:'Visual / atmosphere',
-    invariants:'Invariants', summary:'Intent', prompt:'H3 Prompt',
+    invariants:'Invariants', invariant:'Invariant', summary:'Intent', prompt:'H3 Prompt',
     references:'Reference frames', durationSeconds:'Duration',
     generationSettings:'Generation settings'};
   function el(id) { return document.getElementById(id); }
@@ -399,7 +399,7 @@
   }
 
   function reviewCreativeCapture(capture) {
-    if (!capture || !capture.content || !['title','concept','style','summary','prompt'].includes(capture.field))
+    if (!capture || !capture.content || !['title','concept','style','summary','prompt','invariant'].includes(capture.field))
       throw new Error('No valid authored material is ready for review.');
     if (!window.studioDirectorBridge.isReady())
       throw new Error('Director must be available before starting a reviewed change.');
@@ -410,7 +410,7 @@
       openWriteForCapture();
       return;
     }
-    if (['title','concept','style'].indexOf(capture.field) !== -1) {
+    if (['title','concept','style','invariant'].indexOf(capture.field) !== -1) {
       window.studioDirectorBridge.reviewCapture(capture, id).catch(function (e) {
         status('Creative review failed: ' + String(e.message || e), true);
       });
@@ -883,15 +883,27 @@
         return false;
       }
       var capture = result && result.capture || null;
-      if (capture && (!capture || typeof capture !== 'object' || Array.isArray(capture) ||
-          Object.keys(capture).sort().join(',') !== 'content,field,sceneId' ||
-          ['title','concept','style','summary','prompt'].indexOf(capture.field) === -1 ||
-          typeof capture.content !== 'string' || !capture.content.trim() || capture.content.length > 20000 ||
-          typeof capture.sceneId !== 'string' || capture.sceneId.length > 160 ||
-          (['title','concept','style'].indexOf(capture.field) !== -1 && capture.sceneId) ||
-          (['summary','prompt'].indexOf(capture.field) !== -1 && !capture.sceneId))) {
-        status('Director creative capture did not match the expected contract.',true);
-        return false;
+      if (capture) {
+        var isInvariant = capture.field === 'invariant';
+        var expectedKeys = isInvariant ? 'beforeKind,beforeTitle,content,field,kind,sceneId,title' :
+          'content,field,sceneId';
+        if (typeof capture !== 'object' || Array.isArray(capture) ||
+            Object.keys(capture).sort().join(',') !== expectedKeys ||
+            ['title','concept','style','summary','prompt','invariant'].indexOf(capture.field) === -1 ||
+            typeof capture.content !== 'string' || !capture.content.trim() || capture.content.length > 20000 ||
+            typeof capture.sceneId !== 'string' || capture.sceneId.length > 160 ||
+            (['title','concept','style','invariant'].indexOf(capture.field) !== -1 && capture.sceneId) ||
+            (['summary','prompt'].indexOf(capture.field) !== -1 && !capture.sceneId) ||
+            (isInvariant && (
+              ['character','location','visual','world','sound','custom'].indexOf(capture.kind) === -1 ||
+              typeof capture.title !== 'string' || !capture.title.trim() || capture.title.length > 240 ||
+              typeof capture.beforeKind !== 'string' || typeof capture.beforeTitle !== 'string' ||
+              (!!capture.beforeKind !== !!capture.beforeTitle) ||
+              (capture.beforeKind && ['character','location','visual','world','sound','custom'].indexOf(capture.beforeKind) === -1)
+            ))) {
+          status('Director creative capture did not match the expected contract.',true);
+          return false;
+        }
       }
       recommendations = {readHints:hints, writeHint:writeHint, sceneId:sceneId};
       creativeCapture = capture;

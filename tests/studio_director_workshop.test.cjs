@@ -153,3 +153,20 @@ test('Read offers whole Project, entire Scene, and compact multi-Scene overviews
   const read = workbench.split('  function renderReadStory(story) {', 2)[1].split('  function updateReadSelection() {', 2)[0];
   assert.doesNotMatch(read, /'references'/);
 });
+
+test('reviewed Scene move and duplicate use deterministic WebCap operations, not extra LLM calls', () => {
+  assert.match(html, /value="scene-move">Move Scene/);
+  assert.match(html, /value="scene-duplicate">Duplicate Scene/);
+  assert.match(html, /id="studio-dw-structure-review"/);
+  const prepare = workbench.split('  function prepareStructure(operation, storyId) {')[1]
+    .split('  function applyStructure() {')[0];
+  assert.match(prepare, /flushStudioDirectorStoryEdits/);
+  assert.match(prepare, /expectedSceneOrder:order/);
+  assert.match(prepare, /expectedSourceUpdatedAt:scene.updatedAt/);
+  assert.doesNotMatch(prepare, /makeProposal|\/fs\/director\/chat/);
+  const apply = workbench.split('  function applyStructure() {')[1]
+    .split('  function preparePlaybook() {')[0];
+  assert.match(apply, /\/fs\/studio\/director\/scene-structure/);
+  assert.match(apply, /recordApplied/);
+  assert.match(apply, /saved, but conversation recording or refresh failed/);
+});

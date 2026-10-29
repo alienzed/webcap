@@ -1981,8 +1981,10 @@ def studio_director_scene_fields_route():
         if not story_id or not scene_id:
             raise ValueError("Select a specific saved Project and Scene.")
         if (llm_storyboard_story_busy(story_id) or
-                llm_storyboard_target_busy(story_id, "scenes")):
-            raise ValueError("Wait for pending Director changes before applying the Scene revision.")
+                llm_storyboard_target_busy(story_id, "scenes") or
+                llm_storyboard_target_busy(story_id, "repair") or
+                llm_storyboard_target_busy(story_id, "scene-prompt", scene_id)):
+            raise ValueError("Wait for pending Scene generation or Director changes before applying the revision.")
         with storyboard_mutation_lock:
             story, scene = storyboard_apply_studio_scene_fields(
                 story_id, scene_id, data["expected"], data["changes"])

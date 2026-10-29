@@ -227,6 +227,17 @@
         var id=el('studio-dw-write-scene').value, scene=p.scenes&&p.scenes[id];
         if (scene) data.selectedScene={id:id,title:scene.title,intent:scene.summary,prompt:scene.prompt};
       }
+      if (operation==='scene-move' || operation==='scene-duplicate') {
+        var sourceId=el('studio-dw-write-scene').value;
+        data.sceneOrder=(p.sceneOrder||[]).map(function (id, index) {
+          return {id:id,position:index+1,title:(p.scenes[id]||{}).title};
+        });
+        data.sourceSceneId=sourceId;
+        if (operation==='scene-move') data.destination={
+          relativeSceneId:el('studio-dw-move-target').value,
+          placement:el('studio-dw-move-placement').value
+        };
+      }
       text='Current saved snapshot (reloaded before drafting):' +
         String.fromCharCode(10) + JSON.stringify(data,null,2) +
         String.fromCharCode(10) + 'Recent conversation context is also supplied.';
@@ -487,9 +498,11 @@
         el('studio-dw-structure-before').textContent = 'Before\n' + describe(order);
         el('studio-dw-structure-after').textContent = operation === 'scene-move'
           ? 'After\n' + describe(after)
-          : 'After\n' + describe(order.slice(0, order.indexOf(sceneId) + 1)) +
-            '\n' + (order.indexOf(sceneId) + 2) + '. ' + title(sceneId) + ' Copy (new Scene)' +
-            '\n' + describe(order.slice(order.indexOf(sceneId) + 1));
+          : 'After\n' + order.reduce(function (rows, id, index) {
+              rows.push((rows.length + 1) + '. ' + title(id));
+              if (id === sceneId) rows.push((rows.length + 1) + '. ' + title(id) + ' Copy (new Scene)');
+              return rows;
+            }, []).join('\n');
         el('studio-dw-structure-error').textContent = '';
         el('studio-dw-structure-review').showModal();
       }).catch(function (error) {

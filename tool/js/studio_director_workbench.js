@@ -727,7 +727,8 @@
           var scene = story.scenes && story.scenes[id];
           if (!scene || (story.sceneOrder || []).indexOf(id) === -1)
             throw new Error('A selected Scene no longer exists.');
-          var current = {sceneId:id, title:scene.title, summary:scene.summary, prompt:scene.prompt};
+          var current = {sceneId:id, position:(story.sceneOrder || []).indexOf(id) + 1,
+            title:scene.title, summary:scene.summary, prompt:scene.prompt};
           return current;
         });
         var history = window.studioDirectorBridge.messages().slice(-18).map(function (message) {
@@ -774,7 +775,7 @@
     host.replaceChildren();
     proposedBatch.scenes.forEach(function (entry,index) {
       var section = document.createElement('section'), heading = document.createElement('h3');
-      heading.textContent = 'Scene ' + (index+1) + ' · ' + (entry.before.title || entry.sceneId);
+      heading.textContent = 'Scene ' + entry.before.position + ' · ' + (entry.before.title || entry.sceneId);
       section.dataset.sceneId = entry.sceneId;
       section.appendChild(heading);
       proposedBatch.fields.forEach(function (field) {
@@ -985,6 +986,7 @@
     });
     var button = el('studio-dw-scene-apply');
     button.disabled = true;
+    var applied = false;
     Promise.resolve().then(function () {
       return window.flushStudioDirectorStoryEdits(proposedScene.storyId);
     }).then(function () {return api('/fs/studio/director/scene-fields', {
@@ -993,6 +995,7 @@
         expected:proposedScene.expected,changes:changes})
     });}).then(function (result) {
       if (!result.scene || !result.story) throw new Error('Scene Apply returned no saved Scene.');
+      applied = true;
       var selected = {};
       proposedScene.fields.forEach(function (field) {selected[field] = result.scene[field];});
       var sceneId = proposedScene.sceneId;
@@ -1005,8 +1008,11 @@
           return window.refreshStudioDirectorStoryIfOpen(result.story.id);
       });
     }).catch(function (err) {
-      el('studio-dw-scene-error').textContent = String(err.message || err);
-      status('Scene Apply failed: ' + String(err.message || err),true);
+      var message = String(err.message || err);
+      el('studio-dw-scene-error').textContent = applied
+        ? 'Scene saved, but conversation recording or refresh failed: ' + message
+        : 'Apply was not confirmed: ' + message;
+      status('Scene Apply: ' + message,true);
     }).finally(function () {button.disabled=false;});
   }
   function setReadinessFreshness(stale) {

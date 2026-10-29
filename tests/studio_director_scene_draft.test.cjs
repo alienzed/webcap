@@ -184,7 +184,7 @@ test('Review Create Project persists explicit continuation without touching unbo
         assert.equal(url, '/fs/studio/director/project-create');
         const payload = JSON.parse(opts.body);
         assert.equal(payload.proposal.concept, 'A comic train station scene');
-        return {story: {id: 'story-created', title: 'The Station', sceneOrder: []}};
+        return {story: {id: 'story-created', title: 'The Station', concept: 'A comic train station scene', style: 'Muted pastel palette', invariants: [], sceneOrder: [], scenes: {}}};
       },
       recordStudioOperation: (kind, label, storyId) => {
         receipt = {kind, label, storyId};

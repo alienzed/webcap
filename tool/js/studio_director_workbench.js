@@ -887,14 +887,29 @@
   }
   function setReadinessFreshness(stale) {
     readinessStale = !!stale;
-    var action = el('studio-dw-readiness-list').querySelector('button[data-capture-action]');
-    if (action) action.disabled = readinessStale;
+    Array.from(el('studio-dw-readiness-list').querySelectorAll('button[data-capture-action], button[data-guided-write]'))
+      .forEach(function (action) {action.disabled = readinessStale;});
     var label = el('studio-dw-readiness-freshness');
     label.textContent = readinessStale
       ? (readiness.length ? 'Outdated · latest exchange not assessed' : 'Latest exchange not assessed')
       : (readiness.length ? 'Assessed for latest reply · advisory only' : 'Not assessed yet');
     var empty = el('studio-dw-readiness-list').querySelector('p');
     if (empty) empty.textContent = readinessStale ? 'No current assessment.' : 'Not assessed yet';
+  }
+  function openRecommendedWrite() {
+    var hint = recommendations.writeHint;
+    if (!hint) return;
+    var operation = hint === 'scene' ? 'scenes' : hint;
+    var select = el('studio-dw-write-operation');
+    if (!Array.from(select.options).some(function (item) {return item.value === operation;})) {
+      status('The recommended Studio operation is not available.', true);
+      return;
+    }
+    select.value = operation;
+    writeOperationChosen = true;
+    if (el('studio-dw-write-panel').classList.contains('hidden')) toggle('write');
+    else refreshWrite();
+    status('Director suggested this operation. Choose the exact saved targets, then review.', false);
   }
   function renderReadiness(list) {
     readiness = list;
@@ -910,6 +925,21 @@
       captureButton.title = 'Review Director-authored material in the saved field; no additional model request';
       captureButton.onclick = function () {reviewCreativeCapture(creativeCapture);};
       host.appendChild(captureButton);
+    }
+    if (!creativeCapture && recommendations.writeHint && !readinessStale) {
+      var nextButton = document.createElement('button');
+      nextButton.type = 'button';
+      nextButton.className = 'studio-dw-assessment-item';
+      nextButton.dataset.guidedWrite = 'true';
+      var names = {
+        project:'Update Project', 'new-project':'Create Project', scene:'Add Scene',
+        scenes:'Add Scenes', 'scene-edit':'Revise Scene', 'scenes-batch':'Revise several Scenes',
+        'scene-move':'Move Scene', 'scene-duplicate':'Duplicate Scene',
+        'scene-split':'Split Scene', playbook:'Revise H3 Playbook'
+      };
+      nextButton.textContent = 'Review next step · ' + (names[recommendations.writeHint] || 'Studio Write');
+      nextButton.onclick = openRecommendedWrite;
+      host.appendChild(nextButton);
     }
     if (!list.length) {
       var empty = document.createElement('p');

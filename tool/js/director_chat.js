@@ -3622,6 +3622,7 @@
   }
 
   window.studioDirectorBridge = {
+    isStudioMode: function () {return state.open && state.activeMode === 'storyboard';},
     isReady: function () {
       return state.open && state.activeMode === 'storyboard' && state.sessionReady &&
         !state.pending && !state.attachmentPending && !!state.modelId;

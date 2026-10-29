@@ -1,6 +1,6 @@
 (function () {
   'use strict';
-  var readStory = null, writeStory = null, projects = [], proposedScene = null, proposedStructure = null, playbookExpected = null;
+  var readStory = null, writeStory = null, projects = [], proposedScene = null, proposedStructure = null, proposedBatch = null, playbookExpected = null;
   var readiness = [], recommendations = {readHints:[],writeHint:'',sceneId:''};
   var readinessStale = false;
   var readChoices = {}, writeOperationChosen = false, lastReadSource = null;
@@ -269,6 +269,7 @@
     var structural = operation === 'scene-move' || operation === 'scene-duplicate';
     el('studio-dw-write-scene-row').classList.toggle('hidden', operation !== 'scene-edit' && !structural);
     el('studio-dw-write-fields').classList.toggle('hidden', operation !== 'scene-edit');
+    el('studio-dw-batch-controls').classList.toggle('hidden', operation !== 'scenes-batch');
     el('studio-dw-move-target-row').classList.toggle('hidden', operation !== 'scene-move');
     el('studio-dw-move-placement-row').classList.toggle('hidden', operation !== 'scene-move');
     el('studio-dw-write-project').disabled = operation === 'new-project' || operation === 'playbook';
@@ -295,6 +296,16 @@
     });
     if (previousSource && story.scenes[previousSource]) select.value = previousSource;
     if (previousRelative && story.scenes[previousRelative]) relative.value = previousRelative;
+    var batchHost = el('studio-dw-batch-scenes');
+    var checked = Array.from(batchHost.querySelectorAll('input:checked')).map(function (input) {return input.value;});
+    batchHost.replaceChildren();
+    (story.sceneOrder || []).forEach(function (id, index) {
+      var label = document.createElement('label'), input = document.createElement('input');
+      input.type = 'checkbox'; input.value = id;
+      input.checked = checked.length ? checked.indexOf(id) !== -1 : id === (recommendations.sceneId || activeTarget().sceneId);
+      label.append(input, document.createTextNode('Scene ' + (index+1) + ' · ' + (story.scenes[id].title || 'Untitled')));
+      batchHost.appendChild(label);
+    });
     var preferredScene = recommendations.sceneId || activeTarget().sceneId;
     if (preferredScene && story.scenes && story.scenes[preferredScene])
       select.value = preferredScene;
@@ -437,6 +448,10 @@
       prepareStructure(operation, id);
       return;
     }
+    if (operation === 'scenes-batch') {
+      prepareBatchScenes(id);
+      return;
+    }
     if (operation !== 'scene-edit') {
       try {
         var item = projects.find(function (p) {return p.id === id;});
@@ -456,6 +471,146 @@
       .then(function (story) {return editScene(story,sceneId,fields);})
       .catch(function (e) {status('Scene revision failed: ' + String(e.message || e),true);})
       .finally(function () { el('studio-dw-write-prepare').disabled = false; });
+  }
+  function prepareBatchScenes(storyId) {
+    var ids = Array.from(el('studio-dw-batch-scenes').querySelectorAll('input:checked'))
+      .map(function (node) {return node.value;});
+    var fields = Array.from(el('studio-dw-batch-fields').querySelectorAll('input:checked'))
+      .map(function (node) {return node.value;});
+    if (!ids.length || ids.length > 32 || !fields.length) {
+      status('Choose one to 32 Scenes and at least one creative field.',true);
+      return;
+    }
+    var button = el('studio-dw-write-prepare');
+    button.disabled = true;
+    status('Director is developing the selected Scenes together…',false);
+    Promise.resolve().then(function () {
+      return window.flushStudioDirectorStoryEdits(storyId);
+    }).then(function () {return loadStory(storyId);})
+      .then(function (story) {
+        var selected = ids.map(function (id) {
+          var scene = story.scenes && story.scenes[id];
+          if (!scene || (story.sceneOrder || []).indexOf(id) === -1)
+            throw new Error('A selected Scene no longer exists.');
+          var current = {sceneId:id, title:scene.title, summary:scene.summary, prompt:scene.prompt};
+          return current;
+        });
+        var history = window.studioDirectorBridge.messages().slice(-18).map(function (message) {
+          return {role:message.role, text:String(message.content || '').slice(0,3200)};
+        });
+        var request = [
+          'You are Studio Director. Develop these specific existing Scenes as one coherent creative revision.',
+          'Return ONLY JSON: {"scenes":[{"sceneId":"existing stable ID", selected field:"complete final text"}]}.',
+          'Return exactly one record per selected ID, in the same order, using ONLY sceneId and fields: '+fields.join(', ')+'.',
+          'Do not invent Scenes or IDs. For unchanged fields, return their exact current text.',
+          'Preserve independent renderability, the author\'s core appeal and unrelated content.',
+          'Project context: '+JSON.stringify({id:story.id,concept:story.concept,style:story.style,invariants:story.invariants}),
+          'Selected Scenes: '+JSON.stringify(selected),
+          'Recent creative discussion: '+JSON.stringify(history)
+        ].join('\n');
+        return window.studioDirectorBridge.makeProposal(request, 'studio_scene_batch_draft')
+          .then(function (raw) {
+            var result = parseProposal(raw);
+            if (!Array.isArray(result.scenes) || result.scenes.length !== ids.length)
+              throw new Error('Director did not return the selected Scenes.');
+            var seen = new Set();
+            result.scenes.forEach(function (candidate) {
+              if (!candidate || typeof candidate !== 'object' || !ids.includes(candidate.sceneId) ||
+                  seen.has(candidate.sceneId) ||
+                  Object.keys(candidate).some(function (key) {return key !== 'sceneId' && !fields.includes(key);}) ||
+                  fields.some(function (field) {return typeof candidate[field] !== 'string';})) {
+                throw new Error('Director returned invalid or mismatched Scene fields.');
+              }
+              seen.add(candidate.sceneId);
+            });
+            proposedBatch = {storyId:storyId, scenes:ids.map(function (id) {
+              return {sceneId:id, before:selected.find(function (row) {return row.sceneId === id;}),
+                draft:result.scenes.find(function (row) {return row.sceneId === id;})};
+            }),fields:fields};
+            renderBatchReview();
+          });
+      }).catch(function (error) {
+        status('Multi-Scene draft failed: ' + String(error.message || error),true);
+      }).finally(function () {button.disabled = false;});
+  }
+  function renderBatchReview() {
+    if (!proposedBatch) throw new Error('No multi-Scene proposal is available.');
+    var host = el('studio-dw-batch-editors');
+    host.replaceChildren();
+    proposedBatch.scenes.forEach(function (entry,index) {
+      var section = document.createElement('section'), heading = document.createElement('h3');
+      heading.textContent = 'Scene ' + (index+1) + ' · ' + (entry.before.title || entry.sceneId);
+      section.dataset.sceneId = entry.sceneId;
+      section.appendChild(heading);
+      proposedBatch.fields.forEach(function (field) {
+        var row = document.createElement('label'), checkbox = document.createElement('input'),
+          editor = document.createElement('textarea'), old = entry.before[field] || '';
+        checkbox.type = 'checkbox';
+        checkbox.dataset.selectField = field;
+        checkbox.checked = entry.draft[field] !== old;
+        editor.dataset.field = field;
+        editor.value = entry.draft[field];
+        editor.rows = field === 'prompt' ? 12 : 5;
+        editor.addEventListener('input', function () {checkbox.checked = true;});
+        var name = document.createElement('strong'), before = document.createElement('small');
+        name.textContent = labels[field] + ' · include this change';
+        before.textContent = 'Saved: ' + (old || '(empty)');
+        row.append(checkbox, name, before, editor);
+        section.appendChild(row);
+      });
+      host.appendChild(section);
+    });
+    el('studio-dw-batch-error').textContent = '';
+    el('studio-dw-batch-review').showModal();
+    status('Selected Scene drafts are ready for one reviewed Apply.',false);
+  }
+  function applyBatchScenes() {
+    if (!proposedBatch) throw new Error('No reviewed multi-Scene draft.');
+    var draft = proposedBatch, revisions = [];
+    Array.from(el('studio-dw-batch-editors').querySelectorAll('section[data-scene-id]')).forEach(function (section) {
+      var entry = draft.scenes.find(function (item) {return item.sceneId === section.dataset.sceneId;});
+      var changes = {}, expected = {};
+      Array.from(section.querySelectorAll('input[data-select-field]:checked')).forEach(function (checkbox) {
+        var field = checkbox.dataset.selectField, value = section.querySelector('textarea[data-field="'+field+'"]').value;
+        if (value.trim() !== (entry.before[field] || '')) {
+          changes[field] = value;
+          expected[field] = entry.before[field] || '';
+        }
+      });
+      if (Object.keys(changes).length) revisions.push({sceneId:entry.sceneId,expected:expected,changes:changes});
+    });
+    if (!revisions.length) {
+      el('studio-dw-batch-error').textContent = 'Select at least one actual Scene change.';
+      return;
+    }
+    var button = el('studio-dw-batch-apply');
+    button.disabled = true;
+    var applied = false;
+    Promise.resolve().then(function () {
+      return window.flushStudioDirectorStoryEdits(draft.storyId);
+    }).then(function () {
+      return api('/fs/studio/director/scene-fields-batch', {
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({storyId:draft.storyId,revisions:revisions})
+      });
+    }).then(function (result) {
+      if (!result.story || !result.savedFieldsByScene) throw new Error('Batch Apply returned no authoritative saved fields.');
+      applied = true;
+      proposedBatch = null;
+      el('studio-dw-batch-review').close();
+      return window.studioDirectorBridge.recordApplied('scene.batch.update',result.story,
+        {scenes:result.savedFieldsByScene}).then(function () {
+          status('Reviewed Scene revisions saved together.',false);
+          if (typeof window.refreshStudioDirectorStoryIfOpen === 'function')
+            return window.refreshStudioDirectorStoryIfOpen(result.story.id);
+      });
+    }).catch(function (error) {
+      var detail = String(error.message || error);
+      el('studio-dw-batch-error').textContent = applied
+        ? 'Scenes saved, but conversation recording or refresh failed: '+detail
+        : 'Apply was not confirmed: '+detail;
+      status('Multi-Scene Apply: '+detail,true);
+    }).finally(function () {button.disabled = false;});
   }
   function prepareStructure(operation, storyId) {
     var sceneId = el('studio-dw-write-scene').value;
@@ -807,6 +962,10 @@
     el('studio-dw-write-prepare').onclick=writePrepare;
     el('studio-dw-scene-apply').onclick=applyScene;
     el('studio-dw-structure-apply').onclick=applyStructure;
+    el('studio-dw-batch-apply').onclick=applyBatchScenes;
+    ['studio-dw-batch-close','studio-dw-batch-cancel'].forEach(function (id) {
+      el(id).onclick=function () {el('studio-dw-batch-review').close();};
+    });
     ['studio-dw-structure-close','studio-dw-structure-cancel'].forEach(function (id) {
       el(id).onclick=function () {el('studio-dw-structure-review').close();};
     });

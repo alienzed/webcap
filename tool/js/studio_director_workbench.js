@@ -1,7 +1,7 @@
 (function () {
   'use strict';
   var readStory = null, writeStory = null, projects = [], proposedScene = null;
-  var readiness = [];
+  var readiness = [], recommendations = {readHints:[],writeHint:'',sceneId:''};
   var sceneFields = ['summary', 'prompt', 'title'];
   var projectFields = ['title', 'concept', 'style', 'invariants'];
   var labels = {title:'Title', concept:'Concept', style:'Visual / atmosphere',
@@ -68,7 +68,11 @@
     fields.replaceChildren(); scenes.replaceChildren();
     if (!story) { status('Choose a Project to select fields.', false); return; }
     projectFields.forEach(function (key) {
-      fields.appendChild(fieldCheckbox('project.' + key, labels[key], key !== 'title' && !!story[key]));
+      var path = 'project.' + key;
+      var preferred = recommendations.readHints.length
+        ? recommendations.readHints.indexOf(path) !== -1
+        : key !== 'title' && !!story[key];
+      fields.appendChild(fieldCheckbox(path, labels[key], preferred));
     });
     (story.sceneOrder || []).forEach(function (id, index) {
       var scene = story.scenes && story.scenes[id];
@@ -77,7 +81,12 @@
       heading.textContent = 'Scene ' + (index + 1) + ' · ' + (scene.title || 'Untitled');
       details.appendChild(heading);
       ['title', 'summary', 'prompt', 'references', 'durationSeconds'].forEach(function (field) {
-        details.appendChild(fieldCheckbox('scene:' + id + ':' + field, labels[field], false));
+        var path = 'scene:' + id + ':' + field;
+        var recommended = recommendations.readHints.indexOf(path) !== -1 ||
+          (id === (recommendations.sceneId || activeTarget().sceneId) &&
+           recommendations.readHints.indexOf('scene.current.' + field) !== -1);
+        details.appendChild(fieldCheckbox(path, labels[field], recommended));
+        if (recommended) details.open = true;
       });
       scenes.appendChild(details);
     });
@@ -96,7 +105,7 @@
     loadStory(id).then(function (story) {
       var items = keys.map(function (key) {
         var parts = key.split(':'), value;
-        if (parts[0] === 'project.' + parts[0].slice(8)) {
+        if (key.indexOf('project.') === 0) {
           var field = key.slice(8);
           if (projectFields.indexOf(field) === -1) throw new Error('Unknown Project field: ' + field);
           value = story[field];
@@ -136,8 +145,9 @@
       var scene = story.scenes && story.scenes[id];
       if (scene) option(select, id, 'Scene ' + (index + 1) + ' · ' + (scene.title || 'Untitled'));
     });
-    if (activeTarget().sceneId && story.scenes && story.scenes[activeTarget().sceneId])
-      select.value = activeTarget().sceneId;
+    var preferredScene = recommendations.sceneId || activeTarget().sceneId;
+    if (preferredScene && story.scenes && story.scenes[preferredScene])
+      select.value = preferredScene;
   }
   function refreshRead() {
     return refreshProjects().then(function () {return loadStory(el('studio-dw-read-project').value);})
@@ -145,7 +155,10 @@
   }
   function refreshWrite() {
     return refreshProjects().then(function () {return loadStory(el('studio-dw-write-project').value);})
-      .then(renderWriteStory).then(setOperation)
+      .then(renderWriteStory).then(function () {
+        if (recommendations.writeHint) el('studio-dw-write-operation').value = recommendations.writeHint;
+        setOperation();
+      })
       .catch(function (e) { status('Write setup failed: ' + e.message, true); });
   }
   function toggle(which) {
@@ -264,16 +277,30 @@
       details.append(heading,content);host.appendChild(details);
     });
   }
-  window.studioDirectorWorkbench = {setStatus:status, updateReadiness:function (list) {
-    if (!Array.isArray(list)) { status('Director readiness response was not a list.',true);return; }
+  window.studioDirectorWorkbench = {setStatus:status, updateReadiness:function (result, restoring) {
+    var list = Array.isArray(result) ? result : result && result.checks;
+    if (!Array.isArray(list)) { status('Director readiness response was invalid.',true);return; }
     var allowed = ['Concept','Characters','Setting','Action','Dialogue','Visual / atmosphere',
       'Visual focus','Structure / formula','Variation / repetition','Production feasibility'];
     var valid=list.filter(function (item) {return item && allowed.indexOf(item.name)!==-1 &&
       (item.scope==='project'||item.scope==='scene') && typeof item.ready==='boolean' &&
       typeof item.content==='string' && item.content.length<=8000;}).slice(0,30);
     if (valid.length!==list.length) status('Some Director readiness proposals were invalid; review the conversation.',true);
+    recommendations = {
+      readHints:Array.isArray(result.readHints) ? result.readHints.filter(function (key) {
+        return typeof key==='string' && key.length<=120;}).slice(0,15) : [],
+      writeHint:['project','new-project','scene','scenes','scene-edit'].indexOf(result.writeHint) !== -1 ?
+        result.writeHint : '',
+      sceneId:typeof result.sceneId === 'string' ? result.sceneId : ''
+    };
     renderReadiness(valid);
+    if (!restoring && window.studioDirectorBridge && window.studioDirectorBridge.updateReadiness)
+      window.studioDirectorBridge.updateReadiness({
+        checks:valid,readHints:recommendations.readHints,
+        writeHint:recommendations.writeHint,sceneId:recommendations.sceneId
+      });
   }};
+
   function bind() {
     var rail = el('studio-director-workbench');if (!rail) return;
     el('studio-dw-read').onclick=function () { toggle('read'); };

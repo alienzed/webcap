@@ -193,6 +193,8 @@
         String.fromCharCode(10) + JSON.stringify(data,null,2) +
         String.fromCharCode(10) + 'Recent conversation context is also supplied.';
     }
+    el('studio-dw-write-context').querySelector('summary').textContent =
+      'Inspect saved context for this draft (preview)';
     el('studio-dw-write-context-json').textContent=text;
   }
 
@@ -439,6 +441,14 @@
   }
   window.studioDirectorWorkbench = {
     setStatus:status,
+    showSentWriteContext: function(operation, messages) {
+      var preview = el('studio-dw-write-context-json');
+      var details = el('studio-dw-write-context');
+      details.querySelector('summary').textContent = 'Inspect exact Director request just sent';
+      preview.textContent = JSON.stringify({
+        operation:operation,model:window.studioDirectorBridge.modelId(),messages:messages
+      }, null, 2);
+    },
     setUndo: function (receipt) {
       var host = el('studio-dw-undo');
       host.classList.toggle('hidden', !receipt);

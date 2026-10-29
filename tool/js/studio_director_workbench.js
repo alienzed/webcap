@@ -300,11 +300,18 @@
       body:JSON.stringify({storyId:proposedScene.storyId,sceneId:proposedScene.sceneId,
         expected:proposedScene.expected,changes:changes})
     });}).then(function (result) {
-      if (!result.scene) throw new Error('Scene Apply returned no saved Scene.');
+      if (!result.scene || !result.story) throw new Error('Scene Apply returned no saved Scene.');
+      var selected = {};
+      proposedScene.fields.forEach(function (field) {selected[field] = result.scene[field];});
+      var sceneId = proposedScene.sceneId;
       el('studio-dw-scene-review').close(); proposedScene=null;
-      status('Reviewed Scene changes applied to saved content. Read explicitly to share the new values.',false);
-      if (typeof window.refreshStudioDirectorStoryIfOpen === 'function')
-        return window.refreshStudioDirectorStoryIfOpen(result.story.id);
+      return window.studioDirectorBridge.recordApplied('scene.update',result.story,{
+        sceneId:sceneId, savedFields:selected
+      }).then(function () {
+        status('Reviewed Scene changes saved and recorded in Director conversation.',false);
+        if (typeof window.refreshStudioDirectorStoryIfOpen === 'function')
+          return window.refreshStudioDirectorStoryIfOpen(result.story.id);
+      });
     }).catch(function (err) {
       el('studio-dw-scene-error').textContent = String(err.message || err);
       status('Scene Apply failed: ' + String(err.message || err),true);

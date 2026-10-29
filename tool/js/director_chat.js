@@ -2661,7 +2661,7 @@
         'READINESS: After your conversational reply, emit a final delimited machine-readable block ' +
         '[[WEBCAP_READINESS]]JSON[[END_WEBCAP_READINESS]]. JSON is an object containing checks ' +
         '(up to 10 objects with name, scope, ready, content), readHints (0-5 field identifiers), ' +
-        'writeHint (project, new-project, scene, scenes, scene-edit, playbook, or empty), ' +
+        'writeHint (project, new-project, scene, scenes, scene-edit, scenes-batch, scene-move, scene-duplicate, scene-split, playbook, or empty), ' +
         'and sceneId (known ID or empty). Name is one of Concept, Characters, Setting, ' +
         'Action, Dialogue, Visual / atmosphere, Visual focus, Structure / formula, ' +
         'Variation / repetition, Production feasibility. Scope is project or scene. ' +

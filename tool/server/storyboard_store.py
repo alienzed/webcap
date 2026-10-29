@@ -2017,6 +2017,42 @@ def reorder_scenes(story_id, ordered_ids):
     return story
 
 
+@_serialized_mutation
+def apply_studio_scene_structure(story_id, operation, source_id, expected_order,
+                                  relative_id="", placement="", expected_source_updated_at=""):
+    """Apply one reviewed Scene move or duplicate against the exact displayed order.
+
+    Director may advise on sequence, but WebCap owns resolving stable IDs
+    and determining the resulting permutation. No media is removed.
+    """
+    if operation not in {"move", "duplicate"}:
+        raise ValueError("Studio only supports reviewed Scene move and duplicate.")
+    if not isinstance(expected_order, list) or not all(isinstance(x, str) for x in expected_order):
+        raise ValueError("Expected Scene order must be a saved ID list.")
+    story = load_story(story_id)
+    current_order = list(story.get("sceneOrder") or [])
+    if current_order != expected_order:
+        raise RuntimeError("Scene order changed since review. Inspect the latest order and review again.")
+    if source_id not in current_order:
+        raise FileNotFoundError("Selected source Scene no longer exists.")
+    if operation == "duplicate":
+        scene = story["scenes"][source_id]
+        if not expected_source_updated_at or scene.get("updatedAt") != expected_source_updated_at:
+            raise RuntimeError("Source Scene changed since review. Inspect its current content.")
+        if relative_id or placement:
+            raise ValueError("Duplicate creates its copy immediately after the source Scene.")
+        return duplicate_scene(story_id, source_id)
+
+    if placement not in {"before", "after"} or relative_id == source_id or relative_id not in current_order:
+        raise ValueError("Select a different Scene and an exact before/after placement.")
+    new_order = [scene_id for scene_id in current_order if scene_id != source_id]
+    insertion = new_order.index(relative_id) + (1 if placement == "after" else 0)
+    new_order.insert(insertion, source_id)
+    if new_order == current_order:
+        raise ValueError("The selected Scene is already in that position.")
+    return reorder_scenes(story_id, new_order), None
+
+
 def _assert_scene_takes_not_referenced_elsewhere(story, scene_id):
     resolved_scene_id = str(scene_id or "").strip()
     take_prefix = ("takes/" + resolved_scene_id + "/").replace("\\", "/")

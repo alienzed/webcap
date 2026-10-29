@@ -2193,8 +2193,17 @@
                       <option value="new-project">Create Project</option>
                       <option value="scenes">Add Scenes (one or more)</option>
                       <option value="scene-edit">Revise Scene</option>
+                      <option value="scene-move">Move Scene</option>
+                      <option value="scene-duplicate">Duplicate Scene</option>
                     </select></label>
                     <label id="studio-dw-write-scene-row" class="hidden">Scene<select id="studio-dw-write-scene"></select></label>
+                    <label id="studio-dw-move-target-row" class="hidden">Relative to Scene<select id="studio-dw-move-target"></select></label>
+                    <label id="studio-dw-move-placement-row" class="hidden">Placement
+                      <select id="studio-dw-move-placement">
+                        <option value="before">Before</option>
+                        <option value="after">After</option>
+                      </select>
+                    </label>
                     <div id="studio-dw-write-fields" class="studio-dw-field-list hidden">
                       <label><input type="checkbox" value="summary" checked> Intent</label>
                       <label><input type="checkbox" value="prompt"> H3 Prompt</label>
@@ -2278,6 +2287,21 @@
               <footer class="studio-scene-draft-footer">
                 <button id="studio-dw-playbook-cancel" type="button" class="review-captions-btn">Back</button>
                 <button id="studio-dw-playbook-apply" type="button">Apply reviewed Playbook</button>
+              </footer>
+            </dialog>
+            <dialog id="studio-dw-structure-review" class="studio-scene-draft-review" aria-labelledby="studio-dw-structure-title">
+              <header class="studio-scene-draft-header"><div><h2 id="studio-dw-structure-title">Review Scene order</h2>
+                <p>Only the approved structural change is applied; existing Scenes and Takes remain intact.</p></div>
+                <button id="studio-dw-structure-close" type="button" class="review-captions-btn">Close</button></header>
+              <div class="studio-scene-draft-content">
+                <p id="studio-dw-structure-summary"></p>
+                <pre id="studio-dw-structure-before"></pre>
+                <pre id="studio-dw-structure-after"></pre>
+                <p id="studio-dw-structure-error" role="alert"></p>
+              </div>
+              <footer class="studio-scene-draft-footer">
+                <button id="studio-dw-structure-cancel" type="button" class="review-captions-btn">Back to conversation</button>
+                <button id="studio-dw-structure-apply" type="button">Apply reviewed change</button>
               </footer>
             </dialog>
             <dialog id="studio-dw-scene-review" class="studio-scene-draft-review" aria-labelledby="studio-dw-scene-review-title">

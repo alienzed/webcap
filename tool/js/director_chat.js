@@ -1481,7 +1481,7 @@
     return proposal;
   }
 
-  function addStudioProjectInvariant(item, destination) {
+  function addStudioProjectInvariant(item, destination, original) {
     var host = el(typeof destination === 'string' ? destination : 'studio-project-invariants');
     var row = document.createElement('div');
     row.className = 'studio-project-invariant';
@@ -1503,13 +1503,23 @@
     remove.type = 'button';
     remove.className = 'review-captions-btn';
     remove.textContent = 'Remove';
-    remove.onclick = function () { row.remove(); };
+    remove.onclick = function () {
+      row.remove();
+      if (destination === 'studio-brief-invariants') el('studio-brief-invariants-selected').checked = true;
+    };
     var details = document.createElement('textarea');
     details.placeholder = 'Only what must stay consistent';
     details.setAttribute('aria-label', 'Invariant detail');
     details.rows = 2;
     details.style.gridColumn = '1 / -1';
     details.value = item && item.text || '';
+    if (destination === 'studio-brief-invariants') {
+      row.dataset.original = original ? JSON.stringify(original) : '';
+      [kind, title, details].forEach(function (field) {
+        field.addEventListener('input', function () {el('studio-brief-invariants-selected').checked = true;});
+        field.addEventListener('change', function () {el('studio-brief-invariants-selected').checked = true;});
+      });
+    }
     row.append(kind, title, remove, details);
     host.appendChild(row);
   }

@@ -1,6 +1,6 @@
 (function () {
   'use strict';
-  var readStory = null, writeStory = null, projects = [], proposedScene = null;
+  var readStory = null, writeStory = null, projects = [], proposedScene = null, playbookExpected = null;
   var readiness = [], recommendations = {readHints:[],writeHint:'',sceneId:''};
   var sceneFields = ['summary', 'prompt', 'title'];
   var projectFields = ['title', 'concept', 'style', 'invariants'];
@@ -133,7 +133,7 @@
     var operation = el('studio-dw-write-operation').value;
     el('studio-dw-write-scene-row').classList.toggle('hidden', operation !== 'scene-edit');
     el('studio-dw-write-fields').classList.toggle('hidden', operation !== 'scene-edit');
-    el('studio-dw-write-project').disabled = operation === 'new-project';
+    el('studio-dw-write-project').disabled = operation === 'new-project' || operation === 'playbook';
     el('studio-dw-write-prepare').textContent = operation === 'scene-edit' ? 'Draft Scene revision' : 'Prepare editable review';
   }
   function renderWriteStory(story) {
@@ -220,6 +220,7 @@
     var bridge = window.studioDirectorBridge, operation = el('studio-dw-write-operation').value,
       id = el('studio-dw-write-project').value;
     if (!bridge.isReady()) { status('Open Studio Director and choose a model first.', true);return; }
+    if (operation === 'playbook') { preparePlaybook(); return; }
     if (operation !== 'new-project' && !id) { status('Select a destination Project.', true);return; }
     if (operation !== 'scene-edit') {
       try {
@@ -237,6 +238,49 @@
     loadStory(id).then(function (story) {return editScene(story,sceneId,fields);})
       .catch(function (e) {status('Scene revision failed: ' + String(e.message || e),true);})
       .finally(function () { el('studio-dw-write-prepare').disabled = false; });
+  }
+  function preparePlaybook() {
+    var button = el('studio-dw-write-prepare');
+    button.disabled = true;
+    status('Reading saved Playbook and drafting a focused improvement…',false);
+    api('/fs/studio/director/playbook').then(function (payload) {
+      playbookExpected = payload.guidance;
+      var history = window.studioDirectorBridge.messages().slice(-16).map(function (m) {
+        return {role:m.role,text:String(m.content||'').slice(0,3000)};
+      });
+      var request = 'Suggest a concise, reusable H3 production Playbook improvement based on this discussion. ' +
+        'First determine whether the issue concerns model technique rather than missing context or a WebCap code defect. ' +
+        'Return a JSON object with a single guidance key containing the COMPLETE revised Playbook. ' +
+        'Preserve valuable existing advice, revise conflicting wording rather than stacking prohibitions, ' +
+        'and do not put runtime facts or executable instructions in editable guidance. ' +
+        'Current saved Playbook: ' + JSON.stringify(payload.guidance) +
+        '. Conversation: ' + JSON.stringify(history);
+      return window.studioDirectorBridge.makeProposal(request,'studio_playbook_draft');
+    }).then(function (text) {
+      var proposal = parseProposal(text);
+      if (typeof proposal.guidance !== 'string') throw new Error('Director did not return complete guidance.');
+      el('studio-dw-playbook-before').textContent = playbookExpected || '(empty)';
+      el('studio-dw-playbook-after').value = proposal.guidance;
+      el('studio-dw-playbook-error').textContent = '';
+      el('studio-dw-playbook-review').showModal();
+      status('Playbook proposal ready. Nothing is saved until Apply.',false);
+    }).catch(function (error) {status('Playbook proposal failed: '+String(error.message||error),true);})
+      .finally(function () {button.disabled=false;});
+  }
+  function applyPlaybook() {
+    if (playbookExpected === null) throw new Error('No reviewed Playbook proposal.');
+    var button=el('studio-dw-playbook-apply'); button.disabled=true;
+    api('/fs/studio/director/playbook',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({expected:playbookExpected,guidance:el('studio-dw-playbook-after').value})
+    }).then(function (payload) {
+      if (typeof payload.guidance !== 'string') throw new Error('Playbook Apply was not confirmed.');
+      el('studio-dw-playbook-review').close();playbookExpected=null;
+      status('Reviewed Playbook saved. New Director requests use the updated guidance.',false);
+    }).catch(function (error) {
+      el('studio-dw-playbook-error').textContent=String(error.message||error);
+      status('Playbook Apply failed: '+String(error.message||error),true);
+    }).finally(function () {button.disabled=false;});
   }
   function applyScene() {
     if (!proposedScene) throw new Error('There is no reviewed Scene proposal.');
@@ -289,7 +333,7 @@
     recommendations = {
       readHints:Array.isArray(result.readHints) ? result.readHints.filter(function (key) {
         return typeof key==='string' && key.length<=120;}).slice(0,15) : [],
-      writeHint:['project','new-project','scene','scenes','scene-edit'].indexOf(result.writeHint) !== -1 ?
+      writeHint:['project','new-project','scene','scenes','scene-edit','playbook'].indexOf(result.writeHint) !== -1 ?
         result.writeHint : '',
       sceneId:typeof result.sceneId === 'string' ? result.sceneId : ''
     };
@@ -315,6 +359,10 @@
     el('studio-dw-read-send').onclick=readSend;
     el('studio-dw-write-prepare').onclick=writePrepare;
     el('studio-dw-scene-apply').onclick=applyScene;
+    el('studio-dw-playbook-apply').onclick=applyPlaybook;
+    ['studio-dw-playbook-close','studio-dw-playbook-cancel'].forEach(function (id) {
+      el(id).onclick=function () {el('studio-dw-playbook-review').close();};
+    });
     ['studio-dw-scene-close','studio-dw-scene-cancel'].forEach(function (id) {
       el(id).onclick=function () {el('studio-dw-scene-review').close();};
     });

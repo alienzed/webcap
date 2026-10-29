@@ -4,7 +4,7 @@
   var readiness = [], recommendations = {readHints:[],writeHint:'',sceneId:''};
   var readinessStale = false;
   var readChoices = {}, writeOperationChosen = false, lastReadSource = null;
-  var lastQuickAction = 'read';
+  var lastQuickAction = 'read', creativeCapture = null;
   var sceneFields = ['summary', 'prompt', 'title'];
   var projectFields = ['title', 'concept', 'style', 'invariants'];
   var labels = {title:'Title', concept:'Concept', style:'Visual / atmosphere',
@@ -334,7 +334,17 @@
     ].join(String.fromCharCode(10));
     return window.studioDirectorBridge.makeProposal(request).then(function (text) {
       var candidate = parseProposal(text);
-      fields.forEach(function (key) { if (typeof candidate[key] !== 'string') throw new Error('Director omitted proposed ' + key + '.'); });
+      return showSceneReview(story, sceneId, fields, candidate);
+    });
+  }
+  function showSceneReview(story, sceneId, fields, candidate) {
+    var scene = story.scenes && story.scenes[sceneId];
+    if (!scene || (story.sceneOrder || []).indexOf(sceneId) === -1)
+      throw new Error('Select a saved Scene to review.');
+    fields.forEach(function (key) {
+      if (['title','summary','prompt'].indexOf(key) === -1 || typeof candidate[key] !== 'string')
+        throw new Error('Director did not supply complete ' + key + ' material.');
+    });
       proposedScene = {storyId:story.id,sceneId:sceneId,expected:{},fields:fields};
       var host = el('studio-dw-scene-editors');host.replaceChildren();
       fields.forEach(function (key) {
@@ -350,7 +360,48 @@
       el('studio-dw-scene-error').textContent = '';
       el('studio-dw-scene-review').showModal();
       status('Draft is ready for field-by-field editing and Apply.', false);
-    });
+    return Promise.resolve();
+  }
+
+  function reviewCreativeCapture(capture) {
+    if (!capture || !capture.content || !['title','concept','style','summary','prompt'].includes(capture.field))
+      throw new Error('No valid authored material is ready for review.');
+    if (!window.studioDirectorBridge.isReady())
+      throw new Error('Director must be available before starting a reviewed change.');
+    var projectSelect = el('studio-dw-write-project');
+    var id = projectSelect.value || window.studioDirectorBridge.workingStoryId();
+    if (!id) {
+      status('Choose a destination Project in Write, then review this suggestion.', false);
+      openWriteForCapture();
+      return;
+    }
+    if (['title','concept','style'].indexOf(capture.field) !== -1) {
+      window.studioDirectorBridge.reviewCapture(capture, id).catch(function (e) {
+        status('Creative review failed: ' + String(e.message || e), true);
+      });
+      return;
+    }
+    if (!capture.sceneId) {
+      status('Choose a specific saved Scene before reviewing this suggestion.', true);
+      return;
+    }
+    var sceneTarget = capture.sceneId;
+    el('studio-dw-write-prepare').disabled = true;
+    Promise.resolve().then(function () {
+      return window.flushStudioDirectorStoryEdits(id);
+    }).then(function () {return loadStory(id);})
+      .then(function (story) {
+        var draft = {};
+        draft[capture.field] = capture.content;
+        return showSceneReview(story, sceneTarget, [capture.field], draft);
+      }).catch(function (error) {
+        status('Creative Scene review failed: ' + String(error.message || error), true);
+      }).finally(function () {el('studio-dw-write-prepare').disabled = false;});
+  }
+  function openWriteForCapture() {
+    el('director-chat-drawer').classList.add('studio-actions-open');
+    if (el('studio-dw-write-panel').classList.contains('hidden')) el('studio-dw-write').click();
+    refreshWrite();
   }
   function writePrepare() {
     var bridge = window.studioDirectorBridge, operation = el('studio-dw-write-operation').value,
@@ -455,6 +506,8 @@
   }
   function setReadinessFreshness(stale) {
     readinessStale = !!stale;
+    var action = el('studio-dw-readiness-list').querySelector('button[data-capture-action]');
+    if (action) action.disabled = readinessStale;
     var label = el('studio-dw-readiness-freshness');
     label.textContent = readinessStale
       ? (readiness.length ? 'Outdated · latest exchange not assessed' : 'Latest exchange not assessed')
@@ -466,6 +519,17 @@
     readiness = list;
     var host = el('studio-dw-readiness-list');
     host.replaceChildren();
+    if (creativeCapture && !readinessStale) {
+      var captureButton = document.createElement('button');
+      captureButton.type = 'button';
+      captureButton.className = 'studio-dw-assessment-item';
+      captureButton.dataset.captureAction = 'true';
+      var fieldName = labels[creativeCapture.field] || creativeCapture.field;
+      captureButton.textContent = 'Review ' + fieldName + ' change';
+      captureButton.title = 'Review Director-authored material in the saved field; no additional model request';
+      captureButton.onclick = function () {reviewCreativeCapture(creativeCapture);};
+      host.appendChild(captureButton);
+    }
     if (!list.length) {
       var empty = document.createElement('p');
       empty.textContent = readinessStale ? 'No current assessment.' : 'Not assessed yet.';
@@ -510,6 +574,7 @@
       lastReadSource = null;
       readStory = null;
       writeStory = null;
+      creativeCapture = null;
       el('studio-dw-read-panel').classList.add('hidden');
       el('studio-dw-write-panel').classList.add('hidden');
       el('studio-dw-read').setAttribute('aria-expanded','false');
@@ -547,7 +612,19 @@
         status('Director readiness recommendations do not match the saved contract.',true);
         return false;
       }
+      var capture = result && result.capture || null;
+      if (capture && (!capture || typeof capture !== 'object' || Array.isArray(capture) ||
+          Object.keys(capture).sort().join(',') !== 'content,field,sceneId' ||
+          ['title','concept','style','summary','prompt'].indexOf(capture.field) === -1 ||
+          typeof capture.content !== 'string' || !capture.content.trim() || capture.content.length > 20000 ||
+          typeof capture.sceneId !== 'string' || capture.sceneId.length > 160 ||
+          (['title','concept','style'].indexOf(capture.field) !== -1 && capture.sceneId) ||
+          (['summary','prompt'].indexOf(capture.field) !== -1 && !capture.sceneId))) {
+        status('Director creative capture did not match the expected contract.',true);
+        return false;
+      }
       recommendations = {readHints:hints, writeHint:writeHint, sceneId:sceneId};
+      creativeCapture = capture;
       setReadinessFreshness(!!(restoring && result && result.stale));
       renderReadiness(list);
       if (!restoring) window.studioDirectorBridge.updateReadiness({

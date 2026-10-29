@@ -3195,9 +3195,10 @@
       if (!Array.isArray(keys) || !keys.length) throw new Error('Select at least one field to Read.');
       var composer = el('director-chat-input');
       var draft = String(composer.value || '').trim();
+      var nl = String.fromCharCode(10);
       composer.value = (instruction || draft || 'Inspect this material and suggest the next useful development step.') +
-        '\\n\\n[WEBCAP EXPLICIT READ]\\n' +
-        JSON.stringify(payload, null, 2) + '\\n[END WEBCAP READ]\\n' +
+        nl + nl + '[WEBCAP EXPLICIT READ]' + nl +
+        JSON.stringify(payload, null, 2) + nl + '[END WEBCAP READ]' + nl +
         'Start your response with RECEIVED: ' + keys.join(', ') +
         ' using exactly those field identifiers, then discuss the material.';
       state.pendingReadAck = keys.slice();

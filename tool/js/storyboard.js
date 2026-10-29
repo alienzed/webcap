@@ -4173,17 +4173,6 @@
                 '</div>' +
               '</details>' +
             '</div>' +
-            '<details class="storyboard-scene-disclosure storyboard-continuity-details">' +
-              '<summary><span>Continuity</span><span class="storyboard-disclosure-summary-state">' +
-                ((String(sceneValue(scene, 'entryState', '')).trim() || String(sceneValue(scene, 'exitState', '')).trim()) ? 'Entry + Exit defined' : 'Optional') +
-              '</span></summary>' +
-              '<div class="storyboard-disclosure-body">' +
-                '<div class="storyboard-scene-handoff-row storyboard-scene-handoff-primary">' +
-                  '<label class="storyboard-field"><span>Entry state</span><textarea data-scene-field="entryState" rows="3" placeholder="What must already be true when this Scene begins?">' + escapeHtml(sceneValue(scene, 'entryState', '')) + '</textarea></label>' +
-                  '<label class="storyboard-field"><span>Exit state</span><textarea data-scene-field="exitState" rows="3" placeholder="What should be true when this Scene ends?">' + escapeHtml(sceneValue(scene, 'exitState', '')) + '</textarea></label>' +
-                '</div>' +
-              '</div>' +
-            '</details>' +
             '<details class="storyboard-scene-disclosure storyboard-notes-details">' +
               '<summary><span>Notes</span><span class="storyboard-disclosure-summary-state">' + (String(sceneValue(scene, 'notes', '')).trim() ? 'Added' : 'Optional') + '</span></summary>' +
               '<div class="storyboard-disclosure-body">' +
@@ -4673,8 +4662,6 @@
     var payload = {
       title: field('title').value,
       summary: field('summary').value,
-      entryState: field('entryState').value,
-      exitState: field('exitState').value,
       prompt: promptValue,
       promptDirectorModel: promptDirectorModel,
       promptDirectorJobId: promptDirectorJobId,
@@ -4711,8 +4698,6 @@
     }
     if (directorTargetPending({ kind: 'repair', storyId: storyState.story.id })) {
       delete payload.summary;
-      delete payload.entryState;
-      delete payload.exitState;
       delete payload.prompt;
       delete payload.promptDirectorModel;
       delete payload.promptDirectorJobId;

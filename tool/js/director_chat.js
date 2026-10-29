@@ -2059,7 +2059,7 @@
         summary: row.querySelector('textarea').value.trim()
       };
     });
-    if (!drafts.length || drafts.length > 8 || drafts.some(function (item) { return !item.summary; })) {
+    if (!drafts.length || drafts.length > 32 || drafts.some(function (item) { return !item.summary; })) {
       el('studio-scenes-error').textContent = 'Review between one and 32 Scenes with descriptions.';
       return;
     }

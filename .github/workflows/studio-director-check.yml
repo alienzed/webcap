@@ -3,6 +3,9 @@ on:
   pull_request:
     paths:
       - 'tool/js/director_chat.js'
+      - 'tool/js/studio_blocks.js'
+      - 'tool/css/studio_blocks.css'
+      - 'tests/studio_blocks_slash.test.cjs'
       - 'tool/js/storyboard.js'
       - 'tool/js/studio_director_workbench.js'
       - 'tool/server/studio_director.py'
@@ -37,6 +40,8 @@ jobs:
       - name: JavaScript syntax
         run: |
           node --check tool/js/director_chat.js
+          node --check tool/js/studio_blocks.js
+          node --test tests/studio_blocks_slash.test.cjs
           node --check tool/js/storyboard.js
           node --check tool/js/studio_director_workbench.js
           node --test tests/studio_director_readiness.test.cjs tests/studio_director_design_fixes.test.cjs tests/studio_director_workshop.test.cjs tests/studio_director_scene_draft.test.cjs

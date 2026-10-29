@@ -1082,7 +1082,9 @@
 
       var label = document.createElement('div');
       label.className = 'director-chat-message-label';
-      label.textContent = message.role === 'assistant' ? 'Assistant' : 'You';
+      label.textContent = message.role === 'assistant' ? 'Director' :
+        (message.content.indexOf('[WEBCAP APPLIED FIELD VALUES]') !== -1 ? 'WebCap · Reviewed Apply' :
+         message.content.indexOf('[WEBCAP EXPLICIT READ]') !== -1 ? 'You · Read to Director' : 'You');
 
       var body = document.createElement('div');
       body.className = 'director-chat-message-body';
@@ -3252,6 +3254,9 @@
         operation: kind, projectId: story.id, projectTitle: story.title,
         savedAt: story.updatedAt, fields: selected
       };
+      if (window.studioDirectorWorkbench) window.studioDirectorWorkbench.updateReadiness({
+        checks:[],readHints:[],writeHint:'',sceneId:''
+      });
       state.modeMessages.storyboard.push({role:'user',
         content:'Reviewed Studio Apply completed. The following saved fields are now authoritative.' +
           String.fromCharCode(10) + '[WEBCAP APPLIED FIELD VALUES]' +

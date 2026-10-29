@@ -176,7 +176,8 @@ def test_studio_project_extraction_schema_is_bounded(monkeypatch):
     assert schema["additionalProperties"] is False
     assert set(schema["required"]) == {"title", "concept", "style", "invariants", "rationale"}
     assert schema["properties"]["invariants"]["maxItems"] == 30
-    assert "firstScene" in schema["properties"]
+    assert "firstScenes" in schema["properties"]
+    assert schema["properties"]["firstScenes"]["maxItems"] == 32
 
 
 def test_multi_scene_insert_at_start_between_and_end(isolated_storyboard):
@@ -240,7 +241,7 @@ def test_multi_scene_invalid_proposals_and_atomic_failure(isolated_storyboard, m
         "scenes": [{"title": "", "summary": "A"}, {"title": "", "summary": "B"}],
         "placement": "start", "relativeSceneId": "",
     }
-    for scenes in ([], [{"title": "", "summary": ""}], [{"title": "", "summary": "A", "prompt": "bad"}], data["scenes"] * 5):
+    for scenes in ([], [{"title": "", "summary": ""}], [{"title": "", "summary": "A", "prompt": "bad"}], data["scenes"] * 17):
         response = client.post("/fs/studio/director/scenes-draft", json={**data, "scenes": scenes})
         assert response.status_code == 400
     def broken_writer(path, data):
@@ -265,7 +266,7 @@ def test_multi_scene_extract_schema_is_bounded(monkeypatch):
     })
     assert result.status_code == 202
     schema = captured["contract"]["response_schema"]
-    assert schema["properties"]["scenes"]["maxItems"] == 8
+    assert schema["properties"]["scenes"]["maxItems"] == 32
     assert schema["properties"]["scenes"]["minItems"] == 1
     assert schema["additionalProperties"] is False
 

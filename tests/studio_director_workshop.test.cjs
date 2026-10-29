@@ -236,3 +236,12 @@ test('Character and Location associations use reviewed deterministic multi-Scene
   assert.match(apply,/\/fs\/studio\/director\/scene-invariants/);
   assert.match(apply,/recordApplied/);
 });
+
+test('multi-Scene review preserves actual Project positions and distinguishes a saved Scene from receipt failure', () => {
+  assert.match(workbench, /position:\(story\.sceneOrder \|\| \[\]\)\.indexOf\(id\) \+ 1/);
+  assert.match(workbench, /heading\.textContent = 'Scene ' \+ entry\.before\.position/);
+  const apply = workbench.split('  function applyScene() {')[1]
+    .split('  function setReadinessFreshness(stale) {')[0];
+  assert.match(apply, /applied = true/);
+  assert.match(apply, /Scene saved, but conversation recording or refresh failed/);
+});

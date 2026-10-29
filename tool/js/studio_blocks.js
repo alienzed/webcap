@@ -143,7 +143,7 @@
       var match = slashMatch(input.value, input.selectionStart);
       if (!match || !isStudio()) {close();return;}
       var before = input.value.slice(0, match.start), after = input.value.slice(match.end);
-      var replacement = block.content + (/\s$/.test(block.content) ? '' : ' ');
+      var replacement = block.content + (/\s$/.test(block.content) || /^\s/.test(after) ? '' : ' ');
       input.value = before + replacement + after;
       var caret = before.length + replacement.length;
       close();

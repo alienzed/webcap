@@ -135,3 +135,16 @@ test('a complete Scene Intent can open existing placement review with no duplica
   assert.doesNotMatch(review, /studioDirectorRequestMessages|makeProposal|\/fs\/director\/chat/);
   assert.match(workbench, /reviewSceneCapture\(capture,id\)/);
 });
+
+test('completed Scene operations can be proposed and opened directly from guidance', () => {
+  assert.match(workbench,/['"]scene-move['"]/);
+  assert.match(workbench,/['"]scene-duplicate['"]/);
+  assert.match(workbench,/['"]scene-split['"]/);
+  assert.match(workbench,/['"]scenes-batch['"]/);
+  assert.match(workbench,/function openRecommendedWrite\(\)/);
+  assert.match(workbench,/nextButton\.onclick = openRecommendedWrite/);
+  assert.match(workbench,/writeOperationChosen = true/);
+  assert.match(workbench,/function renderReadiness\(list\)/);
+  assert.match(director,/canReview: function \(\)/);
+  assert.match(director,/this\.canReview\(\)/);
+});

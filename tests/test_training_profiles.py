@@ -51,3 +51,28 @@ def test_training_profiles_have_no_setup_mode_layer():
         assert "setups" not in item
         assert isinstance(item["configs"], list)
         assert isinstance(item["datasetFiles"], list)
+
+
+def test_krea2_video_only_setup_is_visible_but_not_trainable(tmp_path, monkeypatch):
+    from tool.server import training_setup
+
+    folder = tmp_path / "video_set"
+    folder.mkdir()
+    (folder / "clip.mp4").write_bytes(b"video")
+
+    def create_config(path, profile_id):
+        (path / "config.krea2.toml").write_text("[model]\\ntype = 'krea2'\\n", encoding="utf-8")
+
+    monkeypatch.setattr(training_setup, "ensure_training_config_files", create_config)
+    payload = training_setup.ensure_training_setup(
+        folder, KREA2_PROFILE_ID, selected_media=["clip.mp4"], allow_incompatible=True
+    )
+    assert payload["ready"] is False
+    assert "images only" in payload["reason"]
+    assert (folder / "config.krea2.toml").exists()
+    assert not (folder / "dataset.krea2.toml").exists()
+
+    with pytest.raises(ValueError, match="requires at least one prepared image"):
+        training_setup.ensure_training_setup(
+            folder, KREA2_PROFILE_ID, selected_media=["clip.mp4"]
+        )

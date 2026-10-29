@@ -25,6 +25,7 @@ test('Caption Assist yields Enter to an open Crop modal and resumes after closin
       getElementById(id) { return id === 'crop-modal' ? {classList:{contains(name) { return name === 'hidden' && !cropOpen; }}} : null; }
     },
     window: {},
+    getCropEl(id) { return context.document.getElementById(id); },
     isEditableElement: () => false,
     captionAssistEnrichmentReviewActive: () => false,
     armOrUseFocusedCaptionCandidate: () => { armed++; }

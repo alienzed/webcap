@@ -13,7 +13,7 @@ from datetime import datetime
 from pathlib import Path, PurePosixPath
 
 from . import config as app_config
-from .training_commands import build_h3_command_plan, build_training_command_plan
+from .training_backend import DEFAULT_TRAINER_ID, backend_for_job
 from .training_profiles import config_for_stage, profile, resolved_profile, profile_run, profiles as training_profiles
 from .training_bundle import materialize_training_bundle
 from .training_config_files import rewrite_toml_assignment
@@ -362,6 +362,7 @@ def _read_state():
     parsed.setdefault("queuePaused", False)
     parsed.setdefault("queuePauseReason", "")
     for job in parsed["jobs"]:
+        backend_for_job(job)
         resume_path = str(job.get("resumeFromCheckpoint") or "").strip()
         if resume_path and not str(job.get("outputRunPath") or "").strip():
             job["outputRunPath"] = resume_path
@@ -1740,17 +1741,18 @@ def _build_runner_script(job, settings, artifacts, job_dir):
     resume_path = str(job.get("resumeFromCheckpoint") or "").strip()
     if resume_path and not resume_path.startswith("/"):
         resume_path = _to_wsl_path(resume_path, distribution)
-    command_plan = build_training_command_plan(
+    backend = backend_for_job(job)
+    command_plan = backend.command_plan(
         hi_wsl,
         lo_wsl,
-        build_training_launcher(settings),
+        settings,
         resume_path,
         resume_stage,
         reset_dataloader=bool(resume_path and not job.get("resumeOutputId")),
     )
-    h3_command_plan = build_h3_command_plan(
+    h3_command_plan = backend.h3_command_plan(
         lo_wsl,
-        build_training_launcher(settings),
+        settings,
         resume_path if resume_stage == "h3" else "",
         reset_dataloader=bool(resume_path and not job.get("resumeOutputId")),
     ) if stages == "h3" else None
@@ -2101,7 +2103,7 @@ def _request_checkpointed_stop(job, action):
     action_path = _job_action_path(job)
     try:
         action_path.write_text(action, encoding="utf-8")
-        (run_dir / "save_quit").touch(exist_ok=True)
+        backend_for_job(job).request_checkpoint_save(run_dir)
     except OSError as exc:
         try:
             if action_path.read_text(encoding="utf-8").strip() == action:
@@ -2592,7 +2594,7 @@ def start_observer():
 
 
 def _public_job(job):
-    fields = ("id", "folder", "stages", "profileId", "profileLabel", "mode", "runId", "actionRunId", "datasetTarget", "modelLabel", "model", "input", "artifactDir", "artifactSummary", "actionId", "actionPath", "runName", "recordPath", "inputPath", "bundleSummary", "capturedItemCount", "runSummary", "resumeFromCheckpoint", "resumeStage", "resumePoint", "resumePointError", "resumeActionId", "resumeOutputId", "resumeCheckpointTag", "resumeCheckpointRewritePending", "resumeCheckpointWallTime", "resumeBranchStartedAt", "candidateRevision", "outputRunPath", "status", "stage", "pid", "createdAt", "startedAt", "finishedAt", "updatedAt", "lastLogAt", "error", "confirmationNote", "completionNote", "exitCode", "failureScope", "failureExcerpt", "resolvedConfigs", "preflight", "outputRoot", "effectiveOutputDir", "outputSlug", "sequence", "parentJobId", "trainingSettings", "progress", "progressPlan", "actionRequested", "actionRequestedAt", "finishAfterEpoch", "finishScheduledAt", "finishTriggeredEpoch", "activeTrainingSeconds", "activeTrainingTimingComplete")
+    fields = ("trainerId", "id", "folder", "stages", "profileId", "profileLabel", "mode", "runId", "actionRunId", "datasetTarget", "modelLabel", "model", "input", "artifactDir", "artifactSummary", "actionId", "actionPath", "runName", "recordPath", "inputPath", "bundleSummary", "capturedItemCount", "runSummary", "resumeFromCheckpoint", "resumeStage", "resumePoint", "resumePointError", "resumeActionId", "resumeOutputId", "resumeCheckpointTag", "resumeCheckpointRewritePending", "resumeCheckpointWallTime", "resumeBranchStartedAt", "candidateRevision", "outputRunPath", "status", "stage", "pid", "createdAt", "startedAt", "finishedAt", "updatedAt", "lastLogAt", "error", "confirmationNote", "completionNote", "exitCode", "failureScope", "failureExcerpt", "resolvedConfigs", "preflight", "outputRoot", "effectiveOutputDir", "outputSlug", "sequence", "parentJobId", "trainingSettings", "progress", "progressPlan", "actionRequested", "actionRequestedAt", "finishAfterEpoch", "finishScheduledAt", "finishTriggeredEpoch", "activeTrainingSeconds", "activeTrainingTimingComplete")
     payload = {field: job.get(field) for field in fields if field in job}
     if job.get("status") == "queued":
         folder = str(job.get("folder") or "").strip()
@@ -2718,6 +2720,7 @@ def _new_job(
     action_run_id = str(run_id or "")
     return {
         "id": job_id,
+        "trainerId": DEFAULT_TRAINER_ID,
         "folder": folder,
         "stages": stages,
         "profileId": selected_profile["id"],

@@ -47,7 +47,7 @@ def test_link_existing_character_to_selected_scenes_atomically(project):
 
 def test_unlink_does_not_remove_other_scene_invariant(project):
     first = project["sceneOrder"][0]
-    base = storyboard_store.update_scene(project["id"], first, {
+    base, _scene = storyboard_store.update_scene(project["id"], first, {
         "invariantRefs": [
             {"kind": "character", "title": "Alice"},
             {"kind": "location", "title": "Station"},

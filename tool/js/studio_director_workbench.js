@@ -88,19 +88,46 @@
       };
       host.appendChild(row);
     }
+    function addGroup(label, paths, host) {
+      if (!paths.length) return;
+      var row = document.createElement('label'), toggle = document.createElement('input');
+      toggle.type = 'checkbox'; toggle.dataset.groupSelect = 'true';
+      toggle.groupPaths = paths;
+      row.append(toggle, document.createTextNode(label));
+      toggle.onchange = function () {
+        paths.forEach(function (path) {if (toggle.checked) chosen.add(path); else chosen.delete(path);});
+        Array.from(el('studio-dw-read-panel').querySelectorAll('input[data-path]')).forEach(function (node) {
+          node.checked = chosen.has(node.dataset.path);
+        });
+        updateReadSelection();
+      };
+      host.appendChild(row);
+    }
+    addGroup('Entire Project brief', projectFields.map(function (key) {return 'project.' + key;}), fields);
     projectFields.forEach(function (key) {
       var path = 'project.' + key;
       addField(path, labels[key], recommendations.readHints.length
         ? recommendations.readHints.indexOf(path) !== -1
         : key !== 'title' && !!story[key], fields);
     });
-    (story.sceneOrder || []).forEach(function (id, index) {
+    var sceneOrder = story.sceneOrder || [];
+    addGroup('All Scene overviews (without H3 prompts)', sceneOrder.reduce(function (paths, id) {
+      ['title', 'summary', 'durationSeconds'].forEach(function (field) {
+        paths.push('scene:' + id + ':' + field);
+      });
+      return paths;
+    }, []), scenes);
+    sceneOrder.forEach(function (id, index) {
       var scene = story.scenes && story.scenes[id];
       if (!scene) throw new Error('Project has a Scene index with no matching Scene.');
       var details = document.createElement('details'), heading = document.createElement('summary');
       heading.textContent = 'Scene ' + (index + 1) + ' · ' + (scene.title || 'Untitled');
       details.appendChild(heading);
-      ['title', 'summary', 'prompt', 'references', 'durationSeconds'].forEach(function (field) {
+      var sceneFields = ['title', 'summary', 'prompt', 'durationSeconds'];
+      addGroup('Entire Scene', sceneFields.map(function (field) {
+        return 'scene:' + id + ':' + field;
+      }), details);
+      sceneFields.forEach(function (field) {
         var path = 'scene:' + id + ':' + field;
         var current = id === (recommendations.sceneId || activeTarget().sceneId);
         var suggested = recommendations.readHints.indexOf(path) !== -1 ||
@@ -130,7 +157,7 @@
           value = story[field];
         } else {
           if (parts.length !== 3 || parts[0] !== 'scene' ||
-              ['title','summary','prompt','references','durationSeconds'].indexOf(parts[2]) === -1 ||
+              ['title','summary','prompt','durationSeconds'].indexOf(parts[2]) === -1 ||
               !story.scenes || !story.scenes[parts[1]] ||
               (story.sceneOrder || []).indexOf(parts[1]) === -1)
             throw new Error('Selected Scene field is not in this Project: ' + key);
@@ -142,7 +169,14 @@
   }
   function updateReadSelection() {
     var keys = selectedPaths();
-    el('studio-dw-read-count').textContent = keys.length + (keys.length === 1 ? ' field selected' : ' fields selected');
+    Array.from(el('studio-dw-read-panel').querySelectorAll('input[data-group-select]')).forEach(function (toggle) {
+      var chosenCount = toggle.groupPaths.filter(function (key) {return keys.indexOf(key) !== -1;}).length;
+      toggle.checked = chosenCount === toggle.groupPaths.length;
+      toggle.indeterminate = chosenCount > 0 && chosenCount < toggle.groupPaths.length;
+    });
+    var bytes = readStory ? JSON.stringify(readPayload(readStory, keys)).length : 0;
+    el('studio-dw-read-count').textContent = keys.length +
+      (keys.length === 1 ? ' field' : ' fields') + ' · ' + bytes.toLocaleString() + ' characters';
     el('studio-dw-read-send').disabled = !keys.length || !el('studio-dw-read-project').value;
     var name = readStory ? storyName(readStory) : 'No Project selected';
     el('studio-dw-read-scope').textContent = 'Read source: ' + name + '. Not an automatic attachment.';

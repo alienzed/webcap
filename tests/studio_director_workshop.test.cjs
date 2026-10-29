@@ -143,3 +143,13 @@ test('General Chat has a separate request path and Studio keeps native storage I
   assert.match(html, /id="storyboard-workspace"/);
   assert.match(source, /state\.studioOperations = Array\.isArray\(chat\.operations\)/);
 });
+
+
+test('Read offers whole Project, entire Scene, and compact multi-Scene overviews without media fields', () => {
+  assert.match(workbench, /Entire Project brief/);
+  assert.match(workbench, /Entire Scene/);
+  assert.match(workbench, /All Scene overviews \(without H3 prompts\)/);
+  assert.match(workbench, /input\[data-group-select\]/);
+  const read = workbench.split('  function renderReadStory(story) {', 2)[1].split('  function updateReadSelection() {', 2)[0];
+  assert.doesNotMatch(read, /'references'/);
+});

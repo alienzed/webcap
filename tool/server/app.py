@@ -2148,8 +2148,9 @@ def director_chat_route():
         if operation == "studio_brief_draft":
             contract["response_schema"] = {
                 "type": "object", "additionalProperties": False,
-                "required": ["concept", "style", "invariants", "rationale"],
+                "required": ["title", "concept", "style", "invariants", "rationale"],
                 "properties": {
+                    "title": {"type": "string", "maxLength": 240},
                     "concept": {"type": "string"},
                     "style": {"type": "string"},
                     "invariants": {

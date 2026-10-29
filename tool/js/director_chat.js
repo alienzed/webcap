@@ -1481,7 +1481,7 @@
     return proposal;
   }
 
-  function addStudioProjectInvariant(item, destination) {
+  function addStudioProjectInvariant(item, destination, original) {
     var host = el(typeof destination === 'string' ? destination : 'studio-project-invariants');
     var row = document.createElement('div');
     row.className = 'studio-project-invariant';
@@ -1503,13 +1503,23 @@
     remove.type = 'button';
     remove.className = 'review-captions-btn';
     remove.textContent = 'Remove';
-    remove.onclick = function () { row.remove(); };
+    remove.onclick = function () {
+      row.remove();
+      if (destination === 'studio-brief-invariants') el('studio-brief-invariants-selected').checked = true;
+    };
     var details = document.createElement('textarea');
     details.placeholder = 'Only what must stay consistent';
     details.setAttribute('aria-label', 'Invariant detail');
     details.rows = 2;
     details.style.gridColumn = '1 / -1';
     details.value = item && item.text || '';
+    if (destination === 'studio-brief-invariants') {
+      row.dataset.original = original ? JSON.stringify(original) : '';
+      [kind, title, details].forEach(function (field) {
+        field.addEventListener('input', function () {el('studio-brief-invariants-selected').checked = true;});
+        field.addEventListener('change', function () {el('studio-brief-invariants-selected').checked = true;});
+      });
+    }
     row.append(kind, title, remove, details);
     host.appendChild(row);
   }
@@ -1720,7 +1730,7 @@
     try { result = JSON.parse(value); }
     catch (error) { throw new Error('Director returned invalid Concept / Style / Invariants JSON: ' + error.message); }
     if (!result || typeof result !== 'object' || Array.isArray(result) ||
-        typeof result.concept !== 'string' || typeof result.style !== 'string' ||
+        typeof result.title !== 'string' || typeof result.concept !== 'string' || typeof result.style !== 'string' ||
         typeof result.rationale !== 'string' || !Array.isArray(result.invariants) ||
         result.invariants.length > 30 || result.invariants.some(function (item) {
           return !item || typeof item !== 'object' || Array.isArray(item) ||
@@ -1738,17 +1748,39 @@
     if (!proposal) throw new Error('Prepare Concept, Style and Invariants before reviewing.');
     el('studio-brief-target').textContent = 'Project: ' + (proposal.storyTitle || proposal.storyId);
     el('studio-brief-rationale').textContent = proposal.rationale;
+    el('studio-brief-title-before').textContent = 'Current: ' + (proposal.expected.title || '(untitled)');
+    el('studio-brief-title').value = proposal.draft.title;
+    el('studio-brief-title-selected').checked = proposal.draft.title !== proposal.expected.title;
     el('studio-brief-concept-before').textContent = 'Current: ' + (proposal.expected.concept || '(empty)');
     el('studio-brief-style-before').textContent = 'Current: ' + (proposal.expected.style || '(empty)');
     el('studio-brief-concept').value = proposal.draft.concept;
     el('studio-brief-style').value = proposal.draft.style;
     el('studio-brief-concept-selected').checked = proposal.draft.concept !== proposal.expected.concept;
     el('studio-brief-style-selected').checked = proposal.draft.style !== proposal.expected.style;
-    el('studio-brief-invariants-selected').checked =
-      JSON.stringify(proposal.draft.invariants) !== JSON.stringify(proposal.expected.invariants);
+    // A model's omission never becomes a proposed deletion by accident.
+    // Match existing rows by their current composite identity; the author
+    // explicitly removes a row to approve its deletion.
+    var existing = proposal.expected.invariants || [];
+    var suggested = proposal.draft.invariants || [];
+    var matched = new Set();
+    var reviewed = existing.map(function (before) {
+      var index = suggested.findIndex(function (item) {
+        return item.kind === before.kind &&
+          item.title.toLowerCase() === before.title.toLowerCase();
+      });
+      if (index >= 0) matched.add(index);
+      return {item:index >= 0 ? suggested[index] : before, original:before};
+    });
+    suggested.forEach(function (item, index) {
+      if (!matched.has(index)) reviewed.push({item:item, original:null});
+    });
+    el('studio-brief-invariants-selected').checked = reviewed.length !== existing.length ||
+      reviewed.some(function (row, index) {
+        return JSON.stringify(row.item) !== JSON.stringify(existing[index]);
+      });
     el('studio-brief-invariants').replaceChildren();
-    proposal.draft.invariants.forEach(function (item) {
-      addStudioProjectInvariant(item, 'studio-brief-invariants');
+    reviewed.forEach(function (row) {
+      addStudioProjectInvariant(row.item, 'studio-brief-invariants', row.original);
     });
     el('studio-brief-error').textContent = '';
     var dialog = el('studio-brief-review');
@@ -1780,10 +1812,10 @@
     }).then(function (payload) {
       var story = payload.story;
       if (!story || story.id !== storyId) throw new Error('Attached Project is unavailable.');
-      var expected = { concept: story.concept, style: story.style, invariants: story.invariants };
+      var expected = { title: story.title, concept: story.concept, style: story.style, invariants: story.invariants };
       var input = {
         task: 'Propose narrowly scoped creative brief changes that the author has actually discussed. ' +
-          'Return the FULL revised Concept, Style and Invariant list as reviewable suggestions. ' +
+          'Return the revised Project title, Concept, Style and FULL Invariant list as reviewable suggestions. ' +
           'Core Appeal stays within Concept. Preserve established details and unrelated facts. ' +
           'Do not change Scenes or prompts. Prefer no change where ideas remain undecided. ' +
           'Any changes must be reviewed by the author before WebCap stores them.',
@@ -1831,19 +1863,34 @@
     var proposal = state.studioBriefProposal;
     if (!proposal || state.pending) return;
     var changes = {};
+    if (el('studio-brief-title-selected').checked) changes.title = el('studio-brief-title').value.trim();
     if (el('studio-brief-concept-selected').checked) changes.concept = el('studio-brief-concept').value.trim();
     if (el('studio-brief-style-selected').checked) changes.style = el('studio-brief-style').value.trim();
     if (el('studio-brief-invariants-selected').checked) {
-      changes.invariants = Array.prototype.map.call(
-        el('studio-brief-invariants').querySelectorAll('.studio-project-invariant'), function (row) {
-          var fields = row.querySelectorAll('select, input, textarea');
-          return {kind: fields[0].value, title: fields[1].value.trim(), text: fields[2].value.trim()};
-        }
-      );
-      if (changes.invariants.some(function (item) { return !item.text; })) {
-        el('studio-brief-error').textContent = 'Every retained invariant needs a description.';
+      var reviewed = Array.from(el('studio-brief-invariants').querySelectorAll('.studio-project-invariant')).map(function (row) {
+        var fields = row.querySelectorAll('select, input, textarea');
+        return {
+          before: row.dataset.original ? JSON.parse(row.dataset.original) : null,
+          after: {kind:fields[0].value, title:fields[1].value.trim(), text:fields[2].value.trim()}
+        };
+      });
+      if (reviewed.some(function (item) {return !item.after.title || !item.after.text;})) {
+        el('studio-brief-error').textContent = 'Every Invariant needs a name and description.';
         return;
       }
+      var operations = [];
+      proposal.expected.invariants.forEach(function (before) {
+        var row = reviewed.find(function (item) {
+          return item.before && item.before.kind === before.kind && item.before.title === before.title;
+        });
+        if (!row) operations.push({op:'remove', before:before});
+        else if (JSON.stringify(before) !== JSON.stringify(row.after))
+          operations.push({op:'update', before:before, after:row.after});
+      });
+      reviewed.forEach(function (row) {
+        if (!row.before) operations.push({op:'add', after:row.after});
+      });
+      if (operations.length) changes.invariantOps = operations;
     }
     Object.keys(changes).forEach(function (key) {
       if (JSON.stringify(changes[key]) === JSON.stringify(proposal.expected[key])) delete changes[key];
@@ -1854,7 +1901,7 @@
     }
     var expected = {};
     Object.keys(changes).forEach(function (field) {
-      expected[field] = proposal.expected[field];
+      if (field !== 'invariantOps') expected[field] = proposal.expected[field];
     });
     state.pending = true;
     syncControls();
@@ -1877,7 +1924,7 @@
         proposal.storyId, []);
       studioActionStatus('Story brief updated. Undo is available.', false);
       var saved = {};
-      Object.keys(changes).forEach(function (key) {saved[key] = result.story[key];});
+      Object.keys(changes).forEach(function (key) {saved[key === 'invariantOps' ? 'invariants' : key] = result.story[key === 'invariantOps' ? 'invariants' : key];});
       return window.studioDirectorBridge.recordApplied('brief.apply',result.story,saved)
         .then(function () {return window.refreshStudioDirectorStoryIfOpen(proposal.storyId);});
     }).catch(function (error) {

@@ -2990,8 +2990,8 @@ def _enqueue_frozen_test_request(folder_path, request, loras, include_base, lega
 
         if not legacy_job_id:
             execution_promote_backlog_many("inference", queued_ids)
-            from .inference_runner import start_observer
-            start_observer()
+            from .inference_runner import start_requested_inference
+            start_requested_inference()
     except Exception as exc:
         rollback_errors = []
         rollback_pending = False

@@ -670,16 +670,18 @@ def start_observer():
 
 
 def _start_worker_for_requested_inference():
-    # Explicit Queue work resumes Inference, never another GPU lane.
-    # Passive startup recovery and deferred Backlog staging do not call this.
-    execution_resume_lane(EXECUTION_LANE)
     _backlog_deferred_ids.clear()
     _ensure_monitor_started(drain_backlog=True)
 
 
 def start_requested_inference():
-    """Wake Inference after a user request was fully committed to Queue."""
+    """Explicit Queue submission resumes a manual pause, not an execution failure."""
     _ensure_execution_reconciled()
+    lane = execution_lane_snapshot(EXECUTION_LANE, include_terminal=False)
+    if lane.get("paused") and not str(lane.get("pauseReason") or "").startswith(
+        "Inference paused after an execution error:"
+    ):
+        execution_resume_lane(EXECUTION_LANE)
     _start_worker_for_requested_inference()
 
 
@@ -696,7 +698,7 @@ def enqueue_generate(request, label=""):
         },
         initial_status="queued",
     )
-    _start_worker_for_requested_inference()
+    start_requested_inference()
     return _job_view(execution_get_job(job["id"]))
 
 
@@ -743,7 +745,7 @@ def enqueue_storyboard(request, story_id, scene_id, label="", migrated_from_job_
         initial_status=status,
     )
     if not deferred:
-        _start_worker_for_requested_inference()
+        start_requested_inference()
     return _job_view(execution_get_job(job["id"]))
 
 
@@ -780,7 +782,7 @@ def enqueue_test(request, context, label="", deferred=False):
         initial_status=status,
     )
     if not deferred:
-        _start_worker_for_requested_inference()
+        start_requested_inference()
     return _job_view(execution_get_job(job["id"]))
 
 
@@ -821,7 +823,7 @@ def enqueue_test_many(request, contexts, labels=None, deferred=False):
         EXECUTION_LANE, entries, initial_status="backlog" if deferred else "queued"
     )
     if not deferred:
-        _start_worker_for_requested_inference()
+        start_requested_inference()
     return [{"jobId": job["id"]} for job in jobs]
 
 
@@ -971,12 +973,12 @@ def action(operation, job_id="", direction="", position=None):
         return {"queue": snapshot(), "cleared": len(cancelled)}
     if operation == "add_to_queue":
         promoted = execution_promote_backlog(job_id)
-        _start_worker_for_requested_inference()
+        start_requested_inference()
         return {"job": _job_view(promoted), "queue": snapshot()}
     if operation == "add_all_to_queue":
         promoted = execution_promote_all_backlog(EXECUTION_LANE)
         if promoted:
-            _start_worker_for_requested_inference()
+            start_requested_inference()
         return {"queue": snapshot(), "promoted": len(promoted)}
     if operation == "move_all_to_backlog":
         moved = execution_shelve_queued(EXECUTION_LANE)
@@ -991,7 +993,8 @@ def action(operation, job_id="", direction="", position=None):
         execution_pause_lane(EXECUTION_LANE)
         return {"queue": snapshot()}
     if operation == "resume_queue":
-        # Resuming controls inference dispatch only; it does not claim the GPU.
+        # Explicit Resume also clears execution-error pauses.
+        execution_resume_lane(EXECUTION_LANE)
         _start_worker_for_requested_inference()
         return {"queue": snapshot(), "resumed": True}
     if operation == "reorder":

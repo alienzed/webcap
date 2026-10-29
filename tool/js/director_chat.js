@@ -1639,9 +1639,15 @@
       studioActionStatus(continueWithProject
         ? 'Project created and connected: ' + name + '. You can prepare Scenes from this conversation.'
         : 'Project created: ' + name + '. Open it from the Studio Library.', false);
-      return persistSession('storyboard').then(function () {
-        return window.refreshStudioDirectorStoryIfOpen(payload.story.id);
-      });
+      var projectValues = {
+        concept:payload.story.concept,style:payload.story.style,invariants:payload.story.invariants,
+        scenes:(payload.story.sceneOrder || []).map(function (id) {
+          var scene=payload.story.scenes[id];
+          return {id:id,title:scene.title,summary:scene.summary};
+        })
+      };
+      return window.studioDirectorBridge.recordApplied('project.create',payload.story,projectValues)
+        .then(function () {return window.refreshStudioDirectorStoryIfOpen(payload.story.id);});
     }).catch(function (error) {
       var detail = String(error.message || error);
       if (createdStory) {
@@ -1827,9 +1833,10 @@
       recordStudioOperation('brief.apply', 'Updated ' + Object.keys(changes).join(', '),
         proposal.storyId, []);
       studioActionStatus('Story brief updated. Undo is available.', false);
-      return persistSession('storyboard').then(function () {
-        return window.refreshStudioDirectorStoryIfOpen(proposal.storyId);
-      });
+      var saved = {};
+      Object.keys(changes).forEach(function (key) {saved[key] = result.story[key];});
+      return window.studioDirectorBridge.recordApplied('brief.apply',result.story,saved)
+        .then(function () {return window.refreshStudioDirectorStoryIfOpen(proposal.storyId);});
     }).catch(function (error) {
       if (applied) {
         studioActionStatus('Selected Concept, Style or Invariants changes were applied, but history save or refresh failed: ' +
@@ -1865,9 +1872,9 @@
       state.studioBriefUndo = null;
       recordStudioOperation('brief.undo', 'Reverted last Concept / Style / Invariants change', receipt.storyId, []);
       studioActionStatus('Last Concept / Style / Invariants change undone.', false);
-      return persistSession('storyboard').then(function () {
-        return window.refreshStudioDirectorStoryIfOpen(receipt.storyId);
-      });
+      return window.studioDirectorBridge.recordApplied('brief.undo',payload.story,{
+        concept:payload.story.concept,style:payload.story.style,invariants:payload.story.invariants
+      }).then(function () {return window.refreshStudioDirectorStoryIfOpen(receipt.storyId);});
     }).catch(function (error) {
       studioActionStatus('Concept / Style / Invariants Undo failed: ' + String(error.message || error), true);
       if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Studio Brief Undo', error);
@@ -2079,9 +2086,11 @@
       recordStudioOperation('scenes.create', 'Created ' + payload.scenes.length + ' tentative Scenes',
         proposal.storyId, payload.scenes.map(function (scene) { return scene.id; }));
       studioActionStatus(payload.scenes.length + ' Scenes created.', false);
-      return persistSession('storyboard').then(function () {
-        return window.refreshStudioDirectorStoryIfOpen(proposal.storyId);
-      });
+      return window.studioDirectorBridge.recordApplied('scenes.create',payload.story,{
+        scenes:payload.scenes.map(function (scene) {
+          return {id:scene.id,title:scene.title,summary:scene.summary};
+        })
+      }).then(function () {return window.refreshStudioDirectorStoryIfOpen(proposal.storyId);});
     }).catch(function (error) {
       if (applied) {
         studioActionStatus('Scenes were created, but history save or refresh failed: ' +
@@ -2291,7 +2300,9 @@
         '. Its intent is saved; the production prompt and Takes remain empty.';
       recordStudioOperation('scene.create', receipt, proposal.storyId, [created.id]);
       studioActionStatus(receipt, false);
-      return persistSession('storyboard').catch(function (error) {
+      return window.studioDirectorBridge.recordApplied('scene.create',payload.story,{
+        scenes:[{id:created.id,title:created.title,summary:created.summary}]
+      }).catch(function (error) {
         studioActionStatus(receipt + ' Conversation receipt could not be saved: ' + String(error.message || error), true);
       }).then(function () {
         return window.refreshStudioDirectorStoryIfOpen(proposal.storyId);

@@ -163,6 +163,8 @@
       el('studio-dw-read-panel').classList.add('hidden');
       el('studio-dw-read').setAttribute('aria-expanded', 'false');
       updateScope();
+      if (el('director-chat-drawer').classList.contains('studio-actions-open'))
+        el('studio-dw-close-actions').click();
     }).catch(function (error) { status('Read failed: ' + String(error.message || error), true); })
       .finally(function () { updateReadSelection(); });
   }

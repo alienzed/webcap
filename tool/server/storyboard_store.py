@@ -1053,6 +1053,8 @@ def _apply_studio_invariant_ops(story, operations):
             scene["invariantRefs"] = checked
             reference_changes[scene_id] = {"before": copy.deepcopy(old_refs),
                                            "after": copy.deepcopy(checked)}
+    if len(result) > 30:
+        raise ValueError("Project supports at most 30 Invariants.")
     _studio_invariant_links_preserved(updated, result)
     return result, reference_changes
 

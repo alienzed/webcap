@@ -425,6 +425,8 @@
     label.textContent = readinessStale
       ? (readiness.length ? 'Outdated · latest exchange not assessed' : 'Latest exchange not assessed')
       : (readiness.length ? 'Assessed for latest reply · advisory only' : 'Not assessed yet');
+    var empty = el('studio-dw-readiness-list').querySelector('p');
+    if (empty) empty.textContent = readinessStale ? 'No current assessment.' : 'Not assessed yet';
   }
   function renderReadiness(list) {
     readiness = list;
@@ -519,7 +521,7 @@
       });
       return true;
     }
-  }};
+  };
 
   function bind() {
     var rail = el('studio-director-workbench');if (!rail) return;

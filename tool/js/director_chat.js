@@ -1229,7 +1229,18 @@
       var output = el('director-studio-access-data');
       output.textContent = JSON.stringify(result.data, null, 2);
       output.classList.remove('hidden');
-      el('director-studio-access-status').textContent = 'Read ' + field + ' from the saved Story. Not sent to Director.';
+      // Explicit Read delivers selected saved fields; no silent auto-attachment.
+      if (state.pending || !state.modelId) throw new Error('Select a Director model before sending Read.');
+      var source = {projectId: result.storyId, sceneId: result.sceneId || null,
+        field: result.field, savedAt: result.storyUpdatedAt, content: result.data};
+      var composer = el('director-chat-input');
+      var instruction = String(composer.value || '').trim();
+      composer.value = '[WEBCAP EXPLICIT PROJECT READ — SAVED FIELD VALUES]\\n' +
+        JSON.stringify(source, null, 2) + '\\n[END WEBCAP READ]\\n\\n' +
+        'Acknowledge receipt in your own words, naming the Project and fields actually present. ' +
+        'Then ' + (instruction || 'give a concise substantive assessment of this material.');
+      el('director-studio-access-status').textContent = 'Sending ' + field + ' to Director for acknowledgment…';
+      sendMessage();
     }).catch(function (error) {
       el('director-studio-access-status').textContent = 'Read failed: ' + String(error.message || error);
       if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Studio Story read', error);

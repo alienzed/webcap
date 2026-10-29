@@ -705,7 +705,7 @@ def create_studio_project(proposal):
     Stage the complete Story directory on the owning output filesystem. A failed
     validation or pre-publication write never exposes a partial Story.
     """
-    if not isinstance(proposal, dict) or set(proposal) - {"title", "concept", "style", "invariants", "firstScene"}:
+    if not isinstance(proposal, dict) or set(proposal) - {"title", "concept", "style", "invariants", "firstScene", "firstScenes"}:
         raise ValueError("Studio project proposal has unsupported fields.")
     title = proposal.get("title", "")
     concept = proposal.get("concept", "")
@@ -719,23 +719,29 @@ def create_studio_project(proposal):
         raise ValueError("Studio project supports at most 30 invariants.")
 
     first = proposal.get("firstScene")
-    if first is not None:
-        if not isinstance(first, dict) or set(first) != {"title", "summary"}:
-            raise ValueError("Initial Scene must contain only title and summary.")
-        if not isinstance(first["title"], str) or not isinstance(first["summary"], str):
+    many = proposal.get("firstScenes")
+    if first is not None and many is not None:
+        raise ValueError("Use one initial Scene list, not two competing sources.")
+    initial = [first] if first is not None else (many if many is not None else [])
+    if not isinstance(initial, list) or len(initial) > 32:
+        raise ValueError("Project creation supports at most 32 reviewed initial Scenes.")
+    for item in initial:
+        if not isinstance(item, dict) or set(item) != {"title", "summary"}:
+            raise ValueError("Each initial Scene needs only title and summary.")
+        if not isinstance(item["title"], str) or not isinstance(item["summary"], str):
             raise ValueError("Initial Scene title and description must be text.")
-        if not first["summary"].strip() or len(first["summary"]) > 10000 or len(first["title"]) > 240:
-            raise ValueError("Initial Scene needs a short description.")
-    if not concept.strip() and first is None:
+        if not item["summary"].strip() or len(item["summary"]) > 10000 or len(item["title"]) > 240:
+            raise ValueError("Each initial Scene needs a short description.")
+    if not concept.strip() and not initial:
         raise ValueError("Describe the idea or an initial Scene before creating a project.")
 
     story = _normalize_story({
         "title": title, "concept": concept, "style": style,
         "invariants": invariants, "targetSceneCount": None,
     })
-    if first is not None:
+    for item in initial:
         scene_id = _new_id("scene")
-        scene = _normalize_scene(scene_id, first)
+        scene = _normalize_scene(scene_id, item)
         story["scenes"][scene_id] = scene
         story["sceneOrder"].append(scene_id)
 
@@ -1105,7 +1111,7 @@ def add_tentative_scene_at(story_id, expected_updated_at, scene_draft, placement
 
 @_serialized_mutation
 def add_tentative_scenes_at(story_id, expected_scene_order, drafts, placement, relative_scene_id=""):
-    """Insert a reviewed block of 1–8 tentative Scenes with one Story commit.
+    """Insert a reviewed block of up to 32 tentative Scenes with one Story commit.
 
     Check only the structural field being modified, so unrelated Concept or
     Scene edits do not invalidate a reviewed placement.
@@ -1114,8 +1120,8 @@ def add_tentative_scenes_at(story_id, expected_scene_order, drafts, placement, r
     order = list(story.get("sceneOrder") or [])
     if not isinstance(expected_scene_order, list) or order != expected_scene_order:
         raise RuntimeError("Scene order changed during review. Prepare a fresh placement.")
-    if not isinstance(drafts, list) or not 1 <= len(drafts) <= 8:
-        raise ValueError("Create between one and eight tentative Scenes per review.")
+    if not isinstance(drafts, list) or not 1 <= len(drafts) <= 32:
+        raise ValueError("Create between one and 32 tentative Scenes per review.")
     if placement not in {"start", "end", "before", "after"}:
         raise ValueError("Select start, end, before or after.")
     relative_scene_id = str(relative_scene_id or "").strip()
@@ -1421,6 +1427,37 @@ def extend_director_story(story_id, plan, model_id=""):
     for scene_id in added_ids:
         (_story_dir(story_id) / "takes" / scene_id).mkdir(parents=True, exist_ok=True)
     return story, added_ids
+
+
+STUDIO_SCENE_FIELDS = {"title", "summary", "prompt"}
+
+
+@_serialized_mutation
+def apply_studio_scene_fields(story_id, scene_id, expected, changes):
+    """Commit a reviewed, field-scoped Scene revision without touching Takes or settings."""
+    if not isinstance(expected, dict) or not isinstance(changes, dict) or not changes:
+        raise ValueError("Select at least one Scene field to apply.")
+    if set(changes) - STUDIO_SCENE_FIELDS or set(expected) != set(changes):
+        raise ValueError("Reviewed Scene fields must match exact supported originals.")
+    if any(not isinstance(value, str) or len(value) > 60000
+           or not isinstance(expected[key], str) for key, value in changes.items()):
+        raise ValueError("Reviewed Scene field values must be text with saved originals.")
+
+    story = load_story(story_id)
+    current = (story.get("scenes") or {}).get(scene_id)
+    if not isinstance(current, dict) or scene_id not in (story.get("sceneOrder") or []):
+        raise FileNotFoundError("Selected Scene no longer exists.")
+    for key in changes:
+        if str(current.get(key) or "") != expected[key]:
+            raise RuntimeError("Scene " + key + " changed since review. Read the current value and review again.")
+    clean = {key: value.strip() for key, value in changes.items()}
+    if "title" in clean and len(clean["title"]) > 240:
+        raise ValueError("Scene title is too long.")
+    revised = _normalize_scene(scene_id, clean, existing=current)
+    story["scenes"][scene_id] = revised
+    story["updatedAt"] = _utc_now()
+    _write_json_atomic(_story_path(story_id), story)
+    return story, revised
 
 
 @_serialized_mutation

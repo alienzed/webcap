@@ -184,3 +184,36 @@ def test_studio_story_access_is_reference_only_and_survives_reopen(sessions):
         "storyAccess": None,
     })
     assert revoked["storyAccess"] is None
+
+
+def test_studio_readiness_roundtrips_without_becoming_project_storage(sessions):
+    chat = history.create_chat("storyboard")
+    readiness = {
+        "checks": [{
+            "name": "Concept", "scope": "project", "ready": True,
+            "content": "The first Scene establishes the central encounter.",
+        }],
+        "readHints": ["project.concept", "scene.current.summary"],
+        "writeHint": "scene-edit", "sceneId": "scene-12",
+    }
+    history.save_chat(chat["id"], {
+        "expectedRevision": 0, "title": "Creative development",
+        "messages": [{"role": "user", "content": "Let's develop the scene."}],
+        "draft": "", "readiness": readiness,
+    })
+    assert history.open_chat(chat["id"])["readiness"] == readiness
+    assert "readiness" in json.loads((sessions / chat["id"] / "conversation.json").read_text())
+
+
+def test_studio_readiness_rejects_unsupported_dimensions(sessions):
+    chat = history.create_chat("storyboard")
+    with pytest.raises(ValueError, match="invalid assessment"):
+        history.save_chat(chat["id"], {
+            "expectedRevision": 0, "title": "Invalid",
+            "messages": [], "draft": "",
+            "readiness": {
+                "checks": [{"name": "Made up", "scope": "project", "ready": True, "content": "a"}],
+                "readHints": [], "writeHint": "", "sceneId": "",
+            },
+        })
+    assert history.open_chat(chat["id"])["revision"] == 0

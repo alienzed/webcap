@@ -1458,3 +1458,56 @@ def test_reviewed_guidelines_reject_unknown_unexpected_or_non_string_fields(stor
             story["id"], expected={"pacing": ""}, changes={"pacing": ["Quick"]}
         )
     assert storyboard_store.load_story(story["id"])["guidelines"] == {}
+
+
+def test_studio_project_creates_multiple_initial_scenes_atomically(storyboard_fs):
+    proposal = {
+        "title": "The lessons", "concept": "A teacher meets two very different students.",
+        "style": "Natural warm light.", "invariants": [],
+        "firstScenes": [
+            {"title": "First", "summary": "A nervous student plays the opening notes."},
+            {"title": "Second", "summary": "The second student surprises the teacher."},
+        ],
+    }
+    project = storyboard_store.create_studio_project(proposal)
+    assert len(project["sceneOrder"]) == 2
+    assert storyboard_store.load_story(project["id"])["sceneOrder"] == project["sceneOrder"]
+    root = storyboard_fs / "output" / "storyboards" / project["id"]
+    for scene_id in project["sceneOrder"]:
+        assert (root / "takes" / scene_id).is_dir()
+    before = {p.name for p in (storyboard_fs / "output" / "storyboards").iterdir()}
+    with pytest.raises(ValueError, match="initial Scene"):
+        storyboard_store.create_studio_project({
+            **proposal, "firstScenes": [{"title": "Empty", "summary": ""}],
+        })
+    after = {p.name for p in (storyboard_fs / "output" / "storyboards").iterdir()}
+    assert after == before
+
+
+def test_studio_scene_fields_are_scoped_and_conflict_checked(storyboard_fs):
+    project = storyboard_store.create_story({"title": "Interview", "concept": "A consequential question."})
+    project, scene = storyboard_store.add_scene(project["id"], {
+        "title": "Opening", "summary": "An interviewer asks a difficult question.",
+        "prompt": "A close interview with quiet room tone.", "durationSeconds": 12,
+    })
+    id_ = scene["id"]
+    unchanged_settings = storyboard_store.load_story(project["id"])["scenes"][id_]
+    original_prompt = unchanged_settings["prompt"]
+    saved, result = storyboard_store.apply_studio_scene_fields(
+        project["id"], id_, {"summary": scene["summary"]},
+        {"summary": "The interview begins with an incriminating answer."},
+    )
+    assert result["summary"] == "The interview begins with an incriminating answer."
+    assert result["prompt"] == original_prompt
+    assert result["takeOrder"] == unchanged_settings["takeOrder"]
+    assert result["durationSeconds"] == unchanged_settings["durationSeconds"]
+    with pytest.raises(RuntimeError, match="changed since review"):
+        storyboard_store.apply_studio_scene_fields(
+            project["id"], id_, {"summary": scene["summary"]},
+            {"summary": "A stale replacement."},
+        )
+    with pytest.raises(ValueError, match="supported originals"):
+        storyboard_store.apply_studio_scene_fields(
+            project["id"], id_, {"takeOrder": []}, {"takeOrder": []},
+        )
+    assert storyboard_store.load_story(project["id"])["scenes"][id_]["summary"] == result["summary"]

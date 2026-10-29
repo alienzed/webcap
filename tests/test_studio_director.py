@@ -12,19 +12,19 @@ def test_writer_workshop_uses_existing_h3_prompt_contract_and_user_playbook(monk
     )
     result = guidance("minimax_h3")
     text = result["system"]
-    assert "STUDIO DIRECTOR | WRITER'S WORKSHOP" in text
+    assert "STUDIO DIRECTOR | EXPERT CREATIVE PRODUCER" in text
     assert "core appeal" in text.lower()
-    assert "Ask one useful focused question at a time" in text
+    assert "Ask one focused question when a consequential creative decision is missing" in text
     assert "4–15 seconds" in text
     assert "T2VA" in text and "I2VA" in text and "L2VA" in text and "FL2VA" in text
     assert "guide-frame references and Ref2VA are not supported" in text
     assert "Prepare Scenes" in text and "reviewed" in text.lower()
     assert "Keep risky hand-to-hand interactions simple." in text
-    assert "Conversation alone does not create" in text
+    assert "Conversation alone does not create" in text or "Conversation never edits Project records" in text
     assert "integrated_multimodal_description" in result["promptContract"]
     assert "TECHNICAL H3 PRODUCTION PROMPT CONTRACT" not in text
     assert "[Shot 1]" not in text
-    assert len(text) < 4300
+    assert len(text) < 6000
 
 
 def test_action_catalog_marks_future_mutations_as_planned():
@@ -65,11 +65,14 @@ def test_unconfigured_h3_studio_still_has_production_expertise(monkeypatch):
     assert "[Shot 1]" in result["promptContract"]
 
 
-def test_freeform_workshop_does_not_claim_mutations_or_dump_full_scene():
+def test_freeform_workshop_does_not_claim_hidden_context_or_mutations():
     text = guidance("minimax_h3")["system"]
-    assert "dialogue stays dialogue" in text
-    assert "never announce 'Storyboard updated'" in text
-    assert "A separate WebCap operation" in text
+    assert "Acknowledge only the exact saved fields actually supplied" in text
+    assert "Read and Write are explicit author-driven operations" in text
+    assert "Conversation never edits Project records" in text
+    assert "strengthen the idea, do not replace it" in text
+
+
 
 def test_five_field_contract_has_explicit_ownership_and_review_boundary():
     text = guidance("minimax_h3")["system"]
@@ -82,3 +85,39 @@ def test_five_field_contract_has_explicit_ownership_and_review_boundary():
     assert "honor them until separately reviewed" in text
     assert "reviewed insertion" in text
     assert "conversation alone never edits them" in text
+
+
+def test_h3_playbook_review_uses_existing_config_and_checks_conflicts(monkeypatch):
+    import copy
+    from tool.server.app import app
+    saved = {"generation_model_guidance": {"minimax_h3": "Original guidance."}}
+    writes = []
+
+    monkeypatch.setattr(app_config, "load_config_from_disk", lambda: copy.deepcopy(saved))
+
+    def save(value):
+        saved.clear()
+        saved.update(copy.deepcopy(value))
+        writes.append(copy.deepcopy(value))
+        return value
+
+    monkeypatch.setattr(app_config, "save_config_to_disk", save)
+    monkeypatch.setattr(app_config, "reload_runtime_config", lambda: None)
+    client = app.test_client()
+    before = client.get("/fs/studio/director/playbook")
+    assert before.status_code == 200
+    assert before.json["guidance"] == "Original guidance."
+
+    update = client.post("/fs/studio/director/playbook", json={
+        "expected": "Original guidance.", "guidance": "Keep actions physically clear."
+    })
+    assert update.status_code == 200
+    assert saved["generation_model_guidance"]["minimax_h3"] == "Keep actions physically clear."
+    assert len(writes) == 1
+
+    conflict = client.post("/fs/studio/director/playbook", json={
+        "expected": "Original guidance.", "guidance": "Overwrite concurrent changes."
+    })
+    assert conflict.status_code == 400
+    assert "changed since review" in conflict.json["error"]
+    assert len(writes) == 1

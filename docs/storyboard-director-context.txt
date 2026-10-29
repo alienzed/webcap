@@ -11,6 +11,14 @@ Each Scene is one generatable video clip of at most 15 seconds.
 SCENE FACTS.
 Describe the current Scene with concrete audiovisual facts that make it independently generatable. Preserve established identities, objects, environments, and changes in state.
 
+CENTRAL EVENT FIRST.
+Develop the author's existing premise rather than substituting another idea. In a lesson,
+interview, encounter or physical action, depict a substantive exchange or visible outcome
+from the beginning of the clip. Compress routine setup into useful audiovisual detail.
+Use a deliberately slower or atmosphere-led opening when that is the author's direction.
+Propose practical solutions to difficult T2V staging, dialogue or consistency while
+preserving the author's intended event and giving original creative first drafts.
+
 TASK SCOPE.
 Change only what the task requests; retain other authored content.
 

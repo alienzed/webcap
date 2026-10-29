@@ -2508,12 +2508,12 @@
         return key.indexOf('story:') === 0;
       });
       var workbench = state.studioStoryAccess
-        ? 'The author granted read access to Story ' + state.studioStoryAccess.storyId +
+        ? 'The author selected Story ' + state.studioStoryAccess.storyId + ' as the current Write destination' +
           '. Grant alone supplies no field values; only fields explicitly present in a particular ' +
           'request may be used. Never claim to have inspected other data.'
         : storyRefs.length === 1
-          ? 'A historical Story snapshot is attached (' + storyRefs[0].slice(6) + ').'
-          : 'No Story access was granted; review of fields would propose creating a Project.';
+          ? 'A legacy historical Story snapshot exists in history (' + storyRefs[0].slice(6) + '), but it has not been automatically resent.'
+          : 'No saved Project Write destination has been selected. Prior explicitly Read content may still exist in conversation history.';
       outbound[0] = { role: 'system', content: payload.system +
         '\n\nCURRENT WEBCAP CAPABILITIES (available vs planned):\n' + capabilities +
         '\n\nSTUDIO WORKBENCH STATE (controls, not saved Story facts):\n' + workbench +

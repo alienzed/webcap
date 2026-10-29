@@ -961,7 +961,6 @@ function startFocusedCaption(targetMediaKey, mode, options) {
   focusedCaptionState.discrepancySourceLabel = '';
   focusedCaptionVisionPhrases.enabled = false;
   focusedCaptionState.folder = String((state && state.folder) || '');
-  loadCaptionVisionCapabilities();
   focusedCaptionState.itemKeys = itemKeys;
   focusedCaptionState.itemIndex = 0;
   focusedCaptionState.itemKey = itemKeys[0];
@@ -970,6 +969,7 @@ function startFocusedCaption(targetMediaKey, mode, options) {
   focusedCaptionState.selectingFirstItem = !(
     state.currentItem && state.currentItem.fileName && state.currentItem.key === itemKeys[0]
   );
+  loadCaptionVisionCapabilities();
   resetFocusedCaptionUseArm();
   syncFocusedCaptionControls();
   renderPreviewHeaderMeta();

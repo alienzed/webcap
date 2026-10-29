@@ -1,6 +1,6 @@
 (function () {
   'use strict';
-  var readStory = null, writeStory = null, projects = [], proposedScene = null, proposedStructure = null, proposedBatch = null, playbookExpected = null;
+  var readStory = null, writeStory = null, projects = [], proposedScene = null, proposedStructure = null, proposedBatch = null, proposedSplit = null, playbookExpected = null;
   var readiness = [], recommendations = {readHints:[],writeHint:'',sceneId:''};
   var readinessStale = false;
   var readChoices = {}, writeOperationChosen = false, lastReadSource = null;
@@ -267,7 +267,7 @@
   function setOperation() {
     var operation = el('studio-dw-write-operation').value;
     var structural = operation === 'scene-move' || operation === 'scene-duplicate';
-    el('studio-dw-write-scene-row').classList.toggle('hidden', operation !== 'scene-edit' && !structural);
+    el('studio-dw-write-scene-row').classList.toggle('hidden', operation !== 'scene-edit' && operation !== 'scene-split' && !structural);
     el('studio-dw-write-fields').classList.toggle('hidden', operation !== 'scene-edit');
     el('studio-dw-batch-controls').classList.toggle('hidden', operation !== 'scenes-batch');
     el('studio-dw-move-target-row').classList.toggle('hidden', operation !== 'scene-move');
@@ -458,6 +458,10 @@
       prepareBatchScenes(id);
       return;
     }
+    if (operation === 'scene-split') {
+      prepareSplitScene(id);
+      return;
+    }
     if (operation !== 'scene-edit') {
       try {
         var item = projects.find(function (p) {return p.id === id;});
@@ -477,6 +481,102 @@
       .then(function (story) {return editScene(story,sceneId,fields);})
       .catch(function (e) {status('Scene revision failed: ' + String(e.message || e),true);})
       .finally(function () { el('studio-dw-write-prepare').disabled = false; });
+  }
+  function prepareSplitScene(storyId) {
+    var sceneId = el('studio-dw-write-scene').value, button = el('studio-dw-write-prepare');
+    if (!sceneId) {status('Choose the Scene to split.',true);return;}
+    button.disabled = true;
+    status('Director is developing two independently renderable Scene Intents…',false);
+    Promise.resolve().then(function () {
+      return window.flushStudioDirectorStoryEdits(storyId);
+    }).then(function () {return loadStory(storyId);})
+      .then(function (story) {
+        var scene = story.scenes && story.scenes[sceneId];
+        if (!scene || (story.sceneOrder || []).indexOf(sceneId) < 0)
+          throw new Error('Source Scene no longer exists.');
+        var recent = window.studioDirectorBridge.messages().slice(-18).map(function (m) {
+          return {role:m.role,content:String(m.content || '').slice(0,3200)};
+        });
+        var request = [
+          'Studio Director: split this one overloaded Scene into TWO independently generatable clips.',
+          'Return JSON with firstSummary (complete revised Intent for original), secondTitle, secondSummary, rationale.',
+          'Do not create a third Scene, rewrite the Prompt or change existing Takes.',
+          'Make each event feasible within its own short H3 clip (4-15 seconds); preserve the author\'s vision.',
+          'Project: '+JSON.stringify({id:story.id,concept:story.concept,style:story.style,invariants:story.invariants}),
+          'Source Scene: '+JSON.stringify({id:sceneId,title:scene.title,summary:scene.summary,prompt:scene.prompt,
+            durationSeconds:scene.durationSeconds}),
+          'Discussion: '+JSON.stringify(recent)
+        ].join('\n');
+        return window.studioDirectorBridge.makeProposal(request,'studio_scene_split_draft').then(function (raw) {
+          var candidate = parseProposal(raw);
+          if (['firstSummary','secondTitle','secondSummary','rationale'].some(function (key) {
+            return typeof candidate[key] !== 'string';
+          }) || !candidate.firstSummary.trim() || !candidate.secondSummary.trim()) {
+            throw new Error('Director did not supply two complete Scene Intents.');
+          }
+          proposedSplit = {
+            storyId:storyId,sceneId:sceneId,expectedSceneOrder:(story.sceneOrder||[]).slice(),
+            expectedSummary:scene.summary,firstSummary:candidate.firstSummary,
+            secondScene:{title:candidate.secondTitle,summary:candidate.secondSummary}
+          };
+          el('studio-dw-split-target').textContent = storyName(story)+' · '+(scene.title||sceneId);
+          el('studio-dw-split-before').textContent = 'Saved Intent: '+(scene.summary||'(empty)')+
+            (scene.prompt ? ' · Existing H3 Prompt and Takes will remain with this Scene.' : '');
+          el('studio-dw-split-first').value = candidate.firstSummary;
+          el('studio-dw-split-second-title').value = candidate.secondTitle;
+          el('studio-dw-split-second-summary').value = candidate.secondSummary;
+          el('studio-dw-split-error').textContent = '';
+          el('studio-dw-split-review').showModal();
+          status('Two Scene Intents ready for one reviewed split.',false);
+        });
+      }).catch(function (error) {
+        status('Scene split draft failed: '+String(error.message||error),true);
+      }).finally(function () {button.disabled = false;});
+  }
+  function applySplitScene() {
+    if (!proposedSplit) throw new Error('No reviewed Scene split exists.');
+    var proposal = Object.assign({},proposedSplit), button=el('studio-dw-split-apply');
+    proposal.firstSummary=el('studio-dw-split-first').value.trim();
+    proposal.secondScene={
+      title:el('studio-dw-split-second-title').value.trim(),
+      summary:el('studio-dw-split-second-summary').value.trim()
+    };
+    if (!proposal.firstSummary || !proposal.secondScene.summary) {
+      el('studio-dw-split-error').textContent='Both new Scene Intents must describe an event.';
+      return;
+    }
+    button.disabled=true;
+    var applied=false;
+    Promise.resolve().then(function () {
+      return window.flushStudioDirectorStoryEdits(proposal.storyId);
+    }).then(function () {
+      return api('/fs/studio/director/scene-split',{
+        method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(proposal)
+      });
+    }).then(function (result) {
+      if (!result.story || !result.scene || !result.scene.id)
+        throw new Error('Split Apply returned no saved new Scene.');
+      applied=true;
+      proposedSplit=null;
+      el('studio-dw-split-review').close();
+      var saved={
+        sourceSceneId:proposal.sceneId,
+        sourceSummary:result.story.scenes[proposal.sceneId].summary,
+        createdScene:{id:result.scene.id,title:result.scene.title,summary:result.scene.summary},
+        sceneOrder:result.story.sceneOrder
+      };
+      return window.studioDirectorBridge.recordApplied('scene.split',result.story,saved).then(function () {
+        status('Reviewed Scene split saved. Review the original H3 Prompt before generating.',false);
+        if (typeof window.refreshStudioDirectorStoryIfOpen === 'function')
+          return window.refreshStudioDirectorStoryIfOpen(result.story.id);
+      });
+    }).catch(function (error) {
+      var message=String(error.message||error);
+      el('studio-dw-split-error').textContent=applied
+        ? 'Scene split saved, but conversation recording or refresh failed: '+message
+        : 'Apply was not confirmed: '+message;
+      status('Scene split Apply: '+message,true);
+    }).finally(function () {button.disabled=false;});
   }
   function prepareBatchScenes(storyId) {
     var ids = Array.from(el('studio-dw-batch-scenes').querySelectorAll('input:checked'))
@@ -982,6 +1082,10 @@
     el('studio-dw-scene-apply').onclick=applyScene;
     el('studio-dw-structure-apply').onclick=applyStructure;
     el('studio-dw-batch-apply').onclick=applyBatchScenes;
+    el('studio-dw-split-apply').onclick=applySplitScene;
+    ['studio-dw-split-close','studio-dw-split-cancel'].forEach(function (id) {
+      el(id).onclick=function () {el('studio-dw-split-review').close();};
+    });
     ['studio-dw-batch-close','studio-dw-batch-cancel'].forEach(function (id) {
       el(id).onclick=function () {el('studio-dw-batch-review').close();};
     });

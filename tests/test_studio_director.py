@@ -16,8 +16,9 @@ def test_writer_workshop_uses_existing_h3_prompt_contract_and_user_playbook(monk
     assert "core appeal" in text.lower()
     assert "Ask one focused question when a consequential creative decision is missing" in text
     assert "4–15 seconds" in text
-    assert "T2VA" in text and "I2VA" in text and "L2VA" in text and "FL2VA" in text
-    assert "guide-frame references and Ref2VA are not supported" in text
+    assert "FIELD DEVELOPMENT" in text
+    assert "Entry and exit state fields are retired" in text
+    assert "These controls and media inspection are outside Studio Director" in text
     assert "Prepare Scenes" in text and "reviewed" in text.lower()
     assert "Keep risky hand-to-hand interactions simple." in text
     assert "Conversation alone does not create" in text or "Conversation never edits Project records" in text

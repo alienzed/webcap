@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Studio Director — Design Audit Interaction Mock</title>
+<style>
+:root{color-scheme:dark;--bg:#10141b;--panel:#181e27;--panel2:#202733;--edge:#354052;--ink:#f1f4fb;--muted:#aeb9c9;--accent:#a2b9ff;--positive:#8ed6b2;--warning:#f6cc89}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.48 system-ui,-apple-system,"Segoe UI",sans-serif}
+button,input,textarea,select{font:inherit}button{cursor:pointer;color:inherit;background:var(--panel2);border:1px solid var(--edge);border-radius:9px;min-height:42px;padding:8px 13px}button:hover{border-color:var(--accent)}button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,summary:focus-visible{outline:3px solid var(--accent);outline-offset:2px}button.primary{color:#101a2d;background:var(--accent);border-color:var(--accent);font-weight:750}
+button.minimal{background:transparent;border-color:transparent;color:var(--muted)}button.small{min-height:36px;padding:5px 9px;font-size:14px}
+label{display:block;font-weight:600}label small,.muted,small{color:var(--muted);font-weight:400}select,input[type=text],textarea{width:100%;background:var(--bg);color:var(--ink);border:1px solid var(--edge);border-radius:8px;min-height:43px;padding:9px}textarea{resize:vertical}input[type=checkbox]{width:19px;height:19px;accent-color:var(--accent)}
+header{border-bottom:1px solid var(--edge);display:flex;justify-content:space-between;align-items:center;gap:18px;padding:16px 22px}header strong{font-size:22px}header p{margin:2px 0 0;color:var(--muted);font-size:14px}.headerbuttons{display:flex;gap:8px;align-items:center}.prototype{background:#2d2838;color:#e1d5f5;padding:7px 16px;text-align:center;font-size:13px;border-bottom:1px solid #554465}
+main{height:calc(100dvh - 118px);min-height:490px;display:grid;grid-template-columns:minmax(0,1fr) minmax(320px,34%);max-width:1600px;margin:auto}
+.conversation{display:flex;flex-direction:column;min-width:0;min-height:0}.messages{flex:1;overflow:auto;padding:22px clamp(18px,3vw,42px)}.message{max-width:850px;border-radius:13px;margin-bottom:18px;padding:16px 20px;border:1px solid var(--edge);background:var(--panel)}.message.you{margin-left:9%;background:#233046}.message .who{font-weight:750;font-size:14px;margin-bottom:7px;color:var(--accent)}.message p{margin:0}.event{border:1px solid var(--edge);border-left:3px solid var(--accent);background:#141d28;padding:13px 15px;border-radius:10px;margin-bottom:16px}.event.success{border-left-color:var(--positive)}.event strong{display:block}.event p{font-size:14px;color:var(--muted);margin:4px 0}.event button{margin-top:8px}.composer{border-top:1px solid var(--edge);padding:14px 22px 18px}.composer textarea{min-height:88px;width:100%}.composerbar{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:9px}.composerbar small{font-size:13px}
+.rail{background:var(--panel);border-left:1px solid var(--edge);display:flex;min-height:0;flex-direction:column}.railhead{padding:17px 18px 11px;border-bottom:1px solid var(--edge)}.railhead h2{font-size:19px;margin:0 0 6px}.railhead p{font-size:14px;margin:0;color:var(--muted)}
+.actionnav{display:grid;grid-template-columns:1fr 1fr;gap:9px;padding:12px 18px}.actionnav button{font-weight:700}.actionnav button[aria-pressed=true]{background:#2b3c5b;border-color:var(--accent)}.scroll{overflow-y:auto;min-height:0;flex:1;padding:10px 18px}.panel{margin-bottom:20px}.panel h3{font-size:19px;margin:0 0 13px}.field{margin-bottom:15px}.field label{margin-bottom:6px}.checkrow{display:flex;align-items:center;gap:10px;padding:6px 0;font-weight:450}.checkrow input{flex:none}.group{margin:13px 0;padding:11px;border:1px solid var(--edge);border-radius:10px}.group summary{cursor:pointer;font-weight:650}.group .checkrow{margin-left:7px}.context{border:1px solid var(--edge);padding:12px 13px;border-radius:10px;background:#1c2533;margin-bottom:16px}.context .eyebrow{font-size:13px;color:var(--muted)}.context strong{display:block;margin:2px 0 4px}.context p{margin:0;font-size:14px;color:var(--muted)}
+.info{font-size:14px;color:var(--muted);border-top:1px solid var(--edge);padding-top:12px}.fieldcount{font-weight:700;color:var(--ink)}.railfoot{padding:13px 18px 16px;border-top:1px solid var(--edge);display:flex;gap:8px;align-items:center;justify-content:space-between}.railfoot button.primary{flex:1}.none{display:none!important}
+.assessment{border-top:1px solid var(--edge);padding:17px 18px}.assessment h3{font-size:16px;margin:0 0 8px}.assessment details{border:1px solid var(--edge);border-radius:9px;margin-top:8px;padding:10px}.assessment summary{cursor:pointer}.assessment p{color:var(--muted);font-size:15px;white-space:pre-wrap}.checkmark{color:var(--positive);font-weight:800;margin-right:8px}.emptycheck{color:var(--warning);margin-right:8px}
+pre{font-family:ui-monospace,Consolas,monospace;font-size:12px;white-space:pre-wrap;overflow-wrap:anywhere;background:#111923;padding:12px;border-radius:8px;max-height:220px;overflow:auto}.note{font-size:13px;color:var(--muted);margin:9px 0}.scopehint{font-size:14px;color:var(--warning);margin:8px 0}.review{background:#121c29;padding:13px;border:1px solid var(--edge);border-radius:10px}.review h4{margin:0 0 8px}.review .before{color:var(--muted);font-size:14px;padding:9px 11px;background:#1a202b;border-radius:8px;margin-bottom:10px}.review textarea{min-height:118px}.reviewactions{display:flex;gap:8px;justify-content:flex-end;margin-top:9px}
+#mobileActions,#railClose{display:none}
+@media(max-width:840px){main{display:block;height:calc(100dvh - 118px)}.conversation{height:100%}.rail{position:fixed;inset:60px 0 0 auto;width:min(420px,100%);z-index:6;box-shadow:-25px 0 90px #0009;transform:translateX(105%);transition:transform .18s ease}.rail.open{transform:translateX(0)}#mobileActions,#railClose{display:inline-block}.headerbuttons .desktop{display:none}header{padding:10px 13px}header strong{font-size:19px}.messages{padding:16px}.composer{padding:10px}.composer textarea{min-height:64px}.prototype{font-size:12px;padding:6px}.railhead{display:flex;justify-content:space-between;align-items:start}main{min-height:340px}}
+</style>
+</head>
+<body>
+<div class="prototype">DESIGN AUDIT PROTOTYPE · SAMPLE CONTENT ONLY · NO SAVING, MODEL CALLS OR LIVE WEBCAP DATA</div>
+<header><div><strong>Studio Director</strong><p>Creative conversation · <span id="route">Studio location: The Interview</span></p></div><div class="headerbuttons"><button class="desktop small" id="history" type="button">History</button><button class="desktop small" id="fresh" type="button">New chat</button><button class="primary" id="mobileActions" type="button">Actions</button></div></header>
+<main>
+<section class="conversation" aria-label="Creative conversation">
+<div class="messages" id="messages">
+<div class="message you"><div class="who">You</div><p>I want the opening interrogation to feel tense without an empty establishing shot.</p></div>
+<div class="message"><div class="who">Director</div><p>Open with the witness answering a question we haven't heard. Keep the detective's response quiet and precise; tension comes from the silence after the answer, not extra movement.</p></div>
+</div>
+<div class="composer"><label for="compose" class="none">Your message</label><textarea id="compose" placeholder="Discuss a scene, or refine an established idea…"></textarea><div class="composerbar"><small>Conversation persists independently of Project navigation.</small><button id="sendChat" class="primary">Send message</button></div></div>
+</section>
+<aside class="rail" id="rail" aria-label="Director actions">
+<div class="railhead"><div><h2 id="railTitle">Director actions</h2><p id="railSubtitle">One task at a time · Nothing is sent automatically.</p></div><button id="railClose" class="minimal" aria-label="Close actions">✕</button></div>
+<div class="actionnav"><button id="tabRead" aria-pressed="false">Read…</button><button id="tabWrite" aria-pressed="false">Write…</button></div>
+<div class="scroll">
+<div id="idle">
+<div class="context"><span class="eyebrow">Current conversation</span><strong>Unbound creative discussion</strong><p>Choose exactly what Director should read or where it should write. Studio location does not attach material.</p></div>
+<p class="note">Select Read to supply saved fields; Write to review changes to a chosen Project or Scene.</p>
+</div>
+<div id="readPanel" class="none panel">
+<h3>Read saved material</h3>
+<div class="field"><label for="readSource">Read from Project</label><select id="readSource"><option value="interview">The Interview</option><option value="lesson">The Lesson</option></select></div>
+<div class="context"><span class="eyebrow">Source — not a conversation binding</span><strong id="readSourceLabel">The Interview</strong><p>Only checked saved fields will be included in the explicit Read message.</p></div>
+<div class="field"><strong>Project fields</strong><div id="projectFields"></div></div>
+<div class="field"><strong>Scenes</strong><div id="sceneFields"></div></div>
+<details id="inspectRead" class="group"><summary>Inspect exact selected values</summary><pre id="readPreview"></pre></details>
+</div>
+<div id="writePanel" class="none panel">
+<h3>Write reviewed content</h3>
+<div class="field"><label for="writeGoal">What should Director prepare?</label><select id="writeGoal"><option value="update">Update Project</option><option value="scenes">Add Scenes</option><option value="revise">Revise Scene</option><option value="create">Create a Project</option></select></div>
+<div class="field" id="writeToRow"><label for="writeTo">Write to Project</label><select id="writeTo"><option value="interview">The Interview</option><option value="lesson">The Lesson</option></select></div>
+<div id="scopeDifference" class="scopehint none">The selected Write destination differs from the last Read source. Review the target before Apply.</div>
+<div class="context"><span class="eyebrow">Destination — confirmed during review</span><strong id="writeScopeLabel">The Interview</strong><p>This is a proposal only. Director cannot save until you edit and Apply.</p></div>
+<div id="writeReview" class="none review">
+<h4 id="reviewTitle">Review proposed changes</h4>
+<div class="before" id="beforeText">Saved Concept: A tense interrogation.</div>
+<label for="draftText">Proposed complete field</label><textarea id="draftText">A tense interrogation opens with a witness's startling answer, followed by the detective's quiet challenge.</textarea>
+<div class="reviewactions"><button id="cancelReview" type="button">Cancel</button><button id="applyReview" class="primary" type="button">Apply (demo)</button></div>
+</div>
+</div>
+<div class="info" id="status" role="status" aria-live="polite">Choose an action above. This mockup does not communicate with the LLM.</div>
+</div>
+<section class="assessment" aria-label="Advisory creative assessment"><h3>Creative assessment · sample</h3>
+<details><summary><span class="checkmark">☑</span>Project · Concept</summary><p>The conflict is established by the witness's unexpected answer, with the detective's controlled reaction carrying the dramatic focus. This is an advisory proposal, not saved content.</p></details>
+<details><summary><span class="emptycheck">□</span>Scene 1 · Dialogue · needs development</summary><p>Propose the witness's precise first sentence and the detective's follow-up. The two lines should make the scene intelligible without a separate setup.</p></details>
+<small>Director's opinion, not Take/production status.</small>
+</section>
+<div class="railfoot" id="railFoot"><span class="fieldcount" id="selectedCount">Read or Write</span><button class="primary" type="button" id="actionButton">Choose action</button></div>
+</aside>
+</main>
+<script>
+(function(){
+'use strict';
+var data={
+interview:{name:'The Interview',fields:{'project.concept':'The detective confronts a reluctant witness.','project.style':'Intimate noir lighting.','project.invariants':'Detective wears a worn grey coat.'},scenes:[{id:'opening',name:'Scene 1 · The Question',fields:{summary:'Witness answers a dangerous question.',prompt:'A close, tense interview.'}}]},
+lesson:{name:'The Lesson',fields:{'project.concept':'A piano student learns by trial and error.','project.style':'Warm late-afternoon studio light.','project.invariants':'Old upright piano.'},scenes:[{id:'keys',name:'Scene 1 · First Notes',fields:{summary:'Student starts playing immediately.',prompt:'Hands on piano keys in warm light.'}}]}
+};
+var state={mode:'',read:'interview',write:'interview',lastRead:null,goal:'update',selection:new Set(['project.concept','project.style','scene:opening:summary']),review:false,applied:false};
+var id=x=>document.getElementById(x);
+var names={'project.concept':'Concept','project.style':'Visual / atmosphere','project.invariants':'Invariants',summary:'Intent',prompt:'H3 Prompt'};
+var setText=(x,v)=>id(x).textContent=v;
+function choose(mode){state.mode=mode;state.review=false;id('readPanel').classList.toggle('none',mode!=='read');id('writePanel').classList.toggle('none',mode!=='write');id('idle').classList.toggle('none',!!mode);id('tabRead').setAttribute('aria-pressed',String(mode==='read'));id('tabWrite').setAttribute('aria-pressed',String(mode==='write'));setText('railTitle',mode==='read'?'Read saved material':mode==='write'?'Write reviewed changes':'Director actions');id('writeReview').classList.add('none');render();}
+function render(){var active=data[state.read];setText('readSourceLabel',active.name);setText('writeScopeLabel',state.goal==='create'?'New Project':data[state.write].name);id('writeToRow').classList.toggle('none',state.goal==='create');id('scopeDifference').classList.toggle('none',state.lastRead===null||state.write===state.lastRead||state.goal==='create');renderFields();if(state.mode==='read'){setText('selectedCount',state.selection.size+' fields');setText('actionButton','Send '+state.selection.size+' fields');}else if(state.mode==='write'){setText('selectedCount','Reviewed operation');setText('actionButton','Prepare review');}else{setText('selectedCount','No automatic reads');setText('actionButton','Read saved fields');}}
+function checkbox(k,label){var row=document.createElement('label');row.className='checkrow';var input=document.createElement('input');input.type='checkbox';input.checked=state.selection.has(k);input.onchange=function(){input.checked?state.selection.add(k):state.selection.delete(k);updateCount();};row.append(input,document.createTextNode(label));return row;}
+function renderFields(){var f=id('projectFields'),s=id('sceneFields');f.replaceChildren();s.replaceChildren();var proj=data[state.read];Object.keys(proj.fields).forEach(k=>f.appendChild(checkbox(k,names[k])));proj.scenes.forEach(scene=>{var d=document.createElement('details');d.className='group';var t=document.createElement('summary');t.textContent=scene.name;d.appendChild(t);Object.keys(scene.fields).forEach(k=>d.appendChild(checkbox('scene:'+scene.id+':'+k,names[k])));s.appendChild(d);});updateCount();}
+function snapshot(){var p=data[state.read],items=[];state.selection.forEach(k=>{if(k.startsWith('project.')&&Object.prototype.hasOwnProperty.call(p.fields,k))items.push({id:k,value:p.fields[k]});else if(k.startsWith('scene:')){var a=k.split(':'),scene=p.scenes.find(x=>x.id===a[1]);if(scene&&Object.prototype.hasOwnProperty.call(scene.fields,a[2]))items.push({id:k,value:scene.fields[a[2]]});}});return {sourceProject:p.name,fields:items};}
+function updateCount(){if(state.mode==='read'){setText('selectedCount',snapshot().fields.length+' fields');setText('actionButton','Send '+snapshot().fields.length+' fields');}setText('readPreview',JSON.stringify(snapshot(),null,2));}
+function message(who,body,cls){var e=document.createElement('div');e.className=cls==='event'?'event success':'message '+(who==='You'?'you':'');var label=document.createElement('div');label.className=cls==='event'?'':'who';label.textContent=who;var p=document.createElement('p');p.textContent=body;e.append(label,p);id('messages').appendChild(e);id('messages').scrollTop=id('messages').scrollHeight;}
+function action(){if(state.mode==='read'){var snap=snapshot();if(!snap.fields.length){setText('status','Choose at least one saved field.');return;}state.lastRead=state.read;message('You · Read example',snap.fields.map(x=>x.id).join(', '),'event');message('Director · illustrative acknowledgement','RECEIVED: '+snap.fields.map(x=>x.id).join(', ')+' — This is sample UI text, not an actual LLM reply.');setText('status','Demo: field names shown in the conversation. Live WebCap must validate the actual model response.');choose('');}else if(state.mode==='write'){state.review=true;id('writeReview').classList.remove('none');setText('reviewTitle',state.goal==='create'?'Create a new Project (demo)':'Review '+(state.goal==='revise'?'Scene':state.goal==='scenes'?'new Scenes':'Project Concept')+' · '+(state.goal==='create'?'New Project':data[state.write].name));setText('status','Editing proposal; nothing has been saved.');}else choose('read');}
+id('tabRead').onclick=()=>choose(state.mode==='read'?'':'read');id('tabWrite').onclick=()=>choose(state.mode==='write'?'':'write');
+id('readSource').onchange=e=>{state.read=e.target.value;state.selection=new Set(['project.concept']);render();};
+id('writeTo').onchange=e=>{state.write=e.target.value;render();};
+id('writeGoal').onchange=e=>{state.goal=e.target.value;render();};
+id('actionButton').onclick=action;
+id('cancelReview').onclick=()=>{id('writeReview').classList.add('none');state.review=false;setText('status','Review canceled. Nothing saved.');};
+id('applyReview').onclick=()=>{id('writeReview').classList.add('none');state.review=false;state.applied=true;var destination=state.goal==='create'?'New Project':data[state.write].name;message('WebCap · illustrative Apply','Sample saved result: '+destination+'. Actual WebCap must perform an authoritative reviewed Apply.','event');setText('status','Demo Apply result only; real Undo must be linked to actual reversible changes.');choose('');};
+id('sendChat').onclick=()=>{var text=id('compose').value.trim();if(!text)return;message('You',text);id('compose').value='';message('Prototype notice','No LLM is connected. This mock illustrates chat persistence beside actions.');};
+id('mobileActions').onclick=()=>id('rail').classList.add('open');id('railClose').onclick=()=>id('rail').classList.remove('open');id('history').onclick=()=>setText('status','Illustration only; actual saved conversation history stays in WebCap.');id('fresh').onclick=()=>{setText('status','New chat is a separate real application action. This prototype preserves the sample.');};render();
+})();
+</script>
+</body>
+</html>

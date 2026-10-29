@@ -150,7 +150,7 @@ def _validate_readiness(value):
     if (not isinstance(read_hints, list) or len(read_hints) > 15
             or any(not isinstance(hint, str) or len(hint) > 120 for hint in read_hints)):
         raise ValueError("Studio Read recommendations are invalid.")
-    if value["writeHint"] not in {"", "project", "new-project", "scene", "scenes", "scene-edit", "scenes-batch", "scene-move", "scene-duplicate", "scene-split", "playbook"}:
+    if value["writeHint"] not in {"", "project", "new-project", "scene", "scenes", "scene-edit", "scenes-batch", "scene-move", "scene-duplicate", "scene-split", "scene-invariants", "playbook"}:
         raise ValueError("Studio Write recommendation is invalid.")
     if not isinstance(value["sceneId"], str) or len(value["sceneId"]) > 160:
         raise ValueError("Studio Scene recommendation is invalid.")

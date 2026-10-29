@@ -8,7 +8,7 @@
   var sceneFields = ['summary', 'prompt', 'title'];
   var projectFields = ['title', 'concept', 'style', 'invariants'];
   var labels = {title:'Title', concept:'Concept', style:'Visual / atmosphere',
-    invariants:'Invariants', invariant:'Invariant', summary:'Intent', prompt:'H3 Prompt',
+    invariants:'Invariants', invariant:'Invariant', scene:'New Scene', summary:'Intent', prompt:'H3 Prompt',
     references:'Reference frames', durationSeconds:'Duration',
     generationSettings:'Generation settings'};
   function el(id) { return document.getElementById(id); }
@@ -399,7 +399,7 @@
   }
 
   function reviewCreativeCapture(capture) {
-    if (!capture || !capture.content || !['title','concept','style','summary','prompt','invariant'].includes(capture.field))
+    if (!capture || !capture.content || !['title','concept','style','summary','prompt','invariant','scene'].includes(capture.field))
       throw new Error('No valid authored material is ready for review.');
     if (!window.studioDirectorBridge.isReady())
       throw new Error('Director must be available before starting a reviewed change.');
@@ -408,6 +408,12 @@
     if (!id) {
       status('Choose a destination Project in Write, then review this suggestion.', false);
       openWriteForCapture();
+      return;
+    }
+    if (capture.field === 'scene') {
+      window.studioDirectorBridge.reviewSceneCapture(capture,id).catch(function (error) {
+        status('Creative Scene creation review failed: ' + String(error.message || error),true);
+      });
       return;
     }
     if (['title','concept','style','invariant'].indexOf(capture.field) !== -1) {
@@ -886,14 +892,15 @@
       if (capture) {
         var isInvariant = capture.field === 'invariant';
         var expectedKeys = isInvariant ? 'beforeKind,beforeTitle,content,field,kind,sceneId,title' :
-          'content,field,sceneId';
+          capture.field === 'scene' ? 'content,field,sceneId,title' : 'content,field,sceneId';
         if (typeof capture !== 'object' || Array.isArray(capture) ||
             Object.keys(capture).sort().join(',') !== expectedKeys ||
-            ['title','concept','style','summary','prompt','invariant'].indexOf(capture.field) === -1 ||
+            ['title','concept','style','summary','prompt','invariant','scene'].indexOf(capture.field) === -1 ||
             typeof capture.content !== 'string' || !capture.content.trim() || capture.content.length > 20000 ||
             typeof capture.sceneId !== 'string' || capture.sceneId.length > 160 ||
-            (['title','concept','style','invariant'].indexOf(capture.field) !== -1 && capture.sceneId) ||
+            (['title','concept','style','invariant','scene'].indexOf(capture.field) !== -1 && capture.sceneId) ||
             (['summary','prompt'].indexOf(capture.field) !== -1 && !capture.sceneId) ||
+            (capture.field === 'scene' && (typeof capture.title !== 'string' || capture.title.length > 240)) ||
             (isInvariant && (
               ['character','location','visual','world','sound','custom'].indexOf(capture.kind) === -1 ||
               typeof capture.title !== 'string' || !capture.title.trim() || capture.title.length > 240 ||

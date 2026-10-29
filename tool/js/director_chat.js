@@ -2670,7 +2670,8 @@
         'OPTIONAL CREATIVE CAPTURE: Only when you have a COMPLETE, author-acceptable final field value ' +
         'already developed in this reply or the ongoing conversation, you may add one capture object ' +
         '{field, content, sceneId} to the same readiness JSON. field is title, concept, style, ' +
-        'summary, prompt or invariant; content is the COMPLETE replacement field text, not an instruction or summary; ' +
+        'summary, prompt, invariant or scene; content is COMPLETE authored material, not a vague instruction. ' +
+        'For scene, content is the complete Scene Intent for a NEW tentative Scene, title is optional and sceneId empty; ' +
         'sceneId is the exact known saved Scene ID for Scene fields, otherwise empty. ' +
         'For field invariant include kind (character/location/visual/world/sound/custom), title, ' +
         'beforeKind and beforeTitle along with field/content/sceneId; use beforeKind/beforeTitle only ' +
@@ -3735,6 +3736,40 @@
         };
         showStudioBriefReview();
         studioActionStatus('Review the developed ' + capture.field + ' without another model request.',false);
+      }).finally(function () {
+        state.pending = false;
+        syncControls();
+      });
+    },
+    reviewSceneCapture: function (capture, storyId) {
+      if (!this.isReady()) return Promise.reject(new Error('Director is busy or unavailable.'));
+      if (!storyId || !capture || capture.field !== 'scene' ||
+          typeof capture.content !== 'string' || !capture.content.trim() ||
+          typeof capture.title !== 'string') {
+        return Promise.reject(new Error('Choose a Project and a complete tentative Scene Intent.'));
+      }
+      if (state.studioSceneProposal) {
+        return Promise.reject(new Error('An unfinished Scene draft exists. Finish or discard it first.'));
+      }
+      state.pending = true;
+      syncControls();
+      return Promise.resolve().then(function () {
+        return window.flushStudioDirectorStoryEdits(storyId);
+      }).then(function () {
+        return requestJson('/fs/storyboard?story=' + encodeURIComponent(storyId));
+      }).then(function (payload) {
+        var story = payload.story;
+        if (!story || story.id !== storyId) throw new Error('Selected Project is unavailable.');
+        state.studioStoryAccess = {storyId:storyId,label:story.title || storyId};
+        state.studioSceneProposal = {
+          storyId:storyId, storyTitle:story.title, expectedUpdatedAt:story.updatedAt,
+          sceneOrder:(story.sceneOrder || []).slice(), scenes:story.scenes,
+          title:capture.title, summary:capture.content,
+          rationale:'Director developed this Scene Intent in conversation. Select a position and review.',
+          placement:'end'
+        };
+        showStudioSceneDraftReview();
+        studioActionStatus('Review the developed Scene without another model request.',false);
       }).finally(function () {
         state.pending = false;
         syncControls();

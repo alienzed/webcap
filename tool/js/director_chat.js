@@ -2567,15 +2567,6 @@
     });
   }
 
-  function parseStudioCaptureRequest(text) {
-    var value = String(text || '').trim();
-    if (value === '[[WEBCAP_PREPARE:fields]]') return true;
-    if (value.indexOf('[[WEBCAP_PREPARE:') !== -1) {
-      throw new Error('Director returned an invalid capture request.');
-    }
-    return false;
-  }
-
   function storyboardRequestMessages(messages, includePrimer) {
     var context = includePrimer === false ? [] : [STORYBOARD_WORKSHOP_PRIMER];
     if (state.workshop) {
@@ -3014,7 +3005,6 @@
 
     var startedAt = performance.now();
     var requestError = null;
-    var pendingCapture = false;
     // Commit the user's words BEFORE asking the model. A refresh or failed
     // inference can never discard the user's last sent message.
     var saved = persistentMode(activeChatMode) ? persistSession(activeChatMode) : Promise.resolve();
@@ -3054,11 +3044,6 @@
         // Do not allow model-generated hidden read tokens or private continuation.
         return result;
       }).then(function (result) {
-        if (activeChatMode === 'storyboard' && parseStudioCaptureRequest(result.text)) {
-          // A model proposal request is operational control, not assistant dialogue.
-          pendingCapture = true;
-          return;
-        }
         if (activeChatMode === 'storyboard' && state.pendingReadAck) {
           var expected = state.pendingReadAck;
           state.pendingReadAck = null;
@@ -3136,11 +3121,6 @@
       renderMessages();
       syncControls();
       if (input) input.focus();
-      if (pendingCapture && !requestError) {
-        // The author's explicit request starts only a reviewed, private proposal.
-        if (studioAttachedStoryId()) prepareStudioBrief();
-        else prepareStudioProject();
-      }
     });
   }
 

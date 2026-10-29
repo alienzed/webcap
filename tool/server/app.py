@@ -70,6 +70,7 @@ from .director_chat_history import create_chat as create_director_chat, delete_c
 from .storyboard_store import add_tentative_scene_at as storyboard_add_tentative_scene_at, add_tentative_scenes_at as storyboard_add_tentative_scenes_at, create_studio_project as storyboard_create_studio_project, apply_studio_brief as storyboard_apply_studio_brief, undo_studio_brief as storyboard_undo_studio_brief
 from .storyboard_store import add_scene as storyboard_add_scene, add_take_upload as storyboard_add_take_upload, apply_developed_plan as storyboard_apply_developed_plan, clear_scene_reference as storyboard_clear_scene_reference, create_story as storyboard_create_story, delete_scene as storyboard_delete_scene, delete_story as storyboard_delete_story, delete_take as storyboard_delete_take, duplicate_scene as storyboard_duplicate_scene, duplicate_story as storyboard_duplicate_story, list_stories as storyboard_list_stories, load_story as storyboard_load_story, label_take as storyboard_label_take, rate_take as storyboard_rate_take, remove_take as storyboard_remove_take, reorder_scenes as storyboard_reorder_scenes, resolve_story_media as storyboard_resolve_media, restore_previous_concept as storyboard_restore_previous_concept, restore_previous_prompt as storyboard_restore_previous_prompt, restore_scene as storyboard_restore_scene, restore_scene_repairs as storyboard_restore_scene_repairs, restore_take as storyboard_restore_take, select_take as storyboard_select_take, set_scene_reference_from_take as storyboard_set_scene_reference_from_take, set_scene_reference_upload as storyboard_set_scene_reference_upload, update_scene as storyboard_update_scene, update_story as storyboard_update_story
 from .storyboard_store import apply_reviewed_story_guidelines as storyboard_apply_reviewed_story_guidelines
+from .storyboard_store import apply_studio_scene_fields as storyboard_apply_studio_scene_fields
 from .storyboard_generation import generation_action as storyboard_generation_action, generation_capabilities as storyboard_generation_capabilities, generation_queue as storyboard_generation_queue, generation_status as storyboard_generation_status, start_generation as storyboard_start_generation, regenerate_take as storyboard_regenerate_take
 from .storyboard_assembly import current_export as storyboard_current_export, export_selected_sequence as storyboard_export_selected_sequence
 from .storyboard_archive import archive_preview as storyboard_archive_preview, archive_story as storyboard_archive_story
@@ -1939,6 +1940,31 @@ def studio_director_story_read_route():
         return jsonify({"ok": False, "error": str(exc)}), 404
     except Exception as exc:
         app.logger.exception("STUDIO STORY SCOPED READ FAILED: %s", exc)
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
+@app.route("/fs/studio/director/scene-fields", methods=["POST"])
+def studio_director_scene_fields_route():
+    """Apply only explicitly reviewed Scene text, checking exact saved originals."""
+    data = request.get_json(silent=True) or {}
+    try:
+        if not isinstance(data, dict) or set(data) != {"storyId", "sceneId", "expected", "changes"}:
+            raise ValueError("Scene revision requires target Scene, selected fields and expected originals.")
+        story_id = str(data["storyId"] or "").strip()
+        scene_id = str(data["sceneId"] or "").strip()
+        if not story_id or not scene_id:
+            raise ValueError("Select a specific saved Project and Scene.")
+        if (llm_storyboard_story_busy(story_id) or
+                llm_storyboard_target_busy(story_id, "scenes")):
+            raise ValueError("Wait for pending Director changes before applying the Scene revision.")
+        with storyboard_mutation_lock:
+            story, scene = storyboard_apply_studio_scene_fields(
+                story_id, scene_id, data["expected"], data["changes"])
+        return jsonify({"ok": True, "story": story, "scene": scene})
+    except FileNotFoundError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 404
+    except Exception as exc:
+        app.logger.exception("STUDIO SCENE FIELD APPLY FAILED: %s", exc)
         return jsonify({"ok": False, "error": str(exc)}), 400
 
 

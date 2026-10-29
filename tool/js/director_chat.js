@@ -1149,7 +1149,7 @@
   function recordStudioOperation(kind, label, storyId, sceneIds) {
     state.studioOperations.push({
       kind: kind, label: String(label || '').slice(0, 200), storyId: String(storyId || ''),
-      sceneIds: (sceneIds || []).slice(0, 8), at: new Date().toISOString()
+      sceneIds: (sceneIds || []).slice(0, 32), at: new Date().toISOString()
     });
     state.studioOperations = state.studioOperations.slice(-25);
     if (state.studioStoryAccess && state.studioStoryAccess.storyId === String(storyId || '')) {
@@ -1435,7 +1435,7 @@
       throw new Error('Project proposal must contain Concept, Style, optional Invariants, and an optional first Scene.');
     }
     if (proposal.firstScenes != null && (!Array.isArray(proposal.firstScenes) ||
-        proposal.firstScenes.length > 12 || proposal.firstScenes.some(function (item) {
+        proposal.firstScenes.length > 32 || proposal.firstScenes.some(function (item) {
           return !item || typeof item.title !== 'string' || typeof item.summary !== 'string' ||
             !item.summary.trim();
         }))) throw new Error('Project contains invalid initial Scene drafts.');
@@ -1539,7 +1539,7 @@
       task: 'Extract only the agreed creative direction into ONE new Studio Project. ' +
         'Provide an editable title (may be blank), concise Concept including the core appeal, ' +
         'optional Style, and only essential Invariants. Include firstScenes when concrete tentative ' +
-        'clips have emerged; propose as many Scenes as actually developed (up to twelve), ' +
+        'clips have emerged; propose as many Scenes as actually developed (up to 32), ' +
         'and do not fabricate extra Scenes to fill a count. It is fine to have zero Scenes. ' +
         'Do not invent a fixed Scene count or prepare a generation prompt. ' +
         'Use a short rationale. Nothing should be created yet.',
@@ -1608,8 +1608,8 @@
       el('studio-project-error').textContent = 'Describe every selected Scene or remove the empty one.';
       return;
     }
-    if (firstScenes.length > 12) {
-      el('studio-project-error').textContent = 'A new Project can include up to twelve Scenes.';
+    if (firstScenes.length > 32) {
+      el('studio-project-error').textContent = 'One new Project review can include up to 32 Scenes.';
       return;
     }
     if (firstScenes.length) proposal.firstScenes = firstScenes;
@@ -1901,12 +1901,12 @@
     try { result = JSON.parse(value); }
     catch (error) { throw new Error('Director returned invalid Scene sequence JSON: ' + error.message); }
     if (!result || typeof result !== 'object' || Array.isArray(result) ||
-        !Array.isArray(result.scenes) || result.scenes.length < 1 || result.scenes.length > 8 ||
+        !Array.isArray(result.scenes) || result.scenes.length < 1 || result.scenes.length > 32 ||
         typeof result.rationale !== 'string' || result.scenes.some(function (item) {
           return !item || typeof item !== 'object' || Array.isArray(item) ||
             typeof item.title !== 'string' || typeof item.summary !== 'string' || !item.summary.trim();
         })) {
-      throw new Error('Director must return one to eight titled/described Scenes and a rationale.');
+      throw new Error('Director must return one to 32 titled/described Scenes and a rationale.');
     }
     return result;
   }
@@ -2000,9 +2000,9 @@
       if (!story || story.id !== storyId) throw new Error('Attached Project is no longer available.');
       var order = (story.sceneOrder || []).slice();
       var input = {
-        task: 'Extract between one and eight distinct tentative Scenes from the agreed discussion. ' +
+        task: 'Extract up to 32 distinct tentative Scenes from the agreed discussion. ' +
           'Keep each Scene independently generatable and preserve the core appeal. ' +
-          'Use as many Scenes as the author explicitly requested, up to eight; otherwise ' +
+          'Use as many Scenes as the author explicitly requested, up to 32 per review; otherwise ' +
           'select a modest number that fits the discussion. Return title, concise specific ' +
           'what-happens description, and brief rationale. Do not write H3 prompts or modify existing Scenes.',
         project: {
@@ -3322,8 +3322,8 @@
     el('director-studio-undo-brief').onclick = undoStudioBrief;
     el('studio-project-add-scene').onclick = function () {
       if (el('studio-project-extra-scenes').children.length +
-          (el('studio-project-include-scene').checked ? 1 : 0) >= 12) {
-        el('studio-project-error').textContent = 'At most twelve initial Scenes.';
+          (el('studio-project-include-scene').checked ? 1 : 0) >= 32) {
+        el('studio-project-error').textContent = 'At most 32 initial Scenes.';
         return;
       }
       addStudioProjectExtraScene({title:'',summary:''});

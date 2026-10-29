@@ -1,3 +1,9 @@
+.studio-blocks-slash{display:flex;flex-direction:column;gap:3px;max-height:230px;overflow-y:auto;padding:7px;margin:4px 0;border:1px solid var(--border,#555);border-radius:9px;background:var(--panel,#202124);color:var(--text,#eee)}
+.studio-blocks-slash.hidden{display:none}
+.studio-blocks-slash-item{display:flex;flex-direction:column;text-align:left;gap:3px;padding:9px 11px;background:transparent;border:1px solid transparent;border-radius:6px;color:inherit;cursor:pointer;font:inherit;font-size:16px}
+.studio-blocks-slash-item.active,.studio-blocks-slash-item:hover{background:rgba(130,145,180,.17);border-color:#707b91}
+.studio-blocks-slash-item small{font-size:13px;opacity:.78}
+.studio-blocks-slash-empty{padding:8px 11px;font-size:14px}
 .studio-blocks-dialog{width:min(960px,94vw);max-height:88vh;border:1px solid var(--border,#555);border-radius:14px;padding:20px;background:var(--panel,#202124);color:var(--text,#eee)}
 .studio-blocks-dialog::backdrop{background:rgba(0,0,0,.6)}
 .studio-blocks-head,.studio-blocks-actions{display:flex;align-items:center;justify-content:space-between;gap:14px}

@@ -368,7 +368,7 @@
       'Recent conversation: ' + JSON.stringify(history),
       'Write a specific useful revision of the selected fields. No markdown.'
     ].join(String.fromCharCode(10));
-    return window.studioDirectorBridge.makeProposal(request).then(function (text) {
+    return window.studioDirectorBridge.makeProposal(request,'studio_scene_field_draft',fields.indexOf('prompt') !== -1).then(function (text) {
       var candidate = parseProposal(text);
       return showSceneReview(story, sceneId, fields, candidate);
     });
@@ -615,7 +615,7 @@
           'Selected Scenes: '+JSON.stringify(selected),
           'Recent creative discussion: '+JSON.stringify(history)
         ].join('\n');
-        return window.studioDirectorBridge.makeProposal(request, 'studio_scene_batch_draft')
+        return window.studioDirectorBridge.makeProposal(request, 'studio_scene_batch_draft', fields.indexOf('prompt') !== -1)
           .then(function (raw) {
             var result = parseProposal(raw);
             if (!Array.isArray(result.scenes) || result.scenes.length !== ids.length)

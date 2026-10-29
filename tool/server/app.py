@@ -2184,7 +2184,7 @@ def director_chat_route():
                 "required": ["scenes", "rationale"],
                 "properties": {
                     "scenes": {
-                        "type": "array", "minItems": 1, "maxItems": 8,
+                        "type": "array", "minItems": 1, "maxItems": 32,
                         "items": {
                             "type": "object", "additionalProperties": False,
                             "required": ["title", "summary"],
@@ -2218,7 +2218,7 @@ def director_chat_route():
                         },
                     },
                     "firstScenes": {
-                        "type": "array", "maxItems": 12,
+                        "type": "array", "maxItems": 32,
                         "items": {
                             "type": "object", "additionalProperties": False,
                             "required": ["title", "summary"],

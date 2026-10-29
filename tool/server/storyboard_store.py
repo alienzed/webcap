@@ -1609,6 +1609,60 @@ def apply_studio_scene_split(story_id, source_id, expected_scene_order,
 
 
 @_serialized_mutation
+def apply_studio_scene_invariant_links(story_id, kind, title, changes):
+    """Review precisely one existing character/location relationship across Scenes.
+
+    Linked identities are the only intended mutation; no creative prose,
+    Scene order, technical controls, Prompt or Takes are changed.
+    """
+    if kind not in {"character", "location"} or not isinstance(title, str) or not title.strip():
+        raise ValueError("Choose a saved Character or Location Invariant.")
+    if not isinstance(changes, list) or not 1 <= len(changes) <= 128:
+        raise ValueError("Choose one to 128 changed Scene associations.")
+    story = load_story(story_id)
+    candidates = [entry for entry in story.get("invariants") or []
+                  if _studio_invariant_key(entry) == (kind, title.strip().casefold())]
+    if len(candidates) != 1:
+        raise RuntimeError("The selected Invariant changed or is not uniquely defined.")
+    target = {"kind": kind, "title": candidates[0]["title"]}
+    key = _studio_invariant_key(target)
+    updated = copy.deepcopy(story)
+    seen = set()
+    saved = {}
+    for entry in changes:
+        if (not isinstance(entry, dict) or set(entry) != {"sceneId", "expectedRefs", "linked"}
+                or not isinstance(entry["sceneId"], str) or not entry["sceneId"]
+                or not isinstance(entry["linked"], bool)
+                or not isinstance(entry["expectedRefs"], list)):
+            raise ValueError("Scene link review needs exact originals and a desired linked state.")
+        scene_id = entry["sceneId"]
+        if scene_id in seen:
+            raise ValueError("Each Scene may be changed only once.")
+        seen.add(scene_id)
+        scene = (updated.get("scenes") or {}).get(scene_id)
+        if not isinstance(scene, dict) or scene_id not in (updated.get("sceneOrder") or []):
+            raise FileNotFoundError("Selected Scene no longer exists: " + scene_id)
+        before = scene.get("invariantRefs") or []
+        if before != entry["expectedRefs"]:
+            raise RuntimeError("Scene Invariant links changed since review: " + scene_id)
+        is_linked = any(_studio_invariant_key(ref) == key for ref in before)
+        if is_linked == entry["linked"]:
+            raise ValueError("The selected Scene link did not change.")
+        after = [copy.deepcopy(ref) for ref in before if _studio_invariant_key(ref) != key]
+        if entry["linked"]:
+            after.append(copy.deepcopy(target))
+        checked = _normalize_scene_invariant_refs(after)
+        if len(checked) != len(after):
+            raise ValueError("Scene links would contain a duplicate Invariant.")
+        scene["invariantRefs"] = checked
+        scene["updatedAt"] = _utc_now()
+        saved[scene_id] = {"before": copy.deepcopy(before), "after": copy.deepcopy(checked)}
+    updated["updatedAt"] = _utc_now()
+    _write_json_atomic(_story_path(story_id), updated)
+    return updated, saved
+
+
+@_serialized_mutation
 def apply_studio_scene_fields_batch(story_id, revisions):
     """Commit one reviewed, field-scoped creative revision across existing Scenes."""
     if not isinstance(revisions, list) or not 1 <= len(revisions) <= 32:

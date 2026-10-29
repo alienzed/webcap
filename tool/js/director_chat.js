@@ -1730,7 +1730,7 @@
     try { result = JSON.parse(value); }
     catch (error) { throw new Error('Director returned invalid Concept / Style / Invariants JSON: ' + error.message); }
     if (!result || typeof result !== 'object' || Array.isArray(result) ||
-        typeof result.concept !== 'string' || typeof result.style !== 'string' ||
+        typeof result.title !== 'string' || typeof result.concept !== 'string' || typeof result.style !== 'string' ||
         typeof result.rationale !== 'string' || !Array.isArray(result.invariants) ||
         result.invariants.length > 30 || result.invariants.some(function (item) {
           return !item || typeof item !== 'object' || Array.isArray(item) ||
@@ -1748,6 +1748,9 @@
     if (!proposal) throw new Error('Prepare Concept, Style and Invariants before reviewing.');
     el('studio-brief-target').textContent = 'Project: ' + (proposal.storyTitle || proposal.storyId);
     el('studio-brief-rationale').textContent = proposal.rationale;
+    el('studio-brief-title-before').textContent = 'Current: ' + (proposal.expected.title || '(untitled)');
+    el('studio-brief-title').value = proposal.draft.title;
+    el('studio-brief-title-selected').checked = proposal.draft.title !== proposal.expected.title;
     el('studio-brief-concept-before').textContent = 'Current: ' + (proposal.expected.concept || '(empty)');
     el('studio-brief-style-before').textContent = 'Current: ' + (proposal.expected.style || '(empty)');
     el('studio-brief-concept').value = proposal.draft.concept;
@@ -1809,10 +1812,10 @@
     }).then(function (payload) {
       var story = payload.story;
       if (!story || story.id !== storyId) throw new Error('Attached Project is unavailable.');
-      var expected = { concept: story.concept, style: story.style, invariants: story.invariants };
+      var expected = { title: story.title, concept: story.concept, style: story.style, invariants: story.invariants };
       var input = {
         task: 'Propose narrowly scoped creative brief changes that the author has actually discussed. ' +
-          'Return the FULL revised Concept, Style and Invariant list as reviewable suggestions. ' +
+          'Return the revised Project title, Concept, Style and FULL Invariant list as reviewable suggestions. ' +
           'Core Appeal stays within Concept. Preserve established details and unrelated facts. ' +
           'Do not change Scenes or prompts. Prefer no change where ideas remain undecided. ' +
           'Any changes must be reviewed by the author before WebCap stores them.',
@@ -1860,6 +1863,7 @@
     var proposal = state.studioBriefProposal;
     if (!proposal || state.pending) return;
     var changes = {};
+    if (el('studio-brief-title-selected').checked) changes.title = el('studio-brief-title').value.trim();
     if (el('studio-brief-concept-selected').checked) changes.concept = el('studio-brief-concept').value.trim();
     if (el('studio-brief-style-selected').checked) changes.style = el('studio-brief-style').value.trim();
     if (el('studio-brief-invariants-selected').checked) {

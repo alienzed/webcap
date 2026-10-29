@@ -1425,7 +1425,12 @@
         ))) {
       throw new Error('Project proposal must contain Concept, Style, optional Invariants, and an optional first Scene.');
     }
-    if (!proposal.concept.trim() && !proposal.firstScene) {
+    if (proposal.firstScenes != null && (!Array.isArray(proposal.firstScenes) ||
+        proposal.firstScenes.length > 12 || proposal.firstScenes.some(function (item) {
+          return !item || typeof item.title !== 'string' || typeof item.summary !== 'string' ||
+            !item.summary.trim();
+        }))) throw new Error('Project contains invalid initial Scene drafts.');
+    if (!proposal.concept.trim() && !proposal.firstScene && !(proposal.firstScenes || []).length) {
       throw new Error('Director needs at least an idea or first Scene to prepare a Project.');
     }
     return proposal;
@@ -1464,6 +1469,22 @@
     host.appendChild(row);
   }
 
+  function addStudioProjectExtraScene(scene) {
+    var host = el('studio-project-extra-scenes');
+    var row = document.createElement('div');
+    row.className = 'studio-project-extra-scene';
+    var title = document.createElement('input'), summary = document.createElement('textarea'),
+      remove = document.createElement('button'), label = document.createElement('strong');
+    label.textContent = 'Additional Scene';
+    title.placeholder = 'Scene title (optional)'; title.value = scene && scene.title || '';
+    title.setAttribute('aria-label', 'Additional Scene title');
+    summary.placeholder = 'What happens';summary.value = scene && scene.summary || '';
+    summary.rows = 3; summary.setAttribute('aria-label', 'Additional Scene intent');
+    remove.type = 'button'; remove.className = 'review-captions-btn';
+    remove.textContent = 'Remove Scene'; remove.onclick = function () {row.remove();};
+    row.append(label, title, summary, remove); host.appendChild(row);
+  }
+
   function showStudioProjectReview() {
     var proposal = state.studioProjectProposal;
     if (!proposal) throw new Error('Prepare a Project before opening review.');
@@ -1475,11 +1496,15 @@
     el('studio-project-error').textContent = '';
     el('studio-project-invariants').replaceChildren();
     proposal.invariants.forEach(addStudioProjectInvariant);
-    el('studio-project-include-scene').checked = !!proposal.firstScene;
+    var initial = proposal.firstScenes || (proposal.firstScene ? [proposal.firstScene] : []);
+    var first = initial[0] || null;
+    el('studio-project-extra-scenes').replaceChildren();
+    initial.slice(1).forEach(addStudioProjectExtraScene);
+    el('studio-project-include-scene').checked = !!first;
     el('studio-project-continue').checked = true;
-    el('studio-project-first-scene-fields').classList.toggle('hidden', !proposal.firstScene);
-    el('studio-project-scene-title').value = proposal.firstScene ? proposal.firstScene.title : '';
-    el('studio-project-scene-summary').value = proposal.firstScene ? proposal.firstScene.summary : '';
+    el('studio-project-first-scene-fields').classList.toggle('hidden', !first);
+    el('studio-project-scene-title').value = first ? first.title : '';
+    el('studio-project-scene-summary').value = first ? first.summary : '';
     var dialog = el('studio-project-review');
     if (dialog.open) dialog.close();
     dialog.showModal();
@@ -1504,8 +1529,9 @@
     var input = {
       task: 'Extract only the agreed creative direction into ONE new Studio Project. ' +
         'Provide an editable title (may be blank), concise Concept including the core appeal, ' +
-        'optional Style, and only essential Invariants. Include firstScene only if one concrete ' +
-        'tentative clip has actually emerged. It is fine to have no first Scene or no full outline. ' +
+        'optional Style, and only essential Invariants. Include firstScenes when concrete tentative ' +
+        'clips have emerged; propose as many Scenes as actually developed (up to twelve), ' +
+        'and do not fabricate extra Scenes to fill a count. It is fine to have zero Scenes. ' +
         'Do not invent a fixed Scene count or prepare a generation prompt. ' +
         'Use a short rationale. Nothing should be created yet.',
       discussion: discussion
@@ -1556,17 +1582,29 @@
         kind: fields[0].value, title: fields[1].value.trim(), text: text
       });
     });
+    var firstScenes = [];
     if (el('studio-project-include-scene').checked) {
-      proposal.firstScene = {
+      firstScenes.push({
         title: el('studio-project-scene-title').value.trim(),
         summary: el('studio-project-scene-summary').value.trim()
-      };
-      if (!proposal.firstScene.summary) {
-        el('studio-project-error').textContent = 'Describe the first Scene or uncheck it.';
-        return;
-      }
+      });
     }
-    if (!proposal.concept && !proposal.firstScene) {
+    el('studio-project-extra-scenes').querySelectorAll('.studio-project-extra-scene').forEach(function (row) {
+      firstScenes.push({
+        title: row.querySelector('input').value.trim(),
+        summary: row.querySelector('textarea').value.trim()
+      });
+    });
+    if (firstScenes.some(function (scene) {return !scene.summary;})) {
+      el('studio-project-error').textContent = 'Describe every selected Scene or remove the empty one.';
+      return;
+    }
+    if (firstScenes.length > 12) {
+      el('studio-project-error').textContent = 'A new Project can include up to twelve Scenes.';
+      return;
+    }
+    if (firstScenes.length) proposal.firstScenes = firstScenes;
+    if (!proposal.concept && !firstScenes.length) {
       el('studio-project-error').textContent = 'Describe the idea or include a first Scene.';
       return;
     }
@@ -3299,6 +3337,14 @@
     el('director-studio-prepare-scene').onclick = prepareStudioSceneDraft;
     el('director-studio-prepare-scenes').onclick = prepareStudioScenes;
     el('director-studio-undo-brief').onclick = undoStudioBrief;
+    el('studio-project-add-scene').onclick = function () {
+      if (el('studio-project-extra-scenes').children.length +
+          (el('studio-project-include-scene').checked ? 1 : 0) >= 12) {
+        el('studio-project-error').textContent = 'At most twelve initial Scenes.';
+        return;
+      }
+      addStudioProjectExtraScene({title:'',summary:''});
+    };
     el('studio-brief-close').onclick = function () { el('studio-brief-review').close(); };
     el('studio-brief-discard').onclick = function () { el('studio-brief-review').close(); };
     el('studio-brief-apply').onclick = applyStudioBrief;

@@ -402,8 +402,8 @@
   function reviewCreativeCapture(capture) {
     if (!capture || !capture.content || !['title','concept','style','summary','prompt','invariant','scene'].includes(capture.field))
       throw new Error('No valid authored material is ready for review.');
-    if (!window.studioDirectorBridge.isReady())
-      throw new Error('Director must be available before starting a reviewed change.');
+    if (!window.studioDirectorBridge.canReview())
+      throw new Error('Open the Studio conversation before reviewing this change.');
     var projectSelect = el('studio-dw-write-project');
     var id = projectSelect.value || window.studioDirectorBridge.workingStoryId();
     if (!id) {
@@ -448,6 +448,11 @@
   function writePrepare() {
     var bridge = window.studioDirectorBridge, operation = el('studio-dw-write-operation').value,
       id = el('studio-dw-write-project').value;
+    if (operation === 'scene-move' || operation === 'scene-duplicate') {
+      if (!id) {status('Select a destination Project.', true);return;}
+      prepareStructure(operation, id);
+      return;
+    }
     if (!bridge.isReady()) { status('Open Studio Director and choose a model first.', true);return; }
     if (operation === 'playbook') { preparePlaybook(); return; }
     if (operation !== 'new-project' && !id) { status('Select a destination Project.', true);return; }
@@ -883,14 +888,29 @@
   }
   function setReadinessFreshness(stale) {
     readinessStale = !!stale;
-    var action = el('studio-dw-readiness-list').querySelector('button[data-capture-action]');
-    if (action) action.disabled = readinessStale;
+    Array.from(el('studio-dw-readiness-list').querySelectorAll('button[data-capture-action], button[data-guided-write]'))
+      .forEach(function (action) {action.disabled = readinessStale;});
     var label = el('studio-dw-readiness-freshness');
     label.textContent = readinessStale
       ? (readiness.length ? 'Outdated · latest exchange not assessed' : 'Latest exchange not assessed')
       : (readiness.length ? 'Assessed for latest reply · advisory only' : 'Not assessed yet');
     var empty = el('studio-dw-readiness-list').querySelector('p');
     if (empty) empty.textContent = readinessStale ? 'No current assessment.' : 'Not assessed yet';
+  }
+  function openRecommendedWrite() {
+    var hint = recommendations.writeHint;
+    if (!hint) return;
+    var operation = hint === 'scene' ? 'scenes' : hint;
+    var select = el('studio-dw-write-operation');
+    if (!Array.from(select.options).some(function (item) {return item.value === operation;})) {
+      status('The recommended Studio operation is not available.', true);
+      return;
+    }
+    select.value = operation;
+    writeOperationChosen = true;
+    if (el('studio-dw-write-panel').classList.contains('hidden')) toggle('write');
+    else refreshWrite();
+    status('Director suggested this operation. Choose the exact saved targets, then review.', false);
   }
   function renderReadiness(list) {
     readiness = list;
@@ -906,6 +926,21 @@
       captureButton.title = 'Review Director-authored material in the saved field; no additional model request';
       captureButton.onclick = function () {reviewCreativeCapture(creativeCapture);};
       host.appendChild(captureButton);
+    }
+    if (!creativeCapture && recommendations.writeHint && !readinessStale) {
+      var nextButton = document.createElement('button');
+      nextButton.type = 'button';
+      nextButton.className = 'studio-dw-assessment-item';
+      nextButton.dataset.guidedWrite = 'true';
+      var names = {
+        project:'Update Project', 'new-project':'Create Project', scene:'Add Scene',
+        scenes:'Add Scenes', 'scene-edit':'Revise Scene', 'scenes-batch':'Revise several Scenes',
+        'scene-move':'Move Scene', 'scene-duplicate':'Duplicate Scene',
+        'scene-split':'Split Scene', playbook:'Revise H3 Playbook'
+      };
+      nextButton.textContent = 'Review next step · ' + (names[recommendations.writeHint] || 'Studio Write');
+      nextButton.onclick = openRecommendedWrite;
+      host.appendChild(nextButton);
     }
     if (!list.length) {
       var empty = document.createElement('p');
@@ -967,7 +1002,7 @@
       var list = Array.isArray(result) ? result : result && result.checks;
       var allowed = ['Concept','Characters','Setting','Action','Dialogue','Visual / atmosphere',
         'Visual focus','Structure / formula','Variation / repetition','Production feasibility'];
-      var operations = ['', 'project','new-project','scene','scenes','scene-edit','playbook'];
+      var operations = ['', 'project','new-project','scene','scenes','scene-edit','scenes-batch','scene-move','scene-duplicate','scene-split','playbook'];
       if (!Array.isArray(list) || list.length > 30 ||
           list.some(function (item) {
             return !item || typeof item !== 'object' || Array.isArray(item) ||

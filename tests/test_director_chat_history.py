@@ -318,3 +318,15 @@ def test_studio_scene_capture_is_tentative_conversation_material(sessions):
             "expectedRevision": 1, "title": "Invalid", "messages": [], "draft": "",
             "readiness": {**base, "capture": {**capture, "sceneId": "scene-existing"}},
         })
+
+def test_shipped_scene_operations_are_valid_studio_write_hints(sessions):
+    chat = history.create_chat("storyboard")
+    for revision, hint in enumerate(("scenes-batch", "scene-move", "scene-duplicate", "scene-split")):
+        saved = history.save_chat(chat["id"], {
+            "expectedRevision": revision, "title": "Guided next step", "messages": [],
+            "draft": "", "readiness": {
+                "checks": [], "readHints": [], "writeHint": hint, "sceneId": "",
+            },
+        })
+        assert saved["readiness"]["writeHint"] == hint
+    assert history.open_chat(chat["id"])["revision"] == 4

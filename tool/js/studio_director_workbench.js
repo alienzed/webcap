@@ -82,9 +82,11 @@
       details.appendChild(heading);
       ['title', 'summary', 'prompt', 'references', 'durationSeconds'].forEach(function (field) {
         var path = 'scene:' + id + ':' + field;
+        var current = id === (recommendations.sceneId || activeTarget().sceneId);
         var recommended = recommendations.readHints.indexOf(path) !== -1 ||
-          (id === (recommendations.sceneId || activeTarget().sceneId) &&
-           recommendations.readHints.indexOf('scene.current.' + field) !== -1);
+          (current && recommendations.readHints.indexOf('scene.current.' + field) !== -1) ||
+          (!recommendations.readHints.length && current &&
+           (field === 'summary' || field === 'prompt') && !!scene[field]);
         details.appendChild(fieldCheckbox(path, labels[field], recommended));
         if (recommended) details.open = true;
       });

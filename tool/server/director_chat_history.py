@@ -158,13 +158,30 @@ def _validate_readiness(value):
         raise ValueError("Studio readiness freshness flag must be a boolean.")
     capture = value.get("capture")
     if capture is not None:
-        if (not isinstance(capture, dict) or set(capture) != {"field", "content", "sceneId"}
+        if not isinstance(capture, dict):
+            raise ValueError("Studio creative capture is invalid.")
+        if capture.get("field") == "invariant":
+            if (set(capture) != {"field", "content", "sceneId", "kind", "title", "beforeKind", "beforeTitle"}
+                    or capture["kind"] not in {"character", "location", "visual", "world", "sound", "custom"}
+                    or not isinstance(capture["title"], str) or not capture["title"].strip()
+                    or len(capture["title"]) > 240
+                    or not isinstance(capture["beforeKind"], str)
+                    or not isinstance(capture["beforeTitle"], str)
+                    or len(capture["beforeTitle"]) > 240
+                    or bool(capture["beforeKind"]) != bool(capture["beforeTitle"])
+                    or (capture["beforeKind"] and capture["beforeKind"] not in {
+                        "character", "location", "visual", "world", "sound", "custom"
+                    })
+                    or capture["sceneId"] != ""):
+                raise ValueError("Studio creative capture Invariant identity is invalid.")
+        elif (set(capture) != {"field", "content", "sceneId"}
                 or capture["field"] not in {"title", "concept", "style", "summary", "prompt"}
-                or not isinstance(capture["content"], str) or not capture["content"].strip()
-                or len(capture["content"]) > 20000
                 or not isinstance(capture["sceneId"], str) or len(capture["sceneId"]) > 160
                 or (capture["field"] in {"title", "concept", "style"} and capture["sceneId"])):
             raise ValueError("Studio creative capture is invalid.")
+        if (not isinstance(capture["content"], str) or not capture["content"].strip()
+                or len(capture["content"]) > 20000):
+            raise ValueError("Studio creative capture text is invalid.")
     result = {"checks": checks, "readHints": read_hints,
               "writeHint": value["writeHint"], "sceneId": value["sceneId"]}
     if "stale" in value:

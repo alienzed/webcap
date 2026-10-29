@@ -171,7 +171,7 @@
     writeStory = story;
     var select = el('studio-dw-write-scene');
     select.replaceChildren();
-    if (!story) return;
+    if (!story) { showWriteContext(); return; }
     (story.sceneOrder || []).forEach(function (id, index) {
       var scene = story.scenes && story.scenes[id];
       if (scene) option(select, id, 'Scene ' + (index + 1) + ' · ' + (scene.title || 'Untitled'));
@@ -189,6 +189,7 @@
     return refreshProjects().then(function () {return loadStory(el('studio-dw-write-project').value);})
       .then(renderWriteStory).then(function () {
         if (recommendations.writeHint) el('studio-dw-write-operation').value = recommendations.writeHint;
+        else if (!projects.length) el('studio-dw-write-operation').value = 'new-project';
         setOperation();
       })
       .catch(function (e) { status('Write setup failed: ' + e.message, true); });

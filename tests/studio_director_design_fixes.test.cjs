@@ -45,7 +45,7 @@ test('Read and Write stay distinct; Read persists field choices on panel changes
 
 test('Read preview and outbound values use the same validated field serializer', () => {
   const body=section(rail,'  function readPayload(story, keys) {','  function updateReadSelection() {');
-  const scope={projectFields:['title','concept','style','invariants']};
+  const scope={projectFields:['title','concept','style','invariants'],storyName:story=>story.title};
   vm.createContext(scope);
   vm.runInContext(body,scope);
   const story={id:'p1',title:'The Interview',updatedAt:'now',concept:'A specific premise',

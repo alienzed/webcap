@@ -425,9 +425,11 @@ Its responsibilities are:
 
 It does **not** arbitrate the shared GPU against LLM or Training. Inference exposes only its own Queue/Backlog state and requests the canonical local-GPU owner. There is no built-in cross-lane priority order; ownership is FIFO and lane-sticky as defined in `docs/gpu_coordination_invariants.md`.
 
-**Pause affects execution, not admission.** While the Inference Queue is paused, valid Generate,
-Storyboard Take, and Test requests may still be queued normally. They simply do not become runnable
-local-GPU work until Inference is resumed.
+**Pause affects execution, not admission.** Restart does not automatically resume Inference.
+Submitting new Queue work, or explicitly promoting Backlog to Queue, resumes a manual pause
+without preempting another GPU owner. An execution-error pause remains paused until explicit
+Resume, protecting the preserved failed head job from an unintended retry.
+Deferred Backlog staging and startup recovery are not new Queue submissions.
 
 **Reordering changes priority inside Inference, not meaning.** Moving frozen work earlier or later
 changes only which Inference request would run first when Inference is dispatched. It must not

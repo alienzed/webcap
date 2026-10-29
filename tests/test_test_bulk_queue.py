@@ -62,7 +62,7 @@ def test_100_renditions_preserve_mixed_fifo_manifest_and_frozen_requests(bulk_ro
         assert len(jobs) == 101
         assert all(job["status"] == "queued" for job in jobs.values())
         observed.append(True)
-    monkeypatch.setattr(inference_runner, "start_observer", inspect_start)
+    monkeypatch.setattr(inference_runner, "start_requested_inference", inspect_start)
 
     request, session, status = submit_bulk(bulk_root, count=100)
     assert observed == [True]

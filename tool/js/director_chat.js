@@ -1583,6 +1583,7 @@
     };
     studioDirectorRequestMessages([{ role: 'user', content: JSON.stringify(input) }])
       .then(function (messages) {
+        window.studioDirectorWorkbench.showSentWriteContext('studio_project_draft', messages);
         return requestJson('/fs/director/chat', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ model: state.modelId, operation: 'studio_project_draft', messages: messages })
@@ -1792,6 +1793,7 @@
       };
       return studioDirectorRequestMessages([{ role: 'user', content: JSON.stringify(input) }])
         .then(function (messages) {
+          window.studioDirectorWorkbench.showSentWriteContext('studio_brief_draft', messages);
           return requestJson('/fs/director/chat', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({model: state.modelId, operation: 'studio_brief_draft', messages: messages})
@@ -2053,6 +2055,7 @@
       };
       return studioDirectorRequestMessages([{ role: 'user', content: JSON.stringify(input) }])
         .then(function (messages) {
+          window.studioDirectorWorkbench.showSentWriteContext('studio_scene_sequence_draft', messages);
           return requestJson('/fs/director/chat', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ model: state.modelId, operation: 'studio_scene_sequence_draft', messages: messages })
@@ -2255,6 +2258,7 @@
       };
       return studioDirectorRequestMessages([{ role: 'user', content: JSON.stringify(input, null, 2) }])
         .then(function (messages) {
+          window.studioDirectorWorkbench.showSentWriteContext('studio_scene_draft', messages);
           return requestJson('/fs/director/chat', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -3563,6 +3567,7 @@
       syncControls();
       startProgress();
       return studioDirectorRequestMessages([{role:'user',content:instruction}]).then(function (messages) {
+        window.studioDirectorWorkbench.showSentWriteContext(operation || 'studio_scene_field_draft', messages);
         return requestJson('/fs/director/chat', {
           method:'POST',headers:{'Content-Type':'application/json'},
           body:JSON.stringify({model:state.modelId,operation:operation || 'studio_scene_field_draft',messages:messages})

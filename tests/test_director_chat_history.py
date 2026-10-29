@@ -217,3 +217,39 @@ def test_studio_readiness_rejects_unsupported_dimensions(sessions):
             },
         })
     assert history.open_chat(chat["id"])["revision"] == 0
+
+
+def test_studio_readiness_staleness_survives_reopen_and_legacy_payloads(sessions):
+    chat = history.create_chat("storyboard")
+    base = {
+        "checks": [{"name": "Concept", "scope": "project",
+                    "ready": True, "content": "Central idea is clear."}],
+        "readHints": ["project.concept"], "writeHint": "project", "sceneId": "",
+    }
+    saved = history.save_chat(chat["id"], {
+        "expectedRevision": 0, "title": "Developing", "messages": [],
+        "draft": "", "readiness": {**base, "stale": True},
+    })
+    assert saved["readiness"]["stale"] is True
+    assert history.open_chat(chat["id"])["readiness"]["checks"] == base["checks"]
+    updated = history.save_chat(chat["id"], {
+        "expectedRevision": 1, "title": "Developing", "messages": [],
+        "draft": "", "readiness": {**base, "stale": False},
+    })
+    assert updated["readiness"]["stale"] is False
+    legacy = history.save_chat(chat["id"], {
+        "expectedRevision": 2, "title": "Developing", "messages": [],
+        "draft": "", "readiness": base,
+    })
+    assert legacy["readiness"] == base
+
+
+def test_studio_readiness_stale_marker_requires_boolean(sessions):
+    chat = history.create_chat("storyboard")
+    with pytest.raises(ValueError, match="freshness"):
+        history.save_chat(chat["id"], {
+            "expectedRevision": 0, "title": "Invalid",
+            "messages": [], "draft": "",
+            "readiness": {"checks": [], "readHints": [],
+                          "writeHint": "", "sceneId": "", "stale": "yes"},
+        })

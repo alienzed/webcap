@@ -1562,6 +1562,49 @@ def apply_studio_scene_fields(story_id, scene_id, expected, changes):
 
 
 @_serialized_mutation
+def apply_studio_scene_fields_batch(story_id, revisions):
+    """Commit one reviewed, field-scoped creative revision across existing Scenes."""
+    if not isinstance(revisions, list) or not 1 <= len(revisions) <= 32:
+        raise ValueError("Review between one and 32 Scene revisions.")
+    story = load_story(story_id)
+    updated = copy.deepcopy(story)
+    seen = set()
+    changed = {}
+    for revision in revisions:
+        if not isinstance(revision, dict) or set(revision) != {"sceneId", "expected", "changes"}:
+            raise ValueError("Each Scene revision needs exact target, saved originals and selected changes.")
+        scene_id = revision["sceneId"]
+        if not isinstance(scene_id, str) or not scene_id or scene_id in seen:
+            raise ValueError("Each Scene may be revised only once per review.")
+        seen.add(scene_id)
+        current = (updated.get("scenes") or {}).get(scene_id)
+        if not isinstance(current, dict) or scene_id not in (updated.get("sceneOrder") or []):
+            raise FileNotFoundError("Selected Scene no longer exists: " + scene_id)
+        expected, changes = revision["expected"], revision["changes"]
+        if (not isinstance(expected, dict) or not isinstance(changes, dict) or not changes
+                or set(expected) != set(changes) or set(changes) - STUDIO_SCENE_FIELDS):
+            raise ValueError("Scene revisions require supported, selected fields and their originals.")
+        if any(not isinstance(value, str) or len(value) > 60000 or
+               not isinstance(expected[field], str) for field, value in changes.items()):
+            raise ValueError("Reviewed Scene text must be bounded strings.")
+        for field, value in changes.items():
+            if str(current.get(field) or "") != expected[field]:
+                raise RuntimeError("Scene " + scene_id + " " + field + " changed since review.")
+            if field == "title" and len(value.strip()) > 240:
+                raise ValueError("Scene title is too long.")
+        clean = {key: value.strip() for key, value in changes.items()}
+        if all(str(current.get(key) or "") == value for key, value in clean.items()):
+            continue
+        updated["scenes"][scene_id] = _normalize_scene(scene_id, clean, existing=current)
+        changed[scene_id] = copy.deepcopy(clean)
+    if not changed:
+        raise ValueError("There are no actual Scene changes to apply.")
+    updated["updatedAt"] = _utc_now()
+    _write_json_atomic(_story_path(story_id), updated)
+    return updated, changed
+
+
+@_serialized_mutation
 def update_scene(story_id, scene_id, payload):
     story = load_story(story_id)
     scenes = story.get("scenes") if isinstance(story.get("scenes"), dict) else {}

@@ -71,6 +71,7 @@ from .storyboard_store import add_tentative_scene_at as storyboard_add_tentative
 from .storyboard_store import add_scene as storyboard_add_scene, add_take_upload as storyboard_add_take_upload, apply_developed_plan as storyboard_apply_developed_plan, clear_scene_reference as storyboard_clear_scene_reference, create_story as storyboard_create_story, delete_scene as storyboard_delete_scene, delete_story as storyboard_delete_story, delete_take as storyboard_delete_take, duplicate_scene as storyboard_duplicate_scene, duplicate_story as storyboard_duplicate_story, list_stories as storyboard_list_stories, load_story as storyboard_load_story, label_take as storyboard_label_take, rate_take as storyboard_rate_take, remove_take as storyboard_remove_take, reorder_scenes as storyboard_reorder_scenes, resolve_story_media as storyboard_resolve_media, restore_previous_concept as storyboard_restore_previous_concept, restore_previous_prompt as storyboard_restore_previous_prompt, restore_scene as storyboard_restore_scene, restore_scene_repairs as storyboard_restore_scene_repairs, restore_take as storyboard_restore_take, select_take as storyboard_select_take, set_scene_reference_from_take as storyboard_set_scene_reference_from_take, set_scene_reference_upload as storyboard_set_scene_reference_upload, update_scene as storyboard_update_scene, update_story as storyboard_update_story
 from .storyboard_store import apply_reviewed_story_guidelines as storyboard_apply_reviewed_story_guidelines
 from .storyboard_store import apply_studio_scene_fields as storyboard_apply_studio_scene_fields
+from .storyboard_store import apply_studio_scene_fields_batch as storyboard_apply_studio_scene_fields_batch
 from .storyboard_store import apply_studio_scene_structure as storyboard_apply_studio_scene_structure
 from .storyboard_generation import generation_action as storyboard_generation_action, generation_capabilities as storyboard_generation_capabilities, generation_queue as storyboard_generation_queue, generation_status as storyboard_generation_status, start_generation as storyboard_start_generation, regenerate_take as storyboard_regenerate_take
 from .storyboard_assembly import current_export as storyboard_current_export, export_selected_sequence as storyboard_export_selected_sequence
@@ -2001,6 +2002,34 @@ def studio_director_scene_structure_route():
         return jsonify({"ok": False, "error": str(exc)}), 400
 
 
+@app.route("/fs/studio/director/scene-fields-batch", methods=["POST"])
+def studio_director_scene_fields_batch_route():
+    """Apply a reviewed set of existing Scene text edits in one Story JSON write."""
+    data = request.get_json(silent=True) or {}
+    try:
+        if not isinstance(data, dict) or set(data) != {"storyId", "revisions"}:
+            raise ValueError("Scene batch review requires exact Project and revisions.")
+        story_id = str(data["storyId"] or "").strip()
+        revisions = data["revisions"]
+        if not story_id or not isinstance(revisions, list):
+            raise ValueError("Choose a saved Project and reviewed Scenes.")
+        if (llm_storyboard_story_busy(story_id)
+                or llm_storyboard_target_busy(story_id, "scenes")
+                or llm_storyboard_target_busy(story_id, "repair")
+                or any(isinstance(item, dict) and
+                       llm_storyboard_target_busy(story_id, "scene-prompt", str(item.get("sceneId") or ""))
+                       for item in revisions)):
+            raise ValueError("Finish pending Studio Director Scene work before applying the revision.")
+        with storyboard_mutation_lock:
+            story, saved = storyboard_apply_studio_scene_fields_batch(story_id, revisions)
+        return jsonify({"ok": True, "story": story, "savedFieldsByScene": saved})
+    except FileNotFoundError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 404
+    except Exception as exc:
+        app.logger.exception("STUDIO SCENE BATCH APPLY FAILED: %s", exc)
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
 @app.route("/fs/studio/director/scene-fields", methods=["POST"])
 def studio_director_scene_fields_route():
     """Apply only explicitly reviewed Scene text, checking exact saved originals."""
@@ -2174,7 +2203,7 @@ def director_chat_route():
         if not isinstance(messages, list) or not messages:
             raise ValueError("Director Chat messages are required.")
         operation = str(data.get("operation") or "freeform_chat").strip()
-        if operation not in {"freeform_chat", "storyboard_workshop_shots", "storyboard_story_guidelines", "studio_scene_draft", "studio_project_draft", "studio_scene_sequence_draft", "studio_brief_draft", "studio_scene_field_draft", "studio_playbook_draft"}:
+        if operation not in {"freeform_chat", "storyboard_workshop_shots", "storyboard_story_guidelines", "studio_scene_draft", "studio_project_draft", "studio_scene_sequence_draft", "studio_brief_draft", "studio_scene_field_draft", "studio_scene_batch_draft", "studio_playbook_draft"}:
             raise ValueError("Unsupported Director Chat operation.")
         contract = {"operation": operation, "messages": messages}
         if operation == "studio_brief_draft":
@@ -2211,6 +2240,21 @@ def director_chat_route():
                     "title": {"type": "string"},
                     "summary": {"type": "string"},
                     "prompt": {"type": "string"},
+                },
+            }
+        if operation == "studio_scene_batch_draft":
+            contract["response_schema"] = {
+                "type": "object", "additionalProperties": False,
+                "required": ["scenes"], "properties": {
+                    "scenes": {"type": "array", "minItems": 1, "maxItems": 32,
+                              "items": {"type": "object", "additionalProperties": False,
+                                        "required": ["sceneId"],
+                                        "properties": {
+                                            "sceneId": {"type": "string"},
+                                            "title": {"type": "string"},
+                                            "summary": {"type": "string"},
+                                            "prompt": {"type": "string"},
+                                        }}}
                 },
             }
         if operation == "studio_scene_sequence_draft":

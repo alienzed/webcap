@@ -545,6 +545,7 @@ test('active enrichment review owns arrows and media shortcuts without stealing 
     document:doc,window:{addEventListener(){}},
     ui:{previewFocusCaptionBtnEl:button(),previewFocusCaptionSkipBtnEl:button()},
     focusedCaptionState:{open:true},captionAssistCandidate:{mediaKey:'item-a'},
+    isCropModalOpen(){return false;},
     captionAssistEnrichmentReviewActive(){return reviewing;},
     captionAssistEnrichmentBlocksMediaShortcut(event){
       return reviewing && !(doc.activeElement && doc.activeElement.isContentEditable) &&

@@ -2654,6 +2654,14 @@
         'scene.current.prompt or known scene:ID:field. Recommend Write only when appropriate; ' +
         'unknown IDs are empty. Include only relevant categories ' +
         'actually supported by this conversation; do not invent facts to complete checkboxes. ' +
+        'OPTIONAL CREATIVE CAPTURE: Only when you have a COMPLETE, author-acceptable final field value ' +
+        'already developed in this reply or the ongoing conversation, you may add one capture object ' +
+        '{field, content, sceneId} to the same readiness JSON. field is title, concept, style, ' +
+        'summary, or prompt; content is the COMPLETE replacement field text, not an instruction or summary; ' +
+        'sceneId is the exact known saved Scene ID for Scene fields, otherwise empty. ' +
+        'Never guess IDs, confuse proposal with saved content, include any field without a clear destination, ' +
+        'or propose a capture for open-ended exploration. Omit capture when not ready; ' +
+        'WebCap will bind it to a freshly selected saved destination and require editable review. ' +
         'Keep the normal reply brief and focus on the author\'s intent.';
       return outbound;
     });
@@ -3657,6 +3665,39 @@
     undoBrief: function () {
       if (!state.studioBriefUndo) throw new Error('No reversible Project brief change exists.');
       undoStudioBrief();
+    },
+    reviewCapture: function (capture, storyId) {
+      if (!this.isReady()) return Promise.reject(new Error('Director is busy or unavailable.'));
+      if (!storyId || !capture || ['title','concept','style'].indexOf(capture.field) === -1 ||
+          typeof capture.content !== 'string' || !capture.content.trim()) {
+        return Promise.reject(new Error('Choose a saved Project and a complete creative field proposal.'));
+      }
+      if (state.studioBriefProposal) {
+        return Promise.reject(new Error('A Project proposal is already being reviewed. Finish or discard it before capturing another.'));
+      }
+      state.pending = true;
+      syncControls();
+      return Promise.resolve().then(function () {
+        return window.flushStudioDirectorStoryEdits(storyId);
+      }).then(function () {
+        return requestJson('/fs/storyboard?story=' + encodeURIComponent(storyId));
+      }).then(function (payload) {
+        var story = payload.story;
+        if (!story || story.id !== storyId) throw new Error('Selected Project is unavailable.');
+        var expected = {title:story.title,concept:story.concept,style:story.style,invariants:story.invariants};
+        var proposed = {title:story.title,concept:story.concept,style:story.style,invariants:story.invariants};
+        proposed[capture.field] = capture.content;
+        state.studioStoryAccess = {storyId:storyId,label:story.title || storyId};
+        state.studioBriefProposal = {
+          storyId:storyId,storyTitle:story.title,expected:expected,draft:proposed,
+          rationale:'Director developed this field in conversation. Review and edit before saving.'
+        };
+        showStudioBriefReview();
+        studioActionStatus('Review the developed ' + capture.field + ' without another model request.',false);
+      }).finally(function () {
+        state.pending = false;
+        syncControls();
+      });
     },
     updateReadiness: function (value) {
       state.studioReadiness = value;

@@ -132,7 +132,7 @@ def _validate_readiness(value):
         return {"checks": [], "readHints": [], "writeHint": "", "sceneId": ""}
     if (not isinstance(value, dict) or
             not {"checks", "readHints", "writeHint", "sceneId"}.issubset(value) or
-            not set(value).issubset({"checks", "readHints", "writeHint", "sceneId", "stale"})):
+            not set(value).issubset({"checks", "readHints", "writeHint", "sceneId", "stale", "capture"})):
         raise ValueError("Studio readiness must contain checks, Read hints and Write hint.")
     checks = value["checks"]
     if not isinstance(checks, list) or len(checks) > 30:
@@ -156,10 +156,21 @@ def _validate_readiness(value):
         raise ValueError("Studio Scene recommendation is invalid.")
     if "stale" in value and not isinstance(value["stale"], bool):
         raise ValueError("Studio readiness freshness flag must be a boolean.")
+    capture = value.get("capture")
+    if capture is not None:
+        if (not isinstance(capture, dict) or set(capture) != {"field", "content", "sceneId"}
+                or capture["field"] not in {"title", "concept", "style", "summary", "prompt"}
+                or not isinstance(capture["content"], str) or not capture["content"].strip()
+                or len(capture["content"]) > 20000
+                or not isinstance(capture["sceneId"], str) or len(capture["sceneId"]) > 160
+                or (capture["field"] in {"title", "concept", "style"} and capture["sceneId"])):
+            raise ValueError("Studio creative capture is invalid.")
     result = {"checks": checks, "readHints": read_hints,
               "writeHint": value["writeHint"], "sceneId": value["sceneId"]}
     if "stale" in value:
         result["stale"] = value["stale"]
+    if capture is not None:
+        result["capture"] = capture
     return result
 
 

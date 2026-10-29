@@ -2114,7 +2114,7 @@ def director_chat_route():
         if not isinstance(messages, list) or not messages:
             raise ValueError("Director Chat messages are required.")
         operation = str(data.get("operation") or "freeform_chat").strip()
-        if operation not in {"freeform_chat", "storyboard_workshop_shots", "storyboard_story_guidelines", "studio_scene_draft", "studio_project_draft", "studio_scene_sequence_draft", "studio_brief_draft"}:
+        if operation not in {"freeform_chat", "storyboard_workshop_shots", "storyboard_story_guidelines", "studio_scene_draft", "studio_project_draft", "studio_scene_sequence_draft", "studio_brief_draft", "studio_scene_field_draft"}:
             raise ValueError("Unsupported Director Chat operation.")
         contract = {"operation": operation, "messages": messages}
         if operation == "studio_brief_draft":
@@ -2136,6 +2136,15 @@ def director_chat_route():
                         },
                     },
                     "rationale": {"type": "string"},
+                },
+            }
+        if operation == "studio_scene_field_draft":
+            contract["response_schema"] = {
+                "type": "object", "additionalProperties": False, "minProperties": 1,
+                "properties": {
+                    "title": {"type": "string"},
+                    "summary": {"type": "string"},
+                    "prompt": {"type": "string"},
                 },
             }
         if operation == "studio_scene_sequence_draft":

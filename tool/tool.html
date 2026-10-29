@@ -2194,6 +2194,7 @@
                       <option value="scenes">Add Scenes (one or more)</option>
                       <option value="scene-edit">Revise Scene</option>
                       <option value="scenes-batch">Revise several Scenes</option>
+                      <option value="scene-split">Split Scene</option>
                       <option value="scene-move">Move Scene</option>
                       <option value="scene-duplicate">Duplicate Scene</option>
                     </select></label>
@@ -2312,6 +2313,29 @@
               <footer class="studio-scene-draft-footer">
                 <button id="studio-dw-structure-cancel" type="button" class="review-captions-btn">Back to conversation</button>
                 <button id="studio-dw-structure-apply" type="button">Apply reviewed change</button>
+              </footer>
+            </dialog>
+            <dialog id="studio-dw-split-review" class="studio-scene-draft-review" aria-labelledby="studio-dw-split-title">
+              <header class="studio-scene-draft-header"><div><h2 id="studio-dw-split-title">Review Scene split</h2>
+                <p>Two independently renderable Intents. The original Prompt and Takes are preserved, but may need review.</p></div>
+                <button id="studio-dw-split-close" type="button" class="review-captions-btn">Close</button></header>
+              <div class="studio-scene-draft-content">
+                <p id="studio-dw-split-target"></p>
+                <p id="studio-dw-split-before"></p>
+                <label>First Scene Intent (replaces the original Intent)
+                  <textarea id="studio-dw-split-first" rows="6"></textarea>
+                </label>
+                <label>New Scene title
+                  <input id="studio-dw-split-second-title" maxlength="240">
+                </label>
+                <label>New Scene Intent
+                  <textarea id="studio-dw-split-second-summary" rows="6"></textarea>
+                </label>
+                <p id="studio-dw-split-error" role="alert"></p>
+              </div>
+              <footer class="studio-scene-draft-footer">
+                <button id="studio-dw-split-cancel" type="button" class="review-captions-btn">Back to conversation</button>
+                <button id="studio-dw-split-apply" type="button">Apply reviewed split</button>
               </footer>
             </dialog>
             <dialog id="studio-dw-batch-review" class="studio-scene-draft-review" aria-labelledby="studio-dw-batch-title">

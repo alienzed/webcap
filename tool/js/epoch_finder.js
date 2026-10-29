@@ -483,14 +483,13 @@
     var source = (campaign.candidateMap || {})[String(candidate)];
     if (!source) return 'Epoch ' + candidate;
     if (source.sourceType === 'staged') return String(source.fileName || 'Candidate ' + candidate);
-    var run = String(source.runName || (source.runSequence ? 'Run ' + source.runSequence : source.jobId));
-    return run + ' · Epoch ' + source.epoch;
+    return runIdentity(source) + ' · Epoch ' + source.epoch;
   }
   function runIdentity(run) {
     var sequence = String(run.runSequence || '').trim().replace(/^0+(?=\d)/, '');
     var name = String(run.runName || '').trim();
     var identity = sequence ? 'Run ' + sequence : 'Run ' + String(run.jobId).slice(-8);
-    if (name && name !== identity) identity += ' · ' + name;
+    if (name && name.toLowerCase() !== 'run train' && name !== identity) identity += ' · ' + name;
     return identity;
   }
   function runDetails(run) {

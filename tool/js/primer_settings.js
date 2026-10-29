@@ -595,6 +595,22 @@ function getCaptionAssistTagSuggestions(mediaItem) {
   return suggestions.sort(function (a, b) { return a.rank - b.rank; });
 }
 
+// Tag changes from the sidebar and Group controls reuse the current draft.
+// Reconcile and QA tag actions are derived UI, never a reason to rerun a model.
+function syncCaptionAssistTagsForMediaKey(mediaKey) {
+  var item = state && state.currentItem;
+  if (!captionAssistCandidate || !item || item.key !== mediaKey ||
+      captionAssistCandidate.mediaKey !== mediaKey) return;
+  var request = buildCaptionAssistRequest(item);
+  captionAssistCandidate.omittedAssignments = getCaptionAssistOmittedAssignments(
+    mediaKey, captionAssistCandidate.text, request.assignments, request.tags
+  );
+  captionAssistCandidate.omittedCorrections = getCaptionAssistOmittedCorrections(
+    mediaKey, captionAssistCandidate.text, request.assignments, request.tags
+  );
+  syncCaptionAssistCandidateUi();
+}
+
 function refreshCaptionAssistAfterTagMutation(mediaKey, message) {
   var item = state && state.currentItem;
   if (!captionAssistCandidate || !item || item.key !== mediaKey ||

@@ -123,7 +123,7 @@ def test_training_paths_are_quoted_and_must_be_absolute():
     train = shlex.split(plan_h3(DATASET, **changed)["commands"]["train"])
     assert train[train.index("--output_dir") + 1] == changed["output_dir"]
     with pytest.raises(ValueError, match="absolute"):
-        plan_h3(DATASET, **dict(ARGS, python_path="python")])
+        plan_h3(DATASET, **dict(ARGS, python_path="python"))
 
 
 def test_fizgig_checkpoint_request_does_not_touch_diffusion_pipe_sentinel(tmp_path):

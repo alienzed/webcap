@@ -402,8 +402,8 @@
   function reviewCreativeCapture(capture) {
     if (!capture || !capture.content || !['title','concept','style','summary','prompt','invariant','scene'].includes(capture.field))
       throw new Error('No valid authored material is ready for review.');
-    if (!window.studioDirectorBridge.isReady())
-      throw new Error('Director must be available before starting a reviewed change.');
+    if (!window.studioDirectorBridge.canReview())
+      throw new Error('Open the Studio conversation before reviewing this change.');
     var projectSelect = el('studio-dw-write-project');
     var id = projectSelect.value || window.studioDirectorBridge.workingStoryId();
     if (!id) {
@@ -448,6 +448,10 @@
   function writePrepare() {
     var bridge = window.studioDirectorBridge, operation = el('studio-dw-write-operation').value,
       id = el('studio-dw-write-project').value;
+    if ((operation === 'scene-move' || operation === 'scene-duplicate') && id) {
+      prepareStructure(operation, id);
+      return;
+    }
     if (!bridge.isReady()) { status('Open Studio Director and choose a model first.', true);return; }
     if (operation === 'playbook') { preparePlaybook(); return; }
     if (operation !== 'new-project' && !id) { status('Select a destination Project.', true);return; }

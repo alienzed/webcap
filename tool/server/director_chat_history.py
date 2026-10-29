@@ -119,7 +119,7 @@ def _validate_operations(operations):
                 or not item["label"].strip() or len(item["label"]) > 200
                 or not isinstance(item["storyId"], str) or len(item["storyId"]) > 160
                 or not isinstance(item["at"], str) or len(item["at"]) > 45
-                or not isinstance(item["sceneIds"], list) or len(item["sceneIds"]) > 8
+                or not isinstance(item["sceneIds"], list) or len(item["sceneIds"]) > 32
                 or any(not isinstance(scene_id, str) or len(scene_id) > 160 for scene_id in item["sceneIds"])):
             raise ValueError("Studio operation receipt is invalid.")
         result.append({key: item[key] for key in ("kind", "label", "storyId", "sceneIds", "at")})

@@ -705,7 +705,7 @@ def create_studio_project(proposal):
     Stage the complete Story directory on the owning output filesystem. A failed
     validation or pre-publication write never exposes a partial Story.
     """
-    if not isinstance(proposal, dict) or set(proposal) - {"title", "concept", "style", "invariants", "firstScene"}:
+    if not isinstance(proposal, dict) or set(proposal) - {"title", "concept", "style", "invariants", "firstScene", "firstScenes"}:
         raise ValueError("Studio project proposal has unsupported fields.")
     title = proposal.get("title", "")
     concept = proposal.get("concept", "")
@@ -719,23 +719,29 @@ def create_studio_project(proposal):
         raise ValueError("Studio project supports at most 30 invariants.")
 
     first = proposal.get("firstScene")
-    if first is not None:
-        if not isinstance(first, dict) or set(first) != {"title", "summary"}:
-            raise ValueError("Initial Scene must contain only title and summary.")
-        if not isinstance(first["title"], str) or not isinstance(first["summary"], str):
+    many = proposal.get("firstScenes")
+    if first is not None and many is not None:
+        raise ValueError("Use one initial Scene list, not two competing sources.")
+    initial = [first] if first is not None else (many if many is not None else [])
+    if not isinstance(initial, list) or len(initial) > 12:
+        raise ValueError("Project creation supports at most twelve reviewed initial Scenes.")
+    for item in initial:
+        if not isinstance(item, dict) or set(item) != {"title", "summary"}:
+            raise ValueError("Each initial Scene needs only title and summary.")
+        if not isinstance(item["title"], str) or not isinstance(item["summary"], str):
             raise ValueError("Initial Scene title and description must be text.")
-        if not first["summary"].strip() or len(first["summary"]) > 10000 or len(first["title"]) > 240:
-            raise ValueError("Initial Scene needs a short description.")
-    if not concept.strip() and first is None:
+        if not item["summary"].strip() or len(item["summary"]) > 10000 or len(item["title"]) > 240:
+            raise ValueError("Each initial Scene needs a short description.")
+    if not concept.strip() and not initial:
         raise ValueError("Describe the idea or an initial Scene before creating a project.")
 
     story = _normalize_story({
         "title": title, "concept": concept, "style": style,
         "invariants": invariants, "targetSceneCount": None,
     })
-    if first is not None:
+    for item in initial:
         scene_id = _new_id("scene")
-        scene = _normalize_scene(scene_id, first)
+        scene = _normalize_scene(scene_id, item)
         story["scenes"][scene_id] = scene
         story["sceneOrder"].append(scene_id)
 

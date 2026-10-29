@@ -2574,73 +2574,6 @@
     return false;
   }
 
-  function parseStudioReadRequest(text) {
-    var answer = String(text || '').trim();
-    var match = /^\[\[WEBCAP_READ:(brief|index|scene|prompt|takes)(?::([1-9][0-9]{0,2}))?\]\]$/.exec(answer);
-    if (!match) {
-      if (answer.indexOf('[[WEBCAP_READ:') !== -1) {
-        throw new Error('Director returned an invalid Story read request.');
-      }
-      return null;
-    }
-    var field = match[1], number = match[2] ? Number(match[2]) : 0;
-    if ((['scene', 'prompt', 'takes'].indexOf(field) !== -1) !== !!number) {
-      throw new Error('Director Story read request has invalid Scene selection.');
-    }
-    return {field: field, position: number};
-  }
-
-  function resumeStudioAfterRead(messages, command) {
-    if (!state.studioStoryAccess) throw new Error('Director requested Story data without author access.');
-    var locate = command.position
-      ? readStudioStoryScope('index', '').then(function (result) {
-          if (!Array.isArray(result.data) || command.position > result.data.length) {
-            throw new Error('Requested Scene is not in the attached Story.');
-          }
-          return result.data[command.position - 1].id;
-        })
-      : Promise.resolve('');
-    return locate.then(function (sceneId) {
-      return readStudioStoryScope(command.field, sceneId);
-    }).then(function (reading) {
-      var original = messages[messages.length - 1];
-      if (!original || original.role !== 'user') throw new Error('Studio read requires a user question.');
-      // This copy goes ONLY to the second model request, never the saved transcript.
-      var resumed = messages.slice(0, -1).concat([{
-        role: 'user',
-        content: original.content + '\n\n[WEBCAP CURRENT STORY READ — private request context]\n' +
-          JSON.stringify({
-            storyId: reading.storyId, storyUpdatedAt: reading.storyUpdatedAt,
-            field: reading.field, sceneId: reading.sceneId, data: reading.data
-          }) +
-          '\n[END READ]\nAnswer my original question conversationally. Do not repeat the full field data or request more reads.'
-      }]);
-      return studioDirectorRequestMessages(resumed).then(function (outbound) {
-        return requestJson('/fs/director/chat', {
-          method: 'POST', headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({model: state.modelId, messages: outbound})
-        });
-      }).then(function (payload) {
-        if (!payload.job || !payload.job.jobId) throw new Error('Story read continuation did not queue.');
-        state.jobId = String(payload.job.jobId);
-        state.requestDiagnostic = payload.job.request || null;
-        trackTransientLlmJob(payload.job);
-        return waitForJob(payload.job);
-      }).then(function (job) {
-        var result = job.result && typeof job.result === 'object' ? job.result : {};
-        if (parseStudioReadRequest(result.text)) {
-          throw new Error('Director requested another read; only one read per turn is supported.');
-        }
-        var view = el('director-studio-access-data');
-        view.textContent = JSON.stringify(reading.data, null, 2);
-        view.classList.remove('hidden');
-        el('director-studio-access-status').textContent =
-          'Director read ' + reading.field + (reading.sceneId ? ' · ' + reading.sceneId : '') + ' for this reply.';
-        return result;
-      });
-    });
-  }
-
   function storyboardRequestMessages(messages, includePrimer) {
     var context = includePrimer === false ? [] : [STORYBOARD_WORKSHOP_PRIMER];
     if (state.workshop) {
@@ -3115,8 +3048,9 @@
       }).then(function (job) {
         var result = job.result && typeof job.result === 'object' ? job.result : {};
         if (activeChatMode !== 'storyboard') return result;
-        var read = parseStudioReadRequest(result.text);
-        return read ? resumeStudioAfterRead(messages, read) : result;
+        // Explicit Read already placed the selected saved values in the conversation.
+        // Do not allow model-generated hidden read tokens or private continuation.
+        return result;
       }).then(function (result) {
         if (activeChatMode === 'storyboard' && parseStudioCaptureRequest(result.text)) {
           // A model proposal request is operational control, not assistant dialogue.

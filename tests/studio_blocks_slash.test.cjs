@@ -69,7 +69,7 @@ test('type / to search, Enter inserts exact Block text and retains surrounding d
   let stopped=false;
   input.dispatchEvent({type:'keydown',key:'Enter',preventDefault(){},stopImmediatePropagation(){stopped=true;}});
   assert.equal(stopped,true);
-  assert.equal(input.value,'Before A striking opening moment.  after');
+  assert.equal(input.value,'Before A striking opening moment. after');
   assert.equal(host.classList.contains('hidden'),true);
   assert.equal(input.attrs['aria-expanded'],'false');
 });

@@ -1,5 +1,7 @@
 # Studio Director: expert-led side-panel implementation
 
+> **Documentation status (2026-10-29):** Historical implementation plan (2026-10-28). Its earlier status descriptions and future-phase tasks predate later Read/Write and Studio Director merges, including PR #792; do **not** implement its checklists without reconciling current code. The current work is defined in [Studio Director — intention-to-materialization contract](studio-director-materialization-contract.md). The side-panel UX remains a useful layout reference, not a second product roadmap.
+
 Status: implementation sequence. Follow `AGENTS.md`, `docs/filesystem_state_contract.md`, and `docs/gpu_coordination_invariants.md`. This plan updates the design direction of PR #779; verify against current `main` before each phase.
 
 ## Product boundary

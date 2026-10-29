@@ -28,7 +28,7 @@ def test_writer_workshop_uses_existing_h3_prompt_contract_and_user_playbook(monk
     assert len(text) < 6000
 
 
-def test_action_catalog_marks_future_mutations_as_planned():
+def test_action_catalog_tracks_shipped_reviewed_creative_operations():
     by_name = {action["name"]: action for action in ACTIONS}
     assert by_name["conversation.discuss"]["status"] == "available"
     assert by_name["scene.draft"]["status"] == "available"
@@ -36,6 +36,10 @@ def test_action_catalog_marks_future_mutations_as_planned():
     assert by_name["scene.sequence.draft"]["status"] == "available"
     assert by_name["project.brief.propose"]["status"] == "available"
     assert by_name["context.read"]["status"] == "available"
+    for operation in ("creative.capture.review", "scene.batch.revise",
+                      "scene.move", "scene.duplicate", "scene.split"):
+        assert by_name[operation]["status"] == "available"
+    assert "zero to 32" in by_name["project.create"]["description"]
 
 
 def test_studio_guidance_api_is_read_only():
@@ -80,10 +84,10 @@ def test_five_field_contract_has_explicit_ownership_and_review_boundary():
     for phrase in (
         "story.concept", "story.style", "story.invariants",
         "scene.summary", "scene.prompt", "MH3 Take generation",
-        "existing Directing Guidelines",
+        "Legacy Directing Guidelines",
     ):
         assert phrase.casefold() in text.casefold()
-    assert "honor them until separately reviewed" in text
+    assert "not new Studio Director destinations" in text
     assert "reviewed insertion" in text
     assert "conversation alone never edits them" in text
 

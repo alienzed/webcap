@@ -1833,7 +1833,7 @@
           'Do not change Scenes or prompts. Prefer no change where ideas remain undecided. ' +
           'Any changes must be reviewed by the author before WebCap stores them.',
         project: { id: story.id, title: story.title, concept: story.concept,
-          style: story.style, invariants: story.invariants, guidelines: story.guidelines },
+          style: story.style, invariants: story.invariants },
         discussion: discussion
       };
       return studioDirectorRequestMessages([{ role: 'user', content: JSON.stringify(input) }])
@@ -2308,7 +2308,7 @@
           'No generation prompt, new project or existing Scene edits yet.',
         project: {
           id: story.id, title: story.title, concept: story.concept,
-          style: story.style, invariants: story.invariants, guidelines: story.guidelines,
+          style: story.style, invariants: story.invariants,
           currentScenes: order.map(function (id, index) {
             var scene = story.scenes[id];
             return { id: id, position: index + 1, title: scene.title, intent: scene.summary };
@@ -2614,12 +2614,14 @@
     });
   }
 
-  function studioDirectorRequestMessages(messages) {
+  function studioDirectorRequestMessages(messages, includePromptContract) {
     return requestJson('/fs/studio/director/guidance?targetModel=minimax_h3').then(function (payload) {
       if (!payload.system || typeof payload.system !== 'string') {
         throw new Error('Studio Director production guidance is missing.');
       }
       if (!Array.isArray(payload.actions)) throw new Error('Studio Director capability catalog is missing.');
+      if (includePromptContract && (!payload.promptContract || typeof payload.promptContract !== 'string'))
+        throw new Error('H3 prompt-authoring contract is unavailable.');
       var capabilities = payload.actions.map(function (action) {
         return action.name + ' (' + action.status + '): ' + action.description;
       }).join(String.fromCharCode(10));
@@ -2642,6 +2644,8 @@
         '\nWhen choices are clear, offer to review Concept / overview, Visual / atmosphere and Invariants. ' +
         'Keep exploring when they are still tentative; never claim a proposal was saved.\n' +
         outbound[0].content };
+      if (includePromptContract) outbound[0].content +=
+        '\n\nH3 PRODUCTION PROMPT AUTHORING (only for a selected Prompt field):\n' + payload.promptContract;
       return outbound;
     });
   }
@@ -3779,12 +3783,12 @@
       state.studioReadiness = value;
       state.sessionDirty.storyboard = true;
     },
-    makeProposal: function (instruction, operation) {
+    makeProposal: function (instruction, operation, includePromptContract) {
       if (!this.isReady()) return Promise.reject(new Error('Director must be ready to draft.'));
       state.pending = true;
       syncControls();
       startProgress();
-      return studioDirectorRequestMessages([{role:'user',content:instruction}]).then(function (messages) {
+      return studioDirectorRequestMessages([{role:'user',content:instruction}], includePromptContract).then(function (messages) {
         window.studioDirectorWorkbench.showSentWriteContext(operation || 'studio_scene_field_draft', messages);
         return requestJson('/fs/director/chat', {
           method:'POST',headers:{'Content-Type':'application/json'},

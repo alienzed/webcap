@@ -19,7 +19,7 @@ ACTIONS = (
     {"name": "context.read", "status": "available",
      "description": "Author chooses specific saved Project and Scene fields through Read; model acknowledges actual values received."},
     {"name": "project.create", "status": "available",
-     "description": "Draft a reviewed Project with zero to twelve initial tentative Scenes."},
+     "description": "Draft a reviewed Project with zero to 32 initial tentative Scenes."},
     {"name": "project.brief.propose", "status": "available",
      "description": "Propose reviewed Concept, Visual / atmosphere and Invariant changes."},
     {"name": "scene.draft", "status": "available",
@@ -30,8 +30,16 @@ ACTIONS = (
      "description": "Propose and review scoped edits to an existing Scene Title, Intent or H3 Prompt."},
     {"name": "playbook.propose", "status": "available",
      "description": "Propose an editable replacement for existing H3 Playbook guidance; author reviews and applies."},
-    {"name": "scene.move", "status": "planned",
-     "description": "Reorder Scenes with Director assistance; existing Studio manual editing remains available."},
+    {"name": "creative.capture.review", "status": "available",
+     "description": "Offer a complete developed Project field, named Invariant, or Scene Intent for editable review without repeating the LLM draft; WebCap selects and validates the saved target."},
+    {"name": "scene.batch.revise", "status": "available",
+     "description": "Author and review selected text fields across multiple existing Scenes, applied atomically."},
+    {"name": "scene.move", "status": "available",
+     "description": "Author reviews exact Scene order changes; WebCap moves Scenes deterministically without a model request."},
+    {"name": "scene.duplicate", "status": "available",
+     "description": "WebCap duplicates a reviewed Scene setup without copying Takes or deleting anything."},
+    {"name": "scene.split", "status": "available",
+     "description": "Author and review two distinct Scene Intents; WebCap atomically updates the first and inserts a tentative second."},
 )
 
 
@@ -86,8 +94,8 @@ _H3_STUDIO_CORE = (
     "Give practical H3 feedback on whether the action fits 4-15 seconds, using achievable actions and "
     "clear physical transitions. "
 
-    "Existing Directing Guidelines are legacy authored context: preserve populated values "
-    "and honor them until separately reviewed, without creating new guideline fields. "
+    "Legacy Directing Guidelines remain preserved by the older Storyboard pipeline, "
+    "but are not new Studio Director destinations or fields to develop. "
     "Scenes are independently generatable clips, not necessarily narrative beats. "
     "Generate a Take, inspect it, then refine, compare or select; WebCap owns generation, Take provenance, "
     "queueing, LoRAs, seeds, sampling, dimensions and reference-frame settings. "
@@ -95,12 +103,13 @@ _H3_STUDIO_CORE = (
     "A Scene can be tentative without a production prompt or Takes. "
     "The H3 Storyboard generation path validates 4–15 seconds per clip. "
     "Use feasible on-screen actions and clear changing physical states, shot timing, camera behavior, "
-    "dialogue and sound when those details matter. References may improve visual grounding but "
-    "cannot guarantee continuity. Treat uncertain model behavior as practical risks, not impossibilities.\n"
+    "dialogue and sound when those details matter. Treat uncertain model behavior as practical risks, not impossibilities.\n"
     "AVAILABLE AUTHOR-REVIEWED ACTIONS: Review new Project with multiple initial Scenes; "
     "review Concept / overview, Visual / atmosphere and Invariants for an explicitly selected Project; "
     "Prepare a Scene or Prepare Scenes (up to 32) for reviewed insertion (start/between/end); " +
-    "propose reviewed existing Scene Title, Intent or H3 Prompt revisions. "
+    "offer already-developed creative material for direct editable review; " +
+    "propose reviewed existing Scene Title, Intent or H3 Prompt revisions, including a selected multi-Scene revision; " +
+    "move or duplicate Scenes deterministically; propose a reviewed two-Intent Scene split. "
     "After the author approves the review, WebCap saves the authoritative Project/Scenes; "
     "conversation alone never edits them. "
     "Other Storyboard editor/development controls remain separate. "

@@ -43,7 +43,7 @@ function setup(blocks, isStudio) {
   const input=node(), host=node(), calls=[];
   const nodes={'director-chat-input':input,'studio-blocks-slash':host};
   const ctx = new Function('el','api','document','window','Event','report',
-    extract('  function setupSlash() {', '  function bind() {')+'\nreturn setupSlash;')(
+    extract('  function slashMatch(text, caret) {', '  function bind() {')+'\nreturn setupSlash;')(
     id=>nodes[id],
     async ()=>{calls.push('load');return {blocks};},
     {createElement:()=>node()},

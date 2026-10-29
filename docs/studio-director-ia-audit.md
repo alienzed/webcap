@@ -1,5 +1,7 @@
 # Studio Director — Information Architecture Audit → Design Audit Handoff
 
+> **Documentation status (2026-10-29):** This is a dated information-architecture audit, not the present implementation backlog. Some findings were addressed by PRs #788–792. The current intention-to-materialization vision, updated capability matrix, actual gaps and next implementation sequence live in [Studio Director — intention-to-materialization contract](studio-director-materialization-contract.md). Preserve this document as design evidence; verify every historical defect against current `main` before acting.
+
 **Audit date:** 2026-10-28  
 **Code baseline:** `main` after merged PR #783  
 **Status:** IA/content/navigation audit only; no runtime UI changes.  

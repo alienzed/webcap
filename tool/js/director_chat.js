@@ -1236,8 +1236,8 @@
       var composer = el('director-chat-input');
       var instruction = String(composer.value || '').trim();
       if (!instruction) instruction = 'give a concise substantive assessment of this material.';
-      composer.value = '[WEBCAP EXPLICIT PROJECT READ — SAVED FIELD VALUES]\\n' +
-        JSON.stringify(source, null, 2) + '\\n[END WEBCAP READ]\\n\\n' +
+      composer.value = '[WEBCAP EXPLICIT PROJECT READ — SAVED FIELD VALUES]\n' +
+        JSON.stringify(source, null, 2) + '\n[END WEBCAP READ]\n\n' +
         'Acknowledge receipt in your own words, naming the Project and fields actually present. ' +
         'Then ' + (instruction || 'give a concise substantive assessment of this material.');
       el('director-studio-access-status').textContent = 'Read sent to Director. Awaiting the model acknowledgment…';

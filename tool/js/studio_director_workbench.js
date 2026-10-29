@@ -448,7 +448,8 @@
   function writePrepare() {
     var bridge = window.studioDirectorBridge, operation = el('studio-dw-write-operation').value,
       id = el('studio-dw-write-project').value;
-    if ((operation === 'scene-move' || operation === 'scene-duplicate') && id) {
+    if (operation === 'scene-move' || operation === 'scene-duplicate') {
+      if (!id) {status('Select a destination Project.', true);return;}
       prepareStructure(operation, id);
       return;
     }

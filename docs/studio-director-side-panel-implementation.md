@@ -88,3 +88,25 @@ Every phase: inspect current main and changed paths, minimize the diff, run rele
 ## Scope exclusions
 
 No video/Takes visual inspection project, database, automatic Project ingestion, hidden field syncing, background QA scans, hypothetical multi-model orchestration, new intermediate Story/Scene entities, or field explosion. Ideas/Studio Blocks remain an independent feature that Director may explicitly Read later.
+
+## Implementation audit (2026-10-28)
+
+Implemented in the feature branch:
+- **Phase 1:** passive Director opening, reusable split layout with scrollable right action rail and readable controls.
+- **Phase 2:** explicit Project/Scene field selection, fresh saved values at Send, delimited visible conversation event, LLM-authored `RECEIVED:` identifier line checked against exactly selected fields, explicit failure on missing/mismatched receipt; hidden model-read/capture paths retired.
+- **Phase 3:** consolidated Write entry. Existing Project/Scene reviewed dialogs are reused; new existing-Scene Title/Intent/Prompt field-scoped CAS operation and compound multi-Scene Project creation use existing authoritative filesystem stores. Applied final edits appear as authoritative visible conversation events.
+- **Phase 4:** task-aware expert guidance, finite readiness vocabulary with complete draft popovers and contextual wizard hints; checks live in conversation history, not Project fields. Reviewed Playbook replacement uses the existing H3 configuration.
+- **Phase 5:** hidden obsolete Studio Director action rail, one wide conversation plus the dedicated sidebar, selected source preview in Write, responsive styling, and regression tests for storage mutation, readiness, and Playbook.
+
+### Verification performed
+
+- Inspected `AGENTS.md`, the current Project and Scene APIs, chat storage, LLM request assembly, old Studio controls and relevant CSS.
+- Both changed JavaScript files compile successfully via JavaScript function parsing. All static workbench DOM IDs resolve to HTML elements.
+- A mocked DOM/HTTP interaction exercised opening Read, resolving a Project, selecting exact saved field values, sending the payload, opening Write, and inspecting its source preview.
+- Added targeted Python regression tests and a GitHub Actions JavaScript/Python syntax check. This repository did not report a workflow run for the feature branch in the connected session.
+
+**Not verified in this environment:** actual WebCap browser rendering, local Director model acceptance of the receipt/readiness protocol, live H3 generation, or execution of the Python pytest suite. These are runtime acceptance checks, not passed tests. No source data migration or Take generation change was made.
+
+### Compatibility boundary
+
+Existing Story/Scene stable IDs, prompt data, generation settings, Take records and queue invariants remain authoritative. Old persisted fields are retained for compatibility, while replaced Director controls are hidden from the new workspace. A 32-Scene ceiling applies **per reviewed batch only**, not to total Project Scenes.

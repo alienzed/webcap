@@ -2188,6 +2188,7 @@
                       <option value="scene">Create a Scene</option>
                       <option value="scenes">Create several Scenes</option>
                       <option value="scene-edit">Revise existing Scene</option>
+                      <option value="playbook">Improve H3 Playbook</option>
                     </select></label>
                     <label id="studio-dw-write-scene-row" class="hidden">Scene<select id="studio-dw-write-scene"></select></label>
                     <div id="studio-dw-write-fields" class="studio-dw-field-list hidden">
@@ -2254,6 +2255,21 @@
                     </div>
                 </div>
             </aside>
+            <dialog id="studio-dw-playbook-review" class="studio-scene-draft-review" aria-labelledby="studio-dw-playbook-title">
+              <header class="studio-scene-draft-header"><div><h2 id="studio-dw-playbook-title">Review H3 Playbook</h2>
+                <p>Director's proposal is editable. Built-in technical rules remain unchanged.</p></div>
+                <button id="studio-dw-playbook-close" type="button" class="review-captions-btn">Close</button></header>
+              <div class="studio-scene-draft-content">
+                <strong>Saved guidance</strong><pre id="studio-dw-playbook-before"></pre>
+                <label for="studio-dw-playbook-after">Proposed complete Playbook</label>
+                <textarea id="studio-dw-playbook-after" rows="15"></textarea>
+                <p id="studio-dw-playbook-error" role="alert"></p>
+              </div>
+              <footer class="studio-scene-draft-footer">
+                <button id="studio-dw-playbook-cancel" type="button" class="review-captions-btn">Back</button>
+                <button id="studio-dw-playbook-apply" type="button">Apply reviewed Playbook</button>
+              </footer>
+            </dialog>
             <dialog id="studio-dw-scene-review" class="studio-scene-draft-review" aria-labelledby="studio-dw-scene-review-title">
               <header class="studio-scene-draft-header"><div><h2 id="studio-dw-scene-review-title">Review Scene changes</h2>
                 <p>Editable proposals for selected existing fields. Unselected fields and Takes are preserved.</p></div>

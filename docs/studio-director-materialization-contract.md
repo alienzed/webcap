@@ -79,6 +79,14 @@ Legend: **Complete** = deterministic underlying operation and current reviewed S
 | Studio Blocks | Standalone CRUD/copy | No automatic Director integration | **Excluded from first-pass parity** | Copy/paste is adequate; no slash commands or retrieval layer |
 | Reference media, Takes, generation, LoRAs, seeds, sampling, dimensions, legacy fields | Separate Storyboard UI and APIs | Not included in current Studio Read panel | **Excluded** | Do not re-add merely to satisfy a theoretical parity checklist |
 
+### Confirmed code/contract mismatches (not hypothetical defects)
+
+- **Natural-language Invariant rename is not yet represented as rename in the review.** `showStudioBriefReview` (`tool/js/director_chat.js`) matches proposed rows to saved rows by `kind` + case-insensitive `title`. If the model proposes renaming “Alice” to “Alicia”, the review **keeps Alice and treats Alicia as a new row**; it does not know the model intended one entity rename. The backend `invariantOps:update` correctly supports a coordinated rename *when the author edits the original row*. Next-step acceptance must require an explicit “Alice → Alicia” review and affected Scene-reference preview; never silently decide a new identity is a rename because names are similar.
+- **Capability catalog understates Project creation.** `tool/server/studio_director.py` currently advertises “zero to twelve initial tentative Scenes” but `create_studio_project` and `studio_project_draft` support up to **32**. Harmonize the catalog and prompts with actual limits in a small implementation phase; no schema expansion.
+- **A Read acknowledgement validates identifiers, not comprehension.** `RECEIVED:` identifies selected fields, and mismatches are surfaced. It does not prove the model absorbed long Scene Prompts or has reliable context remaining. For 15+ Scenes, check actual outbound size and real-model recall.
+- **A readiness item is not a saved authoring object.** `checks[].content` can contain good text, but `name` (e.g. Characters) + broad `scope` (project/scene) is insufficient to deterministically select one Invariant or Scene. Any capture affordance needs an exact or author-confirmed field/entity target before Apply.
+- **Current Scene deletion is materially destructive.** It purges Take metadata and artifact directories, so it cannot be casually used as an “undoable remove Scene” primitive in a creative restructuring operation.
+
 **Do not turn a “Complete code path” into a claim that the LLM independently chooses and executes the operation.** It does not, and it should not.
 
 ## 4. The real gap: conversation ↔ editable material ↔ saved state

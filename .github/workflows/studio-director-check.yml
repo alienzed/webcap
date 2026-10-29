@@ -19,6 +19,7 @@ on:
       - 'tests/test_studio_invariant_ops.py'
       - 'tests/test_studio_scene_draft.py'
       - 'tests/test_studio_scene_structure.py'
+      - 'tests/test_studio_scene_batch.py'
       - 'tests/test_storyboard_ui_contract.py'
       - '.github/workflows/studio-director-check.yml'
 jobs:
@@ -47,5 +48,5 @@ jobs:
           cp tool/config.example.json tool/config.json
           python -m pytest -q tests/test_director_chat_history.py
           python -m pytest -q tests/test_storyboard_store.py -k "studio_project_creates_multiple_initial_scenes_atomically or studio_scene_fields_are_scoped_and_conflict_checked"
-          python -m pytest -q tests/test_studio_invariant_ops.py tests/test_studio_director.py tests/test_studio_scene_draft.py tests/test_studio_scene_structure.py
+          python -m pytest -q tests/test_studio_invariant_ops.py tests/test_studio_director.py tests/test_studio_scene_draft.py tests/test_studio_scene_structure.py tests/test_studio_scene_batch.py
           python -m pytest -q tests/test_storyboard_ui_contract.py -k "entry_and_exit_states"

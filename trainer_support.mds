@@ -1,0 +1,372 @@
+# Trainer Support: audit and minimal extendable contract
+
+Status: **design/audit, not activation**. Audited WebCap's existing training paths against the
+Diffusion Pipe foundation (#682) and Fizgig planner (#693), plus Fizgig's actual
+CLI/trainer code as of 2026-10-24. No GPU run or pytest execution is asserted.
+This file is intentionally named trainer_support.mds for the requested handoff.
+
+## Decision
+
+**The shared WebCap runner stays the owner of all jobs.** Trainers are local
+CLI processes. The backend layer is only a translation boundary for:
+
+1. **Plan:** immutable captured settings/media -> native config, working directory,
+   environment, ordered shell commands.
+2. **Observe:** native logs/metrics -> WebCap progress, loss samples and an
+   evidenced output-run identity.
+3. **Checkpoint request:** ask the native trainer to save and exit gracefully;
+   no shared guess about the trainer's signal.
+4. **Inspect:** native output -> saved LoRA candidates, actual resume points
+   and proof of a completed checkpoint.
+
+**No new queue, GPU lane, service, database, framework, dynamic registry,
+trainer worker, or state machine.** No wholesale Diffusion Pipe refactor.
+A backend is removable without affecting WebCap's public job model.
+Implement what the second real backend forces us to abstract, and no more.
+
+WebCap retains: captured Sets, captions, Training Review, action identity,
+persisted trainerId, FIFO scheduling, GPU coordination, managed process PID,
+global Console, history, Test Generations, Manual Screening, Campaigns, and
+LoRA Library. Their existing state/routing contracts remain authoritative.
+
+## Verified findings, ordered by impact
+
+### P0 — Current backend boundary is asymmetric, not yet a common contract
+
+- tool/server/training_backend.py: DiffusionPipeBackend has command_plan,
+  h3_command_plan, request_checkpoint_save; FizgigBackend exposes separate
+  plan_h3, saved_artifacts, request_checkpoint_save. No shared runnable plan,
+  progress/inspection contract, or capability behavior exists.
+- backend_for_job still rejects fizgig explicitly; _new_job writes
+  trainerId=diffusion_pipe (training_runner.py around 2682–2770);
+  start_response has no trainer selector (around 2922–3156).
+- #693 is an isolated *planner*, not a working integration. Do not enable
+  Fizgig by merely accepting its ID or displaying a selector.
+
+**Action:** first move DP's existing script preparation behind one small
+plan seam, without changing emitted command text or execution order.
+Implement the same plan shape for Fizgig. Leave generic orchestration alone.
+
+### P0 — Existing resume/pause flow assumes DeepSpeed, including terminal truth
+
+- training_runner.py: _validated_resume_checkpoint and
+  _rewrite_resume_latest (1690–1719) depend on global_stepN and latest;
+  _checkpointed_stop_run_directory, _latest_checkpoint_mtime,
+  _request_checkpointed_stop and _checkpointed_stop_error (2028–2148)
+  require the Diffusion Pipe run layout.
+- _apply_terminal_job_status, _populate_queued_resume_point,
+  _queue_paused_job and _refresh_job (2225–2458) all consume this
+  DeepSpeed-specific representation. _history_continue_epoch_plan and
+  _finish_queued_resume also read latest (2854–2921; 3291–3343).
+- training_history.py: _resume_artifacts, discover_runs,
+  resolve_managed_resume, validate_resumable_run_for_path and
+  resume_point_from_directory (291–325; 347–525) discover ONLY
+  latest/global_stepN checkpoints.
+- Fizgig's actual trainer saves NAME-NNNNNN-state with a
+  training_state.json **written last as a commit marker**; it pauses through
+  output_dir/.pause_requested at the next epoch boundary and returns exit 0.
+  Sources: Fizgig src/fizgig/families/train.py (_save_state, pause handling).
+
+**Action:** backend inspection must return a verified opaque resume reference.
+WebCap still decides whether Pause or Finish means queue/History; the backend
+only requests a checkpointed exit and later proves one actually exists.
+Never use DP's latest checks for Fizgig or consider a state-directory name
+alone proof of a complete save. Existing pause/restart GPU behavior is frozen.
+
+### P0 — Candidate and loss paths are Diffusion Pipe specific
+
+- training_runner.py: candidate_epoch_folder_path/_candidate_safetensors_path
+  (937–957), Copy to Test and Save selection (1123–1305) assume epochN/
+  with a single LoRA safetensors inside.
+- training_candidates.py: artifact_for_epoch and saved_artifacts_for_run
+  (174–208) likewise require epochN directories; read_loss_events (60–95)
+  requires TensorBoard train/loss and train/epoch_loss.
+- Fizgig saves NAME-NNNNNN.safetensors and a separate
+  NAME-NNNNNN-state directory. The isolated adapter now validates
+  training_state.json plus required state files, without treating the
+  folder name as a complete checkpoint; its actual per-step loss source is
+  output_dir/.fizgig_loss_NAME.jsonl, records {s: step, e: epoch, l: loss,
+  lr?: rate}, buffered 20 records per flush.
+  Source: Fizgig src/fizgig/training/step_log.py.
+- This is a **normal format difference**, not a reason to duplicate WebCap's
+  candidate scoring, smoothing, candidate selection, or Evaluation UI.
+
+**Action:** an adapter supplies normalized candidate paths and genuine
+loss samples. Existing shared analysis consumes them. If required inputs
+are unavailable, mark analysis unavailable; do not forge TensorBoard events
+or silently manufacture an epoch loss. Do not scan an entire run directory
+or JSONL stream on each progress poll.
+
+### P0 — Runtime/preflight and launch remain globally Diffusion Pipe wired
+
+- training_runtime.py configured_training_settings() reads
+  training.diffusion_pipe_wsl, the DP activation/Conda runtime and DeepSpeed.
+- training_preflight.py build_preflight/build_launch_preflight (199–319)
+  check the DP working directory, train.py and deepspeed executable.
+- training_runner.py _build_runner_script (1720–1837) emits its specific
+  single/hi/lo/H3 cache flow, DP activation and launch paths;
+  _launch_job (1861–1931) uses _training_settings() and unconditionally
+  rewrites DeepSpeed latest before starting.
+- WebCap's managed setsid bash, PID, log and result files are already
+  a valid common process supervisor and should stay that way.
+
+**Action:** derive working directory, interpreter/activation, native phases
+and required executable checks from the selected plan. Keep the existing
+wrapper/PID/results/Console and existing GPU scheduling intact.
+Do not add another process manager or an extra launch lane.
+
+### P1 — Capture format is DP-specific; Fizgig mapping is currently narrow
+
+- training_bundle.py materialize_training_bundle (442–598) captures
+  source media and captions immutably, but writes DP-style per-stage
+  config and dataset TOMLs, with DP-specific image adapter, focused blocks,
+  initializer and dataset bucket settings.
+- Fizgig's dataset input uses [general] plus [[datasets]], independent
+  cache directories, per-dataset repeats, and area/aspect bucketing;
+  it is not byte- or behavior-equivalent to DP size_buckets.
+- tool/server/training_fizgig.py currently handles image-only, exactly one
+  image bucket per source directory. It rejects other captured layouts,
+  including clip/audio buckets. Fizgig itself supports clips, sound and voice;
+  this is a bridge limitation, not a trainer capability limitation.
+
+**Action:** capture once, then render trainer-specific config from the
+captured membership/sidecars. Preserve review selection and repeat weights;
+make any unavoidable bucket semantic difference visible in the effective
+run settings. Support representative existing H3 image workflows first,
+then real video/audio captures without flattening or dropping items.
+
+### P1 — A real Fizgig H3 training default is unsafe for our experiments
+
+- #693 originally omitted photo_blocks unless manually supplied, silently
+  allowing all-block image training. The safe follow-up explicitly defaults
+  image mode to photo_blocks=20-49; all-block training remains opt-in.
+- Fizgig src/fizgig/families/train.py _run_train: empty --train_blocks
+  leaves blocks unrestricted (all trainable targets). The actual Fizgig H3
+  Default preset uses photo_blocks=20-49, clip_blocks=20-49,
+  audio_blocks=20-49; blocks 0–5 are intentionally excluded.
+  Source: Fizgig src/fizgig/families/minimax.py, H3_LIKENESS_MODE.
+- #693 also explicitly chooses AdamW rather than DP's adamw_optimi;
+  that is an intentional different recipe, **not** settings parity.
+  LR, image_shift, dropout, warmup, optimizer, network targeting and
+  other options must be labeled native/effective, not passed as alleged
+  equivalents.
+
+**Action:** specify a deliberate, visible Fizgig H3 recipe (or require
+explicit block mode) before its first managed run; never let a missing
+setting accidentally imply all-block training. Keep exact effective
+commands/config and trainer version with the run for repeatability.
+
+### P1 — Current candidate analysis requires real evidence, not invented parity
+
+- Fizgig logs epoch N/M, average loss, step and s/step and writes per-step
+  JSONL as described above. The isolated Fizgig adapter now implements a
+  native epoch-log reader and an on-demand JSONL reader. Neither is yet
+  wired to the shared runner.
+- DP's loss curve analysis uses two TensorBoard scalar feeds with a
+  wall-time-based epoch assignment. Fizgig JSONL already has epoch per
+  step, but not the same TensorBoard event wall-time semantics.
+- Decouple normalized loss ingestion from the existing candidate algorithms.
+  Loss coverage or pending points must not be interpreted as zero.
+- The final Fizgig LoRA NAME.safetensors is also saved as the final
+  numbered NAME-NNNNNN.safetensors; avoid double-counting a final candidate.
+  Resumable state directories are NEVER candidates.
+
+### P2 — Capabilities belong to the trainer, not global UI guesses
+
+- Supported H3 Fizgig features include still images, clips/voice, adapter
+  selection, block selection, EMA, pause/resume and ordinary LoRA output.
+- Not all DP settings mean the same thing and some Fizgig H3-only features
+  (e.g. training modes, TREAD, audio) are genuine separate settings.
+  Fizgig's H3 does not support its own cross-family per-image loss-watch
+  or adaptive-LR features. Do not make those look like common functionality.
+- A small static capability declaration can control availability and
+  labels. Do NOT invent generic sliders, an extensible parameter schema,
+  or a driver/plugin registry just to render a hypothetical third backend.
+- Never select backend by inspecting config filenames, output folder names,
+  or global defaults. Persist trainerId on the immutable job and copy it to
+  history and every continuation. Missing legacy trainerId is Diffusion Pipe.
+
+## Minimum practical contract (four operations; not an API framework)
+
+The shapes below are conceptual Python dictionaries, not an instruction
+to add dataclasses, DI, Protocol classes or an interface registry.
+
+    backend.plan(job, captured_inputs, runtime_settings, resume_point=None)
+        -> {
+            cwd: Linux working directory,
+            activate: optional existing environment activation,
+            phases: [{name: "cache" | "train" | ..., command: shell command}],
+            staged_files: trainer-native config text/paths, if needed,
+            output: run identity/evidence anchor
+        }
+
+    backend.observe(job, log_tail)
+        -> {
+            phase: optional phase label,
+            epoch: optional actual epoch,
+            step: optional actual step,
+            loss: optional observed loss,
+            lr: optional observed LR,
+            seconds_per_step: optional observed timing,
+            output_run_path: optional positively evidenced path
+        }
+
+    backend.request_save(job, run_dir)
+        -> None
+        # Requests a checkpoint-safe exit (both Pause and Finish).
+        # The shared runner decides when the process actually finished.
+
+    backend.inspect(job, run_dir, *, include_loss=False)
+        -> {
+            resume_points: [{id: opaque native ref, epoch: optional epoch}],
+            candidates: [{
+                epoch: saved epoch, path: real LoRA path,
+                variant: optional source-defined kind
+            }],
+            loss_points: optional [{step, epoch, loss, lr?}],
+            checkpoint_verified: boolean
+        }
+
+- A fixed, explicit backend_for_job lookup is enough for two backends.
+- Optionally backend.capabilities is a small static dict/tuple attached
+  to that implementation; introduce keys ONLY for features WebCap uses.
+- Validation and trainer-specific preflight belong in plan (or one
+  backend-specific probe called before plan if needed for UI).
+  Generic shell/GPU/disk checks remain shared.
+- Do not create backend-level queue state, job status transitions,
+  thread loops, independent logs, or GPU reservations.
+- A plan contains ordered shell commands, not an entire execution engine.
+  The WebCap wrapper runs the phases sequentially, emits phase markers,
+  preserves managed PID, and aborts visibly on failed phases.
+- The common API uses paths and observations; trainer-native config and
+  CLI flags stay inside the implementation.
+- No guessed equivalences. Unsupported capabilities either remain
+  unavailable in that backend or fail explicitly on request.
+- Inspect is used for requested history/candidate/terminal operations;
+  observe is deliberately light enough for normal polling.
+- For Pause/Finish, call request_save, observe managed process exit, then
+  inspect a **fresh, valid checkpoint** before transitioning state.
+  Support stop-now as the existing generic process action.
+- Resume uses a native opaque point returned by inspect, passed to plan;
+  WebCap does not manufacture or rewrite another trainer's checkpoint.
+- Keep trainer ID, effective recipe, model identity and output provenance
+  in existing job/history records. Do not create a second state store.
+
+## Low-risk forward progress after this audit
+
+The isolated follow-up branch adds **only**:
+- an explicit H3 image-block default (20–49), preserving opt-in all-block runs;
+- ordered latent/text/train command phases, while retaining the current map;
+- a Fizgig epoch-log parser and on-demand native JSONL loss parser;
+- inspection of real LoRA paths and committed resumable states, rejecting
+  incomplete committed states without claiming process-exit freshness;
+- unit tests for these behaviors and the unchanged Diffusion Pipe selector.
+
+It does **not** modify the Diffusion Pipe runtime, preflight, Queue/GPU,
+process supervisor, resume protocol, candidate evaluation, or UI. The four-
+operation shared contract remains a target; new Fizgig helpers are not
+proof that the shared runner has been migrated or end-to-end verified.
+
+## What MUST NOT become an abstraction
+
+- The existing GPU FIFO and queue ownership rules in AGENTS.md.
+- Set curation, media review, captions, dataset versioning or screening UI.
+- Generic user settings into arbitrarily named CLI arguments.
+- DeepSpeed-specific implementation internals as common fields
+  (global_stepN, latest, save_quit, --deepspeed).
+- Fizgig-specific implementation internals as common fields
+  (.pause_requested, NAME-NNNNNN-state, --family_option).
+- Training algorithms or backend model semantics.
+- A new backend-install/auto-download lifecycle.
+- Dynamic imports/registries/configurable method dispatch for two known
+  local engines. An explicit backend selector function is sufficient.
+- Fake parity in learning rate, batch size, epochs, training modes or
+  optimizer semantics.
+- Independent candidate analysis code for each trainer.
+
+## Safe, measurable extraction order
+
+**Phase A — Establish baseline and the contract.**
+Record actual DP submitted command, runner identity, Pause/Finish behavior,
+resume/continue, candidate discovery/copy/selection, History, screening
+and queue recovery tests. No DP refactor on untested paths.
+
+**Phase B — Make a single shared LaunchPlan seam.**
+Use one DP implementation to produce the existing phases, activation/cwd
+and settings. Keep byte-equivalent commands and shell wrapper. Move DP-only
+preflight probes out of generic preflight code, preserving messages/results.
+
+**Phase C — Extract true observation and artifact seams.**
+Redirect DP progress/log parsing, run identity, checkpoint checks,
+candidate enumeration and loss reader through its backend. Keep the
+public data shape and all Evaluation algorithms unchanged. Verify legacy
+runs without trainerId exactly as before.
+
+**Phase D — Complete Fizgig behind the same contract.**
+Reuse the captured image Set. Produce valid native TOML, configure a
+deliberate H3 block mode, pinned executable, model paths and independent
+cache phases. Use the same managed process and queue. Parse real Fizgig
+progress JSONL/logs and inspect state markers/numbered checkpoints.
+Feature-gate video/audio until conversion is implemented and tested.
+
+**Phase E — Activate only after an actual vertical slice.**
+One image Set: capture -> all caches -> train -> progress/loss ->
+checkpoint -> Copy to Test -> Pause -> checkpoint verification ->
+Resume -> Finish -> History and restart reconciliation. Test both
+adapter Off and an Ostris/Circlestone run when supported encoder works.
+Confirm ComfyUI loads and samples the generated H3 LoRA. No silent
+fallback to Diffusion Pipe on Fizgig errors.
+
+**Phase F — Expand only where justified.**
+Video/audio capture, more native settings and optional advanced trainer
+capabilities as real workflows require. Do not delay architecture cleanup
+waiting for hypothetical parity.
+
+## Regression requirements / failure-isolation proof
+
+1. Diffusion Pipe commands/config and action captures remain equivalent;
+   existing runs continue to load without trainerId.
+2. Queue/GPU ordering, PID verification, restart reconciliation and
+   pause-state persistence are unchanged.
+3. DP checkpoint-safe Pause, Finish, queued Resume, manual old-checkpoint
+   rewind, Continue and history state continue to work.
+4. DP loss curves and Candidate Analysis, saved epoch selection and Copy
+   to Test retain their current results/provenance.
+5. Fizgig plan produces valid commands and TOML from real reviewed
+   captures; missing supported assets and incompatible sets fail visibly.
+6. Failed cache phase never starts training; failure reaches global Console.
+7. Fizgig pause requires observed clean process termination and a valid
+   new training_state.json; incomplete states do not count as successes.
+8. Native save and resume checkpoint references are never confused with
+   export .safetensors; no collision between final and numbered epochs.
+9. H3 emitted LoRA is verified loadable by WebCap/ComfyUI before enabling
+   direct Copy to Test. Error messages identify actual trainer + operation.
+10. Removing Fizgig backend code leaves all DP workflows working. No
+    trainer-specific conditions or dead flags remain in shared services.
+
+## Source map
+
+WebCap:
+- AGENTS.md — KISS and managed GPU/process invariants.
+- tool/server/training_backend.py — current asymmetric seam.
+- tool/server/training_runner.py — wrapper, state, launch, pause,
+  resume, candidates, Evaluation and job creation.
+- tool/server/training_runtime.py, training_preflight.py — DP runtime.
+- tool/server/training_bundle.py — captured DP configs/datasets.
+- tool/server/training_progress.py — DP log vocabulary.
+- tool/server/training_candidates.py — DP TensorBoard/epoch layout.
+- tool/server/training_history.py — DP resume discovery.
+- tool/server/training_fizgig.py — proposed planner and current limits.
+- docs/trainer_backend_foundation.md, docs/trainer_fizgig_h3.md.
+- https://github.com/alienzed/webcap/pull/682
+- https://github.com/alienzed/webcap/pull/693
+
+Fizgig upstream (verified source, not just feature descriptions):
+- https://github.com/shootthesound/Fizgig/blob/master/src/fizgig/families/train.py
+- https://github.com/shootthesound/Fizgig/blob/master/src/fizgig/families/minimax.py
+- https://github.com/shootthesound/Fizgig/blob/master/src/fizgig/training/step_log.py
+- https://github.com/shootthesound/Fizgig/blob/master/docs/CLI.md
+
+**Design pass condition:** if Fizgig is deleted tomorrow, this work
+still leaves one simpler, well-isolated Diffusion Pipe implementation
+and a small, genuine adapter seam for the next CLI trainer.

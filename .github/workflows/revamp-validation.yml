@@ -195,6 +195,8 @@ jobs:
         run: cp tool/config.example.json tool/config.json
       - name: Install test essentials
         run: python -m pip install pytest Flask Pillow Werkzeug imageio websocket-client opencv-python-headless
+      - name: Inactive Fizgig and Diffusion Pipe backend contracts
+        run: python -m pytest -q tests/test_training_backend.py tests/test_training_fizgig.py
       - name: Training resume variant and History-only removal
         run: |
           node --check tool/js/training_review.js

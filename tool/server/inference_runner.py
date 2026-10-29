@@ -670,8 +670,17 @@ def start_observer():
 
 
 def _start_worker_for_requested_inference():
+    # Explicit Queue work resumes Inference, never another GPU lane.
+    # Passive startup recovery and deferred Backlog staging do not call this.
+    execution_resume_lane(EXECUTION_LANE)
     _backlog_deferred_ids.clear()
     _ensure_monitor_started(drain_backlog=True)
+
+
+def start_requested_inference():
+    """Wake Inference after a user request was fully committed to Queue."""
+    _ensure_execution_reconciled()
+    _start_worker_for_requested_inference()
 
 
 def enqueue_generate(request, label=""):
@@ -971,6 +980,8 @@ def action(operation, job_id="", direction="", position=None):
         return {"queue": snapshot(), "promoted": len(promoted)}
     if operation == "move_all_to_backlog":
         moved = execution_shelve_queued(EXECUTION_LANE)
+        if moved and not execution_lane_snapshot(EXECUTION_LANE, include_terminal=False).get("paused"):
+            _ensure_monitor_started(drain_backlog=True)
         return {"queue": snapshot(), "moved": len(moved)}
     if operation == "stop":
         return {"job": _job_view(execution_request_stop(job_id))}
@@ -980,9 +991,7 @@ def action(operation, job_id="", direction="", position=None):
         execution_pause_lane(EXECUTION_LANE)
         return {"queue": snapshot()}
     if operation == "resume_queue":
-        # Resuming controls inference dispatch only. Provider cleanup from a
-        # previous attempt is best-effort and never becomes a durable blocker.
-        execution_resume_lane(EXECUTION_LANE)
+        # Resuming controls inference dispatch only; it does not claim the GPU.
         _start_worker_for_requested_inference()
         return {"queue": snapshot(), "resumed": True}
     if operation == "reorder":

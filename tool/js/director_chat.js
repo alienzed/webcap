@@ -1334,6 +1334,10 @@
     var briefUndo = el('director-studio-undo-brief');
     briefUndo.classList.toggle('hidden', state.activeMode !== 'storyboard' || !state.studioBriefUndo);
     briefUndo.disabled = state.pending || !state.studioBriefUndo;
+    if (state.activeMode === 'storyboard' && window.studioDirectorWorkbench) {
+      window.studioDirectorWorkbench.setUndo(state.studioBriefUndo);
+      el('studio-dw-undo-button').disabled = state.pending || !state.studioBriefUndo;
+    }
     var prepare = el('director-chat-workshop-prepare');
     if (prepare) {
       prepare.disabled = state.pending || !state.modelId || !!(state.workshop && state.workshop.shotError) || !currentMessages().some(function (message) { return message.role === 'user'; });
@@ -2422,6 +2426,8 @@
       } else {
         state.modeMessages.storyboard = [];
         state.studioOperations = [];
+        state.studioBriefUndo = null;
+        if (window.studioDirectorWorkbench) window.studioDirectorWorkbench.resetConversation();
         state.studioReadiness = {checks:[],readHints:[],writeHint:'',sceneId:''};
         if (window.studioDirectorWorkbench) window.studioDirectorWorkbench.updateReadiness(state.studioReadiness, true);
         state.modeElapsedByAssistantIndex.storyboard = {};
@@ -3510,6 +3516,10 @@
       renderMessages();
       state.sessionDirty.storyboard = true;
       return persistSession('storyboard');
+    },
+    undoBrief: function () {
+      if (!state.studioBriefUndo) throw new Error('No reversible Project brief change exists.');
+      undoStudioBrief();
     },
     updateReadiness: function (value) {
       state.studioReadiness = value;

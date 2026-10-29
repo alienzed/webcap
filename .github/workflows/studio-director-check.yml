@@ -11,6 +11,7 @@ on:
       - 'tool/tool.html'
       - 'tool/css/workspace_shell.css'
       - 'tests/studio_director_design_fixes.test.cjs'
+      - 'tests/studio_director_readiness.test.cjs'
       - 'tests/test_studio_director.py'
       - 'tests/test_director_chat_history.py'
       - 'tests/test_storyboard_store.py'
@@ -30,7 +31,7 @@ jobs:
         run: |
           node --check tool/js/director_chat.js
           node --check tool/js/studio_director_workbench.js
-          node --test tests/studio_director_design_fixes.test.cjs tests/studio_director_workshop.test.cjs tests/studio_director_scene_draft.test.cjs
+          node --test tests/studio_director_readiness.test.cjs tests/studio_director_design_fixes.test.cjs tests/studio_director_workshop.test.cjs tests/studio_director_scene_draft.test.cjs
       - name: Python compile
         run: |
           python -m compileall -q tool/server tests/test_studio_director.py tests/test_director_chat_history.py tests/test_storyboard_store.py
@@ -38,4 +39,5 @@ jobs:
         run: |
           python -m pip install pytest Flask Pillow imageio websocket-client opencv-python-headless
           cp tool/config.example.json tool/config.json
+          python -m pytest -q tests/test_director_chat_history.py
           python -m pytest -q tests/test_storyboard_store.py -k "studio_project_creates_multiple_initial_scenes_atomically or studio_scene_fields_are_scoped_and_conflict_checked"

@@ -3142,7 +3142,20 @@
               if (typeof window.reportConsoleError === 'function')
                 window.reportConsoleError('Studio readiness', readyError);
               studioActionStatus('Director readiness was malformed; conversation text preserved.', true);
+              if (window.studioDirectorWorkbench) window.studioDirectorWorkbench.updateReadiness({
+                checks:[], readHints:[], writeHint:'', sceneId:''
+              });
             }
+          } else {
+            var omitted = 'Director did not supply the requested readiness assessment. Previous checkmarks cleared.';
+            if (window.studioDirectorWorkbench) {
+              window.studioDirectorWorkbench.updateReadiness({
+                checks:[],readHints:[],writeHint:'',sceneId:''
+              });
+              window.studioDirectorWorkbench.setStatus(omitted, true);
+            }
+            if (typeof window.reportConsoleError === 'function')
+              window.reportConsoleError('Studio readiness', new Error(omitted));
           }
         }
         messages.push({ role: 'assistant', content: assistantText });

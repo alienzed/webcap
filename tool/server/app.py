@@ -72,6 +72,7 @@ from .storyboard_store import add_scene as storyboard_add_scene, add_take_upload
 from .storyboard_store import apply_reviewed_story_guidelines as storyboard_apply_reviewed_story_guidelines
 from .storyboard_store import apply_studio_scene_fields as storyboard_apply_studio_scene_fields
 from .storyboard_store import apply_studio_scene_fields_batch as storyboard_apply_studio_scene_fields_batch
+from .storyboard_store import apply_studio_scene_invariant_links as storyboard_apply_studio_scene_invariant_links
 from .storyboard_store import apply_studio_scene_split as storyboard_apply_studio_scene_split
 from .storyboard_store import apply_studio_scene_structure as storyboard_apply_studio_scene_structure
 from .storyboard_generation import generation_action as storyboard_generation_action, generation_capabilities as storyboard_generation_capabilities, generation_queue as storyboard_generation_queue, generation_status as storyboard_generation_status, start_generation as storyboard_start_generation, regenerate_take as storyboard_regenerate_take
@@ -2030,6 +2031,31 @@ def studio_director_scene_split_route():
         return jsonify({"ok": False, "error": str(exc)}), 404
     except Exception as exc:
         app.logger.exception("STUDIO SCENE SPLIT FAILED: %s", exc)
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
+@app.route("/fs/studio/director/scene-invariants", methods=["POST"])
+def studio_director_scene_invariant_links_route():
+    data = request.get_json(silent=True) or {}
+    try:
+        if not isinstance(data, dict) or set(data) != {"storyId", "kind", "title", "changes"}:
+            raise ValueError("Scene association review requires the exact Invariant and changed Scenes.")
+        story_id = str(data["storyId"] or "").strip()
+        if not story_id:
+            raise ValueError("Choose a saved Project.")
+        if (llm_storyboard_story_busy(story_id)
+                or llm_storyboard_target_busy(story_id, "scenes")
+                or llm_storyboard_target_busy(story_id, "repair")):
+            raise ValueError("Finish pending Scene work before changing associations.")
+        with storyboard_mutation_lock:
+            story, saved = storyboard_apply_studio_scene_invariant_links(
+                story_id, data["kind"], data["title"], data["changes"],
+            )
+        return jsonify({"ok": True, "story": story, "savedLinksByScene": saved})
+    except FileNotFoundError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 404
+    except Exception as exc:
+        app.logger.exception("STUDIO SCENE INVARIANT LINK FAILED: %s", exc)
         return jsonify({"ok": False, "error": str(exc)}), 400
 
 

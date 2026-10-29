@@ -3256,11 +3256,20 @@
       if (!this.isReady()) throw new Error('Director must be ready before Write.');
       if (kind !== 'new-project') {
         if (!storyId) throw new Error('Select a Project destination for Write.');
+        if (studioAttachedStoryId() !== storyId) {
+          // Never reuse a draft extracted against a different saved Project.
+          state.studioBriefProposal = null;
+          state.studioSceneProposal = null;
+          state.studioScenesProposal = null;
+        }
         state.studioStoryAccess = {storyId: storyId, label: storyTitle || storyId};
         state.studioAccessIndex = null;
         scheduleSessionSave();
       }
-      if (kind === 'new-project') return prepareStudioProject();
+      if (kind === 'new-project') {
+        state.studioProjectProposal = null; // Create a fresh review from current conversation.
+        return prepareStudioProject();
+      }
       if (kind === 'project') return prepareStudioBrief();
       if (kind === 'scene') return prepareStudioSceneDraft();
       if (kind === 'scenes') return prepareStudioScenes();

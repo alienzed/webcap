@@ -253,3 +253,29 @@ def test_studio_readiness_stale_marker_requires_boolean(sessions):
             "readiness": {"checks": [], "readHints": [],
                           "writeHint": "", "sceneId": "", "stale": "yes"},
         })
+
+def test_studio_creative_capture_persists_without_authorizing_project_mutation(sessions):
+    chat = history.create_chat("storyboard")
+    base = {"checks": [], "readHints": [], "writeHint": "project", "sceneId": ""}
+    capture = {"field": "concept", "content": "A concrete creative premise.", "sceneId": ""}
+    saved = history.save_chat(chat["id"], {
+        "expectedRevision": 0, "title": "Developing", "messages": [],
+        "draft": "", "readiness": {**base, "capture": capture},
+    })
+    assert saved["readiness"]["capture"] == capture
+    assert history.open_chat(chat["id"])["readiness"]["capture"] == capture
+    assert saved["operations"] == []
+
+    with pytest.raises(ValueError, match="creative capture"):
+        history.save_chat(chat["id"], {
+            "expectedRevision": 1, "title": "Invalid", "messages": [],
+            "draft": "", "readiness": {**base, "capture":
+                {"field": "concept", "content": "", "sceneId": ""}},
+        })
+    with pytest.raises(ValueError, match="creative capture"):
+        history.save_chat(chat["id"], {
+            "expectedRevision": 1, "title": "Invalid", "messages": [],
+            "draft": "", "readiness": {**base, "capture":
+                {"field": "style", "content": "Neon", "sceneId": "scene-12"}},
+        })
+    assert history.open_chat(chat["id"])["revision"] == 1

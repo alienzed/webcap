@@ -1402,6 +1402,9 @@
     status.classList.toggle('hidden', !message);
     status.textContent = message || '';
     status.dataset.error = error ? 'true' : 'false';
+    if (state.activeMode === 'storyboard' && window.studioDirectorWorkbench) {
+      window.studioDirectorWorkbench.setStatus(String(message || ''), !!error);
+    }
   }
 
 

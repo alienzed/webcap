@@ -51,6 +51,46 @@ def test_inference_enqueue_starts_worker_on_demand(inference_root, monkeypatch):
 
 
 
+@pytest.mark.parametrize("owner", ["", "llm"])
+def test_new_generate_resumes_manual_pause_without_claiming_gpu(inference_root, monkeypatch, owner):
+    execution_queue.pause_lane("inference")
+    execution_queue._resource_owner = owner
+    starts = []
+    monkeypatch.setattr(inference_runner, "_start_worker_for_requested_inference", lambda: starts.append(True))
+
+    job = inference_runner.enqueue_generate({"modelId": "krea2_raw", "mediaKind": "image", "prompt": "new"})
+
+    assert job["status"] == "queued"
+    assert inference_runner.snapshot()["paused"] is False
+    assert execution_queue.resource_owner() == owner
+    assert starts == [True]
+
+
+def test_new_generate_does_not_resume_execution_error(inference_root, monkeypatch):
+    execution_queue.pause_lane("inference", reason="Inference paused after an execution error: boom")
+    starts = []
+    monkeypatch.setattr(inference_runner, "_start_worker_for_requested_inference", lambda: starts.append(True))
+
+    job = inference_runner.enqueue_generate({"modelId": "krea2_raw", "mediaKind": "image", "prompt": "new"})
+
+    assert job["status"] == "queued"
+    assert inference_runner.snapshot()["paused"] is True
+    assert starts == [True]
+
+
+def test_move_all_to_backlog_activates_only_unpaused_drain(inference_root, monkeypatch):
+    starts = []
+    monkeypatch.setattr(inference_runner, "_ensure_monitor_started", lambda drain_backlog=False: starts.append(drain_backlog))
+    execution_queue.enqueue("inference", {"request": {"prompt": "one"}})
+    assert inference_runner.action("move_all_to_backlog")["moved"] == 1
+    assert starts == [True]
+
+    execution_queue.enqueue("inference", {"request": {"prompt": "two"}})
+    execution_queue.pause_lane("inference")
+    assert inference_runner.action("move_all_to_backlog")["moved"] == 1
+    assert starts == [True]
+
+
 def test_pending_generate_configuration_requires_explicit_job_detail_request(inference_root):
     from tool.server import app as app_module
 

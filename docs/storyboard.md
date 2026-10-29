@@ -1,5 +1,7 @@
 # Storyboard
 
+> **Documentation status (2026-10-29):** This is the broader Storyboard/production system specification. Studio Director's current author-facing five-field contract, its deliberate exclusion of media/Take/technical settings, and its user-intention-to-reviewed-materialization roadmap are specified separately in [Studio Director — intention-to-materialization contract](studio-director-materialization-contract.md). Do not interpret every manual Storyboard capability below as something Director should manage.
+
 Storyboard is a first-class WebCap workspace for building longer-form visual sequences from ordered scene generations and selected takes.
 
 It intentionally lives inside WebCap because it benefits from WebCap's local-first media handling, model awareness, ComfyUI connectivity, LoRA discovery, ratings, previews, and generation infrastructure. It is not part of the dataset/set workflow and must not depend on the current set, captions, training state, Test candidates, or Test sessions.

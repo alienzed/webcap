@@ -1,5 +1,7 @@
 # Studio Director — conversational production contract and incremental delivery
 
+> **Current implementation handoff (2026-10-29, post-PR #792):** [Studio Director — intention-to-materialization contract](studio-director-materialization-contract.md) is the authoritative **current** workflow audit, capability matrix, materialization design, phase plan and acceptance suite. This document preserves architectural history, early decisions and old phase records; **do not treat older “missing” statuses or earlier solution designs below as the present backlog**. Current `main` code and the new contract supersede stale claims. The new plan changes docs only, not Studio behavior.
+
 Status: **living implementation contract** initially audited at `95dd999b4678d02c10b81df059886ac3c4594ed4`, with initial implementation phases merged through **PRs #758–761** and production-slate workflow clarification audited against `main` at `ca1246c0041f1dd0ffeaa83dc4363f452703b33d` (2026-10-27). Historical finding tables and old unchecked phase items describe their audit baseline, not the latest implementation status; verify current code before each new change. This update modifies **the plan only**. Follow `AGENTS.md`, `docs/filesystem_state_contract.md` and `docs/gpu_coordination_invariants.md`.
 
 ## 2026-10-28 simplified five-field creative contract
@@ -12,11 +14,11 @@ The only independent creative fields are Project **Concept / overview** (`story.
 
 Deprecate **new** Directing Guidelines as a separate creative workflow. Existing populated `guidelines` are legacy authored context: preserve them on disk and in existing Projects, continue honoring their meaning until an explicitly reviewed consolidation, and never silently erase or reinterpret them. Do not invent a Scene group/Sequence layer until a concrete workflow exceeds the five-field contract.
 
-**Acceptance journeys:** (1) freeform brainstorm → explicit capture → editable Project review → reviewed Create (zero or one optional Intent-only Scene); (2) explicit attachment of an existing Project → read current selected facts → discuss → reviewed field-scoped Update; (3) discuss Scene(s) → reviewed Intent insert → separately prepare and review H3 prompts → generate Takes from saved prompts. Conversation alone is not a save action. Check the actual LLM and browser behavior separately from contract tests.
+**Historical acceptance journeys (expanded and superseded by the current materialization contract):** (1) freeform brainstorm → explicit capture → editable Project review → reviewed Create (zero to 32 optional tentative Intent-only Scenes); (2) explicit attachment of an existing Project → read current selected facts → discuss → reviewed field-scoped Update; (3) discuss Scene(s) → reviewed Intent insert → separately prepare and review H3 prompts → generate Takes from saved prompts. Conversation alone is not a save action. Check the actual LLM and browser behavior separately from contract tests.
 
 ## North star
 
-One creator turns an idea, gag, visual, episode, or developing narrative into **renderable short video Scenes** using one Studio Director conversation. Director is a creative collaborator **and** an operator of documented WebCap capabilities; it is not a generic chat pretending to be a video editor.
+One creator turns an idea, gag, visual, episode, or developing narrative into **renderable short video Scenes** using one Studio Director conversation. **Director develops the creative material; WebCap deterministically performs author-reviewed materialization.** This is not unrestricted LLM tool-use, nor generic chat masquerading as an editor. The current journey-level completion criteria live in the [intention-to-materialization contract](studio-director-materialization-contract.md).
 
 Creative discovery is flexible; production operations are precise. The initial user input may be *nothing*: opening a new Director conversation starts a one-question-at-a-time Writer's Workshop. Director can riff from a short, editable opening script, challenge weak ideas, and help discover **the core appeal**. A clear idea can become one tentative Scene immediately; a complex project can evolve one Scene at a time. There are no required title, ending, Scene count, beat map, or placeholder Scene 1/2 before a Scene 3.
 

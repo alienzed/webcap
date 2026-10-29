@@ -1,5 +1,7 @@
 # Studio Director — Design Audit and Implementation Brief
 
+> **Documentation status (2026-10-29):** This is a dated design critique, not the current definition of Studio Director feature completeness. The active goal is natural creative collaboration, focused review and deterministic WebCap materialization—not feature parity with every production control. Use [Studio Director — intention-to-materialization contract](studio-director-materialization-contract.md) for the up-to-date code audit, scope, phased implementation and acceptance tests; verify old findings on current `main`.
+
 **Baseline:** `main` after IA audit PR #786 (2026-10-28)  
 **Status:** Design audit and non-production mockup; no WebCap UI code modified  
 **Related:** [IA audit](studio-director-ia-audit.md), [AGENTS.md](../AGENTS.md), [implementation baseline](studio-director-side-panel-implementation.md)

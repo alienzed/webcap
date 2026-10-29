@@ -47,7 +47,8 @@
     studioScenesProposal: null,
     studioBriefProposal: null,
     studioBriefUndo: null,
-    studioOperations: []
+    studioOperations: [],
+    pendingReadAck: null
   };
   var STORYBOARD_WORKSHOP_PRIMER = [
     'You are collaborating with an author developing short AI-generated videos.',
@@ -1082,6 +1083,20 @@
       var body = document.createElement('div');
       body.className = 'director-chat-message-body';
       body.textContent = message.content;
+      if (message.role === 'user' && message.content.indexOf('[WEBCAP EXPLICIT READ]') !== -1) {
+        var marker = message.content.indexOf('[WEBCAP EXPLICIT READ]');
+        var closing = message.content.indexOf('[END WEBCAP READ]', marker);
+        if (closing !== -1) {
+          var details = document.createElement('details');
+          var heading = document.createElement('summary');
+          heading.textContent = 'Read context · inspect exact fields delivered';
+          var content = document.createElement('pre');
+          content.textContent = message.content.slice(marker, closing + '[END WEBCAP READ]'.length);
+          details.append(heading, content);
+          body.textContent = message.content.slice(0, marker).trim();
+          body.appendChild(details);
+        }
+      }
 
       row.appendChild(label);
       row.appendChild(body);
@@ -3040,6 +3055,25 @@
           pendingCapture = true;
           return;
         }
+        if (activeChatMode === 'storyboard' && state.pendingReadAck) {
+          var expected = state.pendingReadAck;
+          state.pendingReadAck = null;
+          var reply = String(result.text || '');
+          var line = reply.split('\\n').find(function (item) { return /^RECEIVED:/i.test(item.trim()); }) || '';
+          var received = line.replace(/^\\s*RECEIVED:\\s*/i, '').split(',').map(function (key) { return key.trim(); });
+          var missing = expected.filter(function (key) { return received.indexOf(key) === -1; });
+          var extra = received.filter(function (key) { return key && expected.indexOf(key) === -1; });
+          var feedback = missing.length || extra.length
+            ? 'Director acknowledgement mismatch. Missing: ' + (missing.join(', ') || 'none') +
+              '; unexpected: ' + (extra.join(', ') || 'none')
+            : 'Director acknowledged ' + expected.length + ' selected fields.';
+          studioActionStatus(feedback, !!(missing.length || extra.length));
+          if (window.studioDirectorWorkbench) window.studioDirectorWorkbench.setStatus(feedback, !!(missing.length || extra.length));
+          if (missing.length || extra.length) {
+            if (typeof window.reportConsoleError === 'function')
+              window.reportConsoleError('Studio Read acknowledgement', new Error(feedback));
+          }
+        }
         messages.push({ role: 'assistant', content: String(result.text || '') });
         var assistantIndex = messages.length - 1;
         elapsedMap[assistantIndex] = performance.now() - startedAt;
@@ -3052,6 +3086,10 @@
 
     requestPromise.catch(function (err) {
       requestError = err;
+      if (activeChatMode === 'storyboard' && state.pendingReadAck) {
+        state.pendingReadAck = null;
+        if (window.studioDirectorWorkbench) window.studioDirectorWorkbench.setStatus('Read failed: ' + String(err.message || err), true);
+      }
       if (['stopped', 'cancelled'].indexOf(String(err && err.jobStatus || '')) === -1) {
         if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Assistant', err);
       }
@@ -3126,6 +3164,71 @@
       });
     }
   }
+
+  window.studioDirectorBridge = {
+    isReady: function () {
+      return state.open && state.activeMode === 'storyboard' && state.sessionReady &&
+        !state.pending && !state.attachmentPending && !!state.modelId;
+    },
+    workingStoryId: studioAttachedStoryId,
+    modelId: function () { return state.modelId; },
+    messages: function () { return (state.modeMessages.storyboard || []).slice(); },
+    sendRead: function (payload, keys, instruction) {
+      if (!this.isReady()) throw new Error('Open Studio Director and select an available LLM before Read.');
+      if (!Array.isArray(keys) || !keys.length) throw new Error('Select at least one field to Read.');
+      var composer = el('director-chat-input');
+      var draft = String(composer.value || '').trim();
+      composer.value = (instruction || draft || 'Inspect this material and suggest the next useful development step.') +
+        '\\n\\n[WEBCAP EXPLICIT READ]\\n' +
+        JSON.stringify(payload, null, 2) + '\\n[END WEBCAP READ]\\n' +
+        'Start your response with RECEIVED: ' + keys.join(', ') +
+        ' using exactly those field identifiers, then discuss the material.';
+      state.pendingReadAck = keys.slice();
+      sendMessage();
+    },
+    prepareWrite: function (kind, storyId, storyTitle) {
+      if (!this.isReady()) throw new Error('Director must be ready before Write.');
+      if (kind !== 'new-project') {
+        if (!storyId) throw new Error('Select a Project destination for Write.');
+        state.studioStoryAccess = {storyId: storyId, label: storyTitle || storyId};
+        state.studioAccessIndex = null;
+        scheduleSessionSave();
+      }
+      if (kind === 'new-project') return prepareStudioProject();
+      if (kind === 'project') return prepareStudioBrief();
+      if (kind === 'scene') return prepareStudioSceneDraft();
+      if (kind === 'scenes') return prepareStudioScenes();
+      throw new Error('Unsupported reviewed Write operation: ' + kind);
+    },
+    makeProposal: function (instruction) {
+      if (!this.isReady()) return Promise.reject(new Error('Director must be ready to draft.'));
+      state.pending = true;
+      syncControls();
+      startProgress();
+      return studioDirectorRequestMessages([{role:'user',content:instruction}]).then(function (messages) {
+        return requestJson('/fs/director/chat', {
+          method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({model:state.modelId,messages:messages})
+        });
+      }).then(function (payload) {
+        if (!payload.job || !payload.job.jobId) throw new Error('Director did not queue a draft.');
+        state.jobId = payload.job.jobId;
+        trackTransientLlmJob(payload.job);
+        return waitForJob(payload.job);
+      }).then(function (job) {
+        var result = job.result || {};
+        if (!String(result.text || '').trim()) throw new Error('Director returned no draft.');
+        finishProgress(null);
+        return String(result.text);
+      }).catch(function (err) {
+        finishProgress(err);
+        if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Studio Write', err);
+        throw err;
+      }).finally(function () {
+        state.pending = false;state.jobId = '';syncControls();
+      });
+    }
+  };
 
   function bind() {
     var toggle = el('director-chat-rail-btn');

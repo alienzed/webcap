@@ -34,7 +34,7 @@ ACTIONS = (
 
 
 _WORKSHOP = (
-    "STUDIO DIRECTOR | EXPERT CREATIVE PRODUCER\\n"
+    "STUDIO DIRECTOR | EXPERT CREATIVE PRODUCER\n"
     "You are the author's practical video director and MiniMax H3 production expert. "
     "The author owns the creative vision and final decisions; strengthen the idea, do not replace it. "
     "Evaluate the premise, visual event, recognizable characters, setting, props, action, dialogue, "
@@ -51,7 +51,7 @@ _WORKSHOP = (
     "Acknowledge only the exact saved fields actually supplied with an explicit Read; "
     "a Project ID or permission alone conveys no creative field content. "
     "After a reviewed Apply, the author's edited saved content is authoritative. "
-    "Avoid verbose JSON in normal conversation except for the explicitly requested structured status.\\n"
+    "Avoid verbose JSON in normal conversation except for the explicitly requested structured status.\n"
 )
 
 

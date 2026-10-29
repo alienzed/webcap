@@ -3622,6 +3622,10 @@
   }
 
   window.studioDirectorBridge = {
+    canReview: function () {
+      return state.open && state.activeMode === 'storyboard' && state.sessionReady &&
+        !state.pending && !state.attachmentPending;
+    },
     isStudioMode: function () {return state.open && state.activeMode === 'storyboard';},
     isReady: function () {
       return state.open && state.activeMode === 'storyboard' && state.sessionReady &&
@@ -3690,7 +3694,7 @@
       undoStudioBrief();
     },
     reviewCapture: function (capture, storyId) {
-      if (!this.isReady()) return Promise.reject(new Error('Director is busy or unavailable.'));
+      if (!this.canReview()) return Promise.reject(new Error('Open an available Studio conversation before reviewing.'));
       if (!storyId || !capture || ['title','concept','style','invariant'].indexOf(capture.field) === -1 ||
           typeof capture.content !== 'string' || !capture.content.trim()) {
         return Promise.reject(new Error('Choose a saved Project and a complete creative field proposal.'));
@@ -3747,7 +3751,7 @@
       });
     },
     reviewSceneCapture: function (capture, storyId) {
-      if (!this.isReady()) return Promise.reject(new Error('Director is busy or unavailable.'));
+      if (!this.canReview()) return Promise.reject(new Error('Open an available Studio conversation before reviewing.'));
       if (!storyId || !capture || capture.field !== 'scene' ||
           typeof capture.content !== 'string' || !capture.content.trim() ||
           typeof capture.title !== 'string') {

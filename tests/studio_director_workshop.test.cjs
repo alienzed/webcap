@@ -196,3 +196,29 @@ test('Scene split reviews both Intent changes and saves one atomic operation', (
   assert.match(apply, /recordApplied\('scene.split'/);
   assert.match(apply, /Review the original H3 Prompt/);
 });
+
+test('H3 detailed authoring contract is sent only for an explicit Prompt-field draft', async () => {
+  const state = {studioStoryAccess:null,storyboardAttachments:{},workshop:null};
+  const context = vm.createContext({
+    state,Object,String,Promise,
+    requestJson:async () => ({
+      system:'Small creative guidance',actions:[],
+      promptContract:'[Shot 1] Full H3 authoring contract'
+    })
+  });
+  vm.runInContext(part('  function studioDirectorRequestMessages(messages, includePromptContract) {',
+    '  function studioDirectorChatRequestMessages(messages) {'),context);
+  const ordinary = await vm.runInContext(
+    "studioDirectorRequestMessages([{role:'user',content:'Discuss scene'}])",context);
+  const detailed = await vm.runInContext(
+    "studioDirectorRequestMessages([{role:'user',content:'Draft H3 Prompt'}],true)",context);
+  assert.doesNotMatch(ordinary[0].content,/Full H3 authoring contract/);
+  assert.match(detailed[0].content,/Full H3 authoring contract/);
+  assert.match(workbench,/fields\.indexOf\('prompt'\) !== -1/);
+});
+
+test('large explicit Read selections report their true size and refuse silent truncation', () => {
+  assert.match(workbench,/JSON\.stringify\(payload\)\.length/);
+  assert.match(workbench,/length > 48000/);
+  assert.match(workbench,/Narrow the selection to a Project overview/);
+});

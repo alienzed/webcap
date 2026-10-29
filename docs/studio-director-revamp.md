@@ -18,7 +18,7 @@ Deprecate **new** Directing Guidelines as a separate creative workflow. Existing
 
 ## North star
 
-One creator turns an idea, gag, visual, episode, or developing narrative into **renderable short video Scenes** using one Studio Director conversation. Director is a creative collaborator **and** an operator of documented WebCap capabilities; it is not a generic chat pretending to be a video editor.
+One creator turns an idea, gag, visual, episode, or developing narrative into **renderable short video Scenes** using one Studio Director conversation. **Director develops the creative material; WebCap deterministically performs author-reviewed materialization.** This is not unrestricted LLM tool-use, nor generic chat masquerading as an editor. The current journey-level completion criteria live in the [intention-to-materialization contract](studio-director-materialization-contract.md).
 
 Creative discovery is flexible; production operations are precise. The initial user input may be *nothing*: opening a new Director conversation starts a one-question-at-a-time Writer's Workshop. Director can riff from a short, editable opening script, challenge weak ideas, and help discover **the core appeal**. A clear idea can become one tentative Scene immediately; a complex project can evolve one Scene at a time. There are no required title, ending, Scene count, beat map, or placeholder Scene 1/2 before a Scene 3.
 

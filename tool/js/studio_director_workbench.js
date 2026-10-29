@@ -192,6 +192,9 @@
     // Same exact serializer drives the inspector and the outbound LLM message.
     loadStory(id).then(function (story) {
       var payload = readPayload(story, keys);
+      var length = JSON.stringify(payload).length;
+      if (length > 48000) throw new Error('Selected Read is ' + length.toLocaleString() +
+        ' characters. Narrow the selection to a Project overview or fewer full Scene Prompts.');
       el('studio-dw-read-preview-data').textContent = JSON.stringify(payload, null, 2);
       window.studioDirectorBridge.sendRead(payload, keys);
       lastReadSource = story.id;
@@ -215,9 +218,7 @@
     } else {
       var p=writeStory;
       var data={projectId:p.id,title:p.title,concept:p.concept,style:p.style,invariants:p.invariants};
-      if (operation==='project') data.guidelines=p.guidelines || {};
       if (operation==='scene' || operation==='scenes') {
-        if (operation==='scene') data.guidelines=p.guidelines || {};
         data.currentScenes=(p.sceneOrder||[]).map(function (id,index) {
           var scene=p.scenes[id];
           return {id:id,position:index+1,title:scene.title,intent:scene.summary};

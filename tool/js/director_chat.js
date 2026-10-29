@@ -3170,6 +3170,7 @@
                 if (!window.studioDirectorWorkbench.updateReadiness(readinessData))
                   throw new Error('Readiness JSON parsed, but its fields did not match the expected contract.');
                 studioActionStatus('Director assessment updated.', false);
+                window.studioDirectorWorkbench.setStatus('Assessment updated.', false);
               } catch (processingError) {
                 window.reportConsoleError('Studio readiness fields', processingError);
                 studioActionStatus('Assessment outdated: readiness fields were invalid.', true);

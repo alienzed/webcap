@@ -301,3 +301,20 @@ def test_studio_invariant_capture_roundtrip_and_explicit_existing_identity(sessi
             "expectedRevision": 1, "title": "Invalid", "messages": [],
             "draft": "", "readiness": {**base, "capture": invalid},
         })
+
+def test_studio_scene_capture_is_tentative_conversation_material(sessions):
+    chat = history.create_chat("storyboard")
+    base = {"checks": [], "readHints": [], "writeHint": "scenes", "sceneId": ""}
+    capture = {"field": "scene", "title": "A new moment",
+               "content": "The protagonist discovers the empty platform.", "sceneId": ""}
+    saved = history.save_chat(chat["id"], {
+        "expectedRevision": 0, "title": "Scene planning", "messages": [],
+        "draft": "", "readiness": {**base, "capture": capture},
+    })
+    assert saved["readiness"]["capture"] == capture
+    assert saved["operations"] == []
+    with pytest.raises(ValueError, match="Scene identity"):
+        history.save_chat(chat["id"], {
+            "expectedRevision": 1, "title": "Invalid", "messages": [], "draft": "",
+            "readiness": {**base, "capture": {**capture, "sceneId": "scene-existing"}},
+        })

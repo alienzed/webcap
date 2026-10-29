@@ -48,7 +48,8 @@
     studioBriefProposal: null,
     studioBriefUndo: null,
     studioOperations: [],
-    pendingReadAck: null
+    pendingReadAck: null,
+    studioReadiness: {checks:[], readHints:[], writeHint:'', sceneId:''}
   };
   var STORYBOARD_WORKSHOP_PRIMER = [
     'You are collaborating with an author developing short AI-generated videos.',
@@ -537,6 +538,7 @@
     var workshop = mode === 'storyboard' ? JSON.parse(JSON.stringify(state.workshop)) : null;
     var operations = mode === 'storyboard' ? state.studioOperations.slice() : [];
     var storyAccess = mode === 'storyboard' ? state.studioStoryAccess : null;
+    var readiness = mode === 'storyboard' ? state.studioReadiness : null;
     var title = state.sessionByMode[mode] ? state.sessionByMode[mode].title : 'New chat';
     if (title === 'New chat') {
       var first = messages.find(function (message) { return message.role === 'user' && message.content.trim(); });
@@ -562,7 +564,7 @@
           body: JSON.stringify({
             expectedRevision: current.revision, title: title,
             messages: messages, draft: draft, attachments: attachments, workshop: workshop,
-            operations: operations, storyAccess: storyAccess
+            operations: operations, storyAccess: storyAccess, readiness: readiness
           })
         });
       }).then(function (payload) {
@@ -621,6 +623,8 @@
       state.studioAccessIndex = null;
       state.workshop = chat.workshop || null;
       state.studioOperations = Array.isArray(chat.operations) ? chat.operations.slice() : [];
+      state.studioReadiness = chat.readiness || {checks:[],readHints:[],writeHint:'',sceneId:''};
+      if (window.studioDirectorWorkbench) window.studioDirectorWorkbench.updateReadiness(state.studioReadiness, true);
       state.studioSceneProposal = null;
       state.studioProjectProposal = null;
       state.studioScenesProposal = null;
@@ -2360,6 +2364,8 @@
       } else {
         state.modeMessages.storyboard = [];
         state.studioOperations = [];
+        state.studioReadiness = {checks:[],readHints:[],writeHint:'',sceneId:''};
+        if (window.studioDirectorWorkbench) window.studioDirectorWorkbench.updateReadiness(state.studioReadiness, true);
         state.modeElapsedByAssistantIndex.storyboard = {};
         state.modeMetricsByAssistantIndex.storyboard = {};
         if (!preserveContext) {
@@ -2483,12 +2489,16 @@
         'Then discuss the contents substantively; a receipt alone is not an assessment. ' +
         'Never claim to have inspected unavailable saved fields. ' +
         'READINESS: After your conversational reply, emit a final delimited machine-readable block ' +
-        '[[WEBCAP_READINESS]]JSON[[END_WEBCAP_READINESS]]. JSON is an array of up to 10 ' +
-        'objects with name, scope, ready, content. Name is one of Concept, Characters, Setting, ' +
+        '[[WEBCAP_READINESS]]JSON[[END_WEBCAP_READINESS]]. JSON is an object containing checks ' +
+        '(up to 10 objects with name, scope, ready, content), readHints (0-5 field identifiers), ' +
+        'writeHint (project, new-project, scene, scenes, or scene-edit), and sceneId (known ID or empty). Name is one of Concept, Characters, Setting, ' +
         'Action, Dialogue, Visual / atmosphere, Visual focus, Structure / formula, ' +
         'Variation / repetition, Production feasibility. Scope is project or scene. ' +
         'Content is the complete proposed text for that single category, not a summary of the Project. ' +
-        'Ready is true when materially developed, false when incomplete. Include only relevant categories ' +
+        'Ready is true when materially developed, false when incomplete. For Read hints use ' +
+        'project.concept, project.style, project.invariants, scene.current.summary, ' +
+        'scene.current.prompt or known scene:ID:field. Recommend Write only when appropriate; ' +
+        'unknown IDs are empty. Include only relevant categories ' +
         'actually supported by this conversation; do not invent facts to complete checkboxes. ' +
         'Keep the normal reply brief and focus on the author\'s intent.';
       return outbound;
@@ -3217,6 +3227,10 @@
       if (kind === 'scene') return prepareStudioSceneDraft();
       if (kind === 'scenes') return prepareStudioScenes();
       throw new Error('Unsupported reviewed Write operation: ' + kind);
+    },
+    updateReadiness: function (value) {
+      state.studioReadiness = value;
+      state.sessionDirty.storyboard = true;
     },
     makeProposal: function (instruction) {
       if (!this.isReady()) return Promise.reject(new Error('Director must be ready to draft.'));

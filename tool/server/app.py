@@ -3207,6 +3207,7 @@ def training_setup_route():
             selection_criteria=data.get("selection_criteria"),
             total_media_count=data.get("total_media_count"),
             reset_file=data.get("resetFile") or "",
+            allow_incompatible=not bool(data.get("resetFile")),
         )
         return jsonify({"ok": True, **payload})
     except Exception as exc:

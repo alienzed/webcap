@@ -129,12 +129,43 @@
     }).catch(function (error) { status('Read failed: ' + String(error.message || error), true); })
       .finally(function () { el('studio-dw-read-send').disabled = false; });
   }
+  function showWriteContext() {
+    var operation=el('studio-dw-write-operation').value, text='';
+    if (operation==='new-project') {
+      text='Conversation only. No saved Project fields are included.';
+    } else if (operation==='playbook') {
+      text='The saved H3 Playbook and current conversation are used. The complete saved Playbook appears in the editable review.';
+    } else if (!writeStory) {
+      text='Select a Project to inspect the content Director will use.';
+    } else {
+      var p=writeStory;
+      var data={projectId:p.id,title:p.title,concept:p.concept,style:p.style,invariants:p.invariants};
+      if (operation==='project') data.guidelines=p.guidelines || {};
+      if (operation==='scene' || operation==='scenes') {
+        if (operation==='scene') data.guidelines=p.guidelines || {};
+        data.currentScenes=(p.sceneOrder||[]).map(function (id,index) {
+          var scene=p.scenes[id];
+          return {id:id,position:index+1,title:scene.title,intent:scene.summary};
+        });
+      }
+      if (operation==='scene-edit') {
+        var id=el('studio-dw-write-scene').value, scene=p.scenes&&p.scenes[id];
+        if (scene) data.selectedScene={id:id,title:scene.title,intent:scene.summary,prompt:scene.prompt};
+      }
+      text='Current saved snapshot (reloaded before drafting):' +
+        String.fromCharCode(10) + JSON.stringify(data,null,2) +
+        String.fromCharCode(10) + 'Recent conversation context is also supplied.';
+    }
+    el('studio-dw-write-context-json').textContent=text;
+  }
+
   function setOperation() {
     var operation = el('studio-dw-write-operation').value;
     el('studio-dw-write-scene-row').classList.toggle('hidden', operation !== 'scene-edit');
     el('studio-dw-write-fields').classList.toggle('hidden', operation !== 'scene-edit');
     el('studio-dw-write-project').disabled = operation === 'new-project' || operation === 'playbook';
     el('studio-dw-write-prepare').textContent = operation === 'scene-edit' ? 'Draft Scene revision' : 'Prepare editable review';
+    showWriteContext();
   }
   function renderWriteStory(story) {
     writeStory = story;
@@ -148,6 +179,7 @@
     var preferredScene = recommendations.sceneId || activeTarget().sceneId;
     if (preferredScene && story.scenes && story.scenes[preferredScene])
       select.value = preferredScene;
+    showWriteContext();
   }
   function refreshRead() {
     return refreshProjects().then(function () {return loadStory(el('studio-dw-read-project').value);})
@@ -374,6 +406,7 @@
       loadStory(this.value).then(renderWriteStory).catch(function(e) { status(e.message,true); });
     };
     el('studio-dw-write-operation').onchange=setOperation;
+    el('studio-dw-write-scene').onchange=showWriteContext;
     el('studio-dw-read-send').onclick=readSend;
     el('studio-dw-write-prepare').onclick=writePrepare;
     el('studio-dw-scene-apply').onclick=applyScene;

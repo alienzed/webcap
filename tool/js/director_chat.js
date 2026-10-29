@@ -1863,16 +1863,30 @@
     if (el('studio-brief-concept-selected').checked) changes.concept = el('studio-brief-concept').value.trim();
     if (el('studio-brief-style-selected').checked) changes.style = el('studio-brief-style').value.trim();
     if (el('studio-brief-invariants-selected').checked) {
-      changes.invariants = Array.prototype.map.call(
-        el('studio-brief-invariants').querySelectorAll('.studio-project-invariant'), function (row) {
-          var fields = row.querySelectorAll('select, input, textarea');
-          return {kind: fields[0].value, title: fields[1].value.trim(), text: fields[2].value.trim()};
-        }
-      );
-      if (changes.invariants.some(function (item) { return !item.text; })) {
-        el('studio-brief-error').textContent = 'Every retained invariant needs a description.';
+      var reviewed = Array.from(el('studio-brief-invariants').querySelectorAll('.studio-project-invariant')).map(function (row) {
+        var fields = row.querySelectorAll('select, input, textarea');
+        return {
+          before: row.dataset.original ? JSON.parse(row.dataset.original) : null,
+          after: {kind:fields[0].value, title:fields[1].value.trim(), text:fields[2].value.trim()}
+        };
+      });
+      if (reviewed.some(function (item) {return !item.after.title || !item.after.text;})) {
+        el('studio-brief-error').textContent = 'Every Invariant needs a name and description.';
         return;
       }
+      var operations = [];
+      proposal.expected.invariants.forEach(function (before) {
+        var row = reviewed.find(function (item) {
+          return item.before && item.before.kind === before.kind && item.before.title === before.title;
+        });
+        if (!row) operations.push({op:'remove', before:before});
+        else if (JSON.stringify(before) !== JSON.stringify(row.after))
+          operations.push({op:'update', before:before, after:row.after});
+      });
+      reviewed.forEach(function (row) {
+        if (!row.before) operations.push({op:'add', after:row.after});
+      });
+      if (operations.length) changes.invariantOps = operations;
     }
     Object.keys(changes).forEach(function (key) {
       if (JSON.stringify(changes[key]) === JSON.stringify(proposal.expected[key])) delete changes[key];
@@ -1883,7 +1897,7 @@
     }
     var expected = {};
     Object.keys(changes).forEach(function (field) {
-      expected[field] = proposal.expected[field];
+      if (field !== 'invariantOps') expected[field] = proposal.expected[field];
     });
     state.pending = true;
     syncControls();
@@ -1906,7 +1920,7 @@
         proposal.storyId, []);
       studioActionStatus('Story brief updated. Undo is available.', false);
       var saved = {};
-      Object.keys(changes).forEach(function (key) {saved[key] = result.story[key];});
+      Object.keys(changes).forEach(function (key) {saved[key === 'invariantOps' ? 'invariants' : key] = result.story[key === 'invariantOps' ? 'invariants' : key];});
       return window.studioDirectorBridge.recordApplied('brief.apply',result.story,saved)
         .then(function () {return window.refreshStudioDirectorStoryIfOpen(proposal.storyId);});
     }).catch(function (error) {

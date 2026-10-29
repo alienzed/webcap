@@ -1059,7 +1059,7 @@
         project:'Update Project', 'new-project':'Create Project', scene:'Add Scene',
         scenes:'Add Scenes', 'scene-edit':'Revise Scene', 'scenes-batch':'Revise several Scenes',
         'scene-move':'Move Scene', 'scene-duplicate':'Duplicate Scene',
-        'scene-split':'Split Scene', playbook:'Revise H3 Playbook'
+        'scene-split':'Split Scene', 'scene-invariants':'Use Invariant in Scenes', playbook:'Revise H3 Playbook'
       };
       nextButton.textContent = 'Review next step · ' + (names[recommendations.writeHint] || 'Studio Write');
       nextButton.onclick = openRecommendedWrite;

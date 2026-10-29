@@ -1943,6 +1943,32 @@ def studio_director_story_read_route():
         return jsonify({"ok": False, "error": str(exc)}), 400
 
 
+@app.route("/fs/studio/director/playbook", methods=["GET", "POST"])
+def studio_director_playbook_route():
+    """Review exact user-authored H3 guidance; never mutate built-in expertise."""
+    try:
+        current_config = app_config.load_config_from_disk()
+        guidance = current_config.get("generation_model_guidance") or {}
+        current = str(guidance.get("minimax_h3") or "")
+        if request.method == "GET":
+            return jsonify({"ok": True, "guidance": current})
+        data = request.get_json(silent=True) or {}
+        if not isinstance(data, dict) or set(data) != {"expected", "guidance"}:
+            raise ValueError("Playbook requires reviewed replacement and saved original.")
+        expected, proposed = data["expected"], data["guidance"]
+        if not isinstance(expected, str) or not isinstance(proposed, str) or len(proposed) > 20000:
+            raise ValueError("Playbook guidance must be text shorter than 20,000 characters.")
+        if current != expected:
+            raise RuntimeError("Playbook changed since review. Reopen the latest guidance.")
+        current_config.setdefault("generation_model_guidance", {})["minimax_h3"] = proposed.strip()
+        app_config.save_config_to_disk(current_config)
+        app_config.reload_runtime_config()
+        return jsonify({"ok": True, "guidance": proposed.strip()})
+    except Exception as exc:
+        app.logger.exception("STUDIO PLAYBOOK REVIEW FAILED: %s", exc)
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
 @app.route("/fs/studio/director/scene-fields", methods=["POST"])
 def studio_director_scene_fields_route():
     """Apply only explicitly reviewed Scene text, checking exact saved originals."""
@@ -2114,7 +2140,7 @@ def director_chat_route():
         if not isinstance(messages, list) or not messages:
             raise ValueError("Director Chat messages are required.")
         operation = str(data.get("operation") or "freeform_chat").strip()
-        if operation not in {"freeform_chat", "storyboard_workshop_shots", "storyboard_story_guidelines", "studio_scene_draft", "studio_project_draft", "studio_scene_sequence_draft", "studio_brief_draft", "studio_scene_field_draft"}:
+        if operation not in {"freeform_chat", "storyboard_workshop_shots", "storyboard_story_guidelines", "studio_scene_draft", "studio_project_draft", "studio_scene_sequence_draft", "studio_brief_draft", "studio_scene_field_draft", "studio_playbook_draft"}:
             raise ValueError("Unsupported Director Chat operation.")
         contract = {"operation": operation, "messages": messages}
         if operation == "studio_brief_draft":
@@ -2137,6 +2163,11 @@ def director_chat_route():
                     },
                     "rationale": {"type": "string"},
                 },
+            }
+        if operation == "studio_playbook_draft":
+            contract["response_schema"] = {
+                "type": "object", "additionalProperties": False, "required": ["guidance"],
+                "properties": {"guidance": {"type": "string", "maxLength": 20000}},
             }
         if operation == "studio_scene_field_draft":
             contract["response_schema"] = {

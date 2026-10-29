@@ -126,6 +126,36 @@ def _validate_operations(operations):
     return result
 
 
+def _validate_readiness(value):
+    """Bounded, explicitly model-proposed conversation working state; never Project authority."""
+    if value is None:
+        return {"checks": [], "readHints": [], "writeHint": "", "sceneId": ""}
+    if not isinstance(value, dict) or set(value) != {"checks", "readHints", "writeHint", "sceneId"}:
+        raise ValueError("Studio readiness must contain checks, Read hints and Write hint.")
+    checks = value["checks"]
+    if not isinstance(checks, list) or len(checks) > 30:
+        raise ValueError("Studio readiness has too many assessments.")
+    names = {"Concept", "Characters", "Setting", "Action", "Dialogue",
+             "Visual / atmosphere", "Visual focus", "Structure / formula",
+             "Variation / repetition", "Production feasibility"}
+    for item in checks:
+        if (not isinstance(item, dict) or set(item) != {"name", "scope", "ready", "content"}
+                or item["name"] not in names or item["scope"] not in {"project", "scene"}
+                or not isinstance(item["ready"], bool) or not isinstance(item["content"], str)
+                or len(item["content"]) > 8000):
+            raise ValueError("Studio readiness contains an invalid assessment.")
+    read_hints = value["readHints"]
+    if (not isinstance(read_hints, list) or len(read_hints) > 15
+            or any(not isinstance(hint, str) or len(hint) > 120 for hint in read_hints)):
+        raise ValueError("Studio Read recommendations are invalid.")
+    if value["writeHint"] not in {"", "project", "new-project", "scene", "scenes", "scene-edit"}:
+        raise ValueError("Studio Write recommendation is invalid.")
+    if not isinstance(value["sceneId"], str) or len(value["sceneId"]) > 160:
+        raise ValueError("Studio Scene recommendation is invalid.")
+    return {"checks": checks, "readHints": read_hints,
+            "writeHint": value["writeHint"], "sceneId": value["sceneId"]}
+
+
 def _validate_story_access(access):
     """One explicit conversation-owned read grant, never copied Story content."""
     if access is None:
@@ -173,7 +203,7 @@ def create_chat(mode):
         chat_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ") + "-" + uuid.uuid4().hex[:8]
         now = _now()
         chat = {"id": chat_id, "mode": mode, "title": "New chat", "createdAt": now,
-                "updatedAt": now, "revision": 0, "messages": [], "draft": "", "attachments": {}, "workshop": None, "operations": [], "storyAccess": None}
+                "updatedAt": now, "revision": 0, "messages": [], "draft": "", "attachments": {}, "workshop": None, "operations": [], "storyAccess": None, "readiness": _validate_readiness(None)}
         _write(_path(chat_id), chat)
         _set_active(mode, chat_id)
         return chat
@@ -206,6 +236,7 @@ def save_chat(chat_id, payload):
                     workshop=_validate_workshop(payload.get("workshop")),
                     operations=_validate_operations(payload.get("operations", chat.get("operations", []))),
                     storyAccess=_validate_story_access(payload.get("storyAccess", chat.get("storyAccess"))),
+                    readiness=_validate_readiness(payload.get("readiness", chat.get("readiness"))),
                     revision=chat["revision"] + 1, updatedAt=_now())
         _write(path, chat)
         return chat

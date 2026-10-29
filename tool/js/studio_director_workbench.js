@@ -321,7 +321,13 @@
     list.forEach(function (item) {
       var details=document.createElement('details'), heading=document.createElement('summary'), content=document.createElement('pre');
       details.dataset.ready=item.ready ? 'true':'false';
-      heading.textContent = (item.scope === 'scene' ? 'Scene · ' : 'Project · ') + item.name;
+      var checkbox = document.createElement('input'), name = document.createElement('span');
+      checkbox.type = 'checkbox'; checkbox.checked = !!item.ready; checkbox.disabled = true;
+      checkbox.setAttribute('aria-label', item.name + (item.ready ? ' ready' : ' still developing'));
+      name.textContent = (item.scope === 'scene' ?
+        'Scene' + (recommendations.sceneId ? ' ' + recommendations.sceneId : '') + ' · ' :
+        'Project · ') + item.name;
+      heading.append(checkbox, name);
       content.textContent = item.content;
       details.append(heading,content);host.appendChild(details);
     });

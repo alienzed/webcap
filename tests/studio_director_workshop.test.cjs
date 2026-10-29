@@ -170,3 +170,17 @@ test('reviewed Scene move and duplicate use deterministic WebCap operations, not
   assert.match(apply, /recordApplied/);
   assert.match(apply, /saved, but conversation recording or refresh failed/);
 });
+
+test('multi-Scene review drafts together and applies selected fields in one atomic request', () => {
+  assert.match(html, /value="scenes-batch">Revise several Scenes/);
+  assert.match(html, /id="studio-dw-batch-review"/);
+  assert.match(workbench, /makeProposal\(request, 'studio_scene_batch_draft'\)/);
+  assert.match(workbench, /'scenes-batch'\) \{/);
+  assert.match(workbench, /function renderBatchReview\(\)/);
+  const applied = workbench.split('  function applyBatchScenes() {')[1]
+    .split('  function prepareStructure(operation, storyId) {')[0];
+  assert.match(applied, /\/fs\/studio\/director\/scene-fields-batch/);
+  assert.match(applied, /flushStudioDirectorStoryEdits/);
+  assert.match(applied, /savedFieldsByScene/);
+  assert.match(applied, /recordApplied/);
+});

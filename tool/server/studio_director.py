@@ -28,6 +28,8 @@ ACTIONS = (
      "description": "Propose up to eight tentative Scenes for reviewed insertion."},
     {"name": "scene.revise", "status": "available",
      "description": "Propose and review scoped edits to an existing Scene Title, Intent or H3 Prompt."},
+    {"name": "playbook.propose", "status": "available",
+     "description": "Propose an editable replacement for existing H3 Playbook guidance; author reviews and applies."},
     {"name": "scene.move", "status": "planned",
      "description": "Reorder Scenes with Director assistance; existing Studio manual editing remains available."},
 )

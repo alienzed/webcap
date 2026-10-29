@@ -109,3 +109,17 @@ test('capture is optional, bounded and remains editable authoring material, not 
   assert.match(workbench, /return showSceneReview\(story, sceneTarget/);
   assert.match(workbench, /setReadinessFreshness/);
 });
+
+test('Invariant capture uses explicit saved identity rather than treating renames as additions', () => {
+  const capture = {
+    field:'invariant',content:'Short dark hair and a red scarf.',sceneId:'',
+    kind:'character',title:'Alicia',beforeKind:'character',beforeTitle:'Alice'
+  };
+  assert.deepEqual(parse(JSON.stringify({...valid,capture})).capture,capture);
+  assert.match(director, /var redirect = \(proposal\.renames \|\| \[\]\)/);
+  assert.match(director, /capture\.beforeKind && capture\.beforeTitle/);
+  assert.match(director, /proposed\.invariants\[index\] = after/);
+  assert.match(director, /Review and edit before saving/);
+  assert.match(workbench, /isInvariant = capture\.field === 'invariant'/);
+  assert.match(workbench, /creativeCapture = capture/);
+});

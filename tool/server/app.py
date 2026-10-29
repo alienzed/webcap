@@ -2171,7 +2171,7 @@ def director_chat_route():
             }
         if operation == "studio_scene_field_draft":
             contract["response_schema"] = {
-                "type": "object", "additionalProperties": False, "minProperties": 1,
+                "type": "object", "additionalProperties": False,
                 "properties": {
                     "title": {"type": "string"},
                     "summary": {"type": "string"},

@@ -3278,7 +3278,7 @@
       return studioDirectorRequestMessages([{role:'user',content:instruction}]).then(function (messages) {
         return requestJson('/fs/director/chat', {
           method:'POST',headers:{'Content-Type':'application/json'},
-          body:JSON.stringify({model:state.modelId,messages:messages})
+          body:JSON.stringify({model:state.modelId,operation:'studio_scene_field_draft',messages:messages})
         });
       }).then(function (payload) {
         if (!payload.job || !payload.job.jobId) throw new Error('Director did not queue a draft.');

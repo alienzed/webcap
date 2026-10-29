@@ -178,3 +178,78 @@ test('reconciliation is hidden when no annotations are omitted', () => {
   assert.equal(el.classList.contains('hidden'), true);
   assert.equal(el.children.length, 0);
 });
+
+const detailsSource = fs.readFileSync('tool/js/item_details.js', 'utf8');
+const liveSyncStart = source.indexOf('function syncCaptionAssistTagsForMediaKey(mediaKey) {');
+const liveSyncEnd = source.indexOf('function refreshCaptionAssistAfterTagMutation(', liveSyncStart);
+const tagPanelsStart = detailsSource.indexOf('function refreshTagDrivenPanelsForMediaKey(mediaKey) {');
+const tagPanelsEnd = detailsSource.indexOf('function updateTagOrderForMediaKey(', tagPanelsStart);
+const omittedStart = source.indexOf('function getCaptionAssistOmittedCorrections(');
+const omittedEnd = source.indexOf('function getCaptionAssistDraftForMediaItem(', omittedStart);
+assert.ok(liveSyncStart > 0 && liveSyncEnd > liveSyncStart, 'Caption Assist must expose a tag-only refresh');
+assert.ok(tagPanelsStart > 0 && tagPanelsEnd > tagPanelsStart, 'Shared tag mutation refresh must remain available');
+assert.ok(omittedStart > 0 && omittedEnd > omittedStart, 'Live sync must use the existing reconciliation rules');
+
+test('external tag changes immediately reconcile the active draft without requesting a model', () => {
+  const item = {key: 'one', fileName: 'one.jpg'};
+  const candidate = {mediaKey: 'one', text: 'A red shirt.', omittedAssignments: [], omittedCorrections: []};
+  const assignments = [{group: 'Clothing', term: 'red shirt'}];
+  const tags = [];
+  let uiSyncs = 0;
+  let panelRefreshes = 0;
+  const ctx = {
+    state: {currentItem: item},
+    captionAssistCandidate: candidate,
+    buildCaptionAssistRequest() {
+      return {assignments: assignments.slice(), tags: tags.slice()};
+    },
+    checklistGroupTermAppearsInCaptionText(group, term, key, caption) {
+      return caption.toLowerCase().includes(term.toLowerCase());
+    },
+    captionAssistAnnotationAppearsInCaption(caption, term) {
+      return caption.toLowerCase().includes(term.toLowerCase());
+    },
+    syncCaptionAssistCandidateUi() { uiSyncs += 1; },
+    renderFileList() {},
+    updateBalanceDistributionWheel() {},
+    renderChecklistPanel() { panelRefreshes += 1; },
+    renderItemTagsPanel() {},
+    renderItemMetadataPanel() {},
+    renderAnnotateStrip() {}
+  };
+  vm.createContext(ctx);
+  vm.runInContext(
+    source.slice(omittedStart, omittedEnd) +
+    source.slice(liveSyncStart, liveSyncEnd) +
+    detailsSource.slice(tagPanelsStart, tagPanelsEnd) +
+    '\nthis.refreshTags = refreshTagDrivenPanelsForMediaKey;',
+    ctx
+  );
+  function reconciledTerms() {
+    return Array.from(candidate.omittedCorrections, row => row.term);
+  }
+
+  ctx.refreshTags('one');
+  assert.deepEqual(reconciledTerms(), []);
+  assignments.push({group: 'Clothing', term: 'blue tie'});
+  ctx.refreshTags('one');
+  assert.deepEqual(reconciledTerms(), ['blue tie']);
+  tags.push('studio');
+  ctx.refreshTags('one');
+  assert.deepEqual(reconciledTerms(), ['blue tie', 'studio']);
+  assignments.pop();
+  ctx.refreshTags('one');
+  assert.deepEqual(reconciledTerms(), ['studio']);
+  tags.pop();
+  ctx.refreshTags('one');
+  assert.deepEqual(reconciledTerms(), []);
+  assert.equal(candidate.text, 'A red shirt.', 'tag changes must preserve the existing draft');
+  assert.equal(uiSyncs, 5, 'the active candidate must resync on every current-item tag change');
+  assert.equal(panelRefreshes, 5, 'the existing checklist refresh must continue');
+
+  ctx.refreshTags('other');
+  assert.equal(uiSyncs, 5, 'changes to other media must not redraw the active candidate');
+  ctx.state.currentItem = {key: 'two', fileName: 'two.jpg'};
+  ctx.refreshTags('two');
+  assert.equal(uiSyncs, 5, 'a different current item must not modify the old candidate');
+});

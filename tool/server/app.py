@@ -2217,11 +2217,6 @@ def director_chat_route():
                             },
                         },
                     },
-                    "firstScene": {
-                        "type": "object", "additionalProperties": False,
-                        "required": ["title", "summary"],
-                        "properties": {"title": {"type": "string"}, "summary": {"type": "string"}},
-                    },
                     "firstScenes": {
                         "type": "array", "maxItems": 12,
                         "items": {

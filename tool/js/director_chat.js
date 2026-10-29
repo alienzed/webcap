@@ -2634,7 +2634,7 @@
         if (inside) {
           output += c;
           if (escaped) escaped = false;
-          else if (c === '\\\\') escaped = true;
+          else if (c === '\\') escaped = true;
           else if (c === '"') inside = false;
         } else if (c === '"') {
           inside = true; output += c;

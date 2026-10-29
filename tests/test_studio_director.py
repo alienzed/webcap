@@ -12,7 +12,7 @@ def test_writer_workshop_uses_existing_h3_prompt_contract_and_user_playbook(monk
     )
     result = guidance("minimax_h3")
     text = result["system"]
-    assert "STUDIO DIRECTOR | WRITER'S WORKSHOP" in text
+    assert "STUDIO DIRECTOR | EXPERT CREATIVE PRODUCER" in text
     assert "core appeal" in text.lower()
     assert "Ask one focused question when a consequential creative decision is missing" in text
     assert "4–15 seconds" in text

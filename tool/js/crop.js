@@ -24,6 +24,13 @@ function getCropEl(id) {
   return document.getElementById(id);
 }
 
+// Crop owns whether its modal is open; other keyboard handlers can yield to it.
+function isCropModalOpen() {
+  var modal = getCropEl('crop-modal');
+  return !!(modal && !modal.classList.contains('hidden'));
+}
+window.isCropModalOpen = isCropModalOpen;
+
 function destroyCropper() {
   if (cropperInstance) {
     cropperInstance.destroy();

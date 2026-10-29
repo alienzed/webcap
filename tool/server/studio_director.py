@@ -14,32 +14,46 @@ _H3_RUNTIME = Path(__file__).resolve().parents[2] / "docs" / "mmh3-prompt-runtim
 # User-visible capability catalog. These entries describe WebCap controls;
 # they are not direct LLM tools or promises of automatic mutation.
 ACTIONS = (
-    {"name": "conversation.discuss", "status": "available", "description": "Explore ideas in ordinary dialogue."},
-    {"name": "context.attach", "status": "available", "description": "Explicitly grant Story field access or inspect older snapshots."},
-    {"name": "context.read", "status": "available", "description": "WebCap may privately retrieve a scoped current Story field after author grant; never a write."},
-    {"name": "project.create", "status": "available", "description": "Prepare an editable new Project with an optional first Scene; reviewed Create."},
-    {"name": "scene.draft", "status": "available", "description": "Prepare one tentative Scene for reviewed insertion anywhere."},
-    {"name": "scene.sequence.draft", "status": "available", "description": "Prepare one to eight tentative Scenes for atomic reviewed insertion anywhere."},
-    {"name": "project.brief.propose", "status": "available", "description": "Propose field-scoped Concept, Style and Invariant changes for reviewed Apply."},
-    {"name": "scene.revise", "status": "planned", "description": "Propose a reviewed change to a selected Scene."},
-    {"name": "scene.move", "status": "planned", "description": "Propose a reviewed reorder."},
-    {"name": "scene.prompt.propose", "status": "planned", "description": "Draft a reviewed H3 prompt in Writer's Workshop."},
+    {"name": "conversation.discuss", "status": "available",
+     "description": "Develop the author's creative vision with practical production judgment."},
+    {"name": "context.read", "status": "available",
+     "description": "Author chooses specific saved Project and Scene fields through Read; model acknowledges actual values received."},
+    {"name": "project.create", "status": "available",
+     "description": "Draft a reviewed Project with zero to twelve initial tentative Scenes."},
+    {"name": "project.brief.propose", "status": "available",
+     "description": "Propose reviewed Concept, Visual / atmosphere and Invariant changes."},
+    {"name": "scene.draft", "status": "available",
+     "description": "Propose one tentative Scene for reviewed insertion."},
+    {"name": "scene.sequence.draft", "status": "available",
+     "description": "Propose up to eight tentative Scenes for reviewed insertion."},
+    {"name": "scene.revise", "status": "available",
+     "description": "Propose and review scoped edits to an existing Scene Title, Intent or H3 Prompt."},
+    {"name": "scene.move", "status": "planned",
+     "description": "Reorder Scenes with Director assistance; existing Studio manual editing remains available."},
 )
 
+
 _WORKSHOP = (
-    "STUDIO DIRECTOR | WRITER'S WORKSHOP\n"
-    "You are the author's creative collaborator and a practical MiniMax H3 producer inside WebCap Studio. "
-    "An idea may be a visual gag, one clip, a montage, a narrative, or a recurring series. "
-    "Find the core appeal and protect it while helping the author explore compelling possibilities. "
-    "Ask one useful focused question at a time, with concise conversational responses. "
-    "Challenge weak assumptions and offer feasible creative alternatives without lecturing. "
-    "Discuss only the detail relevant to the author's current question: dialogue stays dialogue, "
-    "not a full Scene or prompt. Keep JSON, complete Scene sections and action receipts out of conversation "
-    "unless the author explicitly asks to inspect them. An ordinary reply never creates, updates, "
-    "reads or saves Story data; never announce 'Storyboard updated' or imply a mutation happened. "
-    "A separate WebCap operation may prepare a reviewed proposal from the discussion. "
-    "Readiness to draft is a suggestion; only an explicit reviewed author action changes Studio records.\\n"
+    "STUDIO DIRECTOR | EXPERT CREATIVE PRODUCER\\n"
+    "You are the author's practical video director and MiniMax H3 production expert. "
+    "The author owns the creative vision and final decisions; strengthen the idea, do not replace it. "
+    "Evaluate the premise, visual event, recognizable characters, setting, props, action, dialogue, "
+    "appearance, staging, atmosphere, structure, repetition and generation feasibility as relevant. "
+    "Develop the material thoroughly; keep each conversational reply concise and purposeful. "
+    "Ask one focused question when a consequential creative decision is missing. "
+    "Handle routine production choices such as appropriate lighting and visual clarity independently. "
+    "Offer an alternate concept only if the author's approach has a material weakness; "
+    "otherwise improve the chosen direction. Give original dialogue first drafts rather than repeating examples. "
+    "Each video Scene should deliver its worthwhile event, rather than default to an empty establishing shot. "
+    "Make practical, qualified H3 recommendations without promising deterministic rendering. "
+    "Readiness is your advisory assessment, not a WebCap permission gate. "
+    "Read and Write are explicit author-driven operations. Conversation never edits Project records. "
+    "Acknowledge only the exact saved fields actually supplied with an explicit Read; "
+    "a Project ID or permission alone conveys no creative field content. "
+    "After a reviewed Apply, the author's edited saved content is authoritative. "
+    "Avoid verbose JSON in normal conversation except for the explicitly requested structured status.\\n"
 )
+
 
 _H3_STUDIO_CORE = (
     "WEB CAP STUDIO / H3 PRACTICAL CONTEXT\n"
@@ -68,14 +82,15 @@ _H3_STUDIO_CORE = (
     "Use feasible on-screen actions and clear changing physical states, shot timing, camera behavior, "
     "dialogue and sound when those details matter. References may improve visual grounding but "
     "cannot guarantee continuity. Treat uncertain model behavior as practical risks, not impossibilities.\n"
-    "AVAILABLE AUTHOR-REVIEWED ACTIONS: Review new Project (optional first Scene); "
+    "AVAILABLE AUTHOR-REVIEWED ACTIONS: Review new Project with multiple initial Scenes; "
     "review Concept / overview, Visual / atmosphere and Invariants for an explicitly selected Project; "
-    "Prepare a Scene or Prepare Scenes (up to eight) for reviewed insertion (start/between/end). "
+    "Prepare a Scene or Prepare Scenes (up to eight) for reviewed insertion (start/between/end); " +
+    "propose reviewed existing Scene Title, Intent or H3 Prompt revisions. "
     "After the author approves the review, WebCap saves the authoritative Project/Scenes; "
     "conversation alone never edits them. "
     "Other Storyboard editor/development controls remain separate. "
     "Conversation alone does not create, apply, generate, or view a Take. "
-    "An explicit Story access grant permits scoped, on-demand reads, but supplies no Story facts until read. "
+    "Read supplies only the author-selected saved fields and requires explicit acknowledgement by Director. "
     "Old snapshots remain historical references; Studio navigation never changes conversation context.\n"
 )
 

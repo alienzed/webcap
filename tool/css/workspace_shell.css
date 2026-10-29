@@ -3884,3 +3884,58 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
 
 .studio-project-extra-scene {display:flex;flex-direction:column;gap:8px;margin:12px 0;padding:12px;border:1px solid var(--border);border-radius:8px;}
 .studio-project-extra-scene input,.studio-project-extra-scene textarea {width:100%;font-size:16px;}
+
+
+/* Director design audit: action-local hierarchy and a non-blocking narrow task sheet. */
+#studio-dw-open-actions, #studio-dw-close-actions { display: none; }
+.studio-director-workbench .studio-dw-heading {align-items:start;justify-content:space-between;flex-direction:row;}
+.studio-director-workbench .studio-dw-heading > div {display:flex;flex-direction:column;gap:4px;min-width:0;}
+.studio-director-workbench .studio-dw-heading span {overflow-wrap:anywhere;}
+.studio-director-workbench .studio-dw-scope {font-size:14px;color:var(--muted);margin:0;overflow-wrap:anywhere;}
+.studio-director-workbench .studio-dw-status.hidden {display:none!important;}
+.studio-director-workbench .studio-dw-undo {display:flex;gap:9px;align-items:center;justify-content:space-between;border:1px solid var(--border);border-radius:9px;padding:9px;font-size:14px;}
+.studio-director-workbench .studio-dw-undo.hidden {display:none!important;}
+.studio-director-workbench .studio-dw-undo button {font-size:14px;min-width:112px;}
+.studio-director-workbench .studio-dw-submit {position:sticky;bottom:-18px;z-index:2;display:flex;flex-direction:column;gap:8px;padding:12px 0;background:var(--panel);border-top:1px solid var(--border);}
+.studio-director-workbench .studio-dw-submit span {font-size:14px;color:var(--muted);}
+.studio-director-workbench #studio-dw-read-preview {border:1px solid var(--border);border-radius:9px;padding:9px;}
+.studio-director-workbench #studio-dw-read-preview pre {white-space:pre-wrap;overflow-wrap:anywhere;font-size:13px;max-height:260px;overflow:auto;}
+.studio-director-workbench .studio-dw-assessment-item {width:100%;text-align:left;font-size:15px;border-radius:9px;border:1px solid var(--border);min-height:40px;background:var(--panel);padding:9px;}
+.studio-director-workbench .studio-dw-playbook-open {width:100%;margin-top:13px;border:0;border-top:1px solid var(--border);border-radius:0;font-size:14px;text-align:left;background:transparent;color:var(--muted);}
+#studio-dw-assessment-content {white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;font-size:16px;max-height:min(65vh,700px);overflow:auto;}
+#studio-dw-assessment-dialog {max-width:min(760px,96vw);max-height:calc(100dvh - 40px);}
+@container (max-width:820px) {
+  .director-chat-drawer.studio-director #studio-dw-open-actions {display:inline-flex;align-items:center;}
+  .director-chat-drawer.studio-director .director-chat-layout {display:flex;flex-direction:column;}
+  .director-chat-drawer.studio-director .director-chat-conversation {height:100%;}
+  .director-chat-drawer.studio-director .director-chat-sidebar {
+    position:absolute;top:64px;right:0;bottom:0;left:auto;z-index:9;
+    width:min(390px,100%);height:auto;max-height:none;flex:none;order:initial;
+    overflow:hidden;visibility:hidden;pointer-events:none;
+    transform:translateX(105%);transition:transform .18s ease,visibility .18s;
+    border:0;border-left:1px solid var(--border);border-top:0;
+  }
+  .director-chat-drawer.studio-director.studio-actions-open .director-chat-sidebar {
+    visibility:visible;pointer-events:auto;transform:translateX(0);
+  }
+  .director-chat-drawer.studio-director .studio-director-workbench {height:100%;overflow-y:auto;}
+  .director-chat-drawer.studio-director #studio-dw-close-actions {display:inline-flex;}
+}
+@media (prefers-reduced-motion:reduce) {
+  .director-chat-drawer.studio-director .director-chat-sidebar {transition:none;}
+}
+
+/* LLM-authored receipt status stays next to the corresponding Read event. */
+.director-chat-read-receipt {margin:6px 0 14px;padding:4px 10px;font-size:14px;color:var(--muted);border-left:2px solid var(--accent,#628fd1);}
+.director-chat-read-receipt[data-error="true"] {color:var(--danger,#f87171);border-left-color:currentColor;}
+.studio-director-workbench .studio-dw-panel {background:transparent;}
+.studio-director-workbench .studio-dw-readiness-list {gap:8px;}
+.studio-director-workbench .studio-dw-undo button:disabled {opacity:.5;cursor:wait;}
+#studio-dw-assessment-dialog .studio-scene-draft-header {display:flex;align-items:center;justify-content:space-between;gap:12px;}
+#studio-dw-assessment-dialog .studio-scene-draft-content {min-width:0;overflow-y:auto;}
+@container (max-width:820px) {
+  .director-chat-drawer.studio-director .director-chat-drawer-header {gap:8px;}
+  .director-chat-drawer.studio-director .director-chat-header-actions {gap:6px;}
+  .director-chat-drawer.studio-director #studio-dw-open-actions {min-height:40px;font-size:15px;}
+  .director-chat-drawer.studio-director .director-chat-sidebar {background:var(--panel-soft);}
+}

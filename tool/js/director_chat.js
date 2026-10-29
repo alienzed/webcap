@@ -333,7 +333,7 @@
     if (description) {
       description.textContent = studio
         ? (state.attachmentPending ? 'Connecting Project…'
-          : 'Working with: ' + studioWorkingStoryLabel() +
+          : 'Write destination: ' + (state.studioStoryAccess ? studioWorkingStoryLabel() : 'Not selected') +
             (state.workshop ? ' · Scene: ' + state.workshop.sceneTitle : ''))
         : (active ? String(active.description || active.label || '') : 'Saved Assistant conversation');
     }
@@ -623,6 +623,8 @@
       state.studioAccessIndex = null;
       state.workshop = chat.workshop || null;
       state.studioOperations = Array.isArray(chat.operations) ? chat.operations.slice() : [];
+      state.studioBriefUndo = null;
+      if (window.studioDirectorWorkbench) window.studioDirectorWorkbench.resetConversation();
       state.studioReadiness = chat.readiness || {checks:[],readHints:[],writeHint:'',sceneId:''};
       if (window.studioDirectorWorkbench) window.studioDirectorWorkbench.updateReadiness(state.studioReadiness, true);
       state.studioSceneProposal = null;
@@ -1110,6 +1112,36 @@
 
       row.appendChild(label);
       row.appendChild(body);
+      if (message.role === 'user' && message.content.indexOf('[WEBCAP EXPLICIT READ]') !== -1) {
+        var next = currentMessages()[index + 1];
+        var receipt = document.createElement('div');
+        receipt.className = 'director-chat-read-receipt';
+        if (!next || next.role !== 'assistant') {
+          receipt.textContent = 'Awaiting Director’s field acknowledgment';
+        } else {
+          try {
+            var source = message.content.split('[WEBCAP EXPLICIT READ]')[1]
+              .split('[END WEBCAP READ]')[0].trim();
+            var fields = JSON.parse(source).fields;
+            if (!Array.isArray(fields)) throw new Error('Read event contains no fields.');
+            var match = String(next.content || '').split(String.fromCharCode(10))
+              .find(function (line) { return /^RECEIVED:/i.test(line.trim()); }) || '';
+            var found = match.trim().replace(/^RECEIVED:/i, '').split(',')
+              .map(function (key) { return key.trim(); }).filter(Boolean);
+            var expected = fields.map(function (item) { return item.id; });
+            var ok = found.length === expected.length &&
+              expected.every(function (id) { return found.indexOf(id) >= 0; });
+            receipt.textContent = ok
+              ? 'Director acknowledged ' + expected.length + ' selected fields'
+              : 'Director acknowledgment incomplete or mismatched · inspect its response';
+            receipt.dataset.error = ok ? 'false' : 'true';
+          } catch (error) {
+            receipt.textContent = 'Read receipt could not be checked: ' + error.message;
+            receipt.dataset.error = 'true';
+          }
+        }
+        row.appendChild(receipt);
+      }
 
       var elapsedMap = currentElapsedMap();
       var metricsMap = currentMetricsMap();
@@ -1334,6 +1366,10 @@
     var briefUndo = el('director-studio-undo-brief');
     briefUndo.classList.toggle('hidden', state.activeMode !== 'storyboard' || !state.studioBriefUndo);
     briefUndo.disabled = state.pending || !state.studioBriefUndo;
+    if (state.activeMode === 'storyboard' && window.studioDirectorWorkbench) {
+      window.studioDirectorWorkbench.setUndo(state.studioBriefUndo);
+      el('studio-dw-undo-button').disabled = state.pending || !state.studioBriefUndo;
+    }
     var prepare = el('director-chat-workshop-prepare');
     if (prepare) {
       prepare.disabled = state.pending || !state.modelId || !!(state.workshop && state.workshop.shotError) || !currentMessages().some(function (message) { return message.role === 'user'; });
@@ -1547,6 +1583,7 @@
     };
     studioDirectorRequestMessages([{ role: 'user', content: JSON.stringify(input) }])
       .then(function (messages) {
+        window.studioDirectorWorkbench.showSentWriteContext('studio_project_draft', messages);
         return requestJson('/fs/director/chat', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ model: state.modelId, operation: 'studio_project_draft', messages: messages })
@@ -1756,6 +1793,7 @@
       };
       return studioDirectorRequestMessages([{ role: 'user', content: JSON.stringify(input) }])
         .then(function (messages) {
+          window.studioDirectorWorkbench.showSentWriteContext('studio_brief_draft', messages);
           return requestJson('/fs/director/chat', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({model: state.modelId, operation: 'studio_brief_draft', messages: messages})
@@ -2017,6 +2055,7 @@
       };
       return studioDirectorRequestMessages([{ role: 'user', content: JSON.stringify(input) }])
         .then(function (messages) {
+          window.studioDirectorWorkbench.showSentWriteContext('studio_scene_sequence_draft', messages);
           return requestJson('/fs/director/chat', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ model: state.modelId, operation: 'studio_scene_sequence_draft', messages: messages })
@@ -2219,6 +2258,7 @@
       };
       return studioDirectorRequestMessages([{ role: 'user', content: JSON.stringify(input, null, 2) }])
         .then(function (messages) {
+          window.studioDirectorWorkbench.showSentWriteContext('studio_scene_draft', messages);
           return requestJson('/fs/director/chat', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -2422,6 +2462,8 @@
       } else {
         state.modeMessages.storyboard = [];
         state.studioOperations = [];
+        state.studioBriefUndo = null;
+        if (window.studioDirectorWorkbench) window.studioDirectorWorkbench.resetConversation();
         state.studioReadiness = {checks:[],readHints:[],writeHint:'',sceneId:''};
         if (window.studioDirectorWorkbench) window.studioDirectorWorkbench.updateReadiness(state.studioReadiness, true);
         state.modeElapsedByAssistantIndex.storyboard = {};
@@ -3511,6 +3553,10 @@
       state.sessionDirty.storyboard = true;
       return persistSession('storyboard');
     },
+    undoBrief: function () {
+      if (!state.studioBriefUndo) throw new Error('No reversible Project brief change exists.');
+      undoStudioBrief();
+    },
     updateReadiness: function (value) {
       state.studioReadiness = value;
       state.sessionDirty.storyboard = true;
@@ -3521,6 +3567,7 @@
       syncControls();
       startProgress();
       return studioDirectorRequestMessages([{role:'user',content:instruction}]).then(function (messages) {
+        window.studioDirectorWorkbench.showSentWriteContext(operation || 'studio_scene_field_draft', messages);
         return requestJson('/fs/director/chat', {
           method:'POST',headers:{'Content-Type':'application/json'},
           body:JSON.stringify({model:state.modelId,operation:operation || 'studio_scene_field_draft',messages:messages})

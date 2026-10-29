@@ -9,6 +9,8 @@ on:
       - 'tool/server/director_chat_history.py'
       - 'tool/server/app.py'
       - 'tool/tool.html'
+      - 'tool/css/workspace_shell.css'
+      - 'tests/studio_director_design_fixes.test.cjs'
       - 'tests/test_studio_director.py'
       - 'tests/test_director_chat_history.py'
       - 'tests/test_storyboard_store.py'
@@ -28,6 +30,7 @@ jobs:
         run: |
           node --check tool/js/director_chat.js
           node --check tool/js/studio_director_workbench.js
+          node --test tests/studio_director_design_fixes.test.cjs tests/studio_director_workshop.test.cjs tests/studio_director_scene_draft.test.cjs
       - name: Python compile
         run: |
           python -m compileall -q tool/server tests/test_studio_director.py tests/test_director_chat_history.py tests/test_storyboard_store.py

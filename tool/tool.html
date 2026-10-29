@@ -2086,6 +2086,7 @@
                         <span id="director-chat-save-status" aria-live="polite"></span>
                     </div>
                     <div class="director-chat-header-actions">
+                        <button id="studio-dw-open-actions" type="button" class="review-captions-btn" aria-controls="director-chat-sidebar" aria-expanded="false">Actions</button>
                         <button id="director-chat-pin" type="button" class="director-chat-pin" title="Pin Assistant" aria-label="Pin Assistant" aria-pressed="false">
                             <svg viewBox="0 0 24 24" aria-hidden="true">
                                 <path d="M9 4h6"></path>
@@ -2161,34 +2162,36 @@
                     </div>
                 </div>
                     </div>
-                    <div class="director-chat-sidebar">
+                    <div id="director-chat-sidebar" class="director-chat-sidebar">
                 <section id="studio-director-workbench" class="studio-director-workbench" aria-label="Director actions and feedback">
-                  <div class="studio-dw-heading"><strong>Director desk</strong><span>Expert guidance · reviewed changes</span></div>
+                  <div class="studio-dw-heading"><div><strong id="studio-dw-heading">Director actions</strong><span id="studio-dw-context">Conversation is independent of Studio navigation</span></div><button id="studio-dw-close-actions" type="button" aria-label="Close Director actions">Close</button></div>
                   <div class="studio-dw-actions">
                     <button id="studio-dw-read" type="button" aria-expanded="false" aria-controls="studio-dw-read-panel">Read…</button>
                     <button id="studio-dw-write" type="button" aria-expanded="false" aria-controls="studio-dw-write-panel">Write…</button>
                   </div>
-                  <div id="studio-dw-status" class="studio-dw-status" role="status" aria-live="polite">Choose Read to share saved fields, or Write to review a proposal.</div>
+                  <div id="studio-dw-status" class="studio-dw-status hidden" role="status" aria-live="polite"></div>
+                  <div id="studio-dw-undo" class="studio-dw-undo hidden"><span id="studio-dw-undo-label">Project brief updated</span><button id="studio-dw-undo-button" type="button">Undo brief change</button></div>
                   <section id="studio-dw-read-panel" class="studio-dw-panel hidden" aria-label="Read selected saved fields">
                     <h3>Read saved material</h3>
-                    <label>Project<select id="studio-dw-read-project"></select></label>
+                    <label>Read from Project<select id="studio-dw-read-project"></select></label>
+                    <p id="studio-dw-read-scope" class="studio-dw-scope"></p>
                     <div id="studio-dw-project-fields" class="studio-dw-field-list" aria-label="Project fields"></div>
                     <details id="studio-dw-scenes">
                       <summary>Scenes · choose individual fields</summary>
                       <div id="studio-dw-scene-fields" class="studio-dw-scene-list"></div>
                     </details>
-                    <button id="studio-dw-read-send" type="button" class="studio-dw-primary">Send selected fields to Director</button>
+                    <details id="studio-dw-read-preview"><summary>Inspect selected saved fields</summary><pre id="studio-dw-read-preview-data"></pre></details>
+                    <div class="studio-dw-submit"><span id="studio-dw-read-count">0 fields selected</span><button id="studio-dw-read-send" type="button" class="studio-dw-primary">Send to Director</button></div>
                   </section>
                   <section id="studio-dw-write-panel" class="studio-dw-panel hidden" aria-label="Write reviewed content">
                     <h3>Write a proposal</h3>
-                    <label>Destination<select id="studio-dw-write-project"></select></label>
+                    <label>Write to Project<select id="studio-dw-write-project"></select></label>
+                    <p id="studio-dw-write-scope" class="studio-dw-scope"></p>
                     <label>Operation<select id="studio-dw-write-operation">
-                      <option value="project">Revise Project fields</option>
-                      <option value="new-project">Create a Project</option>
-                      <option value="scene">Create a Scene</option>
-                      <option value="scenes">Create several Scenes</option>
-                      <option value="scene-edit">Revise existing Scene</option>
-                      <option value="playbook">Improve H3 Playbook</option>
+                      <option value="project">Update Project</option>
+                      <option value="new-project">Create Project</option>
+                      <option value="scenes">Add Scenes (one or more)</option>
+                      <option value="scene-edit">Revise Scene</option>
                     </select></label>
                     <label id="studio-dw-write-scene-row" class="hidden">Scene<select id="studio-dw-write-scene"></select></label>
                     <div id="studio-dw-write-fields" class="studio-dw-field-list hidden">
@@ -2200,11 +2203,12 @@
                       <summary>Context Director will use for this draft</summary>
                       <pre id="studio-dw-write-context-json"></pre>
                     </details>
-                    <button id="studio-dw-write-prepare" type="button" class="studio-dw-primary">Prepare editable review</button>
+                    <div class="studio-dw-submit"><button id="studio-dw-write-prepare" type="button" class="studio-dw-primary">Prepare editable review</button></div>
                   </section>
                   <section class="studio-dw-readiness" aria-label="Director readiness proposals">
-                    <div class="studio-dw-readiness-heading"><strong>Creative readiness</strong><small>Director proposals, not saved fields</small></div>
-                    <div id="studio-dw-readiness-list" class="studio-dw-readiness-list"><p>Director will assess material during conversation.</p></div>
+                    <div class="studio-dw-readiness-heading"><strong>Creative assessment</strong><small>Director opinion · not production status</small></div>
+                    <div id="studio-dw-readiness-list" class="studio-dw-readiness-list"><p>Not assessed yet.</p></div>
+                    <button id="studio-dw-playbook-open" type="button" class="studio-dw-playbook-open">H3 Playbook · global model guidance</button>
                   </section>
                 </section>
                 <section id="director-studio-flow" class="director-studio-flow hidden" aria-label="Active Story and proposed field changes">
@@ -2259,6 +2263,7 @@
                     </div>
                 </div>
             </aside>
+            <dialog id="studio-dw-assessment-dialog" class="studio-scene-draft-review" aria-labelledby="studio-dw-assessment-title"><header class="studio-scene-draft-header"><h2 id="studio-dw-assessment-title">Creative assessment</h2><button id="studio-dw-assessment-close" type="button">Close</button></header><div class="studio-scene-draft-content"><pre id="studio-dw-assessment-content"></pre></div></dialog>
             <dialog id="studio-dw-playbook-review" class="studio-scene-draft-review" aria-labelledby="studio-dw-playbook-title">
               <header class="studio-scene-draft-header"><div><h2 id="studio-dw-playbook-title">Review H3 Playbook</h2>
                 <p>Director's proposal is editable. Built-in technical rules remain unchanged.</p></div>

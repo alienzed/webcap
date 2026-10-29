@@ -110,9 +110,9 @@ test('Ordinary Studio conversation has no model-requested hidden Read or capture
 test('Readiness proposals are bounded, inspectable, read-only and do not block Write', () => {
   assert.match(source, /\[\[WEBCAP_READINESS\]\]/);
   assert.match(source, /window\.studioDirectorWorkbench\.updateReadiness/);
-  assert.match(workbench, /checkbox\.type = 'checkbox'/);
-  assert.match(workbench, /checkbox\.disabled = true/);
-  assert.match(workbench, /content\.textContent = item\.content/);
+  assert.match(workbench, /studio-dw-assessment-item/);
+  assert.match(workbench, /button\.type = 'button'/);
+  assert.match(workbench, /studio-dw-assessment-content'\)\.textContent = item\.content/);
   assert.match(workbench, /recommendations\.readHints/);
   assert.match(workbench, /recommendations\.writeHint/);
   assert.match(html, /id="studio-dw-readiness-list"/);

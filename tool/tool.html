@@ -2193,6 +2193,7 @@
                       <option value="new-project">Create Project</option>
                       <option value="scenes">Add Scenes (one or more)</option>
                       <option value="scene-edit">Revise Scene</option>
+                      <option value="scenes-batch">Revise several Scenes</option>
                       <option value="scene-move">Move Scene</option>
                       <option value="scene-duplicate">Duplicate Scene</option>
                     </select></label>
@@ -2204,6 +2205,15 @@
                         <option value="after">After</option>
                       </select>
                     </label>
+                    <div id="studio-dw-batch-controls" class="hidden">
+                      <p>Choose the Scenes and fields to develop together.</p>
+                      <div id="studio-dw-batch-scenes" class="studio-dw-scene-list"></div>
+                      <div id="studio-dw-batch-fields" class="studio-dw-field-list">
+                        <label><input type="checkbox" value="summary" checked> Intent</label>
+                        <label><input type="checkbox" value="title"> Title</label>
+                        <label><input type="checkbox" value="prompt"> H3 Prompt</label>
+                      </div>
+                    </div>
                     <div id="studio-dw-write-fields" class="studio-dw-field-list hidden">
                       <label><input type="checkbox" value="summary" checked> Intent</label>
                       <label><input type="checkbox" value="prompt"> H3 Prompt</label>
@@ -2302,6 +2312,19 @@
               <footer class="studio-scene-draft-footer">
                 <button id="studio-dw-structure-cancel" type="button" class="review-captions-btn">Back to conversation</button>
                 <button id="studio-dw-structure-apply" type="button">Apply reviewed change</button>
+              </footer>
+            </dialog>
+            <dialog id="studio-dw-batch-review" class="studio-scene-draft-review" aria-labelledby="studio-dw-batch-title">
+              <header class="studio-scene-draft-header"><div><h2 id="studio-dw-batch-title">Review Scene revisions</h2>
+                <p>Choose the exact changes to save together. Other Scenes, prompts and Takes remain unchanged.</p></div>
+                <button id="studio-dw-batch-close" type="button" class="review-captions-btn">Close</button></header>
+              <div class="studio-scene-draft-content">
+                <div id="studio-dw-batch-editors"></div>
+                <p id="studio-dw-batch-error" role="alert"></p>
+              </div>
+              <footer class="studio-scene-draft-footer">
+                <button id="studio-dw-batch-cancel" type="button" class="review-captions-btn">Back to conversation</button>
+                <button id="studio-dw-batch-apply" type="button">Apply selected Scene changes</button>
               </footer>
             </dialog>
             <dialog id="studio-dw-scene-review" class="studio-scene-draft-review" aria-labelledby="studio-dw-scene-review-title">

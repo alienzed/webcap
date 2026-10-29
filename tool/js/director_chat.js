@@ -3184,104 +3184,6 @@
     }
   }
 
-  window.studioDirectorBridge = {
-    isReady: function () {
-      return state.open && state.activeMode === 'storyboard' && state.sessionReady &&
-        !state.pending && !state.attachmentPending && !!state.modelId;
-    },
-    workingStoryId: studioAttachedStoryId,
-    modelId: function () { return state.modelId; },
-    messages: function () { return (state.modeMessages.storyboard || []).slice(); },
-    sendRead: function (payload, keys, instruction) {
-      if (!this.isReady()) throw new Error('Open Studio Director and select an available LLM before Read.');
-      if (!Array.isArray(keys) || !keys.length) throw new Error('Select at least one field to Read.');
-      var composer = el('director-chat-input');
-      var draft = String(composer.value || '').trim();
-      var nl = String.fromCharCode(10);
-      composer.value = (instruction || draft || 'Inspect this material and suggest the next useful development step.') +
-        nl + nl + '[WEBCAP EXPLICIT READ]' + nl +
-        JSON.stringify(payload, null, 2) + nl + '[END WEBCAP READ]' + nl +
-        'Start your response with RECEIVED: ' + keys.join(', ') +
-        ' using exactly those field identifiers, then discuss the material.';
-      state.pendingReadAck = keys.slice();
-      sendMessage();
-    },
-    prepareWrite: function (kind, storyId, storyTitle) {
-      if (!this.isReady()) throw new Error('Director must be ready before Write.');
-      if (kind !== 'new-project') {
-        if (!storyId) throw new Error('Select a Project destination for Write.');
-        if (studioAttachedStoryId() !== storyId) {
-          // Never reuse a draft extracted against a different saved Project.
-          state.studioBriefProposal = null;
-          state.studioSceneProposal = null;
-          state.studioScenesProposal = null;
-        }
-        state.studioStoryAccess = {storyId: storyId, label: storyTitle || storyId};
-        state.studioAccessIndex = null;
-        scheduleSessionSave();
-      }
-      if (kind === 'new-project') {
-        state.studioProjectProposal = null; // Create a fresh review from current conversation.
-        return prepareStudioProject();
-      }
-      if (kind === 'project') return prepareStudioBrief();
-      if (kind === 'scene') return prepareStudioSceneDraft();
-      if (kind === 'scenes') return prepareStudioScenes();
-      throw new Error('Unsupported reviewed Write operation: ' + kind);
-    },
-    recordApplied: function (kind, story, selected) {
-      if (!story || !story.id || !selected || typeof selected !== 'object') {
-        throw new Error('Reviewed Apply receipt requires saved Project data.');
-      }
-      var body = {
-        operation: kind, projectId: story.id, projectTitle: story.title,
-        savedAt: story.updatedAt, fields: selected
-      };
-      if (window.studioDirectorWorkbench) window.studioDirectorWorkbench.updateReadiness({
-        checks:[],readHints:[],writeHint:'',sceneId:''
-      });
-      state.modeMessages.storyboard.push({role:'user',
-        content:'Reviewed Studio Apply completed. The following saved fields are now authoritative.' +
-          String.fromCharCode(10) + '[WEBCAP APPLIED FIELD VALUES]' +
-          String.fromCharCode(10) + JSON.stringify(body, null, 2) +
-          String.fromCharCode(10) + '[END WEBCAP APPLY]'});
-      renderMessages();
-      state.sessionDirty.storyboard = true;
-      return persistSession('storyboard');
-    },
-    updateReadiness: function (value) {
-      state.studioReadiness = value;
-      state.sessionDirty.storyboard = true;
-    },
-    makeProposal: function (instruction, operation) {
-      if (!this.isReady()) return Promise.reject(new Error('Director must be ready to draft.'));
-      state.pending = true;
-      syncControls();
-      startProgress();
-      return studioDirectorRequestMessages([{role:'user',content:instruction}]).then(function (messages) {
-        return requestJson('/fs/director/chat', {
-          method:'POST',headers:{'Content-Type':'application/json'},
-          body:JSON.stringify({model:state.modelId,operation:operation || 'studio_scene_field_draft',messages:messages})
-        });
-      }).then(function (payload) {
-        if (!payload.job || !payload.job.jobId) throw new Error('Director did not queue a draft.');
-        state.jobId = payload.job.jobId;
-        trackTransientLlmJob(payload.job);
-        return waitForJob(payload.job);
-      }).then(function (job) {
-        var result = job.result || {};
-        if (!String(result.text || '').trim()) throw new Error('Director returned no draft.');
-        finishProgress(null);
-        return String(result.text);
-      }).catch(function (err) {
-        finishProgress(err);
-        if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Studio Write', err);
-        throw err;
-      }).finally(function () {
-        state.pending = false;state.jobId = '';syncControls();
-      });
-    }
-  };
 
   function bind() {
     var toggle = el('director-chat-rail-btn');
@@ -3339,7 +3241,7 @@
     el('studio-scenes-discard').onclick = function () { el('studio-scenes-review').close(); };
     el('studio-scenes-apply').onclick = applyStudioScenes;
     el('studio-scenes-add').onclick = function () {
-      if (el('studio-scenes-rows').children.length >= 8) {
+      if (el('studio-scenes-rows').children.length >= 32) {
         el('studio-scenes-error').textContent = 'Review up to 32 Scenes at a time.';
         return;
       }
@@ -3543,6 +3445,105 @@
       syncModeUi();
     }
   }
+
+  window.studioDirectorBridge = {
+    isReady: function () {
+      return state.open && state.activeMode === 'storyboard' && state.sessionReady &&
+        !state.pending && !state.attachmentPending && !!state.modelId;
+    },
+    workingStoryId: studioAttachedStoryId,
+    modelId: function () { return state.modelId; },
+    messages: function () { return (state.modeMessages.storyboard || []).slice(); },
+    sendRead: function (payload, keys, instruction) {
+      if (!this.isReady()) throw new Error('Open Studio Director and select an available LLM before Read.');
+      if (!Array.isArray(keys) || !keys.length) throw new Error('Select at least one field to Read.');
+      var composer = el('director-chat-input');
+      var draft = String(composer.value || '').trim();
+      var nl = String.fromCharCode(10);
+      composer.value = (instruction || draft || 'Inspect this material and suggest the next useful development step.') +
+        nl + nl + '[WEBCAP EXPLICIT READ]' + nl +
+        JSON.stringify(payload, null, 2) + nl + '[END WEBCAP READ]' + nl +
+        'Start your response with RECEIVED: ' + keys.join(', ') +
+        ' using exactly those field identifiers, then discuss the material.';
+      state.pendingReadAck = keys.slice();
+      sendMessage();
+    },
+    prepareWrite: function (kind, storyId, storyTitle) {
+      if (!this.isReady()) throw new Error('Director must be ready before Write.');
+      if (kind !== 'new-project') {
+        if (!storyId) throw new Error('Select a Project destination for Write.');
+        if (studioAttachedStoryId() !== storyId) {
+          // Never reuse a draft extracted against a different saved Project.
+          state.studioBriefProposal = null;
+          state.studioSceneProposal = null;
+          state.studioScenesProposal = null;
+        }
+        state.studioStoryAccess = {storyId: storyId, label: storyTitle || storyId};
+        state.studioAccessIndex = null;
+        scheduleSessionSave();
+      }
+      if (kind === 'new-project') {
+        state.studioProjectProposal = null; // Create a fresh review from current conversation.
+        return prepareStudioProject();
+      }
+      if (kind === 'project') return prepareStudioBrief();
+      if (kind === 'scene') return prepareStudioSceneDraft();
+      if (kind === 'scenes') return prepareStudioScenes();
+      throw new Error('Unsupported reviewed Write operation: ' + kind);
+    },
+    recordApplied: function (kind, story, selected) {
+      if (!story || !story.id || !selected || typeof selected !== 'object') {
+        throw new Error('Reviewed Apply receipt requires saved Project data.');
+      }
+      var body = {
+        operation: kind, projectId: story.id, projectTitle: story.title,
+        savedAt: story.updatedAt, fields: selected
+      };
+      if (window.studioDirectorWorkbench) window.studioDirectorWorkbench.updateReadiness({
+        checks:[],readHints:[],writeHint:'',sceneId:''
+      });
+      state.modeMessages.storyboard.push({role:'user',
+        content:'Reviewed Studio Apply completed. The following saved fields are now authoritative.' +
+          String.fromCharCode(10) + '[WEBCAP APPLIED FIELD VALUES]' +
+          String.fromCharCode(10) + JSON.stringify(body, null, 2) +
+          String.fromCharCode(10) + '[END WEBCAP APPLY]'});
+      renderMessages();
+      state.sessionDirty.storyboard = true;
+      return persistSession('storyboard');
+    },
+    updateReadiness: function (value) {
+      state.studioReadiness = value;
+      state.sessionDirty.storyboard = true;
+    },
+    makeProposal: function (instruction, operation) {
+      if (!this.isReady()) return Promise.reject(new Error('Director must be ready to draft.'));
+      state.pending = true;
+      syncControls();
+      startProgress();
+      return studioDirectorRequestMessages([{role:'user',content:instruction}]).then(function (messages) {
+        return requestJson('/fs/director/chat', {
+          method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({model:state.modelId,operation:operation || 'studio_scene_field_draft',messages:messages})
+        });
+      }).then(function (payload) {
+        if (!payload.job || !payload.job.jobId) throw new Error('Director did not queue a draft.');
+        state.jobId = payload.job.jobId;
+        trackTransientLlmJob(payload.job);
+        return waitForJob(payload.job);
+      }).then(function (job) {
+        var result = job.result || {};
+        if (!String(result.text || '').trim()) throw new Error('Director returned no draft.');
+        finishProgress(null);
+        return String(result.text);
+      }).catch(function (err) {
+        finishProgress(err);
+        if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Studio Write', err);
+        throw err;
+      }).finally(function () {
+        state.pending = false;state.jobId = '';syncControls();
+      });
+    }
+  };
 
   window.syncStoryboardAssistantStory = function () {
     // Story navigation has no authority to mutate Assistant conversations or

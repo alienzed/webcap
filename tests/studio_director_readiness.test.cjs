@@ -123,3 +123,15 @@ test('Invariant capture uses explicit saved identity rather than treating rename
   assert.match(workbench, /isInvariant = capture\.field === 'invariant'/);
   assert.match(workbench, /creativeCapture = capture/);
 });
+
+test('a complete Scene Intent can open existing placement review with no duplicate LLM call', () => {
+  const capture = {field:'scene',title:'Opening chase',content:'The actor reaches the gate.',sceneId:''};
+  assert.deepEqual(parse(JSON.stringify({...valid,capture})).capture,capture);
+  assert.match(director, /reviewSceneCapture: function \(capture, storyId\)/);
+  const review = director.split('    reviewSceneCapture: function (capture, storyId) {')[1]
+    .split('    updateReadiness: function (value) {')[0];
+  assert.match(review, /showStudioSceneDraftReview\(\)/);
+  assert.match(review, /expectedUpdatedAt:story.updatedAt/);
+  assert.doesNotMatch(review, /studioDirectorRequestMessages|makeProposal|\/fs\/director\/chat/);
+  assert.match(workbench, /reviewSceneCapture\(capture,id\)/);
+});

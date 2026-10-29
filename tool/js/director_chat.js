@@ -1754,11 +1754,30 @@
     el('studio-brief-style').value = proposal.draft.style;
     el('studio-brief-concept-selected').checked = proposal.draft.concept !== proposal.expected.concept;
     el('studio-brief-style-selected').checked = proposal.draft.style !== proposal.expected.style;
-    el('studio-brief-invariants-selected').checked =
-      JSON.stringify(proposal.draft.invariants) !== JSON.stringify(proposal.expected.invariants);
+    // A model's omission never becomes a proposed deletion by accident.
+    // Match existing rows by their current composite identity; the author
+    // explicitly removes a row to approve its deletion.
+    var existing = proposal.expected.invariants || [];
+    var suggested = proposal.draft.invariants || [];
+    var matched = new Set();
+    var reviewed = existing.map(function (before) {
+      var index = suggested.findIndex(function (item) {
+        return item.kind === before.kind &&
+          item.title.toLowerCase() === before.title.toLowerCase();
+      });
+      if (index >= 0) matched.add(index);
+      return {item:index >= 0 ? suggested[index] : before, original:before};
+    });
+    suggested.forEach(function (item, index) {
+      if (!matched.has(index)) reviewed.push({item:item, original:null});
+    });
+    el('studio-brief-invariants-selected').checked = reviewed.length !== existing.length ||
+      reviewed.some(function (row, index) {
+        return JSON.stringify(row.item) !== JSON.stringify(existing[index]);
+      });
     el('studio-brief-invariants').replaceChildren();
-    proposal.draft.invariants.forEach(function (item) {
-      addStudioProjectInvariant(item, 'studio-brief-invariants');
+    reviewed.forEach(function (row) {
+      addStudioProjectInvariant(row.item, 'studio-brief-invariants', row.original);
     });
     el('studio-brief-error').textContent = '';
     var dialog = el('studio-brief-review');

@@ -2060,7 +2060,7 @@
       };
     });
     if (!drafts.length || drafts.length > 8 || drafts.some(function (item) { return !item.summary; })) {
-      el('studio-scenes-error').textContent = 'Review between one and eight Scenes with descriptions.';
+      el('studio-scenes-error').textContent = 'Review between one and 32 Scenes with descriptions.';
       return;
     }
     var pieces = el('studio-scenes-placement').value.split('|');
@@ -3340,7 +3340,7 @@
     el('studio-scenes-apply').onclick = applyStudioScenes;
     el('studio-scenes-add').onclick = function () {
       if (el('studio-scenes-rows').children.length >= 8) {
-        el('studio-scenes-error').textContent = 'Review up to eight Scenes at a time.';
+        el('studio-scenes-error').textContent = 'Review up to 32 Scenes at a time.';
         return;
       }
       addStudioScenesRow({ title: '', summary: '' });

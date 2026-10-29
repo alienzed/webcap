@@ -628,7 +628,8 @@
       setReadinessFreshness(!!(restoring && result && result.stale));
       renderReadiness(list);
       if (!restoring) window.studioDirectorBridge.updateReadiness({
-        checks:list,readHints:hints,writeHint:writeHint,sceneId:sceneId,stale:false
+        checks:list,readHints:hints,writeHint:writeHint,sceneId:sceneId,stale:false,
+        ...(capture ? {capture:capture} : {})
       });
       return true;
     }

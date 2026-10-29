@@ -316,10 +316,9 @@
     el('director-studio-starters').classList.toggle('hidden', !studio);
     el('director-chat-empty-title').textContent = studio ? "Let's make something" : 'Your conversation';
     el('director-chat-empty-description').textContent = studio
-      ? (state.studioIntroPending ? 'Director is discovering a starting question…' : 'Start with a feeling, a moment, or an unfinished idea. Director will ask one question at a time.')
+      ? 'Start with an idea or a question. Read Project material explicitly when needed.'
       : 'Start a conversation with the selected model.';
-    el('director-studio-retry').classList.toggle('hidden',
-      !studio || !!currentMessages().length || state.pending || !state.sessionReady);
+    el('director-studio-retry').classList.add('hidden');
     if (row) row.classList.toggle('hidden', studio || !modes.length);
     if (host) {
       host.innerHTML = '<button type="button" class="review-captions-btn' + (state.activeMode === 'chat' ? ' active' : '') + '" data-assistant-mode="chat">Chat</button>' +
@@ -2359,8 +2358,7 @@
     }).catch(showSessionFailure).finally(function () {
       state.pending = false;
       syncControls();
-      if (created && mode === 'storyboard' && !preserveContext &&
-          state.open && state.activeMode === mode) startStudioWorkshop();
+      // Opening a Studio conversation is passive. The author sends the first request.
     });
   }
 

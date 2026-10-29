@@ -5,6 +5,7 @@ var focusedCaptionState = {
   itemIndex: 0,
   itemKey: '',
   mode: 'caption',
+  selectingFirstItem: false,
   discrepanciesByMediaKey: {},
   discrepancySourceLabel: '',
   requestToken: 0,
@@ -639,7 +640,8 @@ function syncFocusedCaptionControls() {
 
   if (
     focusedCaptionState.open &&
-    (!hasItem || String(focusedCaptionState.folder || '') !== String((state && state.folder) || ''))
+    ((!hasItem && !focusedCaptionState.selectingFirstItem) ||
+      String(focusedCaptionState.folder || '') !== String((state && state.folder) || ''))
   ) {
     stopFocusedCaption(focusedCaptionModeLabel() + ' ended because the Single Item context changed.');
     return;
@@ -722,6 +724,7 @@ function stopFocusedCaption(message, options) {
   focusedCaptionState.itemIndex = 0;
   focusedCaptionState.itemKey = '';
   focusedCaptionState.mode = 'caption';
+  focusedCaptionState.selectingFirstItem = false;
   focusedCaptionState.discrepanciesByMediaKey = {};
   focusedCaptionState.discrepancySourceLabel = '';
   captionAssistPendingJobId = '';
@@ -813,6 +816,7 @@ function syncFocusedCaptionSelection(mediaKey) {
   }
   focusedCaptionState.itemIndex = index;
   focusedCaptionState.itemKey = key;
+  focusedCaptionState.selectingFirstItem = false;
   prepareFocusedCaptionCurrentItem();
 }
 
@@ -957,10 +961,15 @@ function startFocusedCaption(targetMediaKey, mode, options) {
   focusedCaptionState.discrepancySourceLabel = '';
   focusedCaptionVisionPhrases.enabled = false;
   focusedCaptionState.folder = String((state && state.folder) || '');
-  loadCaptionVisionCapabilities();
   focusedCaptionState.itemKeys = itemKeys;
   focusedCaptionState.itemIndex = 0;
   focusedCaptionState.itemKey = itemKeys[0];
+  // A QA review may open from Set Tools with no Single Item selection yet.
+  // The first selection is initiated below; do not treat that gap as an exit.
+  focusedCaptionState.selectingFirstItem = !(
+    state.currentItem && state.currentItem.fileName && state.currentItem.key === itemKeys[0]
+  );
+  loadCaptionVisionCapabilities();
   resetFocusedCaptionUseArm();
   syncFocusedCaptionControls();
   renderPreviewHeaderMeta();

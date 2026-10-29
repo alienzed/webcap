@@ -413,27 +413,52 @@
   }
   function renderReadiness(list) {
     readiness = list;
-    var host = el('studio-dw-readiness-list');if (!host) return;
+    var host = el('studio-dw-readiness-list');
     host.replaceChildren();
     if (!list.length) {
-      var p = document.createElement('p');p.textContent = 'Director has not provided a readiness assessment yet.';
-      host.appendChild(p);return;
+      var empty = document.createElement('p');
+      empty.textContent = 'Not assessed yet.';
+      host.appendChild(empty);
+      return;
     }
     list.forEach(function (item) {
-      var details=document.createElement('details'), heading=document.createElement('summary'), content=document.createElement('pre');
-      details.dataset.ready=item.ready ? 'true':'false';
-      var checkbox = document.createElement('input'), name = document.createElement('span');
-      checkbox.type = 'checkbox'; checkbox.checked = !!item.ready; checkbox.disabled = true;
-      checkbox.setAttribute('aria-label', item.name + (item.ready ? ' ready' : ' still developing'));
-      name.textContent = (item.scope === 'scene' ?
-        'Scene' + (recommendations.sceneId ? ' ' + recommendations.sceneId : '') + ' · ' :
-        'Project · ') + item.name;
-      heading.append(checkbox, name);
-      content.textContent = item.content;
-      details.append(heading,content);host.appendChild(details);
+      var button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'studio-dw-assessment-item';
+      var subject = item.scope === 'project' ? 'Project' : 'Scene (current discussion)';
+      button.textContent = (item.ready ? '☑ ' : '□ ') + subject + ' · ' + item.name;
+      button.title = 'Inspect complete Director proposal';
+      button.onclick = function () {
+        el('studio-dw-assessment-title').textContent = subject + ' · ' + item.name +
+          (item.ready ? ' · developed' : ' · needs development');
+        el('studio-dw-assessment-content').textContent = item.content;
+        el('studio-dw-assessment-dialog').showModal();
+      };
+      host.appendChild(button);
     });
   }
-  window.studioDirectorWorkbench = {setStatus:status, updateReadiness:function (result, restoring) {
+  window.studioDirectorWorkbench = {
+    setStatus:status,
+    setUndo: function (receipt) {
+      var host = el('studio-dw-undo');
+      host.classList.toggle('hidden', !receipt);
+      if (receipt) el('studio-dw-undo-label').textContent =
+        'Project brief updated · ' + (receipt.label || receipt.storyId);
+    },
+    resetConversation: function () {
+      readChoices = {};
+      writeOperationChosen = false;
+      lastReadSource = null;
+      readStory = null;
+      writeStory = null;
+      el('studio-dw-read-panel').classList.add('hidden');
+      el('studio-dw-write-panel').classList.add('hidden');
+      el('studio-dw-read').setAttribute('aria-expanded','false');
+      el('studio-dw-write').setAttribute('aria-expanded','false');
+      status('', false);
+      updateScope();
+    },
+    updateReadiness:function (result, restoring) {
     var list = Array.isArray(result) ? result : result && result.checks;
     if (!Array.isArray(list)) { status('Director readiness response was invalid.',true);return; }
     var allowed = ['Concept','Characters','Setting','Action','Dialogue','Visual / atmosphere',
@@ -467,7 +492,38 @@
     el('studio-dw-write-project').onchange=function () {
       loadStory(this.value).then(renderWriteStory).catch(function(e) { status(e.message,true); });
     };
-    el('studio-dw-write-operation').onchange=setOperation;
+    el('studio-dw-write-operation').onchange=function () {
+      writeOperationChosen = true;
+      setOperation();
+    };
+    el('studio-dw-read-preview').ontoggle = function () {
+      if (!this.open) return;
+      var id = el('studio-dw-read-project').value;
+      if (!id) return;
+      loadStory(id).then(function (story) {
+        el('studio-dw-read-preview-data').textContent =
+          JSON.stringify(readPayload(story, selectedPaths()), null, 2);
+      }).catch(function(error){status('Read preview failed: '+error.message,true);});
+    };
+    el('studio-dw-open-actions').onclick=function () {
+      el('director-chat-drawer').classList.add('studio-actions-open');
+      this.setAttribute('aria-expanded','true');
+      el('studio-dw-close-actions').focus();
+    };
+    el('studio-dw-close-actions').onclick=function () {
+      el('director-chat-drawer').classList.remove('studio-actions-open');
+      el('studio-dw-open-actions').setAttribute('aria-expanded','false');
+      el('studio-dw-open-actions').focus();
+    };
+    rail.addEventListener('keydown',function(event){
+      if(event.key==='Escape' && el('director-chat-drawer').classList.contains('studio-actions-open')) {
+        event.preventDefault();
+        el('studio-dw-close-actions').click();
+      }
+    });
+    el('studio-dw-undo-button').onclick=function () { window.studioDirectorBridge.undoBrief(); };
+    el('studio-dw-playbook-open').onclick=preparePlaybook;
+    el('studio-dw-assessment-close').onclick=function(){el('studio-dw-assessment-dialog').close();};
     el('studio-dw-write-scene').onchange=showWriteContext;
     el('studio-dw-read-send').onclick=readSend;
     el('studio-dw-write-prepare').onclick=writePrepare;
@@ -480,6 +536,7 @@
       el(id).onclick=function () {el('studio-dw-scene-review').close();};
     });
     renderReadiness(readiness);
+    updateScope();
   }
   if (document.readyState==='loading') document.addEventListener('DOMContentLoaded',bind);
   else bind();

@@ -24,13 +24,17 @@ test('Undo is reachable from the visible rail and delegates to existing reviewed
   assert.match(rail,/resetConversation: function \(\)/);
 });
 
-test('Narrow Studio keeps conversation space until Actions is deliberately opened', () => {
-  assert.match(html,/id="studio-dw-open-actions"/);
-  assert.match(html,/id="studio-dw-close-actions"/);
+test('Narrow Studio exposes Read and Write directly instead of burying them behind Actions', () => {
+  for(const id of ['studio-dw-quick-read','studio-dw-quick-write','studio-dw-close-actions'])
+    assert.match(html,new RegExp('id="'+id+'"'));
+  assert.doesNotMatch(html,/id="studio-dw-open-actions"/);
   assert.match(css,/@container \(max-width:820px\)/);
   assert.match(css,/\.studio-actions-open \.director-chat-sidebar/);
   assert.match(css,/visibility:hidden;pointer-events:none/);
-  assert.match(rail,/studio-actions-open/);
+  assert.match(rail,/function openDirectAction\(which\)/);
+  assert.match(rail,/openDirectAction\('read'\)/);
+  assert.match(rail,/openDirectAction\('write'\)/);
+  assert.match(rail,/el\('studio-dw-' \+ which\)\.click\(\)/);
 });
 
 test('Read and Write stay distinct; Read persists field choices on panel changes', () => {

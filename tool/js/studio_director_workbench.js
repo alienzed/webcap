@@ -3,6 +3,7 @@
   var readStory = null, writeStory = null, projects = [], proposedScene = null, playbookExpected = null;
   var readiness = [], recommendations = {readHints:[],writeHint:'',sceneId:''};
   var readChoices = {}, writeOperationChosen = false, lastReadSource = null;
+  var lastQuickAction = 'read';
   var sceneFields = ['summary', 'prompt', 'title'];
   var projectFields = ['title', 'concept', 'style', 'invariants'];
   var labels = {title:'Title', concept:'Concept', style:'Visual / atmosphere',
@@ -265,6 +266,8 @@
     button.setAttribute('aria-expanded', show ? 'true' : 'false');
     el('studio-dw-' + other + '-panel').classList.add('hidden');
     el('studio-dw-' + other).setAttribute('aria-expanded', 'false');
+    el('studio-dw-quick-' + which).setAttribute('aria-expanded', show ? 'true' : 'false');
+    el('studio-dw-quick-' + other).setAttribute('aria-expanded', 'false');
     updateScope();
     if (show) (which === 'read' ? refreshRead() : refreshWrite());
   }
@@ -467,6 +470,9 @@
       el('studio-dw-write-panel').classList.add('hidden');
       el('studio-dw-read').setAttribute('aria-expanded','false');
       el('studio-dw-write').setAttribute('aria-expanded','false');
+      el('studio-dw-quick-read').setAttribute('aria-expanded','false');
+      el('studio-dw-quick-write').setAttribute('aria-expanded','false');
+      el('director-chat-drawer').classList.remove('studio-actions-open');
       status('', false);
       updateScope();
     },
@@ -517,15 +523,23 @@
           JSON.stringify(readPayload(story, selectedPaths()), null, 2);
       }).catch(function(error){status('Read preview failed: '+error.message,true);});
     };
-    el('studio-dw-open-actions').onclick=function () {
+    function openDirectAction(which) {
+      lastQuickAction = which;
       el('director-chat-drawer').classList.add('studio-actions-open');
-      this.setAttribute('aria-expanded','true');
+      if (el('studio-dw-' + which + '-panel').classList.contains('hidden'))
+        el('studio-dw-' + which).click();
+      el('studio-dw-quick-' + which).setAttribute('aria-expanded','true');
+      el('studio-dw-quick-' + (which === 'read' ? 'write' : 'read'))
+        .setAttribute('aria-expanded','false');
       el('studio-dw-close-actions').focus();
-    };
+    }
+    el('studio-dw-quick-read').onclick=function () { openDirectAction('read'); };
+    el('studio-dw-quick-write').onclick=function () { openDirectAction('write'); };
     el('studio-dw-close-actions').onclick=function () {
       el('director-chat-drawer').classList.remove('studio-actions-open');
-      el('studio-dw-open-actions').setAttribute('aria-expanded','false');
-      el('studio-dw-open-actions').focus();
+      el('studio-dw-quick-read').setAttribute('aria-expanded','false');
+      el('studio-dw-quick-write').setAttribute('aria-expanded','false');
+      el('studio-dw-quick-' + lastQuickAction).focus();
     };
     rail.addEventListener('keydown',function(event){
       if(event.key==='Escape' && el('director-chat-drawer').classList.contains('studio-actions-open')) {

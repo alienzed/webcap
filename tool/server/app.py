@@ -72,6 +72,7 @@ from .storyboard_store import add_scene as storyboard_add_scene, add_take_upload
 from .storyboard_store import apply_reviewed_story_guidelines as storyboard_apply_reviewed_story_guidelines
 from .storyboard_store import apply_studio_scene_fields as storyboard_apply_studio_scene_fields
 from .storyboard_store import apply_studio_scene_fields_batch as storyboard_apply_studio_scene_fields_batch
+from .storyboard_store import apply_studio_scene_split as storyboard_apply_studio_scene_split
 from .storyboard_store import apply_studio_scene_structure as storyboard_apply_studio_scene_structure
 from .storyboard_generation import generation_action as storyboard_generation_action, generation_capabilities as storyboard_generation_capabilities, generation_queue as storyboard_generation_queue, generation_status as storyboard_generation_status, start_generation as storyboard_start_generation, regenerate_take as storyboard_regenerate_take
 from .storyboard_assembly import current_export as storyboard_current_export, export_selected_sequence as storyboard_export_selected_sequence
@@ -2002,6 +2003,36 @@ def studio_director_scene_structure_route():
         return jsonify({"ok": False, "error": str(exc)}), 400
 
 
+@app.route("/fs/studio/director/scene-split", methods=["POST"])
+def studio_director_scene_split_route():
+    data = request.get_json(silent=True) or {}
+    try:
+        required = {"storyId", "sceneId", "expectedSceneOrder",
+                    "expectedSummary", "firstSummary", "secondScene"}
+        if not isinstance(data, dict) or set(data) != required:
+            raise ValueError("Reviewed Scene split requires exact source and two complete Intents.")
+        story_id = str(data["storyId"] or "").strip()
+        scene_id = str(data["sceneId"] or "").strip()
+        if not story_id or not scene_id:
+            raise ValueError("Choose the Project and source Scene to split.")
+        if (llm_storyboard_story_busy(story_id)
+                or llm_storyboard_target_busy(story_id, "scenes")
+                or llm_storyboard_target_busy(story_id, "repair")
+                or llm_storyboard_target_busy(story_id, "scene-prompt", scene_id)):
+            raise ValueError("Finish pending Scene work before splitting.")
+        with storyboard_mutation_lock:
+            story, scene = storyboard_apply_studio_scene_split(
+                story_id, scene_id, data["expectedSceneOrder"], data["expectedSummary"],
+                data["firstSummary"], data["secondScene"],
+            )
+        return jsonify({"ok": True, "story": story, "scene": scene})
+    except FileNotFoundError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 404
+    except Exception as exc:
+        app.logger.exception("STUDIO SCENE SPLIT FAILED: %s", exc)
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
 @app.route("/fs/studio/director/scene-fields-batch", methods=["POST"])
 def studio_director_scene_fields_batch_route():
     """Apply a reviewed set of existing Scene text edits in one Story JSON write."""
@@ -2203,7 +2234,7 @@ def director_chat_route():
         if not isinstance(messages, list) or not messages:
             raise ValueError("Director Chat messages are required.")
         operation = str(data.get("operation") or "freeform_chat").strip()
-        if operation not in {"freeform_chat", "storyboard_workshop_shots", "storyboard_story_guidelines", "studio_scene_draft", "studio_project_draft", "studio_scene_sequence_draft", "studio_brief_draft", "studio_scene_field_draft", "studio_scene_batch_draft", "studio_playbook_draft"}:
+        if operation not in {"freeform_chat", "storyboard_workshop_shots", "storyboard_story_guidelines", "studio_scene_draft", "studio_project_draft", "studio_scene_sequence_draft", "studio_brief_draft", "studio_scene_field_draft", "studio_scene_batch_draft", "studio_scene_split_draft", "studio_playbook_draft"}:
             raise ValueError("Unsupported Director Chat operation.")
         contract = {"operation": operation, "messages": messages}
         if operation == "studio_brief_draft":
@@ -2240,6 +2271,17 @@ def director_chat_route():
                     "title": {"type": "string"},
                     "summary": {"type": "string"},
                     "prompt": {"type": "string"},
+                },
+            }
+        if operation == "studio_scene_split_draft":
+            contract["response_schema"] = {
+                "type": "object", "additionalProperties": False,
+                "required": ["firstSummary", "secondTitle", "secondSummary", "rationale"],
+                "properties": {
+                    "firstSummary": {"type": "string", "minLength": 1},
+                    "secondTitle": {"type": "string"},
+                    "secondSummary": {"type": "string", "minLength": 1},
+                    "rationale": {"type": "string"},
                 },
             }
         if operation == "studio_scene_batch_draft":

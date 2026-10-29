@@ -1562,6 +1562,53 @@ def apply_studio_scene_fields(story_id, scene_id, expected, changes):
 
 
 @_serialized_mutation
+def apply_studio_scene_split(story_id, source_id, expected_scene_order,
+                             expected_source_summary, first_summary, second_scene):
+    """Split one Scene's Intent into two independent clips, preserving its media.
+
+    Existing Scene keeps its stable ID, prompt and Takes. The new Scene is
+    tentative, with an empty prompt and no Takes.
+    """
+    if (not isinstance(expected_scene_order, list) or
+            not all(isinstance(scene_id, str) for scene_id in expected_scene_order)):
+        raise ValueError("Split requires the reviewed Scene order.")
+    if (not isinstance(expected_source_summary, str) or
+            not isinstance(first_summary, str) or not first_summary.strip()
+            or len(first_summary) > 10000):
+        raise ValueError("The first Scene needs a complete reviewed Intent.")
+    if (not isinstance(second_scene, dict) or set(second_scene) != {"title", "summary"}
+            or not isinstance(second_scene["title"], str)
+            or not isinstance(second_scene["summary"], str)
+            or len(second_scene["title"]) > 240 or len(second_scene["summary"]) > 10000
+            or not second_scene["summary"].strip()):
+        raise ValueError("The second Scene needs a reviewed title and Intent.")
+    story = load_story(story_id)
+    order = list(story.get("sceneOrder") or [])
+    if order != expected_scene_order:
+        raise RuntimeError("Scene order changed since split review.")
+    current = (story.get("scenes") or {}).get(source_id)
+    if not isinstance(current, dict) or source_id not in order:
+        raise FileNotFoundError("The source Scene no longer exists.")
+    if str(current.get("summary") or "") != expected_source_summary:
+        raise RuntimeError("Source Scene Intent changed since split review.")
+    if first_summary.strip() == expected_source_summary:
+        raise ValueError("The first Scene's Intent must describe its reduced action.")
+
+    revised = _normalize_scene(source_id, {"summary": first_summary}, existing=current)
+    new_id = _new_id("scene")
+    created = _normalize_scene(new_id, second_scene)
+    updated = copy.deepcopy(story)
+    updated["scenes"][source_id] = revised
+    updated["scenes"][new_id] = created
+    order.insert(order.index(source_id) + 1, new_id)
+    updated["sceneOrder"] = order
+    updated["updatedAt"] = _utc_now()
+    _write_json_atomic(_story_path(story_id), updated)
+    (_story_dir(story_id) / "takes" / new_id).mkdir(parents=True, exist_ok=True)
+    return updated, created
+
+
+@_serialized_mutation
 def apply_studio_scene_fields_batch(story_id, revisions):
     """Commit one reviewed, field-scoped creative revision across existing Scenes."""
     if not isinstance(revisions, list) or not 1 <= len(revisions) <= 32:

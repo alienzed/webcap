@@ -34,4 +34,5 @@ jobs:
       - name: Focused persistence and conflict tests
         run: |
           python -m pip install pytest Flask Pillow imageio websocket-client opencv-python-headless
+          cp tool/config.example.json tool/config.json
           python -m pytest -q tests/test_storyboard_store.py -k "studio_project_creates_multiple_initial_scenes_atomically or studio_scene_fields_are_scoped_and_conflict_checked"

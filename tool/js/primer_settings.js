@@ -2054,6 +2054,8 @@ function refreshCaptionAssistCurrentCandidate() {
     throw new Error('Refresh Caption requires a current editable candidate.');
   }
   if (isCaptionAssistRunning()) return Promise.resolve(false);
+  // Refresh is user-initiated: reveal the existing job Activity immediately.
+  window.openOperationsDrawer('activity');
   var draft = String(candidate.text || '');
   return cancelFocusedCaptionPrefetch().then(function () {
     return cancelCurrentCaptionVision();

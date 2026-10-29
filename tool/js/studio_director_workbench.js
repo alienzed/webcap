@@ -341,7 +341,7 @@
       .finally(function () { el('studio-dw-write-prepare').disabled = false; });
   }
   function preparePlaybook() {
-    var button = el('studio-dw-write-prepare');
+    var button = el('studio-dw-playbook-open');
     button.disabled = true;
     status('Reading saved Playbook and drafting a focused improvement…',false);
     api('/fs/studio/director/playbook').then(function (payload) {

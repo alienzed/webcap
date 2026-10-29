@@ -29,6 +29,7 @@ function node() {
     },
     setAttribute(k,v){this.attrs[k]=v;},
     append(...items){this.children.push(...items);},
+    appendChild(item){this.children.push(item);return item;},
     replaceChildren(){this.children=[];},
     addEventListener(name,fn,capture){(listeners[name] ||= []).push({fn,capture:!!capture});},
     dispatchEvent(e){

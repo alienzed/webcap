@@ -1068,6 +1068,7 @@ function wireFocusedCaption() {
     document.__focusedCaptionKeyboardBound = true;
     document.addEventListener('keydown', function (event) {
       if (!focusedCaptionState.open || !event || event.defaultPrevented || event.repeat) return;
+      if (isCropModalOpen()) return;
       if (isEditableElement(document.activeElement)) return;
       var key = String(event.key || '');
       var lower = key.toLowerCase();

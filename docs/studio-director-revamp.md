@@ -12,6 +12,43 @@ Deprecate **new** Directing Guidelines as a separate creative workflow. Existing
 
 **Acceptance journeys:** (1) freeform brainstorm → explicit capture → editable Project review → reviewed Create (zero or one optional Intent-only Scene); (2) explicit attachment of an existing Project → read current selected facts → discuss → reviewed field-scoped Update; (3) discuss Scene(s) → reviewed Intent insert → separately prepare and review H3 prompts → generate Takes from saved prompts. Conversation alone is not a save action. Check the actual LLM and browser behavior separately from contract tests.
 
+## 2026-10-29 Studio capability parity ledger (living acceptance checklist)
+
+**Purpose:** Track real author-facing Studio actions against (1) WebCap's authoritative UI/store, (2) exactly what Studio Director can read, (3) what it can propose **and save through a reviewed operation**, and (4) what is still only model guidance. This ledger is a delivery checklist, **not a new feature schema, API layer, or second roadmap**. Update its status after code and acceptance tests; older implementation-phase checkboxes below are historical.
+
+**Audit snapshot:** `main` at `a54d2d543c9924209cec87cf6b7c0bd616e9eb90` (2026-10-29); static inspection only. Legend: **Yes** = implementation wired; **Partial** = some fields/workflows wired; **No** = no reviewed Director path. **LLM competence is not proven by prompt wording**; real-model/browser evidence is required. Scope is the Studio Project → Scene → generation/Takes workflow, not every unrelated WebCap workspace.
+
+| Author action / expected outcome | Existing Studio UI/store | Director Read (actual data) | Director reviewed Write / action | Gap / acceptance target |
+| --- | --- | --- | --- | --- |
+| Start a Project, optionally with multiple initial Scenes | Yes | Not required | **Yes** (reviewed create, up to 12 initial Scenes) | Real-model and browser acceptance |
+| Review/edit Project Title | Yes | **Yes** | **No** for existing Project (brief API excludes Title) | Add field-scoped Title revision |
+| Review/edit Concept and Visual / atmosphere | Yes | **Yes** | **Yes** (reviewed Project brief) | Real-model and regression acceptance |
+| Add one or multiple Invariants to an existing Project | Yes | **Yes** (entire list) | **Partial** (replace reviewed whole list) | Support additive, independently reviewed changes while retaining unrelated entries |
+| Edit individual Invariant type, name and description | Yes | **Yes** (entire list) | **Partial** (replace reviewed whole list) | Explicit item-level change; conflict-check only affected data as practical |
+| Remove selected Invariants without touching others | Yes | **Yes** | **Partial** (replace reviewed whole list) | Review selected removal; preserve others |
+| Rename an Invariant referenced by Scenes | UI can edit; store references are title/type-based | **Yes** (list only; Scene invariant refs not in explicit Read picker) | **No** (reviewed brief rejects referenced rename) | Coordinated, reviewed reference update or clearly identified blocker; never leave dangling references |
+| Read an entire Project including all Scenes | Saved fields exist | **Partial** (manual individual field checkboxes) | N/A | Whole-Project / whole-Scene selection, exact payload inspector and size disclosure; keep user-triggered Send |
+| Read a Scene as a coherent unit | Yes | **Partial** (separate Title, Intent, Prompt, reference/duration checkboxes) | N/A | Scene-level selection with optional field refinement |
+| Add one / several Scenes at selected insertion point | Yes | Project brief and Scene index available | **Yes** (reviewed insertion, up to 32 Scenes) | Real workflow tests with existing Scenes and Takes |
+| Revise existing Scene Title, Intent or H3 Prompt | Yes | **Yes** | **Yes** (scoped reviewed Apply) | Verify actual LLM quality, no unintended other-field changes |
+| Set Scene duration, generation settings, references | Yes | **Partial** (duration and reference metadata; not visual inspection or settings in explicit Read) | **No** | Read relevant supported fields and propose safe reviewed edits through existing Scene owner |
+| Reorder Scenes | **Yes** (`reorderScene` → `reorder_scenes`) | Index available; explicit Read lacks one-click whole index | **No** (catalog says planned) | **In scope:** reviewed order change that preserves Scene IDs, content and Takes |
+| Duplicate a Scene | **Yes** | Selected fields only | **No** | Reviewed duplication using existing store semantics; no silent Take duplication |
+| Remove a Scene | **Yes** | Selected fields only | **No** | Explicit destructive review; preserve other Scenes/Takes |
+| Delete a Project | **Yes** | Project metadata | **No** | Explicit high-impact review; not required before basic authoring parity |
+| Generate/inspect/select Takes | **Yes**, Studio generator and Take UI | **Partial:** legacy scoped read can expose Take IDs, not video; explicit Read panel does not expose Takes | **No** Director-controlled execution; can advise | Director should understand readiness and production choices; add actual actions only through existing generation/queue contract with explicit user intent |
+| Explain field purpose, H3 feasibility, duration and reference limitations | UI/store/generator have the facts | Prompt includes built-in expertise | **Advisory only**; not demonstrated expert reliability | Real-model tests on representative incomplete/contradictory Projects; proactively recommend concrete next action |
+| Undo reviewed changes | Existing dedicated brief Undo, other UI paths vary | N/A | **Partial** (Project brief only) | Preserve real Undo where supported; never claim universal Undo |
+
+**Implementation order (parity, not feature inflation):**
+
+1. **Finish everyday Read and Project authoring.** One-click whole Scene/whole Project reads; payload inspection/size visibility; existing Project Title; independent Invariant add/edit/remove with safe linked renames. Reuse the explicit Read and reviewed brief/Scene contracts.
+2. **Complete Scene authoring parity.** Reviewed reorder, duplicate/remove, duration and supported reference/generation settings; use existing `storyboard_store` operations, scoped conflict checks, editor save coordination and preserved Take data. Do not introduce a generic agent/router or new persisted creative fields.
+3. **Prove expert behavior end-to-end.** Test a real selected LLM on a blank Project, incomplete Invariants, a 15-Scene Read, continuity warnings, Scene reorder, reviewed Apply and user cancellation. Differentiate *advice*, *draft prepared*, and *data actually saved*. Add generation/Take actions as clear workflow needs justify them, using existing runtime ownership.
+4. **Only then consider compression.** Repeated Invariant text in H3 prompts is a context-cost optimization. Prefer conservative deterministic matching after measuring full-Project Read sizes; no new back-channel model or independent compacted truth until a real threshold requires it.
+
+**Source seams / proof:** `tool/js/studio_director_workbench.js` (Read picker, scope, revisions and Write dispatch); `tool/js/director_chat.js` (actual Read payload, acknowledgment and reviewed proposals); `tool/server/studio_director.py` (advisory action catalog and H3 guidance); `tool/server/storyboard_store.py` (canonical fields, Scene operations and referenced-Invariant guard); `tool/js/storyboard.js` (actual user actions); `tool/server/app.py` (reviewed routes). Tests: `tests/studio_director_design_fixes.test.cjs`, `tests/test_studio_scene_draft.py`, `tests/test_studio_director.py`. **These tests alone do not prove real-model expertise or browser UX.**
+
 ## North star
 
 One creator turns an idea, gag, visual, episode, or developing narrative into **renderable short video Scenes** using one Studio Director conversation. Director is a creative collaborator **and** an operator of documented WebCap capabilities; it is not a generic chat pretending to be a video editor.

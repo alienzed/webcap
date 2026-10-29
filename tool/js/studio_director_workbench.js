@@ -2,6 +2,7 @@
   'use strict';
   var readStory = null, writeStory = null, projects = [], proposedScene = null, playbookExpected = null;
   var readiness = [], recommendations = {readHints:[],writeHint:'',sceneId:''};
+  var readChoices = {}, writeOperationChosen = false, lastReadSource = null;
   var sceneFields = ['summary', 'prompt', 'title'];
   var projectFields = ['title', 'concept', 'style', 'invariants'];
   var labels = {title:'Title', concept:'Concept', style:'Visual / atmosphere',
@@ -19,7 +20,11 @@
   }
   function status(message, error) {
     var node = el('studio-dw-status');
-    if (node) { node.textContent = message; node.dataset.error = error ? 'true' : 'false'; }
+    if (node) {
+      node.textContent = message || '';
+      node.dataset.error = error ? 'true' : 'false';
+      node.classList.toggle('hidden', !message);
+    }
     if (error && typeof window.reportConsoleError === 'function')
       window.reportConsoleError('Studio Director workbench', new Error(message));
   }
@@ -36,16 +41,18 @@
     return api('/fs/storyboard').then(function (response) {
       projects = response.stories || [];
       if (!Array.isArray(projects)) throw new Error('Project listing is invalid.');
-      var preferred = (readStory && readStory.id) || window.studioDirectorBridge.workingStoryId() ||
-        activeTarget().storyId || '';
-      ['studio-dw-read-project', 'studio-dw-write-project'].forEach(function (id) {
-        var select = el(id), original = select.value;
-        select.replaceChildren();
-        option(select, '', 'Choose Project…');
-        projects.forEach(function (p) { option(select, p.id, storyName(p)); });
-        if (projects.some(function (p) { return p.id === original; })) select.value = original;
-        else if (projects.some(function (p) { return p.id === preferred; })) select.value = preferred;
-      });
+      var preferredRead = (readStory && readStory.id) || activeTarget().storyId ||
+        window.studioDirectorBridge.workingStoryId() || '';
+      var preferredWrite = window.studioDirectorBridge.workingStoryId() || activeTarget().storyId || '';
+      [['studio-dw-read-project', preferredRead], ['studio-dw-write-project', preferredWrite]]
+        .forEach(function (item) {
+          var select = el(item[0]), original = select.value;
+          select.replaceChildren();
+          option(select, '', 'Choose Project…');
+          projects.forEach(function (p) { option(select, p.id, storyName(p)); });
+          if (projects.some(function (p) { return p.id === original; })) select.value = original;
+          else if (projects.some(function (p) { return p.id === item[1]; })) select.value = item[1];
+        });
       return projects;
     });
   }
@@ -66,13 +73,24 @@
     readStory = story;
     var fields = el('studio-dw-project-fields'), scenes = el('studio-dw-scene-fields');
     fields.replaceChildren(); scenes.replaceChildren();
-    if (!story) { status('Choose a Project to select fields.', false); return; }
+    if (!story) { updateReadSelection(); return; }
+    var chosen = readChoices[story.id], firstSelection = !chosen;
+    if (firstSelection) chosen = new Set();
+    function addField(path, label, suggested, host) {
+      if (firstSelection && suggested) chosen.add(path);
+      var row = fieldCheckbox(path, label, chosen.has(path));
+      row.querySelector('input').onchange = function () {
+        if (this.checked) chosen.add(path);
+        else chosen.delete(path);
+        updateReadSelection();
+      };
+      host.appendChild(row);
+    }
     projectFields.forEach(function (key) {
       var path = 'project.' + key;
-      var preferred = recommendations.readHints.length
+      addField(path, labels[key], recommendations.readHints.length
         ? recommendations.readHints.indexOf(path) !== -1
-        : key !== 'title' && !!story[key];
-      fields.appendChild(fieldCheckbox(path, labels[key], preferred));
+        : key !== 'title' && !!story[key], fields);
     });
     (story.sceneOrder || []).forEach(function (id, index) {
       var scene = story.scenes && story.scenes[id];
@@ -83,29 +101,26 @@
       ['title', 'summary', 'prompt', 'references', 'durationSeconds'].forEach(function (field) {
         var path = 'scene:' + id + ':' + field;
         var current = id === (recommendations.sceneId || activeTarget().sceneId);
-        var recommended = recommendations.readHints.indexOf(path) !== -1 ||
+        var suggested = recommendations.readHints.indexOf(path) !== -1 ||
           (current && recommendations.readHints.indexOf('scene.current.' + field) !== -1) ||
           (!recommendations.readHints.length && current &&
            (field === 'summary' || field === 'prompt') && !!scene[field]);
-        details.appendChild(fieldCheckbox(path, labels[field], recommended));
-        if (recommended) details.open = true;
+        addField(path, labels[field], suggested, details);
+        if (chosen.has(path)) details.open = true;
       });
       scenes.appendChild(details);
     });
-    status('Select the saved fields Director should actually receive. Nothing is sent yet.', false);
+    readChoices[story.id] = chosen;
+    updateReadSelection();
   }
   function selectedPaths() {
     return Array.from(el('studio-dw-read-panel').querySelectorAll('input[data-path]:checked'))
       .map(function (node) { return node.dataset.path; });
   }
-  function readSend() {
-    var id = el('studio-dw-read-project').value, keys = selectedPaths();
-    if (!id || !keys.length) { status('Choose a Project and at least one field.', true); return; }
-    if (!window.studioDirectorBridge.isReady()) { status('Open Studio Director and choose a model first.', true); return; }
-    el('studio-dw-read-send').disabled = true;
-    // Fresh saved content is fetched at the explicit Send boundary, not injected by navigation.
-    loadStory(id).then(function (story) {
-      var items = keys.map(function (key) {
+  function readPayload(story, keys) {
+    return {
+      projectId: story.id, projectTitle: storyName(story), savedAt: story.updatedAt,
+      fields: keys.map(function (key) {
         var parts = key.split(':'), value;
         if (key.indexOf('project.') === 0) {
           var field = key.slice(8);
@@ -116,20 +131,40 @@
               ['title','summary','prompt','references','durationSeconds'].indexOf(parts[2]) === -1 ||
               !story.scenes || !story.scenes[parts[1]] ||
               (story.sceneOrder || []).indexOf(parts[1]) === -1)
-            throw new Error('Selected Scene field is not in the current Project: ' + key);
+            throw new Error('Selected Scene field is not in this Project: ' + key);
           value = story.scenes[parts[1]][parts[2]];
         }
         return {id:key, value:value === undefined ? null : value};
-      });
-      window.studioDirectorBridge.sendRead({
-        projectId:story.id, projectTitle:storyName(story), savedAt:story.updatedAt,
-        fields:items
-      }, keys);
-      status('Selected fields sent. Director must acknowledge their identifiers in its reply.', false);
+      })
+    };
+  }
+  function updateReadSelection() {
+    var keys = selectedPaths();
+    el('studio-dw-read-count').textContent = keys.length + (keys.length === 1 ? ' field selected' : ' fields selected');
+    el('studio-dw-read-send').disabled = !keys.length || !el('studio-dw-read-project').value;
+    var name = readStory ? storyName(readStory) : 'No Project selected';
+    el('studio-dw-read-scope').textContent = 'Read source: ' + name + '. Not an automatic attachment.';
+    var details = el('studio-dw-read-preview');
+    if (details.open && readStory) el('studio-dw-read-preview-data').textContent =
+      JSON.stringify(readPayload(readStory, keys), null, 2);
+  }
+  function readSend() {
+    var id = el('studio-dw-read-project').value, keys = selectedPaths();
+    if (!id || !keys.length) { status('Choose a Project and at least one field.', true); return; }
+    if (!window.studioDirectorBridge.isReady()) { status('Open Director and choose a model first.', true); return; }
+    el('studio-dw-read-send').disabled = true;
+    // Same exact serializer drives the inspector and the outbound LLM message.
+    loadStory(id).then(function (story) {
+      var payload = readPayload(story, keys);
+      el('studio-dw-read-preview-data').textContent = JSON.stringify(payload, null, 2);
+      window.studioDirectorBridge.sendRead(payload, keys);
+      lastReadSource = story.id;
+      status('Selected fields sent. Awaiting Director’s own acknowledgment.', false);
       el('studio-dw-read-panel').classList.add('hidden');
       el('studio-dw-read').setAttribute('aria-expanded', 'false');
+      updateScope();
     }).catch(function (error) { status('Read failed: ' + String(error.message || error), true); })
-      .finally(function () { el('studio-dw-read-send').disabled = false; });
+      .finally(function () { updateReadSelection(); });
   }
   function showWriteContext() {
     var operation=el('studio-dw-write-operation').value, text='';
@@ -161,6 +196,23 @@
     el('studio-dw-write-context-json').textContent=text;
   }
 
+  function updateScope() {
+    var readId = el('studio-dw-read-project').value;
+    var writeId = el('studio-dw-write-project').value;
+    var op = el('studio-dw-write-operation').value;
+    el('studio-dw-write-scope').textContent = op === 'new-project'
+      ? 'Creates a new Project. No existing destination.'
+      : 'Write destination: ' + (projects.find(function(p){return p.id===writeId;}) || {title:'Choose a Project'}).title +
+        (lastReadSource && writeId && lastReadSource !== writeId
+          ? ' · Different from last Read source.' : '');
+    var mode = !el('studio-dw-read-panel').classList.contains('hidden') ? 'Read' :
+      !el('studio-dw-write-panel').classList.contains('hidden') ? 'Write' : '';
+    el('studio-dw-heading').textContent = mode ? mode + ' · Director' : 'Director actions';
+    el('studio-dw-context').textContent = mode === 'Read'
+      ? 'Explicit source · nothing sent until Send'
+      : mode === 'Write' ? 'Reviewed destination · nothing saved until Apply'
+      : 'Conversation is independent of Studio navigation';
+  }
   function setOperation() {
     var operation = el('studio-dw-write-operation').value;
     el('studio-dw-write-scene-row').classList.toggle('hidden', operation !== 'scene-edit');
@@ -168,6 +220,7 @@
     el('studio-dw-write-project').disabled = operation === 'new-project' || operation === 'playbook';
     el('studio-dw-write-prepare').textContent = operation === 'scene-edit' ? 'Draft Scene revision' : 'Prepare editable review';
     showWriteContext();
+    updateScope();
   }
   function renderWriteStory(story) {
     writeStory = story;
@@ -182,6 +235,7 @@
     if (preferredScene && story.scenes && story.scenes[preferredScene])
       select.value = preferredScene;
     showWriteContext();
+    updateScope();
   }
   function refreshRead() {
     return refreshProjects().then(function () {return loadStory(el('studio-dw-read-project').value);})
@@ -190,8 +244,12 @@
   function refreshWrite() {
     return refreshProjects().then(function () {return loadStory(el('studio-dw-write-project').value);})
       .then(renderWriteStory).then(function () {
-        if (recommendations.writeHint) el('studio-dw-write-operation').value = recommendations.writeHint;
-        else if (!projects.length) el('studio-dw-write-operation').value = 'new-project';
+        if (!writeOperationChosen) {
+          if (recommendations.writeHint && recommendations.writeHint !== 'playbook')
+            el('studio-dw-write-operation').value =
+              recommendations.writeHint === 'scene' ? 'scenes' : recommendations.writeHint;
+          else if (!projects.length) el('studio-dw-write-operation').value = 'new-project';
+        }
         setOperation();
       })
       .catch(function (e) { status('Write setup failed: ' + e.message, true); });
@@ -203,6 +261,7 @@
     button.setAttribute('aria-expanded', show ? 'true' : 'false');
     el('studio-dw-' + other + '-panel').classList.add('hidden');
     el('studio-dw-' + other).setAttribute('aria-expanded', 'false');
+    updateScope();
     if (show) (which === 'read' ? refreshRead() : refreshWrite());
   }
   function parseProposal(raw) {

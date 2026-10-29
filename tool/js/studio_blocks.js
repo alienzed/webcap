@@ -84,6 +84,122 @@
       el('studio-blocks-status').textContent = 'Copied to clipboard.';
     } catch (error) { report(error); }
   }
+  // Slash inserts author-owned text into the current Studio draft. It never
+  // attaches hidden context, invokes Director, or writes Project fields.
+  function slashMatch(text, caret) {
+    var found = /(^|\s)\/([^\s/]*)$/.exec(String(text).slice(0, caret));
+    return found ? {start:caret - found[2].length - 1, end:caret,
+      query:found[2].toLocaleLowerCase()} : null;
+  }
+  function setupSlash() {
+    var input = el('director-chat-input'), host = el('studio-blocks-slash');
+    var available = [], filtered = [], active = 0, opened = false, loading = false, error = '';
+    var selection = null, requestId = 0;
+    function isStudio() { return window.studioDirectorBridge.isStudioMode(); }
+    function close() {
+      opened = false; selection = null; filtered = []; available = [];
+      requestId++;
+      host.replaceChildren();
+      host.classList.add('hidden');
+      input.setAttribute('aria-expanded', 'false');
+    }
+    function render() {
+      if (!opened || !selection) return;
+      host.classList.remove('hidden');
+      input.setAttribute('aria-expanded', 'true');
+      host.replaceChildren();
+      filtered = available.filter(function (block) {
+        return (block.title + ' ' + block.type + ' ' + block.content)
+          .toLocaleLowerCase().includes(selection.query);
+      }).slice(0, 8);
+      if (active >= filtered.length) active = 0;
+      if (!filtered.length) {
+        var note = document.createElement('p');
+        note.className = 'studio-blocks-slash-empty';
+        note.textContent = loading ? 'Loading Blocks…' : error ||
+          'No matching Blocks. Create Ideas or Guidance with the Blocks button.';
+        host.appendChild(note);
+        return;
+      }
+      filtered.forEach(function (block, index) {
+        var button = document.createElement('button'),
+          title = document.createElement('strong'), detail = document.createElement('small');
+        button.type = 'button';
+        button.tabIndex = -1;
+        button.className = 'studio-blocks-slash-item' + (index === active ? ' active' : '');
+        button.setAttribute('role', 'option');
+        button.setAttribute('aria-selected', index === active ? 'true' : 'false');
+        title.textContent = block.title;
+        detail.textContent = (block.type === 'guidance' ? 'Guidance' : 'Idea') +
+          ' · ' + block.content.replace(/\s+/g, ' ').slice(0, 100);
+        button.append(title, detail);
+        button.onpointerdown = function (event) {event.preventDefault();};
+        button.onclick = function () {insert(block);};
+        host.appendChild(button);
+      });
+    }
+    function insert(block) {
+      // The exact visible slash span, never unrelated composer text, is replaced.
+      var match = slashMatch(input.value, input.selectionStart);
+      if (!match || !isStudio()) {close();return;}
+      var before = input.value.slice(0, match.start), after = input.value.slice(match.end);
+      var replacement = block.content + (/\s$/.test(block.content) ? '' : ' ');
+      input.value = before + replacement + after;
+      var caret = before.length + replacement.length;
+      close();
+      input.focus();
+      input.setSelectionRange(caret, caret);
+      input.dispatchEvent(new Event('input', {bubbles:true}));
+    }
+    function update() {
+      var match = isStudio() ? slashMatch(input.value, input.selectionStart) : null;
+      if (!match) {if (opened) close();return;}
+      selection = match;
+      if (!opened) {
+        opened = true;
+        active = 0;
+        loading = true;
+        error = '';
+        render();
+        var id = ++requestId;
+        api('').then(function (result) {
+          if (id !== requestId || !opened) return;
+          available = result.blocks;
+          loading = false;
+          render();
+        }).catch(function (failure) {
+          if (id !== requestId || !opened) return;
+          loading = false;
+          error = 'Could not load Blocks; check the Console.';
+          report(failure);
+          render();
+        });
+      } else {active = 0;render();}
+    }
+    input.setAttribute('aria-controls', 'studio-blocks-slash');
+    input.setAttribute('aria-expanded', 'false');
+    input.addEventListener('input', update);
+    input.addEventListener('click', update);
+    // Capture before Director's Enter-to-send and arrow-history handlers.
+    input.addEventListener('keydown', function (event) {
+      if (!opened || !isStudio()) return;
+      if (event.key === 'Escape') {
+        event.preventDefault();event.stopImmediatePropagation();close();return;
+      }
+      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        event.preventDefault();event.stopImmediatePropagation();
+        if (filtered.length) active = (active + (event.key === 'ArrowDown' ? 1 : -1) +
+          filtered.length) % filtered.length;
+        render();return;
+      }
+      if (event.key === 'Enter' || event.key === 'Tab') {
+        if (!filtered.length) return;
+        event.preventDefault();event.stopImmediatePropagation();
+        insert(filtered[active]);return;
+      }
+    }, true);
+    input.addEventListener('blur', close);
+  }
   function bind() {
     el('studio-blocks-open').onclick = open;
     el('studio-blocks-close').onclick = function () { el('studio-blocks-dialog').close(); };
@@ -92,6 +208,7 @@
     el('studio-blocks-delete').onclick = remove;
     el('studio-blocks-copy').onclick = copy;
     el('studio-blocks-search').oninput = render;
+    setupSlash();
     edit(null);
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bind);

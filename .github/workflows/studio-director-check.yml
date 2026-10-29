@@ -1,0 +1,33 @@
+name: Studio Director checks
+on:
+  pull_request:
+    paths:
+      - 'tool/js/director_chat.js'
+      - 'tool/js/studio_director_workbench.js'
+      - 'tool/server/studio_director.py'
+      - 'tool/server/storyboard_store.py'
+      - 'tool/server/director_chat_history.py'
+      - 'tool/server/app.py'
+      - 'tool/tool.html'
+      - 'tests/test_studio_director.py'
+      - 'tests/test_director_chat_history.py'
+      - 'tests/test_storyboard_store.py'
+      - '.github/workflows/studio-director-check.yml'
+jobs:
+  syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: JavaScript syntax
+        run: |
+          node --check tool/js/director_chat.js
+          node --check tool/js/studio_director_workbench.js
+      - name: Python compile
+        run: |
+          python -m compileall -q tool/server tests/test_studio_director.py tests/test_director_chat_history.py tests/test_storyboard_store.py

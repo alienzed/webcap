@@ -6,6 +6,8 @@
 > It describes what the product should mean to the user. It does **not** require the current UI to implement
 > every dependency at the narrowest possible scope, and it should not be used as justification for speculative
 > backend guards. When a coarser UI lock is simpler and still preserves these semantics, prefer the simpler UI.
+>
+> **Current authoring scope (2026-10-30):** The dependency examples below retain historical Storyboard operations and `entryState`/`exitState` fields. Those fields remain in legacy storage/contracts but are retired from active Studio Director Read/Write. See [Studio Director materialization contract](studio-director-materialization-contract.md) and [Execution Queue](execution_queue.md) for the implemented boundaries. Do not implement historical example fields merely to satisfy this North Star.
 
 ## 1. Fundamental model
 

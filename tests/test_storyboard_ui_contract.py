@@ -1583,7 +1583,8 @@ def test_story_guidelines_use_reviewed_chat_and_define_from_concept_changes():
     assert "operation: 'storyboard_story_guidelines'" in chat
     assert "window.openStoryboardGuidelineReview({" in chat
     assert '"storyboard_story_guidelines"' in app
-    assert '"storyboard_story_guidelines"' in llm
+    # Chat schemas are forwarded from the server contract for every structured operation.
+    assert 'contract.get("response_schema") is not None' in llm
 
 
 def test_define_invariants_does_not_generate_new_guidelines_and_preserves_legacy_editor():

@@ -7392,11 +7392,96 @@ html[data-theme="dark"] iframe {
 .run-analytics-epoch-media-card button {align-self:flex-start;margin-top:auto;}
 @media(max-width:640px) {.run-analytics-epoch-media-head {flex-direction:column;}.run-analytics-epoch-media-grid {padding:0 12px 12px;}}
 
-/* Prompt Tests: checkpoint rows with fixed-size, playable result cards. */
-.test-generations-matrix-scroll{overflow-x:auto;max-width:100%}
-.test-generations-matrix-board{display:grid;grid-template-columns:140px repeat(var(--matrix-columns),minmax(210px,240px));gap:8px;align-items:start;width:max-content;min-width:100%;padding:8px}
-.test-generations-matrix-board>strong{font-size:12px;min-width:0;overflow-wrap:anywhere;padding:8px}
-.test-generations-matrix-epoch{position:sticky;left:0;background:var(--surface,#181b22);z-index:1}
-.test-generations-matrix-cell{width:240px;max-width:240px;min-height:50px}
-.test-generations-matrix-cell .test-generations-result-card{width:100%;max-width:100%;margin:0}
-.test-generations-matrix-cell.is-empty{font-size:12px;opacity:.65;padding:14px}
+/* Evaluation Matrix follows Manual Screening: sticky prompt columns, full-width
+   checkpoint headers and a horizontally scrolling row of normal 500px cards. */
+.test-generations-matrix { min-width: 0; min-height: 0; }
+.test-generations-matrix-scroll {
+  max-width: 100%;
+  max-height: max(320px, calc(100dvh - 265px));
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+.test-generations-matrix-board {
+  --matrix-card-width: 500px; /* Same width as .test-generations-results Grid. */
+  width: max-content;
+  min-width: 100%;
+  padding: 8px;
+}
+.test-generations-matrix-labels,
+.test-generations-matrix-cases {
+  display: grid;
+  grid-template-columns: repeat(var(--matrix-columns), var(--matrix-card-width));
+  gap: 12px;
+}
+.test-generations-matrix-labels {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  padding: 6px 0 8px;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel);
+}
+.test-generations-matrix-prompt {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-bottom: 3px solid var(--accent);
+  border-radius: 7px;
+  background: var(--panel-soft);
+}
+.test-generations-matrix-prompt span {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+.test-generations-matrix-prompt strong {
+  font-size: 16px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+.test-generations-matrix-row {
+  margin: 12px 0;
+  content-visibility: auto;
+  contain-intrinsic-size: auto 500px;
+}
+.test-generations-matrix-row-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 2px;
+  min-width: 0;
+  font-size: 16px;
+}
+.test-generations-matrix-epoch {
+  flex: 0 1 auto;
+  min-width: 0;
+  font-size: 18px;
+  overflow-wrap: anywhere;
+}
+.test-generations-matrix-row-summary { color: var(--muted); font-size: 14px; white-space: nowrap; }
+.test-generations-matrix-row.is-excluded .test-generations-matrix-row-head {
+  border-left: 3px solid var(--border);
+  padding-left: 7px;
+  opacity: .75;
+}
+.test-generations-matrix-collapse {
+  margin-left: auto;
+  width: auto;
+  min-width: 55px;
+  flex: 0 0 auto;
+  font-size: 14px;
+}
+.test-generations-matrix-row.is-collapsed .test-generations-matrix-cases { display: none; }
+.test-generations-matrix-cell { min-width: 0; min-height: 70px; }
+.test-generations-matrix-cell .test-generations-result-card { width: 100%; max-width: 100%; margin: 0; }
+.test-generations-matrix-cell.is-empty {
+  padding: 16px;
+  border: 1px dashed var(--border);
+  border-radius: 7px;
+  color: var(--muted);
+  font-size: 14px;
+}

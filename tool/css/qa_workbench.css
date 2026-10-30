@@ -826,7 +826,7 @@
   .qa-curation-review { padding:clamp(18px,2.5vh,40px); }
   .qa-curation-review-panel { width:min(2000px,88vw); gap:16px; }
   .qa-curation-review-panel > .qa-curation-review-image { min-height:0; }
-  .qa-curation-review-panel { display:grid; grid-template-columns:minmax(0,1.3fr) minmax(480px,1fr); grid-template-rows:auto auto minmax(0,1fr); align-items:stretch; }
+  .qa-curation-review-panel { display:grid; grid-template-columns:minmax(0,1.3fr) minmax(480px,1fr); grid-template-rows:auto auto minmax(0,1fr) auto; align-items:stretch; }
   .qa-curation-review-top,.qa-curation-review-tabs { grid-column:1 / -1; }
   .qa-curation-review-image { grid-column:1; grid-row:3; min-height:0; }
   .qa-curation-review-evidence { grid-column:2; grid-row:3; align-content:center; gap:14px; padding:20px 26px; overflow:auto; background:var(--panel-soft,#27313d); border-radius:14px; }
@@ -856,4 +856,21 @@
 .qa-curation-review-concept-meter {
   box-shadow: inset 0 0 0 3px rgba(240,165,77,var(--curate-divergence,0));
   transition: box-shadow .18s ease;
+}
+
+/* Curate review navigation lives in its own stable footer, not the variable-height bars. */
+.qa-curation-review-actions { flex:0 0 auto; display:grid; grid-template-columns:minmax(0,1fr) auto minmax(0,1fr) auto; align-items:center; gap:14px; padding:12px 0 0; border-top:1px solid var(--border,#54616c); }
+.qa-curation-review-actions > button:first-child { justify-self:start; min-width:135px; }
+.qa-curation-review-actions > .qa-curation-review-decision { justify-self:center; }
+.qa-curation-review-actions > button:nth-child(3) { justify-self:end; min-width:135px; }
+.qa-curation-review-actions > .qa-curation-review-option { justify-self:end; white-space:nowrap; }
+@media(min-width:1100px) {
+  .qa-curation-review-panel { height:100%; }
+  .qa-curation-review-actions { grid-column:1 / -1; grid-row:4; }
+}
+@media(max-width:700px) {
+  .qa-curation-review-actions { grid-template-columns:1fr auto 1fr; gap:7px; }
+  .qa-curation-review-actions > button:first-child,
+  .qa-curation-review-actions > button:nth-child(3) { min-width:0; }
+  .qa-curation-review-actions > .qa-curation-review-option { grid-column:1 / -1; justify-self:center; }
 }

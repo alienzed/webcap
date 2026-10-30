@@ -15,6 +15,7 @@
     workshopProposal: null,
     storyGuidelineProposal: null,
     modeMessages: {},
+    modeContextKeys: {},
     elapsedByAssistantIndex: {},
     modeElapsedByAssistantIndex: {},
     metricsByAssistantIndex: {},
@@ -3175,7 +3176,8 @@
       if (mode) {
         return Promise.resolve(mode.execute({
           instruction: content,
-          modelId: state.modelId
+          modelId: state.modelId,
+          messages: messages.slice()
         })).then(function (result) {
           result = result && typeof result === 'object' ? result : {};
           messages.push({
@@ -3320,7 +3322,7 @@
   }
 
   function setOpen(open, modeId) {
-    if (open && !studioWorkspaceVisible()) modeId = 'chat';
+    if (open && !studioWorkspaceVisible() && modeId === 'storyboard') modeId = 'chat';
     if (modeId) setMode(modeId);
     // Changing modes is intentionally blocked during an active request.
     // Do not show its Studio UI in another workspace while the request finishes.
@@ -3853,7 +3855,21 @@
   window.refreshAssistantModes = syncModeUi;
   window.openAssistant = function (target) {
     target = target && typeof target === 'object' ? target : {};
-    setOpen(true, target.mode || 'chat');
+    var modeId = String(target.mode || 'chat');
+    if (target.contextKey) {
+      if (state.pending) throw new Error('Finish the current Assistant response before opening a different QA finding.');
+      var key = String(target.contextKey);
+      if (state.modeContextKeys[modeId] !== key) {
+        // Contextual conversations are transient, scoped to the evidence snapshot
+        // that opened them. Switching a finding must never reuse another's chat.
+        state.modeContextKeys[modeId] = key;
+        state.modeMessages[modeId] = [];
+        state.modeElapsedByAssistantIndex[modeId] = {};
+        state.modeMetricsByAssistantIndex[modeId] = {};
+        el('director-chat-input').value = '';
+      }
+    }
+    setOpen(true, modeId);
   };
   window.setDirectorChatOpen = setOpen;
   window.openDirectorChatActivity = function (target) {

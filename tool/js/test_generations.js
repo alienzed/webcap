@@ -3345,6 +3345,7 @@
           if (resultMediaFile(result) === mediaFile) result.rating = payload.rating;
         });
         if (previewSort === 'rating') refreshTestPreviewOrder();
+        if (resultsView === 'matrix') renderMatrix(currentStatus);
       }
       return request('test_rating_summary', { modelId: currentTestModelId() });
     }).then(function (payload) {
@@ -5816,6 +5817,26 @@
       if (event.target.closest('[data-compare-next]')) {
         compareIndex = Math.min(Math.max(0, comparePairs(currentStatus).length - 1), compareIndex + 1);
         renderCompare(currentStatus);
+      }
+    };
+    // Matrix reuses the same preview cards as Grid/Compare. Their rating,
+    // VL, checkpoint and removal actions need the same delegated click wiring.
+    el('test-generations-matrix').onclick = function (event) {
+      var epoch = event.target.closest('[data-test-epoch-media-job]');
+      if (epoch) {
+        window.runAnalyticsViewEpoch(epoch.dataset.testEpochMediaJob,Number(epoch.dataset.testEpochMediaEpoch),'tests');
+        return;
+      }
+      var vl = event.target.closest('[data-test-vl-result]');
+      if (vl) { showTestVlResult(vl.dataset.testVlResult); return; }
+      var rating = event.target.closest('[data-test-rating]');
+      if (rating) {
+        rateTestResult(rating);
+        return;
+      }
+      var remove = event.target.closest('[data-remove-candidate]');
+      if (remove) {
+        removeCurrentSessionCandidate(remove);
       }
     };
     el('test-generations-prompt').addEventListener('input', function () {

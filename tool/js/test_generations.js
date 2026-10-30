@@ -2518,6 +2518,7 @@
     baseInclude.addEventListener('change', function () {
       syncSweepControls();
       saveTestBenchState();
+      syncMatrixCandidateSelection();
     });
 
     var baseCopy = document.createElement('div');
@@ -3581,106 +3582,233 @@
     select.value = groups.some(function(group,index){ return String(index) === previous; }) ? previous : '';
   }
 
+  // Prompt Tests uses Manual Screening's layout pattern: prompt columns over
+  // full-width checkpoint rows. Candidate selection remains owned by Test setup.
+  function matrixCandidateKey(candidate, sweep) {
+    var kind = String(candidate && candidate.kind || 'lora');
+    var file = String(candidate && (candidate.fileName || candidate.candidateFile) || '');
+    var weight = sweep && candidate && candidate.strength != null ? String(Number(candidate.strength)) : '';
+    return JSON.stringify([kind, file, weight]);
+  }
+
+  function syncMatrixCandidateSelection() {
+    var host = el('test-generations-matrix');
+    var available = prepared && Array.isArray(prepared.files) ? prepared.files : [];
+    host.querySelectorAll('[data-matrix-candidate]').forEach(function (checkbox) {
+      var kind = checkbox.dataset.matrixKind;
+      var file = checkbox.dataset.matrixCandidate;
+      var linked = kind === 'base' ? el('test-generations-base-include') : null;
+      var canSelect = kind === 'base' ? !!linked : available.includes(file);
+      var selected = kind === 'base' ? !!(linked && linked.checked)
+        : canSelect && selectedCandidates instanceof Set && selectedCandidates.has(file);
+      checkbox.disabled = !canSelect;
+      checkbox.checked = !!selected;
+      checkbox.title = !canSelect ? 'This checkpoint is not staged for the next Test run'
+        : 'Include this checkpoint in the next Test run';
+      checkbox.closest('.test-generations-matrix-row').classList.toggle('is-excluded', canSelect && !selected);
+    });
+  }
+
+  function setMatrixRowCollapsed(row, collapsed) {
+    row.classList.toggle('is-collapsed', !!collapsed);
+    var toggle = row.querySelector('[data-matrix-collapse]');
+    toggle.textContent = collapsed ? 'Show' : 'Hide';
+    toggle.setAttribute('aria-expanded', String(!collapsed));
+    toggle.title = (collapsed ? 'Show' : 'Hide') + ' checkpoint previews';
+  }
+
   function renderMatrix(status) {
     if (resultsView !== 'matrix') return;
     var host = el('test-generations-matrix');
     var results = status && Array.isArray(status.results) ? status.results : [];
     var failures = status && Array.isArray(status.failures) ? status.failures : [];
     var variations = status && Array.isArray(status.variationCases) ? status.variationCases : [];
+    var sweep = !!(status && status.sweepWeights && status.sweepWeights.length);
     var columns = Math.max(1, variations.length);
     var buckets = new Map();
 
-    // Reserve all checkpoint rows immediately. New results only fill empty cells.
-    (status && status.candidates || []).forEach(function(candidate) {
-      var key = candidate.kind === 'base' ? 'Base' : String(candidate.fileName || candidate.label || '');
+    // Frozen candidates reserve row positions even before their renders arrive.
+    (status && status.candidates || []).forEach(function (candidate) {
+      var key = matrixCandidateKey(candidate, sweep);
       if (buckets.has(key)) return;
-      var provenance = candidate.provenance || {};
-      var parts = [];
-      if (provenance.sourceRunSequence) parts.push('Run ' + provenance.sourceRunSequence);
-      if (provenance.sourceEpoch != null) parts.push('Epoch ' + provenance.sourceEpoch);
-      buckets.set(key, {
-        label:candidate.kind === 'base' ? 'Base' : (parts.join(' · ') || key),
-        cells:new Map()
+      var identity = candidateIdentity({
+        kind: candidate.kind, candidateFile: candidate.fileName, provenance: candidate.provenance
       });
+      var label = identity.primary;
+      if (sweep && candidate.strength != null) label += ' · Weight ' + candidate.strength;
+      buckets.set(key, { label: label, kind: candidate.kind,
+        candidateFile: String(candidate.fileName || ''), cells: new Map() });
     });
-    results.forEach(function(result) {
-      var identity = candidateIdentity(result);
-      var key = result.kind === 'base' ? 'Base' : String(result.candidateFile || result.sourceLoRA || identity.primary);
-      if (!buckets.has(key)) buckets.set(key,{label:identity.primary,cells:new Map()});
-      var row=buckets.get(key);
-      row.label=identity.primary;
-      row.cells.set(result.variationIndex == null ? 0 : Number(result.variationIndex),result);
+    results.concat(failures).forEach(function (result) {
+      var candidate = {kind: result.kind || result.candidateKind || 'lora',
+        candidateFile: candidateFileForResult(result), strength: result.strength};
+      var key = matrixCandidateKey(candidate, sweep);
+      if (!buckets.has(key)) {
+        var label = candidateIdentity(result).primary;
+        if (sweep && result.strength != null) label += ' · Weight ' + result.strength;
+        buckets.set(key, {label: label, kind: candidate.kind,
+          candidateFile: candidate.candidateFile, cells: new Map()});
+      }
+      var index = result.variationIndex == null ? 0 : Number(result.variationIndex);
+      buckets.get(key).cells.set(index, result);
     });
 
-    failures.forEach(function(failure) {
-      var key = failure.kind === 'base' ? 'Base' : String(failure.candidateFile || failure.sourceLoRA || '');
-      if (!buckets.has(key)) buckets.set(key,{label:key,cells:new Map()});
-      var index=failure.variationIndex == null ? 0 : Number(failure.variationIndex);
-      if (!buckets.get(key).cells.has(index)) buckets.get(key).cells.set(index,failure);
-    });
-    var rows=Array.from(buckets.entries());
-    var layout=JSON.stringify([status && status.session,
-      variations.map(function(v){return v.label;}),
-      rows.map(function(entry){return entry[0];})
-    ]);
-    var board=host.querySelector('.test-generations-matrix-board');
+    var rows = Array.from(buckets.entries());
+    var layout = JSON.stringify([String(status && status.session || ''), sweep,
+      variations.map(function (v) { return [v.label, v.prompt]; }),
+      rows.map(function (entry) { return entry[0]; })]);
+    var board = host.querySelector('.test-generations-matrix-board');
     if (!board || host.dataset.layout !== layout) {
-      host.replaceChildren();
-      host.dataset.layout=layout;
-      if (!rows.length) { host.textContent='Generated previews will appear here.'; return; }
-      var scroller=document.createElement('div');
-      scroller.className='test-generations-matrix-scroll';
-      board=document.createElement('div');
-      board.className='test-generations-matrix-board';
-      board.style.setProperty('--matrix-columns', String(columns));
-      var corner=document.createElement('strong');
-      corner.textContent='Checkpoint';
-      board.appendChild(corner);
-      for(var i=0;i<columns;i++){
-        var label=document.createElement('strong');
-        label.textContent=variations[i] ? variations[i].label : 'Preview';
-        board.appendChild(label);
+      var previous = new Map();
+      if (host.dataset.session === String(status && status.session || '')) {
+        host.querySelectorAll('[data-matrix-key]').forEach(function (row) {
+          previous.set(row.dataset.matrixKey, row.classList.contains('is-collapsed'));
+        });
       }
-      rows.forEach(function(entry){
-        var heading=document.createElement('strong');
-        heading.className='test-generations-matrix-epoch';
-        board.appendChild(heading);
-        for(var index=0;index<columns;index++){
-          var cell=document.createElement('div');
-          cell.className='test-generations-matrix-cell';
-          cell.classList.add('is-empty');
-          cell.textContent='Awaiting render';
-          board.appendChild(cell);
+      host.replaceChildren();
+      host.dataset.layout = layout;
+      host.dataset.session = String(status && status.session || '');
+      if (!rows.length) {
+        host.textContent = 'Generated previews will appear here.';
+        return;
+      }
+      var scroller = document.createElement('div');
+      scroller.className = 'test-generations-matrix-scroll';
+      board = document.createElement('div');
+      board.className = 'test-generations-matrix-board';
+      board.style.setProperty('--matrix-columns', String(columns));
+      var labels = document.createElement('div');
+      labels.className = 'test-generations-matrix-labels';
+      for (var i = 0; i < columns; i++) {
+        var prompt = variations[i] && (variations[i].prompt || variations[i].label)
+          || String(status && (status.resolvedPrompt || status.prompt) || '');
+        var label = document.createElement('div');
+        label.className = 'test-generations-matrix-prompt';
+        var number = document.createElement('span');
+        number.textContent = 'Variation ' + (i + 1);
+        var heading = document.createElement('strong');
+        heading.textContent = prompt || 'Preview';
+        heading.title = prompt;
+        label.append(number, heading);
+        labels.appendChild(label);
+      }
+      board.appendChild(labels);
+      rows.forEach(function (entry) {
+        var info = entry[1];
+        var row = document.createElement('section');
+        row.className = 'test-generations-matrix-row';
+        row.dataset.matrixKey = entry[0];
+        var head = document.createElement('div');
+        head.className = 'test-generations-matrix-row-head';
+        var checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.className = 'test-generations-candidate-checkbox';
+        checkbox.dataset.matrixCandidate = info.candidateFile;
+        checkbox.dataset.matrixKind = String(info.kind || 'lora');
+        checkbox.setAttribute('aria-label', 'Include ' + info.label + ' in next Test run');
+        checkbox.addEventListener('change', function () {
+          if (info.kind === 'base') {
+            var base = el('test-generations-base-include');
+            base.checked = checkbox.checked;
+            base.dispatchEvent(new Event('change', {bubbles: true}));
+          } else {
+            var sidebar = Array.from(el('test-generations-files').querySelectorAll('[data-candidate-select]'))
+              .find(function (node) { return node.dataset.candidateSelect === info.candidateFile; });
+            if (!sidebar) throw new Error('Selected Test candidate is missing from the sidebar.');
+            sidebar.checked = checkbox.checked;
+            sidebar.dispatchEvent(new Event('change', {bubbles: true}));
+          }
+          setMatrixRowCollapsed(row, !checkbox.checked);
+          syncMatrixCandidateSelection();
+        });
+        head.appendChild(checkbox);
+        var title = document.createElement('strong');
+        title.className = 'test-generations-matrix-epoch';
+        title.textContent = info.label;
+        title.title = info.candidateFile || info.label;
+        head.appendChild(title);
+        var summary = document.createElement('span');
+        summary.className = 'test-generations-matrix-row-summary';
+        head.appendChild(summary);
+        var collapse = document.createElement('button');
+        collapse.type = 'button';
+        collapse.className = 'review-captions-btn test-generations-matrix-collapse';
+        collapse.dataset.matrixCollapse = '1';
+        collapse.addEventListener('click', function () {
+          setMatrixRowCollapsed(row, !row.classList.contains('is-collapsed'));
+        });
+        head.appendChild(collapse);
+        row.appendChild(head);
+        var cases = document.createElement('div');
+        cases.className = 'test-generations-matrix-cases';
+        for (var index = 0; index < columns; index++) {
+          var cell = document.createElement('div');
+          cell.className = 'test-generations-matrix-cell is-empty';
+          cell.textContent = 'Awaiting render';
+          cases.appendChild(cell);
         }
+        row.appendChild(cases);
+        board.appendChild(row);
+        var selected = info.kind === 'base'
+          ? !!el('test-generations-base-include').checked
+          : selectedCandidates instanceof Set && selectedCandidates.has(info.candidateFile);
+        setMatrixRowCollapsed(row, previous.has(entry[0]) ? previous.get(entry[0]) : !selected);
       });
       scroller.appendChild(board);
       host.appendChild(scroller);
     }
 
-    var headings=board.querySelectorAll('.test-generations-matrix-epoch');
-    var cells=board.querySelectorAll('.test-generations-matrix-cell');
-    var scores=testVlCandidateScores(results);
-    rows.forEach(function(entry,rowIndex){
-      var row=entry[1];
-      headings[rowIndex].textContent=row.label;
-      for(var index=0;index<columns;index++){
-        var cell=cells[rowIndex*columns+index];
-        var result=row.cells.get(index);
-        if(!result) continue;
-        var failed=!!result.error;
-        var key=failed ? 'failure:' + String(result.jobId || '') : String(resultMediaFile(result) || '');
-        if(cell.dataset.mediaKey === key && cell.firstElementChild){
-          window.updateTestPreviewCardRating(cell.firstElementChild,result.rating||0);
-          renderTestVlCard(cell.firstElementChild,result,scores);
+    syncMatrixCandidateSelection();
+    var renderedRows = board.querySelectorAll('.test-generations-matrix-row');
+    var scores = testVlCandidateScores(results);
+    rows.forEach(function (entry, rowIndex) {
+      var row = entry[1];
+      var node = renderedRows[rowIndex];
+      var completed = Array.from(row.cells.values()).filter(function (result) {
+        return !result.error && !!resultMediaFile(result);
+      });
+      var ratings = completed.filter(function (result) { return Number(result.rating) > 0; });
+      var summary = node.querySelector('.test-generations-matrix-row-summary');
+      summary.textContent = ratings.length
+        ? '★ ' + (ratings.reduce(function (sum, result) { return sum + Number(result.rating); }, 0) / ratings.length).toFixed(1)
+          + ' · ' + ratings.length + ' rated'
+        : completed.length + ' of ' + columns + ' rendered';
+      var cells = node.querySelectorAll('.test-generations-matrix-cell');
+      for (var index = 0; index < columns; index++) {
+        var cell = cells[index];
+        var result = row.cells.get(index);
+        if (!result) {
+          if (cell.dataset.mediaKey) {
+            cell.replaceChildren();
+            cell.textContent = 'Awaiting render';
+            cell.classList.add('is-empty');
+            delete cell.dataset.mediaKey;
+          }
           continue;
         }
-        var card=sharedTestCard(result,status,failed ? 'test-generations-result-card is-failed' : 'test-generations-result-card',false,failed);
-        var video=card.querySelector('video');
-        if(video) video.preload='none';
-        if (!failed) renderTestVlCard(card,result,scores);
+        var failed = !!result.error;
+        var key = failed ? 'failure:' + String(result.jobId || '') : resultMediaFile(result);
+        if (cell.dataset.mediaKey === key && cell.firstElementChild) {
+          if (!failed) {
+            window.updateTestPreviewCardRating(cell.firstElementChild, result.rating || 0);
+            renderTestVlCard(cell.firstElementChild, result, scores);
+          }
+          continue;
+        }
+        var card = sharedTestCard(result, status,
+          failed ? 'test-generations-result-card is-failed' : 'test-generations-result-card', false, failed);
+        var video = card.querySelector('video');
+        if (video) {
+          // Decode the opening frame without extracting a poster or preloading the whole video.
+          video.addEventListener('loadedmetadata', function () {
+            if (this.readyState < 2 && Number.isFinite(this.duration) && this.duration > 0.1 &&
+                this.currentTime === 0) this.currentTime = Math.min(0.05, this.duration / 10);
+          }, {once:true});
+        }
+        if (!failed) renderTestVlCard(card, result, scores);
         cell.classList.remove('is-empty');
         cell.replaceChildren(card);
-        cell.dataset.mediaKey=key;
+        cell.dataset.mediaKey = key;
       }
     });
   }
@@ -5389,6 +5517,7 @@
       syncSweepControls();
       saveTestBenchState();
       syncActiveRunControls(currentStatus);
+      syncMatrixCandidateSelection();
     });
     el('test-generations-master-select').addEventListener('change', function () {
       var files = prepared && Array.isArray(prepared.files) ? prepared.files : [];
@@ -5399,6 +5528,7 @@
       renderStagedFiles(prepared || { files: [], count: 0, candidateScores: {} });
       saveTestBenchState();
       syncActiveRunControls(currentStatus);
+      syncMatrixCandidateSelection();
     });
     el('test-generations-files').onclick = function (event) {
       var identity = event.target.closest('[data-staged-file] .test-generations-staged-copy');

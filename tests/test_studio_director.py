@@ -30,6 +30,18 @@ def test_writer_workshop_uses_existing_h3_prompt_contract_and_user_playbook(monk
     assert len(text) < 6000
 
 
+def test_studio_guidance_teaches_supported_workflow_choices_and_handoff():
+    result = guidance("minimax_h3")
+    system = result["system"]
+    assert "WORKFLOW CHOICES" in system
+    for choice in ("Scene Intent", "H3 Prompt", "Project Invariant",
+                   "Move or Duplicate", "multi-Scene revision", "H3 Playbook"):
+        assert choice in system
+    assert "To produce a Take" in system
+    assert "generation controls" in system
+    assert len(system) < 6000
+
+
 def test_action_catalog_tracks_shipped_reviewed_creative_operations():
     by_name = {action["name"]: action for action in ACTIONS}
     assert by_name["conversation.discuss"]["status"] == "available"

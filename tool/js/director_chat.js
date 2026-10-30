@@ -331,7 +331,10 @@
     el('director-chat-temporary-note').classList.toggle('hidden', !contextual);
     el('director-chat-history-toggle').classList.toggle('hidden', contextual);
     el('director-chat-save-status').classList.toggle('hidden', contextual);
-    if (contextual) el('director-chat-history-panel').classList.add('hidden');
+    if (contextual) {
+      el('director-chat-history-toggle').setAttribute('aria-expanded', 'false');
+      el('director-chat-history-panel').classList.add('hidden');
+    }
     el('director-chat-clear').textContent = context ? 'New QA chat' : 'New chat';
     var drawer = el('director-chat-drawer');
     drawer.classList.toggle('studio-director', studio);

@@ -148,3 +148,41 @@ test('completed Scene operations can be proposed and opened directly from guidan
   assert.match(director,/canReview: function \(\)/);
   assert.match(director,/this\.canReview\(\)/);
 });
+
+test('Readiness Write field recommendations preselect only supported editable fields', () => {
+  assert.match(director, /Optionally include writeFields for Write defaults/);
+  assert.match(workbench, /writeFields:writeFields,sceneId:sceneId,stale:false/);
+  assert.match(workbench, /allowedWriteFields\.indexOf\(field\) < 0/);
+  const source=workbench.split('  function recommendedWriteFields(operation) {')[1]
+    .split('  function refreshRead() {')[0];
+  assert.ok(source,'missing Write field defaults');
+  const scene=['summary','prompt','title'].map(value=>({value,checked:value==='summary'}));
+  const batch=['summary','prompt','title'].map(value=>({value,checked:value==='summary'}));
+  const els={'studio-dw-write-operation':{value:'scene-edit'},
+    'studio-dw-write-fields':{querySelectorAll:()=>scene},
+    'studio-dw-batch-fields':{querySelectorAll:()=>batch}};
+  const create=new Function('recommendations','readinessStale','projectFields','sceneFields','writeFieldsManuallyChanged','el',
+    'function recommendedWriteFields(operation) {'+source+
+    '\nreturn {recommendedWriteFields,applySuggestedWriteFields};');
+  function harness(stale=false,changed=false){
+    return create({writeFields:['prompt']},stale,['title','concept','style','invariants'],
+      ['summary','prompt','title'],changed,id=>els[id]);
+  }
+  harness().applySuggestedWriteFields();
+  assert.deepEqual(scene.map(item=>item.checked),[false,true,false]);
+  els['studio-dw-write-operation'].value='scenes-batch';
+  harness().applySuggestedWriteFields();
+  assert.deepEqual(batch.map(item=>item.checked),[false,true,false]);
+  scene[0].checked=true;scene[1].checked=false;
+  els['studio-dw-write-operation'].value='scene-edit';
+  harness(false,true).applySuggestedWriteFields();
+  assert.deepEqual(scene.map(item=>item.checked),[true,false,false],'manual selection wins');
+  harness(true).applySuggestedWriteFields();
+  assert.deepEqual(scene.map(item=>item.checked),[true,false,false],'stale hints are ignored');
+  assert.deepEqual(harness().recommendedWriteFields('project'),[]);
+});
+test('Project Write hints narrow reviewed field defaults without auto-applying',()=>{
+  assert.match(workbench,/bridge\.prepareWrite\(operation, id, item && storyName\(item\), recommendedWriteFields\(operation\)\)/);
+  assert.match(director,/if \(kind === 'project'\) return prepareStudioBrief\(writeFields\)/);
+  assert.match(director,/checkbox\.checked = checkbox\.checked && writeFields\.indexOf\(field\) !== -1/);
+});

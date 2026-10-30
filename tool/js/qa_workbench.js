@@ -2668,6 +2668,7 @@
         : 'Inspect ' + finding.files.length;
       actions.appendChild(qaCreateButton(primaryLabel, 'qa-primary', 'inspect-finding', finding.id));
     }
+    actions.appendChild(qaCreateButton('Ask QA', '', 'ask-finding', finding.id));
     if (!dismissed) actions.appendChild(qaCreateButton('Dismiss', '', 'dispose', 'keep'));
 
     var nav = document.createElement('div');
@@ -3546,6 +3547,42 @@
     });
   }
 
+  function qaOpenFindingChat(finding) {
+    var files = (finding.files || []).slice();
+    if (!files.length) files = (finding.candidates || []).map(function (candidate) { return candidate.file; }).filter(Boolean);
+    var selected = files.slice(0, 12);
+    var byName = {};
+    (state.items || []).forEach(function (item) {
+      if (item && item.fileName) byName[item.fileName] = item;
+    });
+    var evidence = qaBuildDeepScanItems(selected.map(function (name) { return byName[name]; }).filter(Boolean));
+    window.openQaFindingAssistant({
+      folder: String(state.folder || ''),
+      trainingFocus: qaWorkbenchState.trainingFocus,
+      finding: {
+        id: finding.id,
+        title: finding.title,
+        category: finding.category,
+        sourceLabel: finding.sourceLabel || '',
+        summary: finding.summary || '',
+        why: finding.why || '',
+        priority: finding.priority || '',
+        confidence: finding.confidence || '',
+        trainingValue: finding.trainingValue || '',
+        concept: finding.concept || '',
+        dismissIf: finding.dismissIf || '',
+        facts: finding.facts || [],
+        evidence: finding.evidence || [],
+        candidates: (finding.candidates || []).slice(0, 12),
+        patches: finding.patches || [],
+        tagActions: finding.tagActions || [],
+        files: files
+      },
+      items: evidence,
+      affectedCount: files.length
+    });
+  }
+
   function qaInspectFinding(findingId) {
     var finding = qaWorkbenchState.findings.find(function (row) { return row.id === findingId; });
     if (!finding) return;
@@ -3693,6 +3730,17 @@
       var idx = qaGetRecommendations().findIndex(function (finding) { return finding.id === value; });
       if (idx !== -1) qaWorkbenchState.browseIndex = idx;
       qaSetView('browse');
+      return;
+    }
+    if (action === 'ask-finding') {
+      var finding = qaGetRecommendations().find(function (row) { return row.id === value; });
+      if (!finding) throw new Error('Ask QA recommendation no longer exists: ' + value);
+      try {
+        qaOpenFindingChat(finding);
+      } catch (err) {
+        reportConsoleError('QA · Ask QA', err);
+        setStatus('Could not open Ask QA: ' + String(err && err.message || err));
+      }
       return;
     }
     if (action === 'inspect-finding') {

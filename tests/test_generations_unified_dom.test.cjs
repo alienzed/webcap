@@ -111,8 +111,8 @@ test('Evaluation Matrix follows Screening rows and preserves playable preview ca
 
 test('Evaluation Matrix uses regular Grid card width and horizontal scrolling', () => {
   const css = fs.readFileSync(path.join(root,'tool/css/styles.css'),'utf8');
-  assert.match(css, /--matrix-card-width:\\s*500px/);
-  assert.match(css, /grid-template-columns:\\s*repeat\\(var\\(--matrix-columns\\), var\\(--matrix-card-width\\)\\)/);
-  assert.match(css, /\\.test-generations-matrix-scroll\\s*\\{[^}]*overflow:\\s*auto/s);
-  assert.match(css, /\\.test-generations-matrix-labels\\s*\\{[^}]*position:\\s*sticky/s);
+  assert.match(css, /--matrix-card-width:\s*500px/);
+  assert.match(css, /grid-template-columns:\s*repeat\(var\(--matrix-columns\), var\(--matrix-card-width\)\)/);
+  assert.match(css, /\.test-generations-matrix-scroll\s*\{[^}]*overflow:\s*auto/s);
+  assert.match(css, /\.test-generations-matrix-labels\s*\{[^}]*position:\s*sticky/s);
 });

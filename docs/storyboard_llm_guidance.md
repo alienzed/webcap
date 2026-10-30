@@ -115,7 +115,7 @@ That context can help Director decide whether the current Scene should continue,
 
 The previous Scene is not automatically a continuity handoff.
 
-## Current Director operations
+## Underlying legacy Storyboard Director operations (not Studio Read/Write actions)
 
 ### `expand_concept`
 
@@ -230,7 +230,7 @@ The active model-facing guidance is:
 
 That file is intentionally concise and is what Director should use for ordinary H3 prompt writing.
 
-Director authors observable, timed audiovisual content following Story Guidelines and Scene intent. H3 guidance supplies section headings, timestamp notation, dialogue syntax, and exact reference-frame alignment.
+Director authors observable, timed audiovisual content from the context **actually supplied**. Current Studio uses Concept, Style, relevant Invariants and Scene Intent; older Storyboard operations may also provide saved Story Guidelines. H3 guidance supplies section headings, timestamp notation, dialogue syntax, and exact reference-frame alignment.
 
 WebCap stores the complete authored H3 prompt unchanged. The Workshop can selectively revise the timed-shot section when an unambiguous `integrated_multimodal_description` heading is present; other prompt shapes remain available for discussion and manual editing.
 

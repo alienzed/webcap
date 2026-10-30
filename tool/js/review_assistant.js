@@ -182,9 +182,10 @@
       'Respond concisely and use the supplied evidence. Distinguish observed caption/tag facts, cached model-generated Sight, and unverified hypotheses. A cached Sight description is not a fresh visual inspection.',
       'You may explain a finding, disagree with it, or suggest an alternative caption or tag action for the user to review. Existing media and annotations remain unchanged until the user applies an edit in WebCap.',
       'Training focus: ' + String(context.trainingFocus || 'Not specified'),
+      'Current caption primer: ' + String(context.captionPrimer || 'Not supplied'),
       'QA RECOMMENDATION (saved finding, not necessarily validated):',
       JSON.stringify(finding),
-      'CURRENT ITEM EVIDENCE (captured when chat opened):',
+      'CURRENT ITEM EVIDENCE (captured when chat opened; draftCaption is an unsaved working candidate):',
       JSON.stringify(context.items || []),
       'Evidence coverage: ' + String((context.items || []).length) + ' of ' +
         String(context.affectedCount || (context.items || []).length) + ' associated files. Other files, if any, were not included.',

@@ -197,6 +197,22 @@ test('Scene split reviews both Intent changes and saves one atomic operation', (
   assert.match(apply, /Review the original H3 Prompt/);
 });
 
+
+test('existing Scene Prompt Write includes saved duration and linked Invariant IDs', () => {
+  const single = workbench.split('  function editScene(story, sceneId, fields) {')[1]
+    .split('  function showSceneReview(')[0];
+  const batch = workbench.split('  function prepareBatchScenes(storyId) {')[1]
+    .split('  function renderBatchReview() {')[0];
+  const preview = workbench.split('  function showWriteContext() {')[1]
+    .split('  function updateScope() {')[0];
+  assert.match(single,/durationSeconds:scene\\.durationSeconds,invariantRefs:scene\\.invariantRefs/);
+  assert.match(single,/selected Scene durationSeconds/);
+  assert.match(batch,/durationSeconds:scene\\.durationSeconds, invariantRefs:scene\\.invariantRefs/);
+  assert.match(batch,/each selected Scene to its own durationSeconds/);
+  assert.match(preview,/durationSeconds:scene\\.durationSeconds,invariantRefs:scene\\.invariantRefs/);
+  assert.doesNotMatch(single,/durationSeconds.*selected keys/);
+});
+
 test('H3 detailed authoring contract is sent only for an explicit Prompt-field draft', async () => {
   const state = {studioStoryAccess:null,storyboardAttachments:{},workshop:null};
   const context = vm.createContext({

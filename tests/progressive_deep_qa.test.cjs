@@ -430,3 +430,17 @@ test('failure to persist a valid item pauses Deep QA without advancing to anothe
   assert.equal(f.wb.deepScanSkipped['a.jpg'], undefined);
   assert.match(f.errors[0].message, /Disk write failed/);
 });
+
+test('Deep QA overview presents one progress strip with Stop and stable coverage updates', () => {
+  const css = fs.readFileSync('tool/css/qa_workbench.css', 'utf8');
+  const overview = functionSource('qaRenderOverview', 'qaRenderBrowse');
+  const progress = functionSource('qaSyncDeepScanLiveUi', 'qaDeepScanProgress');
+  assert.match(overview, /container\.appendChild\(hero\);[\s\S]*className = 'qa-deep-scan-wrap'/);
+  assert.match(overview, /deepHead\.appendChild\(stop\)/);
+  assert.match(overview, /deepProgress\.id = 'qa-deep-scan-live-progress'/);
+  assert.match(overview, /container\.appendChild\(deepWrap\)/);
+  assert.match(progress, /progress\.value = total - counts\.unchecked/);
+  assert.match(css, /\.qa-deep-scan-progress \{ display:block; width:100%/);
+  assert.doesNotMatch(overview, /qaWorkbenchState\.deepScanSessionActive \? 'Deep QA running'/);
+  assert.match(overview, /qaCreateButton\('Review ' \+ undisposed\.length \+ ' findings', 'qa-primary'/);
+});

@@ -48,6 +48,16 @@ def test_studio_guidance_teaches_workflow_choices_in_existing_action_catalog():
     assert len(result["system"]) < 6000
 
 
+def test_director_role_combines_webcap_workflow_expertise_with_creative_judgment():
+    system = guidance("minimax_h3")["system"]
+    assert "MiniMax H3 production expert, and WebCap Studio workflow guide" in system
+    assert "Choose the smallest relevant Read, reviewed Write, or author-operated Studio step" in system
+    assert "Readiness is advisory, never a gate" in system
+    assert "Acknowledge only the exact saved fields actually supplied" in system
+    assert "Conversation never edits Project records" in system
+    assert len(system) < 6000
+
+
 def test_action_catalog_tracks_shipped_reviewed_creative_operations():
     by_name = {action["name"]: action for action in ACTIONS}
     assert by_name["conversation.discuss"]["status"] == "available"

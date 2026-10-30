@@ -2677,8 +2677,10 @@
       outbound[0] = { role: 'system', content: payload.system +
         '\n\nCURRENT WEBCAP CAPABILITIES (available vs planned):\n' + capabilities +
         '\n\nSTUDIO WORKBENCH STATE (controls, not saved Story facts):\n' + workbench +
-        '\nWhen choices are clear, offer to review Concept / overview, Visual / atmosphere and Invariants. ' +
-        'Keep exploring when they are still tentative; never claim a proposal was saved.\n' +
+        '\nFor the current author goal, suggest at most one useful next step from the listed capabilities: ' +
+        'an explicit Read, an appropriately scoped reviewed Write, or an author-operated Studio action. ' +
+        'Continue developing the idea when a change is not yet useful. ' +
+        'Treat proposed work as unsaved until WebCap confirms Apply.\n' +
         outbound[0].content };
       if (includePromptContract) outbound[0].content +=
         '\n\nH3 PRODUCTION PROMPT REFERENCE (know this template when discussing H3; apply it only when drafting an H3 Prompt field, not when authoring Scene Intent or Project fields):\n' + payload.promptContract;
@@ -2707,12 +2709,12 @@
         'Name is one of Concept, Characters, Setting, ' +
         'Action, Dialogue, Visual / atmosphere, Visual focus, Structure / formula, ' +
         'Variation / repetition, Production feasibility. Scope is project or scene. ' +
-        'Content is the complete proposed text for that single category, not a summary of the Project. ' +
-        'Ready is true when materially developed, false when incomplete. For Read hints use ' +
+        'For ready true, content is complete developed material for that category. ' +
+        'For ready false, content briefly identifies the missing decision or practical weakness. ' +
+        'For Read hints use ' +
         'project.concept, project.style, project.invariants, scene.current.summary, ' +
         'scene.current.prompt or known scene:ID:field. Recommend Write only when appropriate; ' +
-        'unknown IDs are empty. Include only relevant categories ' +
-        'actually supported by this conversation; do not invent facts to complete checkboxes. ' +
+        'unknown IDs are empty. Include only categories grounded in the actual discussion. ' +
         'OPTIONAL CREATIVE CAPTURE: Only when you have a COMPLETE, author-acceptable final field value ' +
         'already developed in this reply or the ongoing conversation, you may add one capture object ' +
         '{field, content, sceneId} to the same readiness JSON. field is title, concept, style, ' +

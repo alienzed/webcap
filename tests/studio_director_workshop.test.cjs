@@ -66,6 +66,34 @@ test('Only explicitly supplied conversation content is sent; legacy snapshots ar
   assert.equal(result[1].content, 'Develop the idea');
 });
 
+test('Studio prompting selects the current goal rather than steering every task to Project edits', async () => {
+  const context = vm.createContext({
+    state: {studioStoryAccess:null,storyboardAttachments:{},workshop:null},
+    Object, String, Promise,
+    requestJson: async () => ({
+      system: 'WebCap Studio Director role',
+      actions: [
+        {name:'context.read',status:'available',description:'Read chosen saved fields'},
+        {name:'scene.revise',status:'available',description:'Revise Scene Intent or H3 Prompt'}
+      ],
+      promptContract:'integrated_multimodal_description: [Shot 1]'
+    })
+  });
+  vm.runInContext(part('  function studioDirectorRequestMessages(messages, includePromptContract) {',
+    '  // The creative assessment is advisory.'),context);
+  const assembled = await vm.runInContext(
+    "studioDirectorChatRequestMessages([{role:'user',content:'Revise only the Scene action'}])",context);
+  const system = assembled[0].content;
+  assert.match(system,/For the current author goal, suggest at most one useful next step/);
+  assert.match(system,/an explicit Read, an appropriately scoped reviewed Write, or an author-operated Studio action/);
+  assert.doesNotMatch(system,/When choices are clear, offer to review Concept/);
+  assert.match(system,/For ready true, content is complete developed material/);
+  assert.match(system,/For ready false, content briefly identifies the missing decision/);
+  assert.match(system,/H3 PRODUCTION PROMPT REFERENCE/);
+  assert.equal(assembled[1].content,'Revise only the Scene action');
+  assert.equal(assembled.length,2, 'no extra request or hidden context event');
+});
+
 test('Read sends actual selected data as a visible conversation event and expects LLM receipt', () => {
   const state = {open: true, activeMode: 'storyboard', sessionReady: true,
     pending: false, attachmentPending: false, modelId: 'local-model'};

@@ -433,7 +433,7 @@ test('failure to persist a valid item pauses Deep QA without advancing to anothe
 
 test('Deep QA overview presents one progress strip with Stop and stable coverage updates', () => {
   const css = fs.readFileSync('tool/css/qa_workbench.css', 'utf8');
-  const overview = functionSource('qaRenderOverview', 'qaRenderBrowse');
+  const overview = functionSource('qaRenderOverview', 'qaCreateEvidenceMedia');
   const progress = functionSource('qaSyncDeepScanLiveUi', 'qaDeepScanProgress');
   assert.match(overview, /container\.appendChild\(hero\);[\s\S]*className = 'qa-deep-scan-wrap'/);
   assert.match(overview, /deepHead\.appendChild\(stop\)/);

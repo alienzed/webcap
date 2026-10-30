@@ -21,6 +21,7 @@
   var resultsView = 'grid';
   var previewSort = 'original';
   var compareIndex = 0;
+  var matrixRatingPending = new Set();
   var pendingActivityFolder = '';
   var testActivity = {};
   var selectedCandidates = null;
@@ -3617,6 +3618,87 @@
     toggle.title = (collapsed ? 'Show' : 'Hide') + ' checkpoint previews';
   }
 
+  function matrixRowResults(status, key) {
+    var sweep = !!(status && status.sweepWeights && status.sweepWeights.length);
+    return (status && status.results || []).filter(function (result) {
+      return !result.error && !!resultMediaFile(result) &&
+        matrixCandidateKey({
+          kind: result.kind || result.candidateKind || 'lora',
+          candidateFile: candidateFileForResult(result),
+          strength: result.strength
+        }, sweep) === key;
+    });
+  }
+
+  function syncMatrixRowRatings(node, status, key) {
+    var units = matrixRowResults(status, key);
+    var values = units.map(function (unit) { return Number(unit.rating) || 0; });
+    var uniform = values.length && values.every(function (value) { return value === values[0]; })
+      ? values[0] : 0;
+    var mixed = values.length > 1 && values.some(function (value) { return value !== values[0]; });
+    var busy = matrixRatingPending.has(String(status.session || '') + '|' + key);
+    node.querySelectorAll('[data-matrix-bulk-rating]').forEach(function (star) {
+      var value = Number(star.dataset.matrixBulkRating);
+      star.textContent = value <= uniform ? '★' : '☆';
+      star.disabled = busy || !units.length;
+      star.setAttribute('aria-pressed', String(value === uniform && uniform > 0));
+    });
+    var state = node.querySelector('.test-generations-matrix-rating-status');
+    state.textContent = busy ? 'Rating…' : mixed ? 'Mixed' : '';
+    state.classList.toggle('hidden', !state.textContent);
+    var vl = node.querySelector('[data-matrix-ask-vl]');
+    vl.disabled = !units.length;
+  }
+
+  function rateMatrixRow(session, key, rating) {
+    var status = currentStatus;
+    if (String(status.session || '') !== session) return Promise.resolve();
+    var units = matrixRowResults(status, key);
+    if (!units.length) return Promise.reject(new Error('No completed previews to rate.'));
+    var pendingKey = session + '|' + key;
+    if (matrixRatingPending.has(pendingKey)) return Promise.resolve();
+    matrixRatingPending.add(pendingKey);
+    if (resultsView === 'matrix') renderMatrix(currentStatus);
+    var completed = 0;
+    var task = Promise.resolve();
+    // The existing per-result rating store is read/modify/write. Serialize writes.
+    units.forEach(function (unit) {
+      task = task.then(function () {
+        return request('test_rate_result', {
+          session: session, mediaFile: resultMediaFile(unit), rating: rating
+        }).then(function (payload) {
+          completed++;
+          var file = resultMediaFile(unit);
+          if (String(currentStatus.session || '') === session) {
+            (currentStatus.results || []).forEach(function (result) {
+              if (resultMediaFile(result) === file) result.rating = payload.rating;
+            });
+          }
+          syncResultRatingButtons(session, file, payload.rating);
+        });
+      });
+    });
+    return task.then(function () {
+      return request('test_rating_summary', {modelId: currentTestModelId()});
+    }).then(function (payload) {
+      if (prepared && payload && payload.candidateScores) {
+        prepared.candidateScores = payload.candidateScores;
+        prepared.candidateVisionScores = payload.candidateVisionScores || {};
+        syncStagedCandidateScores(prepared.candidateScores);
+        syncTestVlCards();
+      }
+      if (payload && payload.sessions) renderSessions(payload.sessions, queuedTestJobs);
+    }).catch(function (error) {
+      showError(new Error('Rated ' + completed + ' of ' + units.length +
+        ' previews: ' + String(error && error.message || error)));
+    }).finally(function () {
+      matrixRatingPending.delete(pendingKey);
+      if (resultsView === 'matrix' && String(currentStatus.session || '') === session) {
+        renderMatrix(currentStatus);
+      }
+    });
+  }
+
   function renderMatrix(status) {
     if (resultsView !== 'matrix') return;
     var host = el('test-generations-matrix');
@@ -3721,15 +3803,55 @@
           setMatrixRowCollapsed(row, !checkbox.checked);
           syncMatrixCandidateSelection();
         });
-        head.appendChild(checkbox);
+        var primary = document.createElement('div');
+        primary.className = 'test-generations-matrix-row-primary';
+        primary.appendChild(checkbox);
         var title = document.createElement('strong');
         title.className = 'test-generations-matrix-epoch';
         title.textContent = info.label;
         title.title = info.candidateFile || info.label;
-        head.appendChild(title);
+        primary.appendChild(title);
+        head.appendChild(primary);
+
+        var stars = document.createElement('div');
+        stars.className = 'test-generations-matrix-bulk-stars';
+        stars.setAttribute('role', 'group');
+        stars.setAttribute('aria-label', 'Rate all completed previews for ' + info.label);
+        for (var starValue = 1; starValue <= 5; starValue++) {
+          (function (value) {
+            var star = document.createElement('button');
+            star.type = 'button';
+            star.className = 'test-generations-matrix-bulk-star';
+            star.dataset.matrixBulkRating = String(value);
+            star.title = 'Rate all completed previews ' + value + ' stars';
+            star.setAttribute('aria-label', star.title);
+            star.addEventListener('click', function () {
+              rateMatrixRow(String(status.session || ''), entry[0], value);
+            });
+            stars.appendChild(star);
+          })(starValue);
+        }
+        head.appendChild(stars);
+        var ratingState = document.createElement('span');
+        ratingState.className = 'test-generations-matrix-rating-status hidden';
+        head.appendChild(ratingState);
+        var actions = document.createElement('div');
+        actions.className = 'test-generations-matrix-row-actions';
         var summary = document.createElement('span');
         summary.className = 'test-generations-matrix-row-summary';
-        head.appendChild(summary);
+        actions.appendChild(summary);
+        var askVl = document.createElement('button');
+        askVl.type = 'button';
+        askVl.className = 'review-captions-btn test-generations-matrix-ask-vl';
+        askVl.dataset.matrixAskVl = '1';
+        askVl.textContent = 'Ask VL';
+        askVl.addEventListener('click', function () {
+          var current = currentStatus;
+          if (String(current.session || '') !== String(status.session || '')) return;
+          try { queueTestVlForSession(current, matrixRowResults(current, entry[0])); }
+          catch (error) { showError(error); }
+        });
+        actions.appendChild(askVl);
         var collapse = document.createElement('button');
         collapse.type = 'button';
         collapse.className = 'review-captions-btn test-generations-matrix-collapse';
@@ -3737,7 +3859,8 @@
         collapse.addEventListener('click', function () {
           setMatrixRowCollapsed(row, !row.classList.contains('is-collapsed'));
         });
-        head.appendChild(collapse);
+        actions.appendChild(collapse);
+        head.appendChild(actions);
         row.appendChild(head);
         var cases = document.createElement('div');
         cases.className = 'test-generations-matrix-cases';
@@ -3769,10 +3892,11 @@
       });
       var ratings = completed.filter(function (result) { return Number(result.rating) > 0; });
       var summary = node.querySelector('.test-generations-matrix-row-summary');
-      summary.textContent = ratings.length
-        ? '★ ' + (ratings.reduce(function (sum, result) { return sum + Number(result.rating); }, 0) / ratings.length).toFixed(1)
-          + ' · ' + ratings.length + ' rated'
-        : completed.length + ' of ' + columns + ' rendered';
+      summary.textContent = completed.length + ' of ' + columns + ' rendered' +
+        (ratings.length ? ' · ★ ' +
+          (ratings.reduce(function (sum, result) { return sum + Number(result.rating); }, 0) / ratings.length).toFixed(1) +
+          ' (' + ratings.length + ' rated)' : '');
+      syncMatrixRowRatings(node, status, entry[0]);
       var cells = node.querySelectorAll('.test-generations-matrix-cell');
       for (var index = 0; index < columns; index++) {
         var cell = cells[index];

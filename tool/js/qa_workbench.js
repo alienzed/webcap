@@ -2668,6 +2668,7 @@
         : 'Inspect ' + finding.files.length;
       actions.appendChild(qaCreateButton(primaryLabel, 'qa-primary', 'inspect-finding', finding.id));
     }
+    actions.appendChild(qaCreateButton('Ask QA', '', 'ask-finding', finding.id));
     if (!dismissed) actions.appendChild(qaCreateButton('Dismiss', '', 'dispose', 'keep'));
 
     var nav = document.createElement('div');
@@ -3546,6 +3547,64 @@
     });
   }
 
+  function qaOpenFindingChat(finding) {
+    var files = (finding.files || []).slice();
+    if (!files.length) files = (finding.candidates || []).map(function (candidate) { return candidate.file; }).filter(Boolean);
+    var selected = files.slice(0, 12);
+    var byName = {};
+    (state.items || []).forEach(function (item) {
+      if (item && item.fileName) byName[item.fileName] = item;
+    });
+    var evidence = qaBuildDeepScanItems(selected.map(function (name) { return byName[name]; }).filter(Boolean));
+    window.openQaFindingAssistant({
+      folder: String(state.folder || ''),
+      trainingFocus: qaWorkbenchState.trainingFocus,
+      captionPrimer: String(statsGetPrimerOptionsFromDom().template || ''),
+      finding: {
+        id: finding.id,
+        title: finding.title,
+        category: finding.category,
+        sourceLabel: finding.sourceLabel || '',
+        summary: finding.summary || '',
+        why: finding.why || '',
+        priority: finding.priority || '',
+        confidence: finding.confidence || '',
+        trainingValue: finding.trainingValue || '',
+        concept: finding.concept || '',
+        dismissIf: finding.dismissIf || '',
+        facts: finding.facts || [],
+        evidence: finding.evidence || [],
+        candidates: (finding.candidates || []).slice(0, 12),
+        patches: finding.patches || [],
+        tagActions: finding.tagActions || [],
+        relatedFindings: finding.relatedFindings || [],
+        draftCaption: finding.draftCaption || '',
+        captionQuality: finding.captionQuality || null,
+        files: files
+      },
+      items: evidence,
+      affectedCount: files.length
+    });
+  }
+
+  function qaAskCurrentReviewItem() {
+    if (!isFocusedQaReviewMode() || !qaFocusReviewCurrent() || !state.currentItem) {
+      throw new Error('Ask QA requires an active QA Focus Review item.');
+    }
+    var item = state.currentItem;
+    var findings = qaFocusReviewFindings(item.key);
+    if (!findings.length) throw new Error('The current QA review item has no remaining findings.');
+    // Keep the whole current item's recommendation set, not just its highest-ranked action.
+    var selected = Object.assign({}, findings[0], {
+      files: [item.fileName],
+      relatedFindings: findings,
+      draftCaption: captionAssistCandidate && captionAssistCandidate.mediaKey === item.key
+        ? String(captionAssistCandidate.text || '') : '',
+      captionQuality: qaFocusReviewQuality(item.key)
+    });
+    qaOpenFindingChat(selected);
+  }
+
   function qaInspectFinding(findingId) {
     var finding = qaWorkbenchState.findings.find(function (row) { return row.id === findingId; });
     if (!finding) return;
@@ -3695,6 +3754,17 @@
       qaSetView('browse');
       return;
     }
+    if (action === 'ask-finding') {
+      var finding = qaGetRecommendations().find(function (row) { return row.id === value; });
+      if (!finding) throw new Error('Ask QA recommendation no longer exists: ' + value);
+      try {
+        qaOpenFindingChat(finding);
+      } catch (err) {
+        reportConsoleError('QA · Ask QA', err);
+        setStatus('Could not open Ask QA: ' + String(err && err.message || err));
+      }
+      return;
+    }
     if (action === 'inspect-finding') {
       qaInspectFinding(value);
       return;
@@ -3833,6 +3903,7 @@
   window.qaFocusReviewQuality = qaFocusReviewQuality;
   window.qaFocusReviewAlternative = qaFocusReviewAlternative;
   window.qaFocusReviewFindings = qaFocusReviewFindings;
+  window.qaAskCurrentReviewItem = qaAskCurrentReviewItem;
   window.qaFocusReviewTagActions = qaFocusReviewTagActions;
   window.qaFocusReviewPatches = qaFocusReviewPatches;
   window.qaFocusReviewInteractiveRefresh = qaFocusReviewInteractiveRefresh;

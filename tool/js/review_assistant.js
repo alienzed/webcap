@@ -140,6 +140,74 @@
     cancel: cancelReview
   });
 
+  // QA recommendation chat reuses the Assistant drawer and the existing
+  // Director job contract. The captured evidence is read-only and no Sight
+  // request or separate conversation store is introduced.
+  var qaFindingContext = null;
+  var qaFindingMode = {
+    id: 'qa-finding',
+    label: 'Ask QA',
+    description: 'Discuss a saved QA recommendation and its evidence.',
+    placeholder: 'What would you like to clarify about this finding?',
+    available: function () { return !!qaFindingContext; },
+    execute: function (request) {
+      if (!qaFindingContext) throw new Error('Open a QA recommendation before asking about it.');
+      var history = (request.messages || []).map(function (message) {
+        return { role: message.role, content: String(message.content || '') };
+      });
+      return requestJson('/fs/director/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: String(request.modelId || ''),
+          messages: [{ role: 'user', content: qaFindingContext.prompt }].concat(history)
+        })
+      }).then(function (payload) {
+        return waitForJob(payload.job);
+      }).then(function (job) {
+        return { text: String(job.result && job.result.text || '') };
+      });
+    },
+    cancel: cancelReview
+  };
+  window.registerAssistantMode(qaFindingMode);
+
+  window.openQaFindingAssistant = function (context) {
+    if (!context || !context.finding || !context.finding.id) {
+      throw new Error('Ask QA requires a recommendation with a stable ID.');
+    }
+    var finding = context.finding;
+    var prompt = [
+      'You are WebCap QA Advisor. Help the user reason about this specific recommendation and decide whether a correction is warranted.',
+      'Respond concisely and use the supplied evidence. Distinguish observed caption/tag facts, cached model-generated Sight, and unverified hypotheses. A cached Sight description is not a fresh visual inspection.',
+      'You may explain a finding, disagree with it, or suggest an alternative caption or tag action for the user to review. Existing media and annotations remain unchanged until the user applies an edit in WebCap.',
+      'Training focus: ' + String(context.trainingFocus || 'Not specified'),
+      'Current caption primer: ' + String(context.captionPrimer || 'Not supplied'),
+      'QA RECOMMENDATION (saved finding, not necessarily validated):',
+      JSON.stringify(finding),
+      'CURRENT ITEM EVIDENCE (captured when chat opened; draftCaption is an unsaved working candidate):',
+      JSON.stringify(context.items || []),
+      'Evidence coverage: ' + String((context.items || []).length) + ' of ' +
+        String(context.affectedCount || (context.items || []).length) + ' associated files. Other files, if any, were not included.',
+      'Please answer the user\'s question about this finding.'
+    ].join('\n\n');
+    var next = {
+      prompt: prompt,
+      key: String(context.folder || '') + '\u001f' + String(finding.id) + '\u001f' + prompt
+    };
+    var previous = qaFindingContext;
+    var previousDescription = qaFindingMode.description;
+    qaFindingContext = next;
+    qaFindingMode.description = 'Recommendation: ' + String(finding.title || 'QA finding') + ' · captured evidence';
+    try {
+      window.openAssistant({ mode: 'qa-finding', contextKey: next.key });
+    } catch (err) {
+      qaFindingContext = previous;
+      qaFindingMode.description = previousDescription;
+      throw err;
+    }
+  };
+
   function bindReviewAssistantButton() {
     var button = document.getElementById('review-output-assistant-btn');
     if (!button) throw new Error('QA Deep Scan button is missing.');

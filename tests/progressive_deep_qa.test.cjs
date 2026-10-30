@@ -359,7 +359,7 @@ function singleItemScanFixture(responses, options = {}) {
     },
     qaSaveReview(required) {
       saves.push({ required, checked: { ...wb.aiItemSignatures }, skipped: { ...wb.deepScanSkipped } });
-      return options.saveFailure ? Promise.reject(new Error('Disk write failed')) : Promise.resolve();
+      return options.saveFailure && required ? Promise.reject(new Error('Disk write failed')) : Promise.resolve();
     },
     qaSyncDeepScanLiveUi() {}, renderQaWorkbench() {},
     qaFinishDeepScanActivity() {},

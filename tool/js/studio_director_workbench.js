@@ -1,9 +1,9 @@
 (function () {
   'use strict';
   var readStory = null, writeStory = null, projects = [], proposedScene = null, proposedStructure = null, proposedBatch = null, proposedSplit = null, proposedInvariantLinks = null, playbookExpected = null;
-  var readiness = [], recommendations = {readHints:[],writeHint:'',sceneId:''};
+  var readiness = [], recommendations = {readHints:[],writeHint:'',writeFields:[],sceneId:''};
   var readinessStale = false;
-  var readChoices = {}, writeOperationChosen = false, lastReadSource = null;
+  var readChoices = {}, writeOperationChosen = false, writeFieldsManuallyChanged = false, lastReadSource = null;
   var lastQuickAction = 'read', creativeCapture = null;
   var sceneFields = ['summary', 'prompt', 'title'];
   var projectFields = ['title', 'concept', 'style', 'invariants'];
@@ -315,6 +315,23 @@
     showWriteContext();
     updateScope();
   }
+  function recommendedWriteFields(operation) {
+    if (readinessStale) return [];
+    var allowed = operation === 'project' ? projectFields :
+      (operation === 'scene-edit' || operation === 'scenes-batch') ? sceneFields : [];
+    return recommendations.writeFields.filter(function (field) { return allowed.indexOf(field) !== -1; });
+  }
+  function applySuggestedWriteFields() {
+    if (writeFieldsManuallyChanged) return;
+    var operation = el('studio-dw-write-operation').value;
+    if (operation !== 'scene-edit' && operation !== 'scenes-batch') return;
+    var hints = recommendedWriteFields(operation);
+    if (!hints.length) return;
+    var host = el(operation === 'scene-edit' ? 'studio-dw-write-fields' : 'studio-dw-batch-fields');
+    Array.from(host.querySelectorAll('input')).forEach(function (check) {
+      check.checked = hints.indexOf(check.value) !== -1;
+    });
+  }
   function refreshRead() {
     return refreshProjects().then(function () {return loadStory(el('studio-dw-read-project').value);})
       .then(renderReadStory).catch(function (e) { status('Read setup failed: ' + e.message, true); });
@@ -329,12 +346,14 @@
           else if (!projects.length) el('studio-dw-write-operation').value = 'new-project';
         }
         setOperation();
+        applySuggestedWriteFields();
       })
       .catch(function (e) { status('Write setup failed: ' + e.message, true); });
   }
   function toggle(which) {
     var other = which === 'read' ? 'write' : 'read', panel = el('studio-dw-' + which + '-panel'),
       button = el('studio-dw-' + which), show = panel.classList.contains('hidden');
+    if (show && which === 'write') writeFieldsManuallyChanged = false;
     panel.classList.toggle('hidden', !show);
     button.setAttribute('aria-expanded', show ? 'true' : 'false');
     el('studio-dw-' + other + '-panel').classList.add('hidden');
@@ -478,7 +497,7 @@
     if (operation !== 'scene-edit') {
       try {
         var item = projects.find(function (p) {return p.id === id;});
-        bridge.prepareWrite(operation, id, item && storyName(item));
+        bridge.prepareWrite(operation, id, item && storyName(item), recommendedWriteFields(operation));
         status('Preparing a reviewed proposal. No saved fields have changed.', false);
       } catch (e) { status('Write failed: ' + e.message, true); }
       return;
@@ -1037,6 +1056,7 @@
     }
     select.value = operation;
     writeOperationChosen = true;
+    writeFieldsManuallyChanged = false;
     if (el('studio-dw-write-panel').classList.contains('hidden')) toggle('write');
     else refreshWrite();
     status('Director suggested this operation. Choose the exact saved targets, then review.', false);
@@ -1112,6 +1132,7 @@
     resetConversation: function () {
       readChoices = {};
       writeOperationChosen = false;
+      writeFieldsManuallyChanged = false;
       lastReadSource = null;
       readStory = null;
       writeStory = null;
@@ -1147,9 +1168,15 @@
       var hints = result && result.readHints === undefined ? [] : result.readHints;
       var writeHint = result && result.writeHint === undefined ? '' : result.writeHint;
       var sceneId = result && result.sceneId === undefined ? '' : result.sceneId;
+      var writeFields = result && result.writeFields === undefined ? [] : result.writeFields;
+      var allowedWriteFields = writeHint === 'project' ? projectFields :
+        (writeHint === 'scene-edit' || writeHint === 'scenes-batch') ? sceneFields : [];
       if (!Array.isArray(hints) || hints.length > 15 ||
           hints.some(function(key) {return typeof key !== 'string' || key.length > 120;}) ||
-          operations.indexOf(writeHint) < 0 || typeof sceneId !== 'string' || sceneId.length > 160) {
+          operations.indexOf(writeHint) < 0 || typeof sceneId !== 'string' || sceneId.length > 160 ||
+          !Array.isArray(writeFields) || writeFields.length > 4 ||
+          writeFields.some(function (field) { return typeof field !== 'string' || allowedWriteFields.indexOf(field) < 0; }) ||
+          (new Set(writeFields)).size !== writeFields.length) {
         status('Director readiness recommendations do not match the saved contract.',true);
         return false;
       }
@@ -1177,12 +1204,12 @@
           return false;
         }
       }
-      recommendations = {readHints:hints, writeHint:writeHint, sceneId:sceneId};
+      recommendations = {readHints:hints, writeHint:writeHint, writeFields:writeFields, sceneId:sceneId};
       creativeCapture = capture;
       setReadinessFreshness(!!(restoring && result && result.stale));
       renderReadiness(list);
       if (!restoring) window.studioDirectorBridge.updateReadiness({
-        checks:list,readHints:hints,writeHint:writeHint,sceneId:sceneId,stale:false,
+        checks:list,readHints:hints,writeHint:writeHint,writeFields:writeFields,sceneId:sceneId,stale:false,
         ...(capture ? {capture:capture} : {})
       });
       return true;
@@ -1201,8 +1228,15 @@
     };
     el('studio-dw-write-operation').onchange=function () {
       writeOperationChosen = true;
+      writeFieldsManuallyChanged = false;
       setOperation();
+      applySuggestedWriteFields();
     };
+    ['studio-dw-write-fields', 'studio-dw-batch-fields'].forEach(function (id) {
+      Array.from(el(id).querySelectorAll('input[type="checkbox"]')).forEach(function (check) {
+        check.onchange = function () { writeFieldsManuallyChanged = true; };
+      });
+    });
     el('studio-dw-read-preview').ontoggle = function () {
       if (!this.open) return;
       var id = el('studio-dw-read-project').value;

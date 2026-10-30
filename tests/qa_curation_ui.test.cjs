@@ -9,7 +9,7 @@ const source = fs.readFileSync('tool/js/qa_curation.js', 'utf8');
 function harness(savedDraft = null) {
   const dom = new JSDOM('<div id="qa-workbench"></div>');
   const document = dom.window.document, root = document.getElementById('qa-workbench');
-  const calls = { submitted: [], copied: [], errors: [], saved: [], changedFocus: 0, draft: savedDraft };
+  const calls = { submitted: [], copied: [], opened: [], errors: [], saved: [], changedFocus: 0, draft: savedDraft };
   const ctx = {
     document, window: dom.window,
     state: { folder: 'sets/demo', focusSet: null },
@@ -19,6 +19,7 @@ function harness(savedDraft = null) {
     mediaGridMediaUrl: row => '/test/' + row.fileName,
     buildSourceMediaRelPath: name => 'sets/demo/' + name,
     runCreateSetFromResultsFlow: items => calls.copied.push(items),
+    selectByFileName: name => calls.opened.push(name),
     fetch: async (url, options) => {
       if (url.startsWith('/fs/qa/curate/draft?')) {
         return {ok: true, json: async () => ({ok: true, draft: calls.draft})};
@@ -71,6 +72,46 @@ function entries() {
   }
   return output;
 }
+
+test('Curate Review shows the exact filename and opens included and excluded images in Single Item', async () => {
+  const h = harness();
+  h.ctx.window.startQaCuration(entries(), 'construction', 'same-scope');
+  await new Promise(resolve => setTimeout(resolve, 55));
+  const initialCount = Number(h.root.querySelector('[data-curation-selected]').textContent);
+  const focusSet = h.ctx.state.focusSet;
+
+  function openGroup(label) {
+    const button = Array.from(h.root.querySelectorAll('button'))
+      .find(item => item.textContent.startsWith(label));
+    assert.ok(button, 'Missing Curate Review entry: ' + label);
+    button.click();
+    const overlay = h.ctx.document.querySelector('.qa-curation-review');
+    assert.ok(overlay, 'Curate Review must open');
+    const filename = overlay.querySelector('.qa-curation-review-filename');
+    const open = overlay.querySelector('button.qa-curation-review-open-item');
+    assert.ok(filename && filename.textContent, 'Exact filename should be visible');
+    assert.equal(filename.title, filename.textContent);
+    assert.equal(open.textContent, 'Open in Single Item');
+    const before = Number(h.root.querySelector('[data-curation-selected]').textContent);
+    open.focus();
+    open.dispatchEvent(new h.ctx.window.KeyboardEvent('keydown', {key:'Enter',bubbles:true}));
+    assert.equal(Number(h.root.querySelector('[data-curation-selected]').textContent), before,
+      'Enter on secondary action must not toggle Include/Remove');
+    open.click();
+    assert.equal(h.ctx.document.querySelector('.qa-curation-review'), null,
+      'Navigation must dismiss the fullscreen overlay');
+    assert.equal(h.calls.opened.at(-1), filename.textContent,
+      'Navigation must use the reviewed item rather than the first visible media row');
+    assert.equal(h.ctx.state.focusSet, focusSet,
+      'Curate Review must not mutate the QA/Training Focus Set');
+  }
+
+  openGroup('Review included');
+  openGroup('Review excluded');
+  assert.equal(Number(h.root.querySelector('[data-curation-selected]').textContent), initialCount,
+    'Opening Single Item should not change shortlist choices');
+  assert.equal(h.calls.opened.length, 2);
+});
 
 test('curation inventory is based on real grouped concepts and never free-word frequency', () => {
   const h = harness();

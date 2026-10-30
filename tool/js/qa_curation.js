@@ -420,6 +420,15 @@
       var explanation = element('div', 'qa-curation-review-evidence');
       explanation.appendChild(element('strong', 'qa-curation-review-counter',
         (included ? 'INCLUDED' : 'EXCLUDED') + ' · ' + (cursor + 1) + ' / ' + items.length));
+      var source = element('div', 'qa-curation-review-source');
+      var filename = element('span', 'qa-curation-review-filename', name);
+      filename.title = name;
+      source.appendChild(filename);
+      source.appendChild(button('Open in Single Item', function() {
+        close();
+        selectByFileName(name);
+      }, 'qa-curation-review-open-item'));
+      explanation.appendChild(source);
       var withChange = new Set(session.choices);
       if (included) withChange.delete(name); else withChange.add(name);
       var before = coverage(session.rows, session.eligible, session.choices).ratio * 100;

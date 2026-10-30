@@ -29,6 +29,7 @@ A QA-only checklist sends selected media paths to the existing Create Set dialog
 
 ## Phase 3 — QA-only visual review (implemented)
 - Preview the Director-prepared selection in a thumbnail grid with checkboxes.
+- **Curate Review:** show each item's exact filename beside its evidence, with **Open in Single Item** using the existing media selection path. Leaving the fullscreen review preserves the curated choices and does not create or modify a Focus Set.
 - Live selected count, represented-concept count, and weighted-evidence coverage.
 - Presets reapply a proposed subset. All images allows adding exclusions back.
 - UI only changes QA-owned curation session state, not `state.focusSet`.

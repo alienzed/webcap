@@ -2285,19 +2285,18 @@
 
     var heroActions = document.createElement('div');
     heroActions.className = 'qa-hero-actions';
-    if (undisposed.length) heroActions.appendChild(qaCreateButton('Review ' + undisposed.length + ' findings', '', 'browse-next'));
-    heroActions.appendChild(qaCreateButton('Curate Training Set', 'qa-primary', 'qa-curate-start'));
+    if (undisposed.length) heroActions.appendChild(qaCreateButton('Review ' + undisposed.length + ' findings', 'qa-primary', 'browse-next'));
+    heroActions.appendChild(qaCreateButton('Curate Training Set', '', 'qa-curate-start'));
     if (qaWorkbenchState.statusMessage) {
       var qaNotice = document.createElement('div');
       qaNotice.className = 'qa-deep-scan-note';
       qaNotice.textContent = qaWorkbenchState.statusMessage;
       heroActions.appendChild(qaNotice);
     }
-    heroActions.appendChild(qaCreateButton(
-      qaWorkbenchState.deepScanSessionActive ? 'Deep QA running' :
-        (qaCanResumeDeepScan() ? 'Resume Deep QA' : 'Run Deep QA'),
-      '', 'qa-start'
-    ));
+    if (!qaWorkbenchState.deepScanSessionActive) {
+      heroActions.appendChild(qaCreateButton(
+        qaCanResumeDeepScan() ? 'Resume Deep QA' : 'Run Deep QA', '', 'qa-start'));
+    }
     var reviewButton = qaCreateButton('Review & Fix saved findings', '', 'qa-focus-review');
     reviewButton.id = 'qa-deep-review-ready';
     var ready = qaDeepScanReadyCount();

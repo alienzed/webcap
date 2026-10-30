@@ -302,7 +302,7 @@ function singleItemScanFixture(responses, options = {}) {
   }));
   const scan = {
     folder: 'set', model: 'local::test', files: names,
-    orderedFiles: names.slice(), signatures,
+    orderedFiles: names.slice(), signatures, inputs,
     inputsByFile: Object.fromEntries(inputs.map(item => [item.fileName, item])),
     supportingFindings: [], deferred: {}, attempted: {}
   };
@@ -321,6 +321,7 @@ function singleItemScanFixture(responses, options = {}) {
       candidate === scan && token === wb.deepScanSessionToken &&
       wb.deepScanSessionActive && !wb.deepScanStopRequested,
     qaDeepScanScopeItems: () => items,
+    qaDeepScanPrioritizedFiles: () => scan.orderedFiles.slice(),
     qaCurrentItemSignatureMap: () => signatures,
     qaDeepScanProgress(_scan, phase) { wb.deepScanStatus = phase; },
     qaRequestJson(url, options) {

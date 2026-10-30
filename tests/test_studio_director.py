@@ -126,3 +126,26 @@ def test_h3_playbook_review_uses_existing_config_and_checks_conflicts(monkeypatc
     assert conflict.status_code == 400
     assert "changed since review" in conflict.json["error"]
     assert len(writes) == 1
+
+
+def test_studio_brief_request_carries_json_schema_to_llm_queue(monkeypatch):
+    import importlib
+
+    server = importlib.import_module("tool.server.app")
+    captured = {}
+
+    def enqueue(client, model, contract, context, label):
+        captured.update({"client": client, "operation": contract["operation"],
+                         "schema": contract.get("response_schema")})
+        return {"jobId": "test-brief"}
+
+    monkeypatch.setattr(server, "enqueue_llm", enqueue)
+    response = server.app.test_client().post("/fs/director/chat", json={
+        "model": "qwen", "operation": "studio_brief_draft",
+        "messages": [{"role": "user", "content": "Propose the brief."}],
+    })
+    assert response.status_code == 202
+    assert captured["client"] == "chat"
+    assert captured["operation"] == "studio_brief_draft"
+    assert captured["schema"]["required"] == ["title", "concept", "style", "invariants", "rationale"]
+    assert captured["schema"]["properties"]["invariants"]["items"]["required"] == ["kind", "title", "text"]

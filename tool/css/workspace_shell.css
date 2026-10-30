@@ -3955,3 +3955,39 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
     background:var(--accent,#628fd1);color:var(--bg);
   }
 }
+
+/* Contextual QA discussion: inspectable exact evidence without taking over the chat. */
+.director-chat-context-panel {
+  flex: 0 0 auto;
+  margin: 0 20px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-soft);
+  font-size: 15px;
+}
+.director-chat-context-panel.hidden,
+.director-chat-temporary-note.hidden { display: none; }
+.director-chat-context-panel details > summary {
+  font-size: 16px;
+  font-weight: 650;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.director-chat-context-summary { margin: 8px 0; color: var(--muted); }
+.director-chat-context-body {
+  max-height: min(28vh, 230px);
+  overflow: auto;
+  margin: 8px 0;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--text);
+  font: 14px/1.45 ui-monospace, monospace;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.director-chat-context-status { margin-top: 5px; color: var(--muted); font-size: 14px; line-height: 1.4; }
+.director-chat-context-panel #director-chat-context-refresh { margin-top: 8px; min-height: 36px; font-size: 15px; }
+.director-chat-temporary-note { flex: 0 0 auto; margin: 6px 20px 10px; color: var(--muted); font-size: 14px; }

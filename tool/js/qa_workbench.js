@@ -3576,11 +3576,32 @@
         candidates: (finding.candidates || []).slice(0, 12),
         patches: finding.patches || [],
         tagActions: finding.tagActions || [],
+        relatedFindings: finding.relatedFindings || [],
+        draftCaption: finding.draftCaption || '',
+        captionQuality: finding.captionQuality || null,
         files: files
       },
       items: evidence,
       affectedCount: files.length
     });
+  }
+
+  function qaAskCurrentReviewItem() {
+    if (!isFocusedQaReviewMode() || !qaFocusReviewCurrent() || !state.currentItem) {
+      throw new Error('Ask QA requires an active QA Focus Review item.');
+    }
+    var item = state.currentItem;
+    var findings = qaFocusReviewFindings(item.key);
+    if (!findings.length) throw new Error('The current QA review item has no remaining findings.');
+    // Keep the whole current item's recommendation set, not just its highest-ranked action.
+    var selected = Object.assign({}, findings[0], {
+      files: [item.fileName],
+      relatedFindings: findings,
+      draftCaption: captionAssistCandidate && captionAssistCandidate.mediaKey === item.key
+        ? String(captionAssistCandidate.text || '') : '',
+      captionQuality: qaFocusReviewQuality(item.key)
+    });
+    qaOpenFindingChat(selected);
   }
 
   function qaInspectFinding(findingId) {
@@ -3881,6 +3902,7 @@
   window.qaFocusReviewQuality = qaFocusReviewQuality;
   window.qaFocusReviewAlternative = qaFocusReviewAlternative;
   window.qaFocusReviewFindings = qaFocusReviewFindings;
+  window.qaAskCurrentReviewItem = qaAskCurrentReviewItem;
   window.qaFocusReviewTagActions = qaFocusReviewTagActions;
   window.qaFocusReviewPatches = qaFocusReviewPatches;
   window.qaFocusReviewInteractiveRefresh = qaFocusReviewInteractiveRefresh;

@@ -226,7 +226,8 @@
       }
       if (operation==='scene-edit') {
         var id=el('studio-dw-write-scene').value, scene=p.scenes&&p.scenes[id];
-        if (scene) data.selectedScene={id:id,title:scene.title,intent:scene.summary,prompt:scene.prompt};
+        if (scene) data.selectedScene={id:id,title:scene.title,intent:scene.summary,prompt:scene.prompt,
+          durationSeconds:scene.durationSeconds,invariantRefs:scene.invariantRefs};
       }
       if (operation==='scene-move' || operation==='scene-duplicate') {
         var sourceId=el('studio-dw-write-scene').value;
@@ -385,8 +386,10 @@
       'Project context (for drafting only; do not save it): ' + JSON.stringify({
         id:story.id,concept:story.concept,style:story.style,invariants:story.invariants
       }),
-      'Selected Scene: ' + JSON.stringify({id:sceneId, title:scene.title,summary:scene.summary,prompt:scene.prompt}),
+      'Selected Scene: ' + JSON.stringify({id:sceneId, title:scene.title,summary:scene.summary,prompt:scene.prompt,
+        durationSeconds:scene.durationSeconds,invariantRefs:scene.invariantRefs}),
       'Recent conversation: ' + JSON.stringify(history),
+      'For H3 Prompt revisions, use the selected Scene durationSeconds for consecutive timed shots spanning that clip and its linked Character/Location Invariants for continuity. Duration and links are context, not editable output fields.',
       'Write a specific useful revision of the selected fields. No markdown.'
     ].join(String.fromCharCode(10));
     return window.studioDirectorBridge.makeProposal(request,'studio_scene_field_draft',fields.indexOf('prompt') !== -1).then(function (text) {
@@ -747,7 +750,8 @@
           if (!scene || (story.sceneOrder || []).indexOf(id) === -1)
             throw new Error('A selected Scene no longer exists.');
           var current = {sceneId:id, position:(story.sceneOrder || []).indexOf(id) + 1,
-            title:scene.title, summary:scene.summary, prompt:scene.prompt};
+            title:scene.title, summary:scene.summary, prompt:scene.prompt,
+            durationSeconds:scene.durationSeconds, invariantRefs:scene.invariantRefs};
           return current;
         });
         var history = window.studioDirectorBridge.messages().slice(-18).map(function (message) {
@@ -761,7 +765,8 @@
           'Preserve independent renderability, the author\'s core appeal and unrelated content.',
           'Project context: '+JSON.stringify({id:story.id,concept:story.concept,style:story.style,invariants:story.invariants}),
           'Selected Scenes: '+JSON.stringify(selected),
-          'Recent creative discussion: '+JSON.stringify(history)
+          'Recent creative discussion: '+JSON.stringify(history),
+          'For H3 Prompt revisions, time each selected Scene to its own durationSeconds and preserve its linked Character/Location Invariants. Duration and links are read-only context, not output fields.'
         ].join('\n');
         return window.studioDirectorBridge.makeProposal(request, 'studio_scene_batch_draft', fields.indexOf('prompt') !== -1)
           .then(function (raw) {

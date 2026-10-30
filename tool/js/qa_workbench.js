@@ -2303,36 +2303,33 @@
     reviewButton.textContent = 'Review & Fix ' + ready + ' item' + (ready === 1 ? '' : 's');
     reviewButton.classList.toggle('hidden', !ready);
     heroActions.appendChild(reviewButton);
-    var deepWrap = document.createElement('div');
-    deepWrap.className = 'qa-deep-scan-wrap';
-    if (qaWorkbenchState.deepScanSessionActive) {
-      var deep = qaCreateButton('Stop Deep QA', '', 'deep-scan-stop');
-      deep.title = 'Stop the current set-wide Director review';
-      deepWrap.appendChild(deep);
-    }
-    var note = document.createElement('span');
-    note.className = 'qa-deep-scan-note';
-    var coveragePartial = qaWorkbenchState.aiCoverageTotal > 0
-      && qaWorkbenchState.aiCoverageValid < qaWorkbenchState.aiCoverageTotal;
-    note.id = 'qa-deep-scan-live-status';
-    note.textContent = qaWorkbenchState.deepScanStatus || (
-      coveragePartial
-        ? ('AI findings retained · ' + qaWorkbenchState.aiCoverageValid + '/' + qaWorkbenchState.aiCoverageTotal + ' inputs still current')
-        : (qaWorkbenchState.aiFindings.length ? 'AI findings active · LLM' : 'Optional · LLM')
-    );
-    deepWrap.appendChild(note);
-    heroActions.appendChild(deepWrap);
-    var deepCoverage = document.createElement('div');
-    deepCoverage.className = 'qa-deep-scan-note';
-    deepCoverage.id = 'qa-deep-scan-live-coverage';
-    deepCoverage.textContent = qaWorkbenchState.qaReviewMode === 'progressive-v1'
-      ? 'Deep QA: ' + qaCoverageLine(qaDeepCoverageCounts(qaDeepScanScopeItems()), false)
-      : ('Deep QA: ' + (qaWorkbenchState.aiScopeSignature === qaBuildDeepScanSignature(items)
-        ? 'Set review current · ' + qaWorkbenchState.aiFindings.length + ' investigations'
-        : 'Set review not current'));
-    deepWrap.appendChild(deepCoverage);
     hero.appendChild(heroActions);
     container.appendChild(hero);
+    var deepWrap = document.createElement('div');
+    deepWrap.className = 'qa-deep-scan-wrap';
+    var deepHead = document.createElement('div');
+    deepHead.className = 'qa-deep-scan-head';
+    var note = document.createElement('span');
+    note.className = 'qa-deep-scan-note';
+    note.id = 'qa-deep-scan-live-status';
+    note.textContent = qaWorkbenchState.deepScanStatus || 'Deep QA has not run for this selection.';
+    deepHead.appendChild(note);
+    if (qaWorkbenchState.deepScanSessionActive) {
+      var stop = qaCreateButton('Stop Deep QA', '', 'deep-scan-stop');
+      stop.title = 'Stop the current set-wide Director review';
+      deepHead.appendChild(stop);
+    }
+    deepWrap.appendChild(deepHead);
+    var deepProgress = document.createElement('progress');
+    deepProgress.id = 'qa-deep-scan-live-progress';
+    deepProgress.className = 'qa-deep-scan-progress';
+    deepWrap.appendChild(deepProgress);
+    var deepCoverage = document.createElement('span');
+    deepCoverage.className = 'qa-deep-scan-note qa-deep-scan-coverage';
+    deepCoverage.id = 'qa-deep-scan-live-coverage';
+    deepWrap.appendChild(deepCoverage);
+    container.appendChild(deepWrap);
+    qaSyncDeepScanLiveUi();
 
     var conceptWrap = document.createElement('section');
     conceptWrap.className = 'qa-section qa-concept-check';

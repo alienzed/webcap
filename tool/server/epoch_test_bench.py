@@ -2563,7 +2563,8 @@ def _sync_inference_session(session_directory):
         visible["candidateStartedAt"] = None
 
         if stopping_session:
-            terminal_status = "stopped"
+            # Do not publish a terminal Session while its children remain runnable.
+            terminal_status = "stopping" if pending else "stopped"
         elif pending:
             # Backlog has no active provider work. A partially completed session
             # with only backlogged children must not masquerade as running after
@@ -3446,12 +3447,34 @@ def stop(folder_path, session_name=None):
 
     _cancel_test_auto_vl_jobs(session_directory)
     for job in _session_job_records(status_payload):
-        job_status = str(job.get("status") or "")
         job_id = str(job.get("id") or "")
-        if job_status in {"backlog", "queued"}:
-            _cancel_shared_pending_job(job_id, session_directory=session_directory)
-        elif job_status in {"starting", "running"}:
-            execution_request_stop(job_id)
+        # The worker can claim a queued rendition between our snapshot and
+        # cancellation. Recheck only that child rather than abandoning the
+        # remainder of the Session's stop request.
+        for _attempt in range(5):
+            try:
+                live_job = execution_get_job(job_id)
+            except FileNotFoundError:
+                break  # Already completed or cancelled while stopping.
+            job_status = str(live_job.get("status") or "")
+            if job_status in {"backlog", "queued"}:
+                try:
+                    _cancel_shared_pending_job(job_id, session_directory=session_directory)
+                except ValueError as exc:
+                    if "Only pending execution jobs can be cancelled." not in str(exc):
+                        raise
+                    continue
+            elif job_status in {"starting", "running", "stopping"}:
+                try:
+                    # An earlier Backlog request must not resurrect a stopped Session.
+                    execution_request_stop(job_id)
+                except ValueError as exc:
+                    if "Only active execution jobs can be stopped." not in str(exc):
+                        raise
+                    continue
+            break
+        else:
+            raise RuntimeError("Test rendition changed state repeatedly while stopping: " + job_id)
     return _sync_inference_session(session_directory)
 
 

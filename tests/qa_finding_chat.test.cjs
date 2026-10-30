@@ -13,6 +13,7 @@ test('QA browse opens a contextual chat with actual current QA evidence', () => 
   assert.match(qa, /qaBuildDeepScanItems\(selected\.map/);
   assert.match(qa, /window\.openQaFindingAssistant\(/);
   assert.match(qa, /trainingFocus: qaWorkbenchState\.trainingFocus/);
+  assert.match(qa, /captionPrimer: String\(statsGetPrimerOptionsFromDom\(\)\.template/);
   assert.match(qa, /window\.qaAskCurrentReviewItem = qaAskCurrentReviewItem/);
   assert.match(qa, /relatedFindings: findings/);
   const focus = fs.readFileSync(path.join(__dirname, '..', 'tool/js/focused_caption.js'), 'utf8');
@@ -29,6 +30,7 @@ test('QA chat carries the evidence snapshot and the previous conversation turns'
   assert.match(assistant, /\.concat\(history\)/);
   assert.match(assistant, /cached Sight description is not a fresh visual inspection/);
   assert.match(assistant, /Existing media and annotations remain unchanged/);
+  assert.match(assistant, /Current caption primer:/);
 });
 
 test('Assistant preserves contextual mode outside Studio and isolates finding conversations', () => {

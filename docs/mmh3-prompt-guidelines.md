@@ -47,7 +47,7 @@ Scene-level sections establish defaults for the generation.
 
 Shots inherit those defaults and focus on what occurs at particular times: action, performance, framing, perspective, camera movement, synchronized events, dialogue, and changes in physical state.
 
-A Storyboard Scene lasts at most 15 seconds. The author's Story Guidelines and Scene intent determine shot count, duration allocation, and visual treatment.
+Current H3 Storyboard clips use the saved 4–15-second duration. For active Studio authoring, supplied Project Concept, Visual / atmosphere, relevant Invariants, and Scene Intent guide shot count, timing, and treatment. Older Storyboard requests may additionally supply legacy Story Directing Guidelines.
 
 ## Camera and motion
 
@@ -77,7 +77,7 @@ Shot-level audio carries synchronized sound tied to a particular moment.
 
 ## Continuity and evolving state
 
-Director receives Story invariants and Story/Scene context as working context.
+Existing-Scene Studio Write requests supply selected Project/Scene context and Invariant references; ordinary Studio conversation sees saved values only when explicitly Read or included in a reviewed Apply receipt.
 
 Scene-level Environment / Continuity Anchors are useful for current spatial state, location identity, props and prop state, lighting, time, weather, and other visible conditions that carry through the generation.
 
@@ -85,7 +85,7 @@ Shots describe coherent changes to those conditions over time.
 
 When Scenes are connected, relevant shared facts and evolving state can carry across them. Independent or variation-based Scenes carry only the shared elements the concept calls for.
 
-Entry/Exit state remains optional planning context for meaningful handoffs.
+Legacy stored Entry/Exit state may still inform older Storyboard workflows. These fields are **retired from active Studio Director authoring**; use Concept, Scene Intent, and relevant Invariants for current relationship and continuity decisions.
 
 ## Exact frame grounding
 
@@ -101,7 +101,7 @@ WebCap may add the exact MiniMax alignment statement derived from the selected r
 
 Prompt refinement applies the requested change while preserving unrelated authored details.
 
-Previous-Scene facts may be used for a user-requested continuity review; Story Guidelines establish the creative relationship.
+Previous-Scene facts may be used for a user-requested continuity review. Current Studio Concept and explicitly supplied Scene Intent establish that relationship; legacy Story Directing Guidelines apply only when present in an older request.
 
 ## Runtime scope
 

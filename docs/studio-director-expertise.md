@@ -74,11 +74,11 @@
 
 ---
 
-## Existing-system integration audit — 2026-10-30
+## Historical existing-system integration audit — 2026-10-30 (pre-PR #818 snapshot)
 
 **Method and limitation:** Compared the living expertise map with current `main` source for Director guidance, request assembly, reviewed Studio actions, Scene persistence/generation settings, Studio Blocks and conversation-history validation. These are **static findings**, not a demonstration of model creativity or UI usability. Fix the confirmed contract gaps first; do not add a parallel knowledge database, new model/tool orchestration framework, automatic project reads, or new edit authority.
 
-### Specific seams to repair or nudge
+### Original seams to repair or nudge (resolution recorded above)
 
 | Priority / confidence | Existing owner and evidence | Gap | Smallest appropriate change | Regression / acceptance |
 |---|---|---|---|---|
@@ -91,7 +91,7 @@
 | **P2 — Studio Blocks scope is intentional** | `tool/js/studio_blocks.js` uses `/` insertion; `tool/server/studio_blocks.py` owns user-authored Blocks; `docs/studio-blocks.md` states no hidden LLM integration | Director does not know an uninserted Block or own its library. This is **not** a defect. | Document the explicit `/` workflow in action guidance; do not auto-inject saved Blocks or build hidden retrieval. | Director can explain how to bring a Block into a conversation and does not claim to have read the entire library. |
 | **P2 — assessment is not a completion gate** | `director_chat.js:studioDirectorChatRequestMessages` asks the model for advisory readiness, `studio_director_workbench.js:updateReadiness` validates it; tests cover parsing, freshness and field defaults | Advisory checks are not verified creative judgment. A valid machine-readable block may still recommend the wrong action. | Improve *examples and live tests* in the existing readiness instructions; promote only useful one-step next actions. Don't create another readiness framework or require arbitrary fields to be complete. | Live model gives one relevant next step; invalid/stale payload remains visibly outdated; no automatic Apply. |
 
-### Implementation order and stopping rule
+### Historical implementation order and stopping rule (P0 steps completed in PR #818)
 
 1. **Contract parity (P0):** repair the existing history validator for `writeFields`; add backend/frontend round-trip tests. This is a demonstrated integration defect and should not wait for a model eval.
 2. **Prompt authoring context (P0):** supply selected Scene duration and relevant continuity links in the existing single/batch Write drafts; test exact request data and H3 timestamp correctness.
@@ -128,7 +128,7 @@
 | **P2 — obsolete terminology and duplicated instructions** | The H3 runtime reference says “Follow the author's Story Guidelines,” although legacy Story Directing Guidelines are retired from active Studio authoring. Core Studio text also repeats a long list of available actions already provided by `ACTIONS`. | Clarify the H3 reference to use explicitly provided Concept, Style, Invariants and Scene Intent; retain legacy Guidelines only when actually supplied by the older path. Reduce redundant core action lists after confirming no regression in actual model responses. |
 | **P2 — test evidence gap** | `tests/test_studio_director.py` checks string presence and length; `tests/studio_director_workshop.test.cjs` checks context assembly. Neither proves the chosen model can advise a user on WebCap or reliably classify the right next operation. | Add a **small observational acceptance set** before prompt expansion: “change just this Scene action,” “make this recurring character recognizable,” “teach me H3 sections,” “how do I generate/compare a Take?”, “what can you Read about my Project?”, “reorder without rewriting”. Record actual answer, needed Read, recommended Write, selected fields, and result. |
 
-### Suggested north-star role (illustrative, not yet model-facing)
+### Suggested north-star role (design reference; core responsibility incorporated by PR #821)
 
 > You are the author's expert creative producer **and WebCap Studio workflow guide**. Understand the purpose and limits of Studio fields, features, and H3 production. Develop the author's creative material, identify meaningful weaknesses, make practical proposals, and recommend the smallest relevant next Read, reviewed Write, or author-operated Studio action. Know which facts were supplied and which require an explicit Read. Distinguish creative recommendations from saved changes and features you cannot directly operate. Offer one useful next step when appropriate; the author retains creative control and approves changes.
 
@@ -159,12 +159,12 @@ This is a role correction, **not** a proposal for an autonomous agent, new UI ta
 
 ---
 
-## Priority gaps — ranked by value, not feature count
+## Current priority gaps — ranked by value, not feature count
 
 | Priority | Work / question | Current evidence | Completion criterion |
 |---|---|---|---|
-| **P0 — Fix** | Studio history rejects client-owned `writeFields` (even empty) | `director_chat_history.py:_validate_readiness` vs initial/persisted `state.studioReadiness` | Align server allowlist/validation/round-trip; test fresh session, empty and populated hints, and legacy history. |
-| **P0 — Fix** | Scene H3 Prompt drafts omit saved duration (also multi-Scene) | `studio_director_workbench.js:editScene/prepareBatchScenes` vs `storyboard_generation.py:_scene_settings` | Supply exact selected duration and relevant linked Invariants in read-only draft context; test timestamp coverage. |
+| **Resolved — PR #818** | Studio history formerly rejected client-owned `writeFields` (even empty) | `director_chat_history.py:_validate_readiness` vs initial/persisted `state.studioReadiness` | Align server allowlist/validation/round-trip; test fresh session, empty and populated hints, and legacy history. |
+| **Resolved — PR #818** | Scene H3 Prompt drafts formerly omitted saved duration (also multi-Scene) | `studio_director_workbench.js:editScene/prepareBatchScenes` vs `storyboard_generation.py:_scene_settings` | Supply exact selected duration and relevant linked Invariants in read-only draft context; test timestamp coverage. |
 | **P0 — Verify** | Can the intended live Director model explain and correctly apply the canonical H3 prompt shape? | Template delivered by PR #816; contract test only | In a live Studio chat, model distinguishes Intent vs Prompt, names the H3 sections accurately and produces a usable reviewed Prompt for a saved Scene. |
 | **P0 — Verify** | Does Director reliably choose the *right* field and next action, rather than just naming fields? | `writeHint` / `writeFields` / capture support exists; no live judgment evidence | Five everyday creative requests lead to correct scope, sensible default selections and approved saved changes without unrelated edits. |
 | **P1 — Audit** | Is its knowledge deep enough for recurring characters, locations, action, staging, dialogue, shot timing and model limits? | Concise guidance exists; quality unmeasured | Test representative weak/strong inputs and document concrete wrong/missing guidance. Add knowledge only for observed failures. |

@@ -100,6 +100,13 @@ def test_unconfigured_h3_studio_still_has_production_expertise(monkeypatch):
     assert "[Shot 1]" in result["promptContract"]
 
 
+def test_h3_runtime_reference_uses_current_studio_fields_and_conditional_legacy_guidelines():
+    prompt = guidance("minimax_h3")["promptContract"]
+    assert "Use supplied Project Concept, Visual / atmosphere, relevant Invariants, and Scene Intent" in prompt
+    assert "legacy Story Guidelines only when explicitly supplied" in prompt
+    assert "integrated_multimodal_description:" in prompt
+
+
 def test_freeform_workshop_does_not_claim_hidden_context_or_mutations():
     text = guidance("minimax_h3")["system"]
     assert "Acknowledge only the exact saved fields actually supplied" in text

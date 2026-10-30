@@ -2652,13 +2652,15 @@
         'Keep exploring when they are still tentative; never claim a proposal was saved.\n' +
         outbound[0].content };
       if (includePromptContract) outbound[0].content +=
-        '\n\nH3 PRODUCTION PROMPT AUTHORING (only for a selected Prompt field):\n' + payload.promptContract;
+        '\n\nH3 PRODUCTION PROMPT REFERENCE (know this template when discussing H3; apply it only when drafting an H3 Prompt field, not when authoring Scene Intent or Project fields):\n' + payload.promptContract;
       return outbound;
     });
   }
 
   function studioDirectorChatRequestMessages(messages) {
-    return studioDirectorRequestMessages(messages).then(function (outbound) {
+    // Studio conversation needs the same authoritative H3 prompt template as Write.
+    // It is reference knowledge here, not permission to draft or save a Prompt.
+    return studioDirectorRequestMessages(messages, true).then(function (outbound) {
       outbound[0].content += '\n\nCONTEXT DELIVERY CONTRACT: Only explicitly supplied Read fields are available. ' +
         'For a WEBCAP EXPLICIT READ, begin your natural answer with a line RECEIVED: ' +
         'followed by the exact received field identifiers separated by comma and space. ' +

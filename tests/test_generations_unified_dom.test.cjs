@@ -27,7 +27,7 @@ test('original controls and generated evidence owners preserved', () => {
   assert.ok(html.indexOf('id="test-generations-body"') < html.indexOf('id="test-generations-run-btn"'));
 });
 
-test('Evaluation Matrix follows Screening rows and preserves playable preview cards on refresh', () => {
+test('Evaluation Matrix follows Screening rows and preserves playable preview cards on refresh', async () => {
   const {JSDOM} = require('jsdom');
   const vm = require('node:vm');
   const dom = new JSDOM(`<div id="test-generations-matrix"></div>
@@ -45,10 +45,25 @@ test('Evaluation Matrix follows Screening rows and preserves playable preview ca
     testJS.indexOf('  function setResultsView(mode)'));
   assert.ok(source.includes('function renderMatrix(status)'), 'Matrix renderer not found');
   let created = 0;
+  const writes = [];
+  const asked = [];
   const context = {
     document, Event: dom.window.Event, window: {updateTestPreviewCardRating() {}},
-    resultsView: 'matrix', selectedCandidates,
+    resultsView: 'matrix', selectedCandidates, matrixRatingPending: new Set(),
     prepared: {files: ['epoch07.safetensors', 'epoch08.safetensors']},
+    currentStatus: {}, queuedTestJobs: [],
+    currentTestModelId: () => 'h3',
+    syncResultRatingButtons() {}, syncStagedCandidateScores() {}, syncTestVlCards() {},
+    renderSessions() {}, showError(error) { throw error; },
+    queueTestVlForSession(status, units) { asked.push(units.map(x => x.mediaFile)); },
+    request: (name, values) => {
+      if (name === 'test_rate_result') {
+        writes.push(values.mediaFile);
+        return Promise.resolve({rating: values.rating});
+      }
+      if (name === 'test_rating_summary') return Promise.resolve({candidateScores: {}});
+      throw new Error('Unexpected request: ' + name);
+    },
     el: id => document.getElementById(id),
     candidateIdentity: item => ({
       primary: item.kind === 'base' ? 'Base' : String(item.candidateFile || 'Epoch'),
@@ -82,6 +97,7 @@ test('Evaluation Matrix follows Screening rows and preserves playable preview ca
     results: [{kind:'lora',candidateFile:'epoch07.safetensors',
       mediaFile:'a.mp4',variationIndex:0,rating:4}], failures: []
   };
+  context.currentStatus = status;
   context.renderMatrix(status);
   const host = document.getElementById('test-generations-matrix');
   assert.deepEqual(Array.from(host.querySelectorAll('.test-generations-matrix-prompt strong'),
@@ -99,6 +115,16 @@ test('Evaluation Matrix follows Screening rows and preserves playable preview ca
   context.renderMatrix(status);
   assert.strictEqual(row.querySelector('.test-generations-result-card'), card);
   assert.equal(row.querySelectorAll('.test-generations-result-card').length, 2);
+  assert.equal(row.querySelectorAll('[data-matrix-bulk-rating]').length, 5);
+  row.querySelector('[data-matrix-ask-vl]').click();
+  assert.deepEqual(asked, [['a.mp4', 'b.mp4']]);
+  await context.rateMatrixRow('test-one', row.dataset.matrixKey, 3);
+  assert.deepEqual(writes, ['a.mp4', 'b.mp4']);
+  assert.equal(status.results[0].rating, 3);
+  assert.equal(status.results[1].rating, 3);
+  assert.equal(row.querySelectorAll('[data-matrix-bulk-rating][aria-pressed="true"]').length, 1);
+  assert.equal(row.querySelectorAll('.test-generations-result-card').length, 2);
+  assert.strictEqual(row.querySelector('.test-generations-result-card'), card);
   const checkbox = row.querySelector('[data-matrix-candidate]');
   checkbox.checked = false;
   checkbox.dispatchEvent(new dom.window.Event('change', {bubbles:true}));
@@ -115,4 +141,7 @@ test('Evaluation Matrix uses regular Grid card width and horizontal scrolling', 
   assert.match(css, /grid-template-columns:\s*repeat\(var\(--matrix-columns\), var\(--matrix-card-width\)\)/);
   assert.match(css, /\.test-generations-matrix-scroll\s*\{[^}]*overflow:\s*auto/s);
   assert.match(css, /\.test-generations-matrix-labels\s*\{[^}]*position:\s*sticky/s);
+  assert.match(css, /\.test-generations-matrix-scroll\s*\{[^}]*container-type:\s*inline-size/s);
+  assert.match(css, /\.test-generations-matrix-row-head\s*\{[^}]*left:\s*0;[^}]*width:\s*100cqw/s);
+  assert.match(css, /\.test-generations-matrix-row-primary \.test-generations-candidate-checkbox\s*\{[^}]*width:\s*20px/s);
 });

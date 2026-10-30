@@ -14,6 +14,7 @@ from tool.server import inference_runtime
 def configure_execution_queue(monkeypatch, tmp_path):
     monkeypatch.setattr(bench.app_config, "FS_ROOT", tmp_path)
     monkeypatch.setattr(bench.app_config, "output_root", lambda: tmp_path / "output")
+    monkeypatch.setattr(bench.app_config, "execution_queue_state_path", lambda: tmp_path / "execution_queue.json")
     execution_queue._resource_owner = ""
     execution_queue.clear_transient_receipts()
     bench._startup_reconciled = False

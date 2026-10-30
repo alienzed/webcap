@@ -3559,6 +3559,7 @@
     window.openQaFindingAssistant({
       folder: String(state.folder || ''),
       trainingFocus: qaWorkbenchState.trainingFocus,
+      captionPrimer: String(statsGetPrimerOptionsFromDom().template || ''),
       finding: {
         id: finding.id,
         title: finding.title,

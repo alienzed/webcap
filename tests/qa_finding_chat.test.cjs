@@ -97,6 +97,8 @@ test('Opening a new finding resets only that contextual conversation, not ordina
   assert.ok(start >= 0 && end > start);
   const state = {
     pending: false,
+    activeMode: 'qa-finding',
+    draftByMode: {'qa-finding': 'old draft', chat: 'saved draft'},
     modeContextKeys: {'qa-finding': 'before'},
     modeMessages: {'qa-finding': [{role: 'user', content: 'old'}], chat: [{role: 'user', content: 'saved'}]},
     modeElapsedByAssistantIndex: {},
@@ -117,6 +119,8 @@ test('Opening a new finding resets only that contextual conversation, not ordina
   assert.equal(state.modeMessages['qa-finding'].length, 0);
   assert.equal(state.modeMessages.chat.length, 1);
   assert.equal(input.value, '');
+  assert.equal(state.draftByMode['qa-finding'], '');
+  assert.equal(state.draftByMode.chat, 'saved draft');
   assert.equal(calls[0][1], 'qa-finding');
   state.modeMessages['qa-finding'].push({role: 'user', content: 'current'});
   context.window.openAssistant({mode: 'qa-finding', contextKey: 'next'});
@@ -124,4 +128,92 @@ test('Opening a new finding resets only that contextual conversation, not ordina
   state.pending = true;
   assert.throws(() => context.window.openAssistant({mode: 'qa-finding', contextKey: 'third'}), /Finish the current Assistant response/);
   assert.equal(state.modeContextKeys['qa-finding'], 'next');
+});
+
+test('Switching Assistant modes preserves separate drafts in both directions', () => {
+  const assistant = read('director_chat.js');
+  const start = assistant.indexOf('  function setMode(modeId) {');
+  const end = assistant.indexOf('  function registerContextMode(mode) {', start);
+  assert.ok(start >= 0 && end > start);
+  const input = {value: 'draft for regular chat', focus() {}};
+  const state = {
+    activeMode: 'chat', pending: false, sessionReady: true,
+    sessionDirty: {chat: false, storyboard: false}, draftByMode: {chat: ''},
+    modelId: 'model'
+  };
+  const context = vm.createContext({
+    state, String,
+    studioWorkspaceVisible: () => false,
+    contextualModes: {'qa-finding': {available: () => true, execute() {}}},
+    modeAvailable: mode => mode.available(),
+    persistentMode: mode => mode === 'chat' || mode === 'storyboard',
+    el: id => id === 'director-chat-input' ? input : null,
+    finishProgress: () => {}, syncModeUi: () => {}
+  });
+  vm.runInContext(assistant.slice(start, end), context);
+  const setMode = vm.runInContext('setMode', context);
+  setMode('qa-finding');
+  assert.equal(state.draftByMode.chat, 'draft for regular chat');
+  assert.equal(input.value, '');
+  input.value = 'question about QA finding';
+  setMode('chat');
+  assert.equal(input.value, 'draft for regular chat');
+  assert.equal(state.draftByMode['qa-finding'], 'question about QA finding');
+  setMode('qa-finding');
+  assert.equal(input.value, 'question about QA finding');
+});
+
+test('Reopening the same finding preserves its snapshot until explicitly refreshed', () => {
+  const assistant = read('review_assistant.js');
+  const start = assistant.indexOf('  var qaFindingContext = null;');
+  const end = assistant.indexOf('  function bindReviewAssistantButton() {', start);
+  assert.ok(start >= 0 && end > start);
+  let mode, opened;
+  const context = vm.createContext({
+    JSON, String, Number,
+    cancelReview: async () => {},
+    requestJson: async () => ({job: {jobId: 'id'}}),
+    waitForJob: async () => ({result: {text: 'answer'}}),
+    window: {
+      registerAssistantMode(value) { mode = value; },
+      openAssistant(value) { opened = value; }
+    }
+  });
+  vm.runInContext(assistant.slice(start, end), context);
+  const original = {
+    folder: '/set', finding: {id: 'same', title: 'Check ring'},
+    captionPrimer: 'Use concise captions',
+    items: [{fileName: 'a.png', caption: 'old caption'}], affectedCount: 1
+  };
+  context.window.openQaFindingAssistant(original);
+  const oldKey = opened.contextKey;
+  assert.ok(mode.contextSnapshot().prompt.includes('old caption'));
+  context.window.openQaFindingAssistant({
+    ...original, items: [{fileName: 'a.png', caption: 'new caption'}]
+  });
+  assert.equal(opened.contextKey, oldKey);
+  assert.equal(mode.contextSnapshot().hasUpdate, true);
+  assert.ok(mode.contextSnapshot().prompt.includes('old caption'));
+  mode.refreshContext();
+  assert.notEqual(opened.contextKey, oldKey);
+  assert.equal(mode.contextSnapshot().hasUpdate, false);
+  assert.ok(mode.contextSnapshot().prompt.includes('new caption'));
+  context.window.openQaFindingAssistant({
+    ...original, finding: {id: 'different', title: 'Different finding'}
+  });
+  assert.notEqual(opened.contextKey, oldKey);
+  assert.equal(mode.contextSnapshot().title, 'Different finding');
+});
+
+test('QA context has an inspectable snapshot and clearly temporary controls', () => {
+  const html = fs.readFileSync(path.join(__dirname, '..', 'tool/tool.html'), 'utf8');
+  const assistant = read('director_chat.js');
+  for (const id of ['director-chat-context-panel', 'director-chat-context-body',
+    'director-chat-context-refresh', 'director-chat-temporary-note']) {
+    assert.ok(html.includes('id="' + id + '"'), id);
+  }
+  assert.match(assistant, /mode\.refreshContext\(\)/);
+  assert.match(assistant, /state\.draftByMode\[state\.activeMode\] = input\.value/);
+  assert.match(assistant, /el\('director-chat-history-toggle'\)\.classList\.toggle\('hidden', contextual\)/);
+  assert.match(assistant, /el\('director-chat-input'\)\.value = ''/);
 });

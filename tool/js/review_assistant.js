@@ -144,12 +144,37 @@
   // Director job contract. The captured evidence is read-only and no Sight
   // request or separate conversation store is introduced.
   var qaFindingContext = null;
+  var qaFindingPendingContext = null;
   var qaFindingMode = {
     id: 'qa-finding',
     label: 'Ask QA',
     description: 'Discuss a saved QA recommendation and its evidence.',
     placeholder: 'What would you like to clarify about this finding?',
     available: function () { return !!qaFindingContext; },
+    contextSnapshot: function () {
+      if (!qaFindingContext) return null;
+      return {
+        title: qaFindingContext.title,
+        summary: qaFindingContext.summary,
+        prompt: qaFindingContext.prompt,
+        hasUpdate: !!qaFindingPendingContext
+      };
+    },
+    refreshContext: function () {
+      if (!qaFindingPendingContext) throw new Error('No newer QA context has been captured. Reopen Ask QA from the current review to check for updates.');
+      var previous = qaFindingContext;
+      qaFindingContext = qaFindingPendingContext;
+      qaFindingPendingContext = null;
+      qaFindingMode.description = 'Recommendation: ' + qaFindingContext.title + ' · captured evidence';
+      try {
+        window.openAssistant({ mode: 'qa-finding', contextKey: qaFindingContext.key });
+      } catch (err) {
+        qaFindingPendingContext = qaFindingContext;
+        qaFindingContext = previous;
+        qaFindingMode.description = 'Recommendation: ' + previous.title + ' · captured evidence';
+        throw err;
+      }
+    },
     execute: function (request) {
       if (!qaFindingContext) throw new Error('Open a QA recommendation before asking about it.');
       var history = (request.messages || []).map(function (message) {
@@ -191,18 +216,36 @@
         String(context.affectedCount || (context.items || []).length) + ' associated files. Other files, if any, were not included.',
       'Please answer the user\'s question about this finding.'
     ].join('\n\n');
+    var identity = String(context.folder || '') + '\u001f' + String(finding.id);
+    var included = (context.items || []).length;
+    var total = Number(context.affectedCount || included);
+    var sight = (context.items || []).filter(function (item) {
+      return !!(item.analysis && item.analysis.visionSight);
+    }).length;
     var next = {
       prompt: prompt,
-      key: String(context.folder || '') + '\u001f' + String(finding.id) + '\u001f' + prompt
+      title: String(finding.title || 'QA finding'),
+      summary: included + '/' + total + ' affected file(s) attached · ' + sight +
+        ' cached Sight record(s) · caption primer ' + (context.captionPrimer ? 'included' : 'unavailable'),
+      identity: identity,
+      key: identity + '\u001f' + prompt
     };
     var previous = qaFindingContext;
+    var previousPending = qaFindingPendingContext;
     var previousDescription = qaFindingMode.description;
-    qaFindingContext = next;
-    qaFindingMode.description = 'Recommendation: ' + String(finding.title || 'QA finding') + ' · captured evidence';
+    if (previous && previous.identity === identity) {
+      // Reopening an existing finding never silently replaces its evidence or discussion.
+      qaFindingPendingContext = previous.prompt === next.prompt ? null : next;
+    } else {
+      qaFindingContext = next;
+      qaFindingPendingContext = null;
+      qaFindingMode.description = 'Recommendation: ' + next.title + ' · captured evidence';
+    }
     try {
-      window.openAssistant({ mode: 'qa-finding', contextKey: next.key });
+      window.openAssistant({ mode: 'qa-finding', contextKey: qaFindingContext.key });
     } catch (err) {
       qaFindingContext = previous;
+      qaFindingPendingContext = previousPending;
       qaFindingMode.description = previousDescription;
       throw err;
     }

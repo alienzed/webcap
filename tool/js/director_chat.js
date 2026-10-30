@@ -312,15 +312,42 @@
     }
 
     var studio = state.activeMode === 'storyboard';
+    var contextual = !persistentMode(state.activeMode);
+    var context = active && typeof active.contextSnapshot === 'function'
+      ? active.contextSnapshot() : null;
+    var panel = el('director-chat-context-panel');
+    panel.classList.toggle('hidden', !context);
+    if (context) {
+      el('director-chat-context-heading').textContent = 'Attached context · ' + context.title;
+      el('director-chat-context-summary').textContent = context.summary;
+      el('director-chat-context-body').textContent = context.prompt;
+      var refreshContext = el('director-chat-context-refresh');
+      refreshContext.classList.toggle('hidden', !context.hasUpdate);
+      refreshContext.disabled = state.pending;
+      el('director-chat-context-status').textContent = context.hasUpdate
+        ? 'Updated evidence detected. Keep discussing this snapshot or start a new chat with the updated context.'
+        : 'Snapshot only · changes to the Set are not included until you reopen Ask QA.';
+    }
+    el('director-chat-temporary-note').classList.toggle('hidden', !contextual);
+    el('director-chat-history-toggle').classList.toggle('hidden', contextual);
+    el('director-chat-save-status').classList.toggle('hidden', contextual);
+    if (contextual) {
+      el('director-chat-history-toggle').setAttribute('aria-expanded', 'false');
+      el('director-chat-history-panel').classList.add('hidden');
+    }
+    el('director-chat-clear').textContent = context ? 'New QA chat' : 'New chat';
     var drawer = el('director-chat-drawer');
     drawer.classList.toggle('studio-director', studio);
     el('app-frame').classList.toggle('studio-director-active', studio && state.open);
-    el('director-chat-title').textContent = studio ? 'Studio Director' : 'Assistant';
+    el('director-chat-title').textContent = studio ? 'Studio Director' :
+      (context ? 'Ask QA' : 'Assistant');
     el('director-studio-starters').classList.toggle('hidden', !studio);
-    el('director-chat-empty-title').textContent = studio ? "Let's make something" : 'Your conversation';
+    el('director-chat-empty-title').textContent = studio ? "Let's make something" :
+      (context ? 'Discuss this recommendation' : 'Your conversation');
     el('director-chat-empty-description').textContent = studio
       ? 'Start with an idea or a question. Read Project material explicitly when needed.'
-      : 'Start a conversation with the selected model.';
+      : (context ? 'Ask why this recommendation matters, challenge its evidence, or discuss a better correction.'
+        : 'Start a conversation with the selected model.');
     el('director-studio-retry').classList.add('hidden');
     if (row) row.classList.toggle('hidden', studio || !modes.length);
     if (host) {
@@ -394,12 +421,12 @@
     }
     if (state.pending || state.activeMode === modeId) return;
     var input = el('director-chat-input');
-    if (persistentMode(state.activeMode) && state.sessionReady) {
-      state.draftByMode[state.activeMode] = input.value;
-      if (state.sessionDirty[state.activeMode]) flushSessionSave().catch(showSessionFailure);
+    state.draftByMode[state.activeMode] = input.value;
+    if (persistentMode(state.activeMode) && state.sessionReady && state.sessionDirty[state.activeMode]) {
+      flushSessionSave().catch(showSessionFailure);
     }
     state.activeMode = modeId;
-    if (persistentMode(modeId)) input.value = state.draftByMode[modeId] || '';
+    input.value = state.draftByMode[modeId] || '';
     finishProgress(null);
     syncModeUi();
     if (input) input.focus();
@@ -2497,12 +2524,14 @@
   }
 
   function newChat(options) {
-    if (state.pending || !state.sessionReady) return;
+    if (state.pending || (persistentMode(state.activeMode) && !state.sessionReady)) return;
     var preserveContext = !!(options && options.preserveContext);
     if (!persistentMode(state.activeMode)) {
       state.modeMessages[state.activeMode] = [];
       state.modeElapsedByAssistantIndex[state.activeMode] = {};
       state.modeMetricsByAssistantIndex[state.activeMode] = {};
+      state.draftByMode[state.activeMode] = '';
+      el('director-chat-input').value = '';
       syncModeUi();
       return;
     }
@@ -3167,8 +3196,8 @@
     messages.push({ role: 'user', content: content });
     if (activeChatMode === 'storyboard') markStudioReadinessOutdated();
     input.value = '';
+    state.draftByMode[activeChatMode] = '';
     if (persistentMode(activeChatMode)) {
-      state.draftByMode[activeChatMode] = '';
       if (state.sessionTimer) clearTimeout(state.sessionTimer);
       state.sessionTimer = 0;
       state.sessionDirty[activeChatMode] = true;
@@ -3388,7 +3417,10 @@
     var refresh = el('director-chat-model-refresh');
     var modeSwitch = el('director-chat-mode-switch');
     var presetsHost = el('director-chat-mode-presets');
-    if (!toggle || !drawer || !pin || !close || !clear || !send || !stop || !copy || !input || !model || !refresh || !modeSwitch || !presetsHost) return;
+    var contextRefresh = el('director-chat-context-refresh');
+    if (!toggle || !drawer || !pin || !close || !clear || !send || !stop || !copy || !input || !model || !refresh || !modeSwitch || !presetsHost || !contextRefresh) {
+      throw new Error('Assistant drawer controls are missing.');
+    }
 
     toggle.onclick = function () {
       if (state.open && state.activeMode === 'chat') setOpen(false);
@@ -3397,6 +3429,13 @@
     pin.onclick = function () { setPinned(!state.pinned); };
     close.onclick = function () { setOpen(false); };
     clear.onclick = newChat;
+    contextRefresh.onclick = function () {
+      var mode = activeContextMode();
+      if (!mode || typeof mode.refreshContext !== 'function') {
+        throw new Error('This Assistant mode cannot refresh captured context.');
+      }
+      mode.refreshContext();
+    };
     el('director-studio-retry').onclick = startStudioWorkshop;
     el('director-studio-capture').onclick = captureStudioCreativeBrief;
     el('director-studio-attach-current').onclick = grantStudioStoryAccess;
@@ -3567,10 +3606,8 @@
         inputHistoryIndex = inputHistory.length;
         inputHistoryDraft = input.value;
       }
-      if (persistentMode(state.activeMode) && state.sessionReady) {
-        state.draftByMode[state.activeMode] = input.value;
-        scheduleSessionSave();
-      }
+      state.draftByMode[state.activeMode] = input.value;
+      if (persistentMode(state.activeMode) && state.sessionReady) scheduleSessionSave();
       syncControls();
     });
     input.addEventListener('keydown', function (event) {
@@ -3878,7 +3915,10 @@
         state.modeMessages[modeId] = [];
         state.modeElapsedByAssistantIndex[modeId] = {};
         state.modeMetricsByAssistantIndex[modeId] = {};
-        el('director-chat-input').value = '';
+        state.draftByMode[modeId] = '';
+        // The visible input may still belong to another mode. Let setMode
+        // capture that draft before restoring the new QA mode's empty draft.
+        if (state.activeMode === modeId) el('director-chat-input').value = '';
       }
     }
     setOpen(true, modeId);

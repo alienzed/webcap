@@ -88,7 +88,7 @@ test('weak or unactionable observations do not enter the corrections queue', () 
   assert.equal(f.state.qaWorkbenchState.aiItemSignatures['a.jpg'], 's1');
 });
 
-test('an incomplete structured answer pauses rather than falsely counting an item checked', () => {
+test('an incomplete structured answer cannot falsely count an item checked', () => {
   const f = fixture();
   f.analysis.captionQuality = [];
   assert.throws(() => f.state.accept(f.scan, f.batch, f.analysis, 'local::test'), /did not assess caption quality/);
@@ -290,4 +290,143 @@ test('resume uses the recorded scope even when the visible Media List changed', 
   assert.equal(sandbox.canResume(), false);
   const run = functionSource('qaRunDeepScan', 'qaInputsUpdated');
   assert.match(run, /continuing \? qaDeepScanScopeItems\(\) : qaGetTrainingItems\(\)/);
+});
+
+function singleItemScanFixture(responses, options = {}) {
+  const names = options.names || ['a.jpg', 'b.jpg', 'c.jpg'];
+  const items = names.map(fileName => ({ key: fileName, fileName, caption: 'A garment.' }));
+  const signatures = Object.fromEntries(names.map(name => [name, 'sig-' + name]));
+  const inputs = names.map(fileName => ({
+    fileName, caption: 'A garment.', groupedTags: [], tags: [],
+    analysis: { visionSight: { description: 'A garment.', inventory: { garments: ['garment'] } } }
+  }));
+  const scan = {
+    folder: 'set', model: 'local::test', files: names,
+    orderedFiles: names.slice(), signatures, inputs,
+    inputsByFile: Object.fromEntries(inputs.map(item => [item.fileName, item])),
+    supportingFindings: [], deferred: {}, attempted: {}
+  };
+  const requests = [], errors = [], saves = [];
+  const wb = {
+    deepScanScope: scan, deepScanSessionToken: 1, deepScanSessionActive: true,
+    deepScanStopRequested: false, deepScanSubmitting: false,
+    deepScanSkipped: { ...(options.skipped || {}) },
+    aiItemSignatures: { ...(options.checked || {}) },
+    deepScanDiscoveryComplete: true
+  };
+  const sandbox = {
+    Promise,
+    qaWorkbenchState: wb, state: { folder: 'set', items },
+    qaDeepScanCurrent: (candidate, token) =>
+      candidate === scan && token === wb.deepScanSessionToken &&
+      wb.deepScanSessionActive && !wb.deepScanStopRequested,
+    qaDeepScanScopeItems: () => items,
+    qaDeepScanPrioritizedFiles: () => scan.orderedFiles.slice(),
+    qaCurrentItemSignatureMap: () => signatures,
+    qaDeepScanProgress(_scan, phase) { wb.deepScanStatus = phase; },
+    qaRequestJson(url, options) {
+      assert.equal(url, '/fs/qa/deep-scan');
+      const sent = JSON.parse(options.body).items;
+      assert.equal(sent.length, 1, 'One item per model request');
+      const file = sent[0].fileName;
+      requests.push(file);
+      return Promise.resolve({ job: { jobId: 'job-' + requests.length, file } });
+    },
+    qaWaitForDeepScan(job) {
+      const file = job.file;
+      const choices = responses[file] || ['ok'];
+      const outcome = choices[Math.min(requests.filter(name => name === file).length - 1, choices.length - 1)];
+      if (outcome === 'invalid') {
+        return Promise.reject(new Error('WebCap ingest failed after a successful model response: QA Deep Scan response must be an object.'));
+      }
+      if (outcome === 'incomplete') {
+        return Promise.resolve({ result: { model: 'local::test', analysis: { findings: [], captionQuality: [] } } });
+      }
+      if (outcome === 'runtime') {
+        return Promise.reject(new Error('Director/model stage failed before WebCap ingest: connection refused'));
+      }
+      return Promise.resolve({
+        result: { model: 'local::test', analysis: { findings: [], captionQuality: [{ file }] } }
+      });
+    },
+    qaDeepScanAcceptBatch(_scan, batch, analysis) {
+      const file = batch[0].fileName;
+      if (!analysis.captionQuality.some(row => row.file === file)) {
+        throw new Error('Deep QA did not assess caption quality for: ' + file);
+      }
+      scan.attempted[file] = true;
+      wb.aiItemSignatures[file] = signatures[file];
+      delete wb.deepScanSkipped[file];
+    },
+    qaSaveReview(required) {
+      saves.push({ required, checked: { ...wb.aiItemSignatures }, skipped: { ...wb.deepScanSkipped } });
+      return options.saveFailure && required ? Promise.reject(new Error('Disk write failed')) : Promise.resolve();
+    },
+    qaSyncDeepScanLiveUi() {}, renderQaWorkbench() {},
+    qaFinishDeepScanActivity() {},
+    reportConsoleInfo() {},
+    reportConsoleError(source, error) { errors.push({ source, message: error.message }); },
+  };
+  vm.createContext(sandbox);
+  vm.runInContext(
+    functionSource('qaDeepScanNextItemBatch', 'qaRunNextDeepScanBatch') +
+    functionSource('qaRunNextDeepScanBatch', 'qaConceptCoverageCounts') +
+    '\nthis.run = qaDeepScanNextItemBatch; this.begin = qaRunNextDeepScanBatch;',
+    sandbox
+  );
+  return { sandbox, scan, requests, errors, saves, wb };
+}
+
+test('Deep QA sends one item per request and retries malformed output at the end', async () => {
+  const f = singleItemScanFixture({ 'a.jpg': ['invalid', 'ok'] });
+  await f.sandbox.run(f.scan, 1);
+  assert.deepEqual(f.requests, ['a.jpg', 'b.jpg', 'c.jpg', 'a.jpg']);
+  assert.equal(f.errors.length, 1);
+  assert.equal(f.wb.deepScanStage, 'complete');
+  assert.deepEqual(Object.keys(f.wb.aiItemSignatures).sort(), ['a.jpg', 'b.jpg', 'c.jpg']);
+  assert.equal(f.wb.deepScanSkipped['a.jpg'], undefined);
+});
+
+test('Deep QA records twice-invalid and incomplete responses as failed while completing other items', async () => {
+  const f = singleItemScanFixture({ 'a.jpg': ['invalid', 'invalid'], 'b.jpg': ['incomplete', 'incomplete'] });
+  await f.sandbox.run(f.scan, 1);
+  assert.deepEqual(f.requests, ['a.jpg', 'b.jpg', 'c.jpg', 'a.jpg', 'b.jpg']);
+  assert.equal(f.errors.length, 4);
+  assert.equal(f.wb.deepScanStage, 'paused', 'Failed items stay explicitly resumable');
+  assert.equal(f.wb.deepScanSkipped['a.jpg'], 'failed');
+  assert.equal(f.wb.deepScanSkipped['b.jpg'], 'failed');
+  assert.equal(f.wb.aiItemSignatures['a.jpg'], undefined);
+  assert.equal(f.wb.aiItemSignatures['b.jpg'], undefined);
+  assert.equal(f.wb.aiItemSignatures['c.jpg'], 'sig-c.jpg');
+  assert.equal(f.saves.at(-1).skipped['a.jpg'], 'failed');
+});
+
+test('resuming failed items leaves already checked item receipts untouched', async () => {
+  const f = singleItemScanFixture(
+    { 'a.jpg': ['ok'] },
+    { checked: { 'b.jpg': 'sig-b.jpg', 'c.jpg': 'sig-c.jpg' }, skipped: { 'a.jpg': 'failed' } }
+  );
+  await f.sandbox.run(f.scan, 1);
+  assert.deepEqual(f.requests, ['a.jpg']);
+  assert.equal(f.wb.deepScanStage, 'complete');
+  assert.equal(f.wb.deepScanSkipped['a.jpg'], undefined);
+});
+
+test('a Director runtime failure pauses the scan instead of being treated as bad item output', async () => {
+  const f = singleItemScanFixture({ 'a.jpg': ['runtime'] });
+  await f.sandbox.begin();
+  assert.deepEqual(f.requests, ['a.jpg']);
+  assert.equal(f.wb.deepScanStage, 'paused');
+  assert.equal(f.wb.deepScanSessionActive, false);
+  assert.equal(f.wb.deepScanSkipped['a.jpg'], undefined);
+  assert.match(f.errors[0].message, /connection refused/);
+});
+
+test('failure to persist a valid item pauses Deep QA without advancing to another item', async () => {
+  const f = singleItemScanFixture({ 'a.jpg': ['ok'] }, { saveFailure: true });
+  await f.sandbox.begin();
+  assert.deepEqual(f.requests, ['a.jpg']);
+  assert.equal(f.wb.deepScanStage, 'paused');
+  assert.equal(f.wb.deepScanSkipped['a.jpg'], undefined);
+  assert.match(f.errors[0].message, /Disk write failed/);
 });

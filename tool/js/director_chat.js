@@ -3322,7 +3322,7 @@
   }
 
   function setOpen(open, modeId) {
-    if (open && !studioWorkspaceVisible() && modeId === 'storyboard') modeId = 'chat';
+    if (open && !studioWorkspaceVisible() && (!modeId || modeId === 'storyboard')) modeId = 'chat';
     if (modeId) setMode(modeId);
     // Changing modes is intentionally blocked during an active request.
     // Do not show its Studio UI in another workspace while the request finishes.

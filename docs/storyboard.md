@@ -439,7 +439,7 @@ Current runtime slice:
 - Storyboard and Generate Director requests share the app-owned `llm` execution lane and may queue without inventing a separate Storyboard scheduler;
 - local Director work shares WebCap GPU arbitration; a successfully loaded local model may remain resident for the next LLM task, while Training/Inference explicitly release the loaded Director model before claiming GPU work;
 - idle ComfyUI model release before local Director loading;
-- no conversational memory; WebCap's stored Story/Scene state remains the complete durable context.
+- older bounded Director request contracts have no independent conversational memory; current Studio Director has persisted conversations in `tool/server/director_chat_history.py`, but saved Project/Scene fields remain authoritative and are supplied only through explicit Read/Write requests.
 
 Historical candidates from this implementation phase (some superseded by current Studio Director):
 

@@ -15,31 +15,31 @@ _H3_RUNTIME = Path(__file__).resolve().parents[2] / "docs" / "mmh3-prompt-runtim
 # they are not direct LLM tools or promises of automatic mutation.
 ACTIONS = (
     {"name": "conversation.discuss", "status": "available",
-     "description": "Develop the author's creative vision with practical production judgment."},
+     "description": "Develop the author's vision; advise how saved H3 Prompt and generation controls produce a Take. Generation, media inspection and technical settings remain author-operated."},
     {"name": "context.read", "status": "available",
-     "description": "Author chooses specific saved Project and Scene fields through Read; model acknowledges actual values received."},
+     "description": "For missing saved details, recommend the smallest relevant Project/Scene Read; acknowledge only fields actually delivered."},
     {"name": "project.create", "status": "available",
-     "description": "Draft a reviewed Project with zero to 32 initial tentative Scenes."},
+     "description": "For a new project, propose a reviewed Concept, Style, Invariants and zero to 32 tentative Scene Intents; production Prompts come later."},
     {"name": "project.brief.propose", "status": "available",
-     "description": "Propose reviewed Concept, Visual / atmosphere and Invariant changes."},
+     "description": "Revise shared premise/look or recurring identity/location in Project Concept, Style or Invariants; review exact changes."},
     {"name": "scene.draft", "status": "available",
-     "description": "Propose one tentative Scene for reviewed insertion."},
+     "description": "For one new video clip, draft its observable Scene Intent for reviewed insertion."},
     {"name": "scene.sequence.draft", "status": "available",
-     "description": "Propose up to 32 tentative Scenes for reviewed insertion."},
+     "description": "For multiple new clips, draft up to 32 distinct Scene Intents for reviewed insertion and placement."},
     {"name": "scene.revise", "status": "available",
-     "description": "Propose and review scoped edits to an existing Scene Title, Intent or H3 Prompt."},
+     "description": "For changed action revise Intent; for render-ready shot timing/dialogue/sound revise H3 Prompt using saved duration and linked continuity. Author reviews Title/Intent/Prompt selections."},
     {"name": "playbook.propose", "status": "available",
-     "description": "Propose an editable replacement for existing H3 Playbook guidance; author reviews and applies."},
+     "description": "When advice is reusable across H3 prompts, propose a reviewed global H3 Playbook improvement, not a one-Scene edit."},
     {"name": "creative.capture.review", "status": "available",
      "description": "Offer a complete developed Project field, named Invariant, or Scene Intent for editable review without repeating the LLM draft; WebCap selects and validates the saved target."},
     {"name": "scene.batch.revise", "status": "available",
-     "description": "Author and review selected text fields across multiple existing Scenes, applied atomically."},
+     "description": "For coordinated creative changes across existing clips, propose reviewed selected Title/Intent/Prompt fields; apply atomically."},
     {"name": "scene.move", "status": "available",
-     "description": "Author reviews exact Scene order changes; WebCap moves Scenes deterministically without a model request."},
+     "description": "For order-only changes, choose reviewed deterministic Scene move; no model rewrite or extra LLM request."},
     {"name": "scene.duplicate", "status": "available",
-     "description": "WebCap duplicates a reviewed Scene setup without copying Takes or deleting anything."},
+     "description": "For copies, choose reviewed deterministic Scene duplication; no model rewrite and no Take copying."},
     {"name": "scene.invariants", "status": "available",
-     "description": "Review the Character or Location Invariants used by selected Scenes, with exact links saved atomically and no changes to creative prose."},
+     "description": "For where an existing Character/Location Invariant applies, review selected Scene links separately from the Invariant's definition or Prompt."},
     {"name": "scene.split", "status": "available",
      "description": "Author and review two distinct Scene Intents; WebCap atomically updates the first and inserts a tentative second."},
 )
@@ -81,14 +81,6 @@ _H3_STUDIO_CORE = (
     "MH3 Take generation uses the saved H3 Prompt, not the Intent directly. "
     "Keep changes at the narrowest existing level; don't repeat one detail in all five fields. "
     "Pacing, variation and Scene relationships go in Concept or the relevant Scene Intent. "
-    "WORKFLOW CHOICES: For a new clip, develop its Scene Intent and propose Add Scene(s); "
-    "for an existing clip's action, revise Intent; for its render-ready timed audiovisual instructions, "
-    "revise H3 Prompt using its saved duration and linked continuity. "
-    "For a reusable identity or location, develop a Project Invariant; "
-    "for where that identity appears, review Scene associations. "
-    "For ordering or copying clips, use the reviewed deterministic Move or Duplicate operation; "
-    "for changed words across clips, use reviewed multi-Scene revision. "
-    "Use the H3 Playbook for reusable model guidance, not one Scene's creative choices. "
     "FIELD DEVELOPMENT: When material has been explicitly discussed or Read, notice consequential gaps and "
     "offer a specific next step. For recurring characters, develop distinguishing visible traits and "
     "stable appearance; for locations, defining layout and recognizable features; for Scenes, clarify "
@@ -114,8 +106,6 @@ _H3_STUDIO_CORE = (
     "Generate a Take, inspect it, then refine, compare or select; WebCap owns generation, Take provenance, "
     "queueing, LoRAs, seeds, sampling, dimensions and reference-frame settings. "
     "These controls and media inspection are outside Studio Director's current Read and Write scope. "
-    "To produce a Take, the author reviews and saves the Scene H3 Prompt, then uses Studio generation; "
-    "duration, seed, dimensions, LoRAs, references and queueing remain in the generation controls. "
     "A Scene can be tentative without a production prompt or Takes. "
     "The H3 Storyboard generation path validates 4–15 seconds per clip. "
     "Use feasible on-screen actions and clear changing physical states, shot timing, camera behavior, "

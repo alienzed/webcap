@@ -744,8 +744,11 @@
     var withoutSight = scan.files.filter(function (file) {
       return qaWorkbenchState.deepScanSkipped[file] === 'no_sight';
     }).length;
+    var failed = scan.files.filter(function (file) {
+      return qaWorkbenchState.deepScanSkipped[file] === 'failed';
+    }).length;
     qaWorkbenchState.deepScanStatus = 'Deep QA · ' + checked + '/' + scan.files.length +
-      ' items checked · ' + withoutSight + ' without Sight · ' + phase;
+      ' items checked · ' + failed + ' failed · ' + withoutSight + ' without Sight · ' + phase;
     qaPublishDeepScanActivity(phase);
     qaSyncDeepScanLiveUi();
   }
@@ -864,10 +867,14 @@
       return true;
     });
     if (!pending.length) {
-      qaWorkbenchState.deepScanStage = 'complete';
+      var failed = scan.files.filter(function (file) {
+        return qaWorkbenchState.deepScanSkipped[file] === 'failed';
+      }).length;
+      // Keep the saved scope resumable when the pass finishes with failed items.
+      qaWorkbenchState.deepScanStage = failed ? 'paused' : 'complete';
       qaWorkbenchState.deepScanJobId = '';
       qaWorkbenchState.deepScanSubmitting = false;
-      qaDeepScanProgress(scan, 'Finished');
+      qaDeepScanProgress(scan, failed ? 'Finished with failures · Resume Deep QA to retry' : 'Finished');
       // Keep the run active until this final receipt is durable. A failed
       // completion write must enter the ordinary visible error path.
       return qaSaveReview(true).then(function () {
@@ -879,7 +886,9 @@
         reportConsoleInfo('Deep QA', qaWorkbenchState.deepScanStatus);
       });
     }
-    var batch = pending.slice(0, 4).map(function (file) { return scan.inputsByFile[file]; });
+    // A single item keeps malformed model responses from invalidating other media.
+    var batch = [scan.inputsByFile[pending[0]]];
+    var file = pending[0];
     qaWorkbenchState.deepScanStage = 'items';
     qaWorkbenchState.deepScanSubmitting = true;
     qaDeepScanProgress(scan, 'Checking saved captions, tags and Sight');
@@ -914,8 +923,32 @@
       qaWorkbenchState.deepScanJobId = '';
       var analysis = job.result && job.result.analysis;
       qaDeepScanAcceptBatch(scan, batch, analysis, job.result.model || scan.model);
-      qaDeepScanProgress(scan, 'Saved batch ready for review');
-      // Durable receipt before advancing. A failed write pauses the run.
+      qaDeepScanProgress(scan, 'Saved item ready for review');
+      return true;
+    }).catch(function (err) {
+      if (!qaDeepScanCurrent(scan, token)) return false;
+      var message = String(err && err.message || err);
+      // Only a rejected model response is isolated. Submission, runtime, job
+      // polling, and storage errors must remain visible systemic failures.
+      var invalidOutput = /^WebCap ingest failed after a successful model response: QA Deep Scan /.test(message) ||
+        /^Deep QA (item review returned no structured findings|did not assess caption quality)/.test(message);
+      if (!invalidOutput) throw err;
+      qaWorkbenchState.deepScanJobId = '';
+      reportConsoleError('Deep QA · ' + file, err);
+      if (!scan.deferred[file]) {
+        scan.deferred[file] = true;
+        scan.orderedFiles = scan.orderedFiles.filter(function (name) { return name !== file; }).concat(file);
+        qaDeepScanProgress(scan, 'Deferred ' + file + ' to end for one retry');
+      } else {
+        scan.attempted[file] = true;
+        qaWorkbenchState.deepScanSkipped[file] = 'failed';
+        qaDeepScanProgress(scan, file + ' failed twice; continuing');
+      }
+      return true;
+    }).then(function (handled) {
+      if (!handled || !qaDeepScanCurrent(scan, token)) return;
+      // Persist accepted results and failed-item receipts before advancing.
+      // Save failure is outside the item-error handler and pauses the scan.
       return qaSaveReview(true).then(function () {
         if (qaDeepScanCurrent(scan, token)) return qaDeepScanNextItemBatch(scan, token);
       });
@@ -1472,7 +1505,7 @@
       // Supporting context is also frozen: later Media List filters must not
       // silently change the interpretation of an already-started scan.
       supportingFindings: qaDeepScanFindingPayload(items),
-      attempted: {}, orderedFiles: scopeFiles.slice()
+      attempted: {}, deferred: {}, orderedFiles: scopeFiles.slice()
     };
     qaWorkbenchState.aiModel = model;
     qaWorkbenchState.qaReviewMode = 'progressive-v1';
@@ -1494,7 +1527,7 @@
 
   function qaInputsUpdated() {
     qaReconcileAiFindingsToCurrentInputs();
-    // The progressive run owns its own batch chain. An annotation edit never
+    // The progressive run owns its own item chain. An annotation edit never
     // starts a second concurrent scan or silently changes its captured inputs.
     if (
       normalizeWorkspaceSurface(workspaceState.surface) === 'reviewOutput' &&

@@ -7401,6 +7401,7 @@ html[data-theme="dark"] iframe {
   overflow: auto;
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
+  container-type: inline-size;
 }
 .test-generations-matrix-board {
   --matrix-card-width: 500px; /* Same width as .test-generations-results Grid. */
@@ -7449,12 +7450,72 @@ html[data-theme="dark"] iframe {
   contain-intrinsic-size: auto 500px;
 }
 .test-generations-matrix-row-head {
+  position: sticky;
+  left: 0;
+  z-index: 2;
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 10px;
+  box-sizing: border-box;
+  width: 100cqw;
   padding: 8px 2px;
   min-width: 0;
+  background: var(--panel);
   font-size: 16px;
+}
+.test-generations-matrix-row-primary {
+  display: flex;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.test-generations-matrix-row-primary .test-generations-candidate-checkbox {
+  flex: 0 0 20px;
+  box-sizing: border-box;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+}
+.test-generations-matrix-bulk-stars {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 2px;
+}
+.test-generations-matrix-bulk-star {
+  box-sizing: border-box;
+  flex: 0 0 25px;
+  width: 25px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font-size: 23px;
+  line-height: 1;
+  cursor: pointer;
+}
+.test-generations-matrix-bulk-star:hover,
+.test-generations-matrix-bulk-star:focus-visible { background: var(--hover); border-radius: 4px; }
+.test-generations-matrix-bulk-star:disabled { opacity: .45; cursor: default; }
+.test-generations-matrix-rating-status { color: var(--muted); font-size: 14px; }
+.test-generations-matrix-row-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 9px;
+  margin-left: auto;
+}
+.test-generations-matrix-row-actions .review-captions-btn {
+  flex: 0 0 auto;
+  width: auto;
+  margin: 0;
+  padding: 5px 9px;
+  font-size: 14px;
 }
 .test-generations-matrix-epoch {
   flex: 0 1 auto;
@@ -7469,8 +7530,6 @@ html[data-theme="dark"] iframe {
   opacity: .75;
 }
 .test-generations-matrix-collapse {
-  margin-left: auto;
-  width: auto;
   min-width: 55px;
   flex: 0 0 auto;
   font-size: 14px;

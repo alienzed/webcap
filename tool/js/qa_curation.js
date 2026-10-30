@@ -495,7 +495,7 @@
       if (!matched.length) explanation.appendChild(element('span', '', 'No prioritized concepts'));
       explanation.appendChild(element('small', '', 'Bars show representation among available items, not an ideal target or visual quality.'));
       var actions = element('div', 'qa-curation-review-actions');
-      var prev = button('← Previous', function() { next(-1); }); prev.disabled = cursor === 0; actions.appendChild(prev);
+      var prev = button('← Previous', function() { next(-1); }, 'qa-curation-review-previous'); prev.disabled = cursor === 0; actions.appendChild(prev);
       var decision = button(included ? 'Remove' : 'Include', function() {
         if (included) session.choices.delete(name); else session.choices.add(name);
         session.preset = 'custom';
@@ -508,16 +508,19 @@
       decision.addEventListener('focus', function() { preview(true); });
       decision.addEventListener('blur', function() { preview(false); });
       actions.appendChild(decision);
-      var forward = button('Next →', function() { next(1); });
+      var forward = button('Next →', function() { next(1); }, 'qa-curation-review-next');
       forward.disabled = cursor === items.length - 1; actions.appendChild(forward);
       var option = element('label', 'qa-curation-review-option');
       var checkbox = element('input'); checkbox.type = 'checkbox'; checkbox.checked = autoNext;
       checkbox.onchange = function() { autoNext = checkbox.checked; };
       option.appendChild(checkbox); option.appendChild(element('span', '', 'Auto-advance'));
       actions.appendChild(option);
-      explanation.appendChild(actions);
       panel.appendChild(explanation);
+      // Navigation stays below both columns, independent of per-item evidence height.
+      panel.appendChild(actions);
       if (retainedFocus === 'qa-curation-review-decision') decision.focus();
+      else if (retainedFocus === 'qa-curation-review-previous' && !prev.disabled) prev.focus();
+      else if (retainedFocus === 'qa-curation-review-next' && !forward.disabled) forward.focus();
     }
     document.body.appendChild(overlay);
     document.addEventListener('keydown', keydown);

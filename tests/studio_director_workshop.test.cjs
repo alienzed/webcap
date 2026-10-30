@@ -217,6 +217,27 @@ test('H3 detailed authoring contract is sent only for an explicit Prompt-field d
   assert.match(workbench,/fields\.indexOf\('prompt'\) !== -1/);
 });
 
+test('Studio conversation receives the canonical H3 template as reference without an automatic Write', async () => {
+  const template = fs.readFileSync(path.join(__dirname, '..', 'docs/mmh3-prompt-runtime-context.txt'), 'utf8').trim();
+  const state = {studioStoryAccess:null,storyboardAttachments:{},workshop:null};
+  const context = vm.createContext({
+    state,Object,String,Promise,
+    requestJson:async () => ({system:'Studio guidance',actions:[],promptContract:template})
+  });
+  vm.runInContext(part('  function studioDirectorRequestMessages(messages, includePromptContract) {',
+    '  // The creative assessment is advisory.'),context);
+  const result = await vm.runInContext(
+    "studioDirectorChatRequestMessages([{role:'user',content:'How should an H3 prompt be structured?'}])",context);
+  assert.equal(result.length,2);
+  assert.match(result[0].content,/H3 PRODUCTION PROMPT REFERENCE/);
+  assert.match(result[0].content,/integrated_multimodal_description:/);
+  assert.match(result[0].content,/overall_soundscape:/);
+  assert.match(result[0].content,/non_diegetic_music:/);
+  assert.match(result[0].content,/not when authoring Scene Intent/);
+  assert.equal(result[1].content,'How should an H3 prompt be structured?');
+  assert.doesNotMatch(result[0].content,/\[WEBCAP EXPLICIT READ\]/);
+});
+
 test('large explicit Read selections report their true size and refuse silent truncation', () => {
   assert.match(workbench,/JSON\.stringify\(payload\)\.length/);
   assert.match(workbench,/length > 48000/);

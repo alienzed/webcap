@@ -205,6 +205,50 @@ def test_studio_readiness_roundtrips_without_becoming_project_storage(sessions):
     assert "readiness" in json.loads((sessions / chat["id"] / "conversation.json").read_text())
 
 
+
+def test_write_field_hints_persist_through_real_session_roundtrip(sessions):
+    chat = history.create_chat("storyboard")
+    baseline = {"checks": [], "readHints": [], "writeHint": "", "sceneId": "",
+                "writeFields": []}
+    saved = history.save_chat(chat["id"], {
+        "expectedRevision": 0, "title": "Untitled Studio chat", "draft": "",
+        "messages": [{"role": "user", "content": "Start a conversation"}],
+        "readiness": baseline,
+    })
+    assert saved["readiness"] == baseline
+    recommended = {**baseline, "writeHint": "scene-edit",
+                   "sceneId": "scene-12", "writeFields": ["prompt"]}
+    saved = history.save_chat(chat["id"], {
+        "expectedRevision": 1, "title": "Studio scene", "draft": "",
+        "messages": [{"role": "user", "content": "Revise only the prompt"}],
+        "readiness": recommended,
+    })
+    assert saved["readiness"] == recommended
+    assert history.open_chat(chat["id"])["readiness"] == recommended
+    assert json.loads((sessions / chat["id"] / "conversation.json").read_text())["readiness"] == recommended
+
+
+@pytest.mark.parametrize("operation, fields", [
+    ("scene-edit", ["concept"]),
+    ("scene-edit", ["prompt", "prompt"]),
+    ("project", ["summary"]),
+    ("scene-move", ["prompt"]),
+    ("", ["prompt"]),
+    ("scene-edit", "prompt"),
+])
+def test_write_field_hints_reject_invalid_or_mismatched_scope(sessions, operation, fields):
+    chat = history.create_chat("storyboard")
+    with pytest.raises(ValueError, match="Write field recommendations"):
+        history.save_chat(chat["id"], {
+            "expectedRevision": 0, "title": "No invalid hints", "draft": "",
+            "messages": [], "readiness": {
+                "checks": [], "readHints": [], "writeHint": operation, "sceneId": "",
+                "writeFields": fields,
+            },
+        })
+    assert history.open_chat(chat["id"])["revision"] == 0
+
+
 def test_studio_readiness_rejects_unsupported_dimensions(sessions):
     chat = history.create_chat("storyboard")
     with pytest.raises(ValueError, match="invalid assessment"):

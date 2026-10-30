@@ -132,7 +132,7 @@ def _validate_readiness(value):
         return {"checks": [], "readHints": [], "writeHint": "", "sceneId": ""}
     if (not isinstance(value, dict) or
             not {"checks", "readHints", "writeHint", "sceneId"}.issubset(value) or
-            not set(value).issubset({"checks", "readHints", "writeHint", "sceneId", "stale", "capture"})):
+            not set(value).issubset({"checks", "readHints", "writeHint", "writeFields", "sceneId", "stale", "capture"})):
         raise ValueError("Studio readiness must contain checks, Read hints and Write hint.")
     checks = value["checks"]
     if not isinstance(checks, list) or len(checks) > 30:
@@ -154,6 +154,16 @@ def _validate_readiness(value):
         raise ValueError("Studio Write recommendation is invalid.")
     if not isinstance(value["sceneId"], str) or len(value["sceneId"]) > 160:
         raise ValueError("Studio Scene recommendation is invalid.")
+    write_fields = value.get("writeFields", [])
+    allowed_fields = (
+        {"title", "concept", "style", "invariants"} if value["writeHint"] == "project"
+        else {"title", "summary", "prompt"} if value["writeHint"] in {"scene-edit", "scenes-batch"}
+        else set()
+    )
+    if (not isinstance(write_fields, list) or len(write_fields) > 4
+            or any(not isinstance(field, str) or field not in allowed_fields for field in write_fields)
+            or len(set(write_fields)) != len(write_fields)):
+        raise ValueError("Studio Write field recommendations are invalid.")
     if "stale" in value and not isinstance(value["stale"], bool):
         raise ValueError("Studio readiness freshness flag must be a boolean.")
     capture = value.get("capture")
@@ -189,6 +199,8 @@ def _validate_readiness(value):
             raise ValueError("Studio creative capture text is invalid.")
     result = {"checks": checks, "readHints": read_hints,
               "writeHint": value["writeHint"], "sceneId": value["sceneId"]}
+    if "writeFields" in value:
+        result["writeFields"] = write_fields
     if "stale" in value:
         result["stale"] = value["stale"]
     if capture is not None:

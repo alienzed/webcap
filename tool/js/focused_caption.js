@@ -626,7 +626,8 @@ function syncFocusedCaptionControls() {
   var reviewBtn = document.getElementById('preview-open-focus-review-btn');
   var skipBtn = ui.previewFocusCaptionSkipBtnEl;
   var dismissQaBtn = document.getElementById('preview-focus-caption-dismiss-qa-btn');
-  if (!startBtn || !reviewBtn || !skipBtn || !dismissQaBtn) {
+  var askQaBtn = document.getElementById('preview-focus-caption-ask-qa-btn');
+  if (!startBtn || !reviewBtn || !skipBtn || !dismissQaBtn || !askQaBtn) {
     throw new Error('Focus Caption controls are missing.');
   }
 
@@ -670,6 +671,7 @@ function syncFocusedCaptionControls() {
 
     skipBtn.classList.add('hidden');
     dismissQaBtn.classList.add('hidden');
+    askQaBtn.classList.add('hidden');
     skipBtn.disabled = false;
     return;
   }
@@ -687,6 +689,7 @@ function syncFocusedCaptionControls() {
 
   skipBtn.classList.remove('hidden');
   dismissQaBtn.classList.toggle('hidden', !isFocusedQaReviewMode());
+  askQaBtn.classList.toggle('hidden', !isFocusedQaReviewMode());
   skipBtn.disabled = false;
   skipBtn.title = reviewMode
     ? 'Skip this review item without saving edits'
@@ -1047,7 +1050,8 @@ function startFocusedCaptionForMediaItem(mediaItem) {
 function wireFocusedCaption() {
   var reviewBtn = document.getElementById('preview-open-focus-review-btn');
   var dismissQaBtn = document.getElementById('preview-focus-caption-dismiss-qa-btn');
-  if (!ui.previewFocusCaptionBtnEl || !reviewBtn || !ui.previewFocusCaptionSkipBtnEl || !dismissQaBtn) {
+  var askQaBtn = document.getElementById('preview-focus-caption-ask-qa-btn');
+  if (!ui.previewFocusCaptionBtnEl || !reviewBtn || !ui.previewFocusCaptionSkipBtnEl || !dismissQaBtn || !askQaBtn) {
     throw new Error('Focus Caption controls are missing.');
   }
   if (!ui.previewFocusCaptionBtnEl.__focusedCaptionBound) {
@@ -1065,6 +1069,17 @@ function wireFocusedCaption() {
     ui.previewFocusCaptionSkipBtnEl.__focusedCaptionBound = true;
     ui.previewFocusCaptionSkipBtnEl.addEventListener('click', function () {
       skipFocusedCaptionItem();
+    });
+  }
+  if (!askQaBtn.__focusedCaptionBound) {
+    askQaBtn.__focusedCaptionBound = true;
+    askQaBtn.addEventListener('click', function () {
+      try {
+        qaAskCurrentReviewItem();
+      } catch (err) {
+        reportConsoleError('QA · Ask QA', err);
+        setStatus('Could not open Ask QA: ' + String(err && err.message || err));
+      }
     });
   }
   if (!dismissQaBtn.__focusedCaptionBound) {

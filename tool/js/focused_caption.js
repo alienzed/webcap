@@ -1093,7 +1093,7 @@ function wireFocusedCaption() {
     document.addEventListener('keydown', function (event) {
       if (!focusedCaptionState.open || !event || event.defaultPrevented || event.repeat) return;
       if (isCropModalOpen()) return;
-      if (isEditableElement(document.activeElement)) return;
+      if (isEditableElement(document.activeElement) || document.activeElement === askQaBtn) return;
       var key = String(event.key || '');
       var lower = key.toLowerCase();
       if (key === 'Escape') {

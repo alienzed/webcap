@@ -733,7 +733,17 @@
       review.textContent = 'Review & Fix ' + ready + ' item' + (ready === 1 ? '' : 's');
     }
     var coverage = document.getElementById('qa-deep-scan-live-coverage');
-    if (coverage) coverage.textContent = 'Deep QA: ' + qaCoverageLine(qaDeepCoverageCounts(qaDeepScanScopeItems()), false);
+    var counts = qaDeepCoverageCounts(qaDeepScanScopeItems());
+    if (coverage) coverage.textContent = qaWorkbenchState.deepScanSessionActive
+      ? counts.actionable + ' actionable · ' + counts.clean + ' checked/no action'
+      : 'Deep QA: ' + qaCoverageLine(counts, false);
+    var progress = document.getElementById('qa-deep-scan-live-progress');
+    if (progress) {
+      var total = counts.actionable + counts.clean + counts.withoutSight + counts.failed + counts.unchecked;
+      progress.max = Math.max(1, total);
+      progress.value = total - counts.unchecked;
+      progress.setAttribute('aria-label', (total - counts.unchecked) + ' of ' + total + ' items processed');
+    }
   }
 
   function qaDeepScanProgress(scan, phase) {

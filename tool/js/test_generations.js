@@ -423,7 +423,7 @@
     var candidateScores = testVlCandidateScores(results);
     var byMedia = Object.create(null);
     results.forEach(function (result) { byMedia[resultMediaFile(result)] = result; });
-    ['test-generations-results','test-generations-compare'].forEach(function (id) {
+    ['test-generations-results','test-generations-compare','test-generations-matrix'].forEach(function (id) {
       var host = el(id);
       if (!host) return;
       Array.prototype.forEach.call(host.querySelectorAll('.test-generations-result-card, .test-generations-compare-item'), function (card) {
@@ -3334,7 +3334,7 @@
       });
     }
 
-    request('test_rate_result', {
+    return request('test_rate_result', {
       session: sessionName,
       mediaFile: mediaFile,
       rating: rating
@@ -3345,6 +3345,7 @@
           if (resultMediaFile(result) === mediaFile) result.rating = payload.rating;
         });
         if (previewSort === 'rating') refreshTestPreviewOrder();
+        else if (resultsView === 'matrix') renderMatrix(currentStatus);
       }
       return request('test_rating_summary', { modelId: currentTestModelId() });
     }).then(function (payload) {
@@ -3736,9 +3737,38 @@
     });
 
     var rows = Array.from(buckets.entries());
+    if (previewSort !== 'original') {
+      var sameVlScope = testVl.scope === testVlScope(status);
+      rows = rows.map(function (entry, originalIndex) {
+        var units = Array.from(entry[1].cells.values()).filter(function (unit) {
+          return !unit.error && !!resultMediaFile(unit);
+        });
+        var values = [];
+        var count = 0;
+        if (previewSort === 'rating') {
+          values = units.map(function (unit) { return Number(unit.rating) || 0; }).filter(Boolean);
+          count = values.length;
+        } else if (sameVlScope) {
+          units.forEach(function (unit) {
+            var assessment = testVl.entries[resultMediaFile(unit)];
+            if (!assessment || assessment.status !== 'done' || !Array.isArray(assessment.comparison)) return;
+            var score = testVlScore(assessment.comparison, assessment.ignoredGroups);
+            if (!score.count) return;
+            values.push(score.matches);
+            count += score.count;
+          });
+        }
+        return {entry:entry, index:originalIndex, score:count
+          ? {value:values.reduce(function (sum, value) { return sum + value; }, 0) / count, count:count}
+          : null};
+      }).sort(function (a, b) {
+        if (!a.score || !b.score) return a.score ? -1 : b.score ? 1 : a.index - b.index;
+        return b.score.value - a.score.value || b.score.count - a.score.count || a.index - b.index;
+      }).map(function (row) { return row.entry; });
+    }
     var layout = JSON.stringify([String(status && status.session || ''), sweep,
       variations.map(function (v) { return [v.label, v.prompt]; }),
-      rows.map(function (entry) { return entry[0]; })]);
+      rows.map(function (entry) { return entry[0]; }).sort()]);
     var board = host.querySelector('.test-generations-matrix-board');
     if (!board || host.dataset.layout !== layout) {
       var previous = new Map();
@@ -3762,14 +3792,15 @@
       var labels = document.createElement('div');
       labels.className = 'test-generations-matrix-labels';
       for (var i = 0; i < columns; i++) {
-        var prompt = variations[i] && (variations[i].prompt || variations[i].label)
-          || String(status && (status.resolvedPrompt || status.prompt) || '');
+        var choice = variations[i] ? String(variations[i].label || 'Preview') : 'Preview';
+        var prompt = variations[i] ? String(variations[i].prompt || '') :
+          String(status && (status.resolvedPrompt || status.prompt) || '');
         var label = document.createElement('div');
         label.className = 'test-generations-matrix-prompt';
         var number = document.createElement('span');
         number.textContent = 'Variation ' + (i + 1);
         var heading = document.createElement('strong');
-        heading.textContent = prompt || 'Preview';
+        heading.textContent = choice;
         heading.title = prompt;
         label.append(number, heading);
         labels.appendChild(label);
@@ -3882,6 +3913,15 @@
     }
 
     syncMatrixCandidateSelection();
+    // Reorder keyed rows for Rating/VL sorting without replacing video elements.
+    var existingRows = new Map(Array.from(board.querySelectorAll('.test-generations-matrix-row')).map(function (row) {
+      return [row.dataset.matrixKey, row];
+    }));
+    rows.forEach(function (entry, index) {
+      var rowNode = existingRows.get(entry[0]);
+      var next = board.children[index + 1];
+      if (rowNode !== next) board.insertBefore(rowNode, next || null);
+    });
     var renderedRows = board.querySelectorAll('.test-generations-matrix-row');
     var scores = testVlCandidateScores(results);
     rows.forEach(function (entry, rowIndex) {
@@ -4062,8 +4102,9 @@
   }
 
   function refreshTestPreviewOrder() {
-    sortTestPreviewCards(currentStatus);
-    if (resultsView === 'compare') renderCompare(currentStatus);
+    if (resultsView === 'grid') sortTestPreviewCards(currentStatus);
+    else if (resultsView === 'compare') renderCompare(currentStatus);
+    else if (resultsView === 'matrix') renderMatrix(currentStatus);
   }
 
   function comparePairs(status) {
@@ -4786,6 +4827,12 @@
       '<div class="test-generations-session-prompts">',
       '<div class="test-generations-session-prompt"><strong>Resolved prompt</strong><pre>' + escapeHtml(resolvedPrompt || '—') + '</pre></div>',
       '<div class="test-generations-session-prompt"><strong>Source prompt</strong><pre>' + escapeHtml(sourcePrompt || '—') + '</pre></div>',
+      (Array.isArray(status.variationCases) && status.variationCases.length
+        ? '<details class="test-generations-session-prompt"><summary>Variation prompts</summary>' +
+          status.variationCases.map(function (variation, index) {
+            return '<div><strong>' + escapeHtml(String(variation.label || 'Variation ' + (index + 1))) +
+              '</strong><pre>' + escapeHtml(String(variation.prompt || '')) + '</pre></div>';
+          }).join('') + '</details>' : ''),
       '</div>',
       '</div>'
     ].join('');
@@ -5816,6 +5863,26 @@
       if (event.target.closest('[data-compare-next]')) {
         compareIndex = Math.min(Math.max(0, comparePairs(currentStatus).length - 1), compareIndex + 1);
         renderCompare(currentStatus);
+      }
+    };
+    // Matrix reuses the same preview cards as Grid/Compare. Their rating,
+    // VL, checkpoint and removal actions need the same delegated click wiring.
+    el('test-generations-matrix').onclick = function (event) {
+      var epoch = event.target.closest('[data-test-epoch-media-job]');
+      if (epoch) {
+        window.runAnalyticsViewEpoch(epoch.dataset.testEpochMediaJob,Number(epoch.dataset.testEpochMediaEpoch),'tests');
+        return;
+      }
+      var vl = event.target.closest('[data-test-vl-result]');
+      if (vl) { showTestVlResult(vl.dataset.testVlResult); return; }
+      var rating = event.target.closest('[data-test-rating]');
+      if (rating) {
+        rateTestResult(rating);
+        return;
+      }
+      var remove = event.target.closest('[data-remove-candidate]');
+      if (remove) {
+        removeCurrentSessionCandidate(remove);
       }
     };
     el('test-generations-prompt').addEventListener('input', function () {

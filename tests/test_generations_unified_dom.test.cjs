@@ -50,6 +50,9 @@ test('Evaluation Matrix follows Screening rows and preserves playable preview ca
   const context = {
     document, Event: dom.window.Event, window: {updateTestPreviewCardRating() {}},
     resultsView: 'matrix', selectedCandidates, matrixRatingPending: new Set(),
+    previewSort:'original', testVl: {scope:'',entries:{}},
+    testVlScope: status => 'test|' + status.session,
+    testVlScore: comparison => comparison,
     prepared: {files: ['epoch07.safetensors', 'epoch08.safetensors']},
     currentStatus: {}, queuedTestJobs: [],
     currentTestModelId: () => 'h3',
@@ -101,7 +104,9 @@ test('Evaluation Matrix follows Screening rows and preserves playable preview ca
   context.renderMatrix(status);
   const host = document.getElementById('test-generations-matrix');
   assert.deepEqual(Array.from(host.querySelectorAll('.test-generations-matrix-prompt strong'),
-    x => x.textContent), ['A red jacket', 'A blue jacket']);
+    x => x.textContent), ['Red', 'Blue']);
+  assert.deepEqual(Array.from(host.querySelectorAll('.test-generations-matrix-prompt strong'),
+    x => x.title), ['A red jacket', 'A blue jacket']);
   assert.equal(host.querySelectorAll('.test-generations-matrix-row').length, 2);
   assert.equal(host.querySelectorAll('.test-generations-matrix-cell').length, 4);
   const row = host.querySelector('.test-generations-matrix-row');
@@ -125,6 +130,14 @@ test('Evaluation Matrix follows Screening rows and preserves playable preview ca
   assert.equal(row.querySelectorAll('[data-matrix-bulk-rating][aria-pressed="true"]').length, 1);
   assert.equal(row.querySelectorAll('.test-generations-result-card').length, 2);
   assert.strictEqual(row.querySelector('.test-generations-result-card'), card);
+  status.results.push({kind:'lora',candidateFile:'epoch08.safetensors',
+    mediaFile:'c.mp4',variationIndex:0,rating:5});
+  context.previewSort = 'rating';
+  context.renderMatrix(status);
+  assert.equal(host.querySelector('.test-generations-matrix-row').dataset.matrixKey,
+    JSON.stringify(['lora','epoch08.safetensors','']));
+  assert.strictEqual(row.querySelector('.test-generations-result-card'), card,
+    'sorting checkpoint rows must not rebuild existing videos');
   const checkbox = row.querySelector('[data-matrix-candidate]');
   checkbox.checked = false;
   checkbox.dispatchEvent(new dom.window.Event('change', {bubbles:true}));
@@ -144,4 +157,62 @@ test('Evaluation Matrix uses regular Grid card width and horizontal scrolling', 
   assert.match(css, /\.test-generations-matrix-scroll\s*\{[^}]*container-type:\s*inline-size/s);
   assert.match(css, /\.test-generations-matrix-row-head\s*\{[^}]*left:\s*0;[^}]*width:\s*100cqw/s);
   assert.match(css, /\.test-generations-matrix-row-primary \.test-generations-candidate-checkbox\s*\{[^}]*width:\s*20px/s);
+});
+
+test('Matrix individual preview stars persist ratings and refresh checkpoint summary', async () => {
+  const {JSDOM} = require('jsdom');
+  const vm = require('node:vm');
+  const dom = new JSDOM('<div id="test-generations-matrix"><div class="test-generations-result-rating">' +
+    '<button data-test-rating="4" data-media-file="clip.mp4" data-test-session="session-x">☆</button>' +
+    '</div></div>');
+  const document = dom.window.document;
+  const writes = [];
+  const status = {session:'session-x',results:[{mediaFile:'clip.mp4',rating:0}]};
+  let refreshed = 0;
+  const ctx = {
+    document, currentStatus: status, resultsView: 'matrix', previewSort: 'original',
+    prepared: null, queuedTestJobs: [], currentTestModelId: () => 'h3',
+    resultMediaFile: item => item.mediaFile,
+    renderMatrix: () => { refreshed++; },
+    refreshTestPreviewOrder: () => { throw new Error('unexpected sort'); },
+    syncStagedCandidateScores() {}, syncTestVlCards() {}, renderSessions() {},
+    showError: error => { throw error; },
+    request: (name, params) => {
+      if (name === 'test_rate_result') {
+        writes.push(params);
+        return Promise.resolve({rating:params.rating});
+      }
+      if (name === 'test_rating_summary') return Promise.resolve({candidateScores:{}});
+      throw Error(name);
+    },
+    window: {}
+  };
+  vm.createContext(ctx);
+  const handlers = testJS.slice(testJS.indexOf('  function syncResultRatingButtons('),
+    testJS.indexOf('  function buildResultRemoveButton('));
+  vm.runInContext(handlers, ctx);
+  const start = testJS.indexOf("    el('test-generations-matrix').onclick = function (event) {");
+  const end = testJS.indexOf("    el('test-generations-prompt').addEventListener('input'", start);
+  assert.ok(start > 0 && end > start, 'Matrix card actions must be delegated');
+  ctx.el = id => document.getElementById(id);
+  vm.runInContext(testJS.slice(start,end),ctx);
+  const star = document.querySelector('[data-test-rating]');
+  star.click();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(writes.length, 1);
+  assert.deepEqual({...writes[0]}, {session:'session-x',mediaFile:'clip.mp4',rating:4});
+  assert.equal(status.results[0].rating, 4);
+  assert.equal(star.textContent, '★');
+  assert.equal(refreshed, 1);
+});
+
+test('Matrix uses Screening wildcard choices and keeps full prompts in session details', () => {
+  assert.ok(testJS.includes("heading.textContent = choice;"));
+  assert.ok(testJS.includes("heading.title = prompt;"));
+  assert.ok(testJS.includes('<summary>Variation prompts</summary>'));
+  assert.ok(testJS.includes("['test-generations-results','test-generations-compare','test-generations-matrix']"));
+  const sort = testJS.split('function refreshTestPreviewOrder()',2)[1]
+    .split('function comparePairs(status)',1)[0];
+  assert.ok(sort.includes("if (resultsView === 'grid') sortTestPreviewCards(currentStatus);"));
+  assert.ok(sort.includes("else if (resultsView === 'matrix') renderMatrix(currentStatus);"));
 });

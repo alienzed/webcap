@@ -136,7 +136,7 @@ test('Studio brief review limits Apply to explicitly checked Story fields', () =
     'studio-brief-invariants-selected', 'studio-brief-apply',
     'director-studio-undo-brief'
   ]) assert.match(html, new RegExp('id="' + id + '"'));
-  const prep = part('  function prepareStudioBrief() {', '  function applyStudioBrief() {');
+  const prep = part('  function prepareStudioBrief(', '  function applyStudioBrief() {');
   assert.match(prep, /studioAttachedStoryId\(\)/);
   assert.match(prep, /window\.flushStudioDirectorStoryEdits\(storyId\)/);
   assert.match(prep, /operation: 'studio_brief_draft'/);

@@ -361,3 +361,33 @@ test('restoring current Curate draft skips Director and retains saved roles', as
   assert.equal(second.calls.submitted.length, 0);
   assert.equal(second.root.querySelector('.qa-curation-concept-choice select').value, 'ignore');
 });
+
+test('Curate review keeps Previous / decision / Next in a stable footer', async () => {
+  const h = harness();
+  h.ctx.window.startQaCuration(entries(), 'shape construction', 'same-scope');
+  await new Promise(resolve => setTimeout(resolve, 40));
+  const open = Array.from(h.root.querySelectorAll('button'))
+    .find(button => button.textContent.includes('Review included'));
+  assert.ok(open);
+  open.click();
+  const panel = h.ctx.document.querySelector('.qa-curation-review-panel');
+  assert.ok(panel);
+  const nav = panel.querySelector('.qa-curation-review-actions');
+  assert.equal(nav.parentNode, panel, 'navigation must not be inside changing evidence');
+  assert.deepEqual(Array.from(nav.querySelectorAll('button'), el => el.textContent),
+    ['← Previous', 'Remove', 'Next →']);
+  assert.equal(nav.querySelector('button').disabled, true);
+  nav.querySelectorAll('button')[2].click();
+  const following = h.ctx.document.querySelector('.qa-curation-review-panel');
+  const navNext = following.querySelector('.qa-curation-review-actions');
+  assert.equal(navNext.parentNode, following);
+  assert.equal(navNext.querySelector('button').disabled, false);
+  assert.equal(following.querySelector('.qa-curation-review-counter').textContent.includes('2 /'), true);
+  following.querySelector('.qa-curation-review-top button').click();
+});
+
+test('Curate review CSS reserves a desktop footer row below both columns', () => {
+  const css = fs.readFileSync('tool/css/qa_workbench.css', 'utf8');
+  assert.match(css, /grid-template-rows:auto auto minmax\(0,1fr\) auto/);
+  assert.match(css, /\.qa-curation-review-actions \{ grid-column:1 \/ -1; grid-row:4; \}/);
+});

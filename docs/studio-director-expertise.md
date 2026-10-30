@@ -103,6 +103,62 @@
 
 ---
 
+## Director role and prompt-stack audit — 2026-10-30
+
+**Scope:** Read the active `studio_director.py` system role, `ACTIONS`, H3 runtime reference, `director_chat.js` message assembly, Readiness instructions, current reviewed Write request construction, and the separately retained older Storyboard primer. Static inspection against `main` (77ba9e590b87). **No app behavior changed; actual model compliance is unverified.**
+
+### What the actual Studio model receives
+
+| Request | Active model context | Significance |
+|---|---|---|
+| New Studio opening | `studioDirectorRequestMessages(opening)`: server `_WORKSHOP + _H3_STUDIO_CORE` role, configured H3 Playbook if any, `ACTIONS` descriptions, Workbench scope note, and synthetic author request | Starts exploration without the ordinary Readiness protocol or full H3 template. This is a distinct opening path, not proof of a broken request. |
+| Regular Studio conversation | The above **plus the full** `docs/mmh3-prompt-runtime-context.txt` reference **plus** long `CONTEXT DELIVERY CONTRACT` / Readiness / optional Capture instructions | PR #816 correctly made H3 knowable, but the full technical shape is now included on *every* Studio conversation, including non-H3 brainstorming. The server module's initial “not every open-ended brainstorm” docstring is stale. |
+| Project/Scene Write preparation | Same core role/catalog, with H3 template only for selected Prompt-field authoring, and task-specific JSON request/schema; selected author-reviewed Project/Scene values sent as explicit context | Correct separation of authoritative input, creative proposal, and reviewed Apply; differs intentionally from freeform chat. |
+| Legacy Storyboard workshop | `STORYBOARD_WORKSHOP_PRIMER` in `director_chat.js` is referenced by `storyboardRequestMessages`, but no current caller of that function was found. Separate older Workshop/Guidelines operations still exist | **Not the active Studio Director role.** Do not edit this legacy primer expecting the main Director's expertise to improve. Preserve compatibility unless a real workflow requires cleanup. |
+
+### Findings and smallest changes
+
+| Priority / status | Evidence and consequence | Recommendation / acceptance |
+|---|---|---|
+| **P0 — confirmed role mismatch with the stated vision** | The core role calls Director an “EXPERT CREATIVE PRODUCER” and “MiniMax H3 production expert.” It does **not** explicitly define responsibility as a **WebCap Studio workflow expert**, or give a clear operating rule for mapping the author's goal to known features, necessary Read, and existing review steps. `ACTIONS` provides labels and short descriptions, but no complete workflow coaching. This explains a design-level *knowledge gap*, not proven model failure. | Adjust the **existing** `_WORKSHOP` role by a short positive directive: “Be the author's WebCap Studio expert as well as creative director: explain actual fields/controls; choose the smallest supported next Read or reviewed Write; distinguish advice from operations WebCap can perform.” Add only 2–3 high-value domain-specific examples to existing `ACTIONS` if live testing shows confusion. Keep mutation consent and field provenance unchanged. |
+| **P0 — confirmed generic Project bias** | `studioDirectorRequestMessages` appends **on every request**: “When choices are clear, offer to review Concept / overview, Visual / atmosphere and Invariants.” This is incorrect as a universal next-action priority when the author is developing Scene Intent, Prompt, multi-Scene revisions, scene structure, etc. | Replace that line with goal-dependent next-step guidance referring to actual `ACTIONS` and readiness hints. Test Scene action / H3 Prompt / Invariant discussions yield different appropriate recommendations and no gratuitous Project changes. |
+| **P1 — Readiness competes with the conversation** | Every regular Studio reply is asked to emit up to ten assessments, contextual hints, optional field defaults and a complete optional creative capture. The same instruction says `checks[].content` is “complete proposed text” even where `ready:false` indicates missing development. Parser tolerates missing metadata by marking it stale. | Keep the **existing** Readiness contract but instruct Director to output only relevant checks, use concise *missing/known evidence* for incomplete checks, and prefer one useful next action. Do not invent a second readiness system or make a checklist a creative permission gate. Test a brief idea, a mature draft, and a direct operational question. |
+| **P1 — H3 knowledge routing / duplicated authority** | The canonical H3 shape is supplied as reference on *all* regular chats; selected Prompt-field Write also receives it. This may tax attention during non-production brainstorming, even though the added reference was intentional (PR #816). | Do **not** remove the H3 reference blindly. Test normal creative conversation vs H3-specific questions with the real model. If it actually distracts or consumes context, prefer a brief always-on H3 section map and include the full canonical template only for H3-specific authoring/discussion. Maintain exactly one authoritative source file. |
+| **P1 — thin product expertise, particularly production handoff** | Role names Takes, generation, LoRAs, references, seeds and queue, but expressly declares those controls outside current Director Read/Write. `ACTIONS` omits Studio Blocks and concrete steps for choosing generation settings, inspecting a Take, and troubleshooting unavailable ComfyUI. Those features exist outside its action surface. | Teach **advisory navigation** of relevant supported Studio workflows from their owners before adding any control capability. Director should tell the author what the app can do, where, with what prerequisites, and exactly what it cannot inspect or execute. Preserve explicit controls and no invented permissions. |
+| **P2 — obsolete terminology and duplicated instructions** | The H3 runtime reference says “Follow the author's Story Guidelines,” although legacy Story Directing Guidelines are retired from active Studio authoring. Core Studio text also repeats a long list of available actions already provided by `ACTIONS`. | Clarify the H3 reference to use explicitly provided Concept, Style, Invariants and Scene Intent; retain legacy Guidelines only when actually supplied by the older path. Reduce redundant core action lists after confirming no regression in actual model responses. |
+| **P2 — test evidence gap** | `tests/test_studio_director.py` checks string presence and length; `tests/studio_director_workshop.test.cjs` checks context assembly. Neither proves the chosen model can advise a user on WebCap or reliably classify the right next operation. | Add a **small observational acceptance set** before prompt expansion: “change just this Scene action,” “make this recurring character recognizable,” “teach me H3 sections,” “how do I generate/compare a Take?”, “what can you Read about my Project?”, “reorder without rewriting”. Record actual answer, needed Read, recommended Write, selected fields, and result. |
+
+### Suggested north-star role (illustrative, not yet model-facing)
+
+> You are the author's expert creative producer **and WebCap Studio workflow guide**. Understand the purpose and limits of Studio fields, features, and H3 production. Develop the author's creative material, identify meaningful weaknesses, make practical proposals, and recommend the smallest relevant next Read, reviewed Write, or author-operated Studio action. Know which facts were supplied and which require an explicit Read. Distinguish creative recommendations from saved changes and features you cannot directly operate. Offer one useful next step when appropriate; the author retains creative control and approves changes.
+
+This is a role correction, **not** a proposal for an autonomous agent, new UI taxonomy or a second system prompt. Incorporate it by editing the present `_WORKSHOP` / related request lines after a focused test. `AGENTS.md` requires positive, actionable, compact guidance and minimal edits.
+
+**Highest-value change:** make Director's role explicitly include *WebCap tool expertise* and remove the unconditional “review Project Concept/Style/Invariants” bias. Then test the real model on six realistic scenarios before broadening capability knowledge. No new framework is indicated.
+
+---
+
+## Prompt-design challenge and accepted nudges — 2026-10-30
+
+**Judgment standard:** Runtime effectiveness is not proportional to primer length. Clear task routing, priority, authoritative context and bounded output matter more than a large feature dictionary. Long-context positional sensitivity is a general risk, **not a benchmark of our selected local Director model**; neither static tests nor a passing CI run establish model-answer quality. See Liu et al., *Lost in the Middle* (TACL 2024, doi:10.1162/tacl_a_00638).
+
+| Proposal | Challenge | Decision |
+|---|---|---|
+| Expand “expert” persona with more WebCap feature prose | Competes with `ACTIONS` and the already lengthy H3/context contract; roles alone cannot confer access to unavailable state | **Accept only a compact identity correction** in existing `_WORKSHOP`: creative producer plus WebCap Studio workflow guide, with a goal-based small-next-step principle. No new primer. |
+| Stop unconditional Project Concept/Style/Invariants suggestions | The universal Project bias appears at the end of every Studio system request, where it may override task-relevant action descriptions | **Accept replacement** in `studioDirectorRequestMessages` with at most one task-matched Read, reviewed Write or author-operated action when useful. |
+| Make all Readiness content shorter or make the JSON optional | Blind truncation degrades complete capture and author-reviewed drafts; changing required delimiters would destabilize parsers/stale warnings | **Accept only a semantic distinction**: for `ready:true`, complete category material; for `ready:false`, the concise actual missing decision/weakness. Preserve structured format, field enumeration and optional capture. |
+| Remove canonical H3 reference from regular Studio chat | Could reintroduce the exact H3-template ignorance fixed in PR #816; no behavioral evidence it currently distracts | **Reject for now**. Keep the exact source file authoritative; test the model first. |
+| Add a hidden WebCap knowledge catalog or more instructions for every subsystem | False authority without data/tool access, extra prompt tokens, scope creep against `AGENTS.md` | **Reject**. Improve one supported workflow at a time from observed mistakes. |
+| Rewrite old Storyboard primer or rename legacy Guidelines everywhere | Old primer is not the active normal Studio path; older operations still rely on compatibility | **Reject** without a concrete supported-workflow failure. |
+
+**Implementation:** [PR #821](https://github.com/alienzed/webcap/pull/821) applies only the three accepted prompt nudges within the existing system-role/client-message assembly, plus assembly and contract tests. The core prompt's existing **6,000-character test budget remains unchanged**; redundant creative prose was shortened rather than raising the limit. The separate audit [PR #819](https://github.com/alienzed/webcap/pull/819) records the rationale.
+
+**Merged implementation:** [PR #821](https://github.com/alienzed/webcap/pull/821), commit `22296c6a7d1a395c4d92784681974e08ceadfc6a`. Core role clarifies WebCap Studio workflow expertise, task-specific next actions replace universal Project-edit steering, and Readiness instructions distinguish complete material from unresolved decisions. Redundant core-role prose was removed to preserve the existing prompt-size budget. Studio Director and Storyboard CI passed; broader Test Generations parity has three unrelated static assertion failures. **Live model behavior is still unverified**, so do not mark role judgment as Proven.
+
+**Next empirical pass:** Test the actual local Director model on Scene-only revision, recurring character, H3 structure, read-only Project context, deterministic Move, and Take-generation handoff. Record the recommended next action and scope for each; no more primer expansion until a concrete response fails.
+
+---
+
 ## Priority gaps — ranked by value, not feature count
 
 | Priority | Work / question | Current evidence | Completion criterion |

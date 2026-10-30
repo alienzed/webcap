@@ -205,11 +205,11 @@ test('existing Scene Prompt Write includes saved duration and linked Invariant I
     .split('  function renderBatchReview() {')[0];
   const preview = workbench.split('  function showWriteContext() {')[1]
     .split('  function updateScope() {')[0];
-  assert.match(single,/durationSeconds:scene\\.durationSeconds,invariantRefs:scene\\.invariantRefs/);
+  assert.match(single,/durationSeconds:scene\.durationSeconds,invariantRefs:scene\.invariantRefs/);
   assert.match(single,/selected Scene durationSeconds/);
-  assert.match(batch,/durationSeconds:scene\\.durationSeconds, invariantRefs:scene\\.invariantRefs/);
+  assert.match(batch,/durationSeconds:scene\.durationSeconds, invariantRefs:scene\.invariantRefs/);
   assert.match(batch,/each selected Scene to its own durationSeconds/);
-  assert.match(preview,/durationSeconds:scene\\.durationSeconds,invariantRefs:scene\\.invariantRefs/);
+  assert.match(preview,/durationSeconds:scene\.durationSeconds,invariantRefs:scene\.invariantRefs/);
   assert.doesNotMatch(single,/durationSeconds.*selected keys/);
 });
 

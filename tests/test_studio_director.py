@@ -1,5 +1,7 @@
 """Studio Director implicit knowledge and bootstrap API contracts."""
 
+import pytest
+
 from tool.server import config as app_config
 from tool.server.studio_director import guidance, ACTIONS
 

@@ -153,7 +153,9 @@ This is a role correction, **not** a proposal for an autonomous agent, new UI ta
 
 **Implementation:** [PR #821](https://github.com/alienzed/webcap/pull/821) applies only the three accepted prompt nudges within the existing system-role/client-message assembly, plus assembly and contract tests. The core prompt's existing **6,000-character test budget remains unchanged**; redundant creative prose was shortened rather than raising the limit. The separate audit [PR #819](https://github.com/alienzed/webcap/pull/819) records the rationale.
 
-**After CI:** Test the actual local Director model on Scene-only revision, recurring character, H3 structure, read-only Project context, deterministic Move, and Take-generation handoff. Record the recommended next action and scope for each; no more primer expansion until a concrete response fails.
+**Merged implementation:** [PR #821](https://github.com/alienzed/webcap/pull/821), commit `22296c6a7d1a395c4d92784681974e08ceadfc6a`. Core role clarifies WebCap Studio workflow expertise, task-specific next actions replace universal Project-edit steering, and Readiness instructions distinguish complete material from unresolved decisions. Redundant core-role prose was removed to preserve the existing prompt-size budget. Studio Director and Storyboard CI passed; broader Test Generations parity has three unrelated static assertion failures. **Live model behavior is still unverified**, so do not mark role judgment as Proven.
+
+**Next empirical pass:** Test the actual local Director model on Scene-only revision, recurring character, H3 structure, read-only Project context, deterministic Move, and Take-generation handoff. Record the recommended next action and scope for each; no more primer expansion until a concrete response fails.
 
 ---
 

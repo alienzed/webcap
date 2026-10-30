@@ -13,6 +13,13 @@ test('QA browse opens a contextual chat with actual current QA evidence', () => 
   assert.match(qa, /qaBuildDeepScanItems\(selected\.map/);
   assert.match(qa, /window\.openQaFindingAssistant\(/);
   assert.match(qa, /trainingFocus: qaWorkbenchState\.trainingFocus/);
+  assert.match(qa, /window\.qaAskCurrentReviewItem = qaAskCurrentReviewItem/);
+  assert.match(qa, /relatedFindings: findings/);
+  const focus = fs.readFileSync(path.join(__dirname, '..', 'tool/js/focused_caption.js'), 'utf8');
+  assert.match(focus, /qaAskCurrentReviewItem\(\)/);
+  assert.match(focus, /askQaBtn\.classList\.toggle\('hidden', !isFocusedQaReviewMode\(\)\)/);
+  const html = fs.readFileSync(path.join(__dirname, '..', 'tool/tool.html'), 'utf8');
+  assert.match(html, /id="preview-focus-caption-ask-qa-btn"/);
 });
 
 test('QA chat carries the evidence snapshot and the previous conversation turns', () => {
@@ -26,7 +33,7 @@ test('QA chat carries the evidence snapshot and the previous conversation turns'
 
 test('Assistant preserves contextual mode outside Studio and isolates finding conversations', () => {
   const assistant = read('director_chat.js');
-  assert.match(assistant, /modeId === 'storyboard'\) modeId = 'chat'/);
+  assert.match(assistant, /!modeId \|\| modeId === 'storyboard'\)\) modeId = 'chat'/);
   assert.match(assistant, /modeContextKeys\[modeId\] !== key/);
   assert.match(assistant, /state\.modeMessages\[modeId\] = \[\]/);
   assert.match(assistant, /messages: messages\.slice\(\)/);

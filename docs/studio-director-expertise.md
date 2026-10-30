@@ -59,6 +59,21 @@
 
 **Note:** A model can know what a UI operation *means* without being able to operate it. Conversely, an available review API does not prove the model knows when to use it. Both must be tested separately.
 
+## Implementation checkpoint — 2026-10-30
+
+**Merged:** [PR #818](https://github.com/alienzed/webcap/pull/818), commit `2b684aa519b4d7fa0b2d7daa8f4eaa4615b03c5b`. This resolves the two code-confirmed P0 integration gaps and adds small task-selection guidance **without** creating new UI, implicit Reads, model calls, or writing authority.
+
+| Phase | Applied changes | Evidence | Remaining boundary |
+|---|---|---|---|
+| 1. Session contract | Server `_validate_readiness` accepts, validates and round-trips optional `writeFields`, including `[]`; preserves legacy records without the field | `tests/test_director_chat_history.py`, Studio Director CI pass | Live long-session persistence not browser-tested |
+| 2. H3 request context | Existing single/batch Scene Write draft requests include each selected Scene's saved `durationSeconds` and `invariantRefs`. Context remains read-only and output selections remain Title/Intent/Prompt | `tests/studio_director_workshop.test.cjs`, Studio Director/Storyboard CI pass | Live H3 timestamp and continuity quality not model-tested |
+| 3. Workflow choice advice | Existing `ACTIONS` descriptions now explain when to use Project/Scene/Prompt/Invariants/batch/structure/Playbook and the author-operated generation handoff; lean base prompt retained | `tests/test_studio_director.py`, Studio Director CI pass | Whether the real chosen model follows this advice remains unverified |
+| 4. Integration | Source/test scope limited to existing owners; no structural refactor; both relevant CI workflows passed, PR squash-merged | [PR #818](https://github.com/alienzed/webcap/pull/818) | Model/browser acceptance scenarios below still required |
+
+**Status correction:** The P0 rows below are historical findings **resolved by PR #818**, not outstanding implementation tasks. Next work should begin with live-model judgment tests (template, field choice, correct Read, Scene/Invariant identity), then change only what fails. Optional multi-Scene target suggestions and broader non-Studio operational control remain unimplemented by design pending a demonstrated user need.
+
+---
+
 ## Existing-system integration audit — 2026-10-30
 
 **Method and limitation:** Compared the living expertise map with current `main` source for Director guidance, request assembly, reviewed Studio actions, Scene persistence/generation settings, Studio Blocks and conversation-history validation. These are **static findings**, not a demonstration of model creativity or UI usability. Fix the confirmed contract gaps first; do not add a parallel knowledge database, new model/tool orchestration framework, automatic project reads, or new edit authority.

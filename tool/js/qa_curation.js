@@ -506,8 +506,9 @@
       checkbox.onchange = function() { autoNext = checkbox.checked; };
       option.appendChild(checkbox); option.appendChild(element('span', '', 'Auto-advance'));
       actions.appendChild(option);
-      explanation.appendChild(actions);
       panel.appendChild(explanation);
+      // Navigation stays below both columns, independent of per-item evidence height.
+      panel.appendChild(actions);
       if (retainedFocus === 'qa-curation-review-decision') decision.focus();
     }
     document.body.appendChild(overlay);

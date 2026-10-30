@@ -138,6 +138,25 @@ This is a role correction, **not** a proposal for an autonomous agent, new UI ta
 
 ---
 
+## Prompt-design challenge and accepted nudges — 2026-10-30
+
+**Judgment standard:** Runtime effectiveness is not proportional to primer length. Clear task routing, priority, authoritative context and bounded output matter more than a large feature dictionary. Long-context positional sensitivity is a general risk, **not a benchmark of our selected local Director model**; neither static tests nor a passing CI run establish model-answer quality. See Liu et al., *Lost in the Middle* (TACL 2024, doi:10.1162/tacl_a_00638).
+
+| Proposal | Challenge | Decision |
+|---|---|---|
+| Expand “expert” persona with more WebCap feature prose | Competes with `ACTIONS` and the already lengthy H3/context contract; roles alone cannot confer access to unavailable state | **Accept only a compact identity correction** in existing `_WORKSHOP`: creative producer plus WebCap Studio workflow guide, with a goal-based small-next-step principle. No new primer. |
+| Stop unconditional Project Concept/Style/Invariants suggestions | The universal Project bias appears at the end of every Studio system request, where it may override task-relevant action descriptions | **Accept replacement** in `studioDirectorRequestMessages` with at most one task-matched Read, reviewed Write or author-operated action when useful. |
+| Make all Readiness content shorter or make the JSON optional | Blind truncation degrades complete capture and author-reviewed drafts; changing required delimiters would destabilize parsers/stale warnings | **Accept only a semantic distinction**: for `ready:true`, complete category material; for `ready:false`, the concise actual missing decision/weakness. Preserve structured format, field enumeration and optional capture. |
+| Remove canonical H3 reference from regular Studio chat | Could reintroduce the exact H3-template ignorance fixed in PR #816; no behavioral evidence it currently distracts | **Reject for now**. Keep the exact source file authoritative; test the model first. |
+| Add a hidden WebCap knowledge catalog or more instructions for every subsystem | False authority without data/tool access, extra prompt tokens, scope creep against `AGENTS.md` | **Reject**. Improve one supported workflow at a time from observed mistakes. |
+| Rewrite old Storyboard primer or rename legacy Guidelines everywhere | Old primer is not the active normal Studio path; older operations still rely on compatibility | **Reject** without a concrete supported-workflow failure. |
+
+**Implementation:** [PR #821](https://github.com/alienzed/webcap/pull/821) applies only the three accepted prompt nudges within the existing system-role/client-message assembly, plus assembly and contract tests. The core prompt's existing **6,000-character test budget remains unchanged**; redundant creative prose was shortened rather than raising the limit. The separate audit [PR #819](https://github.com/alienzed/webcap/pull/819) records the rationale.
+
+**After CI:** Test the actual local Director model on Scene-only revision, recurring character, H3 structure, read-only Project context, deterministic Move, and Take-generation handoff. Record the recommended next action and scope for each; no more primer expansion until a concrete response fails.
+
+---
+
 ## Priority gaps — ranked by value, not feature count
 
 | Priority | Work / question | Current evidence | Completion criterion |

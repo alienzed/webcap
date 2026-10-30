@@ -297,7 +297,7 @@ function singleItemScanFixture(responses, options = {}) {
   const items = names.map(fileName => ({ key: fileName, fileName, caption: 'A garment.' }));
   const signatures = Object.fromEntries(names.map(name => [name, 'sig-' + name]));
   const inputs = names.map(fileName => ({
-    fileName, caption: 'A garment.',
+    fileName, caption: 'A garment.', groupedTags: [], tags: [],
     analysis: { visionSight: { description: 'A garment.', inventory: { garments: ['garment'] } } }
   }));
   const scan = {

@@ -1353,8 +1353,8 @@ def _prepare_shared_test_enqueue(tmp_path, monkeypatch, candidate_count=2):
     monkeypatch.setattr(bench, "_test_directory", lambda _folder, _model: staged)
     monkeypatch.setattr(
         bench,
-        "_selected_lora_files",
-        lambda _folder, selected_files=None: [
+        "_selected_lora_files_for_set",
+        lambda _folder, _model, selected_files=None, campaign_staging="": [
             path for path in candidates
             if selected_files is None or path.name in selected_files
         ],

@@ -32,7 +32,8 @@ Start here when you need to know what the app does today:
 - `docs/primer_mappings_v2.md` - structured mappings/rules storage and UI contract
 - `docs/execution_queue.md` - shared inference/LLM scheduling, backlog, GPU arbitration, and Activity/queue boundaries; state path reconciled 2026-10-18
 - `docs/gpu_coordination_invariants.md` - authoritative local-GPU coordination invariants; runtime truth, ownership, restart, and deterministic dispatch
-- `docs/storyboard.md` - broader Storyboard storage/production architecture, phased implementation history, and legacy LLM contracts; **not** the active Studio Director field contract
+- `docs/storyboard.md` - broader Storyboard storage/production architecture and phased history; its underlying legacy LLM operations are **not** the active Studio Director field contract
+- `docs/storyboard_llm_guidance.md` - underlying Storyboard authoring/generation boundaries and legacy operations; distinguished from current Studio controls
 - `docs/studio-blocks.md` - current standalone Studio Blocks library and explicit `/` insertion workflow
 - `docs/mmh3-prompt-runtime-context.txt` - **active H3 model-facing prompt shape** used by Studio Director and legacy prompt authoring
 - `docs/mmh3-prompt-guidelines.md` - human-readable H3 guidance and distinctions between active Studio and legacy Storyboard requests
@@ -106,7 +107,7 @@ Additional superseded references:
 - **Coverage:** inventoried 166 `docs/` files, checked local Markdown links in all 155 `.md` files, and compared priority active references against current source and tests. This was **not** a line-by-line semantic audit of every design/plan file.
 - **Confirmed drift:** Deep QA's original fail-fast plan did not describe current per-item invalid-output deferral/retry; the H3 human reference blurred active Studio fields with legacy Story Guidelines/Entry/Exit state; the Studio expertise tracker still exposed already-resolved P0 items as fresh gaps. These references have dated corrections.
 - **Links:** three bad relative paths in the archived `feature_spec.legacy-2026-05.md` were repaired; active Markdown links checked in this pass were valid.
-- **Current-vs-history rule:** Plan, design, audit, and revamp documents are snapshots unless explicitly verified as present-tense contracts. Historical phase steps are preserved, not automatically converted into implementation requirements.
+- **Current-vs-history rule:** Plan, design, audit, and revamp documents are snapshots unless explicitly verified as present-tense contracts. Historical phase steps are preserved, not automatically converted into implementation requirements. A follow-up verified that legacy Storyboard prompt/context claims must not be read as current Studio instructions.
 - **Training baseline:** model visibility, visible-media capture, per-run LR/rank/epochs/dropout overrides, fixed-reference repeat planning, logical-run ownership, lightweight Training History, and Resume/Test boundaries remain documented in their specialist references.
 
 ## Documentation maintenance notes

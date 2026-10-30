@@ -2130,6 +2130,16 @@
                     </div>
                     <p id="director-chat-attachments-status" class="director-chat-attachments-status" aria-live="polite"></p>
                 </section>
+                <section id="director-chat-context-panel" class="director-chat-context-panel hidden" aria-label="Context supplied to Ask QA">
+                    <details id="director-chat-context-details">
+                        <summary id="director-chat-context-heading">Attached context</summary>
+                        <div id="director-chat-context-summary" class="director-chat-context-summary"></div>
+                        <pre id="director-chat-context-body" class="director-chat-context-body"></pre>
+                    </details>
+                    <div id="director-chat-context-status" class="director-chat-context-status" role="status"></div>
+                    <button id="director-chat-context-refresh" type="button" class="review-captions-btn hidden">Use updated context · new chat</button>
+                </section>
+                <p id="director-chat-temporary-note" class="director-chat-temporary-note hidden">Temporary conversation · not saved to History</p>
                 <div class="director-chat-model-row director-chat-model-tools">
                     <label for="director-chat-model">Model</label>
                     <select id="director-chat-model" aria-label="Assistant model">

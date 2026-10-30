@@ -49,7 +49,7 @@
     studioBriefUndo: null,
     studioOperations: [],
     pendingReadAck: null,
-    studioReadiness: {checks:[], readHints:[], writeHint:'', sceneId:''}
+    studioReadiness: {checks:[], readHints:[], writeHint:'', writeFields:[], sceneId:''}
   };
   var STORYBOARD_WORKSHOP_PRIMER = [
     'You are collaborating with an author developing short AI-generated videos.',
@@ -625,7 +625,7 @@
       state.studioOperations = Array.isArray(chat.operations) ? chat.operations.slice() : [];
       state.studioBriefUndo = null;
       if (window.studioDirectorWorkbench) window.studioDirectorWorkbench.resetConversation();
-      state.studioReadiness = chat.readiness || {checks:[],readHints:[],writeHint:'',sceneId:''};
+      state.studioReadiness = chat.readiness || {checks:[],readHints:[],writeHint:'',writeFields:[],sceneId:''};
       if (window.studioDirectorWorkbench) window.studioDirectorWorkbench.updateReadiness(state.studioReadiness, true);
       state.studioSceneProposal = null;
       state.studioProjectProposal = null;
@@ -1752,7 +1752,7 @@
     return result;
   }
 
-  function showStudioBriefReview() {
+  function showStudioBriefReview(writeFields) {
     var proposal = state.studioBriefProposal;
     if (!proposal) throw new Error('Prepare Concept, Style and Invariants before reviewing.');
     el('studio-brief-target').textContent = 'Project: ' + (proposal.storyTitle || proposal.storyId);
@@ -1791,6 +1791,12 @@
       reviewed.some(function (row, index) {
         return JSON.stringify(row.item) !== JSON.stringify(existing[index]);
       });
+    if (Array.isArray(writeFields) && writeFields.length) {
+      ['title', 'concept', 'style', 'invariants'].forEach(function (field) {
+        var checkbox = el('studio-brief-' + field + '-selected');
+        checkbox.checked = checkbox.checked && writeFields.indexOf(field) !== -1;
+      });
+    }
     el('studio-brief-invariants').replaceChildren();
     reviewed.forEach(function (row) {
       addStudioProjectInvariant(row.item, 'studio-brief-invariants', row.original);
@@ -1801,9 +1807,9 @@
     dialog.showModal();
   }
 
-  function prepareStudioBrief() {
+  function prepareStudioBrief(writeFields) {
     if (state.pending || state.activeMode !== 'storyboard' || !state.sessionReady) return;
-    if (state.studioBriefProposal) { showStudioBriefReview(); return; }
+    if (state.studioBriefProposal) { showStudioBriefReview(writeFields); return; }
     if (!state.modelId) { studioActionStatus('Select a Director model.', true); return; }
     var storyId = studioAttachedStoryId();
     if (!storyId) {
@@ -1858,7 +1864,7 @@
           };
           finishProgress(null);
           studioActionStatus('Concept, Style and Invariants ready for review. Nothing has changed.', false);
-          showStudioBriefReview();
+          showStudioBriefReview(writeFields);
         });
     }).catch(function (error) {
       finishProgress(error);
@@ -2524,7 +2530,7 @@
         state.studioOperations = [];
         state.studioBriefUndo = null;
         if (window.studioDirectorWorkbench) window.studioDirectorWorkbench.resetConversation();
-        state.studioReadiness = {checks:[],readHints:[],writeHint:'',sceneId:''};
+        state.studioReadiness = {checks:[],readHints:[],writeHint:'',writeFields:[],sceneId:''};
         if (window.studioDirectorWorkbench) window.studioDirectorWorkbench.updateReadiness(state.studioReadiness, true);
         state.modeElapsedByAssistantIndex.storyboard = {};
         state.modeMetricsByAssistantIndex.storyboard = {};
@@ -2662,7 +2668,11 @@
         '[[WEBCAP_READINESS]]JSON[[END_WEBCAP_READINESS]]. JSON is an object containing checks ' +
         '(up to 10 objects with name, scope, ready, content), readHints (0-5 field identifiers), ' +
         'writeHint (project, new-project, scene, scenes, scene-edit, scenes-batch, scene-move, scene-duplicate, scene-split, scene-invariants, playbook, or empty), ' +
-        'and sceneId (known ID or empty). Name is one of Concept, Characters, Setting, ' +
+        'and sceneId (known ID or empty). Optionally include writeFields for Write defaults: ' +
+        'with writeHint project, use title, concept, style or invariants; with scene-edit or scenes-batch, ' +
+        'use summary (Intent), prompt (H3 Prompt) or title. For other operations omit writeFields. ' +
+        'Recommend only the fields relevant to this discussion; these are editable defaults, never automatic edits. ' +
+        'Name is one of Concept, Characters, Setting, ' +
         'Action, Dialogue, Visual / atmosphere, Visual focus, Structure / formula, ' +
         'Variation / repetition, Production feasibility. Scope is project or scene. ' +
         'Content is the complete proposed text for that single category, not a summary of the Project. ' +
@@ -3648,7 +3658,7 @@
       state.pendingReadAck = keys.slice();
       sendMessage();
     },
-    prepareWrite: function (kind, storyId, storyTitle) {
+    prepareWrite: function (kind, storyId, storyTitle, writeFields) {
       if (!this.isReady()) throw new Error('Director must be ready before Write.');
       if (kind !== 'new-project') {
         if (!storyId) throw new Error('Select a Project destination for Write.');
@@ -3666,7 +3676,7 @@
         state.studioProjectProposal = null; // Create a fresh review from current conversation.
         return prepareStudioProject();
       }
-      if (kind === 'project') return prepareStudioBrief();
+      if (kind === 'project') return prepareStudioBrief(writeFields);
       if (kind === 'scene') return prepareStudioSceneDraft();
       if (kind === 'scenes') return prepareStudioScenes();
       throw new Error('Unsupported reviewed Write operation: ' + kind);

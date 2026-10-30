@@ -874,3 +874,38 @@
   .qa-curation-review-actions > button:nth-child(3) { min-width:0; }
   .qa-curation-review-actions > .qa-curation-review-option { grid-column:1 / -1; justify-self:center; }
 }
+
+/* QA Overview: findings and actions first, then one full-width live scan strip. */
+.app.shell-revamp .qa-hero {
+  display:grid;
+  grid-template-columns:minmax(0,1fr);
+  gap:14px;
+  padding:20px 0 14px;
+}
+.app.shell-revamp .qa-hero-copy { flex:none; min-width:0; }
+.app.shell-revamp .qa-hero-actions { justify-content:flex-start; gap:10px; }
+.app.shell-revamp .qa-hero-actions .qa-primary { min-height:42px; padding:9px 14px; font-size:16px; }
+.app.shell-revamp .qa-deep-scan-wrap {
+  display:grid;
+  gap:7px;
+  min-width:0;
+  padding:12px 0 18px;
+  border-bottom:1px solid var(--border);
+}
+.app.shell-revamp .qa-deep-scan-head {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:16px;
+}
+.app.shell-revamp .qa-deep-scan-head .qa-deep-scan-note {
+  flex:1 1 auto;
+  min-width:0;
+  color:var(--text);
+  text-align:left;
+  font-size:15px;
+}
+.app.shell-revamp .qa-deep-scan-head button { flex:0 0 auto; width:auto; min-height:36px; padding:7px 12px; }
+.app.shell-revamp .qa-deep-scan-progress { display:block; width:100%; height:13px; accent-color:var(--accent); }
+.app.shell-revamp .qa-deep-scan-coverage { display:block; text-align:left; }
+.app.shell-revamp .qa-summary-line { border-top:0; padding-top:14px; }

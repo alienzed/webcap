@@ -30,16 +30,22 @@ def test_writer_workshop_uses_existing_h3_prompt_contract_and_user_playbook(monk
     assert len(text) < 6000
 
 
-def test_studio_guidance_teaches_supported_workflow_choices_and_handoff():
+def test_studio_guidance_teaches_workflow_choices_in_existing_action_catalog():
     result = guidance("minimax_h3")
-    system = result["system"]
-    assert "WORKFLOW CHOICES" in system
-    for choice in ("Scene Intent", "H3 Prompt", "Project Invariant",
-                   "Move or Duplicate", "multi-Scene revision", "H3 Playbook"):
-        assert choice in system
-    assert "To produce a Take" in system
-    assert "generation controls" in system
-    assert len(system) < 6000
+    actions = {entry["name"]: entry["description"] for entry in result["actions"]}
+    assert "generation controls produce a Take" in actions["conversation.discuss"]
+    assert "smallest relevant" in actions["context.read"]
+    assert "zero to 32" in actions["project.create"]
+    assert "Concept, Style or Invariants" in actions["project.brief.propose"]
+    assert "observable Scene Intent" in actions["scene.draft"]
+    assert "shot timing/dialogue/sound" in actions["scene.revise"]
+    assert "saved duration and linked continuity" in actions["scene.revise"]
+    assert "global H3 Playbook" in actions["playbook.propose"]
+    assert "apply atomically" in actions["scene.batch.revise"]
+    assert "no model rewrite" in actions["scene.move"]
+    assert "no model rewrite" in actions["scene.duplicate"]
+    assert "separately from the Invariant's definition" in actions["scene.invariants"]
+    assert len(result["system"]) < 6000
 
 
 def test_action_catalog_tracks_shipped_reviewed_creative_operations():

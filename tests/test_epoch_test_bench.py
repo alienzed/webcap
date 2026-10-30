@@ -1552,6 +1552,51 @@ def test_stop_shared_test_session_cancels_pending_children_and_requests_active_s
             execution_queue.get_job(job_id)
 
 
+
+def test_stop_session_handles_child_claimed_while_cancelling(tmp_path, monkeypatch):
+    _staged, candidates = _prepare_shared_test_enqueue(tmp_path, monkeypatch, candidate_count=2)
+    payload = bench.enqueue(
+        tmp_path, "prompt", selected_files=[path.name for path in candidates], include_base=False,
+    )
+    session = bench._session_directory(tmp_path, payload["latest"]["session"])
+    child_ids = bench._read_status(session)["inferenceJobs"]
+    original_cancel = bench._cancel_shared_pending_job
+    raced = []
+
+    def race_cancel(job_id, **kwargs):
+        if job_id == child_ids[0] and not raced:
+            raced.append(job_id)
+            execution_queue.claim_next(inference_runner.EXECUTION_LANE)
+            execution_queue.mark_running(job_id)
+        return original_cancel(job_id, **kwargs)
+
+    monkeypatch.setattr(bench, "_cancel_shared_pending_job", race_cancel)
+    stopped = bench.stop(tmp_path, session_name=session.name)
+
+    assert raced == [child_ids[0]]
+    assert stopped["status"] == "stopping"
+    assert execution_queue.get_job(child_ids[0])["status"] == "stopping"
+    assert execution_queue.transient_receipt(child_ids[1])["status"] == "cancelled"
+
+
+def test_stop_session_overrides_child_backlog_stop_and_remains_stopping(tmp_path, monkeypatch):
+    _staged, candidates = _prepare_shared_test_enqueue(tmp_path, monkeypatch, candidate_count=1)
+    payload = bench.enqueue(
+        tmp_path, "prompt", selected_files=[candidates[0].name], include_base=False,
+    )
+    session = bench._session_directory(tmp_path, payload["latest"]["session"])
+    child_id = bench._read_status(session)["inferenceJobs"][0]
+    execution_queue.claim_next(inference_runner.EXECUTION_LANE)
+    execution_queue.mark_running(child_id)
+    execution_queue.request_stop(child_id, requested_action="backlog")
+
+    stopped = bench.stop(tmp_path, session_name=session.name)
+
+    assert stopped["status"] == "stopping"
+    assert execution_queue.get_job(child_id)["requestedAction"] == "stop"
+    assert execution_queue.get_job(child_id)["status"] == "stopping"
+
+
 def test_committed_test_result_is_recognized_after_queue_job_is_still_active(tmp_path, monkeypatch):
     _staged, candidates = _prepare_shared_test_enqueue(tmp_path, monkeypatch, candidate_count=1)
     payload = bench.enqueue(

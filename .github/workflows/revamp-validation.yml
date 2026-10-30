@@ -107,6 +107,10 @@ on:
       - 'tool/js/run_analytics.js'
       - 'tests/test_insights_sidebar_navigation.test.cjs'
       - '.github/workflows/revamp-validation.yml'
+      - 'tests/qa_finding_chat.test.cjs'
+      - 'tool/js/review_assistant.js'
+      - 'tool/js/director_chat.js'
+      - 'tool/js/focused_caption.js'
       - 'tests/progressive_deep_qa.test.cjs'
       - 'tests/test_progressive_deep_qa.py'
   push:
@@ -288,7 +292,9 @@ jobs:
       - name: Syntax and progressive queue contracts
         run: |
           node --check tool/js/qa_workbench.js
-          node --test tests/progressive_deep_qa.test.cjs
+          node --check tool/js/review_assistant.js
+          node --check tool/js/focused_caption.js
+          node --test tests/progressive_deep_qa.test.cjs tests/qa_finding_chat.test.cjs
       - name: Prepare test runtime
         run: |
           cp tool/config.example.json tool/config.json

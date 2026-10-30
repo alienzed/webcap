@@ -1,5 +1,7 @@
 """Studio Director implicit knowledge and bootstrap API contracts."""
 
+import pytest
+
 from tool.server import config as app_config
 from tool.server.studio_director import guidance, ACTIONS
 
@@ -126,3 +128,46 @@ def test_h3_playbook_review_uses_existing_config_and_checks_conflicts(monkeypatc
     assert conflict.status_code == 400
     assert "changed since review" in conflict.json["error"]
     assert len(writes) == 1
+
+
+@pytest.mark.parametrize("operation, expected_fields", [
+    ("studio_brief_draft", {"title", "concept", "style", "invariants", "rationale"}),
+    ("studio_project_draft", {"title", "concept", "style", "invariants", "firstScenes", "rationale"}),
+    ("studio_scene_draft", {"title", "summary", "rationale"}),
+    ("studio_scene_sequence_draft", {"scenes", "rationale"}),
+    ("studio_scene_field_draft", {"title", "summary", "prompt"}),
+    ("studio_scene_batch_draft", {"scenes"}),
+    ("studio_scene_split_draft", {"firstSummary", "secondTitle", "secondSummary", "rationale"}),
+    ("studio_playbook_draft", {"guidance"}),
+    ("storyboard_workshop_shots", {"summary", "shots"}),
+    ("storyboard_story_guidelines", {"summary", "guidelines"}),
+    ("freeform_chat", None),
+])
+def test_director_chat_route_preserves_all_structured_schemas(monkeypatch, operation, expected_fields):
+    import importlib
+
+    server = importlib.import_module("tool.server.app")
+    captured = {}
+
+    def enqueue(client, model, contract, context, label):
+        captured.update({"client": client, "operation": contract["operation"],
+                         "schema": contract.get("response_schema")})
+        return {"jobId": "test-director"}
+
+    monkeypatch.setattr(server, "enqueue_llm", enqueue)
+    response = server.app.test_client().post("/fs/director/chat", json={
+        "model": "qwen", "operation": operation,
+        "messages": [{"role": "user", "content": "Propose the requested draft."}],
+    })
+    assert response.status_code == 202
+    assert captured["client"] == "chat"
+    assert captured["operation"] == operation
+    if expected_fields is None:
+        assert captured["schema"] is None
+    else:
+        assert captured["schema"]["type"] == "object"
+        assert set(captured["schema"]["properties"]) == expected_fields
+        assert captured["schema"]["additionalProperties"] is False
+        if operation == "studio_brief_draft":
+            assert captured["schema"]["required"] == ["title", "concept", "style", "invariants", "rationale"]
+            assert captured["schema"]["properties"]["invariants"]["items"]["required"] == ["kind", "title", "text"]

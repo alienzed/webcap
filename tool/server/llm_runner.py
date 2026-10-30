@@ -867,7 +867,10 @@ def _execute_claimed(job_id, gpu_reserved):
                 chat_kwargs["max_tokens"] = overrides["maxTokens"]
             if "contextSize" in overrides:
                 chat_kwargs["context_size"] = overrides["contextSize"]
-            if client == "chat" and contract.get("operation") in {"assessment_scene_plan", "storyboard_workshop_shots", "storyboard_story_guidelines"}:
+            # Director's structured operations already carry a server-defined
+            # JSON schema in their contract; forward it instead of treating
+            # their responses as free-form chat.
+            if client == "chat" and contract.get("response_schema") is not None:
                 chat_kwargs["response_schema"] = contract["response_schema"]
             messages = contract.get("messages")
             caption_operation = str(contract.get("operation") or "").strip()

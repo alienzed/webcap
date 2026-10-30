@@ -9,6 +9,8 @@ on:
       - 'tool/js/storyboard.js'
       - 'tool/js/studio_director_workbench.js'
       - 'tool/server/studio_director.py'
+      - 'tool/server/llm_runner.py'
+      - 'tests/test_llm_runner.py'
       - 'tool/server/storyboard_store.py'
       - 'tool/server/director_chat_history.py'
       - 'tool/server/app.py'
@@ -54,6 +56,7 @@ jobs:
           python -m pip install pytest Flask Pillow imageio websocket-client opencv-python-headless
           cp tool/config.example.json tool/config.json
           python -m pytest -q tests/test_director_chat_history.py
+          python -m pytest -q tests/test_llm_runner.py -k studio_chat_response_schema
           python -m pytest -q tests/test_storyboard_store.py -k "studio_project_creates_multiple_initial_scenes_atomically or studio_scene_fields_are_scoped_and_conflict_checked"
           python -m pytest -q tests/test_studio_invariant_ops.py tests/test_studio_director.py tests/test_studio_scene_draft.py tests/test_studio_scene_structure.py tests/test_studio_scene_batch.py tests/test_studio_scene_split.py tests/test_studio_scene_invariant_links.py
           python -m pytest -q tests/test_storyboard_ui_contract.py -k "entry_and_exit_states"

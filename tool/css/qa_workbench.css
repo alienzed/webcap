@@ -807,6 +807,9 @@
 .qa-curation-review-image img,.qa-curation-review-image video { display:block; max-width:100%; max-height:100%; width:auto; height:auto; object-fit:contain; }
 .qa-curation-review-evidence { flex:0 1 auto; display:grid; gap:5px; padding:10px 4px 2px; }
 .qa-curation-review-counter { font-size:19px; }
+.qa-curation-review-source { display:flex; align-items:center; flex-wrap:wrap; gap:8px 14px; }
+.qa-curation-review-filename { min-width:0; overflow-wrap:anywhere; font-size:16px; color:var(--text-muted,#abb7c4); }
+.qa-curation-review .qa-curation-review-open-item { min-height:40px; font-size:16px; }
 .qa-curation-review-verdict { font-size:clamp(21px,2.2vw,27px); }
 .qa-curation-review-bar { width:100%; height:14px; border:1px solid var(--border,#54616c); border-radius:12px; background:#18212b; overflow:hidden; }
 .qa-curation-review-bar-fill { height:100%; background:var(--accent,#8fb9e2); transition:width .15s ease; }

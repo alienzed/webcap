@@ -24,7 +24,7 @@ def patch_default_test_model(monkeypatch, template=None, settings=None):
     model = bench.get_test_model()
     monkeypatch.setattr(bench, "get_test_model", lambda _profile_id=None: model)
     if template is not None:
-        monkeypatch.setattr(model, "load_template", lambda: copy.deepcopy(template))
+        monkeypatch.setattr(model, "load_template", lambda _sampling_mode=None: copy.deepcopy(template))
     if settings is not None:
         monkeypatch.setattr(
             model,

@@ -34,6 +34,51 @@ def inference_root(tmp_path, monkeypatch):
     return tmp_path
 
 
+def test_deferred_test_expansion_failure_pauses_queue_without_losing_promise(inference_root, monkeypatch):
+    queued = execution_queue.enqueue(
+        "inference", {"request": {"modelId": "krea2_raw"}},
+        metadata={"client": "test", "candidateKind": "session", "sessionId": "session-a"},
+    )
+    monkeypatch.setattr(
+        epoch_test_bench, "expand_queued_session",
+        lambda job_id: (_ for _ in ()).throw(RuntimeError("cannot materialize Test Session")),
+    )
+    monkeypatch.setattr(
+        inference_runner, "_reserve_gpu",
+        lambda: (_ for _ in ()).throw(AssertionError("Expansion must not reserve GPU")),
+    )
+
+    assert inference_runner._advance_queue() is None
+    snapshot = execution_queue.lane_snapshot("inference")
+    assert snapshot["paused"] is True
+    assert "cannot materialize Test Session" in snapshot["pauseReason"]
+    assert [job["id"] for job in snapshot["jobs"]] == [queued["id"]]
+    assert snapshot["jobs"][0]["status"] == "queued"
+
+    assert inference_runner._advance_queue() is None
+    assert execution_queue.get_job(queued["id"])["status"] == "queued"
+
+
+def test_cancel_racing_deferred_expansion_does_not_pause_unrelated_inference(inference_root, monkeypatch):
+    parent = execution_queue.enqueue(
+        "inference", {"request": {"modelId": "krea2_raw"}},
+        metadata={"client": "test", "candidateKind": "session"},
+    )
+    other = execution_queue.enqueue(
+        "inference", {"request": {"modelId": "krea2_raw"}},
+        metadata={"client": "generate"},
+    )
+    def cancel_during_expansion(_job_id):
+        execution_queue.cancel_pending_transient(parent["id"])
+        raise FileNotFoundError("Test Session was cancelled")
+    monkeypatch.setattr(epoch_test_bench, "expand_queued_session", cancel_during_expansion)
+
+    assert inference_runner._advance_queue() is None
+    snapshot = execution_queue.lane_snapshot("inference")
+    assert snapshot["paused"] is False
+    assert [job["id"] for job in snapshot["jobs"]] == [other["id"]]
+
+
 def test_inference_enqueue_starts_worker_on_demand(inference_root, monkeypatch):
     started = []
     monkeypatch.setattr(

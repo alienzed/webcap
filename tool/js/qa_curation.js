@@ -7,7 +7,7 @@
     eligible: [], order: [], choices: new Set(), sizes: {}, preset: 'balanced',
     filter: 'selected', limit: 72, summary: '', jobId: '', error: '',
     analysis: null, balanceGroups: new Set(), overriddenGroups: new Set(), conceptRoles: new Map(), availableGroups: [],
-    status: '', missingSight: 0, ignored: 0, draftStale: false, initialChoices: [],
+    status: '', ignored: 0, draftStale: false, initialChoices: [],
     sourceEvidence: {}, sourceFiles: [], drift: null, reviewReturn: null, galleryGroup: '', previousDraft: null,
     pairGroups: []
   };
@@ -35,7 +35,6 @@
     return {
       caption:compactSignature(item.caption || ''),
       tags:compactSignature(JSON.stringify(item.groupedTags || [])),
-      sight:compactSignature(JSON.stringify(analysis.visionSight || null)),
       pose:compactSignature(JSON.stringify(analysis.selectionPose || null)),
       complexity:compactSignature(JSON.stringify(analysis.sceneComplexity || null)),
       resolution:String(item.resolution || '')
@@ -85,7 +84,7 @@
             ? row.analysis.sceneComplexity.score : null, row.resolution || ''];
         }),
         order:session.order.slice(), sizes:Object.assign({},session.sizes), rankingPolicy:'primary-only',
-        ignored:session.ignored, missingSight:session.missingSight,
+        ignored:session.ignored,
         evidence:session.sourceEvidence
       }};
   }
@@ -114,7 +113,6 @@
       session.sourceFiles = session.rows.map(function(row) {return row.fileName;});
       session.sourceEvidence = draft.snapshot.evidence || {};
       session.ignored = Number(draft.snapshot.ignored || 0);
-      session.missingSight = Number(draft.snapshot.missingSight || 0);
       session.availableGroups = Array.from(new Set(session.concepts.map(function(c) {return c.group;}))).sort();
     } else if (!signaturesMatch(draft.signature,session.signature)) {
       // v1 did not preserve the concept-to-file mapping. Never reinterpret its
@@ -192,29 +190,13 @@
       (raw.groupedTags || []).forEach(function (tag) {
         addConcept(lookup, row, tag.group, tag.term, 'tag');
       });
-      var sight = row.analysis.visionSight;
-      var inventory = sight && sight.inventory;
-      if (inventory) {
-        (inventory.things || []).forEach(function (thing) {
-          addConcept(lookup, row, 'Sight · object', thing.name, 'sight');
-          (thing.qualities || []).slice(0, 4).forEach(function (quality) {
-            addConcept(lookup, row, 'Sight · detail', thing.name + ': ' + quality, 'sight');
-          });
-        });
-        (inventory.details || []).slice(0, 12).forEach(function (detail) {
-          addConcept(lookup, row, 'Sight · detail', detail, 'sight');
-        });
-        (inventory.viewpoint || []).slice(0, 2).forEach(function (view) {
-          addConcept(lookup, row, 'Sight · viewpoint', view, 'sight');
-        });
-      }
       return row;
     });
     var all = Array.from(lookup.values()).sort(function (a, b) {
       return b.files.size - a.files.size || a.key.localeCompare(b.key);
     });
-    // Retain frequent evidence and rare construction observations in a bounded
-    // Director request; never send the entire caption corpus.
+    // Retain recurring and rare human-approved tags in the bounded
+    // Director request. Caption distinctions are analyzed separately.
     var chosen = [];
     var seen = new Set();
     function append(feature) {
@@ -222,9 +204,8 @@
       seen.add(feature.key);
       chosen.push(feature);
     }
-    // Human-approved groups precede noisier Sight-derived observations.
-    // Reserve space for rare approved constructions before popular backgrounds
-    // or repeated visual descriptions exhaust the fixed Director budget.
+    // Reserve space for rare approved constructions before common tags
+    // exhaust the existing Director concept budget.
     var approved = all.filter(function (feature) { return feature.source === 'tag'; });
     approved.slice(0, 72).forEach(append);
     approved.filter(function (feature) { return feature.files.size <= 3; })
@@ -273,9 +254,7 @@
       // initial groups, while per-concept manual Supporting/Ignore still wins.
       var role = preference || (balanceGroups.has(row.group) ? 'core' : 'supporting');
       selected.set(id, {id: id, label: row.term, group: row.group, source:row.source, role: role,
-        count: row.count, weight: row.source === 'sight'
-          ? (role === 'core' ? 0.62 : 0.13)
-          : (role === 'core' ? 1 : 0.28)});
+        count: row.count, weight: role === 'core' ? 1 : 0.28});
     }
     core.forEach(include);
     supporting.forEach(function (id) {
@@ -1054,8 +1033,6 @@
     }
     if (session.ignored) host.appendChild(element('p', 'qa-curation-helper',
       session.ignored + ' uncommon or redundant labels fell outside the Director inventory; they were not scored.'));
-    if (session.missingSight) host.appendChild(element('p', 'qa-curation-helper',
-      session.missingSight + ' images have no cached Sight; saved tags still contribute.'));
 
     var presets = element('div', 'qa-curation-controls qa-curation-presets');
     [['lean','Lean'], ['balanced','Standard'], ['broad','Broad']].forEach(function (entry) {
@@ -1375,7 +1352,6 @@
     session.conceptRoles = new Map();
     session.pairGroups = [];
     session.availableGroups = Array.from(new Set(session.concepts.map(function (c) { return c.group; }))).sort();
-    session.missingSight = inventory.rows.filter(function (row) {return !row.analysis.visionSight;}).length;
     session.status = 'Step 1/3 · Indexed ' + items.length + ' images into ' + inventory.concepts.length + ' candidate concepts.';
     session.error = '';
     session.jobId = '';
@@ -1418,7 +1394,7 @@
       renderCurrent();
     });
     function beginDirector() {
-    if (!session.concepts.length) throw new Error('QA Curation needs grouped annotations or saved visual Sight.');
+    if (!session.concepts.length) throw new Error('QA Curation needs grouped annotations.');
     session.status = 'Step 2/3 · Asking Director what matters for training…';
     renderCurrent();
     request('/fs/qa/curate', {

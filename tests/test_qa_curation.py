@@ -9,7 +9,7 @@ def concepts():
         {"id": "c001", "group": "BB Shape", "term": "v-front", "count": 80},
         {"id": "c002", "group": "BB Shape", "term": "micro", "count": 15},
         {"id": "c003", "group": "Viewpoint", "term": "rear", "count": 8},
-        {"id": "c004", "group": "Sight · detail", "term": "connector", "count": 4},
+        {"id": "c004", "group": "Construction", "term": "connector", "count": 4},
     ]
 
 

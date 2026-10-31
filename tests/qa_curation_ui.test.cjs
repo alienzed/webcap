@@ -126,6 +126,18 @@ test('curation inventory is based on real grouped concepts and never free-word f
   assert.ok(inventory.concepts.every(c => c.term !== 'the'));
 });
 
+test('Sight alone cannot influence Curate concept inventory', () => {
+  const h = harness();
+  const input = [{fileName:'one.png',caption:'rare construction', groupedTags:[
+    {group:'Pose',term:'hands up'}], analysis: {}}];
+  const before = h.ctx.window.qaCurationInventory(input);
+  input[0].analysis.visionSight = {inventory:{things:[{name:'phantom red ring'}],
+    viewpoint:['rear'], details:['different pose']}};
+  const after = h.ctx.window.qaCurationInventory(input);
+  assert.deepEqual(after.concepts, before.concepts);
+  assert.deepEqual(after.rows.map(r => r.inventoryIds), before.rows.map(r => r.inventoryIds));
+});
+
 test('unattended Director curation creates a real checklist without equal quotas or Focus Set mutation', async () => {
   const h = harness(), rows = entries();
   h.ctx.window.startQaCuration(rows, 'shape construction', 'same-scope');
@@ -214,7 +226,7 @@ test('cancel while enqueue is in flight cancels the late queued Director job', a
   assert.equal(h.root.querySelector('[data-curation-train]'), null);
 });
 
-test('rare approved construction survives 120-concept budget alongside frequent Sight details', () => {
+test('rare approved construction survives the 120-concept budget without Sight', () => {
   const h = harness();
   const rows = [
     {fileName: 'a.png', caption: '', analysis: {}, groupedTags: []},
@@ -228,15 +240,18 @@ test('rare approved construction survives 120-concept budget alongside frequent 
     rows[0].groupedTags.push(tag);
     rows[1].groupedTags.push(tag);
   }
-  rows[0].analysis.visionSight = {inventory: {
-    details: Array.from({length: 12}, (_,i)=>'visual-'+i),
-    things: Array.from({length: 32}, (_,i)=>({name:'thing-'+i,
-      qualities: Array.from({length: 4}, (_,j)=>'detail-'+j)})),
-  }};
+  for (let i = 100; i < 145; i++) {
+    const tag = {group:'Construction',term:'common-'+String(i).padStart(3,'0')};
+    rows[0].groupedTags.push(tag);
+    rows[1].groupedTags.push(tag);
+  }
+  rows[0].analysis.visionSight = {inventory:{things:[{name:'invented-object'}]}};
   const inventory = h.ctx.window.qaCurationInventory(rows);
   assert.equal(inventory.concepts.length, 120);
   assert.ok(inventory.concepts.some(c => c.term === 'exceptional one-off connector'),
     'single-example approved construction must remain visible to the Director');
+  assert.ok(!inventory.concepts.some(c => c.term === 'invented-object'),
+    'unvalidated Sight cannot influence Curate');
 });
 
 

@@ -11,6 +11,7 @@ from .execution_queue import (
     claim_next as execution_claim_next,
     enqueue as execution_enqueue,
     enqueue_many as execution_enqueue_many,
+    replace_pending_with_many as execution_replace_pending_with_many,
     discard_terminal_and_recent as execution_discard_terminal_and_recent,
     finish_job_transient as execution_finish_job_transient,
     get_job as execution_get_job,
@@ -515,6 +516,13 @@ def _advance_queue():
                 return None
 
             _set_backlog_wait_reason("")
+            metadata = next_runnable.get("metadata") or {}
+            if metadata.get("client") == "test" and metadata.get("candidateKind") == "session":
+                # Expand in place only when this promise is next to run.
+                # Existing FIFO/backlog and GPU arbitration remain authoritative.
+                from .epoch_test_bench import expand_queued_session
+                expand_queued_session(str(next_runnable.get("id") or ""))
+                return None
             backlog_ids = {
                 str(job.get("id") or "")
                 for job in jobs
@@ -792,7 +800,35 @@ def enqueue_test(request, context, label="", deferred=False):
 
 
 
-def enqueue_test_many(request, contexts, labels=None, deferred=False):
+def enqueue_test_session(request, folder, session_id, label=""):
+    """A queued Test Session is one promise, not one job per rendition."""
+    _ensure_execution_reconciled()
+    if not folder or not session_id:
+        raise ValueError("Test Session requires its Set and Session identity.")
+    from .epoch_test_bench import _resolved_wildcard_values
+    metadata = {
+        "client": "test",
+        "candidateKind": "session",
+        "label": str(label or "Test Session"),
+        "modelId": str(request.get("modelId") or ""),
+        "mediaKind": str(request.get("mediaKind") or ""),
+        "folder": str(folder),
+        "sessionId": str(session_id),
+        "wildcardValues": _resolved_wildcard_values(
+            request.get("sourcePrompt"),
+            request.get("resolvedPrompt") or request.get("prompt"),
+        ),
+    }
+    job = execution_enqueue(
+        EXECUTION_LANE,
+        {"request": copy.deepcopy(request)},
+        metadata=metadata,
+        initial_status="backlog",
+    )
+    return _job_view(job)
+
+
+def enqueue_test_many(request, contexts, labels=None, deferred=False, replace_pending_job_id=""):
     """Create one durable queue batch for the Test Session's ordered candidates."""
     _ensure_execution_reconciled()
     contexts = list(contexts)
@@ -829,11 +865,14 @@ def enqueue_test_many(request, contexts, labels=None, deferred=False):
             "payload": {"request": request, "clientContext": context},
             "metadata": metadata,
         })
-    jobs = execution_enqueue_many(
-        EXECUTION_LANE, entries, initial_status="backlog" if deferred else "queued"
-    )
-    if not deferred:
-        start_requested_inference()
+    if replace_pending_job_id:
+        jobs = execution_replace_pending_with_many(replace_pending_job_id, entries)
+    else:
+        jobs = execution_enqueue_many(
+            EXECUTION_LANE, entries, initial_status="backlog" if deferred else "queued"
+        )
+        if not deferred:
+            start_requested_inference()
     return [{"jobId": job["id"]} for job in jobs]
 
 

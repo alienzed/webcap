@@ -156,7 +156,8 @@
     var rows = (items || []).map(function (raw) {
       var row = {
         fileName: String(raw.fileName || ''), caption: String(raw.caption || ''),
-        analysis: raw.analysis || {}, keys: new Set(), ids: [], hash: ''
+        analysis: raw.analysis || {}, resolution: String(raw.resolution || ''),
+        keys: new Set(), ids: [], hash: ''
       };
       (raw.groupedTags || []).forEach(function (tag) {
         addConcept(lookup, row, tag.group, tag.term, 'tag');
@@ -292,6 +293,25 @@
       total: concepts.length };
   }
 
+  function shortSide(resolution) {
+    var match = String(resolution || '').match(/^(\\d+)\\s*[x×]\\s*(\\d+)$/i);
+    if (!match) return null;
+    var w = Number(match[1]), h = Number(match[2]);
+    return w > 0 && h > 0 ? Math.min(w,h) : null;
+  }
+  function resolutionPreference(row) {
+    var side = shortSide(row.resolution);
+    if (side === null) return 0.82; // Unknown: no false precision or hard rejection.
+    // Bounded native-detail preference, saturating at the 768px reference;
+    // this is NOT a claim to have read the active model's bucket target.
+    var ratio = Math.min(1,side / 768);
+    return 0.45 + 0.55 * ratio * ratio;
+  }
+  function resolutionText(row) {
+    var side = shortSide(row && row.resolution);
+    return side === null ? 'Resolution unknown'
+      : String(row.resolution) + (side < 768 ? ' · below 768px reference' : ' · meets 768px reference');
+  }
   function score(row, concepts, byId, selected) {
     var core = 0, supporting = 0;
     row.ids.forEach(function (id) {
@@ -304,7 +324,8 @@
     var complexity = Number(row.analysis.sceneComplexity && row.analysis.sceneComplexity.score);
     var quality = Number.isFinite(complexity) && row.analysis.sceneComplexity
       ? 1 - Math.min(0.14, Math.max(0, complexity) * 0.14) : 1;
-    return {core: core * quality, supporting: supporting * quality};
+    var fidelity = resolutionPreference(row);
+    return {core: core * quality * fidelity, supporting: supporting * quality * fidelity};
   }
 
   function rank(rows, concepts) {
@@ -908,6 +929,12 @@
 
   function startQaCuration(items, focus, signature, options) {
     var reanalyze = !!(options && options.reanalyze);
+    if (!reanalyze && session.phase === 'ready' && session.folder === String(state.folder || '')) {
+      window.qaShowCuration();
+      renderCurrent();
+      return;
+    }
+    var previousDraft = reanalyze && session.phase === 'ready' ? draftPayload() : null;
     var priorChoices = reanalyze && session.folder === String(state.folder || '')
       ? new Set(session.choices) : null;
     var priorPreset = reanalyze ? session.preset : '';
@@ -924,6 +951,7 @@
     session.phase = 'analyzing';
     session.rows = inventory.rows;
     session.concepts = inventory.concepts;
+    captureEvidence(items);
     session.ignored = inventory.ignored;
     session.analysis = null;
     session.choices = new Set();
@@ -942,8 +970,13 @@
     renderCurrent();
     if (reanalyze) {
       if (!model) {
-        session.phase = 'failed';
-        session.error = 'Choose a Director model for QA Curation.';
+        if (previousDraft) {
+          restoreDraft(previousDraft);
+          session.status = 'No Director model selected. Your saved curation is unchanged.';
+        } else {
+          session.phase = 'failed';
+          session.error = 'Choose a Director model for QA Curation.';
+        }
         renderCurrent();
         return;
       }
@@ -1031,8 +1064,13 @@
       renderCurrent();
     }).catch(function (err) {
       if (token !== session.token) return;
-      session.phase = 'failed';
-      session.error = String(err && err.message || err);
+      if (previousDraft) {
+        restoreDraft(previousDraft);
+        session.status = 'Reanalysis failed; your previous curation is preserved: ' + String(err && err.message || err);
+      } else {
+        session.phase = 'failed';
+        session.error = String(err && err.message || err);
+      }
       window.reportConsoleError('QA Curation', err);
       renderCurrent();
     });

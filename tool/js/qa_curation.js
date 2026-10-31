@@ -8,7 +8,7 @@
     filter: 'selected', limit: 72, summary: '', jobId: '', error: '',
     analysis: null, balanceGroups: new Set(), overriddenGroups: new Set(), conceptRoles: new Map(), availableGroups: [],
     status: '', missingSight: 0, ignored: 0, draftStale: false, initialChoices: [],
-    sourceEvidence: {}, sourceFiles: [], drift: null, reviewReturn: null, galleryGroup: ''
+    sourceEvidence: {}, sourceFiles: [], drift: null, reviewReturn: null, galleryGroup: '', previousDraft: null
   };
 
   var draftWrite = Promise.resolve();
@@ -46,7 +46,6 @@
   function currentDrift() {
     var before = session.sourceFiles || [];
     if (!before.length) return {changed:[],missing:[],viewChanged:false};
-    var original = new Set(before);
     var available = new Set((state.items || []).map(function(item) { return item.fileName; }));
     // Query authoritative QA assignments and metadata from the original filenames,
     // regardless of which Focus Set or text filter happens to be active.
@@ -59,7 +58,7 @@
     });
     return {changed:changed, missing:missing, viewChanged:!signaturesMatch(session.signature,qaCurrentCurationSignature()),
       // Current display filters must never alter the persisted source population.
-      sourceCount:original.size};
+      sourceCount:before.length};
   }
   function draftPayload() {
     return {version:2, signature:session.signature.startsWith('v2:') ? session.signature : compactSignature(session.signature),
@@ -409,6 +408,15 @@
       if (!selected.has(row.fileName)) return;
       row.ids.forEach(function(id) { counts.set(id,(counts.get(id)||0)+1); });
     });
+    root.querySelectorAll('[data-curation-pair-left]').forEach(function(cell) {
+      var left = cell.getAttribute('data-curation-pair-left');
+      var right = cell.getAttribute('data-curation-pair-right');
+      var total = Number(cell.getAttribute('data-curation-pair-total'));
+      var selectedPair = session.rows.filter(function(row) {
+        return selected.has(row.fileName) && row.ids.includes(left) && row.ids.includes(right);
+      }).length;
+      cell.textContent = selectedPair + ' / ' + total;
+    });
     root.querySelectorAll('[data-curation-concept]').forEach(function(node) {
       var id = node.getAttribute('data-curation-concept'), concept = byId.get(id);
       if (!concept) throw new Error('QA curation concept meter is stale: ' + id);
@@ -653,9 +661,15 @@
         ' image(s) changed supporting evidence' + (drift.missing.length
           ? ' · ' + drift.missing.length + ' source file(s) missing' : '') +
         '. Reanalyze only if you want new Director priorities.';
-      var driftNote = element('p', 'qa-curation-drift', driftText);
-      driftNote.title = 'Changed files: ' + drift.changed.concat(drift.missing).join(', ');
-      host.appendChild(driftNote);
+      host.appendChild(element('p', 'qa-curation-drift', driftText));
+      var driftDetails = element('details','qa-curation-drift-files');
+      driftDetails.appendChild(element('summary','', 'Review affected filenames'));
+      driftDetails.appendChild(element('p','', drift.changed.map(function(file) {
+        return file + ' (evidence changed)';
+      }).concat(drift.missing.map(function(file) {
+        return file + ' (missing source)';
+      })).join(' · ')));
+      host.appendChild(driftDetails);
     } else if (drift.viewChanged) {
       host.appendChild(element('p', 'qa-curation-helper',
         'The current view or QA settings differ from the original analysis. Saved curation remains available.'));
@@ -752,11 +766,14 @@
     host.appendChild(conceptGrid);
     var matrixGroups = Array.from(session.balanceGroups).sort();
     if (matrixGroups.length >= 2) {
+      var approvedIds = new Set(session.concepts.filter(function(c) {
+        return c.source === 'tag';
+      }).map(function(c) {return c.id;}));
       var first = session.eligible.filter(function(c) {
-        return c.role === 'core' && c.group === matrixGroups[0];
+        return c.role === 'core' && c.group === matrixGroups[0] && approvedIds.has(c.id);
       });
       var second = session.eligible.filter(function(c) {
-        return c.role === 'core' && c.group === matrixGroups[1];
+        return c.role === 'core' && c.group === matrixGroups[1] && approvedIds.has(c.id);
       });
       if (first.length && second.length) {
         var matrix = element('details','qa-curation-pair');
@@ -781,7 +798,11 @@
                 if (session.choices.has(row.fileName)) selected += 1;
               }
             });
-            line.appendChild(element('td','',selected+' / '+found));
+            var pairCell = element('td','',selected+' / '+found);
+            pairCell.setAttribute('data-curation-pair-left',left.id);
+            pairCell.setAttribute('data-curation-pair-right',right.id);
+            pairCell.setAttribute('data-curation-pair-total',String(found));
+            line.appendChild(pairCell);
           });
           table.appendChild(line);
         });
@@ -1065,8 +1086,14 @@
     session.token += 1;
     var jobId = session.jobId;
     session.jobId = '';
-    session.phase = 'stopped';
-    session.status = 'Analysis stopped.';
+    if (session.previousDraft) {
+      restoreDraft(session.previousDraft);
+      session.previousDraft = null;
+      session.status = 'Reanalysis stopped; previous curation preserved.';
+    } else {
+      session.phase = 'stopped';
+      session.status = 'Analysis stopped.';
+    }
     if (jobId) request('/fs/director/job', {operation:'cancel_job',jobId:jobId})
       .catch(function (err) { window.reportConsoleError('QA Curation · Stop Director', err); });
     renderCurrent();
@@ -1080,14 +1107,12 @@
       return;
     }
     var previousDraft = reanalyze && session.phase === 'ready' ? draftPayload() : null;
+    session.previousDraft = previousDraft;
     var priorChoices = reanalyze && session.folder === String(state.folder || '')
       ? new Set(session.choices) : null;
     var priorPreset = reanalyze ? session.preset : '';
     var token = ++session.token;
     var inventory = buildInventory(items);
-    if (!inventory.concepts.length) {
-      throw new Error('QA Curation needs grouped annotations or saved visual Sight.');
-    }
     var model = String(getDirectorModelPreference() || '').trim();
     session.input = items;
     session.focus = String(focus || '');
@@ -1148,6 +1173,7 @@
       renderCurrent();
     });
     function beginDirector() {
+    if (!session.concepts.length) throw new Error('QA Curation needs grouped annotations or saved visual Sight.');
     session.status = 'Step 2/3 · Asking Director what matters for training…';
     renderCurrent();
     request('/fs/qa/curate', {
@@ -1204,6 +1230,7 @@
       session.summary = String(result.summary || 'A curated mix of key constructions and supporting variation.');
       session.phase = 'ready';
       session.jobId = '';
+      session.previousDraft = null;
       session.draftStale = false;
       saveDraft();
       renderCurrent();
@@ -1211,6 +1238,7 @@
       if (token !== session.token) return;
       if (previousDraft) {
         restoreDraft(previousDraft);
+        session.previousDraft = null;
         session.status = 'Reanalysis failed; your previous curation is preserved: ' + String(err && err.message || err);
       } else {
         session.phase = 'failed';

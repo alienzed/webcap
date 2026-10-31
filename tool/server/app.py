@@ -1742,7 +1742,7 @@ def qa_curate_draft_route():
                 return jsonify({"ok": True, "draft": None})
             with path.open("r", encoding="utf-8") as stream:
                 draft = json.load(stream)
-            if not isinstance(draft, dict) or draft.get("version") != 1:
+            if not isinstance(draft, dict) or draft.get("version") not in (1, 2):
                 raise ValueError("Unsupported Curate draft version.")
             return jsonify({"ok": True, "draft": draft})
         if request.method == "DELETE":
@@ -1750,7 +1750,7 @@ def qa_curate_draft_route():
             return jsonify({"ok": True})
         data = request.get_json(silent=True) or {}
         draft = data.get("draft")
-        if not isinstance(draft, dict) or draft.get("version") != 1:
+        if not isinstance(draft, dict) or draft.get("version") not in (1, 2):
             raise ValueError("Invalid Curate draft.")
         if len(json.dumps(draft, ensure_ascii=False)) > 350000:
             raise ValueError("Curate draft exceeds 350 KB.")

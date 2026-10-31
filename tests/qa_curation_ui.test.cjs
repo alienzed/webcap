@@ -136,7 +136,7 @@ test('unattended Director curation creates a real checklist without equal quotas
   assert.equal(h.calls.submitted[0].files.length, 95);
   assert.equal(h.calls.submitted[0].concepts.length, 4);
   assert.equal(h.root.querySelectorAll('.qa-curation-card').length > 0, true);
-  assert.match(h.root.textContent, /Evidence coverage/);
+  assert.match(h.root.textContent, /Priority coverage/);
   assert.ok(h.ctx.state.focusSet === null);
 
   const chosenBefore = Number(h.root.querySelector('[data-curation-selected]').textContent);
@@ -315,7 +315,7 @@ test('manually selected group adds concepts even when Director omitted the entir
   assert.equal(h.calls.submitted.length, 1);
 });
 
-test('untouched Director concepts keep their original core/supporting roles', async () => {
+test('checking a priority group elevates its eligible terms without a second Director call', async () => {
   const h = harness();
   const originalFetch = h.ctx.fetch;
   h.ctx.fetch = (url, options) => {
@@ -336,8 +336,8 @@ test('untouched Director concepts keep their original core/supporting roles', as
   assert.equal(h.calls.errors.length, 0, h.calls.errors.join('; '));
   assert.equal(h.root.querySelector('[data-curation-balance-group="Shape"]').checked, true);
   assert.equal(h.root.querySelectorAll('[data-curation-concept]').length, 2,
-    'all terms in the prioritized Shape group are shown, including supporting terms');
-  assert.match(h.root.querySelector('.qa-curation-concepts').textContent,/supporting/);
+    'both Director-classified terms in the prioritized Shape group contribute');
+  assert.doesNotMatch(h.root.querySelector('.qa-curation-concepts').textContent,/supporting/);
   let shape = h.root.querySelector('[data-curation-balance-group="Shape"]');
   shape.checked = false;
   shape.dispatchEvent(new h.ctx.window.Event('change', {bubbles:true}));
@@ -622,7 +622,7 @@ test('Lean Standard and Broad show the exact images and evidence after choosing 
   for (const key of ['lean','balanced','broad']) {
     const preset=h.root.querySelector('[data-curation-preset="'+key+'"]');
     assert.ok(preset);
-    const displayed=/^(Lean|Standard|Broad) · (\d+) images · (\d+)% evidence$/.exec(preset.textContent);
+    const displayed=/^(Lean|Standard|Broad) · (\d+) images · (\d+)% priority coverage$/.exec(preset.textContent);
     assert.ok(displayed, 'explicit image/evidence tradeoff: '+preset.textContent);
     preset.click();
     assert.equal(Number(h.root.querySelector('[data-curation-selected]').textContent),Number(displayed[2]));
@@ -664,4 +664,142 @@ test('Curate only shows duplicate hints from a ready exact-scope cached analysis
   h.ctx.window.renderQaCuration(h.root,'same-scope');
   assert.doesNotMatch(h.root.textContent,/Exact duplicate/);
   assert.equal(h.calls.submitted.length,submitted,'no new model or duplicate scan');
+});
+
+test('secondary-only background evidence cannot inflate primary coverage or preset sizes', () => {
+  const h = harness();
+  const concepts=[
+    {id:'front',group:'Viewpoint',source:'tag',role:'core',weight:1,count:2},
+    {id:'rear',group:'Viewpoint',source:'tag',role:'core',weight:1,count:1},
+    {id:'painting',group:'Background',source:'tag',role:'supporting',weight:0.28,count:1},
+    {id:'couch',group:'Background',source:'tag',role:'supporting',weight:0.28,count:1}
+  ];
+  const originals=[
+    {fileName:'front-a.png',ids:['front'],analysis:{}},
+    {fileName:'front-b.png',ids:['front'],analysis:{}},
+    {fileName:'rear.png',ids:['rear'],analysis:{}}
+  ];
+  const extras=[
+    {fileName:'painting.png',ids:['painting'],analysis:{}},
+    {fileName:'couch.png',ids:['couch'],analysis:{}}
+  ];
+  const rank=h.ctx.window.qaCurationRank;
+  const base=rank(originals,concepts,[],['Viewpoint']);
+  const withBackground=rank(originals.concat(extras),concepts,[],['Viewpoint']);
+  assert.deepEqual(withBackground.sizes,base.sizes,
+    'secondary novelty must not add images to any preset');
+  assert.ok(withBackground.order.indexOf('rear.png') < withBackground.order.indexOf('painting.png'));
+  assert.ok(withBackground.order.indexOf('front-b.png') < withBackground.order.indexOf('painting.png'));
+  const first=new Set(['front-a.png','front-b.png','rear.png']);
+  const plus=new Set([...first,'painting.png','couch.png']);
+  const metric=h.ctx.window.qaCurationCoverage;
+  assert.equal(metric(originals.concat(extras),concepts,first,['Viewpoint']).ratio,
+    metric(originals.concat(extras),concepts,plus,['Viewpoint']).ratio,
+    'supporting backgrounds cannot increase the displayed priority percentage');
+});
+
+test('supporting concepts distinguish comparable primary candidates but not a new priority pose', () => {
+  const h=harness();
+  const c=[
+    {id:'front',group:'Viewpoint',source:'tag',role:'core',weight:1,count:2},
+    {id:'rear',group:'Viewpoint',source:'tag',role:'core',weight:1,count:1},
+    {id:'painting',group:'Background',source:'tag',role:'supporting',weight:0.28,count:1}
+  ];
+  const rows=[
+    {fileName:'front-basic.png',ids:['front'],resolution:'768x768',analysis:{}},
+    {fileName:'front-painting.png',ids:['front','painting'],resolution:'384x384',analysis:{}},
+    {fileName:'rear.png',ids:['rear'],resolution:'384x384',analysis:{}}
+  ];
+  const order=h.ctx.window.qaCurationRank(rows,c,[],['Viewpoint']).order;
+  assert.ok(order.indexOf('rear.png') < order.indexOf('front-basic.png'),
+    'new primary viewpoint evidence must precede redundant examples');
+  assert.ok(order.indexOf('front-painting.png') < order.indexOf('front-basic.png'),
+    'background can distinguish otherwise equivalent front-view examples');
+});
+
+test('a rare observed Position x Viewpoint pair contributes to primary cutoff and coverage', () => {
+  const h=harness();
+  const concepts=[
+    {id:'standing',role:'core',weight:1,group:'Position',source:'tag',count:2},
+    {id:'kneeling',role:'core',weight:1,group:'Position',source:'tag',count:2},
+    {id:'front',role:'core',weight:1,group:'Viewpoint',source:'tag',count:2},
+    {id:'rear',role:'core',weight:1,group:'Viewpoint',source:'tag',count:2}
+  ];
+  const rows=[
+    {fileName:'standing-front.png',ids:['standing','front'],analysis:{}},
+    {fileName:'standing-rear.png',ids:['standing','rear'],analysis:{}},
+    {fileName:'kneeling-front.png',ids:['kneeling','front'],analysis:{}},
+    {fileName:'kneeling-rear.png',ids:['kneeling','rear'],analysis:{}}
+  ];
+  const three=new Set(rows.slice(0,3).map(row=>row.fileName));
+  const withoutPairs=h.ctx.window.qaCurationCoverage(rows,concepts,three,['Position','Viewpoint']).ratio;
+  const withPairs=h.ctx.window.qaCurationCoverage(rows,concepts,three,['Position','Viewpoint'],
+    ['Position','Viewpoint']).ratio;
+  assert.ok(withPairs < withoutPairs,
+    'missing kneeling/rear combination should lower the primary coverage measure');
+  assert.ok(h.ctx.window.qaCurationCoverage(rows,concepts,new Set(rows.map(r=>r.fileName)),
+    ['Position','Viewpoint'],['Position','Viewpoint']).ratio > withPairs);
+});
+
+test('removing all priority groups removes automatic recommendations but keeps manual media', async () => {
+  const h=harness();
+  h.ctx.window.startQaCuration(entries(),'training','same-scope');
+  await new Promise(resolve=>setTimeout(resolve,45));
+  const manual=h.root.querySelector('.qa-curation-card input[type=checkbox]');
+  manual.checked=false;
+  manual.dispatchEvent(new h.ctx.window.Event('change',{bubbles:true}));
+  const chosen=Number(h.root.querySelector('[data-curation-selected]').textContent);
+  const shape=h.root.querySelector('[data-curation-balance-group="Shape"]');
+  shape.checked=false;
+  shape.dispatchEvent(new h.ctx.window.Event('change',{bubbles:true}));
+  assert.equal(Number(h.root.querySelector('[data-curation-selected]').textContent),chosen);
+  assert.equal(h.root.querySelector('[data-curation-coverage]').textContent,'0%');
+  assert.ok(h.root.querySelector('[data-curation-preset="lean"]').disabled);
+  assert.match(h.root.textContent,/Select at least one priority group/);
+  assert.ok(h.root.querySelector('[data-curation-train]'));
+});
+
+test('card explanations never present unprioritized backgrounds as reasons for retention', async () => {
+  const h=harness();
+  const rows=entries().map((row,i)=>({
+    ...row,groupedTags:[...row.groupedTags,{group:'Background',term:i===0?'painting':'plain'}]
+  }));
+  const original=h.ctx.fetch;
+  h.ctx.fetch=(url,opts)=>{
+    if(url.startsWith('/fs/director/job?')) {
+      const c=h.calls.submitted[0].concepts;
+      return Promise.resolve({ok:true,json:async()=>({ok:true,job:{
+        status:'completed',result:{analysis:{
+          summary:'Prioritize viewpoint',coreIds:c.filter(x=>x.group==='View').map(x=>x.id),
+          supportingIds:c.filter(x=>x.group==='Background').map(x=>x.id)
+        }}
+      }})});
+    }
+    return original(url,opts);
+  };
+  h.ctx.window.startQaCuration(rows,'training','same-scope');
+  await new Promise(resolve=>setTimeout(resolve,55));
+  const reasons=Array.from(h.root.querySelectorAll('[data-curation-contribution]'),
+    item=>item.textContent);
+  assert.ok(reasons.length);
+  assert.ok(reasons.every(reason=>!reason.includes('Background') && !reason.includes('painting')));
+  assert.ok(reasons.every(reason=>/View|No evidence for selected priority/.test(reason)));
+});
+
+test('restoring an older recommended preset preserves its exact files but labels a mismatch Custom', async () => {
+  const first=harness();
+  first.ctx.window.startQaCuration(entries(),'training','same-scope');
+  await new Promise(resolve=>setTimeout(resolve,55));
+  const draft=structuredClone(first.calls.draft);
+  draft.snapshot.rankingPolicy='previous-scoring-policy';
+  draft.choices=draft.choices.slice(1);
+  const restored=harness(draft);
+  restored.ctx.window.startQaCuration(entries(),'training','same-scope');
+  await new Promise(resolve=>setTimeout(resolve,45));
+  assert.equal(restored.calls.submitted.length,0);
+  assert.equal(Number(restored.root.querySelector('[data-curation-selected]').textContent),
+    draft.choices.length,'existing user decisions must survive a scoring change');
+  assert.match(restored.root.textContent,/Previous shortlist preserved as Custom/);
+  assert.ok(Array.from(restored.root.querySelectorAll('[data-curation-preset]'))
+    .every(button=>button.getAttribute('aria-pressed')==='false'));
 });

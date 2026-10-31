@@ -84,7 +84,7 @@
           return [row.fileName, row.inventoryIds || [], row.analysis && row.analysis.sceneComplexity
             ? row.analysis.sceneComplexity.score : null, row.resolution || ''];
         }),
-        order:session.order.slice(), sizes:Object.assign({},session.sizes),
+        order:session.order.slice(), sizes:Object.assign({},session.sizes), rankingPolicy:'primary-only',
         ignored:session.ignored, missingSight:session.missingSight,
         evidence:session.sourceEvidence
       }};
@@ -134,17 +134,26 @@
     session.pairGroups = Array.isArray(draft.pairGroups) ? draft.pairGroups.slice(0,2) : [];
     session.preset = ['lean','balanced','broad'].includes(draft.preset) ? draft.preset : 'custom';
     applyBalancePriorities();
-    if (hasSnapshot && Array.isArray(draft.snapshot.order) && draft.snapshot.sizes) {
-      session.order = draft.snapshot.order.slice();
-      session.sizes = Object.assign({},draft.snapshot.sizes);
-    }
+    // Saved choices are user work. Rank and preset sizes are derived data:
+    // recompute with current deterministic policy without a Director call.
     session.choices = new Set(draft.choices);
-    session.initialChoices = Array.isArray(draft.initialChoices)
-      ? draft.initialChoices.slice() : draft.choices.slice();
+    session.initialChoices = hasSnapshot && draft.snapshot.rankingPolicy === 'primary-only' &&
+      Array.isArray(draft.initialChoices) ? draft.initialChoices.slice()
+      : session.order.slice(0, session.sizes.balanced);
     session.phase = 'ready';
     session.reviewReturn = draft.reviewReturn || null;
     session.filter = 'selected';
     session.status = 'Saved Curate draft restored.';
+    if (session.preset !== 'custom') {
+      var expected = new Set(session.order.slice(0,session.sizes[session.preset]));
+      if (expected.size !== session.choices.size ||
+          Array.from(session.choices).some(function(file) {return !expected.has(file);})) {
+        // An older scoring policy cannot silently rename an old shortlist
+        // as the new Lean / Standard / Broad recommendation.
+        session.preset = 'custom';
+        session.status = 'Previous shortlist preserved as Custom; choose a preset to apply the updated recommendation.';
+      }
+    }
     session.draftStale = false;
     return true;
   }
@@ -260,8 +269,9 @@
       if (!row) throw new Error('Curation result references unknown concept: ' + id);
       var preference = conceptRoles.get(id);
       if (preference === 'ignore') return;
-      var role = preference || (balanceGroups.has(row.group) && (core.has(id) || overriddenGroups.has(row.group))
-        ? 'core' : 'supporting');
+      // A checked group is a primary training objective. Director supplies the
+      // initial groups, while per-concept manual Supporting/Ignore still wins.
+      var role = preference || (balanceGroups.has(row.group) ? 'core' : 'supporting');
       selected.set(id, {id: id, label: row.term, group: row.group, source:row.source, role: role,
         count: row.count, weight: row.source === 'sight'
           ? (role === 'core' ? 0.62 : 0.13)
@@ -304,7 +314,7 @@
     session.eligible = deriveEligible(session.concepts, session.analysis, session.rows,
       session.balanceGroups, session.overriddenGroups, session.conceptRoles);
     reconcilePairGroups(prioritizedTaggedGroups());
-    var ranked = rank(session.rows, session.eligible, session.pairGroups);
+    var ranked = rank(session.rows, session.eligible, session.pairGroups, session.balanceGroups);
     session.order = ranked.order;
     session.sizes = ranked.sizes;
     // Changing priorities must not overwrite manually checked/unchecked media.
@@ -314,21 +324,80 @@
     }
   }
 
-  function coverage(rows, concepts, selectedFiles) {
-    var byId = new Map(concepts.map(function (c) { return [c.id, 0]; }));
-    rows.forEach(function (row) {
+  function primaryConcepts(concepts, primaryGroups) {
+    // The public pure helpers still accept standalone CORE concepts in tests.
+    // Actual Curate sessions always supply the checked priority groups.
+    var groups = primaryGroups === undefined ? null : new Set(primaryGroups);
+    return concepts.filter(function(c) {
+      return c.role === 'core' && (!groups || groups.has(c.group));
+    });
+  }
+
+  function pairEvidence(rows, concepts, pairGroups) {
+    var byFile = new Map(), available = new Map();
+    if (!Array.isArray(pairGroups) || pairGroups.length !== 2) return {byFile:byFile,available:available};
+    var left = new Set(concepts.filter(function(c) {
+      return c.source === 'tag' && c.role === 'core' && c.group === pairGroups[0];
+    }).map(function(c) { return c.id; }));
+    var right = new Set(concepts.filter(function(c) {
+      return c.source === 'tag' && c.role === 'core' && c.group === pairGroups[1];
+    }).map(function(c) { return c.id; }));
+    rows.forEach(function(row) {
+      var pairs = [];
+      row.ids.filter(function(id) {return left.has(id);}).forEach(function(a) {
+        row.ids.filter(function(id) {return right.has(id);}).forEach(function(b) {
+          pairs.push(a + '|' + b);
+        });
+      });
+      byFile.set(row.fileName, pairs);
+      pairs.forEach(function(id) { available.set(id,(available.get(id) || 0) + 1); });
+    });
+    return {byFile:byFile,available:available};
+  }
+
+  function pairStrength(map) {
+    var sum = 0;
+    map.forEach(function(n) { sum += strength(n,'supporting'); });
+    return sum;
+  }
+
+  function coverage(rows, concepts, selectedFiles, primaryGroups, pairGroups) {
+    var primary = primaryConcepts(concepts,primaryGroups);
+    var byId = new Map(primary.map(function(c) {return [c.id,0];}));
+    rows.forEach(function(row) {
       if (!selectedFiles.has(row.fileName)) return;
-      row.ids.forEach(function (id) { byId.set(id, byId.get(id) + 1); });
+      row.ids.forEach(function(id) {
+        if (byId.has(id)) byId.set(id,byId.get(id) + 1);
+      });
     });
     var obtained = 0, available = 0, represented = 0;
-    concepts.forEach(function (c) {
+    primary.forEach(function(c) {
       var n = byId.get(c.id) || 0;
       if (n > 0) represented += 1;
-      obtained += c.weight * strength(n, c.role);
-      available += c.weight * strength(c.count, c.role);
+      obtained += c.weight * strength(n,c.role);
+      available += c.weight * strength(c.count,c.role);
     });
-    return { ratio: available ? obtained / available : 0, represented: represented,
-      total: concepts.length };
+    // Pair diversity is capped at 15% of the primary evidence denominator.
+    // Supporting Background/Lighting concepts never enter either denominator.
+    var pairs = pairEvidence(rows,primary,pairGroups);
+    var totalPair = pairStrength(pairs.available);
+    if (totalPair > 0 && available > 0) {
+      var selectedPairs = new Map();
+      rows.forEach(function(row) {
+        if (!selectedFiles.has(row.fileName)) return;
+        (pairs.byFile.get(row.fileName) || []).forEach(function(id) {
+          selectedPairs.set(id,(selectedPairs.get(id) || 0) + 1);
+        });
+      });
+      var pairWeight = available * 0.15;
+      obtained += pairWeight * pairStrength(selectedPairs) / totalPair;
+      available += pairWeight;
+    }
+    return {ratio:available ? obtained / available : 0,represented:represented,total:primary.length};
+  }
+
+  function sessionCoverage(selectedFiles) {
+    return coverage(session.rows,session.eligible,selectedFiles,session.balanceGroups,session.pairGroups);
   }
 
   function sourcePixels(row) {
@@ -341,103 +410,90 @@
   function resolutionText(row) {
     return sourcePixels(row) === null ? 'Resolution unknown' : String(row.resolution);
   }
-  function score(row, concepts, byId, selected) {
-    var core = 0, supporting = 0;
-    row.ids.forEach(function (id) {
-      var c = byId.get(id);
+  function score(row, byId, selected, primaryIds) {
+    var primary = 0, supporting = 0;
+    row.ids.forEach(function(id) {
+      var concept = byId.get(id);
       var n = selected.get(id) || 0;
-      var gain = c.weight * (strength(n + 1, c.role) - strength(n, c.role));
-      if (c.role === 'core') core += gain;
+      var gain = concept.weight * (strength(n+1,concept.role) - strength(n,concept.role));
+      if (primaryIds.has(id)) primary += gain;
       else supporting += gain;
     });
-    var complexity = Number(row.analysis.sceneComplexity && row.analysis.sceneComplexity.score);
-    var quality = Number.isFinite(complexity) && row.analysis.sceneComplexity
-      ? 1 - Math.min(0.14, Math.max(0, complexity) * 0.14) : 1;
-    return {core: core * quality, supporting: supporting * quality};
+    var complexity = Number(row.analysis && row.analysis.sceneComplexity &&
+      row.analysis.sceneComplexity.score);
+    var quality = Number.isFinite(complexity) && row.analysis && row.analysis.sceneComplexity
+      ? 1 - Math.min(0.14, Math.max(0,complexity) * 0.14) : 1;
+    return {primary:primary*quality,supporting:supporting*quality};
   }
 
-  function rank(rows, concepts, pairGroups) {
-    var byId = new Map(concepts.map(function (feature) { return [feature.id, feature]; }));
-    var pairByFile = new Map(), pairCounts = new Map();
-    if (Array.isArray(pairGroups) && pairGroups.length >= 2) {
-      var left = new Set(concepts.filter(function(c) {
-        return c.source === 'tag' && c.group === pairGroups[0];
-      }).map(function(c) {return c.id;}));
-      var right = new Set(concepts.filter(function(c) {
-        return c.source === 'tag' && c.group === pairGroups[1];
-      }).map(function(c) {return c.id;}));
-      rows.forEach(function(row) {
-        var a = row.ids.filter(function(id) {return left.has(id);});
-        var b = row.ids.filter(function(id) {return right.has(id);});
-        var pairs = [];
-        a.forEach(function(x) {b.forEach(function(y) {pairs.push(x+'|'+y);});});
-        pairByFile.set(row.fileName,pairs);
-      });
-    }
-    function pairGain(row) {
-      var pairs = pairByFile.get(row.fileName) || [];
-      if (!pairs.length) return 0;
-      var sum = pairs.reduce(function(total,id) {
-        var count = pairCounts.get(id) || 0;
-        return total + strength(count+1,'supporting') - strength(count,'supporting');
-      },0);
-      // Mean instead of sum prevents multi-label items from gaming the bonus.
-      return 0.18 * sum / pairs.length;
-    }
-    var counts = new Map(concepts.map(function (feature) { return [feature.id, 0]; }));
+  function rank(rows, concepts, pairGroups, primaryGroups) {
+    var byId = new Map(concepts.map(function(c) {return [c.id,c];}));
+    var primary = primaryConcepts(concepts,primaryGroups);
+    var primaryIds = new Set(primary.map(function(c) {return c.id;}));
+    var pairs = pairEvidence(rows,primary,pairGroups);
+    var primaryTotal = primary.reduce(function(sum,c) {
+      return sum + c.weight * strength(c.count,c.role);
+    },0);
+    var totalPair = pairStrength(pairs.available);
+    var pairWeight = totalPair && primaryTotal ? primaryTotal * 0.15 / totalPair : 0;
+    var pairCounts = new Map();
+    var counts = new Map(concepts.map(function(c) {return [c.id,0];}));
     var remaining = rows.slice(), ordered = [], gains = [];
     while (remaining.length) {
-      var scores = remaining.map(function (row) { return score(row, concepts, byId, counts); });
-      var maxCore = scores.reduce(function (best, value) { return Math.max(best, value.core); }, 0);
-      // Select for evidence first; use source resolution only between images
-      // whose weighted marginal gains are within 2% of the best gain.
-      var candidateGains = scores.map(function(value, i) {
-        var pairBonus = pairGain(remaining[i]);
-        return value.core + (maxCore > 0
-          ? Math.min(value.supporting, maxCore * 0.2) +
-            Math.min(pairBonus, maxCore * 0.16)
-          : value.supporting + pairBonus);
+      var scores = remaining.map(function(row) {return score(row,byId,counts,primaryIds);});
+      var candidatePrimary = scores.map(function(value,i) {
+        var increment = (pairs.byFile.get(remaining[i].fileName) || []).reduce(function(sum,id) {
+          var n = pairCounts.get(id) || 0;
+          return sum + strength(n+1,'supporting') - strength(n,'supporting');
+        },0);
+        return value.primary + pairWeight * increment;
       });
-      var bestGain = Math.max.apply(null, candidateGains);
-      var best = candidateGains.indexOf(bestGain);
-      var bestPixels = sourcePixels(remaining[best]);
+      var bestGain = Math.max.apply(null,candidatePrimary);
+      var best = candidatePrimary.indexOf(bestGain);
+      // Supporting variation is a tie-breaker only; it cannot create primary
+      // coverage, enter the preset cutoffs, or rescue a background-only item.
       for (var i = 0; i < remaining.length; i += 1) {
-        if (i === best || candidateGains[i] < bestGain * 0.98) continue;
-        var pixels = sourcePixels(remaining[i]);
-        // Unknown dimensions cannot resolve a tie in either direction.
-        if (pixels !== null && bestPixels !== null && pixels > bestPixels) {
+        if (i === best || candidatePrimary[i] < bestGain * 0.98) continue;
+        if (scores[i].supporting > scores[best].supporting + 1e-9) {
           best = i;
-          bestPixels = pixels;
+        } else if (Math.abs(scores[i].supporting - scores[best].supporting) <= 1e-9) {
+          var pixels = sourcePixels(remaining[i]);
+          var bestPixels = sourcePixels(remaining[best]);
+          if (pixels !== null && bestPixels !== null && pixels > bestPixels) best = i;
         }
       }
-      var chosen = remaining.splice(best, 1)[0];
-      bestGain = candidateGains[best];
+      var chosen = remaining.splice(best,1)[0];
       ordered.push(chosen.fileName);
-      gains.push(bestGain);
-      chosen.ids.forEach(function (id) { counts.set(id, counts.get(id) + 1); });
-      (pairByFile.get(chosen.fileName) || []).forEach(function(id) {
-        pairCounts.set(id, (pairCounts.get(id) || 0) + 1);
+      gains.push(candidatePrimary[best]);
+      chosen.ids.forEach(function(id) {counts.set(id,(counts.get(id) || 0) + 1);});
+      (pairs.byFile.get(chosen.fileName) || []).forEach(function(id) {
+        pairCounts.set(id,(pairCounts.get(id) || 0) + 1);
       });
     }
     var selected = new Set(), ratios = [];
-    ordered.forEach(function (file) {
+    ordered.forEach(function(file) {
       selected.add(file);
-      ratios.push(coverage(rows, concepts, selected).ratio);
+      ratios.push(coverage(rows,concepts,selected,primaryGroups,pairGroups).ratio);
     });
-    var first = gains.slice(0, Math.min(6, gains.length));
-    var baseline = first.reduce(function (sum, value) { return sum + value; }, 0) / first.length;
-    function bend(target, fraction) {
-      for (var i = 0; i < gains.length; i += 1) {
-        if (i < Math.min(7, gains.length - 1) || ratios[i] < target) continue;
-        var tail = gains.slice(Math.max(0, i - 4), i + 1);
-        var current = tail.reduce(function (sum, n) { return sum + n; }, 0) / tail.length;
-        if (current <= baseline * fraction) return i + 1;
-      }
-      return gains.length;
+    // Once no more primary information is gained, stop. Supporting-only
+    // candidates can appear in the gallery but never extend any preset.
+    var useful = gains.filter(function(gain) {return gain > 1e-10;}).length;
+    if (!useful || !primary.length) {
+      return {order:ordered,gains:gains,ratios:ratios,sizes:{lean:0,balanced:0,broad:0}};
     }
-    return { order: ordered, gains: gains, ratios: ratios,
-      sizes: {lean: bend(0.83, 0.14), balanced: bend(0.91, 0.085),
-        broad: bend(0.97, 0.045)} };
+    var first = gains.slice(0,Math.min(6,useful));
+    var baseline = first.reduce(function(sum,value) {return sum+value;},0) / first.length;
+    function bend(target,fraction) {
+      for (var i = 0; i < useful; i += 1) {
+        if (i < Math.min(7,useful-1) || ratios[i] < target) continue;
+        var tail = gains.slice(Math.max(0,i-4),i+1);
+        var current = tail.reduce(function(sum,n) {return sum+n;},0) / tail.length;
+        if (current <= baseline*fraction) return i+1;
+      }
+      return useful;
+    }
+    return {order:ordered,gains:gains,ratios:ratios,
+      sizes:{lean:bend(0.83,0.14),balanced:bend(0.91,0.085),broad:bend(0.97,0.045)}};
   }
 
   function clearNode(el) { el.replaceChildren(); }
@@ -459,24 +515,36 @@
 
   function selectionReason(row, selected, counts) {
     var included = selected.has(row.fileName);
-    var matched = row.ids.map(function(id) {
-      return session.eligible.find(function(c) { return c.id === id; });
-    }).filter(Boolean).sort(function(a,b) {
-      return (b.role === 'core') - (a.role === 'core') ||
-        (b.source === 'tag') - (a.source === 'tag');
+    var primary = primaryConcepts(session.eligible,session.balanceGroups);
+    var byId = new Map(primary.map(function(c) {return [c.id,c];}));
+    var pairs = pairEvidence(session.rows,primary,session.pairGroups);
+    var pairCounts = new Map();
+    session.rows.forEach(function(other) {
+      if (!selected.has(other.fileName)) return;
+      (pairs.byFile.get(other.fileName) || []).forEach(function(key) {
+        pairCounts.set(key,(pairCounts.get(key) || 0) + 1);
+      });
     });
-    var strongest = matched.find(function(c) {
+    var rarePair = (pairs.byFile.get(row.fileName) || []).find(function(key) {
+      return (pairCounts.get(key) || 0) === (included ? 1 : 0);
+    });
+    if (rarePair) {
+      var parts = rarePair.split('|'), first = byId.get(parts[0]), second = byId.get(parts[1]);
+      return (included ? 'Only selected combination: ' : 'Would add missing combination: ') +
+        first.group + ' · ' + first.label + ' × ' + second.group + ' · ' + second.label;
+    }
+    var matched = row.ids.map(function(id) {return byId.get(id);}).filter(Boolean)
+      .sort(function(a,b) {return (b.source === 'tag') - (a.source === 'tag');});
+    var rare = matched.find(function(c) {
       return (counts.get(c.id) || 0) === (included ? 1 : 0);
     });
-    if (strongest) {
-      return (included ? 'Only selected example: ' : 'Would add missing evidence: ') +
-        strongest.group + ' · ' + strongest.label;
-    }
-    if (!matched.length) return 'No scored concepts; inspect the original image.';
-    var reference = matched[0], others = (counts.get(reference.id) || 0) - (included ? 1 : 0);
+    if (rare) return (included ? 'Only selected example: ' : 'Would add missing evidence: ') +
+      rare.group + ' · ' + rare.label;
+    if (!matched.length) return 'No evidence for selected priority groups; supporting variation only.';
+    var c = matched[0], others = Math.max(0,(counts.get(c.id) || 0) - (included ? 1 : 0));
     return (included ? 'Also represented by ' : 'Already represented by ') + others +
       ' other selected item' + (others === 1 ? '' : 's') +
-      ': ' + reference.group + ' · ' + reference.label;
+      ': ' + c.group + ' · ' + c.label;
   }
 
   function cachedDuplicateHint(fileName) {
@@ -502,7 +570,7 @@
   function selectedCount() { return session.choices.size; }
   function updateStats(root) {
     var selected = currentSelection();
-    var metric = coverage(session.rows, session.eligible, selected);
+    var metric = sessionCoverage(selected);
     var number = root.querySelector('[data-curation-selected]');
     var completeness = root.querySelector('[data-curation-coverage]');
     var variations = root.querySelector('[data-curation-variations]');
@@ -529,8 +597,8 @@
       node.textContent = selectionReason(row,selected,counts);
       var modified = new Set(selected);
       if (modified.has(file)) modified.delete(file); else modified.add(file);
-      var delta = Math.abs((coverage(session.rows,session.eligible,modified).ratio -
-        coverage(session.rows,session.eligible,selected).ratio) * 100);
+      var delta = Math.abs((sessionCoverage(modified).ratio -
+        sessionCoverage(selected).ratio) * 100);
       node.title = 'Weighted annotated-evidence change: ' + delta.toFixed(2) +
         ' percentage points (not predicted training quality)';
     });
@@ -632,7 +700,7 @@
         (included ? 'INCLUDED' : 'EXCLUDED') + ' · ' + (cursor + 1) + ' / ' + items.length));
       explanation.appendChild(element('div','qa-curation-review-rank',
         'Recommendation rank #' + (session.order.indexOf(name) + 1) + ' of ' + session.order.length +
-        ' · by weighted concept coverage, source detail and minor complexity preference'));
+        ' · prioritized evidence first, supporting variation only as a tie-breaker'));
       var source = element('div', 'qa-curation-review-source');
       var filename = element('span', 'qa-curation-review-filename', name);
       filename.title = name;
@@ -673,8 +741,8 @@
       }
       var withChange = new Set(session.choices);
       if (included) withChange.delete(name); else withChange.add(name);
-      var before = coverage(session.rows, session.eligible, session.choices).ratio * 100;
-      var after = coverage(session.rows, session.eligible, withChange).ratio * 100;
+      var before = sessionCoverage(session.choices).ratio * 100;
+      var after = sessionCoverage(withChange).ratio * 100;
       var delta = after - before;
       var numericDetails = element('details','qa-curation-review-calculations');
       numericDetails.appendChild(element('summary','', 'Coverage calculations'));
@@ -682,7 +750,7 @@
         (included ? 'Keeping contributes ' : 'Including would contribute ') +
         Math.abs(delta).toFixed(2) + ' weighted coverage points'));
       numericDetails.appendChild(element('small','',
-        'This is annotated-evidence coverage, not visual similarity or proven training quality.'));
+        'This is selected-priority coverage, not visual similarity or proven training quality.'));
       var bar = element('div', 'qa-curation-review-bar');
       var fill = element('div', 'qa-curation-review-bar-fill');
       fill.style.width = before.toFixed(2) + '%';
@@ -783,7 +851,7 @@
     host.appendChild(title);
     var counters = element('div', 'qa-curation-metrics');
     [
-      ['Selected', 'selected'], ['Evidence coverage', 'coverage'], ['Represented concepts', 'variations']
+      ['Selected', 'selected'], ['Priority coverage', 'coverage'], ['Priority concepts', 'variations']
     ].forEach(function (entry) {
       var tile = element('div', 'qa-curation-metric');
       tile.appendChild(element('strong', '', '0')).setAttribute('data-curation-' + entry[1], '');
@@ -798,7 +866,7 @@
     progress.setAttribute('aria-label', 'Weighted concept evidence represented');
     host.appendChild(progress);
     host.appendChild(element('p', 'qa-curation-helper',
-      'Coverage is measured against available annotated evidence, not predicted LoRA accuracy.'));
+      'Coverage reflects selected priority groups (and selected tag-group combinations), not supporting backgrounds or predicted LoRA accuracy.'));
     host.appendChild(element('p', 'qa-curation-summary', session.summary));
     if (session.status) host.appendChild(element('p', 'qa-curation-helper', session.status));
     var drift = session.drift || currentDrift();
@@ -885,8 +953,9 @@
     }).sort(function(a,b) {
       return a.group.localeCompare(b.group) || a.label.localeCompare(b.label);
     });
-    if (!coreFeatures.length) coreFeatures = session.eligible.filter(function(c) {return c.role==='core';})
-      .sort(function(a,b) {return a.group.localeCompare(b.group) || a.label.localeCompare(b.label);});
+    coreFeatures = coreFeatures.filter(function(c) {return c.role === 'core';});
+    if (!coreFeatures.length) host.appendChild(element('p','qa-curation-helper',
+      'Select at least one priority group to calculate an automatic shortlist. Your manual choices are preserved.'));
     host.appendChild(element('h3','', 'Priority-group representation · Selected / Available'));
     host.appendChild(element('p','qa-curation-helper',
       'Every prioritized concept is shown. This is observed coverage, not an equal-quota target or predicted LoRA accuracy.'));
@@ -915,10 +984,10 @@
         return c.source === 'tag';
       }).map(function(c) {return c.id;}));
       var first = session.eligible.filter(function(c) {
-        return c.group === matrixGroups[0] && approvedIds.has(c.id);
+        return c.group === matrixGroups[0] && c.role === 'core' && approvedIds.has(c.id);
       });
       var second = session.eligible.filter(function(c) {
-        return c.group === matrixGroups[1] && approvedIds.has(c.id);
+        return c.group === matrixGroups[1] && c.role === 'core' && approvedIds.has(c.id);
       });
       if (first.length && second.length) {
         var matrix = element('details','qa-curation-pair');
@@ -992,22 +1061,23 @@
     [['lean','Lean'], ['balanced','Standard'], ['broad','Broad']].forEach(function (entry) {
       var name = entry[0], label = entry[1], size = session.sizes[name];
       var selection = new Set(session.order.slice(0,size));
-      var represented = Math.round(coverage(session.rows,session.eligible,selection).ratio * 100);
+      var represented = Math.round(sessionCoverage(selection).ratio * 100);
       var active = session.preset === name;
-      var control = button(label + ' · ' + size + ' images · ' + represented + '% evidence',
+      var control = button(label + ' · ' + size + ' images · ' + represented + '% priority coverage',
         function () {
           session.preset = name;
           session.choices = new Set(session.order.slice(0, session.sizes[name]));
           saveDraft();
           renderQaCuration(host, session.signature);
         }, 'review-captions-btn qa-curation-preset' + (active ? ' qa-curation-active' : ''));
+      control.disabled = size === 0;
       control.setAttribute('data-curation-preset',name);
       control.setAttribute('aria-pressed', active ? 'true' : 'false');
       presets.appendChild(control);
     });
     host.appendChild(presets);
     host.appendChild(element('p','qa-curation-helper',
-      'Lean / Standard / Broad trade image count against annotated evidence coverage; these are not equal-category quotas or predicted LoRA scores. Native resolution only breaks near-ties.'));
+      'Lean / Standard / Broad compare the selected priority groups and their observed combinations only. Other concepts can break ranking ties, but cannot increase a preset size. Native resolution also breaks near-ties.'));
 
     host.appendChild(button('Reset selections to original recommendation', function() {
       session.choices = new Set(session.initialChoices);

@@ -57,7 +57,13 @@ function trainingHistoryRunSummary(job) {
   var parts = [];
   if (summary.lr !== undefined && summary.lr !== null) parts.push('LR ' + trainingHistoryCompactNumber(summary.lr));
   if (summary.dropout !== undefined && summary.dropout !== null) parts.push('dropout ' + trainingHistoryCompactNumber(summary.dropout));
-  if (summary.shift !== undefined && summary.shift !== null) parts.push('shift ' + trainingHistoryCompactNumber(summary.shift));
+  if (job && job.stages === 'h3') {
+    if (summary.shift !== undefined && summary.shift !== null) parts.push('video shift ' + trainingHistoryCompactNumber(summary.shift));
+    if (summary.imageShift !== undefined && summary.imageShift !== null) parts.push('image shift ' + trainingHistoryCompactNumber(summary.imageShift));
+    if (typeof summary.focusedH3Blocks === 'boolean') parts.push('focused blocks ' + (summary.focusedH3Blocks ? 'on' : 'off'));
+  } else if (summary.shift !== undefined && summary.shift !== null) {
+    parts.push('shift ' + trainingHistoryCompactNumber(summary.shift));
+  }
   if (Number(summary.capturedItems || 0) > 0) parts.push(Math.round(Number(summary.capturedItems)).toLocaleString() + ' items');
   if (Number(summary.epochs || 0) > 0) parts.push(Math.round(Number(summary.epochs)).toLocaleString() + ' epochs');
   return parts.join(' · ');
@@ -243,7 +249,11 @@ function renderTrainingHistory() {
       trainingHistoryMetric('Epoch', isFinite(epoch) && epoch >= 0 ? Math.round(epoch).toLocaleString() + (isFinite(epochs) && epochs > 0 ? ' / ' + Math.round(epochs).toLocaleString() : '') : '') +
       trainingHistoryMetric('Step', isFinite(finalStep) && finalStep >= 0 ? Math.round(finalStep).toLocaleString() + (isFinite(plannedSteps) && plannedSteps > 0 ? ' / ' + Math.round(plannedSteps).toLocaleString() : '') : '') +
       trainingHistoryMetric('LR', learningRate) +
-      trainingHistoryMetric('Shift', runConfig.shift !== undefined && runConfig.shift !== null ? trainingHistoryCompactNumber(runConfig.shift) : '') +
+      trainingHistoryMetric(job.stages === 'h3' ? 'Video shift' : 'Shift', runConfig.shift !== undefined && runConfig.shift !== null ? trainingHistoryCompactNumber(runConfig.shift) : '') +
+      (job.stages === 'h3'
+        ? trainingHistoryMetric('Image shift', runConfig.imageShift !== undefined && runConfig.imageShift !== null ? trainingHistoryCompactNumber(runConfig.imageShift) : '') +
+          trainingHistoryMetric('Focused H3 blocks', typeof runConfig.focusedH3Blocks === 'boolean' ? (runConfig.focusedH3Blocks ? 'On' : 'Off') : '')
+        : '') +
       trainingHistoryMetric('Dropout', runConfig.dropout !== undefined && runConfig.dropout !== null ? trainingHistoryCompactNumber(runConfig.dropout) : '') +
       trainingHistoryMetric('Selected epoch', selectedEpochLabel ? String(Math.round(selectedEpochNumber)) : '') +
       trainingHistoryMetric(

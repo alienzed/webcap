@@ -8,7 +8,8 @@
     filter: 'selected', limit: 72, summary: '', jobId: '', error: '',
     analysis: null, balanceGroups: new Set(), overriddenGroups: new Set(), conceptRoles: new Map(), availableGroups: [],
     status: '', missingSight: 0, ignored: 0, draftStale: false, initialChoices: [],
-    sourceEvidence: {}, sourceFiles: [], drift: null, reviewReturn: null, galleryGroup: '', previousDraft: null
+    sourceEvidence: {}, sourceFiles: [], drift: null, reviewReturn: null, galleryGroup: '', previousDraft: null,
+    pairGroups: []
   };
 
   var draftWrite = Promise.resolve();
@@ -76,6 +77,7 @@
       choices:Array.from(session.choices), initialChoices:session.initialChoices, preset:session.preset,
       balanceGroups:Array.from(session.balanceGroups), overriddenGroups:Array.from(session.overriddenGroups),
       conceptRoles:Array.from(session.conceptRoles), reviewReturn:session.reviewReturn,
+      pairGroups:session.pairGroups.slice(),
       snapshot:{
         concepts:session.concepts,
         rows:session.rows.map(function(row) {
@@ -129,6 +131,7 @@
     session.balanceGroups = new Set(draft.balanceGroups);
     session.overriddenGroups = new Set(draft.overriddenGroups);
     session.conceptRoles = new Map(draft.conceptRoles);
+    session.pairGroups = Array.isArray(draft.pairGroups) ? draft.pairGroups.slice(0,2) : [];
     session.preset = ['lean','balanced','broad'].includes(draft.preset) ? draft.preset : 'custom';
     applyBalancePriorities();
     if (hasSnapshot && Array.isArray(draft.snapshot.order) && draft.snapshot.sizes) {
@@ -281,13 +284,27 @@
     return Array.from(selected.values());
   }
 
+  function prioritizedTaggedGroups() {
+    return Array.from(session.balanceGroups).filter(function(group) {
+      return session.eligible.some(function(c) { return c.source === 'tag' && c.group === group; });
+    });
+  }
+
+  function reconcilePairGroups(groups) {
+    if (groups.length < 2) { session.pairGroups = []; return; }
+    if (session.pairGroups.length === 2 && session.pairGroups[0] !== session.pairGroups[1] &&
+        session.pairGroups.every(function(group) { return groups.includes(group); })) return;
+    // Prefer explicit human tag groups over alphabetically selected arbitrary axes.
+    var position = groups.find(function(g) { return /position|pose/i.test(g); });
+    var viewpoint = groups.find(function(g) { return /viewpoint|view|camera angle/i.test(g) && g !== position; });
+    session.pairGroups = position && viewpoint ? [position, viewpoint] : groups.slice(0, 2);
+  }
+
   function applyBalancePriorities() {
     session.eligible = deriveEligible(session.concepts, session.analysis, session.rows,
       session.balanceGroups, session.overriddenGroups, session.conceptRoles);
-    var taggedGroups = Array.from(session.balanceGroups).filter(function(group) {
-      return session.eligible.some(function(c) { return c.source === 'tag' && c.group === group; });
-    }).sort();
-    var ranked = rank(session.rows, session.eligible, taggedGroups.slice(0,2));
+    reconcilePairGroups(prioritizedTaggedGroups());
+    var ranked = rank(session.rows, session.eligible, session.pairGroups);
     session.order = ranked.order;
     session.sizes = ranked.sizes;
     // Changing priorities must not overwrite manually checked/unchecked media.
@@ -439,6 +456,49 @@
   function currentSelection() {
     return new Set(session.choices);
   }
+
+  function selectionReason(row, selected, counts) {
+    var included = selected.has(row.fileName);
+    var matched = row.ids.map(function(id) {
+      return session.eligible.find(function(c) { return c.id === id; });
+    }).filter(Boolean).sort(function(a,b) {
+      return (b.role === 'core') - (a.role === 'core') ||
+        (b.source === 'tag') - (a.source === 'tag');
+    });
+    var strongest = matched.find(function(c) {
+      return (counts.get(c.id) || 0) === (included ? 1 : 0);
+    });
+    if (strongest) {
+      return (included ? 'Only selected example: ' : 'Would add missing evidence: ') +
+        strongest.group + ' · ' + strongest.label;
+    }
+    if (!matched.length) return 'No scored concepts; inspect the original image.';
+    var reference = matched[0], others = (counts.get(reference.id) || 0) - (included ? 1 : 0);
+    return (included ? 'Also represented by ' : 'Already represented by ') + others +
+      ' other selected item' + (others === 1 ? '' : 's') +
+      ': ' + reference.group + ' · ' + reference.label;
+  }
+
+  function cachedDuplicateHint(fileName) {
+    // Duplicate Candidates is independently owned; only show already completed
+    // matching-scope evidence, never start or broaden its expensive scan.
+    if (state.duplicateCandidatesStatus !== 'ready' || state.duplicateCandidatesDirty ||
+        state.duplicateCandidatesFolder !== session.folder ||
+        !Array.isArray(state.duplicateCandidatesScopeFiles) ||
+        state.duplicateCandidatesScopeFiles.length !== session.sourceFiles.length) return '';
+    var expected = new Set(session.sourceFiles);
+    if (state.duplicateCandidatesScopeFiles.some(function(file) { return !expected.has(file); })) return '';
+    var groups = state.duplicateCandidateGroups || [];
+    var group = groups.find(function(candidate) {
+      return candidate && Array.isArray(candidate.items) &&
+        candidate.items.some(function(item) { return item.file === fileName; });
+    });
+    if (!group) return '';
+    var peer = group.items.find(function(item) { return item.file !== fileName; });
+    if (!peer) return '';
+    return (group.match_type === 'exact' ? 'Exact duplicate' : 'Possible similar image') +
+      ': ' + peer.file + ' (from cached Duplicate Candidates)';
+  }
   function selectedCount() { return session.choices.size; }
   function updateStats(root) {
     var selected = currentSelection();
@@ -462,15 +522,17 @@
       if (!selected.has(row.fileName)) return;
       row.ids.forEach(function(id) { counts.set(id,(counts.get(id)||0)+1); });
     });
+    var rowsByFile = new Map(session.rows.map(function(row) {return [row.fileName,row];}));
     root.querySelectorAll('[data-curation-contribution]').forEach(function(node) {
-      var file = node.getAttribute('data-curation-contribution');
-      var modified = new Set(session.choices);
-      var included = modified.has(file);
-      if (included) modified.delete(file); else modified.add(file);
+      var file = node.getAttribute('data-curation-contribution'), row = rowsByFile.get(file);
+      if (!row) throw new Error('Curate card references missing analyzed item: ' + file);
+      node.textContent = selectionReason(row,selected,counts);
+      var modified = new Set(selected);
+      if (modified.has(file)) modified.delete(file); else modified.add(file);
       var delta = Math.abs((coverage(session.rows,session.eligible,modified).ratio -
-        coverage(session.rows,session.eligible,session.choices).ratio) * 100);
-      node.textContent = (included ? 'Keeping contributes ' : 'Including would add ') +
-        delta.toFixed(2) + ' coverage points';
+        coverage(session.rows,session.eligible,selected).ratio) * 100);
+      node.title = 'Weighted annotated-evidence change: ' + delta.toFixed(2) +
+        ' percentage points (not predicted training quality)';
     });
     root.querySelectorAll('[data-curation-pair-left]').forEach(function(cell) {
       var left = cell.getAttribute('data-curation-pair-left');
@@ -580,6 +642,8 @@
         window.qaInspectCurationItem(name);
       }, 'qa-curation-review-open-item'));
       explanation.appendChild(source);
+      var cachedHint = cachedDuplicateHint(name);
+      if (cachedHint) explanation.appendChild(element('p','qa-curation-duplicate-hint',cachedHint));
       var changedEvidence = (session.drift && session.drift.changed || []).find(function(change) {
         return change.file === name;
       });
@@ -612,11 +676,13 @@
       var before = coverage(session.rows, session.eligible, session.choices).ratio * 100;
       var after = coverage(session.rows, session.eligible, withChange).ratio * 100;
       var delta = after - before;
-      explanation.appendChild(element('strong', 'qa-curation-review-verdict',
+      var numericDetails = element('details','qa-curation-review-calculations');
+      numericDetails.appendChild(element('summary','', 'Coverage calculations'));
+      numericDetails.appendChild(element('strong', 'qa-curation-review-verdict',
         (included ? 'Keeping contributes ' : 'Including would contribute ') +
         Math.abs(delta).toFixed(2) + ' weighted coverage points'));
-      explanation.appendChild(element('small','',
-        'This is marginal tagged/Sight evidence, not visual similarity or proven training quality.'));
+      numericDetails.appendChild(element('small','',
+        'This is annotated-evidence coverage, not visual similarity or proven training quality.'));
       var bar = element('div', 'qa-curation-review-bar');
       var fill = element('div', 'qa-curation-review-bar-fill');
       fill.style.width = before.toFixed(2) + '%';
@@ -625,8 +691,8 @@
         conceptPreviews.forEach(function(update) { update(show); });
       }
       bar.appendChild(fill);
-      explanation.appendChild(bar);
-      explanation.appendChild(element('span', 'qa-curation-review-numbers',
+      numericDetails.appendChild(bar);
+      numericDetails.appendChild(element('span', 'qa-curation-review-numbers',
         'Current ' + before.toFixed(1) + '% → With change ' + after.toFixed(1) + '%'));
       var matched = row.ids.map(function(id) { return session.eligible.find(function(c) { return c.id === id; }); }).filter(Boolean);
       var counts = new Map();
@@ -635,6 +701,9 @@
           counts.set(id, (counts.get(id) || 0) + 1);
         });
       });
+      explanation.appendChild(element('strong','qa-curation-review-reason',
+        selectionReason(row,session.choices,counts)));
+      explanation.appendChild(numericDetails);
       // Compare like-for-like concepts within each group and role, not raw
       // counts across unrelated concepts. This is descriptive, not a target.
       var conceptPreviews = [];
@@ -671,10 +740,10 @@
         }
         update(false);
         conceptPreviews.push(update);
-        explanation.appendChild(line);
+        numericDetails.appendChild(line);
       });
-      if (!matched.length) explanation.appendChild(element('span', '', 'No prioritized concepts'));
-      explanation.appendChild(element('small', '', 'Bars show representation among available items, not an ideal target or visual quality.'));
+      if (!matched.length) numericDetails.appendChild(element('span', '', 'No prioritized concepts'));
+      numericDetails.appendChild(element('small', '', 'Bars show representation among available items, not an ideal target or visual quality.'));
       var actions = element('div', 'qa-curation-review-actions');
       var prev = button('← Previous', function() { next(-1); }, 'qa-curation-review-previous'); prev.disabled = cursor === 0; actions.appendChild(prev);
       var decision = button(included ? 'Remove' : 'Include', function() {
@@ -747,9 +816,6 @@
         return file + ' (missing source)';
       })).join(' · ')));
       host.appendChild(driftDetails);
-    } else if (drift.viewChanged) {
-      host.appendChild(element('p', 'qa-curation-helper',
-        'The current view or QA settings differ from the original analysis. Saved curation remains available.'));
     }
 
     var priorities = element('section', 'qa-curation-priorities');
@@ -842,8 +908,9 @@
       conceptGrid.appendChild(cell);
     });
     host.appendChild(conceptGrid);
-    var matrixGroups = Array.from(session.balanceGroups).sort();
-    if (matrixGroups.length >= 2) {
+    var matrixGroups = session.pairGroups.slice();
+    var availablePairGroups = prioritizedTaggedGroups();
+    if (matrixGroups.length === 2) {
       var approvedIds = new Set(session.concepts.filter(function(c) {
         return c.source === 'tag';
       }).map(function(c) {return c.id;}));
@@ -858,7 +925,34 @@
         matrix.appendChild(element('summary','',
           'Cross-category coverage · '+matrixGroups[0]+' × '+matrixGroups[1]));
         matrix.appendChild(element('p','qa-curation-helper',
-          'Observed tagged combinations (selected / available). Multi-label items count in each applicable cell; new combinations give a modest ranking bonus.'));
+          'These two groups drive the small pairwise ranking bonus. Observed tags only; no equal quotas.'));
+        var selectors = element('div','qa-curation-pair-axes');
+        [0,1].forEach(function(index) {
+          var label = element('label','',index === 0 ? 'First group' : 'Second group');
+          var select = element('select','qa-curation-pair-select');
+          select.setAttribute('data-curation-pair-axis',String(index));
+          availablePairGroups.forEach(function(group) {
+            var option = element('option','',group);
+            option.value = group;
+            select.appendChild(option);
+          });
+          select.value = matrixGroups[index];
+          select.onchange = function() {
+            var next = session.pairGroups.slice();
+            var old = next[index];
+            next[index] = select.value;
+            if (next[index] === next[1-index]) next[1-index] = old; // Swap, never silently collapse to one axis.
+            session.pairGroups = next;
+            applyBalancePriorities();
+            saveDraft();
+            renderQaCuration(host,session.signature);
+            var details = host.querySelector('.qa-curation-pair');
+            if (details) details.open = true;
+          };
+          label.appendChild(select);
+          selectors.appendChild(label);
+        });
+        matrix.appendChild(selectors);
         var scroll = element('div','qa-curation-pair-scroll');
         var table = element('table','qa-curation-pair-table');
         var head = element('tr');
@@ -894,22 +988,26 @@
     if (session.missingSight) host.appendChild(element('p', 'qa-curation-helper',
       session.missingSight + ' images have no cached Sight; saved tags still contribute.'));
 
-    var presets = element('div', 'qa-curation-controls');
-    ['lean', 'balanced', 'broad'].forEach(function (name) {
+    var presets = element('div', 'qa-curation-controls qa-curation-presets');
+    [['lean','Lean'], ['balanced','Standard'], ['broad','Broad']].forEach(function (entry) {
+      var name = entry[0], label = entry[1], size = session.sizes[name];
+      var selection = new Set(session.order.slice(0,size));
+      var represented = Math.round(coverage(session.rows,session.eligible,selection).ratio * 100);
       var active = session.preset === name;
-      var control = button(name[0].toUpperCase() + name.slice(1) + ' · ' + session.sizes[name],
+      var control = button(label + ' · ' + size + ' images · ' + represented + '% evidence',
         function () {
           session.preset = name;
           session.choices = new Set(session.order.slice(0, session.sizes[name]));
           saveDraft();
           renderQaCuration(host, session.signature);
-        }, 'review-captions-btn' + (active ? ' qa-curation-active' : ''));
+        }, 'review-captions-btn qa-curation-preset' + (active ? ' qa-curation-active' : ''));
+      control.setAttribute('data-curation-preset',name);
       control.setAttribute('aria-pressed', active ? 'true' : 'false');
       presets.appendChild(control);
     });
     host.appendChild(presets);
     host.appendChild(element('p','qa-curation-helper',
-      'Lean / Balanced / Broad choose progressively larger subsets where additional concept coverage tapers off. Balanced is not an equal-category quota. Higher source resolution breaks near-ties; it does not replace useful concept coverage.'));
+      'Lean / Standard / Broad trade image count against annotated evidence coverage; these are not equal-category quotas or predicted LoRA scores. Native resolution only breaks near-ties.'));
 
     host.appendChild(button('Reset selections to original recommendation', function() {
       session.choices = new Set(session.initialChoices);
@@ -1028,16 +1126,11 @@
       }).join(' · ');
       card.appendChild(chip);
       card.appendChild(element('div','qa-curation-card-resolution',resolutionText(row)));
-      var without = new Set(session.choices);
-      var included = without.has(fileName);
-      if (included) without.delete(fileName); else without.add(fileName);
-      var contribution = Math.abs((coverage(session.rows,session.eligible,without).ratio -
-        coverage(session.rows,session.eligible,session.choices).ratio) * 100);
-      var reason = element('div','qa-curation-card-insight',
-        (included ? 'Keeping contributes ' : 'Including would add ') +
-        contribution.toFixed(2) + ' coverage points');
+      var reason = element('div','qa-curation-card-insight','');
       reason.setAttribute('data-curation-contribution',fileName);
       card.appendChild(reason);
+      var duplicateHint = cachedDuplicateHint(fileName);
+      if (duplicateHint) card.appendChild(element('div','qa-curation-duplicate-hint',duplicateHint));
       var inspect = button('Inspect item', function(event) {
         event.preventDefault();
         event.stopPropagation();
@@ -1210,6 +1303,7 @@
     session.balanceGroups = new Set();
     session.overriddenGroups = new Set();
     session.conceptRoles = new Map();
+    session.pairGroups = [];
     session.availableGroups = Array.from(new Set(session.concepts.map(function (c) { return c.group; }))).sort();
     session.missingSight = inventory.rows.filter(function (row) {return !row.analysis.visionSight;}).length;
     session.status = 'Step 1/3 · Indexed ' + items.length + ' images into ' + inventory.concepts.length + ' candidate concepts.';
@@ -1280,9 +1374,11 @@
       return poll(receivedId, token);
     }).then(function (job) {
       if (!job || token !== session.token) return;
-      if (String(state.folder || '') !== session.folder ||
-          qaCurrentCurationSignature() !== session.signature) {
-        throw new Error('QA Curation inputs changed while Director was running.');
+      // Director classified the immutable concept inventory submitted with this job.
+      // Current captions, tags and view filters may drift while it runs; report
+      // the drift after accepting the result rather than wasting the analysis.
+      if (String(state.folder || '') !== session.folder) {
+        throw new Error('The source Set changed while Director was running.');
       }
       var result = job.result && job.result.analysis;
       if (!result || !Array.isArray(result.coreIds) || !Array.isArray(result.supportingIds))

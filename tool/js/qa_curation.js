@@ -1370,12 +1370,63 @@
       if (['failed', 'cancelled', 'stopped', 'interrupted'].includes(job.status)) {
         throw new Error(job.error || ('Director ' + job.status));
       }
-      session.status = job.status === 'queued' ? 'Director queued · waiting for available runtime'
-        : 'Director interpreting training concepts…';
+      session.status = (job.status === 'queued' ? 'Director queued · ' : '') +
+        (session.progressLabel || 'Interpreting training concepts…');
       renderCurrent();
       return new Promise(function (resolve) { setTimeout(resolve, 1800); })
         .then(function () { return poll(jobId, token); });
     });
+  }
+
+  function queueCurateJob(payload, token) {
+    if (token !== session.token) return Promise.resolve(null);
+    if (String(state.folder || '') !== session.folder)
+      throw new Error('The Set changed while Curate was analyzing its evidence.');
+    return request('/fs/qa/curate', payload).then(function(result) {
+      if (!result || !result.job || !result.job.jobId)
+        throw new Error('QA Curate did not receive a Director job ID.');
+      var receivedId = String(result.job.jobId);
+      if (token !== session.token) {
+        // Stop may be clicked during enqueue. Cancel the late job too.
+        return request('/fs/director/job', {operation:'cancel_job', jobId:receivedId})
+          .catch(function(err) {
+            window.reportConsoleError('QA Curate · Cancel late Director job',err);
+          }).then(function() {return null;});
+      }
+      session.jobId = receivedId;
+      return poll(receivedId, token);
+    }).then(function(job) {
+      if (job && token === session.token) session.jobId = '';
+      return job;
+    });
+  }
+
+  function analyzeCaptionBatches(items, model, token) {
+    var batches = captionBatches(items), observed = [];
+    function step(index) {
+      if (token !== session.token) return Promise.resolve(null);
+      if (index >= batches.length) return Promise.resolve(observed);
+      session.progressLabel = 'Reading authored captions · batch ' +
+        (index+1) + ' / ' + batches.length;
+      session.status = session.progressLabel;
+      renderCurrent();
+      var known = Array.from(new Set(observed.map(function(row) {
+        return String(row.concept || '');
+      }))).slice(-80);
+      return queueCurateJob({
+        operation:'captions', folder:session.folder,
+        files:batches[index].map(function(row) {return row.fileName;}),
+        captions:batches[index], knownConcepts:known,
+        trainingFocus:session.focus,model:model
+      },token).then(function(job) {
+        if (!job || token !== session.token) return null;
+        if (!job.result || !Array.isArray(job.result.captionObservations))
+          throw new Error('Director did not return validated caption observations.');
+        observed.push.apply(observed,job.result.captionObservations);
+        return step(index+1);
+      });
+    }
+    return step(0);
   }
 
   function stopQaCuration() {
@@ -1417,6 +1468,8 @@
     session.phase = 'analyzing';
     session.rows = inventory.rows;
     session.concepts = inventory.concepts;
+    session.captionConcepts = [];
+    session.progressLabel = '';
     captureEvidence(items);
     session.ignored = inventory.ignored;
     session.analysis = null;
@@ -1470,41 +1523,35 @@
       renderCurrent();
     });
     function beginDirector() {
-    if (!session.concepts.length) throw new Error('QA Curation needs grouped annotations.');
-    session.status = 'Step 2/3 · Asking Director what matters for training…';
+    if (!session.concepts.length && !items.some(function(item) {return String(item.caption || '').trim();}))
+      throw new Error('QA Curation needs grouped annotations or authored captions.');
+    session.progressLabel = 'Step 2/3 · Interpreting tagged balance concepts…';
+    session.status = session.progressLabel;
     renderCurrent();
-    request('/fs/qa/curate', {
-      folder: session.folder,
-      files: items.map(function (item) {return item.fileName;}),
-      trainingFocus: session.focus,
-      concepts: session.concepts,
-      model: model
-    }).then(function (result) {
-      if (!result || !result.job || !result.job.jobId) {
-        throw new Error('QA Curation did not receive a Director job ID.');
-      }
-      var receivedId = String(result.job.jobId);
-      if (token !== session.token) {
-        // Stop may be clicked while enqueue is in flight. The newly created
-        // job still needs explicit cancellation even though our UI moved on.
-        return request('/fs/director/job', {operation: 'cancel_job', jobId: receivedId})
-          .catch(function (err) {
-            window.reportConsoleError('QA Curation · Cancel late Director job', err);
-          }).then(function () { return null; });
-      }
-      session.jobId = receivedId;
-      return poll(receivedId, token);
-    }).then(function (job) {
-      if (!job || token !== session.token) return;
-      // Director classified the immutable concept inventory submitted with this job.
-      // Current captions, tags and view filters may drift while it runs; report
-      // the drift after accepting the result rather than wasting the analysis.
-      if (String(state.folder || '') !== session.folder) {
-        throw new Error('The source Set changed while Director was running.');
-      }
+    var priorityJob = session.concepts.length ? queueCurateJob({
+      folder:session.folder, files:items.map(function(item) {return item.fileName;}),
+      trainingFocus:session.focus, concepts:session.concepts, model:model
+    },token).then(function(job) {
+      if (!job || token !== session.token) return null;
       var result = job.result && job.result.analysis;
       if (!result || !Array.isArray(result.coreIds) || !Array.isArray(result.supportingIds))
-        throw new Error('Director did not return a validated concept priority analysis.');
+        throw new Error('Director did not return a validated tag-priority analysis.');
+      return result;
+    }) : Promise.resolve({summary:'Preserve captioned visual distinctions.',
+      coreIds:[], supportingIds:[]});
+    priorityJob.then(function(result) {
+      if (!result || token !== session.token) return null;
+      return analyzeCaptionBatches(items,model,token).then(function(observations) {
+        return observations === null ? null : {result:result,observations:observations};
+      });
+    }).then(function(completed) {
+      if (!completed || token !== session.token) return;
+      // Interpret only the immutable inputs submitted for this analysis.
+      // Drift on the live Set remains nonblocking and is reported afterwards.
+      if (String(state.folder || '') !== session.folder)
+        throw new Error('The source Set changed while Director was running.');
+      applyCaptionObservations(completed.observations);
+      var result = completed.result;
       session.status = 'Step 3/3 · Choosing complementary images…';
       renderCurrent();
       session.analysis = result;

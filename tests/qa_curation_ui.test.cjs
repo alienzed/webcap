@@ -478,7 +478,7 @@ test('resolution only breaks near-equal evidence scores, with no assumed model t
 test('Curate review shows source tags, resolution and preserves a review resume point', async () => {
   const h = harness();
   const source = entries();
-  source[0].resolution = '768x768';
+  source.forEach(item => { item.resolution = '768x768'; });
   h.ctx.window.qaCurrentCurationEvidence = files => source.filter(item => files.includes(item.fileName));
   h.ctx.window.startQaCuration(source,'geometry','same-scope');
   await new Promise(resolve => setTimeout(resolve,45));

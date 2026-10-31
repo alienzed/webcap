@@ -92,6 +92,7 @@
     parentFocusSet: undefined,
     returnTrainingFiles: null,
     returnFindingId: '',
+    returnToCurate: false,
     statusMessage: '',
     externalAnalysisAttemptKey: '',
     externalAnalysisRunning: false
@@ -3514,6 +3515,23 @@
     qaSetView('browse');
   }
 
+  function qaInspectCurationItem(fileName) {
+    var target = (state.items || []).find(function(item) {
+      return item && item.fileName === fileName;
+    });
+    if (!target) throw new Error('Cannot inspect missing source media: ' + fileName);
+    qaWorkbenchState.returnTrainingFiles = qaGetTrainingFileNames().slice();
+    qaWorkbenchState.parentFocusSet = qaCloneFocusSet(state.focusSet);
+    qaWorkbenchState.returnFindingId = '';
+    qaWorkbenchState.returnToCurate = true;
+    activateFocusSet([fileName], 'QA Curate · Inspect', 'qa');
+    setWorkspaceSurface('default');
+    selectPathMedia(target, {allowOutsideFilter:true}).catch(function(err) {
+      window.reportConsoleError('QA Curate · Inspect source item',err);
+      setStatus('Could not inspect source item: '+String(err && err.message || err));
+    });
+  }
+
   function qaUseCuratedSelectionForTraining(files, source) {
     if (!Array.isArray(files) || !files.length) {
       throw new Error('Select at least one curated item before training.');
@@ -3523,6 +3541,7 @@
     qaWorkbenchState.returnTrainingFiles = qaGetTrainingFileNames().slice();
     qaWorkbenchState.parentFocusSet = qaCloneFocusSet(state.focusSet);
     qaWorkbenchState.returnFindingId = '';
+    qaWorkbenchState.returnToCurate = true;
     qaWorkbenchState.statusMessage = '';
     activateFocusSet(files, source || 'QA Curate', 'qa');
     openTrainingSurface('set');
@@ -3674,10 +3693,12 @@
   function returnToQaWorkbenchFromFocusSet() {
     var parent = qaWorkbenchState.parentFocusSet;
     var returnToFinding = !!qaWorkbenchState.returnFindingId;
+    var returnToCurate = !!qaWorkbenchState.returnToCurate;
+    qaWorkbenchState.returnToCurate = false;
     state.focusSet = parent ? qaCloneFocusSet(parent) : null;
     qaWorkbenchState.parentFocusSet = undefined;
     qaWorkbenchState.returnTrainingFiles = null;
-    qaWorkbenchState.view = returnToFinding ? 'browse' : 'overview';
+    qaWorkbenchState.view = returnToCurate ? 'curate' : returnToFinding ? 'browse' : 'overview';
     updateFocusSetUi();
     renderFileList(ui.filterEl.value);
     pruneCandidatesScopeChanged();
@@ -3916,6 +3937,7 @@
     startQaCuration(qaBuildCurateItems(items), qaWorkbenchState.trainingFocus,
       qaBuildDeepScanSignature(items), {reanalyze: true});
   };
+  window.qaInspectCurationItem = qaInspectCurationItem;
   window.qaUseCuratedSelectionForTraining = qaUseCuratedSelectionForTraining;
   window.qaShowCuration = function () { qaWorkbenchState.view = 'curate'; renderQaWorkbench(); };
   window.qaShowOverviewFromCuration = function () { qaWorkbenchState.view = 'overview'; renderQaWorkbench(); };

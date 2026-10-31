@@ -141,6 +141,58 @@ def test_training_history_shows_captured_run_settings_and_short_unnamed_identity
 
 
 
+def test_h3_training_history_recovers_image_shift_and_focused_blocks(tmp_path):
+    import json
+    from tool.server import training_history
+    from tool.server.training_config_files import H3_FOCUSED_EXCLUDE_MODULES
+
+    captured = tmp_path / "capture"
+    captured.mkdir()
+
+    def captured_summary(extra="", include_image_shift=True):
+        config = (
+            '[model]\n'
+            'diffusion_model = "/models/standard_h3.safetensors"\n'
+            'cfg = 4\nshift = 8\n'
+            + ('image_shift = 1.5\n' if include_image_shift else '')
+            + '[adapter]\ntype = "lora"\n' + extra
+        )
+        (captured / "config.h3.toml").write_text(config, encoding="utf-8")
+        return training_history.run_summary_from_capture(captured, "h3")
+
+    normal = captured_summary()
+    assert normal["shift"] == 8
+    assert normal["imageShift"] == 1.5
+    assert normal["focusedH3Blocks"] is False
+
+    focused = captured_summary("exclude_modules = " + json.dumps(H3_FOCUSED_EXCLUDE_MODULES) + "\n")
+    assert focused["focusedH3Blocks"] is True
+
+    old_job = {
+        "stages": "h3", "recordPath": str(captured), "folder": "",
+        "runSummary": {"trainingVariant": "CFG", "shift": 8},
+    }
+    viewed = training_history._history_job_view(old_job)
+    assert viewed["runSummary"]["focusedH3Blocks"] is True
+    assert viewed["runSummary"]["imageShift"] == 1.5
+    assert "focusedH3Blocks" not in old_job["runSummary"]
+
+    custom = captured_summary("exclude_modules = " + json.dumps(r"^blocks\.0") + "\n")
+    assert "focusedH3Blocks" not in custom
+
+    legacy = captured_summary(include_image_shift=False)
+    assert "imageShift" not in legacy
+    assert legacy["focusedH3Blocks"] is False
+
+
+def test_training_history_labels_h3_image_shift_and_focused_blocks():
+    script = (ROOT / "tool" / "js" / "training_history_ui.js").read_text(encoding="utf-8")
+    assert "trainingHistoryMetric('Image shift'" in script
+    assert "trainingHistoryMetric('Focused H3 blocks'" in script
+    assert "'Video shift'" in script
+    assert "typeof runConfig.focusedH3Blocks === 'boolean'" in script
+
+
 def test_metadata_backed_training_history_contract():
     history = (ROOT / "tool" / "server" / "training_history.py").read_text(encoding="utf-8")
     runner = (ROOT / "tool" / "server" / "training_runner.py").read_text(encoding="utf-8")

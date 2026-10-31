@@ -1,4 +1,4 @@
-/* QA-only, opt-in set curation. No Focus Set or training queue mutation. */
+/* QA-owned curation; an explicit training handoff activates the existing Focus Set. */
 (function () {
   'use strict';
 
@@ -58,7 +58,7 @@
       session.preset = ['lean', 'balanced', 'broad'].includes(draft.preset)
         ? draft.preset : 'custom';
       session.phase = 'stale';
-      session.status = 'Source evidence changed. Saved image choices are preserved; reanalyze before creating a Set.';
+      session.status = 'Source evidence changed. Saved image choices are preserved; reanalyze before training.';
       session.draftStale = true;
       return true;
     }
@@ -319,14 +319,14 @@
     var completeness = root.querySelector('[data-curation-coverage]');
     var variations = root.querySelector('[data-curation-variations]');
     var bar = root.querySelector('[data-curation-bar]');
-    var exportButton = root.querySelector('[data-curation-create]');
+    var trainButton = root.querySelector('[data-curation-train]');
     if (number) number.textContent = String(selectedCount());
     if (completeness) completeness.textContent = Math.round(metric.ratio * 100) + '%';
     if (variations) variations.textContent = metric.represented + ' / ' + metric.total;
     if (bar) { bar.value = Math.round(metric.ratio * 100); }
-    if (exportButton) {
-      exportButton.disabled = !selectedCount();
-      exportButton.textContent = 'Create Set · ' + selectedCount() + ' images';
+    if (trainButton) {
+      trainButton.disabled = !selectedCount();
+      trainButton.textContent = 'Use for Training · ' + selectedCount() + ' items';
     }
     var byId = new Map(session.eligible.map(function (c) {return [c.id,c];}));
     var counts = new Map(session.eligible.map(function (c) {return [c.id,0];}));
@@ -739,19 +739,19 @@
         function () { session.limit += 72; renderQaCuration(host, session.signature); }));
     }
     var actions = element('div', 'qa-curation-actions');
-    var create = button('Create Set · ' + selectedCount() + ' images', function () {
+    var train = button('Use for Training · ' + selectedCount() + ' items', function () {
       var chosen = session.order.filter(function (file) { return session.choices.has(file); });
-      if (!chosen.length) throw new Error('Select at least one image before creating a Set.');
+      if (!chosen.length) throw new Error('Select at least one item before training.');
       if (String(state.folder || '') !== session.folder ||
           qaCurrentCurationSignature() !== session.signature) {
         throw new Error('QA Curation inputs changed; analyze the current selection again.');
       }
-      runCreateSetFromResultsFlow(chosen.map(function (file) {
-        return {source_media_rel: buildSourceMediaRelPath(file)};
-      }));
+      var label = session.preset === 'custom'
+        ? 'Custom' : session.preset[0].toUpperCase() + session.preset.slice(1);
+      window.qaUseCuratedSelectionForTraining(chosen, 'QA Curate · ' + label);
     }, 'review-captions-btn qa-curation-primary');
-    create.setAttribute('data-curation-create', '');
-    actions.appendChild(create);
+    train.setAttribute('data-curation-train', '');
+    actions.appendChild(train);
     host.appendChild(actions);
     updateStats(host);
   }
@@ -776,7 +776,7 @@
     if (session.phase === 'ready' && qaCurrentCurationSignature() !== session.signature) {
       session.phase = 'stale';
       session.draftStale = true;
-      session.status = 'Curation inputs changed. Saved image choices are preserved; reanalyze before creating a Set.';
+      session.status = 'Curation inputs changed. Saved image choices are preserved; reanalyze before training.';
     }
     if (session.phase === 'stale') {
       host.appendChild(element('h2', 'qa-curation-heading', 'Your shortlist needs fresh analysis'));

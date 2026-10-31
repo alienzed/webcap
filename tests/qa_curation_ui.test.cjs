@@ -484,3 +484,20 @@ test('changed evidence displays a nonblocking notice and does not discard manual
   assert.equal(Number(h.root.querySelector('[data-curation-selected]').textContent),count);
   assert.ok(h.root.querySelector('[data-curation-train]'));
 });
+
+test('chosen tag groups show a pair matrix that tracks local inclusion edits', async () => {
+  const h = harness();
+  h.ctx.window.startQaCuration(entries(),'geometry','same-scope');
+  await new Promise(resolve => setTimeout(resolve,45));
+  const view = h.root.querySelector('[data-curation-balance-group="View"]');
+  view.checked = true;
+  view.dispatchEvent(new h.ctx.window.Event('change',{bubbles:true}));
+  const cells = () => Array.from(h.root.querySelectorAll('[data-curation-pair-left]'));
+  assert.ok(cells().length > 0);
+  const before = cells().map(cell=>cell.textContent);
+  const selected = h.root.querySelector('.qa-curation-card input[type=checkbox]');
+  selected.checked = false;
+  selected.dispatchEvent(new h.ctx.window.Event('change',{bubbles:true}));
+  const after = cells().map(cell=>cell.textContent);
+  assert.notDeepEqual(after,before,'the displayed pair distribution must update after a checkbox decision');
+});

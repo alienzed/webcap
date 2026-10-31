@@ -576,7 +576,7 @@
       source.appendChild(filename);
       source.appendChild(button('Open in Single Item', function() {
         close();
-        selectByFileName(name);
+        window.qaInspectCurationItem(name);
       }, 'qa-curation-review-open-item'));
       explanation.appendChild(source);
       var live = window.qaCurrentCurationEvidence([name])[0];
@@ -1030,12 +1030,12 @@
       reason.setAttribute('data-curation-contribution',fileName);
       card.appendChild(reason);
       var inspect = button('Inspect item', function(e) {
-        selectByFileName(fileName);
+        window.qaInspectCurationItem(fileName);
       }, 'qa-curation-inspect');
       inspect.onclick = function(event) {
         event.preventDefault();
         event.stopPropagation();
-        selectByFileName(fileName);
+        window.qaInspectCurationItem(fileName);
       };
       card.appendChild(inspect);
       grid.appendChild(card);

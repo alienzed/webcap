@@ -7,14 +7,14 @@
     eligible: [], order: [], choices: new Set(), sizes: {}, preset: 'balanced',
     filter: 'selected', limit: 72, summary: '', jobId: '', error: '',
     analysis: null, balanceGroups: new Set(), overriddenGroups: new Set(), conceptRoles: new Map(), availableGroups: [],
-    status: '', missingSight: 0, ignored: 0, draftStale: false, initialChoices: []
+    status: '', missingSight: 0, ignored: 0, draftStale: false, initialChoices: [],
+    sourceEvidence: {}, sourceFiles: [], drift: null, reviewReturn: null
   };
 
   var draftWrite = Promise.resolve();
-  // Keep the exact QA input signature in memory, but persist a bounded fingerprint.
-  // Legacy drafts used the complete signature; both formats remain readable.
   function compactSignature(signature) {
     var first = 2166136261, second = 2246822519;
+    signature = String(signature || '');
     for (var i = 0; i < signature.length; i += 1) {
       var code = signature.charCodeAt(i);
       first = Math.imul(first ^ code, 16777619);
@@ -24,13 +24,57 @@
       (first >>> 0).toString(16).padStart(8, '0') +
       (second >>> 0).toString(16).padStart(8, '0');
   }
+  function signaturesMatch(left, right) {
+    return left === right || compactSignature(left) === right || left === compactSignature(right);
+  }
+  function evidenceFingerprint(item) {
+    var analysis = item.analysis || {};
+    // Ratings, filters and unrelated QA settings are not curation evidence.
+    return compactSignature(JSON.stringify([
+      item.caption || '', item.groupedTags || [],
+      analysis.visionSight || null, analysis.selectionPose || null,
+      analysis.sceneComplexity || null, String(item.resolution || '')
+    ]));
+  }
+  function captureEvidence(items) {
+    session.sourceFiles = (items || []).map(function(item) { return item.fileName; });
+    session.sourceEvidence = {};
+    (items || []).forEach(function(item) {
+      session.sourceEvidence[item.fileName] = evidenceFingerprint(item);
+    });
+  }
+  function currentDrift() {
+    var before = session.sourceFiles || [];
+    if (!before.length) return {changed:[],missing:[],viewChanged:false};
+    var original = new Set(before);
+    var available = new Set((state.items || []).map(function(item) { return item.fileName; }));
+    // Query authoritative QA assignments and metadata from the original filenames,
+    // regardless of which Focus Set or text filter happens to be active.
+    var live = window.qaCurrentCurationEvidence(before);
+    var byFile = new Map(live.map(function(item) { return [item.fileName,item]; }));
+    var missing = before.filter(function(file) { return !available.has(file); });
+    var changed = before.filter(function(file) {
+      var item = byFile.get(file);
+      return item && session.sourceEvidence[file] !== evidenceFingerprint(item);
+    });
+    return {changed:changed, missing:missing, viewChanged:!signaturesMatch(session.signature,qaCurrentCurationSignature()),
+      // Current display filters must never alter the persisted source population.
+      sourceCount:original.size};
+  }
   function draftPayload() {
-    return {version:1, signature:compactSignature(session.signature), focus:session.focus,
-      analysis:session.analysis, summary:session.summary,
+    return {version:2, signature:session.signature.startsWith('v2:') ? session.signature : compactSignature(session.signature),
+      focus:session.focus, analysis:session.analysis, summary:session.summary,
       choices:Array.from(session.choices), initialChoices:session.initialChoices, preset:session.preset,
-      balanceGroups:Array.from(session.balanceGroups),
-      overriddenGroups:Array.from(session.overriddenGroups),
-      conceptRoles:Array.from(session.conceptRoles)};
+      balanceGroups:Array.from(session.balanceGroups), overriddenGroups:Array.from(session.overriddenGroups),
+      conceptRoles:Array.from(session.conceptRoles),
+      snapshot:{
+        concepts:session.concepts,
+        rows:session.rows.map(function(row) {
+          return [row.fileName, row.inventoryIds || [], row.analysis && row.analysis.sceneComplexity
+            ? row.analysis.sceneComplexity.score : null, row.resolution || ''];
+        }),
+        evidence:session.sourceEvidence
+      }};
   }
   function saveDraft() {
     if (!session.analysis || session.phase !== 'ready') return;
@@ -40,36 +84,45 @@
     }).catch(function(err) { window.reportConsoleError('QA Curate · Save draft',err); });
   }
   function restoreDraft(draft) {
-    if (!draft || draft.version !== 1 || !draft.analysis) return false;
+    if (!draft || ![1,2].includes(draft.version) || !draft.analysis) return false;
     if (!Array.isArray(draft.choices) || !Array.isArray(draft.balanceGroups) ||
-        !Array.isArray(draft.overriddenGroups) || !Array.isArray(draft.conceptRoles))
+        !Array.isArray(draft.overriddenGroups) || !Array.isArray(draft.conceptRoles)) {
       throw new Error('Curate draft contains invalid selections.');
-    var available = new Set(session.rows.map(function(row) { return row.fileName; }));
-    var choices = draft.choices.filter(function(file) { return available.has(file); });
-    session.choices = new Set(choices);
-    session.initialChoices = (Array.isArray(draft.initialChoices)
-      ? draft.initialChoices : draft.choices).filter(function(file) { return available.has(file); });
-    session.summary = String(draft.summary || '');
-    // Concept IDs are positional. Never interpret old IDs against a changed
-    // inventory, even when the saved filenames still exist.
-    if (draft.signature !== session.signature &&
-        draft.signature !== compactSignature(session.signature)) {
-      session.analysis = null;
-      session.preset = ['lean', 'balanced', 'broad'].includes(draft.preset)
-        ? draft.preset : 'custom';
-      session.phase = 'stale';
-      session.status = 'Source evidence changed. Saved image choices are preserved; reanalyze before training.';
-      session.draftStale = true;
+    }
+    var hasSnapshot = draft.version === 2 && draft.snapshot &&
+      Array.isArray(draft.snapshot.concepts) && Array.isArray(draft.snapshot.rows);
+    if (hasSnapshot) {
+      session.concepts = draft.snapshot.concepts;
+      session.rows = draft.snapshot.rows.map(function(parts) {
+        return {fileName:parts[0], ids:[], inventoryIds:parts[1] || [],
+          resolution:parts[3] || '',
+          analysis:parts[2] === null ? {} : {sceneComplexity:{score:parts[2]}}};
+      });
+      session.sourceFiles = session.rows.map(function(row) {return row.fileName;});
+      session.sourceEvidence = draft.snapshot.evidence || {};
+      session.availableGroups = Array.from(new Set(session.concepts.map(function(c) {return c.group;}))).sort();
+    } else if (!signaturesMatch(draft.signature,session.signature)) {
+      // v1 did not preserve the concept-to-file mapping. Never reinterpret its
+      // positional concept IDs after source edits, but retain the saved choices.
+      session.choices = new Set(draft.choices);
+      session.phase = 'legacy';
+      session.status = 'Legacy Curate draft: selections are preserved, but scored evidence needs optional reanalysis.';
       return true;
     }
+    session.signature = draft.signature;
+    session.focus = String(draft.focus || session.focus || '');
+    session.summary = String(draft.summary || '');
     session.analysis = draft.analysis;
     session.balanceGroups = new Set(draft.balanceGroups);
     session.overriddenGroups = new Set(draft.overriddenGroups);
     session.conceptRoles = new Map(draft.conceptRoles);
-    session.preset = 'custom';
+    session.preset = ['lean','balanced','broad'].includes(draft.preset) ? draft.preset : 'custom';
     applyBalancePriorities();
-    session.choices = new Set(choices);
+    session.choices = new Set(draft.choices);
+    session.initialChoices = Array.isArray(draft.initialChoices)
+      ? draft.initialChoices.slice() : draft.choices.slice();
     session.phase = 'ready';
+    session.filter = 'selected';
     session.status = 'Saved Curate draft restored.';
     session.draftStale = false;
     return true;

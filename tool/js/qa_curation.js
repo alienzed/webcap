@@ -314,24 +314,15 @@
       total: concepts.length };
   }
 
-  function shortSide(resolution) {
-    var match = String(resolution || '').match(/^(\d+)\s*[x×]\s*(\d+)$/i);
+  function sourcePixels(row) {
+    var match = String(row && row.resolution || '').match(/^(\d+)\s*[x×]\s*(\d+)$/i);
     if (!match) return null;
-    var w = Number(match[1]), h = Number(match[2]);
-    return w > 0 && h > 0 ? Math.min(w,h) : null;
-  }
-  function resolutionPreference(row) {
-    var side = shortSide(row.resolution);
-    if (side === null) return 0.82; // Unknown: no false precision or hard rejection.
-    // Bounded native-detail preference, saturating at the 768px reference;
-    // this is NOT a claim to have read the active model's bucket target.
-    var ratio = Math.min(1,side / 768);
-    return 0.45 + 0.55 * ratio * ratio;
+    var width = Number(match[1]), height = Number(match[2]);
+    return width > 0 && height > 0 && Number.isSafeInteger(width * height)
+      ? width * height : null;
   }
   function resolutionText(row) {
-    var side = shortSide(row && row.resolution);
-    return side === null ? 'Resolution unknown'
-      : String(row.resolution) + (side < 768 ? ' · below 768px reference' : ' · meets 768px reference');
+    return sourcePixels(row) === null ? 'Resolution unknown' : String(row.resolution);
   }
   function score(row, concepts, byId, selected) {
     var core = 0, supporting = 0;
@@ -345,8 +336,7 @@
     var complexity = Number(row.analysis.sceneComplexity && row.analysis.sceneComplexity.score);
     var quality = Number.isFinite(complexity) && row.analysis.sceneComplexity
       ? 1 - Math.min(0.14, Math.max(0, complexity) * 0.14) : 1;
-    var fidelity = resolutionPreference(row);
-    return {core: core * quality * fidelity, supporting: supporting * quality * fidelity};
+    return {core: core * quality, supporting: supporting * quality};
   }
 
   function rank(rows, concepts, pairGroups) {
@@ -382,18 +372,29 @@
     while (remaining.length) {
       var scores = remaining.map(function (row) { return score(row, concepts, byId, counts); });
       var maxCore = scores.reduce(function (best, value) { return Math.max(best, value.core); }, 0);
-      var best = -1, bestGain = -Infinity;
-      for (var i = 0; i < remaining.length; i += 1) {
-        // Supporting variation can contribute at most 20% of the best available
-        // primary gain. Once core coverage is exhausted, supporting gains decide.
+      // Select for evidence first; use source resolution only between images
+      // whose weighted marginal gains are within 2% of the best gain.
+      var candidateGains = scores.map(function(value, i) {
         var pairBonus = pairGain(remaining[i]);
-        var gain = scores[i].core + (maxCore > 0
-          ? Math.min(scores[i].supporting, maxCore * 0.2) +
+        return value.core + (maxCore > 0
+          ? Math.min(value.supporting, maxCore * 0.2) +
             Math.min(pairBonus, maxCore * 0.16)
-          : scores[i].supporting + pairBonus);
-        if (gain > bestGain) { bestGain = gain; best = i; }
+          : value.supporting + pairBonus);
+      });
+      var bestGain = Math.max.apply(null, candidateGains);
+      var best = candidateGains.indexOf(bestGain);
+      var bestPixels = sourcePixels(remaining[best]);
+      for (var i = 0; i < remaining.length; i += 1) {
+        if (i === best || candidateGains[i] < bestGain * 0.98) continue;
+        var pixels = sourcePixels(remaining[i]);
+        // Unknown dimensions cannot resolve a tie in either direction.
+        if (pixels !== null && bestPixels !== null && pixels > bestPixels) {
+          best = i;
+          bestPixels = pixels;
+        }
       }
       var chosen = remaining.splice(best, 1)[0];
+      bestGain = candidateGains[best];
       ordered.push(chosen.fileName);
       gains.push(bestGain);
       chosen.ids.forEach(function (id) { counts.set(id, counts.get(id) + 1); });
@@ -590,7 +591,7 @@
       var live = window.qaCurrentCurationEvidence([name])[0];
       explanation.appendChild(element('div','qa-curation-review-resolution',resolutionText(live || row)));
       explanation.appendChild(element('small','',
-        'Rank favors native detail when coverage is comparable; 768px is a comparison reference, not a read of the active training bucket.'));
+        'When candidates have nearly equal coverage value, higher source resolution breaks the tie.'));
       if (live) {
         var tags = (live.groupedTags || []).map(function(t) {
           return (t.group || '') + ': ' + (t.term || '');
@@ -908,7 +909,7 @@
     });
     host.appendChild(presets);
     host.appendChild(element('p','qa-curation-helper',
-      'Lean / Balanced / Broad choose progressively larger subsets where additional concept coverage tapers off. Balanced is not an equal-category quota. Higher native resolution is strongly preferred for similar concept evidence, using a 768px comparison reference (not the model bucket target).'));
+      'Lean / Balanced / Broad choose progressively larger subsets where additional concept coverage tapers off. Balanced is not an equal-category quota. Higher source resolution breaks near-ties; it does not replace useful concept coverage.'));
 
     host.appendChild(button('Reset selections to original recommendation', function() {
       session.choices = new Set(session.initialChoices);

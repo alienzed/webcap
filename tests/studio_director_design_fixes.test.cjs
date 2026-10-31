@@ -15,6 +15,31 @@ function section(text,start,end) {
   return text.slice(a,b);
 }
 
+test('changing Write operation reloads saved Scene choices after a reviewed insertion', async () => {
+  const handler = section(rail,"    el('studio-dw-write-operation').onchange=function () {",
+    "    ['studio-dw-write-fields', 'studio-dw-batch-fields'].forEach");
+  const refresh = section(rail,'  function refreshWrite() {','  function toggle(which) {');
+  const elements = {
+    'studio-dw-write-operation':{value:'scene-edit'},
+    'studio-dw-write-project':{value:'project-1'}
+  };
+  const saved = {id:'project-1',sceneOrder:['new-scene'],scenes:{'new-scene':{title:'New Scene'}}};
+  let rendered = {id:'project-1',sceneOrder:[],scenes:{}};
+  const scope = vm.createContext({
+    el:id=>elements[id], writeOperationChosen:false,writeFieldsManuallyChanged:true,
+    refreshProjects:async()=>{},
+    loadStory:async id=>{assert.equal(id,saved.id);return saved;},
+    renderWriteStory:story=>{rendered=story;},
+    setOperation:()=>{assert.deepEqual(rendered.sceneOrder,['new-scene']);},
+    applySuggestedWriteFields:()=>{},status:message=>assert.fail(message)
+  });
+  vm.runInContext(refresh+handler,scope);
+  await elements['studio-dw-write-operation'].onchange();
+  assert.equal(rendered,saved);
+  assert.equal(scope.writeOperationChosen,true);
+  assert.equal(scope.writeFieldsManuallyChanged,false);
+});
+
 test('Undo is reachable from the visible rail and delegates to existing reviewed operation', () => {
   for(const id of ['studio-dw-undo','studio-dw-undo-label','studio-dw-undo-button'])
     assert.match(html,new RegExp('id="'+id+'"'));

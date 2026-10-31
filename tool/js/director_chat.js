@@ -1396,6 +1396,7 @@
     briefUndo.disabled = state.pending || !state.studioBriefUndo;
     if (state.activeMode === 'storyboard' && window.studioDirectorWorkbench) {
       window.studioDirectorWorkbench.setUndo(state.studioBriefUndo);
+      window.studioDirectorWorkbench.updateContext();
       el('studio-dw-undo-button').disabled = state.pending || !state.studioBriefUndo;
     }
     var prepare = el('director-chat-workshop-prepare');
@@ -1829,10 +1830,36 @@
     reviewed.forEach(function (row) {
       addStudioProjectInvariant(row.item, 'studio-brief-invariants', row.original);
     });
+    updateStudioBriefReviewSummary();
     el('studio-brief-error').textContent = '';
     var dialog = el('studio-brief-review');
     if (dialog.open) dialog.close();
     dialog.showModal();
+  }
+
+  function updateStudioBriefReviewSummary() {
+    var proposal = state.studioBriefProposal;
+    if (!proposal) return;
+    var names = {title:'Project title',concept:'Concept',style:'Visual / atmosphere',invariants:'Invariants'};
+    var rows = Array.from(el('studio-brief-invariants').querySelectorAll('.studio-project-invariant'));
+    var invariants = rows.map(function (row) {
+      var fields = row.querySelectorAll('select, input, textarea');
+      return {kind:fields[0].value,title:fields[1].value.trim(),text:fields[2].value.trim()};
+    });
+    var existing = proposal.expected.invariants || [];
+    var selected = [];
+    Object.keys(names).forEach(function (key) {
+      var changed = key === 'invariants' ? invariants.length !== existing.length || invariants.some(function (item,index) {
+        return !existing[index] || ['kind','title','text'].some(function (field) {return item[field] !== existing[index][field];});
+      }) : el('studio-brief-' + key).value.trim() !== String(proposal.expected[key] || '').trim();
+      var checked = el('studio-brief-' + key + '-selected').checked;
+      var section = el('studio-brief-' + key + '-state').closest('.studio-brief-field');
+      section.dataset.changed = String(changed);
+      el('studio-brief-' + key + '-state').textContent = (changed ? 'Changed' : 'Unchanged') +
+        (checked ? ' · selected' : ' · not selected');
+      if (checked) selected.push(names[key] + (key === 'invariants' ? ' (' + invariants.length + ')' : ''));
+    });
+    el('studio-brief-summary').textContent = selected.length ? 'Selected: ' + selected.join(' · ') : 'No fields selected';
   }
 
   function prepareStudioBrief(writeFields) {
@@ -1969,7 +1996,7 @@
       el('studio-brief-review').close();
       recordStudioOperation('brief.apply', 'Updated ' + Object.keys(changes).join(', '),
         proposal.storyId, []);
-      studioActionStatus('Story brief updated. Undo is available.', false);
+      studioActionStatus('Project brief saved. Undo is available.', false);
       var saved = {};
       Object.keys(changes).forEach(function (key) {saved[key === 'invariantOps' ? 'invariants' : key] = result.story[key === 'invariantOps' ? 'invariants' : key];});
       return window.studioDirectorBridge.recordApplied('brief.apply',result.story,saved)
@@ -1980,7 +2007,7 @@
           String(error.message || error), true);
       } else {
         el('studio-brief-error').textContent = 'Apply was not confirmed: ' +
-          String(error.message || error) + '. Refresh the current Story if the connection was lost.';
+          String(error.message || error) + '. Refresh the current Project if the connection was lost.';
       }
       if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Studio Brief Apply', error);
       else throw error;
@@ -2728,7 +2755,10 @@
         'Never guess IDs, confuse proposal with saved content, include any field without a clear destination, ' +
         'or propose a capture for open-ended exploration. Omit capture when not ready; ' +
         'WebCap will bind it to a freshly selected saved destination and require editable review. ' +
-        'Keep the normal reply brief and focus on the author\'s intent.';
+        'For ordinary discussion, use one to three short paragraphs focused on the new decision and next useful action. ' +
+        'Build on agreed material and give at most one consequential question. ' +
+        'When the author asks for a complete field or Prompt, supply its full usable content. ' +
+        'Keep readiness metadata in its separate final block.';
       return outbound;
     });
   }
@@ -3290,7 +3320,7 @@
             if (readinessData !== null) {
               try {
                 if (!window.studioDirectorWorkbench.updateReadiness(readinessData))
-                  throw new Error('Readiness JSON parsed, but its fields did not match the expected contract.');
+                  throw new Error('Readiness JSON parsed, but its fields did not match the expected contract.\nRaw readiness JSON:\n' + readyJson);
                 studioActionStatus('Director assessment updated.', false);
                 window.studioDirectorWorkbench.setStatus('Assessment updated.', false);
               } catch (processingError) {
@@ -3463,6 +3493,9 @@
     el('studio-brief-close').onclick = function () { el('studio-brief-review').close(); };
     el('studio-brief-discard').onclick = function () { el('studio-brief-review').close(); };
     el('studio-brief-apply').onclick = applyStudioBrief;
+    ['input','change','click'].forEach(function (eventName) {
+      el('studio-brief-review').addEventListener(eventName, updateStudioBriefReviewSummary);
+    });
     el('studio-brief-add-invariant').onclick = function () {
       addStudioProjectInvariant(null, 'studio-brief-invariants');
       el('studio-brief-invariants-selected').checked = true;
@@ -3649,14 +3682,12 @@
       }
     });
     document.addEventListener('pointerdown', function (event) {
-      if (!state.open || state.pinned || el('storyboard-workshop-review').open ||
-          el('storyboard-guidelines-review').open || el('studio-scene-draft-review').open ||
+      if (!state.open || state.pinned || document.querySelector('dialog[open]') ||
           drawer.contains(event.target) || toggle.contains(event.target)) return;
       setOpen(false);
     });
     window.addEventListener('keydown', function (event) {
-      if (event.key === 'Escape' && state.open && !el('storyboard-workshop-review').open &&
-          !el('storyboard-guidelines-review').open && !el('studio-scene-draft-review').open) setOpen(false);
+      if (event.key === 'Escape' && state.open && !document.querySelector('dialog[open]')) setOpen(false);
     });
 
     window.addEventListener('beforeunload', function (event) {
@@ -3733,8 +3764,14 @@
         savedAt: story.updatedAt, fields: selected
       };
       markStudioReadinessOutdated();
+      var names = {title:'Title',concept:'Concept',style:'Visual / atmosphere',invariants:'Invariants',summary:'Intent',prompt:'H3 Prompt'};
+      var values = selected.fields || selected;
+      var savedFields = Object.keys(values).filter(function(key){return names[key];}).map(function(key){
+        return names[key] + (key === 'invariants' ? ' (' + values[key].length + ')' : '');
+      });
+      if (Array.isArray(selected.scenes)) savedFields.push(selected.scenes.length + (selected.scenes.length === 1 ? ' Scene' : ' Scenes'));
       state.modeMessages.storyboard.push({role:'user',
-        content:'Reviewed Studio Apply completed. The following saved fields are now authoritative.' +
+        content:'Saved: ' + (savedFields.join(' · ') || 'Scene changes') + '. Reviewed values are now authoritative.' +
           String.fromCharCode(10) + '[WEBCAP APPLIED FIELD VALUES]' +
           String.fromCharCode(10) + JSON.stringify(body, null, 2) +
           String.fromCharCode(10) + '[END WEBCAP APPLY]'});

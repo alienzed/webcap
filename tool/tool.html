@@ -2182,6 +2182,10 @@
                     <button id="studio-dw-read" type="button" aria-expanded="false" aria-controls="studio-dw-read-panel">Read…</button>
                     <button id="studio-dw-write" type="button" aria-expanded="false" aria-controls="studio-dw-write-panel">Write…</button>
                   </div>
+                  <div class="studio-dw-shortcuts" aria-label="Write for the current Project">
+                    <button id="studio-dw-current-brief" type="button">Review current Project brief</button>
+                    <button id="studio-dw-current-prompt" type="button">Draft current Scene H3 Prompt</button>
+                  </div>
                   <div id="studio-dw-status" class="studio-dw-status hidden" role="status" aria-live="polite"></div>
                   <div id="studio-dw-undo" class="studio-dw-undo hidden"><span id="studio-dw-undo-label">Project brief updated</span><button id="studio-dw-undo-button" type="button">Undo brief change</button></div>
                   <section id="studio-dw-read-panel" class="studio-dw-panel hidden" aria-label="Read selected saved fields">
@@ -2389,6 +2393,7 @@
                 <button id="studio-dw-scene-close" type="button" class="review-captions-btn">Close</button></header>
               <div class="studio-scene-draft-content">
                 <p id="studio-dw-scene-target"></p>
+                <p id="studio-dw-scene-summary" class="studio-review-summary"></p>
                 <div id="studio-dw-scene-editors"></div>
                 <p id="studio-dw-scene-error" role="alert"></p>
               </div>
@@ -2400,27 +2405,40 @@
             <dialog id="studio-brief-review" class="studio-scene-draft-review" aria-labelledby="studio-brief-review-title">
                 <header class="studio-scene-draft-header">
                     <div>
-                        <h2 id="studio-brief-review-title">Review Story fields</h2>
-                        <p>Select and edit only the fields you want to change. Other Story and Scene content stays intact.</p>
+                        <h2 id="studio-brief-review-title">Review Project brief</h2>
+                        <p>Select and edit the fields to save. Apply confirms your reviewed changes.</p>
                     </div>
                     <button id="studio-brief-close" type="button" class="review-captions-btn">Close</button>
                 </header>
                 <div class="studio-scene-draft-content">
                     <p id="studio-brief-target" class="studio-scene-draft-target"></p>
+                    <p id="studio-brief-summary" class="studio-review-summary" aria-live="polite"></p>
                     <p id="studio-brief-rationale" class="studio-scene-draft-rationale"></p>
+                    <section class="studio-brief-field" data-brief-field="title">
                     <label for="studio-brief-title"><input id="studio-brief-title-selected" type="checkbox"> Project title</label>
-                    <p id="studio-brief-title-before" class="studio-scene-draft-rationale"></p>
+                    <small id="studio-brief-title-state"></small>
+                    <details><summary>Saved Project title</summary><p id="studio-brief-title-before" class="studio-scene-draft-rationale"></p></details>
                     <input id="studio-brief-title" type="text" maxlength="240" aria-label="Project title">
+                    </section>
+                    <section class="studio-brief-field" data-brief-field="concept">
                     <label for="studio-brief-concept"><input id="studio-brief-concept-selected" type="checkbox" checked> Concept / overview <small>(including Core Appeal)</small></label>
-                    <p id="studio-brief-concept-before" class="studio-scene-draft-rationale"></p>
+                    <small id="studio-brief-concept-state"></small>
+                    <details><summary>Saved Concept</summary><p id="studio-brief-concept-before" class="studio-scene-draft-rationale"></p></details>
                     <textarea id="studio-brief-concept" rows="5"></textarea>
+                    </section>
+                    <section class="studio-brief-field" data-brief-field="style">
                     <label for="studio-brief-style"><input id="studio-brief-style-selected" type="checkbox" checked> Visual / atmosphere</label>
-                    <p id="studio-brief-style-before" class="studio-scene-draft-rationale"></p>
+                    <small id="studio-brief-style-state"></small>
+                    <details><summary>Saved Visual / atmosphere</summary><p id="studio-brief-style-before" class="studio-scene-draft-rationale"></p></details>
                     <textarea id="studio-brief-style" rows="3"></textarea>
+                    </section>
+                    <section class="studio-brief-field" data-brief-field="invariants">
                     <label><input id="studio-brief-invariants-selected" type="checkbox"> Invariants</label>
+                    <small id="studio-brief-invariants-state"></small>
                     <p class="studio-scene-draft-rationale">Names and types referenced by Scenes must remain stable. Edit descriptions freely; coordinated renames require separate review.</p>
                     <div id="studio-brief-invariants"></div>
                     <button id="studio-brief-add-invariant" type="button" class="review-captions-btn">Add invariant</button>
+                    </section>
                     <p id="studio-brief-error" class="studio-scene-draft-error" aria-live="polite"></p>
                 </div>
                 <footer class="studio-scene-draft-footer">

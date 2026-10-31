@@ -75,6 +75,14 @@ test('parseable but unsupported fields are rejected separately from JSON syntax'
   assert.ok(response.failures.some(x=>x.includes('Studio readiness fields')));
   assert.ok(!response.failures.some(x=>x.includes('Studio readiness JSON')));
 });
+
+test('rejected model metadata retains the exact payload in the diagnostic log',()=>{
+  const raw = '{"readHints":["project.concept"],"writeHint":"project, style, invariants","writeFields":{"project":["style","invariants"]}}';
+  const response = processResponse('A creative reply.\n[[WEBCAP_READINESS]]'+raw+'[[END_WEBCAP_READINESS]]',false);
+  assert.equal(response.text,'A creative reply.');
+  assert.equal(response.state.studioReadiness.stale,true);
+  assert.ok(response.failures.some(message=>message.includes('Raw readiness JSON:\n'+raw)));
+});
 test('missing or partial readiness stays outdated instead of erasing the last assessment',()=>{
   const omitted=processResponse('Here is a creative suggestion.');
   assert.equal(omitted.text,'Here is a creative suggestion.');
@@ -182,7 +190,7 @@ test('Readiness Write field recommendations preselect only supported editable fi
   assert.deepEqual(harness().recommendedWriteFields('project'),[]);
 });
 test('Project Write hints narrow reviewed field defaults without auto-applying',()=>{
-  assert.match(workbench,/bridge\.prepareWrite\(operation, id, item && storyName\(item\), recommendedWriteFields\(operation\)\)/);
+  assert.match(workbench,/bridge\.prepareWrite\(operation, id, item && storyName\(item\),\s*Array\.isArray\(writeFields\) \? writeFields : recommendedWriteFields\(operation\)\)/);
   assert.match(director,/if \(kind === 'project'\) return prepareStudioBrief\(writeFields\)/);
   assert.match(director,/checkbox\.checked = checkbox\.checked && writeFields\.indexOf\(field\) !== -1/);
 });

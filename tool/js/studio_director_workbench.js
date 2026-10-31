@@ -250,6 +250,10 @@
   }
 
   function updateScope() {
+    var current = activeTarget();
+    var ready = window.studioDirectorBridge.isReady();
+    el('studio-dw-current-brief').disabled = !current.storyId || !ready;
+    el('studio-dw-current-prompt').disabled = !current.storyId || !current.sceneId || !ready;
     var readId = el('studio-dw-read-project').value;
     var writeId = el('studio-dw-write-project').value;
     var op = el('studio-dw-write-operation').value;
@@ -420,13 +424,19 @@
       fields.forEach(function (key) {
         var old = String(scene[key] || '');
         proposedScene.expected[key] = old;
-        var label = document.createElement('label'), hint = document.createElement('small'),
+        var label = document.createElement('label'), saved = document.createElement('details'),
+          hint = document.createElement('summary'), before = document.createElement('pre'),
           textarea = document.createElement('textarea');
-        label.textContent = labels[key];hint.textContent = 'Saved: ' + (old || '(empty)');
+        label.textContent = labels[key];hint.textContent = 'Saved ' + labels[key];
+        before.textContent = old || '(empty)'; saved.append(hint,before);
         textarea.dataset.field = key;textarea.value = candidate[key];textarea.rows = key === 'prompt' ? 13 : 5;
-        label.append(hint,textarea);host.appendChild(label);
+        textarea.setAttribute('aria-label',labels[key]);
+        label.append(textarea);host.append(saved,label);
       });
       el('studio-dw-scene-target').textContent = storyName(story) + ' · ' + (scene.title || sceneId);
+      el('studio-dw-scene-review-title').textContent = fields.length === 1 ? 'Review ' + labels[fields[0]] : 'Review Scene changes';
+      el('studio-dw-scene-summary').textContent = 'Selected: ' + fields.map(function(key){return labels[key];}).join(' · ') +
+        ' · Scene duration: ' + scene.durationSeconds + ' seconds';
       el('studio-dw-scene-error').textContent = '';
       el('studio-dw-scene-review').showModal();
       status('Draft is ready for field-by-field editing and Apply.', false);
@@ -479,7 +489,33 @@
     if (el('studio-dw-write-panel').classList.contains('hidden')) el('studio-dw-write').click();
     refreshWrite();
   }
-  function writePrepare() {
+  function prepareCurrentWrite(operation) {
+    var target = activeTarget();
+    if (!window.studioDirectorBridge.isReady()) { status('Finish the current request and choose a Director model before drafting.', false); return; }
+    el('studio-dw-current-brief').disabled = true;
+    el('studio-dw-current-prompt').disabled = true;
+    return refreshProjects().then(function () {
+      el('studio-dw-write-project').value = target.storyId;
+      el('studio-dw-write-operation').value = operation;
+      writeOperationChosen = true;
+      writeFieldsManuallyChanged = true;
+      return loadStory(target.storyId);
+    }).then(function (story) {
+      renderWriteStory(story);
+      el('studio-dw-write-scene').value = target.sceneId || '';
+      Array.from(el('studio-dw-write-fields').querySelectorAll('input')).forEach(function (check) {
+        check.checked = check.value === 'prompt';
+      });
+      el('studio-dw-read-panel').classList.add('hidden');
+      el('studio-dw-read').setAttribute('aria-expanded','false');
+      el('studio-dw-write-panel').classList.remove('hidden');
+      el('studio-dw-write').setAttribute('aria-expanded','true');
+      setOperation();
+      writePrepare(operation === 'project' ? ['concept','style','invariants'] : null);
+    }).catch(function (error) {status('Current Project draft failed: ' + error.message,true);})
+      .finally(updateScope);
+  }
+  function writePrepare(writeFields) {
     var bridge = window.studioDirectorBridge, operation = el('studio-dw-write-operation').value,
       id = el('studio-dw-write-project').value;
     if (operation === 'scene-invariants') {
@@ -510,7 +546,8 @@
     if (operation !== 'scene-edit') {
       try {
         var item = projects.find(function (p) {return p.id === id;});
-        bridge.prepareWrite(operation, id, item && storyName(item), recommendedWriteFields(operation));
+        bridge.prepareWrite(operation, id, item && storyName(item),
+          Array.isArray(writeFields) ? writeFields : recommendedWriteFields(operation));
         status('Preparing a reviewed proposal. No saved fields have changed.', false);
       } catch (e) { status('Write failed: ' + e.message, true); }
       return;
@@ -1130,6 +1167,7 @@
   }
   window.studioDirectorWorkbench = {
     setStatus:status,
+    updateContext:updateScope,
     showSentWriteContext: function(operation, messages) {
       var preview = el('studio-dw-write-context-json');
       var details = el('studio-dw-write-context');
@@ -1235,6 +1273,8 @@
     var rail = el('studio-director-workbench');if (!rail) return;
     el('studio-dw-read').onclick=function () { toggle('read'); };
     el('studio-dw-write').onclick=function () { toggle('write'); };
+    el('studio-dw-current-brief').onclick=function () {return prepareCurrentWrite('project');};
+    el('studio-dw-current-prompt').onclick=function () {return prepareCurrentWrite('scene-edit');};
     el('studio-dw-read-project').onchange=function () {
       loadStory(this.value).then(renderReadStory).catch(function(e) { status(e.message,true); });
     };
@@ -1244,8 +1284,7 @@
     el('studio-dw-write-operation').onchange=function () {
       writeOperationChosen = true;
       writeFieldsManuallyChanged = false;
-      setOperation();
-      applySuggestedWriteFields();
+      return refreshWrite();
     };
     ['studio-dw-write-fields', 'studio-dw-batch-fields'].forEach(function (id) {
       Array.from(el(id).querySelectorAll('input[type="checkbox"]')).forEach(function (check) {

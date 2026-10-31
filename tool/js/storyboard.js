@@ -4130,14 +4130,14 @@
       return '<section class="storyboard-scene" data-scene-id="' + escapeHtml(sceneId) + '">' +
         '<div class="storyboard-scene-body">' +
           '<div class="storyboard-scene-main">' +
-            '<label class="storyboard-field storyboard-scene-title-field"><span>Title</span><input data-scene-field="title" value="' + escapeHtml(sceneValue(scene, 'title', '')) + '" placeholder="Scene title"></label>' +
-            '<label class="storyboard-field storyboard-scene-intent"><span>Scene intent</span><textarea data-scene-field="summary" rows="2" placeholder="Describe what happens in this Scene.">' + escapeHtml(sceneValue(scene, 'summary', '')) + '</textarea></label>' +
+            '<label class="storyboard-field storyboard-scene-title-field"><span>Scene title</span><input data-scene-field="title" value="' + escapeHtml(sceneValue(scene, 'title', '')) + '" placeholder="Scene title"></label>' +
+            '<label class="storyboard-field storyboard-scene-intent"><span>Intent</span><textarea data-scene-field="summary" rows="2" placeholder="Describe what happens in this Scene.">' + escapeHtml(sceneValue(scene, 'summary', '')) + '</textarea></label>' +
             '<div class="storyboard-prompt-block">' +
               '<div class="storyboard-prompt-heading">' +
                 '<span class="storyboard-prompt-label">' +
                   '<span' +
                     (promptDirectorModel ? ' title="Last populated by Director model ' + escapeHtml(promptDirectorModel) + '"' : '') +
-                  '>Generation prompt</span>' +
+                  '>H3 Prompt</span>' +
                   '<span class="storyboard-prompt-take-status hidden" data-prompt-take-status title="The current prompt differs from the selected Take&#39;s original prompt.">' +
                     '<span aria-hidden="true">✧</span><span data-prompt-take-status-label></span>' +
                   '</span>' +

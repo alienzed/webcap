@@ -2100,6 +2100,13 @@ html[data-theme="dark"] .storyboard-prompt-take-status {
   gap: 16px;
 }
 
+.storyboard-scenes-list.is-focus .storyboard-scene-main .storyboard-field > span,
+.storyboard-scenes-list.is-focus .storyboard-prompt-label {font-size:18px;}
+.storyboard-scenes-list.is-focus .storyboard-scene-main input,
+.storyboard-scenes-list.is-focus .storyboard-scene-main textarea,
+.storyboard-scenes-list.is-focus .storyboard-scene-main button {font-size:16px;}
+.storyboard-scenes-list.is-focus .storyboard-scene-title-field input {font-size:26px;line-height:1.3;}
+
 .storyboard-scenes-list.is-focus .storyboard-scene-intent textarea {
   min-height: 96px;
 }
@@ -2112,7 +2119,7 @@ html[data-theme="dark"] .storyboard-prompt-take-status {
   min-height: 280px;
   height: clamp(280px, 32vh, 420px);
   resize: vertical;
-  font-size: 14px;
+  font-size: 16px;
   line-height: 1.5;
 }
 

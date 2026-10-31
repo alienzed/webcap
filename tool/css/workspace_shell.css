@@ -2753,6 +2753,7 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
   }
 }
 .studio-scene-draft-review {
+  font-size: 16px;
   width: min(840px, calc(100vw - 36px));
   max-height: min(90vh, 900px);
   border: 1px solid var(--border);
@@ -2774,7 +2775,7 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
 .studio-scene-draft-header h2 { font-size: 27px; margin: 0 0 6px; }
 .studio-scene-draft-header p { font-size: 16px; line-height: 1.5; color: var(--muted); margin: 0; }
 .studio-scene-draft-content { padding: 22px 28px; display: grid; gap: 12px; }
-.studio-scene-draft-content label { font-size: 17px; font-weight: 700; margin-top: 8px; }
+.studio-scene-draft-content label { font-size: 18px; font-weight: 700; margin-top: 8px; }
 .studio-scene-draft-content label small { font-size: 14px; color: var(--muted); font-weight: 500; }
 .studio-scene-draft-content input,
 .studio-scene-draft-content textarea,
@@ -2790,10 +2791,18 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
   font-size: 17px;
 }
 .studio-scene-draft-content textarea { min-height: 180px; line-height: 1.55; resize: vertical; }
+.studio-scene-draft-content input[type="checkbox"] { width:18px; min-height:0; height:18px; padding:0; accent-color:var(--accent); }
+.studio-review-summary {margin:0;padding:12px 14px;border-left:3px solid var(--accent);background:var(--panel-soft);font-size:18px;font-weight:650;line-height:1.5;}
+.studio-brief-field {display:grid;gap:8px;padding:12px 14px;border-left:3px solid var(--border);}
+.studio-brief-field[data-changed="true"] {border-left-color:var(--accent);}
+.studio-brief-field > small {font-size:14px;color:var(--muted);}
+.studio-scene-draft-content details summary {font-size:16px;cursor:pointer;}
+.studio-scene-draft-content details pre {font:inherit;font-size:16px;line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere;max-height:240px;overflow:auto;}
 .studio-scene-draft-target { margin: 0; font-weight: 700; color: var(--accent); }
 .studio-scene-draft-rationale { margin: 0; color: var(--muted); line-height: 1.5; }
 .studio-scene-draft-error { min-height: 1.3em; margin: 0; color: var(--danger, #f87171); }
 .studio-scene-draft-footer {
+  position:sticky;bottom:0;z-index:2;background:var(--panel);
   display: flex; align-items: center; justify-content: flex-end; gap: 12px;
   padding: 16px 28px 24px; border-top: 1px solid var(--border);
 }
@@ -2802,11 +2811,12 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
   border: 1px solid var(--border); border-radius: 10px;
   background: var(--panel-soft); color: var(--text); cursor: pointer;
 }
-.studio-scene-draft-footer #studio-scene-draft-apply {
+.studio-scene-draft-footer > button:last-child {
   background: var(--accent);
   border-color: var(--accent);
   color: var(--bg);
   font-weight: 750;
+  font-size:18px;
 }
 .studio-scene-draft-footer button:disabled { opacity: .6; cursor: wait; }
 
@@ -3851,6 +3861,9 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
 .studio-director-workbench button {min-height:40px;font-size:16px;border-radius:8px;}
 .studio-director-workbench .studio-dw-actions button {font-weight:650;border:1px solid var(--border);background:var(--panel);}
 .studio-director-workbench .studio-dw-actions button[aria-expanded="true"] {outline:2px solid var(--accent, #628fd1);}
+.studio-director-workbench .studio-dw-shortcuts {display:grid;gap:8px;}
+.studio-director-workbench .studio-dw-shortcuts button {padding:10px 12px;text-align:left;font-size:18px;line-height:1.35;border:1px solid var(--border);background:var(--panel-soft);color:var(--text);}
+.studio-director-workbench .studio-dw-shortcuts button:disabled {opacity:.6;}
 .studio-director-workbench .studio-dw-primary {width:100%;background:var(--accent,#436dba);color:#fff;font-weight:650;}
 .studio-director-workbench .studio-dw-status {padding:12px;border-radius:8px;border:1px solid var(--border);font-size:15px;}
 .studio-director-workbench .studio-dw-status[data-error="true"] {color:var(--danger,#f87171);}

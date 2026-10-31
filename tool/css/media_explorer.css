@@ -764,10 +764,10 @@
 
 
 /* Keep the common Explorer header quiet; filtering is available on demand. */
-.media-explorer-toolbar { padding-top: 14px; }
-.media-explorer-header { margin-bottom: 10px; }
-.media-explorer-searchbar { margin-bottom: 9px; }
-.media-explorer-search-field input { padding: 12px 0; font-size: 15px; }
+.media-explorer-workspace .media-explorer-toolbar { padding-top: 14px; }
+.media-explorer-workspace .media-explorer-header { margin-bottom: 10px; }
+.media-explorer-workspace .media-explorer-searchbar { margin-bottom: 9px; }
+.media-explorer-workspace .media-explorer-search-field input { padding: 12px 0; font-size: 15px; }
 .media-explorer-filter-panel { margin: 0 0 7px; }
 .media-explorer-filter-panel > summary {
   display: inline-flex; align-items: center; gap: 8px; min-height: 30px;

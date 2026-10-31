@@ -3539,7 +3539,17 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
   display: none;
 }
 .activity-monitor-details .activity-monitor-recent-copy small {
-  display: none;
+  display: block;
+  margin-top: 3px;
+  font-size: 13px;
+  line-height: 1.35;
+}
+.activity-monitor-details .activity-monitor-recent-row {
+  min-height: 50px;
+}
+.activity-monitor-details .activity-monitor-recent-row time {
+  font-size: 12px;
+  text-align: right;
 }
 .activity-monitor-details .activity-monitor-recent-copy,
 .activity-monitor-details .activity-monitor-copy {

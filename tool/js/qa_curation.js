@@ -747,9 +747,6 @@
         return file + ' (missing source)';
       })).join(' · ')));
       host.appendChild(driftDetails);
-    } else if (drift.viewChanged) {
-      host.appendChild(element('p', 'qa-curation-helper',
-        'The current view or QA settings differ from the original analysis. Saved curation remains available.'));
     }
 
     var priorities = element('section', 'qa-curation-priorities');
@@ -1280,9 +1277,11 @@
       return poll(receivedId, token);
     }).then(function (job) {
       if (!job || token !== session.token) return;
-      if (String(state.folder || '') !== session.folder ||
-          qaCurrentCurationSignature() !== session.signature) {
-        throw new Error('QA Curation inputs changed while Director was running.');
+      // Director classified the immutable concept inventory submitted with this job.
+      // Current captions, tags and view filters may drift while it runs; report
+      // the drift after accepting the result rather than wasting the analysis.
+      if (String(state.folder || '') !== session.folder) {
+        throw new Error('The source Set changed while Director was running.');
       }
       var result = job.result && job.result.analysis;
       if (!result || !Array.isArray(result.coreIds) || !Array.isArray(result.supportingIds))

@@ -8,7 +8,8 @@
     filter: 'selected', limit: 72, summary: '', jobId: '', error: '',
     analysis: null, balanceGroups: new Set(), overriddenGroups: new Set(), conceptRoles: new Map(), availableGroups: [],
     status: '', missingSight: 0, ignored: 0, draftStale: false, initialChoices: [],
-    sourceEvidence: {}, sourceFiles: [], drift: null, reviewReturn: null, galleryGroup: '', previousDraft: null
+    sourceEvidence: {}, sourceFiles: [], drift: null, reviewReturn: null, galleryGroup: '', previousDraft: null,
+    pairGroups: []
   };
 
   var draftWrite = Promise.resolve();
@@ -76,6 +77,7 @@
       choices:Array.from(session.choices), initialChoices:session.initialChoices, preset:session.preset,
       balanceGroups:Array.from(session.balanceGroups), overriddenGroups:Array.from(session.overriddenGroups),
       conceptRoles:Array.from(session.conceptRoles), reviewReturn:session.reviewReturn,
+      pairGroups:session.pairGroups.slice(),
       snapshot:{
         concepts:session.concepts,
         rows:session.rows.map(function(row) {
@@ -129,6 +131,7 @@
     session.balanceGroups = new Set(draft.balanceGroups);
     session.overriddenGroups = new Set(draft.overriddenGroups);
     session.conceptRoles = new Map(draft.conceptRoles);
+    session.pairGroups = Array.isArray(draft.pairGroups) ? draft.pairGroups.slice(0,2) : [];
     session.preset = ['lean','balanced','broad'].includes(draft.preset) ? draft.preset : 'custom';
     applyBalancePriorities();
     if (hasSnapshot && Array.isArray(draft.snapshot.order) && draft.snapshot.sizes) {
@@ -281,13 +284,27 @@
     return Array.from(selected.values());
   }
 
+  function prioritizedTaggedGroups() {
+    return Array.from(session.balanceGroups).filter(function(group) {
+      return session.eligible.some(function(c) { return c.source === 'tag' && c.group === group; });
+    });
+  }
+
+  function reconcilePairGroups(groups) {
+    if (groups.length < 2) { session.pairGroups = []; return; }
+    if (session.pairGroups.length === 2 && session.pairGroups[0] !== session.pairGroups[1] &&
+        session.pairGroups.every(function(group) { return groups.includes(group); })) return;
+    // Prefer explicit human tag groups over alphabetically selected arbitrary axes.
+    var position = groups.find(function(g) { return /position|pose/i.test(g); });
+    var viewpoint = groups.find(function(g) { return /viewpoint|view|camera angle/i.test(g) && g !== position; });
+    session.pairGroups = position && viewpoint ? [position, viewpoint] : groups.slice(0, 2);
+  }
+
   function applyBalancePriorities() {
     session.eligible = deriveEligible(session.concepts, session.analysis, session.rows,
       session.balanceGroups, session.overriddenGroups, session.conceptRoles);
-    var taggedGroups = Array.from(session.balanceGroups).filter(function(group) {
-      return session.eligible.some(function(c) { return c.source === 'tag' && c.group === group; });
-    }).sort();
-    var ranked = rank(session.rows, session.eligible, taggedGroups.slice(0,2));
+    reconcilePairGroups(prioritizedTaggedGroups());
+    var ranked = rank(session.rows, session.eligible, session.pairGroups);
     session.order = ranked.order;
     session.sizes = ranked.sizes;
     // Changing priorities must not overwrite manually checked/unchecked media.
@@ -839,8 +856,9 @@
       conceptGrid.appendChild(cell);
     });
     host.appendChild(conceptGrid);
-    var matrixGroups = Array.from(session.balanceGroups).sort();
-    if (matrixGroups.length >= 2) {
+    var matrixGroups = session.pairGroups.slice();
+    var availablePairGroups = prioritizedTaggedGroups();
+    if (matrixGroups.length === 2) {
       var approvedIds = new Set(session.concepts.filter(function(c) {
         return c.source === 'tag';
       }).map(function(c) {return c.id;}));
@@ -855,7 +873,34 @@
         matrix.appendChild(element('summary','',
           'Cross-category coverage · '+matrixGroups[0]+' × '+matrixGroups[1]));
         matrix.appendChild(element('p','qa-curation-helper',
-          'Observed tagged combinations (selected / available). Multi-label items count in each applicable cell; new combinations give a modest ranking bonus.'));
+          'These two groups drive the small pairwise ranking bonus. Observed tags only; no equal quotas.'));
+        var selectors = element('div','qa-curation-pair-axes');
+        [0,1].forEach(function(index) {
+          var label = element('label','',index === 0 ? 'First group' : 'Second group');
+          var select = element('select','qa-curation-pair-select');
+          select.setAttribute('data-curation-pair-axis',String(index));
+          availablePairGroups.forEach(function(group) {
+            var option = element('option','',group);
+            option.value = group;
+            select.appendChild(option);
+          });
+          select.value = matrixGroups[index];
+          select.onchange = function() {
+            var next = session.pairGroups.slice();
+            var old = next[index];
+            next[index] = select.value;
+            if (next[index] === next[1-index]) next[1-index] = old; // Swap, never silently collapse to one axis.
+            session.pairGroups = next;
+            applyBalancePriorities();
+            saveDraft();
+            renderQaCuration(host,session.signature);
+            var details = host.querySelector('.qa-curation-pair');
+            if (details) details.open = true;
+          };
+          label.appendChild(select);
+          selectors.appendChild(label);
+        });
+        matrix.appendChild(selectors);
         var scroll = element('div','qa-curation-pair-scroll');
         var table = element('table','qa-curation-pair-table');
         var head = element('tr');
@@ -1207,6 +1252,7 @@
     session.balanceGroups = new Set();
     session.overriddenGroups = new Set();
     session.conceptRoles = new Map();
+    session.pairGroups = [];
     session.availableGroups = Array.from(new Set(session.concepts.map(function (c) { return c.group; }))).sort();
     session.missingSight = inventory.rows.filter(function (row) {return !row.analysis.visionSight;}).length;
     session.status = 'Step 1/3 · Indexed ' + items.length + ' images into ' + inventory.concepts.length + ' candidate concepts.';

@@ -157,6 +157,19 @@ test('completed Scene operations can be proposed and opened directly from guidan
   assert.match(director,/this\.canReview\(\)/);
 });
 
+test('Director guidance presents at most two field actions and keeps assessment details secondary', () => {
+  assert.match(workbench, /function captureActionLabel\(capture\)/);
+  assert.match(workbench, /function writeActionLabel\(\)/);
+  assert.match(workbench, /available\.slice\(0,2\)\.forEach/);
+  assert.match(workbench, /button\.dataset\.suggestionKind = action\.kind/);
+  assert.match(workbench, /reviewCreativeCapture\(creativeCapture\)/);
+  assert.match(workbench, /openRecommendedWrite/);
+  assert.match(html, /id="studio-dw-suggestions"/);
+  assert.match(html, /<details class="studio-dw-assessment-details">/);
+  assert.match(html, /<summary>Creative assessment details<\/summary>/);
+  assert.match(workbench, /sceneNames\.join\(' \+ '\)/);
+});
+
 test('Readiness Write field recommendations preselect only supported editable fields', () => {
   assert.match(director, /Optionally include writeFields for Write defaults/);
   assert.match(workbench, /writeFields:writeFields,sceneId:sceneId,stale:false/);

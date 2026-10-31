@@ -1607,6 +1607,10 @@
       }
       session.filter = 'selected';
       session.summary = String(result.summary || 'A curated mix of key constructions and supporting variation.');
+      session.status = session.captionConcepts.length
+        ? 'Analyzed ' + items.length + ' images · ' + session.captionConcepts.length +
+          ' captioned visual distinctions identified.'
+        : 'Analyzed ' + items.length + ' images · no distinctive caption concepts identified.';
       session.phase = 'ready';
       session.jobId = '';
       session.previousDraft = null;

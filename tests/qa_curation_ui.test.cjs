@@ -334,8 +334,9 @@ test('untouched Director concepts keep their original core/supporting roles', as
   await new Promise(resolve => setTimeout(resolve, 45));
   assert.equal(h.calls.errors.length, 0, h.calls.errors.join('; '));
   assert.equal(h.root.querySelector('[data-curation-balance-group="Shape"]').checked, true);
-  assert.equal(h.root.querySelectorAll('[data-curation-concept]').length, 1,
-    'initial proposal must honor the per-concept Director result');
+  assert.equal(h.root.querySelectorAll('[data-curation-concept]').length, 2,
+    'all terms in the prioritized Shape group are shown, including supporting terms');
+  assert.match(h.root.querySelector('.qa-curation-concepts').textContent,/supporting/);
   let shape = h.root.querySelector('[data-curation-balance-group="Shape"]');
   shape.checked = false;
   shape.dispatchEvent(new h.ctx.window.Event('change', {bubbles:true}));
@@ -343,7 +344,8 @@ test('untouched Director concepts keep their original core/supporting roles', as
   shape.checked = true;
   shape.dispatchEvent(new h.ctx.window.Event('change', {bubbles:true}));
   assert.equal(h.root.querySelectorAll('[data-curation-concept]').length, 2,
-    'explicit group override promotes all available terms');
+    'explicit group override retains all terms');
+  assert.doesNotMatch(h.root.querySelector('.qa-curation-concepts').textContent,/supporting/);
 });
 
 test('core-weighted group priority changes deterministic ranking', () => {
@@ -462,7 +464,7 @@ test('Curate review shows source tags, resolution and preserves a review resume 
   button.click();
   const overlay = h.ctx.document.querySelector('.qa-curation-review');
   assert.match(overlay.textContent, /Current tags:/);
-  assert.match(overlay.textContent, /Resolution/);
+  assert.match(overlay.textContent, /768x768/);
   overlay.querySelector('.qa-curation-review-open-item').click();
   assert.equal(h.calls.opened.length,1);
   assert.ok(Array.from(h.root.querySelectorAll('button')).some(el => el.textContent === 'Resume review'));

@@ -259,8 +259,9 @@
       if (!row) throw new Error('Curation result references unknown concept: ' + id);
       var preference = conceptRoles.get(id);
       if (preference === 'ignore') return;
-      var role = preference || (balanceGroups.has(row.group) && (core.has(id) || overriddenGroups.has(row.group))
-        ? 'core' : 'supporting');
+      // A checked group is a primary training objective. Director supplies the
+      // initial groups, while per-concept manual Supporting/Ignore still wins.
+      var role = preference || (balanceGroups.has(row.group) ? 'core' : 'supporting');
       selected.set(id, {id: id, label: row.term, group: row.group, source:row.source, role: role,
         count: row.count, weight: row.source === 'sight'
           ? (role === 'core' ? 0.62 : 0.13)
@@ -303,7 +304,7 @@
     session.eligible = deriveEligible(session.concepts, session.analysis, session.rows,
       session.balanceGroups, session.overriddenGroups, session.conceptRoles);
     reconcilePairGroups(prioritizedTaggedGroups());
-    var ranked = rank(session.rows, session.eligible, session.pairGroups);
+    var ranked = rank(session.rows, session.eligible, session.pairGroups, session.balanceGroups);
     session.order = ranked.order;
     session.sizes = ranked.sizes;
     // Changing priorities must not overwrite manually checked/unchecked media.
@@ -313,21 +314,80 @@
     }
   }
 
-  function coverage(rows, concepts, selectedFiles) {
-    var byId = new Map(concepts.map(function (c) { return [c.id, 0]; }));
-    rows.forEach(function (row) {
+  function primaryConcepts(concepts, primaryGroups) {
+    // The public pure helpers still accept standalone CORE concepts in tests.
+    // Actual Curate sessions always supply the checked priority groups.
+    var groups = primaryGroups === undefined ? null : new Set(primaryGroups);
+    return concepts.filter(function(c) {
+      return c.role === 'core' && (!groups || groups.has(c.group));
+    });
+  }
+
+  function pairEvidence(rows, concepts, pairGroups) {
+    var byFile = new Map(), available = new Map();
+    if (!Array.isArray(pairGroups) || pairGroups.length !== 2) return {byFile:byFile,available:available};
+    var left = new Set(concepts.filter(function(c) {
+      return c.source === 'tag' && c.role === 'core' && c.group === pairGroups[0];
+    }).map(function(c) { return c.id; }));
+    var right = new Set(concepts.filter(function(c) {
+      return c.source === 'tag' && c.role === 'core' && c.group === pairGroups[1];
+    }).map(function(c) { return c.id; }));
+    rows.forEach(function(row) {
+      var pairs = [];
+      row.ids.filter(function(id) {return left.has(id);}).forEach(function(a) {
+        row.ids.filter(function(id) {return right.has(id);}).forEach(function(b) {
+          pairs.push(a + '|' + b);
+        });
+      });
+      byFile.set(row.fileName, pairs);
+      pairs.forEach(function(id) { available.set(id,(available.get(id) || 0) + 1); });
+    });
+    return {byFile:byFile,available:available};
+  }
+
+  function pairStrength(map) {
+    var sum = 0;
+    map.forEach(function(n) { sum += strength(n,'supporting'); });
+    return sum;
+  }
+
+  function coverage(rows, concepts, selectedFiles, primaryGroups, pairGroups) {
+    var primary = primaryConcepts(concepts,primaryGroups);
+    var byId = new Map(primary.map(function(c) {return [c.id,0];}));
+    rows.forEach(function(row) {
       if (!selectedFiles.has(row.fileName)) return;
-      row.ids.forEach(function (id) { byId.set(id, byId.get(id) + 1); });
+      row.ids.forEach(function(id) {
+        if (byId.has(id)) byId.set(id,byId.get(id) + 1);
+      });
     });
     var obtained = 0, available = 0, represented = 0;
-    concepts.forEach(function (c) {
+    primary.forEach(function(c) {
       var n = byId.get(c.id) || 0;
       if (n > 0) represented += 1;
-      obtained += c.weight * strength(n, c.role);
-      available += c.weight * strength(c.count, c.role);
+      obtained += c.weight * strength(n,c.role);
+      available += c.weight * strength(c.count,c.role);
     });
-    return { ratio: available ? obtained / available : 0, represented: represented,
-      total: concepts.length };
+    // Pair diversity is capped at 15% of the primary evidence denominator.
+    // Supporting Background/Lighting concepts never enter either denominator.
+    var pairs = pairEvidence(rows,primary,pairGroups);
+    var totalPair = pairStrength(pairs.available);
+    if (totalPair > 0 && available > 0) {
+      var selectedPairs = new Map();
+      rows.forEach(function(row) {
+        if (!selectedFiles.has(row.fileName)) return;
+        (pairs.byFile.get(row.fileName) || []).forEach(function(id) {
+          selectedPairs.set(id,(selectedPairs.get(id) || 0) + 1);
+        });
+      });
+      var pairWeight = available * 0.15;
+      obtained += pairWeight * pairStrength(selectedPairs) / totalPair;
+      available += pairWeight;
+    }
+    return {ratio:available ? obtained / available : 0,represented:represented,total:primary.length};
+  }
+
+  function sessionCoverage(selectedFiles) {
+    return coverage(session.rows,session.eligible,selectedFiles,session.balanceGroups,session.pairGroups);
   }
 
   function sourcePixels(row) {

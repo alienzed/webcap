@@ -415,8 +415,7 @@
       var total = node.querySelector('[data-curation-concept-count]');
       var meter = node.querySelector('progress');
       total.textContent = count + '/' + concept.count;
-      meter.value = Math.round(100 * strength(count,concept.role) /
-        strength(concept.count,concept.role));
+      meter.value = Math.round(100 * count / Math.max(1, concept.count));
     });
   }
 
@@ -625,6 +624,19 @@
       'Coverage is measured against available annotated evidence, not predicted LoRA accuracy.'));
     host.appendChild(element('p', 'qa-curation-summary', session.summary));
     if (session.status) host.appendChild(element('p', 'qa-curation-helper', session.status));
+    var drift = session.drift || currentDrift();
+    if (drift.changed.length || drift.missing.length) {
+      var driftText = 'Saved recommendation retained · ' + drift.changed.length +
+        ' image(s) changed supporting evidence' + (drift.missing.length
+          ? ' · ' + drift.missing.length + ' source file(s) missing' : '') +
+        '. Reanalyze only if you want new Director priorities.';
+      var driftNote = element('p', 'qa-curation-drift', driftText);
+      driftNote.title = 'Changed files: ' + drift.changed.concat(drift.missing).join(', ');
+      host.appendChild(driftNote);
+    } else if (drift.viewChanged) {
+      host.appendChild(element('p', 'qa-curation-helper',
+        'The current view or QA settings differ from the original analysis. Saved curation remains available.'));
+    }
 
     var priorities = element('section', 'qa-curation-priorities');
     priorities.appendChild(element('h3', '', 'Balance priorities'));
@@ -688,14 +700,22 @@
     if (session.preset === 'custom') priorities.appendChild(element('p', 'qa-curation-helper',
       'Manual image selections are preserved. Choose Lean, Balanced, or Broad to apply the new ranking.'));
     host.appendChild(priorities);
-    var coreFeatures = session.eligible.filter(function (c) {return c.role==='core';})
-      .sort(function(a,b) {return b.count-a.count;}).slice(0,9);
+    var coreFeatures = session.eligible.filter(function(c) {
+      return c.role === 'core' && session.balanceGroups.has(c.group);
+    }).sort(function(a,b) {
+      return a.group.localeCompare(b.group) || a.label.localeCompare(b.label);
+    });
+    if (!coreFeatures.length) coreFeatures = session.eligible.filter(function(c) {return c.role==='core';})
+      .sort(function(a,b) {return a.group.localeCompare(b.group) || a.label.localeCompare(b.label);});
+    host.appendChild(element('h3','', 'Priority-group representation · Selected / Available'));
+    host.appendChild(element('p','qa-curation-helper',
+      'Every prioritized concept is shown. This is observed coverage, not an equal-quota target or predicted LoRA accuracy.'));
     var conceptGrid = element('div', 'qa-curation-concepts');
     coreFeatures.forEach(function (feature) {
       var cell = element('div','qa-curation-concept');
       cell.setAttribute('data-curation-concept',feature.id);
       var heading = element('div','qa-curation-concept-heading');
-      heading.appendChild(element('span','',feature.label));
+      heading.appendChild(element('span','', feature.group + ' · ' + feature.label));
       var total = element('strong','','0/' + feature.count);
       total.setAttribute('data-curation-concept-count','');
       heading.appendChild(total);
@@ -707,6 +727,46 @@
       conceptGrid.appendChild(cell);
     });
     host.appendChild(conceptGrid);
+    var matrixGroups = Array.from(session.balanceGroups).sort();
+    if (matrixGroups.length >= 2) {
+      var first = session.eligible.filter(function(c) {
+        return c.role === 'core' && c.group === matrixGroups[0];
+      });
+      var second = session.eligible.filter(function(c) {
+        return c.role === 'core' && c.group === matrixGroups[1];
+      });
+      if (first.length && second.length) {
+        var matrix = element('details','qa-curation-pair');
+        matrix.appendChild(element('summary','',
+          'Cross-category coverage · '+matrixGroups[0]+' × '+matrixGroups[1]));
+        matrix.appendChild(element('p','qa-curation-helper',
+          'Observed tagged combinations (selected / available). Multi-label items count in each applicable cell.'));
+        var scroll = element('div','qa-curation-pair-scroll');
+        var table = element('table','qa-curation-pair-table');
+        var head = element('tr');
+        head.appendChild(element('th','',matrixGroups[0]+' / '+matrixGroups[1]));
+        second.forEach(function(c) {head.appendChild(element('th','',c.label));});
+        table.appendChild(head);
+        first.forEach(function(left) {
+          var line = element('tr');
+          line.appendChild(element('th','',left.label));
+          second.forEach(function(right) {
+            var found = 0, selected = 0;
+            session.rows.forEach(function(row) {
+              if (row.ids.includes(left.id) && row.ids.includes(right.id)) {
+                found += 1;
+                if (session.choices.has(row.fileName)) selected += 1;
+              }
+            });
+            line.appendChild(element('td','',selected+' / '+found));
+          });
+          table.appendChild(line);
+        });
+        scroll.appendChild(table);
+        matrix.appendChild(scroll);
+        host.appendChild(matrix);
+      }
+    }
     if (session.ignored) host.appendChild(element('p', 'qa-curation-helper',
       session.ignored + ' uncommon or redundant labels fell outside the Director inventory; they were not scored.'));
     if (session.missingSight) host.appendChild(element('p', 'qa-curation-helper',
@@ -726,6 +786,8 @@
       presets.appendChild(control);
     });
     host.appendChild(presets);
+    host.appendChild(element('p','qa-curation-helper',
+      'Lean / Balanced / Broad choose progressively larger subsets where additional concept coverage tapers off. Balanced is not an equal-category quota.'));
 
     host.appendChild(button('Reset selections to original recommendation', function() {
       session.choices = new Set(session.initialChoices);
@@ -816,9 +878,13 @@
     var train = button('Use for Training · ' + selectedCount() + ' items', function () {
       var chosen = session.order.filter(function (file) { return session.choices.has(file); });
       if (!chosen.length) throw new Error('Select at least one item before training.');
-      if (String(state.folder || '') !== session.folder ||
-          qaCurrentCurationSignature() !== session.signature) {
-        throw new Error('QA Curation inputs changed; analyze the current selection again.');
+      if (String(state.folder || '') !== session.folder) {
+        throw new Error('The source Set changed; return to the original Set to train this selection.');
+      }
+      var available = new Set((state.items || []).map(function(item) {return item.fileName;}));
+      var missing = chosen.filter(function(file) {return !available.has(file);});
+      if (missing.length) {
+        throw new Error('Some selected source media no longer exists: ' + missing.join(', '));
       }
       var label = session.preset === 'custom'
         ? 'Custom' : session.preset[0].toUpperCase() + session.preset.slice(1);
@@ -847,18 +913,21 @@
       host.appendChild(element('p', 'qa-curation-status', 'The training selection changed. Return to QA and analyze it again.'));
       return;
     }
-    if (session.phase === 'ready' && qaCurrentCurationSignature() !== session.signature) {
-      session.phase = 'stale';
-      session.draftStale = true;
-      session.status = 'Curation inputs changed. Saved image choices are preserved; reanalyze before training.';
-    }
-    if (session.phase === 'stale') {
-      host.appendChild(element('h2', 'qa-curation-heading', 'Your shortlist needs fresh analysis'));
+    if (session.phase === 'ready') session.drift = currentDrift();
+    if (session.phase === 'legacy') {
+      host.appendChild(element('h2', 'qa-curation-heading', 'Saved selections from an older Curate draft'));
       host.appendChild(element('p', 'qa-curation-status', session.status));
-      host.appendChild(element('p', 'qa-curation-helper',
-        session.choices.size + ' saved selections still match media in the current Set.'));
-      host.appendChild(button('Reanalyze current selection',
-        function() { window.qaReanalyzeCuration(); }, 'qa-curation-primary'));
+      host.appendChild(element('p', 'qa-curation-helper', session.choices.size +
+        ' selected filenames are retained. Older drafts did not save enough evidence to reconstruct their original ranking.'));
+      host.appendChild(button('Use saved selections for Training', function() {
+        var files = Array.from(session.choices);
+        if (!files.length) throw new Error('No selected items in the saved Curate draft.');
+        var available = new Set((state.items || []).map(function(item) {return item.fileName;}));
+        var missing = files.filter(function(name) {return !available.has(name);});
+        if (missing.length) throw new Error('Selected media no longer exists: '+missing.join(', '));
+        window.qaUseCuratedSelectionForTraining(files,'QA Curate · Saved selection');
+      }, 'qa-curation-primary'));
+      host.appendChild(button('Reanalyze for updated recommendations', function() { window.qaReanalyzeCuration(); }));
       return;
     }
     if (session.phase !== 'ready') {

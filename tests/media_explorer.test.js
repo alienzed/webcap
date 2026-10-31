@@ -433,7 +433,7 @@ test('Explorer keeps advanced facets collapsed until requested and shows active 
   const html = fs.readFileSync('tool/tool.html', 'utf8');
   const toolbar = html.slice(html.indexOf('<div class="media-explorer-toolbar">'), html.indexOf('<aside class="media-explorer-browser"'));
   const panel = toolbar.slice(toolbar.indexOf('id="media-explorer-filter-panel"'), toolbar.indexOf('id="media-explorer-filter-chips"'));
-  assert.match(panel, /<details id="media-explorer-filter-panel"/);
+  assert.match(toolbar, /<details id="media-explorer-filter-panel"/);
   assert.match(panel, /id="media-explorer-filter-count"/);
   for (const id of ['media-explorer-kind', 'media-explorer-model', 'media-explorer-folder',
     'media-explorer-date', 'media-explorer-rating', 'media-explorer-min-side']) {

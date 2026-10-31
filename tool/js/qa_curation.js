@@ -281,7 +281,7 @@
       var caption = String(item.caption || '').trim();
       if (!caption) return;
       var row = {fileName:String(item.fileName || ''),caption:caption};
-      if (JSON.stringify([row]).length > 9500) {
+      if (caption.length > 8000 || JSON.stringify([row]).length > 9500) {
         throw new Error('Caption too large for bounded Curate analysis: ' + row.fileName);
       }
       if (batch.length && (batch.length >= 24 ||
@@ -1412,7 +1412,7 @@
   function queueCurateJob(payload, token) {
     if (token !== session.token) return Promise.resolve(null);
     if (String(state.folder || '') !== session.folder)
-      throw new Error('The Set changed while Curate was analyzing its evidence.');
+      throw new Error('The source Set changed while Curate was analyzing its evidence.');
     return request('/fs/qa/curate', payload).then(function(result) {
       if (!result || !result.job || !result.job.jobId)
         throw new Error('QA Curate did not receive a Director job ID.');

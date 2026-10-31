@@ -106,11 +106,15 @@
     var hasSnapshot = draft.version === 2 && draft.snapshot &&
       Array.isArray(draft.snapshot.concepts) && Array.isArray(draft.snapshot.rows);
     if (hasSnapshot) {
-      session.concepts = draft.snapshot.concepts;
+      session.concepts = draft.snapshot.concepts.filter(function(concept) {
+        return concept && concept.source !== 'sight' && !String(concept.group || '').startsWith('Sight ·');
+      });
+      var approvedIds = new Set(session.concepts.map(function(concept) {return concept.id;}));
       session.captionConcepts = Array.isArray(draft.snapshot.captionConcepts)
         ? draft.snapshot.captionConcepts : [];
       session.rows = draft.snapshot.rows.map(function(parts) {
-        return {fileName:parts[0], ids:[], inventoryIds:parts[1] || [],
+        return {fileName:parts[0], ids:[],
+          inventoryIds:(parts[1] || []).filter(function(id) {return approvedIds.has(id);}),
           resolution:parts[3] || '', captionIds:parts[4] || [], captionEvidence:parts[5] || {},
           analysis:parts[2] === null ? {} : {sceneComplexity:{score:parts[2]}}};
       });
@@ -129,8 +133,13 @@
     session.signature = draft.signature;
     session.focus = String(draft.focus || session.focus || '');
     session.summary = String(draft.summary || '');
-    session.analysis = draft.analysis;
-    session.balanceGroups = new Set(draft.balanceGroups);
+    var validConceptIds = new Set(session.concepts.map(function(concept) {return concept.id;}));
+    session.analysis = {...draft.analysis,
+      coreIds:(draft.analysis.coreIds || []).filter(function(id) {return validConceptIds.has(id);}),
+      supportingIds:(draft.analysis.supportingIds || []).filter(function(id) {return validConceptIds.has(id);})};
+    session.balanceGroups = new Set(draft.balanceGroups.filter(function(group) {
+      return session.concepts.some(function(concept) {return concept.group === group;});
+    }));
     session.overriddenGroups = new Set(draft.overriddenGroups);
     session.conceptRoles = new Map(draft.conceptRoles);
     session.pairGroups = Array.isArray(draft.pairGroups) ? draft.pairGroups.slice(0,2) : [];
@@ -311,7 +320,6 @@
       if (core.has(id)) throw new Error('Curation classified a concept twice: ' + id);
       include(id);
     });
-    if (!core.size && concepts.length) throw new Error('Director found no core visual concepts.');
     // Preserve the Director's per-concept defaults until the user changes a
     // group. A manually selected group can promote even omitted concepts.
     concepts.forEach(function (row) {
@@ -595,7 +603,19 @@
     });
     if (rare) return (included ? 'Only selected example: ' : 'Would add missing evidence: ') +
       rare.group + ' · ' + rare.label;
-    if (!matched.length) return 'No evidence for selected priority groups; supporting variation only.';
+    var captionById = new Map(session.captionConcepts.map(function(concept) {
+      return [concept.id,concept];
+    }));
+    var rareCaption = (row.captionIds || []).map(function(id) {return captionById.get(id);})
+      .filter(Boolean).find(function(concept) {
+        return !session.rows.some(function(other) {
+          return other.fileName !== row.fileName && selected.has(other.fileName) &&
+            (other.captionIds || []).includes(concept.id);
+        });
+      });
+    if (rareCaption) return (included ? 'Caption distinction retained: ' :
+      'Would preserve caption distinction: ') + rareCaption.label;
+    if (!matched.length) return 'No unique priority or caption evidence; other variation only.';
     var c = matched[0], others = Math.max(0,(counts.get(c.id) || 0) - (included ? 1 : 0));
     return (included ? 'Also represented by ' : 'Already represented by ') + others +
       ' other selected item' + (others === 1 ? '' : 's') +
@@ -629,12 +649,14 @@
     var number = root.querySelector('[data-curation-selected]');
     var completeness = root.querySelector('[data-curation-coverage]');
     var variations = root.querySelector('[data-curation-variations]');
+    var captionCount = root.querySelector('[data-curation-caption-evidence]');
     var bar = root.querySelector('[data-curation-bar]');
     var trainButton = root.querySelector('[data-curation-train]');
     if (number) number.textContent = String(selectedCount());
     if (completeness) completeness.textContent = Math.round(metric.ratio * 100) + '%';
     if (variations) variations.textContent = metric.represented + ' / ' + metric.total;
-    if (bar) { bar.value = Math.round(metric.ratio * 100); }
+    if (captionCount) captionCount.textContent = metric.captionRepresented + ' / ' + metric.captionTotal;
+    if (bar) { bar.value = Math.round(metric.learningRatio * 100); }
     if (trainButton) {
       trainButton.disabled = !selectedCount();
       trainButton.textContent = 'Use for Training · ' + selectedCount() + ' items';
@@ -652,9 +674,9 @@
       node.textContent = selectionReason(row,selected,counts);
       var modified = new Set(selected);
       if (modified.has(file)) modified.delete(file); else modified.add(file);
-      var delta = Math.abs((sessionCoverage(modified).ratio -
-        sessionCoverage(selected).ratio) * 100);
-      node.title = 'Weighted annotated-evidence change: ' + delta.toFixed(2) +
+      var delta = Math.abs((sessionCoverage(modified).learningRatio -
+        sessionCoverage(selected).learningRatio) * 100);
+      node.title = 'Weighted learning-evidence change: ' + delta.toFixed(2) +
         ' percentage points (not predicted training quality)';
     });
     root.querySelectorAll('[data-curation-pair-left]').forEach(function(cell) {
@@ -907,7 +929,8 @@
     var counters = element('div', 'qa-curation-metrics');
     [
       ['Selected', 'selected'], ['Priority coverage', 'coverage'], ['Priority concepts', 'variations']
-    ].forEach(function (entry) {
+    ].concat(session.captionConcepts.length ? [['Caption distinctions', 'caption-evidence']] : [])
+      .forEach(function (entry) {
       var tile = element('div', 'qa-curation-metric');
       tile.appendChild(element('strong', '', '0')).setAttribute('data-curation-' + entry[1], '');
       tile.appendChild(element('span', '', entry[0]));
@@ -918,10 +941,10 @@
     progress.max = 100;
     progress.value = 0;
     progress.setAttribute('data-curation-bar', '');
-    progress.setAttribute('aria-label', 'Weighted concept evidence represented');
+    progress.setAttribute('aria-label', 'Combined tag and caption learning evidence represented');
     host.appendChild(progress);
     host.appendChild(element('p', 'qa-curation-helper',
-      'Coverage reflects selected priority groups (and selected tag-group combinations), not supporting backgrounds or predicted LoRA accuracy.'));
+      'Priority coverage reflects chosen tag groups. The progress bar also includes distinctive caption evidence; neither predicts LoRA accuracy.'));
     host.appendChild(element('p', 'qa-curation-summary', session.summary));
     if (session.status) host.appendChild(element('p', 'qa-curation-helper', session.status));
     var drift = session.drift || currentDrift();
@@ -1010,7 +1033,9 @@
     });
     coreFeatures = coreFeatures.filter(function(c) {return c.role === 'core';});
     if (!coreFeatures.length) host.appendChild(element('p','qa-curation-helper',
-      'Select at least one priority group to calculate an automatic shortlist. Your manual choices are preserved.'));
+      session.captionConcepts.length
+        ? 'No tag balance priorities selected. Captioned visual distinctions still influence the shortlist.'
+        : 'Select at least one priority group to calculate an automatic shortlist. Your manual choices are preserved.'));
     host.appendChild(element('h3','', 'Priority-group representation · Selected / Available'));
     host.appendChild(element('p','qa-curation-helper',
       'Every prioritized concept is shown. This is observed coverage, not an equal-quota target or predicted LoRA accuracy.'));
@@ -1114,9 +1139,9 @@
     [['lean','Lean'], ['balanced','Standard'], ['broad','Broad']].forEach(function (entry) {
       var name = entry[0], label = entry[1], size = session.sizes[name];
       var selection = new Set(session.order.slice(0,size));
-      var represented = Math.round(sessionCoverage(selection).ratio * 100);
+      var represented = Math.round(sessionCoverage(selection).learningRatio * 100);
       var active = session.preset === name;
-      var control = button(label + ' · ' + size + ' images · ' + represented + '% priority coverage',
+      var control = button(label + ' · ' + size + ' images · ' + represented + '% learning coverage',
         function () {
           session.preset = name;
           session.choices = new Set(session.order.slice(0, session.sizes[name]));
@@ -1130,7 +1155,7 @@
     });
     host.appendChild(presets);
     host.appendChild(element('p','qa-curation-helper',
-      'Lean / Standard / Broad compare the selected priority groups and their observed combinations only. Other concepts can break ranking ties, but cannot increase a preset size. Native resolution also breaks near-ties.'));
+      'Lean / Standard / Broad follow diminishing returns in selected tag groups and captioned visual distinctions. Supporting tags cannot extend a preset; native resolution breaks near-ties.'));
 
     host.appendChild(button('Reset selections to original recommendation', function() {
       session.choices = new Set(session.initialChoices);
@@ -1241,12 +1266,18 @@
       }).filter(Boolean);
       var primary = features.find(function(feature) { return feature.role === 'core'; });
       if (!primary) primary = features[0];
+      var captionConcept = session.captionConcepts.find(function(concept) {
+        return (row.captionIds || []).includes(concept.id);
+      });
       var chip = element('div', 'qa-curation-card-insight',
-        primary ? (primary.role === 'core' ? 'Core · ' : 'Variation · ') + primary.label
-          : 'No prioritized concept');
+        primary ? (primary.role === 'core' ? 'Priority · ' : 'Variation · ') + primary.label
+          : (captionConcept ? 'Caption · ' + captionConcept.label : 'No prioritized concept'));
       chip.title = features.map(function(feature) {
         return feature.group + ': ' + feature.label;
-      }).join(' · ');
+      }).concat((row.captionIds || []).map(function(id) {
+        var c = session.captionConcepts.find(function(item) {return item.id === id;});
+        return c ? 'Caption: ' + c.label + ' · "' + String(row.captionEvidence[id] || '') + '"' : '';
+      }).filter(Boolean)).join(' · ');
       card.appendChild(chip);
       card.appendChild(element('div','qa-curation-card-resolution',resolutionText(row)));
       var reason = element('div','qa-curation-card-insight','');
@@ -1481,7 +1512,7 @@
     session.conceptRoles = new Map();
     session.pairGroups = [];
     session.availableGroups = Array.from(new Set(session.concepts.map(function (c) { return c.group; }))).sort();
-    session.status = 'Step 1/3 · Indexed ' + items.length + ' images into ' + inventory.concepts.length + ' candidate concepts.';
+    session.status = 'Step 1/3 · Indexed ' + items.length + ' images into ' + inventory.concepts.length + ' tagged concepts.';
     session.error = '';
     session.jobId = '';
     session.draftStale = false;

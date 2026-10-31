@@ -402,10 +402,14 @@
   function coverage(rows, concepts, selectedFiles, primaryGroups, pairGroups, captionConcepts) {
     var primary = primaryConcepts(concepts,primaryGroups);
     var byId = new Map(primary.map(function(c) {return [c.id,0];}));
+    var captionCounts = new Map();
     rows.forEach(function(row) {
       if (!selectedFiles.has(row.fileName)) return;
       row.ids.forEach(function(id) {
         if (byId.has(id)) byId.set(id,byId.get(id) + 1);
+      });
+      (row.captionIds || []).forEach(function(id) {
+        captionCounts.set(id,(captionCounts.get(id) || 0) + 1);
       });
     });
     var obtained = 0, available = 0, represented = 0;
@@ -433,9 +437,7 @@
     }
     var captionAvailable = 0, captionObtained = 0, captionRepresented = 0;
     (captionConcepts || []).forEach(function(concept) {
-      var n = rows.filter(function(row) {
-        return selectedFiles.has(row.fileName) && (row.captionIds || []).includes(concept.id);
-      }).length;
+      var n = captionCounts.get(concept.id) || 0;
       if (n) captionRepresented += 1;
       captionObtained += concept.weight * strength(n, 'core');
       captionAvailable += concept.weight * strength(concept.count, 'core');

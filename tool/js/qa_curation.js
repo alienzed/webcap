@@ -84,7 +84,7 @@
           return [row.fileName, row.inventoryIds || [], row.analysis && row.analysis.sceneComplexity
             ? row.analysis.sceneComplexity.score : null, row.resolution || ''];
         }),
-        order:session.order.slice(), sizes:Object.assign({},session.sizes),
+        order:session.order.slice(), sizes:Object.assign({},session.sizes), rankingPolicy:'primary-only',
         ignored:session.ignored, missingSight:session.missingSight,
         evidence:session.sourceEvidence
       }};
@@ -134,13 +134,12 @@
     session.pairGroups = Array.isArray(draft.pairGroups) ? draft.pairGroups.slice(0,2) : [];
     session.preset = ['lean','balanced','broad'].includes(draft.preset) ? draft.preset : 'custom';
     applyBalancePriorities();
-    if (hasSnapshot && Array.isArray(draft.snapshot.order) && draft.snapshot.sizes) {
-      session.order = draft.snapshot.order.slice();
-      session.sizes = Object.assign({},draft.snapshot.sizes);
-    }
+    // Saved choices are user work. Rank and preset sizes are derived data:
+    // recompute with current deterministic policy without a Director call.
     session.choices = new Set(draft.choices);
-    session.initialChoices = Array.isArray(draft.initialChoices)
-      ? draft.initialChoices.slice() : draft.choices.slice();
+    session.initialChoices = hasSnapshot && draft.snapshot.rankingPolicy === 'primary-only' &&
+      Array.isArray(draft.initialChoices) ? draft.initialChoices.slice()
+      : session.order.slice(0, session.sizes.balanced);
     session.phase = 'ready';
     session.reviewReturn = draft.reviewReturn || null;
     session.filter = 'selected';

@@ -326,6 +326,30 @@
     return Math.floor(seconds / 3600) + 'h ' + String(Math.floor(seconds % 3600 / 60)) + 'm';
   }
 
+  function formatFinishClock(timestamp) {
+    var stamp = Number(timestamp);
+    if (!isFinite(stamp) || stamp <= 0) return '';
+    var date = new Date(stamp * 1000);
+    var today = new Date();
+    var sameDay = date.getFullYear() === today.getFullYear() &&
+      date.getMonth() === today.getMonth() && date.getDate() === today.getDate();
+    return date.toLocaleString(undefined, sameDay
+      ? { hour: 'numeric', minute: '2-digit' }
+      : { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
+          ...(date.getFullYear() !== today.getFullYear() ? { year: 'numeric' } : {}) });
+  }
+
+  function syncRecentFinishedTime(element, item) {
+    var stamp = finishedAt(item);
+    var clock = formatFinishClock(stamp);
+    element.textContent = clock ? 'Finished ' + clock : '';
+    element.title = clock
+      ? 'Finished ' + new Date(stamp * 1000).toLocaleString() +
+        ' (' + formatAge(stamp) + ' ago)'
+      : '';
+    if (clock) element.dateTime = new Date(stamp * 1000).toISOString();
+  }
+
   function formatAge(timestamp) {
     var value = Number(timestamp);
     if (!isFinite(value) || value <= 0) return '';
@@ -678,11 +702,12 @@
     detail.textContent = [metadata, item.error ? 'Error: ' + item.error : '',
       duration ? 'Ran ' + duration : '', wait ? 'Queued ' + wait : ''].filter(Boolean).join(' · ')
       || String(item.status || '').replace(/_/g, ' ');
+    detail.title = detail.textContent;
     copy.appendChild(title);
     copy.appendChild(detail);
 
     var age = document.createElement('time');
-    age.textContent = formatAge(finishedAt(item));
+    syncRecentFinishedTime(age, item);
 
     button.appendChild(icon);
     button.appendChild(copy);
@@ -1193,7 +1218,7 @@
         var key = recentKey(item);
         var row = existingRecent[key] || createRecentRow(item);
         row.setAttribute('data-activity-recent-key', key);
-        row.querySelector('time').textContent = formatAge(finishedAt(item));
+        syncRecentFinishedTime(row.querySelector('time'), item);
         recentRows.push(row);
       });
     }

@@ -9,7 +9,7 @@
     analysis: null, balanceGroups: new Set(), overriddenGroups: new Set(), conceptRoles: new Map(), availableGroups: [],
     status: '', ignored: 0, draftStale: false, initialChoices: [],
     sourceEvidence: {}, sourceFiles: [], drift: null, reviewReturn: null, galleryGroup: '', previousDraft: null,
-    pairGroups: []
+    pairGroups: [], captionConcepts: [], progressLabel: ''
   };
 
   var draftWrite = Promise.resolve();
@@ -81,9 +81,11 @@
         concepts:session.concepts,
         rows:session.rows.map(function(row) {
           return [row.fileName, row.inventoryIds || [], row.analysis && row.analysis.sceneComplexity
-            ? row.analysis.sceneComplexity.score : null, row.resolution || ''];
+            ? row.analysis.sceneComplexity.score : null, row.resolution || '',
+            row.captionIds || [], row.captionEvidence || {}];
         }),
-        order:session.order.slice(), sizes:Object.assign({},session.sizes), rankingPolicy:'primary-only',
+        order:session.order.slice(), sizes:Object.assign({},session.sizes), rankingPolicy:'caption-aware-v1',
+        captionConcepts:session.captionConcepts,
         ignored:session.ignored,
         evidence:session.sourceEvidence
       }};
@@ -105,9 +107,11 @@
       Array.isArray(draft.snapshot.concepts) && Array.isArray(draft.snapshot.rows);
     if (hasSnapshot) {
       session.concepts = draft.snapshot.concepts;
+      session.captionConcepts = Array.isArray(draft.snapshot.captionConcepts)
+        ? draft.snapshot.captionConcepts : [];
       session.rows = draft.snapshot.rows.map(function(parts) {
         return {fileName:parts[0], ids:[], inventoryIds:parts[1] || [],
-          resolution:parts[3] || '',
+          resolution:parts[3] || '', captionIds:parts[4] || [], captionEvidence:parts[5] || {},
           analysis:parts[2] === null ? {} : {sceneComplexity:{score:parts[2]}}};
       });
       session.sourceFiles = session.rows.map(function(row) {return row.fileName;});
@@ -135,7 +139,7 @@
     // Saved choices are user work. Rank and preset sizes are derived data:
     // recompute with current deterministic policy without a Director call.
     session.choices = new Set(draft.choices);
-    session.initialChoices = hasSnapshot && draft.snapshot.rankingPolicy === 'primary-only' &&
+    session.initialChoices = hasSnapshot && draft.snapshot.rankingPolicy === 'caption-aware-v1' &&
       Array.isArray(draft.initialChoices) ? draft.initialChoices.slice()
       : session.order.slice(0, session.sizes.balanced);
     session.phase = 'ready';
@@ -185,7 +189,7 @@
       var row = {
         fileName: String(raw.fileName || ''), caption: String(raw.caption || ''),
         analysis: raw.analysis || {}, resolution: String(raw.resolution || ''),
-        keys: new Set(), ids: [], hash: ''
+        keys: new Set(), ids: [], captionIds: [], captionEvidence: {}, hash: ''
       };
       (raw.groupedTags || []).forEach(function (tag) {
         addConcept(lookup, row, tag.group, tag.term, 'tag');
@@ -236,6 +240,52 @@
     };
   }
 
+  function applyCaptionObservations(observations) {
+    var byFile = new Map(session.rows.map(function(row) {
+      row.captionIds = [];
+      row.captionEvidence = {};
+      return [row.fileName, row];
+    }));
+    var concepts = new Map();
+    (observations || []).forEach(function(item) {
+      var file = String(item.fileName || '');
+      var row = byFile.get(file);
+      if (!row) throw new Error('Caption evidence references a different Set item: ' + file);
+      var label = normalize(item.concept);
+      var key = label.toLocaleLowerCase();
+      if (!key) throw new Error('Caption evidence concept is empty.');
+      if (!concepts.has(key)) concepts.set(key, {id:'d'+String(concepts.size+1).padStart(4,'0'),
+        label:label, count:0, weight:0.65, source:'caption'});
+      var concept = concepts.get(key);
+      if (!row.captionIds.includes(concept.id)) {
+        row.captionIds.push(concept.id);
+        row.captionEvidence[concept.id] = String(item.quote || '');
+        concept.count += 1;
+      }
+    });
+    session.captionConcepts = Array.from(concepts.values());
+  }
+
+  function captionBatches(items) {
+    var batches = [], batch = [];
+    (items || []).forEach(function(item) {
+      var caption = String(item.caption || '').trim();
+      if (!caption) return;
+      var row = {fileName:String(item.fileName || ''),caption:caption};
+      if (JSON.stringify([row]).length > 9500) {
+        throw new Error('Caption too large for bounded Curate analysis: ' + row.fileName);
+      }
+      if (batch.length && (batch.length >= 24 ||
+          JSON.stringify(batch.concat([row])).length > 9000)) {
+        batches.push(batch);
+        batch = [];
+      }
+      batch.push(row);
+    });
+    if (batch.length) batches.push(batch);
+    return batches;
+  }
+
   function strength(count, role) {
     return 1 - Math.exp(-count / (role === 'core' ? 3 : 2));
   }
@@ -261,7 +311,7 @@
       if (core.has(id)) throw new Error('Curation classified a concept twice: ' + id);
       include(id);
     });
-    if (!core.size) throw new Error('Director found no core visual concepts.');
+    if (!core.size && concepts.length) throw new Error('Director found no core visual concepts.');
     // Preserve the Director's per-concept defaults until the user changes a
     // group. A manually selected group can promote even omitted concepts.
     concepts.forEach(function (row) {
@@ -293,7 +343,8 @@
     session.eligible = deriveEligible(session.concepts, session.analysis, session.rows,
       session.balanceGroups, session.overriddenGroups, session.conceptRoles);
     reconcilePairGroups(prioritizedTaggedGroups());
-    var ranked = rank(session.rows, session.eligible, session.pairGroups, session.balanceGroups);
+    var ranked = rank(session.rows, session.eligible, session.pairGroups,
+      session.balanceGroups, session.captionConcepts);
     session.order = ranked.order;
     session.sizes = ranked.sizes;
     // Changing priorities must not overwrite manually checked/unchecked media.
@@ -340,7 +391,7 @@
     return sum;
   }
 
-  function coverage(rows, concepts, selectedFiles, primaryGroups, pairGroups) {
+  function coverage(rows, concepts, selectedFiles, primaryGroups, pairGroups, captionConcepts) {
     var primary = primaryConcepts(concepts,primaryGroups);
     var byId = new Map(primary.map(function(c) {return [c.id,0];}));
     rows.forEach(function(row) {
@@ -372,11 +423,25 @@
       obtained += pairWeight * pairStrength(selectedPairs) / totalPair;
       available += pairWeight;
     }
-    return {ratio:available ? obtained / available : 0,represented:represented,total:primary.length};
+    var captionAvailable = 0, captionObtained = 0, captionRepresented = 0;
+    (captionConcepts || []).forEach(function(concept) {
+      var n = rows.filter(function(row) {
+        return selectedFiles.has(row.fileName) && (row.captionIds || []).includes(concept.id);
+      }).length;
+      if (n) captionRepresented += 1;
+      captionObtained += concept.weight * strength(n, 'core');
+      captionAvailable += concept.weight * strength(concept.count, 'core');
+    });
+    return {ratio:available ? obtained / available : 0,
+      learningRatio:available + captionAvailable
+        ? (obtained + captionObtained) / (available + captionAvailable) : 0,
+      represented:represented,total:primary.length,
+      captionRepresented:captionRepresented,captionTotal:(captionConcepts || []).length};
   }
 
   function sessionCoverage(selectedFiles) {
-    return coverage(session.rows,session.eligible,selectedFiles,session.balanceGroups,session.pairGroups);
+    return coverage(session.rows,session.eligible,selectedFiles,session.balanceGroups,
+      session.pairGroups,session.captionConcepts);
   }
 
   function sourcePixels(row) {
@@ -389,8 +454,8 @@
   function resolutionText(row) {
     return sourcePixels(row) === null ? 'Resolution unknown' : String(row.resolution);
   }
-  function score(row, byId, selected, primaryIds) {
-    var primary = 0, supporting = 0;
+  function score(row, byId, selected, primaryIds, captionById) {
+    var primary = 0, supporting = 0, distinctive = 0;
     row.ids.forEach(function(id) {
       var concept = byId.get(id);
       var n = selected.get(id) || 0;
@@ -398,15 +463,23 @@
       if (primaryIds.has(id)) primary += gain;
       else supporting += gain;
     });
+    (row.captionIds || []).forEach(function(id) {
+      var concept = captionById.get(id);
+      if (!concept) return;
+      var n = selected.get(id) || 0;
+      distinctive += concept.weight * (strength(n+1,'core') - strength(n,'core'));
+    });
     var complexity = Number(row.analysis && row.analysis.sceneComplexity &&
       row.analysis.sceneComplexity.score);
     var quality = Number.isFinite(complexity) && row.analysis && row.analysis.sceneComplexity
       ? 1 - Math.min(0.14, Math.max(0,complexity) * 0.14) : 1;
-    return {primary:primary*quality,supporting:supporting*quality};
+    return {primary:primary*quality,distinctive:distinctive*quality,supporting:supporting*quality};
   }
 
-  function rank(rows, concepts, pairGroups, primaryGroups) {
+  function rank(rows, concepts, pairGroups, primaryGroups, captionConcepts) {
+    captionConcepts = captionConcepts || [];
     var byId = new Map(concepts.map(function(c) {return [c.id,c];}));
+    var captionById = new Map(captionConcepts.map(function(c) {return [c.id,c];}));
     var primary = primaryConcepts(concepts,primaryGroups);
     var primaryIds = new Set(primary.map(function(c) {return c.id;}));
     var pairs = pairEvidence(rows,primary,pairGroups);
@@ -416,16 +489,16 @@
     var totalPair = pairStrength(pairs.available);
     var pairWeight = totalPair && primaryTotal ? primaryTotal * 0.15 / totalPair : 0;
     var pairCounts = new Map();
-    var counts = new Map(concepts.map(function(c) {return [c.id,0];}));
+    var counts = new Map(concepts.concat(captionConcepts).map(function(c) {return [c.id,0];}));
     var remaining = rows.slice(), ordered = [], gains = [];
     while (remaining.length) {
-      var scores = remaining.map(function(row) {return score(row,byId,counts,primaryIds);});
+      var scores = remaining.map(function(row) {return score(row,byId,counts,primaryIds,captionById);});
       var candidatePrimary = scores.map(function(value,i) {
         var increment = (pairs.byFile.get(remaining[i].fileName) || []).reduce(function(sum,id) {
           var n = pairCounts.get(id) || 0;
           return sum + strength(n+1,'supporting') - strength(n,'supporting');
         },0);
-        return value.primary + pairWeight * increment;
+        return value.primary + value.distinctive + pairWeight * increment;
       });
       var bestGain = Math.max.apply(null,candidatePrimary);
       var best = candidatePrimary.indexOf(bestGain);
@@ -444,7 +517,9 @@
       var chosen = remaining.splice(best,1)[0];
       ordered.push(chosen.fileName);
       gains.push(candidatePrimary[best]);
-      chosen.ids.forEach(function(id) {counts.set(id,(counts.get(id) || 0) + 1);});
+      chosen.ids.concat(chosen.captionIds || []).forEach(function(id) {
+        counts.set(id,(counts.get(id) || 0) + 1);
+      });
       (pairs.byFile.get(chosen.fileName) || []).forEach(function(id) {
         pairCounts.set(id,(pairCounts.get(id) || 0) + 1);
       });
@@ -452,12 +527,13 @@
     var selected = new Set(), ratios = [];
     ordered.forEach(function(file) {
       selected.add(file);
-      ratios.push(coverage(rows,concepts,selected,primaryGroups,pairGroups).ratio);
+      ratios.push(coverage(rows,concepts,selected,primaryGroups,pairGroups,
+        captionConcepts).learningRatio);
     });
     // Once no more primary information is gained, stop. Supporting-only
     // candidates can appear in the gallery but never extend any preset.
     var useful = gains.filter(function(gain) {return gain > 1e-10;}).length;
-    if (!useful || !primary.length) {
+    if (!useful || (!primary.length && !captionConcepts.length)) {
       return {order:ordered,gains:gains,ratios:ratios,sizes:{lean:0,balanced:0,broad:0}};
     }
     var first = gains.slice(0,Math.min(6,useful));

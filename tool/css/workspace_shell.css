@@ -2947,12 +2947,27 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
 .director-chat-history-heading { display: flex; justify-content: space-between; gap: 10px; margin-bottom: 7px; font-size: 12px; font-weight: 700; }
 #director-chat-save-status { font-weight: 400; color: var(--muted); }
 #director-chat-save-status[data-error="true"] { color: var(--danger, #d24c4c); }
-.director-chat-history-list { max-height: 260px; overflow: auto; display: grid; gap: 5px; }
-.director-chat-history-item { display: flex; align-items: center; gap: 5px; min-width: 0; }
-.director-chat-history-item > button:first-child { flex: 1; min-width: 0; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.director-chat-history-list { max-height: 260px; overflow: auto; display: grid; gap: 6px; }
+.director-chat-history-item { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.director-chat-history-item > button:first-child {
+  flex: 1 1 0;
+  width: auto;
+  min-width: 0;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.director-chat-history-item > button:not(:first-child) {
+  flex: 0 0 auto;
+  width: auto;
+  justify-content: center;
+  padding: 6px 10px;
+  border-left-width: 1px;
+}
 .director-chat-history-item.is-current > button:first-child { border-color: var(--accent); }
-.director-chat-history-item input { min-width: 0; flex: 1; }
-.director-chat-history-item button { font-size: 12px; }
+.director-chat-history-item input { flex: 1 1 0; width: auto; min-width: 0; }
+.director-chat-history-item button { font-size: 14px; }
 .director-chat-mode-row {
   display: flex;
   align-items: center;

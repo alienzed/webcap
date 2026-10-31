@@ -14,6 +14,15 @@ function block(start, end) {
   return source.slice(from, to);
 }
 
+const workspaceCss = fs.readFileSync(path.join(__dirname, '..', 'tool', 'css', 'workspace_shell.css'), 'utf8');
+
+test('Saved chat history preserves title width and keeps actions compact, including rename mode', () => {
+  assert.match(workspaceCss, /\.director-chat-history-item > button:first-child\s*\{[^}]*flex:\s*1 1 0;[^}]*width:\s*auto;/);
+  assert.match(workspaceCss, /\.director-chat-history-item > button:not\(:first-child\)\s*\{[^}]*flex:\s*0 0 auto;[^}]*width:\s*auto;/);
+  assert.match(workspaceCss, /\.director-chat-history-item input\s*\{[^}]*flex:\s*1 1 0;/);
+  assert.match(source, /item\.append\(input, save, cancel\)/);
+});
+
 test('Assistant displays history, new chat and save status', () => {
   assert.match(markup, /id="director-chat-history-toggle"/);
   assert.match(markup, /id="director-chat-history-panel"/);

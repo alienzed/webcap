@@ -4207,3 +4207,20 @@ html[data-theme="dark"] .storyboard-prompt-take-status {
   resize: vertical;
 }
 #director-chat-story-prepare:not(.hidden) { font-weight: 700; min-height: 36px; }
+
+
+/* Director guidance: surface only concrete field materialization opportunities. */
+.studio-dw-suggestions { display:grid; gap:8px; margin:10px 0 12px; }
+.studio-dw-suggestion-action {
+  display:block; width:100%; min-height:38px; padding:9px 12px;
+  border:1px solid var(--border); border-radius:7px;
+  background:var(--panel-soft); color:var(--text); text-align:left;
+  font:inherit; font-size:14px; font-weight:650; cursor:pointer;
+}
+.studio-dw-suggestion-action:first-child { border-color:var(--accent); }
+.studio-dw-suggestion-action:hover { background:var(--hover); border-color:var(--accent); }
+.studio-dw-suggestion-action:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+.studio-dw-suggestions-empty { margin:8px 0 12px; color:var(--muted); font-size:13px; line-height:1.4; }
+.studio-dw-assessment-details { margin:8px 0; border-top:1px solid var(--border); padding-top:8px; }
+.studio-dw-assessment-details > summary { color:var(--muted); font-size:12px; cursor:pointer; }
+.studio-dw-assessment-details .studio-dw-readiness-list { margin-top:8px; }

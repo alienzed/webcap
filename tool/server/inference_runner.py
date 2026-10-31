@@ -497,10 +497,29 @@ def _advance_queue():
 
         metadata = next_runnable.get("metadata") or {}
         if metadata.get("client") == "test" and metadata.get("candidateKind") == "session":
-            # Expand the session at dispatch, before reserving the GPU.
-            # A cancelled promise leaves no GPU lease behind.
+            # Expand only the next runnable Test Session. A failed expansion
+            # must not retry indefinitely and starve every job behind it.
             from .epoch_test_bench import expand_queued_session
-            expand_queued_session(str(next_runnable.get("id") or ""))
+            promise_id = str(next_runnable.get("id") or "")
+            try:
+                expand_queued_session(promise_id)
+            except Exception as exc:
+                try:
+                    # A concurrent cancellation, or an atomic replacement whose
+                    # Session manifest write failed, may remove the promise.
+                    execution_get_job(promise_id)
+                except FileNotFoundError:
+                    _logger.exception(
+                        "Test Session promise %s disappeared during expansion; "
+                        "the queue will reconcile its remaining work.", promise_id
+                    )
+                    return None
+                _logger.exception("Test Session %s failed to expand.", promise_id)
+                execution_pause_lane(
+                    EXECUTION_LANE,
+                    "Inference paused after an execution error: "
+                    "Test Session expansion failed: " + str(exc),
+                )
             return None
 
         if not owner:

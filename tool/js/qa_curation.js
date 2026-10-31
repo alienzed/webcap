@@ -1029,14 +1029,11 @@
         contribution.toFixed(2) + ' coverage points');
       reason.setAttribute('data-curation-contribution',fileName);
       card.appendChild(reason);
-      var inspect = button('Inspect item', function(e) {
-        window.qaInspectCurationItem(fileName);
-      }, 'qa-curation-inspect');
-      inspect.onclick = function(event) {
+      var inspect = button('Inspect item', function(event) {
         event.preventDefault();
         event.stopPropagation();
         window.qaInspectCurationItem(fileName);
-      };
+      }, 'qa-curation-inspect');
       card.appendChild(inspect);
       grid.appendChild(card);
     });

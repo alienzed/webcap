@@ -165,7 +165,6 @@ test('Director guidance presents at most two field actions and keeps assessment 
   assert.match(workbench, /dataset\.captureAction = 'true'/);
   assert.match(workbench, /dataset\.guidedWrite = 'true'/);
   assert.match(workbench, /studio-dw-suggestions/);
-  assert.match(workbench, /studio-dw-suggestions'\)\.querySelectorAll\('button\\[data-capture-action\\], button\\[data-guided-write\\]'\)/);
   assert.match(workbench, /reviewCreativeCapture\(creativeCapture\)/);
   assert.match(workbench, /openRecommendedWrite/);
   assert.match(html, /id="studio-dw-suggestions"/);

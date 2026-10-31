@@ -113,7 +113,7 @@ test('capture is optional, bounded and remains editable authoring material, not 
   assert.match(director, /reviewCapture: function \(capture, storyId\)/);
   assert.match(director, /showStudioBriefReview\(\)/);
   assert.match(workbench, /creativeCapture = capture/);
-  assert.match(workbench, /'Review ' \+ fieldName \+ ' change'/);
+  assert.ok(workbench.includes('function captureActionLabel(capture)'));
   assert.match(workbench, /return showSceneReview\(story, sceneTarget/);
   assert.match(workbench, /setReadinessFreshness/);
 });
@@ -150,11 +150,27 @@ test('completed Scene operations can be proposed and opened directly from guidan
   assert.match(workbench,/['"]scene-split['"]/);
   assert.match(workbench,/['"]scenes-batch['"]/);
   assert.match(workbench,/function openRecommendedWrite\(\)/);
-  assert.match(workbench,/nextButton\.onclick = openRecommendedWrite/);
+  assert.match(workbench,/run:openRecommendedWrite/);
   assert.match(workbench,/writeOperationChosen = true/);
   assert.match(workbench,/function renderReadiness\(list\)/);
   assert.match(director,/canReview: function \(\)/);
   assert.match(director,/this\.canReview\(\)/);
+});
+
+test('Director guidance presents at most two field actions and keeps assessment details secondary', () => {
+  assert.ok(workbench.includes('function captureActionLabel(capture)'));
+  assert.match(workbench, /function writeActionLabel\(\)/);
+  assert.match(workbench, /available\.slice\(0,2\)\.forEach/);
+  assert.match(workbench, /button\.dataset\.suggestionKind = action\.kind/);
+  assert.match(workbench, /dataset\.captureAction = 'true'/);
+  assert.match(workbench, /dataset\.guidedWrite = 'true'/);
+  assert.match(workbench, /studio-dw-suggestions/);
+  assert.match(workbench, /reviewCreativeCapture\(creativeCapture\)/);
+  assert.match(workbench, /openRecommendedWrite/);
+  assert.match(html, /id="studio-dw-suggestions"/);
+  assert.match(html, /<details class="studio-dw-assessment-details">/);
+  assert.match(html, /<summary>Creative assessment details<\/summary>/);
+  assert.match(workbench, /sceneNames\.join\(' \+ '\)/);
 });
 
 test('Readiness Write field recommendations preselect only supported editable fields', () => {

@@ -1088,7 +1088,7 @@
   }
   function setReadinessFreshness(stale) {
     readinessStale = !!stale;
-    Array.from(el('studio-dw-readiness-list').querySelectorAll('button[data-capture-action], button[data-guided-write]'))
+    Array.from(el('studio-dw-suggestions').querySelectorAll('button[data-capture-action], button[data-guided-write]'))
       .forEach(function (action) {action.disabled = readinessStale;});
     var label = el('studio-dw-readiness-freshness');
     label.textContent = readinessStale
@@ -1113,40 +1113,82 @@
     else refreshWrite();
     status('Director suggested this operation. Choose the exact saved targets, then review.', false);
   }
+  function captureActionLabel(capture) {
+    var names = {title:'Project Title',concept:'Project Overview',style:'Visual Atmosphere',
+      invariant:'Invariant',summary:'Scene Intent',prompt:'H3 Prompt',scene:'New Scene'};
+    return capture.field === 'scene' ? 'Add Scene' :
+      capture.field === 'invariant' ? 'Capture Invariant' :
+      'Write ' + (names[capture.field] || labels[capture.field] || capture.field);
+  }
+  function writeActionLabel() {
+    var operation = recommendations.writeHint, fields = recommendedWriteFields(operation);
+    if (operation === 'new-project') return 'Create Project';
+    if (operation === 'scene') return 'Add Scene';
+    if (operation === 'scenes') return 'Develop Scenes';
+    if (operation === 'scene-edit' || operation === 'scenes-batch') {
+      var sceneNames = fields.map(function (field) {
+        return field === 'summary' ? 'Intent' : field === 'prompt' ? 'H3 Prompt' : 'Title';
+      });
+      return sceneNames.length ? 'Write ' + sceneNames.join(' + ') : 'Write Scene fields';
+    }
+    if (operation === 'project') {
+      var projectNames = fields.map(function (field) {
+        return field === 'concept' ? 'Overview' : field === 'style' ? 'Visual Atmosphere' :
+          field === 'invariants' ? 'Invariants' : 'Title';
+      });
+      return projectNames.length ? 'Write ' + projectNames.join(' + ') : 'Write Project fields';
+    }
+    return operation === 'scene-split' ? 'Split Scene' :
+      operation === 'scene-move' ? 'Move Scene' :
+      operation === 'scene-duplicate' ? 'Duplicate Scene' :
+      operation === 'scene-invariants' ? 'Link Invariants' :
+      operation === 'playbook' ? 'Update H3 Playbook' : '';
+  }
   function renderReadiness(list) {
     readiness = list;
-    var host = el('studio-dw-readiness-list');
-    host.replaceChildren();
-    if (creativeCapture && !readinessStale) {
-      var captureButton = document.createElement('button');
-      captureButton.type = 'button';
-      captureButton.className = 'studio-dw-assessment-item';
-      captureButton.dataset.captureAction = 'true';
-      var fieldName = labels[creativeCapture.field] || creativeCapture.field;
-      captureButton.textContent = 'Review ' + fieldName + ' change';
-      captureButton.title = 'Review Director-authored material in the saved field; no additional model request';
-      captureButton.onclick = function () {reviewCreativeCapture(creativeCapture);};
-      host.appendChild(captureButton);
+    var actions = el('studio-dw-suggestions');
+    var assessment = el('studio-dw-readiness-list');
+    actions.replaceChildren();
+    assessment.replaceChildren();
+    var available = [];
+    if (!readinessStale && creativeCapture) available.push({
+      kind:'capture', label:captureActionLabel(creativeCapture),
+      run:function () { reviewCreativeCapture(creativeCapture); }
+    });
+    if (!readinessStale && recommendations.writeHint) {
+      var fields = recommendedWriteFields(recommendations.writeHint);
+      var captureField = creativeCapture && creativeCapture.field === 'invariant' ? 'invariants' :
+        creativeCapture && creativeCapture.field;
+      var duplicatesCapture = creativeCapture &&
+        (fields.indexOf(captureField) !== -1 ||
+         (creativeCapture.field === 'scene' && recommendations.writeHint === 'scene'));
+      var label = writeActionLabel();
+      if (label && !duplicatesCapture) available.push({
+        kind:'write', label:label, run:openRecommendedWrite
+      });
     }
-    if (!creativeCapture && recommendations.writeHint && !readinessStale) {
-      var nextButton = document.createElement('button');
-      nextButton.type = 'button';
-      nextButton.className = 'studio-dw-assessment-item';
-      nextButton.dataset.guidedWrite = 'true';
-      var names = {
-        project:'Update Project', 'new-project':'Create Project', scene:'Add Scene',
-        scenes:'Add Scenes', 'scene-edit':'Revise Scene', 'scenes-batch':'Revise several Scenes',
-        'scene-move':'Move Scene', 'scene-duplicate':'Duplicate Scene',
-        'scene-split':'Split Scene', 'scene-invariants':'Use Invariant in Scenes', playbook:'Revise H3 Playbook'
-      };
-      nextButton.textContent = 'Review next step · ' + (names[recommendations.writeHint] || 'Studio Write');
-      nextButton.onclick = openRecommendedWrite;
-      host.appendChild(nextButton);
+    available.slice(0,2).forEach(function (action) {
+      var button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'studio-dw-suggestion-action';
+      button.dataset.suggestionKind = action.kind;
+      if (action.kind === 'capture') button.dataset.captureAction = 'true';
+      if (action.kind === 'write') button.dataset.guidedWrite = 'true';
+      button.textContent = action.label;
+      button.onclick = action.run;
+      actions.appendChild(button);
+    });
+    if (!available.length) {
+      var emptyAction = document.createElement('p');
+      emptyAction.className = 'studio-dw-suggestions-empty';
+      emptyAction.textContent = readinessStale ? 'Waiting for a current assessment.' :
+        'Keep developing the idea. Director will offer a field when it is ready.';
+      actions.appendChild(emptyAction);
     }
     if (!list.length) {
       var empty = document.createElement('p');
-      empty.textContent = readinessStale ? 'No current assessment.' : 'Not assessed yet.';
-      host.appendChild(empty);
+      empty.textContent = readinessStale ? 'No current assessment.' : 'No assessment details yet.';
+      assessment.appendChild(empty);
       return;
     }
     list.forEach(function (item) {
@@ -1154,15 +1196,15 @@
       button.type = 'button';
       button.className = 'studio-dw-assessment-item';
       var subject = item.scope === 'project' ? 'Project' : 'Scene (current discussion)';
-      button.textContent = (item.ready ? '☑ ' : '□ ') + subject + ' · ' + item.name;
-      button.title = 'Inspect complete Director proposal';
+      button.textContent = (item.ready ? '✓ ' : '○ ') + subject + ' · ' + item.name;
+      button.title = 'Inspect Director assessment details';
       button.onclick = function () {
         el('studio-dw-assessment-title').textContent = subject + ' · ' + item.name +
           (item.ready ? ' · developed' : ' · needs development');
         el('studio-dw-assessment-content').textContent = item.content;
         el('studio-dw-assessment-dialog').showModal();
       };
-      host.appendChild(button);
+      assessment.appendChild(button);
     });
   }
   window.studioDirectorWorkbench = {

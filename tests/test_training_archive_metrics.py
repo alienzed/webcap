@@ -174,6 +174,64 @@ def test_finalize_persists_resume_branch_boundary(tmp_path, monkeypatch):
     assert cleared_test_workspace == {"folder": tmp_path / "set", "sessions": []}
 
 
+
+
+@pytest.mark.parametrize("other_provenance", [
+    {"version": 1},
+    {"modelProfile": {"schemaVersion": 1}},
+    {"version": 1, "sourceFolder": "sets/another", "stage": "h3"},
+    {"version": 1, "sourceFolder": "sets/subject", "stage": "krea2"},
+])
+def test_archive_ignores_staged_copies_without_matching_set_stage(other_provenance, tmp_path, monkeypatch):
+    staged = tmp_path / "staged"
+    staged.mkdir()
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+
+    current = staged / "current.safetensors"
+    current.write_bytes(b"current")
+    matching = {
+        "version": 1,
+        "sourceFolder": "sets/subject",
+        "stage": "h3",
+        "sourceEpoch": 12,
+    }
+    current.with_suffix(".webcap.json").write_text(json.dumps(matching), encoding="utf-8")
+    other = staged / "unrelated.safetensors"
+    other.write_bytes(b"other")
+    other_sidecar = other.with_suffix(".webcap.json")
+    other_sidecar.write_text(json.dumps(other_provenance), encoding="utf-8")
+
+    monkeypatch.setattr(training_archive, "test_copy_destination", lambda stage, folder: (tmp_path, ["staged"]))
+
+    def resolve(payload):
+        assert payload == matching, "Unrelated staged provenance must not be resolved."
+        return run_dir.resolve(), {"actionId": "003-h3"}
+
+    monkeypatch.setattr(training_archive, "candidate_run_snapshot_from_provenance", resolve)
+    matches = training_archive._staged_candidates("sets/subject", run_dir, "003-h3", "h3")
+
+    assert [candidate.name for candidate, _sidecar, _payload in matches] == ["current.safetensors"]
+    assert other.read_bytes() == b"other"
+    assert json.loads(other_sidecar.read_text(encoding="utf-8")) == other_provenance
+
+
+def test_archive_still_rejects_invalid_matching_staged_provenance(tmp_path, monkeypatch):
+    staged = tmp_path / "staged"
+    staged.mkdir()
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    candidate = staged / "matching.safetensors"
+    candidate.write_bytes(b"current")
+    candidate.with_suffix(".webcap.json").write_text(
+        json.dumps({"version": 2, "sourceFolder": "sets/subject", "stage": "h3"}),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(training_archive, "test_copy_destination", lambda stage, folder: (tmp_path, ["staged"]))
+    with pytest.raises(RuntimeError, match="Staged Test provenance is invalid: matching.webcap.json"):
+        training_archive._staged_candidates("sets/subject", run_dir, "003-h3", "h3")
+
+
 def test_staged_archive_cleanup_groups_candidates_by_timestamp_run_not_job_id(tmp_path, monkeypatch):
     staged = tmp_path / "staged"
     staged.mkdir()

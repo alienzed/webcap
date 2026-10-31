@@ -144,6 +144,16 @@
     session.reviewReturn = draft.reviewReturn || null;
     session.filter = 'selected';
     session.status = 'Saved Curate draft restored.';
+    if (session.preset !== 'custom') {
+      var expected = new Set(session.order.slice(0,session.sizes[session.preset]));
+      if (expected.size !== session.choices.size ||
+          Array.from(session.choices).some(function(file) {return !expected.has(file);})) {
+        // An older scoring policy cannot silently rename an old shortlist
+        // as the new Lean / Standard / Broad recommendation.
+        session.preset = 'custom';
+        session.status = 'Previous shortlist preserved as Custom; choose a preset to apply the updated recommendation.';
+      }
+    }
     session.draftStale = false;
     return true;
   }

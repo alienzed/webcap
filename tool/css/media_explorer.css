@@ -761,3 +761,31 @@
 @media(max-width:850px) {
   .media-explorer-workspace .media-explorer-sort-controls { flex:1 1 100%; }
 }
+
+
+/* Keep the common Explorer header quiet; filtering is available on demand. */
+.media-explorer-workspace .media-explorer-toolbar { padding-top: 14px; }
+.media-explorer-workspace .media-explorer-header { margin-bottom: 10px; }
+.media-explorer-workspace .media-explorer-searchbar { margin-bottom: 9px; }
+.media-explorer-workspace .media-explorer-search-field input { padding: 12px 0; font-size: 15px; }
+.media-explorer-filter-panel { margin: 0 0 7px; }
+.media-explorer-filter-panel > summary {
+  display: inline-flex; align-items: center; gap: 8px; min-height: 30px;
+  padding: 4px 9px; border: 1px solid var(--border); border-radius: 6px;
+  color: var(--muted); background: transparent; font-size: 12px; cursor: pointer;
+  list-style: none;
+}
+.media-explorer-filter-panel > summary::-webkit-details-marker { display: none; }
+.media-explorer-filter-panel > summary::before { content: '＋'; color: var(--muted); font-size: 13px; }
+.media-explorer-filter-panel[open] > summary::before { content: '−'; }
+.media-explorer-filter-panel > summary:hover { color: var(--text); border-color: var(--muted); }
+.media-explorer-filter-count { color: var(--explorer-accent); font-weight: 700; }
+.media-explorer-filter-panel-body {
+  display: grid; gap: 9px; margin: 8px 0 9px; padding: 12px;
+  border: 1px solid var(--border); border-radius: 8px; background: var(--panel);
+}
+.media-explorer-filter-panel-body .media-explorer-facets { margin: 0; }
+.media-explorer-filter-panel-body .media-explorer-facets select { max-width: 220px; }
+.media-explorer-technical-filters { padding-top: 8px; border-top: 1px solid var(--border); }
+.media-explorer-technical-filters > summary { color: var(--muted); font-size: 12px; cursor: pointer; }
+.media-explorer-filter-chips { margin: 0 0 4px; }

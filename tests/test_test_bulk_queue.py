@@ -106,6 +106,53 @@ def test_100_renditions_expand_only_when_session_is_dispatched(bulk_root, monkey
     assert len(calls) == 1
 
 
+def test_cancel_pending_test_batch_does_not_materialize_renditions(bulk_root, monkeypatch):
+    monkeypatch.setattr(inference_runner, "start_requested_inference", lambda: None)
+    sessions = [submit_bulk(bulk_root, count=3)[1] for _ in range(4)]
+    queued = execution_queue.lane_snapshot("inference", include_terminal=False)["jobs"]
+    assert len(queued) == 4
+    assert all(job["metadata"]["candidateKind"] == "session" for job in queued)
+    assert all(bench._read_status(session)["inferenceJobs"] == [] for session in sessions)
+
+    removed = bench.cancel_queued(bulk_root, sessions[1].name)
+    assert removed["removed"] == sessions[1].name
+    assert not sessions[1].exists()
+    remaining = execution_queue.lane_snapshot("inference", include_terminal=False)["jobs"]
+    assert [job["metadata"]["sessionId"] for job in remaining] == [
+        sessions[index].name for index in (0, 2, 3)
+    ]
+    assert all(job["metadata"]["candidateKind"] == "session" for job in remaining)
+
+
+def test_test_batch_recovers_atomic_expansion_after_session_write_failure(bulk_root, monkeypatch):
+    monkeypatch.setattr(inference_runner, "start_requested_inference", lambda: None)
+    _request, session, _status = submit_bulk(bulk_root, count=3)
+    promise_id = bench._read_status(session)["deferredJobId"]
+    original_write = bench._atomic_write_json
+    failed = []
+
+    def crash_before_session_commit(path, payload):
+        if (Path(path) == session / "test.json"
+                and payload.get("inferenceJobs") and not failed):
+            failed.append(True)
+            raise OSError("simulated crash after atomic queue swap")
+        return original_write(path, payload)
+
+    monkeypatch.setattr(bench, "_atomic_write_json", crash_before_session_commit)
+    with pytest.raises(OSError, match="simulated crash"):
+        bench.expand_queued_session(promise_id)
+    assert failed == [True]
+    manifest = bench._read_status(session)
+    assert manifest["deferredJobId"] == promise_id
+    assert manifest["inferenceJobs"] == []
+
+    visible = bench._sync_inference_session(session)
+    manifest = bench._read_status(session)
+    assert len(manifest["inferenceJobs"]) == 4
+    assert manifest["deferredJobId"] == ""
+    assert visible["status"] == "queued"
+
+
 def test_failed_bulk_promotion_rolls_back_only_its_session(bulk_root, monkeypatch):
     other = execution_queue.enqueue(
         "inference", {"request": {"prompt": "other"}},

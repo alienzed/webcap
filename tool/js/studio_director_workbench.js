@@ -1088,7 +1088,7 @@
   }
   function setReadinessFreshness(stale) {
     readinessStale = !!stale;
-    Array.from(el('studio-dw-readiness-list').querySelectorAll('button[data-capture-action], button[data-guided-write]'))
+    Array.from(el('studio-dw-suggestions').querySelectorAll('button[data-capture-action], button[data-guided-write]'))
       .forEach(function (action) {action.disabled = readinessStale;});
     var label = el('studio-dw-readiness-freshness');
     label.textContent = readinessStale
@@ -1172,6 +1172,8 @@
       button.type = 'button';
       button.className = 'studio-dw-suggestion-action';
       button.dataset.suggestionKind = action.kind;
+      if (action.kind === 'capture') button.dataset.captureAction = 'true';
+      if (action.kind === 'write') button.dataset.guidedWrite = 'true';
       button.textContent = action.label;
       button.onclick = action.run;
       actions.appendChild(button);

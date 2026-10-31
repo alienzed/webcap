@@ -12,7 +12,7 @@ function harness(savedDraft = null) {
   const calls = { submitted: [], training: [], opened: [], errors: [], saved: [], changedFocus: 0, draft: savedDraft };
   const ctx = {
     document, window: dom.window,
-    state: { folder: 'sets/demo', focusSet: null },
+    state: { folder: 'sets/demo', focusSet: null, items: entries().map(item => ({fileName:item.fileName})) },
     getDirectorModelPreference: () => 'director-test',
     qaCurrentCurationSignature: () => 'same-scope',
     isPreviewVideoFileName: name => name.endsWith('.mp4'),
@@ -48,6 +48,8 @@ function harness(savedDraft = null) {
     },
     setTimeout,
   };
+  dom.window.qaCurrentCurationEvidence = files => entries().filter(item => files.includes(item.fileName));
+  dom.window.qaUseCuratedSelectionForTraining = ctx.qaUseCuratedSelectionForTraining;
   dom.window.qaShowCuration = () => {};
   dom.window.qaShowOverviewFromCuration = () => {};
   dom.window.reportConsoleError = (name, error) => calls.errors.push(String(error.message || error));
@@ -156,15 +158,15 @@ test('unattended Director curation creates a real checklist without equal quotas
   assert.ok(h.ctx.state.focusSet === null);
 });
 
-test('scope changes fail visibly instead of using a stale curated selection', async () => {
+test('a changed view does not block saved Curate training selections', async () => {
   const h = harness();
   h.ctx.qaCurrentCurationSignature = () => 'first-scope';
   h.ctx.window.startQaCuration(entries(), 'training', 'first-scope');
-  await new Promise(resolve => setTimeout(resolve, 40));
+  await new Promise(resolve => setTimeout(resolve, 45));
   h.ctx.qaCurrentCurationSignature = () => 'new-scope';
   h.ctx.window.renderQaCuration(h.root, 'new-scope');
-  assert.match(h.root.textContent, /inputs changed/i);
-  assert.equal(h.root.querySelector('[data-curation-train]'), null);
+  assert.match(h.root.textContent, /current view or QA settings differ/i);
+  assert.ok(h.root.querySelector('[data-curation-train]'));
 });
 
 test('video candidates render metadata-only thumbnails and remain opt-in', async () => {
@@ -374,19 +376,21 @@ test('Curate saves compact signatures and persists individual concept changes', 
   assert.ok(h.calls.draft.conceptRoles.some(([id, role]) => role === 'ignore'));
 });
 
-test('stale Curate drafts retain media choices but cannot export old concepts', async () => {
+test('Curate v2 restores ranking and choices without a Director call after signature drift', async () => {
   const first = harness();
   first.ctx.window.startQaCuration(entries(), 'geometry', 'same-scope');
   await new Promise(resolve => setTimeout(resolve, 55));
-  const staleDraft = structuredClone(first.calls.draft);
-  const second = harness(staleDraft);
+  const draft = structuredClone(first.calls.draft);
+  assert.equal(draft.version, 2);
+  assert.ok(draft.snapshot.rows.length > 0);
+  const second = harness(draft);
+  second.ctx.qaCurrentCurationSignature = () => 'new-scope';
   second.ctx.window.startQaCuration(entries(), 'geometry', 'new-scope');
   await new Promise(resolve => setTimeout(resolve, 50));
   assert.equal(second.calls.submitted.length, 0);
-  assert.match(second.root.textContent, /needs fresh analysis/);
-  assert.equal(second.root.querySelector('[data-curation-train]'), null);
-  assert.ok(second.root.querySelector('button.qa-curation-primary'));
-  assert.equal(second.calls.draft.signature, staleDraft.signature);
+  assert.ok(second.root.querySelector('[data-curation-train]'));
+  assert.equal(Number(second.root.querySelector('[data-curation-selected]').textContent), draft.choices.length);
+  assert.equal(second.calls.draft.signature, draft.signature);
 });
 
 test('restoring current Curate draft skips Director and retains saved roles', async () => {
@@ -432,4 +436,49 @@ test('Curate review CSS reserves a desktop footer row below both columns', () =>
   const css = fs.readFileSync('tool/css/qa_workbench.css', 'utf8');
   assert.match(css, /grid-template-rows:auto auto minmax\(0,1fr\) auto/);
   assert.match(css, /\.qa-curation-review-actions \{ grid-column:1 \/ -1; grid-row:4; \}/);
+});
+
+test('near-equivalent 768 source outranks 384 source, but rare core evidence remains eligible', () => {
+  const h = harness();
+  const concepts = [{id:'unique',role:'core',weight:1,count:1}, {id:'common',role:'core',weight:1,count:3}];
+  const rows = [
+    {fileName:'small.png',ids:['common'],resolution:'384x384',analysis:{}},
+    {fileName:'large.png',ids:['common'],resolution:'768x768',analysis:{}},
+    {fileName:'unique.png',ids:['unique'],resolution:'384x384',analysis:{}},
+  ];
+  const ranked = h.ctx.window.qaCurationRank(rows, concepts).order;
+  assert.ok(ranked.indexOf('large.png') < ranked.indexOf('small.png'));
+  assert.ok(ranked.indexOf('unique.png') < ranked.indexOf('small.png'));
+});
+
+test('Curate review shows source tags, resolution and preserves a review resume point', async () => {
+  const h = harness();
+  const source = entries();
+  source[0].resolution = '768x768';
+  h.ctx.window.qaCurrentCurationEvidence = files => source.filter(item => files.includes(item.fileName));
+  h.ctx.window.startQaCuration(source,'geometry','same-scope');
+  await new Promise(resolve => setTimeout(resolve,45));
+  const button = Array.from(h.root.querySelectorAll('button')).find(el => el.textContent.startsWith('Review included'));
+  button.click();
+  const overlay = h.ctx.document.querySelector('.qa-curation-review');
+  assert.match(overlay.textContent, /Current tags:/);
+  assert.match(overlay.textContent, /Resolution/);
+  overlay.querySelector('.qa-curation-review-open-item').click();
+  assert.equal(h.calls.opened.length,1);
+  assert.ok(Array.from(h.root.querySelectorAll('button')).some(el => el.textContent === 'Resume review'));
+});
+
+test('changed evidence displays a nonblocking notice and does not discard manual selections', async () => {
+  const h = harness();
+  const original = entries();
+  let live = original.map(row=>structuredClone(row));
+  h.ctx.window.qaCurrentCurationEvidence = files => live.filter(row => files.includes(row.fileName));
+  h.ctx.window.startQaCuration(original,'geometry','same-scope');
+  await new Promise(resolve => setTimeout(resolve,45));
+  const count = Number(h.root.querySelector('[data-curation-selected]').textContent);
+  live[0].caption = 'edited caption';
+  h.ctx.window.renderQaCuration(h.root,'same-scope');
+  assert.match(h.root.textContent,/changed supporting evidence/);
+  assert.equal(Number(h.root.querySelector('[data-curation-selected]').textContent),count);
+  assert.ok(h.root.querySelector('[data-curation-train]'));
 });

@@ -520,6 +520,10 @@ def _advance_queue():
                     "Inference paused after an execution error: "
                     "Test Session expansion failed: " + str(exc),
                 )
+                # This branch exits before the normal post-job GPU release.
+                # A paused lane must not retain stale inference ownership.
+                if execution_resource_owner() == GPU_RESERVATION_OWNER:
+                    _release_gpu()
             return None
 
         if not owner:

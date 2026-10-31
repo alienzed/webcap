@@ -1,6 +1,6 @@
 # QA Curate — training-quality curation contract and phased delivery
 
-Status: **design contract committed first (2026-10-30); implementation commits in progress, automated CI and live UX validation pending**. This supersedes the original copy-to-Set handoff. Keep the existing bold, readable fullscreen UX. Work inside the current QA/Media List/Focus Set/Training architecture, as directed by `AGENTS.md`.
+Status: **design contract committed first (2026-10-30); workflow-clarity implementation completed in PR #840; Evaluation parity and QA Focus Review CI passed; live UX and trained-LoRA outcome validation remain pending**. This supersedes the original copy-to-Set handoff. Keep the existing bold, readable fullscreen UX. Work inside the current QA/Media List/Focus Set/Training architecture, as directed by `AGENTS.md`.
 
 ## 1. Outcome and ownership
 

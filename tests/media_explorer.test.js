@@ -429,6 +429,22 @@ test('Explorer IA keeps full-size viewer an action and recent discovery in the h
   assert.match(css, /\.media-explorer-workspace \.media-explorer-resizer\s*\{\s*display: none;/);
 });
 
+test('Explorer keeps advanced facets collapsed until requested and shows active filter count', async () => {
+  const html = fs.readFileSync('tool/tool.html', 'utf8');
+  const toolbar = html.slice(html.indexOf('<div class="media-explorer-toolbar">'), html.indexOf('<aside class="media-explorer-browser"'));
+  const panel = toolbar.slice(toolbar.indexOf('id="media-explorer-filter-panel"'), toolbar.indexOf('id="media-explorer-filter-chips"'));
+  assert.match(panel, /<details id="media-explorer-filter-panel"/);
+  assert.match(panel, /id="media-explorer-filter-count"/);
+  for (const id of ['media-explorer-kind', 'media-explorer-model', 'media-explorer-folder',
+    'media-explorer-date', 'media-explorer-rating', 'media-explorer-min-side']) {
+    assert.ok(panel.includes('id="' + id + '"'), id + ' remains available inside the filter disclosure');
+  }
+  assert.match(panel, /id="media-explorer-external-filters" class="media-explorer-technical-filters hidden"/);
+  const source = fs.readFileSync('tool/js/media_explorer.js', 'utf8');
+  assert.match(source, /var filterCount = chips\.children\.length;/);
+  assert.match(source, /countNode\.textContent = filterCount \? String\(filterCount\) : '';/);
+});
+
 test('Explorer file lists expose media type without loading thumbnails in List mode', () => {
   const source = fs.readFileSync('tool/js/media_explorer.js', 'utf8');
   assert.match(source, /row\.dataset\.mediaKind = item\.mediaKind/);

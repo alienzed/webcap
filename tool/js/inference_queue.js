@@ -413,6 +413,10 @@
     renderFailureDetails();
     syncShellInferenceState(jobs);
 
+    // Polling continues for badges and Activity, but hidden queue rows have
+    // no reason to be reconciled on every background refresh.
+    if (!state.open) return;
+
     var drawer = el('inference-queue-drawer');
     var host = el('inference-queue-list');
     var summary = el('inference-queue-summary');

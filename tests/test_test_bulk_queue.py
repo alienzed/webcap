@@ -48,7 +48,7 @@ def submit_bulk(folder, count=100, include_base=True):
     return request, session, result
 
 
-def test_100_renditions_preserve_mixed_fifo_manifest_and_frozen_requests(bulk_root, monkeypatch):
+def test_100_renditions_expand_only_when_session_is_dispatched(bulk_root, monkeypatch):
     other = execution_queue.enqueue(
         "inference", {"request": {"prompt": "generate"}},
         metadata={"client": "generate"}, initial_status="queued"
@@ -58,32 +58,43 @@ def test_100_renditions_preserve_mixed_fifo_manifest_and_frozen_requests(bulk_ro
         session = bench._session_directories(bulk_root)[0]
         manifest = bench._read_status(session)
         assert manifest["migrationComplete"] is True
-        jobs = execution_queue.jobs_by_id(manifest["inferenceJobs"])
-        assert len(jobs) == 101
-        assert all(job["status"] == "queued" for job in jobs.values())
+        assert manifest["inferenceJobs"] == []
+        promised = execution_queue.get_job(manifest["deferredJobId"])
+        assert promised["metadata"]["candidateKind"] == "session"
         observed.append(True)
     monkeypatch.setattr(inference_runner, "start_requested_inference", inspect_start)
 
     request, session, status = submit_bulk(bulk_root, count=100)
     assert observed == [True]
     manifest = bench._read_status(session)
-    assert status["total"] == 101
-    assert manifest["total"] == len(manifest["inferenceJobs"]) == 101
+    promise_id = manifest["deferredJobId"]
+    assert status["total"] == manifest["total"] == 101
+    assert manifest["inferenceJobs"] == []
     snapshot = execution_queue.lane_snapshot("inference", include_terminal=False)
-    assert [job["id"] for job in snapshot["jobs"]] == [
-        other["id"], *manifest["inferenceJobs"]
-    ]
+    assert [job["id"] for job in snapshot["jobs"]] == [other["id"], promise_id]
+    assert [job["queuePosition"] for job in snapshot["jobs"]] == [1, 2]
+
+    frozen = execution_queue.get_job(promise_id, include_payload=True)
+    assert frozen["payload"]["request"]["workflow"] == {"nodes": [{"id": "frozen"}]}
+    request["workflow"]["nodes"][0]["id"] = "changed-after-submit"
+    assert execution_queue.get_job(promise_id, include_payload=True)["payload"]["request"]["workflow"] == {
+        "nodes": [{"id": "frozen"}]
+    }
+
+    expanded = bench.expand_queued_session(promise_id)
+    assert len(expanded) == 101
+    manifest = bench._read_status(session)
+    assert manifest["deferredJobId"] == ""
+    assert manifest["inferenceJobs"] == expanded
+    snapshot = execution_queue.lane_snapshot("inference", include_terminal=False)
+    assert [job["id"] for job in snapshot["jobs"]] == [other["id"], *expanded]
     assert [job["queuePosition"] for job in snapshot["jobs"]] == list(range(1, 103))
     assert [job["metadata"]["candidateKind"] for job in snapshot["jobs"][1:]] == [
         "base", *(["lora"] * 100)
     ]
-
-    first = execution_queue.get_job(manifest["inferenceJobs"][0], include_payload=True)
-    assert first["payload"]["request"]["workflow"] == {"nodes": [{"id": "frozen"}]}
-    request["workflow"]["nodes"][0]["id"] = "changed-after-submit"
-    assert execution_queue.get_job(
-        manifest["inferenceJobs"][0], include_payload=True
-    )["payload"]["request"]["workflow"] == {"nodes": [{"id": "frozen"}]}
+    assert execution_queue.get_job(expanded[0], include_payload=True)["payload"]["request"]["workflow"] == {
+        "nodes": [{"id": "frozen"}]
+    }
 
     original_read = execution_queue._read_state
     calls = []
@@ -91,8 +102,7 @@ def test_100_renditions_preserve_mixed_fifo_manifest_and_frozen_requests(bulk_ro
         calls.append(True)
         return original_read()
     monkeypatch.setattr(execution_queue, "_read_state", counted_read)
-    records = bench._session_job_records(manifest)
-    assert len(records) == 101
+    assert len(bench._session_job_records(manifest)) == 101
     assert len(calls) == 1
 
 

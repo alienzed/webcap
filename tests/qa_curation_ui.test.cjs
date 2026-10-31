@@ -166,7 +166,7 @@ test('a changed view does not block saved Curate training selections', async () 
   await new Promise(resolve => setTimeout(resolve, 45));
   h.ctx.qaCurrentCurationSignature = () => 'new-scope';
   h.ctx.window.renderQaCuration(h.root, 'new-scope');
-  assert.match(h.root.textContent, /current view or QA settings differ/i);
+  assert.doesNotMatch(h.root.textContent, /Stale|reassess|QA settings differ/i);
   assert.ok(h.root.querySelector('[data-curation-train]'));
 });
 
@@ -283,7 +283,7 @@ test('balancing priorities never discard manual thumbnail choices', async () => 
   assert.match(h.root.textContent, /Manual image selections are preserved/);
   assert.equal(h.calls.submitted.length, 1);
   const balanced = Array.from(h.root.querySelectorAll('.qa-curation-controls button'))
-    .find(button => button.textContent.startsWith('Balanced'));
+    .find(button => button.textContent.startsWith('Standard'));
   balanced.click();
   assert.doesNotMatch(h.root.textContent, /Manual image selections are preserved/);
 });
@@ -522,4 +522,146 @@ test('chosen tag groups show a pair matrix that tracks local inclusion edits', a
   selected.dispatchEvent(new h.ctx.window.Event('change',{bubbles:true}));
   const after = cells().map(cell=>cell.textContent);
   assert.notDeepEqual(after,before,'the displayed pair distribution must update after a checkbox decision');
+});
+
+
+test('Director completion uses its submitted concept inventory even if current QA evidence changes', async () => {
+  const h = harness(), rows = entries(), live = entries();
+  let completeJob;
+  const original = h.ctx.fetch;
+  h.ctx.fetch = (url, opts) => {
+    if (url.startsWith('/fs/director/job?')) {
+      return new Promise(resolve => {completeJob = resolve;});
+    }
+    return original(url, opts);
+  };
+  h.ctx.window.qaCurrentCurationEvidence = files => live.filter(item => files.includes(item.fileName));
+  h.ctx.window.startQaCuration(rows, 'construction', 'original-input');
+  await new Promise(resolve => setTimeout(resolve, 20));
+  assert.equal(typeof completeJob, 'function');
+  live[0].caption = 'revised after the request was queued';
+  h.ctx.qaCurrentCurationSignature = () => 'different-current-input';
+  const concepts = h.calls.submitted[0].concepts;
+  completeJob({ok:true,json:async()=>({ok:true,job:{status:'completed',result:{analysis:{
+    summary:'Valid completed original analysis',
+    coreIds:concepts.filter(c=>c.group==='Shape').map(c=>c.id),
+    supportingIds:concepts.filter(c=>c.group==='View').map(c=>c.id)
+  }}}})});
+  await new Promise(resolve => setTimeout(resolve, 55));
+  assert.ok(h.root.querySelector('[data-curation-train]'), 'successful paid analysis must remain usable');
+  assert.match(h.root.textContent,/changed supporting evidence/i);
+  assert.equal(h.calls.errors.length,0,h.calls.errors.join('; '));
+  assert.equal(h.calls.draft.analysis.summary,'Valid completed original analysis');
+});
+
+test('Director result cannot be applied after source folder changes during analysis', async () => {
+  const h = harness();
+  let completeJob;
+  const original = h.ctx.fetch;
+  h.ctx.fetch = (url, opts) => url.startsWith('/fs/director/job?')
+    ? new Promise(resolve => {completeJob = resolve;}) : original(url,opts);
+  h.ctx.window.startQaCuration(entries(), 'construction','original-input');
+  await new Promise(resolve => setTimeout(resolve,20));
+  h.ctx.state.folder = 'sets/another';
+  const concepts = h.calls.submitted[0].concepts;
+  completeJob({ok:true,json:async()=>({ok:true,job:{status:'completed',result:{analysis:{
+    summary:'wrong source',
+    coreIds:concepts.filter(c=>c.group==='Shape').map(c=>c.id),
+    supportingIds:[]
+  }}}})});
+  await new Promise(resolve => setTimeout(resolve,35));
+  assert.equal(h.calls.saved.length,0,'no draft may be saved to a different source folder');
+  assert.ok(h.calls.errors.some(e=>/source Set changed/i.test(e)));
+});
+
+test('pairwise scoring axes are visible, user-controlled and preserved in the draft', async () => {
+  const h = harness();
+  const rows = entries().slice(0,15).map((row,i)=>({
+    ...row, groupedTags:[
+      {group:'Lighting',term:i%2?'bright':'dim'},
+      {group:'Position',term:i%2?'kneeling':'standing'},
+      {group:'Viewpoint',term:i%2?'rear':'front'}
+    ]
+  }));
+  const original = h.ctx.fetch;
+  h.ctx.fetch = (url,opts) => {
+    if (url.startsWith('/fs/director/job?')) {
+      const concepts=h.calls.submitted[0].concepts;
+      return Promise.resolve({ok:true,json:async()=>({ok:true,job:{status:'completed',
+        result:{analysis:{summary:'All groups are useful',coreIds:concepts.map(c=>c.id),supportingIds:[]}}
+      }})});
+    }
+    return original(url,opts);
+  };
+  h.ctx.window.startQaCuration(rows,'angles','test-scope');
+  await new Promise(resolve => setTimeout(resolve,50));
+  const axes=() => Array.from(h.root.querySelectorAll('[data-curation-pair-axis]'));
+  assert.equal(axes().length,2);
+  assert.deepEqual(axes().map(el=>el.value),['Position','Viewpoint'],
+    'pairwise relevance must not silently choose the alphabetically first two groups');
+  axes()[0].value='Lighting';
+  axes()[0].dispatchEvent(new h.ctx.window.Event('change',{bubbles:true}));
+  await new Promise(resolve => setTimeout(resolve,30));
+  assert.deepEqual(axes().map(el=>el.value),['Lighting','Viewpoint']);
+  assert.deepEqual(h.calls.draft.pairGroups,['Lighting','Viewpoint']);
+  assert.match(h.root.querySelector('.qa-curation-pair summary').textContent,/Lighting.*Viewpoint/);
+  assert.equal(h.calls.submitted.length,1,'axis change must not rerun Director');
+  const saved=structuredClone(h.calls.draft);
+  const other=harness(saved);
+  other.ctx.window.startQaCuration(rows,'angles','test-scope');
+  await new Promise(resolve => setTimeout(resolve,45));
+  assert.deepEqual(Array.from(other.root.querySelectorAll('[data-curation-pair-axis]')).map(x=>x.value),
+    ['Lighting','Viewpoint']);
+  assert.equal(other.calls.submitted.length,0);
+});
+
+test('Lean Standard and Broad show the exact images and evidence after choosing each preset', async () => {
+  const h=harness();
+  h.ctx.window.startQaCuration(entries(),'training','same-scope');
+  await new Promise(resolve=>setTimeout(resolve,50));
+  for (const key of ['lean','balanced','broad']) {
+    const preset=h.root.querySelector('[data-curation-preset="'+key+'"]');
+    assert.ok(preset);
+    const displayed=/^(Lean|Standard|Broad) · (\d+) images · (\d+)% evidence$/.exec(preset.textContent);
+    assert.ok(displayed, 'explicit image/evidence tradeoff: '+preset.textContent);
+    preset.click();
+    assert.equal(Number(h.root.querySelector('[data-curation-selected]').textContent),Number(displayed[2]));
+    assert.equal(Number(h.root.querySelector('[data-curation-coverage]').textContent.replace('%','')),Number(displayed[3]));
+    assert.equal(h.calls.submitted.length,1);
+  }
+});
+
+test('Curate explanations favor grounded rarity over prominent numeric scoring', async () => {
+  const h=harness();
+  h.ctx.window.startQaCuration(entries(),'training','same-scope');
+  await new Promise(resolve=>setTimeout(resolve,50));
+  const reason=h.root.querySelector('[data-curation-contribution]');
+  assert.ok(reason);
+  assert.match(reason.textContent,/Only selected example|Also represented by|Already represented|Would add missing/);
+  assert.doesNotMatch(reason.textContent,/coverage points/);
+  assert.match(reason.title,/not predicted training quality/);
+  const review=Array.from(h.root.querySelectorAll('button')).find(b=>b.textContent.startsWith('Review included'));
+  review.click();
+  assert.ok(h.ctx.document.querySelector('.qa-curation-review-reason'));
+  assert.ok(h.ctx.document.querySelector('.qa-curation-review-calculations summary'));
+  assert.equal(h.ctx.document.querySelector('.qa-curation-review-calculations').open,false);
+});
+
+test('Curate only shows duplicate hints from a ready exact-scope cached analysis', async () => {
+  const h=harness(), rows=entries();
+  h.ctx.window.startQaCuration(rows,'training','same-scope');
+  await new Promise(resolve=>setTimeout(resolve,50));
+  const chosen=h.calls.draft.choices[0], other=rows.find(r=>r.fileName!==chosen).fileName;
+  h.ctx.state.duplicateCandidatesStatus='ready';
+  h.ctx.state.duplicateCandidatesDirty=false;
+  h.ctx.state.duplicateCandidatesFolder='sets/demo';
+  h.ctx.state.duplicateCandidatesScopeFiles=rows.map(r=>r.fileName);
+  h.ctx.state.duplicateCandidateGroups=[{match_type:'exact',items:[{file:chosen},{file:other}]}];
+  h.ctx.window.renderQaCuration(h.root,'same-scope');
+  assert.match(h.root.textContent,/Exact duplicate/);
+  const submitted=h.calls.submitted.length;
+  h.ctx.state.duplicateCandidatesScopeFiles=rows.slice(1).map(r=>r.fileName);
+  h.ctx.window.renderQaCuration(h.root,'same-scope');
+  assert.doesNotMatch(h.root.textContent,/Exact duplicate/);
+  assert.equal(h.calls.submitted.length,submitted,'no new model or duplicate scan');
 });

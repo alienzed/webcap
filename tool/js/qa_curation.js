@@ -29,12 +29,16 @@
   }
   function evidenceFingerprint(item) {
     var analysis = item.analysis || {};
+    // Field-level evidence fingerprints explain drift without storing duplicated captions.
     // Ratings, filters and unrelated QA settings are not curation evidence.
-    return compactSignature(JSON.stringify([
-      item.caption || '', item.groupedTags || [],
-      analysis.visionSight || null, analysis.selectionPose || null,
-      analysis.sceneComplexity || null, String(item.resolution || '')
-    ]));
+    return {
+      caption:compactSignature(item.caption || ''),
+      tags:compactSignature(JSON.stringify(item.groupedTags || [])),
+      sight:compactSignature(JSON.stringify(analysis.visionSight || null)),
+      pose:compactSignature(JSON.stringify(analysis.selectionPose || null)),
+      complexity:compactSignature(JSON.stringify(analysis.sceneComplexity || null)),
+      resolution:String(item.resolution || '')
+    };
   }
   function captureEvidence(items) {
     session.sourceFiles = (items || []).map(function(item) { return item.fileName; });
@@ -52,10 +56,16 @@
     var live = window.qaCurrentCurationEvidence(before);
     var byFile = new Map(live.map(function(item) { return [item.fileName,item]; }));
     var missing = before.filter(function(file) { return !available.has(file); });
-    var changed = before.filter(function(file) {
+    var changed = before.map(function(file) {
       var item = byFile.get(file);
-      return item && session.sourceEvidence[file] !== evidenceFingerprint(item);
-    });
+      if (!item) return null;
+      var current = evidenceFingerprint(item);
+      var prior = session.sourceEvidence[file];
+      var fields = Object.keys(current).filter(function(key) {
+        return !prior || prior[key] !== current[key];
+      });
+      return fields.length ? {file:file,fields:fields} : null;
+    }).filter(Boolean);
     return {changed:changed, missing:missing, viewChanged:!signaturesMatch(session.signature,qaCurrentCurationSignature()),
       // Current display filters must never alter the persisted source population.
       sourceCount:before.length};
@@ -72,6 +82,8 @@
           return [row.fileName, row.inventoryIds || [], row.analysis && row.analysis.sceneComplexity
             ? row.analysis.sceneComplexity.score : null, row.resolution || ''];
         }),
+        order:session.order.slice(), sizes:Object.assign({},session.sizes),
+        ignored:session.ignored, missingSight:session.missingSight,
         evidence:session.sourceEvidence
       }};
   }
@@ -99,6 +111,8 @@
       });
       session.sourceFiles = session.rows.map(function(row) {return row.fileName;});
       session.sourceEvidence = draft.snapshot.evidence || {};
+      session.ignored = Number(draft.snapshot.ignored || 0);
+      session.missingSight = Number(draft.snapshot.missingSight || 0);
       session.availableGroups = Array.from(new Set(session.concepts.map(function(c) {return c.group;}))).sort();
     } else if (!signaturesMatch(draft.signature,session.signature)) {
       // v1 did not preserve the concept-to-file mapping. Never reinterpret its
@@ -117,6 +131,10 @@
     session.conceptRoles = new Map(draft.conceptRoles);
     session.preset = ['lean','balanced','broad'].includes(draft.preset) ? draft.preset : 'custom';
     applyBalancePriorities();
+    if (hasSnapshot && Array.isArray(draft.snapshot.order) && draft.snapshot.sizes) {
+      session.order = draft.snapshot.order.slice();
+      session.sizes = Object.assign({},draft.snapshot.sizes);
+    }
     session.choices = new Set(draft.choices);
     session.initialChoices = Array.isArray(draft.initialChoices)
       ? draft.initialChoices.slice() : draft.choices.slice();
@@ -676,8 +694,8 @@
       host.appendChild(element('p', 'qa-curation-drift', driftText));
       var driftDetails = element('details','qa-curation-drift-files');
       driftDetails.appendChild(element('summary','', 'Review affected filenames'));
-      driftDetails.appendChild(element('p','', drift.changed.map(function(file) {
-        return file + ' (evidence changed)';
+      driftDetails.appendChild(element('p','', drift.changed.map(function(change) {
+        return change.file + ' (' + change.fields.join(', ') + ' changed)';
       }).concat(drift.missing.map(function(file) {
         return file + ' (missing source)';
       })).join(' · ')));
@@ -750,7 +768,7 @@
       'Manual image selections are preserved. Choose Lean, Balanced, or Broad to apply the new ranking.'));
     host.appendChild(priorities);
     var coreFeatures = session.eligible.filter(function(c) {
-      return c.role === 'core' && session.balanceGroups.has(c.group);
+      return session.balanceGroups.has(c.group);
     }).sort(function(a,b) {
       return a.group.localeCompare(b.group) || a.label.localeCompare(b.label);
     });
@@ -764,7 +782,8 @@
       var cell = element('div','qa-curation-concept');
       cell.setAttribute('data-curation-concept',feature.id);
       var heading = element('div','qa-curation-concept-heading');
-      heading.appendChild(element('span','', feature.group + ' · ' + feature.label));
+      heading.appendChild(element('span','', feature.group + ' · ' + feature.label +
+        (feature.role === 'core' ? ' (priority)' : ' (supporting)')));
       var total = element('strong','','0/' + feature.count);
       total.setAttribute('data-curation-concept-count','');
       heading.appendChild(total);
@@ -782,10 +801,10 @@
         return c.source === 'tag';
       }).map(function(c) {return c.id;}));
       var first = session.eligible.filter(function(c) {
-        return c.role === 'core' && c.group === matrixGroups[0] && approvedIds.has(c.id);
+        return c.group === matrixGroups[0] && approvedIds.has(c.id);
       });
       var second = session.eligible.filter(function(c) {
-        return c.role === 'core' && c.group === matrixGroups[1] && approvedIds.has(c.id);
+        return c.group === matrixGroups[1] && approvedIds.has(c.id);
       });
       if (first.length && second.length) {
         var matrix = element('details','qa-curation-pair');
@@ -1150,6 +1169,7 @@
     session.error = '';
     session.jobId = '';
     session.draftStale = false;
+    session.galleryGroup = '';
     window.qaShowCuration();
     renderCurrent();
     if (reanalyze) {

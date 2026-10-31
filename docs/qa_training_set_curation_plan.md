@@ -1,6 +1,6 @@
 # QA Curate — training-quality curation contract and phased delivery
 
-Status: **design contract adopted 2026-10-30; implementation follows in separate commits**. This supersedes the original copy-to-Set handoff. Keep the existing bold, readable fullscreen UX. Work inside the current QA/Media List/Focus Set/Training architecture, as directed by `AGENTS.md`.
+Status: **design contract committed first (2026-10-30); implementation commits in progress, automated CI and live UX validation pending**. This supersedes the original copy-to-Set handoff. Keep the existing bold, readable fullscreen UX. Work inside the current QA/Media List/Focus Set/Training architecture, as directed by `AGENTS.md`.
 
 ## 1. Outcome and ownership
 
@@ -81,3 +81,10 @@ Curation is expensive; **analysis and user choices are durable work**, not a vie
 ### Deferred on purpose
 
 Unvalidated neural perceptual embeddings, universal aesthetic/sharpness ranking, GPU-hungry video/frame analysis, forced category quotas, multiple per-Set curation sessions, speculative model-quality scores, and automatic reanalysis. Add such measures only after demonstrating that the measurement predicts better LoRA results on representative WebCap datasets.
+
+
+## Implementation notes (2026-10-30)
+
+- **Implemented on the review branch:** Focus Set training handoff (dependent on PR #831); v2 Set-owned Curate draft snapshot with backwards-compatible v1 reading; preserve selections through nonblocking input drift and interrupted reanalysis; resolution-aware bounded ranking with a transparent 768px comparison reference; prioritized term coverage and optional tagged group-pair matrix; inspect actions with current filename/tags/caption/resolution, plus resume position; tests for ranking, draft versions, drift and source inspection.
+- **Still to verify:** complete QA + Training integration and responsive UI on a running WebCap instance, full CI contracts, live selected-model bucket target resolution, model-specific treatment of visual quality, and controlled LoRA results. The 768px fallback is **not the selected training bucket**. Exact/near-duplicate detection is available elsewhere in WebCap but has not been plugged into this scorer; no claim of semantic-near-duplicate detection or calibrated blur scores.
+- **Review gate:** Do not claim these heuristics have proven improved LoRA outcomes until comparable Test/Matrix runs establish that result. Keep scoring transparent and user-overridable.

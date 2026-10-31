@@ -454,6 +454,27 @@ test('near-equivalent 768 source outranks 384 source, but rare core evidence rem
   assert.ok(ranked.indexOf('unique.png') < ranked.indexOf('small.png'));
 });
 
+test('resolution only breaks near-equal evidence scores, with no assumed model target', () => {
+  const h = harness();
+  const concepts = [{id:'same',role:'core',weight:1,count:2}];
+  function order(resolutions, complexities) {
+    return h.ctx.window.qaCurationRank(resolutions.map((resolution,i) => ({
+      fileName:'item-'+i+'.png', ids:['same'], resolution,
+      analysis:{sceneComplexity:{score:complexities[i]}}
+    })),concepts).order;
+  }
+  assert.equal(order(['384x384','768x768'],[0,0])[0],'item-1.png',
+    'higher original pixel count wins for otherwise equivalent images');
+  assert.equal(order(['384x384','768x768'],[0,0.1])[0],'item-1.png',
+    'higher resolution can break a small semantic-score near-tie');
+  assert.equal(order(['384x384','768x768'],[0,0.5])[0],'item-0.png',
+    'higher resolution must not override a meaningful scoring difference');
+  assert.equal(order(['1024x768','768x1400'],[0,0])[0],'item-1.png',
+    'compare actual source pixel count, not an assumed reference or shortest edge');
+  assert.equal(order(['','768x768'],[0,0])[0],'item-0.png',
+    'unknown dimensions must not be treated as low-quality evidence');
+});
+
 test('Curate review shows source tags, resolution and preserves a review resume point', async () => {
   const h = harness();
   const source = entries();

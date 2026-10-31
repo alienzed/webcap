@@ -1752,8 +1752,8 @@ def qa_curate_draft_route():
         draft = data.get("draft")
         if not isinstance(draft, dict) or draft.get("version") not in (1, 2):
             raise ValueError("Invalid Curate draft.")
-        if len(json.dumps(draft, ensure_ascii=False)) > 350000:
-            raise ValueError("Curate draft exceeds 350 KB.")
+        if len(json.dumps(draft, ensure_ascii=False)) > 2000000:
+            raise ValueError("Curate draft exceeds 2 MB.")
         import tempfile
         temp_path = None
         try:

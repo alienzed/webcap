@@ -3505,6 +3505,20 @@
     qaSetView('browse');
   }
 
+  function qaUseCuratedSelectionForTraining(files, source) {
+    if (!Array.isArray(files) || !files.length) {
+      throw new Error('Select at least one curated item before training.');
+    }
+    // Keep QA's original scope while the curated Focus Set drives the training view.
+    // Return to QA restores the previous Focus Set instead of reanalyzing the subset.
+    qaWorkbenchState.returnTrainingFiles = qaGetTrainingFileNames().slice();
+    qaWorkbenchState.parentFocusSet = qaCloneFocusSet(state.focusSet);
+    qaWorkbenchState.returnFindingId = '';
+    qaWorkbenchState.statusMessage = '';
+    activateFocusSet(files, source || 'QA Curate', 'qa');
+    openTrainingSurface('set');
+  }
+
   function qaSelectFiles(files, source, findingId) {
     var clean = (files || []).filter(Boolean);
     if (!clean.length) return;
@@ -3886,6 +3900,7 @@
     startQaCuration(qaBuildDeepScanItems(items), qaWorkbenchState.trainingFocus,
       qaBuildDeepScanSignature(items), {reanalyze: true});
   };
+  window.qaUseCuratedSelectionForTraining = qaUseCuratedSelectionForTraining;
   window.qaShowCuration = function () { qaWorkbenchState.view = 'curate'; renderQaWorkbench(); };
   window.qaShowOverviewFromCuration = function () { qaWorkbenchState.view = 'overview'; renderQaWorkbench(); };
   window.renderQaWorkbench = renderQaWorkbench;

@@ -108,6 +108,15 @@ test('unified shell has one overlay Activity surface and no old follower', () =>
   assert.ok(!source.includes('renderProgressFollower'));
 });
 
+test('workflow Activity cards distinguish queued and executing child LLM jobs', () => {
+  assert.ok(source.includes('function childExecutionState(childJobId)'));
+  assert.ok(source.includes("return { status: 'queued', job: pending };"));
+  assert.ok(source.includes('Waiting for Director queue'));
+  assert.ok(source.includes('Director request executing'));
+  assert.ok(source.includes('localItems().map(describeWorkflowChild)'));
+  assert.ok(source.includes('function isProgressChild(item)'));
+});
+
 test('queued Inference jobs are navigation-only and telemetry is owned by the shell', () => {
   assert.ok(monitor.includes('"jobs": ['));
   assert.ok(monitor.includes('_execution_item("inference", job)'));

@@ -4,7 +4,7 @@
 An optional, unattended, visually reviewed subset suggestion owned by **Quality Assurance**.
 No new workspace, editable Focus Set, training scheduler, media deletion, automatic
 caption/tag mutation, or model-learning guarantee. Existing source Set is unchanged.
-A QA-only checklist sends selected media paths to the existing Create Set dialog/route.
+A QA-only checklist sends selected media filenames into the existing Focus Set mechanism for training, without duplicating source media.
 
 ## Phase 1 — Authority and data (implemented)
 - Capture current QA training selection, its human-approved group tags and saved
@@ -35,12 +35,12 @@ A QA-only checklist sends selected media paths to the existing Create Set dialog
 - UI only changes QA-owned curation session state, not `state.focusSet`.
 - **Balance priorities (added):** display all groups represented in the bounded concept inventory, preselect groups containing Director CORE concepts while preserving their per-concept priorities until explicitly changed. Checkbox overrides determine which groups' terms get CORE coverage weight. Unchecked groups retain Director-selected terms at SUPPORTING weight; newly checked groups include even terms the Director omitted. Rank and shortlist presets recompute locally without more inference. If the user has manually changed media checkboxes, preserve their selections until a preset is explicitly chosen again. No new persistent state.
 
-## Phase 4 — Existing Create Set handoff (implemented)
-- On explicit user action, pass the chosen source-relative paths to the existing
-  Create Set dialog and `/fs/create_set_from_results` route.
-- Existing copying of media, captions, originals, approved group tags,
-  ratings, and metadata remains authoritative. The source Set is untouched.
-- No silent filesystem write until the destination and name are confirmed.
+## Phase 4 — Focus Set training handoff (implemented)
+- On explicit user action, activate a Focus Set containing the chosen original media filenames.
+- Open the existing Set Training workspace for the user to review and start a run.
+- Do not copy the working Set, captions, ratings, tags, or metadata into a second editable Set.
+- QA preserves the parent training scope so returning from the curated Focus Set does not turn the shortlist into the analysis source.
+- Training captures its normal immutable run-specific bundle only when the user initiates the run.
 
 ## Phase 5 — Verification and limitations
 - Python contract/normalization tests, including fabricated/duplicate Director IDs.

@@ -261,6 +261,15 @@
     });
   }
 
+  function qaBuildCurateItems(items) {
+    var curated = qaBuildDeepScanItems(items);
+    curated.forEach(function(row, i) {
+      var metadata = items[i] && items[i].metadata || {};
+      row.resolution = String(metadata.resolution || '');
+    });
+    return curated;
+  }
+
   function qaBuildDeepScanSignature(items) {
     return JSON.stringify({
       folder: String(state.folder || ''),
@@ -3681,7 +3690,7 @@
   function qaHandleAction(action, value) {
     if (action === 'qa-curate-start') {
       try {
-        startQaCuration(qaBuildDeepScanItems(qaGetTrainingItems()),
+        startQaCuration(qaBuildCurateItems(qaGetTrainingItems()),
           qaWorkbenchState.trainingFocus, qaBuildDeepScanSignature(qaGetTrainingItems()));
       } catch (err) {
         window.reportConsoleError('QA Curation', err);
@@ -3892,12 +3901,19 @@
     renderQaWorkbench(true);
   });
 
+  window.qaCurrentCurationEvidence = function(fileNames) {
+    var wanted = new Set(fileNames || []);
+    var items = (state.items || []).filter(function(item) {
+      return item && wanted.has(item.fileName);
+    });
+    return qaBuildCurateItems(items);
+  };
   window.qaCurrentCurationSignature = function () {
     return qaBuildDeepScanSignature(qaGetTrainingItems());
   };
   window.qaReanalyzeCuration = function () {
     var items = qaGetTrainingItems();
-    startQaCuration(qaBuildDeepScanItems(items), qaWorkbenchState.trainingFocus,
+    startQaCuration(qaBuildCurateItems(items), qaWorkbenchState.trainingFocus,
       qaBuildDeepScanSignature(items), {reanalyze: true});
   };
   window.qaUseCuratedSelectionForTraining = qaUseCuratedSelectionForTraining;

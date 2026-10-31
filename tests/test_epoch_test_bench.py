@@ -1378,6 +1378,9 @@ def _prepare_shared_test_enqueue(tmp_path, monkeypatch, candidate_count=2):
         lambda prompt, seed: prompt.replace("{place}", "studio") + " #" + str(seed),
     )
     monkeypatch.setattr(bench, "_relative_set_folder", lambda _folder: "sets/subject")
+    # The fixture uses a symbolic Set alias. Deferred dispatch resolves that
+    # alias back into a Set path; give both paths the same workspace identity.
+    monkeypatch.setattr(bench, "_workspace_name", lambda _folder: "subject--test")
     return staged, candidates
 
 

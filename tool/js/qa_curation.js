@@ -259,7 +259,7 @@
       if (preference === 'ignore') return;
       var role = preference || (balanceGroups.has(row.group) && (core.has(id) || overriddenGroups.has(row.group))
         ? 'core' : 'supporting');
-      selected.set(id, {id: id, label: row.term, group: row.group, role: role,
+      selected.set(id, {id: id, label: row.term, group: row.group, source:row.source, role: role,
         count: row.count, weight: row.source === 'sight'
           ? (role === 'core' ? 0.62 : 0.13)
           : (role === 'core' ? 1 : 0.28)});
@@ -284,7 +284,10 @@
   function applyBalancePriorities() {
     session.eligible = deriveEligible(session.concepts, session.analysis, session.rows,
       session.balanceGroups, session.overriddenGroups, session.conceptRoles);
-    var ranked = rank(session.rows, session.eligible);
+    var taggedGroups = Array.from(session.balanceGroups).filter(function(group) {
+      return session.eligible.some(function(c) { return c.source === 'tag' && c.group === group; });
+    }).sort();
+    var ranked = rank(session.rows, session.eligible, taggedGroups.slice(0,2));
     session.order = ranked.order;
     session.sizes = ranked.sizes;
     // Changing priorities must not overwrite manually checked/unchecked media.
@@ -346,8 +349,34 @@
     return {core: core * quality * fidelity, supporting: supporting * quality * fidelity};
   }
 
-  function rank(rows, concepts) {
+  function rank(rows, concepts, pairGroups) {
     var byId = new Map(concepts.map(function (feature) { return [feature.id, feature]; }));
+    var pairByFile = new Map(), pairCounts = new Map();
+    if (Array.isArray(pairGroups) && pairGroups.length >= 2) {
+      var left = new Set(concepts.filter(function(c) {
+        return c.source === 'tag' && c.group === pairGroups[0];
+      }).map(function(c) {return c.id;}));
+      var right = new Set(concepts.filter(function(c) {
+        return c.source === 'tag' && c.group === pairGroups[1];
+      }).map(function(c) {return c.id;}));
+      rows.forEach(function(row) {
+        var a = row.ids.filter(function(id) {return left.has(id);});
+        var b = row.ids.filter(function(id) {return right.has(id);});
+        var pairs = [];
+        a.forEach(function(x) {b.forEach(function(y) {pairs.push(x+'|'+y);});});
+        pairByFile.set(row.fileName,pairs);
+      });
+    }
+    function pairGain(row) {
+      var pairs = pairByFile.get(row.fileName) || [];
+      if (!pairs.length) return 0;
+      var sum = pairs.reduce(function(total,id) {
+        var count = pairCounts.get(id) || 0;
+        return total + strength(count+1,'supporting') - strength(count,'supporting');
+      },0);
+      // Mean instead of sum prevents multi-label items from gaming the bonus.
+      return 0.18 * sum / pairs.length;
+    }
     var counts = new Map(concepts.map(function (feature) { return [feature.id, 0]; }));
     var remaining = rows.slice(), ordered = [], gains = [];
     while (remaining.length) {
@@ -357,14 +386,20 @@
       for (var i = 0; i < remaining.length; i += 1) {
         // Supporting variation can contribute at most 20% of the best available
         // primary gain. Once core coverage is exhausted, supporting gains decide.
+        var pairBonus = pairGain(remaining[i]);
         var gain = scores[i].core + (maxCore > 0
-          ? Math.min(scores[i].supporting, maxCore * 0.2) : scores[i].supporting);
+          ? Math.min(scores[i].supporting, maxCore * 0.2) +
+            Math.min(pairBonus, maxCore * 0.16)
+          : scores[i].supporting + pairBonus);
         if (gain > bestGain) { bestGain = gain; best = i; }
       }
       var chosen = remaining.splice(best, 1)[0];
       ordered.push(chosen.fileName);
       gains.push(bestGain);
       chosen.ids.forEach(function (id) { counts.set(id, counts.get(id) + 1); });
+      (pairByFile.get(chosen.fileName) || []).forEach(function(id) {
+        pairCounts.set(id, (pairCounts.get(id) || 0) + 1);
+      });
     }
     var selected = new Set(), ratios = [];
     ordered.forEach(function (file) {
@@ -814,7 +849,7 @@
         matrix.appendChild(element('summary','',
           'Cross-category coverage · '+matrixGroups[0]+' × '+matrixGroups[1]));
         matrix.appendChild(element('p','qa-curation-helper',
-          'Observed tagged combinations (selected / available). Multi-label items count in each applicable cell.'));
+          'Observed tagged combinations (selected / available). Multi-label items count in each applicable cell; new combinations give a modest ranking bonus.'));
         var scroll = element('div','qa-curation-pair-scroll');
         var table = element('table','qa-curation-pair-table');
         var head = element('tr');

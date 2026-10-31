@@ -162,6 +162,7 @@ test('Director guidance presents at most two field actions and keeps assessment 
   assert.match(workbench, /function writeActionLabel\(\)/);
   assert.match(workbench, /available\.slice\(0,2\)\.forEach/);
   assert.match(workbench, /button\.dataset\.suggestionKind = action\.kind/);
+  assert.match(workbench, /studio-dw-suggestions'\)\.querySelectorAll\('button\\[data-capture-action\\], button\\[data-guided-write\\]'\)/);
   assert.match(workbench, /reviewCreativeCapture\(creativeCapture\)/);
   assert.match(workbench, /openRecommendedWrite/);
   assert.match(html, /id="studio-dw-suggestions"/);

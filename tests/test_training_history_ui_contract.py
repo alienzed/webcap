@@ -285,7 +285,7 @@ def test_training_history_identifies_custom_named_runs_and_recorded_h3_variant()
     assert 'isinstance(merged, list)' in history
     assert 'def _h3_uses_premerged_image_adapter(' in history
     assert 'def _h3_uses_image_adapter(' in history
-    assert '"trainingVariant" not in item["runSummary"]' in history
+    assert 'h3_fields = ("trainingVariant", "imageShift", "focusedH3Blocks")' in history
 
 
 def test_image_adapted_indicator_is_visible_in_history_queue_and_active_run():

@@ -1481,7 +1481,7 @@
     }
     var proposal;
     try { proposal = JSON.parse(value); }
-    catch (error) { throw new Error('Director returned invalid Project JSON: ' + error.message); }
+    catch (error) { throw new Error('Director returned invalid Project JSON: ' + error.message + '\nRaw Director response:\n' + String(raw || '')); }
     if (!proposal || Array.isArray(proposal) || typeof proposal !== 'object' ||
         ['title', 'concept', 'style', 'rationale'].some(function (field) { return typeof proposal[field] !== 'string'; }) ||
         !Array.isArray(proposal.invariants) ||
@@ -1496,15 +1496,15 @@
           typeof proposal.firstScene.title !== 'string' || typeof proposal.firstScene.summary !== 'string' ||
           !proposal.firstScene.summary.trim()
         ))) {
-      throw new Error('Project proposal must contain Concept, Style, optional Invariants, and an optional first Scene.');
+      throw new Error('Project proposal must contain Concept, Style, optional Invariants, and an optional first Scene.\nRaw Director response:\n' + String(raw || ''));
     }
     if (proposal.firstScenes != null && (!Array.isArray(proposal.firstScenes) ||
         proposal.firstScenes.length > 32 || proposal.firstScenes.some(function (item) {
           return !item || typeof item.title !== 'string' || typeof item.summary !== 'string' ||
             !item.summary.trim();
-        }))) throw new Error('Project contains invalid initial Scene drafts.');
+        }))) throw new Error('Project contains invalid initial Scene drafts.\nRaw Director response:\n' + String(raw || ''));
     if (!proposal.concept.trim() && !proposal.firstScene && !(proposal.firstScenes || []).length) {
-      throw new Error('Director needs at least an idea or first Scene to prepare a Project.');
+      throw new Error('Director needs at least an idea or first Scene to prepare a Project.\nRaw Director response:\n' + String(raw || ''));
     }
     return proposal;
   }
@@ -1765,7 +1765,7 @@
     }
     var result;
     try { result = JSON.parse(value); }
-    catch (error) { throw new Error('Director returned invalid Concept / Style / Invariants JSON: ' + error.message); }
+    catch (error) { throw new Error('Director returned invalid Concept / Style / Invariants JSON: ' + error.message + '\nRaw Director response:\n' + String(raw || '')); }
     if (!result || typeof result !== 'object' || Array.isArray(result) ||
         typeof result.title !== 'string' || typeof result.concept !== 'string' || typeof result.style !== 'string' ||
         typeof result.rationale !== 'string' || !Array.isArray(result.invariants) ||
@@ -1775,7 +1775,7 @@
             typeof item.text !== 'string' ||
             ['character', 'location', 'visual', 'world', 'sound', 'custom'].indexOf(item.kind) === -1;
         })) {
-      throw new Error('The proposal must contain Concept, Style, Invariants and a rationale.');
+      throw new Error('The proposal must contain Concept, Style, Invariants and a rationale.\nRaw Director response:\n' + String(raw || ''));
     }
     return result;
   }
@@ -2031,14 +2031,14 @@
     }
     var result;
     try { result = JSON.parse(value); }
-    catch (error) { throw new Error('Director returned invalid Scene sequence JSON: ' + error.message); }
+    catch (error) { throw new Error('Director returned invalid Scene sequence JSON: ' + error.message + '\nRaw Director response:\n' + String(raw || '')); }
     if (!result || typeof result !== 'object' || Array.isArray(result) ||
         !Array.isArray(result.scenes) || result.scenes.length < 1 || result.scenes.length > 32 ||
         typeof result.rationale !== 'string' || result.scenes.some(function (item) {
           return !item || typeof item !== 'object' || Array.isArray(item) ||
             typeof item.title !== 'string' || typeof item.summary !== 'string' || !item.summary.trim();
         })) {
-      throw new Error('Director must return one to 32 titled/described Scenes and a rationale.');
+      throw new Error('Director must return one to 32 titled/described Scenes and a rationale.\nRaw Director response:\n' + String(raw || ''));
     }
     return result;
   }

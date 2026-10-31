@@ -367,8 +367,18 @@
   function parseProposal(raw) {
     var text = String(raw || '').trim();
     if (text.slice(0,3) === '```') text = text.replace(/^\`\`\`(?:json)?/i,'').replace(/\`\`\`$/,'').trim();
-    var object = JSON.parse(text);
-    if (!object || typeof object !== 'object' || Array.isArray(object)) throw new Error('Director returned an invalid Scene revision.');
+    var object;
+    try {
+      object = JSON.parse(text);
+    } catch (error) {
+      // Keep the exact reply available for diagnosis; do not attempt a creative rewrite.
+      var detail = 'Director returned invalid structured JSON: ' + error.message +
+        '\nRaw Director response:\n' + String(raw || '');
+      throw new Error(detail);
+    }
+    if (!object || typeof object !== 'object' || Array.isArray(object)) {
+      throw new Error('Director returned JSON, but the expected top-level object is missing.\nRaw Director response:\n' + String(raw || ''));
+    }
     return object;
   }
   function editScene(story, sceneId, fields) {

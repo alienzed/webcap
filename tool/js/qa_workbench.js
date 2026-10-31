@@ -2889,6 +2889,7 @@
       qaWorkbenchState.parentFocusSet = undefined;
       qaWorkbenchState.returnTrainingFiles = null;
       qaWorkbenchState.returnFindingId = '';
+      qaWorkbenchState.returnToCurate = false;
     }
     if (qaFocusReviewState.active && (folderChanged || scopeChanged) &&
         !qaFocusReviewCurrent()) {

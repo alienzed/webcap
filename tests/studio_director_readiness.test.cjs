@@ -113,7 +113,7 @@ test('capture is optional, bounded and remains editable authoring material, not 
   assert.match(director, /reviewCapture: function \(capture, storyId\)/);
   assert.match(director, /showStudioBriefReview\(\)/);
   assert.match(workbench, /creativeCapture = capture/);
-  assert.match(workbench, /function captureActionLabel\\(capture\\)/);
+  assert.ok(workbench.includes('function captureActionLabel(capture)'));
   assert.match(workbench, /return showSceneReview\(story, sceneTarget/);
   assert.match(workbench, /setReadinessFreshness/);
 });
@@ -158,7 +158,7 @@ test('completed Scene operations can be proposed and opened directly from guidan
 });
 
 test('Director guidance presents at most two field actions and keeps assessment details secondary', () => {
-  assert.match(workbench, /function captureActionLabel\(capture\)/);
+  assert.ok(workbench.includes('function captureActionLabel(capture)'));
   assert.match(workbench, /function writeActionLabel\(\)/);
   assert.match(workbench, /available\.slice\(0,2\)\.forEach/);
   assert.match(workbench, /button\.dataset\.suggestionKind = action\.kind/);

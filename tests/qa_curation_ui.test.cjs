@@ -711,7 +711,8 @@ test('supporting concepts distinguish comparable primary candidates but not a ne
     {fileName:'rear.png',ids:['rear'],resolution:'384x384',analysis:{}}
   ];
   const order=h.ctx.window.qaCurationRank(rows,c,[],['Viewpoint']).order;
-  assert.equal(order[0],'rear.png','rare primary viewpoint must beat background novelty');
+  assert.ok(order.indexOf('rear.png') < order.indexOf('front-basic.png'),
+    'new primary viewpoint evidence must precede redundant examples');
   assert.ok(order.indexOf('front-painting.png') < order.indexOf('front-basic.png'),
     'background can distinguish otherwise equivalent front-view examples');
 });

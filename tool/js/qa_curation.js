@@ -408,6 +408,16 @@
       if (!selected.has(row.fileName)) return;
       row.ids.forEach(function(id) { counts.set(id,(counts.get(id)||0)+1); });
     });
+    root.querySelectorAll('[data-curation-contribution]').forEach(function(node) {
+      var file = node.getAttribute('data-curation-contribution');
+      var modified = new Set(session.choices);
+      var included = modified.has(file);
+      if (included) modified.delete(file); else modified.add(file);
+      var delta = Math.abs((coverage(session.rows,session.eligible,modified).ratio -
+        coverage(session.rows,session.eligible,session.choices).ratio) * 100);
+      node.textContent = (included ? 'Keeping contributes ' : 'Including would add ') +
+        delta.toFixed(2) + ' coverage points';
+    });
     root.querySelectorAll('[data-curation-pair-left]').forEach(function(cell) {
       var left = cell.getAttribute('data-curation-pair-left');
       var right = cell.getAttribute('data-curation-pair-right');
@@ -515,6 +525,8 @@
       explanation.appendChild(source);
       var live = window.qaCurrentCurationEvidence([name])[0];
       explanation.appendChild(element('div','qa-curation-review-resolution',resolutionText(live || row)));
+      explanation.appendChild(element('small','',
+        'Rank favors native detail when coverage is comparable; 768px is a comparison reference, not a read of the active training bucket.'));
       if (live) {
         var tags = (live.groupedTags || []).map(function(t) {
           return (t.group || '') + ': ' + (t.term || '');
@@ -831,7 +843,7 @@
     });
     host.appendChild(presets);
     host.appendChild(element('p','qa-curation-helper',
-      'Lean / Balanced / Broad choose progressively larger subsets where additional concept coverage tapers off. Balanced is not an equal-category quota.'));
+      'Lean / Balanced / Broad choose progressively larger subsets where additional concept coverage tapers off. Balanced is not an equal-category quota. Higher native resolution is strongly preferred for similar concept evidence, using a 768px comparison reference (not the model bucket target).'));
 
     host.appendChild(button('Reset selections to original recommendation', function() {
       session.choices = new Set(session.initialChoices);
@@ -952,9 +964,11 @@
       if (included) without.delete(fileName); else without.add(fileName);
       var contribution = Math.abs((coverage(session.rows,session.eligible,without).ratio -
         coverage(session.rows,session.eligible,session.choices).ratio) * 100);
-      card.appendChild(element('div','qa-curation-card-insight',
+      var reason = element('div','qa-curation-card-insight',
         (included ? 'Keeping contributes ' : 'Including would add ') +
-        contribution.toFixed(2) + ' coverage points'));
+        contribution.toFixed(2) + ' coverage points');
+      reason.setAttribute('data-curation-contribution',fileName);
+      card.appendChild(reason);
       var inspect = button('Inspect item', function(e) {
         selectByFileName(fileName);
       }, 'qa-curation-inspect');

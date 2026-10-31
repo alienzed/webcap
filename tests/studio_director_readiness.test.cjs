@@ -113,7 +113,7 @@ test('capture is optional, bounded and remains editable authoring material, not 
   assert.match(director, /reviewCapture: function \(capture, storyId\)/);
   assert.match(director, /showStudioBriefReview\(\)/);
   assert.match(workbench, /creativeCapture = capture/);
-  assert.match(workbench, /'Review ' \+ fieldName \+ ' change'/);
+  assert.match(workbench, /function captureActionLabel\\(capture\\)/);
   assert.match(workbench, /return showSceneReview\(story, sceneTarget/);
   assert.match(workbench, /setReadinessFreshness/);
 });
@@ -150,7 +150,7 @@ test('completed Scene operations can be proposed and opened directly from guidan
   assert.match(workbench,/['"]scene-split['"]/);
   assert.match(workbench,/['"]scenes-batch['"]/);
   assert.match(workbench,/function openRecommendedWrite\(\)/);
-  assert.match(workbench,/nextButton\.onclick = openRecommendedWrite/);
+  assert.match(workbench,/run:openRecommendedWrite/);
   assert.match(workbench,/writeOperationChosen = true/);
   assert.match(workbench,/function renderReadiness\(list\)/);
   assert.match(director,/canReview: function \(\)/);

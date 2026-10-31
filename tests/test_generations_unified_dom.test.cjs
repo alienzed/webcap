@@ -19,6 +19,16 @@ test('native Evaluation methods reachable and obsolete shells absent', () => {
   assert.ok(!testJS.includes('testGenerationsUnifiedNativeRoute'));
   assert.match(finder, /window\.epochFinderShowMode = showMode/);
 });
+test('Test preview footer shows the existing aggregate human rating beside epoch', () => {
+  const card = fs.readFileSync(path.join(root, 'tool/js/test_preview_card.js'), 'utf8');
+  assert.ok(card.includes('data-test-epoch-aggregate-rating'));
+  assert.ok(card.includes("node('span', 'test-generations-epoch-rating hidden')"));
+  assert.ok(testJS.includes("card.querySelector('[data-test-epoch-aggregate-rating]')"));
+  assert.ok(testJS.includes("'Aggregate human rating across '"));
+  assert.ok(testJS.includes('prepared.candidateScores && prepared.candidateScores[candidate]'));
+  assert.ok(testJS.includes('aggregateCount <= 0'));
+});
+
 test('original controls and generated evidence owners preserved', () => {
   for (const id of ['test-generations-run-btn','test-generations-inline-count',
       'test-generations-files','test-generations-sessions-list','epoch-finder-start',

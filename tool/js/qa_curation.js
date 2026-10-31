@@ -579,6 +579,14 @@
         window.qaInspectCurationItem(name);
       }, 'qa-curation-review-open-item'));
       explanation.appendChild(source);
+      var changedEvidence = (session.drift && session.drift.changed || []).find(function(change) {
+        return change.file === name;
+      });
+      if (changedEvidence) {
+        explanation.appendChild(element('p','qa-curation-drift',
+          'Changed since recommendation: ' + changedEvidence.fields.join(', ') +
+          '. Review the current source evidence; reanalysis is optional.'));
+      }
       var live = window.qaCurrentCurationEvidence([name])[0];
       explanation.appendChild(element('div','qa-curation-review-resolution',resolutionText(live || row)));
       explanation.appendChild(element('small','',

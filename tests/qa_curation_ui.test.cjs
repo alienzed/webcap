@@ -9,7 +9,7 @@ const source = fs.readFileSync('tool/js/qa_curation.js', 'utf8');
 function harness(savedDraft = null) {
   const dom = new JSDOM('<div id="qa-workbench"></div>');
   const document = dom.window.document, root = document.getElementById('qa-workbench');
-  const calls = { submitted: [], copied: [], opened: [], errors: [], saved: [], changedFocus: 0, draft: savedDraft };
+  const calls = { submitted: [], training: [], opened: [], errors: [], saved: [], changedFocus: 0, draft: savedDraft };
   const ctx = {
     document, window: dom.window,
     state: { folder: 'sets/demo', focusSet: null },
@@ -18,7 +18,7 @@ function harness(savedDraft = null) {
     isPreviewVideoFileName: name => name.endsWith('.mp4'),
     mediaGridMediaUrl: row => '/test/' + row.fileName,
     buildSourceMediaRelPath: name => 'sets/demo/' + name,
-    runCreateSetFromResultsFlow: items => calls.copied.push(items),
+    qaUseCuratedSelectionForTraining: (items, source) => calls.training.push({items, source}),
     selectByFileName: name => calls.opened.push(name),
     fetch: async (url, options) => {
       if (url.startsWith('/fs/qa/curate/draft?')) {
@@ -148,10 +148,11 @@ test('unattended Director curation creates a real checklist without equal quotas
   assert.ok(coreMeters().some((value,i) => value < metersBefore[i]),
     'removing an image changes the relevant visual concept meter');
 
-  h.root.querySelector('[data-curation-create]').click();
-  assert.equal(h.calls.copied.length, 1);
-  assert.equal(h.calls.copied[0].length, chosenBefore - 1);
-  assert.ok(h.calls.copied[0].every(x => x.source_media_rel.startsWith('sets/demo/')));
+  h.root.querySelector('[data-curation-train]').click();
+  assert.equal(h.calls.training.length, 1);
+  assert.equal(h.calls.training[0].items.length, chosenBefore - 1);
+  assert.ok(h.calls.training[0].items.every(x => x.endsWith('.png')));
+  assert.match(h.calls.training[0].source, /QA Curate/);
   assert.ok(h.ctx.state.focusSet === null);
 });
 
@@ -163,7 +164,7 @@ test('scope changes fail visibly instead of using a stale curated selection', as
   h.ctx.qaCurrentCurationSignature = () => 'new-scope';
   h.ctx.window.renderQaCuration(h.root, 'new-scope');
   assert.match(h.root.textContent, /inputs changed/i);
-  assert.equal(h.root.querySelector('[data-curation-create]'), null);
+  assert.equal(h.root.querySelector('[data-curation-train]'), null);
 });
 
 test('video candidates render metadata-only thumbnails and remain opt-in', async () => {
@@ -207,7 +208,7 @@ test('cancel while enqueue is in flight cancels the late queued Director job', a
   await new Promise(resolve => setTimeout(resolve, 30));
   assert.deepEqual(cancelled, [{operation: 'cancel_job', jobId: 'late-queued-job'}]);
   assert.equal(h.calls.errors.length, 0);
-  assert.equal(h.root.querySelector('[data-curation-create]'), null);
+  assert.equal(h.root.querySelector('[data-curation-train]'), null);
 });
 
 test('rare approved construction survives 120-concept budget alongside frequent Sight details', () => {
@@ -383,7 +384,7 @@ test('stale Curate drafts retain media choices but cannot export old concepts', 
   await new Promise(resolve => setTimeout(resolve, 50));
   assert.equal(second.calls.submitted.length, 0);
   assert.match(second.root.textContent, /needs fresh analysis/);
-  assert.equal(second.root.querySelector('[data-curation-create]'), null);
+  assert.equal(second.root.querySelector('[data-curation-train]'), null);
   assert.ok(second.root.querySelector('button.qa-curation-primary'));
   assert.equal(second.calls.draft.signature, staleDraft.signature);
 });

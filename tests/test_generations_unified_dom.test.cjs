@@ -21,7 +21,7 @@ test('native Evaluation methods reachable and obsolete shells absent', () => {
 });
 test('Test preview footer shows the existing aggregate human rating beside epoch', () => {
   const card = fs.readFileSync(path.join(root, 'tool/js/test_preview_card.js'), 'utf8');
-  assert.ok(card.includes('data-test-epoch-aggregate-rating'));
+  assert.ok(card.includes('epochRating.dataset.testEpochAggregateRating = \'1\''));
   assert.ok(card.includes("node('span', 'test-generations-epoch-rating hidden')"));
   assert.ok(testJS.includes("card.querySelector('[data-test-epoch-aggregate-rating]')"));
   assert.ok(testJS.includes("'Aggregate human rating across '"));

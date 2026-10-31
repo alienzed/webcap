@@ -948,6 +948,7 @@ def finish_job_transient(job_id, status="completed", result=None, error=""):
         lane["jobs"] = [item for item in lane.get("jobs", []) if item is not job]
         if lane.get("activeJobId") == job["id"]:
             lane["activeJobId"] = ""
+        _record_recent(lane, job, summary_only=True)
         _refresh_positions(lane)
         _write_state(state)
         _remember_transient_receipt(receipt)

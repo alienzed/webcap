@@ -1891,13 +1891,11 @@ def test_enqueue_registers_all_children_before_any_test_work_can_start(tmp_path,
         session = next(path for path in session_root.iterdir() if path.is_dir())
         manifest = bench._read_status(session)
         observed["jobIds"] = list(manifest["inferenceJobs"])
+        observed["promiseId"] = manifest["deferredJobId"]
         observed["migrationComplete"] = manifest["migrationComplete"]
-        observed["statuses"] = [
-            execution_queue.get_job(job_id)["status"]
-            for job_id in observed["jobIds"]
-        ]
+        observed["promise"] = execution_queue.get_job(observed["promiseId"])
 
-    monkeypatch.setattr(inference_runner, "start_observer", inspect_before_worker_start)
+    monkeypatch.setattr(inference_runner, "start_requested_inference", inspect_before_worker_start)
 
     payload = bench.enqueue(
         tmp_path,
@@ -1908,10 +1906,12 @@ def test_enqueue_registers_all_children_before_any_test_work_can_start(tmp_path,
 
     session = bench._session_directory(tmp_path, payload["latest"]["session"])
     manifest = bench._read_status(session)
-    assert len(observed["jobIds"]) == 3
+    assert observed["jobIds"] == []
     assert observed["migrationComplete"] is True
-    assert observed["statuses"] == ["queued", "queued", "queued"]
-    assert manifest["inferenceJobs"] == observed["jobIds"]
+    assert observed["promise"]["metadata"]["candidateKind"] == "session"
+    assert observed["promise"]["status"] == "queued"
+    assert manifest["inferenceJobs"] == []
+    assert manifest["deferredJobId"] == observed["promiseId"]
     assert manifest["migrationComplete"] is True
 
 
@@ -1945,12 +1945,12 @@ def test_stop_session_state_cannot_be_reverted_by_provider_start_publication(tmp
 
 def test_test_enqueue_failure_cleans_inert_children_and_incomplete_session(tmp_path, monkeypatch):
     _staged, candidates = _prepare_shared_test_enqueue(tmp_path, monkeypatch, candidate_count=1)
-    def rejected_batch(request, contexts, labels=None, deferred=False):
-        raise RuntimeError("rendition batch enqueue failed")
+    def rejected_promise(request, folder, session_id, label=""):
+        raise RuntimeError("Test Session promise enqueue failed")
 
-    monkeypatch.setattr(inference_runner, "enqueue_test_many", rejected_batch)
+    monkeypatch.setattr(inference_runner, "enqueue_test_session", rejected_promise)
 
-    with pytest.raises(RuntimeError, match="rendition batch enqueue failed"):
+    with pytest.raises(RuntimeError, match="Test Session promise enqueue failed"):
         bench.enqueue(
             tmp_path,
             "prompt",
@@ -2060,11 +2060,7 @@ def test_new_test_sessions_use_output_storage_and_freeze_candidate_provenance(tm
         "stage": model.STAGING_KEY,
     }), encoding="utf-8")
     monkeypatch.setattr(bench, "_test_directory", lambda _folder, _model, source=None: staged)
-    monkeypatch.setattr(inference_runner, "enqueue_test_many", lambda request, contexts, labels=None, deferred=False: [
-        {"jobId": "job-" + context["candidateKind"]} for context in contexts
-    ])
-    monkeypatch.setattr(bench, "execution_promote_backlog_many", lambda lane, ids: ids)
-    monkeypatch.setattr(inference_runner, "start_observer", lambda: None)
+    monkeypatch.setattr(inference_runner, "start_requested_inference", lambda: None)
     monkeypatch.setattr(bench, "_sync_inference_session", lambda directory: bench._session_status(directory))
 
     set_folder = tmp_path / "sets" / "demo"
@@ -2103,11 +2099,7 @@ def test_new_test_sessions_freeze_candidate_strength_for_result_cards(tmp_path, 
     candidate = staged / "epoch10.safetensors"
     candidate.write_bytes(b"weights")
     monkeypatch.setattr(bench, "_test_directory", lambda _folder, _model, source=None: staged)
-    monkeypatch.setattr(inference_runner, "enqueue_test_many", lambda request, contexts, labels=None, deferred=False: [
-        {"jobId": "job-" + context["candidateKind"]} for context in contexts
-    ])
-    monkeypatch.setattr(bench, "execution_promote_backlog_many", lambda lane, ids: ids)
-    monkeypatch.setattr(inference_runner, "start_observer", lambda: None)
+    monkeypatch.setattr(inference_runner, "start_requested_inference", lambda: None)
     monkeypatch.setattr(bench, "_sync_inference_session", lambda directory: bench._session_status(directory))
 
     set_folder = tmp_path / "sets" / "demo"
@@ -2658,11 +2650,7 @@ def test_sweep_request_expands_multiple_loras_and_freezes_weights(tmp_path, monk
     assert include_base
     assert selected == loras
     assert request["sweepWeights"] == [0.6, 0.8, 1.2]
-    contexts = []
-    monkeypatch.setattr(inference_runner, "enqueue_test_many", lambda request, items, labels=None, deferred=False:
-                        [contexts.append(context) or {"jobId": "job-" + str(len(contexts))} for context in items])
-    monkeypatch.setattr(bench, "execution_promote_backlog_many", lambda lane, ids: ids)
-    monkeypatch.setattr(inference_runner, "start_observer", lambda: None)
+    monkeypatch.setattr(inference_runner, "start_requested_inference", lambda: None)
     monkeypatch.setattr(bench, "_sync_inference_session", lambda directory: bench._session_status(directory))
     set_folder = tmp_path / "sets" / "demo"
     set_folder.mkdir(parents=True)
@@ -2673,6 +2661,11 @@ def test_sweep_request_expands_multiple_loras_and_freezes_weights(tmp_path, monk
     assert [(item["fileName"], item["strength"]) for item in payload["candidates"][1:]] == [
         (lora.name, strength) for lora in loras for strength in (0.6, 0.8, 1.2)
     ]
+    promise_id = payload["deferredJobId"]
+    frozen = execution_queue.get_job(promise_id, include_payload=True)["payload"]["request"]
+    contexts, _labels = bench._test_session_renditions(
+        payload["ownerFolder"], session["session"], frozen, frozen["sessionCandidates"]
+    )
     assert len({context["candidateIndex"] for context in contexts}) == 7
     assert [(context["candidateFile"], context["candidateStrength"]) for context in contexts[1:]] == [
         (lora.name, strength) for lora in loras for strength in (0.6, 0.8, 1.2)

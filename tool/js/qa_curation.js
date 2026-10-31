@@ -294,7 +294,7 @@
   }
 
   function shortSide(resolution) {
-    var match = String(resolution || '').match(/^(\\d+)\\s*[x×]\\s*(\\d+)$/i);
+    var match = String(resolution || '').match(/^(\d+)\s*[x×]\s*(\d+)$/i);
     if (!match) return null;
     var w = Number(match[1]), h = Number(match[2]);
     return w > 0 && h > 0 ? Math.min(w,h) : null;

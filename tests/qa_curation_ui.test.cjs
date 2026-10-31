@@ -49,6 +49,7 @@ function harness(savedDraft = null) {
     setTimeout,
   };
   dom.window.qaCurrentCurationEvidence = files => entries().filter(item => files.includes(item.fileName));
+  dom.window.qaInspectCurationItem = name => calls.opened.push(name);
   dom.window.qaUseCuratedSelectionForTraining = ctx.qaUseCuratedSelectionForTraining;
   dom.window.qaShowCuration = () => {};
   dom.window.qaShowOverviewFromCuration = () => {};

@@ -2857,6 +2857,63 @@ def execute_inference(job_id, request, context):
         raise
 
 
+def _test_session_renditions(folder, session_name, request, candidates):
+    contexts = []
+    labels = []
+    for index, candidate in enumerate(candidates, start=1):
+        label_root = str(request.get("name") or "").strip() or session_name
+        labels.append(label_root + " · " + candidate["label"])
+        contexts.append({
+            "folder": folder,
+            "sessionId": session_name,
+            "candidateKind": candidate["kind"],
+            "candidateFile": candidate["file"],
+            "candidateLabel": candidate["label"],
+            "candidateIndex": index,
+            "variationIndex": candidate.get("variationIndex"),
+            "variationLabel": candidate.get("variationLabel"),
+            "variationPrompt": candidate.get("variationPrompt"),
+            "candidateProvenance": dict(candidate.get("provenance") or {}),
+            "candidateStrength": candidate.get("strength"),
+            "campaignStaging": str(request.get("campaignStaging") or ""),
+        })
+    return contexts, labels
+
+
+def expand_queued_session(job_id):
+    """Materialize frozen renditions only when the session is at dispatch."""
+    from .inference_runner import enqueue_test_many
+
+    stored = execution_get_job(job_id, include_payload=True)
+    metadata = stored.get("metadata") or {}
+    if metadata.get("client") != "test" or metadata.get("candidateKind") != "session":
+        raise ValueError("Only a queued Test Session can expand.")
+    folder = str(metadata.get("folder") or "")
+    session_name = str(metadata.get("sessionId") or "")
+    folder_path = app_config.safe_join_fs_root(folder)
+    session_directory = _session_directory(folder_path, session_name)
+    with _status_lock:
+        status = _read_status(session_directory) or {}
+        if str(status.get("deferredJobId") or "") != job_id:
+            raise RuntimeError("Test Session is no longer waiting for this queue promise.")
+        frozen = stored.get("payload") or {}
+        request = copy.deepcopy(frozen.get("request") or {})
+        candidates = request.pop("sessionCandidates", None)
+        if not isinstance(candidates, list) or not candidates:
+            raise RuntimeError("Queued Test Session has no frozen renditions.")
+        contexts, labels = _test_session_renditions(folder, session_name, request, candidates)
+        # One durable queue transaction replaces the promise with its child jobs.
+        # If interrupted before the status write, polling recovers their IDs.
+        jobs = enqueue_test_many(
+            request, contexts, labels=labels, replace_pending_job_id=job_id,
+        )
+        status["inferenceJobs"] = [job["jobId"] for job in jobs]
+        status["deferredJobId"] = ""
+        status["migrationComplete"] = True
+        _atomic_write_json(_status_path(session_directory), status)
+    return status["inferenceJobs"]
+
+
 def _enqueue_frozen_test_request(folder_path, request, loras, include_base, legacy_job_id="", auto_vl_model=""):
     from .inference_runner import enqueue_test_many
 
@@ -2944,6 +3001,8 @@ def _enqueue_frozen_test_request(folder_path, request, loras, include_base, lega
         "results": [],
         "resultFolder": _session_result_folder(session_directory),
         "inferenceJobs": [],
+        "deferredSession": not bool(legacy_job_id),
+        "deferredJobId": "",
         "legacyJobId": str(legacy_job_id or ""),
         "migrationComplete": False,
         "autoVlModel": str(auto_vl_model or ""),
@@ -2956,29 +3015,40 @@ def _enqueue_frozen_test_request(folder_path, request, loras, include_base, lega
     with _status_lock:
         _atomic_write_json(_status_path(session_directory), payload)
 
+    if not legacy_job_id:
+        from .inference_runner import enqueue_test_session, start_requested_inference
+        deferred_id = ""
+        try:
+            # Preserve immutable prompt, settings and candidate choices once.
+            frozen_request = dict(request)
+            frozen_request["sessionCandidates"] = copy.deepcopy(candidates)
+            placeholder = enqueue_test_session(
+                frozen_request, folder, session_directory.name,
+                label=str(request.get("name") or "").strip() or "Test Session",
+            )
+            deferred_id = placeholder["jobId"]
+            with _status_lock:
+                current_status = _read_status(session_directory) or {}
+                current_status["deferredJobId"] = deferred_id
+                current_status["migrationComplete"] = True
+                _atomic_write_json(_status_path(session_directory), current_status)
+            execution_promote_backlog_many("inference", [deferred_id])
+            start_requested_inference()
+        except Exception:
+            if deferred_id:
+                try:
+                    from .inference_runner import action as inference_action
+                    inference_action("cancel", job_id=deferred_id)
+                except Exception:
+                    _logger.exception("Could not cancel failed Test Session promise %s.", deferred_id)
+                    raise
+            shutil.rmtree(session_directory)
+            raise
+        return _sync_inference_session(session_directory)
+
     queued_ids = []
     try:
-        contexts = []
-        labels = []
-        for index, candidate in enumerate(candidates, start=1):
-            label_root = str(request.get("name") or "").strip() or session_directory.name
-            label = label_root + " · " + candidate["label"]
-            context = {
-                "folder": folder,
-                "sessionId": session_directory.name,
-                "candidateKind": candidate["kind"],
-                "candidateFile": candidate["file"],
-                "candidateLabel": candidate["label"],
-                "candidateIndex": index,
-                "variationIndex": candidate.get("variationIndex"),
-                "variationLabel": candidate.get("variationLabel"),
-                "variationPrompt": candidate.get("variationPrompt"),
-                "candidateProvenance": dict(candidate.get("provenance") or {}),
-                "candidateStrength": candidate.get("strength"),
-                "campaignStaging": str(request.get("campaignStaging") or ""),
-            }
-            contexts.append(context)
-            labels.append(label)
+        contexts, labels = _test_session_renditions(folder, session_directory.name, request, candidates)
         queued_ids = [
             job["jobId"] for job in enqueue_test_many(request, contexts, labels=labels, deferred=True)
         ]

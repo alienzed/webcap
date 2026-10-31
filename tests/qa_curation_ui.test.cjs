@@ -9,7 +9,7 @@ const source = fs.readFileSync('tool/js/qa_curation.js', 'utf8');
 function harness(savedDraft = null) {
   const dom = new JSDOM('<div id="qa-workbench"></div>');
   const document = dom.window.document, root = document.getElementById('qa-workbench');
-  const calls = { submitted: [], training: [], opened: [], errors: [], saved: [], changedFocus: 0, draft: savedDraft };
+  const calls = { submitted: [], captionSubmitted: [], pendingKind: '', training: [], opened: [], errors: [], saved: [], changedFocus: 0, draft: savedDraft };
   const ctx = {
     document, window: dom.window,
     state: { folder: 'sets/demo', focusSet: null, items: entries().map(item => ({fileName:item.fileName})) },
@@ -30,18 +30,21 @@ function harness(savedDraft = null) {
         return {ok: true, json: async () => ({ok: true})};
       }
       if (url === '/fs/qa/curate') {
-        calls.submitted.push(JSON.parse(options.body));
+        const payload = JSON.parse(options.body);
+        calls.pendingKind = payload.operation === 'captions' ? 'captions' : 'tags';
+        (calls.pendingKind === 'captions' ? calls.captionSubmitted : calls.submitted).push(payload);
         return {ok: true, json: async () => ({ok: true, job: {jobId: 'job1'}})};
       }
       if (url.startsWith('/fs/director/job?')) {
-        const original = calls.submitted[0].concepts;
+        const original = (calls.submitted[0] || {concepts:[]}).concepts;
         return {ok: true, json: async () => ({
           ok: true,
-          job: {status: 'completed', result: {analysis: {
-            summary: 'Prioritize shape, preserve some rear perspectives',
-            coreIds: original.filter(c => c.group === 'Shape').map(c => c.id),
-            supportingIds: original.filter(c => c.group === 'View').map(c => c.id),
-          }}}
+          job: {status: 'completed', result: calls.pendingKind === 'captions'
+            ? {captionObservations:[]} : {analysis: {
+              summary: 'Prioritize shape, preserve some rear perspectives',
+              coreIds: original.filter(c => c.group === 'Shape').map(c => c.id),
+              supportingIds: original.filter(c => c.group === 'View').map(c => c.id),
+            }}}
         })};
       }
       throw new Error('Unexpected network request ' + url);
@@ -124,6 +127,18 @@ test('curation inventory is based on real grouped concepts and never free-word f
   assert.deepEqual(Array.from(inventory.concepts.filter(c => c.group === 'Shape')
     .map(c => c.count)).sort((a,b)=>a-b), [15,80]);
   assert.ok(inventory.concepts.every(c => c.term !== 'the'));
+});
+
+test('Sight alone cannot influence Curate concept inventory', () => {
+  const h = harness();
+  const input = [{fileName:'one.png',caption:'rare construction', groupedTags:[
+    {group:'Pose',term:'hands up'}], analysis: {}}];
+  const before = h.ctx.window.qaCurationInventory(input);
+  input[0].analysis.visionSight = {inventory:{things:[{name:'phantom red ring'}],
+    viewpoint:['rear'], details:['different pose']}};
+  const after = h.ctx.window.qaCurationInventory(input);
+  assert.deepEqual(after.concepts, before.concepts);
+  assert.deepEqual(after.rows.map(r => r.inventoryIds), before.rows.map(r => r.inventoryIds));
 });
 
 test('unattended Director curation creates a real checklist without equal quotas or Focus Set mutation', async () => {
@@ -214,7 +229,7 @@ test('cancel while enqueue is in flight cancels the late queued Director job', a
   assert.equal(h.root.querySelector('[data-curation-train]'), null);
 });
 
-test('rare approved construction survives 120-concept budget alongside frequent Sight details', () => {
+test('rare approved construction survives the 120-concept budget without Sight', () => {
   const h = harness();
   const rows = [
     {fileName: 'a.png', caption: '', analysis: {}, groupedTags: []},
@@ -228,15 +243,18 @@ test('rare approved construction survives 120-concept budget alongside frequent 
     rows[0].groupedTags.push(tag);
     rows[1].groupedTags.push(tag);
   }
-  rows[0].analysis.visionSight = {inventory: {
-    details: Array.from({length: 12}, (_,i)=>'visual-'+i),
-    things: Array.from({length: 32}, (_,i)=>({name:'thing-'+i,
-      qualities: Array.from({length: 4}, (_,j)=>'detail-'+j)})),
-  }};
+  for (let i = 100; i < 145; i++) {
+    const tag = {group:'Construction',term:'common-'+String(i).padStart(3,'0')};
+    rows[0].groupedTags.push(tag);
+    rows[1].groupedTags.push(tag);
+  }
+  rows[0].analysis.visionSight = {inventory:{things:[{name:'invented-object'}]}};
   const inventory = h.ctx.window.qaCurationInventory(rows);
   assert.equal(inventory.concepts.length, 120);
   assert.ok(inventory.concepts.some(c => c.term === 'exceptional one-off connector'),
     'single-example approved construction must remain visible to the Director');
+  assert.ok(!inventory.concepts.some(c => c.term === 'invented-object'),
+    'unvalidated Sight cannot influence Curate');
 });
 
 
@@ -292,7 +310,7 @@ test('manually selected group adds concepts even when Director omitted the entir
   const h = harness();
   const originalFetch = h.ctx.fetch;
   h.ctx.fetch = (url, options) => {
-    if (url.startsWith('/fs/director/job?')) {
+    if (url.startsWith('/fs/director/job?') && h.calls.pendingKind !== 'captions') {
       const concepts = h.calls.submitted[0].concepts;
       return Promise.resolve({ok:true,json:async()=>({ok:true,job:{
         status:'completed', result:{analysis:{
@@ -319,7 +337,7 @@ test('checking a priority group elevates its eligible terms without a second Dir
   const h = harness();
   const originalFetch = h.ctx.fetch;
   h.ctx.fetch = (url, options) => {
-    if (url.startsWith('/fs/director/job?')) {
+    if (url.startsWith('/fs/director/job?') && h.calls.pendingKind !== 'captions') {
       const concepts = h.calls.submitted[0].concepts;
       const shapes = concepts.filter(c => c.group === 'Shape');
       return Promise.resolve({ok:true,json:async()=>({ok:true,job:{
@@ -530,7 +548,7 @@ test('Director completion uses its submitted concept inventory even if current Q
   let completeJob;
   const original = h.ctx.fetch;
   h.ctx.fetch = (url, opts) => {
-    if (url.startsWith('/fs/director/job?')) {
+    if (url.startsWith('/fs/director/job?') && h.calls.pendingKind !== 'captions') {
       return new Promise(resolve => {completeJob = resolve;});
     }
     return original(url, opts);
@@ -558,7 +576,8 @@ test('Director result cannot be applied after source folder changes during analy
   const h = harness();
   let completeJob;
   const original = h.ctx.fetch;
-  h.ctx.fetch = (url, opts) => url.startsWith('/fs/director/job?')
+  h.ctx.fetch = (url, opts) => url.startsWith('/fs/director/job?') &&
+    h.calls.pendingKind !== 'captions'
     ? new Promise(resolve => {completeJob = resolve;}) : original(url,opts);
   h.ctx.window.startQaCuration(entries(), 'construction','original-input');
   await new Promise(resolve => setTimeout(resolve,20));
@@ -585,7 +604,7 @@ test('pairwise scoring axes are visible, user-controlled and preserved in the dr
   }));
   const original = h.ctx.fetch;
   h.ctx.fetch = (url,opts) => {
-    if (url.startsWith('/fs/director/job?')) {
+    if (url.startsWith('/fs/director/job?') && h.calls.pendingKind !== 'captions') {
       const concepts=h.calls.submitted[0].concepts;
       return Promise.resolve({ok:true,json:async()=>({ok:true,job:{status:'completed',
         result:{analysis:{summary:'All groups are useful',coreIds:concepts.map(c=>c.id),supportingIds:[]}}
@@ -622,11 +641,11 @@ test('Lean Standard and Broad show the exact images and evidence after choosing 
   for (const key of ['lean','balanced','broad']) {
     const preset=h.root.querySelector('[data-curation-preset="'+key+'"]');
     assert.ok(preset);
-    const displayed=/^(Lean|Standard|Broad) · (\d+) images · (\d+)% priority coverage$/.exec(preset.textContent);
+    const displayed=/^(Lean|Standard|Broad) · (\d+) images · (\d+)% learning coverage$/.exec(preset.textContent);
     assert.ok(displayed, 'explicit image/evidence tradeoff: '+preset.textContent);
     preset.click();
     assert.equal(Number(h.root.querySelector('[data-curation-selected]').textContent),Number(displayed[2]));
-    assert.equal(Number(h.root.querySelector('[data-curation-coverage]').textContent.replace('%','')),Number(displayed[3]));
+    assert.equal(Number(h.root.querySelector('[data-curation-bar]').value),Number(displayed[3]));
     assert.equal(h.calls.submitted.length,1);
   }
 });
@@ -766,7 +785,7 @@ test('card explanations never present unprioritized backgrounds as reasons for r
   }));
   const original=h.ctx.fetch;
   h.ctx.fetch=(url,opts)=>{
-    if(url.startsWith('/fs/director/job?')) {
+    if(url.startsWith('/fs/director/job?') && h.calls.pendingKind !== 'captions') {
       const c=h.calls.submitted[0].concepts;
       return Promise.resolve({ok:true,json:async()=>({ok:true,job:{
         status:'completed',result:{analysis:{
@@ -783,7 +802,7 @@ test('card explanations never present unprioritized backgrounds as reasons for r
     item=>item.textContent);
   assert.ok(reasons.length);
   assert.ok(reasons.every(reason=>!reason.includes('Background') && !reason.includes('painting')));
-  assert.ok(reasons.every(reason=>/View|No evidence for selected priority/.test(reason)));
+  assert.ok(reasons.every(reason=>/View|No unique priority or caption evidence/.test(reason)));
 });
 
 test('restoring an older recommended preset preserves its exact files but labels a mismatch Custom', async () => {
@@ -802,4 +821,87 @@ test('restoring an older recommended preset preserves its exact files but labels
   assert.match(restored.root.textContent,/Previous shortlist preserved as Custom/);
   assert.ok(Array.from(restored.root.querySelectorAll('[data-curation-preset]'))
     .every(button=>button.getAttribute('aria-pressed')==='false'));
+});
+
+
+test('caption distinctions outrank repeated tags and contribute to preset stopping', () => {
+  const h = harness(), rank = h.ctx.window.qaCurationRank;
+  const tags = [{id:'front',group:'Viewpoint',role:'core',weight:1,count:3,source:'tag'}];
+  const captions = [{id:'d0001',label:'crossed-strap geometry',weight:0.65,count:1,source:'caption'}];
+  const rows = [
+    {fileName:'plain-a',ids:['front'],captionIds:[],analysis:{},resolution:'384x384'},
+    {fileName:'plain-b',ids:['front'],captionIds:[],analysis:{},resolution:'768x768'},
+    {fileName:'unique',ids:['front'],captionIds:['d0001'],analysis:{},resolution:'384x384'},
+  ];
+  const withCaption = rank(rows,tags,[],['Viewpoint'],captions);
+  assert.equal(withCaption.order[0],'unique',
+    'a distinctive captioned construction should survive over an otherwise redundant larger image');
+  const withoutCaption = rank(rows,tags,[],['Viewpoint']);
+  assert.equal(withoutCaption.order[0],'plain-b',
+    'source resolution still breaks ties when caption evidence is equivalent');
+  const metrics = h.ctx.window.qaCurationCoverage(rows,tags,new Set(['unique']),['Viewpoint'],[],captions);
+  assert.equal(metrics.captionRepresented,1);
+  assert.equal(metrics.captionTotal,1);
+  assert.ok(metrics.learningRatio > metrics.ratio);
+});
+
+test('caption batches include every authored caption without new Sight requests', async () => {
+  const h = harness();
+  const rows = entries();
+  h.ctx.window.startQaCuration(rows,'unusual geometry','same-scope');
+  await new Promise(resolve => setTimeout(resolve,90));
+  assert.equal(h.calls.errors.length,0,h.calls.errors.join('; '));
+  assert.ok(h.calls.captionSubmitted.length > 1);
+  assert.deepEqual(h.calls.captionSubmitted.flatMap(batch=>batch.captions.map(c=>c.fileName)),
+    rows.map(row=>row.fileName));
+  assert.ok(h.calls.captionSubmitted.every(batch => batch.captions.length <= 24));
+  assert.ok(h.calls.captionSubmitted.every(batch => JSON.stringify(batch.captions).length <= 9500));
+  assert.equal(h.calls.submitted.length,1,'tag classification should remain one separate job');
+  assert.ok(h.calls.captionSubmitted.every(batch => !('visionSight' in batch)));
+});
+
+test('caption-only Set can produce a shortlist without inventing balance tags', async () => {
+  const h = harness();
+  const one = [{fileName:'unique.png',caption:'crossed straps beneath raised arms', groupedTags:[],analysis:{}}];
+  h.ctx.state.items = one.map(item => ({fileName:item.fileName}));
+  h.ctx.window.qaCurrentCurationEvidence = () => one;
+  const original = h.ctx.fetch;
+  h.ctx.fetch = async (url,opts) => {
+    if (url.startsWith('/fs/director/job?') && h.calls.pendingKind === 'captions') {
+      return {ok:true,json:async()=>({ok:true,job:{status:'completed',result:{
+        captionObservations:[{fileName:'unique.png',concept:'crossed strap geometry',
+          quote:'crossed straps'}]
+      }}})};
+    }
+    return original(url,opts);
+  };
+  h.ctx.window.startQaCuration(one,'strap geometry','same-scope');
+  await new Promise(resolve => setTimeout(resolve,50));
+  assert.equal(h.calls.errors.length,0,h.calls.errors.join('; '));
+  assert.equal(h.calls.submitted.length,0);
+  assert.ok(Number(h.root.querySelector('[data-curation-selected]').textContent)>0);
+  assert.match(h.root.textContent,/Caption distinctions/);
+  assert.match(h.root.textContent,/crossed strap geometry/);
+  assert.ok(h.calls.draft.snapshot.captionConcepts.length===1);
+  assert.equal(h.calls.draft.snapshot.rows[0][4][0],'d0001');
+});
+
+test('older Sight-weighted draft is restored without reinstating Sight in ranking', async () => {
+  const h = harness();
+  const legacy = {
+    version:2, signature:'same-scope', analysis:{summary:'old',coreIds:['c001','c002'],supportingIds:[]},
+    choices:['image-000.png'], initialChoices:['image-000.png'],preset:'balanced',
+    balanceGroups:['Sight · detail','Shape'],overriddenGroups:[],conceptRoles:[],
+    snapshot:{rankingPolicy:'primary-only',
+      concepts:[{id:'c001',group:'Shape',term:'common',count:1,source:'tag'},
+        {id:'c002',group:'Sight · detail',term:'phantom',count:1,source:'sight'}],
+      rows:[['image-000.png',['c001','c002'],null,'384x384']], evidence:{}}
+  };
+  const restored = harness(legacy);
+  restored.ctx.window.startQaCuration(entries(),'construction','same-scope');
+  await new Promise(resolve => setTimeout(resolve,40));
+  assert.equal(restored.calls.submitted.length,0);
+  assert.equal(restored.calls.draft,legacy); // No implicit rewrite of saved draft.
+  assert.equal(restored.root.querySelector('[data-curation-balance-group="Sight · detail"]'),null);
+  assert.equal(Number(restored.root.querySelector('[data-curation-selected]').textContent),1);
 });

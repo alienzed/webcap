@@ -1787,13 +1787,26 @@ def qa_curate_route():
         available = set(list_media_files(str(data.get("folder") or "").strip()))
         if any(name not in available for name in names):
             raise ValueError("QA Curation selection includes media outside the current Set.")
-        from .qa_curation import build_curation_request
-        contract = build_curation_request(
-            data.get("concepts"), data.get("trainingFocus"), len(names)
-        )
+        if data.get("operation") == "captions":
+            from .qa_curation import build_caption_curation_request
+            captions = data.get("captions")
+            if not isinstance(captions, list):
+                raise ValueError("Curate caption analysis requires a caption batch.")
+            if any(not isinstance(row, dict) or row.get("fileName") not in names for row in captions):
+                raise ValueError("Curate caption evidence must belong to the selected Set.")
+            contract = build_caption_curation_request(
+                captions, data.get("trainingFocus"), data.get("knownConcepts")
+            )
+            label = "QA · Curate Caption Evidence"
+        else:
+            from .qa_curation import build_curation_request
+            contract = build_curation_request(
+                data.get("concepts"), data.get("trainingFocus"), len(names)
+            )
+            label = "QA · Curate Training Set"
         job = enqueue_llm(
             "qa", str(data.get("model") or "").strip(), contract,
-            context={}, label="QA · Curate Training Set"
+            context={}, label=label
         )
         return jsonify({"ok": True, "job": job}), 202
     except Exception as exc:

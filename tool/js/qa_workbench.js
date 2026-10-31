@@ -267,6 +267,8 @@
     curated.forEach(function(row, i) {
       var metadata = items[i] && items[i].metadata || {};
       row.resolution = String(metadata.resolution || '');
+      // Sight is useful for QA suggestions, but never an input to curation.
+      delete row.analysis.visionSight;
     });
     return curated;
   }

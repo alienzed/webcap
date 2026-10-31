@@ -29,6 +29,8 @@ _lock = threading.RLock()
 RESOURCE_OWNERS = {"training", "llm", "inference"}
 _resource_owner = ""
 _transient_receipts = {}
+_TRANSIENT_RECENT_LIMIT = 80
+_transient_recent = []
 _TRANSIENT_RECEIPT_LIMIT = 200
 
 
@@ -239,7 +241,10 @@ def clear_transient_receipts(lane_name=""):
     with _lock:
         if not lane_name:
             _transient_receipts.clear()
+            _transient_recent.clear()
             return
+        if lane_name == "inference":
+            _transient_recent.clear()
         remove_ids = [
             job_id for job_id, receipt in _transient_receipts.items()
             if str(receipt.get("lane") or "") == lane_name
@@ -283,7 +288,10 @@ def recent_snapshot(lane_name, limit=30):
     with _lock:
         state = _read_state()
         lane = _lane(state, lane_name, create=False) or _default_lane()
-        recent = lane.get("recent") if isinstance(lane.get("recent"), list) else []
+        recent = list(lane.get("recent") if isinstance(lane.get("recent"), list) else [])
+        if lane_name == "inference":
+            recent.extend(_transient_recent)
+            recent.sort(key=lambda item: float(item.get("finishedAt") or 0))
         return [copy.deepcopy(item) for item in reversed(recent[-limit:]) if isinstance(item, dict)]
 
 
@@ -948,9 +956,12 @@ def finish_job_transient(job_id, status="completed", result=None, error=""):
         lane["jobs"] = [item for item in lane.get("jobs", []) if item is not job]
         if lane.get("activeJobId") == job["id"]:
             lane["activeJobId"] = ""
-        _record_recent(lane, job, summary_only=True)
         _refresh_positions(lane)
         _write_state(state)
+        # Completed inference is visible in Recent without recreating durable
+        # queue history or bloating the file during large Test batches.
+        _record_recent({"recent": _transient_recent}, job,
+                       keep=_TRANSIENT_RECENT_LIMIT, summary_only=True)
         _remember_transient_receipt(receipt)
         return receipt
 

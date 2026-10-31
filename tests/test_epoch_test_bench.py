@@ -1383,7 +1383,7 @@ def _prepare_shared_test_enqueue(tmp_path, monkeypatch, candidate_count=2):
 
 def _expanded_test_enqueue(folder_path, *args, **kwargs):
     """Tests of running renditions explicitly cross the deferred dispatch boundary."""
-    result = _expanded_test_enqueue(folder_path, *args, **kwargs)
+    result = bench.enqueue(folder_path, *args, **kwargs)
     session = bench._session_directory(folder_path, result["latest"]["session"])
     bench.expand_queued_session(bench._read_status(session)["deferredJobId"])
     return result

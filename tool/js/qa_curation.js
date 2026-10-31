@@ -936,22 +936,26 @@
     if (session.missingSight) host.appendChild(element('p', 'qa-curation-helper',
       session.missingSight + ' images have no cached Sight; saved tags still contribute.'));
 
-    var presets = element('div', 'qa-curation-controls');
-    ['lean', 'balanced', 'broad'].forEach(function (name) {
+    var presets = element('div', 'qa-curation-controls qa-curation-presets');
+    [['lean','Lean'], ['balanced','Standard'], ['broad','Broad']].forEach(function (entry) {
+      var name = entry[0], label = entry[1], size = session.sizes[name];
+      var selection = new Set(session.order.slice(0,size));
+      var represented = Math.round(coverage(session.rows,session.eligible,selection).ratio * 100);
       var active = session.preset === name;
-      var control = button(name[0].toUpperCase() + name.slice(1) + ' · ' + session.sizes[name],
+      var control = button(label + ' · ' + size + ' images · ' + represented + '% evidence',
         function () {
           session.preset = name;
           session.choices = new Set(session.order.slice(0, session.sizes[name]));
           saveDraft();
           renderQaCuration(host, session.signature);
-        }, 'review-captions-btn' + (active ? ' qa-curation-active' : ''));
+        }, 'review-captions-btn qa-curation-preset' + (active ? ' qa-curation-active' : ''));
+      control.setAttribute('data-curation-preset',name);
       control.setAttribute('aria-pressed', active ? 'true' : 'false');
       presets.appendChild(control);
     });
     host.appendChild(presets);
     host.appendChild(element('p','qa-curation-helper',
-      'Lean / Balanced / Broad choose progressively larger subsets where additional concept coverage tapers off. Balanced is not an equal-category quota. Higher source resolution breaks near-ties; it does not replace useful concept coverage.'));
+      'Lean / Standard / Broad trade image count against annotated evidence coverage; these are not equal-category quotas or predicted LoRA scores. Native resolution only breaks near-ties.'));
 
     host.appendChild(button('Reset selections to original recommendation', function() {
       session.choices = new Set(session.initialChoices);

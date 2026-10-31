@@ -14,6 +14,7 @@ from .execution_queue import (
     discard_terminal_and_recent as execution_discard_terminal_and_recent,
     finish_job_transient as execution_finish_job_transient,
     get_job as execution_get_job,
+    jobs_by_id as execution_jobs_by_id,
     lane_snapshot as execution_lane_snapshot,
     mark_running as execution_mark_running,
     pause_lane as execution_pause_lane,
@@ -142,16 +143,15 @@ def _test_job_wildcard_values(job, metadata, details):
     values = details.get("wildcardValues")
     if isinstance(values, list):
         return copy.deepcopy(values)
+    values = metadata.get("wildcardValues")
+    if isinstance(values, list):
+        return copy.deepcopy(values)
     if str(metadata.get("client") or "") != "test":
         return []
     job_id = str(job.get("id") or "").strip()
     if not job_id:
         return []
-    try:
-        stored = execution_get_job(job_id, include_payload=True)
-    except FileNotFoundError:
-        return []
-    payload = stored.get("payload") if isinstance(stored.get("payload"), dict) else {}
+    payload = job.get("payload") if isinstance(job.get("payload"), dict) else {}
     request = payload.get("request") if isinstance(payload.get("request"), dict) else {}
     from .epoch_test_bench import _resolved_wildcard_values
     return _resolved_wildcard_values(
@@ -772,6 +772,11 @@ def enqueue_test(request, context, label="", deferred=False):
     # Failed sweep jobs still need their weight when no result file was produced.
     if request.get("sweepWeights") and candidate_kind == "lora":
         metadata["candidateStrength"] = float(context["candidateStrength"])
+    from .epoch_test_bench import _resolved_wildcard_values
+    metadata["wildcardValues"] = _resolved_wildcard_values(
+        request.get("sourcePrompt"),
+        context.get("variationPrompt") or request.get("resolvedPrompt") or request.get("prompt"),
+    )
     job = execution_enqueue(
         EXECUTION_LANE,
         {
@@ -814,6 +819,11 @@ def enqueue_test_many(request, contexts, labels=None, deferred=False):
         }
         if request.get("sweepWeights") and candidate_kind == "lora":
             metadata["candidateStrength"] = float(context["candidateStrength"])
+        from .epoch_test_bench import _resolved_wildcard_values
+        metadata["wildcardValues"] = _resolved_wildcard_values(
+            request.get("sourcePrompt"),
+            context.get("variationPrompt") or request.get("resolvedPrompt") or request.get("prompt"),
+        )
         # enqueue_many freezes every payload once under the durable queue lock.
         entries.append({
             "payload": {"request": request, "clientContext": context},
@@ -835,13 +845,20 @@ def snapshot(include_terminal=False):
         if _provider_runtime_holds:
             wait_reason = "Waiting for confirmed active ComfyUI provider work to finish."
     jobs = current.get("jobs", [])
+    legacy_ids = [
+        str(job.get("id") or "") for job in jobs
+        if (job.get("metadata") or {}).get("client") == "test"
+        and not isinstance((job.get("details") or {}).get("wildcardValues"), list)
+        and not isinstance((job.get("metadata") or {}).get("wildcardValues"), list)
+    ]
+    legacy = execution_jobs_by_id(legacy_ids, include_payload=True) if legacy_ids else {}
     return {
         "paused": bool(current.get("paused")),
         "pauseReason": str(current.get("pauseReason") or ""),
         "activeJobId": str(current.get("activeJobId") or ""),
         "backlogCount": sum(1 for job in jobs if str(job.get("status") or "") == "backlog"),
         "waitReason": wait_reason,
-        "jobs": [_job_view(job) for job in jobs],
+        "jobs": [_job_view(legacy.get(str(job.get("id") or ""), job)) for job in jobs],
     }
 
 

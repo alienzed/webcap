@@ -1157,8 +1157,11 @@
     });
     if (!readinessStale && recommendations.writeHint) {
       var fields = recommendedWriteFields(recommendations.writeHint);
-      var duplicatesCapture = creativeCapture && fields.indexOf(creativeCapture.field) !== -1 &&
-        ['project','scene-edit','scenes-batch'].indexOf(recommendations.writeHint) !== -1;
+      var captureField = creativeCapture && creativeCapture.field === 'invariant' ? 'invariants' :
+        creativeCapture && creativeCapture.field;
+      var duplicatesCapture = creativeCapture &&
+        (fields.indexOf(captureField) !== -1 ||
+         (creativeCapture.field === 'scene' && recommendations.writeHint === 'scene'));
       var label = writeActionLabel();
       if (label && !duplicatesCapture) available.push({
         kind:'write', label:label, run:openRecommendedWrite

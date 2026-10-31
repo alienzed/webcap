@@ -384,6 +384,16 @@
     var button = row.querySelector('[data-test-vl-result]');
     if (!manualLabel || !epochLabel || !button) throw new Error('Test result evaluation controls are missing.');
 
+    var aggregate = card.querySelector('[data-test-epoch-aggregate-rating]');
+    if (aggregate) {
+      var aggregateCount = Number(manual && manual.count || 0);
+      aggregate.textContent = aggregateCount > 0 ? '· ★ ' + Number(manual.average || 0).toFixed(1) +
+        ' (' + aggregateCount + ')' : '';
+      aggregate.title = aggregateCount > 0
+        ? 'Aggregate human rating across ' + aggregateCount + ' rated previews for this epoch'
+        : '';
+      aggregate.classList.toggle('hidden', aggregateCount <= 0);
+    }
     manualLabel.textContent = manual && Number(manual.count) ? '★ ' + Number(manual.average).toFixed(1) : '';
     manualLabel.title = manualLabel.textContent ? 'Epoch manual average · ' + manual.count + ' rated preview(s)' : '';
     manualLabel.classList.toggle('hidden', !manualLabel.textContent);

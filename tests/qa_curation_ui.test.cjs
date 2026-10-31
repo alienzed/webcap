@@ -9,16 +9,16 @@ const source = fs.readFileSync('tool/js/qa_curation.js', 'utf8');
 function harness(savedDraft = null) {
   const dom = new JSDOM('<div id="qa-workbench"></div>');
   const document = dom.window.document, root = document.getElementById('qa-workbench');
-  const calls = { submitted: [], copied: [], opened: [], errors: [], saved: [], changedFocus: 0, draft: savedDraft };
+  const calls = { submitted: [], training: [], opened: [], errors: [], saved: [], changedFocus: 0, draft: savedDraft };
   const ctx = {
     document, window: dom.window,
-    state: { folder: 'sets/demo', focusSet: null },
+    state: { folder: 'sets/demo', focusSet: null, items: entries().map(item => ({fileName:item.fileName})) },
     getDirectorModelPreference: () => 'director-test',
     qaCurrentCurationSignature: () => 'same-scope',
     isPreviewVideoFileName: name => name.endsWith('.mp4'),
     mediaGridMediaUrl: row => '/test/' + row.fileName,
     buildSourceMediaRelPath: name => 'sets/demo/' + name,
-    runCreateSetFromResultsFlow: items => calls.copied.push(items),
+    qaUseCuratedSelectionForTraining: (items, source) => calls.training.push({items, source}),
     selectByFileName: name => calls.opened.push(name),
     fetch: async (url, options) => {
       if (url.startsWith('/fs/qa/curate/draft?')) {
@@ -48,6 +48,9 @@ function harness(savedDraft = null) {
     },
     setTimeout,
   };
+  dom.window.qaCurrentCurationEvidence = files => entries().filter(item => files.includes(item.fileName));
+  dom.window.qaInspectCurationItem = name => calls.opened.push(name);
+  dom.window.qaUseCuratedSelectionForTraining = ctx.qaUseCuratedSelectionForTraining;
   dom.window.qaShowCuration = () => {};
   dom.window.qaShowOverviewFromCuration = () => {};
   dom.window.reportConsoleError = (name, error) => calls.errors.push(String(error.message || error));
@@ -148,22 +151,23 @@ test('unattended Director curation creates a real checklist without equal quotas
   assert.ok(coreMeters().some((value,i) => value < metersBefore[i]),
     'removing an image changes the relevant visual concept meter');
 
-  h.root.querySelector('[data-curation-create]').click();
-  assert.equal(h.calls.copied.length, 1);
-  assert.equal(h.calls.copied[0].length, chosenBefore - 1);
-  assert.ok(h.calls.copied[0].every(x => x.source_media_rel.startsWith('sets/demo/')));
+  h.root.querySelector('[data-curation-train]').click();
+  assert.equal(h.calls.training.length, 1);
+  assert.equal(h.calls.training[0].items.length, chosenBefore - 1);
+  assert.ok(h.calls.training[0].items.every(x => x.endsWith('.png')));
+  assert.match(h.calls.training[0].source, /QA Curate/);
   assert.ok(h.ctx.state.focusSet === null);
 });
 
-test('scope changes fail visibly instead of using a stale curated selection', async () => {
+test('a changed view does not block saved Curate training selections', async () => {
   const h = harness();
   h.ctx.qaCurrentCurationSignature = () => 'first-scope';
   h.ctx.window.startQaCuration(entries(), 'training', 'first-scope');
-  await new Promise(resolve => setTimeout(resolve, 40));
+  await new Promise(resolve => setTimeout(resolve, 45));
   h.ctx.qaCurrentCurationSignature = () => 'new-scope';
   h.ctx.window.renderQaCuration(h.root, 'new-scope');
-  assert.match(h.root.textContent, /inputs changed/i);
-  assert.equal(h.root.querySelector('[data-curation-create]'), null);
+  assert.match(h.root.textContent, /current view or QA settings differ/i);
+  assert.ok(h.root.querySelector('[data-curation-train]'));
 });
 
 test('video candidates render metadata-only thumbnails and remain opt-in', async () => {
@@ -207,7 +211,7 @@ test('cancel while enqueue is in flight cancels the late queued Director job', a
   await new Promise(resolve => setTimeout(resolve, 30));
   assert.deepEqual(cancelled, [{operation: 'cancel_job', jobId: 'late-queued-job'}]);
   assert.equal(h.calls.errors.length, 0);
-  assert.equal(h.root.querySelector('[data-curation-create]'), null);
+  assert.equal(h.root.querySelector('[data-curation-train]'), null);
 });
 
 test('rare approved construction survives 120-concept budget alongside frequent Sight details', () => {
@@ -331,8 +335,9 @@ test('untouched Director concepts keep their original core/supporting roles', as
   await new Promise(resolve => setTimeout(resolve, 45));
   assert.equal(h.calls.errors.length, 0, h.calls.errors.join('; '));
   assert.equal(h.root.querySelector('[data-curation-balance-group="Shape"]').checked, true);
-  assert.equal(h.root.querySelectorAll('[data-curation-concept]').length, 1,
-    'initial proposal must honor the per-concept Director result');
+  assert.equal(h.root.querySelectorAll('[data-curation-concept]').length, 2,
+    'all terms in the prioritized Shape group are shown, including supporting terms');
+  assert.match(h.root.querySelector('.qa-curation-concepts').textContent,/supporting/);
   let shape = h.root.querySelector('[data-curation-balance-group="Shape"]');
   shape.checked = false;
   shape.dispatchEvent(new h.ctx.window.Event('change', {bubbles:true}));
@@ -340,7 +345,8 @@ test('untouched Director concepts keep their original core/supporting roles', as
   shape.checked = true;
   shape.dispatchEvent(new h.ctx.window.Event('change', {bubbles:true}));
   assert.equal(h.root.querySelectorAll('[data-curation-concept]').length, 2,
-    'explicit group override promotes all available terms');
+    'explicit group override retains all terms');
+  assert.doesNotMatch(h.root.querySelector('.qa-curation-concepts').textContent,/supporting/);
 });
 
 test('core-weighted group priority changes deterministic ranking', () => {
@@ -373,19 +379,21 @@ test('Curate saves compact signatures and persists individual concept changes', 
   assert.ok(h.calls.draft.conceptRoles.some(([id, role]) => role === 'ignore'));
 });
 
-test('stale Curate drafts retain media choices but cannot export old concepts', async () => {
+test('Curate v2 restores ranking and choices without a Director call after signature drift', async () => {
   const first = harness();
   first.ctx.window.startQaCuration(entries(), 'geometry', 'same-scope');
   await new Promise(resolve => setTimeout(resolve, 55));
-  const staleDraft = structuredClone(first.calls.draft);
-  const second = harness(staleDraft);
+  const draft = structuredClone(first.calls.draft);
+  assert.equal(draft.version, 2);
+  assert.ok(draft.snapshot.rows.length > 0);
+  const second = harness(draft);
+  second.ctx.qaCurrentCurationSignature = () => 'new-scope';
   second.ctx.window.startQaCuration(entries(), 'geometry', 'new-scope');
   await new Promise(resolve => setTimeout(resolve, 50));
   assert.equal(second.calls.submitted.length, 0);
-  assert.match(second.root.textContent, /needs fresh analysis/);
-  assert.equal(second.root.querySelector('[data-curation-create]'), null);
-  assert.ok(second.root.querySelector('button.qa-curation-primary'));
-  assert.equal(second.calls.draft.signature, staleDraft.signature);
+  assert.ok(second.root.querySelector('[data-curation-train]'));
+  assert.equal(Number(second.root.querySelector('[data-curation-selected]').textContent), draft.choices.length);
+  assert.equal(second.calls.draft.signature, draft.signature);
 });
 
 test('restoring current Curate draft skips Director and retains saved roles', async () => {
@@ -431,4 +439,66 @@ test('Curate review CSS reserves a desktop footer row below both columns', () =>
   const css = fs.readFileSync('tool/css/qa_workbench.css', 'utf8');
   assert.match(css, /grid-template-rows:auto auto minmax\(0,1fr\) auto/);
   assert.match(css, /\.qa-curation-review-actions \{ grid-column:1 \/ -1; grid-row:4; \}/);
+});
+
+test('near-equivalent 768 source outranks 384 source, but rare core evidence remains eligible', () => {
+  const h = harness();
+  const concepts = [{id:'unique',role:'core',weight:1,count:1}, {id:'common',role:'core',weight:1,count:3}];
+  const rows = [
+    {fileName:'small.png',ids:['common'],resolution:'384x384',analysis:{}},
+    {fileName:'large.png',ids:['common'],resolution:'768x768',analysis:{}},
+    {fileName:'unique.png',ids:['unique'],resolution:'384x384',analysis:{}},
+  ];
+  const ranked = h.ctx.window.qaCurationRank(rows, concepts).order;
+  assert.ok(ranked.indexOf('large.png') < ranked.indexOf('small.png'));
+  assert.ok(ranked.indexOf('unique.png') < ranked.indexOf('small.png'));
+});
+
+test('Curate review shows source tags, resolution and preserves a review resume point', async () => {
+  const h = harness();
+  const source = entries();
+  source[0].resolution = '768x768';
+  h.ctx.window.qaCurrentCurationEvidence = files => source.filter(item => files.includes(item.fileName));
+  h.ctx.window.startQaCuration(source,'geometry','same-scope');
+  await new Promise(resolve => setTimeout(resolve,45));
+  const button = Array.from(h.root.querySelectorAll('button')).find(el => el.textContent.startsWith('Review included'));
+  button.click();
+  const overlay = h.ctx.document.querySelector('.qa-curation-review');
+  assert.match(overlay.textContent, /Current tags:/);
+  assert.match(overlay.textContent, /768x768/);
+  overlay.querySelector('.qa-curation-review-open-item').click();
+  assert.equal(h.calls.opened.length,1);
+  assert.ok(Array.from(h.root.querySelectorAll('button')).some(el => el.textContent === 'Resume review'));
+});
+
+test('changed evidence displays a nonblocking notice and does not discard manual selections', async () => {
+  const h = harness();
+  const original = entries();
+  let live = original.map(row=>structuredClone(row));
+  h.ctx.window.qaCurrentCurationEvidence = files => live.filter(row => files.includes(row.fileName));
+  h.ctx.window.startQaCuration(original,'geometry','same-scope');
+  await new Promise(resolve => setTimeout(resolve,45));
+  const count = Number(h.root.querySelector('[data-curation-selected]').textContent);
+  live[0].caption = 'edited caption';
+  h.ctx.window.renderQaCuration(h.root,'same-scope');
+  assert.match(h.root.textContent,/changed supporting evidence/);
+  assert.equal(Number(h.root.querySelector('[data-curation-selected]').textContent),count);
+  assert.ok(h.root.querySelector('[data-curation-train]'));
+});
+
+test('chosen tag groups show a pair matrix that tracks local inclusion edits', async () => {
+  const h = harness();
+  h.ctx.window.startQaCuration(entries(),'geometry','same-scope');
+  await new Promise(resolve => setTimeout(resolve,45));
+  const view = h.root.querySelector('[data-curation-balance-group="View"]');
+  view.checked = true;
+  view.dispatchEvent(new h.ctx.window.Event('change',{bubbles:true}));
+  const cells = () => Array.from(h.root.querySelectorAll('[data-curation-pair-left]'));
+  assert.ok(cells().length > 0);
+  const before = cells().map(cell=>cell.textContent);
+  const selected = h.root.querySelector('.qa-curation-card input[type=checkbox]');
+  selected.checked = false;
+  selected.dispatchEvent(new h.ctx.window.Event('change',{bubbles:true}));
+  const after = cells().map(cell=>cell.textContent);
+  assert.notDeepEqual(after,before,'the displayed pair distribution must update after a checkbox decision');
 });

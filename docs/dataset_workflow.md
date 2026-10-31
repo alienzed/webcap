@@ -18,6 +18,8 @@ Dataset TOMLs are calculated directly from visible-media metadata. Repeat counts
 
 The currently visible media rows are the dataset source of truth. Text filters, advanced filters, and focus sets therefore control what the next Train action captures.
 
+**QA Curate** can prepare a Lean, Balanced, Broad or manually reviewed shortlist from the original Set. Its **Use for Training** action activates a Focus Set of original media; it does not create a copied editable Set. Captions, tags, ratings, and metadata continue to be edited on the originals. A saved Curate draft can be revisited and its evidence drift reviewed without rerunning Director; reanalysis is a separate explicit action. Curate's evidence-coverage score is a selection proxy, not a measured LoRA quality score.
+
 ## 4. Capture and train
 
 Train saves the open TOML, captures the visible media and latest captions, copies the inspected TOMLs, applies the Run setup overrides to the captured config, and writes the run plan under the logical-run output tree. Diffusion Pipe writes its cache inside the captured action evidence.

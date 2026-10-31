@@ -923,6 +923,9 @@
         if (input.value) chip(technicalNames[name] + ' ' + input.value, function () { input.value = ''; load(true); });
       });
     }
+    var filterCount = chips.children.length;
+    var countNode = el('media-explorer-filter-count');
+    if (countNode) countNode.textContent = filterCount ? String(filterCount) : '';
     el('media-explorer-clear-filters').classList.toggle('hidden', !hasFilters() && el('media-explorer-sort').value === 'newest' && !reverseSort);
     var activeSource = sourceButtons.find(function (button) { return button.classList.contains('active'); });
     text(el('media-explorer-heading'), activeSource ? activeSource.textContent : 'WebCap media');

@@ -89,6 +89,7 @@ on:
       - 'tool/js/test_references.js'
       - 'tool/css/epoch_finder.css'
       - 'tool/server/epoch_test_bench.py'
+      - 'tests/test_epoch_test_bench.py'
       - 'tool/css/styles.css'
       - 'tests/test_generations_unified_dom.test.cjs'
       - 'tests/test_test_generations_unified_*.py'
@@ -107,6 +108,12 @@ on:
       - 'tool/js/run_analytics.js'
       - 'tests/test_insights_sidebar_navigation.test.cjs'
       - '.github/workflows/revamp-validation.yml'
+      - 'tests/qa_finding_chat.test.cjs'
+      - 'tool/js/review_assistant.js'
+      - 'tool/js/director_chat.js'
+      - 'tool/js/focused_caption.js'
+      - 'tests/progressive_deep_qa.test.cjs'
+      - 'tests/test_progressive_deep_qa.py'
   push:
     branches:
       - main
@@ -193,6 +200,8 @@ jobs:
         run: cp tool/config.example.json tool/config.json
       - name: Install test essentials
         run: python -m pip install pytest Flask Pillow Werkzeug imageio websocket-client opencv-python-headless
+      - name: Inactive Fizgig and Diffusion Pipe backend contracts
+        run: python -m pytest -q tests/test_training_backend.py tests/test_training_fizgig.py
       - name: Training resume variant and History-only removal
         run: |
           node --check tool/js/training_review.js
@@ -227,6 +236,8 @@ jobs:
       - name: Set-wide Training Reference selections and campaign integration
         run: |
           python -m pytest -q tests/test_training_reference_selections.py tests/test_training_references_browser.py tests/test_epoch_finder_multigroup_references.py
+      - name: Evaluation Session Stop regressions
+        run: python -m pytest -q tests/test_epoch_test_bench.py -k 'stop_session or stop_shared_test_session'
       - name: Native Test, VL, Finder and Analytics regressions
         run: |
           python -m pytest -q tests/test_test_generations_ui_contract.py tests/test_test_generations_route.py tests/test_test_generations_ask_vl_navigation_contract.py tests/test_test_repeat.py tests/test_epoch_finder.py tests/test_epoch_finder_scaling.py tests/test_epoch_finder_multirun.py tests/test_run_analytics_next.py
@@ -269,3 +280,29 @@ jobs:
         run: python -m pytest -q tests/test_folder_state_ui_contract.py tests/test_file_ops_routes.py -k 'superset_search or incomplete_media_filter_is_retired or folder_state_reads_legacy'
       - name: Verify Director prompt and route
         run: python -m pytest -q tests/test_caption_atomic.py -k 'tag_mismatch or explicit_caption_candidate_repairs or caption_assist_corrections_make_retry'
+
+  progressive-deep-qa:
+    name: Progressive Deep QA / QA Focus Review
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Syntax and progressive queue contracts
+        run: |
+          node --check tool/js/qa_workbench.js
+          node --check tool/js/review_assistant.js
+          node --check tool/js/focused_caption.js
+          node --test tests/progressive_deep_qa.test.cjs tests/qa_finding_chat.test.cjs
+      - name: Prepare test runtime
+        run: |
+          cp tool/config.example.json tool/config.json
+          python -m pip install pytest Flask Pillow Werkzeug imageio websocket-client opencv-python-headless
+      - name: Existing QA + progressive backend contracts
+        run: |
+          python -m compileall -q tool/server/qa_llm_contract.py tool/server/app.py
+          python -m pytest -q tests/test_progressive_deep_qa.py tests/test_qa_workbench_contract.py tests/test_qa_focused_set_review.py tests/test_qa_llm_contract.py tests/test_qa_deep_scan_route.py

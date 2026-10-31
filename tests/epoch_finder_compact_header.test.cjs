@@ -49,3 +49,19 @@ test('compact strip remains flexible, preserves hidden metrics and full status t
   assert.match(css, /\.epoch-finder-frames-metric>\.epoch-finder-track/);
   assert.match(script, /els\('detail'\)\.title = campaign\.detail \|\| ''/);
 });
+
+test('unnamed Campaign runs use persisted sequence across labels', () => {
+  const vm = require('node:vm');
+  const start = script.indexOf('  function candidateLabel(campaign, candidate) {');
+  const end = script.indexOf('  function runDetails(run) {', start);
+  assert.ok(start >= 0 && end > start);
+  const ctx = {Number, String};
+  vm.createContext(ctx);
+  vm.runInContext(script.slice(start, end) +
+    '\nthis.identity = runIdentity; this.candidate = candidateLabel;', ctx);
+  const run = {runName: 'Run train', runSequence: '012', jobId: 'job-12'};
+  assert.equal(ctx.identity(run), 'Run 12');
+  assert.equal(ctx.candidate({candidateMap: {'50': {...run, epoch: 50}}}, 50), 'Run 12 · Epoch 50');
+  assert.equal(ctx.identity({...run, runName: 'Bikini details'}), 'Run 12 · Bikini details');
+  assert.equal(ctx.identity({runName: 'Run train', jobId: 'job-12'}), 'Run job-12');
+});

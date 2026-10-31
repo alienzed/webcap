@@ -1605,7 +1605,7 @@ def release_loaded_model_for_gpu_work():
 
 def manual_local_runtime(action="status"):
     """Inspect or release only the WebCap-owned local llama.cpp process."""
-    from .execution_queue import execution_resource_owner
+    from .execution_queue import resource_owner as execution_resource_owner
 
     if action not in {"status", "unload", "stop"}:
         raise ValueError("Unknown local llama.cpp action.")

@@ -150,7 +150,7 @@ def test_develop_story_uses_simple_scene_schema_and_dense_scene_guidance():
     assert "Create exactly 12 Scenes." in prompt
     assert "GENERATION UNIT." in prompt
     assert "at most 15 seconds." in prompt
-    assert "Use the supplied concept, Directing Guidelines" in prompt
+    assert "Use the Project Concept, Visual / atmosphere, Invariants" in prompt
     assert "when continuity matters" not in prompt
     assert "Use evolving state between connected Scenes" not in prompt
     assert "complete H3 prompt in the supplied JSON schema" in prompt
@@ -224,7 +224,7 @@ def test_extend_story_preserves_distinction_from_redevelopment():
     assert "OLD FIRST PROMPT" not in request["prompt"]
     assert "EXISTING SECOND PROMPT" not in request["prompt"]
     assert "[LAST SCENE EXIT STATE]" not in request["prompt"]
-    assert "Use the supplied concept, Directing Guidelines" in request["prompt"]
+    assert "Use the Project Concept, Visual / atmosphere, Invariants" in request["prompt"]
     assert "[USER DIRECTION]\nDifferent cubicle vignettes." in request["prompt"]
     assert "new Scenes, each with a complete standalone H3 generation prompt, as JSON" in request["prompt"]
 
@@ -267,19 +267,22 @@ def test_define_invariants_remains_context_generation_not_scene_authoring():
     request = storyboard_llm_contract.build_request(_story(), "", "define_invariants")
 
     assert request["output"] == "json"
-    assert request["response_schema"]["required"] == ["invariants", "guidelines"]
-    assert set(request["response_schema"]["properties"]["guidelines"]["required"]) == {"visualFocus", "creativeDirection", "variation", "pacing"}
+    assert request["response_schema"]["required"] == ["invariants"]
+    assert set(request["response_schema"]["properties"]) == {"invariants"}
+    assert "propose four" not in request["prompt"]
     assert "Define stable visual identities for recurring characters and locations" in request["prompt"]
 
 
-def test_define_invariants_refreshes_existing_guidelines_only_on_request():
+def test_define_invariants_preserves_legacy_context_without_generating_new_guidelines():
     story = _story()
     story["guidelines"] = {"visualFocus": "Old focus"}
     default = storyboard_llm_contract.build_request(story, "", "define_invariants")
     refreshed = storyboard_llm_contract.build_request(story, "", "define_invariants", refresh_guidelines=True)
-    assert "return an empty string for any already populated field" in default["prompt"]
-    assert "Refresh the four guideline proposals" in refreshed["prompt"]
-    assert "[EXISTING STORY GUIDELINES]" in refreshed["prompt"]
+    assert default["response_schema"]["required"] == ["invariants"]
+    assert default["response_schema"] == refreshed["response_schema"]
+    assert "[EXISTING STORY GUIDELINES]" in default["prompt"]
+    assert "Old focus" in refreshed["prompt"]
+    assert "Refresh the four guideline proposals" not in refreshed["prompt"]
 
 
 def test_write_prompt_requires_scene_intent():
@@ -535,3 +538,15 @@ def test_coherence_preserves_populated_author_variation_guidance():
     text = storyboard_llm_contract.build_request(story, "scene-2", "check_coherence")["prompt"]
     assert "Repeat the exact pose as a deliberate motif." in text
     assert "Consolidate repeated descriptions." not in text
+
+def test_new_scene_authoring_uses_five_fields_without_new_guideline_values():
+    story = _story()
+    story["guidelines"] = {}
+    request = storyboard_llm_contract.build_request(story, "scene-2", "write_prompt")
+    assert "[STORY CONCEPT / OVERVIEW]" in request["prompt"]
+    assert "[STORY VISUAL / ATMOSPHERE]" in request["prompt"]
+    assert "[STORY INVARIANTS]" in request["prompt"]
+    assert "Summary / intent: She notices wet footprints" in request["prompt"]
+    assert "EXISTING SECOND PROMPT" not in request["prompt"]
+    assert "[STORY DIRECTING GUIDELINES" not in request["prompt"]
+    assert request["response_schema"]["required"] == ["prompt"]

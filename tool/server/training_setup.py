@@ -2,9 +2,9 @@ from pathlib import Path
 import tomllib
 
 from .dataset_config import build_dataset_config_artifacts
-from .dataset_prep import build_dataset_manifest
+from .dataset_prep import IMAGE_EXTS, build_dataset_manifest, normalize_selected_media
 from .training_config_files import _write_set_toml_atomic, ensure_training_config_files, reset_training_config_file
-from .training_profiles import WAN22_PROFILE_ID, resolved_profile
+from .training_profiles import KREA2_PROFILE_ID, WAN22_PROFILE_ID, resolved_profile
 
 
 DATASET_ROOT_PLACEHOLDER = Path("__WEBCAP_DATASET_ROOT__")
@@ -29,6 +29,7 @@ def ensure_training_setup(
     selection_criteria=None,
     total_media_count=None,
     reset_file="",
+    allow_incompatible=False,
 ):
     folder = Path(folder_path)
     selected = resolved_setup(profile_id)
@@ -58,6 +59,21 @@ def ensure_training_setup(
             reset_name,
             profile_id=selected["id"],
         )
+
+    # Opening Training is not a training attempt. Keep the model configuration
+    # available even when the visible selection cannot train with this model.
+    # Review and actual run creation still reject the incompatible selection.
+    if allow_incompatible and selected["id"] == KREA2_PROFILE_ID:
+        selected_names = normalize_selected_media(selected_media)
+        if selected_names is not None and not any(
+            Path(name).suffix.lower() in IMAGE_EXTS for name in selected_names
+        ):
+            return {
+                "profileId": selected["id"],
+                "files": list(setup_file_names(selected["id"])),
+                "ready": False,
+                "reason": "Krea2 Raw trains images only. No images are visible in this set. Select images or choose a video-capable model.",
+            }
 
     missing_datasets = [item for item in selected["configs"] if not (folder / item["dataset"]).is_file()]
     reset_dataset = next((item for item in selected["configs"] if item["dataset"] == reset_name), None)
@@ -90,4 +106,5 @@ def ensure_training_setup(
     return {
         "profileId": selected["id"],
         "files": list(setup_file_names(selected["id"])),
+        "ready": True,
     }

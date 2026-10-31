@@ -20,6 +20,7 @@
         <link rel="stylesheet" href="/static/css/checklist.css">
         <link rel="stylesheet" href="/static/css/workspace_shell.css">
         <link rel="stylesheet" href="/static/css/storyboard.css">
+<link rel="stylesheet" href="/static/css/studio_blocks.css">
         <link rel="stylesheet" href="/static/css/generate.css">
         <link rel="stylesheet" href="/static/css/storage_manager.css">
         <link rel="stylesheet" href="/static/css/media_explorer.css">
@@ -106,7 +107,7 @@
                         <circle cx="12" cy="12" r="3"></circle>
                     </svg>
                 </button>
-                <button id="activity-storyboard-btn" type="button" class="activity-rail-btn" title="Storyboard" aria-label="Storyboard" aria-pressed="false" aria-controls="storyboard-workspace">
+                <button id="activity-storyboard-btn" type="button" class="activity-rail-btn" title="Studio" aria-label="Studio" aria-pressed="false" aria-controls="storyboard-workspace">
                     <svg class="activity-rail-icon" viewBox="0 0 24 24" aria-hidden="true">
                         <rect x="4" y="4" width="16" height="16" rx="2"></rect>
                         <path d="M4 9h16"></path>
@@ -1090,6 +1091,7 @@
                                         <span class="btn-glyph" aria-hidden="true">&#10003;</span>
                                         <span class="preview-header-btn-label">Focus Review</span>
                                     </button>
+                                    <button id="preview-focus-caption-ask-qa-btn" type="button" class="review-captions-btn hidden" title="Ask about this item's Deep QA recommendations">Ask QA</button>
                                     <button id="preview-focus-caption-dismiss-qa-btn" type="button" class="review-captions-btn hidden" title="Dismiss this QA item for this review round">Dismiss</button>
                                     <button
                                         id="preview-focus-caption-skip-btn"
@@ -1862,18 +1864,19 @@
                     </section>
                 </main>
             </section>
-            <section id="storyboard-workspace" class="storyboard-workspace hidden" data-workspace-root="storyboard" aria-label="Storyboard workspace">
-                <aside class="storyboard-library" aria-label="Stories">
+            <section id="storyboard-workspace" class="storyboard-workspace hidden" data-workspace-root="storyboard" aria-label="Studio workspace">
+                <aside class="storyboard-library" aria-label="Projects">
                     <header class="storyboard-library-header">
-                        <strong>Stories</strong>
+                        <strong>Projects</strong>
                         <div class="storyboard-library-header-actions">
-                            <button id="storyboard-library-compact-toggle" type="button" class="review-captions-btn storyboard-library-compact-toggle" aria-pressed="false" title="Collapse Stories to icons" aria-label="Collapse Stories to icons">‹</button>
-                            <button id="storyboard-new-btn" type="button" class="storyboard-primary-btn">New Story</button>
+                            <button id="storyboard-library-compact-toggle" type="button" class="review-captions-btn storyboard-library-compact-toggle" aria-pressed="false" title="Collapse Projects to icons" aria-label="Collapse Stories to icons">‹</button>
+                            <button id="studio-blocks-open" type="button" class="review-captions-btn">Blocks</button>
+<button id="storyboard-new-btn" type="button" class="storyboard-primary-btn">New Project</button>
                         </div>
                     </header>
                     <div id="storyboard-library-list" class="storyboard-library-list"></div>
                 </aside>
-                <section class="storyboard-editor" aria-label="Story editor">
+                <section class="storyboard-editor" aria-label="Project editor">
                     <aside id="storyboard-director-activity" class="storyboard-director-activity hidden" aria-live="polite">
                         <strong>Director</strong>
                         <span id="storyboard-director-activity-phase">Preparing…</span>
@@ -1894,15 +1897,15 @@
                         </div>
                         <button id="storyboard-director-stop" type="button" class="director-stop-btn hidden">Stop</button>
                     </aside>
-                    <div id="storyboard-editor-empty" class="storyboard-editor-empty">Create or open a Story to begin.</div>
+                    <div id="storyboard-editor-empty" class="storyboard-editor-empty">Create or open a Project to begin.</div>
                     <div id="storyboard-editor-content" class="storyboard-editor-scroll hidden">
                         <div id="storyboard-story-authoring" class="storyboard-story-authoring">
                             <div id="storyboard-story-overview" class="storyboard-story-fields storyboard-story-overview-surface">
                                 <div class="storyboard-story-panel-heading">
-                                    <strong>Story Overview</strong>
+                                    <strong>Project Overview</strong>
                                     <div class="storyboard-story-heading-actions">
                                         <div class="storyboard-story-action-wrap">
-                                            <button id="storyboard-first-cut-btn" type="button" class="storyboard-primary-btn storyboard-director-action" title="Take this Story from its current concept through Director refinement and queue one first Take per Scene.">First Cut</button>
+                                            <button id="storyboard-first-cut-btn" type="button" class="storyboard-primary-btn storyboard-director-action" title="Take this Project from its current concept through Director refinement and queue one first Take per Scene.">First Cut</button>
                                         <div id="storyboard-story-action-card" class="storyboard-story-action-card hidden" aria-live="polite">
                                             <div class="storyboard-story-action-copy">
                                                 <strong id="storyboard-story-action-phase">Preparing</strong>
@@ -1912,14 +1915,14 @@
                                             <button id="storyboard-story-action-cancel" data-story-action-cancel type="button" class="review-captions-btn">Cancel</button>
                                         </div>
                                         </div>
-                                        <button id="storyboard-story-toggle" type="button" class="review-captions-btn" aria-expanded="true" aria-controls="storyboard-story-authoring">Hide Story Overview</button>
+                                        <button id="storyboard-story-toggle" type="button" class="review-captions-btn" aria-expanded="true" aria-controls="storyboard-story-authoring">Hide Project Overview</button>
                                     </div>
                                 </div>
 
                                 <details class="storyboard-story-section" data-story-section="story" open>
                                     <summary>
                                         <span class="storyboard-story-section-summary-copy">
-                                            <strong>Story</strong>
+                                            <strong>Project</strong>
                                             <span>Identity, concept, and visual language.</span>
                                         </span>
                                     </summary>
@@ -1929,11 +1932,11 @@
                                             <span>Icon</span>
                                             <div class="storyboard-icon-picker">
                                                 <input id="storyboard-story-icon" type="hidden" value="">
-                                                <button id="storyboard-story-icon-trigger" type="button" class="storyboard-icon-picker-trigger" aria-haspopup="true" aria-expanded="false" title="Choose Story icon">
+                                                <button id="storyboard-story-icon-trigger" type="button" class="storyboard-icon-picker-trigger" aria-haspopup="true" aria-expanded="false" title="Choose Project icon">
                                                     <span id="storyboard-story-icon-preview" class="storyboard-icon-picker-preview" aria-hidden="true"></span>
                                                     <span id="storyboard-story-icon-label">Auto</span>
                                                 </button>
-                                                <div id="storyboard-story-icon-menu" class="storyboard-icon-picker-menu hidden" role="menu" aria-label="Choose Story icon"></div>
+                                                <div id="storyboard-story-icon-menu" class="storyboard-icon-picker-menu hidden" role="menu" aria-label="Choose Project icon"></div>
                                             </div>
                                         </div>
                                         <label class="storyboard-field"><span>Status</span><select id="storyboard-story-status"><option value="active">Active</option><option value="complete">Complete</option><option value="archived" disabled>Archived (recipe retained)</option></select></label>
@@ -1945,7 +1948,7 @@
                                                     <button id="storyboard-restore-concept-btn" type="button" class="storyboard-field-action-btn hidden">Restore Original</button>
                                                 </div>
                                             </div>
-                                            <textarea id="storyboard-story-concept" rows="6" placeholder="High-level grounded overview of the Story."></textarea>
+                                            <textarea id="storyboard-story-concept" rows="6" placeholder="High-level grounded overview of the Project."></textarea>
                                         </div>
                                         <div class="storyboard-field storyboard-style-field">
                                             <div class="storyboard-field-header">
@@ -1963,23 +1966,26 @@
                                 <details class="storyboard-story-section" data-story-section="continuity">
                                     <summary class="storyboard-continuity-summary">
                                         <span class="storyboard-story-section-summary-copy">
-                                            <strong>Directing Guidelines</strong>
-                                            <span>Optional creative direction and continuity facts.</span>
+                                            <strong>Invariants</strong>
+                                            <span>Fixed character, location and other recurring facts.</span>
                                         </span>
                                         <span class="storyboard-invariants-actions">
-                                            <button id="storyboard-invariant-define" type="button" class="review-captions-btn storyboard-director-action">Define from Concept</button>
+                                            <button id="storyboard-invariant-define" type="button" class="review-captions-btn storyboard-director-action">Define Invariants</button>
                                             <button id="storyboard-invariant-add" type="button" class="review-captions-btn">Add Invariant</button>
                                         </span>
                                     </summary>
                                     <div class="storyboard-story-section-body">
-                                        <section class="storyboard-guidelines" aria-label="Creative directing guidelines">
+                                        <details class="storyboard-legacy-guidelines">
+                                        <summary>Legacy Directing Guidelines (existing Projects)</summary>
+                                        <section class="storyboard-guidelines" aria-label="Legacy creative directing guidelines">
                                         <label class="storyboard-field"><span>Visual Focus</span><textarea data-story-guideline="visualFocus" rows="2" placeholder="What should the audience actually see: subjects, actions, interactions, details?"></textarea></label>
                                         <label class="storyboard-field"><span>Creative Direction</span><textarea data-story-guideline="creativeDirection" rows="2" placeholder="What qualities make this concept compelling? What should new examples have in common?"></textarea></label>
                                         <label class="storyboard-field"><span>Variation / Repetition</span><textarea data-story-guideline="variation" rows="2" placeholder="What should vary between Scenes? What repetition is intentional?"></textarea></label>
                                         <label class="storyboard-field"><span>Pacing / Rhythm</span><textarea data-story-guideline="pacing" rows="2" placeholder="How should shots and actions spend the available time?"></textarea></label>
                                         <label class="storyboard-field"><span>Scene Relationships</span><textarea data-story-guideline="sceneRelationships" rows="2" placeholder="Do Scenes progress, form independent variations, repeat a format, or relate another way?"></textarea></label>
                                         </section>
-                                        <section class="storyboard-invariants" aria-label="Story invariants">
+                                        </details>
+                                        <section class="storyboard-invariants" aria-label="Project invariants">
                                             <div id="storyboard-invariants-list" class="storyboard-invariants-list"></div>
                                         </section>
                                     </div>
@@ -1997,8 +2003,8 @@
                                         <input id="storyboard-story-target-scenes" type="number" min="2" max="50" step="1" value="12" aria-label="Target Scene count">
                                         <span>scenes</span>
                                     </label>
-                                    <button id="storyboard-scene-count-auto" type="button" class="review-captions-btn storyboard-scene-count-auto" aria-pressed="false" title="Let Director choose the Scene count from the Story">Auto</button>
-                                    <label class="storyboard-develop-individual" title="Plan the Story once, then author each full Scene in a separate Director request.">
+                                    <button id="storyboard-scene-count-auto" type="button" class="review-captions-btn storyboard-scene-count-auto" aria-pressed="false" title="Let Director choose the Scene count from the Project">Auto</button>
+                                    <label class="storyboard-develop-individual" title="Plan the Project once, then author each full Scene in a separate Director request.">
                                         <input id="storyboard-develop-individual" type="checkbox">
                                         <span>One at a time</span>
                                     </label>
@@ -2011,7 +2017,7 @@
                                 <summary>
                                     <span class="storyboard-story-section-summary-copy">
                                         <strong>Scene Defaults</strong>
-                                        <span>Generation settings inherited by Scenes; does not affect the Story definition.</span>
+                                        <span>Generation settings inherited by Scenes; does not affect the Project definition.</span>
                                     </span>
                                 </summary>
                                 <div class="storyboard-story-section-body storyboard-scene-defaults-body">
@@ -2026,9 +2032,9 @@
                                         <button id="storyboard-director-lora-suggest" type="button" class="review-captions-btn">Suggest LoRAs</button>
                                     </div>
                                     <span id="storyboard-director-lora-status" class="storyboard-reference-empty" aria-live="polite"></span>
-                                    <section class="storyboard-story-loras" aria-label="Story LoRAs">
+                                    <section class="storyboard-story-loras" aria-label="Project LoRAs">
                                         <div class="storyboard-scene-defaults-subheading">
-                                            <strong>Story LoRAs</strong>
+                                            <strong>Project LoRAs</strong>
                                             <span>Inherited by all Scenes unless overridden.</span>
                                             <button id="storyboard-story-lora-refresh" type="button" class="review-captions-btn" data-storyboard-lora-refresh title="Rescan available LoRAs from ComfyUI.">Refresh</button>
                                         </div>
@@ -2050,9 +2056,9 @@
                                 <div class="storyboard-scenes-heading-left">
                                     <div class="storyboard-scenes-heading-title">
                                         <div class="storyboard-scenes-title-row">
-                                            <button id="storyboard-story-show" type="button" class="review-captions-btn hidden" aria-expanded="false" aria-controls="storyboard-story-authoring">Show Story Overview</button>
+                                            <button id="storyboard-story-show" type="button" class="review-captions-btn hidden" aria-expanded="false" aria-controls="storyboard-story-authoring">Show Project Overview</button>
                                             <strong id="storyboard-workspace-mode-title">Scenes</strong>
-                                            <button id="storyboard-generate-scenes-btn" type="button" class="review-captions-btn" title="Queue one new Take for every Scene in this Story.">Generate</button>
+                                            <button id="storyboard-generate-scenes-btn" type="button" class="review-captions-btn" title="Queue one new Take for every Scene in this Project.">Generate</button>
                                             <button id="storyboard-cancel-takes-btn" type="button" class="review-captions-btn hidden" title="Cancel this Story's queued Take generation. The current Take will finish.">Cancel Takes</button>
                                         </div>
                                         <span id="storyboard-progress-summary" class="storyboard-progress-summary"></span>
@@ -2061,7 +2067,7 @@
                                 <div class="storyboard-scenes-heading-actions">
                                     <button id="storyboard-scenes-focus-btn" type="button" class="review-captions-btn hidden">← Scenes</button>
                                     <button id="storyboard-scenes-sequence-btn" type="button" class="review-captions-btn">Sequence</button>
-                                    <button type="button" class="review-captions-btn" onclick="openStoryboardAssistant()" title="Discuss the Story with the Assistant without changing scenes">Chat</button>
+                                    <button type="button" class="review-captions-btn" onclick="openStoryboardAssistant()" title="Discuss the Project with Director without changing Scenes">Chat</button>
                                      <button id="storyboard-director-tools-btn" type="button" class="review-captions-btn storyboard-director-action" title="Open Director Tools">Director Tools</button>
 
                                 </div>
@@ -2076,10 +2082,13 @@
             <aside id="director-chat-drawer" class="director-chat-drawer hidden" aria-label="Assistant" aria-hidden="true">
                 <header class="director-chat-drawer-header">
                     <div class="director-chat-header-copy">
-                        <strong>Assistant</strong>
-                        <span id="director-chat-mode-description">Session-only freeform model conversation</span>
+                        <strong id="director-chat-title">Assistant</strong>
+                        <span id="director-chat-mode-description">Assistant conversation</span>
+                        <span id="director-chat-save-status" aria-live="polite"></span>
                     </div>
                     <div class="director-chat-header-actions">
+                        <button id="studio-dw-quick-read" type="button" class="review-captions-btn" aria-controls="studio-dw-read-panel" aria-expanded="false">Read…</button>
+                        <button id="studio-dw-quick-write" type="button" class="review-captions-btn" aria-controls="studio-dw-write-panel" aria-expanded="false">Write…</button>
                         <button id="director-chat-pin" type="button" class="director-chat-pin" title="Pin Assistant" aria-label="Pin Assistant" aria-pressed="false">
                             <svg viewBox="0 0 24 24" aria-hidden="true">
                                 <path d="M9 4h6"></path>
@@ -2087,10 +2096,17 @@
                                 <path d="M12 14v6"></path>
                             </svg>
                         </button>
+                        <button id="director-chat-history-toggle" type="button" class="review-captions-btn" aria-expanded="false" aria-controls="director-chat-history-panel">History</button>
                         <button id="director-chat-clear" type="button" class="review-captions-btn">New chat</button>
                         <button id="director-chat-close" type="button" class="director-chat-close" aria-label="Close Assistant">×</button>
                     </div>
                 </header>
+                <section id="director-chat-history-panel" class="director-chat-history-panel hidden" aria-label="Saved Assistant conversations">
+                    <div class="director-chat-history-heading">Saved conversations</div>
+                    <div id="director-chat-history-list" class="director-chat-history-list"></div>
+                </section>
+                <div class="director-chat-layout">
+                    <div class="director-chat-conversation">
                 <div id="director-chat-mode-row" class="director-chat-mode-row hidden" aria-label="Assistant mode">
                     <span>Mode</span>
                     <div id="director-chat-mode-switch" class="director-chat-mode-switch" role="group" aria-label="Assistant mode"></div>
@@ -2106,13 +2122,24 @@
                     <div class="director-chat-attachments-bar">
                         <button id="director-chat-attachments-toggle" type="button" class="review-captions-btn director-chat-attachments-toggle" aria-expanded="false" aria-controls="director-chat-attachments-body">View attached context</button>
                         <button id="director-chat-attachments-copy-all" type="button" class="review-captions-btn" title="Copy every attached reference exactly as supplied to Storyboard Chat">Copy all</button>
+                        <button id="director-chat-attachments-clear" type="button" class="review-captions-btn" title="Clear legacy attached text snapshots without deleting past dialogue">Clear snapshots</button>
                     </div>
                     <div id="director-chat-attachments-body" class="director-chat-attachments-body hidden">
-                        <p class="director-chat-attachments-note">Attached snapshot sent with each message. Reattach to capture new Story or Scene edits.</p>
+                        <p class="director-chat-attachments-note">Explicitly attached snapshots are saved with this conversation. Inspect or copy the supplied text here.</p>
                         <div id="director-chat-attachments-list" class="director-chat-attachments-list"></div>
                     </div>
                     <p id="director-chat-attachments-status" class="director-chat-attachments-status" aria-live="polite"></p>
                 </section>
+                <section id="director-chat-context-panel" class="director-chat-context-panel hidden" aria-label="Context supplied to Ask QA">
+                    <details id="director-chat-context-details">
+                        <summary id="director-chat-context-heading">Attached context</summary>
+                        <div id="director-chat-context-summary" class="director-chat-context-summary"></div>
+                        <pre id="director-chat-context-body" class="director-chat-context-body"></pre>
+                    </details>
+                    <div id="director-chat-context-status" class="director-chat-context-status" role="status"></div>
+                    <button id="director-chat-context-refresh" type="button" class="review-captions-btn hidden">Use updated context · new chat</button>
+                </section>
+                <p id="director-chat-temporary-note" class="director-chat-temporary-note hidden">Temporary conversation · not saved to History</p>
                 <div class="director-chat-model-row director-chat-model-tools">
                     <label for="director-chat-model">Model</label>
                     <select id="director-chat-model" aria-label="Assistant model">
@@ -2132,10 +2159,14 @@
                 </div>
                 <div id="director-chat-messages" class="director-chat-messages" aria-live="polite"></div>
                 <div id="director-chat-empty" class="director-chat-empty">
-                    Start a freeform conversation with the selected model.
+                    <strong id="director-chat-empty-title">Your creative workshop</strong>
+                    <p id="director-chat-empty-description">Tell Director what interests you. You can start with a single moment, a feeling, or nothing at all.</p>
+                    <button id="director-studio-retry" type="button" class="review-captions-btn hidden">Start Writer's Workshop</button>
                 </div>
                 <div class="director-chat-composer">
                     <textarea id="director-chat-input" rows="4" placeholder="Ask the model anything…"></textarea>
+                    <div id="studio-blocks-slash" class="studio-blocks-slash hidden" role="listbox" aria-label="Insert reusable Studio Block"></div>
+
                     <div class="director-chat-composer-footer">
                         <span class="director-chat-composer-hint">Enter to send · Shift+Enter for newline</span>
                         <div class="director-chat-composer-actions">
@@ -2143,7 +2174,342 @@
                         </div>
                     </div>
                 </div>
+                    </div>
+                    <div id="director-chat-sidebar" class="director-chat-sidebar">
+                <section id="studio-director-workbench" class="studio-director-workbench" aria-label="Director actions and feedback">
+                  <div class="studio-dw-heading"><div><strong id="studio-dw-heading">Director actions</strong><span id="studio-dw-context">Conversation is independent of Studio navigation</span></div><button id="studio-dw-close-actions" type="button" aria-label="Close Director actions">Close</button></div>
+                  <div class="studio-dw-actions">
+                    <button id="studio-dw-read" type="button" aria-expanded="false" aria-controls="studio-dw-read-panel">Read…</button>
+                    <button id="studio-dw-write" type="button" aria-expanded="false" aria-controls="studio-dw-write-panel">Write…</button>
+                  </div>
+                  <div id="studio-dw-status" class="studio-dw-status hidden" role="status" aria-live="polite"></div>
+                  <div id="studio-dw-undo" class="studio-dw-undo hidden"><span id="studio-dw-undo-label">Project brief updated</span><button id="studio-dw-undo-button" type="button">Undo brief change</button></div>
+                  <section id="studio-dw-read-panel" class="studio-dw-panel hidden" aria-label="Read selected saved fields">
+                    <h3>Read saved material</h3>
+                    <label>Read from Project<select id="studio-dw-read-project"></select></label>
+                    <p id="studio-dw-read-scope" class="studio-dw-scope"></p>
+                    <div id="studio-dw-project-fields" class="studio-dw-field-list" aria-label="Project fields"></div>
+                    <details id="studio-dw-scenes">
+                      <summary>Scenes · choose individual fields</summary>
+                      <div id="studio-dw-scene-fields" class="studio-dw-scene-list"></div>
+                    </details>
+                    <details id="studio-dw-read-preview"><summary>Inspect selected saved fields</summary><pre id="studio-dw-read-preview-data"></pre></details>
+                    <div class="studio-dw-submit"><span id="studio-dw-read-count">0 fields selected</span><button id="studio-dw-read-send" type="button" class="studio-dw-primary">Send to Director</button></div>
+                  </section>
+                  <section id="studio-dw-write-panel" class="studio-dw-panel hidden" aria-label="Write reviewed content">
+                    <h3>Write a proposal</h3>
+                    <label>Write to Project<select id="studio-dw-write-project"></select></label>
+                    <p id="studio-dw-write-scope" class="studio-dw-scope"></p>
+                    <label>Operation<select id="studio-dw-write-operation">
+                      <option value="project">Update Project</option>
+                      <option value="new-project">Create Project</option>
+                      <option value="scenes">Add Scenes (one or more)</option>
+                      <option value="scene-edit">Revise Scene</option>
+                      <option value="scenes-batch">Revise several Scenes</option>
+                      <option value="scene-split">Split Scene</option>
+                      <option value="scene-invariants">Use Invariant in Scenes</option>
+                      <option value="scene-move">Move Scene</option>
+                      <option value="scene-duplicate">Duplicate Scene</option>
+                    </select></label>
+                    <label id="studio-dw-write-scene-row" class="hidden">Scene<select id="studio-dw-write-scene"></select></label>
+                    <label id="studio-dw-move-target-row" class="hidden">Relative to Scene<select id="studio-dw-move-target"></select></label>
+                    <label id="studio-dw-move-placement-row" class="hidden">Placement
+                      <select id="studio-dw-move-placement">
+                        <option value="before">Before</option>
+                        <option value="after">After</option>
+                      </select>
+                    </label>
+                    <div id="studio-dw-invariant-controls" class="hidden">
+                      <label>Character or Location<select id="studio-dw-invariant-choice"></select></label>
+                      <p>Select the Scenes that use this Invariant. Existing associations are already checked.</p>
+                      <div id="studio-dw-invariant-scenes" class="studio-dw-scene-list"></div>
+                    </div>
+                    <div id="studio-dw-batch-controls" class="hidden">
+                      <p>Choose the Scenes and fields to develop together.</p>
+                      <div id="studio-dw-batch-scenes" class="studio-dw-scene-list"></div>
+                      <div id="studio-dw-batch-fields" class="studio-dw-field-list">
+                        <label><input type="checkbox" value="summary" checked> Intent</label>
+                        <label><input type="checkbox" value="title"> Title</label>
+                        <label><input type="checkbox" value="prompt"> H3 Prompt</label>
+                      </div>
+                    </div>
+                    <div id="studio-dw-write-fields" class="studio-dw-field-list hidden">
+                      <label><input type="checkbox" value="summary" checked> Intent</label>
+                      <label><input type="checkbox" value="prompt"> H3 Prompt</label>
+                      <label><input type="checkbox" value="title"> Title</label>
+                    </div>
+                    <details id="studio-dw-write-context" class="studio-dw-source-preview">
+                      <summary>Context Director will use for this draft</summary>
+                      <pre id="studio-dw-write-context-json"></pre>
+                    </details>
+                    <div class="studio-dw-submit"><button id="studio-dw-write-prepare" type="button" class="studio-dw-primary">Prepare editable review</button></div>
+                  </section>
+                  <section class="studio-dw-readiness" aria-label="Director readiness proposals">
+                    <div class="studio-dw-readiness-heading"><strong>Creative assessment</strong><small id="studio-dw-readiness-freshness" role="status" aria-live="polite">Not assessed yet</small></div>
+                    <div id="studio-dw-readiness-list" class="studio-dw-readiness-list"><p>Not assessed yet.</p></div>
+                    <button id="studio-dw-playbook-open" type="button" class="studio-dw-playbook-open">H3 Playbook · global model guidance</button>
+                  </section>
+                </section>
+                <section id="director-studio-flow" class="director-studio-flow hidden" aria-label="Active Story and proposed field changes">
+                    <div class="director-studio-flow-main">
+                        <div class="director-studio-flow-copy">
+                            <strong id="director-studio-flow-title">Working with: New Project</strong>
+                            <p id="director-studio-flow-description">Concept / overview · Visual / atmosphere · Invariants</p>
+                        </div>
+                        <button id="director-studio-capture" type="button" class="studio-primary-action">Review new Project</button>
+                    </div>
+                    <div id="director-studio-flow-target" class="director-studio-flow-target hidden">
+                        <span id="director-studio-flow-target-label"></span>
+                        <button id="director-studio-attach-current" type="button" class="review-captions-btn">Use open Project</button>
+                    </div>
+                    <div class="director-studio-flow-secondary">
+                        <section id="director-studio-access" class="director-studio-access hidden" aria-label="Story read access">
+                                            <details id="director-studio-access-details">
+                                                <summary id="director-studio-access-summary">Project access</summary>
+                                                <p>Director has permission to request specific Story fields. Nothing is sent to the model simply by granting access.</p>
+                                                <div class="director-studio-access-controls">
+                                                    <label for="director-studio-access-field">Field group</label>
+                                                    <select id="director-studio-access-field">
+                                                        <option value="brief">Concept / overview, Visual / atmosphere, Invariants</option>
+                                                        <option value="index">Scene index</option>
+                                                        <option value="scene">Selected Scene intent</option>
+                                                        <option value="prompt">Selected Scene prompt</option>
+                                                        <option value="takes">Selected Scene Take IDs</option>
+                                                    </select>
+                                                    <select id="director-studio-access-scene" class="hidden" aria-label="Select a Scene"></select>
+                                                    <button id="director-studio-access-read" type="button" class="review-captions-btn">Inspect fields</button>
+                                                    <button id="director-studio-access-clear" type="button" class="review-captions-btn">Disconnect</button>
+                                                </div>
+                                                <p id="director-studio-access-status" aria-live="polite">No fields read in this session.</p>
+                                                <pre id="director-studio-access-data" class="director-studio-access-data hidden"></pre>
+                                            </details>
+                                        </section>
+                        <details id="director-studio-operation-history" class="director-studio-operation-history hidden">
+                                            <summary id="director-studio-operation-summary">Studio changes</summary>
+                                            <div id="director-studio-operation-list" class="director-studio-operation-list"></div>
+                                        </details>
+                        <details id="director-studio-more">
+                            <summary>Scenes</summary>
+                            <div id="director-studio-starters" class="director-studio-starters" aria-label="Scene preparation actions">
+                                <button id="director-studio-prepare-scenes" type="button" title="Review multiple tentative Scenes and their placement">Prepare Scenes</button>
+                                <button id="director-studio-prepare-scene" type="button" title="Review one tentative Scene and its placement">Prepare a Scene</button>
+                            </div>
+                        </details>
+                        <button id="director-studio-undo-brief" type="button" class="review-captions-btn hidden">Undo brief change</button>
+                    </div>
+                    <span id="director-studio-action-status" class="director-studio-action-status hidden" aria-live="polite"></span>
+                </section>
+                    </div>
+                </div>
             </aside>
+            <dialog id="studio-dw-assessment-dialog" class="studio-scene-draft-review" aria-labelledby="studio-dw-assessment-title"><header class="studio-scene-draft-header"><h2 id="studio-dw-assessment-title">Creative assessment</h2><button id="studio-dw-assessment-close" type="button">Close</button></header><div class="studio-scene-draft-content"><pre id="studio-dw-assessment-content"></pre></div></dialog>
+            <dialog id="studio-dw-playbook-review" class="studio-scene-draft-review" aria-labelledby="studio-dw-playbook-title">
+              <header class="studio-scene-draft-header"><div><h2 id="studio-dw-playbook-title">Review H3 Playbook</h2>
+                <p>Director's proposal is editable. Built-in technical rules remain unchanged.</p></div>
+                <button id="studio-dw-playbook-close" type="button" class="review-captions-btn">Close</button></header>
+              <div class="studio-scene-draft-content">
+                <strong>Saved guidance</strong><pre id="studio-dw-playbook-before"></pre>
+                <label for="studio-dw-playbook-after">Proposed complete Playbook</label>
+                <textarea id="studio-dw-playbook-after" rows="15"></textarea>
+                <p id="studio-dw-playbook-error" role="alert"></p>
+              </div>
+              <footer class="studio-scene-draft-footer">
+                <button id="studio-dw-playbook-cancel" type="button" class="review-captions-btn">Back</button>
+                <button id="studio-dw-playbook-apply" type="button">Apply reviewed Playbook</button>
+              </footer>
+            </dialog>
+            <dialog id="studio-dw-structure-review" class="studio-scene-draft-review" aria-labelledby="studio-dw-structure-title">
+              <header class="studio-scene-draft-header"><div><h2 id="studio-dw-structure-title">Review Scene order</h2>
+                <p>Only the approved structural change is applied; existing Scenes and Takes remain intact.</p></div>
+                <button id="studio-dw-structure-close" type="button" class="review-captions-btn">Close</button></header>
+              <div class="studio-scene-draft-content">
+                <p id="studio-dw-structure-summary"></p>
+                <pre id="studio-dw-structure-before"></pre>
+                <pre id="studio-dw-structure-after"></pre>
+                <p id="studio-dw-structure-error" role="alert"></p>
+              </div>
+              <footer class="studio-scene-draft-footer">
+                <button id="studio-dw-structure-cancel" type="button" class="review-captions-btn">Back to conversation</button>
+                <button id="studio-dw-structure-apply" type="button">Apply reviewed change</button>
+              </footer>
+            </dialog>
+            <dialog id="studio-dw-split-review" class="studio-scene-draft-review" aria-labelledby="studio-dw-split-title">
+              <header class="studio-scene-draft-header"><div><h2 id="studio-dw-split-title">Review Scene split</h2>
+                <p>Two independently renderable Intents. The original Prompt and Takes are preserved, but may need review.</p></div>
+                <button id="studio-dw-split-close" type="button" class="review-captions-btn">Close</button></header>
+              <div class="studio-scene-draft-content">
+                <p id="studio-dw-split-target"></p>
+                <p id="studio-dw-split-before"></p>
+                <label>First Scene Intent (replaces the original Intent)
+                  <textarea id="studio-dw-split-first" rows="6"></textarea>
+                </label>
+                <label>New Scene title
+                  <input id="studio-dw-split-second-title" maxlength="240">
+                </label>
+                <label>New Scene Intent
+                  <textarea id="studio-dw-split-second-summary" rows="6"></textarea>
+                </label>
+                <p id="studio-dw-split-error" role="alert"></p>
+              </div>
+              <footer class="studio-scene-draft-footer">
+                <button id="studio-dw-split-cancel" type="button" class="review-captions-btn">Back to conversation</button>
+                <button id="studio-dw-split-apply" type="button">Apply reviewed split</button>
+              </footer>
+            </dialog>
+            <dialog id="studio-dw-invariant-review" class="studio-scene-draft-review" aria-labelledby="studio-dw-invariant-title">
+              <header class="studio-scene-draft-header"><div><h2 id="studio-dw-invariant-title">Review Scene associations</h2>
+                <p>Save these exact Character/Location links. Other creative and production fields remain unchanged.</p></div>
+                <button id="studio-dw-invariant-close" type="button" class="review-captions-btn">Close</button></header>
+              <div class="studio-scene-draft-content">
+                <p id="studio-dw-invariant-summary"></p>
+                <div id="studio-dw-invariant-diff"></div>
+                <p id="studio-dw-invariant-error" role="alert"></p>
+              </div>
+              <footer class="studio-scene-draft-footer">
+                <button id="studio-dw-invariant-cancel" type="button" class="review-captions-btn">Back to conversation</button>
+                <button id="studio-dw-invariant-apply" type="button">Apply reviewed associations</button>
+              </footer>
+            </dialog>
+            <dialog id="studio-dw-batch-review" class="studio-scene-draft-review" aria-labelledby="studio-dw-batch-title">
+              <header class="studio-scene-draft-header"><div><h2 id="studio-dw-batch-title">Review Scene revisions</h2>
+                <p>Choose the exact changes to save together. Other Scenes, prompts and Takes remain unchanged.</p></div>
+                <button id="studio-dw-batch-close" type="button" class="review-captions-btn">Close</button></header>
+              <div class="studio-scene-draft-content">
+                <div id="studio-dw-batch-editors"></div>
+                <p id="studio-dw-batch-error" role="alert"></p>
+              </div>
+              <footer class="studio-scene-draft-footer">
+                <button id="studio-dw-batch-cancel" type="button" class="review-captions-btn">Back to conversation</button>
+                <button id="studio-dw-batch-apply" type="button">Apply selected Scene changes</button>
+              </footer>
+            </dialog>
+            <dialog id="studio-dw-scene-review" class="studio-scene-draft-review" aria-labelledby="studio-dw-scene-review-title">
+              <header class="studio-scene-draft-header"><div><h2 id="studio-dw-scene-review-title">Review Scene changes</h2>
+                <p>Editable proposals for selected existing fields. Unselected fields and Takes are preserved.</p></div>
+                <button id="studio-dw-scene-close" type="button" class="review-captions-btn">Close</button></header>
+              <div class="studio-scene-draft-content">
+                <p id="studio-dw-scene-target"></p>
+                <div id="studio-dw-scene-editors"></div>
+                <p id="studio-dw-scene-error" role="alert"></p>
+              </div>
+              <footer class="studio-scene-draft-footer">
+                <button id="studio-dw-scene-cancel" type="button" class="review-captions-btn">Back to conversation</button>
+                <button id="studio-dw-scene-apply" type="button">Apply selected fields</button>
+              </footer>
+            </dialog>
+            <dialog id="studio-brief-review" class="studio-scene-draft-review" aria-labelledby="studio-brief-review-title">
+                <header class="studio-scene-draft-header">
+                    <div>
+                        <h2 id="studio-brief-review-title">Review Story fields</h2>
+                        <p>Select and edit only the fields you want to change. Other Story and Scene content stays intact.</p>
+                    </div>
+                    <button id="studio-brief-close" type="button" class="review-captions-btn">Close</button>
+                </header>
+                <div class="studio-scene-draft-content">
+                    <p id="studio-brief-target" class="studio-scene-draft-target"></p>
+                    <p id="studio-brief-rationale" class="studio-scene-draft-rationale"></p>
+                    <label for="studio-brief-title"><input id="studio-brief-title-selected" type="checkbox"> Project title</label>
+                    <p id="studio-brief-title-before" class="studio-scene-draft-rationale"></p>
+                    <input id="studio-brief-title" type="text" maxlength="240" aria-label="Project title">
+                    <label for="studio-brief-concept"><input id="studio-brief-concept-selected" type="checkbox" checked> Concept / overview <small>(including Core Appeal)</small></label>
+                    <p id="studio-brief-concept-before" class="studio-scene-draft-rationale"></p>
+                    <textarea id="studio-brief-concept" rows="5"></textarea>
+                    <label for="studio-brief-style"><input id="studio-brief-style-selected" type="checkbox" checked> Visual / atmosphere</label>
+                    <p id="studio-brief-style-before" class="studio-scene-draft-rationale"></p>
+                    <textarea id="studio-brief-style" rows="3"></textarea>
+                    <label><input id="studio-brief-invariants-selected" type="checkbox"> Invariants</label>
+                    <p class="studio-scene-draft-rationale">Names and types referenced by Scenes must remain stable. Edit descriptions freely; coordinated renames require separate review.</p>
+                    <div id="studio-brief-invariants"></div>
+                    <button id="studio-brief-add-invariant" type="button" class="review-captions-btn">Add invariant</button>
+                    <p id="studio-brief-error" class="studio-scene-draft-error" aria-live="polite"></p>
+                </div>
+                <footer class="studio-scene-draft-footer">
+                    <button id="studio-brief-discard" type="button" class="review-captions-btn">Back to conversation</button>
+                    <button id="studio-brief-apply" type="button">Apply Selected</button>
+                </footer>
+            </dialog>
+            <dialog id="studio-project-review" class="studio-scene-draft-review" aria-labelledby="studio-project-review-title">
+                <header class="studio-scene-draft-header">
+                    <div>
+                        <h2 id="studio-project-review-title">Review New Project</h2>
+                        <p>An idea can become a Project without a title, finished outline or Scenes. Nothing is created until you approve.</p>
+                    </div>
+                    <button id="studio-project-close" type="button" class="review-captions-btn">Close</button>
+                </header>
+                <div class="studio-scene-draft-content">
+                    <p id="studio-project-rationale" class="studio-scene-draft-rationale"></p>
+                    <label for="studio-project-title">Working title <small>(optional)</small></label>
+                    <input id="studio-project-title" type="text" maxlength="240" placeholder="Untitled Project">
+                    <label for="studio-project-concept">Concept / overview <small>(including Core Appeal)</small></label>
+                    <textarea id="studio-project-concept" rows="5" placeholder="What makes this idea worth watching?"></textarea>
+                    <label for="studio-project-style">Visual / atmosphere <small>(optional)</small></label>
+                    <textarea id="studio-project-style" rows="2"></textarea>
+                    <label>Invariants <small>(optional; only genuinely persistent facts)</small></label>
+                    <div id="studio-project-invariants"></div>
+                    <button id="studio-project-add-invariant" type="button" class="review-captions-btn">Add invariant</button>
+                    <label for="studio-project-include-scene"><input id="studio-project-include-scene" type="checkbox"> Include first tentative Scene</label>
+                    <div id="studio-project-first-scene-fields" class="hidden">
+                        <label for="studio-project-scene-title">Scene title <small>(optional)</small></label>
+                        <input id="studio-project-scene-title" type="text" maxlength="240">
+                        <label for="studio-project-scene-summary">What happens</label>
+                        <textarea id="studio-project-scene-summary" rows="3"></textarea>
+                    </div>
+                    <div id="studio-project-extra-scenes" aria-label="Additional proposed Scenes"></div>
+                    <button id="studio-project-add-scene" type="button" class="review-captions-btn">Add another Scene</button>
+                    <label for="studio-project-continue"><input id="studio-project-continue" type="checkbox" checked> Continue with this Project in Director</label>
+                    <p id="studio-project-error" class="studio-scene-draft-error" aria-live="polite"></p>
+                </div>
+                <footer class="studio-scene-draft-footer">
+                    <button id="studio-project-discard" type="button" class="review-captions-btn">Back to conversation</button>
+                    <button id="studio-project-create" type="button">Create Project</button>
+                </footer>
+            </dialog>
+            <dialog id="studio-scenes-review" class="studio-scene-draft-review" aria-labelledby="studio-scenes-review-title">
+                <header class="studio-scene-draft-header">
+                    <div>
+                        <h2 id="studio-scenes-review-title">Review Scene Sequence</h2>
+                        <p>Review tentative Scenes in their proposed order. Edit or remove any Scene before applying the whole block.</p>
+                    </div>
+                    <button id="studio-scenes-close" type="button" class="review-captions-btn">Close</button>
+                </header>
+                <div class="studio-scene-draft-content">
+                    <p id="studio-scenes-target" class="studio-scene-draft-target"></p>
+                    <p id="studio-scenes-rationale" class="studio-scene-draft-rationale"></p>
+                    <div id="studio-scenes-rows"></div>
+                    <button id="studio-scenes-add" type="button" class="review-captions-btn">Add a Scene</button>
+                    <label for="studio-scenes-placement">Insert the sequence</label>
+                    <select id="studio-scenes-placement"></select>
+                    <p id="studio-scenes-error" class="studio-scene-draft-error" aria-live="polite"></p>
+                </div>
+                <footer class="studio-scene-draft-footer">
+                    <button id="studio-scenes-discard" type="button" class="review-captions-btn">Back to conversation</button>
+                    <button id="studio-scenes-apply" type="button">Create reviewed Scenes</button>
+                </footer>
+            </dialog>
+            <dialog id="studio-scene-draft-review" class="studio-scene-draft-review" aria-labelledby="studio-scene-draft-review-title">
+                <header class="studio-scene-draft-header">
+                    <div>
+                        <h2 id="studio-scene-draft-review-title">Prepare a Scene</h2>
+                        <p>One tentative Scene, extracted from the conversation. Nothing is created until you approve.</p>
+                    </div>
+                    <button id="studio-scene-draft-close" type="button" class="review-captions-btn">Close</button>
+                </header>
+                <div class="studio-scene-draft-content">
+                    <p id="studio-scene-draft-target" class="studio-scene-draft-target"></p>
+                    <p id="studio-scene-draft-rationale" class="studio-scene-draft-rationale"></p>
+                    <label for="studio-scene-draft-title">Working title <small>(optional)</small></label>
+                    <input id="studio-scene-draft-title" type="text" placeholder="Untitled Scene">
+                    <label for="studio-scene-draft-summary">What happens <small>(editable Scene intent)</small></label>
+                    <textarea id="studio-scene-draft-summary" rows="6" placeholder="A single clear, renderable moment…"></textarea>
+                    <label for="studio-scene-draft-placement">Place the new Scene</label>
+                    <select id="studio-scene-draft-placement" aria-label="New Scene placement"></select>
+                    <p id="studio-scene-draft-error" class="studio-scene-draft-error" aria-live="polite"></p>
+                </div>
+                <footer class="studio-scene-draft-footer">
+                    <button id="studio-scene-draft-discard" type="button" class="review-captions-btn">Back to conversation</button>
+                    <button id="studio-scene-draft-apply" type="button">Create tentative Scene</button>
+                </footer>
+            </dialog>
             <dialog id="storyboard-workshop-review" class="storyboard-workshop-review" aria-labelledby="storyboard-workshop-review-title">
                 <div class="storyboard-workshop-review-head">
                     <div>
@@ -2993,11 +3359,11 @@
                         </section>
                         <section class="app-settings-section">
                             <div class="app-settings-section-header">
-                                <div class="app-settings-section-title">Generation Model Capabilities &amp; Limitations</div>
-                                <div class="app-settings-section-copy">Optional advice for Director when planning or writing for each target model. Not appended directly to generation prompts.</div>
+                                <div class="app-settings-section-title">Production Playbook</div>
+                                <div class="app-settings-section-copy">Your practical strengths, weaknesses, techniques, and lessons for each video-generation model. Studio Director reads the selected playbook when you converse; the built-in technical prompt contract stays separate. These notes are not silently appended to generation prompts.</div>
                             </div>
                             <div class="app-settings-form-grid">
-                                <label class="app-settings-field app-settings-field-wide"><span class="app-settings-field-label">MiniMax H3</span><textarea id="app-settings-model-guidance-minimax_h3" rows="4" placeholder="A few practical limitations and preferred workarounds"></textarea></label>
+                                <label class="app-settings-field app-settings-field-wide"><span class="app-settings-field-label">MiniMax H3 — working methods &amp; lessons</span><textarea id="app-settings-model-guidance-minimax_h3" rows="7" placeholder="Reliable actions, known failure modes, techniques that worked in your Takes…"></textarea></label>
                                 <label class="app-settings-field app-settings-field-wide"><span class="app-settings-field-label">Krea 2</span><textarea id="app-settings-model-guidance-krea2_raw" rows="3" placeholder="Optional model-specific guidance"></textarea></label>
                             </div>
                         </section>
@@ -3237,6 +3603,7 @@
                                 <div class="set-scan-progress-track" role="progressbar" aria-label="Sight scan progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
                                     <span id="set-scan-progress-fill"></span>
                                 </div>
+                                <div id="set-scan-timing" class="set-scan-timing" aria-live="off" hidden></div>
                                 <div class="set-scan-summary">
                                     <strong id="set-scan-stage">Checking Set</strong>
                                     <span id="set-scan-status" aria-live="polite"></span>
@@ -3617,6 +3984,8 @@
         <script src="/static/js/qa_curation.js"></script>
         <script src="/static/js/session_prompt_history.js"></script>
         <script src="/static/js/director_chat.js"></script>
+        <script src="/static/js/studio_director_workbench.js"></script>
+<script src="/static/js/studio_blocks.js"></script>
         <script src="/static/js/review_assistant.js"></script>
         <script src="/static/js/inference_queue.js"></script>
             <script src="/static/js/job_queues.js"></script>
@@ -3636,5 +4005,22 @@
         <script src="/static/js/epoch_info.js"></script>
         <script src="/static/js/storyboard.js"></script>
         <script src="/static/js/main.js"></script>
+<dialog id="studio-blocks-dialog" class="studio-blocks-dialog" aria-labelledby="studio-blocks-heading">
+  <div class="studio-blocks-head"><h2 id="studio-blocks-heading">Studio Blocks</h2><button id="studio-blocks-close" type="button" class="review-captions-btn">Close</button></div>
+  <div class="studio-blocks-layout">
+    <aside class="studio-blocks-library">
+      <input id="studio-blocks-search" type="search" placeholder="Search Blocks…" aria-label="Search Blocks">
+      <button id="studio-blocks-new" type="button" class="storyboard-primary-btn">New Block</button>
+      <div id="studio-blocks-list" class="studio-blocks-list"></div>
+    </aside>
+    <section class="studio-blocks-edit" aria-label="Block editor">
+      <label>Type<select id="studio-blocks-type"><option value="idea">Idea</option><option value="guidance">Guidance</option></select></label>
+      <label>Name<input id="studio-blocks-title" maxlength="120" placeholder="Name this Block"></label>
+      <label>Content<textarea id="studio-blocks-content" rows="12" placeholder="Reusable creative material or guidance…"></textarea></label>
+      <p id="studio-blocks-status" role="status"></p>
+      <div class="studio-blocks-actions"><button id="studio-blocks-copy" type="button" class="review-captions-btn" aria-label="Copy Block content" title="Copy content to clipboard">⧉ Copy</button><button id="studio-blocks-delete" type="button" class="review-captions-btn">Delete</button><button id="studio-blocks-save" type="button" class="storyboard-primary-btn">Save Block</button></div>
+    </section>
+  </div>
+</dialog>
     </body>
 </html>

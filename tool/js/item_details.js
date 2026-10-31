@@ -1222,6 +1222,9 @@ function refreshTagDrivenPanelsForMediaKey(mediaKey) {
   var key = String(mediaKey || '').trim();
   renderFileList();
   updateBalanceDistributionWheel();
+  if (state && state.currentItem && state.currentItem.key === key) {
+    syncCaptionAssistTagsForMediaKey(key);
+  }
   if (state && state.currentItem && state.currentItem.key === key && typeof renderChecklistPanel === 'function') {
     renderChecklistPanel();
     return;

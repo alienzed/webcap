@@ -1,0 +1,62 @@
+name: Studio Director checks
+on:
+  pull_request:
+    paths:
+      - 'tool/js/director_chat.js'
+      - 'tool/js/studio_blocks.js'
+      - 'tool/css/studio_blocks.css'
+      - 'tests/studio_blocks_slash.test.cjs'
+      - 'tool/js/storyboard.js'
+      - 'tool/js/studio_director_workbench.js'
+      - 'tool/server/studio_director.py'
+      - 'tool/server/llm_runner.py'
+      - 'tests/test_llm_runner.py'
+      - 'tool/server/storyboard_store.py'
+      - 'tool/server/director_chat_history.py'
+      - 'tool/server/app.py'
+      - 'tool/tool.html'
+      - 'tool/css/workspace_shell.css'
+      - 'tests/studio_director_design_fixes.test.cjs'
+      - 'tests/studio_director_readiness.test.cjs'
+      - 'tests/test_studio_director.py'
+      - 'tests/test_director_chat_history.py'
+      - 'tests/test_storyboard_store.py'
+      - 'tests/test_studio_invariant_ops.py'
+      - 'tests/test_studio_scene_draft.py'
+      - 'tests/test_studio_scene_structure.py'
+      - 'tests/test_studio_scene_batch.py'
+      - 'tests/test_studio_scene_split.py'
+      - 'tests/test_studio_scene_invariant_links.py'
+      - 'tests/test_storyboard_ui_contract.py'
+      - '.github/workflows/studio-director-check.yml'
+jobs:
+  syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: JavaScript syntax
+        run: |
+          node --check tool/js/director_chat.js
+          node --check tool/js/studio_blocks.js
+          node --test tests/studio_blocks_slash.test.cjs
+          node --check tool/js/storyboard.js
+          node --check tool/js/studio_director_workbench.js
+          node --test tests/studio_director_readiness.test.cjs tests/studio_director_design_fixes.test.cjs tests/studio_director_workshop.test.cjs tests/studio_director_scene_draft.test.cjs
+      - name: Python compile
+        run: |
+          python -m compileall -q tool/server tests/test_studio_director.py tests/test_director_chat_history.py tests/test_storyboard_store.py
+      - name: Focused persistence and conflict tests
+        run: |
+          python -m pip install pytest Flask Pillow imageio websocket-client opencv-python-headless
+          cp tool/config.example.json tool/config.json
+          python -m pytest -q tests/test_director_chat_history.py
+          python -m pytest -q tests/test_llm_runner.py -k studio_chat_response_schema
+          python -m pytest -q tests/test_storyboard_store.py -k "studio_project_creates_multiple_initial_scenes_atomically or studio_scene_fields_are_scoped_and_conflict_checked"
+          python -m pytest -q tests/test_studio_invariant_ops.py tests/test_studio_director.py tests/test_studio_scene_draft.py tests/test_studio_scene_structure.py tests/test_studio_scene_batch.py tests/test_studio_scene_split.py tests/test_studio_scene_invariant_links.py
+          python -m pytest -q tests/test_storyboard_ui_contract.py -k "entry_and_exit_states"

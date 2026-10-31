@@ -60,7 +60,19 @@ function captionAssistEnrichmentInsert(text, row) {
   if (at < 0 || text.indexOf(row.anchor, at + row.anchor.length) !== -1)
     throw new Error('Caption suggestion anchor is no longer unique.');
   at += row.anchor.length;
-  return text.slice(0, at) + row.addition + text.slice(at);
+  var before = text.slice(0, at);
+  var after = text.slice(at);
+  var addition = row.addition;
+  // Avoid double spaces when the suggested addition includes its own padding.
+  if (/\s$/.test(before) && /^\s/.test(addition)) addition = addition.replace(/^\s+/, '');
+  if (/\s$/.test(addition) && /^\s/.test(after)) addition = addition.replace(/\s+$/, '');
+  // Some Director suggestions omit boundary spaces. Separate touching words,
+  // leaving punctuation and intentional spacing unchanged.
+  if (/[\p{L}\p{N}]$/u.test(before) && /^[\p{L}\p{N}]/u.test(addition))
+    addition = ' ' + addition;
+  if (/[\p{L}\p{N}]$/u.test(addition) && /^[\p{L}\p{N}]/u.test(after))
+    addition += ' ';
+  return before + addition + after;
 }
 
 function syncCaptionAssistEnrichmentUi(candidate) {

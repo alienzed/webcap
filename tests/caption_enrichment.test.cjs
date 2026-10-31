@@ -70,6 +70,36 @@ test('enrichment accepts verbatim unique anchor insertions, rejects malformed an
   assert.throws(()=>p('not json','A swimsuit.'),SyntaxError);
 });
 
+test('enrichment repairs missing spaces only at word boundaries',()=>{
+  const f=fixture(), insert=f.ctx.captionAssistEnrichmentInsert;
+  const original='A woman wears a blue tie.';
+  const expected='A woman wears a blue striped tie.';
+  assert.equal(insert(original,{anchor:'blue',addition:'striped'}),expected);
+  assert.equal(insert(original,{anchor:'blue',addition:' striped'}),expected);
+  assert.equal(insert(original,{anchor:'blue',addition:' striped '}),expected);
+  assert.equal(insert('A woman wears a bluetie.',{anchor:'blue',addition:' striped'}),
+    expected);
+  assert.equal(insert('A woman wears a blue tie.',{anchor:'blue',addition:', striped'}),
+    'A woman wears a blue, striped tie.');
+  assert.equal(insert('A bluegreen tie.',{anchor:'blue',addition:'-'}),
+    'A blue-green tie.');
+  assert.equal(insert('A caféwall.',{anchor:'café',addition:'painted'}),
+    'A café painted wall.');
+});
+
+test('accepting an enrichment suggestion fixes missing boundary spaces',()=>{
+  const f=fixture(),c=f.ctx,candidate=f.candidate;
+  candidate.text='A woman wears a blue tie.';
+  const row={anchor:'blue',addition:'striped',pending:true};
+  c.captionAssistEnrichment={candidate,mediaKey:candidate.mediaKey,phase:'review',
+    originalText:candidate.text,jobId:'',suggestions:[row]};
+  c.syncCaptionAssistEnrichmentUi(candidate);
+  assert.equal(candidate.text,'A woman wears a blue tie.','review must not change the draft');
+  c.resolveCaptionAssistEnrichment(row,true);
+  assert.equal(candidate.text,'A woman wears a blue striped tie.');
+  assert.equal(c.captionAssistEnrichment,null);
+});
+
 test('proposals remain separate until accepted; final decision returns to editable draft',()=>{
   const f=fixture(),c=f.ctx,candidate=f.candidate;
   c.captionAssistEnrichment={candidate,mediaKey:candidate.mediaKey,phase:'review',
@@ -515,6 +545,7 @@ test('active enrichment review owns arrows and media shortcuts without stealing 
     document:doc,window:{addEventListener(){}},
     ui:{previewFocusCaptionBtnEl:button(),previewFocusCaptionSkipBtnEl:button()},
     focusedCaptionState:{open:true},captionAssistCandidate:{mediaKey:'item-a'},
+    isCropModalOpen(){return false;},
     captionAssistEnrichmentReviewActive(){return reviewing;},
     captionAssistEnrichmentBlocksMediaShortcut(event){
       return reviewing && !(doc.activeElement && doc.activeElement.isContentEditable) &&

@@ -2514,3 +2514,20 @@ def test_empty_provider_completion_includes_reported_reasoning_token_count():
     }
     with pytest.raises(RuntimeError, match="reasoning_tokens=512"):
         storyboard_llm_runtime._completion_result(response, "remote::vision", allow_truncated=True)
+
+
+def test_manual_local_runtime_status_without_server(monkeypatch):
+    monkeypatch.setattr(storyboard_llm_runtime, "_process", None)
+
+    assert storyboard_llm_runtime.manual_local_runtime("status") == {
+        "serverRunning": False,
+        "loadedModels": [],
+    }
+
+
+def test_manual_local_runtime_rejects_stop_while_director_owns_gpu(monkeypatch):
+    from tool.server import execution_queue
+
+    monkeypatch.setattr(execution_queue, "resource_owner", lambda: "llm")
+    with pytest.raises(RuntimeError, match="currently owns the GPU"):
+        storyboard_llm_runtime.manual_local_runtime("stop")

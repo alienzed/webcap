@@ -15,7 +15,7 @@ def _model_limitations(model_id):
 def _add_model_limitations(blocks, model_id):
     guidance = _model_limitations(model_id)
     if guidance:
-        blocks.append("[MODEL TECHNICAL LIMITATIONS]\nUse these as generation capability information. Story Directing Guidelines remain the creative authority.\n" + guidance)
+        blocks.append("[MODEL TECHNICAL LIMITATIONS]\nUse these as generation capability information. Author-approved Project Concept, Visual / atmosphere, Invariants, and any populated legacy Guidelines are creative context.\n" + guidance)
 
 
 
@@ -340,13 +340,8 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
             "For locations, describe consistent layout, materials, and fixed features. "
             "Choose grounded details that aid reproducible generation. "
             "Return only JSON matching the supplied invariant schema, with an empty invariants array "
-            "when no recurring identity needs defining. "
-            "Also propose four concise Story Directing Guidelines from the concept: visualFocus (observable priorities), "
-            "creativeDirection (qualities that make the concept compelling), variation (what changes or deliberately repeats "
-            "across Scenes), and pacing (how actions and shots use time). "
-            + ("Refresh the four guideline proposals using the concept and existing guidelines as context. "
-               if refresh_guidelines else "Existing guidelines are authoritative: return an empty string for any already populated field. ")
-            + "Do not invent story facts or turn guidelines into mandatory Scene prescriptions."
+            "when no recurring identity needs defining. Preserve existing Project Concept, Visual / atmosphere "
+            "and author-approved legacy Directing Guidelines without creating new guideline fields."
         )
         return {
             "operation": operation,
@@ -386,7 +381,7 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
             blocks.append("[STORY INVARIANTS]\n" + invariants)
         blocks.append(
             "[CURRENT TASK]\nExpand the author's concept into a useful creative overview for Scene planning. "
-            "Develop creative details that serve the supplied concept and Directing Guidelines. "
+            "Develop details that serve the Project Concept / overview. "
             "Preserve established Story facts, invariants, and Visual / Atmosphere. "
             "Return the expanded concept as concise polished prose."
         )
@@ -424,7 +419,7 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
         blocks.append(
             "[CURRENT TASK]\nDevelop the Story into independently generatable MiniMax H3 Scenes. "
             + scene_count_guidance
-            + "Use the supplied concept, Directing Guidelines, and established Story facts to author "
+            + "Use the Project Concept, Visual / atmosphere, Invariants and established facts to author "
             "the Scene content and relationships. Return each Scene's title, summary, optional entry/exit "
             "state, duration, and complete H3 prompt in the supplied JSON schema."
         )
@@ -460,7 +455,7 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
         blocks.append(
             "[CURRENT TASK]\nPlan the Story as a concise ordered Scene outline. "
             + scene_count_guidance
-            + "Use the supplied concept and Directing Guidelines. For each Scene return a title, "
+            + "Use the Project Concept, Visual / atmosphere and Invariants. For each Scene return a title, "
             "summary / intent, optional entry/exit state, and suggested duration. "
             "Generation prompts will be authored separately. Return JSON matching the supplied schema."
         )
@@ -625,7 +620,7 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
             blocks.append("[USER DIRECTION]\n" + _clean(instruction))
         blocks.append(
             "[CURRENT TASK]\nAppend exactly " + str(scene_count) + " new Scenes after the existing sequence. "
-            "Use the supplied concept, Directing Guidelines, established Story facts, and existing Scene outline to author the new material. "
+            "Use the Project Concept, Visual / atmosphere, Invariants, established facts and existing Scene outline to author the new material. "
             "Return only the new Scenes, each with a complete standalone H3 generation prompt, as JSON matching the supplied schema."
         )
         return {

@@ -140,6 +140,117 @@
     cancel: cancelReview
   });
 
+  // QA recommendation chat reuses the Assistant drawer and the existing
+  // Director job contract. The captured evidence is read-only and no Sight
+  // request or separate conversation store is introduced.
+  var qaFindingContext = null;
+  var qaFindingPendingContext = null;
+  var qaFindingMode = {
+    id: 'qa-finding',
+    label: 'Ask QA',
+    description: 'Discuss a saved QA recommendation and its evidence.',
+    placeholder: 'What would you like to clarify about this finding?',
+    available: function () { return !!qaFindingContext; },
+    contextSnapshot: function () {
+      if (!qaFindingContext) return null;
+      return {
+        title: qaFindingContext.title,
+        summary: qaFindingContext.summary,
+        prompt: qaFindingContext.prompt,
+        hasUpdate: !!qaFindingPendingContext
+      };
+    },
+    refreshContext: function () {
+      if (!qaFindingPendingContext) throw new Error('No newer QA context has been captured. Reopen Ask QA from the current review to check for updates.');
+      var previous = qaFindingContext;
+      qaFindingContext = qaFindingPendingContext;
+      qaFindingPendingContext = null;
+      qaFindingMode.description = 'Recommendation: ' + qaFindingContext.title + ' · captured evidence';
+      try {
+        window.openAssistant({ mode: 'qa-finding', contextKey: qaFindingContext.key });
+      } catch (err) {
+        qaFindingPendingContext = qaFindingContext;
+        qaFindingContext = previous;
+        qaFindingMode.description = 'Recommendation: ' + previous.title + ' · captured evidence';
+        throw err;
+      }
+    },
+    execute: function (request) {
+      if (!qaFindingContext) throw new Error('Open a QA recommendation before asking about it.');
+      var history = (request.messages || []).map(function (message) {
+        return { role: message.role, content: String(message.content || '') };
+      });
+      return requestJson('/fs/director/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: String(request.modelId || ''),
+          messages: [{ role: 'user', content: qaFindingContext.prompt }].concat(history)
+        })
+      }).then(function (payload) {
+        return waitForJob(payload.job);
+      }).then(function (job) {
+        return { text: String(job.result && job.result.text || '') };
+      });
+    },
+    cancel: cancelReview
+  };
+  window.registerAssistantMode(qaFindingMode);
+
+  window.openQaFindingAssistant = function (context) {
+    if (!context || !context.finding || !context.finding.id) {
+      throw new Error('Ask QA requires a recommendation with a stable ID.');
+    }
+    var finding = context.finding;
+    var prompt = [
+      'You are WebCap QA Advisor. Help the user reason about this specific recommendation and decide whether a correction is warranted.',
+      'Respond concisely and use the supplied evidence. Distinguish observed caption/tag facts, cached model-generated Sight, and unverified hypotheses. A cached Sight description is not a fresh visual inspection.',
+      'You may explain a finding, disagree with it, or suggest an alternative caption or tag action for the user to review. Existing media and annotations remain unchanged until the user applies an edit in WebCap.',
+      'Training focus: ' + String(context.trainingFocus || 'Not specified'),
+      'Current caption primer: ' + String(context.captionPrimer || 'Not supplied'),
+      'QA RECOMMENDATION (saved finding, not necessarily validated):',
+      JSON.stringify(finding),
+      'CURRENT ITEM EVIDENCE (captured when chat opened; draftCaption is an unsaved working candidate):',
+      JSON.stringify(context.items || []),
+      'Evidence coverage: ' + String((context.items || []).length) + ' of ' +
+        String(context.affectedCount || (context.items || []).length) + ' associated files. Other files, if any, were not included.',
+      'Please answer the user\'s question about this finding.'
+    ].join('\n\n');
+    var identity = String(context.folder || '') + '\u001f' + String(finding.id);
+    var included = (context.items || []).length;
+    var total = Number(context.affectedCount || included);
+    var sight = (context.items || []).filter(function (item) {
+      return !!(item.analysis && item.analysis.visionSight);
+    }).length;
+    var next = {
+      prompt: prompt,
+      title: String(finding.title || 'QA finding'),
+      summary: included + '/' + total + ' affected file(s) attached · ' + sight +
+        ' cached Sight record(s) · caption primer ' + (context.captionPrimer ? 'included' : 'unavailable'),
+      identity: identity,
+      key: identity + '\u001f' + prompt
+    };
+    var previous = qaFindingContext;
+    var previousPending = qaFindingPendingContext;
+    var previousDescription = qaFindingMode.description;
+    if (previous && previous.identity === identity) {
+      // Reopening an existing finding never silently replaces its evidence or discussion.
+      qaFindingPendingContext = previous.prompt === next.prompt ? null : next;
+    } else {
+      qaFindingContext = next;
+      qaFindingPendingContext = null;
+      qaFindingMode.description = 'Recommendation: ' + next.title + ' · captured evidence';
+    }
+    try {
+      window.openAssistant({ mode: 'qa-finding', contextKey: qaFindingContext.key });
+    } catch (err) {
+      qaFindingContext = previous;
+      qaFindingPendingContext = previousPending;
+      qaFindingMode.description = previousDescription;
+      throw err;
+    }
+  };
+
   function bindReviewAssistantButton() {
     var button = document.getElementById('review-output-assistant-btn');
     if (!button) throw new Error('QA Deep Scan button is missing.');

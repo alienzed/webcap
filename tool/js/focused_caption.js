@@ -5,6 +5,7 @@ var focusedCaptionState = {
   itemIndex: 0,
   itemKey: '',
   mode: 'caption',
+  selectingFirstItem: false,
   discrepanciesByMediaKey: {},
   discrepancySourceLabel: '',
   requestToken: 0,
@@ -625,7 +626,8 @@ function syncFocusedCaptionControls() {
   var reviewBtn = document.getElementById('preview-open-focus-review-btn');
   var skipBtn = ui.previewFocusCaptionSkipBtnEl;
   var dismissQaBtn = document.getElementById('preview-focus-caption-dismiss-qa-btn');
-  if (!startBtn || !reviewBtn || !skipBtn || !dismissQaBtn) {
+  var askQaBtn = document.getElementById('preview-focus-caption-ask-qa-btn');
+  if (!startBtn || !reviewBtn || !skipBtn || !dismissQaBtn || !askQaBtn) {
     throw new Error('Focus Caption controls are missing.');
   }
 
@@ -639,7 +641,8 @@ function syncFocusedCaptionControls() {
 
   if (
     focusedCaptionState.open &&
-    (!hasItem || String(focusedCaptionState.folder || '') !== String((state && state.folder) || ''))
+    ((!hasItem && !focusedCaptionState.selectingFirstItem) ||
+      String(focusedCaptionState.folder || '') !== String((state && state.folder) || ''))
   ) {
     stopFocusedCaption(focusedCaptionModeLabel() + ' ended because the Single Item context changed.');
     return;
@@ -668,6 +671,7 @@ function syncFocusedCaptionControls() {
 
     skipBtn.classList.add('hidden');
     dismissQaBtn.classList.add('hidden');
+    askQaBtn.classList.add('hidden');
     skipBtn.disabled = false;
     return;
   }
@@ -685,6 +689,7 @@ function syncFocusedCaptionControls() {
 
   skipBtn.classList.remove('hidden');
   dismissQaBtn.classList.toggle('hidden', !isFocusedQaReviewMode());
+  askQaBtn.classList.toggle('hidden', !isFocusedQaReviewMode());
   skipBtn.disabled = false;
   skipBtn.title = reviewMode
     ? 'Skip this review item without saving edits'
@@ -722,6 +727,7 @@ function stopFocusedCaption(message, options) {
   focusedCaptionState.itemIndex = 0;
   focusedCaptionState.itemKey = '';
   focusedCaptionState.mode = 'caption';
+  focusedCaptionState.selectingFirstItem = false;
   focusedCaptionState.discrepanciesByMediaKey = {};
   focusedCaptionState.discrepancySourceLabel = '';
   captionAssistPendingJobId = '';
@@ -813,6 +819,7 @@ function syncFocusedCaptionSelection(mediaKey) {
   }
   focusedCaptionState.itemIndex = index;
   focusedCaptionState.itemKey = key;
+  focusedCaptionState.selectingFirstItem = false;
   prepareFocusedCaptionCurrentItem();
 }
 
@@ -823,8 +830,11 @@ function finishFocusedCaption() {
   stopFocusedCaption();
   renderFileList();
   if (wasQa) {
-    showFocusedCaptionToast('QA Focus Review · reached end of prepared items');
-    setStatus('QA Focus Review reached the end of prepared items. Skip keeps items available for this round.');
+    var message = qaDeepScanIsActive()
+      ? 'Caught up — Deep QA is still running. New findings will appear in Quality Assurance.'
+      : 'QA Focus Review · reached end of prepared items. Skipped findings remain available.';
+    showFocusedCaptionToast(message);
+    setStatus(message);
   } else {
     showFocusedCaptionToast(label + ' complete · ' + completedCount + ' item' + (completedCount === 1 ? '' : 's'));
     setStatus(label + ' complete.');
@@ -858,7 +868,7 @@ function navigateFocusedCaptionToIndex(index, direction) {
   syncFocusedCaptionControls();
   syncCaptionAssistCandidateUi();
   syncFocusedCaptionPanelGeometry();
-  return selectPathMedia(targetItem).then(function () {
+  return selectPathMedia(targetItem, isFocusedQaReviewMode() ? { allowOutsideFilter: true } : undefined).then(function () {
     return true;
   }).catch(function (err) {
     var message = String(err && err.message ? err.message : err);
@@ -954,10 +964,15 @@ function startFocusedCaption(targetMediaKey, mode, options) {
   focusedCaptionState.discrepancySourceLabel = '';
   focusedCaptionVisionPhrases.enabled = false;
   focusedCaptionState.folder = String((state && state.folder) || '');
-  loadCaptionVisionCapabilities();
   focusedCaptionState.itemKeys = itemKeys;
   focusedCaptionState.itemIndex = 0;
   focusedCaptionState.itemKey = itemKeys[0];
+  // A QA review may open from Set Tools with no Single Item selection yet.
+  // The first selection is initiated below; do not treat that gap as an exit.
+  focusedCaptionState.selectingFirstItem = !(
+    state.currentItem && state.currentItem.fileName && state.currentItem.key === itemKeys[0]
+  );
+  loadCaptionVisionCapabilities();
   resetFocusedCaptionUseArm();
   syncFocusedCaptionControls();
   renderPreviewHeaderMeta();
@@ -1035,7 +1050,8 @@ function startFocusedCaptionForMediaItem(mediaItem) {
 function wireFocusedCaption() {
   var reviewBtn = document.getElementById('preview-open-focus-review-btn');
   var dismissQaBtn = document.getElementById('preview-focus-caption-dismiss-qa-btn');
-  if (!ui.previewFocusCaptionBtnEl || !reviewBtn || !ui.previewFocusCaptionSkipBtnEl || !dismissQaBtn) {
+  var askQaBtn = document.getElementById('preview-focus-caption-ask-qa-btn');
+  if (!ui.previewFocusCaptionBtnEl || !reviewBtn || !ui.previewFocusCaptionSkipBtnEl || !dismissQaBtn || !askQaBtn) {
     throw new Error('Focus Caption controls are missing.');
   }
   if (!ui.previewFocusCaptionBtnEl.__focusedCaptionBound) {
@@ -1055,6 +1071,17 @@ function wireFocusedCaption() {
       skipFocusedCaptionItem();
     });
   }
+  if (!askQaBtn.__focusedCaptionBound) {
+    askQaBtn.__focusedCaptionBound = true;
+    askQaBtn.addEventListener('click', function () {
+      try {
+        qaAskCurrentReviewItem();
+      } catch (err) {
+        reportConsoleError('QA · Ask QA', err);
+        setStatus('Could not open Ask QA: ' + String(err && err.message || err));
+      }
+    });
+  }
   if (!dismissQaBtn.__focusedCaptionBound) {
     dismissQaBtn.__focusedCaptionBound = true;
     dismissQaBtn.addEventListener('click', function () {
@@ -1065,7 +1092,8 @@ function wireFocusedCaption() {
     document.__focusedCaptionKeyboardBound = true;
     document.addEventListener('keydown', function (event) {
       if (!focusedCaptionState.open || !event || event.defaultPrevented || event.repeat) return;
-      if (isEditableElement(document.activeElement)) return;
+      if (isCropModalOpen()) return;
+      if (isEditableElement(document.activeElement) || document.activeElement === askQaBtn) return;
       var key = String(event.key || '');
       var lower = key.toLowerCase();
       if (key === 'Escape') {

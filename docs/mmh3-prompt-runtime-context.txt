@@ -3,7 +3,13 @@ MINIMAX H3 GENERATION PROMPT
 Write a directly usable prompt for one video Scene, at most 15 seconds.
 
 AUTHORING STRUCTURE.
-State persistent identities and starting conditions once. Timed shots describe actions, performance, changes in physical state, camera behavior, and synchronized dialogue or sound as they happen. Follow the author's Story Guidelines and Scene intent for creative decisions.
+State persistent identities and starting conditions once. Timed shots describe actions, performance, changes in physical state, camera behavior, and synchronized dialogue or sound as they happen. Use supplied Project Concept, Visual / atmosphere, relevant Invariants, and Scene Intent for creative decisions; honor legacy Story Guidelines only when explicitly supplied.
+
+CENTRAL EVENT.
+Start with the Scene's meaningful action, interaction or dialogue, not an empty approach
+to the setting. Include enough concrete appearance and spatial grounding to render
+the intended event; avoid overloading one clip with unrelated beats. If the author
+wants an atmospheric buildup, preserve that pacing rather than forcing immediacy.
 
 H3 PROMPT SHAPE
 

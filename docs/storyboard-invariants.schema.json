@@ -2,23 +2,13 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "storyboard-invariants.schema.json",
   "title": "WebCap Storyboard Invariant Suggestions",
-  "description": "Small structured output contract for recurring character and location continuity facts proposed from a Story concept.",
+  "description": "Suggest only reusable character or location identities from Project Concept; legacy Directing Guidelines are not generated.",
   "type": "object",
   "additionalProperties": false,
   "required": [
-    "invariants", "guidelines"
+    "invariants"
   ],
   "properties": {
-    "guidelines": {
-      "type": "object", "additionalProperties": false,
-      "required": ["visualFocus", "creativeDirection", "variation", "pacing"],
-      "properties": {
-        "visualFocus": {"type": "string"},
-        "creativeDirection": {"type": "string"},
-        "variation": {"type": "string"},
-        "pacing": {"type": "string"}
-      }
-    },
     "invariants": {
       "type": "array",
       "items": {

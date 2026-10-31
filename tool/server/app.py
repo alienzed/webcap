@@ -65,8 +65,16 @@ from .h3_probe import h3_probe_log, h3_probe_status, prepare_h3_probe, start_h3_
 from .permissions import normalize_path_permissions, run_with_directory_repair
 from .folder_state_store import FolderStateReadError, FolderStateUnsafeWriteError, read_folder_state, reject_wholesale_state_map_clear, write_folder_state_with_owned_drafts, set_media_annotation_state, set_media_rating, write_folder_state_atomic
 from .storage_manager import clear_set_generated_sight as storage_clear_set_generated_sight, cancel_scan as storage_cancel_scan, measure as storage_measure, open_path as storage_open_path, overview as storage_overview, purge as storage_purge, scan_status as storage_scan_status, start_scan as storage_start_scan
+from .studio_director import guidance as studio_director_guidance, read_story_scope as studio_read_story_scope
+from .director_chat_history import create_chat as create_director_chat, delete_chat as delete_director_chat, list_chats as list_director_chats, open_chat as open_director_chat, save_chat as save_director_chat
+from .storyboard_store import add_tentative_scene_at as storyboard_add_tentative_scene_at, add_tentative_scenes_at as storyboard_add_tentative_scenes_at, create_studio_project as storyboard_create_studio_project, apply_studio_brief as storyboard_apply_studio_brief, undo_studio_brief as storyboard_undo_studio_brief
 from .storyboard_store import add_scene as storyboard_add_scene, add_take_upload as storyboard_add_take_upload, apply_developed_plan as storyboard_apply_developed_plan, clear_scene_reference as storyboard_clear_scene_reference, create_story as storyboard_create_story, delete_scene as storyboard_delete_scene, delete_story as storyboard_delete_story, delete_take as storyboard_delete_take, duplicate_scene as storyboard_duplicate_scene, duplicate_story as storyboard_duplicate_story, list_stories as storyboard_list_stories, load_story as storyboard_load_story, label_take as storyboard_label_take, rate_take as storyboard_rate_take, remove_take as storyboard_remove_take, reorder_scenes as storyboard_reorder_scenes, resolve_story_media as storyboard_resolve_media, restore_previous_concept as storyboard_restore_previous_concept, restore_previous_prompt as storyboard_restore_previous_prompt, restore_scene as storyboard_restore_scene, restore_scene_repairs as storyboard_restore_scene_repairs, restore_take as storyboard_restore_take, select_take as storyboard_select_take, set_scene_reference_from_take as storyboard_set_scene_reference_from_take, set_scene_reference_upload as storyboard_set_scene_reference_upload, update_scene as storyboard_update_scene, update_story as storyboard_update_story
 from .storyboard_store import apply_reviewed_story_guidelines as storyboard_apply_reviewed_story_guidelines
+from .storyboard_store import apply_studio_scene_fields as storyboard_apply_studio_scene_fields
+from .storyboard_store import apply_studio_scene_fields_batch as storyboard_apply_studio_scene_fields_batch
+from .storyboard_store import apply_studio_scene_invariant_links as storyboard_apply_studio_scene_invariant_links
+from .storyboard_store import apply_studio_scene_split as storyboard_apply_studio_scene_split
+from .storyboard_store import apply_studio_scene_structure as storyboard_apply_studio_scene_structure
 from .storyboard_generation import generation_action as storyboard_generation_action, generation_capabilities as storyboard_generation_capabilities, generation_queue as storyboard_generation_queue, generation_status as storyboard_generation_status, start_generation as storyboard_start_generation, regenerate_take as storyboard_regenerate_take
 from .storyboard_assembly import current_export as storyboard_current_export, export_selected_sequence as storyboard_export_selected_sequence
 from .storyboard_archive import archive_preview as storyboard_archive_preview, archive_story as storyboard_archive_story
@@ -103,6 +111,8 @@ TEMPLATES_DIR = TOOL_DIR / "templates"
 app = Flask(__name__, static_folder=None)
 register_model_lab_routes(app)
 register_storyboard_first_cut_routes(app)
+from .studio_blocks import register_routes as register_studio_blocks_routes
+register_studio_blocks_routes(app)
 
 
 
@@ -1850,6 +1860,15 @@ def qa_deep_scan_route():
                               context={}, label="QA Set Review")
             return jsonify({"ok": True, "job": job}), 202
 
+        # Progressive Deep QA reuses the existing item-level contract in bounded batches.
+        # Sight is cached evidence: this route never requests a fresh Vision scan.
+        if data.get("itemReview") is True:
+            if len(items) > 4:
+                raise ValueError("Progressive Deep QA supports at most four items per batch.")
+            for row in items:
+                sight = (row.get("analysis") or {}).get("visionSight") if isinstance(row, dict) else None
+                if not isinstance(sight, dict) or not sight.get("description") or not isinstance(sight.get("inventory"), dict):
+                    raise ValueError("Progressive Deep QA requires saved Sight for every item.")
         from .qa_llm_contract import build_request as build_qa_llm_request
         contract = build_qa_llm_request(
             items,
@@ -1904,6 +1923,335 @@ def qa_concept_check_route():
         return jsonify({"ok": False, "error": str(exc)}), 400
 
 
+@app.route("/fs/studio/director/story-read", methods=["GET"])
+def studio_director_story_read_route():
+    """Read only an explicitly granted Story, never choose from UI navigation."""
+    try:
+        chat_id = str(request.args.get("chatId") or "").strip()
+        field = str(request.args.get("field") or "").strip()
+        scene_id = str(request.args.get("sceneId") or "").strip()
+        chat = open_director_chat(chat_id, activate=False)
+        if chat.get("mode") != "storyboard" or not isinstance(chat.get("storyAccess"), dict):
+            raise ValueError("This conversation has no explicit Story access.")
+        story_id = chat["storyAccess"]["storyId"]
+        story = storyboard_load_story(story_id)
+        data = studio_read_story_scope(story, field, scene_id)
+        return jsonify({
+            "ok": True, "storyId": story_id, "sceneId": scene_id,
+            "field": field, "storyUpdatedAt": story.get("updatedAt"), "data": data,
+        })
+    except FileNotFoundError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 404
+    except Exception as exc:
+        app.logger.exception("STUDIO STORY SCOPED READ FAILED: %s", exc)
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
+@app.route("/fs/studio/director/playbook", methods=["GET", "POST"])
+def studio_director_playbook_route():
+    """Review exact user-authored H3 guidance; never mutate built-in expertise."""
+    try:
+        current_config = app_config.load_config_from_disk()
+        guidance = current_config.get("generation_model_guidance") or {}
+        current = str(guidance.get("minimax_h3") or "")
+        if request.method == "GET":
+            return jsonify({"ok": True, "guidance": current})
+        data = request.get_json(silent=True) or {}
+        if not isinstance(data, dict) or set(data) != {"expected", "guidance"}:
+            raise ValueError("Playbook requires reviewed replacement and saved original.")
+        expected, proposed = data["expected"], data["guidance"]
+        if not isinstance(expected, str) or not isinstance(proposed, str) or len(proposed) > 20000:
+            raise ValueError("Playbook guidance must be text shorter than 20,000 characters.")
+        if current != expected:
+            raise RuntimeError("Playbook changed since review. Reopen the latest guidance.")
+        current_config.setdefault("generation_model_guidance", {})["minimax_h3"] = proposed.strip()
+        app_config.save_config_to_disk(current_config)
+        app_config.reload_runtime_config()
+        return jsonify({"ok": True, "guidance": proposed.strip()})
+    except Exception as exc:
+        app.logger.exception("STUDIO PLAYBOOK REVIEW FAILED: %s", exc)
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
+@app.route("/fs/studio/director/scene-structure", methods=["POST"])
+def studio_director_scene_structure_route():
+    """Apply an exact author-reviewed Scene move or duplicate, never delete Takes."""
+    data = request.get_json(silent=True) or {}
+    try:
+        required = {"storyId", "operation", "sceneId", "expectedSceneOrder",
+                    "relativeSceneId", "placement", "expectedSourceUpdatedAt"}
+        if not isinstance(data, dict) or set(data) != required:
+            raise ValueError("Reviewed Scene structure requires exact target and original Scene order.")
+        story_id = str(data["storyId"] or "").strip()
+        scene_id = str(data["sceneId"] or "").strip()
+        if not story_id or not scene_id:
+            raise ValueError("Choose a saved Project and source Scene.")
+        if (llm_storyboard_story_busy(story_id)
+                or llm_storyboard_target_busy(story_id, "scenes")
+                or llm_storyboard_target_busy(story_id, "scene-prompt", scene_id)):
+            raise ValueError("Finish pending Studio Director Scene work before editing the order.")
+        with storyboard_mutation_lock:
+            story, new_scene = storyboard_apply_studio_scene_structure(
+                story_id, data["operation"], scene_id, data["expectedSceneOrder"],
+                str(data["relativeSceneId"] or ""), str(data["placement"] or ""),
+                str(data["expectedSourceUpdatedAt"] or ""),
+            )
+        return jsonify({"ok": True, "story": story, "scene": new_scene})
+    except FileNotFoundError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 404
+    except Exception as exc:
+        app.logger.exception("STUDIO REVIEWED SCENE STRUCTURE FAILED: %s", exc)
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
+@app.route("/fs/studio/director/scene-split", methods=["POST"])
+def studio_director_scene_split_route():
+    data = request.get_json(silent=True) or {}
+    try:
+        required = {"storyId", "sceneId", "expectedSceneOrder",
+                    "expectedSummary", "firstSummary", "secondScene"}
+        if not isinstance(data, dict) or set(data) != required:
+            raise ValueError("Reviewed Scene split requires exact source and two complete Intents.")
+        story_id = str(data["storyId"] or "").strip()
+        scene_id = str(data["sceneId"] or "").strip()
+        if not story_id or not scene_id:
+            raise ValueError("Choose the Project and source Scene to split.")
+        if (llm_storyboard_story_busy(story_id)
+                or llm_storyboard_target_busy(story_id, "scenes")
+                or llm_storyboard_target_busy(story_id, "repair")
+                or llm_storyboard_target_busy(story_id, "scene-prompt", scene_id)):
+            raise ValueError("Finish pending Scene work before splitting.")
+        with storyboard_mutation_lock:
+            story, scene = storyboard_apply_studio_scene_split(
+                story_id, scene_id, data["expectedSceneOrder"], data["expectedSummary"],
+                data["firstSummary"], data["secondScene"],
+            )
+        return jsonify({"ok": True, "story": story, "scene": scene})
+    except FileNotFoundError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 404
+    except Exception as exc:
+        app.logger.exception("STUDIO SCENE SPLIT FAILED: %s", exc)
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
+@app.route("/fs/studio/director/scene-invariants", methods=["POST"])
+def studio_director_scene_invariant_links_route():
+    data = request.get_json(silent=True) or {}
+    try:
+        if not isinstance(data, dict) or set(data) != {"storyId", "kind", "title", "changes"}:
+            raise ValueError("Scene association review requires the exact Invariant and changed Scenes.")
+        story_id = str(data["storyId"] or "").strip()
+        if not story_id:
+            raise ValueError("Choose a saved Project.")
+        if (llm_storyboard_story_busy(story_id)
+                or llm_storyboard_target_busy(story_id, "scenes")
+                or llm_storyboard_target_busy(story_id, "repair")):
+            raise ValueError("Finish pending Scene work before changing associations.")
+        with storyboard_mutation_lock:
+            story, saved = storyboard_apply_studio_scene_invariant_links(
+                story_id, data["kind"], data["title"], data["changes"],
+            )
+        return jsonify({"ok": True, "story": story, "savedLinksByScene": saved})
+    except FileNotFoundError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 404
+    except Exception as exc:
+        app.logger.exception("STUDIO SCENE INVARIANT LINK FAILED: %s", exc)
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
+@app.route("/fs/studio/director/scene-fields-batch", methods=["POST"])
+def studio_director_scene_fields_batch_route():
+    """Apply a reviewed set of existing Scene text edits in one Story JSON write."""
+    data = request.get_json(silent=True) or {}
+    try:
+        if not isinstance(data, dict) or set(data) != {"storyId", "revisions"}:
+            raise ValueError("Scene batch review requires exact Project and revisions.")
+        story_id = str(data["storyId"] or "").strip()
+        revisions = data["revisions"]
+        if not story_id or not isinstance(revisions, list):
+            raise ValueError("Choose a saved Project and reviewed Scenes.")
+        if (llm_storyboard_story_busy(story_id)
+                or llm_storyboard_target_busy(story_id, "scenes")
+                or llm_storyboard_target_busy(story_id, "repair")
+                or any(isinstance(item, dict) and
+                       llm_storyboard_target_busy(story_id, "scene-prompt", str(item.get("sceneId") or ""))
+                       for item in revisions)):
+            raise ValueError("Finish pending Studio Director Scene work before applying the revision.")
+        with storyboard_mutation_lock:
+            story, saved = storyboard_apply_studio_scene_fields_batch(story_id, revisions)
+        return jsonify({"ok": True, "story": story, "savedFieldsByScene": saved})
+    except FileNotFoundError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 404
+    except Exception as exc:
+        app.logger.exception("STUDIO SCENE BATCH APPLY FAILED: %s", exc)
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
+@app.route("/fs/studio/director/scene-fields", methods=["POST"])
+def studio_director_scene_fields_route():
+    """Apply only explicitly reviewed Scene text, checking exact saved originals."""
+    data = request.get_json(silent=True) or {}
+    try:
+        if not isinstance(data, dict) or set(data) != {"storyId", "sceneId", "expected", "changes"}:
+            raise ValueError("Scene revision requires target Scene, selected fields and expected originals.")
+        story_id = str(data["storyId"] or "").strip()
+        scene_id = str(data["sceneId"] or "").strip()
+        if not story_id or not scene_id:
+            raise ValueError("Select a specific saved Project and Scene.")
+        if (llm_storyboard_story_busy(story_id) or
+                llm_storyboard_target_busy(story_id, "scenes") or
+                llm_storyboard_target_busy(story_id, "repair") or
+                llm_storyboard_target_busy(story_id, "scene-prompt", scene_id)):
+            raise ValueError("Wait for pending Scene generation or Director changes before applying the revision.")
+        with storyboard_mutation_lock:
+            story, scene = storyboard_apply_studio_scene_fields(
+                story_id, scene_id, data["expected"], data["changes"])
+        return jsonify({"ok": True, "story": story, "scene": scene})
+    except FileNotFoundError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 404
+    except Exception as exc:
+        app.logger.exception("STUDIO SCENE FIELD APPLY FAILED: %s", exc)
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
+@app.route("/fs/studio/director/brief", methods=["POST"])
+def studio_director_brief_apply_route():
+    data = request.get_json(silent=True) or {}
+    try:
+        if not isinstance(data, dict) or set(data) != {"storyId", "expected", "changes"}:
+            raise ValueError("Reviewed Story brief needs target, originals and selected fields.")
+        story_id = str(data["storyId"] or "").strip()
+        if not story_id:
+            raise ValueError("Explicit Story ID is required.")
+        if llm_storyboard_story_busy(story_id):
+            raise ValueError("Wait for pending Director changes.")
+        with storyboard_mutation_lock:
+            story, revision_id = storyboard_apply_studio_brief(story_id, data["expected"], data["changes"])
+        return jsonify({"ok": True, "story": story, "revisionId": revision_id})
+    except FileNotFoundError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 404
+    except Exception as exc:
+        app.logger.exception("STUDIO BRIEF APPLY FAILED: %s", exc)
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
+@app.route("/fs/studio/director/brief/undo", methods=["POST"])
+def studio_director_brief_undo_route():
+    data = request.get_json(silent=True) or {}
+    try:
+        if not isinstance(data, dict) or set(data) != {"storyId", "revisionId"}:
+            raise ValueError("Undo requires its exact Story and revision ID.")
+        story = storyboard_undo_studio_brief(str(data["storyId"]), str(data["revisionId"]))
+        return jsonify({"ok": True, "story": story})
+    except Exception as exc:
+        app.logger.exception("STUDIO BRIEF UNDO FAILED: %s", exc)
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
+@app.route("/fs/studio/director/scenes-draft", methods=["POST"])
+def studio_director_scenes_draft_route():
+    data = request.get_json(silent=True) or {}
+    try:
+        if not isinstance(data, dict) or set(data) != {
+            "storyId", "expectedSceneOrder", "scenes", "placement", "relativeSceneId"
+        }:
+            raise ValueError("Scene sequence Apply needs a reviewed target, order and placement.")
+        story_id = str(data.get("storyId") or "").strip()
+        if not story_id:
+            raise ValueError("Explicit Studio project ID is required.")
+        if (llm_storyboard_story_busy(story_id)
+                or llm_storyboard_target_busy(story_id, "scenes")):
+            raise ValueError("Wait for pending Director changes before inserting Scenes.")
+        with storyboard_mutation_lock:
+            story, scenes = storyboard_add_tentative_scenes_at(
+                story_id, data["expectedSceneOrder"], data["scenes"],
+                data["placement"], data["relativeSceneId"],
+            )
+        return jsonify({"ok": True, "story": story, "scenes": scenes})
+    except FileNotFoundError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 404
+    except Exception as exc:
+        app.logger.exception("STUDIO SCENE SEQUENCE APPLY FAILED: %s", exc)
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
+@app.route("/fs/studio/director/project-create", methods=["POST"])
+def studio_director_project_create_route():
+    data = request.get_json(silent=True) or {}
+    try:
+        if not isinstance(data, dict) or set(data) != {"proposal"}:
+            raise ValueError("Project creation requires one reviewed proposal.")
+        story = storyboard_create_studio_project(data["proposal"])
+        return jsonify({"ok": True, "story": story}), 201
+    except Exception as exc:
+        app.logger.exception("STUDIO PROJECT CREATE FAILED: %s", exc)
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
+@app.route("/fs/studio/director/scene-draft", methods=["POST"])
+def studio_director_scene_draft_route():
+    data = request.get_json(silent=True) or {}
+    try:
+        story_id = str(data.get("storyId") or "").strip()
+        if not story_id:
+            raise ValueError("Attach a Studio project before creating a Scene.")
+        if (llm_storyboard_story_busy(story_id)
+                or llm_storyboard_target_busy(story_id, "scenes")):
+            raise ValueError("Wait for pending Director changes before inserting a Scene.")
+        with storyboard_mutation_lock:
+            story, scene = storyboard_add_tentative_scene_at(
+                story_id,
+                data.get("expectedUpdatedAt"),
+                data.get("scene"),
+                str(data.get("placement") or ""),
+                data.get("relativeSceneId"),
+            )
+        return jsonify({"ok": True, "story": story, "scene": scene})
+    except FileNotFoundError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 404
+    except Exception as exc:
+        app.logger.exception("STUDIO SCENE DRAFT APPLY FAILED: %s", exc)
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
+@app.route("/fs/studio/director/guidance", methods=["GET"])
+def studio_director_guidance_route():
+    try:
+        return jsonify({"ok": True, **studio_director_guidance(
+            str(request.args.get("targetModel") or "minimax_h3").strip()
+        )})
+    except Exception as exc:
+        app.logger.exception("STUDIO DIRECTOR GUIDANCE FAILED: %s", exc)
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
+@app.route("/fs/director/chats", methods=["GET", "POST"])
+def director_chats_route():
+    try:
+        if request.method == "GET":
+            return jsonify({"ok": True, **list_director_chats()})
+        data = request.get_json(silent=True) or {}
+        return jsonify({"ok": True, "chat": create_director_chat(str(data.get("mode") or ""))}), 201
+    except Exception as exc:
+        app.logger.exception("DIRECTOR CHAT HISTORY FAILED: %s", exc)
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
+@app.route("/fs/director/chats/<chat_id>", methods=["GET", "PUT", "DELETE"])
+def director_chat_session_route(chat_id):
+    try:
+        if request.method == "GET":
+            return jsonify({"ok": True, "chat": open_director_chat(chat_id, activate=request.args.get("inspect") != "1")})
+        if request.method == "DELETE":
+            return jsonify({"ok": True, "deleted": delete_director_chat(chat_id)})
+        return jsonify({"ok": True, "chat": save_director_chat(chat_id, request.get_json(silent=True) or {})})
+    except FileNotFoundError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 404
+    except Exception as exc:
+        app.logger.exception("DIRECTOR CHAT HISTORY FAILED: %s", exc)
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
 @app.route("/fs/director/chat", methods=["POST"])
 def director_chat_route():
     data = request.get_json(silent=True) or {}
@@ -1912,9 +2260,135 @@ def director_chat_route():
         if not isinstance(messages, list) or not messages:
             raise ValueError("Director Chat messages are required.")
         operation = str(data.get("operation") or "freeform_chat").strip()
-        if operation not in {"freeform_chat", "storyboard_workshop_shots", "storyboard_story_guidelines"}:
+        if operation not in {"freeform_chat", "storyboard_workshop_shots", "storyboard_story_guidelines", "studio_scene_draft", "studio_project_draft", "studio_scene_sequence_draft", "studio_brief_draft", "studio_scene_field_draft", "studio_scene_batch_draft", "studio_scene_split_draft", "studio_playbook_draft"}:
             raise ValueError("Unsupported Director Chat operation.")
         contract = {"operation": operation, "messages": messages}
+        if operation == "studio_brief_draft":
+            contract["response_schema"] = {
+                "type": "object", "additionalProperties": False,
+                "required": ["title", "concept", "style", "invariants", "rationale"],
+                "properties": {
+                    "title": {"type": "string", "maxLength": 240},
+                    "concept": {"type": "string"},
+                    "style": {"type": "string"},
+                    "invariants": {
+                        "type": "array", "maxItems": 30,
+                        "items": {
+                            "type": "object", "additionalProperties": False,
+                            "required": ["kind", "title", "text"],
+                            "properties": {
+                                "kind": {"type": "string", "enum": ["character", "location", "visual", "world", "sound", "custom"]},
+                                "title": {"type": "string"}, "text": {"type": "string"},
+                            },
+                        },
+                    },
+                    "rationale": {"type": "string"},
+                },
+            }
+        if operation == "studio_playbook_draft":
+            contract["response_schema"] = {
+                "type": "object", "additionalProperties": False, "required": ["guidance"],
+                "properties": {"guidance": {"type": "string", "maxLength": 20000}},
+            }
+        if operation == "studio_scene_field_draft":
+            contract["response_schema"] = {
+                "type": "object", "additionalProperties": False,
+                "properties": {
+                    "title": {"type": "string"},
+                    "summary": {"type": "string"},
+                    "prompt": {"type": "string"},
+                },
+            }
+        if operation == "studio_scene_split_draft":
+            contract["response_schema"] = {
+                "type": "object", "additionalProperties": False,
+                "required": ["firstSummary", "secondTitle", "secondSummary", "rationale"],
+                "properties": {
+                    "firstSummary": {"type": "string", "minLength": 1},
+                    "secondTitle": {"type": "string"},
+                    "secondSummary": {"type": "string", "minLength": 1},
+                    "rationale": {"type": "string"},
+                },
+            }
+        if operation == "studio_scene_batch_draft":
+            contract["response_schema"] = {
+                "type": "object", "additionalProperties": False,
+                "required": ["scenes"], "properties": {
+                    "scenes": {"type": "array", "minItems": 1, "maxItems": 32,
+                              "items": {"type": "object", "additionalProperties": False,
+                                        "required": ["sceneId"],
+                                        "properties": {
+                                            "sceneId": {"type": "string"},
+                                            "title": {"type": "string"},
+                                            "summary": {"type": "string"},
+                                            "prompt": {"type": "string"},
+                                        }}}
+                },
+            }
+        if operation == "studio_scene_sequence_draft":
+            contract["response_schema"] = {
+                "type": "object", "additionalProperties": False,
+                "required": ["scenes", "rationale"],
+                "properties": {
+                    "scenes": {
+                        "type": "array", "minItems": 1, "maxItems": 32,
+                        "items": {
+                            "type": "object", "additionalProperties": False,
+                            "required": ["title", "summary"],
+                            "properties": {
+                                "title": {"type": "string"},
+                                "summary": {"type": "string", "minLength": 1},
+                            },
+                        },
+                    },
+                    "rationale": {"type": "string"},
+                },
+            }
+        if operation == "studio_project_draft":
+            contract["response_schema"] = {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["title", "concept", "style", "invariants", "rationale"],
+                "properties": {
+                    "title": {"type": "string"},
+                    "concept": {"type": "string"},
+                    "style": {"type": "string"},
+                    "invariants": {
+                        "type": "array", "maxItems": 30,
+                        "items": {
+                            "type": "object", "additionalProperties": False,
+                            "required": ["kind", "title", "text"],
+                            "properties": {
+                                "kind": {"type": "string", "enum": ["character", "location", "visual", "world", "sound", "custom"]},
+                                "title": {"type": "string"}, "text": {"type": "string"},
+                            },
+                        },
+                    },
+                    "firstScenes": {
+                        "type": "array", "maxItems": 32,
+                        "items": {
+                            "type": "object", "additionalProperties": False,
+                            "required": ["title", "summary"],
+                            "properties": {
+                                "title": {"type": "string"},
+                                "summary": {"type": "string", "minLength": 1},
+                            },
+                        },
+                    },
+                    "rationale": {"type": "string"},
+                },
+            }
+        if operation == "studio_scene_draft":
+            contract["response_schema"] = {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["title", "summary", "rationale"],
+                "properties": {
+                    "title": {"type": "string"},
+                    "summary": {"type": "string", "minLength": 1},
+                    "rationale": {"type": "string"},
+                },
+            }
         if operation == "storyboard_workshop_shots":
             contract["response_schema"] = {
                 "type": "object",
@@ -1947,7 +2421,7 @@ def director_chat_route():
             str(data.get("model") or "").strip(),
             contract,
             context={},
-            label={"storyboard_workshop_shots": "Storyboard Shot Proposal", "storyboard_story_guidelines": "Storyboard Guideline Proposal"}.get(operation, "Director Chat"),
+            label={"storyboard_workshop_shots": "Storyboard Shot Proposal", "storyboard_story_guidelines": "Storyboard Guideline Proposal","studio_scene_draft": "Studio: Draft a Scene", "studio_project_draft": "Studio: Prepare Project", "studio_scene_sequence_draft": "Studio: Prepare Scenes", "studio_brief_draft": "Studio: Propose Brief"}.get(operation, "Director Chat"),
         )
         return jsonify({"ok": True, "job": job}), 202
     except Exception as exc:
@@ -2878,6 +3352,7 @@ def training_setup_route():
             selection_criteria=data.get("selection_criteria"),
             total_media_count=data.get("total_media_count"),
             reset_file=data.get("resetFile") or "",
+            allow_incompatible=not bool(data.get("resetFile")),
         )
         return jsonify({"ok": True, **payload})
     except Exception as exc:

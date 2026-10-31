@@ -651,6 +651,7 @@ def _normalize_story(payload, existing=None, story_id=None):
         "removedScenes": removed_scenes,
         "development": copy.deepcopy(current.get("development")) if isinstance(current.get("development"), dict) else None,
         "previousSceneRepair": copy.deepcopy(current.get("previousSceneRepair")) if isinstance(current.get("previousSceneRepair"), dict) else None,
+        "studioRevisions": copy.deepcopy(current.get("studioRevisions") or []),
     }
 
 
@@ -693,6 +694,76 @@ def create_story(payload):
         raise RuntimeError("Story already exists.")
     _write_json_atomic(path, story)
     (path.parent / "takes").mkdir(parents=True, exist_ok=True)
+    return story
+
+
+
+@_serialized_mutation
+def create_studio_project(proposal):
+    """Publish one reviewed Story and optional tentative Scene as a single visible unit.
+
+    Stage the complete Story directory on the owning output filesystem. A failed
+    validation or pre-publication write never exposes a partial Story.
+    """
+    if not isinstance(proposal, dict) or set(proposal) - {"title", "concept", "style", "invariants", "firstScene", "firstScenes"}:
+        raise ValueError("Studio project proposal has unsupported fields.")
+    title = proposal.get("title", "")
+    concept = proposal.get("concept", "")
+    style = proposal.get("style", "")
+    invariants = proposal.get("invariants", [])
+    if any(not isinstance(value, str) for value in (title, concept, style)):
+        raise ValueError("Studio project title, concept and style must be text.")
+    if len(title) > 240 or len(concept) > 20000 or len(style) > 10000:
+        raise ValueError("Studio project text is too long.")
+    if not isinstance(invariants, list) or len(invariants) > 30:
+        raise ValueError("Studio project supports at most 30 invariants.")
+
+    first = proposal.get("firstScene")
+    many = proposal.get("firstScenes")
+    if first is not None and many is not None:
+        raise ValueError("Use one initial Scene list, not two competing sources.")
+    initial = [first] if first is not None else (many if many is not None else [])
+    if not isinstance(initial, list) or len(initial) > 32:
+        raise ValueError("Project creation supports at most 32 reviewed initial Scenes.")
+    for item in initial:
+        if not isinstance(item, dict) or set(item) != {"title", "summary"}:
+            raise ValueError("Each initial Scene needs only title and summary.")
+        if not isinstance(item["title"], str) or not isinstance(item["summary"], str):
+            raise ValueError("Initial Scene title and description must be text.")
+        if not item["summary"].strip() or len(item["summary"]) > 10000 or len(item["title"]) > 240:
+            raise ValueError("Each initial Scene needs a short description.")
+    if not concept.strip() and not initial:
+        raise ValueError("Describe the idea or an initial Scene before creating a project.")
+
+    story = _normalize_story({
+        "title": title, "concept": concept, "style": style,
+        "invariants": invariants, "targetSceneCount": None,
+    })
+    for item in initial:
+        scene_id = _new_id("scene")
+        scene = _normalize_scene(scene_id, item)
+        story["scenes"][scene_id] = scene
+        story["sceneOrder"].append(scene_id)
+
+    root = storyboard_root()
+    root.mkdir(parents=True, exist_ok=True)
+    destination = root / story["id"]
+    if destination.exists():
+        raise FileExistsError("Studio project ID already exists.")
+    stage = Path(tempfile.mkdtemp(prefix=".studio-create-", dir=root))
+    published = False
+    try:
+        (stage / "takes").mkdir()
+        for scene_id in story["sceneOrder"]:
+            (stage / "takes" / scene_id).mkdir()
+        _write_json_atomic(stage / STORY_FILE, story)
+        if destination.exists():
+            raise FileExistsError("Studio project ID already exists.")
+        os.rename(stage, destination)
+        published = True
+    finally:
+        if not published and stage.exists():
+            shutil.rmtree(stage)
     return story
 
 
@@ -880,6 +951,207 @@ def apply_reviewed_story_guidelines(story_id, expected, changes):
     return story
 
 
+
+STUDIO_BRIEF_FIELDS = {"title", "concept", "style", "invariants", "invariantOps"}
+
+
+def _studio_invariant_key(item):
+    return (str(item.get("kind") or "").strip().lower(),
+            str(item.get("title") or "").strip().casefold())
+
+
+def _studio_invariant_links_preserved(story, proposed_invariants):
+    existing = {
+        _studio_invariant_key(entry)
+        for entry in story.get("invariants", [])
+        if entry.get("kind") in {"character", "location"} and entry.get("title")
+    }
+    proposed = {
+        _studio_invariant_key(entry)
+        for entry in proposed_invariants
+        if entry.get("kind") in {"character", "location"} and entry.get("title")
+    }
+    removed = existing - proposed
+    if not removed:
+        return
+    for scene_id, scene in (story.get("scenes") or {}).items():
+        for ref in scene.get("invariantRefs") or []:
+            if _studio_invariant_key(ref) in removed:
+                raise RuntimeError(
+                    "Invariant " + str(ref.get("title")) + " is referenced by Scene " + scene_id
+                    + ". Keep its identity or review a coordinated rename."
+                )
+
+
+def _studio_valid_invariant(item):
+    if (not isinstance(item, dict) or set(item) != {"kind", "title", "text"}
+            or not all(isinstance(item[key], str) for key in ("kind", "title", "text"))):
+        raise ValueError("Each reviewed Invariant needs type, name and description.")
+    normalized = _normalize_story_invariants([item])
+    if len(normalized) != 1 or not normalized[0]["title"]:
+        raise ValueError("Reviewed Invariants need a name and description.")
+    return normalized[0]
+
+
+def _apply_studio_invariant_ops(story, operations):
+    """Apply only reviewed entities; never accept a model's whole-list omission as deletion."""
+    if not isinstance(operations, list) or not 1 <= len(operations) <= 60:
+        raise ValueError("Review between one and 60 individual Invariant changes.")
+    result = copy.deepcopy(story.get("invariants") or [])
+    renames = {}
+    for action in operations:
+        if not isinstance(action, dict) or action.get("op") not in {"add", "update", "remove"}:
+            raise ValueError("Unsupported reviewed Invariant change.")
+        verb = action["op"]
+        required = {"op", "after"} if verb == "add" else (
+            {"op", "before", "after"} if verb == "update" else {"op", "before"})
+        if set(action) != required:
+            raise ValueError("Invariant changes need exact reviewed values.")
+        before = _studio_valid_invariant(action["before"]) if verb != "add" else None
+        after = _studio_valid_invariant(action["after"]) if verb != "remove" else None
+        if before is not None:
+            key = _studio_invariant_key(before)
+            matches = [i for i, item in enumerate(result) if _studio_invariant_key(item) == key]
+            if len(matches) != 1:
+                raise RuntimeError("Invariant " + before["title"] + " is missing or ambiguous. Review current Project.")
+            index = matches[0]
+            if result[index] != before:
+                raise RuntimeError("Invariant " + before["title"] + " changed since review. Prepare again.")
+        if verb == "add":
+            if any(_studio_invariant_key(item) == _studio_invariant_key(after) for item in result):
+                raise RuntimeError("Invariant " + after["title"] + " already exists.")
+            result.append(after)
+        elif verb == "remove":
+            result.pop(index)
+        else:
+            if _studio_invariant_key(before) != _studio_invariant_key(after) and any(
+                i != index and _studio_invariant_key(item) == _studio_invariant_key(after)
+                for i, item in enumerate(result)
+            ):
+                raise RuntimeError("Invariant " + after["title"] + " already exists.")
+            result[index] = after
+            if _studio_invariant_key(before) != _studio_invariant_key(after) or before["title"] != after["title"]:
+                renames[_studio_invariant_key(before)] = after
+
+    # A coordinated rename must update every active Scene reference in the same write.
+    reference_changes = {}
+    updated = copy.deepcopy(story)
+    for scene_id, scene in updated.get("scenes", {}).items():
+        old_refs = scene.get("invariantRefs") or []
+        new_refs = copy.deepcopy(old_refs)
+        for ref in new_refs:
+            replacement = renames.get(_studio_invariant_key(ref))
+            if replacement is not None:
+                if replacement["kind"] not in {"character", "location"}:
+                    raise ValueError("Referenced characters and locations must retain a referenceable type.")
+                ref["kind"] = replacement["kind"]
+                ref["title"] = replacement["title"]
+        if new_refs != old_refs:
+            checked = _normalize_scene_invariant_refs(new_refs)
+            if len(checked) != len(new_refs):
+                raise ValueError("Renaming would duplicate an existing Scene reference.")
+            scene["invariantRefs"] = checked
+            reference_changes[scene_id] = {"before": copy.deepcopy(old_refs),
+                                           "after": copy.deepcopy(checked)}
+    if len(result) > 30:
+        raise ValueError("Project supports at most 30 Invariants.")
+    _studio_invariant_links_preserved(updated, result)
+    return result, reference_changes
+
+
+@_serialized_mutation
+def apply_studio_brief(story_id, expected, changes):
+    """Commit reviewed Project fields and individual Invariant changes atomically."""
+    if not isinstance(expected, dict) or not isinstance(changes, dict) or not changes:
+        raise ValueError("Select at least one approved Project field.")
+    if set(changes) - STUDIO_BRIEF_FIELDS or set(expected) - STUDIO_BRIEF_FIELDS:
+        raise ValueError("Studio Project update contains unsupported fields.")
+    if set(changes) - set(expected) - {"invariantOps"}:
+        raise ValueError("Every selected Project field needs its saved original.")
+    if "invariantOps" in changes and "invariants" in changes:
+        raise ValueError("Choose individual Invariant changes or a whole-list change, not both.")
+
+    story = load_story(story_id)
+    updated = copy.deepcopy(story)
+    approved = {}
+    references = {}
+    for field, value in changes.items():
+        if field == "invariantOps":
+            after, references = _apply_studio_invariant_ops(updated, value)
+            before = story.get("invariants") or []
+            if after != before:
+                approved["invariants"] = {"before": copy.deepcopy(before), "after": copy.deepcopy(after)}
+                updated["invariants"] = after
+                for scene_id, ref_change in references.items():
+                    updated["scenes"][scene_id]["invariantRefs"] = ref_change["after"]
+            continue
+        before = story.get(field)
+        if before != expected[field]:
+            raise RuntimeError("Project " + field + " changed since review. Prepare again.")
+        if field in {"title", "concept", "style"}:
+            limit = 240 if field == "title" else (10000 if field == "style" else 20000)
+            if not isinstance(value, str) or len(value) > limit:
+                raise ValueError("Reviewed Project " + field + " text is too long.")
+            after = value.strip()
+        else:
+            if not isinstance(value, list) or len(value) > 30:
+                raise ValueError("Project supports at most 30 Invariants.")
+            if any(not isinstance(x, dict) or not isinstance(x.get("text"), str)
+                   or not x["text"].strip() for x in value):
+                raise ValueError("Every retained Invariant needs a description.")
+            after = _normalize_story_invariants(value)
+            if len(after) != len(value):
+                raise ValueError("Every Invariant must be valid and non-empty.")
+            _studio_invariant_links_preserved(story, after)
+        if after != before:
+            approved[field] = {"before": copy.deepcopy(before), "after": copy.deepcopy(after)}
+            updated[field] = after
+    if not approved:
+        raise ValueError("No actual Project changes were selected.")
+
+    revisions = list(story.get("studioRevisions") or [])
+    revision_id = _new_id("brief")
+    revision = {"id": revision_id, "at": _utc_now(), "fields": approved}
+    if references:
+        revision["sceneInvariantRefs"] = references
+    revisions.append(revision)
+    updated["studioRevisions"] = revisions[-10:]
+    updated["updatedAt"] = _utc_now()
+    _write_json_atomic(_story_path(story_id), updated)
+    return updated, revision_id
+
+
+@_serialized_mutation
+def undo_studio_brief(story_id, revision_id):
+    """Undo latest reviewed Project change, preserving subsequent unrelated edits."""
+    story = load_story(story_id)
+    revisions = list(story.get("studioRevisions") or [])
+    if not revisions or revisions[-1].get("id") != revision_id:
+        raise RuntimeError("Only the latest Studio Project change can be undone.")
+    entry = revisions[-1]
+    fields = entry.get("fields") or {}
+    if not fields or set(fields) - (STUDIO_BRIEF_FIELDS - {"invariantOps"}):
+        raise RuntimeError("Studio revision metadata is invalid.")
+    for field, record in fields.items():
+        if story.get(field) != record["after"]:
+            raise RuntimeError("Project " + field + " changed since Apply; Undo was not performed.")
+    reference_changes = entry.get("sceneInvariantRefs") or {}
+    restored = copy.deepcopy(story)
+    for scene_id, refs in reference_changes.items():
+        scene = restored.get("scenes", {}).get(scene_id)
+        if not scene or (scene.get("invariantRefs") or []) != refs["after"]:
+            raise RuntimeError("Scene reference changed since Apply; Undo was not performed.")
+        scene["invariantRefs"] = copy.deepcopy(refs["before"])
+    if "invariants" in fields:
+        _studio_invariant_links_preserved(restored, fields["invariants"]["before"])
+    for field, record in fields.items():
+        restored[field] = copy.deepcopy(record["before"])
+    restored["studioRevisions"] = revisions[:-1]
+    restored["updatedAt"] = _utc_now()
+    _write_json_atomic(_story_path(story_id), restored)
+    return restored
+
+
 @_serialized_mutation
 def update_story(story_id, payload):
     current = load_story(story_id)
@@ -899,6 +1171,97 @@ def add_scene(story_id, payload=None):
     _write_json_atomic(_story_path(story_id), story)
     (_story_dir(story_id) / "takes" / scene_id).mkdir(parents=True, exist_ok=True)
     return story, scene
+
+
+@_serialized_mutation
+def add_tentative_scene_at(story_id, expected_updated_at, scene_draft, placement, relative_scene_id=""):
+    """Atomically create exactly one prompt-free Scene in an explicit position.
+
+    Placement, creative text and target ID come from a human-reviewed proposal.
+    No Scene is generated, deleted or renumbered implicitly.
+    """
+    story = load_story(story_id)
+    if str(story.get("updatedAt") or "") != str(expected_updated_at or ""):
+        raise RuntimeError("Studio project changed during Scene review. Refresh the proposal before applying.")
+    if not isinstance(scene_draft, dict) or set(scene_draft) != {"title", "summary"}:
+        raise ValueError("Tentative Scene must contain only title and summary.")
+    title, summary = scene_draft["title"], scene_draft["summary"]
+    if not isinstance(title, str) or not isinstance(summary, str) or not summary.strip():
+        raise ValueError("Tentative Scene needs a description of what happens.")
+    if placement not in {"start", "end", "before", "after"}:
+        raise ValueError("Choose start, end, before or after for the new Scene.")
+    order = list(story.get("sceneOrder") or [])
+    relative_scene_id = str(relative_scene_id or "").strip()
+    if placement in {"before", "after"}:
+        if relative_scene_id not in order:
+            raise ValueError("The relative Scene no longer exists; review placement again.")
+        index = order.index(relative_scene_id) + (1 if placement == "after" else 0)
+    else:
+        index = 0 if placement == "start" else len(order)
+    scene_id = _new_id("scene")
+    scene = _normalize_scene(scene_id, {"title": title, "summary": summary})
+    story["scenes"][scene_id] = scene
+    order.insert(index, scene_id)
+    story["sceneOrder"] = order
+    story["updatedAt"] = _utc_now()
+    _write_json_atomic(_story_path(story_id), story)
+    (_story_dir(story_id) / "takes" / scene_id).mkdir(parents=True, exist_ok=True)
+    return story, scene
+
+
+
+@_serialized_mutation
+def add_tentative_scenes_at(story_id, expected_scene_order, drafts, placement, relative_scene_id=""):
+    """Insert a reviewed block of up to 32 tentative Scenes with one Story commit.
+
+    Check only the structural field being modified, so unrelated Concept or
+    Scene edits do not invalidate a reviewed placement.
+    """
+    story = load_story(story_id)
+    order = list(story.get("sceneOrder") or [])
+    if not isinstance(expected_scene_order, list) or order != expected_scene_order:
+        raise RuntimeError("Scene order changed during review. Prepare a fresh placement.")
+    if not isinstance(drafts, list) or not 1 <= len(drafts) <= 32:
+        raise ValueError("Create between one and 32 tentative Scenes per review.")
+    if placement not in {"start", "end", "before", "after"}:
+        raise ValueError("Select start, end, before or after.")
+    relative_scene_id = str(relative_scene_id or "").strip()
+    if placement in {"before", "after"}:
+        if relative_scene_id not in order:
+            raise ValueError("Selected neighboring Scene no longer exists.")
+        index = order.index(relative_scene_id) + (1 if placement == "after" else 0)
+    else:
+        index = 0 if placement == "start" else len(order)
+
+    new_scenes = []
+    for item in drafts:
+        if not isinstance(item, dict) or set(item) != {"title", "summary"}:
+            raise ValueError("Each tentative Scene needs only a title and summary.")
+        title, summary = item["title"], item["summary"]
+        if not isinstance(title, str) or not isinstance(summary, str) or not summary.strip():
+            raise ValueError("Each tentative Scene needs a description.")
+        if len(title) > 240 or len(summary) > 10000:
+            raise ValueError("Tentative Scene text is too long.")
+        new_scenes.append(_normalize_scene(_new_id("scene"), item))
+
+    updated = copy.deepcopy(story)
+    for offset, scene in enumerate(new_scenes):
+        updated["scenes"][scene["id"]] = scene
+        updated["sceneOrder"].insert(index + offset, scene["id"])
+    updated["updatedAt"] = _utc_now()
+    created_directories = []
+    try:
+        # Prepare required empty Take directories first, then publish Story JSON.
+        for scene in new_scenes:
+            folder = _story_dir(story_id) / "takes" / scene["id"]
+            folder.mkdir(parents=True, exist_ok=False)
+            created_directories.append(folder)
+        _write_json_atomic(_story_path(story_id), updated)
+    except Exception:
+        for folder in reversed(created_directories):
+            folder.rmdir()
+        raise
+    return updated, new_scenes
 
 
 @_serialized_mutation
@@ -1165,6 +1528,181 @@ def extend_director_story(story_id, plan, model_id=""):
     for scene_id in added_ids:
         (_story_dir(story_id) / "takes" / scene_id).mkdir(parents=True, exist_ok=True)
     return story, added_ids
+
+
+STUDIO_SCENE_FIELDS = {"title", "summary", "prompt"}
+
+
+@_serialized_mutation
+def apply_studio_scene_fields(story_id, scene_id, expected, changes):
+    """Commit a reviewed, field-scoped Scene revision without touching Takes or settings."""
+    if not isinstance(expected, dict) or not isinstance(changes, dict) or not changes:
+        raise ValueError("Select at least one Scene field to apply.")
+    if set(changes) - STUDIO_SCENE_FIELDS or set(expected) != set(changes):
+        raise ValueError("Reviewed Scene fields must match exact supported originals.")
+    if any(not isinstance(value, str) or len(value) > 60000
+           or not isinstance(expected[key], str) for key, value in changes.items()):
+        raise ValueError("Reviewed Scene field values must be text with saved originals.")
+
+    story = load_story(story_id)
+    current = (story.get("scenes") or {}).get(scene_id)
+    if not isinstance(current, dict) or scene_id not in (story.get("sceneOrder") or []):
+        raise FileNotFoundError("Selected Scene no longer exists.")
+    for key in changes:
+        if str(current.get(key) or "") != expected[key]:
+            raise RuntimeError("Scene " + key + " changed since review. Read the current value and review again.")
+    clean = {key: value.strip() for key, value in changes.items()}
+    if "title" in clean and len(clean["title"]) > 240:
+        raise ValueError("Scene title is too long.")
+    revised = _normalize_scene(scene_id, clean, existing=current)
+    story["scenes"][scene_id] = revised
+    story["updatedAt"] = _utc_now()
+    _write_json_atomic(_story_path(story_id), story)
+    return story, revised
+
+
+@_serialized_mutation
+def apply_studio_scene_split(story_id, source_id, expected_scene_order,
+                             expected_source_summary, first_summary, second_scene):
+    """Split one Scene's Intent into two independent clips, preserving its media.
+
+    Existing Scene keeps its stable ID, prompt and Takes. The new Scene is
+    tentative, with an empty prompt and no Takes.
+    """
+    if (not isinstance(expected_scene_order, list) or
+            not all(isinstance(scene_id, str) for scene_id in expected_scene_order)):
+        raise ValueError("Split requires the reviewed Scene order.")
+    if (not isinstance(expected_source_summary, str) or
+            not isinstance(first_summary, str) or not first_summary.strip()
+            or len(first_summary) > 10000):
+        raise ValueError("The first Scene needs a complete reviewed Intent.")
+    if (not isinstance(second_scene, dict) or set(second_scene) != {"title", "summary"}
+            or not isinstance(second_scene["title"], str)
+            or not isinstance(second_scene["summary"], str)
+            or len(second_scene["title"]) > 240 or len(second_scene["summary"]) > 10000
+            or not second_scene["summary"].strip()):
+        raise ValueError("The second Scene needs a reviewed title and Intent.")
+    story = load_story(story_id)
+    order = list(story.get("sceneOrder") or [])
+    if order != expected_scene_order:
+        raise RuntimeError("Scene order changed since split review.")
+    current = (story.get("scenes") or {}).get(source_id)
+    if not isinstance(current, dict) or source_id not in order:
+        raise FileNotFoundError("The source Scene no longer exists.")
+    if str(current.get("summary") or "") != expected_source_summary:
+        raise RuntimeError("Source Scene Intent changed since split review.")
+    if first_summary.strip() == expected_source_summary:
+        raise ValueError("The first Scene's Intent must describe its reduced action.")
+
+    revised = _normalize_scene(source_id, {"summary": first_summary}, existing=current)
+    new_id = _new_id("scene")
+    created = _normalize_scene(new_id, second_scene)
+    updated = copy.deepcopy(story)
+    updated["scenes"][source_id] = revised
+    updated["scenes"][new_id] = created
+    order.insert(order.index(source_id) + 1, new_id)
+    updated["sceneOrder"] = order
+    updated["updatedAt"] = _utc_now()
+    _write_json_atomic(_story_path(story_id), updated)
+    (_story_dir(story_id) / "takes" / new_id).mkdir(parents=True, exist_ok=True)
+    return updated, created
+
+
+@_serialized_mutation
+def apply_studio_scene_invariant_links(story_id, kind, title, changes):
+    """Review precisely one existing character/location relationship across Scenes.
+
+    Linked identities are the only intended mutation; no creative prose,
+    Scene order, technical controls, Prompt or Takes are changed.
+    """
+    if kind not in {"character", "location"} or not isinstance(title, str) or not title.strip():
+        raise ValueError("Choose a saved Character or Location Invariant.")
+    if not isinstance(changes, list) or not 1 <= len(changes) <= 128:
+        raise ValueError("Choose one to 128 changed Scene associations.")
+    story = load_story(story_id)
+    candidates = [entry for entry in story.get("invariants") or []
+                  if _studio_invariant_key(entry) == (kind, title.strip().casefold())]
+    if len(candidates) != 1:
+        raise RuntimeError("The selected Invariant changed or is not uniquely defined.")
+    target = {"kind": kind, "title": candidates[0]["title"]}
+    key = _studio_invariant_key(target)
+    updated = copy.deepcopy(story)
+    seen = set()
+    saved = {}
+    for entry in changes:
+        if (not isinstance(entry, dict) or set(entry) != {"sceneId", "expectedRefs", "linked"}
+                or not isinstance(entry["sceneId"], str) or not entry["sceneId"]
+                or not isinstance(entry["linked"], bool)
+                or not isinstance(entry["expectedRefs"], list)):
+            raise ValueError("Scene link review needs exact originals and a desired linked state.")
+        scene_id = entry["sceneId"]
+        if scene_id in seen:
+            raise ValueError("Each Scene may be changed only once.")
+        seen.add(scene_id)
+        scene = (updated.get("scenes") or {}).get(scene_id)
+        if not isinstance(scene, dict) or scene_id not in (updated.get("sceneOrder") or []):
+            raise FileNotFoundError("Selected Scene no longer exists: " + scene_id)
+        before = scene.get("invariantRefs") or []
+        if before != entry["expectedRefs"]:
+            raise RuntimeError("Scene Invariant links changed since review: " + scene_id)
+        is_linked = any(_studio_invariant_key(ref) == key for ref in before)
+        if is_linked == entry["linked"]:
+            raise ValueError("The selected Scene link did not change.")
+        after = [copy.deepcopy(ref) for ref in before if _studio_invariant_key(ref) != key]
+        if entry["linked"]:
+            after.append(copy.deepcopy(target))
+        checked = _normalize_scene_invariant_refs(after)
+        if len(checked) != len(after):
+            raise ValueError("Scene links would contain a duplicate Invariant.")
+        scene["invariantRefs"] = checked
+        scene["updatedAt"] = _utc_now()
+        saved[scene_id] = {"before": copy.deepcopy(before), "after": copy.deepcopy(checked)}
+    updated["updatedAt"] = _utc_now()
+    _write_json_atomic(_story_path(story_id), updated)
+    return updated, saved
+
+
+@_serialized_mutation
+def apply_studio_scene_fields_batch(story_id, revisions):
+    """Commit one reviewed, field-scoped creative revision across existing Scenes."""
+    if not isinstance(revisions, list) or not 1 <= len(revisions) <= 32:
+        raise ValueError("Review between one and 32 Scene revisions.")
+    story = load_story(story_id)
+    updated = copy.deepcopy(story)
+    seen = set()
+    changed = {}
+    for revision in revisions:
+        if not isinstance(revision, dict) or set(revision) != {"sceneId", "expected", "changes"}:
+            raise ValueError("Each Scene revision needs exact target, saved originals and selected changes.")
+        scene_id = revision["sceneId"]
+        if not isinstance(scene_id, str) or not scene_id or scene_id in seen:
+            raise ValueError("Each Scene may be revised only once per review.")
+        seen.add(scene_id)
+        current = (updated.get("scenes") or {}).get(scene_id)
+        if not isinstance(current, dict) or scene_id not in (updated.get("sceneOrder") or []):
+            raise FileNotFoundError("Selected Scene no longer exists: " + scene_id)
+        expected, changes = revision["expected"], revision["changes"]
+        if (not isinstance(expected, dict) or not isinstance(changes, dict) or not changes
+                or set(expected) != set(changes) or set(changes) - STUDIO_SCENE_FIELDS):
+            raise ValueError("Scene revisions require supported, selected fields and their originals.")
+        if any(not isinstance(value, str) or len(value) > 60000 or
+               not isinstance(expected[field], str) for field, value in changes.items()):
+            raise ValueError("Reviewed Scene text must be bounded strings.")
+        for field, value in changes.items():
+            if str(current.get(field) or "") != expected[field]:
+                raise RuntimeError("Scene " + scene_id + " " + field + " changed since review.")
+            if field == "title" and len(value.strip()) > 240:
+                raise ValueError("Scene title is too long.")
+        clean = {key: value.strip() for key, value in changes.items()}
+        if all(str(current.get(key) or "") == value for key, value in clean.items()):
+            continue
+        updated["scenes"][scene_id] = _normalize_scene(scene_id, clean, existing=current)
+        changed[scene_id] = copy.deepcopy(clean)
+    if not changed:
+        raise ValueError("There are no actual Scene changes to apply.")
+    updated["updatedAt"] = _utc_now()
+    _write_json_atomic(_story_path(story_id), updated)
+    return updated, changed
 
 
 @_serialized_mutation
@@ -1621,6 +2159,42 @@ def reorder_scenes(story_id, ordered_ids):
     story["updatedAt"] = _utc_now()
     _write_json_atomic(_story_path(story_id), story)
     return story
+
+
+@_serialized_mutation
+def apply_studio_scene_structure(story_id, operation, source_id, expected_order,
+                                  relative_id="", placement="", expected_source_updated_at=""):
+    """Apply one reviewed Scene move or duplicate against the exact displayed order.
+
+    Director may advise on sequence, but WebCap owns resolving stable IDs
+    and determining the resulting permutation. No media is removed.
+    """
+    if operation not in {"move", "duplicate"}:
+        raise ValueError("Studio only supports reviewed Scene move and duplicate.")
+    if not isinstance(expected_order, list) or not all(isinstance(x, str) for x in expected_order):
+        raise ValueError("Expected Scene order must be a saved ID list.")
+    story = load_story(story_id)
+    current_order = list(story.get("sceneOrder") or [])
+    if current_order != expected_order:
+        raise RuntimeError("Scene order changed since review. Inspect the latest order and review again.")
+    if source_id not in current_order:
+        raise FileNotFoundError("Selected source Scene no longer exists.")
+    if operation == "duplicate":
+        scene = story["scenes"][source_id]
+        if not expected_source_updated_at or scene.get("updatedAt") != expected_source_updated_at:
+            raise RuntimeError("Source Scene changed since review. Inspect its current content.")
+        if relative_id or placement:
+            raise ValueError("Duplicate creates its copy immediately after the source Scene.")
+        return duplicate_scene(story_id, source_id)
+
+    if placement not in {"before", "after"} or relative_id == source_id or relative_id not in current_order:
+        raise ValueError("Select a different Scene and an exact before/after placement.")
+    new_order = [scene_id for scene_id in current_order if scene_id != source_id]
+    insertion = new_order.index(relative_id) + (1 if placement == "after" else 0)
+    new_order.insert(insertion, source_id)
+    if new_order == current_order:
+        raise ValueError("The selected Scene is already in that position.")
+    return reorder_scenes(story_id, new_order), None
 
 
 def _assert_scene_takes_not_referenced_elsewhere(story, scene_id):

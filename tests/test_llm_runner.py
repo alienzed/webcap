@@ -182,6 +182,39 @@ def test_llm_queue_payload_never_reaches_execution_state_file(llm_root, monkeypa
     assert llm_runner.job_status(job["jobId"])["status"] == "queued"
 
 
+
+@pytest.mark.parametrize("operation", [
+    "studio_brief_draft", "studio_project_draft", "studio_scene_draft", "studio_scene_sequence_draft",
+    "studio_scene_field_draft", "studio_scene_batch_draft", "studio_scene_split_draft", "studio_playbook_draft",
+    "freeform_chat",
+])
+def test_studio_chat_response_schema_reaches_model_without_changing_freeform(llm_root, monkeypatch, operation):
+    calls = []
+    schema = {"type": "object", "properties": {"concept": {"type": "string"}}}
+    contract = {"operation": operation, "messages": [{"role": "user", "content": "Draft."}]}
+    if operation != "freeform_chat":
+        contract["response_schema"] = schema
+
+    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda *_args: False)
+
+    def fake_chat(model_id, messages, **kwargs):
+        calls.append(kwargs)
+        return {"text": '{"concept":"A short film."}', "model": model_id}
+
+    monkeypatch.setattr(storyboard_llm_runtime, "run_freeform_chat", fake_chat)
+    job = llm_runner.enqueue("chat", "qwen", contract)
+    llm_runner._advance_queue()
+
+    finished = llm_runner.job_status(job["jobId"])
+    assert finished["status"] == "completed"
+    assert finished["result"]["text"] == '{"concept":"A short film."}'
+    assert len(calls) == 1
+    if operation == "freeform_chat":
+        assert "response_schema" not in calls[0]
+    else:
+        assert calls[0]["response_schema"] == schema
+
+
 def test_llm_chat_job_runs_through_shared_lane_without_persisting_conversation(llm_root, monkeypatch):
     calls = []
     captured = {}

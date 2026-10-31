@@ -464,26 +464,48 @@ function refreshTrainingWorkspace() {
       if (!isTrainingSetRefreshCurrent(folder, requestVersion)) return null;
       syncWorkingModelProfileSelect();
       if (!isTrainingSetRefreshCurrent(folder, requestVersion)) return null;
-      return getVisibleMediaSelectionForTraining().length ? ensureSelectedTrainingSetup() : Promise.resolve(null);
+      return getVisibleMediaSelectionForTraining().length ? ensureSelectedTrainingSetup() : Promise.resolve({ ready: false, reason: 'No visible media items are selected for training.' });
     })
-    .then(function () {
-      if (!isTrainingSetRefreshCurrent(folder, requestVersion)) return [];
-      return Promise.all([fetchTrainingWorkspaceConfigFiles(folder), refreshTrainingHistory(), refreshTrainingReview()]);
+    .then(function (setup) {
+      if (!isTrainingSetRefreshCurrent(folder, requestVersion)) return null;
+      // Setup readiness must not prevent loading the user's existing files or history.
+      return Promise.all([
+        fetchTrainingWorkspaceConfigFiles(folder),
+        refreshTrainingHistory().catch(function (err) {
+          reportConsoleError('Training history', err);
+          return null;
+        }),
+        setup && setup.ready === false ? Promise.resolve(null) : refreshTrainingReview().catch(function (err) {
+          reportConsoleError('Training review', err);
+          return null;
+        })
+      ]).then(function (results) { return { setup: setup, files: results[0] }; });
     })
-    .then(function (results) {
-      if (!isTrainingSetRefreshCurrent(folder, requestVersion)) return;
-      trainingWorkspaceState.configFiles = results[0];
-      syncTrainingWorkflowReadiness(null, results[0]);
-      if (els.readiness) els.readiness.innerHTML = buildTrainingReadinessHtml();
+    .then(function (result) {
+      if (!result || !isTrainingSetRefreshCurrent(folder, requestVersion)) return;
+      trainingWorkspaceState.configFiles = result.files;
+      syncTrainingWorkflowReadiness(null, result.files);
+      if (els.readiness) {
+        els.readiness.innerHTML = result.setup && result.setup.ready === false
+          ? '<div class="training-readiness-state"><strong>Training unavailable</strong><span>' + escapeHtml(result.setup.reason) + '</span></div>'
+          : buildTrainingReadinessHtml();
+      }
       renderTrainingItemOverview(null);
-      renderTrainingWorkspaceConfigList(results[0]);
+      renderTrainingWorkspaceConfigList(result.files);
       renderTrainingCommandHandoff();
+      if (result.setup && result.setup.ready === false) {
+        trainingWorkspaceState.review = null;
+        trainingWorkspaceState.reviewPending = false;
+        trainingWorkspaceState.reviewError = result.setup.reason;
+        renderTrainingReview();
+      }
       syncWorkspaceConfigEditorUi();
     })
     .catch(function (err) {
       if (!isTrainingSetRefreshCurrent(folder, requestVersion)) return;
+      reportConsoleError('Training setup', err);
       if (els.readiness) els.readiness.textContent = String(err && err.message ? err.message : err);
-      renderTrainingItemOverview(null, 'Could not load the visible training items.');
+      renderTrainingItemOverview(null);
     });
 }
 

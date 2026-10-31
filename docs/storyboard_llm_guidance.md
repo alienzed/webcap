@@ -1,5 +1,7 @@
 # Storyboard LLM Guidance
 
+> **Scope note (2026-10-29):** This document describes the underlying **Storyboard LLM/generation pipeline**, including historical operations still supported for old Projects. The current **Studio Director authoring experience**, its five-field contract, the intentional exclusion of reference media/LoRA/sampling/seed controls, and the *current* implementation backlog are defined in [Studio Director — intention-to-materialization contract](studio-director-materialization-contract.md). Director supplies authored creative material; WebCap deterministically reviews, targets and saves it with the author. Do not treat the legacy operations documented here as additional Studio Director fields or feature-completeness requirements.
+
 ## Core vision
 
 WebCap Storyboard is a local-first creative tool for turning a concept into short generated video Scenes and organizing multiple Takes for each Scene.
@@ -67,7 +69,7 @@ The human remains the editor/director. Every Scene and prompt remains directly e
 
 ## Story authoring authority
 
-The complete Story concept and populated Directing Guidelines govern Scene relationships, variation, pacing, and emphasis. The Director interprets that authored direction while producing independently generatable Scenes. Missing guidelines leave creative decisions unspecified.
+**Current Studio Director:** Project Concept governs Scene relationships, variation, pacing and emphasis; shared visual treatment belongs in Visual / atmosphere, reusable fixed details in Invariants, and local creative action in Scene Intent. **Legacy Storyboard operations:** populated saved Directing Guidelines continue to be passed as previously authored context where the older request contract expects them. Do not create new Guidelines through the current Director or discard saved historical values.
 
 Auto Scene count is a Director decision. Explicit Scene counts are requested in the output contract; WebCap preserves the authored Scene records.
 
@@ -99,15 +101,11 @@ When stronger continuity is genuinely needed, the human can make it explicit thr
 - first/last-frame references;
 - other generation conditioning.
 
-### Entry and exit state
+### Entry and exit state — historical compatibility only
 
-Entry and exit state are optional planning notes.
+`entryState` and `exitState` were retired from active Scene authoring in PR #792. The current Studio Director must **not propose or require** these fields; moving Scenes should not require maintaining cross-Scene state bookkeeping. Describe an actual on-screen initial condition or necessary handoff in the Scene Intent and relevant Project Concept/Invariants instead.
 
-Use them only when a specific handoff, visible object state, physical state, or reference-frame relationship materially helps the Scene.
-
-Do not create state bookkeeping merely because Scenes are adjacent.
-
-Generation does not depend on Entry/Exit being populated.
+Existing saved values remain in `storyboard_store.py` and are still consumed by older `storyboard_llm_contract.py` planning/refinement paths and stored Take provenance. Preserve those values for compatibility, but do not revive their controls or mistake their backend presence for an active Studio Director requirement. The H3 workflow renders the saved Prompt, not separate entry/exit-state text.
 
 ### Previous-Scene context during refinement
 
@@ -117,7 +115,7 @@ That context can help Director decide whether the current Scene should continue,
 
 The previous Scene is not automatically a continuity handoff.
 
-## Current Director operations
+## Underlying legacy Storyboard Director operations (not Studio Read/Write actions)
 
 ### `expand_concept`
 
@@ -232,7 +230,7 @@ The active model-facing guidance is:
 
 That file is intentionally concise and is what Director should use for ordinary H3 prompt writing.
 
-Director authors observable, timed audiovisual content following Story Guidelines and Scene intent. H3 guidance supplies section headings, timestamp notation, dialogue syntax, and exact reference-frame alignment.
+Director authors observable, timed audiovisual content from the context **actually supplied**. Current Studio uses Concept, Style, relevant Invariants and Scene Intent; older Storyboard operations may also provide saved Story Guidelines. H3 guidance supplies section headings, timestamp notation, dialogue syntax, and exact reference-frame alignment.
 
 WebCap stores the complete authored H3 prompt unchanged. The Workshop can selectively revise the timed-shot section when an unambiguous `integrated_multimodal_description` heading is present; other prompt shapes remain available for discussion and manual editing.
 

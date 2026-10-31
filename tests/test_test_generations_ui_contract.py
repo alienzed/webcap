@@ -303,9 +303,10 @@ def test_test_generations_compare_mode_reuses_current_session_results():
     assert "test-generations-view-compare-btn" in script
     assert "function setResultsView(mode)" in script
     assert "function renderCompare(status)" in script
-    assert "var pair = [results[compareIndex], results[compareIndex + 1]];" in script
+    assert "function comparePairs(status)" in script
+    assert "var pair = pairs[compareIndex];" in script
     assert "compareIndex = Math.max(0, compareIndex - 1);" in script
-    assert "compareIndex = Math.min(Math.max(0, results.length - 2), compareIndex + 1);" in script
+    assert "compareIndex = Math.min(Math.max(0, comparePairs(currentStatus).length - 1), compareIndex + 1);" in script
     assert "function syncCompareVideos(videos)" in script
     assert "video.addEventListener('play'" in script
     assert "video.addEventListener('pause'" in script
@@ -538,8 +539,8 @@ def test_compare_polling_preserves_video_elements_and_refreshes_navigation_only(
     assert "host.dataset.compareKey = compareKey;" in block
     assert "host.querySelector('.test-generations-compare-stage')" in block
     assert "existingPrevious.disabled = compareIndex <= 0;" in block
-    assert "existingNext.disabled = compareIndex >= results.length - 2;" in block
-    assert "existingPosition.textContent = (compareIndex + 1) + ' / ' + (results.length - 1);" in block
+    assert "existingNext.disabled = compareIndex >= pairs.length - 1;" in block
+    assert "existingPosition.textContent = (compareIndex + 1) + ' / ' + pairs.length;" in block
     assert block.index("if (String(host.dataset.compareKey || '') === compareKey") < block.index("host.innerHTML = '';")
     assert "if (resultsView === 'compare') renderCompare(status || {});" in script
 
@@ -1458,7 +1459,9 @@ def test_preview_sort_is_session_local_and_preserves_keyed_cards():
     assert "if (card.nextSibling !== next) host.insertBefore(card, next);" in sorter
     assert "host.innerHTML" not in sorter
     compare = script.split("function renderCompare(status)", 1)[1].split("function renderResults(status)", 1)[0]
-    assert "sortedTestPreviewRows(" in compare
+    assert "var pairs = comparePairs(status);" in compare
+    pair_builder = script.split("function comparePairs(status)", 1)[1].split("function renderCompare(status)", 1)[0]
+    assert "sortedTestPreviewRows(" in pair_builder
     assert "sortTestPreviewCards(status);" in script.split("function renderResults(status)", 1)[1].split("function syncActiveRunControls", 1)[0]
 
 

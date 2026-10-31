@@ -1,5 +1,7 @@
 # Storyboard
 
+> **Documentation status (updated 2026-10-30):** This is the broader Storyboard/production system specification, with dated legacy-implementation phases. Studio Director's current author-facing five-field contract, its deliberate exclusion of media/Take/technical settings, and its user-intention-to-reviewed-materialization roadmap are specified separately in [Studio Director — intention-to-materialization contract](studio-director-materialization-contract.md). Do not interpret every manual Storyboard capability below as something Director should manage.
+
 Storyboard is a first-class WebCap workspace for building longer-form visual sequences from ordered scene generations and selected takes.
 
 It intentionally lives inside WebCap because it benefits from WebCap's local-first media handling, model awareness, ComfyUI connectivity, LoRA discovery, ratings, previews, and generation infrastructure. It is not part of the dataset/set workflow and must not depend on the current set, captions, training state, Test candidates, or Test sessions.
@@ -422,7 +424,7 @@ Current runtime slice:
 - `expand_concept` turns a terse Story seed into a richer persistent overview without creating Scenes; the first successful expanded concept becomes the fixed **Restore Previous** baseline, and later expansions (including First Cut) do not replace that baseline;
 - `develop_story` turns the saved concept/style into a complete structured Scene sequence and writes the initial H3-ready prompt for every Scene in the same whole-Story pass;
 - whole-Story development must reliably return usable Scenes; shared continuity metadata is optional and must never be required for Scene creation to succeed;
-- when a Story already contains valid shared continuity definitions/references, WebCap can still inject those descriptions mechanically into later H3 prompt rewrites and final generation compilation;
+- when a Story has shared continuity definitions or Scene-linked Invariants, Director receives them as authoring context where the older operation requires them. WebCap does **not** mechanically inject creative descriptions into Director-authored prompts during generation; the H3 adapter only adds supported first/last-frame reference-alignment syntax;
 - deterministic validation against `docs/storyboard-scene-plan.schema.json` plus app-level validation protects the required Scene structure without treating optional continuity bookkeeping as a fatal model contract;
 - replanning requires explicit confirmation and moves old active Scenes into recoverable `removedScenes` without deleting their Take media;
 - the accepted development plan/model are persisted in Story metadata for provenance, with per-Scene plan/prompt Director provenance retained for quiet hover inspection;
@@ -437,14 +439,14 @@ Current runtime slice:
 - Storyboard and Generate Director requests share the app-owned `llm` execution lane and may queue without inventing a separate Storyboard scheduler;
 - local Director work shares WebCap GPU arbitration; a successfully loaded local model may remain resident for the next LLM task, while Training/Inference explicitly release the loaded Director model before claiming GPU work;
 - idle ComfyUI model release before local Director loading;
-- no conversational memory; WebCap's stored Story/Scene state remains the complete durable context.
+- older bounded Director request contracts have no independent conversational memory; current Studio Director has persisted conversations in `tool/server/director_chat_history.py`, but saved Project/Scene fields remain authoritative and are supplied only through explicit Read/Write requests.
 
-Next candidates after real usage:
+Historical candidates from this implementation phase (some superseded by current Studio Director):
 
 - AI-assisted split/insert/merge operations for evolving creative structure;
 - one semantic audit using `docs/storyboard-plan-audit.schema.json` and at most one bounded repair pass if quality warrants the extra inference;
 - branching/version UX only if actual production use proves simple recoverable replacement is insufficient;
-- lightweight conversational UI only if explicit bounded actions stop being enough.
+- lightweight conversational UI only if explicit bounded actions stop being enough. **Superseded for Studio:** the current Studio Director already has conversation, explicit Read and reviewed Write; do not treat this historical candidate as unimplemented.
 
 Manual editing remains available everywhere except the exact field or active Scene plan currently owned by a pending Director job. A sequential Director pass protects the Story/Scene context it is actively reviewing, and First Cut protects its Story for the duration of the orchestration. Other Stories and app activities remain usable.
 
@@ -490,7 +492,9 @@ While implementing Phase 1:
 The architecture should leave obvious seams for later provider integration, but Phase 1 should solve only the real manual authoring workflow.
 
 
-## Current LLM contract slice
+## Underlying legacy Storyboard LLM contract slice
+
+**Scope (2026-10-30):** These named backend operations describe the older Storyboard LLM pipeline, not the current Studio Director's five-field Read/Write surface. The current Studio authoring field contract and reviewed actions live in `tool/server/studio_director.py`, `tool/js/studio_director_workbench.js`, and [the materialization contract](studio-director-materialization-contract.md). Saved older fields and requests remain compatible.
 
 Storyboard keeps request meaning separate from execution. `tool/server/storyboard_llm_contract.py` remains the pure request-assembly boundary, while `tool/server/storyboard_llm_runtime.py` owns the llama.cpp process/model lifecycle and HTTP transport.
 
@@ -503,7 +507,7 @@ The current operations are deliberately explicit rather than chat-like:
 
 The contract module does not call a provider. The llama.cpp runtime consumes its returned prompt, so context assembly and leakage boundaries stay testable independently from model quality/runtime behavior.
 
-Entry and exit state remain manual first-class Scene fields. Whole-Story development now proposes them initially, while the user can still edit them directly at any time.
+Entry and exit state remain in saved Story/Scene data and some **legacy** planning/refinement contracts. They are **retired from active Studio Director authoring**; current Studio Intent/Concept/Invariants carry necessary state and handoffs without reintroducing those fields.
 
 **Director passes** use the same Scene refinement primitive sequentially rather than sending the whole plan through a second repair mechanism. WebCap walks Scene order, sends the same pass instruction to each Scene, waits for that Scene to commit, then builds the next request from the updated Story. The LLM decides whether the instruction applies to the current Scene; WebCap does not interpret the instruction. Custom repair and continuity/prompt refinement are presets over this same mechanism. These passes are client-side orchestration: if LLM Stop/reset occurs, the pass ends and does not submit another Scene request. The same rule applies to staged **One at a time** development and other multi-call Storyboard Director workflows.
 

@@ -782,7 +782,7 @@ def test_storyboard_compact_header_places_controls_with_their_owned_surfaces():
 
     story_heading = html.split('class="storyboard-story-panel-heading"', 1)[1].split('</div>\n\n                                <details', 1)[0]
     scenes_heading = html.split('class="storyboard-scenes-heading"', 1)[1].split('</div>\n                            <div id="storyboard-scene-progression"', 1)[0]
-    assert "<strong>Story Overview</strong>" in story_heading
+    assert "<strong>Project Overview</strong>" in story_heading
     assert 'id="storyboard-story-toggle"' in story_heading
     assert '>Hide Story</button>' in story_heading
     assert 'id="storyboard-story-toggle"' not in scenes_heading
@@ -950,7 +950,7 @@ def test_storyboard_story_context_has_persisted_local_collapsible_sections():
     assert "width: 100%;" in css
 
     payload_block = storyboard.split("function storyPayloadFromUi()", 1)[1].split("\n  function ", 1)[0]
-    assert 'storyboard-list-section-title">Stories</div>' in storyboard
+    assert 'storyboard-list-section-title">Projects</div>' in storyboard
 
 
 
@@ -1168,14 +1168,23 @@ def test_storyboard_scene_progress_cards_mark_saved_refinements():
     assert ".storyboard-scene-progress-step .storyboard-scene-progress-refined" in css
 
 
-def test_storyboard_scene_continuity_is_collapsible():
+def test_scene_entry_and_exit_states_are_retired_from_authoring_but_preserved_in_storage():
     storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+    store = (ROOT / "tool" / "server" / "storyboard_store.py").read_text(encoding="utf-8")
 
-    assert 'class="storyboard-scene-disclosure storyboard-continuity-details"' in storyboard
-    assert "<span>Continuity</span>" in storyboard
-    assert "Entry + Exit defined" in storyboard
-    assert 'data-scene-field="entryState"' in storyboard
-    assert 'data-scene-field="exitState"' in storyboard
+    # Neither the Scene form nor its edit payload creates hidden continuity obligations.
+    assert 'class="storyboard-scene-disclosure storyboard-continuity-details"' not in storyboard
+    assert '<textarea data-scene-field="entryState"' not in storyboard
+    assert '<textarea data-scene-field="exitState"' not in storyboard
+    payload = storyboard.split("function scenePayloadFromUi(sceneId) {", 1)[1].split(
+        "\\n  }", 1
+    )[0]
+    assert "field('entryState')" not in payload
+    assert "field('exitState')" not in payload
+
+    # Existing authored values remain readable and retained by normal edits.
+    assert 'value.get("entryState", current.get("entryState", ""))' in store
+    assert 'value.get("exitState", current.get("exitState", ""))' in store
 
 
 def test_storyboard_scene_uses_large_visible_generation_and_conditioning_inspector():
@@ -1574,19 +1583,22 @@ def test_story_guidelines_use_reviewed_chat_and_define_from_concept_changes():
     assert "operation: 'storyboard_story_guidelines'" in chat
     assert "window.openStoryboardGuidelineReview({" in chat
     assert '"storyboard_story_guidelines"' in app
-    assert '"storyboard_story_guidelines"' in llm
+    # Chat schemas are forwarded from the server contract for every structured operation.
+    assert 'contract.get("response_schema") is not None' in llm
 
 
-def test_define_from_concept_review_reopens_previous_values_and_refreshes_explicitly():
+def test_define_invariants_does_not_generate_new_guidelines_and_preserves_legacy_editor():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     story = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
-    assert 'id="storyboard-guidelines-review-refresh"' in html
-    assert "storyboardDefineGuidelineDrafts = Object.create(null)" in story
+    assert 'class="storyboard-legacy-guidelines"' in html
+    assert 'data-story-guideline="visualFocus"' in html
     assert "function openDefinedGuidelineDraft(storyId)" in story
-    assert "if (refresh !== true && openDefinedGuidelineDraft(storyId)) return;" in story
     assert "function rememberDefinedGuidelineDraft()" in story
-    assert "after.oninput = rememberDefinedGuidelineDraft" in story
-    assert "checked.onchange = function () {" in story
-    assert "defineInvariants(true);" in story
-    assert "source: 'define'" in story
     assert "operation: 'apply_reviewed_guidelines'" in story
+    start = story.index("  function defineInvariants(refresh) {")
+    end = story.index("\n  function ", start + 10)
+    current_define = story[start:end]
+    assert "operation: 'define_invariants'" in current_define
+    assert "openDefinedGuidelineDraft(storyId)" not in current_define
+    assert "payload.guidelineSuggestions" not in current_define
+    assert "reportConsoleInfo('Storyboard'" in current_define

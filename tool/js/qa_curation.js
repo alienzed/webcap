@@ -532,6 +532,9 @@
       var explanation = element('div', 'qa-curation-review-evidence');
       explanation.appendChild(element('strong', 'qa-curation-review-counter',
         (included ? 'INCLUDED' : 'EXCLUDED') + ' · ' + (cursor + 1) + ' / ' + items.length));
+      explanation.appendChild(element('div','qa-curation-review-rank',
+        'Recommendation rank #' + (session.order.indexOf(name) + 1) + ' of ' + session.order.length +
+        ' · by weighted concept coverage, source detail and minor complexity preference'));
       var source = element('div', 'qa-curation-review-source');
       var filename = element('span', 'qa-curation-review-filename', name);
       filename.title = name;
@@ -965,6 +968,9 @@
       foot.appendChild(input);
       foot.appendChild(element('span', 'qa-curation-filename', fileName));
       card.appendChild(foot);
+      card.appendChild(element('div','qa-curation-card-rank',
+        'Recommendation rank #' + (session.order.indexOf(fileName) + 1) +
+        ' of ' + session.order.length));
       var features = row.ids.map(function(id) {
         return session.eligible.find(function(concept) { return concept.id === id; });
       }).filter(Boolean);

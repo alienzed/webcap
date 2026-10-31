@@ -875,6 +875,16 @@ def job_status(job_id, consume=False, include_configuration=False):
             job = execution_consume_terminal_job(job_id)
     except FileNotFoundError:
         job = execution_transient_receipt(job_id, consume=consume)
+    metadata = job.get("metadata") if isinstance(job.get("metadata"), dict) else {}
+    details = job.get("details") if isinstance(job.get("details"), dict) else {}
+    if (metadata.get("client") == "test"
+            and not isinstance(metadata.get("wildcardValues"), list)
+            and not isinstance(details.get("wildcardValues"), list)
+            and not isinstance(job.get("payload"), dict)):
+        try:
+            job = execution_get_job(job_id, include_payload=True)
+        except FileNotFoundError:
+            pass
     return _job_view(job)
 
 

@@ -400,103 +400,90 @@
   function resolutionText(row) {
     return sourcePixels(row) === null ? 'Resolution unknown' : String(row.resolution);
   }
-  function score(row, concepts, byId, selected) {
-    var core = 0, supporting = 0;
-    row.ids.forEach(function (id) {
-      var c = byId.get(id);
+  function score(row, byId, selected, primaryIds) {
+    var primary = 0, supporting = 0;
+    row.ids.forEach(function(id) {
+      var concept = byId.get(id);
       var n = selected.get(id) || 0;
-      var gain = c.weight * (strength(n + 1, c.role) - strength(n, c.role));
-      if (c.role === 'core') core += gain;
+      var gain = concept.weight * (strength(n+1,concept.role) - strength(n,concept.role));
+      if (primaryIds.has(id)) primary += gain;
       else supporting += gain;
     });
-    var complexity = Number(row.analysis.sceneComplexity && row.analysis.sceneComplexity.score);
-    var quality = Number.isFinite(complexity) && row.analysis.sceneComplexity
-      ? 1 - Math.min(0.14, Math.max(0, complexity) * 0.14) : 1;
-    return {core: core * quality, supporting: supporting * quality};
+    var complexity = Number(row.analysis && row.analysis.sceneComplexity &&
+      row.analysis.sceneComplexity.score);
+    var quality = Number.isFinite(complexity) && row.analysis && row.analysis.sceneComplexity
+      ? 1 - Math.min(0.14, Math.max(0,complexity) * 0.14) : 1;
+    return {primary:primary*quality,supporting:supporting*quality};
   }
 
-  function rank(rows, concepts, pairGroups) {
-    var byId = new Map(concepts.map(function (feature) { return [feature.id, feature]; }));
-    var pairByFile = new Map(), pairCounts = new Map();
-    if (Array.isArray(pairGroups) && pairGroups.length >= 2) {
-      var left = new Set(concepts.filter(function(c) {
-        return c.source === 'tag' && c.group === pairGroups[0];
-      }).map(function(c) {return c.id;}));
-      var right = new Set(concepts.filter(function(c) {
-        return c.source === 'tag' && c.group === pairGroups[1];
-      }).map(function(c) {return c.id;}));
-      rows.forEach(function(row) {
-        var a = row.ids.filter(function(id) {return left.has(id);});
-        var b = row.ids.filter(function(id) {return right.has(id);});
-        var pairs = [];
-        a.forEach(function(x) {b.forEach(function(y) {pairs.push(x+'|'+y);});});
-        pairByFile.set(row.fileName,pairs);
-      });
-    }
-    function pairGain(row) {
-      var pairs = pairByFile.get(row.fileName) || [];
-      if (!pairs.length) return 0;
-      var sum = pairs.reduce(function(total,id) {
-        var count = pairCounts.get(id) || 0;
-        return total + strength(count+1,'supporting') - strength(count,'supporting');
-      },0);
-      // Mean instead of sum prevents multi-label items from gaming the bonus.
-      return 0.18 * sum / pairs.length;
-    }
-    var counts = new Map(concepts.map(function (feature) { return [feature.id, 0]; }));
+  function rank(rows, concepts, pairGroups, primaryGroups) {
+    var byId = new Map(concepts.map(function(c) {return [c.id,c];}));
+    var primary = primaryConcepts(concepts,primaryGroups);
+    var primaryIds = new Set(primary.map(function(c) {return c.id;}));
+    var pairs = pairEvidence(rows,primary,pairGroups);
+    var primaryTotal = primary.reduce(function(sum,c) {
+      return sum + c.weight * strength(c.count,c.role);
+    },0);
+    var totalPair = pairStrength(pairs.available);
+    var pairWeight = totalPair && primaryTotal ? primaryTotal * 0.15 / totalPair : 0;
+    var pairCounts = new Map();
+    var counts = new Map(concepts.map(function(c) {return [c.id,0];}));
     var remaining = rows.slice(), ordered = [], gains = [];
     while (remaining.length) {
-      var scores = remaining.map(function (row) { return score(row, concepts, byId, counts); });
-      var maxCore = scores.reduce(function (best, value) { return Math.max(best, value.core); }, 0);
-      // Select for evidence first; use source resolution only between images
-      // whose weighted marginal gains are within 2% of the best gain.
-      var candidateGains = scores.map(function(value, i) {
-        var pairBonus = pairGain(remaining[i]);
-        return value.core + (maxCore > 0
-          ? Math.min(value.supporting, maxCore * 0.2) +
-            Math.min(pairBonus, maxCore * 0.16)
-          : value.supporting + pairBonus);
+      var scores = remaining.map(function(row) {return score(row,byId,counts,primaryIds);});
+      var candidatePrimary = scores.map(function(value,i) {
+        var increment = (pairs.byFile.get(remaining[i].fileName) || []).reduce(function(sum,id) {
+          var n = pairCounts.get(id) || 0;
+          return sum + strength(n+1,'supporting') - strength(n,'supporting');
+        },0);
+        return value.primary + pairWeight * increment;
       });
-      var bestGain = Math.max.apply(null, candidateGains);
-      var best = candidateGains.indexOf(bestGain);
-      var bestPixels = sourcePixels(remaining[best]);
+      var bestGain = Math.max.apply(null,candidatePrimary);
+      var best = candidatePrimary.indexOf(bestGain);
+      // Supporting variation is a tie-breaker only; it cannot create primary
+      // coverage, enter the preset cutoffs, or rescue a background-only item.
       for (var i = 0; i < remaining.length; i += 1) {
-        if (i === best || candidateGains[i] < bestGain * 0.98) continue;
-        var pixels = sourcePixels(remaining[i]);
-        // Unknown dimensions cannot resolve a tie in either direction.
-        if (pixels !== null && bestPixels !== null && pixels > bestPixels) {
+        if (i === best || candidatePrimary[i] < bestGain * 0.98) continue;
+        if (scores[i].supporting > scores[best].supporting + 1e-9) {
           best = i;
-          bestPixels = pixels;
+        } else if (Math.abs(scores[i].supporting - scores[best].supporting) <= 1e-9) {
+          var pixels = sourcePixels(remaining[i]);
+          var bestPixels = sourcePixels(remaining[best]);
+          if (pixels !== null && bestPixels !== null && pixels > bestPixels) best = i;
         }
       }
-      var chosen = remaining.splice(best, 1)[0];
-      bestGain = candidateGains[best];
+      var chosen = remaining.splice(best,1)[0];
       ordered.push(chosen.fileName);
-      gains.push(bestGain);
-      chosen.ids.forEach(function (id) { counts.set(id, counts.get(id) + 1); });
-      (pairByFile.get(chosen.fileName) || []).forEach(function(id) {
-        pairCounts.set(id, (pairCounts.get(id) || 0) + 1);
+      gains.push(candidatePrimary[best]);
+      chosen.ids.forEach(function(id) {counts.set(id,(counts.get(id) || 0) + 1);});
+      (pairs.byFile.get(chosen.fileName) || []).forEach(function(id) {
+        pairCounts.set(id,(pairCounts.get(id) || 0) + 1);
       });
     }
     var selected = new Set(), ratios = [];
-    ordered.forEach(function (file) {
+    ordered.forEach(function(file) {
       selected.add(file);
-      ratios.push(coverage(rows, concepts, selected).ratio);
+      ratios.push(coverage(rows,concepts,selected,primaryGroups,pairGroups).ratio);
     });
-    var first = gains.slice(0, Math.min(6, gains.length));
-    var baseline = first.reduce(function (sum, value) { return sum + value; }, 0) / first.length;
-    function bend(target, fraction) {
-      for (var i = 0; i < gains.length; i += 1) {
-        if (i < Math.min(7, gains.length - 1) || ratios[i] < target) continue;
-        var tail = gains.slice(Math.max(0, i - 4), i + 1);
-        var current = tail.reduce(function (sum, n) { return sum + n; }, 0) / tail.length;
-        if (current <= baseline * fraction) return i + 1;
-      }
-      return gains.length;
+    // Once no more primary information is gained, stop. Supporting-only
+    // candidates can appear in the gallery but never extend any preset.
+    var useful = gains.filter(function(gain) {return gain > 1e-10;}).length;
+    if (!useful || !primary.length) {
+      return {order:ordered,gains:gains,ratios:ratios,sizes:{lean:0,balanced:0,broad:0}};
     }
-    return { order: ordered, gains: gains, ratios: ratios,
-      sizes: {lean: bend(0.83, 0.14), balanced: bend(0.91, 0.085),
-        broad: bend(0.97, 0.045)} };
+    var first = gains.slice(0,Math.min(6,useful));
+    var baseline = first.reduce(function(sum,value) {return sum+value;},0) / first.length;
+    function bend(target,fraction) {
+      for (var i = 0; i < useful; i += 1) {
+        if (i < Math.min(7,useful-1) || ratios[i] < target) continue;
+        var tail = gains.slice(Math.max(0,i-4),i+1);
+        var current = tail.reduce(function(sum,n) {return sum+n;},0) / tail.length;
+        if (current <= baseline*fraction) return i+1;
+      }
+      return useful;
+    }
+    return {order:ordered,gains:gains,ratios:ratios,
+      sizes:{lean:bend(0.83,0.14),balanced:bend(0.91,0.085),broad:bend(0.97,0.045)}};
   }
 
   function clearNode(el) { el.replaceChildren(); }

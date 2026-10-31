@@ -11,9 +11,11 @@ from .execution_queue import (
     claim_next as execution_claim_next,
     enqueue as execution_enqueue,
     enqueue_many as execution_enqueue_many,
+    replace_pending_with_many as execution_replace_pending_with_many,
     discard_terminal_and_recent as execution_discard_terminal_and_recent,
     finish_job_transient as execution_finish_job_transient,
     get_job as execution_get_job,
+    jobs_by_id as execution_jobs_by_id,
     lane_snapshot as execution_lane_snapshot,
     mark_running as execution_mark_running,
     pause_lane as execution_pause_lane,
@@ -142,16 +144,15 @@ def _test_job_wildcard_values(job, metadata, details):
     values = details.get("wildcardValues")
     if isinstance(values, list):
         return copy.deepcopy(values)
+    values = metadata.get("wildcardValues")
+    if isinstance(values, list):
+        return copy.deepcopy(values)
     if str(metadata.get("client") or "") != "test":
         return []
     job_id = str(job.get("id") or "").strip()
     if not job_id:
         return []
-    try:
-        stored = execution_get_job(job_id, include_payload=True)
-    except FileNotFoundError:
-        return []
-    payload = stored.get("payload") if isinstance(stored.get("payload"), dict) else {}
+    payload = job.get("payload") if isinstance(job.get("payload"), dict) else {}
     request = payload.get("request") if isinstance(payload.get("request"), dict) else {}
     from .epoch_test_bench import _resolved_wildcard_values
     return _resolved_wildcard_values(
@@ -494,6 +495,33 @@ def _advance_queue():
                 _release_gpu()
             return None
 
+        metadata = next_runnable.get("metadata") or {}
+        if metadata.get("client") == "test" and metadata.get("candidateKind") == "session":
+            # Expand only the next runnable Test Session. A failed expansion
+            # must not retry indefinitely and starve every job behind it.
+            from .epoch_test_bench import expand_queued_session
+            promise_id = str(next_runnable.get("id") or "")
+            try:
+                expand_queued_session(promise_id)
+            except Exception as exc:
+                try:
+                    # A concurrent cancellation, or an atomic replacement whose
+                    # Session manifest write failed, may remove the promise.
+                    execution_get_job(promise_id)
+                except FileNotFoundError:
+                    _logger.exception(
+                        "Test Session promise %s disappeared during expansion; "
+                        "the queue will reconcile its remaining work.", promise_id
+                    )
+                    return None
+                _logger.exception("Test Session %s failed to expand.", promise_id)
+                execution_pause_lane(
+                    EXECUTION_LANE,
+                    "Inference paused after an execution error: "
+                    "Test Session expansion failed: " + str(exc),
+                )
+            return None
+
         if not owner:
             if not _reserve_gpu():
                 from .training_runner import external_gpu_work_block_reason
@@ -772,6 +800,11 @@ def enqueue_test(request, context, label="", deferred=False):
     # Failed sweep jobs still need their weight when no result file was produced.
     if request.get("sweepWeights") and candidate_kind == "lora":
         metadata["candidateStrength"] = float(context["candidateStrength"])
+    from .epoch_test_bench import _resolved_wildcard_values
+    metadata["wildcardValues"] = _resolved_wildcard_values(
+        request.get("sourcePrompt"),
+        context.get("variationPrompt") or request.get("resolvedPrompt") or request.get("prompt"),
+    )
     job = execution_enqueue(
         EXECUTION_LANE,
         {
@@ -787,7 +820,35 @@ def enqueue_test(request, context, label="", deferred=False):
 
 
 
-def enqueue_test_many(request, contexts, labels=None, deferred=False):
+def enqueue_test_session(request, folder, session_id, label=""):
+    """A queued Test Session is one promise, not one job per rendition."""
+    _ensure_execution_reconciled()
+    if not folder or not session_id:
+        raise ValueError("Test Session requires its Set and Session identity.")
+    from .epoch_test_bench import _resolved_wildcard_values
+    metadata = {
+        "client": "test",
+        "candidateKind": "session",
+        "label": str(label or "Test Session"),
+        "modelId": str(request.get("modelId") or ""),
+        "mediaKind": str(request.get("mediaKind") or ""),
+        "folder": str(folder),
+        "sessionId": str(session_id),
+        "wildcardValues": _resolved_wildcard_values(
+            request.get("sourcePrompt"),
+            request.get("resolvedPrompt") or request.get("prompt"),
+        ),
+    }
+    job = execution_enqueue(
+        EXECUTION_LANE,
+        {"request": copy.deepcopy(request)},
+        metadata=metadata,
+        initial_status="backlog",
+    )
+    return _job_view(job)
+
+
+def enqueue_test_many(request, contexts, labels=None, deferred=False, replace_pending_job_id=""):
     """Create one durable queue batch for the Test Session's ordered candidates."""
     _ensure_execution_reconciled()
     contexts = list(contexts)
@@ -814,16 +875,24 @@ def enqueue_test_many(request, contexts, labels=None, deferred=False):
         }
         if request.get("sweepWeights") and candidate_kind == "lora":
             metadata["candidateStrength"] = float(context["candidateStrength"])
+        from .epoch_test_bench import _resolved_wildcard_values
+        metadata["wildcardValues"] = _resolved_wildcard_values(
+            request.get("sourcePrompt"),
+            context.get("variationPrompt") or request.get("resolvedPrompt") or request.get("prompt"),
+        )
         # enqueue_many freezes every payload once under the durable queue lock.
         entries.append({
             "payload": {"request": request, "clientContext": context},
             "metadata": metadata,
         })
-    jobs = execution_enqueue_many(
-        EXECUTION_LANE, entries, initial_status="backlog" if deferred else "queued"
-    )
-    if not deferred:
-        start_requested_inference()
+    if replace_pending_job_id:
+        jobs = execution_replace_pending_with_many(replace_pending_job_id, entries)
+    else:
+        jobs = execution_enqueue_many(
+            EXECUTION_LANE, entries, initial_status="backlog" if deferred else "queued"
+        )
+        if not deferred:
+            start_requested_inference()
     return [{"jobId": job["id"]} for job in jobs]
 
 
@@ -835,13 +904,20 @@ def snapshot(include_terminal=False):
         if _provider_runtime_holds:
             wait_reason = "Waiting for confirmed active ComfyUI provider work to finish."
     jobs = current.get("jobs", [])
+    legacy_ids = [
+        str(job.get("id") or "") for job in jobs
+        if (job.get("metadata") or {}).get("client") == "test"
+        and not isinstance((job.get("details") or {}).get("wildcardValues"), list)
+        and not isinstance((job.get("metadata") or {}).get("wildcardValues"), list)
+    ]
+    legacy = execution_jobs_by_id(legacy_ids, include_payload=True) if legacy_ids else {}
     return {
         "paused": bool(current.get("paused")),
         "pauseReason": str(current.get("pauseReason") or ""),
         "activeJobId": str(current.get("activeJobId") or ""),
         "backlogCount": sum(1 for job in jobs if str(job.get("status") or "") == "backlog"),
         "waitReason": wait_reason,
-        "jobs": [_job_view(job) for job in jobs],
+        "jobs": [_job_view(legacy.get(str(job.get("id") or ""), job)) for job in jobs],
     }
 
 
@@ -858,6 +934,16 @@ def job_status(job_id, consume=False, include_configuration=False):
             job = execution_consume_terminal_job(job_id)
     except FileNotFoundError:
         job = execution_transient_receipt(job_id, consume=consume)
+    metadata = job.get("metadata") if isinstance(job.get("metadata"), dict) else {}
+    details = job.get("details") if isinstance(job.get("details"), dict) else {}
+    if (metadata.get("client") == "test"
+            and not isinstance(metadata.get("wildcardValues"), list)
+            and not isinstance(details.get("wildcardValues"), list)
+            and not isinstance(job.get("payload"), dict)):
+        try:
+            job = execution_get_job(job_id, include_payload=True)
+        except FileNotFoundError:
+            pass
     return _job_view(job)
 
 

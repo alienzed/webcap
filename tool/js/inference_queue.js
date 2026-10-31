@@ -414,14 +414,18 @@
     syncShellInferenceState(jobs);
 
     var drawer = el('inference-queue-drawer');
+    if (drawer) {
+      drawer.classList.toggle('hidden', !state.open);
+      drawer.setAttribute('aria-hidden', state.open ? 'false' : 'true');
+    }
+    // Keep background badges and Activity live without reconciling hidden rows.
+    if (!state.open) return;
+
     var host = el('inference-queue-list');
     var summary = el('inference-queue-summary');
     var pauseButton = el('inference-queue-pause');
     var clearButton = el('inference-queue-clear');
     if (!drawer || !host || !summary || !pauseButton || !clearButton) return;
-
-    drawer.classList.toggle('hidden', !state.open);
-    drawer.setAttribute('aria-hidden', state.open ? 'false' : 'true');
 
     var running = jobs.filter(function (job) {
       return ['starting', 'running', 'stopping'].indexOf(String(job.status || '')) !== -1;

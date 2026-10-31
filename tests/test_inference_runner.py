@@ -34,6 +34,51 @@ def inference_root(tmp_path, monkeypatch):
     return tmp_path
 
 
+def test_deferred_test_expansion_failure_pauses_queue_without_losing_promise(inference_root, monkeypatch):
+    queued = execution_queue.enqueue(
+        "inference", {"request": {"modelId": "krea2_raw"}},
+        metadata={"client": "test", "candidateKind": "session", "sessionId": "session-a"},
+    )
+    monkeypatch.setattr(
+        epoch_test_bench, "expand_queued_session",
+        lambda job_id: (_ for _ in ()).throw(RuntimeError("cannot materialize Test Session")),
+    )
+    monkeypatch.setattr(
+        inference_runner, "_reserve_gpu",
+        lambda: (_ for _ in ()).throw(AssertionError("Expansion must not reserve GPU")),
+    )
+
+    assert inference_runner._advance_queue() is None
+    snapshot = execution_queue.lane_snapshot("inference")
+    assert snapshot["paused"] is True
+    assert "cannot materialize Test Session" in snapshot["pauseReason"]
+    assert [job["id"] for job in snapshot["jobs"]] == [queued["id"]]
+    assert snapshot["jobs"][0]["status"] == "queued"
+
+    assert inference_runner._advance_queue() is None
+    assert execution_queue.get_job(queued["id"])["status"] == "queued"
+
+
+def test_cancel_racing_deferred_expansion_does_not_pause_unrelated_inference(inference_root, monkeypatch):
+    parent = execution_queue.enqueue(
+        "inference", {"request": {"modelId": "krea2_raw"}},
+        metadata={"client": "test", "candidateKind": "session"},
+    )
+    other = execution_queue.enqueue(
+        "inference", {"request": {"modelId": "krea2_raw"}},
+        metadata={"client": "generate"},
+    )
+    def cancel_during_expansion(_job_id):
+        execution_queue.cancel_pending_transient(parent["id"])
+        raise FileNotFoundError("Test Session was cancelled")
+    monkeypatch.setattr(epoch_test_bench, "expand_queued_session", cancel_during_expansion)
+
+    assert inference_runner._advance_queue() is None
+    snapshot = execution_queue.lane_snapshot("inference")
+    assert snapshot["paused"] is False
+    assert [job["id"] for job in snapshot["jobs"]] == [other["id"]]
+
+
 def test_inference_enqueue_starts_worker_on_demand(inference_root, monkeypatch):
     started = []
     monkeypatch.setattr(
@@ -922,9 +967,57 @@ def test_inference_snapshot_projects_test_rendition_context(inference_root):
     assert job["candidateKind"] == "base"
     assert job["wildcardValues"] == ["red dress", "rooftop", "side"]
     stored = execution_queue.get_job(queued["jobId"], include_payload=True)
-    assert "wildcardValues" not in stored["metadata"]
+    assert stored["metadata"]["wildcardValues"] == ["red dress", "rooftop", "side"]
     assert "wildcardValues" not in stored["payload"]["clientContext"]
     assert job["label"] == "Comparison · Base"
+
+
+def test_large_test_batch_snapshot_reads_no_individual_job_payloads(inference_root, monkeypatch):
+    request = {
+        "modelId": "krea2_raw", "mediaKind": "image",
+        "sourcePrompt": "wearing {red|blue} clothes",
+        "prompt": "wearing blue clothes", "workflow": {"large": "x" * 3000},
+    }
+    contexts = [
+        {"folder": "sets/subject", "sessionId": "bulk-session",
+         "candidateKind": "lora", "candidateFile": "epoch20.safetensors"}
+        for _ in range(100)
+    ]
+    inference_runner.enqueue_test_many(request, contexts, labels=["Test"] * 100, deferred=True)
+    assert len(inference_runner.snapshot()["jobs"]) == 100
+    monkeypatch.setattr(
+        inference_runner, "execution_jobs_by_id",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("Cached batch must not read frozen job payloads")
+        ),
+    )
+    for _ in range(3):
+        jobs = inference_runner.snapshot()["jobs"]
+        assert len(jobs) == 100
+        assert all(job["wildcardValues"] == ["blue"] for job in jobs)
+
+
+def test_legacy_test_batch_snapshot_uses_one_payload_read(inference_root, monkeypatch):
+    jobs = [
+        execution_queue.enqueue("inference", {
+            "request": {
+                "sourcePrompt": "a {red|blue} shirt",
+                "prompt": "a red shirt",
+            },
+            "clientContext": {},
+        }, metadata={"client": "test"})
+        for _ in range(4)
+    ]
+    original = inference_runner.execution_jobs_by_id
+    calls = []
+    def tracked(job_ids, include_payload=False):
+        calls.append((set(job_ids), include_payload))
+        return original(job_ids, include_payload=include_payload)
+    monkeypatch.setattr(inference_runner, "execution_jobs_by_id", tracked)
+    snapshot = inference_runner.snapshot()
+    assert [job["wildcardValues"] for job in snapshot["jobs"]] == [["red"]] * 4
+    assert len(calls) == 1
+    assert calls[0] == ({job["id"] for job in jobs}, True)
 
 
 def test_inference_snapshot_prefers_resolved_wildcard_values_from_job_details(inference_root):

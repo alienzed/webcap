@@ -2427,6 +2427,14 @@ def _job_candidate_identity(job):
 
 def _session_has_nonterminal_jobs(session_directory):
     status = _read_status(session_directory) or {}
+    if status.get("deferredJobId") and not status.get("inferenceJobs"):
+        try:
+            return str(execution_get_job(status["deferredJobId"]).get("status") or "") in {
+                "queued", "backlog", "starting", "running", "stopping"
+            }
+        except FileNotFoundError:
+            # A swap to child jobs may be in progress; the Session still owns work.
+            return True
     if not status.get("inferenceJobs"):
         return False
     return any(
@@ -2436,6 +2444,11 @@ def _session_has_nonterminal_jobs(session_directory):
 
 
 def _session_candidate_has_nonterminal_job(status, candidate_name):
+    if status.get("deferredJobId") and not status.get("inferenceJobs"):
+        return any(
+            str(candidate.get("fileName") or "") == candidate_name
+            for candidate in (status.get("candidates") or [])
+        )
     for job in _session_job_records(status):
         job_status = str(job.get("status") or "")
         if job_status not in {"backlog", "queued", "starting", "running", "stopping"}:
@@ -2451,6 +2464,48 @@ def _sync_inference_session(session_directory):
         status = _read_status(session_directory) or {}
         if not isinstance(status.get("inferenceJobs"), list):
             return _session_status(session_directory)
+
+        if status.get("deferredSession") and not status.get("inferenceJobs"):
+            promise_id = str(status.get("deferredJobId") or "")
+            try:
+                promise = execution_get_job(promise_id) if promise_id else None
+            except FileNotFoundError:
+                promise = None
+            if promise is not None and (promise.get("metadata") or {}).get("candidateKind") == "session":
+                visible = dict(status)
+                visible["status"] = "queued"
+                visible["session"] = Path(session_directory).name
+                visible["queued"] = int(status.get("total") or 0)
+                visible["running"] = 0
+                visible["queuePosition"] = int(promise.get("queuePosition") or 0)
+                visible["resultFolder"] = visible.get("resultFolder") or _session_result_folder(session_directory)
+                _project_wildcard_fields(visible)
+                return visible
+            # The atomic queue swap may have committed before the Session
+            # status write. Recover its rendition IDs from queue metadata.
+            from .inference_runner import EXECUTION_LANE
+            snapshot = execution_lane_snapshot(EXECUTION_LANE, include_terminal=True)
+            job_ids = [
+                str(job.get("id") or "")
+                for job in snapshot.get("jobs", [])
+                if (job.get("metadata") or {}).get("client") == "test"
+                and (job.get("metadata") or {}).get("candidateKind") in {"lora", "base"}
+                and (job.get("metadata") or {}).get("sessionId") == Path(session_directory).name
+                and (job.get("metadata") or {}).get("folder") == status.get("ownerFolder")
+            ]
+            if job_ids:
+                status["inferenceJobs"] = job_ids
+                status["deferredJobId"] = ""
+                _atomic_write_json(_status_path(session_directory), status)
+            elif promise_id:
+                status["status"] = "stopped"
+                status["deferredJobId"] = ""
+                status["error"] = "Queued Test Session was cancelled before execution."
+                _atomic_write_json(_status_path(session_directory), status)
+                return _session_status_from_payload(session_directory, status)
+            else:
+                # An enqueue is being committed; preserve its queued status.
+                return _session_status_from_payload(session_directory, status)
 
         missing_job_ids = []
         jobs = _session_job_records(status, missing_job_ids=missing_job_ids)
@@ -2857,6 +2912,63 @@ def execute_inference(job_id, request, context):
         raise
 
 
+def _test_session_renditions(folder, session_name, request, candidates):
+    contexts = []
+    labels = []
+    for index, candidate in enumerate(candidates, start=1):
+        label_root = str(request.get("name") or "").strip() or session_name
+        labels.append(label_root + " · " + candidate["label"])
+        contexts.append({
+            "folder": folder,
+            "sessionId": session_name,
+            "candidateKind": candidate["kind"],
+            "candidateFile": candidate["file"],
+            "candidateLabel": candidate["label"],
+            "candidateIndex": index,
+            "variationIndex": candidate.get("variationIndex"),
+            "variationLabel": candidate.get("variationLabel"),
+            "variationPrompt": candidate.get("variationPrompt"),
+            "candidateProvenance": dict(candidate.get("provenance") or {}),
+            "candidateStrength": candidate.get("strength"),
+            "campaignStaging": str(request.get("campaignStaging") or ""),
+        })
+    return contexts, labels
+
+
+def expand_queued_session(job_id):
+    """Materialize frozen renditions only when the session is at dispatch."""
+    from .inference_runner import enqueue_test_many
+
+    stored = execution_get_job(job_id, include_payload=True)
+    metadata = stored.get("metadata") or {}
+    if metadata.get("client") != "test" or metadata.get("candidateKind") != "session":
+        raise ValueError("Only a queued Test Session can expand.")
+    folder = str(metadata.get("folder") or "")
+    session_name = str(metadata.get("sessionId") or "")
+    folder_path = app_config.safe_join_fs_root(folder)
+    session_directory = _session_directory(folder_path, session_name)
+    with _status_lock:
+        status = _read_status(session_directory) or {}
+        if str(status.get("deferredJobId") or "") != job_id:
+            raise RuntimeError("Test Session is no longer waiting for this queue promise.")
+        frozen = stored.get("payload") or {}
+        request = copy.deepcopy(frozen.get("request") or {})
+        candidates = request.pop("sessionCandidates", None)
+        if not isinstance(candidates, list) or not candidates:
+            raise RuntimeError("Queued Test Session has no frozen renditions.")
+        contexts, labels = _test_session_renditions(folder, session_name, request, candidates)
+        # One durable queue transaction replaces the promise with its child jobs.
+        # If interrupted before the status write, polling recovers their IDs.
+        jobs = enqueue_test_many(
+            request, contexts, labels=labels, replace_pending_job_id=job_id,
+        )
+        status["inferenceJobs"] = [job["jobId"] for job in jobs]
+        status["deferredJobId"] = ""
+        status["migrationComplete"] = True
+        _atomic_write_json(_status_path(session_directory), status)
+    return status["inferenceJobs"]
+
+
 def _enqueue_frozen_test_request(folder_path, request, loras, include_base, legacy_job_id="", auto_vl_model=""):
     from .inference_runner import enqueue_test_many
 
@@ -2944,6 +3056,8 @@ def _enqueue_frozen_test_request(folder_path, request, loras, include_base, lega
         "results": [],
         "resultFolder": _session_result_folder(session_directory),
         "inferenceJobs": [],
+        "deferredSession": not bool(legacy_job_id),
+        "deferredJobId": "",
         "legacyJobId": str(legacy_job_id or ""),
         "migrationComplete": False,
         "autoVlModel": str(auto_vl_model or ""),
@@ -2956,29 +3070,40 @@ def _enqueue_frozen_test_request(folder_path, request, loras, include_base, lega
     with _status_lock:
         _atomic_write_json(_status_path(session_directory), payload)
 
+    if not legacy_job_id:
+        from .inference_runner import enqueue_test_session, start_requested_inference
+        deferred_id = ""
+        try:
+            # Preserve immutable prompt, settings and candidate choices once.
+            frozen_request = dict(request)
+            frozen_request["sessionCandidates"] = copy.deepcopy(candidates)
+            placeholder = enqueue_test_session(
+                frozen_request, folder, session_directory.name,
+                label=str(request.get("name") or "").strip() or "Test Session",
+            )
+            deferred_id = placeholder["jobId"]
+            with _status_lock:
+                current_status = _read_status(session_directory) or {}
+                current_status["deferredJobId"] = deferred_id
+                current_status["migrationComplete"] = True
+                _atomic_write_json(_status_path(session_directory), current_status)
+            execution_promote_backlog_many("inference", [deferred_id])
+            start_requested_inference()
+        except Exception:
+            if deferred_id:
+                try:
+                    from .inference_runner import action as inference_action
+                    inference_action("cancel", job_id=deferred_id)
+                except Exception:
+                    _logger.exception("Could not cancel failed Test Session promise %s.", deferred_id)
+                    raise
+            shutil.rmtree(session_directory)
+            raise
+        return _sync_inference_session(session_directory)
+
     queued_ids = []
     try:
-        contexts = []
-        labels = []
-        for index, candidate in enumerate(candidates, start=1):
-            label_root = str(request.get("name") or "").strip() or session_directory.name
-            label = label_root + " · " + candidate["label"]
-            context = {
-                "folder": folder,
-                "sessionId": session_directory.name,
-                "candidateKind": candidate["kind"],
-                "candidateFile": candidate["file"],
-                "candidateLabel": candidate["label"],
-                "candidateIndex": index,
-                "variationIndex": candidate.get("variationIndex"),
-                "variationLabel": candidate.get("variationLabel"),
-                "variationPrompt": candidate.get("variationPrompt"),
-                "candidateProvenance": dict(candidate.get("provenance") or {}),
-                "candidateStrength": candidate.get("strength"),
-                "campaignStaging": str(request.get("campaignStaging") or ""),
-            }
-            contexts.append(context)
-            labels.append(label)
+        contexts, labels = _test_session_renditions(folder, session_directory.name, request, candidates)
         queued_ids = [
             job["jobId"] for job in enqueue_test_many(request, contexts, labels=labels, deferred=True)
         ]
@@ -3202,7 +3327,7 @@ def enqueue(folder_path, prompt, settings=None, seed=None, name=None, selected_f
             "status": str(latest.get("status") or ""),
             "testTotal": int(latest.get("total") or 0),
             "createdAt": float(latest.get("startedAt") or 0) / 1000,
-            "queuePosition": min(
+            "queuePosition": int(latest.get("queuePosition") or 0) or min(
                 [
                     int(job.get("queuePosition") or 0)
                     for job in _session_job_records(_read_status(_session_directory(folder_path, latest["session"])) or {})
@@ -3295,6 +3420,8 @@ def queued_jobs(folder_path, model_id=None):
             for job in child_jobs
             if str(job.get("status") or "") == "queued" and int(job.get("queuePosition") or 0) > 0
         ]
+        if visible.get("queuePosition"):
+            positions.append(int(visible["queuePosition"]))
         jobs.append({
             "id": session_directory.name,
             "folder": _relative_set_folder(folder_path),
@@ -3315,6 +3442,20 @@ def cancel_queued(folder_path, job_id):
     if visible.get("status") != "queued":
         raise RuntimeError("Only a fully queued Test session can be cancelled here.")
     status_payload = _read_status(session_directory) or {}
+    promise_id = str(status_payload.get("deferredJobId") or "")
+    if promise_id and not status_payload.get("inferenceJobs"):
+        from .inference_runner import action as inference_action
+        inference_action("cancel", job_id=promise_id)
+        _cancel_test_auto_vl_jobs(session_directory)
+        shutil.rmtree(session_directory)
+        return {
+            "operation": "test_queue_cancel",
+            "removed": str(job_id),
+            "jobs": queued_jobs(
+                folder_path,
+                model_id=str(visible.get("modelId") or visible.get("model") or ""),
+            )["jobs"],
+        }
     for child in _session_job_records(status_payload):
         if str(child.get("status") or "") in {"backlog", "queued"}:
             _cancel_shared_pending_job(

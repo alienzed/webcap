@@ -47,8 +47,15 @@ def test_deferred_test_expansion_failure_pauses_queue_without_losing_promise(inf
         inference_runner, "_reserve_gpu",
         lambda: (_ for _ in ()).throw(AssertionError("Expansion must not reserve GPU")),
     )
+    # A preceding inference job may have left sticky GPU ownership with this lane.
+    execution_queue.reserve_resource("inference")
+    monkeypatch.setattr(
+        inference_runner, "_release_gpu",
+        lambda: execution_queue.release_resource("inference"),
+    )
 
     assert inference_runner._advance_queue() is None
+    assert execution_queue.resource_owner() == ""
     snapshot = execution_queue.lane_snapshot("inference")
     assert snapshot["paused"] is True
     assert "cannot materialize Test Session" in snapshot["pauseReason"]

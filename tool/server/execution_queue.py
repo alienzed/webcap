@@ -960,8 +960,9 @@ def finish_job_transient(job_id, status="completed", result=None, error=""):
         _write_state(state)
         # Completed inference is visible in Recent without recreating durable
         # queue history or bloating the file during large Test batches.
-        _record_recent({"recent": _transient_recent}, job,
-                       keep=_TRANSIENT_RECENT_LIMIT, summary_only=True)
+        if lane_name == "inference":
+            _record_recent({"recent": _transient_recent}, job,
+                           keep=_TRANSIENT_RECENT_LIMIT, summary_only=True)
         _remember_transient_receipt(receipt)
         return receipt
 

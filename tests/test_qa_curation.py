@@ -103,3 +103,22 @@ def test_qa_curate_route_rejects_unknown_and_duplicate_media(tmp_path, monkeypat
     result = client.post("/fs/qa/curate", json=dict(payload, files=["one.jpg", "one.jpg"]))
     assert result.status_code == 400
     assert "duplicate" in result.get_json()["error"]
+
+
+@pytest.mark.parametrize("version", [1, 2])
+def test_curate_draft_route_roundtrips_compatible_versions(tmp_path, monkeypatch, version):
+    from pathlib import Path
+    from tool.server import app as app_module
+    folder = tmp_path / "set"
+    folder.mkdir()
+    monkeypatch.setattr(app_module.app_config, "FS_ROOT", Path(tmp_path))
+    client = app_module.app.test_client()
+    draft = {"version": version, "choices": ["photo.jpg"]}
+    if version == 2:
+        draft["snapshot"] = {"concepts": [], "rows": [], "evidence": {}}
+    saved = client.post("/fs/qa/curate/draft", json={"folder": "set", "draft": draft})
+    assert saved.status_code == 200
+    restored = client.get("/fs/qa/curate/draft?folder=set")
+    assert restored.status_code == 200
+    assert restored.get_json()["draft"] == draft
+    assert (folder / ".webcap_curate.json").exists()

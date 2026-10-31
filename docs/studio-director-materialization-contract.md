@@ -66,6 +66,16 @@ The cooperation is **Director authors; WebCap targets, validates, materializes; 
 
 **Pleasant to use:** one contextually relevant next step; human labels rather than JSON; generous usable editing space; show *changed fields*, not everything the Project stores; no repeated selection of the same destination; no nagging for deliberately optional fields; return to the same conversation after Apply. Creative energy must survive materialization.
 
+
+### User-facing readiness and field suggestions
+
+The LLM may maintain a richer creative assessment (the bounded `checks` list) to reason about development, renderability, continuity and missing decisions. That assessment is supporting intelligence, not a user task list.
+
+The primary UX presents **no more than two actionable field-materialization suggestions**. Suggestions represent one field, a coherent group of fields, or creation of a Project/Scene object. Their labels name the creative destination (for example, “Write Project Overview” or “Write Scene Intent + H3 Prompt”), not an internal operation such as “Review next step.” Reuse the existing readiness `capture` and `writeHint/writeFields` contract and reviewed workflows; do not introduce a second recommendation engine or a generic action executor for this presentation change.
+
+Keep the detailed creative assessment available on demand in a secondary disclosure. It may contain multiple dimensions and explanations, but it must not compete visually with the one or two actions. Suggestions refresh with the latest accepted readiness response, disappear when stale, and never save automatically. When a direct capture and a grouped Write target overlap, avoid offering duplicate actions.
+
+
 ## 2. Explicit scope
 
 ### Creative model — five independently authored fields

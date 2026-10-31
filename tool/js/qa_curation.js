@@ -8,7 +8,7 @@
     filter: 'selected', limit: 72, summary: '', jobId: '', error: '',
     analysis: null, balanceGroups: new Set(), overriddenGroups: new Set(), conceptRoles: new Map(), availableGroups: [],
     status: '', missingSight: 0, ignored: 0, draftStale: false, initialChoices: [],
-    sourceEvidence: {}, sourceFiles: [], drift: null, reviewReturn: null
+    sourceEvidence: {}, sourceFiles: [], drift: null, reviewReturn: null, galleryGroup: ''
   };
 
   var draftWrite = Promise.resolve();
@@ -66,7 +66,7 @@
       focus:session.focus, analysis:session.analysis, summary:session.summary,
       choices:Array.from(session.choices), initialChoices:session.initialChoices, preset:session.preset,
       balanceGroups:Array.from(session.balanceGroups), overriddenGroups:Array.from(session.overriddenGroups),
-      conceptRoles:Array.from(session.conceptRoles),
+      conceptRoles:Array.from(session.conceptRoles), reviewReturn:session.reviewReturn,
       snapshot:{
         concepts:session.concepts,
         rows:session.rows.map(function(row) {
@@ -122,6 +122,7 @@
     session.initialChoices = Array.isArray(draft.initialChoices)
       ? draft.initialChoices.slice() : draft.choices.slice();
     session.phase = 'ready';
+    session.reviewReturn = draft.reviewReturn || null;
     session.filter = 'selected';
     session.status = 'Saved Curate draft restored.';
     session.draftStale = false;
@@ -420,8 +421,8 @@
   }
 
 
-  function openCurateReview(host, startGroup) {
-    var group = startGroup || 'selected', cursor = 0, autoNext = false;
+  function openCurateReview(host, startGroup, startCursor) {
+    var group = startGroup || 'selected', cursor = Number(startCursor) || 0, autoNext = false;
     var originalFocus = document.activeElement;
     var overlay = element('div', 'qa-curation-review');
     overlay.setAttribute('role', 'dialog');
@@ -434,6 +435,8 @@
     var excludedOrder = session.order.filter(function(file) { return !session.choices.has(file); });
     function list() { return group === 'selected' ? selectedOrder : excludedOrder; }
     function close() {
+      session.reviewReturn = {group:group, cursor:cursor};
+      saveDraft();
       document.removeEventListener('keydown', keydown);
       overlay.remove();
       renderQaCuration(host, session.signature);
@@ -502,13 +505,33 @@
         selectByFileName(name);
       }, 'qa-curation-review-open-item'));
       explanation.appendChild(source);
+      var live = window.qaCurrentCurationEvidence([name])[0];
+      explanation.appendChild(element('div','qa-curation-review-resolution',resolutionText(live || row)));
+      if (live) {
+        var tags = (live.groupedTags || []).map(function(t) {
+          return (t.group || '') + ': ' + (t.term || '');
+        });
+        explanation.appendChild(element('div','qa-curation-review-tags',
+          'Current tags: ' + (tags.join(' · ') || 'None')));
+        if (live.caption) {
+          var captionDetails = element('details','qa-curation-review-caption');
+          captionDetails.appendChild(element('summary','','Current caption'));
+          captionDetails.appendChild(element('p','',live.caption));
+          explanation.appendChild(captionDetails);
+        }
+      } else {
+        explanation.appendChild(element('p','qa-curation-drift','Source media missing; saved analysis is retained.'));
+      }
       var withChange = new Set(session.choices);
       if (included) withChange.delete(name); else withChange.add(name);
       var before = coverage(session.rows, session.eligible, session.choices).ratio * 100;
       var after = coverage(session.rows, session.eligible, withChange).ratio * 100;
       var delta = after - before;
       explanation.appendChild(element('strong', 'qa-curation-review-verdict',
-        (included ? 'Remove: ' : 'Include: ') + (delta > 0 ? '+' : '') + delta.toFixed(2) + ' coverage points'));
+        (included ? 'Keeping contributes ' : 'Including would contribute ') +
+        Math.abs(delta).toFixed(2) + ' weighted coverage points'));
+      explanation.appendChild(element('small','',
+        'This is marginal tagged/Sight evidence, not visual similarity or proven training quality.'));
       var bar = element('div', 'qa-curation-review-bar');
       var fill = element('div', 'qa-curation-review-bar-fill');
       fill.style.width = before.toFixed(2) + '%';
@@ -802,6 +825,11 @@
     reviews.appendChild(button('Review excluded · Full screen', function() {
       openCurateReview(host, 'excluded');
     }));
+    if (session.reviewReturn) {
+      reviews.appendChild(button('Resume review', function() {
+        openCurateReview(host,session.reviewReturn.group,session.reviewReturn.cursor);
+      }));
+    }
     host.appendChild(reviews);
     var controls = element('div', 'qa-curation-controls');
     ['selected', 'all'].forEach(function (filter) {
@@ -812,10 +840,40 @@
       controls.appendChild(ctl);
     });
     host.appendChild(controls);
-
+    var galleryFilters = element('div','qa-curation-gallery-filters');
+    var groupLabel = element('label','', 'Inspect group ');
+    var groupSelect = element('select','qa-curation-group-select');
+    var allOption = element('option','', 'All prioritized groups · Selection rank');
+    allOption.value = '';
+    groupSelect.appendChild(allOption);
+    session.availableGroups.forEach(function(group) {
+      var option = element('option','',group);
+      option.value = group;
+      groupSelect.appendChild(option);
+    });
+    groupSelect.value = session.galleryGroup || '';
+    groupSelect.onchange = function() {
+      session.galleryGroup = groupSelect.value;
+      session.limit = 72;
+      renderQaCuration(host,session.signature);
+    };
+    groupLabel.appendChild(groupSelect);
+    galleryFilters.appendChild(groupLabel);
+    galleryFilters.appendChild(element('span','qa-curation-helper',
+      'Default order is recommendation rank, not alphabetical or random.'));
+    host.appendChild(galleryFilters);
     var images = session.filter === 'selected'
       ? session.order.filter(function (file) { return session.choices.has(file); })
       : session.order;
+    if (session.galleryGroup) {
+      var ids = new Set(session.eligible.filter(function(feature) {
+        return feature.group === session.galleryGroup;
+      }).map(function(feature) {return feature.id;}));
+      images = images.filter(function(file) {
+        var row = session.rows.find(function(item) {return item.fileName === file;});
+        return row && row.ids.some(function(id) {return ids.has(id);});
+      });
+    }
     var grid = element('div', 'qa-curation-grid');
     var byFile = new Map(session.rows.map(function (row) { return [row.fileName, row]; }));
     images.slice(0, session.limit).forEach(function (fileName) {
@@ -867,6 +925,24 @@
         return feature.group + ': ' + feature.label;
       }).join(' · ');
       card.appendChild(chip);
+      card.appendChild(element('div','qa-curation-card-resolution',resolutionText(row)));
+      var without = new Set(session.choices);
+      var included = without.has(fileName);
+      if (included) without.delete(fileName); else without.add(fileName);
+      var contribution = Math.abs((coverage(session.rows,session.eligible,without).ratio -
+        coverage(session.rows,session.eligible,session.choices).ratio) * 100);
+      card.appendChild(element('div','qa-curation-card-insight',
+        (included ? 'Keeping contributes ' : 'Including would add ') +
+        contribution.toFixed(2) + ' coverage points'));
+      var inspect = button('Inspect item', function(e) {
+        selectByFileName(fileName);
+      }, 'qa-curation-inspect');
+      inspect.onclick = function(event) {
+        event.preventDefault();
+        event.stopPropagation();
+        selectByFileName(fileName);
+      };
+      card.appendChild(inspect);
       grid.appendChild(card);
     });
     host.appendChild(grid);

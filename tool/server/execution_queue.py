@@ -713,8 +713,8 @@ def enqueue_many(lane_name, entries, initial_status="queued"):
         return [_public_job(job) for job in added]
 
 
-def jobs_by_id(job_ids):
-    """Read persisted jobs once and return public snapshots for the requested IDs."""
+def jobs_by_id(job_ids, include_payload=False):
+    """Read jobs once; callers explicitly opt into the private frozen payloads."""
     wanted = {str(job_id or "").strip() for job_id in job_ids}
     wanted.discard("")
     if not wanted:
@@ -725,7 +725,7 @@ def jobs_by_id(job_ids):
         for lane in state["lanes"].values():
             for job in lane.get("jobs", []):
                 if job["id"] in wanted:
-                    found[job["id"]] = _public_job(job)
+                    found[job["id"]] = copy.deepcopy(job) if include_payload else _public_job(job)
         return found
 
 

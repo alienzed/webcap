@@ -495,6 +495,14 @@ def _advance_queue():
                 _release_gpu()
             return None
 
+        metadata = next_runnable.get("metadata") or {}
+        if metadata.get("client") == "test" and metadata.get("candidateKind") == "session":
+            # Expand the session at dispatch, before reserving the GPU.
+            # A cancelled promise leaves no GPU lease behind.
+            from .epoch_test_bench import expand_queued_session
+            expand_queued_session(str(next_runnable.get("id") or ""))
+            return None
+
         if not owner:
             if not _reserve_gpu():
                 from .training_runner import external_gpu_work_block_reason
@@ -516,13 +524,6 @@ def _advance_queue():
                 return None
 
             _set_backlog_wait_reason("")
-            metadata = next_runnable.get("metadata") or {}
-            if metadata.get("client") == "test" and metadata.get("candidateKind") == "session":
-                # Expand in place only when this promise is next to run.
-                # Existing FIFO/backlog and GPU arbitration remain authoritative.
-                from .epoch_test_bench import expand_queued_session
-                expand_queued_session(str(next_runnable.get("id") or ""))
-                return None
             backlog_ids = {
                 str(job.get("id") or "")
                 for job in jobs

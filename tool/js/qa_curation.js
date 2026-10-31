@@ -642,6 +642,8 @@
         window.qaInspectCurationItem(name);
       }, 'qa-curation-review-open-item'));
       explanation.appendChild(source);
+      var cachedHint = cachedDuplicateHint(name);
+      if (cachedHint) explanation.appendChild(element('p','qa-curation-duplicate-hint',cachedHint));
       var changedEvidence = (session.drift && session.drift.changed || []).find(function(change) {
         return change.file === name;
       });
@@ -674,11 +676,13 @@
       var before = coverage(session.rows, session.eligible, session.choices).ratio * 100;
       var after = coverage(session.rows, session.eligible, withChange).ratio * 100;
       var delta = after - before;
-      explanation.appendChild(element('strong', 'qa-curation-review-verdict',
+      var numericDetails = element('details','qa-curation-review-calculations');
+      numericDetails.appendChild(element('summary','', 'Coverage calculations'));
+      numericDetails.appendChild(element('strong', 'qa-curation-review-verdict',
         (included ? 'Keeping contributes ' : 'Including would contribute ') +
         Math.abs(delta).toFixed(2) + ' weighted coverage points'));
-      explanation.appendChild(element('small','',
-        'This is marginal tagged/Sight evidence, not visual similarity or proven training quality.'));
+      numericDetails.appendChild(element('small','',
+        'This is annotated-evidence coverage, not visual similarity or proven training quality.'));
       var bar = element('div', 'qa-curation-review-bar');
       var fill = element('div', 'qa-curation-review-bar-fill');
       fill.style.width = before.toFixed(2) + '%';
@@ -687,8 +691,8 @@
         conceptPreviews.forEach(function(update) { update(show); });
       }
       bar.appendChild(fill);
-      explanation.appendChild(bar);
-      explanation.appendChild(element('span', 'qa-curation-review-numbers',
+      numericDetails.appendChild(bar);
+      numericDetails.appendChild(element('span', 'qa-curation-review-numbers',
         'Current ' + before.toFixed(1) + '% → With change ' + after.toFixed(1) + '%'));
       var matched = row.ids.map(function(id) { return session.eligible.find(function(c) { return c.id === id; }); }).filter(Boolean);
       var counts = new Map();
@@ -697,6 +701,9 @@
           counts.set(id, (counts.get(id) || 0) + 1);
         });
       });
+      explanation.appendChild(element('strong','qa-curation-review-reason',
+        selectionReason(row,session.choices,counts)));
+      explanation.appendChild(numericDetails);
       // Compare like-for-like concepts within each group and role, not raw
       // counts across unrelated concepts. This is descriptive, not a target.
       var conceptPreviews = [];
@@ -733,10 +740,10 @@
         }
         update(false);
         conceptPreviews.push(update);
-        explanation.appendChild(line);
+        numericDetails.appendChild(line);
       });
-      if (!matched.length) explanation.appendChild(element('span', '', 'No prioritized concepts'));
-      explanation.appendChild(element('small', '', 'Bars show representation among available items, not an ideal target or visual quality.'));
+      if (!matched.length) numericDetails.appendChild(element('span', '', 'No prioritized concepts'));
+      numericDetails.appendChild(element('small', '', 'Bars show representation among available items, not an ideal target or visual quality.'));
       var actions = element('div', 'qa-curation-review-actions');
       var prev = button('← Previous', function() { next(-1); }, 'qa-curation-review-previous'); prev.disabled = cursor === 0; actions.appendChild(prev);
       var decision = button(included ? 'Remove' : 'Include', function() {

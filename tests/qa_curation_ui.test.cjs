@@ -785,3 +785,21 @@ test('card explanations never present unprioritized backgrounds as reasons for r
   assert.ok(reasons.every(reason=>!reason.includes('Background') && !reason.includes('painting')));
   assert.ok(reasons.every(reason=>/View|No evidence for selected priority/.test(reason)));
 });
+
+test('restoring an older recommended preset preserves its exact files but labels a mismatch Custom', async () => {
+  const first=harness();
+  first.ctx.window.startQaCuration(entries(),'training','same-scope');
+  await new Promise(resolve=>setTimeout(resolve,55));
+  const draft=structuredClone(first.calls.draft);
+  draft.snapshot.rankingPolicy='previous-scoring-policy';
+  draft.choices=draft.choices.slice(1);
+  const restored=harness(draft);
+  restored.ctx.window.startQaCuration(entries(),'training','same-scope');
+  await new Promise(resolve=>setTimeout(resolve,45));
+  assert.equal(restored.calls.submitted.length,0);
+  assert.equal(Number(restored.root.querySelector('[data-curation-selected]').textContent),
+    draft.choices.length,'existing user decisions must survive a scoring change');
+  assert.match(restored.root.textContent,/Previous shortlist preserved as Custom/);
+  assert.ok(Array.from(restored.root.querySelectorAll('[data-curation-preset]'))
+    .every(button=>button.getAttribute('aria-pressed')==='false'));
+});

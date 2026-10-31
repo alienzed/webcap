@@ -1193,7 +1193,7 @@
       var button = document.createElement('button');
       button.type = 'button';
       button.className = 'studio-dw-assessment-item';
-      var subject = item.scope === 'project' ? 'Project' : 'Scene';
+      var subject = item.scope === 'project' ? 'Project' : 'Scene (current discussion)';
       button.textContent = (item.ready ? '✓ ' : '○ ') + subject + ' · ' + item.name;
       button.title = 'Inspect Director assessment details';
       button.onclick = function () {

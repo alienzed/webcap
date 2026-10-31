@@ -456,6 +456,49 @@
   function currentSelection() {
     return new Set(session.choices);
   }
+
+  function selectionReason(row, selected, counts) {
+    var included = selected.has(row.fileName);
+    var matched = row.ids.map(function(id) {
+      return session.eligible.find(function(c) { return c.id === id; });
+    }).filter(Boolean).sort(function(a,b) {
+      return (b.role === 'core') - (a.role === 'core') ||
+        (b.source === 'tag') - (a.source === 'tag');
+    });
+    var strongest = matched.find(function(c) {
+      return (counts.get(c.id) || 0) === (included ? 1 : 0);
+    });
+    if (strongest) {
+      return (included ? 'Only selected example: ' : 'Would add missing evidence: ') +
+        strongest.group + ' · ' + strongest.label;
+    }
+    if (!matched.length) return 'No scored concepts; inspect the original image.';
+    var reference = matched[0], others = (counts.get(reference.id) || 0) - (included ? 1 : 0);
+    return (included ? 'Also represented by ' : 'Already represented by ') + others +
+      ' other selected item' + (others === 1 ? '' : 's') +
+      ': ' + reference.group + ' · ' + reference.label;
+  }
+
+  function cachedDuplicateHint(fileName) {
+    // Duplicate Candidates is independently owned; only show already completed
+    // matching-scope evidence, never start or broaden its expensive scan.
+    if (state.duplicateCandidatesStatus !== 'ready' || state.duplicateCandidatesDirty ||
+        state.duplicateCandidatesFolder !== session.folder ||
+        !Array.isArray(state.duplicateCandidatesScopeFiles) ||
+        state.duplicateCandidatesScopeFiles.length !== session.sourceFiles.length) return '';
+    var expected = new Set(session.sourceFiles);
+    if (state.duplicateCandidatesScopeFiles.some(function(file) { return !expected.has(file); })) return '';
+    var groups = state.duplicateCandidateGroups || [];
+    var group = groups.find(function(candidate) {
+      return candidate && Array.isArray(candidate.items) &&
+        candidate.items.some(function(item) { return item.file === fileName; });
+    });
+    if (!group) return '';
+    var peer = group.items.find(function(item) { return item.file !== fileName; });
+    if (!peer) return '';
+    return (group.match_type === 'exact' ? 'Exact duplicate' : 'Possible similar image') +
+      ': ' + peer.file + ' (from cached Duplicate Candidates)';
+  }
   function selectedCount() { return session.choices.size; }
   function updateStats(root) {
     var selected = currentSelection();
@@ -479,15 +522,17 @@
       if (!selected.has(row.fileName)) return;
       row.ids.forEach(function(id) { counts.set(id,(counts.get(id)||0)+1); });
     });
+    var rowsByFile = new Map(session.rows.map(function(row) {return [row.fileName,row];}));
     root.querySelectorAll('[data-curation-contribution]').forEach(function(node) {
-      var file = node.getAttribute('data-curation-contribution');
-      var modified = new Set(session.choices);
-      var included = modified.has(file);
-      if (included) modified.delete(file); else modified.add(file);
+      var file = node.getAttribute('data-curation-contribution'), row = rowsByFile.get(file);
+      if (!row) throw new Error('Curate card references missing analyzed item: ' + file);
+      node.textContent = selectionReason(row,selected,counts);
+      var modified = new Set(selected);
+      if (modified.has(file)) modified.delete(file); else modified.add(file);
       var delta = Math.abs((coverage(session.rows,session.eligible,modified).ratio -
-        coverage(session.rows,session.eligible,session.choices).ratio) * 100);
-      node.textContent = (included ? 'Keeping contributes ' : 'Including would add ') +
-        delta.toFixed(2) + ' coverage points';
+        coverage(session.rows,session.eligible,selected).ratio) * 100);
+      node.title = 'Weighted annotated-evidence change: ' + delta.toFixed(2) +
+        ' percentage points (not predicted training quality)';
     });
     root.querySelectorAll('[data-curation-pair-left]').forEach(function(cell) {
       var left = cell.getAttribute('data-curation-pair-left');
@@ -1074,16 +1119,11 @@
       }).join(' · ');
       card.appendChild(chip);
       card.appendChild(element('div','qa-curation-card-resolution',resolutionText(row)));
-      var without = new Set(session.choices);
-      var included = without.has(fileName);
-      if (included) without.delete(fileName); else without.add(fileName);
-      var contribution = Math.abs((coverage(session.rows,session.eligible,without).ratio -
-        coverage(session.rows,session.eligible,session.choices).ratio) * 100);
-      var reason = element('div','qa-curation-card-insight',
-        (included ? 'Keeping contributes ' : 'Including would add ') +
-        contribution.toFixed(2) + ' coverage points');
+      var reason = element('div','qa-curation-card-insight','');
       reason.setAttribute('data-curation-contribution',fileName);
       card.appendChild(reason);
+      var duplicateHint = cachedDuplicateHint(fileName);
+      if (duplicateHint) card.appendChild(element('div','qa-curation-duplicate-hint',duplicateHint));
       var inspect = button('Inspect item', function(event) {
         event.preventDefault();
         event.stopPropagation();

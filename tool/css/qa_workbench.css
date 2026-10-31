@@ -929,3 +929,15 @@
 .qa-curation-pair-table { border-collapse:collapse; min-width:max-content; font-size:14px; }
 .qa-curation-pair-table td,.qa-curation-pair-table th { border:1px solid var(--border-color,#43505c); padding:10px 13px; text-align:center; }
 .qa-curation-pair-table th { background:var(--panel-soft,var(--background-secondary,#29313d)); }
+
+.qa-curation-card-rank { font-size:16px; font-weight:600; padding:0 11px 10px; }
+.qa-curation-review-rank { font-size:16px; color:var(--text-muted,#abb7c4); line-height:1.4; }
+.qa-curation-grid .qa-curation-filename,.qa-curation-grid .qa-curation-card-insight { font-size:16px; line-height:1.4; }
+.qa-curation-concept-heading { font-size:16px; }
+.qa-curation-drift-files { padding:0 12px 10px; font-size:15px; overflow-wrap:anywhere; }
+.qa-curation-drift-files summary { font-size:16px; cursor:pointer; }
+.qa-curation-review-tags { max-height:88px; overflow-y:auto; }
+@media (max-width:1099px) {
+  .qa-curation-review-evidence { min-height:0; max-height:52vh; overflow-y:auto; }
+  .qa-curation-review-actions { flex:none; }
+}

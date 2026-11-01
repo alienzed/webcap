@@ -7405,6 +7405,7 @@ html[data-theme="dark"] iframe {
 }
 .test-generations-matrix-board {
   --matrix-card-width: 500px; /* Same width as .test-generations-results Grid. */
+  box-sizing: border-box; /* Include side padding in the viewport minimum. */
   width: max-content;
   min-width: 100%;
   padding: 8px;
@@ -7458,7 +7459,9 @@ html[data-theme="dark"] iframe {
   flex-wrap: wrap;
   gap: 10px;
   box-sizing: border-box;
-  width: 100cqw;
+  /* The row starts after the board's 8px inset. Keep Hide in view
+     without adding an extra horizontal scroll when the cards already fit. */
+  width: calc(100cqw - 16px);
   padding: 8px 2px;
   min-width: 0;
   background: var(--panel);

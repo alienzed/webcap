@@ -59,7 +59,7 @@ test('Evaluation Matrix follows Screening rows and preserves playable preview ca
   const asked = [];
   const context = {
     document, Event: dom.window.Event, window: {updateTestPreviewCardRating() {}},
-    resultsView: 'matrix', selectedCandidates, matrixRatingPending: new Set(),
+    resultsView: 'matrix', selectedCandidates, matrixRatingPending: new Set(), matrixSkipPending: new Set(),
     previewSort:'original', testVl: {scope:'',entries:{}},
     testVlScope: status => 'test|' + status.session,
     testVlScore: comparison => comparison,
@@ -165,7 +165,8 @@ test('Evaluation Matrix uses regular Grid card width and horizontal scrolling', 
   assert.match(css, /\.test-generations-matrix-scroll\s*\{[^}]*overflow:\s*auto/s);
   assert.match(css, /\.test-generations-matrix-labels\s*\{[^}]*position:\s*sticky/s);
   assert.match(css, /\.test-generations-matrix-scroll\s*\{[^}]*container-type:\s*inline-size/s);
-  assert.match(css, /\.test-generations-matrix-row-head\s*\{[^}]*left:\s*0;[^}]*width:\s*100cqw/s);
+  assert.match(css, /\.test-generations-matrix-board\s*\{[^}]*box-sizing:\s*border-box/s);
+  assert.match(css, /\.test-generations-matrix-row-head\s*\{[^}]*left:\s*0;[^}]*width:\s*calc\(100cqw - 16px\)/s);
   assert.match(css, /\.test-generations-matrix-row-primary \.test-generations-candidate-checkbox\s*\{[^}]*width:\s*20px/s);
 });
 

@@ -23,7 +23,7 @@ def bulk_root(tmp_path, monkeypatch):
     return folder
 
 
-def submit_bulk(folder, count=100, include_base=True):
+def submit_bulk(folder, count=100, include_base=True, variations=None):
     model = bench.get_test_model()
     staged = folder / "staged"
     staged.mkdir(exist_ok=True)
@@ -43,6 +43,8 @@ def submit_bulk(folder, count=100, include_base=True):
         "workflowFile": "test.json",
         "workflowSha256": "sha",
     }
+    if variations is not None:
+        request["variationCases"] = variations
     result = bench._enqueue_frozen_test_request(folder, request, files, include_base)
     session = bench._session_directory(folder, result["session"])
     return request, session, result
@@ -104,6 +106,48 @@ def test_100_renditions_expand_only_when_session_is_dispatched(bulk_root, monkey
     monkeypatch.setattr(execution_queue, "_read_state", counted_read)
     assert len(bench._session_job_records(manifest)) == 101
     assert len(calls) == 1
+
+
+def test_skip_checkpoint_test_batch_only_cancels_its_queued_variations(bulk_root, monkeypatch):
+    monkeypatch.setattr(inference_runner, "start_requested_inference", lambda: None)
+    _, session, _ = submit_bulk(
+        bulk_root, count=2, include_base=False,
+        variations=[
+            {"label": "A", "prompt": "portrait A"},
+            {"label": "B", "prompt": "portrait B"},
+        ],
+    )
+    promise_id = bench._read_status(session)["deferredJobId"]
+    ids = bench.expand_queued_session(promise_id)
+    assert len(ids) == 4
+
+    before = bench._visible_session_status(bulk_root, session)
+    assert before["total"] == 4
+    assert before["pendingCandidates"] == [
+        {"kind": "lora", "fileName": "epoch000.safetensors", "strength": None},
+        {"kind": "lora", "fileName": "epoch001.safetensors", "strength": None},
+    ]
+
+    after = bench.skip_candidate(bulk_root, session.name, "lora", "epoch000.safetensors")
+    assert after["total"] == 2
+    assert after["skippedCandidates"] == [
+        {"kind": "lora", "fileName": "epoch000.safetensors", "strength": None},
+    ]
+    assert after["pendingCandidates"] == [
+        {"kind": "lora", "fileName": "epoch001.safetensors", "strength": None},
+    ]
+    # Cancelled child jobs may be consumed immediately after reconciliation;
+    # the Session's durable cancellation markers remain authoritative.
+    assert set(ids[:2]) <= set(bench._read_status(session)["cancelledJobIds"])
+    assert [execution_queue.get_job(job_id)["status"] for job_id in ids[2:]] == [
+        "queued", "queued"
+    ]
+    # A second skip is idempotent, and the other checkpoint is unaffected.
+    again = bench.skip_candidate(bulk_root, session.name, "lora", "epoch000.safetensors")
+    assert again["total"] == 2
+    assert [execution_queue.get_job(job_id)["status"] for job_id in ids[2:]] == [
+        "queued", "queued"
+    ]
 
 
 def test_cancel_pending_test_batch_does_not_materialize_renditions(bulk_root, monkeypatch):

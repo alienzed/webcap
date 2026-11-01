@@ -1461,6 +1461,15 @@ def handle_request(folder_path, mode, selection_criteria=None):
     if operation == "test_stop":
         criteria = selection_criteria if isinstance(selection_criteria, dict) else {}
         return stop(folder_path, session_name=criteria.get("session"))
+    if operation == "test_skip_candidate":
+        criteria = selection_criteria if isinstance(selection_criteria, dict) else {}
+        return skip_candidate(
+            folder_path,
+            criteria.get("session"),
+            criteria.get("kind"),
+            criteria.get("candidateFile"),
+            criteria.get("strength"),
+        )
     if operation == "test_remove_candidate":
         criteria = selection_criteria if isinstance(selection_criteria, dict) else {}
         return remove_candidate(
@@ -2425,6 +2434,27 @@ def _job_candidate_identity(job):
     return kind, candidate_file, label
 
 
+def _test_candidate_row(kind, file_name, strength, sweep):
+    kind = str(kind or "")
+    if kind not in {"lora", "base"}:
+        return None
+    return {
+        "kind": kind,
+        "fileName": str(file_name or "") if kind == "lora" else "",
+        "strength": float(strength) if sweep and kind == "lora" and strength is not None else None,
+    }
+
+
+def _job_candidate_row(job, sweep):
+    metadata = job.get("metadata") if isinstance(job.get("metadata"), dict) else {}
+    return _test_candidate_row(
+        metadata.get("candidateKind"),
+        metadata.get("candidateFile"),
+        metadata.get("candidateStrength"),
+        sweep,
+    )
+
+
 def _session_has_nonterminal_jobs(session_directory):
     status = _read_status(session_directory) or {}
     if status.get("deferredJobId") and not status.get("inferenceJobs"):
@@ -2550,14 +2580,16 @@ def _sync_inference_session(session_directory):
                 and job_id not in failure_job_ids
             ):
                 _kind, candidate_file, label = _job_candidate_identity(job)
+                metadata = job.get("metadata") if isinstance(job.get("metadata"), dict) else {}
                 failure = {
                     "jobId": job_id,
                     "sourceLoRA": label or candidate_file or "Generation",
+                    "kind": metadata.get("candidateKind"),
                     "candidateFile": candidate_file,
+                    "variationIndex": metadata.get("variationIndex"),
                     "error": str(job.get("error") or "Test generation failed."),
                     "elapsedMs": 0,
                 }
-                metadata = job.get("metadata") if isinstance(job.get("metadata"), dict) else {}
                 if status.get("sweepWeights") and metadata.get("candidateStrength") is not None:
                     failure["strength"] = float(metadata["candidateStrength"])
                 failures.append(failure)
@@ -2595,6 +2627,15 @@ def _sync_inference_session(session_directory):
         visible["failed"] = failed
         visible["queued"] = len(pending)
         visible["running"] = 1 if active is not None else 0
+        # Matrix controls use the exact queued job identities, not guesses from
+        # the number of completed previews. A queued variation can be skipped
+        # without affecting another weight or another Test Session.
+        pending_rows = []
+        for job in pending:
+            row = _job_candidate_row(job, bool(status.get("sweepWeights")))
+            if row is not None and row not in pending_rows:
+                pending_rows.append(row)
+        visible["pendingCandidates"] = pending_rows
         visible["session"] = Path(session_directory).name
         visible["resultFolder"] = visible.get("resultFolder") or _session_result_folder(session_directory)
         _project_wildcard_fields(visible)
@@ -3565,6 +3606,65 @@ def status(folder_path, model_id=None, session_snapshot=None, visible_snapshot=N
         return payload
     session = _session_directory(folder_path, session_name)
     return _with_session_vision(session, _with_session_ratings(session, payload))
+
+
+def skip_candidate(folder_path, session_name, kind, candidate_file, strength=None):
+    """Cancel only unstarted Test variations for one Matrix checkpoint row."""
+    reconcile_startup()
+    session_id = str(session_name or "").strip()
+    if not session_id:
+        raise ValueError("Select a Test Session before skipping a checkpoint.")
+    session_directory = _session_directory(folder_path, session_id)
+    payload = _visible_session_status(folder_path, session_directory)
+    if payload.get("status") not in {"running", "queued"} or not payload.get("inferenceJobs"):
+        raise RuntimeError("This Test Session has no queued checkpoint variations to skip.")
+
+    sweep = bool(payload.get("sweepWeights"))
+    if str(kind or "") not in {"lora", "base"}:
+        raise ValueError("Unsupported Test checkpoint kind.")
+    if kind == "lora" and not str(candidate_file or "").strip():
+        raise ValueError("Choose a Test checkpoint to skip.")
+    if sweep and kind == "lora" and strength is None:
+        raise ValueError("Choose the Test checkpoint weight to skip.")
+    target = _test_candidate_row(kind, candidate_file, strength, sweep)
+    available = [
+        _test_candidate_row(candidate.get("kind"), candidate.get("fileName"),
+                            candidate.get("strength"), sweep)
+        for candidate in (payload.get("candidates") or [])
+    ]
+    if target not in available:
+        raise ValueError("The selected checkpoint is not part of this Test Session.")
+    if target in (payload.get("skippedCandidates") or []):
+        return payload
+
+    # Pending only: already running renders finish normally, and completed
+    # previews/ratings remain intact. Recheck per job because the queue can
+    # claim work between listing and cancellation.
+    for job in _session_job_records(payload):
+        if _job_candidate_row(job, sweep) != target:
+            continue
+        job_id = str(job.get("id") or "")
+        try:
+            live = execution_get_job(job_id)
+        except FileNotFoundError:
+            continue
+        if str(live.get("status") or "") not in {"backlog", "queued"}:
+            continue
+        try:
+            _cancel_shared_pending_job(job_id, session_directory=session_directory, reduce_total=True)
+        except ValueError as exc:
+            if "Only pending execution jobs can be cancelled." not in str(exc):
+                raise
+            # Worker claimed this rendition: allow it to finish.
+
+    with _status_lock:
+        stored = _read_status(session_directory) or {}
+        skipped = list(stored.get("skippedCandidates") or [])
+        if target not in skipped:
+            skipped.append(target)
+            stored["skippedCandidates"] = skipped
+            _atomic_write_json(_status_path(session_directory), stored)
+    return _visible_session_status(folder_path, session_directory)
 
 
 def stop(folder_path, session_name=None):

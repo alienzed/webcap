@@ -963,3 +963,28 @@
 .qa-curation-review-calculations summary { cursor:pointer; font-size:16px; font-weight:600; margin:8px 0; }
 .qa-curation-review-calculations small { display:block; font-size:14px; line-height:1.4; }
 @media(max-width:650px) { .qa-curation-presets .qa-curation-preset { flex-basis:100%; min-height:56px; } }
+
+
+/* Deep QA correction review: concrete changes grouped by affected media. */
+.qa-corrections-intro { margin:0 0 14px; color:var(--text-muted,#abb7c4); line-height:1.45; }
+.qa-correction-card {
+  display:grid; gap:12px; margin:12px 0; padding:16px;
+  border:1px solid var(--border-color,#43505c); border-radius:10px;
+  background:var(--panel-soft,var(--background-secondary,#29313d));
+}
+.qa-correction-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+.qa-correction-heading h2 { margin:0; min-width:0; overflow-wrap:anywhere; font-size:16px; }
+.qa-correction-heading > span { color:var(--text-muted,#abb7c4); font-size:13px; white-space:nowrap; }
+.qa-correction-reason { margin:0; color:var(--text-muted,#abb7c4); font-size:13px; line-height:1.4; }
+.qa-correction-caption { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+.qa-correction-caption > div { min-width:0; padding:10px; border:1px solid var(--border-color,#43505c); border-radius:7px; }
+.qa-correction-caption strong,.qa-correction-tags > strong { display:block; margin-bottom:6px; font-size:12px; color:var(--text-muted,#abb7c4); }
+.qa-correction-caption p { margin:0; white-space:pre-wrap; overflow-wrap:anywhere; line-height:1.45; }
+.qa-correction-tags { display:flex; flex-wrap:wrap; align-items:center; gap:7px; }
+.qa-correction-tags > strong { width:100%; margin:0; }
+.qa-correction-tag { display:inline-flex; padding:4px 8px; border-radius:6px; font-size:12px; border:1px solid var(--border-color,#43505c); }
+.qa-correction-tag.is-add { color:var(--success-color,#80c99b); }
+.qa-correction-tag.is-remove { color:var(--danger-color,#e18a8a); }
+.qa-correction-manual { margin:0; color:var(--text-muted,#abb7c4); font-size:12px; line-height:1.4; }
+.qa-correction-actions { display:flex; flex-wrap:wrap; gap:8px; }
+@media(max-width:700px) { .qa-correction-caption { grid-template-columns:1fr; } }

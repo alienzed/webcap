@@ -48,3 +48,42 @@ def test_qa_optional_checks_preserve_existing_routes():
     assert "'deep-scan'" in qa
     assert "qaSelectFiles(files, source, findingId)" in qa
     assert "returnToQaWorkbenchFromFocusSet()" in qa
+
+
+
+def test_deep_qa_corrections_are_action_first_and_caption_assist_remains_separate():
+    qa = source("tool/js/qa_workbench.js")
+    corrections = qa.split("function qaRenderCorrections(container, items)", 1)[1].split(
+        "function qaApplyCorrectionsForItem(mediaKey)", 1
+    )[0]
+    apply = qa.split("function qaApplyCorrectionsForItem(mediaKey)", 1)[1].split(
+        "function renderQaWorkbench(force)", 1
+    )[0]
+    assert "qaCorrectionItems()" in corrections
+    assert "Current caption" in corrections and "Proposed caption" in corrections
+    assert "Tag changes" in corrections
+    assert "Apply proposed corrections" in corrections
+    assert "Inspect in Single Item" in corrections
+    assert "captionVisionValidatePatch(caption, patch)" in qa
+    assert "captionVisionApplyPatchToText(caption, validated, -1)" in qa
+    assert "saveCaptionDirect(folder, item.fileName, plan.captionAfter" in apply
+    assert "assignChecklistTagToMediaKey(key, action.group, action.term)" in apply
+    assert "unassignChecklistTagFromMediaKey(key, action.group, action.term)" in apply
+    assert "qaSetView('corrections')" in qa
+    assert "qaApplyCorrectionsForItem(value)" in qa
+    assert "startFocusedQaReview(keys)" in qa
+    focused = source("tool/js/focused_caption.js")
+    assert "function presentFocusedReviewCandidate(mediaItem)" in focused
+    assert "function prepareFocusedCaptionCurrentItem()" in focused
+
+
+def test_deep_qa_correction_apply_uses_existing_freshness_and_reports_failures():
+    qa = source("tool/js/qa_workbench.js")
+    apply = qa.split("function qaApplyCorrectionsForItem(mediaKey)", 1)[1].split(
+        "function renderQaWorkbench(force)", 1
+    )[0]
+    assert "qaFocusReviewCandidateFindings(item)" in apply
+    assert "The Set changed while QA corrections were being applied." in apply
+    assert "reportConsoleError('QA Corrections · Apply', err)" in apply
+    assert "qaRefreshComputedState(true)" in apply
+    assert "Nothing is saved until you apply it." in qa

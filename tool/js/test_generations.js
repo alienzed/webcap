@@ -22,6 +22,7 @@
   var previewSort = 'original';
   var compareIndex = 0;
   var matrixRatingPending = new Set();
+  var matrixSkipPending = new Set();
   var pendingActivityFolder = '';
   var testActivity = {};
   var selectedCandidates = null;
@@ -3719,6 +3720,11 @@
     var sweep = !!(status && status.sweepWeights && status.sweepWeights.length);
     var columns = Math.max(1, variations.length);
     var buckets = new Map();
+    var skippedRows = status && Array.isArray(status.skippedCandidates) ? status.skippedCandidates : [];
+    var pendingRows = status && Array.isArray(status.pendingCandidates) ? status.pendingCandidates : [];
+    function rowMatches(item, key) {
+      return matrixCandidateKey(item, sweep) === key;
+    }
 
     // Frozen candidates reserve row positions even before their renders arrive.
     (status && status.candidates || []).forEach(function (candidate) {
@@ -3743,7 +3749,10 @@
           candidateFile: candidate.candidateFile, cells: new Map()});
       }
       var index = result.variationIndex == null ? 0 : Number(result.variationIndex);
-      buckets.get(key).cells.set(index, result);
+      // Never allow a missing/invalid variation to overwrite column zero.
+      if (index >= 0 && index < columns && Number.isInteger(index)) {
+        buckets.get(key).cells.set(index, result);
+      }
     });
 
     var rows = Array.from(buckets.entries());
@@ -3881,6 +3890,32 @@
         var summary = document.createElement('span');
         summary.className = 'test-generations-matrix-row-summary';
         actions.appendChild(summary);
+        var skip = document.createElement('button');
+        skip.type = 'button';
+        skip.className = 'review-captions-btn test-generations-matrix-skip';
+        skip.dataset.matrixSkip = '1';
+        skip.textContent = 'Skip epoch';
+        skip.title = 'Cancel unstarted variations for this checkpoint; preserve completed previews and selection.';
+        skip.addEventListener('click', function () {
+          var session = String(currentStatus.session || '');
+          var key = session + '|' + entry[0];
+          if (!session || matrixSkipPending.has(key)) return;
+          matrixSkipPending.add(key);
+          renderMatrix(currentStatus);
+          request('test_skip_candidate', {
+            session: session,
+            kind: info.kind,
+            candidateFile: info.candidateFile,
+            strength: sweep ? JSON.parse(entry[0])[2] : null
+          }).then(function (updated) {
+            if (String(currentStatus.session || '') === session) renderStatus(updated);
+            pollStatus();
+          }).catch(showError).finally(function () {
+            matrixSkipPending.delete(key);
+            if (String(currentStatus.session || '') === session) renderMatrix(currentStatus);
+          });
+        });
+        actions.appendChild(skip);
         var askVl = document.createElement('button');
         askVl.type = 'button';
         askVl.className = 'review-captions-btn test-generations-matrix-ask-vl';
@@ -3942,7 +3977,14 @@
       });
       var ratings = completed.filter(function (result) { return Number(result.rating) > 0; });
       var summary = node.querySelector('.test-generations-matrix-row-summary');
-      summary.textContent = completed.length + ' of ' + columns + ' rendered' +
+      var skipped = skippedRows.some(function (item) { return rowMatches(item, entry[0]); });
+      var pending = pendingRows.some(function (item) { return rowMatches(item, entry[0]); });
+      var skipButton = node.querySelector('[data-matrix-skip]');
+      var skipBusy = matrixSkipPending.has(String(status.session || '') + '|' + entry[0]);
+      skipButton.classList.toggle('hidden', !pending || skipped);
+      skipButton.disabled = skipBusy;
+      skipButton.textContent = skipBusy ? 'Skipping…' : 'Skip epoch';
+      summary.textContent = (skipped ? 'Epoch skipped · ' : '') + completed.length + ' of ' + columns + ' rendered' +
         (ratings.length ? ' · ★ ' +
           (ratings.reduce(function (sum, result) { return sum + Number(result.rating); }, 0) / ratings.length).toFixed(1) +
           ' (' + ratings.length + ' rated)' : '');
@@ -3954,10 +3996,11 @@
         if (!result) {
           if (cell.dataset.mediaKey) {
             cell.replaceChildren();
-            cell.textContent = 'Awaiting render';
             cell.classList.add('is-empty');
             delete cell.dataset.mediaKey;
           }
+          cell.textContent = cell.firstElementChild ? cell.textContent :
+            (skipped ? 'Skipped' : 'Awaiting render');
           continue;
         }
         var failed = !!result.error;

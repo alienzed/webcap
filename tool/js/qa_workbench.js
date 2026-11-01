@@ -3653,6 +3653,8 @@
     var data = qaRefreshComputedState(!!force);
     if (qaWorkbenchState.view === 'curate') {
       renderQaCuration(root, qaBuildDeepScanSignature(data.items));
+    } else if (qaWorkbenchState.view === 'corrections') {
+      qaRenderCorrections(root, data.items);
     } else if (qaWorkbenchState.view === 'browse') {
       qaRenderBrowse(root, data.items);
     } else if (qaWorkbenchState.view === 'report') {
@@ -3925,7 +3927,15 @@
     if (action === 'concept-run') { qaRunConceptCheck(); return; }
     if (action === 'concept-stop') { qaStopConceptCheck(); return; }
     if (action === 'qa-focus-review') {
-      qaStartFocusReview();
+      qaSetView('corrections');
+      return;
+    }
+    if (action === 'apply-corrections') {
+      qaApplyCorrectionsForItem(value);
+      return;
+    }
+    if (action === 'inspect-correction-item') {
+      qaSelectFiles([value], 'QA · Proposed corrections', '');
       return;
     }
     if (action === 'deep-scan') {

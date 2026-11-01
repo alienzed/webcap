@@ -136,8 +136,11 @@ def test_skip_checkpoint_test_batch_only_cancels_its_queued_variations(bulk_root
     assert after["pendingCandidates"] == [
         {"kind": "lora", "fileName": "epoch001.safetensors", "strength": None},
     ]
-    assert [execution_queue.get_job(job_id)["status"] for job_id in ids] == [
-        "cancelled", "cancelled", "queued", "queued"
+    # Cancelled child jobs may be consumed immediately after reconciliation;
+    # the Session's durable cancellation markers remain authoritative.
+    assert set(ids[:2]) <= set(bench._read_status(session)["cancelledJobIds"])
+    assert [execution_queue.get_job(job_id)["status"] for job_id in ids[2:]] == [
+        "queued", "queued"
     ]
     # A second skip is idempotent, and the other checkpoint is unaffected.
     again = bench.skip_candidate(bulk_root, session.name, "lora", "epoch000.safetensors")

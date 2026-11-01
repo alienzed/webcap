@@ -3748,7 +3748,7 @@
         buckets.set(key, {label: label, kind: candidate.kind,
           candidateFile: candidate.candidateFile, cells: new Map()});
       }
-      var index = result.variationIndex == null ? 0 : Number(result.variationIndex);
+      var index = result.variationIndex == null ? (variations.length ? -1 : 0) : Number(result.variationIndex);
       // Never allow a missing/invalid variation to overwrite column zero.
       if (index >= 0 && index < columns && Number.isInteger(index)) {
         buckets.get(key).cells.set(index, result);

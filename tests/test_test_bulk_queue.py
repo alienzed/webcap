@@ -108,7 +108,7 @@ def test_100_renditions_expand_only_when_session_is_dispatched(bulk_root, monkey
     assert len(calls) == 1
 
 
-def test_skip_checkpoint_only_cancels_its_queued_variations(bulk_root, monkeypatch):
+def test_skip_checkpoint_test_batch_only_cancels_its_queued_variations(bulk_root, monkeypatch):
     monkeypatch.setattr(inference_runner, "start_requested_inference", lambda: None)
     _, session, _ = submit_bulk(
         bulk_root, count=2, include_base=False,

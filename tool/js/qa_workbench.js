@@ -2309,7 +2309,7 @@
       heroActions.appendChild(qaCreateButton(
         qaCanResumeDeepScan() ? 'Resume Deep QA' : 'Run Deep QA', '', 'qa-start'));
     }
-    var reviewButton = qaCreateButton('Review & Fix saved findings', '', 'view', 'corrections');
+    var reviewButton = qaCreateButton('Review & Fix saved findings', '', 'qa-focus-review');
     reviewButton.id = 'qa-deep-review-ready';
     var ready = qaDeepScanReadyCount();
     reviewButton.textContent = 'Review & Fix ' + ready + ' item' + (ready === 1 ? '' : 's');

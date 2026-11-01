@@ -40,3 +40,13 @@ def test_matrix_skip_does_not_change_future_run_selection():
     assert "skipButton.classList.toggle('hidden', !pending || skipped)" in matrix
     assert "Epoch skipped" in matrix
     assert "selectedCandidates.delete(" not in matrix
+
+
+def test_matrix_header_and_board_padding_do_not_force_extra_scroll():
+    board = CSS.split(".test-generations-matrix-board {", 1)[1].split("}", 1)[0]
+    head = CSS.split(".test-generations-matrix-row-head {", 1)[1].split("}", 1)[0]
+    assert "box-sizing: border-box;" in board
+    assert "min-width: 100%;" in board
+    assert "padding: 8px;" in board
+    assert "width: calc(100cqw - 16px);" in head
+    assert "box-sizing: border-box;" in head

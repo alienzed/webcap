@@ -3491,6 +3491,7 @@
     var original = caption;
     var appliedPatches = [];
     var tagActions = [];
+    var manualTagActions = [];
     var seenTags = {};
     (findings || []).forEach(function (finding) {
       (finding.patches || []).forEach(function (patch) {
@@ -3503,7 +3504,7 @@
         }
       });
       qaFocusReviewTagActionsForFinding(item.key, item.fileName, finding).forEach(function (action) {
-        if (!action.group) return;
+        if (!action.group) { manualTagActions.push(action); return; }
         var id = [action.action, action.group.toLowerCase(), action.term.toLowerCase()].join('|');
         if (seenTags[id]) return;
         seenTags[id] = true;
@@ -3511,7 +3512,8 @@
       });
     });
     return {captionBefore:original,captionAfter:caption,patches:appliedPatches,
-      tagActions:tagActions,hasChanges:caption !== original || tagActions.length > 0};
+      tagActions:tagActions,manualTagActions:manualTagActions,
+      hasChanges:caption !== original || tagActions.length > 0};
   }
 
   function qaRenderCorrections(container, items) {
@@ -3579,6 +3581,15 @@
           tags.appendChild(chip);
         });
         card.appendChild(tags);
+      }
+      if (plan.manualTagActions.length) {
+        var manual = document.createElement('p');
+        manual.className = 'qa-correction-manual';
+        manual.textContent = 'Additional ungrouped tag changes need item inspection: ' +
+          plan.manualTagActions.map(function (action) {
+            return (action.action === 'add' ? '+ ' : '− ') + action.term;
+          }).join(', ');
+        card.appendChild(manual);
       }
       var actions = document.createElement('div');
       actions.className = 'qa-correction-actions';

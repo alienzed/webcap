@@ -3436,7 +3436,9 @@
     }
   }
 
-  function qaStartFocusReview() {
+  function qaStartFocusReview(options) {
+    var opts = options || {};
+    var autoOpen = opts.autoOpen !== false;
     var items = qaDeepScanScopeItems();
     if (!items.length) {
       setStatus('QA Focus Review needs at least one item in the current training selection.');
@@ -3448,11 +3450,11 @@
       qaFocusReviewState = {
         active: true, folder: String(state.folder || ''), scopeKey: scopeKey,
         items: items.slice(), handled: {}, queued: {}, reviewFindings: {}, prepQueued: {},
-        prepChain: Promise.resolve(), autoOpen: true, opening: false,
+        prepChain: Promise.resolve(), autoOpen: autoOpen, opening: false,
         token: qaFocusReviewState.token + 1, loadToken: 0
       };
     } else {
-      qaFocusReviewState.autoOpen = true;
+      qaFocusReviewState.autoOpen = autoOpen;
     }
     qaRefreshComputedState(true);
     var session = qaFocusReviewState;
@@ -3467,6 +3469,7 @@
     restore.then(function () {
       if (!qaFocusReviewCurrent() || session !== qaFocusReviewState || session.loadToken !== loadToken) return;
       qaSyncFocusReview();
+      if (opts.onReady) opts.onReady();
       if (!qaWorkbenchState.deepScanSessionActive &&
           !Object.keys(qaFocusReviewState.queued).length) {
         setStatus('No actionable saved QA findings. Run Deep QA separately to check more items.');
@@ -3927,7 +3930,7 @@
     if (action === 'concept-run') { qaRunConceptCheck(); return; }
     if (action === 'concept-stop') { qaStopConceptCheck(); return; }
     if (action === 'qa-focus-review') {
-      qaSetView('corrections');
+      qaStartFocusReview({autoOpen:false, onReady:function () { qaSetView('corrections'); }});
       return;
     }
     if (action === 'apply-corrections') {

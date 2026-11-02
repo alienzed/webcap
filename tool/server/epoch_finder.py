@@ -1065,8 +1065,6 @@ def _run(folder_path, campaign_id, control):
             if not epochs:
                 raise RuntimeError("Round has no candidates.")
             campaign["round"] = number
-            if campaign.get("mode") == "manual":
-                plan["status"] = "running"
             _update(folder_path, campaign, status="running", phase="Rendering",
                     detail="Round " + str(number) + " · " + str(len(epochs)) + " epochs")
             # Round-local index: no persisted cache and no repeated full-unit scans.
@@ -1075,16 +1073,7 @@ def _run(folder_path, campaign_id, control):
                 for item in campaign["units"]
             }
             for epoch in epochs:
-                if campaign.get("mode") == "manual" and control["stop_round"].is_set():
-                    break
                 skip_signal = None
-                if campaign.get("mode") == "manual":
-                    skip_signal = control.setdefault("skipped_epochs", {}).setdefault(
-                        (number, epoch), threading.Event())
-                    if epoch in plan.get("skippedEpochs", []):
-                        skip_signal.set()
-                    if skip_signal.is_set():
-                        continue
                 pending = []
                 for case in range(len(plan["seeds"])):
                     unit = _unit(campaign, number, epoch, case, index=unit_index)
@@ -1100,7 +1089,6 @@ def _run(folder_path, campaign_id, control):
                     for unit in pending:
                         try:
                             _render_unit(folder_path, campaign, plan, unit, staged, enqueue_only=True,
-                                         stop_queuing=control["stop_round"] if campaign.get("mode") == "manual" else None,
                                          skip_queuing=skip_signal)
                         except Exception as exc:
                             _mark_unit_error(folder_path, campaign, unit, "render", exc)
@@ -1118,35 +1106,6 @@ def _run(folder_path, campaign_id, control):
                             _mark_unit_error(folder_path, campaign, unit, "render", exc)
                 if not _campaign_has_active_sessions(folder_path, campaign):
                     _clean_staging(folder_path, campaign)
-            if campaign.get("mode") == "manual":
-                if not _check_signal(folder_path, campaign, control):
-                    return
-                for finished in campaign["units"]:
-                    if finished["round"] == number and finished.get("frame"):
-                        _retire_scored_session(folder_path, campaign, finished)
-                stopped = control["stop_round"].is_set()
-                control["stop_round"].clear()
-                failed = sum(bool(item.get("error")) for item in campaign["units"] if item["round"] == number)
-                with _worker_lock:
-                    # Check persisted submissions at the completion boundary under
-                    # the same lock used by the submit/cancel operations.
-                    _save(folder_path, campaign)
-                    plan["status"] = "stopped" if stopped else "complete"
-                    next_plan = next((p for p in campaign["rounds"]
-                                      if p["number"] > number and p.get("status") != "cancelled"), None)
-                    if next_plan:
-                        campaign["round"] = next_plan["number"]
-                        _update(folder_path, campaign, status="running", phase="Queued",
-                                detail="Round " + str(number) + (" stopped." if stopped else " complete.") +
-                                       " Next queued round is starting.")
-                    else:
-                        _update(folder_path, campaign, status="complete", phase="Review",
-                                detail=("Round " + str(number) + (" stopped." if stopped else " ready for manual review.") +
-                                        (" " + str(failed) + " failed render(s); see cards and Console." if failed else "")),
-                                finishedAt=time.time())
-                if not next_plan:
-                    return
-                continue
             _update(folder_path, campaign, phase="Evaluating", detail="All round frames captured.")
             for unit in campaign["units"]:
                 if unit["round"] != number:
@@ -1202,10 +1161,6 @@ def _run(folder_path, campaign_id, control):
             _save(folder_path, campaign)
             if not _check_signal(folder_path, campaign, control):
                 return
-        if campaign.get("mode") == "manual":
-            _update(folder_path, campaign, status="complete", phase="Review",
-                    detail="No more queued screening rounds.", finishedAt=time.time())
-            return
         _update(folder_path, campaign, phase="Finalizing", detail="Pruning assessed campaign frames.")
         _prune_campaign_frames(folder_path, campaign)
         failed = sum(bool(unit.get("error")) for unit in campaign["units"])
@@ -1290,8 +1245,7 @@ def _resume_saved_work(folder_path, campaign):
 
 def _start_campaign_worker_locked(folder_path, campaign_id):
     """Caller holds _worker_lock; only one active Epoch Finder coordinator."""
-    control = {"pause": threading.Event(), "stop": threading.Event(),
-               "stop_round": threading.Event(), "skipped_epochs": {}}
+    control = {"pause": threading.Event(), "stop": threading.Event()}
     thread = threading.Thread(
         target=_run, args=(folder_path, campaign_id, control), daemon=True,
         name="webcap-epoch-finder",

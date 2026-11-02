@@ -793,18 +793,15 @@ def _render_unit(folder_path, campaign, plan, unit, staged, enqueue_only=False,
     elapsed_ms = result.get("elapsedMs")
     if isinstance(elapsed_ms, (int, float)) and elapsed_ms > 0:
         unit["renderSeconds"] = round(elapsed_ms / 1000, 2)
-    if campaign.get("mode") == "manual":
-        unit["groups"] = _screening_groups(plan, unit["case"])
-    else:
-        unit["groups"] = status.get("wildcardEvaluationGroups") or []
-        if len(unit["groups"]) != len(campaign["dimensions"]):
-            raise RuntimeError("Resolved wildcard group count differs from the approved plan.")
-        for group, dimension in zip(unit["groups"], campaign["dimensions"]):
-            if group.get("options") != dimension["options"]:
-                raise RuntimeError("Resolved wildcard attributes diverged from the approved plan.")
-            group.update({"label": dimension["label"], "role": dimension["role"],
-                          "weight": dimension["weight"],
-                          "annotationGroup": dimension.get("annotationGroup", "")})
+    unit["groups"] = status.get("wildcardEvaluationGroups") or []
+    if len(unit["groups"]) != len(campaign["dimensions"]):
+        raise RuntimeError("Resolved wildcard group count differs from the approved plan.")
+    for group, dimension in zip(unit["groups"], campaign["dimensions"]):
+        if group.get("options") != dimension["options"]:
+            raise RuntimeError("Resolved wildcard attributes diverged from the approved plan.")
+        group.update({"label": dimension["label"], "role": dimension["role"],
+                      "weight": dimension["weight"],
+                      "annotationGroup": dimension.get("annotationGroup", "")})
     unit["question"] = _question(unit["groups"])
     if plan.get("caseSelections"):
         unit["selections"] = plan["caseSelections"][unit["case"]]
@@ -819,10 +816,7 @@ def _retire_scored_session(folder_path, campaign, unit):
     """Retire source Test media after durable frame capture (or automated VL)."""
     if not unit.get("session"):
         return
-    if campaign.get("mode") == "manual":
-        if not unit.get("frame"):
-            return
-    elif unit.get("assessment") is None:
+    if unit.get("assessment") is None:
         return
     try:
         test_bench.delete_session(folder_path, unit["session"])
@@ -832,7 +826,7 @@ def _retire_scored_session(folder_path, campaign, unit):
     _save(folder_path, campaign)
 
 
-def _prune_screening_frames(folder_path, campaign):
+def _prune_campaign_frames(folder_path, campaign):
     """Keep final field frames and all unscored failure evidence."""
     finalists = set(campaign["rounds"][-1]["epochs"])
     for unit in campaign["units"]:
@@ -873,17 +867,7 @@ def _evaluate_unit(folder_path, campaign, unit):
                 "modelId": campaign["visionModel"], "text": answer,
                 "comparison": _compare(answer, unit["groups"]),
             }
-            if campaign.get("mode") == "manual":
-                with _worker_lock:
-                    latest = _load(folder_path, campaign["id"])
-                    target = _unit(latest, unit["round"], unit["epoch"], unit["case"])
-                    target["assessment"] = unit["assessment"]
-                    target["visionWallSeconds"] = unit["visionWallSeconds"]
-                    target.pop("visionError", None)
-                    target.pop("visionErrorAt", None)
-                    _save(folder_path, latest, preserve_manual=False)
-            else:
-                _save(folder_path, campaign)
+            _save(folder_path, campaign)
             llm_job_status(job_id, consume=True)
             return
         time.sleep(1)
@@ -1222,8 +1206,8 @@ def _run(folder_path, campaign_id, control):
             _update(folder_path, campaign, status="complete", phase="Review",
                     detail="No more queued screening rounds.", finishedAt=time.time())
             return
-        _update(folder_path, campaign, phase="Finalizing", detail="Pruning assessed screening frames.")
-        _prune_screening_frames(folder_path, campaign)
+        _update(folder_path, campaign, phase="Finalizing", detail="Pruning assessed campaign frames.")
+        _prune_campaign_frames(folder_path, campaign)
         failed = sum(bool(unit.get("error")) for unit in campaign["units"])
         _update(folder_path, campaign, status="complete", phase="Complete",
                 detail="Evaluation finished." + (" " + str(failed) + " failed observations; review Console." if failed else " Review the ranked epochs."),
@@ -1331,9 +1315,6 @@ def _launch(folder_path, campaign_id):
 
 def status(folder_path, campaign_id):
     campaign = _load(folder_path, campaign_id)
-    if campaign.get("mode") == "manual":
-        worker = _screening_vision_workers.get(campaign_id)
-        campaign["screeningVisionRunning"] = bool(worker and worker.is_alive())
     with _worker_lock:
         thread = _workers.get(campaign_id)
     if campaign.get("status") in {"running", "queued"} and (thread is None or not thread.is_alive()):
@@ -1735,8 +1716,6 @@ def command(folder_path, operation, criteria=None):
     if operation == "resume":
         campaign = status(folder_path, campaign_id)
         can_resume = {"paused", "interrupted", "failed"}
-        if campaign.get("mode") == "manual":
-            can_resume.add("stopped")
         if campaign["status"] not in can_resume:
             raise ValueError("Only paused, interrupted, failed or stopped work can resume.")
         _resume_saved_work(folder_path, campaign)
@@ -1749,18 +1728,10 @@ def command(folder_path, operation, criteria=None):
             campaign = _load(folder_path, campaign_id)
             worker = _workers.get(campaign_id)
             if worker is not None and worker.is_alive():
-                raise ValueError("Cannot delete screening history while its worker is active.")
-            vl_worker = _screening_vision_workers.get(campaign_id)
-            if vl_worker and vl_worker.is_alive():
-                raise ValueError("Wait for the screening VL operation before deleting.")
-            if campaign.get("mode") == "manual" and (
-                    campaign.get("status") in {"queued", "running"} or
-                    any(plan.get("status") in {"queued", "running", "stopping"}
-                        for plan in campaign.get("rounds", []))):
-                raise ValueError("Stop or cancel pending screening work before deleting all rounds.")
+                raise ValueError("Cannot delete campaign history while its worker is active.")
             if any(unit.get("session") and _session_still_active(folder_path, unit["session"])
                    for unit in campaign["units"]):
-                raise RuntimeError("Screening history still owns active Test work.")
+                raise RuntimeError("Campaign history still owns active Test work.")
             for unit in campaign["units"]:
                 if unit.get("session"):
                     try:

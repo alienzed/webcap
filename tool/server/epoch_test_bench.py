@@ -3061,6 +3061,16 @@ def expand_queued_session(job_id):
         candidates = request.pop("sessionCandidates", None)
         if not isinstance(candidates, list) or not candidates:
             raise RuntimeError("Queued Test Session has no frozen renditions.")
+        # X may reject a candidate while the session is still a deferred promise.
+        # Do not materialize GPU work for candidates already marked for deletion.
+        rejected = set(status.get("pendingCandidateRemovals") or [])
+        if rejected:
+            candidates = [item for item in candidates if item.get("file") not in rejected]
+            status["candidates"] = [
+                item for item in (status.get("candidates") or [])
+                if item.get("fileName") not in rejected
+            ]
+            status["total"] = len(candidates)
         contexts, labels = _test_session_renditions(folder, session_name, request, candidates)
         # One durable queue transaction replaces the promise with its child jobs.
         # If interrupted before the status write, polling recovers their IDs.

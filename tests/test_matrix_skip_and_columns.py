@@ -31,7 +31,7 @@ def test_matrix_uses_identical_grid_definition_for_headers_and_cells():
 
 
 def test_matrix_shares_destructive_x_and_keeps_checkbox_selection():
-    matrix = FRONTEND.split("function renderMatrix(status)", 1)[1].split("\\n  function setResultsView(", 1)[0]
+    matrix = FRONTEND.split("function renderMatrix(status)", 1)[1].split("\n  function setResultsView(", 1)[0]
     assert "request('test_skip_candidate'" not in matrix
     assert "data.matrixSkip" not in matrix
     assert "checkbox.dataset.matrixCandidate = info.candidateFile" in matrix

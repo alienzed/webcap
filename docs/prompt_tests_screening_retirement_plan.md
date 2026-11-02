@@ -13,7 +13,7 @@ Status: **In progress; draft PR #852.** Follow [AGENTS.md](../AGENTS.md): preser
 Touch `tool/server/epoch_test_bench.py`, `tool/js/test_generations.js`, `tests/test_matrix_skip_and_columns.py`.
 - Existing `test_remove_candidate` formerly rejected active sessions. Persist `pendingCandidateRemovals` before stopping candidate jobs, cancel pending, stop active, and finalize after termination via ordinary status reconciliation.
 - Preserve distinct confirmation and output; avoid hiding failures. Confirm that delayed/repeated requests are idempotent and no unrelated candidate job is cancelled.
-- **Gate:** exercise fully queued, running, transitioning-to-running, finished, multi-candidate, user reload/restart, and weight-sweep semantics; run Python backend and browser DOM tests. The code in PR #852 has not passed these tests in this environment.
+- **Static audit gate:** verify fully queued, running, transitioning-to-running, finished, multi-candidate, user reload/restart, and weight-sweep code paths; browser and Python execution tests are intentionally not a merge requirement for this request.
 - **Review before merge:** `_sync_inference_session` early returns for deferred sessions; ensure pending rejection is handled before the deferred work materializes and no unintended candidate runs. Confirm all in-flight jobs cannot subsequently reference a deleted staged checkpoint. Verify repeated UI polling does not leave an indefinitely disabled X.
 
 ## Phase 2 — Hide/retire Manual Screening UI
@@ -30,7 +30,7 @@ Touch `tool/server/epoch_test_bench.py`, `tool/js/test_generations.js`, `tests/t
 - Update evaluation navigation documentation and remove obsolete screening-only tests and docs while retaining historical designs where valuable.
 - Audit code references across `tool/`, `tests/`, and `docs/` for `screening`, `manual`, `test_skip_candidate`, `skippedCandidates` and `data-matrix-skip`. Some words may legitimately describe other campaign concepts.
 - Test: Prompt Tests creation/exhaustive wildcard Matrix, per-item and bulk ratings, VL, X destruction, selection, stopped/queued jobs; Campaigns launch and progress, Insights, References, deep-link routing, and data deletion.
-- Only merge when code compiles, relevant tests run and the manual cleanup no longer breaks Campaigns.
+- Only merge after static dependency and source-contract review, and ensure the cleanup does not break Campaigns. Browser and Python test execution are deliberately excluded by request.
 
-## Current blocker
-The GitHub connector can read/write code but this execution environment cannot resolve github.com for a local clone; there is no repository checkout available here for running the project's tests or functional verification. PR remains draft pending that gate.
+## Validation scope
+Static source-contract and dependency review; no browser or Python tests per the current request. Historical Screening artifacts are not deleted automatically.

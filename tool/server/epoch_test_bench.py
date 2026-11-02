@@ -2572,8 +2572,10 @@ def _sync_inference_session(session_directory):
                 _atomic_write_json(_status_path(session_directory), status)
                 return _session_status_from_payload(session_directory, status)
             else:
-                # An enqueue is being committed; preserve its queued status.
-                return _session_status_from_payload(session_directory, status)
+                # A queued promise can finish empty when X eliminated all its
+                # candidates. Finalize the persisted X removal, if any.
+                if not status.get("pendingCandidateRemovals"):
+                    return _session_status_from_payload(session_directory, status)
 
         missing_job_ids = []
         for candidate_name in status.get("pendingCandidateRemovals") or []:
@@ -3071,6 +3073,17 @@ def expand_queued_session(job_id):
                 if item.get("fileName") not in rejected
             ]
             status["total"] = len(candidates)
+        if not candidates:
+            # All frozen renditions were explicitly eliminated before dispatch.
+            # Do not try to replace the promise with an empty execution batch.
+            from .inference_runner import action as inference_action
+            inference_action("cancel", job_id=job_id)
+            status["status"] = "stopped"
+            status["deferredJobId"] = ""
+            status["error"] = ""
+            _atomic_write_json(_status_path(session_directory), status)
+            _sync_inference_session(session_directory)
+            return []
         contexts, labels = _test_session_renditions(folder, session_name, request, candidates)
         # One durable queue transaction replaces the promise with its child jobs.
         # If interrupted before the status write, polling recovers their IDs.

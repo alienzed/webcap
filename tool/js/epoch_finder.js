@@ -180,8 +180,8 @@
       button.setAttribute('aria-pressed', String(active));
     });
     els('screen').classList.toggle('hidden', !finder);
-    // A reference lookup discarded while screening was active must be restarted
-    // when returning to Campaign step 4, without discarding authored selections.
+    // Returning to Campaign setup restarts an interrupted reference lookup
+    // without discarding authored selections.
     if(next==='finder'&&previousMode!==next&&wizardStep===4&&!activeCampaign){
       referencePlanSignature='';
       showStep(4);
@@ -1299,27 +1299,10 @@
     var running = campaign.status === 'running';
     els('pause').classList.toggle('hidden', !running);
     els('stop').classList.toggle('hidden', !running);
-    els('resume').classList.toggle('hidden', !(['paused', 'interrupted', 'failed'].includes(campaign.status) ||
-      (campaign.mode==='manual'&&campaign.status==='stopped')));
-    var manual=campaign.mode==='manual';
-    if (manual && mode==='finder') showMode('screening',
-      {restore:true,returnTo:returnMode,keepCampaign:true,campaignId:campaign.id,methodRedirect:true});
-    if (!manual && mode==='screening') showMode('finder',
-      {restore:true,returnTo:returnMode,keepCampaign:true,campaignId:campaign.id,methodRedirect:true});
-    campaignState=campaign;
-    var canDeleteAll=manual && ['complete','stopped','failed','interrupted'].includes(campaign.status) &&
-      campaign.rounds.every(function(plan){
-        return ['complete','stopped','cancelled','deleted'].includes(plan.status);
-      });
-    els('delete').textContent=manual?'Delete all rounds':'Delete';
-    els('delete').classList.toggle('hidden', manual?!canDeleteAll:running);
-    if (manual) {
-      screeningRender(campaign);
-      return;
-    }
-    screeningModeUi();
-    els('manual-review').classList.add('hidden');
-    els('manual-history').classList.add('hidden');
+    els('resume').classList.toggle('hidden', !['paused', 'interrupted', 'failed'].includes(campaign.status));
+    if (campaign.mode === 'manual') throw new Error('Manual Screening has been retired; delete legacy artifacts from Storage.');
+    els('delete').textContent='Delete';
+    els('delete').classList.toggle('hidden', running);
     els('live-layout').classList.remove('hidden');
     els('timeline').classList.remove('hidden');
     els('metrics').classList.remove('hidden');
@@ -1344,7 +1327,7 @@
     });
   }
   function refresh() {
-    if (!currentFolder || (mode !== 'finder' && mode !== 'screening')) return;
+    if (!currentFolder || mode !== 'finder') return;
     var folderAtRequest = currentFolder, modelAtRequest = String(window.getWorkingModelProfileId() || '');
     var modeAtRequest = mode, requestVersion = ++listRequestVersion;
     api('list', {modelId: modelAtRequest}).then(function (response) {
@@ -1356,7 +1339,7 @@
         stagedModel = modelAtRequest;
         var preselected = window.getTestGenerationSelectedCandidateFiles(currentFolder, modelAtRequest);
         stagedSelection = new Set(preselected);
-        sourceMode = mode==='screening' ? 'runs' : preselected.length ? 'staged' : 'runs';
+        sourceMode = preselected.length ? 'staged' : 'runs';
       }
       stagedSelection.forEach(function (file) { if (!stagedFiles.includes(file)) stagedSelection.delete(file); });
       if (response.warnings && response.warnings.length) {
@@ -1368,13 +1351,12 @@
       refreshPickerTestStatus(false).catch(function(){});
       if(activeCampaign&&campaigns.some(function(c){
         return c.id===activeCampaign&&c.modelId===modelAtRequest&&
-          ((c.mode==='manual')===(mode==='screening'));
+          c.mode!=='manual';
       }))return refreshStatus();
       activeCampaign='';campaignState=null;
       methodWorkspaces[mode].activeCampaign='';
       var draftKey=currentFolder+'|'+String(window.getWorkingModelProfileId()||'');
       if(!followUpSource&&mode==='finder'&&campaignDefaultsKey!==draftKey)campaignApplyDefaults();
-      manualSelectionCampaign='';
       els('active').classList.add('hidden'); els('empty').classList.remove('hidden');
     }).catch(error);
   }
@@ -1490,7 +1472,7 @@
     }
     if (changed) { pickerTestStatusKey='';pickerTestStatus={};pickerTestStatusVersion++;listRequestVersion++; crossEvidenceVersion++; crossEvidence = null; crossEvidenceKey = ''; }
     currentFolder = folder;
-    if (changed) { campaignDefaultsKey='';screeningSettingsKey='';screeningSettingsRequest=null;screeningDraftContext=''; screeningShowExcluded=false; campaignTestStatusCampaign='';campaignTestStatus={};campaignTestStatusVersion++;screeningCopyPending.clear();screeningSkipPending.clear();screeningExpandedExcluded.clear(); manualSelectionCampaign=''; manualMatrixSignature=''; resetMethodWorkspaces(); runs = []; campaigns = []; stagedFiles = []; stagedModel = ''; lastFrameKey = ''; selectedRunId = ''; selectedEpochs = new Set(); referenceSelections = {}; referenceItems = []; referencePlanSignature = ''; referenceGeneration++; }
+    if (changed) {campaignDefaultsKey='';campaignTestStatusCampaign='';campaignTestStatus={};campaignTestStatusVersion++;resetMethodWorkspaces();runs=[];campaigns=[];stagedFiles=[];stagedModel='';lastFrameKey='';selectedRunId='';selectedEpochs=new Set();referenceSelections={};referenceItems=[];referencePlanSignature='';referenceGeneration++;}
     window.testReferencesPrepare(folder);
     window.runAnalyticsPrepare(folder);
     if (mode === 'finder' || mode === 'screening') refresh();
@@ -1500,15 +1482,14 @@
     var previous=mode;
     inspectedEpoch = null; inspectedFrame = 0; lastFrameKey = '';
     var knownCampaign = campaigns.find(function(c){return c.id===String(campaignId);});
-    var destination = knownCampaign && knownCampaign.mode==='manual' ? 'screening' : 'finder';
+    var destination = 'finder';
     var options=previous!==destination?{returnTo:previous,keepCampaign:true,campaignId:String(campaignId)}:
       {keepCampaign:true,campaignId:String(campaignId)};
     showMode(destination,options);
     activeCampaign=String(campaignId);
     methodWorkspaces[destination].activeCampaign=activeCampaign;
     return refreshStatus().then(function () {
-      if (campaignState && campaignState.mode==='manual' && mode!=='screening') showMode('screening',{restore:true,returnTo:returnMode});
-      if (campaignState && campaignState.mode!=='manual' && mode!=='finder') showMode('finder',{restore:true,returnTo:returnMode});
+      if (campaignState && mode!=='finder') showMode('finder',{restore:true,returnTo:returnMode});
       if (sourceEpoch == null || !campaignState || campaignState.id !== String(campaignId)) return;
       var matched = Object.entries(campaignState.candidateMap || {}).find(function (entry) {
         return entry[1].epoch === Number(sourceEpoch) && (!sourceJobId || entry[1].jobId === sourceJobId);
@@ -1695,7 +1676,6 @@
   });
   els('prompt').addEventListener('change', function () { try { updateDimensions(); } catch (exc) { error(exc); } });
   showStep(1);
-  screeningModeUi();
   var testDuration = document.getElementById('test-generations-duration');
   if (testDuration) testDuration.addEventListener('input', function () {
     if (mode === 'finder') roundPlan();

@@ -656,6 +656,14 @@ def test_blind_rating_auto_advances_after_saved_rating_and_continues_past_five()
     assert "run-lab-review-back" in markup
 
 
+def test_blind_rating_videos_autoplay_muted_without_losing_controls():
+    from pathlib import Path
+    script = (Path(__file__).resolve().parents[1] / "tool/js/run_analytics.js").read_text(encoding="utf-8")
+    review = script.split("  function labReviewRender(){", 1)[1].split("  function labReviewLoad(){", 1)[0]
+    assert "if(video){media.controls=true;media.preload='auto';media.playsInline=true;media.muted=true;media.defaultMuted=true;media.autoplay=true;}" in review
+    assert "lab('review-media').appendChild(media);" in review
+
+
 def test_blind_review_keeps_wildcard_strings_and_actual_render_prompt(tmp_path, monkeypatch):
     from tool.server import run_analytics as analytics
     session = tmp_path / "session"

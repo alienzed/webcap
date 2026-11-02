@@ -1,6 +1,6 @@
 # Prompt Tests consolidation / Manual Screening retirement
 
-Status: **In progress; draft PR #852.** Follow [AGENTS.md](../AGENTS.md): preserve Campaigns, queue invariants, visible errors, and explicitly destructive changes.
+Status: **Implementation complete, awaiting merge review (PR #852).** Follow [AGENTS.md](../AGENTS.md): preserve Campaigns, queue invariants, visible errors, and explicitly destructive changes.
 
 ## Product contract
 - Matrix X rejects the entire staged candidate, cancels its queued work, requests termination of running work, waits until that work is terminal, and then deletes the staged checkpoint and its results in the currently selected Test session. Do not delete historical results in other sessions or the source training checkpoint.
@@ -9,7 +9,7 @@ Status: **In progress; draft PR #852.** Follow [AGENTS.md](../AGENTS.md): preser
 - Retire Manual Screening, including navigation, own wizard, review, unique per-round actions and dead tests/styles. Preserve Campaigns, Insights, References and shared Test preview/queue infrastructure.
 - Do not automatically delete persisted historical Screening artifacts; user can explicitly remove them.
 
-## Phase 1 — X cancellation and deletion (code committed, not validated)
+## Phase 1 — X cancellation and deletion (implemented; statically reviewed)
 Touch `tool/server/epoch_test_bench.py`, `tool/js/test_generations.js`, `tests/test_matrix_skip_and_columns.py`.
 - Existing `test_remove_candidate` formerly rejected active sessions. Persist `pendingCandidateRemovals` before stopping candidate jobs, cancel pending, stop active, and finalize after termination via ordinary status reconciliation.
 - Preserve distinct confirmation and output; avoid hiding failures. Confirm that delayed/repeated requests are idempotent and no unrelated candidate job is cancelled.

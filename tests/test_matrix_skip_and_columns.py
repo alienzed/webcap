@@ -7,6 +7,12 @@ FRONTEND = (ROOT / "tool/js/test_generations.js").read_text(encoding="utf-8")
 CSS = (ROOT / "tool/css/styles.css").read_text(encoding="utf-8")
 
 
+def test_matrix_removes_frozen_candidate_row_after_destructive_x():
+    body = BACKEND.split("def _remove_candidate_from_session(", 1)[1].split("\n\ndef activity_snapshot(", 1)[0]
+    assert 'status_payload["candidates"] = retained_candidates' in body
+    assert 'str(item.get("fileName") or "") != candidate_name' in body
+
+
 def test_matrix_x_cancels_live_work_before_deleting():
     assert 'cancel_active=criteria.get("cancelActive") is True' in BACKEND
     assert '"pendingCandidateRemovals"' in BACKEND

@@ -3875,6 +3875,11 @@ def _remove_candidate_from_session(folder_path, session_name, candidate_name, re
             ):
                 if path.is_file():
                     path.unlink()
+    candidates = status_payload.get("candidates") if isinstance(status_payload.get("candidates"), list) else []
+    retained_candidates = [
+        item for item in candidates
+        if str(item.get("fileName") or "") != candidate_name
+    ]
     if removed_results or removed_failures:
         status_payload["results"] = [item for item in results if item not in removed_results]
         status_payload["failures"] = [item for item in failures if item not in removed_failures]
@@ -3884,6 +3889,9 @@ def _remove_candidate_from_session(folder_path, session_name, candidate_name, re
             0,
             int(status_payload.get("total") or 0) - len(removed_results) - len(removed_failures),
         )
+    if len(retained_candidates) != len(candidates):
+        status_payload["candidates"] = retained_candidates
+    if removed_results or removed_failures or len(retained_candidates) != len(candidates):
         _atomic_write_json(_status_path(session), status_payload)
     return _visible_session_status(folder_path, session) if return_status else None
 

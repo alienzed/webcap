@@ -2435,27 +2435,6 @@ def _job_candidate_identity(job):
     return kind, candidate_file, label
 
 
-def _test_candidate_row(kind, file_name, strength, sweep):
-    kind = str(kind or "")
-    if kind not in {"lora", "base"}:
-        return None
-    return {
-        "kind": kind,
-        "fileName": str(file_name or "") if kind == "lora" else "",
-        "strength": float(strength) if sweep and kind == "lora" and strength is not None else None,
-    }
-
-
-def _job_candidate_row(job, sweep):
-    metadata = job.get("metadata") if isinstance(job.get("metadata"), dict) else {}
-    return _test_candidate_row(
-        metadata.get("candidateKind"),
-        metadata.get("candidateFile"),
-        metadata.get("candidateStrength"),
-        sweep,
-    )
-
-
 def _session_has_nonterminal_jobs(session_directory):
     status = _read_status(session_directory) or {}
     if status.get("deferredJobId") and not status.get("inferenceJobs"):
@@ -2686,15 +2665,6 @@ def _sync_inference_session(session_directory):
         visible["failed"] = failed
         visible["queued"] = len(pending)
         visible["running"] = 1 if active is not None else 0
-        # Matrix controls use the exact queued job identities, not guesses from
-        # the number of completed previews. A queued variation can be skipped
-        # without affecting another weight or another Test Session.
-        pending_rows = []
-        for job in pending:
-            row = _job_candidate_row(job, bool(status.get("sweepWeights")))
-            if row is not None and row not in pending_rows:
-                pending_rows.append(row)
-        visible["pendingCandidates"] = pending_rows
         visible["session"] = Path(session_directory).name
         visible["resultFolder"] = visible.get("resultFolder") or _session_result_folder(session_directory)
         _project_wildcard_fields(visible)

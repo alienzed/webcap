@@ -495,7 +495,7 @@
     els('run-detail').textContent=selected.length+' runs · '+chosenEpochs().length+' checkpoints selected';
   }
   function refreshPickerTestStatus(force) {
-    if (!currentFolder || (mode!=='screening' && mode!=='finder')) return Promise.resolve();
+    if (!currentFolder || mode!=='finder') return Promise.resolve();
     var folder=currentFolder, model=String(window.getWorkingModelProfileId()||'');
     var ids=selectedRunEntries().map(function(run){return run.jobId;});
     var key=JSON.stringify([folder,model,ids]);
@@ -514,15 +514,6 @@
   function drawEpochPicker() {
     drawRuns();
     var host=els('epoch-picker'),selected=selectedRunEntries();
-    var screening=isManualCampaign();
-    var excluded=screening ? selected.reduce(function(total,choice){
-      var run=runs.find(function(item){return item.jobId===choice.jobId;});
-      return total+(run?run.epochs.length-choice.epochs.length:0);
-    },0) : 0;
-    var reveal=els('screening-show-excluded');
-    reveal.classList.toggle('hidden',!screening||!excluded);
-    reveal.textContent=screeningShowExcluded?'Show selected epochs only':'Show '+excluded+' excluded epochs';
-    reveal.setAttribute('aria-pressed',String(screeningShowExcluded));
     if(sourceMode==='staged'){host.classList.add('hidden');return;}
     host.classList.toggle('hidden',!selected.length);
     var existing=new Map(Array.from(host.querySelectorAll('[data-epoch-run]')).map(function(node){
@@ -532,7 +523,7 @@
       var run=runs.find(function(item){return item.jobId===choice.jobId;});
       if(!run)throw new Error('Selected training run disappeared.');
       var region=existing.get(run.jobId);
-      var visibleEpochs=screening&&!screeningShowExcluded?choice.epochs:run.epochs;
+      var visibleEpochs=run.epochs;
       var epochsSignature=JSON.stringify(visibleEpochs);
       if(!region){
         region=document.createElement('section');
@@ -891,14 +882,14 @@
 
   function list() {
     var model = String(window.getWorkingModelProfileId() || '');
-    var visible = campaigns.filter(function (c) { return c.modelId === model && (c.mode === 'manual') === (mode === 'screening'); });
+    var visible = campaigns.filter(function (c) { return c.modelId === model && c.mode !== 'manual'; });
     els('count').textContent = String(visible.length);
     els('campaigns').innerHTML = visible.length ? visible.map(function (c) {
       return '<button type="button" class="epoch-finder-campaign ' +
         (c.id === activeCampaign ? 'active' : '') + '" data-id="' + escape(c.id) + '">' +
         '<strong>' + escape(c.name || c.id) + '</strong><small>' + escape(c.modelId || '') + ' · Round ' + escape(c.round) +
         ' · ' + escape(c.phase || c.status) + '</small></button>';
-    }).join('') : '<span class="epoch-finder-muted">No '+(mode==='screening'?'screenings':'campaigns')+' for this model.</span>';
+    }).join('') : '<span class="epoch-finder-muted">No '+'campaigns'+' for this model.</span>';
   }
   function progress(campaign) {
     var plan = campaign.rounds.find(function (r) { return r.number === campaign.round; }) || campaign.rounds[campaign.rounds.length - 1];

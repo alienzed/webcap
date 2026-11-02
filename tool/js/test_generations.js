@@ -2800,7 +2800,9 @@
     var failed = Number(session && session.failed || 0);
     var queued = Number(session && session.queued || 0);
     var running = Number(session && session.running || 0);
-    var text = String(session && session.status || '') + ' · ' + completed + ' / ' + total + ' complete' +
+    var status = String(session && session.status || '').trim();
+    var label = status ? status.charAt(0).toUpperCase() + status.slice(1) : 'Unknown';
+    var text = label + ' · ' + completed + ' / ' + total + ' complete' +
       (running ? ' · ' + running + ' running' : '') +
       (queued ? ' · ' + queued + ' queued' : '') +
       (failed ? ' · ' + failed + ' failed' : '');
@@ -2927,10 +2929,6 @@
       row.className = 'test-generations-session-row';
       row.dataset.sessionRowKey = key;
 
-      var stateBadge = document.createElement('span');
-      stateBadge.className = 'test-generations-session-state';
-      stateBadge.dataset.sessionRowState = '1';
-
       var copy = document.createElement('div');
       copy.className = 'test-generations-session-copy';
       var title = document.createElement('strong');
@@ -2944,7 +2942,6 @@
       actions.className = 'test-generations-session-actions';
       actions.dataset.sessionRowActions = '1';
 
-      row.appendChild(stateBadge);
       row.appendChild(copy);
       row.appendChild(actions);
       return row;
@@ -2983,19 +2980,6 @@
       row.querySelector('[data-session-row-title]').textContent =
         String(session.name || '').trim() || sessionLabel(name);
       row.querySelector('[data-session-row-meta]').textContent = sessionStatusText(session);
-      var stateBadge = row.querySelector('[data-session-row-state]');
-      var state = String(session.status || '').trim().toLowerCase() || 'complete';
-      if (stateBadge) {
-        stateBadge.className = 'test-generations-session-state status-' + state;
-        stateBadge.textContent = state === 'complete'
-          ? 'Complete'
-          : (state === 'starting' ? 'Starting'
-            : (state === 'running' ? 'Running'
-              : (state === 'stopping' ? 'Stopping'
-                : (state === 'stopped' ? 'Stopped'
-                  : (state === 'failed' ? 'Failed' : state)))));
-      }
-
       var copy = row.querySelector('.test-generations-session-copy');
       var active = session.status === 'running' || session.status === 'stopping' || session.status === 'starting';
       var progress = copy.querySelector('.test-generations-session-progress');
@@ -3022,12 +3006,6 @@
       }
 
       var actions = row.querySelector('[data-session-row-actions]');
-      var resultFolder = String(session.resultFolder || '');
-      var open = ensureButton(actions, 'open', 'review-captions-btn', 'Open');
-      open.dataset.sessionFolderOpen = resultFolder;
-      open.dataset.sessionReveal = resultFolder ? '' : name;
-      open.disabled = !resultFolder && !name;
-
       if (active) {
         removeControl(actions, 'delete');
         var stop = ensureButton(
@@ -3058,18 +3036,12 @@
       row.removeAttribute('data-session-name');
       row.querySelector('[data-session-row-title]').textContent =
         String(job.runName || '').trim() || 'Queued Test';
-      var stateBadge = row.querySelector('[data-session-row-state]');
-      if (stateBadge) {
-        stateBadge.className = 'test-generations-session-state status-queued';
-        stateBadge.textContent = 'Queued';
-      }
-
       var total = Number(job.testTotal || 0);
       var position = Number(job.queuePosition || 0);
       var queuedModel = supportedTestModels[String(job.modelId || '')] || {};
       row.querySelector('[data-session-row-meta]').textContent =
         (String(queuedModel.label || '').trim() ? String(queuedModel.label).trim() + ' · ' : '') +
-        'queued' + (position ? ' · Queue #' + position : '') + (total ? ' · ' + total + ' renders' : '');
+        'Queued' + (position ? ' · Queue #' + position : '') + (total ? ' · ' + total + ' renders' : '');
 
       var copy = row.querySelector('.test-generations-session-copy');
       var progress = copy.querySelector('.test-generations-session-progress');
@@ -4999,41 +4971,6 @@
     }
   }
 
-  function revealTestSession(sessionName) {
-    var name = String(sessionName || '').trim();
-    if (!name) return Promise.resolve();
-    return fetch('/fs/storage/open', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ area: 'tests', id: name, folder: '' })
-    }).then(function (response) {
-      return response.json().then(function (payload) {
-        if (!response.ok || !payload || payload.ok === false) {
-          throw new Error(payload && payload.error ? payload.error : 'Could not open Test session folder.');
-        }
-        return payload;
-      });
-    });
-  }
-
-  function openResultsFolder(folder) {
-    var targetFolder = String(folder || '').replace(/^[/\\]+|[/\\]+$/g, '');
-    if (!targetFolder || !state || !state.dirStack || !state.dirStack.length) return;
-    if (typeof clearFocusSet === 'function' && state.focusSet && state.focusSet.keys && state.focusSet.keys.length) {
-      clearFocusSet();
-    }
-    closePane();
-    setWorkspaceSurface('default');
-    state.dirStack = [state.dirStack[0]].concat(targetFolder.split('/').filter(Boolean).map(function (name) {
-      return { name: name };
-    }));
-    state.folder = targetFolder;
-    state.currentItem = null;
-    clearEditorAndPreview();
-    clearCaptionFilterInputs();
-    refreshCurrentDirectory();
-  }
-
   function closePane() {
     ++openGeneration;
     var node = pane();
@@ -5846,15 +5783,6 @@
       var sessionStop = event.target.closest('[data-session-stop]');
       if (sessionStop) {
         stopRun(sessionStop);
-        return;
-      }
-      var folderOpen = event.target.closest('[data-session-folder-open], [data-session-reveal]');
-      if (folderOpen) {
-        if (folderOpen.dataset.sessionFolderOpen) {
-          openResultsFolder(folderOpen.dataset.sessionFolderOpen);
-        } else {
-          revealTestSession(folderOpen.dataset.sessionReveal).catch(showError);
-        }
         return;
       }
       var remove = event.target.closest('[data-session-delete]');

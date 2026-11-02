@@ -633,7 +633,7 @@
     cancelCaptionAssistJob(labAiJob).catch(error);
   };
   var reviewItems=[],reviewIndex=0,reviewRated=0,reviewSkipped=0,reviewBusy=false;
-  var reviewTotal=0,reviewExcluded=[],reviewExhausted=false,reviewSession=0;
+  var reviewTotal=0,reviewExcluded=[],reviewExhausted=false,reviewLoadFailed=false,reviewSession=0;
   function labReviewApi(operation,criteria,endpoint){
     return fetch(endpoint||'/fs/epoch_finder',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({folder:folder,operation:operation,criteria:criteria||{}})})
@@ -656,7 +656,8 @@
     lab('review-dialog').classList.toggle('is-complete',done&&reviewExhausted);
     lab('review-back').classList.toggle('hidden',reviewIndex===0);
     lab('review-skip').classList.toggle('hidden',done||!!current.reviewRating);
-    lab('review-next').classList.toggle('hidden',done||!(current.reviewRating||current.reviewSkipped));
+    lab('review-next').classList.toggle('hidden',!reviewLoadFailed&&(done||!(current.reviewRating||current.reviewSkipped)));
+    lab('review-next').textContent=reviewLoadFailed?'Retry loading →':'Next →';
     lab('review-undo').classList.toggle('hidden',done||!current.reviewRating);
   }
   function labReviewRender(){
@@ -668,6 +669,10 @@
     lab('review-wildcards').replaceChildren();
     lab('review-prompt').textContent='';
     if(done){
+      if(reviewLoadFailed){
+        lab('review-progress').textContent=reviewRated+' rated · '+reviewSkipped+' skipped · Loading interrupted';
+        lab('review-status').textContent='Could not load more renders. Use Retry loading to continue.';
+      }
       if(reviewExhausted){
         lab('review-progress').textContent=reviewItems.length
           ? 'All available renders reviewed · '+reviewRated+' rated · '+reviewSkipped+' skipped'
@@ -697,6 +702,8 @@
   function labReviewLoad(){
     var session=reviewSession;
     reviewBusy=true;
+    reviewLoadFailed=false;
+    labReviewRender();
     lab('review-progress').textContent='Finding unrated saved renders…';
     lab('review-status').textContent='';
     // Keep previously visited renders for Back, without asking for them again.
@@ -709,6 +716,7 @@
       reviewExhausted=!batch.length;
     }).catch(function(exc){
       if(session!==reviewSession)return;
+      reviewLoadFailed=true;
       error(exc);
       lab('review-status').textContent=String(exc.message||exc);
     }).finally(function(){
@@ -723,14 +731,14 @@
   function labReviewOpen(){
     ++reviewSession;
     reviewItems=[];reviewIndex=0;reviewRated=0;reviewSkipped=0;
-    reviewTotal=0;reviewExcluded=[];reviewExhausted=false;reviewBusy=false;
+    reviewTotal=0;reviewExcluded=[];reviewExhausted=false;reviewLoadFailed=false;reviewBusy=false;
     lab('review-dialog').showModal();
     labReviewLoad();
   }
   function labReviewAdvance(skipped){
     if(reviewBusy)return;
     var item=reviewItems[reviewIndex];
-    if(!item)return;
+    if(!item){if(reviewLoadFailed)labReviewLoad();return;}
     if(skipped){
       if(item.reviewRating)return;
       if(!item.reviewSkipped){

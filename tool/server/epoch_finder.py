@@ -458,6 +458,8 @@ def create_campaign(folder_path, criteria):
         model = get_test_model_for_staging_key(run["stage"])
         run_name = run["runName"]
     model.load_template()
+    if criteria.get("campaignMode") == "manual":
+        raise ValueError("Manual Screening is retired. Use Prompt Tests.")
     prompt = str(criteria.get("prompt") or "").strip()
     dimensions = normalize_dimensions(prompt, criteria.get("dimensions"))
     vision_model = str(criteria.get("visionModel") or "").strip()
@@ -1668,6 +1670,8 @@ def command(folder_path, operation, criteria=None):
         return {"campaign": status(folder_path, campaign_id)}
     if operation == "resume":
         campaign = status(folder_path, campaign_id)
+        if campaign.get("mode") == "manual":
+            raise ValueError("Legacy Manual Screening work cannot resume after retirement.")
         can_resume = {"paused", "interrupted", "failed"}
         if campaign["status"] not in can_resume:
             raise ValueError("Only paused, interrupted, failed or stopped work can resume.")

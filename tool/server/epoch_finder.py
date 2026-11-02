@@ -1100,7 +1100,6 @@ def _run(folder_path, campaign_id, control):
                             continue
                         try:
                             _render_unit(folder_path, campaign, plan, unit, staged,
-                                         stop_queuing=control["stop_round"] if campaign.get("mode") == "manual" else None,
                                          skip_queuing=skip_signal)
                         except Exception as exc:
                             _mark_unit_error(folder_path, campaign, unit, "render", exc)

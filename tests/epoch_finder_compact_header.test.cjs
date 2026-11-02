@@ -11,7 +11,7 @@ const end = html.indexOf('<div class="epoch-finder-live-layout"', start);
 assert.ok(start > -1 && end > start, 'Expected live Campaign/Screening header section');
 const doc = new JSDOM(html.slice(start, end)).window.document;
 
-test('screening/campaign header is two compact bands with live IDs intact', () => {
+test('Campaign header is two compact bands with live IDs intact', () => {
   const heading = doc.querySelector('.epoch-finder-heading');
   const title = heading.querySelector('.epoch-finder-title');
   assert.equal(title.querySelector('#epoch-finder-name').textContent, 'Campaign');

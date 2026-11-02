@@ -1,4 +1,4 @@
-"""Regression checks for Prompt Tests Matrix checkpoint cancellation and columns."""
+"""Regression checks for Prompt Tests Matrix elimination and columns."""
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -7,15 +7,18 @@ FRONTEND = (ROOT / "tool/js/test_generations.js").read_text(encoding="utf-8")
 CSS = (ROOT / "tool/css/styles.css").read_text(encoding="utf-8")
 
 
-def test_matrix_skip_only_cancels_queued_checkpoint_jobs():
-    assert 'if operation == "test_skip_candidate":' in BACKEND
-    skip = BACKEND.split("def skip_candidate(", 1)[1].split("\ndef stop(", 1)[0]
-    assert 'if target not in available:' in skip
-    assert '_job_candidate_row(job, sweep) != target' in skip
-    assert 'not in {"backlog", "queued"}' in skip
-    assert '_cancel_shared_pending_job(job_id, session_directory=session_directory, reduce_total=True)' in skip
-    assert 'stored["skippedCandidates"] = skipped' in skip
-    assert "execution_request_stop(" not in skip
+def test_matrix_removes_frozen_candidate_row_after_destructive_x():
+    body = BACKEND.split("def _remove_candidate_from_session(", 1)[1].split("\n\ndef activity_snapshot(", 1)[0]
+    assert 'status_payload["candidates"] = retained_candidates' in body
+    assert 'str(item.get("fileName") or "") != candidate_name' in body
+
+
+def test_matrix_x_cancels_live_work_before_deleting():
+    assert 'cancel_active=criteria.get("cancelActive") is True' in BACKEND
+    assert '"pendingCandidateRemovals"' in BACKEND
+    assert '_stop_removing_candidate_jobs' in BACKEND
+    assert 'execution_request_stop(job_id)' in BACKEND
+    assert 'return_status=False' in BACKEND
 
 
 def test_recovered_failures_retain_variation_and_checkpoint_identity():
@@ -33,13 +36,13 @@ def test_matrix_uses_identical_grid_definition_for_headers_and_cells():
     assert "index >= 0 && index < columns && Number.isInteger(index)" in FRONTEND
 
 
-def test_matrix_skip_does_not_change_future_run_selection():
+def test_matrix_shares_destructive_x_and_keeps_checkbox_selection():
     matrix = FRONTEND.split("function renderMatrix(status)", 1)[1].split("\n  function setResultsView(", 1)[0]
-    assert "request('test_skip_candidate'" in matrix
-    assert "matrixSkipPending.add(key)" in matrix
-    assert "skipButton.classList.toggle('hidden', !pending || skipped)" in matrix
-    assert "Epoch skipped" in matrix
-    assert "selectedCandidates.delete(" not in matrix
+    assert "request('test_skip_candidate'" not in matrix
+    assert "data.matrixSkip" not in matrix
+    assert "checkbox.dataset.matrixCandidate = info.candidateFile" in matrix
+    assert "sharedTestCard(result, status" in matrix
+    assert "cancelActive: !!sessionName" in FRONTEND
 
 
 def test_matrix_header_and_board_padding_do_not_force_extra_scroll():

@@ -13,7 +13,7 @@ from datetime import datetime
 from pathlib import Path, PurePosixPath
 
 from . import config as app_config
-from .folder_state_store import read_folder_state, set_media_rating, set_test_vision_assessment, set_test_workspace_prompt, migrate_test_workspace_prompts, set_test_manual_settings, set_test_campaign_settings
+from .folder_state_store import read_folder_state, set_media_rating, set_test_vision_assessment, set_test_workspace_prompt, migrate_test_workspace_prompts, set_test_campaign_settings
 from .test_models import get_test_model, get_test_model_for_staging_key, supported_models as registered_test_models, supported_profile_ids
 from .training_test_paths import browse_test_source, test_copy_path
 from .training_runner import candidate_run_snapshot_from_provenance, candidate_selected_epoch_from_provenance
@@ -226,7 +226,7 @@ def recent_test_prompts(limit=8):
 
 
 
-def remove_candidate(folder_path, file_name, session_name=None, model_id=None):
+def remove_candidate(folder_path, file_name, session_name=None, model_id=None, cancel_active=False):
     name = str(file_name or "").strip()
     if (
         not name
@@ -261,6 +261,22 @@ def remove_candidate(folder_path, file_name, session_name=None, model_id=None):
             raise RuntimeError("Staged Test candidate is not a regular file: " + name)
     if sidecar.is_symlink() or (sidecar.exists() and not sidecar.is_file()):
         raise RuntimeError("Staged Test candidate sidecar is not a regular file: " + sidecar.name)
+
+    # Persist explicit X removal before stopping GPU work; a later status poll
+    # finishes deleting this staged copy even if the reviewer closes the page.
+    if session_name and cancel_active:
+        with _status_lock:
+            stored = _read_status(session) or {}
+            if _session_candidate_has_nonterminal_job(stored, name):
+                pending = list(stored.get("pendingCandidateRemovals") or [])
+                if name not in pending:
+                    pending.append(name)
+                    stored["pendingCandidateRemovals"] = pending
+                    _atomic_write_json(_status_path(session), stored)
+                updated = _sync_inference_session(session)
+                if name in (updated.get("pendingCandidateRemovals") or []):
+                    return {"operation": "test_remove_candidate", "pendingRemoval": True,
+                            "removed": name, "sessionStatus": updated}
 
     session_status = _remove_candidate_from_session(folder_path, session_name, name) if session_name else None
 
@@ -1331,9 +1347,8 @@ def prepare(folder_path, model_id=None):
     template = model.load_template()
     prompt_state = workspace_prompt(folder_path, model.PROFILE_ID)
     set_state = read_folder_state(_set_prompt_path(folder_path))
-    manual_settings = set_state.get("test_manual_screening_by_model") or {}
     campaign_settings = set_state.get("test_campaign_by_model") or {}
-    if not isinstance(manual_settings, dict) or not isinstance(campaign_settings, dict):
+    if not isinstance(campaign_settings, dict):
         raise ValueError("Set Test workspace form settings are invalid.")
     try:
         loras = _staged_loras_for_set(folder_path, model)
@@ -1372,7 +1387,6 @@ def prepare(folder_path, model_id=None):
         "warnings": prepare_warnings,
         "workspacePromptPresent": bool(prompt_state["present"]),
         "workspacePrompt": str(prompt_state["prompt"]),
-        "manualSettings": dict(manual_settings.get(model.PROFILE_ID) or {}),
         "campaignSettings": dict(campaign_settings.get(model.PROFILE_ID) or {}),
         "defaultPrompt": model.default_prompt(template),
         "defaults": defaults,
@@ -1402,11 +1416,6 @@ def handle_request(folder_path, mode, selection_criteria=None):
             "operation": "test_save_workspace_prompt",
             **saved,
         }
-    if operation == "test_save_manual_settings":
-        criteria = selection_criteria if isinstance(selection_criteria, dict) else {}
-        return {"operation": operation, "settings": set_test_manual_settings(
-            _set_prompt_path(folder_path), get_test_model(criteria.get("modelId")).PROFILE_ID,
-            criteria.get("settings"))}
     if operation == "test_save_campaign_settings":
         criteria = selection_criteria if isinstance(selection_criteria, dict) else {}
         return {"operation": operation, "settings": set_test_campaign_settings(
@@ -1461,15 +1470,6 @@ def handle_request(folder_path, mode, selection_criteria=None):
     if operation == "test_stop":
         criteria = selection_criteria if isinstance(selection_criteria, dict) else {}
         return stop(folder_path, session_name=criteria.get("session"))
-    if operation == "test_skip_candidate":
-        criteria = selection_criteria if isinstance(selection_criteria, dict) else {}
-        return skip_candidate(
-            folder_path,
-            criteria.get("session"),
-            criteria.get("kind"),
-            criteria.get("candidateFile"),
-            criteria.get("strength"),
-        )
     if operation == "test_remove_candidate":
         criteria = selection_criteria if isinstance(selection_criteria, dict) else {}
         return remove_candidate(
@@ -1477,6 +1477,7 @@ def handle_request(folder_path, mode, selection_criteria=None):
             criteria.get("fileName"),
             session_name=criteria.get("session"),
             model_id=criteria.get("modelId"),
+            cancel_active=criteria.get("cancelActive") is True,
         )
     if operation == "test_enqueue":
         criteria = selection_criteria if isinstance(selection_criteria, dict) else {}
@@ -2434,27 +2435,6 @@ def _job_candidate_identity(job):
     return kind, candidate_file, label
 
 
-def _test_candidate_row(kind, file_name, strength, sweep):
-    kind = str(kind or "")
-    if kind not in {"lora", "base"}:
-        return None
-    return {
-        "kind": kind,
-        "fileName": str(file_name or "") if kind == "lora" else "",
-        "strength": float(strength) if sweep and kind == "lora" and strength is not None else None,
-    }
-
-
-def _job_candidate_row(job, sweep):
-    metadata = job.get("metadata") if isinstance(job.get("metadata"), dict) else {}
-    return _test_candidate_row(
-        metadata.get("candidateKind"),
-        metadata.get("candidateFile"),
-        metadata.get("candidateStrength"),
-        sweep,
-    )
-
-
 def _session_has_nonterminal_jobs(session_directory):
     status = _read_status(session_directory) or {}
     if status.get("deferredJobId") and not status.get("inferenceJobs"):
@@ -2487,6 +2467,36 @@ def _session_candidate_has_nonterminal_job(status, candidate_name):
         if candidate_file == candidate_name:
             return True
     return False
+
+
+def _stop_removing_candidate_jobs(session_directory, status, candidate_name):
+    """Cancel pending and stop active renditions of an explicitly rejected LoRA."""
+    for job in _session_job_records(status):
+        if _job_candidate_identity(job)[1] != candidate_name:
+            continue
+        job_id = str(job.get("id") or "")
+        for _attempt in range(5):
+            try:
+                state = str(execution_get_job(job_id).get("status") or "")
+            except FileNotFoundError:
+                break
+            if state in {"backlog", "queued"}:
+                try:
+                    _cancel_shared_pending_job(job_id, session_directory=session_directory, reduce_total=True)
+                except ValueError as exc:
+                    if "Only pending execution jobs can be cancelled." not in str(exc):
+                        raise
+                    continue
+            elif state in {"starting", "running", "stopping"}:
+                try:
+                    execution_request_stop(job_id)
+                except ValueError as exc:
+                    if "Only active execution jobs can be stopped." not in str(exc):
+                        raise
+                    continue
+            break
+        else:
+            raise RuntimeError("Test candidate job changed state repeatedly while stopping: " + job_id)
 
 
 def _sync_inference_session(session_directory):
@@ -2534,10 +2544,14 @@ def _sync_inference_session(session_directory):
                 _atomic_write_json(_status_path(session_directory), status)
                 return _session_status_from_payload(session_directory, status)
             else:
-                # An enqueue is being committed; preserve its queued status.
-                return _session_status_from_payload(session_directory, status)
+                # A queued promise can finish empty when X eliminated all its
+                # candidates. Finalize the persisted X removal, if any.
+                if not status.get("pendingCandidateRemovals"):
+                    return _session_status_from_payload(session_directory, status)
 
         missing_job_ids = []
+        for candidate_name in status.get("pendingCandidateRemovals") or []:
+            _stop_removing_candidate_jobs(session_directory, status, candidate_name)
         jobs = _session_job_records(status, missing_job_ids=missing_job_ids)
         results = status.get("results") if isinstance(status.get("results"), list) else []
         failures = status.get("failures") if isinstance(status.get("failures"), list) else []
@@ -2611,6 +2625,30 @@ def _sync_inference_session(session_directory):
             status["skippedJobIds"] = sorted(skipped_job_ids)
             _atomic_write_json(_status_path(session_directory), status)
 
+        # Finalize only after this candidate has no runnable child job.
+        for candidate_name in list(status.get("pendingCandidateRemovals") or []):
+            if _session_candidate_has_nonterminal_job(status, candidate_name):
+                continue
+            owner_folder = app_config.safe_join_fs_root(str(status.get("ownerFolder") or ""))
+            _remove_candidate_from_session(
+                owner_folder, Path(session_directory).name, candidate_name, return_status=False
+            )
+            model = get_test_model(status.get("modelId") or status.get("model"))
+            candidate_file = _test_directory(owner_folder, model) / candidate_name
+            sidecar = candidate_file.with_suffix(".webcap.json")
+            if candidate_file.is_file():
+                candidate_file.unlink()
+            if sidecar.is_file():
+                sidecar.unlink()
+            status = _read_status(session_directory) or {}
+            status["pendingCandidateRemovals"] = [
+                item for item in (status.get("pendingCandidateRemovals") or [])
+                if item != candidate_name
+            ]
+            _atomic_write_json(_status_path(session_directory), status)
+        results = status.get("results") if isinstance(status.get("results"), list) else []
+        failures = status.get("failures") if isinstance(status.get("failures"), list) else []
+
         active = next(
             (
                 job for job in jobs
@@ -2627,15 +2665,6 @@ def _sync_inference_session(session_directory):
         visible["failed"] = failed
         visible["queued"] = len(pending)
         visible["running"] = 1 if active is not None else 0
-        # Matrix controls use the exact queued job identities, not guesses from
-        # the number of completed previews. A queued variation can be skipped
-        # without affecting another weight or another Test Session.
-        pending_rows = []
-        for job in pending:
-            row = _job_candidate_row(job, bool(status.get("sweepWeights")))
-            if row is not None and row not in pending_rows:
-                pending_rows.append(row)
-        visible["pendingCandidates"] = pending_rows
         visible["session"] = Path(session_directory).name
         visible["resultFolder"] = visible.get("resultFolder") or _session_result_folder(session_directory)
         _project_wildcard_fields(visible)
@@ -2997,6 +3026,27 @@ def expand_queued_session(job_id):
         candidates = request.pop("sessionCandidates", None)
         if not isinstance(candidates, list) or not candidates:
             raise RuntimeError("Queued Test Session has no frozen renditions.")
+        # X may reject a candidate while the session is still a deferred promise.
+        # Do not materialize GPU work for candidates already marked for deletion.
+        rejected = set(status.get("pendingCandidateRemovals") or [])
+        if rejected:
+            candidates = [item for item in candidates if item.get("file") not in rejected]
+            status["candidates"] = [
+                item for item in (status.get("candidates") or [])
+                if item.get("fileName") not in rejected
+            ]
+            status["total"] = len(candidates)
+        if not candidates:
+            # All frozen renditions were explicitly eliminated before dispatch.
+            # Do not try to replace the promise with an empty execution batch.
+            from .inference_runner import action as inference_action
+            inference_action("cancel", job_id=job_id)
+            status["status"] = "stopped"
+            status["deferredJobId"] = ""
+            status["error"] = ""
+            _atomic_write_json(_status_path(session_directory), status)
+            _sync_inference_session(session_directory)
+            return []
         contexts, labels = _test_session_renditions(folder, session_name, request, candidates)
         # One durable queue transaction replaces the promise with its child jobs.
         # If interrupted before the status write, polling recovers their IDs.
@@ -3608,65 +3658,6 @@ def status(folder_path, model_id=None, session_snapshot=None, visible_snapshot=N
     return _with_session_vision(session, _with_session_ratings(session, payload))
 
 
-def skip_candidate(folder_path, session_name, kind, candidate_file, strength=None):
-    """Cancel only unstarted Test variations for one Matrix checkpoint row."""
-    reconcile_startup()
-    session_id = str(session_name or "").strip()
-    if not session_id:
-        raise ValueError("Select a Test Session before skipping a checkpoint.")
-    session_directory = _session_directory(folder_path, session_id)
-    payload = _visible_session_status(folder_path, session_directory)
-    if payload.get("status") not in {"running", "queued"} or not payload.get("inferenceJobs"):
-        raise RuntimeError("This Test Session has no queued checkpoint variations to skip.")
-
-    sweep = bool(payload.get("sweepWeights"))
-    if str(kind or "") not in {"lora", "base"}:
-        raise ValueError("Unsupported Test checkpoint kind.")
-    if kind == "lora" and not str(candidate_file or "").strip():
-        raise ValueError("Choose a Test checkpoint to skip.")
-    if sweep and kind == "lora" and strength is None:
-        raise ValueError("Choose the Test checkpoint weight to skip.")
-    target = _test_candidate_row(kind, candidate_file, strength, sweep)
-    available = [
-        _test_candidate_row(candidate.get("kind"), candidate.get("fileName"),
-                            candidate.get("strength"), sweep)
-        for candidate in (payload.get("candidates") or [])
-    ]
-    if target not in available:
-        raise ValueError("The selected checkpoint is not part of this Test Session.")
-    if target in (payload.get("skippedCandidates") or []):
-        return payload
-
-    # Pending only: already running renders finish normally, and completed
-    # previews/ratings remain intact. Recheck per job because the queue can
-    # claim work between listing and cancellation.
-    for job in _session_job_records(payload):
-        if _job_candidate_row(job, sweep) != target:
-            continue
-        job_id = str(job.get("id") or "")
-        try:
-            live = execution_get_job(job_id)
-        except FileNotFoundError:
-            continue
-        if str(live.get("status") or "") not in {"backlog", "queued"}:
-            continue
-        try:
-            _cancel_shared_pending_job(job_id, session_directory=session_directory, reduce_total=True)
-        except ValueError as exc:
-            if "Only pending execution jobs can be cancelled." not in str(exc):
-                raise
-            # Worker claimed this rendition: allow it to finish.
-
-    with _status_lock:
-        stored = _read_status(session_directory) or {}
-        skipped = list(stored.get("skippedCandidates") or [])
-        if target not in skipped:
-            skipped.append(target)
-            stored["skippedCandidates"] = skipped
-            _atomic_write_json(_status_path(session_directory), stored)
-    return _visible_session_status(folder_path, session_directory)
-
-
 def stop(folder_path, session_name=None):
     reconcile_startup()
     session_id = str(session_name or "").strip()
@@ -3857,7 +3848,7 @@ def delete_session(folder_path, session_name):
         "latest": _latest_status(folder_path, model_id=model_id),
     }
 
-def _remove_candidate_from_session(folder_path, session_name, candidate_name):
+def _remove_candidate_from_session(folder_path, session_name, candidate_name, return_status=True):
     session = _session_directory(folder_path, session_name)
     session_payload = _read_status(session) or {}
     status_payload = session_payload
@@ -3884,6 +3875,11 @@ def _remove_candidate_from_session(folder_path, session_name, candidate_name):
             ):
                 if path.is_file():
                     path.unlink()
+    candidates = status_payload.get("candidates") if isinstance(status_payload.get("candidates"), list) else []
+    retained_candidates = [
+        item for item in candidates
+        if str(item.get("fileName") or "") != candidate_name
+    ]
     if removed_results or removed_failures:
         status_payload["results"] = [item for item in results if item not in removed_results]
         status_payload["failures"] = [item for item in failures if item not in removed_failures]
@@ -3893,8 +3889,11 @@ def _remove_candidate_from_session(folder_path, session_name, candidate_name):
             0,
             int(status_payload.get("total") or 0) - len(removed_results) - len(removed_failures),
         )
+    if len(retained_candidates) != len(candidates):
+        status_payload["candidates"] = retained_candidates
+    if removed_results or removed_failures or len(retained_candidates) != len(candidates):
         _atomic_write_json(_status_path(session), status_payload)
-    return _visible_session_status(folder_path, session)
+    return _visible_session_status(folder_path, session) if return_status else None
 
 
 def activity_snapshot(folder_path=None):

@@ -687,7 +687,7 @@
     var video=/\.(mp4|webm|mov|mkv)$/i.test(current.mediaFile)||current.mediaKind==='video';
     var media=document.createElement(video?'video':'img');
     media.src=url;
-    if(video){media.controls=true;media.preload='metadata';media.playsInline=true;}
+    if(video){media.controls=true;media.preload='auto';media.playsInline=true;media.muted=true;media.defaultMuted=true;media.autoplay=true;}
     else {media.alt='Test render under blind review';}
     lab('review-media').appendChild(media);
     var wildcards=(current.wildcards||[]).map(function(item){return typeof item==='string'?item:(item&&(item.phrase||item.value||item.label))||'';}).filter(Boolean);

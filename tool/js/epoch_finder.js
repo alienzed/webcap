@@ -1475,7 +1475,7 @@
     if (changed) {campaignDefaultsKey='';campaignTestStatusCampaign='';campaignTestStatus={};campaignTestStatusVersion++;resetMethodWorkspaces();runs=[];campaigns=[];stagedFiles=[];stagedModel='';lastFrameKey='';selectedRunId='';selectedEpochs=new Set();referenceSelections={};referenceItems=[];referencePlanSignature='';referenceGeneration++;}
     window.testReferencesPrepare(folder);
     window.runAnalyticsPrepare(folder);
-    if (mode === 'finder' || mode === 'screening') refresh();
+    if (mode === 'finder') refresh();
   }
   window.epochFinderPrepare = applyFolder;
   window.epochFinderInspectCampaign = function (campaignId, sourceEpoch, sourceJobId) {
@@ -1517,43 +1517,14 @@
     refresh();
   };
   els('new').onclick = function () {
-    screeningShowExcluded=false;followUpSource='';
+    followUpSource='';
     activeCampaign='';methodWorkspaces[mode].activeCampaign='';
-    campaignState=null;manualSelectionCampaign='';runEpochSelections={};
+    campaignState=null;runEpochSelections={};
     inspectedEpoch=null;inspectedFrame=0;lastFrameKey='';
     els('active').classList.add('hidden');els('empty').classList.remove('hidden');
-    list();showStep(1);screeningModeUi();
-    if(mode==='screening')screeningApplySettings(null);
-    else campaignApplyDefaults();
+    list();showStep(1);campaignApplyDefaults();
   };
   els('start').onclick=start;
-  els('manual-prompt').addEventListener('input',function(){screeningGroups();try{screeningSavePrompt();}catch(exc){error(exc);}});
-  els('manual-launch').onclick=screeningLaunch;
-  els('screening-show-excluded').onclick=function(){
-    screeningShowExcluded=!screeningShowExcluded;
-    drawEpochPicker();
-  };
-  els('manual-sort').onchange=function(){if (isManualCampaign()) screeningMatrix(campaignState);};
-  els('manual-vl-round').onclick=function(){if (isManualCampaign()) screeningAskVision(campaignState,{});};
-  els('manual-round-list').onclick=function(event){
-    if(!isManualCampaign())return;
-    var action=event.target.closest('[data-screening-round-action]');
-    if(action){
-      var number=Number(action.dataset.screeningRoundNumber),kind=action.dataset.screeningRoundAction;
-      if(kind==='delete' && !window.confirm(
-        'Permanently delete only Round '+number+' and its previews/ratings? Current and queued rounds will remain intact.')) return;
-      action.disabled=true;
-      api('screening_round_action',{campaignId:activeCampaign,round:number,action:kind})
-        .then(function(){return refreshStatus();}).catch(error)
-        .finally(function(){action.disabled=false;});
-      return;
-    }
-    var button=event.target.closest('[data-screening-round]');
-    if(!button)return;
-    manualSelectedRound=Number(button.dataset.screeningRound);
-    els('manual-matrix').dataset.signature='';
-    screeningMatrix(campaignState);
-  };
   els('follow-up').onclick = followUpCampaign;
   els('suggest').onclick = propose;
   els('next').onclick = advance;
@@ -1589,7 +1560,6 @@
     referenceGeneration++;
     drawEpochPicker();
     roundPlan();
-    screeningSaveSelection();
   });
   els('epoch-picker').addEventListener('click', function (event) {
     var region = event.target.closest('[data-epoch-run]');
@@ -1629,7 +1599,6 @@
       if (action.dataset.epochAction === 'last10') runEpochSelections[jobId] = new Set(run.epochs.slice(-10));
     }
     drawEpochPicker(); roundPlan();
-    screeningSaveSelection();
   });
 
   function referenceClick(event) {
@@ -1706,7 +1675,7 @@
       if (!hasRunOrigin(campaignState, inspectedEpoch)) return;
       var mapped=(campaignState.candidateMap||{})[String(inspectedEpoch)];
       window.runAnalyticsViewEpoch(mapped ? mapped.jobId : campaignState.jobId,
-        mapped ? mapped.epoch : inspectedEpoch,mode==='screening'?'screening':'finder');
+        mapped ? mapped.epoch : inspectedEpoch,'finder');
       return;
     }
     if (event.target.closest('[data-copy-epoch-to-test]')) {
@@ -1774,9 +1743,7 @@
   els('resume').onclick = function () { send('resume'); };
   els('stop').onclick = function () { send('stop'); };
   els('delete').onclick = function () {
-    var message=isManualCampaign()
-      ? 'Permanently delete ALL rounds and results in this screening history? This is NOT just the selected round.'
-      : 'Delete this campaign, its frames, and its scoring history?';
+    var message='Delete this campaign, its frames, and its scoring history?';
     if (window.confirm(message)) {
       clearError();
       api('delete', { campaignId: activeCampaign }).then(function () {
@@ -1790,7 +1757,7 @@
     var button = event.target.closest('[data-id]');
     if(button){
       activeCampaign=button.dataset.id;methodWorkspaces[mode].activeCampaign=activeCampaign;
-      manualSelectionCampaign='';screeningShowExcluded=false;
+
       inspectedEpoch=null;inspectedFrame=0;lastFrameKey='';
       list();refreshStatus().catch(error);
     }
@@ -1802,19 +1769,15 @@
     referenceDraftChoices={};referencePlanSignature='';referenceIndex=0;
     inspectedEpoch=null;
     els('active').classList.add('hidden'); els('empty').classList.remove('hidden');
-    if (mode === 'screening') {
-      screeningDraftContext=currentFolder+'|'+String(window.getWorkingModelProfileId()||'');
-      screeningSettingsKey='';screeningSettingsRequest=null;
-      screeningApplySettings(null);
-    } else if (mode === 'finder') {
+    if (mode === 'finder') {
       campaignDefaultsKey='';
       campaignApplyDefaults();
     }
-    if (mode === 'finder' || mode === 'screening') refresh();
+    if (mode === 'finder') refresh();
   });
   timer = setInterval(function () {
-    if ((mode === 'finder' || mode === 'screening') && activeCampaign && campaignState &&
-        (['queued', 'running'].includes(campaignState.status) || manualVisionPending) &&
+    if ((mode === 'finder') && activeCampaign && campaignState &&
+        ['queued', 'running'].includes(campaignState.status) &&
         !els('screen').classList.contains('hidden')) refreshStatus().catch(error);
   }, 2500);
 })();

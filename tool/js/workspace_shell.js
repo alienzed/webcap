@@ -158,7 +158,7 @@ function parseShellLocationRoute() {
   var scope = params.get('scope') === 'global' ? 'global' : 'set';
   return {
     workspace: workspace, folder: folder, scope: scope,
-    evaluationMethod: workspace === 'test' ? String(params.get('method') || 'tests') : '',
+    evaluationMethod: workspace === 'test' ? (['finder', 'analytics', 'references'].includes(params.get('method')) ? params.get('method') : 'tests') : '',
     storyId: String(params.get('story') || ''),
     sceneId: String(params.get('scene') || '')
   };

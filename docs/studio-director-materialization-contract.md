@@ -1,5 +1,7 @@
 # Studio Director — intention-to-materialization contract and feature-completeness audit
 
+> **Coherence consolidation (2026-11-03):** The staged implementation and acceptance gates for migrating the legacy Director Tools coherence check into Studio Director's explicit capability catalog and reviewed multi-Scene Write flow are in [studio-director-coherence-consolidation.md](studio-director-coherence-consolidation.md). It is not a new autonomous LLM tool framework. Legacy UI removal awaits runtime acceptance.
+
 ## Reconciliation checkpoint — 2026-11-03
 
 Recovered the uncommitted work based on `db550e27` as `5a74677e` on

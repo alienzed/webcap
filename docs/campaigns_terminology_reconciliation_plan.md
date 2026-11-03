@@ -1,6 +1,6 @@
 # Epoch Finder terminology reconciliation — Campaigns
 
-Status: implementation plan; changes are limited to presentation copy, with compatibility invariants below. Follow the root [AGENTS.md](../AGENTS.md).
+Status: phases 1–3 implemented; focused source-contract checks passed. Repository CI and real-browser verification remain separate. Follow the root [AGENTS.md](../AGENTS.md).
 
 ## Problem and codebase findings
 The Evaluations tabs in `tool/tool.html` and `surfaceLabels` in `tool/js/epoch_finder.js` already call the feature **Campaigns**. Remaining **Epoch Finder** text leaks through Media Explorer source labels/actions/usage metadata, Storage Manager category/ownership/deletion messages, Campaign jobs and Console/errors, and current README/Insights instructions. The old name also appears in historical design documents and internal contracts.

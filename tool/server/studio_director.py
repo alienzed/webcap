@@ -125,6 +125,70 @@ _H3_STUDIO_CORE = (
 )
 
 
+def chat_response_schema():
+    """One schema-constrained conversational reply and its advisory Studio metadata."""
+    capture_base = {
+        "content": {"type": "string", "minLength": 1, "maxLength": 20000},
+        "sceneId": {"type": "string", "enum": [""]},
+    }
+    captures = []
+    for fields in (
+        {"field": {"type": "string", "enum": ["title", "concept", "style"]}},
+        {"field": {"type": "string", "enum": ["summary", "prompt"]},
+         "sceneId": {"type": "string", "minLength": 1, "maxLength": 160}},
+        {"field": {"type": "string", "enum": ["scene"]},
+         "title": {"type": "string", "maxLength": 240}},
+        {"field": {"type": "string", "enum": ["invariant"]},
+         "kind": {"type": "string", "enum": ["character", "location", "visual", "world", "sound", "custom"]},
+         "title": {"type": "string", "minLength": 1, "maxLength": 240},
+         "beforeKind": {"type": "string", "enum": ["", "character", "location", "visual", "world", "sound", "custom"]},
+         "beforeTitle": {"type": "string", "maxLength": 240}},
+    ):
+        properties = {**capture_base, **fields}
+        captures.append({"type": "object", "additionalProperties": False,
+                         "properties": properties, "required": list(properties)})
+    readiness = []
+    for operations, fields in (
+        (["project"], ["title", "concept", "style", "invariants"]),
+        (["scene-edit", "scenes-batch"], ["title", "summary", "prompt"]),
+        (["", "new-project", "scene", "scenes", "scene-move", "scene-duplicate",
+          "scene-split", "scene-invariants", "playbook"], []),
+    ):
+        properties = {
+            "checks": {"type": "array", "maxItems": 10, "items": {
+                "type": "object", "additionalProperties": False,
+                "required": ["name", "scope", "ready", "content"],
+                "properties": {
+                    "name": {"type": "string", "enum": [
+                        "Concept", "Characters", "Setting", "Action", "Dialogue", "Visual / atmosphere",
+                        "Visual focus", "Structure / formula", "Variation / repetition", "Production feasibility"]},
+                    "scope": {"type": "string", "enum": ["project", "scene"]},
+                    "ready": {"type": "boolean"},
+                    "content": {"type": "string", "maxLength": 8000},
+                },
+            }},
+            "readHints": {"type": "array", "maxItems": 5,
+                          "items": {"type": "string", "maxLength": 120}},
+            "writeHint": {"type": "string", "enum": operations},
+            "writeFields": {"type": "array", "maxItems": 4 if fields else 0,
+                            "uniqueItems": True,
+                            "items": {"type": "string", **({"enum": fields} if fields else {})}},
+            "sceneId": {"type": "string", "maxLength": 160},
+            "capture": {"anyOf": captures},
+        }
+        readiness.append({
+            "type": "object", "additionalProperties": False,
+            "required": ["checks", "readHints", "writeHint", "writeFields", "sceneId"],
+            "properties": properties,
+        })
+    return {
+        "type": "object", "additionalProperties": False,
+        "required": ["reply", "readiness"],
+        "properties": {"reply": {"type": "string", "minLength": 1},
+                       "readiness": {"anyOf": readiness}},
+    }
+
+
 def guidance(target_model="minimax_h3"):
     """Return concise Studio expertise plus the distinct prompt-authoring contract."""
     if target_model != "minimax_h3":

@@ -121,6 +121,7 @@ test('Read sends actual selected data as a visible conversation event and expect
   assert.match(outgoing, /\[WEBCAP EXPLICIT READ\]/);
   assert.match(outgoing, /A meaningful conversation/);
   assert.match(outgoing, /RECEIVED: project\.concept, scene:scene-two:summary/);
+  assert.match(outgoing, /After that line, briefly assess the supplied material and name the next useful step/);
   assert.equal(state.pendingReadAck.length, 2);
   assert.match(source, /Director acknowledgement mismatch/);
   assert.match(source, /reportConsoleError\('Studio Read acknowledgement'/);
@@ -136,7 +137,9 @@ test('Ordinary Studio conversation has no model-requested hidden Read or capture
 });
 
 test('Readiness proposals are bounded, inspectable, read-only and do not block Write', () => {
-  assert.match(source, /\[\[WEBCAP_READINESS\]\]/);
+  assert.match(source, /parseStudioChatResponse\(result.text\)/);
+  assert.match(source, /operation: activeChatMode === 'storyboard' \? 'studio_chat' : 'freeform_chat'/);
+  assert.doesNotMatch(source,/WEBCAP_READINESS/);
   assert.match(source, /window\.studioDirectorWorkbench\.updateReadiness/);
   assert.match(workbench, /studio-dw-assessment-item/);
   assert.match(workbench, /button\.type = 'button'/);

@@ -177,6 +177,7 @@ def test_h3_playbook_review_uses_existing_config_and_checks_conflicts(monkeypatc
     ("storyboard_workshop_shots", {"summary", "shots"}),
     ("storyboard_story_guidelines", {"summary", "guidelines"}),
     ("freeform_chat", None),
+    ("studio_chat", {"reply", "readiness"}),
 ])
 def test_director_chat_route_preserves_all_structured_schemas(monkeypatch, operation, expected_fields):
     import importlib
@@ -206,3 +207,50 @@ def test_director_chat_route_preserves_all_structured_schemas(monkeypatch, opera
         if operation == "studio_brief_draft":
             assert captured["schema"]["required"] == ["title", "concept", "style", "invariants", "rationale"]
             assert captured["schema"]["properties"]["invariants"]["items"]["required"] == ["kind", "title", "text"]
+
+
+def test_studio_chat_schema_constrains_recommendations_to_the_selected_operation():
+    from tool.server.studio_director import chat_response_schema
+
+    schema = chat_response_schema()
+    assert schema["required"] == ["reply", "readiness"]
+    assert schema["properties"]["reply"]["minLength"] == 1
+    variants = schema["properties"]["readiness"]["anyOf"]
+    for variant in variants:
+        assert variant["additionalProperties"] is False
+        assert set(variant["required"]) == {"checks", "readHints", "writeHint", "writeFields", "sceneId"}
+        fields = variant["properties"]["writeFields"]
+        for operation in variant["properties"]["writeHint"]["enum"]:
+            if operation == "project":
+                assert set(fields["items"]["enum"]) == {"title", "concept", "style", "invariants"}
+            elif operation in {"scene-edit", "scenes-batch"}:
+                assert set(fields["items"]["enum"]) == {"title", "summary", "prompt"}
+            else:
+                assert fields["maxItems"] == 0
+        assert fields["uniqueItems"] is True
+        assert "project, style, invariants" not in variant["properties"]["writeHint"]["enum"]
+        check = variant["properties"]["checks"]["items"]
+        assert check["additionalProperties"] is False
+        assert set(check["required"]) == {"name", "scope", "ready", "content"}
+
+
+def test_studio_chat_schema_keeps_creative_captures_optional_and_compatible_with_saved_readiness():
+    from tool.server.studio_director import chat_response_schema
+    from tool.server.director_chat_history import _validate_readiness
+
+    for variant in chat_response_schema()["properties"]["readiness"]["anyOf"]:
+        assert "capture" not in variant["required"]
+        captures = variant["properties"]["capture"]["anyOf"]
+        for schema in captures:
+            assert schema["additionalProperties"] is False
+            assert set(schema["required"]) == set(schema["properties"])
+            for field in schema["properties"]["field"]["enum"]:
+                capture = {"field": field, "content": "Complete developed creative material.",
+                           "sceneId": "scene-1" if field in {"summary", "prompt"} else ""}
+                if field == "scene":
+                    capture["title"] = "A quiet reply"
+                if field == "invariant":
+                    capture.update(kind="character", title="Mara", beforeKind="", beforeTitle="")
+                readiness = {"checks": [], "readHints": [], "writeHint": "", "writeFields": [],
+                             "sceneId": "", "capture": capture}
+                assert _validate_readiness(readiness)["capture"] == capture

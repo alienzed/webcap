@@ -55,6 +55,19 @@ test('Project review summary follows edits and selection without changing either
   assert.equal(elements['studio-brief-concept'].value,'The keeper receives a reply.');
 });
 
+test('identical Invariants are not preselected because JSON properties arrived in another order',()=>{
+  const checkbox={checked:true};
+  const existing=[{kind:'character',text:'Keeper',title:'Mara'}];
+  const reviewed=[{item:{kind:'character',title:'Mara',text:'Keeper'}}];
+  const scope=vm.createContext({el:()=>checkbox,existing,reviewed});
+  const code=part(chat,"    el('studio-brief-invariants-selected').checked = reviewed.length",'    if (Array.isArray(writeFields)');
+  vm.runInContext(code,scope);
+  assert.equal(checkbox.checked,false);
+  reviewed[0].item.text='An older keeper.';
+  vm.runInContext(code,scope);
+  assert.equal(checkbox.checked,true);
+});
+
 test('contextual Prompt action uses the current route even when Write was aimed at another Project',async()=>{
   const fields=[{value:'summary',checked:true},{value:'prompt',checked:false},{value:'title',checked:true}];
   const elements={};
@@ -81,5 +94,34 @@ test('contextual Prompt action uses the current route even when Write was aimed 
 test('ordinary discussion asks for concise new decisions while complete creative fields remain complete',()=>{
   assert.match(chat,/one to three short paragraphs/);
   assert.match(chat,/supply its full usable content/);
-  assert.match(chat,/Keep readiness metadata in its separate final block/);
+  assert.match(chat,/Keep assessment metadata in readiness and conversational material in reply/);
+});
+
+test('compact Director replies keep the exact full text and leave General Chat alone',()=>{
+  const code=part(chat,"      if (state.activeMode === 'storyboard' && message.role === 'assistant' && message.content.length > 1200) {",
+    "      if (message.role === 'user' && (message.content.indexOf('[WEBCAP EXPLICIT READ]')");
+  const node=()=>({children:[],append(...children){this.children.push(...children);},replaceChildren(...children){this.children=children;}});
+  const message={role:'assistant',content:'A useful opening recommendation.\n\n'+('Complete creative details with "quotes" and line breaks.\n').repeat(40)};
+  const body=node();
+  const scope=vm.createContext({state:{activeMode:'storyboard'},message,body,document:{createElement:node}});
+  vm.runInContext(code,scope);
+  assert.equal(body.children[0].textContent,'A useful opening recommendation.');
+  assert.equal(body.children[1].children[1].textContent,message.content);
+  const general=node();
+  scope.body=general;
+  scope.state.activeMode='chat';
+  vm.runInContext(code,scope);
+  assert.equal(general.children.length,0);
+});
+
+test('Apply receipt names the actual scoped Scene fields and retains authoritative values',async()=>{
+  const state={modeMessages:{storyboard:[]},sessionDirty:{}};
+  const scope=vm.createContext({state,markStudioReadinessOutdated(){},renderMessages(){},persistSession:async()=>{}});
+  const bridge=vm.runInContext('({'+part(chat,'    recordApplied: function (kind, story, selected) {','    undoBrief: function () {')+'})',scope);
+  await bridge.recordApplied('scene.update',{id:'project-1',title:'Project',updatedAt:'now'},
+    {sceneId:'scene-1',savedFields:{prompt:'The reviewed prompt.'}});
+  const message=state.modeMessages.storyboard[0].content;
+  assert.match(message,/^Saved: H3 Prompt\./);
+  const saved=JSON.parse(message.split('[WEBCAP APPLIED FIELD VALUES]')[1].split('[END WEBCAP APPLY]')[0]);
+  assert.equal(saved.fields.savedFields.prompt,'The reviewed prompt.');
 });

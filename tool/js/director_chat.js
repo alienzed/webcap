@@ -1119,6 +1119,19 @@
       var body = document.createElement('div');
       body.className = 'director-chat-message-body';
       body.textContent = message.content;
+      if (state.activeMode === 'storyboard' && message.role === 'assistant' && message.content.length > 1200) {
+        var preview = document.createElement('div');
+        preview.className = 'director-chat-reply-preview';
+        var opening = message.content.split(/\n\s*\n/)[0];
+        preview.textContent = opening.length > 480 ? opening.slice(0,480).replace(/\s+\S*$/, '') + '…' : opening;
+        var fullReply = document.createElement('details'), fullHeading = document.createElement('summary'),
+          fullText = document.createElement('div');
+        fullReply.className = 'director-chat-long-reply';
+        fullHeading.textContent = 'Full Director reply';
+        fullText.textContent = message.content;
+        fullReply.append(fullHeading,fullText);
+        body.replaceChildren(preview,fullReply);
+      }
       if (message.role === 'user' && (message.content.indexOf('[WEBCAP EXPLICIT READ]') !== -1 ||
           message.content.indexOf('[WEBCAP APPLIED FIELD VALUES]') !== -1)) {
         var applied = message.content.indexOf('[WEBCAP APPLIED FIELD VALUES]') !== -1;
@@ -1818,7 +1831,9 @@
     });
     el('studio-brief-invariants-selected').checked = reviewed.length !== existing.length ||
       reviewed.some(function (row, index) {
-        return JSON.stringify(row.item) !== JSON.stringify(existing[index]);
+        return !existing[index] || ['kind','title','text'].some(function (field) {
+          return row.item[field] !== existing[index][field];
+        });
       });
     if (Array.isArray(writeFields) && writeFields.length) {
       ['title', 'concept', 'style', 'invariants'].forEach(function (field) {
@@ -2720,18 +2735,18 @@
     // It is reference knowledge here, not permission to draft or save a Prompt.
     return studioDirectorRequestMessages(messages, true).then(function (outbound) {
       outbound[0].content += '\n\nCONTEXT DELIVERY CONTRACT: Only explicitly supplied Read fields are available. ' +
-        'For a WEBCAP EXPLICIT READ, begin your natural answer with a line RECEIVED: ' +
+        'For a WEBCAP EXPLICIT READ, begin the reply field with a line RECEIVED: ' +
         'followed by the exact received field identifiers separated by comma and space. ' +
         'Then discuss the contents substantively; a receipt alone is not an assessment. ' +
         'Never claim to have inspected unavailable saved fields. ' +
         'A WEBCAP APPLIED FIELD VALUES event contains author-reviewed saved content and supersedes older Read snapshots. ' +
-        'READINESS: After your conversational reply, emit a final delimited machine-readable block ' +
-        '[[WEBCAP_READINESS]]JSON[[END_WEBCAP_READINESS]]. JSON is an object containing checks ' +
+        'RESPONSE CONTRACT: Return one JSON object matching the supplied schema, with reply and readiness. ' +
+        'Put your conversational answer in reply. Put its Studio assessment in readiness, containing checks ' +
         '(up to 10 objects with name, scope, ready, content), readHints (0-5 field identifiers), ' +
         'writeHint (project, new-project, scene, scenes, scene-edit, scenes-batch, scene-move, scene-duplicate, scene-split, scene-invariants, playbook, or empty), ' +
-        'and sceneId (known ID or empty). Optionally include writeFields for Write defaults: ' +
+        'and sceneId (known ID or empty). Include writeFields for Write defaults: ' +
         'with writeHint project, use title, concept, style or invariants; with scene-edit or scenes-batch, ' +
-        'use summary (Intent), prompt (H3 Prompt) or title. For other operations omit writeFields. ' +
+        'use summary (Intent), prompt (H3 Prompt) or title. For other operations use an empty writeFields array. ' +
         'Recommend only the fields relevant to this discussion; these are editable defaults, never automatic edits. ' +
         'Name is one of Concept, Characters, Setting, ' +
         'Action, Dialogue, Visual / atmosphere, Visual focus, Structure / formula, ' +
@@ -2746,7 +2761,7 @@
         'already developed in this reply or the ongoing conversation, you may add one capture object ' +
         '{field, content, sceneId} to the same readiness JSON. field is title, concept, style, ' +
         'summary, prompt, invariant or scene; content is COMPLETE authored material, not a vague instruction. ' +
-        'For scene, content is the complete Scene Intent for a NEW tentative Scene, title is optional and sceneId empty; ' +
+        'For scene, content is the complete Scene Intent for a NEW tentative Scene, title is a string (empty when unnamed) and sceneId empty; ' +
         'sceneId is the exact known saved Scene ID for Scene fields, otherwise empty. ' +
         'For field invariant include kind (character/location/visual/world/sound/custom), title, ' +
         'beforeKind and beforeTitle along with field/content/sceneId; use beforeKind/beforeTitle only ' +
@@ -2758,7 +2773,7 @@
         'For ordinary discussion, use one to three short paragraphs focused on the new decision and next useful action. ' +
         'Build on agreed material and give at most one consequential question. ' +
         'When the author asks for a complete field or Prompt, supply its full usable content. ' +
-        'Keep readiness metadata in its separate final block.';
+        'Keep assessment metadata in readiness and conversational material in reply.';
       return outbound;
     });
   }
@@ -2771,36 +2786,17 @@
     window.studioDirectorWorkbench.setReadinessFreshness(true);
   }
 
-  // Conservative recovery for common LLM JSON formatting mistakes. Never
-  // invent readiness fields or evaluate text as JavaScript.
-  function parseStudioReadinessJson(raw) {
-    var source = String(raw || '').trim().replace(/^\uFEFF/, '');
-    try { return JSON.parse(source); }
-    catch (originalError) {
-      var repaired = source.replace(/^\`\`\`(?:json)?\s*/i, '').replace(/\s*\`\`\`$/, '');
-      // Remove trailing commas ONLY outside JSON strings.
-      var inside = false, escaped = false, output = '';
-      for (var i = 0; i < repaired.length; i++) {
-        var c = repaired[i];
-        if (inside) {
-          output += c;
-          if (escaped) escaped = false;
-          else if (c === '\\') escaped = true;
-          else if (c === '"') inside = false;
-        } else if (c === '"') {
-          inside = true; output += c;
-        } else if (c === ',') {
-          var next = i + 1;
-          while (next < repaired.length && /\s/.test(repaired[next])) next++;
-          if (repaired[next] !== '}' && repaired[next] !== ']') output += c;
-        } else output += c;
-      }
-      try { return JSON.parse(output); }
-      catch (repairError) {
-        throw new Error('Readiness JSON parse failed: ' + originalError.message +
-          '; conservative repair failed: ' + repairError.message);
-      }
+  function parseStudioChatResponse(raw) {
+    var value;
+    try { value = JSON.parse(String(raw || '')); }
+    catch (error) {
+      throw new Error('Director returned invalid conversation JSON: ' + error.message +
+        '\nRaw Director response:\n' + String(raw || ''));
     }
+    if (!value || typeof value !== 'object' || Array.isArray(value) ||
+        typeof value.reply !== 'string' || !value.reply.trim())
+      throw new Error('Director response requires a conversational reply.\nRaw Director response:\n' + String(raw || ''));
+    return value;
   }
 
   function storyboardRequestMessages(messages, includePrimer) {
@@ -3266,7 +3262,9 @@
         return requestJson('/fs/director/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ model: state.modelId, messages: outboundMessages })
+          body: JSON.stringify({ model: state.modelId,
+            operation: activeChatMode === 'storyboard' ? 'studio_chat' : 'freeform_chat',
+            messages: outboundMessages })
         });
       }).then(function (payload) {
         if (!payload.job || !payload.job.jobId) throw new Error('Assistant did not return a queued job.');
@@ -3282,10 +3280,12 @@
         // Do not allow model-generated hidden read tokens or private continuation.
         return result;
       }).then(function (result) {
+        var studioResponse = activeChatMode === 'storyboard' ? parseStudioChatResponse(result.text) : null;
+        var assistantText = studioResponse ? studioResponse.reply : String(result.text || '');
         if (activeChatMode === 'storyboard' && state.pendingReadAck) {
           var expected = state.pendingReadAck;
           state.pendingReadAck = null;
-          var reply = String(result.text || '');
+          var reply = assistantText;
           var line = reply.split(String.fromCharCode(10)).find(function (item) { return /^RECEIVED:/i.test(item.trim()); }) || '';
           var received = line.trim().replace(/^RECEIVED:/i, '').trim().split(',').map(function (key) { return key.trim(); });
           var missing = expected.filter(function (key) { return received.indexOf(key) === -1; });
@@ -3301,51 +3301,16 @@
               window.reportConsoleError('Studio Read acknowledgement', new Error(feedback));
           }
         }
-        var assistantText = String(result.text || '');
-        if (activeChatMode === 'storyboard') {
-          var readyStart = assistantText.indexOf('[[WEBCAP_READINESS]]');
-          var readyEnd = assistantText.indexOf('[[END_WEBCAP_READINESS]]');
-          if (readyStart >= 0 && readyEnd > readyStart) {
-            var readyJson = assistantText.slice(readyStart + '[[WEBCAP_READINESS]]'.length, readyEnd).trim();
-            // Remove the metadata from the visible conversation independently of parsing.
-            assistantText = (assistantText.slice(0, readyStart) +
-              assistantText.slice(readyEnd + '[[END_WEBCAP_READINESS]]'.length)).trim();
-            var readinessData = null;
-            try { readinessData = parseStudioReadinessJson(readyJson); }
-            catch (parseError) {
-              window.reportConsoleError('Studio readiness JSON', parseError);
-              studioActionStatus('Assessment outdated: Director returned unparseable JSON.', true);
-              window.studioDirectorWorkbench.setStatus('Assessment outdated · JSON parsing failed.', true);
-            }
-            if (readinessData !== null) {
-              try {
-                if (!window.studioDirectorWorkbench.updateReadiness(readinessData))
-                  throw new Error('Readiness JSON parsed, but its fields did not match the expected contract.\nRaw readiness JSON:\n' + readyJson);
-                studioActionStatus('Director assessment updated.', false);
-                window.studioDirectorWorkbench.setStatus('Assessment updated.', false);
-              } catch (processingError) {
-                window.reportConsoleError('Studio readiness fields', processingError);
-                studioActionStatus('Assessment outdated: readiness fields were invalid.', true);
-                window.studioDirectorWorkbench.setStatus('Assessment outdated · invalid readiness fields.', true);
-              }
-            }
-            if (state.studioReadiness.stale)
-              window.studioDirectorWorkbench.setReadinessFreshness(true);
-            if (!assistantText) {
-              assistantText = 'Director returned assessment data but no conversational reply.';
-              window.reportConsoleError('Studio Director conversation',
-                new Error('Director supplied readiness without a conversational reply; JSON validity is independent.'));
-            }
-          } else {
-            if (readyStart >= 0) {
-              // A truncated metadata block is not conversational content.
-              assistantText = assistantText.slice(0, readyStart).trim() ||
-                'Director returned an incomplete assessment without a conversational reply.';
-              window.reportConsoleError('Studio readiness JSON',
-                new Error('Director started a readiness block but omitted its end delimiter.'));
-            }
-            studioActionStatus('Assessment outdated: latest reply was not assessed.', false);
-            window.studioDirectorWorkbench.setStatus('Assessment outdated · no complete readiness block.', false);
+        if (studioResponse) {
+          try {
+            if (!window.studioDirectorWorkbench.updateReadiness(studioResponse.readiness))
+              throw new Error('Director readiness did not match the expected contract.\nRaw structured response:\n' + result.text);
+            studioActionStatus('Director assessment updated.', false);
+          } catch (processingError) {
+            requestError = processingError;
+            window.reportConsoleError('Studio readiness fields', processingError);
+            studioActionStatus('Director reply received · assessment failed.', true);
+            window.studioDirectorWorkbench.setReadinessFreshness(true);
           }
         }
         messages.push({ role: 'assistant', content: assistantText });
@@ -3727,25 +3692,27 @@
       composer.value = (instruction || draft || 'Inspect this material and suggest the next useful development step.') +
         nl + nl + '[WEBCAP EXPLICIT READ]' + nl +
         JSON.stringify(payload, null, 2) + nl + '[END WEBCAP READ]' + nl +
-        'Start your response with RECEIVED: ' + keys.join(', ') +
-        ' using exactly those field identifiers, then discuss the material.';
+        'Begin the reply field with RECEIVED: ' + keys.join(', ') +
+        ' using exactly those field identifiers. After that line, briefly assess the supplied material and name the next useful step.';
       state.pendingReadAck = keys.slice();
       sendMessage();
     },
+    selectWriteProject: function (storyId, storyTitle) {
+      if (!storyId) throw new Error('Select a Project destination for Write.');
+      if (studioAttachedStoryId() !== storyId) {
+        // Never reuse a draft extracted against a different saved Project.
+        state.studioBriefProposal = null;
+        state.studioSceneProposal = null;
+        state.studioScenesProposal = null;
+      }
+      state.studioStoryAccess = {storyId: storyId, label: storyTitle || storyId};
+      state.studioAccessIndex = null;
+      scheduleSessionSave();
+      syncModeUi();
+    },
     prepareWrite: function (kind, storyId, storyTitle, writeFields) {
       if (!this.isReady()) throw new Error('Director must be ready before Write.');
-      if (kind !== 'new-project') {
-        if (!storyId) throw new Error('Select a Project destination for Write.');
-        if (studioAttachedStoryId() !== storyId) {
-          // Never reuse a draft extracted against a different saved Project.
-          state.studioBriefProposal = null;
-          state.studioSceneProposal = null;
-          state.studioScenesProposal = null;
-        }
-        state.studioStoryAccess = {storyId: storyId, label: storyTitle || storyId};
-        state.studioAccessIndex = null;
-        scheduleSessionSave();
-      }
+      if (kind !== 'new-project') this.selectWriteProject(storyId,storyTitle);
       if (kind === 'new-project') {
         state.studioProjectProposal = null; // Create a fresh review from current conversation.
         return prepareStudioProject();
@@ -3765,7 +3732,7 @@
       };
       markStudioReadinessOutdated();
       var names = {title:'Title',concept:'Concept',style:'Visual / atmosphere',invariants:'Invariants',summary:'Intent',prompt:'H3 Prompt'};
-      var values = selected.fields || selected;
+      var values = selected.savedFields || selected.fields || selected;
       var savedFields = Object.keys(values).filter(function(key){return names[key];}).map(function(key){
         return names[key] + (key === 'invariants' ? ' (' + values[key].length + ')' : '');
       });

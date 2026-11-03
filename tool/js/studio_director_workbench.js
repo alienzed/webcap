@@ -265,7 +265,7 @@
     var mode = !el('studio-dw-read-panel').classList.contains('hidden') ? 'Read' :
       !el('studio-dw-write-panel').classList.contains('hidden') ? 'Write' : '';
     el('studio-dw-heading').textContent = mode ? mode + ' · Director' : 'Director actions';
-    el('studio-dw-context').textContent = mode === 'Read'
+    el('studio-dw-heading').title = mode === 'Read'
       ? 'Explicit source · nothing sent until Send'
       : mode === 'Write' ? 'Reviewed destination · nothing saved until Apply'
       : 'Conversation is independent of Studio navigation';
@@ -388,6 +388,7 @@
   function editScene(story, sceneId, fields) {
     var scene = story.scenes && story.scenes[sceneId];
     if (!scene) throw new Error('Select an existing Scene.');
+    window.studioDirectorBridge.selectWriteProject(story.id,storyName(story));
     status('Director is drafting a scoped revision…', false);
     var history = window.studioDirectorBridge.messages().slice(-18).map(function (m) {
       return {role:m.role, text:String(m.content || '').slice(0,3200)};
@@ -1114,7 +1115,6 @@
     status('Director suggested this operation. Choose the exact saved targets, then review.', false);
   }
   function renderReadiness(list) {
-    readiness = list;
     var host = el('studio-dw-readiness-list');
     host.replaceChildren();
     if (creativeCapture && !readinessStale) {
@@ -1259,6 +1259,7 @@
       }
       recommendations = {readHints:hints, writeHint:writeHint, writeFields:writeFields, sceneId:sceneId};
       creativeCapture = capture;
+      readiness = list;
       setReadinessFreshness(!!(restoring && result && result.stale));
       renderReadiness(list);
       if (!restoring) window.studioDirectorBridge.updateReadiness({

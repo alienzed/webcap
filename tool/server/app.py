@@ -65,7 +65,7 @@ from .h3_probe import h3_probe_log, h3_probe_status, prepare_h3_probe, start_h3_
 from .permissions import normalize_path_permissions, run_with_directory_repair
 from .folder_state_store import FolderStateReadError, FolderStateUnsafeWriteError, read_folder_state, reject_wholesale_state_map_clear, write_folder_state_with_owned_drafts, set_media_annotation_state, set_media_rating, write_folder_state_atomic
 from .storage_manager import clear_set_generated_sight as storage_clear_set_generated_sight, cancel_scan as storage_cancel_scan, measure as storage_measure, open_path as storage_open_path, overview as storage_overview, purge as storage_purge, scan_status as storage_scan_status, start_scan as storage_start_scan
-from .studio_director import guidance as studio_director_guidance, read_story_scope as studio_read_story_scope
+from .studio_director import guidance as studio_director_guidance, read_story_scope as studio_read_story_scope, chat_response_schema as studio_chat_response_schema
 from .director_chat_history import create_chat as create_director_chat, delete_chat as delete_director_chat, list_chats as list_director_chats, open_chat as open_director_chat, save_chat as save_director_chat
 from .storyboard_store import add_tentative_scene_at as storyboard_add_tentative_scene_at, add_tentative_scenes_at as storyboard_add_tentative_scenes_at, create_studio_project as storyboard_create_studio_project, apply_studio_brief as storyboard_apply_studio_brief, undo_studio_brief as storyboard_undo_studio_brief
 from .storyboard_store import add_scene as storyboard_add_scene, add_take_upload as storyboard_add_take_upload, apply_developed_plan as storyboard_apply_developed_plan, clear_scene_reference as storyboard_clear_scene_reference, create_story as storyboard_create_story, delete_scene as storyboard_delete_scene, delete_story as storyboard_delete_story, delete_take as storyboard_delete_take, duplicate_scene as storyboard_duplicate_scene, duplicate_story as storyboard_duplicate_story, list_stories as storyboard_list_stories, load_story as storyboard_load_story, label_take as storyboard_label_take, rate_take as storyboard_rate_take, remove_take as storyboard_remove_take, reorder_scenes as storyboard_reorder_scenes, resolve_story_media as storyboard_resolve_media, restore_previous_concept as storyboard_restore_previous_concept, restore_previous_prompt as storyboard_restore_previous_prompt, restore_scene as storyboard_restore_scene, restore_scene_repairs as storyboard_restore_scene_repairs, restore_take as storyboard_restore_take, select_take as storyboard_select_take, set_scene_reference_from_take as storyboard_set_scene_reference_from_take, set_scene_reference_upload as storyboard_set_scene_reference_upload, update_scene as storyboard_update_scene, update_story as storyboard_update_story
@@ -2260,9 +2260,11 @@ def director_chat_route():
         if not isinstance(messages, list) or not messages:
             raise ValueError("Director Chat messages are required.")
         operation = str(data.get("operation") or "freeform_chat").strip()
-        if operation not in {"freeform_chat", "storyboard_workshop_shots", "storyboard_story_guidelines", "studio_scene_draft", "studio_project_draft", "studio_scene_sequence_draft", "studio_brief_draft", "studio_scene_field_draft", "studio_scene_batch_draft", "studio_scene_split_draft", "studio_playbook_draft"}:
+        if operation not in {"freeform_chat", "studio_chat", "storyboard_workshop_shots", "storyboard_story_guidelines", "studio_scene_draft", "studio_project_draft", "studio_scene_sequence_draft", "studio_brief_draft", "studio_scene_field_draft", "studio_scene_batch_draft", "studio_scene_split_draft", "studio_playbook_draft"}:
             raise ValueError("Unsupported Director Chat operation.")
         contract = {"operation": operation, "messages": messages}
+        if operation == "studio_chat":
+            contract["response_schema"] = studio_chat_response_schema()
         if operation == "studio_brief_draft":
             contract["response_schema"] = {
                 "type": "object", "additionalProperties": False,

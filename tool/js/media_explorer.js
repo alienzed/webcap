@@ -422,7 +422,7 @@
   }
 
   var routeInitialized = false;
-  var sourceNames = {generate: 'Generate', test: 'Test Generations', epoch: 'Epoch Finder', storyboard: 'Storyboard', external: 'External folders'};
+  var sourceNames = {generate: 'Generate', test: 'Test Generations', epoch: 'Campaigns', storyboard: 'Storyboard', external: 'External folders'};
   var roleNames = {generated: 'Generated', reference: 'Reference', source: 'Source media'};
   var mediaFacts = new Map();
   var loupeReturn = null;
@@ -719,7 +719,7 @@
     }
     if (item.source === 'epoch' && item.ownerFolder && item.model) {
       var epoch = document.createElement('button'); epoch.type = 'button'; epoch.className = 'review-captions-btn';
-      text(epoch, 'Open Epoch Finder'); epoch.addEventListener('click', function () {
+      text(epoch, 'Open Campaign'); epoch.addEventListener('click', function () {
         window.openTestBenchActivity({folder: item.ownerFolder, modelId: item.model, campaignId: item.storageId});
       }); actions.appendChild(epoch);
     }
@@ -732,7 +732,7 @@
         url: '/fs/test_generations', data: {folder: item.ownerFolder, operation: 'test_delete_session',
           criteria: {session: item.storageId}}};
     } else if (item.source === 'epoch' && item.ownerFolder && item.storageId) {
-      deletion = {label: 'Delete Epoch campaign', description: 'entire Epoch Finder campaign and its generated results',
+      deletion = {label: 'Delete campaign', description: 'entire campaign and its generated results',
         url: '/fs/epoch_finder', data: {folder: item.ownerFolder, operation: 'delete',
           criteria: {campaignId: item.storageId}}};
     }

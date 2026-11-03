@@ -300,7 +300,7 @@ def discover_epoch_frames():
                 "contextLabel": str(payload.get("name") or campaign_id),
                 "epoch": unit.get("epoch"), "fileSize": file.stat().st_size,
                 "assessment": _assessment(unit.get("assessment")),
-                "uses": [{"storageId": campaign_id, "role": "Epoch Finder campaign", "source": "epoch"}],
+                "uses": [{"storageId": campaign_id, "role": "Campaign", "source": "epoch"}],
             })
     return frames
 

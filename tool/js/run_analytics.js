@@ -422,15 +422,32 @@
     labShowAll=false;
     labResults();
   }
+  function labLeaders(ranked){
+    var byAverage=ranked.slice().sort(function(a,b){
+      return b.allManualAverage-a.allManualAverage||b.ratedCount-a.ratedCount||
+        a.jobId.localeCompare(b.jobId)||a.epoch-b.epoch;
+    });
+    var highest=byAverage[0]||null;
+    var supported=byAverage.find(function(p){return p.ratedCount>=5;})||null;
+    var primary=supported||highest;
+    var alternate=primary&&highest!==primary?highest:
+      byAverage.find(function(p){return p!==primary;})||null;
+    return {primary:primary,highest:highest,supported:supported,alternate:alternate};
+  }
   function labFeatured(ranked){
-    var best=ranked.slice().sort(function(a,b){
-      return b.allManualAverage-a.allManualAverage||b.ratedCount-a.ratedCount;
-    })[0];
-    var backed=ranked.slice().sort(function(a,b){
-      return b.allManualAverage-a.allManualAverage||b.ratedCount-a.ratedCount;
-    }).find(function(p){return !best||p.jobId!==best.jobId||p.epoch!==best.epoch;});
-    var picks=[{point:best,label:'Highest rated',note:'An average based on '+(best?best.ratedCount:0)+' saved ratings'},
-               {point:backed,label:'Runner-up',note:'Compare its saved ratings and coverage with the leader'}];
+    var leaders=labLeaders(ranked),primary=leaders.primary;
+    var picks=primary?[{
+      point:primary,label:leaders.supported?'Best-supported contender':'Provisional leader',
+      note:leaders.supported?
+        'Highest average among epochs with at least 5 saved ratings · not a statistical confidence score':
+        'No epoch has 5 saved ratings yet · this result is provisional'
+    }]:[];
+    if(leaders.supported&&leaders.highest!==primary){
+      picks.push({point:leaders.highest,label:'Highest average · provisional',
+        note:leaders.highest.ratedCount+' rating(s) · fewer than the 5-rating minimum'});
+    }
+    lab('featured').classList.toggle('is-single',picks.length<2);
+    if(!picks.length){lab('featured').innerHTML=labEmpty('No saved Test ratings yet. Rate renders to identify a contender.');return;}
     lab('featured').innerHTML=picks.map(function(item){
       var p=item.point;
       if(!p)return '<div class="run-lab-feature"><small>'+esc(item.label)+'</small><p>Rate more saved renders to reveal another contender.</p></div>';
@@ -490,7 +507,7 @@
   }
   function labResults(){
     var points=labPoints(),ranked=labRanked(),visible=labShowAll?ranked:ranked.slice(0,12);
-    var ratedLeaders=ranked.slice().sort(function(a,b){return b.allManualAverage-a.allManualAverage||b.ratedCount-a.ratedCount;});
+    var leaders=labLeaders(ranked);
     labFeatured(ranked);
     lab('contenders').innerHTML=ranked.length?visible.map(function(p,i){
       return '<div class="run-lab-contender"><b class="run-lab-position">'+(i+1)+'</b><div><strong>'+esc(p.runName||'Run '+p.jobId.slice(-8))+' · Epoch '+p.epoch+'</strong><small>'+p.ratedCount+' of '+p.testCount+' Test renders rated · '+p.sessions.length+' sessions</small></div><div class="run-lab-score"><b>'+p.allManualAverage.toFixed(2)+'/5</b><small>'+p.ratedCount+' ratings</small></div><button data-lab-job="'+esc(p.jobId)+'" data-lab-epoch="'+p.epoch+'">Inspect</button></div>';
@@ -509,10 +526,11 @@
       lab('challenge-title').textContent='Improve your evidence: '+reviewable+' unrated renders available';
       lab('challenge-description').textContent='Blind-rate existing Test results without revealing their checkpoints. '+rated+' of '+total+' linked results have saved ratings.';
       lab('challenge-actions').innerHTML='<button type="button" data-lab-action="review">Blind rate</button><button type="button" data-lab-action="inspect">Inspect a contender</button>';
-    }else if(ratedLeaders.length>=2){
-      lab('challenge-title').textContent='Compare your two highest-rated contenders';
-      lab('challenge-description').textContent='Leader '+ratedLeaders[0].allManualAverage.toFixed(2)+'/5 ('+ratedLeaders[0].ratedCount+' ratings) versus runner-up '+ratedLeaders[1].allManualAverage.toFixed(2)+'/5 ('+ratedLeaders[1].ratedCount+' ratings). Sample size matters.';
-      lab('challenge-actions').innerHTML='<button type="button" data-lab-action="inspect">Inspect leader</button><button type="button" data-lab-action="challenger">Inspect runner-up</button>'+(reviewable?'<button type="button" data-lab-action="review">Blind rate</button>':'');
+    }else if(leaders.primary&&leaders.alternate){
+      var different=leaders.supported&&leaders.highest!==leaders.primary;
+      lab('challenge-title').textContent=different?'Compare supported versus highest average':'Compare your leading rated epochs';
+      lab('challenge-description').textContent=(leaders.supported?'Best-supported':'Provisional leader')+' '+leaders.primary.allManualAverage.toFixed(2)+'/5 ('+leaders.primary.ratedCount+' ratings) versus '+(different?'highest average':'next highest')+' '+leaders.alternate.allManualAverage.toFixed(2)+'/5 ('+leaders.alternate.ratedCount+' ratings). At least 5 ratings are needed for a supported contender.';
+      lab('challenge-actions').innerHTML='<button type="button" data-lab-action="inspect">Inspect leader</button><button type="button" data-lab-action="challenger">Inspect '+(different?'highest average':'runner-up')+'</button>'+(reviewable?'<button type="button" data-lab-action="review">Blind rate</button>':'');
     }else{
       lab('challenge-title').textContent=reviewable?'Review existing unrated Test renders':'Explore what your training history reveals';
       lab('challenge-description').textContent=reviewable?'Review saved results before generating more Tests.':'Ask Director to compare active and archived training evidence.';
@@ -865,7 +883,7 @@
     if(action==='detail'){labDetail();return;}
     if(action==='review'){labReviewOpen();return;}
     if(action==='ai'){labAiStart();return;}
-    var list=labRanked().slice().sort(function(a,b){return b.allManualAverage-a.allManualAverage||b.ratedCount-a.ratedCount;}),p=action==='challenger'?list[1]:(list[0]||labPoints()[0]);
+    var leaders=labLeaders(labRanked()),p=action==='challenger'?leaders.alternate:(leaders.primary||labPoints()[0]);
     if(p)window.runAnalyticsViewEpoch(p.jobId,p.epoch);else labDetail();
   };
 })();

@@ -209,6 +209,8 @@
   }
   function showWriteContext() {
     var operation=el('studio-dw-write-operation').value, text='';
+    var writingNewScenes = operation === 'scene-write' && el('studio-dw-scene-mode').value === 'create';
+    var revisingScenes = operation === 'scene-write' && el('studio-dw-scene-mode').value === 'revise';
     if (operation==='new-project') {
       text='Conversation only. No saved Project fields are included.';
     } else if (operation==='playbook') {
@@ -218,11 +220,19 @@
     } else {
       var p=writeStory;
       var data={projectId:p.id,title:p.title,concept:p.concept,style:p.style,invariants:p.invariants};
-      if (operation==='scene' || operation==='scenes') {
+      if (writingNewScenes || operation==='scene' || operation==='scenes') {
         data.currentScenes=(p.sceneOrder||[]).map(function (id,index) {
           var scene=p.scenes[id];
           return {id:id,position:index+1,title:scene.title,intent:scene.summary};
         });
+      }
+      if (revisingScenes) {
+        data.selectedScenes = Array.from(el('studio-dw-batch-scenes').querySelectorAll('input:checked'))
+          .map(function (check) {return p.scenes && p.scenes[check.value];})
+          .filter(Boolean).map(function (scene) {
+            return {id:scene.id,title:scene.title,intent:scene.summary,prompt:scene.prompt,
+              durationSeconds:scene.durationSeconds,invariantRefs:scene.invariantRefs};
+          });
       }
       if (operation==='scene-edit') {
         var id=el('studio-dw-write-scene').value, scene=p.scenes&&p.scenes[id];
@@ -508,10 +518,15 @@
       return loadStory(target.storyId);
     }).then(function (story) {
       renderWriteStory(story);
-      el('studio-dw-write-scene').value = target.sceneId || '';
-      Array.from(el('studio-dw-write-fields').querySelectorAll('input')).forEach(function (check) {
-        check.checked = check.value === 'prompt';
-      });
+      if (operation === 'scene-write') {
+        el('studio-dw-scene-mode').value = 'revise';
+        Array.from(el('studio-dw-batch-scenes').querySelectorAll('input')).forEach(function (check) {
+          check.checked = check.value === target.sceneId;
+        });
+        Array.from(el('studio-dw-batch-fields').querySelectorAll('input')).forEach(function (check) {
+          check.checked = check.value === 'prompt';
+        });
+      }
       el('studio-dw-read-panel').classList.add('hidden');
       el('studio-dw-read').setAttribute('aria-expanded','false');
       el('studio-dw-write-panel').classList.remove('hidden');
@@ -1380,7 +1395,7 @@
     el('studio-dw-read').onclick=function () { toggle('read'); };
     el('studio-dw-write').onclick=function () { toggle('write'); };
     el('studio-dw-current-brief').onclick=function () {return prepareCurrentWrite('project');};
-    el('studio-dw-current-prompt').onclick=function () {return prepareCurrentWrite('scene-edit');};
+    el('studio-dw-current-prompt').onclick=function () {return prepareCurrentWrite('scene-write');};
     el('studio-dw-read-project').onchange=function () {
       loadStory(this.value).then(renderReadStory).catch(function(e) { status(e.message,true); });
     };
@@ -1391,6 +1406,18 @@
       writeOperationChosen = true;
       writeFieldsManuallyChanged = false;
       return refreshWrite();
+    };
+    el('studio-dw-scene-mode').onchange=function () {
+      writeOperationChosen = true;
+      writeFieldsManuallyChanged = false;
+      setOperation();
+      applySuggestedWriteFields();
+    };
+    el('studio-dw-coherence-check').onclick=function () {
+      var id = el('studio-dw-write-project').value;
+      if (!id) {status('Choose a Project to check.',true);return;}
+      if (!window.studioDirectorBridge.isReady()) {status('Choose a Director model first.',true);return;}
+      prepareProjectCoherence(id);
     };
     ['studio-dw-write-fields', 'studio-dw-batch-fields'].forEach(function (id) {
       Array.from(el(id).querySelectorAll('input[type="checkbox"]')).forEach(function (check) {

@@ -81,3 +81,30 @@ test('slash never fetches Blocks in ordinary Chat mode',async()=>{
   await tick();
   assert.deepEqual(calls,[]);
 });
+
+test('Blocks launcher sits with Studio Chat and Director Tools, not Project management', () => {
+  const html = fs.readFileSync(path.join(__dirname, '../tool/tool.html'), 'utf8');
+  const studio = html.slice(html.indexOf('id="storyboard-workspace"'), html.indexOf('id="director-chat-drawer"'));
+  const sidebar = studio.slice(0, studio.indexOf('class="storyboard-editor"'));
+  const actions = studio.slice(studio.indexOf('class="storyboard-scenes-heading-actions"'));
+  const toolbar = actions.slice(0, actions.indexOf('</div>'));
+  assert.equal((studio.match(/id="studio-blocks-open"/g) || []).length, 1);
+  assert.doesNotMatch(sidebar, /id="studio-blocks-open"/);
+  const chat = toolbar.indexOf('openStoryboardAssistant()');
+  const blocks = toolbar.indexOf('id="studio-blocks-open"');
+  const tools = toolbar.indexOf('id="storyboard-director-tools-btn"');
+  assert.ok(chat >= 0 && blocks > chat && tools > blocks);
+  assert.match(source, /el\('studio-blocks-open'\)\.onclick = open/);
+});
+
+test('Project Overview owns the desktop scroll while stacked Studio uses its shared scroll', () => {
+  const css = fs.readFileSync(path.join(__dirname, '../tool/css/storyboard.css'), 'utf8');
+  const desktop = css.split('.storyboard-editor-scroll {\n  display: grid;', 2)[1].split('}', 1)[0];
+  assert.match(desktop, /grid-template-rows: minmax\(0, 1fr\)/);
+  const overview = css.split('.storyboard-story-overview-surface {', 2)[1].split('}', 1)[0];
+  assert.match(overview, /min-height: 0/);
+  assert.match(overview, /overflow-y: auto/);
+  const stacked = css.split('@media \(max-width: 1180px\) {\n  .storyboard-editor-scroll,', 2)[1].split('}', 1)[0];
+  assert.match(stacked, /grid-template-rows: auto/);
+  assert.match(stacked, /overflow: auto/);
+});

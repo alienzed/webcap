@@ -2748,7 +2748,7 @@
         'RESPONSE CONTRACT: Return one JSON object matching the supplied schema, with reply and readiness. ' +
         'Put your conversational answer in reply. Put its Studio assessment in readiness, containing checks ' +
         '(up to 10 objects with name, scope, ready, content), readHints (0-5 field identifiers), ' +
-        'writeHint (project, new-project, scene, scenes, scene-edit, scenes-batch, scene-move, scene-duplicate, scene-split, scene-invariants, playbook, or empty), ' +
+        'writeHint (project, new-project, scene, scenes, scene-edit, scenes-batch, scene-move, scene-duplicate, scene-split, scene-invariants, coherence-check, playbook, or empty), ' +
         'and sceneId (known ID or empty). Include writeFields for Write defaults: ' +
         'with writeHint project, use title, concept, style or invariants; with scene-edit or scenes-batch, ' +
         'use summary (Intent), prompt (H3 Prompt) or title. For other operations use an empty writeFields array. ' +
@@ -2760,7 +2760,7 @@
         'For ready false, content briefly identifies the missing decision or practical weakness. ' +
         'For Read hints use ' +
         'project.concept, project.style, project.invariants, scene.current.summary, ' +
-        'scene.current.prompt or known scene:ID:field. Recommend Write only when appropriate; ' +
+        'scene.current.prompt or known scene:ID:field. For a user-requested Project-wide coherence check, suggest coherence-check (an explicit author-triggered analysis), not an automatic tool call. Recommend Write only when appropriate; ' +
         'unknown IDs are empty. Include only categories grounded in the actual discussion. ' +
         'OPTIONAL CREATIVE CAPTURE: Only when you have a COMPLETE, author-acceptable final field value ' +
         'already developed in this reply or the ongoing conversation, you may add one capture object ' +

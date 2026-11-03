@@ -3242,11 +3242,11 @@ def epoch_finder_propose_route():
         )
         job = enqueue_llm(
             "test", str(data.get("directorModel") or "").strip(), contract,
-            context={}, label="Epoch Finder: design concept tests",
+            context={}, label="Campaign: design concept tests",
         )
         return jsonify({"ok": True, "job": job}), 202
     except Exception as exc:
-        app.logger.exception("EPOCH FINDER PROPOSAL FAILED: %s", exc)
+        app.logger.exception("CAMPAIGN PROPOSAL FAILED: %s", exc)
         return jsonify({"ok": False, "error": str(exc)}), 400
 
 
@@ -3293,7 +3293,7 @@ def epoch_finder_route():
     except FileNotFoundError as exc:
         return jsonify({"ok": False, "error": str(exc)}), 404
     except Exception as exc:
-        app.logger.exception("EPOCH FINDER FAILED: %s", exc)
+        app.logger.exception("EVALUATIONS FAILED: %s", exc)
         return jsonify({"ok": False, "error": str(exc)}), 400
 
 

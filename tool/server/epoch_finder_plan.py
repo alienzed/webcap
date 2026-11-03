@@ -113,7 +113,7 @@ def normalize_proposal(data):
     proposal = normalize_result(data)
     concept = str(data.get("concept") or "").strip() if isinstance(data, dict) else ""
     if not concept:
-        raise ValueError("Epoch Finder proposal is missing its concept.")
+        raise ValueError("Campaign proposal is missing its concept.")
     proposal["concept"] = concept
     proposal["variationGroups"] = normalize_dimensions(
         proposal["wildcard"], data.get("variationGroups"),

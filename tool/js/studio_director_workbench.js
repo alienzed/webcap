@@ -282,7 +282,7 @@
     el('studio-dw-write-project').disabled = operation === 'new-project' || operation === 'playbook';
     el('studio-dw-write-prepare').textContent =
       operation === 'scene-edit' ? 'Draft Scene revision' :
-      structural ? 'Review change' : 'Prepare editable review';
+      structural ? 'Review change' : operation === 'coherence-check' ? 'Check Project coherence' : 'Prepare editable review';
     showWriteContext();
     updateScope();
   }
@@ -536,6 +536,10 @@
       prepareStructure(operation, id);
       return;
     }
+    if (operation === 'coherence-check') {
+      prepareProjectCoherence(id);
+      return;
+    }
     if (operation === 'scenes-batch') {
       prepareBatchScenes(id);
       return;
@@ -776,6 +780,65 @@
         : 'Apply was not confirmed: '+message;
       status('Scene split Apply: '+message,true);
     }).finally(function () {button.disabled=false;});
+  }
+  function prepareProjectCoherence(storyId) {
+    var button = el('studio-dw-write-prepare');
+    button.disabled = true;
+    status('Checking saved H3 Prompts across the selected Project. Nothing will be saved.', false);
+    var originalStory;
+    Promise.resolve().then(function () {
+      return window.flushStudioDirectorStoryEdits(storyId);
+    }).then(function () {
+      return loadStory(storyId);
+    }).then(function (story) {
+      var ids = story.sceneOrder || [];
+      if (!ids.length) throw new Error('This Project has no Scenes to check.');
+      if (ids.some(function (id) {
+        return !story.scenes || !story.scenes[id] || !String(story.scenes[id].prompt || '').trim();
+      })) throw new Error('Check Coherence requires a saved H3 Prompt in every Scene.');
+      originalStory = story;
+      return window.studioDirectorBridge.checkProjectCoherence(storyId);
+    }).then(function (result) {
+      return loadStory(storyId).then(function (fresh) {
+        if (fresh.updatedAt !== originalStory.updatedAt)
+          throw new Error('The Project changed during coherence analysis. Run the check again before reviewing changes.');
+        var ids = originalStory.sceneOrder || [], seen = new Set();
+        if (result.scenes.length !== ids.length)
+          throw new Error('Coherence analysis did not return every Scene.');
+        var changed = result.scenes.filter(function (entry) {
+          if (!entry || !ids.includes(entry.sceneId) || seen.has(entry.sceneId) ||
+              typeof entry.originalPrompt !== 'string' || typeof entry.prompt !== 'string' ||
+              !entry.prompt.trim() || entry.originalPrompt !== originalStory.scenes[entry.sceneId].prompt) {
+            throw new Error('Coherence analysis returned mismatched Scene prompts.');
+          }
+          seen.add(entry.sceneId);
+          return entry.prompt !== entry.originalPrompt;
+        });
+        if (seen.size !== ids.length) throw new Error('Coherence analysis omitted a Scene.');
+        if (!changed.length) {
+          status('Checked ' + ids.length + ' Scenes; no H3 Prompt changes proposed.', false);
+          return;
+        }
+        proposedBatch = {
+          storyId:storyId,
+          fields:['prompt'],
+          scenes:changed.map(function (entry) {
+            var scene = originalStory.scenes[entry.sceneId];
+            return {
+              sceneId:entry.sceneId,
+              before:{sceneId:entry.sceneId,position:ids.indexOf(entry.sceneId)+1,
+                title:scene.title,summary:scene.summary,prompt:scene.prompt},
+              draft:{sceneId:entry.sceneId,prompt:entry.prompt}
+            };
+          })
+        };
+        renderBatchReview();
+        status('Coherence check proposed H3 Prompt changes for ' + changed.length +
+          ' of ' + ids.length + ' Scenes. Review before applying.', false);
+      });
+    }).catch(function (error) {
+      status('Project coherence check failed: ' + String(error.message || error), true);
+    }).finally(function () {button.disabled = false;});
   }
   function prepareBatchScenes(storyId) {
     var ids = Array.from(el('studio-dw-batch-scenes').querySelectorAll('input:checked'))
@@ -1143,7 +1206,8 @@
       operation === 'scene-move' ? 'Move Scene' :
       operation === 'scene-duplicate' ? 'Duplicate Scene' :
       operation === 'scene-invariants' ? 'Link Invariants' :
-      operation === 'playbook' ? 'Update H3 Playbook' : '';
+      operation === 'playbook' ? 'Update H3 Playbook' :
+      operation === 'coherence-check' ? 'Check Project Coherence' : '';
   }
   function renderReadiness(list) {
     var actions = el('studio-dw-suggestions');
@@ -1247,7 +1311,7 @@
       var list = Array.isArray(result) ? result : result && result.checks;
       var allowed = ['Concept','Characters','Setting','Action','Dialogue','Visual / atmosphere',
         'Visual focus','Structure / formula','Variation / repetition','Production feasibility'];
-      var operations = ['', 'project','new-project','scene','scenes','scene-edit','scenes-batch','scene-move','scene-duplicate','scene-split','scene-invariants','playbook'];
+      var operations = ['', 'project','new-project','scene','scenes','scene-edit','scenes-batch','scene-move','scene-duplicate','scene-split','scene-invariants','playbook','coherence-check'];
       if (!Array.isArray(list) || list.length > 30 ||
           list.some(function (item) {
             return !item || typeof item !== 'object' || Array.isArray(item) ||

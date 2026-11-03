@@ -139,7 +139,7 @@
       body: JSON.stringify({ folder: folderOverride == null ? currentFolder : folderOverride,
         operation: operation, criteria: criteria || {} })
     }).then(function (response) { return response.json().then(function (json) {
-      if (!response.ok || !json.ok) throw new Error(json.error || 'Epoch Finder request failed.');
+      if (!response.ok || !json.ok) throw new Error(json.error || 'Evaluations request failed.');
       return json;
     }); });
   }
@@ -147,8 +147,8 @@
     var node = els('error');
     node.textContent = String(exc && exc.message || exc);
     node.classList.remove('hidden');
-    console.error('[Epoch Finder]', exc);
-    if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Epoch Finder', exc);
+    console.error('[Evaluations]', exc);
+    if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Evaluations', exc);
   }
   function clearError() { els('error').classList.add('hidden'); els('error').textContent = ''; }
   function showMode(next, options) {

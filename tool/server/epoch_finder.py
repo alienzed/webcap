@@ -1,4 +1,4 @@
-"""Backend-owned, disposable Epoch Finder campaigns using existing Test and VL queues."""
+"""Backend-owned, disposable campaigns using existing Test and VL queues."""
 import io
 import json
 import math
@@ -47,7 +47,7 @@ def _root(folder_path):
 
 def _directory(folder_path, campaign_id):
     if not _ID.fullmatch(str(campaign_id or "")):
-        raise ValueError("Invalid Epoch Finder campaign ID.")
+        raise ValueError("Invalid campaign ID.")
     return _root(folder_path) / campaign_id
 
 
@@ -57,10 +57,10 @@ def _load(folder_path, campaign_id):
         raise RuntimeError("Campaign directory must not be a symlink.")
     path = directory / "campaign.json"
     if not path.is_file() or path.is_symlink():
-        raise FileNotFoundError("Epoch Finder campaign does not exist.")
+        raise FileNotFoundError("Campaign does not exist.")
     payload = json.loads(path.read_text(encoding="utf-8"))
     if payload.get("id") != campaign_id or payload.get("folder") != _folder_key(folder_path):
-        raise ValueError("Epoch Finder campaign ownership mismatch.")
+        raise ValueError("Campaign ownership mismatch.")
     return payload
 
 
@@ -344,7 +344,7 @@ def _create_plan(epochs, prompt, rounds, cases, keep_percent, settings, round_op
     for index in range(rounds):
         edits = options_by_round[index] if options_by_round else {}
         if not isinstance(edits, dict):
-            raise ValueError("Each Epoch Finder round must be an object.")
+            raise ValueError("Each campaign round must be an object.")
         case_count = int(edits.get("cases", cases))
         retention = int(edits.get("keepPercent", keep_percent))
         if not 1 <= case_count <= 6 or not 10 <= retention <= 90:
@@ -354,7 +354,7 @@ def _create_plan(epochs, prompt, rounds, cases, keep_percent, settings, round_op
         if "megapixels" in selected:
             resolution = float(edits.get("megapixels", min(0.4, round(0.2 + index * 0.1, 2))))
             if not 0.1 <= resolution <= 0.4 or not math.isfinite(resolution):
-                raise ValueError("Epoch Finder round resolution must be 0.1-0.4 MP.")
+                raise ValueError("Campaign round resolution must be 0.1-0.4 MP.")
             selected["megapixels"] = resolution
         elif "megapixels" in edits:
             raise ValueError("Selected Test model does not support resolution in megapixels.")
@@ -576,7 +576,7 @@ def _staging(folder_path, campaign):
     base = test_bench._test_directory(folder_path, model)
     directory = base / ("epoch-finder-" + campaign["id"])
     if directory.is_symlink():
-        raise RuntimeError("Epoch Finder staging folder is a symlink.")
+        raise RuntimeError("Campaign staging folder is a symlink.")
     return directory
 
 
@@ -613,10 +613,10 @@ def _clean_staging(folder_path, campaign):
     if not directory.exists():
         return
     if directory.is_symlink():
-        raise RuntimeError("Refusing to remove symlinked Epoch Finder staging.")
+        raise RuntimeError("Refusing to remove symlinked campaign staging.")
     for entry in directory.iterdir():
         if entry.is_symlink() or not re.fullmatch(r"epoch[0-9]+\.safetensors", entry.name) or not entry.is_file():
-            raise RuntimeError("Unexpected item in temporary Epoch Finder staging: " + str(entry))
+            raise RuntimeError( "Unexpected item in temporary campaign staging: " + str(entry))
         entry.unlink()
     directory.rmdir()
 
@@ -752,7 +752,7 @@ def _render_unit(folder_path, campaign, plan, unit, staged, enqueue_only=False,
         prompt = plan.get("casePrompts", [])[unit["case"]] if plan.get("casePrompts") else plan["prompt"]
         answer = test_bench.enqueue(
             folder_path, prompt, settings=settings,
-            name="Epoch Finder " + str(unit["epoch"]) + " / " + str(unit["case"] + 1),
+            name="Campaign epoch " + str(unit["epoch"]) + " / " + str(unit["case"] + 1),
             selected_files=[staged], candidate_strengths={Path(staged).name: 1.0},
             include_base=False, model_id=campaign["modelId"],
             campaign_staging="epoch-finder-" + campaign["id"],
@@ -781,7 +781,7 @@ def _render_unit(folder_path, campaign, plan, unit, staged, enqueue_only=False,
             image.save(buffer, format="PNG")
             pixels = buffer.getvalue()
     else:
-        raise ValueError("Epoch Finder expected supported Test video or image output.")
+        raise ValueError("Campaign expected supported Test video or image output.")
     temp = frame.with_suffix(".tmp")
     try:
         temp.write_bytes(pixels)
@@ -852,14 +852,14 @@ def _evaluate_unit(folder_path, campaign, unit):
     job = enqueue_llm("caption", campaign["visionModel"], {
         "operation": "vision_question",
         "messages": build_vision_question_messages(unit["question"], vision_resized_image_data_url(frame, int(campaign.get("vlImageMP", 0.45) * 1000000)))
-    }, label="Epoch Finder Ask VL")
+    }, label="Campaign Ask VL")
     job_id = str(job.get("jobId") or job.get("id") or "")
     if not job_id:
         raise RuntimeError("VL request did not return an execution job ID.")
     while True:
         result = llm_job_status(job_id, consume=False)
         if not result:
-            raise RuntimeError("Epoch Finder VL request was lost.")
+            raise RuntimeError("Campaign VL request was lost.")
         if result["status"] in {"completed", "failed", "cancelled", "stopped", "interrupted"}:
             if result["status"] != "completed":
                 raise RuntimeError("VL request " + result["status"] + ": " + str(result.get("error") or ""))
@@ -908,7 +908,7 @@ def _evaluate_reference_unit(folder_path, campaign, unit):
             vision_resized_image_data_url(frame, int(campaign.get("vlImageMP", .45) * 1000000)))
         started = time.monotonic()
         job = enqueue_llm("caption", campaign["visionModel"], {"operation": "vision_question", "messages": messages},
-                          label="Epoch Finder Reference VL")
+                          label="Campaign Reference VL")
         job_id = str(job.get("jobId") or job.get("id") or "")
         if not job_id:
             raise RuntimeError("Reference VL request did not return a job ID.")
@@ -987,7 +987,7 @@ def _mark_unit_error(folder_path, campaign, unit, stage, exc):
     unit["error"] = message
     unit["errorStage"] = stage
     logging.getLogger(__name__).exception(
-        "Epoch Finder %s failed: campaign %s, round %s, epoch %s, case %s",
+        "Campaign %s failed: id %s, round %s, epoch %s, case %s",
         stage, campaign["id"], unit["round"], unit["epoch"], unit["case"],
     )
     campaign["detail"] = stage.title() + " failure · epoch " + str(unit["epoch"]) + ": " + message
@@ -1194,7 +1194,7 @@ def _run(folder_path, campaign_id, control):
                         break
                     except Exception:
                         import logging
-                        logging.getLogger(__name__).exception("Could not dispatch next queued Epoch Finder campaign")
+                        logging.getLogger(__name__).exception("Could not dispatch next queued campaign")
 
 
 def _campaign_has_active_sessions(folder_path, campaign):
@@ -1228,7 +1228,7 @@ def _resume_saved_work(folder_path, campaign):
             continue
         session = test_bench.open_session(folder_path, session_name)
         if session.get("campaignStaging") != owned_staging:
-            raise RuntimeError("Epoch Finder session ownership mismatch.")
+            raise RuntimeError("Campaign session ownership mismatch.")
         if unit.get("assessment") is not None and not _session_still_active(folder_path, session_name):
             _retire_scored_session(folder_path, campaign, unit)
             continue
@@ -1245,7 +1245,7 @@ def _resume_saved_work(folder_path, campaign):
 
 
 def _start_campaign_worker_locked(folder_path, campaign_id):
-    """Caller holds _worker_lock; only one active Epoch Finder coordinator."""
+    """Caller holds _worker_lock; only one active campaign coordinator."""
     control = {"pause": threading.Event(), "stop": threading.Event()}
     thread = threading.Thread(
         target=_run, args=(folder_path, campaign_id, control), daemon=True,
@@ -1261,7 +1261,7 @@ def _launch(folder_path, campaign_id):
         if any(thread.is_alive() for thread in _workers.values()):
             campaign = _load(folder_path, campaign_id)
             _update(folder_path, campaign, status="queued", phase="Queued",
-                    detail="Waiting for earlier Epoch Finder campaign.")
+                    detail="Waiting for earlier campaign.")
             if not any(id_ == campaign_id for _, id_ in _pending_campaigns):
                 _pending_campaigns.append((folder_path, campaign_id))
             return
@@ -1700,7 +1700,7 @@ def command(folder_path, operation, criteria=None):
             _pending_campaigns[:] = [(folder, id_) for folder, id_ in _pending_campaigns
                                      if id_ != campaign_id]
         return {"deleted": campaign_id}
-    raise ValueError("Unsupported Epoch Finder operation: " + operation)
+    raise ValueError("Unsupported Evaluations operation: " + operation)
 
 
 
@@ -1726,7 +1726,7 @@ def storage_campaigns():
             folder = str(payload.get("folder") or "")
             owner = app_config.safe_join_fs_root(folder)
             if _directory(owner, directory.name) != directory or payload.get("id") != directory.name:
-                raise RuntimeError("Epoch Finder storage ownership mismatch: " + str(directory))
+                raise RuntimeError("Campaign storage ownership mismatch: " + str(directory))
             with _worker_lock:
                 thread = _workers.get(directory.name)
             active = bool(thread and thread.is_alive()) or _campaign_has_active_sessions(owner, payload)
@@ -1748,7 +1748,7 @@ def storage_staging_path(folder, campaign_id):
     payload = _load(owner, campaign_id)
     staging = _staging(owner, payload)
     if staging.is_symlink() or not staging.is_dir():
-        raise FileNotFoundError("Epoch Finder temporary checkpoint storage is unavailable.")
+        raise FileNotFoundError("Campaign temporary checkpoint storage is unavailable.")
     return staging
 
 
@@ -1760,9 +1760,9 @@ def storage_campaign_path(folder, campaign_id):
 
 def frame_path(folder_path, campaign_id, file_name):
     if not _FRAME.fullmatch(str(file_name or "")):
-        raise ValueError("Invalid Epoch Finder frame name.")
+        raise ValueError("Invalid campaign frame name.")
     _load(folder_path, campaign_id)
     frame = _directory(folder_path, campaign_id) / "frames" / file_name
     if frame.is_symlink() or not frame.is_file():
-        raise FileNotFoundError("Epoch Finder frame is unavailable.")
+        raise FileNotFoundError("Campaign frame is unavailable.")
     return frame

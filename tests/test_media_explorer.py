@@ -164,6 +164,7 @@ def test_epoch_frame_uses_existing_owner_route(monkeypatch, tmp_path):
     found = media_explorer.list_media(source="epoch")
     assert found["total"] == 1
     assert found["items"][0]["mediaUrl"].startswith("/fs/epoch_finder/frame?")
+    assert found["items"][0]["uses"][0]["role"] == "Campaign"
 
 
 def test_storyboard_references_and_takes_use_owner_media_route(monkeypatch, tmp_path):

@@ -272,17 +272,18 @@
   }
   function setOperation() {
     var operation = el('studio-dw-write-operation').value;
-    var structural = operation === 'scene-move' || operation === 'scene-duplicate';
-    el('studio-dw-write-scene-row').classList.toggle('hidden', operation !== 'scene-edit' && operation !== 'scene-split' && !structural);
-    el('studio-dw-write-fields').classList.toggle('hidden', operation !== 'scene-edit');
-    el('studio-dw-batch-controls').classList.toggle('hidden', operation !== 'scenes-batch');
-    el('studio-dw-invariant-controls').classList.toggle('hidden', operation !== 'scene-invariants');
-    el('studio-dw-move-target-row').classList.toggle('hidden', operation !== 'scene-move');
-    el('studio-dw-move-placement-row').classList.toggle('hidden', operation !== 'scene-move');
-    el('studio-dw-write-project').disabled = operation === 'new-project' || operation === 'playbook';
-    el('studio-dw-write-prepare').textContent =
-      operation === 'scene-edit' ? 'Draft Scene revision' :
-      structural ? 'Review change' : operation === 'coherence-check' ? 'Check Project coherence' : 'Prepare editable review';
+    var sceneWrite = operation === 'scene-write';
+    var revise = sceneWrite && el('studio-dw-scene-mode').value === 'revise';
+    el('studio-dw-scene-mode-row').classList.toggle('hidden', !sceneWrite);
+    el('studio-dw-batch-controls').classList.toggle('hidden', !revise);
+    ['studio-dw-write-scene-row', 'studio-dw-write-fields', 'studio-dw-invariant-controls',
+     'studio-dw-move-target-row', 'studio-dw-move-placement-row'].forEach(function (id) {
+      el(id).classList.add('hidden');
+    });
+    el('studio-dw-write-project').disabled = operation === 'new-project';
+    el('studio-dw-write-prepare').textContent = sceneWrite
+      ? (revise ? 'Review Scene revisions' : 'Review new Scenes')
+      : 'Prepare editable review';
     showWriteContext();
     updateScope();
   }
@@ -323,16 +324,16 @@
   function recommendedWriteFields(operation) {
     if (readinessStale) return [];
     var allowed = operation === 'project' ? projectFields :
-      (operation === 'scene-edit' || operation === 'scenes-batch') ? sceneFields : [];
+      operation === 'scene-write' ? sceneFields : [];
     return recommendations.writeFields.filter(function (field) { return allowed.indexOf(field) !== -1; });
   }
   function applySuggestedWriteFields() {
     if (writeFieldsManuallyChanged) return;
     var operation = el('studio-dw-write-operation').value;
-    if (operation !== 'scene-edit' && operation !== 'scenes-batch') return;
+    if (operation !== 'scene-write' || el('studio-dw-scene-mode').value !== 'revise') return;
     var hints = recommendedWriteFields(operation);
     if (!hints.length) return;
-    var host = el(operation === 'scene-edit' ? 'studio-dw-write-fields' : 'studio-dw-batch-fields');
+    var host = el('studio-dw-batch-fields');
     Array.from(host.querySelectorAll('input')).forEach(function (check) {
       check.checked = hints.indexOf(check.value) !== -1;
     });
@@ -345,10 +346,14 @@
     return refreshProjects().then(function () {return loadStory(el('studio-dw-write-project').value);})
       .then(renderWriteStory).then(function () {
         if (!writeOperationChosen) {
-          if (recommendations.writeHint && recommendations.writeHint !== 'playbook')
-            el('studio-dw-write-operation').value =
-              recommendations.writeHint === 'scene' ? 'scenes' : recommendations.writeHint;
-          else if (!projects.length) el('studio-dw-write-operation').value = 'new-project';
+          var hint = recommendations.writeHint;
+          if (hint === 'new-project' || hint === 'project') {
+            el('studio-dw-write-operation').value = hint;
+          } else if (['scene', 'scenes', 'scene-edit', 'scenes-batch'].includes(hint)) {
+            el('studio-dw-write-operation').value = 'scene-write';
+            el('studio-dw-scene-mode').value =
+              (recommendations.sceneId || hint === 'scene-edit' || hint === 'scenes-batch') ? 'revise' : 'create';
+          } else if (!projects.length) el('studio-dw-write-operation').value = 'new-project';
         }
         setOperation();
         applySuggestedWriteFields();
@@ -519,6 +524,15 @@
   function writePrepare(writeFields) {
     var bridge = window.studioDirectorBridge, operation = el('studio-dw-write-operation').value,
       id = el('studio-dw-write-project').value;
+    if (operation === 'scene-write') {
+      if (!bridge.isReady()) {status('Choose a Director model first.',true);return;}
+      if (!id) {status('Choose a destination Project.',true);return;}
+      if (el('studio-dw-scene-mode').value === 'revise') return prepareBatchScenes(id);
+      var selected = projects.find(function (p) {return p.id === id;});
+      bridge.prepareWrite('scenes', id, selected && storyName(selected), []);
+      status('Preparing new Scenes for reviewed insertion.', false);
+      return;
+    }
     if (operation === 'scene-invariants') {
       if (!id) {status('Select a Project.',true);return;}
       prepareInvariantLinks(id);
@@ -1164,13 +1178,16 @@
   function openRecommendedWrite() {
     var hint = recommendations.writeHint;
     if (!hint) return;
-    var operation = hint === 'scene' ? 'scenes' : hint;
+    var operation = ['scene', 'scenes', 'scene-edit', 'scenes-batch'].includes(hint)
+      ? 'scene-write' : hint;
     var select = el('studio-dw-write-operation');
     if (!Array.from(select.options).some(function (item) {return item.value === operation;})) {
       status('The recommended Studio operation is not available.', true);
       return;
     }
     select.value = operation;
+    if (operation === 'scene-write') el('studio-dw-scene-mode').value =
+      (recommendations.sceneId || hint === 'scene-edit' || hint === 'scenes-batch') ? 'revise' : 'create';
     writeOperationChosen = true;
     writeFieldsManuallyChanged = false;
     if (el('studio-dw-write-panel').classList.contains('hidden')) toggle('write');
@@ -1185,29 +1202,11 @@
       'Write ' + (names[capture.field] || labels[capture.field] || capture.field);
   }
   function writeActionLabel() {
-    var operation = recommendations.writeHint, fields = recommendedWriteFields(operation);
-    if (operation === 'new-project') return 'Create Project';
-    if (operation === 'scene') return 'Add Scene';
-    if (operation === 'scenes') return 'Develop Scenes';
-    if (operation === 'scene-edit' || operation === 'scenes-batch') {
-      var sceneNames = fields.map(function (field) {
-        return field === 'summary' ? 'Intent' : field === 'prompt' ? 'H3 Prompt' : 'Title';
-      });
-      return sceneNames.length ? 'Write ' + sceneNames.join(' + ') : 'Write Scene fields';
-    }
-    if (operation === 'project') {
-      var projectNames = fields.map(function (field) {
-        return field === 'concept' ? 'Overview' : field === 'style' ? 'Visual Atmosphere' :
-          field === 'invariants' ? 'Invariants' : 'Title';
-      });
-      return projectNames.length ? 'Write ' + projectNames.join(' + ') : 'Write Project fields';
-    }
-    return operation === 'scene-split' ? 'Split Scene' :
-      operation === 'scene-move' ? 'Move Scene' :
-      operation === 'scene-duplicate' ? 'Duplicate Scene' :
-      operation === 'scene-invariants' ? 'Link Invariants' :
-      operation === 'playbook' ? 'Update H3 Playbook' :
-      operation === 'coherence-check' ? 'Check Project Coherence' : '';
+    var hint = recommendations.writeHint;
+    if (hint === 'new-project') return 'Create Project';
+    if (hint === 'project') return 'Revise Project';
+    if (['scene', 'scenes', 'scene-edit', 'scenes-batch'].includes(hint)) return 'Write Scenes';
+    return '';
   }
   function renderReadiness(list) {
     var actions = el('studio-dw-suggestions');
@@ -1329,7 +1328,7 @@
       var sceneId = result && result.sceneId === undefined ? '' : result.sceneId;
       var writeFields = result && result.writeFields === undefined ? [] : result.writeFields;
       var allowedWriteFields = writeHint === 'project' ? projectFields :
-        (writeHint === 'scene-edit' || writeHint === 'scenes-batch') ? sceneFields : [];
+        ['scenes', 'scene-edit', 'scenes-batch'].includes(writeHint) ? sceneFields : [];
       if (!Array.isArray(hints) || hints.length > 15 ||
           hints.some(function(key) {return typeof key !== 'string' || key.length > 120;}) ||
           operations.indexOf(writeHint) < 0 || typeof sceneId !== 'string' || sceneId.length > 160 ||

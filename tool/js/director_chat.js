@@ -444,7 +444,12 @@
     return fetch(url, options || {}).then(function (response) {
       return response.json().then(function (payload) {
         if (!response.ok || !payload || payload.ok === false) {
-          throw new Error(payload && payload.error ? payload.error : (response.statusText || 'Request failed'));
+          var message = payload && payload.error ? payload.error : (response.statusText || 'Request failed');
+          if (url === '/fs/director/chat' && /Unsupported Director Chat operation/i.test(message)) {
+            message += ' The running WebCap backend does not recognize the requested chat operation. ' +
+              'Restart or update the backend so it matches the current Studio Director frontend (studio_chat is supported in the current server code).';
+          }
+          throw new Error(message);
         }
         return payload;
       });

@@ -116,3 +116,90 @@ test('Insights sidebar is browse-first with readable epochs and optional tools',
   assert.match(css, /run-insights-rail-summary-title\{font-size:19px/);
   assert.match(css, /run-analytics-result-epochs button strong\{font-size:17px/);
 });
+
+function insightsFeaturedHarness(rows) {
+  const start = analytics.indexOf('  function labLeaders(ranked){');
+  const end = analytics.indexOf('  function labHistory(){', start);
+  assert.ok(start >= 0 && end > start, 'Insights leadership functions must be present');
+  const feature = {
+    innerHTML: '',
+    single: false,
+    classList: {toggle(name, active) {
+      assert.equal(name, 'is-single');
+      feature.single = active;
+    }},
+  };
+  const context = {
+    folder: 'test-set',
+    lab: id => {
+      assert.equal(id, 'featured');
+      return feature;
+    },
+    labEmpty: message => '<p>' + message + '</p>',
+    esc: value => String(value),
+  };
+  const exposed = vm.runInNewContext('(function(){\n' +
+    analytics.slice(start, end) + '\nreturn { labLeaders, labFeatured };\n})()', context);
+  const candidates = rows.map(row => ({
+    jobId: row[0], epoch: row[1], allManualAverage: row[2],
+    ratedCount: row[3], testCount: row[3] + 1,
+    runName: row[0], sessions: ['test-session'], ratingDistribution: {},
+    topRenders: [],
+  }));
+  const leaders = exposed.labLeaders(candidates);
+  exposed.labFeatured(candidates);
+  return {leaders, feature};
+}
+
+test('Insights leads with highest average among checkpoints with at least five ratings', () => {
+  const {leaders, feature} = insightsFeaturedHarness([
+    ['run-a', 35, 5.0, 1], ['run-b', 48, 4.7, 12], ['run-c', 57, 4.5, 18],
+  ]);
+  assert.equal(leaders.primary.epoch, 48);
+  assert.equal(leaders.highest.epoch, 35);
+  assert.equal(leaders.alternate.epoch, 35);
+  assert.equal(feature.single, false);
+  assert.match(feature.innerHTML, /Best-supported contender/);
+  assert.match(feature.innerHTML, /Highest average · provisional/);
+  assert.ok(feature.innerHTML.indexOf('Epoch 48') < feature.innerHTML.indexOf('Epoch 35'));
+  assert.match(feature.innerHTML, /12 of 13 Test renders rated/);
+  assert.match(feature.innerHTML, /1 of 2 Test renders rated/);
+});
+
+test('Insights shows one wide card when highest-rated is also best-supported', () => {
+  const {leaders, feature} = insightsFeaturedHarness([
+    ['run-a', 35, 4.8, 6], ['run-b', 48, 4.8, 5], ['run-c', 57, 4.5, 18],
+  ]);
+  assert.equal(leaders.primary.epoch, 35, 'Tied average favors more ratings');
+  assert.equal(leaders.highest.epoch, 35);
+  assert.equal(feature.single, true);
+  assert.match(feature.innerHTML, /Best-supported contender/);
+  assert.doesNotMatch(feature.innerHTML, /Highest average · provisional/);
+  assert.doesNotMatch(feature.innerHTML, /Epoch 48/);
+});
+
+test('Insights shows a provisional leader instead of inventing a supported winner', () => {
+  const {leaders, feature} = insightsFeaturedHarness([
+    ['run-a', 35, 5, 1], ['run-b', 48, 4.8, 4],
+  ]);
+  assert.equal(leaders.supported, null);
+  assert.equal(leaders.primary.epoch, 35);
+  assert.equal(feature.single, true);
+  assert.match(feature.innerHTML, /Provisional leader/);
+  assert.match(feature.innerHTML, /No epoch has 5 saved ratings yet/);
+  assert.doesNotMatch(feature.innerHTML, /Best-supported contender/);
+  assert.doesNotMatch(feature.innerHTML, /Epoch 48/);
+});
+
+test('Insights shows no fabricated contender when there are no ratings', () => {
+  const {leaders, feature} = insightsFeaturedHarness([]);
+  assert.equal(leaders.primary, null);
+  assert.equal(feature.single, true);
+  assert.match(feature.innerHTML, /No saved Test ratings yet/);
+});
+
+test('Insights challenge inspect actions follow the same leader definitions', () => {
+  assert.match(analytics, /var leaders=labLeaders\(ranked\)/);
+  assert.match(analytics, /var leaders=labLeaders\(labRanked\(\)\),p=action==='challenger'\?leaders\.alternate:\(leaders\.primary\|\|labPoints\(\)\[0\]\)/);
+  assert.match(css, /#run-analytics-screen #run-lab-featured\.is-single\{grid-template-columns:minmax\(0,1fr\)\}/);
+});

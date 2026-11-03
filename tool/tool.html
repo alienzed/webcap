@@ -2180,17 +2180,16 @@
                     <label>Write to Project<select id="studio-dw-write-project"></select></label>
                     <p id="studio-dw-write-scope" class="studio-dw-scope"></p>
                     <label>Operation<select id="studio-dw-write-operation">
-                      <option value="project">Update Project</option>
                       <option value="new-project">Create Project</option>
-                      <option value="scenes">Add Scenes (one or more)</option>
-                      <option value="scene-edit">Revise Scene</option>
-                      <option value="scenes-batch">Revise several Scenes</option>
-                      <option value="coherence-check">Check Project coherence</option>
-                      <option value="scene-split">Split Scene</option>
-                      <option value="scene-invariants">Use Invariant in Scenes</option>
-                      <option value="scene-move">Move Scene</option>
-                      <option value="scene-duplicate">Duplicate Scene</option>
+                      <option value="project">Revise Project</option>
+                      <option value="scene-write">Write Scenes</option>
                     </select></label>
+                    <label id="studio-dw-scene-mode-row" class="hidden">Write Scenes
+                      <select id="studio-dw-scene-mode">
+                        <option value="create">Add one or more Scenes</option>
+                        <option value="revise">Revise one or more existing Scenes</option>
+                      </select>
+                    </label>
                     <label id="studio-dw-write-scene-row" class="hidden">Scene<select id="studio-dw-write-scene"></select></label>
                     <label id="studio-dw-move-target-row" class="hidden">Relative to Scene<select id="studio-dw-move-target"></select></label>
                     <label id="studio-dw-move-placement-row" class="hidden">Placement
@@ -2223,6 +2222,9 @@
                       <pre id="studio-dw-write-context-json"></pre>
                     </details>
                     <div class="studio-dw-submit"><button id="studio-dw-write-prepare" type="button" class="studio-dw-primary">Prepare editable review</button></div>
+                    <details class="studio-dw-source-preview"><summary>Other Project utilities</summary>
+                      <button id="studio-dw-coherence-check" type="button">Check Project coherence</button>
+                    </details>
                   </section>
                   <section class="studio-dw-readiness" aria-label="Director suggestions">
                     <div class="studio-dw-readiness-heading"><strong>Ready to write</strong><small id="studio-dw-readiness-freshness" role="status" aria-live="polite">Not assessed yet</small></div>

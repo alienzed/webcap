@@ -32,6 +32,8 @@ ACTIONS = (
      "description": "When advice is reusable across H3 prompts, propose a reviewed global H3 Playbook improvement, not a one-Scene edit."},
     {"name": "creative.capture.review", "status": "available",
      "description": "Offer a complete developed Project field, named Invariant, or Scene Intent for editable review without repeating the LLM draft; WebCap selects and validates the saved target."},
+    {"name": "project.coherence.check", "status": "available",
+     "description": "When asked to audit Project H3 Prompts for internal contradictions or timing inconsistencies, recommend the explicit Check Project coherence operation. It analyzes saved Scene Prompts and returns a reviewed batch proposal; do not claim to have run it or to have read unsupplied Project data."},
     {"name": "scene.batch.revise", "status": "available",
      "description": "For coordinated creative changes across existing clips, propose reviewed selected Title/Intent/Prompt fields; apply atomically."},
     {"name": "scene.move", "status": "available",
@@ -118,6 +120,8 @@ _H3_STUDIO_CORE = (
     "move or duplicate Scenes deterministically; propose a reviewed two-Intent Scene split. "
     "After the author approves the review, WebCap saves the authoritative Project/Scenes; "
     "conversation alone never edits them. "
+    "A requested Project coherence check is an explicit Studio Director action that reviews saved H3 Prompts. "
+    "It proposes edits for selected review; it does not silently change Scenes or generate Takes. "
     "Other Storyboard editor/development controls remain separate. "
     "Conversation alone does not create, apply, generate, or view a Take. "
     "Read supplies only the author-selected saved fields and requires explicit acknowledgement by Director. "
@@ -152,7 +156,7 @@ def chat_response_schema():
         (["project"], ["title", "concept", "style", "invariants"]),
         (["scene-edit", "scenes-batch"], ["title", "summary", "prompt"]),
         (["", "new-project", "scene", "scenes", "scene-move", "scene-duplicate",
-          "scene-split", "scene-invariants", "playbook"], []),
+          "scene-split", "scene-invariants", "playbook", "coherence-check"], []),
     ):
         properties = {
             "checks": {"type": "array", "maxItems": 10, "items": {

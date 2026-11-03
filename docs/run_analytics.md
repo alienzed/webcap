@@ -10,6 +10,10 @@ Status: implemented in Test Generations → Analytics. This replaces the propose
 4. Inspect a checkpoint via **Inspect epoch** to open its Epoch Finder campaign or use **Test session** for a linked session. These work only when the underlying evidence still exists.
 5. Expand **Preview numerical evidence sent to Director** to read the numerical/metadata facts. The backend rechecks these facts at execution and rejects requests if they changed after review. Click **Interpret with Director** to enqueue an opt-in LLM job on the existing Test LLM queue. It returns **Observed, Hypotheses, Try next, Limits**. Progress is visible; stop is available. The response is an interpretation, not a new rating.
 
+## Featured contenders (Insights)
+
+Insights leads with the highest average manually rated checkpoint that has **at least five saved ratings**; tied averages prefer more ratings, then a stable run/epoch order. Five is a transparent evidence threshold, **not** a statistical confidence estimate. If no checkpoint reaches five ratings, the highest-average checkpoint appears as a provisional leader. When the best-supported checkpoint differs from the raw highest-average checkpoint, Insights displays that raw leader separately as provisional; when they match, it shows one card. The comparison actions inspect these same choices. The full Contenders table keeps its existing average/count sorting, and pooled ratings from different Test settings remain descriptive rather than controlled comparisons.
+
 ## Blind rating (Insights)
 
 **Blind rate** reviews saved, unrated Test renders continuously until the user closes it or eligible renders run out. Selecting 1–5 saves through the existing Test rating route and immediately advances; Skip leaves that item unrated for another review pass. Back allows correction or undo of an earlier decision. Run and epoch stay hidden while reviewing. The backend retrieves small batches internally, but the UI does not stop after an arbitrary batch size. Progress counts reflect only available Test renders with recorded training provenance; missing or unlinked media remain excluded.

@@ -616,7 +616,7 @@ def _clean_staging(folder_path, campaign):
         raise RuntimeError("Refusing to remove symlinked campaign staging.")
     for entry in directory.iterdir():
         if entry.is_symlink() or not re.fullmatch(r"epoch[0-9]+\.safetensors", entry.name) or not entry.is_file():
-            raise RuntimeError( "Unexpected item in temporary campaign staging: " + str(entry))
+            raise RuntimeError("Unexpected item in temporary campaign staging: " + str(entry))
         entry.unlink()
     directory.rmdir()
 

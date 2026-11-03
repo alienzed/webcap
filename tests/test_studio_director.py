@@ -70,6 +70,17 @@ def test_action_catalog_tracks_shipped_reviewed_creative_operations():
                       "scene.move", "scene.duplicate", "scene.split"):
         assert by_name[operation]["status"] == "available"
     assert "zero to 32" in by_name["project.create"]["description"]
+    assert by_name["project.coherence.check"]["status"] == "available"
+    assert "explicit Check Project coherence operation" in by_name["project.coherence.check"]["description"]
+
+
+def test_studio_chat_schema_advertises_explicit_project_coherence_without_write_fields():
+    from tool.server.studio_director import chat_response_schema
+    variants = chat_response_schema()["properties"]["readiness"]["anyOf"]
+    coherence = [variant for variant in variants
+                 if "coherence-check" in variant["properties"]["writeHint"]["enum"]]
+    assert len(coherence) == 1
+    assert coherence[0]["properties"]["writeFields"]["maxItems"] == 0
 
 
 def test_studio_guidance_api_is_read_only():

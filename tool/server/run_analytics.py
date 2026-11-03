@@ -481,6 +481,7 @@ def director_contract(facts):
     import json
     return {
         "operation": "interpret_run_analytics",
+        "output": "json",
         "prompt": (
             "Review only the numerical evidence below. Never assume a causal effect from "
             "loss, learning rate, epoch count, or sample size. Distinguish direct observations "
@@ -593,6 +594,7 @@ def insights_director_contract(facts):
     import json
     return {
         "operation": "interpret_run_analytics",
+        "output": "json",
         "prompt": (
             "Interpret the supplied Set-wide training evidence. The user's goal is to "
             "choose promising epochs and learn what training decisions to test next. "

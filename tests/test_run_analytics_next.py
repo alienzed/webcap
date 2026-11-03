@@ -74,6 +74,7 @@ class RunAnalyticsNextTests(unittest.TestCase):
     def test_director_contract_and_output_fields(self):
         contract = analytics.director_contract(analytics.director_facts(self._snapshot(["job1"])))
         self.assertEqual(contract["operation"], "interpret_run_analytics")
+        self.assertEqual(contract["output"], "json")
         self.assertEqual(set(contract["response_schema"]["required"]),
                          {"observed", "hypotheses", "tryNext", "limits"})
         self.assertRaises(ValueError, analytics.normalize_director_response, {"observed": "ok"})
@@ -394,6 +395,7 @@ def test_insights_ai_facts_keep_archive_selection_distinct_from_rated_winner(mon
     assert any("missing-log" in warning for warning in facts["warnings"])
     contract = analytics.insights_director_contract(facts)
     assert contract["operation"] == "interpret_run_analytics"
+    assert contract["output"] == "json"
     assert "missing or deleted Test ratings" in contract["prompt"]
     assert "Observed" in contract["response_schema"]["required"][0].title()
 

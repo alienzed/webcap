@@ -2790,7 +2790,7 @@
     });
     var sequenceMode = storyState.sceneViewMode === 'sequence';
     el('storyboard-generate-scenes-btn').classList.toggle('hidden', sequenceMode);
-    el('storyboard-director-tools-btn').classList.toggle('hidden', sequenceMode);
+
     var modeTitle = el('storyboard-workspace-mode-title');
     if (modeTitle) modeTitle.textContent = storyState.sceneViewMode === 'sequence' ? 'Sequence' : 'Scenes';
     var progression = el('storyboard-scene-progression');
@@ -6172,7 +6172,10 @@
     el('storyboard-scenes-sequence-btn').onclick = function () { setSceneViewMode('sequence'); };
     el('storyboard-generate-scenes-btn').onclick = generateScenes;
     el('storyboard-cancel-takes-btn').onclick = cancelStoryTakes;
-    el('storyboard-director-tools-btn').onclick = openDirectorTools;
+    el('storyboard-director-tools-btn').onclick = function () {
+      el('storyboard-director-tools-menu').open = false;
+      openDirectorTools();
+    };
     el('storyboard-scene-creation-close').onclick = closeSceneCreation;
     el('storyboard-scene-creation-cancel').onclick = closeSceneCreation;
     el('storyboard-scene-creation-run').onclick = runSceneCreation;

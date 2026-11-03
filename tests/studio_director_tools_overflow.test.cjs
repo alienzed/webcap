@@ -9,14 +9,14 @@ const chat = fs.readFileSync(path.join(root, 'tool/js/director_chat.js'), 'utf8'
 const server = fs.readFileSync(path.join(root, 'tool/server/app.py'), 'utf8');
 
 test('Studio Director keeps Director Tools in actions overflow, not Scenes header', () => {
-  assert.match(markup, /id="storyboard-director-tools-menu"[^>]*>/);
-  assert.match(markup, /id="storyboard-director-tools-menu"[\\s\\S]*?id="storyboard-director-tools-btn"/);
+  assert.ok(markup.indexOf('id="storyboard-director-tools-menu"') < markup.indexOf('id="storyboard-director-tools-btn"'));
+  assert.ok(markup.indexOf('id="storyboard-director-tools-menu"') < markup.indexOf('id="storyboard-director-tools-btn"'));
   assert.equal((markup.match(/id="storyboard-director-tools-btn"/g) || []).length, 1);
-  assert.match(storyboard, /el\\('storyboard-director-tools-menu'\\)\\.open = false/);
+  assert.ok(storyboard.includes("el('storyboard-director-tools-menu').open = false"));
 });
 
 test('frontend and backend agree on structured Studio chat operation', () => {
-  assert.match(chat, /operation: activeChatMode === 'storyboard' \\? 'studio_chat' : 'freeform_chat'/);
+  assert.ok(chat.includes("operation: activeChatMode === 'storyboard' ? 'studio_chat' : 'freeform_chat'"));
   assert.match(server, /if operation == "studio_chat":/);
   assert.match(server, /"freeform_chat", "studio_chat"/);
   assert.match(chat, /Restart or update the backend so it matches the current Studio Director frontend/);

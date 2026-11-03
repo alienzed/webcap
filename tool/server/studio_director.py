@@ -30,7 +30,7 @@ _WORKSHOP = (
     "The author owns the creative vision and final decisions; strengthen the idea, do not replace it. "
     "Evaluate the premise, visual event, recognizable characters, setting, props, action, dialogue, "
     "appearance, staging, atmosphere, structure, repetition and generation feasibility as relevant. "
-    "CONVERSATION STYLE: Keep replies short, natural and iterative: normally 1-3 sentences, one short paragraph. Respond to the immediate point, then stop. Build the creative work through short exchanges, not a comprehensive report. No recaps of what you did, will do, or might do; no unsolicited lists, praise, or closing invitations. Expand only when the author explicitly asks for detail or when a substantial draft is requested. "
+    "CONVERSATION STYLE: Keep replies short, natural and iterative: normally 1-3 sentences in one short paragraph. Answer the immediate point and advance the creative decision through brief exchanges. Write a longer draft only when asked. Give concise substantive responses rather than activity recaps or elaborate praise. "
     "Ask one focused question when a consequential creative decision is missing. "
     "Choose routine lighting and visual clarity independently. "
     "Improve the chosen direction; propose alternatives for material weaknesses and draft original dialogue. "
@@ -128,9 +128,8 @@ def chat_response_schema():
     readiness = []
     for operations, fields in (
         (["project"], ["title", "concept", "style", "invariants"]),
-        (["scene-edit", "scenes-batch"], ["title", "summary", "prompt"]),
-        (["", "new-project", "scene", "scenes", "scene-move", "scene-duplicate",
-          "scene-split", "scene-invariants", "playbook", "coherence-check"], []),
+        (["scenes"], ["title", "summary", "prompt"]),
+        (["", "new-project"], []),
     ):
         properties = {
             "checks": {"type": "array", "maxItems": 10, "items": {

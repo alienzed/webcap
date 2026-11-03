@@ -2643,6 +2643,8 @@ html[data-theme="dark"] .storyboard-prompt-take-status {
 .storyboard-editor-scroll {
   display: grid;
   grid-template-columns: minmax(580px, 640px) minmax(0, 1fr);
+  /* Bound both desktop panes to the available editor height so Overview can scroll. */
+  grid-template-rows: minmax(0, 1fr);
   align-items: stretch;
   gap: 0;
   padding: 0;
@@ -3315,6 +3317,8 @@ html[data-theme="dark"] .storyboard-prompt-take-status {
   .storyboard-editor-scroll,
   .storyboard-editor-scroll.story-collapsed {
     grid-template-columns: 1fr;
+    /* Stacked layout scrolls as one document, not as two height-clamped panes. */
+    grid-template-rows: auto;
     overflow: auto;
   }
 

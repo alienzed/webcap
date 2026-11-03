@@ -583,6 +583,7 @@ button.epoch-finder-ranking-row:hover,button.epoch-finder-ranking-row:focus-visi
 /* Insights enhancement: keep detail tools, foreground decisions and review. */
 #run-analytics-screen .run-lab-featured{margin:12px 0}
 #run-analytics-screen #run-lab-featured{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px}
+#run-analytics-screen #run-lab-featured.is-single{grid-template-columns:minmax(0,1fr)}
 #run-analytics-screen .run-lab-feature{padding:17px 19px;border-radius:10px;background:var(--panel-bg,#1c2834);border:1px solid var(--border-color,#384653);min-width:0}
 #run-analytics-screen .run-lab-feature small{font-size:12px;color:var(--muted,#b5c4d2)}
 #run-analytics-screen .run-lab-feature h3{font-size:16px;margin:9px 0}

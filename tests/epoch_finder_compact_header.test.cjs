@@ -106,7 +106,7 @@ test('Campaign jobs and diagnostics use current names while internal contracts s
   assert.match(readme, /\*\*Use Campaigns\.\*\* Open \*\*Evaluations → Campaigns\*\*/);
   assert.match(guide, /Evaluations → Insights/);
   assert.match(app, /@app\.route\("\/fs\/epoch_finder", methods=\["POST"\]\)/);
-  assert.match(server, /"epoch-finder" \+ campaign\["id"\]/);
+  assert.match(server, /campaign_staging="epoch-finder-" \+ campaign\["id"\]/);
   assert.match(plan, /contract\["operation"\] = "propose_epoch_finder_plan"/);
   assert.match(plan, /\[EPOCH FINDER ADDITION\]/);
 });

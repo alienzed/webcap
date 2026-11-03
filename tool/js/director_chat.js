@@ -3850,6 +3850,37 @@
       state.studioReadiness = value;
       state.sessionDirty.storyboard = true;
     },
+    checkProjectCoherence: function (storyId) {
+      if (!this.isReady()) return Promise.reject(new Error('Studio Director must be ready to check Project coherence.'));
+      if (!storyId) return Promise.reject(new Error('Select a Project to check.'));
+      state.pending = true;
+      state.jobId = '';
+      syncControls();
+      startProgress();
+      return requestJson('/fs/storyboard/director', {
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({storyId:storyId,operation:'check_coherence_sequence',model:state.modelId})
+      }).then(function (payload) {
+        if (!payload.job || !payload.job.jobId) throw new Error('Coherence check did not queue a job.');
+        state.jobId = String(payload.job.jobId);
+        trackTransientLlmJob(payload.job);
+        return waitForJob(payload.job);
+      }).then(function (job) {
+        var result = job.result || {};
+        if (result.storyId !== storyId || !Array.isArray(result.scenes))
+          throw new Error('Coherence check returned invalid Project results.');
+        finishProgress(null);
+        return result;
+      }).catch(function (error) {
+        finishProgress(error);
+        if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Studio coherence check', error);
+        throw error;
+      }).finally(function () {
+        state.pending = false;
+        state.jobId = '';
+        syncControls();
+      });
+    },
     makeProposal: function (instruction, operation, includePromptContract) {
       if (!this.isReady()) return Promise.reject(new Error('Director must be ready to draft.'));
       state.pending = true;

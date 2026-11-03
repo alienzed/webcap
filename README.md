@@ -73,7 +73,7 @@ This section is a task-oriented quick start, not a substitute for the in-app con
 
 **Inspect history and checkpoints.** In **Training History**, open a recorded run to inspect its output and checkpoint choices. Use the candidate-analysis action to review loss-based checkpoint suggestions, then stage chosen LoRAs for Test. Choose **Resume checkpoint** for compatible continuation or **Fine-tune from saved LoRA** for initialization of a new run. History/Archive operations and permanent run deletion must not be confused with deleting source media.
 
-**Use Epoch Finder.** Open the **Epoch Finder** tab in the Test area to configure an evaluation campaign for training checkpoints. Review the selected training run, reference/control material, prompt or wildcard choices, generation settings, and candidate epochs before launching. Inspect resulting preview images and comparison evidence, then use manual ratings to inform checkpoint selection; automated visual scores are advisory, not proof that an epoch is best. Campaigns and results are separate from Training History. Do not assume that a reference image was necessarily included in the run's training capture without checking its provenance.
+**Use Campaigns.** Open **Evaluations → Campaigns** to configure an evaluation campaign for training checkpoints. Review the selected training run, reference/control material, prompt or wildcard choices, generation settings, and candidate epochs before launching. Inspect resulting preview images and comparison evidence, then use manual ratings to inform checkpoint selection; automated visual scores are advisory, not proof that an epoch is best. Campaigns and results are separate from Training History. Do not assume that a reference image was necessarily included in the run's training capture without checking its provenance.
 
 ### Test: compare candidates and examine results
 
@@ -97,7 +97,7 @@ This section is a task-oriented quick start, not a substitute for the in-app con
 
 ### Media Explorer and Storage: find, inspect, clean up
 
-**Browse generated media.** Open **Media Explorer** from the activity rail. Choose **All media**, **Generations**, **References**, or a source such as Generate, Test Generations, Epoch Finder, or Storyboard. Search by name, prompt, model, or Set; narrow by media-type filters. Select an item to inspect its details, provenance, and navigation links to its owning workflow.
+**Browse generated media.** Open **Media Explorer** from the activity rail. Choose **All media**, **Generations**, **References**, or a source such as Generate, Test Generations, Campaigns, or Storyboard. Search by name, prompt, model, or Set; narrow by media-type filters. Select an item to inspect its details, provenance, and navigation links to its owning workflow.
 
 **Compare or remove output.** Select media and use **Compare** when available; inspect the full viewer before acting. Deletion rules depend on the artifact's owner and dependencies—sometimes removal is deliberately directed back to the original feature. Do not treat output cleanup as the same operation as pruning source Set files.
 
@@ -166,9 +166,9 @@ GPU training requirements are otherwise owned by Diffusion Pipe/the selected mod
 
 H3 calibration additionally requires working NVIDIA telemetry (`nvidia-smi`) in the training environment.
 
-### Run Analytics
+### Insights
 
-Open **Test Generations → Analytics** to compare recorded training runs using their archived loss, Test session evidence, and Epoch Finder campaign results. Choose runs, click **Analyze selected**, then optionally select one comparable campaign or Test session. **Interpret with Director** is always opt-in; preview its numerical evidence first. Scores are never combined across independent evaluation protocols. See [Run Analytics](docs/run_analytics.md) for complete usage, provenance and limitations.
+Open **Evaluations → Insights** to compare recorded training runs using their archived loss, Test session evidence, and Campaign results. Choose runs, click **Analyze selected**, then optionally select one comparable campaign or Test session. **Interpret with Director** is always opt-in; preview its numerical evidence first. Scores are never combined across independent evaluation protocols. See [Run Analytics](docs/run_analytics.md) for complete usage, provenance and limitations.
 
 ### Test Generations
 

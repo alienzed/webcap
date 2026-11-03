@@ -161,8 +161,8 @@
       archive: 'Training Archives',
       tests: 'Tests',
       staged: 'Staged Test LoRAs',
-      epoch_finder: 'Epoch Finder Campaigns',
-      epoch_finder_staging: 'Epoch Finder Temporary Checkpoints',
+      epoch_finder: 'Campaigns',
+      epoch_finder_staging: 'Campaign temporary checkpoints',
       generate: 'Generations',
       storyboard: 'Storyboard Takes',
       set: 'Set Data (protected)',
@@ -370,7 +370,7 @@
       consequence = '\nThis removes only this generated Take. The Story and other Takes remain.';
       if (item.meta && item.meta.selected) consequence += '\nThis Take is currently selected for its Scene.';
     } else if (item.area === 'epoch_finder') {
-      label = 'Epoch Finder campaign';
+      label = 'Campaign';
       consequence = '\nThis permanently removes its recorded scores, retained frames, and any remaining campaign-owned Test media and temporary checkpoint copies. Original training checkpoints are preserved.';
     } else if (item.area === 'staged') {
       label = 'staged Test LoRA copy';

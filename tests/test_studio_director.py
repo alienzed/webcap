@@ -21,7 +21,7 @@ def test_writer_workshop_uses_existing_h3_prompt_contract_and_user_playbook(monk
     assert "FIELD DEVELOPMENT" in text
     assert "Entry and exit state fields are retired" in text
     assert "These controls and media inspection are outside Studio Director" in text
-    assert "Prepare Scenes" in text and "reviewed" in text.lower()
+    assert "Write Scenes" in text and "reviewed" in text.lower()
     assert "Keep risky hand-to-hand interactions simple." in text
     assert "Conversation alone does not create" in text or "Conversation never edits Project records" in text
     assert "integrated_multimodal_description" in result["promptContract"]
@@ -30,22 +30,17 @@ def test_writer_workshop_uses_existing_h3_prompt_contract_and_user_playbook(monk
     assert len(text) < 6000
 
 
-def test_studio_guidance_teaches_workflow_choices_in_existing_action_catalog():
+def test_studio_guidance_teaches_only_focused_creative_workflows():
     result = guidance("minimax_h3")
     actions = {entry["name"]: entry["description"] for entry in result["actions"]}
-    assert "generation controls produce a Take" in actions["conversation.discuss"]
-    assert "smallest relevant" in actions["context.read"]
-    assert "zero to 32" in actions["project.create"]
-    assert "Concept, Style or Invariants" in actions["project.brief.propose"]
-    assert "observable Scene Intent" in actions["scene.draft"]
-    assert "shot timing/dialogue/sound" in actions["scene.revise"]
-    assert "saved duration and linked continuity" in actions["scene.revise"]
-    assert "global H3 Playbook" in actions["playbook.propose"]
-    assert "apply atomically" in actions["scene.batch.revise"]
-    assert "no model rewrite" in actions["scene.move"]
-    assert "no model rewrite" in actions["scene.duplicate"]
-    assert "separately from the Invariant's definition" in actions["scene.invariants"]
+    assert set(actions) == {"context.read", "project.create", "project.revise", "scenes.write"}
+    assert "explicitly selected" in actions["context.read"]
+    assert "optional initial Scenes" in actions["project.create"]
+    assert "Invariants" in actions["project.revise"]
+    assert "one or more Scenes" in actions["scenes.write"]
     assert len(result["system"]) < 6000
+    assert "normally 1-3 sentences" in result["system"]
+    assert "No recaps of what you did" in result["system"]
 
 
 def test_director_role_combines_webcap_workflow_expertise_with_creative_judgment():
@@ -58,24 +53,18 @@ def test_director_role_combines_webcap_workflow_expertise_with_creative_judgment
     assert len(system) < 6000
 
 
-def test_action_catalog_tracks_shipped_reviewed_creative_operations():
+def test_action_catalog_excludes_low_value_studio_director_operations():
     by_name = {action["name"]: action for action in ACTIONS}
-    assert by_name["conversation.discuss"]["status"] == "available"
-    assert by_name["scene.draft"]["status"] == "available"
-    assert by_name["project.create"]["status"] == "available"
-    assert by_name["scene.sequence.draft"]["status"] == "available"
-    assert by_name["project.brief.propose"]["status"] == "available"
-    assert by_name["context.read"]["status"] == "available"
-    for operation in ("creative.capture.review", "scene.batch.revise",
-                      "scene.move", "scene.duplicate", "scene.split"):
-        assert by_name[operation]["status"] == "available"
-    assert "zero to 32" in by_name["project.create"]["description"]
-    assert by_name["project.coherence.check"]["status"] == "available"
-    assert "explicit Check Project coherence operation" in by_name["project.coherence.check"]["description"]
+    assert set(by_name) == {"context.read", "project.create", "project.revise", "scenes.write"}
+    assert all(action["status"] == "available" for action in ACTIONS)
+    for retired in ("scene.move", "scene.duplicate", "scene.split", "scene.invariants",
+                    "playbook.propose", "scene.sequence.draft", "scene.batch.revise"):
+        assert retired not in by_name
 
 
-def test_studio_chat_schema_advertises_explicit_project_coherence_without_write_fields():
+def test_project_coherence_remains_explicit_but_not_advertised_as_creative_action():
     from tool.server.studio_director import chat_response_schema
+    assert "project.coherence.check" not in {action["name"] for action in ACTIONS}
     variants = chat_response_schema()["properties"]["readiness"]["anyOf"]
     coherence = [variant for variant in variants
                  if "coherence-check" in variant["properties"]["writeHint"]["enum"]]
@@ -89,7 +78,7 @@ def test_studio_guidance_api_is_read_only():
     assert response.status_code == 200
     assert response.json["ok"] is True
     assert response.json["targetModel"] == "minimax_h3"
-    assert response.json["actions"][0]["name"] == "conversation.discuss"
+    assert response.json["actions"][0]["name"] == "context.read"
 
 
 def test_unsupported_generation_model_fails_instead_of_misapplying_h3_guidance():

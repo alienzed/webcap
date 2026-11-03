@@ -1333,11 +1333,11 @@
         field: result.field, savedAt: result.storyUpdatedAt, content: result.data};
       var composer = el('director-chat-input');
       var instruction = String(composer.value || '').trim();
-      if (!instruction) instruction = 'give a concise substantive assessment of this material.';
+      if (!instruction) instruction = 'Acknowledge receipt of the supplied material and ask what I would like to do with it. Do not assess or suggest next steps unless I ask.';
       composer.value = '[WEBCAP EXPLICIT PROJECT READ — SAVED FIELD VALUES]\n' +
         JSON.stringify(source, null, 2) + '\n[END WEBCAP READ]\n\n' +
         'Acknowledge receipt in your own words, naming the Project and fields actually present. ' +
-        'Then ' + (instruction || 'give a concise substantive assessment of this material.');
+        'Then ' + instruction;
       el('director-studio-access-status').textContent = 'Read sent to Director. Awaiting the model acknowledgment…';
       sendMessage();
     }).catch(function (error) {
@@ -2737,7 +2737,7 @@
       outbound[0].content += '\n\nCONTEXT DELIVERY CONTRACT: Only explicitly supplied Read fields are available. ' +
         'For a WEBCAP EXPLICIT READ, begin the reply field with a line RECEIVED: ' +
         'followed by the exact received field identifiers separated by comma and space. ' +
-        'Then discuss the contents substantively; a receipt alone is not an assessment. ' +
+        'For a Read without a separate substantive user request, acknowledge the received fields and ask what the author wants to do with them; do not assess or propose next steps. ' +
         'Never claim to have inspected unavailable saved fields. ' +
         'A WEBCAP APPLIED FIELD VALUES event contains author-reviewed saved content and supersedes older Read snapshots. ' +
         'RESPONSE CONTRACT: Return one JSON object matching the supplied schema, with reply and readiness. ' +
@@ -2770,7 +2770,7 @@
         'Never guess IDs, confuse proposal with saved content, include any field without a clear destination, ' +
         'or propose a capture for open-ended exploration. Omit capture when not ready; ' +
         'WebCap will bind it to a freshly selected saved destination and require editable review. ' +
-        'For ordinary discussion, use one to three short paragraphs focused on the new decision and next useful action. ' +
+        'For ordinary discussion (not a context-only Read), use one to three short paragraphs focused on the new decision and next useful action. ' +
         'Build on agreed material and give at most one consequential question. ' +
         'When the author asks for a complete field or Prompt, supply its full usable content. ' +
         'Keep assessment metadata in readiness and conversational material in reply.';
@@ -3689,11 +3689,11 @@
       var composer = el('director-chat-input');
       var draft = String(composer.value || '').trim();
       var nl = String.fromCharCode(10);
-      composer.value = (instruction || draft || 'Inspect this material and suggest the next useful development step.') +
+      composer.value = (instruction || draft || 'Acknowledge receipt of this material and ask what I would like to do with it. Do not assess or suggest next steps unless I ask.') +
         nl + nl + '[WEBCAP EXPLICIT READ]' + nl +
         JSON.stringify(payload, null, 2) + nl + '[END WEBCAP READ]' + nl +
         'Begin the reply field with RECEIVED: ' + keys.join(', ') +
-        ' using exactly those field identifiers. After that line, briefly assess the supplied material and name the next useful step.';
+        ' using exactly those field identifiers. After that line, follow the request above. If no specific task was requested, simply acknowledge receipt and ask what I want to do next; do not assess or recommend development steps.';
       state.pendingReadAck = keys.slice();
       sendMessage();
     },

@@ -1,3 +1,5 @@
+> Historical plan (superseded): Manual Screening was retired in PR #852. Prompt Tests Matrix owns exhaustive review; Campaigns and Insights remain. See [current retirement plan](prompt_tests_screening_retirement_plan.md). The remainder of this document records historical design decisions.
+
 # Evaluation workspace: safe IA migration
 
 ## Goal and non-negotiables

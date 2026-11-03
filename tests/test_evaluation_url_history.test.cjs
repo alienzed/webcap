@@ -41,12 +41,12 @@ function harness(hash='#/test?folder=dataset%2Fone') {
   return {ctx,location,writes,setMode(next){mode=next;}};
 }
 
-test('Evaluation method is present in shareable URL and parsed on reload',()=>{
+test('Supported Evaluation methods are shareable and parse on reload',()=>{
   const h=harness();
-  h.setMode('screening');
+  h.setMode('finder');
   h.ctx.syncShellLocationRoute();
-  assert.equal(h.location.hash,'#/test?folder=dataset%2Fone&method=screening');
-  assert.equal(h.ctx.parseShellLocationRoute().evaluationMethod,'screening');
+  assert.equal(h.location.hash,'#/test?folder=dataset%2Fone&method=finder');
+  assert.equal(h.ctx.parseShellLocationRoute().evaluationMethod,'finder');
   assert.equal(h.ctx.parseShellLocationRoute().folder,'dataset/one');
   assert.equal(h.writes[0].kind,'replace');
 
@@ -71,7 +71,7 @@ test('Explicit method selection adds Back/Forward entry; background sync does no
 });
 
 test('All Evaluation tabs round-trip without changing folder or shell route',()=>{
-  for(const mode of ['screening','finder','analytics','references']){
+  for(const mode of ['finder','analytics','references']){
     const h=harness();
     h.setMode(mode);
     h.ctx.syncShellLocationRoute({push:true});
@@ -82,4 +82,9 @@ test('All Evaluation tabs round-trip without changing folder or shell route',()=
   assert.match(shell,/window\.addEventListener\('popstate', function \(\)/);
   assert.equal((shell.match(/window\.epochFinderShowMode\(route\.evaluationMethod\)/g)||[]).length,2);
   assert.match(shell,/window\.epochFinderShowMode\(route\.evaluationMethod\)/);
+});
+
+test('Retired Screening links fall back to Prompt Tests',()=>{
+  const h=harness('#/test?folder=dataset%2Fone&method=screening');
+  assert.equal(h.ctx.parseShellLocationRoute().evaluationMethod,'tests');
 });

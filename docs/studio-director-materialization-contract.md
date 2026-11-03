@@ -1,5 +1,40 @@
 # Studio Director — intention-to-materialization contract and feature-completeness audit
 
+## Reconciliation checkpoint — 2026-11-03
+
+Recovered the uncommitted work based on `db550e27` as `5a74677e` on
+`codex/reconcile-studio-director`, then reconciled with `origin/main` at `9d599c78`.
+The renderer conflict retains main's field-first suggestions and the recovered
+fix that assigns accepted readiness before calculating freshness.
+
+Recovered files: `tool/js/director_chat.js`, `tool/js/studio_director_workbench.js`,
+`tool/server/app.py`, `tool/server/studio_director.py`, `tool/css/workspace_shell.css`,
+`tool/tool.html`, `tests/studio_director_readiness.test.cjs`,
+`tests/studio_director_ux.test.cjs`, `tests/studio_director_workshop.test.cjs`, and
+`tests/test_studio_director.py`. This checkpoint is the additional documentation change.
+
+Studio conversation now uses the existing schema-constrained Director runtime for
+one `{reply, readiness}` response. General Chat remains free-form. Existing Read,
+editable reviews, scoped Apply, Undo and file persistence remain authoritative;
+there is no automatic retry or JSON repair. Other recovered changes reduce header
+prose, expand long replies on demand, compare Invariant values independently of
+JSON key order, and retain the selected Write target and actual saved-field receipts.
+
+Validation after reconciliation: 75 frontend tests passed across Studio Director,
+chat persistence and Story attachments; 71 backend tests passed across Studio
+Director, chat history, Scene drafts and Invariant operations. Both edited JS files
+passed syntax checks. Browser smoke testing was blocked by connection refusal in
+the in-app browser, although the started local server returned HTTP 200 from PowerShell.
+No new live model inference or Apply was performed for this reconciliation.
+
+Earlier real Gemma/browser probes produced four parseable structured chat replies,
+including Project revision recommendations and persisted assessments. They also
+exposed unresolved semantic failures: brief extraction returned unchanged saved text,
+Scene Read receipt mixed identifiers with prose, and a Scene recommendation used a
+prefixed ID. These are not fixed by JSON schema. The changes reduce visible clutter
+and format failures, but a consistently shorter end-to-end author journey remains
+unproven; this checkpoint does not declare the feature acceptance-complete.
+
 **Status:** Current implementation contract and next-work handoff, audited against `main` commit `9b3a49657ef3ae7664b63ee96a4b93dee94d4df6` on 2026-10-29, after PR #792. **Documentation-only audit:** no application code changed and no real local-model or browser test was run in preparing this document.
 
 **Authority:** Follow `AGENTS.md` and `docs/filesystem_state_contract.md`. This document is the *current* Studio Director creative collaboration and implementation plan. `docs/studio-director-revamp.md` records architectural context and earlier phase history; `docs/studio-director-ia-audit.md`, `docs/studio-director-design-audit.md` and `docs/studio-director-side-panel-implementation.md` are dated snapshots, not current outstanding-task lists. `docs/storyboard_llm_guidance.md` owns the existing lower-level Storyboard LLM/generation contracts, not the Studio Director user-experience roadmap. Current code wins over all docs when a statement describes what has shipped.
@@ -65,6 +100,16 @@ The cooperation is **Director authors; WebCap targets, validates, materializes; 
 **Completeness is a journey criterion, not a button count.** For each representative author intention below, the journey must complete from natural conversation to visible saved effect without detouring through manual field copying, invisible background control, invented context, or unnecessary re-prompting. A workflow is not complete because the API can technically make the edit.
 
 **Pleasant to use:** one contextually relevant next step; human labels rather than JSON; generous usable editing space; show *changed fields*, not everything the Project stores; no repeated selection of the same destination; no nagging for deliberately optional fields; return to the same conversation after Apply. Creative energy must survive materialization.
+
+
+### User-facing readiness and field suggestions
+
+The LLM may maintain a richer creative assessment (the bounded `checks` list) to reason about development, renderability, continuity and missing decisions. That assessment is supporting intelligence, not a user task list.
+
+The primary UX presents **no more than two actionable field-materialization suggestions**. Suggestions represent one field, a coherent group of fields, or creation of a Project/Scene object. Their labels name the creative destination (for example, “Write Project Overview” or “Write Scene Intent + H3 Prompt”), not an internal operation such as “Review next step.” Reuse the existing readiness `capture` and `writeHint/writeFields` contract and reviewed workflows; do not introduce a second recommendation engine or a generic action executor for this presentation change.
+
+Keep the detailed creative assessment available on demand in a secondary disclosure. It may contain multiple dimensions and explanations, but it must not compete visually with the one or two actions. Suggestions refresh with the latest accepted readiness response, disappear when stale, and never save automatically. When a direct capture and a grouped Write target overlap, avoid offering duplicate actions.
+
 
 ## 2. Explicit scope
 

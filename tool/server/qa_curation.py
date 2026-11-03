@@ -40,8 +40,8 @@ def build_curation_request(concepts, training_focus="", item_count=0):
         "poses, or scene backgrounds. Avoid counting descriptive complexity or "
         "caption length as image quality. Supporting dimensions may occur much "
         "more or less often than core dimensions.\n"
-        "Human-approved grouped tags are strong evidence; cached Sight terms are "
-        "fallible observations. 'Sight' groups deserve more caution.\n"
+        "Grouped tags are authoritative recurring dimensions for balancing. "
+        "Distinctive caption observations are evaluated independently.\n"
         "The response guides a deterministic coverage-and-redundancy selector. "
         "It does not select specific images, edit the Set, or claim optimal "
         "training performance. Return existing IDs only; no invented concepts.\n"
@@ -91,4 +91,91 @@ def normalize_curation_result(data, allowed_ids):
         raise ValueError("QA Curation Director identified no core training concepts.")
     summary = str(data.get("summary") or "").strip()
     result["summary"] = summary[:240]
+    return result
+
+
+def build_caption_curation_request(captions, training_focus="", known_concepts=None):
+    """One small Director batch of authored captions; no Vision/Sight inference."""
+    import re
+    if not isinstance(captions, list) or not 1 <= len(captions) <= 24:
+        raise ValueError("Curate caption analysis requires 1-24 media captions per batch.")
+    known = known_concepts or []
+    if (not isinstance(known, list) or len(known) > 80
+            or any(not isinstance(value, str) or not 1 <= len(value.strip()) <= 100 for value in known)):
+        raise ValueError("Curate caption concept references are invalid.")
+    compact = []
+    by_file = {}
+    for item in captions:
+        if not isinstance(item, dict):
+            raise ValueError("Curate caption evidence item must be an object.")
+        name = str(item.get("fileName") or "").strip()
+        caption = str(item.get("caption") or "").strip()
+        if (not name or name in by_file or not caption or len(caption) > 8000
+                or len(name) > 255):
+            raise ValueError("Curate caption batch contains invalid or duplicate media evidence.")
+        by_file[name] = caption
+        compact.append({"fileName": name, "caption": caption})
+    if len(json.dumps(compact, ensure_ascii=False)) > 9500:
+        raise ValueError("Curate caption batch exceeds its context budget.")
+    prompt = (
+        "[ROLE] You are extracting distinctive learnable visual information from human-authored "
+        "training captions for image LoRA curation.\n"
+        "[GOAL] Identify only visual structures, physical relationships, unusual garment "
+        "construction and meaningful pose/viewpoint distinctions that contribute something "
+        "beyond common tagged categories. Represent genuinely repeated visual ideas with "
+        "the same short canonical concept label. Use an existing canonical label whenever "
+        "it describes the same visual concept.\n"
+        "[EVIDENCE] Use the supplied captions as the complete evidence source. For each "
+        "observation, copy a short exact quote from that caption supporting the concept. "
+        "Treat an empty observations list as a valid result when there are no distinctive "
+        "facts worth preserving. Give recurring ordinary background and incidental wording "
+        "low priority; preserve unusual relevant constructions even if they appear once.\n"
+        "[TRAINING FOCUS] " + (str(training_focus or "").strip()[:300] or "Not specified") +
+        "\n[KNOWN CANONICAL LABELS] " + json.dumps(known, ensure_ascii=False) +
+        "\n[CAPTIONS] " + json.dumps(compact, ensure_ascii=False) +
+        "\n[OUTPUT] Return up to 64 observations. Each observation has fileName, "
+        "concept (concise canonical visual concept), quote (exact caption substring)."
+    )
+    return {
+        "operation": "qa_curate_caption", "output": "json", "prompt": prompt,
+        "max_tokens": 3072, "caption_sources": by_file,
+        "response_schema": {
+            "type": "object", "additionalProperties": False,
+            "required": ["observations"],
+            "properties": {"observations": {
+                "type": "array", "maxItems": 64,
+                "items": {"type": "object", "additionalProperties": False,
+                          "required": ["fileName", "concept", "quote"],
+                          "properties": {"fileName": {"type": "string"},
+                                         "concept": {"type": "string"},
+                                         "quote": {"type": "string"}}}
+            }}
+        }
+    }
+
+
+def normalize_caption_curation_result(data, captions_by_file):
+    import re
+    if not isinstance(data, dict) or not isinstance(data.get("observations"), list):
+        raise ValueError("Curate caption analysis returned no structured observations.")
+    values = data["observations"]
+    if len(values) > 64:
+        raise ValueError("Curate caption analysis exceeded its observation limit.")
+    result, seen = [], set()
+    for entry in values:
+        if not isinstance(entry, dict):
+            raise ValueError("Curate caption observation is invalid.")
+        name = str(entry.get("fileName") or "").strip()
+        concept = str(entry.get("concept") or "").strip()
+        quote = str(entry.get("quote") or "").strip()
+        if name not in captions_by_file or not 2 <= len(concept) <= 100 or not quote:
+            raise ValueError("Curate caption observation has an invalid file, concept or quote.")
+        source = re.sub(r"\s+", " ", captions_by_file[name]).casefold()
+        evidence = re.sub(r"\s+", " ", quote).casefold()
+        if evidence not in source:
+            raise ValueError("Curate caption observation is not supported by its source caption: " + name)
+        key = (name, concept.casefold())
+        if key not in seen:
+            seen.add(key)
+            result.append({"fileName": name, "concept": concept, "quote": quote})
     return result

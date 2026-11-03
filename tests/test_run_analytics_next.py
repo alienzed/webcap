@@ -74,6 +74,7 @@ class RunAnalyticsNextTests(unittest.TestCase):
     def test_director_contract_and_output_fields(self):
         contract = analytics.director_contract(analytics.director_facts(self._snapshot(["job1"])))
         self.assertEqual(contract["operation"], "interpret_run_analytics")
+        self.assertEqual(contract["output"], "json")
         self.assertEqual(set(contract["response_schema"]["required"]),
                          {"observed", "hypotheses", "tryNext", "limits"})
         self.assertRaises(ValueError, analytics.normalize_director_response, {"observed": "ok"})
@@ -394,6 +395,7 @@ def test_insights_ai_facts_keep_archive_selection_distinct_from_rated_winner(mon
     assert any("missing-log" in warning for warning in facts["warnings"])
     contract = analytics.insights_director_contract(facts)
     assert contract["operation"] == "interpret_run_analytics"
+    assert contract["output"] == "json"
     assert "missing or deleted Test ratings" in contract["prompt"]
     assert "Observed" in contract["response_schema"]["required"][0].title()
 
@@ -490,8 +492,9 @@ def test_insights_rating_missions_use_real_saved_coverage_and_batch_progress():
         assert f'id="{field}"' in html
     assert "lab('mission-meter').value=rated" in js
     assert "lab('mission-meter').max=total||1" in js
-    assert "lab('review-meter').value=completed" in js
-    assert "reviewIndex+(reviewRatedCurrent?1:0)" in js
+    assert "lab('review-meter').value=Math.min(completed,reviewTotal)" in js
+    assert "var current=reviewItems[reviewIndex],completed=reviewRated+reviewSkipped;" in js
+    assert "reviewRated+' rated · '+reviewSkipped+' skipped" in js
     assert "data-lab-action=\"review\"" in js
     assert "ratingDistribution" in js
     assert "test_rate_result" in js
@@ -619,7 +622,7 @@ def test_insights_featured_previews_fill_unrated_slots_and_keep_vl_per_render(tm
         (50, 2), (None, 0), (100, 1), (None, 0)]
 
 
-def test_blind_five_rating_uses_full_height_without_hiding_rating_controls():
+def test_continuous_blind_rating_uses_full_height_without_hiding_rating_controls():
     from pathlib import Path
     root = Path(__file__).resolve().parents[1]
     css = (root / "tool/css/epoch_finder.css").read_text(encoding="utf-8")
@@ -631,8 +634,37 @@ def test_blind_five_rating_uses_full_height_without_hiding_rating_controls():
     assert ".run-lab-review-media video{display:block;width:100%;height:100%;max-height:100%" in css
     assert ".run-lab-review-dialog[open]{overflow-y:auto}" in css  # Short viewports can scroll.
     assert "max-height:min(53vh,550px)" not in css
-    for control in ("review-media", "review-stars", "review-skip", "review-next", "review-close"):
+    for control in ("review-media", "review-stars", "review-back", "review-skip", "review-next", "review-undo", "review-close"):
         assert 'id="run-lab-' + control + '"' in review
+
+def test_blind_rating_auto_advances_after_saved_rating_and_continues_past_five():
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[1]
+    js = (root / "tool/js/run_analytics.js").read_text(encoding="utf-8")
+    markup = (root / "tool/tool.html").read_text(encoding="utf-8")
+    review = js.split("  var reviewItems=[]", 1)[1].split("  function labLoad(){", 1)[0]
+
+    assert "if(saved)labReviewAdvance(false);" in review
+    assert "if(reviewIndex<reviewItems.length||reviewExhausted)labReviewRender();" in review
+    assert "else labReviewLoad();" in review
+    assert "var excluded=reviewItems.map(function(item){return item.id;}).concat(reviewExcluded);" in review
+    assert "lab('review-back').onclick=labReviewBack;" in js
+    assert "if(event.key==='ArrowLeft'){event.preventDefault();labReviewBack();}" in js
+    assert "labReviewApi('test_rate_result',{session:item.session,mediaFile:item.mediaFile,rating:0}" in review
+    assert "reviewRatedCurrent" not in review
+    assert "Review five more" not in js
+    assert "Blind-rate five" not in js
+    assert "Run and epoch revealed after rating." not in markup
+    assert "run-lab-review-back" in markup
+
+
+def test_blind_rating_videos_autoplay_muted_without_losing_controls():
+    from pathlib import Path
+    script = (Path(__file__).resolve().parents[1] / "tool/js/run_analytics.js").read_text(encoding="utf-8")
+    review = script.split("  function labReviewRender(){", 1)[1].split("  function labReviewLoad(){", 1)[0]
+    assert "if(video){media.controls=true;media.preload='auto';media.playsInline=true;media.muted=true;media.defaultMuted=true;media.autoplay=true;}" in review
+    assert "lab('review-media').appendChild(media);" in review
+
 
 def test_blind_review_keeps_wildcard_strings_and_actual_render_prompt(tmp_path, monkeypatch):
     from tool.server import run_analytics as analytics

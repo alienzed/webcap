@@ -1378,10 +1378,21 @@ def _prepare_shared_test_enqueue(tmp_path, monkeypatch, candidate_count=2):
         lambda prompt, seed: prompt.replace("{place}", "studio") + " #" + str(seed),
     )
     monkeypatch.setattr(bench, "_relative_set_folder", lambda _folder: "sets/subject")
+    # The fixture uses a symbolic Set alias. Deferred dispatch resolves that
+    # alias back into a Set path; give both paths the same workspace identity.
+    monkeypatch.setattr(bench, "_workspace_name", lambda _folder: "subject--test")
     return staged, candidates
 
 
-def test_enqueue_creates_one_common_inference_job_per_rendition(tmp_path, monkeypatch):
+def _expanded_test_enqueue(folder_path, *args, **kwargs):
+    """Tests of running renditions explicitly cross the deferred dispatch boundary."""
+    result = bench.enqueue(folder_path, *args, **kwargs)
+    session = bench._session_directory(folder_path, result["latest"]["session"])
+    bench.expand_queued_session(bench._read_status(session)["deferredJobId"])
+    return result
+
+
+def test_enqueue_keeps_one_promise_in_shared_inference_queue(tmp_path, monkeypatch):
     _staged, candidates = _prepare_shared_test_enqueue(tmp_path, monkeypatch, candidate_count=2)
 
     payload = bench.enqueue(
@@ -1398,16 +1409,14 @@ def test_enqueue_creates_one_common_inference_job_per_rendition(tmp_path, monkey
 
     session = bench._session_directory(tmp_path, payload["latest"]["session"])
     manifest = bench._read_status(session)
-    assert len(manifest["inferenceJobs"]) == 3
+    assert manifest["inferenceJobs"] == []
+    assert manifest["deferredJobId"]
 
     snapshot = execution_queue.lane_snapshot(inference_runner.EXECUTION_LANE, include_terminal=False)
-    jobs = [
-        job for job in snapshot["jobs"]
-        if (job.get("metadata") or {}).get("client") == "test"
-    ]
-    assert len(jobs) == 3
-    assert [job["metadata"]["candidateKind"] for job in jobs] == ["base", "lora", "lora"]
-    assert [job["queuePosition"] for job in jobs] == [1, 2, 3]
+    jobs = [job for job in snapshot["jobs"] if (job.get("metadata") or {}).get("client") == "test"]
+    assert len(jobs) == 1
+    assert jobs[0]["metadata"]["candidateKind"] == "session"
+    assert jobs[0]["queuePosition"] == 1
 
 
 def test_test_enqueue_survives_comfyui_unavailable_and_defers_wildcard_resolution(tmp_path, monkeypatch):
@@ -1428,20 +1437,18 @@ def test_test_enqueue_survives_comfyui_unavailable_and_defers_wildcard_resolutio
     assert payload["queued"] is True
     session = bench._session_directory(tmp_path, payload["latest"]["session"])
     manifest = bench._read_status(session)
-    child_payloads = [
-        execution_queue.get_job(job_id, include_payload=True)["payload"]["request"]
-        for job_id in manifest["inferenceJobs"]
-    ]
-    assert len(child_payloads) == 2
-    assert {item["prompt"] for item in child_payloads} == {"person in {studio|rooftop}"}
-    assert {item["promptNeedsResolve"] for item in child_payloads} == {True}
-    assert {item["settings"]["seed"] for item in child_payloads} == {77}
+    assert manifest["inferenceJobs"] == []
+    frozen = execution_queue.get_job(manifest["deferredJobId"], include_payload=True)["payload"]["request"]
+    assert frozen["prompt"] == "person in {studio|rooftop}"
+    assert frozen["promptNeedsResolve"] is True
+    assert frozen["settings"]["seed"] == 77
+    assert len(frozen["sessionCandidates"]) == 2
 
 
 def test_test_session_children_share_frozen_prompt_seed_and_workflow(tmp_path, monkeypatch):
     _staged, candidates = _prepare_shared_test_enqueue(tmp_path, monkeypatch, candidate_count=2)
 
-    payload = bench.enqueue(
+    payload = _expanded_test_enqueue(
         tmp_path,
         "person in {place}",
         selected_files=[path.name for path in candidates],
@@ -1477,11 +1484,9 @@ def test_test_renditions_use_global_inference_positions(tmp_path, monkeypatch):
 
     assert execution_queue.get_job(generate["id"])["queuePosition"] == 1
     session = bench._session_directory(tmp_path, payload["latest"]["session"])
-    child_jobs = [
-        execution_queue.get_job(job_id)
-        for job_id in bench._read_status(session)["inferenceJobs"]
-    ]
-    assert [job["queuePosition"] for job in child_jobs] == [2, 3]
+    deferred = execution_queue.get_job(bench._read_status(session)["deferredJobId"])
+    assert deferred["metadata"]["candidateKind"] == "session"
+    assert deferred["queuePosition"] == 2
     queued = bench.queued_jobs(tmp_path)["jobs"]
     assert queued[0]["queuePosition"] == 2
 
@@ -1522,7 +1527,7 @@ def test_clear_queued_test_sessions_keeps_other_global_inference(tmp_path, monke
 
 def test_stop_shared_test_session_cancels_pending_children_and_requests_active_stop(tmp_path, monkeypatch):
     _staged, candidates = _prepare_shared_test_enqueue(tmp_path, monkeypatch, candidate_count=2)
-    payload = bench.enqueue(
+    payload = _expanded_test_enqueue(
         tmp_path,
         "prompt",
         selected_files=[path.name for path in candidates],
@@ -1558,7 +1563,7 @@ def test_stop_shared_test_session_cancels_pending_children_and_requests_active_s
 
 def test_stop_session_handles_child_claimed_while_cancelling(tmp_path, monkeypatch):
     _staged, candidates = _prepare_shared_test_enqueue(tmp_path, monkeypatch, candidate_count=2)
-    payload = bench.enqueue(
+    payload = _expanded_test_enqueue(
         tmp_path, "prompt", selected_files=[path.name for path in candidates], include_base=False,
     )
     session = bench._session_directory(tmp_path, payload["latest"]["session"])
@@ -1589,7 +1594,7 @@ def test_stop_session_handles_child_claimed_while_cancelling(tmp_path, monkeypat
 
 def test_stop_session_overrides_child_backlog_stop_and_remains_stopping(tmp_path, monkeypatch):
     _staged, candidates = _prepare_shared_test_enqueue(tmp_path, monkeypatch, candidate_count=1)
-    payload = bench.enqueue(
+    payload = _expanded_test_enqueue(
         tmp_path, "prompt", selected_files=[candidates[0].name], include_base=False,
     )
     session = bench._session_directory(tmp_path, payload["latest"]["session"])
@@ -1607,7 +1612,7 @@ def test_stop_session_overrides_child_backlog_stop_and_remains_stopping(tmp_path
 
 def test_committed_test_result_is_recognized_after_queue_job_is_still_active(tmp_path, monkeypatch):
     _staged, candidates = _prepare_shared_test_enqueue(tmp_path, monkeypatch, candidate_count=1)
-    payload = bench.enqueue(
+    payload = _expanded_test_enqueue(
         tmp_path,
         "prompt",
         selected_files=[candidates[0].name],
@@ -1639,7 +1644,7 @@ def test_committed_test_result_is_recognized_after_queue_job_is_still_active(tmp
 
 def test_test_cancel_marker_prevents_replay_if_process_dies_before_queue_removal(tmp_path, monkeypatch):
     _staged, candidates = _prepare_shared_test_enqueue(tmp_path, monkeypatch, candidate_count=1)
-    payload = bench.enqueue(
+    payload = _expanded_test_enqueue(
         tmp_path,
         "prompt",
         selected_files=[candidates[0].name],
@@ -1660,7 +1665,7 @@ def test_test_cancel_marker_prevents_replay_if_process_dies_before_queue_removal
 
 def test_test_result_without_media_is_not_treated_as_committed(tmp_path, monkeypatch):
     _staged, candidates = _prepare_shared_test_enqueue(tmp_path, monkeypatch, candidate_count=1)
-    payload = bench.enqueue(
+    payload = _expanded_test_enqueue(
         tmp_path,
         "prompt",
         selected_files=[candidates[0].name],
@@ -1687,7 +1692,7 @@ def test_test_result_without_media_is_not_treated_as_committed(tmp_path, monkeyp
 
 def test_transient_test_cancel_remains_recoverable_after_receipt_is_lost(tmp_path, monkeypatch):
     _staged, candidates = _prepare_shared_test_enqueue(tmp_path, monkeypatch, candidate_count=1)
-    payload = bench.enqueue(
+    payload = _expanded_test_enqueue(
         tmp_path,
         "prompt",
         selected_files=[candidates[0].name],
@@ -1712,7 +1717,7 @@ def test_transient_test_cancel_remains_recoverable_after_receipt_is_lost(tmp_pat
 
 def test_missing_candidate_rendition_skips_without_failure_card(tmp_path, monkeypatch):
     _staged, candidates = _prepare_shared_test_enqueue(tmp_path, monkeypatch, candidate_count=1)
-    payload = bench.enqueue(
+    payload = _expanded_test_enqueue(
         tmp_path,
         "prompt",
         selected_files=[candidates[0].name],
@@ -1737,7 +1742,7 @@ def test_missing_candidate_rendition_skips_without_failure_card(tmp_path, monkey
 
 def test_shared_test_rendition_executes_with_existing_test_model_semantics(tmp_path, monkeypatch):
     _staged, candidates = _prepare_shared_test_enqueue(tmp_path, monkeypatch, candidate_count=1)
-    payload = bench.enqueue(
+    payload = _expanded_test_enqueue(
         tmp_path,
         "prompt",
         selected_files=[candidates[0].name],
@@ -1807,7 +1812,7 @@ def test_remove_candidate_allows_queued_test_reference(tmp_path, monkeypatch):
     assert removed["removed"] == candidates[0].name
     assert not candidates[0].exists()
     session = bench._session_directory(tmp_path, payload["latest"]["session"])
-    assert bench._read_status(session)["inferenceJobs"]
+    assert bench._read_status(session)["deferredJobId"]
 
 
 def test_running_test_session_owns_stop_control():
@@ -1889,13 +1894,11 @@ def test_enqueue_registers_all_children_before_any_test_work_can_start(tmp_path,
         session = next(path for path in session_root.iterdir() if path.is_dir())
         manifest = bench._read_status(session)
         observed["jobIds"] = list(manifest["inferenceJobs"])
+        observed["promiseId"] = manifest["deferredJobId"]
         observed["migrationComplete"] = manifest["migrationComplete"]
-        observed["statuses"] = [
-            execution_queue.get_job(job_id)["status"]
-            for job_id in observed["jobIds"]
-        ]
+        observed["promise"] = execution_queue.get_job(observed["promiseId"])
 
-    monkeypatch.setattr(inference_runner, "start_observer", inspect_before_worker_start)
+    monkeypatch.setattr(inference_runner, "start_requested_inference", inspect_before_worker_start)
 
     payload = bench.enqueue(
         tmp_path,
@@ -1906,17 +1909,19 @@ def test_enqueue_registers_all_children_before_any_test_work_can_start(tmp_path,
 
     session = bench._session_directory(tmp_path, payload["latest"]["session"])
     manifest = bench._read_status(session)
-    assert len(observed["jobIds"]) == 3
+    assert observed["jobIds"] == []
     assert observed["migrationComplete"] is True
-    assert observed["statuses"] == ["queued", "queued", "queued"]
-    assert manifest["inferenceJobs"] == observed["jobIds"]
+    assert observed["promise"]["metadata"]["candidateKind"] == "session"
+    assert observed["promise"]["status"] == "queued"
+    assert manifest["inferenceJobs"] == []
+    assert manifest["deferredJobId"] == observed["promiseId"]
     assert manifest["migrationComplete"] is True
 
 
 
 def test_stop_session_state_cannot_be_reverted_by_provider_start_publication(tmp_path, monkeypatch):
     _staged, candidates = _prepare_shared_test_enqueue(tmp_path, monkeypatch, candidate_count=1)
-    payload = bench.enqueue(
+    payload = _expanded_test_enqueue(
         tmp_path,
         "prompt",
         selected_files=[candidates[0].name],
@@ -1943,12 +1948,12 @@ def test_stop_session_state_cannot_be_reverted_by_provider_start_publication(tmp
 
 def test_test_enqueue_failure_cleans_inert_children_and_incomplete_session(tmp_path, monkeypatch):
     _staged, candidates = _prepare_shared_test_enqueue(tmp_path, monkeypatch, candidate_count=1)
-    def rejected_batch(request, contexts, labels=None, deferred=False):
-        raise RuntimeError("rendition batch enqueue failed")
+    def rejected_promise(request, folder, session_id, label=""):
+        raise RuntimeError("Test Session promise enqueue failed")
 
-    monkeypatch.setattr(inference_runner, "enqueue_test_many", rejected_batch)
+    monkeypatch.setattr(inference_runner, "enqueue_test_session", rejected_promise)
 
-    with pytest.raises(RuntimeError, match="rendition batch enqueue failed"):
+    with pytest.raises(RuntimeError, match="Test Session promise enqueue failed"):
         bench.enqueue(
             tmp_path,
             "prompt",
@@ -2058,11 +2063,7 @@ def test_new_test_sessions_use_output_storage_and_freeze_candidate_provenance(tm
         "stage": model.STAGING_KEY,
     }), encoding="utf-8")
     monkeypatch.setattr(bench, "_test_directory", lambda _folder, _model, source=None: staged)
-    monkeypatch.setattr(inference_runner, "enqueue_test_many", lambda request, contexts, labels=None, deferred=False: [
-        {"jobId": "job-" + context["candidateKind"]} for context in contexts
-    ])
-    monkeypatch.setattr(bench, "execution_promote_backlog_many", lambda lane, ids: ids)
-    monkeypatch.setattr(inference_runner, "start_observer", lambda: None)
+    monkeypatch.setattr(inference_runner, "start_requested_inference", lambda: None)
     monkeypatch.setattr(bench, "_sync_inference_session", lambda directory: bench._session_status(directory))
 
     set_folder = tmp_path / "sets" / "demo"
@@ -2101,11 +2102,7 @@ def test_new_test_sessions_freeze_candidate_strength_for_result_cards(tmp_path, 
     candidate = staged / "epoch10.safetensors"
     candidate.write_bytes(b"weights")
     monkeypatch.setattr(bench, "_test_directory", lambda _folder, _model, source=None: staged)
-    monkeypatch.setattr(inference_runner, "enqueue_test_many", lambda request, contexts, labels=None, deferred=False: [
-        {"jobId": "job-" + context["candidateKind"]} for context in contexts
-    ])
-    monkeypatch.setattr(bench, "execution_promote_backlog_many", lambda lane, ids: ids)
-    monkeypatch.setattr(inference_runner, "start_observer", lambda: None)
+    monkeypatch.setattr(inference_runner, "start_requested_inference", lambda: None)
     monkeypatch.setattr(bench, "_sync_inference_session", lambda directory: bench._session_status(directory))
 
     set_folder = tmp_path / "sets" / "demo"
@@ -2656,11 +2653,7 @@ def test_sweep_request_expands_multiple_loras_and_freezes_weights(tmp_path, monk
     assert include_base
     assert selected == loras
     assert request["sweepWeights"] == [0.6, 0.8, 1.2]
-    contexts = []
-    monkeypatch.setattr(inference_runner, "enqueue_test_many", lambda request, items, labels=None, deferred=False:
-                        [contexts.append(context) or {"jobId": "job-" + str(len(contexts))} for context in items])
-    monkeypatch.setattr(bench, "execution_promote_backlog_many", lambda lane, ids: ids)
-    monkeypatch.setattr(inference_runner, "start_observer", lambda: None)
+    monkeypatch.setattr(inference_runner, "start_requested_inference", lambda: None)
     monkeypatch.setattr(bench, "_sync_inference_session", lambda directory: bench._session_status(directory))
     set_folder = tmp_path / "sets" / "demo"
     set_folder.mkdir(parents=True)
@@ -2671,6 +2664,11 @@ def test_sweep_request_expands_multiple_loras_and_freezes_weights(tmp_path, monk
     assert [(item["fileName"], item["strength"]) for item in payload["candidates"][1:]] == [
         (lora.name, strength) for lora in loras for strength in (0.6, 0.8, 1.2)
     ]
+    promise_id = payload["deferredJobId"]
+    frozen = execution_queue.get_job(promise_id, include_payload=True)["payload"]["request"]
+    contexts, _labels = bench._test_session_renditions(
+        payload["ownerFolder"], session["session"], frozen, frozen["sessionCandidates"]
+    )
     assert len({context["candidateIndex"] for context in contexts}) == 7
     assert [(context["candidateFile"], context["candidateStrength"]) for context in contexts[1:]] == [
         (lora.name, strength) for lora in loras for strength in (0.6, 0.8, 1.2)

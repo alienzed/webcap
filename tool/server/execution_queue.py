@@ -29,6 +29,8 @@ _lock = threading.RLock()
 RESOURCE_OWNERS = {"training", "llm", "inference"}
 _resource_owner = ""
 _transient_receipts = {}
+_TRANSIENT_RECENT_LIMIT = 80
+_transient_recent = []
 _TRANSIENT_RECEIPT_LIMIT = 200
 
 
@@ -239,7 +241,10 @@ def clear_transient_receipts(lane_name=""):
     with _lock:
         if not lane_name:
             _transient_receipts.clear()
+            _transient_recent.clear()
             return
+        if lane_name == "inference":
+            _transient_recent.clear()
         remove_ids = [
             job_id for job_id, receipt in _transient_receipts.items()
             if str(receipt.get("lane") or "") == lane_name
@@ -283,7 +288,10 @@ def recent_snapshot(lane_name, limit=30):
     with _lock:
         state = _read_state()
         lane = _lane(state, lane_name, create=False) or _default_lane()
-        recent = lane.get("recent") if isinstance(lane.get("recent"), list) else []
+        recent = list(lane.get("recent") if isinstance(lane.get("recent"), list) else [])
+        if lane_name == "inference":
+            recent.extend(_transient_recent)
+            recent.sort(key=lambda item: float(item.get("finishedAt") or 0))
         return [copy.deepcopy(item) for item in reversed(recent[-limit:]) if isinstance(item, dict)]
 
 
@@ -713,8 +721,59 @@ def enqueue_many(lane_name, entries, initial_status="queued"):
         return [_public_job(job) for job in added]
 
 
-def jobs_by_id(job_ids):
-    """Read persisted jobs once and return public snapshots for the requested IDs."""
+
+def replace_pending_with_many(job_id, entries):
+    """Atomically expand a queued session at its existing FIFO position."""
+    entries = list(entries)
+    if not entries:
+        raise ValueError("A Test Session needs at least one rendition.")
+    now = time.time()
+    with _lock:
+        state = _read_state()
+        lane_name, parent = _find_job(state, job_id)
+        if parent is None:
+            raise FileNotFoundError("Queued Test Session no longer exists.")
+        if parent.get("status") not in PENDING_STATUSES:
+            raise ValueError("Only a pending Test Session can expand.")
+        lane = _lane(state, lane_name)
+        if lane.get("paused"):
+            raise ValueError("A paused Test Session cannot expand.")
+        position = lane["jobs"].index(parent)
+        existing_ids = {
+            item["id"] for other_lane in state["lanes"].values()
+            for item in other_lane.get("jobs", [])
+        }
+        children = []
+        for entry in entries:
+            while True:
+                child_id = secrets.token_hex(12)
+                if child_id not in existing_ids:
+                    break
+            existing_ids.add(child_id)
+            children.append({
+                "id": child_id,
+                "lane": lane_name,
+                "status": parent["status"],
+                "queuePosition": 0,
+                "createdAt": now,
+                "updatedAt": now,
+                "startedAt": None,
+                "finishedAt": None,
+                "error": "",
+                "metadata": copy.deepcopy(entry.get("metadata") or {}),
+                "details": {},
+                "result": {},
+                "requestedAction": "",
+                "payload": copy.deepcopy(entry.get("payload") or {}),
+            })
+        lane["jobs"][position:position + 1] = children
+        _refresh_positions(lane)
+        _write_state(state)
+        return [_public_job(child) for child in children]
+
+
+def jobs_by_id(job_ids, include_payload=False):
+    """Read jobs once; callers explicitly opt into the private frozen payloads."""
     wanted = {str(job_id or "").strip() for job_id in job_ids}
     wanted.discard("")
     if not wanted:
@@ -725,7 +784,7 @@ def jobs_by_id(job_ids):
         for lane in state["lanes"].values():
             for job in lane.get("jobs", []):
                 if job["id"] in wanted:
-                    found[job["id"]] = _public_job(job)
+                    found[job["id"]] = copy.deepcopy(job) if include_payload else _public_job(job)
         return found
 
 
@@ -950,6 +1009,11 @@ def finish_job_transient(job_id, status="completed", result=None, error=""):
             lane["activeJobId"] = ""
         _refresh_positions(lane)
         _write_state(state)
+        # Completed inference is visible in Recent without recreating durable
+        # queue history or bloating the file during large Test batches.
+        if lane_name == "inference":
+            _record_recent({"recent": _transient_recent}, job,
+                           keep=_TRANSIENT_RECENT_LIMIT, summary_only=True)
         _remember_transient_receipt(receipt)
         return receipt
 

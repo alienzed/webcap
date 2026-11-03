@@ -60,9 +60,9 @@ The **global WebCap activity rail** remains the primary app navigation. Explorer
 
 ## Toolbar and filtering
 
-Search is the largest/first control. Scope: filenames, prompts or recorded source labels only when actually available. Below: role chips, producer, model, Set, date, media type, rating and sort. Hide unsupported filters or mark them unavailable rather than offering empty choices.
+Search is the largest/first control. Scope: filenames, prompts or recorded source labels only when actually available. Keep sort and view controls in the results toolbar.
 
-Use **one compact row of primary facets**, with a More panel for rarely used facets. Show active filters as removable chips; Clear All is always available when filtering. Counts reflect the *completed discovery scope*; when results are partial, label them as partial. Avoid a permanent large filter form.
+Do not present every facet as a permanent form row. Put media type, producer/model, Set, date, rating and technical filters inside one compact, collapsed-by-default **Filters** disclosure. Preserve every existing supported filter and its route behavior. Show active filters as removable chips outside the disclosure, with an active-filter count on the disclosure and Clear All available. Counts reflect the *completed discovery scope*; when results are partial, label them as partial. Avoid a permanent large filter form.
 
 Sort: Newest (default), Oldest, Rating (rated first), Name. Discovery must be complete to guarantee global sort. Use **Load more** pagination rather than scroll-triggered fetch initially: predictable keyboard/selection/back behavior, no confusing scroll jumps.
 

@@ -1742,7 +1742,7 @@ def qa_curate_draft_route():
                 return jsonify({"ok": True, "draft": None})
             with path.open("r", encoding="utf-8") as stream:
                 draft = json.load(stream)
-            if not isinstance(draft, dict) or draft.get("version") != 1:
+            if not isinstance(draft, dict) or draft.get("version") not in (1, 2):
                 raise ValueError("Unsupported Curate draft version.")
             return jsonify({"ok": True, "draft": draft})
         if request.method == "DELETE":
@@ -1750,10 +1750,10 @@ def qa_curate_draft_route():
             return jsonify({"ok": True})
         data = request.get_json(silent=True) or {}
         draft = data.get("draft")
-        if not isinstance(draft, dict) or draft.get("version") != 1:
+        if not isinstance(draft, dict) or draft.get("version") not in (1, 2):
             raise ValueError("Invalid Curate draft.")
-        if len(json.dumps(draft, ensure_ascii=False)) > 350000:
-            raise ValueError("Curate draft exceeds 350 KB.")
+        if len(json.dumps(draft, ensure_ascii=False)) > 2000000:
+            raise ValueError("Curate draft exceeds 2 MB.")
         import tempfile
         temp_path = None
         try:
@@ -1787,13 +1787,26 @@ def qa_curate_route():
         available = set(list_media_files(str(data.get("folder") or "").strip()))
         if any(name not in available for name in names):
             raise ValueError("QA Curation selection includes media outside the current Set.")
-        from .qa_curation import build_curation_request
-        contract = build_curation_request(
-            data.get("concepts"), data.get("trainingFocus"), len(names)
-        )
+        if data.get("operation") == "captions":
+            from .qa_curation import build_caption_curation_request
+            captions = data.get("captions")
+            if not isinstance(captions, list):
+                raise ValueError("Curate caption analysis requires a caption batch.")
+            if any(not isinstance(row, dict) or row.get("fileName") not in names for row in captions):
+                raise ValueError("Curate caption evidence must belong to the selected Set.")
+            contract = build_caption_curation_request(
+                captions, data.get("trainingFocus"), data.get("knownConcepts")
+            )
+            label = "QA · Curate Caption Evidence"
+        else:
+            from .qa_curation import build_curation_request
+            contract = build_curation_request(
+                data.get("concepts"), data.get("trainingFocus"), len(names)
+            )
+            label = "QA · Curate Training Set"
         job = enqueue_llm(
             "qa", str(data.get("model") or "").strip(), contract,
-            context={}, label="QA · Curate Training Set"
+            context={}, label=label
         )
         return jsonify({"ok": True, "job": job}), 202
     except Exception as exc:
@@ -3231,11 +3244,11 @@ def epoch_finder_propose_route():
         )
         job = enqueue_llm(
             "test", str(data.get("directorModel") or "").strip(), contract,
-            context={}, label="Epoch Finder: design concept tests",
+            context={}, label="Campaign: design concept tests",
         )
         return jsonify({"ok": True, "job": job}), 202
     except Exception as exc:
-        app.logger.exception("EPOCH FINDER PROPOSAL FAILED: %s", exc)
+        app.logger.exception("CAMPAIGN PROPOSAL FAILED: %s", exc)
         return jsonify({"ok": False, "error": str(exc)}), 400
 
 
@@ -3282,7 +3295,7 @@ def epoch_finder_route():
     except FileNotFoundError as exc:
         return jsonify({"ok": False, "error": str(exc)}), 404
     except Exception as exc:
-        app.logger.exception("EPOCH FINDER FAILED: %s", exc)
+        app.logger.exception("EVALUATIONS FAILED: %s", exc)
         return jsonify({"ok": False, "error": str(exc)}), 400
 
 

@@ -7,7 +7,7 @@
   var timer = null;
   var mode = 'tests';
   var returnMode = '';
-  var surfaceLabels = {tests:'Prompt Tests',screening:'Manual Screening',finder:'Campaigns',references:'References',analytics:'Insights'};
+  var surfaceLabels = {tests:'Prompt Tests',finder:'Campaigns',references:'References',analytics:'Insights'};
   var lastFrameKey = '';
   var wizardStep = 1;
   var dimensions = [];
@@ -30,69 +30,42 @@
   var proposalBusy = false;
   var followUpSource = '';
   var timingProfiles = {};
-  var manualSelectionCampaign = '';
-  var manualSelectedRound = 0;
-  var manualMatrixSignature = '';
-  var manualVisionPending = false;
-  var screeningReportedVlErrors = new Set();
-  var screeningSettingsKey = '';
-  var screeningSettingsRequest = null;
-  var screeningSaveTimer = 0;
   var campaignSaveTimer = 0;
+  var campaignTestStatusCampaign = '';
+  var campaignTestStatus = {};
+  var campaignTestStatusVersion = 0;
   var campaignDefaultsKey = '';
   var campaignDraftRevision = 0;
-  // Transient selections belong to each method; the engine and rendered evidence stay shared.
   function emptyMethodWorkspace() {
-    return {activeCampaign:'',runEpochSelections:{},stagedSelection:new Set(),
-      sourceMode:'runs',selectedRound:0,selectionCampaign:'',referenceSelections:{}};
+    return {activeCampaign:'',runEpochSelections:{},stagedSelection:new Set(),sourceMode:'runs',referenceSelections:{}};
   }
-  var methodWorkspaces={finder:emptyMethodWorkspace(),screening:emptyMethodWorkspace()};
+  var methodWorkspaces={finder:emptyMethodWorkspace()};
   function snapshotMethodWorkspace(method) {
-    var workspace=methodWorkspaces[method];
-    if(!workspace)return;
-    workspace.activeCampaign=activeCampaign;
-    workspace.sourceMode=sourceMode;
-    workspace.stagedSelection=new Set(stagedSelection);
-    if(method==='finder')workspace.referenceSelections=Object.assign({},referenceSelections);
-    workspace.runEpochSelections=Object.fromEntries(Object.entries(runEpochSelections).map(function(entry){
-      return [entry[0],new Set(entry[1])];
-    }));
-    if(method==='screening'){
-      workspace.selectedRound=manualSelectedRound;
-      workspace.selectionCampaign=manualSelectionCampaign;
-    }
+    if(method!=='finder')return;
+    var w=methodWorkspaces.finder;
+    w.activeCampaign=activeCampaign;w.sourceMode=sourceMode;w.stagedSelection=new Set(stagedSelection);
+    w.referenceSelections=Object.assign({},referenceSelections);
+    w.runEpochSelections=Object.fromEntries(Object.entries(runEpochSelections).map(function(e){return [e[0],new Set(e[1])];}));
   }
-  function restoreMethodWorkspace(method, requestedCampaign) {
-    var workspace=methodWorkspaces[method];
-    if(!workspace)throw new Error('Unknown Evaluation method workspace: '+method);
-    activeCampaign=requestedCampaign||workspace.activeCampaign;
-    workspace.activeCampaign=activeCampaign;
-    campaignState=null;
-    sourceMode=method==='screening'?'runs':workspace.sourceMode;
-    stagedSelection=new Set(workspace.stagedSelection);
-    if(method==='finder')referenceSelections=Object.assign({},workspace.referenceSelections);
-    referenceGeneration++; // Invalidate pending reference requests from the other method.
-    runEpochSelections=Object.fromEntries(Object.entries(workspace.runEpochSelections).map(function(entry){
-      return [entry[0],new Set(entry[1])];
-    }));
-    manualSelectionCampaign=method==='screening'&&!requestedCampaign?workspace.selectionCampaign:'';
-    manualSelectedRound=method==='screening'&&!requestedCampaign?workspace.selectedRound:0;
+  function restoreMethodWorkspace(method,campaignId) {
+    if(method!=='finder')throw new Error('Unknown campaign workspace.');
+    var w=methodWorkspaces.finder;
+    activeCampaign=campaignId||w.activeCampaign;
+    campaignState=null;sourceMode=w.sourceMode;
+    stagedSelection=new Set(w.stagedSelection);referenceSelections=Object.assign({},w.referenceSelections);
+    referenceGeneration++;
+    runEpochSelections=Object.fromEntries(Object.entries(w.runEpochSelections).map(function(e){return [e[0],new Set(e[1])];}));
     inspectedEpoch=null;inspectedFrame=0;lastFrameKey='';
   }
-  function resetMethodWorkspaces() {
-    methodWorkspaces={finder:emptyMethodWorkspace(),screening:emptyMethodWorkspace()};
-    referenceGeneration++;
-    activeCampaign='';campaignState=null;
-    runEpochSelections={};stagedSelection=new Set();sourceMode='runs';
-    manualSelectionCampaign='';manualSelectedRound=0;
+  function resetMethodWorkspaces(){
+    methodWorkspaces={finder:emptyMethodWorkspace()};referenceGeneration++;
+    activeCampaign='';campaignState=null;runEpochSelections={};stagedSelection=new Set();sourceMode='runs';
   }
   window.epochFinderReceiveSetPrompt = function(folder, modelId, prompt) {
     if(currentFolder!==String(folder||'') ||
        String(window.getWorkingModelProfileId()||'')!==String(modelId||''))return;
     // These are editable drafts, not immutable results or historical plans.
     els('prompt').value=String(prompt==null?'':prompt);
-    els('manual-prompt').value=String(prompt==null?'':prompt);
-    screeningGroups();
   };
   function campaignSaveDraft() {
     if (!currentFolder || mode!=='finder') return;
@@ -152,22 +125,9 @@
       }).catch(function(exc){campaignDefaultsKey='';error(exc);});
   }
 
-  var screeningSelectionQueue = Promise.resolve();
-  var screeningSelectionRevision = 0;
-  var screeningSelectionFailure = null;
-  var screeningExpandedExcluded = new Set();
-  var screeningShowExcluded = false;
-  var screeningDraftContext = '';
-  var screeningTestStatusCampaign = '';
-  var screeningTestStatus = {};
-  var screeningTestStatusVersion = 0;
   var pickerTestStatus = {};
   var pickerTestStatusKey = '';
   var pickerTestStatusVersion = 0;
-  var screeningCopyPending = new Set();
-  var screeningRatingPending = new Set();
-  var screeningSkipPending = new Set();
-  var screeningWildcardError = null;
   var els = function (id) { return document.getElementById('epoch-finder-' + id); };
   function escape(value) {
     return String(value == null ? '' : value).replace(/[&<>"']/g, function (ch) {
@@ -179,7 +139,7 @@
       body: JSON.stringify({ folder: folderOverride == null ? currentFolder : folderOverride,
         operation: operation, criteria: criteria || {} })
     }).then(function (response) { return response.json().then(function (json) {
-      if (!response.ok || !json.ok) throw new Error(json.error || 'Epoch Finder request failed.');
+      if (!response.ok || !json.ok) throw new Error(json.error || 'Evaluations request failed.');
       return json;
     }); });
   }
@@ -187,8 +147,8 @@
     var node = els('error');
     node.textContent = String(exc && exc.message || exc);
     node.classList.remove('hidden');
-    console.error('[Epoch Finder]', exc);
-    if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Epoch Finder', exc);
+    console.error('[Evaluations]', exc);
+    if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Evaluations', exc);
   }
   function clearError() { els('error').classList.add('hidden'); els('error').textContent = ''; }
   function showMode(next, options) {
@@ -201,34 +161,17 @@
       ? options.returnTo : '';
     var previousMode=mode;
     if(previousMode!==next){
-      listRequestVersion++; // Ignore results from the method that just lost focus.
-      if(!options.methodRedirect)snapshotMethodWorkspace(previousMode);
-      if(next==='finder'||next==='screening'){
-        restoreMethodWorkspace(next,options.keepCampaign?options.campaignId:'');
+      listRequestVersion++;
+      snapshotMethodWorkspace(previousMode);
+      if(next==='finder'){
+        restoreMethodWorkspace('finder',options.keepCampaign?options.campaignId:'');
         els('active').classList.add('hidden');
         els('empty').classList.remove('hidden');
+        campaignTestStatusCampaign='';campaignTestStatus={};pickerTestStatusKey='';
       }
     }
     mode=next;
-    if(previousMode!==next && (next==='finder'||next==='screening')) {
-      screeningTestStatusCampaign='';
-      screeningTestStatus={};
-      pickerTestStatusKey='';
-    }
-    var finder=next==='finder'||next==='screening';
-    if (finder) {
-      screeningModeUi();
-      els('new-heading').textContent = next === 'screening' ? 'New screening' : 'New campaign';
-      els('history-heading').textContent = next === 'screening' ? 'Screenings' : 'Campaigns';
-      els('new').textContent = next === 'screening' ? '+ New Screening' : '+ New Campaign';
-      if (next === 'screening' && !activeCampaign) {
-        var draftKey = currentFolder+'|'+String(window.getWorkingModelProfileId()||'');
-        if (screeningDraftContext !== draftKey) {
-          screeningDraftContext = draftKey;
-          screeningApplySettings(null);
-        }
-      }
-    }
+    var finder=next==='finder';
     var references = next === 'references';
     var analytics = next === 'analytics';
     document.querySelectorAll('#test-workspace-main-tabs [data-test-workspace-mode]').forEach(function (button) {
@@ -237,8 +180,8 @@
       button.setAttribute('aria-pressed', String(active));
     });
     els('screen').classList.toggle('hidden', !finder);
-    // A reference lookup discarded while screening was active must be restarted
-    // when returning to Campaign step 4, without discarding authored selections.
+    // Returning to Campaign setup restarts an interrupted reference lookup
+    // without discarding authored selections.
     if(next==='finder'&&previousMode!==next&&wizardStep===4&&!activeCampaign){
       referencePlanSignature='';
       showStep(4);
@@ -552,7 +495,7 @@
     els('run-detail').textContent=selected.length+' runs · '+chosenEpochs().length+' checkpoints selected';
   }
   function refreshPickerTestStatus(force) {
-    if (!currentFolder || (mode!=='screening' && mode!=='finder')) return Promise.resolve();
+    if (!currentFolder || mode!=='finder') return Promise.resolve();
     var folder=currentFolder, model=String(window.getWorkingModelProfileId()||'');
     var ids=selectedRunEntries().map(function(run){return run.jobId;});
     var key=JSON.stringify([folder,model,ids]);
@@ -571,15 +514,6 @@
   function drawEpochPicker() {
     drawRuns();
     var host=els('epoch-picker'),selected=selectedRunEntries();
-    var screening=isManualCampaign();
-    var excluded=screening ? selected.reduce(function(total,choice){
-      var run=runs.find(function(item){return item.jobId===choice.jobId;});
-      return total+(run?run.epochs.length-choice.epochs.length:0);
-    },0) : 0;
-    var reveal=els('screening-show-excluded');
-    reveal.classList.toggle('hidden',!screening||!excluded);
-    reveal.textContent=screeningShowExcluded?'Show selected epochs only':'Show '+excluded+' excluded epochs';
-    reveal.setAttribute('aria-pressed',String(screeningShowExcluded));
     if(sourceMode==='staged'){host.classList.add('hidden');return;}
     host.classList.toggle('hidden',!selected.length);
     var existing=new Map(Array.from(host.querySelectorAll('[data-epoch-run]')).map(function(node){
@@ -589,7 +523,7 @@
       var run=runs.find(function(item){return item.jobId===choice.jobId;});
       if(!run)throw new Error('Selected training run disappeared.');
       var region=existing.get(run.jobId);
-      var visibleEpochs=screening&&!screeningShowExcluded?choice.epochs:run.epochs;
+      var visibleEpochs=run.epochs;
       var epochsSignature=JSON.stringify(visibleEpochs);
       if(!region){
         region=document.createElement('section');
@@ -948,14 +882,14 @@
 
   function list() {
     var model = String(window.getWorkingModelProfileId() || '');
-    var visible = campaigns.filter(function (c) { return c.modelId === model && (c.mode === 'manual') === (mode === 'screening'); });
+    var visible = campaigns.filter(function (c) { return c.modelId === model && c.mode !== 'manual'; });
     els('count').textContent = String(visible.length);
     els('campaigns').innerHTML = visible.length ? visible.map(function (c) {
       return '<button type="button" class="epoch-finder-campaign ' +
         (c.id === activeCampaign ? 'active' : '') + '" data-id="' + escape(c.id) + '">' +
         '<strong>' + escape(c.name || c.id) + '</strong><small>' + escape(c.modelId || '') + ' · Round ' + escape(c.round) +
         ' · ' + escape(c.phase || c.status) + '</small></button>';
-    }).join('') : '<span class="epoch-finder-muted">No '+(mode==='screening'?'screenings':'campaigns')+' for this model.</span>';
+    }).join('') : '<span class="epoch-finder-muted">No '+'campaigns'+' for this model.</span>';
   }
   function progress(campaign) {
     var plan = campaign.rounds.find(function (r) { return r.number === campaign.round; }) || campaign.rounds[campaign.rounds.length - 1];
@@ -1061,7 +995,7 @@
       var extra = (campaign.referenceEvaluation || {});
       var evidence = (extra.rvn ? ' · RVN ' + observed.filter(function (u) { return u.referenceComplete; }).length + '/' + observed.length : '') +
         (extra.dino ? ' · DINO ' + observed.filter(function (u) { return u.dinoComplete; }).length + '/' + observed.length : '');
-      return '<button type="button" class="epoch-finder-ranking-row' + (screeningTestStatus[String(entry.epoch)]===true?' is-in-test':'') + '" data-inspect-epoch="' + entry.epoch + '" title="Inspect all retained tests for this epoch' + (screeningTestStatus[String(entry.epoch)]===true?' · In Test Generations':'') + '"><span class="rank">#' + (index + 1) +
+      return '<button type="button" class="epoch-finder-ranking-row' + (campaignTestStatus[String(entry.epoch)]===true?' is-in-test':'') + '" data-inspect-epoch="' + entry.epoch + '" title="Inspect all retained tests for this epoch' + (campaignTestStatus[String(entry.epoch)]===true?' · In Test Generations':'') + '"><span class="rank">#' + (index + 1) +
         '</span><span class="epoch">' + escape(candidateLabel(campaign, entry.epoch)) + (recommended.has(entry.epoch) && entry.score != null ? ' · recommended' : '') + (entry.active === false ? ' · sidelined' : '') +
         '</span><span class="epoch-finder-score-track"><i style="width:' +
         Math.round((entry.score || 0) * 100) + '%"></i></span><span class="percent">' +
@@ -1264,10 +1198,10 @@
         '<img loading="lazy" src="' + escape(href) + '" alt="Approved training reference: ' + escape(name) + '">' +
         '<small>' + escape(name) + '</small></a>';
     }).join('');
-    node.innerHTML = '<div class="epoch-finder-inspect-top' + (screeningTestStatus[String(unit.epoch)]===true?' is-in-test':'') + '"><strong>' + escape(candidateLabel(campaign, unit.epoch)) +
+    node.innerHTML = '<div class="epoch-finder-inspect-top' + (campaignTestStatus[String(unit.epoch)]===true?' is-in-test':'') + '"><strong>' + escape(candidateLabel(campaign, unit.epoch)) +
       ' · Round ' + unit.round + ' / Test ' + (unit.case+1) + '</strong><span>' +
       (inspectedFrame+1) + ' / ' + units.length + '</span></div>' +
-      (stagedOrigin(campaign, unit.epoch) || screeningTestStatus[String(unit.epoch)]===true ? '' :
+      (stagedOrigin(campaign, unit.epoch) || campaignTestStatus[String(unit.epoch)]===true ? '' :
         '<div class="epoch-finder-inspect-actions"><button type="button" data-copy-epoch-to-test>Copy ' +
         escape(candidateLabel(campaign, unit.epoch)) + ' to Test Generations</button></div>') +
       (hasRunOrigin(campaign, unit.epoch) ?
@@ -1307,904 +1241,28 @@
       (unit.error ? '<p class="epoch-finder-error">' + escape(unit.error) + '</p>' : '') + evidenceSection(campaign);
   }
 
-  // Manual Screening reuses this Campaign's run picker, Test render cards and queue.
-  function isManualCampaign() { return campaignState && campaignState.mode === 'manual' && !!activeCampaign; }
-  function screeningModeUi() {
-    var manual = mode === 'screening';
-    els('manual-form').classList.toggle('hidden', !manual);
-    els('wizard-progress').classList.toggle('hidden', manual);
-    els('wizard-actions').classList.toggle('hidden', manual);
-    document.querySelectorAll('[data-epoch-wizard-step]').forEach(function (node) {
-      node.classList.toggle('hidden', manual ? node.dataset.epochWizardStep !== '1' : Number(node.dataset.epochWizardStep) !== wizardStep);
-    });
-    document.querySelector('.epoch-finder-source-choice').classList.toggle('hidden', manual);
-    if (manual) {
-      sourceMode = 'runs';
-      drawEpochPicker();
-    }
-  }
-  // Read the Test model's owned prepare contract; don't borrow another screen's DOM.
-  function screeningSettingsSource(modelId) {
-    var key=currentFolder+'|'+String(modelId||window.getWorkingModelProfileId()||'');
-    if (screeningSettingsKey===key && screeningSettingsRequest) return screeningSettingsRequest;
-    screeningSettingsKey=key;
-    screeningSettingsRequest=fetch('/fs/test_generations',{
-      method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({folder:currentFolder,operation:'test_prepare',criteria:{modelId:modelId||window.getWorkingModelProfileId()}})
-    }).then(function(response){return response.json().then(function(payload){
-      if(!response.ok||!payload||payload.ok===false) throw new Error(payload&&payload.error||'Could not load Test settings.');
-      return payload;
-    });}).then(function(payload){
-      if(screeningSettingsKey!==key) return payload;
-      var available=new Set(payload.settings||[]), defaults=Object.assign({},payload.defaults||{},payload.manualSettings||{});
-      var freshControls=els('manual-mp').dataset.screeningSettingsKey!==key;
-      var fields=[['mp','megapixels'],['duration','duration'],['aspect','aspectRatio'],
-        ['sampling','samplingMode'],['dimensions','dimensions']];
-      fields.forEach(function(pair){
-        var target=els('manual-'+pair[0]), field=target.closest('label');
-        field.classList.toggle('hidden',!available.has(pair[1]));
-        if(target.dataset.screeningSettingsKey!==key && target.tagName==='INPUT'){
-          target.value=defaults[pair[1]]==null?'':String(defaults[pair[1]]);
-        }
-        target.dataset.screeningSettingsKey=key;
-      });
-      [['aspect',payload.aspectRatioOptions||[]],
-        ['dimensions',(payload.settingOptions||{}).dimensions||[]]].forEach(function(pair){
-        var target=els('manual-'+pair[0]);
-        var field=pair[0]==='aspect'?'aspectRatio':'dimensions';
-        var preferred=String(defaults[field]||''), selected=freshControls?preferred:target.value;
-        var values=pair[1].map(String);
-        if(preferred && !values.includes(preferred))values.unshift(preferred);
-        target.replaceChildren.apply(target,values.map(function(value){
-          var option=document.createElement('option');option.value=value;option.textContent=value;return option;
-        }));
-        target.value=values.includes(selected)?selected:preferred;
-      });
-      var sampling=els('manual-sampling'), prior=freshControls?String(defaults.samplingMode||'turbo'):sampling.value;
-      sampling.value=Array.from(sampling.options).some(function(o){return o.value===prior;})?prior:String(defaults.samplingMode||'turbo');
-      (payload.warnings||[]).forEach(function(warning){if(warning)window.reportConsoleWarning('Manual Screening settings',warning);});
-      return payload;
-    });
-    screeningSettingsRequest=screeningSettingsRequest.catch(function(exc){
-      if(screeningSettingsKey===key)screeningSettingsRequest=null;
-      throw exc;
-    });
-    return screeningSettingsRequest;
-  }
-  function screeningGroups(selected) {
-    var choice=els('manual-group');
-    var old=selected == null ? Number(choice.value || 0) : selected;
-    var groups;
-    try {
-      groups=wildcardParts(els('manual-prompt').value);
-      screeningWildcardError=null;
-    } catch (exc) {
-      screeningWildcardError=exc;
-      groups=[];
-    }
-    choice.innerHTML=groups.map(function (group,index) {
-      return '<option value="'+index+'">Group '+(index+1)+' · '+escape(group.options.join(' / '))+'</option>';
-    }).join('');
-    if (groups.length) choice.value=String(Math.min(Math.max(0,old),groups.length-1));
-  }
-  function screeningApplySettings(campaign) {
-    if(mode!=='screening')return;
-    var plan=campaign && campaign.rounds[campaign.rounds.length-1];
-    var context=currentFolder, selectedId=campaign&&campaign.id;
-    els('manual-prompt').value=plan?plan.prompt:'';
-    screeningGroups(plan?plan.groupIndex:0);
-    screeningSettingsSource(campaign&&campaign.modelId).then(function(payload){
-      if(context!==currentFolder || (selectedId && activeCampaign!==selectedId) ||
-          (!selectedId && activeCampaign) || mode!=='screening')return;
-      if(!plan){
-        var localPrompt=window.testGenerationsCurrentSetPrompt(
-          context,String(campaign&&campaign.modelId||window.getWorkingModelProfileId()||''));
-        var prompt=localPrompt!==null?localPrompt:
-          (payload.workspacePromptPresent?payload.workspacePrompt:payload.defaultPrompt);
-        if(!els('manual-prompt').value.trim()){
-          els('manual-prompt').value=String(prompt||'');
-          screeningGroups((payload.manualSettings||{}).groupIndex||0);
-        }
-        return;
-      }
-      var settings=plan.settings||{};
-      [['mp','megapixels'],['duration','duration'],['aspect','aspectRatio'],
-        ['sampling','samplingMode'],['dimensions','dimensions']].forEach(function(pair){
-        var target=els('manual-'+pair[0]),value=settings[pair[1]];
-        if(value==null)return;
-        if(target.tagName==='SELECT'&&!Array.from(target.options).some(function(o){return o.value===String(value);})){
-          var option=document.createElement('option');option.value=String(value);option.textContent=String(value);
-          target.appendChild(option);
-        }
-        target.value=String(value);
-      });
-    }).catch(error);
-  }
-  function screeningSaveDraft() {
-    if (!currentFolder || mode!=='screening') return;
-    var folder=currentFolder, modelId=String(window.getWorkingModelProfileId()||'');
-    var settings={groupIndex:Number(els('manual-group').value||0)};
-    [['mp','megapixels'],['duration','duration'],['aspect','aspectRatio'],
-      ['sampling','samplingMode'],['dimensions','dimensions']].forEach(function(pair){
-        settings[pair[1]]=els('manual-'+pair[0]).value;
-      });
-    if(screeningSaveTimer)clearTimeout(screeningSaveTimer);
-    screeningSaveTimer=setTimeout(function(){
-      screeningSaveTimer=0;
-      fetch('/fs/test_generations',{method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({folder:folder,operation:'test_save_manual_settings',
-          criteria:{modelId:modelId,settings:settings}})})
-      .then(function(response){return response.json().then(function(payload){
-        if(!response.ok||payload.ok===false)throw new Error(payload.error||'Could not save Manual Screening settings.');
-        if(folder===currentFolder && modelId===String(window.getWorkingModelProfileId()||'')){
-          screeningSettingsKey=''; screeningSettingsRequest=null;
-        }
-      });}).catch(error);
-    },500);
-  }
-  function screeningSavePrompt() {
-    window.testGenerationsSaveSharedSetPrompt(els('manual-prompt').value);
-    screeningSettingsKey='';screeningSettingsRequest=null;
-  }
-  function screeningCriteria() {
-    var settings={};
-    [['mp','megapixels'],['duration','duration'],['aspect','aspectRatio'],
-      ['sampling','samplingMode'],['dimensions','dimensions']].forEach(function (pair) {
-      var control=els('manual-'+pair[0]);
-      if (!control.closest('label').classList.contains('hidden') && String(control.value||'').trim()) {
-        settings[pair[1]]=control.value;
-      }
-    });
-    var prompt=els('manual-prompt').value.trim();
-    if (!prompt) throw new Error('Enter a wildcard prompt.');
-    if (screeningWildcardError) throw screeningWildcardError;
-    if (!els('manual-group').options.length) throw new Error('Select a wildcard group to exhaust.');
-    return {prompt:prompt,groupIndex:Number(els('manual-group').value),settings:settings};
-  }
-  function screeningRememberSelection(campaign) {
-    if (manualSelectionCampaign === campaign.id) return;
-    manualSelectionCampaign=campaign.id;
-    screeningShowExcluded=false;
-    manualSelectedRound=campaign.rounds.length;
-    manualMatrixSignature='';
-    runEpochSelections={};
-    var kept=new Set(campaign.kept||[]);
-    Object.entries(campaign.candidateMap||{}).forEach(function (entry) {
-      var origin=entry[1];
-      if (!kept.has(Number(entry[0]))) return;
-      if (!(runEpochSelections[origin.jobId] instanceof Set)) runEpochSelections[origin.jobId]=new Set();
-      runEpochSelections[origin.jobId].add(origin.epoch);
-    });
-    sourceMode='runs';
-    drawEpochPicker();
-    // The form is a working draft; opening historical results must not change it.
-  }
-  function screeningSaveSelection() {
-    if (!isManualCampaign()) return Promise.resolve();
-    var id=activeCampaign, folder=currentFolder, selection=selectedRunEntries();
-    var revision=++screeningSelectionRevision;
-    screeningSelectionFailure=null;
-    screeningSelectionQueue=screeningSelectionQueue.catch(function(){}).then(function(){
-      return api('screening_selection',{campaignId:id,runSelections:selection});
-    });
-    return screeningSelectionQueue.then(function (response) {
-      if (!campaignState || campaignState.id !== id || currentFolder !== folder ||
-          revision!==screeningSelectionRevision) return;
-      screeningSelectionFailure=null;
-      campaignState.kept=response.campaign.kept;
-      campaignState.candidateMap=response.campaign.candidateMap;
-      screeningMatrix(campaignState);
-    }).catch(function(exc) {
-      error(exc);
-      if (activeCampaign===id && currentFolder===folder &&
-          revision===screeningSelectionRevision) {
-        screeningSelectionFailure=exc;
-        // Roll back the optimistic picker on a failed save, never leave a false Keep state.
-        manualSelectionCampaign='';
-        return refreshStatus().catch(error);
-      }
-    });
-  }
-  function screeningLaunch() {
-    clearError();
-    var criteria;
-    try {
-      criteria=screeningCriteria();
-      if (!selectedCampaignCount()) throw new Error('Select at least one saved epoch.');
-    } catch (exc) { error(exc);return; }
-    var next=isManualCampaign(),id=activeCampaign;
-    var action=next?'screening_next_round':'start';
-    if (!next) {
-      criteria.campaignMode='manual';
-      criteria.runSelections=selectedRunEntries();
-    } else criteria.campaignId=id;
-    els('manual-launch').disabled=true;
-    (next?screeningSelectionQueue:Promise.resolve()).then(function(){
-      if (next && screeningSelectionFailure)
-        throw new Error('Epoch selection was not saved. Correct the error before queuing another round.');
-      return api(action,criteria);
-    }).then(function (response) {
-      if (next && activeCampaign!==id) return;
-      activeCampaign=response.campaign.id;
-      if (!next) manualSelectedRound=1;
-      manualMatrixSignature='';
-      return refresh();
-    }).catch(error).finally(function () {els('manual-launch').disabled=false;});
-  }
-  function screeningAskVision(campaign, criteria) {
-    var model=window.getCaptionVisionModelId();
-    if (!model) { error(new Error('Choose an available Vision model for Ask VL.'));return; }
-    manualVisionPending=true;
-    api('screening_vision',Object.assign({campaignId:campaign.id,visionModel:model,
-      round:manualSelectedRound},criteria)).then(function (answer) {
-      if (!answer.queued) manualVisionPending=false;
-      refreshStatus().catch(error);
-    }).catch(function (exc) {manualVisionPending=false;error(exc);});
-  }
-  function screeningLogVisionErrors(campaign) {
-    (campaign.units || []).forEach(function (u) {
-      if (!u.visionError) return;
-      var identity = [campaign.id,u.round,u.epoch,u.case,u.visionErrorAt||'',u.visionError].join('|');
-      if (screeningReportedVlErrors.has(identity)) return;
-      screeningReportedVlErrors.add(identity);
-      window.reportConsoleError('Manual Screening Ask VL', new Error(
-        'Round '+u.round+' · '+candidateLabel(campaign,u.epoch)+
-        ' · variation '+(u.case+1)+': '+u.visionError));
-    });
-  }
-  function screeningRoundState(campaign, plan) {
-    if (['complete','stopped','cancelled','stopping','deleted'].includes(plan.status)) return plan.status;
-    if (plan.number<campaign.round) return 'complete';
-    if (plan.number>campaign.round) return 'queued';
-    if (campaign.status==='complete') return 'complete';
-    return campaign.status;
-  }
-  function screeningRoundList(campaign) {
-    els('manual-history').classList.remove('hidden');
-    var host=els('manual-round-list');
-    var visibleRounds=campaign.rounds.filter(function(plan){return plan.status!=='deleted';});
-    var finishedByRound=new Map(),renderedByRound=new Map();
-    campaign.units.forEach(function(unit){
-      if(unit.frame||unit.error) finishedByRound.set(unit.round,(finishedByRound.get(unit.round)||0)+1);
-      if(unit.frame) renderedByRound.set(unit.round,(renderedByRound.get(unit.round)||0)+1);
-    });
-    var signature=campaign.id+'|'+manualSelectedRound+'|'+campaign.status+'|'+campaign.round+'|'+
-      visibleRounds.map(function(plan){
-        return plan.number+':'+screeningRoundState(campaign,plan)+':'+
-          (finishedByRound.get(plan.number)||0);
-      }).join('|');
-    if (host.dataset.signature===signature) return;
-    host.dataset.signature=signature;
-    // Progress polling changes counts often. Keep existing round buttons and focus
-    // instead of destroying the whole list whenever a render completes.
-    var existing=new Map(Array.from(host.querySelectorAll('[data-screening-round-item]')).map(function(node){
-      return [Number(node.dataset.screeningRoundItem),node];
-    }));
-    visibleRounds.forEach(function(plan,index){
-      var state=screeningRoundState(campaign,plan);
-      var completed=renderedByRound.get(plan.number)||0;
-      var total=plan.epochs.length*plan.seeds.length;
-      var action=state==='queued'?'cancel':state==='running'?'stop':
-        (plan.number<campaign.round&&['complete','stopped','cancelled'].includes(state)?'delete':'');
-      var entry=existing.get(plan.number);
-      if (!entry) {
-        entry=document.createElement('div');
-        entry.className='epoch-screening-round-item';
-        entry.dataset.screeningRoundItem=String(plan.number);
-        var open=document.createElement('button');
-        open.type='button';
-        open.className='epoch-finder-campaign';
-        open.dataset.screeningRound=String(plan.number);
-        var title=document.createElement('span');
-        title.className='epoch-screening-round-title';
-        title.appendChild(document.createElement('strong'));
-        var status=document.createElement('span');
-        status.className='epoch-screening-round-state';
-        title.appendChild(status);
-        open.appendChild(title);
-        open.appendChild(document.createElement('small'));
-        entry.appendChild(open);
-        var track=document.createElement('div');
-        track.className='epoch-screening-round-progress';
-        track.setAttribute('role','progressbar');
-        track.setAttribute('aria-label','Round '+plan.number+' frames captured');
-        track.setAttribute('aria-valuemin','0');
-        track.appendChild(document.createElement('i'));
-        entry.appendChild(track);
-      }
-      var selected=manualSelectedRound===plan.number;
-      entry.classList.toggle('active',selected);
-      entry.dataset.roundState=state;
-      var button=entry.querySelector('[data-screening-round]');
-      button.classList.toggle('active',selected);
-      button.setAttribute('aria-pressed',selected?'true':'false');
-      button.querySelector('strong').textContent='Round '+plan.number;
-      button.querySelector('.epoch-screening-round-state').textContent=state;
-      var detail=plan.epochs.length+' epochs · '+completed+'/'+total+' renders';
-      if (button.querySelector('small').textContent!==detail) button.querySelector('small').textContent=detail;
-      var track=entry.querySelector('.epoch-screening-round-progress');
-      track.setAttribute('aria-valuenow',String(completed));
-      track.setAttribute('aria-valuemax',String(total));
-      track.querySelector('i').style.width=(total?Math.min(100,completed/total*100):0)+'%';
-      var control=entry.querySelector('[data-screening-round-action]');
-      if (!action || !control || control.dataset.screeningRoundAction!==action) {
-        if (control) control.remove();
-        if (action) {
-          control=document.createElement('button');
-          control.type='button';
-          control.className='review-captions-btn';
-          control.dataset.screeningRoundAction=action;
-          control.dataset.screeningRoundNumber=String(plan.number);
-          control.title=action==='stop'?'Cancel unstarted renders; finish the active render':
-            action==='delete'?'Delete only this finished round and its results':'Cancel before rendering';
-          control.textContent=action==='stop'?'Stop queuing':action==='delete'?'Delete':'Cancel';
-          entry.appendChild(control);
-        }
-      }
-      if (host.children[index]!==entry) host.insertBefore(entry,host.children[index]||null);
-      existing.delete(plan.number);
-    });
-    existing.forEach(function(node){node.remove();});
-  }
-  function screeningRunInfo(campaign, plan) {
-    var host=els('manual-run-info');
-    var signature=JSON.stringify([campaign.id,plan.number,plan.settings,plan.prompt,
-      plan.groupIndex,plan.columnLabels,plan.casePrompts,plan.seeds]);
-    if (host.dataset.signature===signature) return;
-    if (host.dataset.round!==String(plan.number)) host.open=false;
-    host.dataset.round=String(plan.number);
-    host.dataset.signature=signature;
-    host.replaceChildren();
-    var heading=document.createElement('summary');
-    heading.textContent='Round '+plan.number+' · Submitted prompts and settings';
-    host.appendChild(heading);
-    var settings=document.createElement('p');
-    settings.textContent=Object.entries(plan.settings||{}).map(function(entry){
-      return entry[0]+': '+String(entry[1]);
-    }).join(' · ');
-    host.appendChild(settings);
-    var prompt=document.createElement('details');
-    var promptLabel=document.createElement('summary');
-    promptLabel.textContent='Original wildcard prompt · Group '+(plan.groupIndex+1);
-    var promptText=document.createElement('pre');promptText.textContent=plan.prompt;
-    prompt.append(promptLabel,promptText);
-    host.appendChild(prompt);
-    var columns=document.createElement('div');columns.className='epoch-screening-run-prompts';
-    plan.columnLabels.forEach(function(name,index){
-      var item=document.createElement('div');
-      item.className='epoch-screening-run-prompt';
-      var title=document.createElement('strong');
-      title.textContent=name+' · Seed '+plan.seeds[index];
-      var preview=document.createElement('p');
-      preview.textContent=plan.casePrompts[index];
-      preview.title=plan.casePrompts[index];
-      var detail=document.createElement('details');
-      var trigger=document.createElement('summary');trigger.textContent='Full prompt';
-      var submitted=document.createElement('pre');submitted.textContent=plan.casePrompts[index];
-      detail.append(trigger,submitted);
-      item.append(title,preview,detail);
-      columns.appendChild(item);
-    });
-    host.appendChild(columns);
-  }
-  function screeningUpdateAverage(row, average, epochUnits) {
-    var head=row&&row.querySelector('.epoch-screening-row-head');
-    if (!head) return;
-    var summary=head.querySelector('.epoch-screening-rating-summary');
-    if (!average || !average.count) {
-      if (summary) summary.remove();
-    } else {
-      if (!summary) {
-        summary=document.createElement('span');
-        summary.className='epoch-screening-rating-summary';
-        head.insertBefore(summary,head.querySelector('.epoch-screening-row-actions'));
-      }
-      var averageText='★ '+average.average.toFixed(1)+' · '+average.count;
-      if (summary.textContent!==averageText) summary.textContent=averageText;
-    }
-    var stars=head.querySelector('.epoch-screening-bulk-stars');
-    if (!stars) return;
-    var rendered=(epochUnits||[]).filter(function(u){return u.frame&&!u.framePruned&&!u.error;});
-    var values=rendered.map(function(u){return Number(u.rating)||0;});
-    var uniform=values.length&&values.every(function(value){return value===values[0];})?values[0]:0;
-    var mixed=values.length>0&&values.some(function(value){return value!==values[0];});
-    var busy=campaignState&&screeningRatingPending.has(
-      currentFolder+':'+campaignState.id+':'+manualSelectedRound+':'+row.dataset.screeningEpoch);
-    stars.querySelectorAll('[data-epoch-bulk-rating]').forEach(function(star){
-      var value=Number(star.dataset.epochBulkRating);
-      star.textContent=value<=uniform?'★':'☆';
-      star.disabled=!!busy||!rendered.length;
-      star.setAttribute('aria-pressed',String(value===uniform&&uniform>0));
-    });
-    var state=head.querySelector('.epoch-screening-bulk-rating-status');
-    if(state){
-      state.textContent=busy?'Rating…':mixed?'Mixed':'';
-      state.classList.toggle('hidden',!state.textContent);
-    }
-  }
-
-  function screeningRateEpoch(campaign, round, epoch, rating) {
-    var units=(campaign.units||[]).filter(function(u){
-      return u.round===round&&u.epoch===epoch&&u.frame&&!u.framePruned&&!u.error;
-    });
-    if(!units.length) {error(new Error('No rendered items to rate for '+candidateLabel(campaign,epoch)));return;}
-    var folder=currentFolder,id=campaign.id,key=folder+':'+id+':'+round+':'+epoch;
-    if(screeningRatingPending.has(key)) return;
-    screeningRatingPending.add(key);
-    els('manual-matrix').dataset.signature='';
-    screeningMatrix(campaign);
-    var completed=0,task=Promise.resolve();
-    // Serialize existing per-render saves; simultaneous read/modify/write can lose ratings.
-    units.forEach(function(unit){
-      task=task.then(function(){
-        return api('screening_rate',{campaignId:id,round:round,epoch:epoch,case:unit.case,rating:rating},folder)
-          .then(function(){
-            completed++;
-            unit.rating=rating;
-            if(currentFolder===folder&&campaignState&&campaignState.id===id){
-              var current=campaignState.units.find(function(item){
-                return item.round===round&&item.epoch===epoch&&item.case===unit.case;
-              });
-              if(current) current.rating=rating;
-            }
-          });
-      });
-    });
-    return task.then(function(){
-      if(currentFolder===folder&&campaignState&&campaignState.id===id) return refreshStatus();
-    }).catch(function(exc){
-      error(new Error('Rated '+completed+' of '+units.length+' renders in '+
-        candidateLabel(campaign,epoch)+': '+String(exc&&exc.message||exc)));
-      if(currentFolder===folder&&campaignState&&campaignState.id===id)
-        return refreshStatus().catch(error);
-    }).finally(function(){
-      screeningRatingPending.delete(key);
-      if(currentFolder===folder&&campaignState&&campaignState.id===id){
-        els('manual-matrix').dataset.signature='';
-        screeningMatrix(campaignState);
-      }
-    });
-  }
-
-  function refreshScreeningTestStatus(campaign, force) {
+  function refreshCampaignTestStatus(campaign, force) {
     if (!campaign) return Promise.resolve();
     var folder=currentFolder, id=campaign.id, identity=folder+':'+id;
-    if (!force && screeningTestStatusCampaign===identity) return Promise.resolve();
-    if (screeningTestStatusCampaign!==identity) screeningTestStatus={};
-    screeningTestStatusCampaign=identity;
-    var version=++screeningTestStatusVersion;
+    if (!force && campaignTestStatusCampaign===identity) return Promise.resolve();
+    if (campaignTestStatusCampaign!==identity) campaignTestStatus={};
+    campaignTestStatusCampaign=identity;
+    var version=++campaignTestStatusVersion;
     return api('checkpoint_test_status',{campaignId:id},folder).then(function(response){
-      if (version!==screeningTestStatusVersion || currentFolder!==folder ||
+      if (version!==campaignTestStatusVersion || currentFolder!==folder ||
           !campaignState || campaignState.id!==id) return;
-      screeningTestStatus=response.inTest||{};
-      els('manual-matrix').dataset.signature='';
-      if(campaignState.mode==='manual')screeningMatrix(campaignState);
-      else { ranking(campaignState); inspectFrame(campaignState); }
+      campaignTestStatus=response.inTest||{};
+      ranking(campaignState); inspectFrame(campaignState);
     }).catch(function(exc){
-      if (version===screeningTestStatusVersion && currentFolder===folder &&
+      if (version===campaignTestStatusVersion && currentFolder===folder &&
           campaignState && campaignState.id===id) error(exc);
       throw exc;
     });
   }
 
-  function screeningCopyToTest(campaign, epoch) {
-    var folder=currentFolder, id=campaign.id, candidate=String(epoch);
-    var origin=(campaign.candidateMap||{})[candidate];
-    if (stagedOrigin(campaign,epoch) || screeningTestStatus[candidate]===true) return Promise.resolve();
-    var sourceJobId=origin?origin.jobId:campaign.jobId;
-    var sourceEpoch=origin?origin.epoch:epoch;
-    if (!sourceJobId || !Number.isInteger(Number(sourceEpoch))) {
-      var missing=new Error('Missing saved checkpoint identity for '+candidateLabel(campaign,epoch));
-      error(missing);return Promise.reject(missing);
-    }
-    var key=folder+':'+id+':'+candidate;
-    if (screeningCopyPending.has(key)) return Promise.resolve();
-    screeningCopyPending.add(key);
-    els('manual-matrix').dataset.signature='';
-    screeningMatrix(campaign);
-    return fetch('/fs/training_candidates/copy_to_test',{
-      method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({folder:folder,jobId:sourceJobId,epoch:sourceEpoch})
-    }).then(function(response){return response.json().then(function(data){
-      if (!response.ok || !data.ok) throw new Error(data.error||'Could not copy checkpoint.');
-      return data;
-    });}).then(function(){
-      if (currentFolder!==folder || !campaignState || campaignState.id!==id) return;
-      pickerTestStatusKey='';
-      return refreshScreeningTestStatus(campaignState,true).then(function(){
-        if (screeningTestStatus[candidate]!==true)
-          throw new Error('Copied checkpoint could not be confirmed in Test Generations.');
-      });
-    }).catch(function(exc){
-      error(exc);
-    }).finally(function(){
-      screeningCopyPending.delete(key);
-      if (currentFolder===folder && campaignState && campaignState.id===id){
-        els('manual-matrix').dataset.signature='';
-        screeningMatrix(campaignState);
-      }
-    });
-  }
-
-  function screeningSkipEpoch(campaign, round, epoch) {
-    var key=currentFolder+':'+campaign.id+':'+round+':'+epoch;
-    if(screeningSkipPending.has(key)) return;
-    screeningSkipPending.add(key);
-    els('manual-matrix').dataset.signature='';
-    screeningMatrix(campaign);
-    api('screening_skip_epoch',{campaignId:campaign.id,round:round,epoch:epoch})
-      .then(function(){return refreshStatus();}).catch(error).finally(function(){
-        screeningSkipPending.delete(key);
-        if(campaignState&&campaignState.id===campaign.id){
-          els('manual-matrix').dataset.signature='';
-          screeningMatrix(campaignState);
-        }
-      });
-  }
-
-  function screeningMatrix(campaign) {
-    if (campaign.mode!=='manual') return;
-    if (!campaign.rounds.some(function (plan) {
-      return plan.number===manualSelectedRound&&plan.status!=='deleted';
-    })) {
-      manualSelectedRound=campaign.round;
-    }
-    screeningRoundList(campaign);
-    var plan=campaign.rounds[manualSelectedRound-1],host=els('manual-matrix');
-    screeningRunInfo(campaign,plan);
-    var kept=new Set(campaign.kept||[]);
-    // The left picker is the immediate next-round selection. Derive Keep from it
-    // so live polls and delayed saves cannot visually undo a local checkbox edit.
-    if (manualSelectionCampaign===campaign.id) {
-      Object.entries(campaign.candidateMap||{}).forEach(function(entry){
-        var origin=entry[1],selected=runEpochSelections[origin.jobId];
-        if (selected instanceof Set && selected.has(origin.epoch)) kept.add(Number(entry[0]));
-        else kept.delete(Number(entry[0]));
-      });
-    }
-    var units=campaign.units||[];
-    var byEpoch={},roundUnits=[],roundUnitsByEpoch=new Map();
-    units.forEach(function (u) {
-      if (!byEpoch[u.epoch]) byEpoch[u.epoch]=[];
-      byEpoch[u.epoch].push(u);
-      if (u.round===plan.number) {
-        roundUnits.push(u);
-        if (!roundUnitsByEpoch.has(u.epoch)) roundUnitsByEpoch.set(u.epoch,[]);
-        roundUnitsByEpoch.get(u.epoch).push(u);
-      }
-    });
-    var rated={};
-    Object.keys(byEpoch).forEach(function (key) {
-      var values=byEpoch[key].filter(function (u) {return Number(u.rating)>0;});
-      rated[key]={count:values.length,average:values.length?
-        values.reduce(function (sum,u) {return sum+u.rating;},0)/values.length:null};
-    });
-    var sort=els('manual-sort').value;
-    // Historical rounds retain their actual candidates; each future plan already
-    // captures the reduced kept set from the previous round.
-    // Reveal an epoch when its first render (or visible failure) is available.
-    // Unfinished cells in that epoch remain as "Awaiting render" placeholders.
-    var rows=plan.epochs.filter(function (epoch) {
-      return (roundUnitsByEpoch.get(epoch)||[]).some(function(u){return u.frame||u.error;});
-    }).sort(function (a,b) {
-      if (sort==='kept') return Number(kept.has(b))-Number(kept.has(a))||a-b;
-      if (sort==='high'||sort==='low') {
-        var av=rated[a]&&rated[a].average,bv=rated[b]&&rated[b].average;
-        if (av==null||bv==null) return av==null&&bv==null?a-b:av==null?1:-1;
-        return (sort==='high'?bv-av:av-b)||a-b;
-      }
-      var x=campaign.candidateMap[String(a)],y=campaign.candidateMap[String(b)];
-      return (x&&x.epoch||a)-(y&&y.epoch||b)||a-b;
-    });
-    var signature=JSON.stringify([campaign.id,campaign.status,manualSelectedRound,rows,Array.from(kept),sort,
-      screeningTestStatus,
-      plan.skippedEpochs||[],Array.from(screeningSkipPending),
-      roundUnits.map(function (u) {
-        return [u.epoch,u.case,u.frame,u.error,u.rating,u.visionError,u.assessment&&u.assessment.text];
-      }),units.map(function(u){return [u.epoch,u.rating]})]);
-    if (host.dataset.signature===signature) return;
-    host.dataset.signature=signature;
-    var priorScroll=host.scrollLeft;
-    var scope=campaign.id+':'+manualSelectedRound;
-    var scroller=host.querySelector('.epoch-screening-round');
-    if (!scroller || host.dataset.scope!==scope) {
-      host.replaceChildren();
-      scroller=document.createElement('div');
-      scroller.className='epoch-screening-round';
-      host.appendChild(scroller);
-      host.dataset.scope=scope;
-    }
-    scroller.style.setProperty('--screening-columns',String(plan.seeds.length));
-    scroller.style.setProperty('--screening-width',Math.max(550,plan.seeds.length*228)+'px');
-    // Keep column labels aligned while scrolling; full prompts belong to the run,
-    // not to each epoch or the sticky image grid.
-    var labels=scroller.querySelector('.epoch-screening-case-labels');
-    var labelSignature=JSON.stringify(plan.columnLabels);
-    if (!labels || labels.dataset.signature!==labelSignature) {
-      if (labels) labels.remove();
-      labels=document.createElement('div');
-      labels.className='epoch-screening-cases epoch-screening-case-labels';
-      labels.dataset.signature=labelSignature;
-      plan.columnLabels.forEach(function(name,index) {
-        var card=document.createElement('div');
-        card.className='epoch-screening-case-label';
-        var number=document.createElement('span');
-        number.className='epoch-screening-case-number';
-        number.textContent='Variation '+(index+1);
-        var heading=document.createElement('strong');
-        heading.className='epoch-screening-case-choice';
-        heading.textContent=name;
-        heading.title=name;
-        card.append(number,heading);
-        labels.appendChild(card);
-      });
-      scroller.insertBefore(labels,scroller.firstChild);
-    }
-    var desired=[];
-    var existingRows=new Map(Array.from(scroller.querySelectorAll('[data-screening-epoch]')).map(function(row){
-      return [row.dataset.screeningEpoch,row];
-    }));
-    rows.forEach(function (epoch) {
-      var epochUnits=roundUnitsByEpoch.get(epoch)||[];
-      var collapsed=!kept.has(epoch)&&!screeningExpandedExcluded.has(campaign.id+':'+plan.number+':'+epoch);
-      var inTest=screeningTestStatus[String(epoch)]===true;
-      var skipped=(plan.skippedEpochs||[]).includes(epoch);
-      var skipPending=screeningSkipPending.has(currentFolder+':'+campaign.id+':'+plan.number+':'+epoch);
-      var unfinished=epochUnits.filter(function(u){return u.frame||u.error||u.cancelled;}).length<plan.seeds.length;
-      var canSkip=plan.number===campaign.round&&campaign.status==='running'&&
-        plan.status==='running'&&!skipped&&unfinished;
-      var copying=screeningCopyPending.has(currentFolder+':'+campaign.id+':'+String(epoch));
-      var rowSignature=JSON.stringify([campaign.status,kept.has(epoch),collapsed,inTest,copying,
-        skipped,skipPending,canSkip,
-        epochUnits.map(function(u){
-          return [u.case,u.frame,u.error,u.cancelled,u.rating,u.visionError,u.assessment&&u.assessment.text];
-        })]);
-      var previous=existingRows.get(String(epoch));
-      if (previous && previous.dataset.signature===rowSignature) {
-        screeningUpdateAverage(previous,rated[epoch],epochUnits);
-        var existingUnits=epochUnits;
-        existingUnits.forEach(function(u){
-          var card=previous.querySelector('.epoch-screening-cases').children[u.case];
-          if (card) window.updateTestPreviewCardRating(card,u.rating||0);
-        });
-        desired.push(previous);
-        return;
-      }
-      var row=previous||document.createElement('section');
-      row.className='epoch-screening-row'+(collapsed?' is-collapsed':'')+(inTest?' is-in-test':'');
-      row.dataset.screeningEpoch=String(epoch);
-      row.dataset.signature=rowSignature;
-      var headSignature=JSON.stringify([campaign.status,kept.has(epoch),collapsed,inTest,copying,
-        skipped,skipPending,canSkip]);
-      var head=row.querySelector('.epoch-screening-row-head');
-      if (!head || head.dataset.signature!==headSignature) {
-      if (head) head.remove();
-      head=document.createElement('div');head.className='epoch-screening-row-head';
-      head.dataset.signature=headSignature;
-      var keepToggle=document.createElement('button');
-      keepToggle.type='button';
-      keepToggle.className='epoch-screening-keep-toggle'+(kept.has(epoch)?' is-kept':'');
-      keepToggle.textContent=kept.has(epoch)?'✓':'○';
-      keepToggle.title='Keep for next round';
-      keepToggle.setAttribute('aria-label','Keep '+candidateLabel(campaign,epoch)+' for next round');
-      keepToggle.setAttribute('aria-pressed',String(kept.has(epoch)));
-      // Same persisted selection as the existing checkbox and left epoch picker.
-      keepToggle.addEventListener('click',function () {
-        var origin=campaign.candidateMap[String(epoch)];
-        if (!origin) throw new Error('Missing screening checkpoint identity.');
-        if (!(runEpochSelections[origin.jobId] instanceof Set))
-          runEpochSelections[origin.jobId]=new Set();
-        if (kept.has(epoch)) runEpochSelections[origin.jobId].delete(origin.epoch);
-        else runEpochSelections[origin.jobId].add(origin.epoch);
-        screeningExpandedExcluded.delete(campaign.id+':'+plan.number+':'+epoch);
-        drawEpochPicker();
-        host.dataset.signature='';
-        screeningMatrix(campaignState);
-        screeningSaveSelection();
-      });
-      head.appendChild(keepToggle);
-      var title=document.createElement('strong');
-      var source=campaign.candidateMap[String(epoch)]||{};
-      title.textContent=source.sourceType==='staged'?
-        String(source.fileName||'Candidate '+epoch):'Epoch '+(source.epoch||epoch);
-      title.title=candidateLabel(campaign,epoch)+
-        (inTest?' · In Test Generations':stagedOrigin(campaign,epoch)?'':
-          ' · Double-click to copy to Test Generations');
-      if (!stagedOrigin(campaign,epoch)) {
-        title.classList.add('epoch-screening-epoch-name');
-        title.addEventListener('dblclick',function(event){
-          event.preventDefault();
-          screeningCopyToTest(campaign,epoch);
-        });
-      }
-      head.appendChild(title);
-      var bulkStars=document.createElement('div');
-      bulkStars.className='epoch-screening-bulk-stars';
-      bulkStars.setAttribute('role','group');
-      bulkStars.setAttribute('aria-label','Rate all rendered items in '+candidateLabel(campaign,epoch));
-      for (var starValue=1;starValue<=5;starValue++) {
-        (function (value) {
-          var star=document.createElement('button');
-          star.type='button';
-          star.className='epoch-screening-bulk-star';
-          star.dataset.epochBulkRating=String(value);
-          star.textContent='☆';
-          star.title='Rate every rendered item '+value+' star'+(value===1?'':'s');
-          star.setAttribute('aria-label',star.title);
-          star.addEventListener('click',function () { screeningRateEpoch(campaign,plan.number,epoch,value); });
-          bulkStars.appendChild(star);
-        })(starValue);
-      }
-      head.appendChild(bulkStars);
-      var ratingStatus=document.createElement('span');
-      ratingStatus.className='epoch-screening-bulk-rating-status hidden';
-      head.appendChild(ratingStatus);
-      var actions=document.createElement('div');actions.className='epoch-screening-row-actions';
-      if(skipped){
-        var skippedLabel=document.createElement('span');
-        skippedLabel.className='epoch-screening-skip-state';
-        skippedLabel.textContent='Epoch skipped';
-        skippedLabel.title='Queued renders cancelled; any already running render may still finish. Keep selection is unchanged.';
-        actions.appendChild(skippedLabel);
-      }else if(canSkip){
-        var skipButton=document.createElement('button');
-        skipButton.type='button';skipButton.className='review-captions-btn epoch-screening-skip-btn';
-        skipButton.textContent=skipPending?'Skipping…':'Skip epoch';
-        skipButton.title='Cancel unstarted renders of this epoch, keep completed images, and continue. Already running renders finish. Keep selection is unchanged.';
-        skipButton.disabled=skipPending;
-        skipButton.addEventListener('click',function(){screeningSkipEpoch(campaign,plan.number,epoch);});
-        actions.appendChild(skipButton);
-      }
-      if (!kept.has(epoch)) {
-        var toggle=document.createElement('button');
-        toggle.type='button';toggle.className='review-captions-btn epoch-screening-expand-btn';
-        toggle.textContent=collapsed?'Show':'Hide';
-        toggle.title=collapsed?'Show excluded epoch previews':'Collapse excluded epoch previews';
-        toggle.addEventListener('click',function(){
-          var key=campaign.id+':'+plan.number+':'+epoch;
-          if (screeningExpandedExcluded.has(key)) screeningExpandedExcluded.delete(key);
-          else screeningExpandedExcluded.add(key);
-          host.dataset.signature='';
-          screeningMatrix(campaignState);
-        });
-        actions.appendChild(toggle);
-      }
-      if (!stagedOrigin(campaign,epoch)) {
-        var copy=document.createElement('button');
-        copy.type='button';copy.className='review-captions-btn epoch-screening-copy-btn';
-        copy.textContent=inTest?'In Test ✓':copying?'Copying…':'Copy to Test';
-        copy.title=inTest?'Confirmed in Test Generations':'Copy this saved checkpoint into Test Generations';
-        copy.disabled=inTest||copying;
-        copy.addEventListener('click',function () { screeningCopyToTest(campaign,epoch); });
-        actions.appendChild(copy);
-      }
-      var vl=document.createElement('button');vl.type='button';vl.className='review-captions-btn epoch-screening-ask-btn';vl.textContent='Ask VL';
-      vl.onclick=function(){screeningAskVision(campaign,{epoch:epoch});};
-      actions.appendChild(vl);
-      head.appendChild(actions);
-      row.insertBefore(head,row.firstChild);
-      }
-      screeningUpdateAverage(row,rated[epoch],epochUnits);
-      var cards=row.querySelector('.epoch-screening-cases');
-      if (!cards) {
-        cards=document.createElement('div');cards.className='epoch-screening-cases';
-        row.appendChild(cards);
-      }
-      if (collapsed) {
-        // Excluded epochs keep their row and ratings, not hidden preview/media nodes.
-        if (cards.children.length) cards.replaceChildren();
-        desired.push(row);
-        return;
-      }
-      var unitsByCase=new Map(epochUnits.map(function(u){return [u.case,u];}));
-      for (var caseIndex=0;caseIndex<plan.seeds.length;caseIndex++) {
-        var unit=unitsByCase.get(caseIndex);
-        (function(u,index) {
-          var cardSignature=JSON.stringify([u&&u.frame,u&&u.framePruned,u&&u.error,
-            u&&u.renderSeconds,u&&u.visionError,u&&u.assessment&&u.assessment.text]);
-          var oldCard=cards.children[index];
-          if (oldCard && oldCard.dataset.screeningCardSignature===cardSignature) {
-            window.updateTestPreviewCardRating(oldCard,u&&u.rating||0);
-            return;
-          }
-          var url=u&&u.frame&&!u.framePruned?'/fs/epoch_finder/frame?folder='+encodeURIComponent(currentFolder)+
-            '&campaign='+encodeURIComponent(campaign.id)+'&frame='+encodeURIComponent(u.frame):'';
-          var card=createTestPreviewCard({
-            className:'test-generations-result-card',
-            title:plan.columnLabels[index]||'Variation '+(index+1),
-            media:url?{kind:'image',url:url,alt:'Epoch '+epoch+' · '+plan.columnLabels[index]}:null,
-            placeholder:url?null:(u&&u.error?'Render failed':u&&u.cancelled?'Skipped':
-              skipped?(u&&u.session?'Finishing active render…':'Skipped'):'Awaiting render'),
-            failed:!!(u&&u.error),
-            error:u&&u.error||'',
-            rating:url?{value:u.rating||0,session:campaign.id,mediaFile:u.frame,
-              onRate:function(value,card){
-                if(screeningRatingPending.has(currentFolder+':'+campaign.id+':'+plan.number+':'+epoch)){
-                  error(new Error('Finish applying the row rating before rating an individual render.'));
-                  return;
-                }
-                api('screening_rate',{campaignId:campaign.id,round:plan.number,
-                  epoch:epoch,case:index,rating:value}).then(function () {
-                    u.rating=value;
-                    if (campaignState && campaignState.id===campaign.id) {
-                      var current=campaignState.units.find(function(item){
-                        return item.round===plan.number&&item.epoch===epoch&&item.case===index;
-                      });
-                      if(current)current.rating=value;
-                    }
-                    window.updateTestPreviewCardRating(card,value);
-                    var currentUnits=(campaignState&&campaignState.id===campaign.id?
-                      campaignState:campaign).units.filter(function(item){
-                        return item.epoch===epoch&&Number(item.rating)>0;
-                      });
-                    screeningUpdateAverage(card.closest('.epoch-screening-row'),{
-                      count:currentUnits.length,
-                      average:currentUnits.length?currentUnits.reduce(function(total,item){
-                        return total+item.rating;
-                      },0)/currentUnits.length:0
-                    },(campaignState&&campaignState.id===campaign.id?
-                      campaignState:campaign).units.filter(function(item){
-                        return item.round===plan.number&&item.epoch===epoch;
-                      }));
-                    if (els('manual-sort').value==='high'||els('manual-sort').value==='low') {
-                      host.dataset.signature='';
-                      screeningMatrix(campaignState||campaign);
-                    }
-                  }).catch(error);
-              }}:null,
-            wildcards:plan.caseSelections[index].map(function(v){return {label:v.id,value:v.option};}),
-            metadata:u&&u.renderSeconds?[(u.renderSeconds).toFixed(1)+'s']:[],
-            evaluations:u&&u.assessment?[{label:'VL reviewed',title:u.assessment.text}]:
-              u&&u.visionError?[{label:'VL failed',title:u.visionError}]:[],
-            details:[{label:'VL',value:u&&u.assessment&&u.assessment.text||''},
-              {label:'VL error',value:u&&u.visionError||''}],
-            actions:url?[{label:'Ask VL for this render',onClick:function () {
-                screeningAskVision(campaign,{epoch:epoch,case:index});
-              }},{label:'Open original',url:url}]:[]
-          });
-          card.dataset.screeningCardSignature=cardSignature;
-          if (oldCard) cards.replaceChild(card,oldCard);
-          else cards.appendChild(card);
-        })(unit,caseIndex);
-      }
-      desired.push(row);
-    });
-    var wanted=new Set(desired);
-    existingRows.forEach(function(node){
-      if (!wanted.has(node)) node.remove();
-    });
-    desired.forEach(function(node,index){
-      var at=scroller.children[index+1];
-      if (at!==node) scroller.insertBefore(node,at||null);
-    });
-    host.scrollLeft=priorScroll;
-    els('manual-vl-round').disabled=!units.some(function(u) {
-      return u.round===plan.number&&u.frame&&!u.error;
-    });
-    els('manual-launch').textContent='Queue Round '+(campaign.rounds.length+1)+' · '+selectedCampaignCount()+' epochs';
-  }
-  function screeningRender(campaign) {
-    screeningModeUi();
-    screeningRememberSelection(campaign);
-    els('manual-review').classList.remove('hidden');
-    els('live-layout').classList.add('hidden');
-    els('timeline').classList.add('hidden');
-    els('metrics').classList.remove('hidden');
-    progress(campaign);
-    els('vl-count').parentElement.classList.add('hidden');
-    var failed=(campaign.units||[]).filter(function(u){
-      return u.round===campaign.round && !!u.error;
-    }).length;
-    if(failed)els('render-count').textContent+=' · '+failed+' failed';
-    els('follow-up').classList.add('hidden');
-    manualVisionPending=!!campaign.screeningVisionRunning;
-    screeningLogVisionErrors(campaign);
-    screeningMatrix(campaign);
-  }
-
   function render(campaign) {
     campaignState = campaign;
-    refreshScreeningTestStatus(campaign,false).catch(function(){});
+    refreshCampaignTestStatus(campaign,false).catch(function(){});
     function median(values) {
       if (!values.length) return null;
       var sorted = values.slice().sort(function (a,b) { return a-b; });
@@ -2241,27 +1299,10 @@
     var running = campaign.status === 'running';
     els('pause').classList.toggle('hidden', !running);
     els('stop').classList.toggle('hidden', !running);
-    els('resume').classList.toggle('hidden', !(['paused', 'interrupted', 'failed'].includes(campaign.status) ||
-      (campaign.mode==='manual'&&campaign.status==='stopped')));
-    var manual=campaign.mode==='manual';
-    if (manual && mode==='finder') showMode('screening',
-      {restore:true,returnTo:returnMode,keepCampaign:true,campaignId:campaign.id,methodRedirect:true});
-    if (!manual && mode==='screening') showMode('finder',
-      {restore:true,returnTo:returnMode,keepCampaign:true,campaignId:campaign.id,methodRedirect:true});
-    campaignState=campaign;
-    var canDeleteAll=manual && ['complete','stopped','failed','interrupted'].includes(campaign.status) &&
-      campaign.rounds.every(function(plan){
-        return ['complete','stopped','cancelled','deleted'].includes(plan.status);
-      });
-    els('delete').textContent=manual?'Delete all rounds':'Delete';
-    els('delete').classList.toggle('hidden', manual?!canDeleteAll:running);
-    if (manual) {
-      screeningRender(campaign);
-      return;
-    }
-    screeningModeUi();
-    els('manual-review').classList.add('hidden');
-    els('manual-history').classList.add('hidden');
+    els('resume').classList.toggle('hidden', !['paused', 'interrupted', 'failed'].includes(campaign.status));
+    if (campaign.mode === 'manual') throw new Error('Manual Screening has been retired; delete legacy artifacts from Storage.');
+    els('delete').textContent='Delete';
+    els('delete').classList.toggle('hidden', running);
     els('live-layout').classList.remove('hidden');
     els('timeline').classList.remove('hidden');
     els('metrics').classList.remove('hidden');
@@ -2286,7 +1327,7 @@
     });
   }
   function refresh() {
-    if (!currentFolder || (mode !== 'finder' && mode !== 'screening')) return;
+    if (!currentFolder || mode !== 'finder') return;
     var folderAtRequest = currentFolder, modelAtRequest = String(window.getWorkingModelProfileId() || '');
     var modeAtRequest = mode, requestVersion = ++listRequestVersion;
     api('list', {modelId: modelAtRequest}).then(function (response) {
@@ -2298,7 +1339,7 @@
         stagedModel = modelAtRequest;
         var preselected = window.getTestGenerationSelectedCandidateFiles(currentFolder, modelAtRequest);
         stagedSelection = new Set(preselected);
-        sourceMode = mode==='screening' ? 'runs' : preselected.length ? 'staged' : 'runs';
+        sourceMode = preselected.length ? 'staged' : 'runs';
       }
       stagedSelection.forEach(function (file) { if (!stagedFiles.includes(file)) stagedSelection.delete(file); });
       if (response.warnings && response.warnings.length) {
@@ -2310,13 +1351,12 @@
       refreshPickerTestStatus(false).catch(function(){});
       if(activeCampaign&&campaigns.some(function(c){
         return c.id===activeCampaign&&c.modelId===modelAtRequest&&
-          ((c.mode==='manual')===(mode==='screening'));
+          c.mode!=='manual';
       }))return refreshStatus();
       activeCampaign='';campaignState=null;
       methodWorkspaces[mode].activeCampaign='';
       var draftKey=currentFolder+'|'+String(window.getWorkingModelProfileId()||'');
       if(!followUpSource&&mode==='finder'&&campaignDefaultsKey!==draftKey)campaignApplyDefaults();
-      manualSelectionCampaign='';
       els('active').classList.add('hidden'); els('empty').classList.remove('hidden');
     }).catch(error);
   }
@@ -2432,25 +1472,24 @@
     }
     if (changed) { pickerTestStatusKey='';pickerTestStatus={};pickerTestStatusVersion++;listRequestVersion++; crossEvidenceVersion++; crossEvidence = null; crossEvidenceKey = ''; }
     currentFolder = folder;
-    if (changed) { campaignDefaultsKey='';screeningSettingsKey='';screeningSettingsRequest=null;screeningDraftContext=''; screeningShowExcluded=false; screeningTestStatusCampaign='';screeningTestStatus={};screeningTestStatusVersion++;screeningCopyPending.clear();screeningSkipPending.clear();screeningExpandedExcluded.clear(); manualSelectionCampaign=''; manualMatrixSignature=''; resetMethodWorkspaces(); runs = []; campaigns = []; stagedFiles = []; stagedModel = ''; lastFrameKey = ''; selectedRunId = ''; selectedEpochs = new Set(); referenceSelections = {}; referenceItems = []; referencePlanSignature = ''; referenceGeneration++; }
+    if (changed) {campaignDefaultsKey='';campaignTestStatusCampaign='';campaignTestStatus={};campaignTestStatusVersion++;resetMethodWorkspaces();runs=[];campaigns=[];stagedFiles=[];stagedModel='';lastFrameKey='';selectedRunId='';selectedEpochs=new Set();referenceSelections={};referenceItems=[];referencePlanSignature='';referenceGeneration++;}
     window.testReferencesPrepare(folder);
     window.runAnalyticsPrepare(folder);
-    if (mode === 'finder' || mode === 'screening') refresh();
+    if (mode === 'finder') refresh();
   }
   window.epochFinderPrepare = applyFolder;
   window.epochFinderInspectCampaign = function (campaignId, sourceEpoch, sourceJobId) {
     var previous=mode;
     inspectedEpoch = null; inspectedFrame = 0; lastFrameKey = '';
     var knownCampaign = campaigns.find(function(c){return c.id===String(campaignId);});
-    var destination = knownCampaign && knownCampaign.mode==='manual' ? 'screening' : 'finder';
+    var destination = 'finder';
     var options=previous!==destination?{returnTo:previous,keepCampaign:true,campaignId:String(campaignId)}:
       {keepCampaign:true,campaignId:String(campaignId)};
     showMode(destination,options);
     activeCampaign=String(campaignId);
     methodWorkspaces[destination].activeCampaign=activeCampaign;
     return refreshStatus().then(function () {
-      if (campaignState && campaignState.mode==='manual' && mode!=='screening') showMode('screening',{restore:true,returnTo:returnMode});
-      if (campaignState && campaignState.mode!=='manual' && mode!=='finder') showMode('finder',{restore:true,returnTo:returnMode});
+      if (campaignState && mode!=='finder') showMode('finder',{restore:true,returnTo:returnMode});
       if (sourceEpoch == null || !campaignState || campaignState.id !== String(campaignId)) return;
       var matched = Object.entries(campaignState.candidateMap || {}).find(function (entry) {
         return entry[1].epoch === Number(sourceEpoch) && (!sourceJobId || entry[1].jobId === sourceJobId);
@@ -2474,47 +1513,18 @@
     });
   });
   els('refresh').onclick = function(){
-    screeningTestStatusCampaign='';pickerTestStatusKey='';
+    campaignTestStatusCampaign='';pickerTestStatusKey='';
     refresh();
   };
   els('new').onclick = function () {
-    screeningShowExcluded=false;followUpSource='';
+    followUpSource='';
     activeCampaign='';methodWorkspaces[mode].activeCampaign='';
-    campaignState=null;manualSelectionCampaign='';runEpochSelections={};
+    campaignState=null;runEpochSelections={};
     inspectedEpoch=null;inspectedFrame=0;lastFrameKey='';
     els('active').classList.add('hidden');els('empty').classList.remove('hidden');
-    list();showStep(1);screeningModeUi();
-    if(mode==='screening')screeningApplySettings(null);
-    else campaignApplyDefaults();
+    list();showStep(1);campaignApplyDefaults();
   };
   els('start').onclick=start;
-  els('manual-prompt').addEventListener('input',function(){screeningGroups();try{screeningSavePrompt();}catch(exc){error(exc);}});
-  els('manual-launch').onclick=screeningLaunch;
-  els('screening-show-excluded').onclick=function(){
-    screeningShowExcluded=!screeningShowExcluded;
-    drawEpochPicker();
-  };
-  els('manual-sort').onchange=function(){if (isManualCampaign()) screeningMatrix(campaignState);};
-  els('manual-vl-round').onclick=function(){if (isManualCampaign()) screeningAskVision(campaignState,{});};
-  els('manual-round-list').onclick=function(event){
-    if(!isManualCampaign())return;
-    var action=event.target.closest('[data-screening-round-action]');
-    if(action){
-      var number=Number(action.dataset.screeningRoundNumber),kind=action.dataset.screeningRoundAction;
-      if(kind==='delete' && !window.confirm(
-        'Permanently delete only Round '+number+' and its previews/ratings? Current and queued rounds will remain intact.')) return;
-      action.disabled=true;
-      api('screening_round_action',{campaignId:activeCampaign,round:number,action:kind})
-        .then(function(){return refreshStatus();}).catch(error)
-        .finally(function(){action.disabled=false;});
-      return;
-    }
-    var button=event.target.closest('[data-screening-round]');
-    if(!button)return;
-    manualSelectedRound=Number(button.dataset.screeningRound);
-    els('manual-matrix').dataset.signature='';
-    screeningMatrix(campaignState);
-  };
   els('follow-up').onclick = followUpCampaign;
   els('suggest').onclick = propose;
   els('next').onclick = advance;
@@ -2550,7 +1560,6 @@
     referenceGeneration++;
     drawEpochPicker();
     roundPlan();
-    screeningSaveSelection();
   });
   els('epoch-picker').addEventListener('click', function (event) {
     var region = event.target.closest('[data-epoch-run]');
@@ -2569,7 +1578,7 @@
           refresh();
           pickerTestStatusKey='';
           refreshPickerTestStatus(true).catch(function(){});
-          if(campaignState) refreshScreeningTestStatus(campaignState,true).catch(function(){});
+          if(campaignState) refreshCampaignTestStatus(campaignState,true).catch(function(){});
         }
       });
       return;
@@ -2590,7 +1599,6 @@
       if (action.dataset.epochAction === 'last10') runEpochSelections[jobId] = new Set(run.epochs.slice(-10));
     }
     drawEpochPicker(); roundPlan();
-    screeningSaveSelection();
   });
 
   function referenceClick(event) {
@@ -2637,7 +1645,6 @@
   });
   els('prompt').addEventListener('change', function () { try { updateDimensions(); } catch (exc) { error(exc); } });
   showStep(1);
-  screeningModeUi();
   var testDuration = document.getElementById('test-generations-duration');
   if (testDuration) testDuration.addEventListener('input', function () {
     if (mode === 'finder') roundPlan();
@@ -2668,7 +1675,7 @@
       if (!hasRunOrigin(campaignState, inspectedEpoch)) return;
       var mapped=(campaignState.candidateMap||{})[String(inspectedEpoch)];
       window.runAnalyticsViewEpoch(mapped ? mapped.jobId : campaignState.jobId,
-        mapped ? mapped.epoch : inspectedEpoch,mode==='screening'?'screening':'finder');
+        mapped ? mapped.epoch : inspectedEpoch,'finder');
       return;
     }
     if (event.target.closest('[data-copy-epoch-to-test]')) {
@@ -2686,7 +1693,7 @@
           return value;
         }); }).then(function () {
           if (currentFolder === folder && campaignState?.id === campaignId) {
-          screeningTestStatusCampaign='';pickerTestStatusKey='';
+          campaignTestStatusCampaign='';pickerTestStatusKey='';
           showMode('tests');
         }
         }).catch(function (exc) {
@@ -2736,9 +1743,7 @@
   els('resume').onclick = function () { send('resume'); };
   els('stop').onclick = function () { send('stop'); };
   els('delete').onclick = function () {
-    var message=isManualCampaign()
-      ? 'Permanently delete ALL rounds and results in this screening history? This is NOT just the selected round.'
-      : 'Delete this campaign, its frames, and its scoring history?';
+    var message='Delete this campaign, its frames, and its scoring history?';
     if (window.confirm(message)) {
       clearError();
       api('delete', { campaignId: activeCampaign }).then(function () {
@@ -2752,7 +1757,7 @@
     var button = event.target.closest('[data-id]');
     if(button){
       activeCampaign=button.dataset.id;methodWorkspaces[mode].activeCampaign=activeCampaign;
-      manualSelectionCampaign='';screeningShowExcluded=false;
+
       inspectedEpoch=null;inspectedFrame=0;lastFrameKey='';
       list();refreshStatus().catch(error);
     }
@@ -2764,19 +1769,15 @@
     referenceDraftChoices={};referencePlanSignature='';referenceIndex=0;
     inspectedEpoch=null;
     els('active').classList.add('hidden'); els('empty').classList.remove('hidden');
-    if (mode === 'screening') {
-      screeningDraftContext=currentFolder+'|'+String(window.getWorkingModelProfileId()||'');
-      screeningSettingsKey='';screeningSettingsRequest=null;
-      screeningApplySettings(null);
-    } else if (mode === 'finder') {
+    if (mode === 'finder') {
       campaignDefaultsKey='';
       campaignApplyDefaults();
     }
-    if (mode === 'finder' || mode === 'screening') refresh();
+    if (mode === 'finder') refresh();
   });
   timer = setInterval(function () {
-    if ((mode === 'finder' || mode === 'screening') && activeCampaign && campaignState &&
-        (['queued', 'running'].includes(campaignState.status) || manualVisionPending) &&
+    if ((mode === 'finder') && activeCampaign && campaignState &&
+        ['queued', 'running'].includes(campaignState.status) &&
         !els('screen').classList.contains('hidden')) refreshStatus().catch(error);
   }, 2500);
 })();

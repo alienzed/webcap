@@ -1344,6 +1344,7 @@ def test_epoch_finder_storage_items_and_temporary_copies(monkeypatch, tmp_path):
     items = storage_manager._epoch_finder_items({})
     assert len(items) == 2
     assert items[0]["area"] == "epoch_finder" and items[0]["purgeable"]
+    assert items[0]["kind"] == "Campaign"
     assert items[1]["area"] == "epoch_finder_staging" and not items[1]["purgeable"]
     assert items[0]["meta"]["frames"] == 1
 

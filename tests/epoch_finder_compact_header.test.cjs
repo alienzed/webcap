@@ -11,7 +11,7 @@ const end = html.indexOf('<div class="epoch-finder-live-layout"', start);
 assert.ok(start > -1 && end > start, 'Expected live Campaign/Screening header section');
 const doc = new JSDOM(html.slice(start, end)).window.document;
 
-test('screening/campaign header is two compact bands with live IDs intact', () => {
+test('Campaign header is two compact bands with live IDs intact', () => {
   const heading = doc.querySelector('.epoch-finder-heading');
   const title = heading.querySelector('.epoch-finder-title');
   assert.equal(title.querySelector('#epoch-finder-name').textContent, 'Campaign');
@@ -64,4 +64,49 @@ test('unnamed Campaign runs use persisted sequence across labels', () => {
   assert.equal(ctx.candidate({candidateMap: {'50': {...run, epoch: 50}}}, 50), 'Run 12 · Epoch 50');
   assert.equal(ctx.identity({...run, runName: 'Bikini details'}), 'Run 12 · Bikini details');
   assert.equal(ctx.identity({runName: 'Run train', jobId: 'job-12'}), 'Run job-12');
+});
+
+test('Campaigns terminology is visible while Media Explorer routes and source keys remain stable', () => {
+  const explorer = fs.readFileSync('tool/js/media_explorer.js', 'utf8');
+  const backend = fs.readFileSync('tool/server/media_explorer.py', 'utf8');
+  assert.match(html, /data-test-workspace-mode="finder"[^>]*>Campaigns<\/button>/);
+  assert.match(explorer, /epoch: 'Campaigns'/);
+  assert.match(explorer, /text\(epoch, 'Open Campaign'\)/);
+  assert.match(explorer, /label: 'Delete campaign', description: 'entire campaign and its generated results'/);
+  assert.match(explorer, /url: '\/fs\/epoch_finder', data: \{folder: item.ownerFolder, operation: 'delete'/);
+  assert.match(backend, /"source": "epoch", "storageId": campaign_id/);
+  assert.match(backend, /"role": "Campaign", "source": "epoch"/);
+  assert.match(backend, /"\/fs\/epoch_finder\/frame\?folder="/);
+});
+
+test('Storage Manager calls campaign artifacts by their current name without changing ownership keys', () => {
+  const ui = fs.readFileSync('tool/js/storage_manager.js', 'utf8');
+  const backend = fs.readFileSync('tool/server/storage_manager.py', 'utf8');
+  assert.match(ui, /epoch_finder: 'Campaigns'/);
+  assert.match(ui, /epoch_finder_staging: 'Campaign temporary checkpoints'/);
+  assert.match(ui, /label = 'Campaign'/);
+  assert.match(backend, /_category\("epoch_finder", "Campaigns"/);
+  assert.match(backend, /_category\("epoch_finder_staging", "Campaign temporary checkpoints"/);
+  assert.match(backend, /"Campaign " \+ campaign_id \+ " owns this session; delete the campaign instead\."/);
+  assert.match(backend, /epoch_finder\.command\(app_config\.safe_join_fs_root\(folder\), "delete"/);
+});
+
+test('Campaign jobs and diagnostics use current names while internal contracts stay fixed', () => {
+  const server = fs.readFileSync('tool/server/epoch_finder.py', 'utf8');
+  const app = fs.readFileSync('tool/server/app.py', 'utf8');
+  const plan = fs.readFileSync('tool/server/epoch_finder_plan.py', 'utf8');
+  const readme = fs.readFileSync('README.md', 'utf8');
+  const guide = fs.readFileSync('docs/run_analytics.md', 'utf8');
+  assert.match(script, /'Evaluations request failed\.'/);
+  assert.match(script, /reportConsoleError\('Evaluations', exc\)/);
+  assert.match(server, /name="Campaign epoch " \+ str\(unit\["epoch"\]\)/);
+  assert.match(server, /label="Campaign Ask VL"/);
+  assert.match(server, /label="Campaign Reference VL"/);
+  assert.match(app, /label="Campaign: design concept tests"/);
+  assert.match(readme, /\*\*Use Campaigns\.\*\* Open \*\*Evaluations → Campaigns\*\*/);
+  assert.match(guide, /Evaluations → Insights/);
+  assert.match(app, /@app\.route\("\/fs\/epoch_finder", methods=\["POST"\]\)/);
+  assert.match(server, /campaign_staging="epoch-finder-" \+ campaign\["id"\]/);
+  assert.match(plan, /contract\["operation"\] = "propose_epoch_finder_plan"/);
+  assert.match(plan, /\[EPOCH FINDER ADDITION\]/);
 });

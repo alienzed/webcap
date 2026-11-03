@@ -532,7 +532,7 @@ def _test_items_for_folder(cache, folder, qualify_label=False):
             kind=session.get("modelId") or session.get("model") or "Test Session",
             status=status,
             purgeable=not active and not campaign_id,
-            protected_reason=("Epoch Finder campaign " + campaign_id + " owns this session; delete the campaign instead." if campaign_id else "Active Test Session; stop it before deletion." if active else ""),
+            protected_reason=("Campaign " + campaign_id + " owns this session; delete the campaign instead." if campaign_id else "Active Test Session; stop it before deletion." if active else ""),
             meta={
                 "set": folder,
                 "completed": int(session.get("completed") or 0),
@@ -576,7 +576,7 @@ def _central_test_items(cache):
                 kind=session.get("modelId") or session.get("model") or "Test Session",
                 status=status,
                 purgeable=not active and not campaign_id,
-                protected_reason=("Epoch Finder campaign " + campaign_id + " owns this session; delete the campaign instead." if campaign_id else "Active Test Session; stop it before deletion." if active else ""),
+                protected_reason=("Campaign " + campaign_id + " owns this session; delete the campaign instead." if campaign_id else "Active Test Session; stop it before deletion." if active else ""),
                 meta={
                     "source": source,
                     "ownerFolder": owner_folder,
@@ -595,7 +595,7 @@ def _epoch_finder_items(cache):
         active = record["active"]
         items.append(_item(
             "epoch_finder", record["id"], record["name"], record["path"],
-            folder=record["folder"], kind="Epoch Finder campaign",
+            folder=record["folder"], kind="Campaign",
             status=record["status"], purgeable=not active,
             protected_reason="Campaign has active Test work." if active else "",
             meta={"frames": record["frames"], "retainedSessions": record["retainedSessions"]},
@@ -606,7 +606,7 @@ def _epoch_finder_items(cache):
                 "epoch_finder_staging", record["id"], record["name"] + " · temporary checkpoints",
                 record["stagingPath"], folder=record["folder"], kind="Campaign Test checkpoint copies",
                 status="temporary", purgeable=False,
-                protected_reason="Managed by Epoch Finder lifecycle; delete the campaign instead.",
+                protected_reason="Managed by the campaign lifecycle; delete the campaign instead.",
                 cache=cache,
             ))
     return items
@@ -1121,8 +1121,8 @@ def overview(folder=""):
             note=("Training queue state is unavailable; inventory is hidden until it can be read." if "training" in unavailable else "")
         ),
         _category("archive", "Training Archives", groups["archive"]),
-        _category("epoch_finder", "Epoch Finder Campaigns", groups["epoch_finder"]),
-        _category("epoch_finder_staging", "Epoch Finder Temporary Checkpoints", groups["epoch_finder_staging"]),
+        _category("epoch_finder", "Campaigns", groups["epoch_finder"]),
+        _category("epoch_finder_staging", "Campaign temporary checkpoints", groups["epoch_finder_staging"]),
         _category("director_assessment", "Director Assessments", groups["director_assessment"], note="Raw diagnostic evidence only; learned Director model results are preserved when this is deleted."),
         _category(
             "tests", "Tests", groups["tests"], complete=scan_complete,
@@ -1921,7 +1921,7 @@ def purge(area, item_id, folder=""):
         status = str(session_payload.get("status") or "").strip().lower()
         campaign_id = _test_campaign_owner(session_payload)
         if campaign_id:
-            raise RuntimeError("Test Session belongs to Epoch Finder campaign " + campaign_id + "; delete the campaign instead.")
+            raise RuntimeError("Test session belongs to Campaign " + campaign_id + "; delete the campaign instead.")
         if status in ACTIVE_TEST_STATUSES:
             raise RuntimeError("Active Test Session; stop it before deletion.")
         owner_folder = str(session_payload.get("ownerFolder") or folder or "").strip()

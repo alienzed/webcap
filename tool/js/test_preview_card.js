@@ -72,6 +72,9 @@
       jump.dataset.testEpochMediaEpoch = text(epoch.epoch);
       jump.title = 'See all recorded results for this training checkpoint';
       name.appendChild(jump);
+      var epochRating = node('span', 'test-generations-epoch-rating hidden');
+      epochRating.dataset.testEpochAggregateRating = '1';
+      name.appendChild(epochRating);
       name.appendChild(document.createTextNode(label.slice(at + epoch.text.length)));
     } else {
       name.textContent = label;

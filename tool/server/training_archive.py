@@ -179,6 +179,8 @@ def _staged_candidates(folder, run_dir, action_id, stage):
         raise RuntimeError("Configured staged Test directory is invalid.")
     wanted_run = Path(run_dir).resolve(strict=True)
     wanted_action = str(action_id or "").strip()
+    wanted_folder = str(folder or "").strip().replace("\\", "/").strip("/")
+    wanted_stage = str(stage or "").strip().lower()
     matches = []
     for candidate in directory.iterdir():
         if candidate.suffix.lower() != ".safetensors" or candidate.is_symlink() or not candidate.is_file():
@@ -190,7 +192,14 @@ def _staged_candidates(folder, run_dir, action_id, stage):
             payload = json.loads(sidecar.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError) as exc:
             raise RuntimeError("Staged Test provenance is unreadable: " + sidecar.name) from exc
-        if not isinstance(payload, dict) or payload.get("version") != 1:
+        if not isinstance(payload, dict):
+            raise RuntimeError("Staged Test provenance is invalid: " + sidecar.name)
+        # Other staged files may carry model metadata without run provenance.
+        # Never resolve or delete a candidate not attributable to this Set/stage.
+        if (str(payload.get("sourceFolder") or "").strip().replace("\\", "/").strip("/") != wanted_folder
+                or str(payload.get("stage") or "").strip().lower() != wanted_stage):
+            continue
+        if payload.get("version") != 1:
             raise RuntimeError("Staged Test provenance is invalid: " + sidecar.name)
         try:
             candidate_run_dir, candidate_run = candidate_run_snapshot_from_provenance(payload)

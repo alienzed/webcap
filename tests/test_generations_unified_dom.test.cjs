@@ -19,6 +19,16 @@ test('native Evaluation methods reachable and obsolete shells absent', () => {
   assert.ok(!testJS.includes('testGenerationsUnifiedNativeRoute'));
   assert.match(finder, /window\.epochFinderShowMode = showMode/);
 });
+test('Test preview footer shows the existing aggregate human rating beside epoch', () => {
+  const card = fs.readFileSync(path.join(root, 'tool/js/test_preview_card.js'), 'utf8');
+  assert.ok(card.includes('epochRating.dataset.testEpochAggregateRating = \'1\''));
+  assert.ok(card.includes("node('span', 'test-generations-epoch-rating hidden')"));
+  assert.ok(testJS.includes("card.querySelector('[data-test-epoch-aggregate-rating]')"));
+  assert.ok(testJS.includes("'Aggregate human rating across '"));
+  assert.ok(testJS.includes('prepared.candidateScores && prepared.candidateScores[candidate]'));
+  assert.ok(testJS.includes('aggregateCount <= 0'));
+});
+
 test('original controls and generated evidence owners preserved', () => {
   for (const id of ['test-generations-run-btn','test-generations-inline-count',
       'test-generations-files','test-generations-sessions-list','epoch-finder-start',
@@ -49,7 +59,7 @@ test('Evaluation Matrix follows Screening rows and preserves playable preview ca
   const asked = [];
   const context = {
     document, Event: dom.window.Event, window: {updateTestPreviewCardRating() {}},
-    resultsView: 'matrix', selectedCandidates, matrixRatingPending: new Set(),
+    resultsView: 'matrix', selectedCandidates, matrixRatingPending: new Set(), matrixSkipPending: new Set(),
     previewSort:'original', testVl: {scope:'',entries:{}},
     testVlScope: status => 'test|' + status.session,
     testVlScore: comparison => comparison,
@@ -155,7 +165,8 @@ test('Evaluation Matrix uses regular Grid card width and horizontal scrolling', 
   assert.match(css, /\.test-generations-matrix-scroll\s*\{[^}]*overflow:\s*auto/s);
   assert.match(css, /\.test-generations-matrix-labels\s*\{[^}]*position:\s*sticky/s);
   assert.match(css, /\.test-generations-matrix-scroll\s*\{[^}]*container-type:\s*inline-size/s);
-  assert.match(css, /\.test-generations-matrix-row-head\s*\{[^}]*left:\s*0;[^}]*width:\s*100cqw/s);
+  assert.match(css, /\.test-generations-matrix-board\s*\{[^}]*box-sizing:\s*border-box/s);
+  assert.match(css, /\.test-generations-matrix-row-head\s*\{[^}]*left:\s*0;[^}]*width:\s*calc\(100cqw - 16px\)/s);
   assert.match(css, /\.test-generations-matrix-row-primary \.test-generations-candidate-checkbox\s*\{[^}]*width:\s*20px/s);
 });
 

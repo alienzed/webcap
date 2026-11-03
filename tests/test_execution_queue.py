@@ -233,11 +233,24 @@ def test_execution_queue_transient_finish_removes_all_durable_terminal_history(q
     assert finished["status"] == "completed"
     with pytest.raises(FileNotFoundError):
         execution_queue.get_job(job["id"])
-    assert execution_queue.recent_snapshot("inference") == []
+    recent = execution_queue.recent_snapshot("inference")
+    assert len(recent) == 1
+    assert recent[0]["id"] == job["id"]
+    assert recent[0]["status"] == "completed"
+    assert recent[0]["metadata"]["client"] == "generate"
+    assert recent[0]["startedAt"] is not None
+    assert recent[0]["finishedAt"] >= recent[0]["startedAt"]
+    assert recent[0]["details"] == {}
+    # Queue history stays transient; nothing is persisted to recent[].
+    state = json.loads(app_config.execution_queue_state_path().read_text(encoding="utf-8"))
+    assert state["lanes"]["inference"]["recent"] == []
     receipt = execution_queue.transient_receipt(job["id"], consume=True)
     assert receipt["result"] == {"mediaPath": "output/clip.mp4"}
     with pytest.raises(FileNotFoundError):
         execution_queue.transient_receipt(job["id"])
+    assert len(execution_queue.recent_snapshot("inference")) == 1
+    execution_queue.clear_transient_receipts("inference")
+    assert execution_queue.recent_snapshot("inference") == []
 
 
 def test_transient_cancel_does_not_persist_recent_history(queue_root):

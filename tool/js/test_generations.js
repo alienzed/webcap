@@ -384,6 +384,16 @@
     var button = row.querySelector('[data-test-vl-result]');
     if (!manualLabel || !epochLabel || !button) throw new Error('Test result evaluation controls are missing.');
 
+    var aggregate = card.querySelector('[data-test-epoch-aggregate-rating]');
+    if (aggregate) {
+      var aggregateCount = Number(manual && manual.count || 0);
+      aggregate.textContent = aggregateCount > 0 ? '· ★ ' + Number(manual.average || 0).toFixed(1) +
+        ' (' + aggregateCount + ')' : '';
+      aggregate.title = aggregateCount > 0
+        ? 'Aggregate human rating across ' + aggregateCount + ' rated previews for this epoch'
+        : '';
+      aggregate.classList.toggle('hidden', aggregateCount <= 0);
+    }
     manualLabel.textContent = manual && Number(manual.count) ? '★ ' + Number(manual.average).toFixed(1) : '';
     manualLabel.title = manualLabel.textContent ? 'Epoch manual average · ' + manual.count + ' rated preview(s)' : '';
     manualLabel.classList.toggle('hidden', !manualLabel.textContent);
@@ -3709,7 +3719,6 @@
     var sweep = !!(status && status.sweepWeights && status.sweepWeights.length);
     var columns = Math.max(1, variations.length);
     var buckets = new Map();
-
     // Frozen candidates reserve row positions even before their renders arrive.
     (status && status.candidates || []).forEach(function (candidate) {
       var key = matrixCandidateKey(candidate, sweep);
@@ -3732,8 +3741,11 @@
         buckets.set(key, {label: label, kind: candidate.kind,
           candidateFile: candidate.candidateFile, cells: new Map()});
       }
-      var index = result.variationIndex == null ? 0 : Number(result.variationIndex);
-      buckets.get(key).cells.set(index, result);
+      var index = result.variationIndex == null ? (variations.length ? -1 : 0) : Number(result.variationIndex);
+      // Never allow a missing/invalid variation to overwrite column zero.
+      if (index >= 0 && index < columns && Number.isInteger(index)) {
+        buckets.get(key).cells.set(index, result);
+      }
     });
 
     var rows = Array.from(buckets.entries());
@@ -3944,10 +3956,11 @@
         if (!result) {
           if (cell.dataset.mediaKey) {
             cell.replaceChildren();
-            cell.textContent = 'Awaiting render';
             cell.classList.add('is-empty');
             delete cell.dataset.mediaKey;
           }
+          cell.textContent = cell.firstElementChild ? cell.textContent :
+            'Awaiting render';
           continue;
         }
         var failed = !!result.error;
@@ -5390,8 +5403,14 @@
     return request('test_remove_candidate', {
       fileName: String(fileName || ''),
       session: String(sessionName || ''),
-      modelId: currentTestModelId()
+      modelId: currentTestModelId(),
+      cancelActive: !!sessionName
     }).then(function (payload) {
+      if (payload.pendingRemoval) {
+        // The backend persists this intent across refreshes/restarts.
+        return new Promise(function (resolve) { setTimeout(resolve, 1000); })
+          .then(function () { return removeCandidate(fileName, sessionName); });
+      }
       if (prepared && String(payload.modelId || '') === String(prepared.modelId || '')) {
         var removed = String(payload.removed || '');
         var previous = Array.isArray(prepared.files) ? prepared.files : [];
@@ -5447,7 +5466,9 @@
     );
     if (!confirmed) return;
     button.disabled = true;
+    button.textContent = '…';
     removeCandidate(candidateFile, currentSession).catch(function (err) {
+      button.textContent = '×';
       button.disabled = false;
       showError(err);
     });

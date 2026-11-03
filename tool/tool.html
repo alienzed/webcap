@@ -1163,12 +1163,11 @@
                 <section id="test-generations-pane" class="test-generations-pane hidden" aria-label="Evaluation">
                     <nav id="test-workspace-main-tabs" class="test-workspace-main-tabs" aria-label="Evaluation methods">
                         <button type="button" class="test-workspace-pane-btn active" data-test-workspace-mode="tests" aria-pressed="true">Prompt Tests</button>
-                        <button type="button" class="test-workspace-pane-btn" data-test-workspace-mode="screening" aria-pressed="false">Manual Screening</button>
                         <button type="button" class="test-workspace-pane-btn" data-test-workspace-mode="finder" aria-pressed="false">Campaigns</button>
                         <button type="button" class="test-workspace-pane-btn" data-test-workspace-mode="analytics" aria-pressed="false">Insights</button>
                         <button type="button" class="test-workspace-pane-btn test-workspace-reference-link" data-test-workspace-mode="references" aria-pressed="false" title="Manage training reference images for VL and DINO comparisons">References</button>
                     </nav>
-                    <section id="epoch-finder-screen" class="epoch-finder-screen hidden" aria-label="Manual Screening and Campaigns">
+                    <section id="epoch-finder-screen" class="epoch-finder-screen hidden" aria-label="Campaigns">
                         <div class="epoch-finder-layout">
                             <aside class="epoch-finder-sidebar">
                                 <section class="epoch-finder-panel">
@@ -1188,7 +1187,6 @@
                                     <div id="epoch-finder-staged-choices" class="epoch-finder-run-choices hidden" aria-label="Select staged Test LoRAs"></div>
                                     <label class="hidden">Training run (legacy)<select id="epoch-finder-run"><option value="">Loading saved runs…</option></select></label><div id="epoch-finder-run-choices" class="epoch-finder-run-choices" aria-label="Select training runs"></div>
                                     <p id="epoch-finder-run-detail" class="epoch-finder-muted"></p>
-                                    <button id="epoch-finder-screening-show-excluded" type="button" class="review-captions-btn hidden" aria-pressed="false">Show excluded epochs</button>
                                     <div id="epoch-finder-epoch-picker" class="epoch-finder-epoch-picker hidden"></div>
                                     </div>
                                     <div data-epoch-wizard-step="2" class="hidden">
@@ -1214,27 +1212,11 @@
                                         <strong>Review your campaign</strong>
                                         <div id="epoch-finder-review" class="epoch-finder-review"></div>
                                     </div>
-                                    <div id="epoch-finder-manual-form" class="hidden epoch-finder-manual-form">
-                                        <label>Test prompt<textarea id="epoch-finder-manual-prompt" rows="6" placeholder="Use {option|option} wildcards."></textarea></label>
-                                        <label>Exhaustively vary<select id="epoch-finder-manual-group"></select></label>
-                                        <div class="epoch-finder-fields">
-                                            <label>Resolution (MP)<input id="epoch-finder-manual-mp" type="number" min="0.1" step="0.1"></label>
-                                            <label>Duration (seconds)<input id="epoch-finder-manual-duration" type="number" min="1" step="1"></label>
-                                            <label>Aspect ratio<select id="epoch-finder-manual-aspect"></select></label>
-                                            <label>Sampling mode<select id="epoch-finder-manual-sampling"><option value="turbo">Turbo · 8 steps / 1.0</option><option value="quality">Quality · 20 steps / no Turbo</option></select></label>
-                                            <label>Dimensions<select id="epoch-finder-manual-dimensions"></select></label>
-                                        </div>
-                                        <button id="epoch-finder-manual-launch" type="button" class="training-btn training-launch-btn">Run Round 1</button>
-                                    </div>
                                     <div class="epoch-finder-wizard-actions" id="epoch-finder-wizard-actions">
                                         <button id="epoch-finder-back" type="button" class="review-captions-btn hidden">Back</button>
                                         <button id="epoch-finder-next" type="button" class="training-btn training-launch-btn">Next</button>
                                         <button id="epoch-finder-start" type="button" class="training-btn training-launch-btn hidden">Launch campaign</button>
                                     </div>
-                                </section>
-                                <section id="epoch-finder-manual-history" class="epoch-finder-panel hidden">
-                                    <div class="epoch-finder-panel-heading"><h3>Rounds</h3></div>
-                                    <div id="epoch-finder-manual-round-list" class="epoch-finder-campaigns"></div>
                                 </section>
                                 <section class="epoch-finder-panel">
                                     <div class="epoch-finder-panel-heading"><h3 id="epoch-finder-history-heading">Campaigns</h3><span id="epoch-finder-count"></span></div>
@@ -1284,15 +1266,6 @@
                                             <div id="epoch-finder-inspector" class="epoch-finder-inspector hidden"></div>
                                         </section>
                                     </div>
-                                    <section id="epoch-finder-manual-review" class="hidden epoch-finder-manual-review">
-                                        <details id="epoch-finder-manual-run-info" class="epoch-screening-run-info"></details>
-                                        <div class="epoch-finder-panel-heading">
-                                            <h3>Compare epochs</h3>
-                                            <label>Sort rows<select id="epoch-finder-manual-sort"><option value="epoch">Epoch number</option><option value="high">Highest rating</option><option value="low">Lowest rating</option><option value="kept">Kept first</option></select></label>
-                                            <button id="epoch-finder-manual-vl-round" type="button" class="review-captions-btn">Ask VL · Round</button>
-                                        </div>
-                                        <div id="epoch-finder-manual-matrix" class="epoch-finder-manual-matrix" role="region" aria-label="Scroll through epoch comparisons" tabindex="0"></div>
-                                    </section>
                                 </div>
                                 <p id="epoch-finder-error" class="epoch-finder-error hidden" role="alert"></p>
                             </main>
@@ -1377,26 +1350,26 @@
                                 <div id="run-analytics-epoch-media-grid" class="run-analytics-epoch-media-grid" aria-live="polite"></div>
                                 <button id="run-analytics-epoch-media-more" class="review-captions-btn hidden" type="button">Load 8 more</button>
                               </dialog>
-                            <dialog id="run-lab-review-dialog" class="run-lab-review-dialog" aria-label="Blind render rating">
+                            <dialog id="run-lab-review-dialog" class="run-lab-review-dialog" aria-label="Continuous blind render rating">
                               <header class="run-lab-review-head">
                                 <div><span class="run-lab-review-kicker">INSIGHTS / QUICK REVIEW</span><h3>Rate this render</h3><p id="run-lab-review-progress" role="status">Preparing review…</p></div>
-                                <div class="run-lab-review-meter-wrap"><progress id="run-lab-review-meter" max="5" value="0" aria-label="Blind rating batch progress"></progress><span>Five quick decisions. Run and epoch revealed after rating.</span></div>
+                                <div class="run-lab-review-meter-wrap"><progress id="run-lab-review-meter" max="1" value="0" aria-label="Blind rating batch progress"></progress><span>Keep rating until you're done. Run and epoch stay hidden.</span></div>
                                 <button type="button" id="run-lab-review-close" class="review-captions-btn">Close</button>
                               </header>
                               <div class="run-lab-review-workspace">
                                 <div id="run-lab-review-media" class="run-lab-review-media"></div>
                                 <aside class="run-lab-review-panel">
                                   <div class="run-lab-review-context"><h4>What was generated?</h4><p>Actual resolved prompt and wildcard choices for this render.</p><div id="run-lab-review-wildcards" class="run-lab-review-wildcards"></div><details class="run-lab-review-prompt-details"><summary>Full generated prompt</summary><p id="run-lab-review-prompt"></p></details></div>
-                                  <div class="run-lab-review-decision"><h4>Your rating</h4><p>Judge the image before revealing its training run.</p><div id="run-lab-review-stars" class="run-lab-review-stars" aria-label="Rate this render from one to five stars">
+                                  <div class="run-lab-review-decision"><h4>Your rating</h4><p>Rate 1–5 to save and immediately advance.</p><div id="run-lab-review-stars" class="run-lab-review-stars" aria-label="Rate this render from one to five stars">
                                     <button type="button" data-insights-rating="1" aria-label="1 star"><span>★</span><small>1</small></button><button type="button" data-insights-rating="2" aria-label="2 stars"><span>★</span><small>2</small></button><button type="button" data-insights-rating="3" aria-label="3 stars"><span>★</span><small>3</small></button><button type="button" data-insights-rating="4" aria-label="4 stars"><span>★</span><small>4</small></button><button type="button" data-insights-rating="5" aria-label="5 stars"><span>★</span><small>5</small></button>
-                                  </div><div id="run-lab-review-reveal" class="run-lab-review-reveal" aria-live="polite"></div><div class="run-lab-review-actions"><button id="run-lab-review-undo" type="button" class="review-captions-btn hidden">Undo rating</button><button id="run-lab-review-skip" type="button" class="review-captions-btn">Skip</button><button id="run-lab-review-next" type="button" class="review-captions-btn hidden">Next render →</button></div><p id="run-lab-review-status" role="status"></p><p class="run-lab-review-keys">Keys: 1–5 rate · S skip · → next</p></div>
+                                  </div><div id="run-lab-review-reveal" class="run-lab-review-reveal" aria-live="polite"></div><div class="run-lab-review-actions"><button id="run-lab-review-back" type="button" class="review-captions-btn hidden">← Back</button><button id="run-lab-review-undo" type="button" class="review-captions-btn hidden">Undo rating</button><button id="run-lab-review-skip" type="button" class="review-captions-btn">Skip</button><button id="run-lab-review-next" type="button" class="review-captions-btn hidden">Next →</button></div><p id="run-lab-review-status" role="status"></p><p class="run-lab-review-keys">Keys: 1–5 rate &amp; advance · S skip · ← back · → forward</p></div>
                                 </aside>
                               </div>
                             </dialog>
                             <div id="run-analytics-lab" class="run-analytics-lab">
                               <header class="run-lab-heading"><div><span class="run-lab-eyebrow">EVALUATION / INSIGHTS</span><h2>Insights</h2><p>Review what you have, find promising epochs, and choose the next useful action.</p></div><div class="run-lab-heading-actions"><button type="button" id="run-lab-ai" class="training-btn training-launch-btn">✦ AI Insights</button><button type="button" id="run-lab-refresh" class="review-captions-btn">Refresh evidence</button></div></header>
                               <p id="run-lab-status" role="status">Reading recorded testing evidence…</p>
-                              <section class="run-lab-challenge"><div><span class="run-lab-eyebrow">NEXT CHALLENGE</span><h3 id="run-lab-challenge-title">Review five unrated renders</h3><p id="run-lab-challenge-description">Rate existing results before spending more GPU time.</p><div id="run-lab-challenge-actions"></div></div><div class="run-lab-steps"><strong>Rating progress</strong><p id="run-lab-mission-metrics" role="status">Reading saved ratings…</p><progress id="run-lab-mission-meter" max="100" value="0" aria-label="Linked Test rating coverage"></progress><small id="run-lab-mission-hint">Rate renders to strengthen your comparisons.</small></div></section>
+                              <section class="run-lab-challenge"><div><span class="run-lab-eyebrow">NEXT CHALLENGE</span><h3 id="run-lab-challenge-title">Review unrated renders</h3><p id="run-lab-challenge-description">Rate existing results before spending more GPU time.</p><div id="run-lab-challenge-actions"></div></div><div class="run-lab-steps"><strong>Rating progress</strong><p id="run-lab-mission-metrics" role="status">Reading saved ratings…</p><progress id="run-lab-mission-meter" max="100" value="0" aria-label="Linked Test rating coverage"></progress><small id="run-lab-mission-hint">Rate renders to strengthen your comparisons.</small></div></section>
                               <section class="run-lab-featured" aria-label="Leading epochs"><div id="run-lab-featured"></div></section>
                               <section id="run-lab-ai-panel" class="run-lab-card run-lab-ai-panel hidden" aria-live="polite">
                                 <div class="run-lab-card-heading"><div><h3>AI Insights — Training history</h3><p>Grounded interpretation of saved Test ratings and active / archived training data, not a measured score.</p></div><button id="run-lab-ai-stop" class="review-captions-btn hidden" type="button">Stop</button></div>
@@ -1608,8 +1581,14 @@
                         <header class="media-explorer-header"><h2 id="media-explorer-heading">WebCap media</h2><div class="media-explorer-header-actions"><button type="button" id="media-explorer-refresh" class="review-captions-btn" title="Refresh this view">↻ Refresh</button><button type="button" id="media-explorer-scan-all" class="review-captions-btn" title="Discover older WebCap-generated media beyond the recent results">Scan full history</button></div></header>
                         <div id="media-explorer-external-path-bar" class="media-explorer-external-path-bar hidden"><input type="text" id="media-explorer-external-path" placeholder="Absolute folder path (other disks supported)" aria-label="External folder path"><select id="media-explorer-saved-folders" aria-label="Previously opened external folders" title="Select a saved folder to browse"><option value="">Recent folders…</option></select><button type="button" id="media-explorer-forget-folder" class="review-captions-btn" title="Remove the selected folder from recent history (does not delete files)" disabled>Forget</button><button type="button" id="media-explorer-open-path" class="review-captions-btn">Browse</button><button type="button" id="media-explorer-generate-metadata" class="review-captions-btn">Generate Metadata</button><button type="button" id="media-explorer-stop-metadata" class="review-captions-btn hidden">Stop</button></div><div id="media-explorer-metadata-progress" class="media-explorer-metadata-progress hidden" role="status"></div>
                         <div class="media-explorer-searchbar"><label class="media-explorer-search-field"><span aria-hidden="true">⌕</span><input type="search" id="media-explorer-search" placeholder="Search generated media, prompts, models…" aria-label="Search media" autocomplete="off"></label></div>
-                        <div class="media-explorer-facets"><select id="media-explorer-storyboard-type" class="hidden" aria-label="Filter Storyboard media"><option value="">All Storyboard media</option><option value="scenes">Scenes</option><option value="exports">Exported Sequences</option></select><select id="media-explorer-kind" aria-label="Filter media type"><option value="">All media types</option><option value="image">Images</option><option value="video">Videos</option></select><select id="media-explorer-model" aria-label="Filter model" class="hidden"><option value="">All models</option></select><select id="media-explorer-folder" aria-label="Filter Set" class="hidden"><option value="">All Sets</option></select><select id="media-explorer-date" aria-label="Filter date"><option value="">Any date</option><option value="7">Last 7 days</option><option value="30">Last 30 days</option><option value="90">Last 90 days</option></select><select id="media-explorer-rating" aria-label="Filter rating"><option value="">Any rating</option><option value="5">5 stars</option><option value="4">4 stars &amp; up</option><option value="3">3 stars &amp; up</option><option value="2">2 stars &amp; up</option><option value="1">Rated</option><option value="unrated">Unrated / unknown</option></select></div>
-                        <details id="media-explorer-external-filters" class="media-explorer-technical-filters hidden"><summary>Technical filters</summary><div class="media-explorer-facets"><label>Short side ≥ <input id="media-explorer-min-side" type="number" min="0" placeholder="px" aria-label="Minimum short side pixels"></label><label>MP ≥ <input id="media-explorer-min-mp" type="number" min="0" step="0.1" placeholder="MP" aria-label="Minimum megapixels"></label><label>Duration ≥ <input id="media-explorer-min-duration" type="number" min="0" step="1" placeholder="seconds" aria-label="Minimum duration seconds"></label><label>Duration ≤ <input id="media-explorer-max-duration" type="number" min="0" step="1" placeholder="seconds" aria-label="Maximum duration seconds"></label></div></details><div id="media-explorer-filter-chips" class="media-explorer-filter-chips"></div>
+                        <details id="media-explorer-filter-panel" class="media-explorer-filter-panel">
+                            <summary><span>Filters</span><span id="media-explorer-filter-count" class="media-explorer-filter-count" aria-live="polite"></span></summary>
+                            <div class="media-explorer-filter-panel-body">
+                                <div class="media-explorer-facets"><select id="media-explorer-storyboard-type" class="hidden" aria-label="Filter Storyboard media"><option value="">All Storyboard media</option><option value="scenes">Scenes</option><option value="exports">Exported Sequences</option></select><select id="media-explorer-kind" aria-label="Filter media type"><option value="">All media types</option><option value="image">Images</option><option value="video">Videos</option></select><select id="media-explorer-model" aria-label="Filter model" class="hidden"><option value="">All models</option></select><select id="media-explorer-folder" aria-label="Filter Set" class="hidden"><option value="">All Sets</option></select><select id="media-explorer-date" aria-label="Filter date"><option value="">Any date</option><option value="7">Last 7 days</option><option value="30">Last 30 days</option><option value="90">Last 90 days</option></select><select id="media-explorer-rating" aria-label="Filter rating"><option value="">Any rating</option><option value="5">5 stars</option><option value="4">4 stars &amp; up</option><option value="3">3 stars &amp; up</option><option value="2">2 stars &amp; up</option><option value="1">Rated</option><option value="unrated">Unrated / unknown</option></select></div>
+                                <details id="media-explorer-external-filters" class="media-explorer-technical-filters hidden"><summary>Technical filters</summary><div class="media-explorer-facets"><label>Short side ≥ <input id="media-explorer-min-side" type="number" min="0" placeholder="px" aria-label="Minimum short side pixels"></label><label>MP ≥ <input id="media-explorer-min-mp" type="number" min="0" step="0.1" placeholder="MP" aria-label="Minimum megapixels"></label><label>Duration ≥ <input id="media-explorer-min-duration" type="number" min="0" step="1" placeholder="seconds" aria-label="Minimum duration seconds"></label><label>Duration ≤ <input id="media-explorer-max-duration" type="number" min="0" step="1" placeholder="seconds" aria-label="Maximum duration seconds"></label></div></details>
+                            </div>
+                        </details>
+                        <div id="media-explorer-filter-chips" class="media-explorer-filter-chips"></div>
                         <div class="media-explorer-gallery-toolbar"><div class="media-explorer-sort-controls"><span>Sort</span><select id="media-explorer-sort" aria-label="Sort media"><option value="newest">Newest first</option><option value="oldest">Oldest first</option><option value="name">Filename A–Z</option><option value="rating">Highest rated</option><option value="path">Path A–Z</option><option value="type">Type</option><option value="size">File size</option><option value="resolution">Short side</option><option value="megapixels">Megapixels</option><option value="duration">Duration</option></select><button type="button" id="media-explorer-sort-reverse" class="review-captions-btn" title="Reverse sort order" aria-pressed="false">⇅</button></div><div class="media-explorer-count-group"><span id="media-explorer-count" aria-live="polite">Discovering media…</span><button id="media-explorer-clear-filters" type="button" class="media-explorer-text-btn hidden">Clear filters</button><span id="media-explorer-scope" class="media-explorer-scope hidden"><span>Recent results</span><span>Scan full history for older media</span></span></div><div class="media-explorer-view-controls"><div class="media-explorer-modes" role="group" aria-label="Media list or grid view"><button type="button" data-explorer-mode="list">List</button><button type="button" data-explorer-mode="grid" aria-pressed="true">Grid</button></div><button type="button" id="media-explorer-view-full-size" class="media-explorer-viewer-action" data-explorer-mode="single" title="Open the selected media in the full-size viewer" disabled>Full size ↗</button><div class="media-explorer-fit-controls" role="group" aria-label="Thumbnail framing"><button type="button" id="media-explorer-fit" aria-pressed="true">Fit</button><button type="button" id="media-explorer-fill" aria-pressed="false">Fill</button></div><label class="media-explorer-size-label"><span>Size</span><input id="media-explorer-size" type="range" min="180" max="380" step="20" value="260" aria-label="Thumbnail size"></label></div></div>
                         <div id="media-explorer-selection" class="media-explorer-selection hidden" role="toolbar" aria-label="Media selection"><span id="media-explorer-selected-count"></span><span id="media-explorer-selection-hint" class="media-explorer-selection-hint">Select 2–4 to compare</span><button type="button" id="media-explorer-copy-selected" class="review-captions-btn hidden">Copy to Set</button><button type="button" id="media-explorer-compare" class="review-captions-btn">Compare</button><button type="button" id="media-explorer-clear-selection" class="media-explorer-text-btn">Deselect</button></div>
                     </div>
@@ -2245,9 +2224,13 @@
                     </details>
                     <div class="studio-dw-submit"><button id="studio-dw-write-prepare" type="button" class="studio-dw-primary">Prepare editable review</button></div>
                   </section>
-                  <section class="studio-dw-readiness" aria-label="Director readiness proposals">
-                    <div class="studio-dw-readiness-heading"><strong>Creative assessment</strong><small id="studio-dw-readiness-freshness" role="status" aria-live="polite">Not assessed yet</small></div>
-                    <div id="studio-dw-readiness-list" class="studio-dw-readiness-list"><p>Not assessed yet.</p></div>
+                  <section class="studio-dw-readiness" aria-label="Director suggestions">
+                    <div class="studio-dw-readiness-heading"><strong>Ready to write</strong><small id="studio-dw-readiness-freshness" role="status" aria-live="polite">Not assessed yet</small></div>
+                    <div id="studio-dw-suggestions" class="studio-dw-suggestions"><p>Keep developing the idea. Director will offer a field when it is ready.</p></div>
+                    <details class="studio-dw-assessment-details">
+                      <summary>Creative assessment details</summary>
+                      <div id="studio-dw-readiness-list" class="studio-dw-readiness-list"><p>No assessment details yet.</p></div>
+                    </details>
                     <button id="studio-dw-playbook-open" type="button" class="studio-dw-playbook-open">H3 Playbook · global model guidance</button>
                   </section>
                 </section>

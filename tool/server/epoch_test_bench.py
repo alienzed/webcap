@@ -2759,6 +2759,42 @@ def _record_failed_inference(session_directory, job_id, candidate_label, candida
         _atomic_write_json(_status_path(session_directory), status)
 
 
+
+def _resolve_staged_test_lora(lora_file, available):
+    """Select a deterministic ComfyUI LoRA for a selected Test candidate.
+
+    A staged absolute path can match both "epoch.safetensors" and
+    "set/epoch.safetensors". Prefer the longest matching ComfyUI path; if only
+    the basename identifies multiple entries, use a stable first choice and
+    log that the selection was a fallback.
+    """
+    from . import inference_runtime
+
+    staged = str(lora_file).replace("\\", "/").casefold()
+    candidates = [(str(name), str(name).replace("\\", "/").casefold()) for name in available]
+    suffix_matches = [
+        (name, normalized) for name, normalized in candidates
+        if staged == normalized or staged.endswith("/" + normalized)
+    ]
+    if suffix_matches:
+        longest = max(len(normalized) for _, normalized in suffix_matches)
+        matches = [name for name, normalized in suffix_matches if len(normalized) == longest]
+    else:
+        basename = Path(staged).name
+        matches = [
+            name for name, normalized in candidates if normalized.rsplit("/", 1)[-1] == basename
+        ]
+    if not matches:
+        return inference_runtime.resolve_name(str(lora_file), available, "staged LoRA")
+    selected = sorted(matches, key=lambda name: (name.casefold(), name))[0]
+    if len(matches) > 1:
+        _logger.warning(
+            "Test LoRA %s matches multiple ComfyUI paths; using %s (choices: %s)",
+            lora_file, selected, ", ".join(sorted(matches, key=str.casefold)),
+        )
+    return selected
+
+
 def execute_inference(job_id, request, context):
     from . import inference_runtime
 
@@ -2844,10 +2880,8 @@ def execute_inference(job_id, request, context):
 
         comfy_lora_name = None
         if lora_file is not None:
-            comfy_lora_name = inference_runtime.resolve_name(
-                str(lora_file),
-                model.available_lora_names(inference_runtime.available_names),
-                "staged LoRA",
+            comfy_lora_name = _resolve_staged_test_lora(
+                lora_file, model.available_lora_names(inference_runtime.available_names)
             )
 
         output_prefix = _candidate_output_prefix(

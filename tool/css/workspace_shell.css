@@ -3885,6 +3885,7 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
 .studio-director-workbench .studio-dw-heading span,
 .studio-director-workbench .studio-dw-readiness-heading small {font-size:14px;color:var(--muted);}
 .studio-director-workbench .studio-dw-actions {display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.studio-director-workbench .studio-dw-actions #storyboard-director-tools-btn {grid-column:1 / -1;text-align:left;padding:10px 12px;}
 .studio-director-workbench button {min-height:40px;font-size:16px;border-radius:8px;}
 .studio-director-workbench .studio-dw-actions button {font-weight:650;border:1px solid var(--border);background:var(--panel);}
 .studio-director-workbench .studio-dw-actions button[aria-expanded="true"] {outline:2px solid var(--accent, #628fd1);}

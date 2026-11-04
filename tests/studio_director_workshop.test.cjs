@@ -87,8 +87,8 @@ test('Studio prompting selects the current goal rather than steering every task 
   assert.match(system,/For the current author goal, suggest at most one useful next step/);
   assert.match(system,/an explicit Read, an appropriately scoped reviewed Write, or an author-operated Studio action/);
   assert.doesNotMatch(system,/When choices are clear, offer to review Concept/);
-  assert.match(system,/For ready true, content is complete developed material/);
-  assert.match(system,/For ready false, content briefly identifies the missing decision/);
+  assert.match(system,/Keep readiness light: normally checks=\[\]/);
+  assert.match(system,/If assessment is genuinely useful, provide at most two concise checks/);
   assert.match(system,/H3 PRODUCTION PROMPT REFERENCE/);
   assert.equal(assembled[1].content,'Revise only the Scene action');
   assert.equal(assembled.length,2, 'no extra request or hidden context event');
@@ -157,7 +157,7 @@ test('Write preserves reviewed Apply and carries final saved content into conver
     '/fs/studio/director/project-create'
   ]) assert.ok(source.includes(path), path);
   assert.match(workbench, /\/fs\/studio\/director\/scene-fields/);
-  assert.match(workbench, /\/fs\/studio\/director\/playbook/);
+  assert.doesNotMatch(workbench, /\/fs\/studio\/director\/playbook/);
   assert.match(source, /recordApplied: function/);
   assert.match(source, /return persistSession\('storyboard'\)/);
   assert.match(source, /\[WEBCAP APPLIED FIELD VALUES\]/);

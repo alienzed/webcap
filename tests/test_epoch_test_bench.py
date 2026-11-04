@@ -1758,6 +1758,25 @@ def test_staged_test_lora_uses_stable_basename_when_no_path_matches(tmp_path, ca
     assert "matches multiple ComfyUI paths" in caplog.text
 
 
+
+def test_staged_test_lora_template_turbo_uses_same_choice():
+    assert bench._resolve_test_model_asset(
+        "mh3\\\\turbo.safetensors",
+        ["other/turbo.safetensors", "mh3/turbo.safetensors", "turbo.safetensors"],
+        "LoRA",
+    ) == "mh3/turbo.safetensors"
+
+
+def test_staged_test_lora_template_does_not_fuzz_other_model_assets():
+    with pytest.raises(RuntimeError, match="ambiguous"):
+        bench._resolve_test_model_asset(
+            "unet.safetensors",
+            ["A/unet.safetensors", "B/unet.safetensors"],
+            "diffusion model",
+        )
+
+
+
 def test_staged_test_lora_fails_when_comfy_cannot_see_candidate(tmp_path):
     candidate = tmp_path / "staged" / "epoch12.safetensors"
     with pytest.raises(RuntimeError, match="cannot see staged LoRA"):

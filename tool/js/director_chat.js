@@ -2741,7 +2741,8 @@
     return studioDirectorRequestMessages(messages, true).then(function (outbound) {
       outbound[0].content += '\n\nCONTEXT DELIVERY: Use only the saved fields explicitly supplied by Read. ' +
         'On WEBCAP EXPLICIT READ start reply with RECEIVED: and the exact received field IDs, comma-separated. ' +
-        'Then respond to the content substantively. Applied field values supersede earlier snapshots. ' +
+        'Then answer the author’s explicit question, if any; a context-only Read needs just the receipt. ' +
+        'Applied field values supersede earlier snapshots. ' +
         'RESPONSE CONTRACT: Return JSON matching the supplied reply/readiness schema. ' +
         'For ordinary conversation, reply in one short paragraph of 1-3 sentences, with one useful ' +
         'creative decision or question at most. Longer complete fields and H3 Prompts belong in requested drafts. ' +
@@ -3674,11 +3675,11 @@
       var composer = el('director-chat-input');
       var draft = String(composer.value || '').trim();
       var nl = String.fromCharCode(10);
-      composer.value = (instruction || draft || 'Inspect this material and suggest the next useful development step.') +
+      composer.value = (instruction || draft || 'Read the selected saved context and acknowledge receipt.') +
         nl + nl + '[WEBCAP EXPLICIT READ]' + nl +
         JSON.stringify(payload, null, 2) + nl + '[END WEBCAP READ]' + nl +
         'Begin the reply field with RECEIVED: ' + keys.join(', ') +
-        ' using exactly those field identifiers. After that line, briefly assess the supplied material and name the next useful step.';
+        ' using exactly those field identifiers. Address only any question explicitly asked above; otherwise stop after the receipt.';
       state.pendingReadAck = keys.slice();
       sendMessage();
     },

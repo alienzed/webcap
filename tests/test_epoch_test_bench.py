@@ -479,6 +479,26 @@ def test_prepare_exposes_supported_test_aspect_ratios(tmp_path, monkeypatch):
     assert payload["defaults"]["aspectRatio"] == "4:3 (Standard)"
 
 
+def test_prepare_aggregates_candidate_ratings_once(tmp_path, monkeypatch):
+    staged = tmp_path / "staged"
+    staged.mkdir()
+    (staged / "epoch01.safetensors").write_bytes(b"weights")
+    monkeypatch.setattr(bench, "_test_directory", lambda _folder, _model: staged)
+    monkeypatch.setattr(bench, "_visible_status", lambda _folder, model_id=None, **_kwargs: {"status": "idle"})
+    calls = []
+    original = bench._candidate_rating_scores
+
+    def counted(*args, **kwargs):
+        calls.append((args, kwargs))
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(bench, "_candidate_rating_scores", counted)
+    payload = bench.prepare(tmp_path)
+    assert len(calls) == 1
+    assert isinstance(payload["candidateScores"], dict)
+    assert isinstance(payload["checkpointHumanRatings"], (list, dict))
+
+
 def test_prepare_survives_optional_setting_choice_failure(tmp_path, monkeypatch):
     staged = tmp_path / "staged"
     staged.mkdir()

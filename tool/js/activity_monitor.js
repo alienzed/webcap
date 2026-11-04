@@ -147,10 +147,42 @@
     };
   }
 
+  function childExecutionState(childJobId) {
+    var id = String(childJobId || '');
+    if (!id) return null;
+    var active = Array.isArray(state.payload.active) ? state.payload.active : [];
+    var running = active.find(function (item) {
+      return String(item && item.id || '') === id && item.lane === 'llm';
+    });
+    if (running) return { status: String(running.status || 'running'), job: running };
+    var queues = state.payload.queues || {};
+    var director = queues.director || {};
+    var queued = Array.isArray(director.jobs) ? director.jobs : [];
+    var pending = queued.find(function (item) {
+      return String(item && (item.id || item.jobId) || '') === id;
+    });
+    return pending ? { status: 'queued', job: pending } : null;
+  }
+
+  function describeWorkflowChild(item) {
+    if (!item || !item.childJobId) return item;
+    var child = childExecutionState(item.childJobId);
+    if (!child) return item;
+    var copy = Object.assign({}, item);
+    var phase = String(copy.phase || '').trim();
+    var childLabel = child.status === 'queued'
+      ? 'Waiting for Director queue'
+      : child.status === 'starting' ? 'Director request starting'
+      : child.status === 'stopping' ? 'Stopping Director request'
+      : 'Director request executing';
+    copy.phase = phase ? phase + ' · ' + childLabel : childLabel;
+    return copy;
+  }
+
   function currentActivityItems() {
     return (Array.isArray(state.payload.active) ? state.payload.active : [])
       .filter(function (item) { return !isProgressChild(item); })
-      .concat(localItems());
+      .concat(localItems().map(describeWorkflowChild));
   }
 
   function activityLane(item) {

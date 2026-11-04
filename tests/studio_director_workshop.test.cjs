@@ -186,8 +186,8 @@ test('Read offers whole Project, entire Scene, and compact multi-Scene overviews
 });
 
 test('reviewed Scene move and duplicate use deterministic WebCap operations, not extra LLM calls', () => {
-  assert.match(html, /value="scene-move">Move Scene/);
-  assert.match(html, /value="scene-duplicate">Duplicate Scene/);
+  assert.doesNotMatch(html, /value="scene-move">Move Scene/);
+  assert.doesNotMatch(html, /value="scene-duplicate">Duplicate Scene/);
   assert.match(html, /id="studio-dw-structure-review"/);
   const prepare = workbench.split('  function prepareStructure(operation, storyId) {')[1]
     .split('  function applyStructure() {')[0];
@@ -203,10 +203,11 @@ test('reviewed Scene move and duplicate use deterministic WebCap operations, not
 });
 
 test('multi-Scene review drafts together and applies selected fields in one atomic request', () => {
-  assert.match(html, /value="scenes-batch">Revise several Scenes/);
+  assert.match(html, /value="scene-write">Write Scenes/);
+  assert.match(html, /id="studio-dw-scene-mode"/);
   assert.match(html, /id="studio-dw-batch-review"/);
   assert.match(workbench, /makeProposal\(request, 'studio_scene_batch_draft', fields\.indexOf\('prompt'\) !== -1\)/);
-  assert.match(workbench, /'scenes-batch'\) \{/);
+  assert.match(workbench, /el\('studio-dw-scene-mode'\)\.value === 'revise'/);
   assert.match(workbench, /function renderBatchReview\(\)/);
   const applied = workbench.split('  function applyBatchScenes() {')[1]
     .split('  function prepareStructure(operation, storyId) {')[0];
@@ -217,7 +218,7 @@ test('multi-Scene review drafts together and applies selected fields in one atom
 });
 
 test('Scene split reviews both Intent changes and saves one atomic operation', () => {
-  assert.match(html, /value="scene-split">Split Scene/);
+  assert.doesNotMatch(html, /value="scene-split">Split Scene/);
   assert.match(html, /id="studio-dw-split-review"/);
   assert.match(workbench, /makeProposal\(request,'studio_scene_split_draft'\)/);
   const apply = workbench.split('  function applySplitScene() {')[1]

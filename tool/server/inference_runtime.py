@@ -197,9 +197,14 @@ def resolve_name(configured_name, available, label):
         (name, _normalize_name(name), Path(str(name).replace("\\", "/")).name.casefold())
         for name in available
     ]
+    # A path selected from ComfyUI's own list is authoritative, even when
+    # another folder contains a LoRA with the same basename.
+    exact_matches = [name for name, candidate, _ in records if candidate == normalized]
+    if exact_matches:
+        return exact_matches[0]
     suffix_matches = [
         name for name, available_normalized, _ in records
-        if normalized == available_normalized or normalized.endswith("/" + available_normalized)
+        if normalized.endswith("/" + available_normalized)
     ]
     if len(suffix_matches) == 1:
         return suffix_matches[0]

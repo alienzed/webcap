@@ -68,6 +68,32 @@ def test_resolve_rejects_missing_or_ambiguous_comfy_name(monkeypatch):
         lora_library.resolve_for_inference("h3", ["unknown.safetensors"])
 
 
+
+def test_exact_comfy_lora_path_wins_over_same_basename(monkeypatch):
+    from tool.server import generate_generation
+    monkeypatch.setattr(lora_library, "catalogue", lambda: [
+        {"stage": "h3", "name": "Run/identity.safetensors", "enriched": True},
+    ])
+    monkeypatch.setattr(generate_generation, "_public_model", lambda model: {
+        "loras": ["identity.safetensors", "Run/identity.safetensors"],
+    })
+    assert lora_library.resolve_for_inference("h3", ["Run/identity.safetensors"]) == {
+        "Run/identity.safetensors": "Run/identity.safetensors"
+    }
+
+
+def test_exact_comfy_lora_name_wins_across_multiple_folders():
+    from tool.server import inference_runtime
+    assert inference_runtime.resolve_name("one/identity.safetensors", [
+        "one/identity.safetensors", "two/identity.safetensors"
+    ], "LoRA") == "one/identity.safetensors"
+    with pytest.raises(RuntimeError, match="ambiguous"):
+        inference_runtime.resolve_name("identity.safetensors", [
+            "one/identity.safetensors", "two/identity.safetensors"
+        ], "LoRA")
+
+
+
 def test_missing_root_does_not_block_valid_roots(tmp_path, monkeypatch, caplog):
     available = tmp_path / "existing"
     available.mkdir()

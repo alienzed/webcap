@@ -6,7 +6,7 @@ Status: staged implementation, November 3, 2026. Follow [AGENTS.md](../AGENTS.md
 
 Studio Director owns creative conversation, suggestions, explicit Read, reviewed Write, and Project-level coherence analysis. Studio's existing author-operated generation workflow owns Take creation. Director Tools' older revision modal is transitional, not a second product direction.
 
-The **capability catalog is advisory**, not a real LLM function-call dispatcher. `project.coherence.check` can be suggested by `readiness.writeHint = "coherence-check"`, but the author must explicitly invoke the operation in Studio Director's Write panel. This avoids adding a second executor, automatic model-controlled filesystem reads, or hidden writes.
+The capability catalog is advisory, not an LLM tool dispatcher. In the consolidated interface, coherence remains a separately invoked Project utility, outside the three creative Write workflows. `project.coherence.check` can be suggested by `readiness.writeHint = "coherence-check"`, but the author must explicitly invoke the operation in Studio Director's Write panel. This avoids adding a second executor, automatic model-controlled filesystem reads, or hidden writes.
 
 ## Code audit
 

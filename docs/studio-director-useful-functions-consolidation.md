@@ -9,7 +9,7 @@ One explicit Read path; three creative Write goals: Create Project, Revise Proje
 - Advertise only Read, Create Project, Revise Project and Write Scenes.
 - Give short, iterative conversational replies; 1-3 sentences by default.
 - Map readiness to these goals, not low-value structural operations; keep compatibility for older stored chat metadata without re-advertising it.
-- Keep exact Read provenance and explicit review. Avoid a second model request when a complete approved capture is already available.
+- Keep exact Read provenance and explicit review. Read presents Project Overview as one checkbox and each Scene as one complete checkbox (Title, Intent, H3 Prompt and duration); the existing field-ID payload and acknowledgment flow remain unchanged. Avoid a second model request when a complete approved capture is already available.
 
 ## Phase 2: Consolidate Write
 - Surface three choices in the primary Write panel.

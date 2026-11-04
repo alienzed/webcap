@@ -8,11 +8,25 @@ const storyboard = fs.readFileSync(path.join(root, 'tool/js/storyboard.js'), 'ut
 const chat = fs.readFileSync(path.join(root, 'tool/js/director_chat.js'), 'utf8');
 const server = fs.readFileSync(path.join(root, 'tool/server/app.py'), 'utf8');
 
-test('Studio Director keeps Director Tools in actions overflow, not Scenes header', () => {
-  assert.ok(markup.indexOf('id="storyboard-director-tools-menu"') < markup.indexOf('id="storyboard-director-tools-btn"'));
-  assert.ok(markup.indexOf('id="storyboard-director-tools-menu"') < markup.indexOf('id="storyboard-director-tools-btn"'));
+test('Revise & Generate is a direct Director production action, not an overflow tool', () => {
+  const actions = markup.split('<div class="studio-dw-actions">')[1].split('</div>')[0];
+  assert.match(actions, /id="studio-dw-read"/);
+  assert.match(actions, /id="studio-dw-write"/);
+  assert.match(actions, /id="storyboard-director-tools-btn"/);
   assert.equal((markup.match(/id="storyboard-director-tools-btn"/g) || []).length, 1);
-  assert.ok(storyboard.includes("el('storyboard-director-tools-menu').open = false"));
+  assert.doesNotMatch(markup, /id="storyboard-director-tools-menu"/);
+  assert.match(storyboard, /el\\('storyboard-director-tools-btn'\\)\\.onclick = openDirectorTools/);
+});
+
+test('Revise & Generate retains the existing production operation with explicit destination', () => {
+  assert.match(markup, /id="storyboard-director-tools-target"/);
+  assert.match(markup, /id="storyboard-director-tools-generate-takes"/);
+  assert.match(markup, /revisions can save while the job runs/);
+  assert.match(storyboard, /storyState\\.story\\.sceneOrder\\.length \\+ ' Scenes'/);
+  assert.match(storyboard, /operation: 'revise_scenes_sequence'/);
+  assert.match(storyboard, /generateFreshTakes: generateFreshTakes === true/);
+  assert.match(storyboard, /operation: 'check_coherence_sequence'/);
+  assert.match(storyboard, /sceneRevisionHistory\\.remember/);
 });
 
 test('frontend and backend agree on structured Studio chat operation', () => {

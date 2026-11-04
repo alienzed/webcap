@@ -2190,19 +2190,6 @@
                         <option value="revise">Revise one or more existing Scenes</option>
                       </select>
                     </label>
-                    <label id="studio-dw-write-scene-row" class="hidden">Scene<select id="studio-dw-write-scene"></select></label>
-                    <label id="studio-dw-move-target-row" class="hidden">Relative to Scene<select id="studio-dw-move-target"></select></label>
-                    <label id="studio-dw-move-placement-row" class="hidden">Placement
-                      <select id="studio-dw-move-placement">
-                        <option value="before">Before</option>
-                        <option value="after">After</option>
-                      </select>
-                    </label>
-                    <div id="studio-dw-invariant-controls" class="hidden">
-                      <label>Character or Location<select id="studio-dw-invariant-choice"></select></label>
-                      <p>Select the Scenes that use this Invariant. Existing associations are already checked.</p>
-                      <div id="studio-dw-invariant-scenes" class="studio-dw-scene-list"></div>
-                    </div>
                     <div id="studio-dw-batch-controls" class="hidden">
                       <p>Choose the Scenes and fields to develop together.</p>
                       <div id="studio-dw-batch-scenes" class="studio-dw-scene-list"></div>
@@ -2211,11 +2198,6 @@
                         <label><input type="checkbox" value="title"> Title</label>
                         <label><input type="checkbox" value="prompt"> H3 Prompt</label>
                       </div>
-                    </div>
-                    <div id="studio-dw-write-fields" class="studio-dw-field-list hidden">
-                      <label><input type="checkbox" value="summary" checked> Intent</label>
-                      <label><input type="checkbox" value="prompt"> H3 Prompt</label>
-                      <label><input type="checkbox" value="title"> Title</label>
                     </div>
                     <details id="studio-dw-write-context" class="studio-dw-source-preview">
                       <summary>Context Director will use for this draft</summary>
@@ -2289,69 +2271,6 @@
                 </div>
             </aside>
             <dialog id="studio-dw-assessment-dialog" class="studio-scene-draft-review" aria-labelledby="studio-dw-assessment-title"><header class="studio-scene-draft-header"><h2 id="studio-dw-assessment-title">Creative assessment</h2><button id="studio-dw-assessment-close" type="button">Close</button></header><div class="studio-scene-draft-content"><pre id="studio-dw-assessment-content"></pre></div></dialog>
-            <dialog id="studio-dw-playbook-review" class="studio-scene-draft-review" aria-labelledby="studio-dw-playbook-title">
-              <header class="studio-scene-draft-header"><div><h2 id="studio-dw-playbook-title" title="Director's proposal is editable. Built-in technical rules remain unchanged.">Review H3 Playbook</h2></div>
-                <button id="studio-dw-playbook-close" type="button" class="review-captions-btn">Close</button></header>
-              <div class="studio-scene-draft-content">
-                <strong>Saved guidance</strong><pre id="studio-dw-playbook-before"></pre>
-                <label for="studio-dw-playbook-after">Proposed complete Playbook</label>
-                <textarea id="studio-dw-playbook-after" rows="15"></textarea>
-                <p id="studio-dw-playbook-error" role="alert"></p>
-              </div>
-              <footer class="studio-scene-draft-footer">
-                <button id="studio-dw-playbook-cancel" type="button" class="review-captions-btn">Back</button>
-                <button id="studio-dw-playbook-apply" type="button">Apply reviewed Playbook</button>
-              </footer>
-            </dialog>
-            <dialog id="studio-dw-structure-review" class="studio-scene-draft-review" aria-labelledby="studio-dw-structure-title">
-              <header class="studio-scene-draft-header"><div><h2 id="studio-dw-structure-title" title="Only the approved structural change is applied; existing Scenes and Takes remain intact.">Review Scene order</h2></div>
-                <button id="studio-dw-structure-close" type="button" class="review-captions-btn">Close</button></header>
-              <div class="studio-scene-draft-content">
-                <p id="studio-dw-structure-summary"></p>
-                <pre id="studio-dw-structure-before"></pre>
-                <pre id="studio-dw-structure-after"></pre>
-                <p id="studio-dw-structure-error" role="alert"></p>
-              </div>
-              <footer class="studio-scene-draft-footer">
-                <button id="studio-dw-structure-cancel" type="button" class="review-captions-btn">Back to conversation</button>
-                <button id="studio-dw-structure-apply" type="button">Apply reviewed change</button>
-              </footer>
-            </dialog>
-            <dialog id="studio-dw-split-review" class="studio-scene-draft-review" aria-labelledby="studio-dw-split-title">
-              <header class="studio-scene-draft-header"><div><h2 id="studio-dw-split-title" title="Two independently renderable Intents. The original Prompt and Takes are preserved, but may need review.">Review Scene split</h2></div>
-                <button id="studio-dw-split-close" type="button" class="review-captions-btn">Close</button></header>
-              <div class="studio-scene-draft-content">
-                <p id="studio-dw-split-target"></p>
-                <p id="studio-dw-split-before"></p>
-                <label>First Scene Intent (replaces the original Intent)
-                  <textarea id="studio-dw-split-first" rows="6"></textarea>
-                </label>
-                <label>New Scene title
-                  <input id="studio-dw-split-second-title" maxlength="240">
-                </label>
-                <label>New Scene Intent
-                  <textarea id="studio-dw-split-second-summary" rows="6"></textarea>
-                </label>
-                <p id="studio-dw-split-error" role="alert"></p>
-              </div>
-              <footer class="studio-scene-draft-footer">
-                <button id="studio-dw-split-cancel" type="button" class="review-captions-btn">Back to conversation</button>
-                <button id="studio-dw-split-apply" type="button">Apply reviewed split</button>
-              </footer>
-            </dialog>
-            <dialog id="studio-dw-invariant-review" class="studio-scene-draft-review" aria-labelledby="studio-dw-invariant-title">
-              <header class="studio-scene-draft-header"><div><h2 id="studio-dw-invariant-title" title="Save these exact Character/Location links. Other creative and production fields remain unchanged.">Review Scene associations</h2></div>
-                <button id="studio-dw-invariant-close" type="button" class="review-captions-btn">Close</button></header>
-              <div class="studio-scene-draft-content">
-                <p id="studio-dw-invariant-summary"></p>
-                <div id="studio-dw-invariant-diff"></div>
-                <p id="studio-dw-invariant-error" role="alert"></p>
-              </div>
-              <footer class="studio-scene-draft-footer">
-                <button id="studio-dw-invariant-cancel" type="button" class="review-captions-btn">Back to conversation</button>
-                <button id="studio-dw-invariant-apply" type="button">Apply reviewed associations</button>
-              </footer>
-            </dialog>
             <dialog id="studio-dw-batch-review" class="studio-scene-draft-review" aria-labelledby="studio-dw-batch-title">
               <header class="studio-scene-draft-header"><div><h2 id="studio-dw-batch-title" title="Choose the exact changes to save together. Other Scenes, prompts and Takes remain unchanged.">Review Scene revisions</h2></div>
                 <button id="studio-dw-batch-close" type="button" class="review-captions-btn">Close</button></header>

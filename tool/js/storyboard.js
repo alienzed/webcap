@@ -5961,6 +5961,12 @@
     if (run) run.disabled = !directorToolsAvailable();
   }
 
+  function syncDirectorToolsRunLabel() {
+    var coherence = el('storyboard-director-tools-preset').value === 'coherence';
+    el('storyboard-director-tools-run').textContent = coherence ? 'Check Coherence' :
+      el('storyboard-director-tools-generate-takes').checked ? 'Revise & Generate Takes' : 'Revise Scenes';
+  }
+
   function openDirectorTools() {
     if (!directorToolsAvailable()) {
       reportError(new Error('Revise & Generate requires an open Project with Scenes.'));
@@ -5978,7 +5984,7 @@
     input.value = '';
     sceneRevisionHistory.reset(input);
     input.readOnly = false;
-    el('storyboard-director-tools-run').textContent = 'Revise Scenes';
+    syncDirectorToolsRunLabel();
     el('storyboard-director-tools-generate-takes').closest('label').classList.remove('hidden');
     el('storyboard-director-tools-generate-takes').checked = false;
     status.textContent = '';
@@ -6188,13 +6194,13 @@
       if (this.value === 'coherence') input.value = DIRECTOR_PASS_PRESETS.coherence.instruction;
       sceneRevisionHistory.reset(input);
       var coherence = this.value === 'coherence';
-      var run = el('storyboard-director-tools-run');
-      if (run) run.textContent = coherence ? 'Check Coherence' : 'Revise Scenes';
+      syncDirectorToolsRunLabel();
       var fresh = el('storyboard-director-tools-generate-takes').closest('label');
       if (fresh) fresh.classList.toggle('hidden', coherence);
       input.readOnly = coherence;
       input.focus();
     };
+    el('storyboard-director-tools-generate-takes').onchange = syncDirectorToolsRunLabel;
     el('storyboard-director-tools-run').onclick = runDirectorToolsRevision;
     el('storyboard-expand-concept-btn').onclick = expandConcept;
     el('storyboard-restore-concept-btn').onclick = restorePreviousConcept;

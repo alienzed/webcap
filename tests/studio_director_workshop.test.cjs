@@ -293,7 +293,7 @@ test('large explicit Read selections report their true size and refuse silent tr
 });
 
 test('Character and Location associations use reviewed deterministic multi-Scene edits', () => {
-  assert.match(html,/value="scene-invariants">Use Invariant in Scenes/);
+  assert.doesNotMatch(html,/value="scene-invariants">Use Invariant in Scenes/);
   assert.match(html,/id="studio-dw-invariant-review"/);
   assert.match(workbench,/function prepareInvariantLinks\(storyId\)/);
   assert.match(workbench,/function applyInvariantLinks\(\)/);

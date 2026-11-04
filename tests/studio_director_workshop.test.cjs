@@ -284,3 +284,12 @@ test('multi-Scene review preserves actual Project positions and distinguishes a 
   assert.match(apply, /applied = true/);
   assert.match(apply, /Scene saved, but conversation recording or refresh failed/);
 });
+
+test('legacy Studio field Read remains a neutral context handoff by default', () => {
+  const read = source.split('  function inspectStudioStoryScope() {')[1]
+    .split('  function syncStudioFlow() {')[0];
+  assert.match(read, /Acknowledge the saved context without assessing it or suggesting next steps/);
+  assert.doesNotMatch(read, /give a concise substantive assessment/);
+  assert.match(source, /state\.pendingReadAck = keys\.slice\(\)/);
+  assert.match(source, /Address only any question explicitly asked above; otherwise stop after the receipt/);
+});

@@ -2739,50 +2739,26 @@
     // Studio conversation needs the same authoritative H3 prompt template as Write.
     // It is reference knowledge here, not permission to draft or save a Prompt.
     return studioDirectorRequestMessages(messages, true).then(function (outbound) {
-      outbound[0].content += '\n\nCONTEXT DELIVERY CONTRACT: Only explicitly supplied Read fields are available. ' +
-        'For a WEBCAP EXPLICIT READ, begin the reply field with a line RECEIVED: ' +
-        'followed by the exact received field identifiers separated by comma and space. ' +
-        'Then discuss the contents substantively; a receipt alone is not an assessment. ' +
-        'Never claim to have inspected unavailable saved fields. ' +
-        'A WEBCAP APPLIED FIELD VALUES event contains author-reviewed saved content and supersedes older Read snapshots. ' +
-        'RESPONSE CONTRACT: Return one JSON object matching the supplied schema, with reply and readiness. ' +
-        'Put your conversational answer in reply. Put its Studio assessment in readiness, containing checks ' +
-        '(up to 10 objects with name, scope, ready, content), readHints (0-5 field identifiers), ' +
-        'writeHint (new-project, project, scenes, or empty), ' +
-        'and sceneId (exact known saved Scene ID when revising, otherwise empty). ' +
-        'Use new-project to create, project to revise Concept/Visual/Invariants, and scenes for one ' +
-        'or more new or existing Scenes. Include writeFields for recommended editable fields: ' +
-        'project uses title, concept, style or invariants; scenes uses summary (Intent), prompt (H3 Prompt) or title. ' +
-        'For new-project or empty hints use an empty writeFields array. ' +
-        'For ordinary conversation, keep checks and readHints empty unless an actual development decision or missing saved context requires them. ' +
-        'When useful, provide at most two brief checks; leave writeHint empty until there is concrete creative material worth reviewing. ' +
-        'Suggested fields are editable defaults, never automatic edits. ' +
-        'Name is one of Concept, Characters, Setting, ' +
-        'Action, Dialogue, Visual / atmosphere, Visual focus, Structure / formula, ' +
-        'Variation / repetition, Production feasibility. Scope is project or scene. ' +
-        'For ready true, content is complete developed material for that category. ' +
-        'For ready false, content briefly identifies the missing decision or practical weakness. ' +
-        'For Read hints use ' +
-        'project.concept, project.style, project.invariants, scene.current.summary, ' +
-        'scene.current.prompt or known scene:ID:field. Recommend Write only for creative content creation or revision; ' +
-        'unknown IDs are empty. Include only categories grounded in the actual discussion. ' +
-        'OPTIONAL CREATIVE CAPTURE: Only when you have a COMPLETE, author-acceptable final field value ' +
-        'already developed in this reply or the ongoing conversation, you may add one capture object ' +
-        '{field, content, sceneId} to the same readiness JSON. field is title, concept, style, ' +
-        'summary, prompt, invariant or scene; content is COMPLETE authored material, not a vague instruction. ' +
-        'For scene, content is the complete Scene Intent for a NEW tentative Scene, title is a string (empty when unnamed) and sceneId empty; ' +
-        'sceneId is the exact known saved Scene ID for Scene fields, otherwise empty. ' +
-        'For field invariant include kind (character/location/visual/world/sound/custom), title, ' +
-        'beforeKind and beforeTitle along with field/content/sceneId; use beforeKind/beforeTitle only ' +
-        'when editing an exact existing Invariant identity (including renames), else both empty. ' +
-        'Do not infer that a renamed character is a new additional person. ' +
-        'Never guess IDs, confuse proposal with saved content, include any field without a clear destination, ' +
-        'or propose a capture for open-ended exploration. Omit capture when not ready; ' +
-        'WebCap will bind it to a freshly selected saved destination and require editable review. ' +
-        'For ordinary discussion, answer in one short paragraph of 1-3 sentences. ' +
-        'Build on agreed material and give at most one consequential question. ' +
-        'When the author asks for a complete field or Prompt, supply its full usable content. ' +
-        'Keep assessment metadata in readiness and conversational material in reply.';
+      outbound[0].content += '\n\nCONTEXT DELIVERY: Use only the saved fields explicitly supplied by Read. ' +
+        'On WEBCAP EXPLICIT READ start reply with RECEIVED: and the exact received field IDs, comma-separated. ' +
+        'Then respond to the content substantively. Applied field values supersede earlier snapshots. ' +
+        'RESPONSE CONTRACT: Return JSON matching the supplied reply/readiness schema. ' +
+        'For ordinary conversation, reply in one short paragraph of 1-3 sentences, with one useful ' +
+        'creative decision or question at most. Longer complete fields and H3 Prompts belong in requested drafts. ' +
+        'Keep readiness light: normally checks=[], readHints=[], writeHint="", writeFields=[], sceneId="". ' +
+        'Use a readiness hint only when it provides a useful next action. ' +
+        'Write hints are new-project, project or scenes; include writeFields for recommended editable fields ' +
+        '(project: title/concept/style/invariants; scenes: title/summary/prompt). ' +
+        'Use the exact known saved sceneId for an existing Scene, otherwise empty. ' +
+        'If assessment is genuinely useful, provide at most two concise checks with a valid name and scope. ' +
+        'For Read recommendations use only known field identifiers, such as project.concept, ' +
+        'project.style, project.invariants or scene.current.prompt. ' +
+        'OPTIONAL CREATIVE CAPTURE: When an author-ready complete final field has already been developed, ' +
+        'include one capture matching the supplied schema, with complete content. ' +
+        'For an existing Scene use its exact ID. For a new Scene use field=scene, title and an empty sceneId. ' +
+        'For an Invariant use kind/title and beforeKind/beforeTitle only for an exact known rename or edit. ' +
+        'Use capture only for a genuinely complete proposal; WebCap selects and validates the save target ' +
+        'and opens editable review before Apply. Keep assessment metadata in readiness and conversation in reply.\n';
       return outbound;
     });
   }

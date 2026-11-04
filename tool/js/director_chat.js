@@ -2754,7 +2754,9 @@
         'or more new or existing Scenes. Include writeFields for recommended editable fields: ' +
         'project uses title, concept, style or invariants; scenes uses summary (Intent), prompt (H3 Prompt) or title. ' +
         'For new-project or empty hints use an empty writeFields array. ' +
-        'Recommend only the fields relevant to this discussion; these are editable defaults, never automatic edits. ' +
+        'For ordinary conversation, keep checks and readHints empty unless an actual development decision or missing saved context requires them. ' +
+        'When useful, provide at most two brief checks; leave writeHint empty until there is concrete creative material worth reviewing. ' +
+        'Suggested fields are editable defaults, never automatic edits. ' +
         'Name is one of Concept, Characters, Setting, ' +
         'Action, Dialogue, Visual / atmosphere, Visual focus, Structure / formula, ' +
         'Variation / repetition, Production feasibility. Scope is project or scene. ' +

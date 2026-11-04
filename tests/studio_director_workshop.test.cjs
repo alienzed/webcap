@@ -208,18 +208,10 @@ test('multi-Scene review drafts together and applies selected fields in one atom
   assert.match(applied, /recordApplied/);
 });
 
-test('Scene split reviews both Intent changes and saves one atomic operation', () => {
-  assert.doesNotMatch(html, /value="scene-split">Split Scene/);
-  assert.match(html, /id="studio-dw-split-review"/);
-  assert.match(workbench, /makeProposal\(request,'studio_scene_split_draft'\)/);
-  const apply = workbench.split('  function applySplitScene() {')[1]
-    .split('  function prepareBatchScenes(storyId) {')[0];
-  assert.match(apply, /\/fs\/studio\/director\/scene-split/);
-  assert.match(apply, /flushStudioDirectorStoryEdits/);
-  assert.match(apply, /recordApplied\('scene.split'/);
-  assert.match(apply, /Review the original H3 Prompt/);
+test('Scene splitting is not a Director Write operation', () => {
+  assert.doesNotMatch(html, /id="studio-dw-split-review"/);
+  assert.doesNotMatch(workbench, /function prepareSplitScene\(/);
 });
-
 
 test('existing Scene Prompt Write includes saved duration and linked Invariant IDs', () => {
   const single = workbench.split('  function editScene(story, sceneId, fields) {')[1]

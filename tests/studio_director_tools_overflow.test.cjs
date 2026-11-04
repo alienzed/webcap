@@ -27,6 +27,9 @@ test('Revise & Generate retains the existing production operation with explicit 
   assert.match(storyboard, /generateFreshTakes: generateFreshTakes === true/);
   assert.match(storyboard, /operation: 'check_coherence_sequence'/);
   assert.match(storyboard, /sceneRevisionHistory\.remember/);
+  assert.match(storyboard, /function syncDirectorToolsRunLabel\(\)/);
+  assert.match(storyboard, /'Revise & Generate Takes'/);
+  assert.match(storyboard, /generate-takes'\)\.onchange = syncDirectorToolsRunLabel/);
 });
 
 test('frontend and backend agree on structured Studio chat operation', () => {

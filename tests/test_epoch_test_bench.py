@@ -1740,6 +1740,31 @@ def test_missing_candidate_rendition_skips_without_failure_card(tmp_path, monkey
 
 
 
+
+def test_staged_test_lora_prefers_longest_comfy_path(tmp_path):
+    candidate = tmp_path / "Models" / "Set" / "epoch12.safetensors"
+    available = [
+        "epoch12.safetensors",
+        "Set/epoch12.safetensors",
+        "Other/epoch12.safetensors",
+    ]
+    assert bench._resolve_staged_test_lora(candidate, available) == "Set/epoch12.safetensors"
+
+
+def test_staged_test_lora_uses_stable_basename_when_no_path_matches(tmp_path, caplog):
+    candidate = tmp_path / "staged" / "epoch12.safetensors"
+    available = ["Z/epoch12.safetensors", "A/epoch12.safetensors"]
+    assert bench._resolve_staged_test_lora(candidate, available) == "A/epoch12.safetensors"
+    assert "matches multiple ComfyUI paths" in caplog.text
+
+
+def test_staged_test_lora_fails_when_comfy_cannot_see_candidate(tmp_path):
+    candidate = tmp_path / "staged" / "epoch12.safetensors"
+    with pytest.raises(RuntimeError, match="cannot see staged LoRA"):
+        bench._resolve_staged_test_lora(candidate, ["Other/epoch99.safetensors"])
+
+
+
 def test_shared_test_rendition_executes_with_existing_test_model_semantics(tmp_path, monkeypatch):
     _staged, candidates = _prepare_shared_test_enqueue(tmp_path, monkeypatch, candidate_count=1)
     payload = _expanded_test_enqueue(

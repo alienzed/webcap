@@ -34,7 +34,7 @@ test('coherence results enter existing batch review and atomic saved-field Apply
   assert.match(code, /fields:\['prompt'\]/);
   assert.match(code, /renderBatchReview\(\)/);
   assert.doesNotMatch(code, /apply_coherence|scene-fields-batch|generateFreshTakes/);
-  const apply = section(workbench, '  function applyBatchScenes() {', '  function prepareStructure(operation, storyId) {');
+  const apply = section(workbench, '  function applyBatchScenes() {', '  function applyScene() {');
   assert.match(apply, /\/fs\/studio\/director\/scene-fields-batch/);
   assert.match(apply, /expected:expected,changes:changes/);
   assert.match(apply, /recordApplied\('scene.batch.update'/);

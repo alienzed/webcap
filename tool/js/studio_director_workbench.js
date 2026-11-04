@@ -1239,7 +1239,7 @@
         creativeCapture && creativeCapture.field;
       var duplicatesCapture = creativeCapture &&
         (fields.indexOf(captureField) !== -1 ||
-         (creativeCapture.field === 'scene' && recommendations.writeHint === 'scene'));
+         (creativeCapture.field === 'scene' && ['scene', 'scenes'].includes(recommendations.writeHint)));
       var label = writeActionLabel();
       if (label && !duplicatesCapture) available.push({
         kind:'write', label:label, run:openRecommendedWrite

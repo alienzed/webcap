@@ -157,7 +157,7 @@ def _validate_readiness(value):
     write_fields = value.get("writeFields", [])
     allowed_fields = (
         {"title", "concept", "style", "invariants"} if value["writeHint"] == "project"
-        else {"title", "summary", "prompt"} if value["writeHint"] in {"scene-edit", "scenes-batch"}
+        else {"title", "summary", "prompt"} if value["writeHint"] in {"scenes", "scene-edit", "scenes-batch"}
         else set()
     )
     if (not isinstance(write_fields, list) or len(write_fields) > 4

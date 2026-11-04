@@ -537,66 +537,28 @@
       .finally(updateScope);
   }
   function writePrepare(writeFields) {
-    var bridge = window.studioDirectorBridge, operation = el('studio-dw-write-operation').value,
-      id = el('studio-dw-write-project').value;
+    var bridge = window.studioDirectorBridge;
+    var operation = el('studio-dw-write-operation').value;
+    var id = el('studio-dw-write-project').value;
+    if (!bridge.isReady()) {status('Choose a Director model first.',true);return;}
+    if (operation !== 'new-project' && !id) {status('Choose a destination Project.',true);return;}
     if (operation === 'scene-write') {
-      if (!bridge.isReady()) {status('Choose a Director model first.',true);return;}
-      if (!id) {status('Choose a destination Project.',true);return;}
       if (el('studio-dw-scene-mode').value === 'revise') return prepareBatchScenes(id);
-      var selected = projects.find(function (p) {return p.id === id;});
-      bridge.prepareWrite('scenes', id, selected && storyName(selected), []);
-      status('Preparing new Scenes for reviewed insertion.', false);
-      return;
-    }
-    if (operation === 'scene-invariants') {
-      if (!id) {status('Select a Project.',true);return;}
-      prepareInvariantLinks(id);
-      return;
-    }
-    if (operation === 'scene-move' || operation === 'scene-duplicate') {
-      if (!id) {status('Select a destination Project.', true);return;}
-      prepareStructure(operation, id);
-      return;
-    }
-    if (!bridge.isReady()) { status('Open Studio Director and choose a model first.', true);return; }
-    if (operation === 'playbook') { preparePlaybook(); return; }
-    if (operation !== 'new-project' && !id) { status('Select a destination Project.', true);return; }
-    if (operation === 'scene-move' || operation === 'scene-duplicate') {
-      prepareStructure(operation, id);
-      return;
-    }
-    if (operation === 'coherence-check') {
-      prepareProjectCoherence(id);
-      return;
-    }
-    if (operation === 'scenes-batch') {
-      prepareBatchScenes(id);
-      return;
-    }
-    if (operation === 'scene-split') {
-      prepareSplitScene(id);
-      return;
-    }
-    if (operation !== 'scene-edit') {
       try {
-        var item = projects.find(function (p) {return p.id === id;});
-        bridge.prepareWrite(operation, id, item && storyName(item),
-          Array.isArray(writeFields) ? writeFields : recommendedWriteFields(operation));
-        status('Preparing a reviewed proposal. No saved fields have changed.', false);
-      } catch (e) { status('Write failed: ' + e.message, true); }
+        var selected = projects.find(function (p) {return p.id === id;});
+        bridge.prepareWrite('scenes', id, selected && storyName(selected), []);
+        status('Preparing new Scenes for reviewed insertion.', false);
+      } catch (error) {status('Write Scenes failed: ' + error.message, true);}
       return;
     }
-    var sceneId = el('studio-dw-write-scene').value;
-    var fields = Array.from(el('studio-dw-write-fields').querySelectorAll('input:checked'))
-      .map(function (node) { return node.value; });
-    if (!sceneId || !fields.length) { status('Choose a Scene and at least one field.', true);return; }
-    el('studio-dw-write-prepare').disabled = true;
-    Promise.resolve().then(function () {
-      return window.flushStudioDirectorStoryEdits(id);
-    }).then(function () {return loadStory(id);})
-      .then(function (story) {return editScene(story,sceneId,fields);})
-      .catch(function (e) {status('Scene revision failed: ' + String(e.message || e),true);})
-      .finally(function () { el('studio-dw-write-prepare').disabled = false; });
+    if (operation !== 'new-project' && operation !== 'project')
+      throw new Error('Unsupported Studio creative Write goal: ' + operation);
+    try {
+      var item = projects.find(function (p) {return p.id === id;});
+      bridge.prepareWrite(operation, id, item && storyName(item),
+        Array.isArray(writeFields) ? writeFields : recommendedWriteFields(operation));
+      status('Preparing a reviewed proposal. No saved fields have changed.', false);
+    } catch (error) {status('Write failed: ' + error.message, true);}
   }
   function renderInvariantChoices(story) {
     var select = el('studio-dw-invariant-choice'), previous = select.value;

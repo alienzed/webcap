@@ -1,6 +1,6 @@
 (function () {
   'use strict';
-  var readStory = null, writeStory = null, projects = [], proposedScene = null, proposedStructure = null, proposedBatch = null, proposedSplit = null, proposedInvariantLinks = null, playbookExpected = null;
+  var readStory = null, writeStory = null, projects = [], proposedScene = null, proposedBatch = null;
   var readiness = [], recommendations = {readHints:[],writeHint:'',writeFields:[],sceneId:''};
   var readinessStale = false;
   var readChoices = {}, writeOperationChosen = false, writeFieldsManuallyChanged = false, lastReadSource = null;
@@ -234,10 +234,6 @@
     var revise = sceneWrite && el('studio-dw-scene-mode').value === 'revise';
     el('studio-dw-scene-mode-row').classList.toggle('hidden', !sceneWrite);
     el('studio-dw-batch-controls').classList.toggle('hidden', !revise);
-    ['studio-dw-write-scene-row', 'studio-dw-write-fields', 'studio-dw-invariant-controls',
-     'studio-dw-move-target-row', 'studio-dw-move-placement-row'].forEach(function (id) {
-      el(id).classList.add('hidden');
-    });
     el('studio-dw-write-project').disabled = operation === 'new-project';
     el('studio-dw-write-prepare').textContent = sceneWrite
       ? (revise ? 'Review Scene revisions' : 'Review new Scenes')
@@ -247,21 +243,7 @@
   }
   function renderWriteStory(story) {
     writeStory = story;
-    var select = el('studio-dw-write-scene'), relative = el('studio-dw-move-target');
-    var previousSource = select.value, previousRelative = relative.value;
-    select.replaceChildren();
-    relative.replaceChildren();
     if (!story) { showWriteContext(); return; }
-    (story.sceneOrder || []).forEach(function (id, index) {
-      var scene = story.scenes && story.scenes[id];
-      if (scene) {
-        var label = 'Scene ' + (index + 1) + ' · ' + (scene.title || 'Untitled');
-        option(select, id, label);
-        option(relative, id, label);
-      }
-    });
-    if (previousSource && story.scenes[previousSource]) select.value = previousSource;
-    if (previousRelative && story.scenes[previousRelative]) relative.value = previousRelative;
     var batchHost = el('studio-dw-batch-scenes');
     var checked = Array.from(batchHost.querySelectorAll('input:checked')).map(function (input) {return input.value;});
     batchHost.replaceChildren();
@@ -272,9 +254,6 @@
       label.append(input, document.createTextNode('Scene ' + (index+1) + ' · ' + (story.scenes[id].title || 'Untitled')));
       batchHost.appendChild(label);
     });
-    var preferredScene = recommendations.sceneId || activeTarget().sceneId;
-    if (preferredScene && story.scenes && story.scenes[preferredScene])
-      select.value = preferredScene;
     showWriteContext();
     updateScope();
   }
@@ -346,33 +325,6 @@
       throw new Error('Director returned JSON, but the expected top-level object is missing.\nRaw Director response:\n' + String(raw || ''));
     }
     return object;
-  }
-  function editScene(story, sceneId, fields) {
-    var scene = story.scenes && story.scenes[sceneId];
-    if (!scene) throw new Error('Select an existing Scene.');
-    window.studioDirectorBridge.selectWriteProject(story.id,storyName(story));
-    status('Director is drafting a scoped revision…', false);
-    var history = window.studioDirectorBridge.messages().slice(-18).map(function (m) {
-      return {role:m.role, text:String(m.content || '').slice(0,3200)};
-    });
-    var request = [
-      'You are Studio Director. Propose a scoped Scene revision based on the creative discussion.',
-      'Return ONLY a JSON object with exactly the selected keys: ' + fields.join(', ') + '.',
-      'Preserve the author\'s vision, subject identity, and previously approved details.',
-      'If no change is warranted, preserve the original field value. Produce complete usable values.',
-      'Project context (for drafting only; do not save it): ' + JSON.stringify({
-        id:story.id,concept:story.concept,style:story.style,invariants:story.invariants
-      }),
-      'Selected Scene: ' + JSON.stringify({id:sceneId, title:scene.title,summary:scene.summary,prompt:scene.prompt,
-        durationSeconds:scene.durationSeconds,invariantRefs:scene.invariantRefs}),
-      'Recent conversation: ' + JSON.stringify(history),
-      'For H3 Prompt revisions, use the selected Scene durationSeconds for consecutive timed shots spanning that clip and its linked Character/Location Invariants for continuity. Duration and links are context, not editable output fields.',
-      'Write a specific useful revision of the selected fields. No markdown.'
-    ].join(String.fromCharCode(10));
-    return window.studioDirectorBridge.makeProposal(request,'studio_scene_field_draft',fields.indexOf('prompt') !== -1).then(function (text) {
-      var candidate = parseProposal(text);
-      return showSceneReview(story, sceneId, fields, candidate);
-    });
   }
   function showSceneReview(story, sceneId, fields, candidate) {
     var scene = story.scenes && story.scenes[sceneId];
@@ -506,218 +458,6 @@
         Array.isArray(writeFields) ? writeFields : recommendedWriteFields(operation));
       status('Preparing a reviewed proposal. No saved fields have changed.', false);
     } catch (error) {status('Write failed: ' + error.message, true);}
-  }
-  function renderInvariantChoices(story) {
-    var select = el('studio-dw-invariant-choice'), previous = select.value;
-    select.replaceChildren();
-    (story.invariants || []).filter(function (entry) {
-      return ['character','location'].indexOf(entry.kind) !== -1 && entry.title;
-    }).forEach(function (entry) {
-      option(select, JSON.stringify({kind:entry.kind,title:entry.title}),
-        (entry.kind === 'character' ? 'Character · ' : 'Location · ') + entry.title);
-    });
-    if (Array.from(select.options).some(function (entry) {return entry.value === previous;}))
-      select.value = previous;
-    renderInvariantScenes(story);
-  }
-  function renderInvariantScenes(story) {
-    var host = el('studio-dw-invariant-scenes');
-    host.replaceChildren();
-    if (!story || !el('studio-dw-invariant-choice').value) {
-      host.textContent = 'Define a Character or Location Invariant in the Project first.';
-      return;
-    }
-    var target = JSON.parse(el('studio-dw-invariant-choice').value);
-    (story.sceneOrder || []).forEach(function (id,index) {
-      var scene = story.scenes[id], row = document.createElement('label'),
-        check = document.createElement('input');
-      check.type = 'checkbox';
-      check.value = id;
-      check.checked = (scene.invariantRefs || []).some(function (ref) {
-        return ref.kind === target.kind && ref.title.toLowerCase() === target.title.toLowerCase();
-      });
-      row.append(check, document.createTextNode('Scene ' + (index + 1) + ' · ' + (scene.title || 'Untitled')));
-      host.appendChild(row);
-    });
-  }
-  function prepareInvariantLinks(storyId) {
-    var choice = el('studio-dw-invariant-choice').value;
-    if (!choice) {status('Choose a Character or Location Invariant.',true);return;}
-    var target = JSON.parse(choice), host = el('studio-dw-invariant-scenes');
-    var selected = new Set(Array.from(host.querySelectorAll('input:checked')).map(function (node) {
-      return node.value;
-    }));
-    var button = el('studio-dw-write-prepare');
-    button.disabled = true;
-    Promise.resolve().then(function () {
-      return window.flushStudioDirectorStoryEdits(storyId);
-    }).then(function () {return loadStory(storyId);})
-      .then(function (story) {
-        var exists = (story.invariants || []).some(function (entry) {
-          return entry.kind === target.kind && entry.title.toLowerCase() === target.title.toLowerCase();
-        });
-        if (!exists) throw new Error('The selected Invariant is no longer in the Project.');
-        var changes = (story.sceneOrder || []).reduce(function (items,id) {
-          var before = story.scenes[id].invariantRefs || [];
-          var currently = before.some(function (ref) {
-            return ref.kind === target.kind && ref.title.toLowerCase() === target.title.toLowerCase();
-          });
-          var linked = selected.has(id);
-          if (currently !== linked) items.push({
-            sceneId:id,expectedRefs:before,linked:linked
-          });
-          return items;
-        },[]);
-        if (!changes.length) {
-          status('These Scenes already have the selected Invariant associations.',false);
-          return;
-        }
-        proposedInvariantLinks = {storyId:storyId,kind:target.kind,title:target.title,changes:changes};
-        var diff = el('studio-dw-invariant-diff');
-        diff.replaceChildren();
-        changes.forEach(function (entry) {
-          var note = document.createElement('p'), scene = story.scenes[entry.sceneId];
-          note.textContent = (entry.linked ? 'Use in: ' : 'Unlink from: ') +
-            (scene.title || entry.sceneId) + ' (' + (story.sceneOrder.indexOf(entry.sceneId) + 1) + ')';
-          diff.appendChild(note);
-        });
-        el('studio-dw-invariant-summary').textContent =
-          target.kind + ' · ' + target.title + ' · ' + changes.length + ' Scene associations';
-        el('studio-dw-invariant-error').textContent = '';
-        el('studio-dw-invariant-review').showModal();
-      }).catch(function (error) {
-        status('Scene association review failed: ' + String(error.message || error),true);
-      }).finally(function () {button.disabled=false;});
-  }
-  function applyInvariantLinks() {
-    if (!proposedInvariantLinks) throw new Error('No reviewed Scene associations exist.');
-    var proposal = proposedInvariantLinks, button = el('studio-dw-invariant-apply');
-    button.disabled = true;
-    var applied = false;
-    Promise.resolve().then(function () {
-      return window.flushStudioDirectorStoryEdits(proposal.storyId);
-    }).then(function () {
-      return api('/fs/studio/director/scene-invariants', {
-        method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify(proposal)
-      });
-    }).then(function (result) {
-      if (!result.story || !result.savedLinksByScene)
-        throw new Error('Association Apply returned no authoritative saved links.');
-      applied = true;
-      proposedInvariantLinks = null;
-      el('studio-dw-invariant-review').close();
-      return window.studioDirectorBridge.recordApplied('scene.invariant-links',result.story,{
-        invariant:{kind:proposal.kind,title:proposal.title},
-        scenes:result.savedLinksByScene
-      }).then(function () {
-        status('Reviewed Scene associations saved.',false);
-        if (typeof window.refreshStudioDirectorStoryIfOpen === 'function')
-          return window.refreshStudioDirectorStoryIfOpen(result.story.id);
-      });
-    }).catch(function (error) {
-      var message = String(error.message || error);
-      el('studio-dw-invariant-error').textContent = applied
-        ? 'Scene links saved, but conversation recording or refresh failed: ' + message
-        : 'Apply was not confirmed: ' + message;
-      status('Scene association Apply: ' + message,true);
-    }).finally(function () {button.disabled=false;});
-  }
-  function prepareSplitScene(storyId) {
-    var sceneId = el('studio-dw-write-scene').value, button = el('studio-dw-write-prepare');
-    if (!sceneId) {status('Choose the Scene to split.',true);return;}
-    button.disabled = true;
-    status('Director is developing two independently renderable Scene Intents…',false);
-    Promise.resolve().then(function () {
-      return window.flushStudioDirectorStoryEdits(storyId);
-    }).then(function () {return loadStory(storyId);})
-      .then(function (story) {
-        var scene = story.scenes && story.scenes[sceneId];
-        if (!scene || (story.sceneOrder || []).indexOf(sceneId) < 0)
-          throw new Error('Source Scene no longer exists.');
-        var recent = window.studioDirectorBridge.messages().slice(-18).map(function (m) {
-          return {role:m.role,content:String(m.content || '').slice(0,3200)};
-        });
-        var request = [
-          'Studio Director: split this one overloaded Scene into TWO independently generatable clips.',
-          'Return JSON with firstSummary (complete revised Intent for original), secondTitle, secondSummary, rationale.',
-          'Do not create a third Scene, rewrite the Prompt or change existing Takes.',
-          'Make each event feasible within its own short H3 clip (4-15 seconds); preserve the author\'s vision.',
-          'Project: '+JSON.stringify({id:story.id,concept:story.concept,style:story.style,invariants:story.invariants}),
-          'Source Scene: '+JSON.stringify({id:sceneId,title:scene.title,summary:scene.summary,prompt:scene.prompt,
-            durationSeconds:scene.durationSeconds}),
-          'Discussion: '+JSON.stringify(recent)
-        ].join('\n');
-        return window.studioDirectorBridge.makeProposal(request,'studio_scene_split_draft').then(function (raw) {
-          var candidate = parseProposal(raw);
-          if (['firstSummary','secondTitle','secondSummary','rationale'].some(function (key) {
-            return typeof candidate[key] !== 'string';
-          }) || !candidate.firstSummary.trim() || !candidate.secondSummary.trim()) {
-            throw new Error('Director did not supply two complete Scene Intents.');
-          }
-          proposedSplit = {
-            storyId:storyId,sceneId:sceneId,expectedSceneOrder:(story.sceneOrder||[]).slice(),
-            expectedSummary:scene.summary,firstSummary:candidate.firstSummary,
-            secondScene:{title:candidate.secondTitle,summary:candidate.secondSummary}
-          };
-          el('studio-dw-split-target').textContent = storyName(story)+' · '+(scene.title||sceneId);
-          el('studio-dw-split-before').textContent = 'Saved Intent: '+(scene.summary||'(empty)')+
-            (scene.prompt ? ' · Existing H3 Prompt and Takes will remain with this Scene.' : '');
-          el('studio-dw-split-first').value = candidate.firstSummary;
-          el('studio-dw-split-second-title').value = candidate.secondTitle;
-          el('studio-dw-split-second-summary').value = candidate.secondSummary;
-          el('studio-dw-split-error').textContent = '';
-          el('studio-dw-split-review').showModal();
-          status('Two Scene Intents ready for one reviewed split.',false);
-        });
-      }).catch(function (error) {
-        status('Scene split draft failed: '+String(error.message||error),true);
-      }).finally(function () {button.disabled = false;});
-  }
-  function applySplitScene() {
-    if (!proposedSplit) throw new Error('No reviewed Scene split exists.');
-    var proposal = Object.assign({},proposedSplit), button=el('studio-dw-split-apply');
-    proposal.firstSummary=el('studio-dw-split-first').value.trim();
-    proposal.secondScene={
-      title:el('studio-dw-split-second-title').value.trim(),
-      summary:el('studio-dw-split-second-summary').value.trim()
-    };
-    if (!proposal.firstSummary || !proposal.secondScene.summary) {
-      el('studio-dw-split-error').textContent='Both new Scene Intents must describe an event.';
-      return;
-    }
-    button.disabled=true;
-    var applied=false;
-    Promise.resolve().then(function () {
-      return window.flushStudioDirectorStoryEdits(proposal.storyId);
-    }).then(function () {
-      return api('/fs/studio/director/scene-split',{
-        method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(proposal)
-      });
-    }).then(function (result) {
-      if (!result.story || !result.scene || !result.scene.id)
-        throw new Error('Split Apply returned no saved new Scene.');
-      applied=true;
-      proposedSplit=null;
-      el('studio-dw-split-review').close();
-      var saved={
-        sourceSceneId:proposal.sceneId,
-        sourceSummary:result.story.scenes[proposal.sceneId].summary,
-        createdScene:{id:result.scene.id,title:result.scene.title,summary:result.scene.summary},
-        sceneOrder:result.story.sceneOrder
-      };
-      return window.studioDirectorBridge.recordApplied('scene.split',result.story,saved).then(function () {
-        status('Reviewed Scene split saved. Review the original H3 Prompt before generating.',false);
-        if (typeof window.refreshStudioDirectorStoryIfOpen === 'function')
-          return window.refreshStudioDirectorStoryIfOpen(result.story.id);
-      });
-    }).catch(function (error) {
-      var message=String(error.message||error);
-      el('studio-dw-split-error').textContent=applied
-        ? 'Scene split saved, but conversation recording or refresh failed: '+message
-        : 'Apply was not confirmed: '+message;
-      status('Scene split Apply: '+message,true);
-    }).finally(function () {button.disabled=false;});
   }
   function prepareProjectCoherence(storyId) {
     var button = el('studio-dw-write-prepare');
@@ -920,136 +660,6 @@
         : 'Apply was not confirmed: '+detail;
       status('Multi-Scene Apply: '+detail,true);
     }).finally(function () {button.disabled = false;});
-  }
-  function prepareStructure(operation, storyId) {
-    var sceneId = el('studio-dw-write-scene').value;
-    var relativeId = operation === 'scene-move' ? el('studio-dw-move-target').value : '';
-    var placement = operation === 'scene-move' ? el('studio-dw-move-placement').value : '';
-    if (!sceneId || (operation === 'scene-move' && (!relativeId || sceneId === relativeId))) {
-      status('Choose a source Scene and a different destination Scene.', true);
-      return;
-    }
-    var button = el('studio-dw-write-prepare');
-    button.disabled = true;
-    Promise.resolve().then(function () {
-      return window.flushStudioDirectorStoryEdits(storyId);
-    }).then(function () { return loadStory(storyId); })
-      .then(function (story) {
-        var order = (story.sceneOrder || []).slice(), scene = story.scenes && story.scenes[sceneId];
-        if (!scene || order.indexOf(sceneId) < 0) throw new Error('Source Scene is no longer available.');
-        var after = order.slice();
-        if (operation === 'scene-move') {
-          if (after.indexOf(relativeId) < 0) throw new Error('Destination Scene is no longer available.');
-          after.splice(after.indexOf(sceneId), 1);
-          after.splice(after.indexOf(relativeId) + (placement === 'after' ? 1 : 0), 0, sceneId);
-          if (after.join('|') === order.join('|'))
-            throw new Error('The Scene is already in that position.');
-        }
-        var title = function (id) { return (story.scenes[id] || {}).title || 'Untitled'; };
-        proposedStructure = {
-          storyId:storyId, operation:operation === 'scene-move' ? 'move' : 'duplicate',
-          sceneId:sceneId, relativeSceneId:relativeId, placement:placement,
-          expectedSceneOrder:order, expectedSourceUpdatedAt:scene.updatedAt
-        };
-        el('studio-dw-structure-title').textContent = operation === 'scene-move'
-          ? 'Review Scene move' : 'Review Scene duplicate';
-        el('studio-dw-structure-summary').textContent = operation === 'scene-move'
-          ? 'Move “' + title(sceneId) + '” ' + placement + ' “' + title(relativeId) + '”.'
-          : 'Create a copy of “' + title(sceneId) + '” immediately after it. The copy retains its authored setup and Prompt, not its Takes.';
-        var describe = function (ids) {
-          return ids.map(function (id, index) {return (index + 1) + '. ' + title(id);}).join('\n');
-        };
-        el('studio-dw-structure-before').textContent = 'Before\n' + describe(order);
-        el('studio-dw-structure-after').textContent = operation === 'scene-move'
-          ? 'After\n' + describe(after)
-          : 'After\n' + order.reduce(function (rows, id, index) {
-              rows.push((rows.length + 1) + '. ' + title(id));
-              if (id === sceneId) rows.push((rows.length + 1) + '. ' + title(id) + ' Copy (new Scene)');
-              return rows;
-            }, []).join('\n');
-        el('studio-dw-structure-error').textContent = '';
-        el('studio-dw-structure-review').showModal();
-      }).catch(function (error) {
-        status('Scene structure review failed: ' + String(error.message || error), true);
-      }).finally(function () {button.disabled = false;});
-  }
-  function applyStructure() {
-    if (!proposedStructure) throw new Error('No reviewed Scene structure change exists.');
-    var proposal = proposedStructure, button = el('studio-dw-structure-apply');
-    button.disabled = true;
-    var applied = false;
-    Promise.resolve().then(function () {
-      return window.flushStudioDirectorStoryEdits(proposal.storyId);
-    }).then(function () {
-      return api('/fs/studio/director/scene-structure', {
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body:JSON.stringify(proposal)
-      });
-    }).then(function (payload) {
-      if (!payload.story || !Array.isArray(payload.story.sceneOrder))
-        throw new Error('Reviewed structure Apply returned no saved Scene order.');
-      applied = true;
-      proposedStructure = null;
-      el('studio-dw-structure-review').close();
-      var saved = {sceneOrder:payload.story.sceneOrder, sourceSceneId:proposal.sceneId};
-      if (payload.scene) saved.newScene = {id:payload.scene.id,title:payload.scene.title,summary:payload.scene.summary};
-      return window.studioDirectorBridge.recordApplied(
-        'scene.' + proposal.operation,payload.story,saved
-      ).then(function () {
-        status('Reviewed Scene structure saved and recorded in conversation.',false);
-        if (typeof window.refreshStudioDirectorStoryIfOpen === 'function')
-          return window.refreshStudioDirectorStoryIfOpen(payload.story.id);
-      });
-    }).catch(function (error) {
-      var message = String(error.message || error);
-      el('studio-dw-structure-error').textContent = applied
-        ? 'Scene change saved, but conversation recording or refresh failed: ' + message
-        : 'Apply was not confirmed: ' + message;
-      status('Scene structure Apply: ' + message,true);
-    }).finally(function () {button.disabled = false;});
-  }
-  function preparePlaybook() {
-    var button = el('studio-dw-playbook-open');
-    button.disabled = true;
-    status('Reading saved Playbook and drafting a focused improvement…',false);
-    api('/fs/studio/director/playbook').then(function (payload) {
-      playbookExpected = payload.guidance;
-      var history = window.studioDirectorBridge.messages().slice(-16).map(function (m) {
-        return {role:m.role,text:String(m.content||'').slice(0,3000)};
-      });
-      var request = 'Suggest a concise, reusable H3 production Playbook improvement based on this discussion. ' +
-        'First determine whether the issue concerns model technique rather than missing context or a WebCap code defect. ' +
-        'Return a JSON object with a single guidance key containing the COMPLETE revised Playbook. ' +
-        'Preserve valuable existing advice, revise conflicting wording rather than stacking prohibitions, ' +
-        'and do not put runtime facts or executable instructions in editable guidance. ' +
-        'Current saved Playbook: ' + JSON.stringify(payload.guidance) +
-        '. Conversation: ' + JSON.stringify(history);
-      return window.studioDirectorBridge.makeProposal(request,'studio_playbook_draft');
-    }).then(function (text) {
-      var proposal = parseProposal(text);
-      if (typeof proposal.guidance !== 'string') throw new Error('Director did not return complete guidance.');
-      el('studio-dw-playbook-before').textContent = playbookExpected || '(empty)';
-      el('studio-dw-playbook-after').value = proposal.guidance;
-      el('studio-dw-playbook-error').textContent = '';
-      el('studio-dw-playbook-review').showModal();
-      status('Playbook proposal ready. Nothing is saved until Apply.',false);
-    }).catch(function (error) {status('Playbook proposal failed: '+String(error.message||error),true);})
-      .finally(function () {button.disabled=false;});
-  }
-  function applyPlaybook() {
-    if (playbookExpected === null) throw new Error('No reviewed Playbook proposal.');
-    var button=el('studio-dw-playbook-apply'); button.disabled=true;
-    api('/fs/studio/director/playbook',{
-      method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({expected:playbookExpected,guidance:el('studio-dw-playbook-after').value})
-    }).then(function (payload) {
-      if (typeof payload.guidance !== 'string') throw new Error('Playbook Apply was not confirmed.');
-      el('studio-dw-playbook-review').close();playbookExpected=null;
-      status('Reviewed Playbook saved. New Director requests use the updated guidance.',false);
-    }).catch(function (error) {
-      el('studio-dw-playbook-error').textContent=String(error.message||error);
-      status('Playbook Apply failed: '+String(error.message||error),true);
-    }).finally(function () {button.disabled=false;});
   }
   function applyScene() {
     if (!proposedScene) throw new Error('There is no reviewed Scene proposal.');
@@ -1328,11 +938,10 @@
       if (!window.studioDirectorBridge.isReady()) {status('Choose a Director model first.',true);return;}
       prepareProjectCoherence(id);
     };
-    ['studio-dw-write-fields', 'studio-dw-batch-fields'].forEach(function (id) {
-      Array.from(el(id).querySelectorAll('input[type="checkbox"]')).forEach(function (check) {
+    Array.from(el('studio-dw-batch-fields').querySelectorAll('input[type="checkbox"]'))
+      .forEach(function (check) {
         check.onchange = function () { writeFieldsManuallyChanged = true; };
       });
-    });
     el('studio-dw-read-preview').ontoggle = function () {
       if (!this.open) return;
       var id = el('studio-dw-read-project').value;
@@ -1368,32 +977,12 @@
     });
     el('studio-dw-undo-button').onclick=function () { window.studioDirectorBridge.undoBrief(); };
     el('studio-dw-assessment-close').onclick=function(){el('studio-dw-assessment-dialog').close();};
-    el('studio-dw-write-scene').onchange=showWriteContext;
-    el('studio-dw-invariant-choice').onchange=function () {renderInvariantScenes(writeStory);showWriteContext();};
-    el('studio-dw-move-target').onchange=showWriteContext;
-    el('studio-dw-move-placement').onchange=showWriteContext;
     el('studio-dw-read-send').onclick=readSend;
     el('studio-dw-write-prepare').onclick=writePrepare;
     el('studio-dw-scene-apply').onclick=applyScene;
-    el('studio-dw-structure-apply').onclick=applyStructure;
     el('studio-dw-batch-apply').onclick=applyBatchScenes;
-    el('studio-dw-invariant-apply').onclick=applyInvariantLinks;
-    ['studio-dw-invariant-close','studio-dw-invariant-cancel'].forEach(function (id) {
-      el(id).onclick=function () {el('studio-dw-invariant-review').close();};
-    });
-    el('studio-dw-split-apply').onclick=applySplitScene;
-    ['studio-dw-split-close','studio-dw-split-cancel'].forEach(function (id) {
-      el(id).onclick=function () {el('studio-dw-split-review').close();};
-    });
     ['studio-dw-batch-close','studio-dw-batch-cancel'].forEach(function (id) {
       el(id).onclick=function () {el('studio-dw-batch-review').close();};
-    });
-    ['studio-dw-structure-close','studio-dw-structure-cancel'].forEach(function (id) {
-      el(id).onclick=function () {el('studio-dw-structure-review').close();};
-    });
-    el('studio-dw-playbook-apply').onclick=applyPlaybook;
-    ['studio-dw-playbook-close','studio-dw-playbook-cancel'].forEach(function (id) {
-      el(id).onclick=function () {el('studio-dw-playbook-review').close();};
     });
     ['studio-dw-scene-close','studio-dw-scene-cancel'].forEach(function (id) {
       el(id).onclick=function () {el('studio-dw-scene-review').close();};

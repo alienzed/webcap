@@ -293,6 +293,21 @@ def _system_ram_status():
             raise OSError(ctypes.get_last_error(), "GlobalMemoryStatusEx failed.")
         total = int(status.ullTotalPhys)
         available = int(status.ullAvailPhys)
+    elif sys.platform.startswith("linux"):
+        # MemFree excludes reclaimable page cache and can report almost 100%
+        # utilization on an otherwise healthy Linux system.
+        meminfo = {}
+        with open("/proc/meminfo", encoding="utf-8") as source:
+            for line in source:
+                key, _, value = line.partition(":")
+                if key in {"MemTotal", "MemAvailable"}:
+                    parts = value.split()
+                    if len(parts) != 2 or parts[1] != "kB":
+                        raise OSError("Linux returned invalid " + key + " in /proc/meminfo.")
+                    meminfo[key] = int(parts[0]) * 1024
+        if "MemTotal" not in meminfo or "MemAvailable" not in meminfo:
+            raise OSError("Linux /proc/meminfo is missing MemTotal or MemAvailable.")
+        total, available = meminfo["MemTotal"], meminfo["MemAvailable"]
     else:
         page_size = int(os.sysconf("SC_PAGE_SIZE"))
         total = page_size * int(os.sysconf("SC_PHYS_PAGES"))

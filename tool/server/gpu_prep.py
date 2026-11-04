@@ -42,6 +42,7 @@ def _prepare_comfyui_for_training():
 
     try:
         inference_runtime.free_cached_models()
+        _logger.info("Released ComfyUI model cache for Training GPU handoff.")
     except (ConnectionError, TimeoutError):
         _logger.warning("ComfyUI became unavailable while releasing cached models before Training; proceeding.")
     except Exception:
@@ -72,6 +73,7 @@ def _prepare_comfyui_for_llm():
 
     try:
         inference_runtime.free_cached_models()
+        _logger.info("Released ComfyUI model cache for local LLM GPU handoff.")
     except (ConnectionError, TimeoutError):
         _logger.info("ComfyUI became unavailable while releasing cached models before LLM; proceeding.")
     return True

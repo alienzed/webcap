@@ -716,7 +716,7 @@ def test_test_generations_reuses_normal_folder_review_for_assessment():
     assert "function syncCandidateMasterSelect(files)" in script
     assert "master.indeterminate = selectedCount > 0 && selectedCount < available.length;" in script
     assert "includeBase: el('test-generations-base-include').checked" in script
-    assert "function openResultsFolder(folder)" in script
+    assert "function openResultsFolder(folder)" not in script
     assert "refreshCurrentDirectory();" in script
     assert "function testRunCriteria()" in script
 
@@ -1005,12 +1005,21 @@ def test_test_result_grid_identity_is_session_scoped_when_output_root_is_externa
     assert "host.dataset.resultScope = resultScope;" in block
 
 
-def test_external_output_test_sessions_keep_open_action():
+def test_test_session_rows_keep_navigation_stop_and_delete_without_redundant_controls():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "styles.css").read_text(encoding="utf-8")
+    render = script.split("function renderSessions(sessions, queuedJobs)", 1)[1].split("function refreshSessions()", 1)[0]
 
-    assert "open.dataset.sessionReveal = resultFolder ? '' : name;" in script
-    assert "function revealTestSession(sessionName)" in script
-    assert "body: JSON.stringify({ area: 'tests', id: name, folder: '' })" in script
+    assert "data-session-row-state" not in script
+    assert "ensureButton(actions, 'open'" not in render
+    assert "data-session-folder-open" not in script
+    assert "data-session-reveal" not in script
+    assert "function revealTestSession(sessionName)" not in script
+    assert "if (row) openSession(row.dataset.sessionName);" in script
+    assert "if (sessionStop)" in script
+    assert "deleteSession(sessionName)" in script
+    assert ".test-generations-session-state" not in css
+    assert "grid-template-columns: minmax(0, 1fr) auto;" in css
     assert "data-session-rate" not in script
 
 def test_test_generations_background_updates_never_choose_a_session():

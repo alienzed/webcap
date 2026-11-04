@@ -5984,9 +5984,9 @@
     input.value = '';
     sceneRevisionHistory.reset(input);
     input.readOnly = false;
-    syncDirectorToolsRunLabel();
     el('storyboard-director-tools-generate-takes').closest('label').classList.remove('hidden');
     el('storyboard-director-tools-generate-takes').checked = false;
+    syncDirectorToolsRunLabel();
     status.textContent = '';
     modal.classList.remove('hidden');
     modal.setAttribute('aria-hidden', 'false');

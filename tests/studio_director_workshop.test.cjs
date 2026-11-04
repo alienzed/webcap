@@ -121,7 +121,7 @@ test('Read sends actual selected data as a visible conversation event and expect
   assert.match(outgoing, /\[WEBCAP EXPLICIT READ\]/);
   assert.match(outgoing, /A meaningful conversation/);
   assert.match(outgoing, /RECEIVED: project\.concept, scene:scene-two:summary/);
-  assert.match(outgoing, /After that line, briefly assess the supplied material and name the next useful step/);
+  assert.match(outgoing, /Address only any question explicitly asked above; otherwise stop after the receipt/);
   assert.equal(state.pendingReadAck.length, 2);
   assert.match(source, /Director acknowledgement mismatch/);
   assert.match(source, /reportConsoleError\('Studio Read acknowledgement'/);

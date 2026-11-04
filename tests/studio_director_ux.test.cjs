@@ -97,8 +97,8 @@ test('contextual Prompt action uses the current route even when Write was aimed 
 
 test('ordinary discussion asks for concise new decisions while complete creative fields remain complete',()=>{
   assert.match(chat,/one short paragraph of 1-3 sentences/);
-  assert.match(chat,/supply its full usable content/);
-  assert.match(chat,/Keep assessment metadata in readiness and conversational material in reply/);
+  assert.match(chat,/Longer complete fields and H3 Prompts belong in requested drafts/);
+  assert.match(chat,/Keep assessment metadata in readiness and conversation in reply/);
 });
 
 test('compact Director replies keep the exact full text and leave General Chat alone',()=>{

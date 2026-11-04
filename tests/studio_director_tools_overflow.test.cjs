@@ -15,18 +15,18 @@ test('Revise & Generate is a direct Director production action, not an overflow 
   assert.match(actions, /id="storyboard-director-tools-btn"/);
   assert.equal((markup.match(/id="storyboard-director-tools-btn"/g) || []).length, 1);
   assert.doesNotMatch(markup, /id="storyboard-director-tools-menu"/);
-  assert.match(storyboard, /el\\('storyboard-director-tools-btn'\\)\\.onclick = openDirectorTools/);
+  assert.match(storyboard, /el\('storyboard-director-tools-btn'\)\.onclick = openDirectorTools/);
 });
 
 test('Revise & Generate retains the existing production operation with explicit destination', () => {
   assert.match(markup, /id="storyboard-director-tools-target"/);
   assert.match(markup, /id="storyboard-director-tools-generate-takes"/);
   assert.match(markup, /revisions can save while the job runs/);
-  assert.match(storyboard, /storyState\\.story\\.sceneOrder\\.length \\+ ' Scenes'/);
+  assert.match(storyboard, /storyState\.story\.sceneOrder\.length \+ ' Scenes'/);
   assert.match(storyboard, /operation: 'revise_scenes_sequence'/);
   assert.match(storyboard, /generateFreshTakes: generateFreshTakes === true/);
   assert.match(storyboard, /operation: 'check_coherence_sequence'/);
-  assert.match(storyboard, /sceneRevisionHistory\\.remember/);
+  assert.match(storyboard, /sceneRevisionHistory\.remember/);
 });
 
 test('frontend and backend agree on structured Studio chat operation', () => {

@@ -1377,6 +1377,7 @@ def prepare(folder_path, model_id=None):
         (session, _visible_session_status(folder_path, session, stored=stored))
         for session, stored in session_snapshot
     ]
+    candidate_scores = _candidate_rating_scores(folder_path, model.PROFILE_ID, session_snapshot=session_snapshot)
     return {
         "operation": "test_prepare",
         "modelId": model.PROFILE_ID,
@@ -1397,8 +1398,8 @@ def prepare(folder_path, model_id=None):
         "removableFiles": [path.name for path in loras],
         "candidateRuns": candidate_runs,
         "candidateMetadata": candidate_metadata,
-        "checkpointHumanRatings": by_checkpoint(candidate_metadata, _candidate_rating_scores(folder_path, model.PROFILE_ID, session_snapshot=session_snapshot)),
-        "candidateScores": _candidate_rating_scores(folder_path, model.PROFILE_ID, session_snapshot=session_snapshot),
+        "checkpointHumanRatings": by_checkpoint(candidate_metadata, candidate_scores),
+        "candidateScores": candidate_scores,
         "candidateVisionScores": _candidate_vision_scores(folder_path, model.PROFILE_ID, session_snapshot=session_snapshot),
         "sessions": list_sessions(folder_path, model_id=model.PROFILE_ID, visible_snapshot=visible_sessions),
         "latest": status(folder_path, model_id=model.PROFILE_ID, visible_snapshot=visible_sessions),

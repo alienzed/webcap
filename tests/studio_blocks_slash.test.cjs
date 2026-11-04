@@ -81,3 +81,26 @@ test('slash never fetches Blocks in ordinary Chat mode',async()=>{
   await tick();
   assert.deepEqual(calls,[]);
 });
+
+test('Studio Blocks sits beside Chat without duplicating Director production actions', () => {
+  const html = fs.readFileSync(path.join(__dirname, '../tool/tool.html'), 'utf8');
+  const scenes = html.split('class="storyboard-scenes-heading-actions"')[1].split('</div>')[0];
+  const library = html.split('class="storyboard-library-header-actions"')[1].split('</div>')[0];
+  assert.match(scenes, /id="studio-blocks-open"/);
+  assert.ok(scenes.indexOf('openStoryboardAssistant()') < scenes.indexOf('id="studio-blocks-open"'));
+  assert.doesNotMatch(library, /id="studio-blocks-open"/);
+  assert.equal((html.match(/id="studio-blocks-open"/g) || []).length, 1);
+  assert.match(html, /id="storyboard-director-tools-btn"[^>]*>Revise &amp; Generate/);
+});
+
+test('Project Overview independently scrolls on desktop, stacked layout stays shared', () => {
+  const css = fs.readFileSync(path.join(__dirname, '../tool/css/storyboard.css'), 'utf8');
+  const desktop = css.split('.storyboard-editor-scroll {\n  display: grid;')[1].split('}', 1)[0];
+  assert.match(desktop, /grid-template-rows: minmax\(0, 1fr\)/);
+  const overview = css.split('.storyboard-story-overview-surface {')[1].split('}', 1)[0];
+  assert.match(overview, /min-height: 0/);
+  assert.match(overview, /overflow-y: auto/);
+  const stacked = css.split('@media (max-width: 1180px) {\n  .storyboard-editor-scroll,')[1].split('}', 1)[0];
+  assert.match(stacked, /grid-template-rows: auto/);
+  assert.match(stacked, /overflow: auto/);
+});

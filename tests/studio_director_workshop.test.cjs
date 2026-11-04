@@ -176,13 +176,16 @@ test('General Chat has a separate request path and Studio keeps native storage I
 });
 
 
-test('Read offers whole Project, entire Scene, and compact multi-Scene overviews without media fields', () => {
-  assert.match(workbench, /Entire Project brief/);
-  assert.match(workbench, /Entire Scene/);
-  assert.match(workbench, /All Scene overviews \(without H3 prompts\)/);
-  assert.match(workbench, /input\[data-group-select\]/);
-  const read = workbench.split('  function renderReadStory(story) {', 2)[1].split('  function updateReadSelection() {', 2)[0];
+test('Read offers one Project Overview and per-Scene complete selections without media fields', () => {
+  assert.match(workbench, /addUnit\('Project Overview', overview, fields/);
+  assert.match(workbench, /addUnit\('Scene ' \+ \(index \+ 1\)/);
+  assert.match(workbench, /\['title', 'summary', 'prompt', 'durationSeconds'\]/);
+  assert.match(workbench, /input\[data-group-select\]:checked/);
+  assert.match(html, /Scenes · select complete Scenes/);
+  const read = workbench.split('  function renderReadStory(story) {', 2)[1].split('  function selectedPaths() {', 2)[0];
   assert.doesNotMatch(read, /'references'/);
+  assert.doesNotMatch(read, /'generationSettings'/);
+  assert.doesNotMatch(read, /addField\(/);
 });
 
 test('reviewed Scene move and duplicate use deterministic WebCap operations, not extra LLM calls', () => {
@@ -289,7 +292,7 @@ test('Studio conversation receives the canonical H3 template as reference withou
 test('large explicit Read selections report their true size and refuse silent truncation', () => {
   assert.match(workbench,/JSON\.stringify\(payload\)\.length/);
   assert.match(workbench,/length > 48000/);
-  assert.match(workbench,/Narrow the selection to a Project overview/);
+  assert.match(workbench,/Select the Project Overview or fewer Scenes/);
 });
 
 test('Character and Location associations use reviewed deterministic multi-Scene edits', () => {

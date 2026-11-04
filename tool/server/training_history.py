@@ -13,7 +13,7 @@ from pathlib import Path, PurePosixPath
 import tomllib
 
 from . import config as app_config
-from .training_config_files import output_dir_from_config, training_config_path, h3_premerged_image_model_path, h3_premerged_ostris_model_path
+from .training_config_files import output_dir_from_config, training_config_path, h3_premerged_image_model_path, h3_premerged_ostris_model_path, H3_FOCUSED_EXCLUDE_MODULES
 from .training_action import managed_actions_for_folder, read_action
 from .training_profiles import config_for_id, config_for_stage
 from .training_run_manifest import selected_epoch as selected_run_epoch
@@ -82,10 +82,19 @@ def run_summary_from_capture(record_path, stage, captured_items=0):
     model = parsed.get("model") if isinstance(parsed.get("model"), dict) else {}
     if selected_stage == "h3":
         summary["trainingVariant"] = {"image": "Image Adapter", "ostris": "Ostris", "cfg": "CFG", "plain": "Standard"}[_h3_training_method(parsed)]
+        image_shift = model.get("image_shift")
+        if isinstance(image_shift, (int, float)):
+            summary["imageShift"] = image_shift
     shift = model.get("shift")
     if isinstance(shift, (int, float)):
         summary["shift"] = shift
     adapter = parsed.get("adapter") if isinstance(parsed.get("adapter"), dict) else {}
+    if selected_stage == "h3" and adapter.get("type") == "lora":
+        excluded = adapter.get("exclude_modules")
+        if excluded is None:
+            summary["focusedH3Blocks"] = False
+        elif excluded == H3_FOCUSED_EXCLUDE_MODULES:
+            summary["focusedH3Blocks"] = True
     rank = adapter.get("rank")
     if isinstance(rank, int) and rank > 0:
         summary["rank"] = rank
@@ -629,13 +638,15 @@ def _history_job_view(job):
             item.get("stages"),
             item.get("capturedItemCount"),
         )
-    # Existing history entries predate the variant summary; read their captured config.
-    if item.get("stages") == "h3" and "trainingVariant" not in item["runSummary"]:
+    # Backfill older summaries from the captured run config without changing persisted history.
+    h3_fields = ("trainingVariant", "imageShift", "focusedH3Blocks")
+    if item.get("stages") == "h3" and any(key not in item["runSummary"] for key in h3_fields):
         captured_summary = run_summary_from_capture(
             item.get("recordPath") or item.get("inputPath"), "h3", item.get("capturedItemCount")
         )
-        if "trainingVariant" in captured_summary:
-            item["runSummary"] = {**item["runSummary"], "trainingVariant": captured_summary["trainingVariant"]}
+        recovered = {key: captured_summary[key] for key in h3_fields if key in captured_summary}
+        if recovered:
+            item["runSummary"] = {**item["runSummary"], **recovered}
     raw_output = str(item.get("outputRunPath") or item.get("effectiveOutputDir") or item.get("outputRoot") or "").strip()
     raw_candidate = str(item.get("outputRunPath") or item.get("resumeFromCheckpoint") or "").strip()
     try:

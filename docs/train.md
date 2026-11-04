@@ -76,7 +76,7 @@ Disabling a profile only hides it from new-run setup. Existing TOMLs, captured b
 - `.webcap_training/recent_runs.json` is the lightweight Training History metadata index and never gates scheduling.
 - Queue and Training History metadata are convenience state. History rows remain useful even when their recorded output/log paths are later unavailable; existing files are checked only to enrich actions and availability. New action-owned captures, jobs, logs, and output live under `output/runs/<global-sequence>-<set-slug>--<hash>/<logical-run>/`.
 
-The persistent set TOMLs remain the editable baseline. Learning rate, rank, epochs, dropout, and H3 image shift selected in Run setup are written only into the captured config for that action; app-owned runtime paths are rewritten there as well.
+The persistent set TOMLs remain the editable baseline. Learning rate, rank, epochs, dropout, and H3 image shift selected in Run setup are written only into the captured config for that action; app-owned runtime paths are rewritten there as well. Training History reads H3 Image shift and Focused H3 blocks from that captured config, including older runs where it remains available. H3's separate general shift is labeled Video shift; unknown or custom block exclusions are not reported as Focused off.
 
 Generated dataset repeats are intentionally decoupled from the run's selected Epochs value. Repeat counts are solved against `training.repeat_reference_epochs` (90 by default); the actual run epochs still drive the captured config and estimated total work.
 

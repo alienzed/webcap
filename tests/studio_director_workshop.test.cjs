@@ -22,7 +22,7 @@ test('Studio has a wide conversation and a real side-panel Read/Write workbench'
     'studio-director-workbench', 'studio-dw-read', 'studio-dw-write',
     'studio-dw-read-project', 'studio-dw-write-project', 'studio-dw-scene-fields',
     'studio-dw-read-send', 'studio-dw-write-prepare', 'studio-dw-readiness-list',
-    'studio-dw-write-context-json', 'studio-dw-scene-review', 'studio-dw-playbook-review'
+    'studio-dw-write-context-json', 'studio-dw-scene-review', 'studio-dw-batch-review'
   ]) assert.match(html, new RegExp('id="' + id + '"'));
   assert.match(html, /class="director-chat-layout"/);
   assert.match(html, /class="director-chat-sidebar"/);
@@ -188,21 +188,9 @@ test('Read offers one Project Overview and per-Scene complete selections without
   assert.doesNotMatch(read, /addField\(/);
 });
 
-test('reviewed Scene move and duplicate use deterministic WebCap operations, not extra LLM calls', () => {
-  assert.doesNotMatch(html, /value="scene-move">Move Scene/);
-  assert.doesNotMatch(html, /value="scene-duplicate">Duplicate Scene/);
-  assert.match(html, /id="studio-dw-structure-review"/);
-  const prepare = workbench.split('  function prepareStructure(operation, storyId) {')[1]
-    .split('  function applyStructure() {')[0];
-  assert.match(prepare, /flushStudioDirectorStoryEdits/);
-  assert.match(prepare, /expectedSceneOrder:order/);
-  assert.match(prepare, /expectedSourceUpdatedAt:scene.updatedAt/);
-  assert.doesNotMatch(prepare, /makeProposal|\/fs\/director\/chat/);
-  const apply = workbench.split('  function applyStructure() {')[1]
-    .split('  function preparePlaybook() {')[0];
-  assert.match(apply, /\/fs\/studio\/director\/scene-structure/);
-  assert.match(apply, /recordApplied/);
-  assert.match(apply, /saved, but conversation recording or refresh failed/);
+test('retired Director structural UI is absent', () => {
+  assert.doesNotMatch(html, /id="studio-dw-structure-review"/);
+  assert.doesNotMatch(workbench, /function prepareStructure\(/);
 });
 
 test('multi-Scene review drafts together and applies selected fields in one atomic request', () => {
@@ -213,7 +201,7 @@ test('multi-Scene review drafts together and applies selected fields in one atom
   assert.match(workbench, /el\('studio-dw-scene-mode'\)\.value === 'revise'/);
   assert.match(workbench, /function renderBatchReview\(\)/);
   const applied = workbench.split('  function applyBatchScenes() {')[1]
-    .split('  function prepareStructure(operation, storyId) {')[0];
+    .split('  function applyScene() {')[0];
   assert.match(applied, /\/fs\/studio\/director\/scene-fields-batch/);
   assert.match(applied, /flushStudioDirectorStoryEdits/);
   assert.match(applied, /savedFieldsByScene/);

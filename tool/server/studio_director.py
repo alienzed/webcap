@@ -14,36 +14,15 @@ _H3_RUNTIME = Path(__file__).resolve().parents[2] / "docs" / "mmh3-prompt-runtim
 # User-visible capability catalog. These entries describe WebCap controls;
 # they are not direct LLM tools or promises of automatic mutation.
 ACTIONS = (
-    {"name": "conversation.discuss", "status": "available",
-     "description": "Develop the author's vision; advise how saved H3 Prompt and generation controls produce a Take. Generation, media inspection and technical settings remain author-operated."},
     {"name": "context.read", "status": "available",
-     "description": "For missing saved details, recommend the smallest relevant Project/Scene Read; acknowledge only fields actually delivered."},
+     "description": "Send only explicitly selected saved Project and Scene fields to Director; do not assume unread context."},
     {"name": "project.create", "status": "available",
-     "description": "For a new project, propose a reviewed Concept, Style, Invariants and zero to 32 tentative Scene Intents; production Prompts come later."},
-    {"name": "project.brief.propose", "status": "available",
-     "description": "Revise shared premise/look or recurring identity/location in Project Concept, Style or Invariants; review exact changes."},
-    {"name": "scene.draft", "status": "available",
-     "description": "For one new video clip, draft its observable Scene Intent for reviewed insertion."},
-    {"name": "scene.sequence.draft", "status": "available",
-     "description": "For multiple new clips, draft up to 32 distinct Scene Intents for reviewed insertion and placement."},
-    {"name": "scene.revise", "status": "available",
-     "description": "For changed action revise Intent; for render-ready shot timing/dialogue/sound revise H3 Prompt using saved duration and linked continuity. Author reviews Title/Intent/Prompt selections."},
-    {"name": "playbook.propose", "status": "available",
-     "description": "When advice is reusable across H3 prompts, propose a reviewed global H3 Playbook improvement, not a one-Scene edit."},
-    {"name": "creative.capture.review", "status": "available",
-     "description": "Offer a complete developed Project field, named Invariant, or Scene Intent for editable review without repeating the LLM draft; WebCap selects and validates the saved target."},
-    {"name": "scene.batch.revise", "status": "available",
-     "description": "For coordinated creative changes across existing clips, propose reviewed selected Title/Intent/Prompt fields; apply atomically."},
-    {"name": "scene.move", "status": "available",
-     "description": "For order-only changes, choose reviewed deterministic Scene move; no model rewrite or extra LLM request."},
-    {"name": "scene.duplicate", "status": "available",
-     "description": "For copies, choose reviewed deterministic Scene duplication; no model rewrite and no Take copying."},
-    {"name": "scene.invariants", "status": "available",
-     "description": "For where an existing Character/Location Invariant applies, review selected Scene links separately from the Invariant's definition or Prompt."},
-    {"name": "scene.split", "status": "available",
-     "description": "Author and review two distinct Scene Intents; WebCap atomically updates the first and inserts a tentative second."},
+     "description": "Create a reviewed Project with Concept, Visual / atmosphere, Invariants, and optional initial Scenes."},
+    {"name": "project.revise", "status": "available",
+     "description": "Revise an existing Project's Concept, Visual / atmosphere, or Invariants in one editable review."},
+    {"name": "scenes.write", "status": "available",
+     "description": "Create or revise one or more Scenes in a chosen Project, including Scene Intent, H3 Prompt and relevant Invariants; review before applying."},
 )
-
 
 _WORKSHOP = (
     "STUDIO DIRECTOR | EXPERT CREATIVE PRODUCER\n"
@@ -51,7 +30,7 @@ _WORKSHOP = (
     "The author owns the creative vision and final decisions; strengthen the idea, do not replace it. "
     "Evaluate the premise, visual event, recognizable characters, setting, props, action, dialogue, "
     "appearance, staging, atmosphere, structure, repetition and generation feasibility as relevant. "
-    "Develop the material; reply concisely and purposefully. "
+    "CONVERSATION STYLE: Keep replies short, natural and iterative: normally 1-3 sentences in one short paragraph. Answer the immediate point and advance the creative decision through brief exchanges. Write a longer draft only when asked. Give concise substantive responses rather than activity recaps or elaborate praise. "
     "Ask one focused question when a consequential creative decision is missing. "
     "Choose routine lighting and visual clarity independently. "
     "Improve the chosen direction; propose alternatives for material weaknesses and draft original dialogue. "
@@ -85,15 +64,12 @@ _H3_STUDIO_CORE = (
     "offer a specific next step. For recurring characters, develop distinguishing visible traits and "
     "stable appearance; for locations, defining layout and recognizable features; for Scenes, clarify "
     "the on-screen event, causality, staging, timing and dialogue where useful. "
-    "Tell the author which of the five creative fields should hold a decision and why. "
+    "Use the appropriate saved creative field. "
     "Ask one focused question only when the answer materially changes the result; otherwise suggest "
     "a concrete editable draft. Offer reviewed Write after a decision becomes clear. "
-    "Assess the available material, not unread or imagined saved fields. Distinguish genuinely missing "
-    "facts from intentionally flexible creative choices. "
-    "Where a saved Character or Location Invariant belongs in particular Scenes, propose reviewing its " 
-    "Scene associations rather than repeating its full identity in each Scene Intent. "
-    "An Invariant definition and its Scene associations are separate author-reviewed decisions. "
-    "Changing either preserves saved H3 Prompts; offer a focused Prompt review when a genuine contradiction matters. "
+    "Assess only supplied material and meaningful gaps. "
+     "Include relevant Invariants while writing or revising Scenes; WebCap handles links and identifiers, "
+    "not a separate LLM action. Existing H3 Prompts are never silently rewritten. "
     "A Scene remains independently movable: put any necessary starting condition or handoff in its Intent "
     "and relevant shared constraints in Concept or Invariants. "
     "Entry and exit state fields are retired from active creative planning. "
@@ -110,18 +86,19 @@ _H3_STUDIO_CORE = (
     "The H3 Storyboard generation path validates 4–15 seconds per clip. "
     "Use feasible on-screen actions and clear changing physical states, shot timing, camera behavior, "
     "dialogue and sound when those details matter. Treat uncertain model behavior as practical risks, not impossibilities.\n"
-    "AVAILABLE AUTHOR-REVIEWED ACTIONS: Review new Project with multiple initial Scenes; "
-    "review Concept / overview, Visual / atmosphere and Invariants for an explicitly selected Project; "
-    "Prepare a Scene or Prepare Scenes (up to 32) for reviewed insertion (start/between/end); " +
-    "offer already-developed creative material for direct editable review; " +
-    "propose reviewed existing Scene Title, Intent or H3 Prompt revisions, including a selected multi-Scene revision; " +
-    "move or duplicate Scenes deterministically; propose a reviewed two-Intent Scene split. "
+    "AVAILABLE AUTHOR-REVIEWED CREATIVE WORKFLOWS: Create Project with Concept, Visual / atmosphere, "
+    "Invariants and optional initial Scenes; Revise Project with those same fields; Write Scenes to create "
+    "or revise one or multiple Scenes, with reviewed insertion or revision of Intent and H3 Prompt. "
+    "These are the only creative Write goals to suggest. Read remains explicit and author-selected. "
+    "Do not suggest Director operations for renaming, moving, duplicating, splitting Scenes, linking "
+    "Invariants separately, undoing a Project brief or updating the H3 Playbook; WebCap or the author "
+    "handles noncreative mechanics outside the Director conversation. "
     "After the author approves the review, WebCap saves the authoritative Project/Scenes; "
     "conversation alone never edits them. "
     "Other Storyboard editor/development controls remain separate. "
     "Conversation alone does not create, apply, generate, or view a Take. "
     "Read supplies only the author-selected saved fields and requires explicit acknowledgement by Director. "
-    "Old snapshots remain historical references; Studio navigation never changes conversation context.\n"
+    "Studio navigation does not auto-read saved fields.\n"
 )
 
 
@@ -150,9 +127,8 @@ def chat_response_schema():
     readiness = []
     for operations, fields in (
         (["project"], ["title", "concept", "style", "invariants"]),
-        (["scene-edit", "scenes-batch"], ["title", "summary", "prompt"]),
-        (["", "new-project", "scene", "scenes", "scene-move", "scene-duplicate",
-          "scene-split", "scene-invariants", "playbook"], []),
+        (["scenes"], ["title", "summary", "prompt"]),
+        (["", "new-project"], []),
     ):
         properties = {
             "checks": {"type": "array", "maxItems": 10, "items": {

@@ -74,7 +74,9 @@ test('contextual Prompt action uses the current route even when Write was aimed 
   const node=()=>({value:'',classList:{add(){},remove(){}},setAttribute(){}});
   for(const id of ['current-brief','current-prompt','write-project','write-operation','write-scene','read-panel','read','write-panel','write']) elements['studio-dw-'+id]=node();
   elements['studio-dw-write-project'].value='unrelated-project';
-  elements['studio-dw-write-fields']={querySelectorAll:()=>fields};
+  elements['studio-dw-scene-mode']=node();
+  elements['studio-dw-batch-scenes']={querySelectorAll:()=>[{value:'current-scene',checked:false},{value:'other-scene',checked:true}]};
+  elements['studio-dw-batch-fields']={querySelectorAll:()=>fields};
   let prepared=false;
   const saved={id:'current-project'};
   const scope=vm.createContext({
@@ -84,17 +86,19 @@ test('contextual Prompt action uses the current route even when Write was aimed 
     writePrepare:()=>{prepared=true;},writeOperationChosen:false,writeFieldsManuallyChanged:false
   });
   vm.runInContext(part(workbench,'  function prepareCurrentWrite(operation) {','  function writePrepare(writeFields) {'),scope);
-  await scope.prepareCurrentWrite('scene-edit');
+  await scope.prepareCurrentWrite('scene-write');
   assert.equal(elements['studio-dw-write-project'].value,saved.id);
-  assert.equal(elements['studio-dw-write-scene'].value,'current-scene');
+  assert.equal(elements['studio-dw-scene-mode'].value,'revise');
+  assert.equal(elements['studio-dw-batch-scenes'].querySelectorAll()[0].checked,true);
+  assert.equal(elements['studio-dw-batch-scenes'].querySelectorAll()[1].checked,false);
   assert.deepEqual(fields.map(field=>field.checked),[false,true,false]);
   assert.equal(prepared,true);
 });
 
 test('ordinary discussion asks for concise new decisions while complete creative fields remain complete',()=>{
-  assert.match(chat,/one to three short paragraphs/);
-  assert.match(chat,/supply its full usable content/);
-  assert.match(chat,/Keep assessment metadata in readiness and conversational material in reply/);
+  assert.match(chat,/one short paragraph of 1-3 sentences/);
+  assert.match(chat,/Longer complete fields and H3 Prompts belong in requested drafts/);
+  assert.match(chat,/Keep assessment metadata in readiness and conversation in reply/);
 });
 
 test('compact Director replies keep the exact full text and leave General Chat alone',()=>{

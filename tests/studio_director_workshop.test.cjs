@@ -22,7 +22,7 @@ test('Studio has a wide conversation and a real side-panel Read/Write workbench'
     'studio-director-workbench', 'studio-dw-read', 'studio-dw-write',
     'studio-dw-read-project', 'studio-dw-write-project', 'studio-dw-scene-fields',
     'studio-dw-read-send', 'studio-dw-write-prepare', 'studio-dw-readiness-list',
-    'studio-dw-write-context-json', 'studio-dw-scene-review', 'studio-dw-playbook-review'
+    'studio-dw-write-context-json', 'studio-dw-scene-review', 'studio-dw-batch-review'
   ]) assert.match(html, new RegExp('id="' + id + '"'));
   assert.match(html, /class="director-chat-layout"/);
   assert.match(html, /class="director-chat-sidebar"/);
@@ -87,8 +87,8 @@ test('Studio prompting selects the current goal rather than steering every task 
   assert.match(system,/For the current author goal, suggest at most one useful next step/);
   assert.match(system,/an explicit Read, an appropriately scoped reviewed Write, or an author-operated Studio action/);
   assert.doesNotMatch(system,/When choices are clear, offer to review Concept/);
-  assert.match(system,/For ready true, content is complete developed material/);
-  assert.match(system,/For ready false, content briefly identifies the missing decision/);
+  assert.match(system,/Keep readiness light: normally checks=\[\]/);
+  assert.match(system,/If assessment is genuinely useful, provide at most two concise checks/);
   assert.match(system,/H3 PRODUCTION PROMPT REFERENCE/);
   assert.equal(assembled[1].content,'Revise only the Scene action');
   assert.equal(assembled.length,2, 'no extra request or hidden context event');
@@ -121,7 +121,7 @@ test('Read sends actual selected data as a visible conversation event and expect
   assert.match(outgoing, /\[WEBCAP EXPLICIT READ\]/);
   assert.match(outgoing, /A meaningful conversation/);
   assert.match(outgoing, /RECEIVED: project\.concept, scene:scene-two:summary/);
-  assert.match(outgoing, /After that line, briefly assess the supplied material and name the next useful step/);
+  assert.match(outgoing, /Address only any question explicitly asked above; otherwise stop after the receipt/);
   assert.equal(state.pendingReadAck.length, 2);
   assert.match(source, /Director acknowledgement mismatch/);
   assert.match(source, /reportConsoleError\('Studio Read acknowledgement'/);
@@ -157,7 +157,7 @@ test('Write preserves reviewed Apply and carries final saved content into conver
     '/fs/studio/director/project-create'
   ]) assert.ok(source.includes(path), path);
   assert.match(workbench, /\/fs\/studio\/director\/scene-fields/);
-  assert.match(workbench, /\/fs\/studio\/director\/playbook/);
+  assert.doesNotMatch(workbench, /\/fs\/studio\/director\/playbook/);
   assert.match(source, /recordApplied: function/);
   assert.match(source, /return persistSession\('storyboard'\)/);
   assert.match(source, /\[WEBCAP APPLIED FIELD VALUES\]/);
@@ -176,72 +176,51 @@ test('General Chat has a separate request path and Studio keeps native storage I
 });
 
 
-test('Read offers whole Project, entire Scene, and compact multi-Scene overviews without media fields', () => {
-  assert.match(workbench, /Entire Project brief/);
-  assert.match(workbench, /Entire Scene/);
-  assert.match(workbench, /All Scene overviews \(without H3 prompts\)/);
-  assert.match(workbench, /input\[data-group-select\]/);
-  const read = workbench.split('  function renderReadStory(story) {', 2)[1].split('  function updateReadSelection() {', 2)[0];
+test('Read offers one Project Overview and per-Scene complete selections without media fields', () => {
+  assert.match(workbench, /addUnit\('Project Overview', overview, fields/);
+  assert.match(workbench, /addUnit\('Scene ' \+ \(index \+ 1\)/);
+  assert.match(workbench, /\['title', 'summary', 'prompt', 'durationSeconds'\]/);
+  assert.match(workbench, /input\[data-group-select\]:checked/);
+  assert.match(html, /Scenes · select complete Scenes/);
+  const read = workbench.split('  function renderReadStory(story) {', 2)[1].split('  function selectedPaths() {', 2)[0];
   assert.doesNotMatch(read, /'references'/);
+  assert.doesNotMatch(read, /'generationSettings'/);
+  assert.doesNotMatch(read, /addField\(/);
 });
 
-test('reviewed Scene move and duplicate use deterministic WebCap operations, not extra LLM calls', () => {
-  assert.match(html, /value="scene-move">Move Scene/);
-  assert.match(html, /value="scene-duplicate">Duplicate Scene/);
-  assert.match(html, /id="studio-dw-structure-review"/);
-  const prepare = workbench.split('  function prepareStructure(operation, storyId) {')[1]
-    .split('  function applyStructure() {')[0];
-  assert.match(prepare, /flushStudioDirectorStoryEdits/);
-  assert.match(prepare, /expectedSceneOrder:order/);
-  assert.match(prepare, /expectedSourceUpdatedAt:scene.updatedAt/);
-  assert.doesNotMatch(prepare, /makeProposal|\/fs\/director\/chat/);
-  const apply = workbench.split('  function applyStructure() {')[1]
-    .split('  function preparePlaybook() {')[0];
-  assert.match(apply, /\/fs\/studio\/director\/scene-structure/);
-  assert.match(apply, /recordApplied/);
-  assert.match(apply, /saved, but conversation recording or refresh failed/);
+test('retired Director structural UI is absent', () => {
+  assert.doesNotMatch(html, /id="studio-dw-structure-review"/);
+  assert.doesNotMatch(workbench, /function prepareStructure\(/);
 });
 
 test('multi-Scene review drafts together and applies selected fields in one atomic request', () => {
-  assert.match(html, /value="scenes-batch">Revise several Scenes/);
+  assert.match(html, /value="scene-write">Write Scenes/);
+  assert.match(html, /id="studio-dw-scene-mode"/);
   assert.match(html, /id="studio-dw-batch-review"/);
   assert.match(workbench, /makeProposal\(request, 'studio_scene_batch_draft', fields\.indexOf\('prompt'\) !== -1\)/);
-  assert.match(workbench, /'scenes-batch'\) \{/);
+  assert.match(workbench, /el\('studio-dw-scene-mode'\)\.value === 'revise'/);
   assert.match(workbench, /function renderBatchReview\(\)/);
   const applied = workbench.split('  function applyBatchScenes() {')[1]
-    .split('  function prepareStructure(operation, storyId) {')[0];
+    .split('  function applyScene() {')[0];
   assert.match(applied, /\/fs\/studio\/director\/scene-fields-batch/);
   assert.match(applied, /flushStudioDirectorStoryEdits/);
   assert.match(applied, /savedFieldsByScene/);
   assert.match(applied, /recordApplied/);
 });
 
-test('Scene split reviews both Intent changes and saves one atomic operation', () => {
-  assert.match(html, /value="scene-split">Split Scene/);
-  assert.match(html, /id="studio-dw-split-review"/);
-  assert.match(workbench, /makeProposal\(request,'studio_scene_split_draft'\)/);
-  const apply = workbench.split('  function applySplitScene() {')[1]
-    .split('  function prepareBatchScenes(storyId) {')[0];
-  assert.match(apply, /\/fs\/studio\/director\/scene-split/);
-  assert.match(apply, /flushStudioDirectorStoryEdits/);
-  assert.match(apply, /recordApplied\('scene.split'/);
-  assert.match(apply, /Review the original H3 Prompt/);
+test('Scene splitting is not a Director Write operation', () => {
+  assert.doesNotMatch(html, /id="studio-dw-split-review"/);
+  assert.doesNotMatch(workbench, /function prepareSplitScene\(/);
 });
 
-
-test('existing Scene Prompt Write includes saved duration and linked Invariant IDs', () => {
-  const single = workbench.split('  function editScene(story, sceneId, fields) {')[1]
-    .split('  function showSceneReview(')[0];
+test('batch Scene revisions include duration and linked Invariants', () => {
   const batch = workbench.split('  function prepareBatchScenes(storyId) {')[1]
     .split('  function renderBatchReview() {')[0];
   const preview = workbench.split('  function showWriteContext() {')[1]
     .split('  function updateScope() {')[0];
-  assert.match(single,/durationSeconds:scene\.durationSeconds,invariantRefs:scene\.invariantRefs/);
-  assert.match(single,/selected Scene durationSeconds/);
-  assert.match(batch,/durationSeconds:scene\.durationSeconds, invariantRefs:scene\.invariantRefs/);
-  assert.match(batch,/each selected Scene to its own durationSeconds/);
-  assert.match(preview,/durationSeconds:scene\.durationSeconds,invariantRefs:scene\.invariantRefs/);
-  assert.doesNotMatch(single,/durationSeconds.*selected keys/);
+  assert.match(batch, /durationSeconds:scene\.durationSeconds, invariantRefs:scene\.invariantRefs/);
+  assert.match(batch, /each selected Scene to its own durationSeconds/);
+  assert.match(preview, /durationSeconds:scene\.durationSeconds,invariantRefs:scene\.invariantRefs/);
 });
 
 test('H3 detailed authoring contract is sent only for an explicit Prompt-field draft', async () => {
@@ -288,21 +267,13 @@ test('Studio conversation receives the canonical H3 template as reference withou
 test('large explicit Read selections report their true size and refuse silent truncation', () => {
   assert.match(workbench,/JSON\.stringify\(payload\)\.length/);
   assert.match(workbench,/length > 48000/);
-  assert.match(workbench,/Narrow the selection to a Project overview/);
+  assert.match(workbench,/Select the Project Overview or fewer Scenes/);
 });
 
-test('Character and Location associations use reviewed deterministic multi-Scene edits', () => {
-  assert.match(html,/value="scene-invariants">Use Invariant in Scenes/);
-  assert.match(html,/id="studio-dw-invariant-review"/);
-  assert.match(workbench,/function prepareInvariantLinks\(storyId\)/);
-  assert.match(workbench,/function applyInvariantLinks\(\)/);
-  const prepare = workbench.split('  function prepareInvariantLinks(storyId) {')[1]
-    .split('  function applyInvariantLinks() {')[0];
-  assert.doesNotMatch(prepare,/makeProposal|\/fs\/director\/chat/);
-  const apply = workbench.split('  function applyInvariantLinks() {')[1]
-    .split('  function prepareSplitScene(storyId) {')[0];
-  assert.match(apply,/\/fs\/studio\/director\/scene-invariants/);
-  assert.match(apply,/recordApplied/);
+test('standalone Invariant linking is not a Director Write operation', () => {
+  assert.doesNotMatch(html, /id="studio-dw-invariant-review"/);
+  assert.doesNotMatch(workbench, /function prepareInvariantLinks\(/);
+  assert.doesNotMatch(workbench, /function applyInvariantLinks\(/);
 });
 
 test('multi-Scene review preserves actual Project positions and distinguishes a saved Scene from receipt failure', () => {

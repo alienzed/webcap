@@ -2044,7 +2044,6 @@
                                     <button id="storyboard-scenes-focus-btn" type="button" class="review-captions-btn hidden">← Scenes</button>
                                     <button id="storyboard-scenes-sequence-btn" type="button" class="review-captions-btn">Sequence</button>
                                     <button type="button" class="review-captions-btn" onclick="openStoryboardAssistant()" title="Discuss the Project with Director without changing Scenes">Chat</button>
-                                     <button id="storyboard-director-tools-btn" type="button" class="review-captions-btn storyboard-director-action" title="Open Director Tools">Director Tools</button>
 
                                 </div>
                             </div>
@@ -2157,6 +2156,7 @@
                   <div class="studio-dw-actions">
                     <button id="studio-dw-read" type="button" aria-expanded="false" aria-controls="studio-dw-read-panel">Read…</button>
                     <button id="studio-dw-write" type="button" aria-expanded="false" aria-controls="studio-dw-write-panel">Write…</button>
+                    <button id="storyboard-director-tools-btn" type="button" title="Revise the open Project's Scenes, optionally generating new Takes">Revise &amp; Generate…</button>
                   </div>
                   <div class="studio-dw-shortcuts" aria-label="Write for the current Project">
                     <button id="studio-dw-current-brief" type="button">Review current Project brief</button>
@@ -2164,46 +2164,33 @@
                   </div>
                   <div id="studio-dw-status" class="studio-dw-status hidden" role="status" aria-live="polite"></div>
                   <div id="studio-dw-undo" class="studio-dw-undo hidden"><span id="studio-dw-undo-label">Project brief updated</span><button id="studio-dw-undo-button" type="button">Undo brief change</button></div>
-                  <section id="studio-dw-read-panel" class="studio-dw-panel hidden" aria-label="Read selected saved fields">
+                  <section id="studio-dw-read-panel" class="studio-dw-panel hidden" aria-label="Read selected Project and Scenes">
                     <h3>Read saved material</h3>
                     <label>Read from Project<select id="studio-dw-read-project"></select></label>
                     <p id="studio-dw-read-scope" class="studio-dw-scope"></p>
                     <div id="studio-dw-project-fields" class="studio-dw-field-list" aria-label="Project fields"></div>
                     <details id="studio-dw-scenes">
-                      <summary>Scenes · choose individual fields</summary>
+                      <summary>Scenes · select complete Scenes</summary>
                       <div id="studio-dw-scene-fields" class="studio-dw-scene-list"></div>
                     </details>
-                    <details id="studio-dw-read-preview"><summary>Inspect selected saved fields</summary><pre id="studio-dw-read-preview-data"></pre></details>
-                    <div class="studio-dw-submit"><span id="studio-dw-read-count">0 fields selected</span><button id="studio-dw-read-send" type="button" class="studio-dw-primary">Send to Director</button></div>
+                    <details id="studio-dw-read-preview"><summary>Inspect selected material</summary><pre id="studio-dw-read-preview-data"></pre></details>
+                    <div class="studio-dw-submit"><span id="studio-dw-read-count">0 selections</span><button id="studio-dw-read-send" type="button" class="studio-dw-primary">Send to Director</button></div>
                   </section>
                   <section id="studio-dw-write-panel" class="studio-dw-panel hidden" aria-label="Write reviewed content">
                     <h3>Write a proposal</h3>
                     <label>Write to Project<select id="studio-dw-write-project"></select></label>
                     <p id="studio-dw-write-scope" class="studio-dw-scope"></p>
                     <label>Operation<select id="studio-dw-write-operation">
-                      <option value="project">Update Project</option>
                       <option value="new-project">Create Project</option>
-                      <option value="scenes">Add Scenes (one or more)</option>
-                      <option value="scene-edit">Revise Scene</option>
-                      <option value="scenes-batch">Revise several Scenes</option>
-                      <option value="scene-split">Split Scene</option>
-                      <option value="scene-invariants">Use Invariant in Scenes</option>
-                      <option value="scene-move">Move Scene</option>
-                      <option value="scene-duplicate">Duplicate Scene</option>
+                      <option value="project">Revise Project</option>
+                      <option value="scene-write">Write Scenes</option>
                     </select></label>
-                    <label id="studio-dw-write-scene-row" class="hidden">Scene<select id="studio-dw-write-scene"></select></label>
-                    <label id="studio-dw-move-target-row" class="hidden">Relative to Scene<select id="studio-dw-move-target"></select></label>
-                    <label id="studio-dw-move-placement-row" class="hidden">Placement
-                      <select id="studio-dw-move-placement">
-                        <option value="before">Before</option>
-                        <option value="after">After</option>
+                    <label id="studio-dw-scene-mode-row" class="hidden">Write Scenes
+                      <select id="studio-dw-scene-mode">
+                        <option value="create">Add one or more Scenes</option>
+                        <option value="revise">Revise one or more existing Scenes</option>
                       </select>
                     </label>
-                    <div id="studio-dw-invariant-controls" class="hidden">
-                      <label>Character or Location<select id="studio-dw-invariant-choice"></select></label>
-                      <p>Select the Scenes that use this Invariant. Existing associations are already checked.</p>
-                      <div id="studio-dw-invariant-scenes" class="studio-dw-scene-list"></div>
-                    </div>
                     <div id="studio-dw-batch-controls" class="hidden">
                       <p>Choose the Scenes and fields to develop together.</p>
                       <div id="studio-dw-batch-scenes" class="studio-dw-scene-list"></div>
@@ -2213,16 +2200,14 @@
                         <label><input type="checkbox" value="prompt"> H3 Prompt</label>
                       </div>
                     </div>
-                    <div id="studio-dw-write-fields" class="studio-dw-field-list hidden">
-                      <label><input type="checkbox" value="summary" checked> Intent</label>
-                      <label><input type="checkbox" value="prompt"> H3 Prompt</label>
-                      <label><input type="checkbox" value="title"> Title</label>
-                    </div>
                     <details id="studio-dw-write-context" class="studio-dw-source-preview">
                       <summary>Context Director will use for this draft</summary>
                       <pre id="studio-dw-write-context-json"></pre>
                     </details>
                     <div class="studio-dw-submit"><button id="studio-dw-write-prepare" type="button" class="studio-dw-primary">Prepare editable review</button></div>
+                    <details class="studio-dw-source-preview"><summary>Other Project utilities</summary>
+                      <button id="studio-dw-coherence-check" type="button">Check Project coherence</button>
+                    </details>
                   </section>
                   <section class="studio-dw-readiness" aria-label="Director suggestions">
                     <div class="studio-dw-readiness-heading"><strong>Ready to write</strong><small id="studio-dw-readiness-freshness" role="status" aria-live="polite">Not assessed yet</small></div>
@@ -2231,7 +2216,7 @@
                       <summary>Creative assessment details</summary>
                       <div id="studio-dw-readiness-list" class="studio-dw-readiness-list"><p>No assessment details yet.</p></div>
                     </details>
-                    <button id="studio-dw-playbook-open" type="button" class="studio-dw-playbook-open">H3 Playbook · global model guidance</button>
+
                   </section>
                 </section>
                 <section id="director-studio-flow" class="director-studio-flow hidden" aria-label="Active Story and proposed field changes">
@@ -2287,69 +2272,6 @@
                 </div>
             </aside>
             <dialog id="studio-dw-assessment-dialog" class="studio-scene-draft-review" aria-labelledby="studio-dw-assessment-title"><header class="studio-scene-draft-header"><h2 id="studio-dw-assessment-title">Creative assessment</h2><button id="studio-dw-assessment-close" type="button">Close</button></header><div class="studio-scene-draft-content"><pre id="studio-dw-assessment-content"></pre></div></dialog>
-            <dialog id="studio-dw-playbook-review" class="studio-scene-draft-review" aria-labelledby="studio-dw-playbook-title">
-              <header class="studio-scene-draft-header"><div><h2 id="studio-dw-playbook-title" title="Director's proposal is editable. Built-in technical rules remain unchanged.">Review H3 Playbook</h2></div>
-                <button id="studio-dw-playbook-close" type="button" class="review-captions-btn">Close</button></header>
-              <div class="studio-scene-draft-content">
-                <strong>Saved guidance</strong><pre id="studio-dw-playbook-before"></pre>
-                <label for="studio-dw-playbook-after">Proposed complete Playbook</label>
-                <textarea id="studio-dw-playbook-after" rows="15"></textarea>
-                <p id="studio-dw-playbook-error" role="alert"></p>
-              </div>
-              <footer class="studio-scene-draft-footer">
-                <button id="studio-dw-playbook-cancel" type="button" class="review-captions-btn">Back</button>
-                <button id="studio-dw-playbook-apply" type="button">Apply reviewed Playbook</button>
-              </footer>
-            </dialog>
-            <dialog id="studio-dw-structure-review" class="studio-scene-draft-review" aria-labelledby="studio-dw-structure-title">
-              <header class="studio-scene-draft-header"><div><h2 id="studio-dw-structure-title" title="Only the approved structural change is applied; existing Scenes and Takes remain intact.">Review Scene order</h2></div>
-                <button id="studio-dw-structure-close" type="button" class="review-captions-btn">Close</button></header>
-              <div class="studio-scene-draft-content">
-                <p id="studio-dw-structure-summary"></p>
-                <pre id="studio-dw-structure-before"></pre>
-                <pre id="studio-dw-structure-after"></pre>
-                <p id="studio-dw-structure-error" role="alert"></p>
-              </div>
-              <footer class="studio-scene-draft-footer">
-                <button id="studio-dw-structure-cancel" type="button" class="review-captions-btn">Back to conversation</button>
-                <button id="studio-dw-structure-apply" type="button">Apply reviewed change</button>
-              </footer>
-            </dialog>
-            <dialog id="studio-dw-split-review" class="studio-scene-draft-review" aria-labelledby="studio-dw-split-title">
-              <header class="studio-scene-draft-header"><div><h2 id="studio-dw-split-title" title="Two independently renderable Intents. The original Prompt and Takes are preserved, but may need review.">Review Scene split</h2></div>
-                <button id="studio-dw-split-close" type="button" class="review-captions-btn">Close</button></header>
-              <div class="studio-scene-draft-content">
-                <p id="studio-dw-split-target"></p>
-                <p id="studio-dw-split-before"></p>
-                <label>First Scene Intent (replaces the original Intent)
-                  <textarea id="studio-dw-split-first" rows="6"></textarea>
-                </label>
-                <label>New Scene title
-                  <input id="studio-dw-split-second-title" maxlength="240">
-                </label>
-                <label>New Scene Intent
-                  <textarea id="studio-dw-split-second-summary" rows="6"></textarea>
-                </label>
-                <p id="studio-dw-split-error" role="alert"></p>
-              </div>
-              <footer class="studio-scene-draft-footer">
-                <button id="studio-dw-split-cancel" type="button" class="review-captions-btn">Back to conversation</button>
-                <button id="studio-dw-split-apply" type="button">Apply reviewed split</button>
-              </footer>
-            </dialog>
-            <dialog id="studio-dw-invariant-review" class="studio-scene-draft-review" aria-labelledby="studio-dw-invariant-title">
-              <header class="studio-scene-draft-header"><div><h2 id="studio-dw-invariant-title" title="Save these exact Character/Location links. Other creative and production fields remain unchanged.">Review Scene associations</h2></div>
-                <button id="studio-dw-invariant-close" type="button" class="review-captions-btn">Close</button></header>
-              <div class="studio-scene-draft-content">
-                <p id="studio-dw-invariant-summary"></p>
-                <div id="studio-dw-invariant-diff"></div>
-                <p id="studio-dw-invariant-error" role="alert"></p>
-              </div>
-              <footer class="studio-scene-draft-footer">
-                <button id="studio-dw-invariant-cancel" type="button" class="review-captions-btn">Back to conversation</button>
-                <button id="studio-dw-invariant-apply" type="button">Apply reviewed associations</button>
-              </footer>
-            </dialog>
             <dialog id="studio-dw-batch-review" class="studio-scene-draft-review" aria-labelledby="studio-dw-batch-title">
               <header class="studio-scene-draft-header"><div><h2 id="studio-dw-batch-title" title="Choose the exact changes to save together. Other Scenes, prompts and Takes remain unchanged.">Review Scene revisions</h2></div>
                 <button id="studio-dw-batch-close" type="button" class="review-captions-btn">Close</button></header>
@@ -2838,10 +2760,10 @@
             <section class="keep-lora-dialog storyboard-director-tools-dialog" role="dialog" aria-modal="true" aria-labelledby="storyboard-director-tools-title">
                 <header class="keep-lora-header">
                     <div>
-                        <h2 id="storyboard-director-tools-title">Director Tools</h2>
-                        <p class="keep-lora-source">Apply a targeted revision across the current Story's Scenes.</p>
+                        <h2 id="storyboard-director-tools-title">Revise &amp; Generate</h2>
+                        <p id="storyboard-director-tools-target" class="keep-lora-source">Current Project · all Scenes</p>
                     </div>
-                    <button id="storyboard-director-tools-close" type="button" class="training-review-modal-close" aria-label="Close Director Tools">&times;</button>
+                    <button id="storyboard-director-tools-close" type="button" class="training-review-modal-close" aria-label="Close Revise and Generate">&times;</button>
                 </header>
                 <div class="keep-lora-content">
                     <div class="keep-lora-field">
@@ -2856,7 +2778,7 @@
                         <select id="storyboard-director-tools-preset">
                             <option value="">Custom revision</option>
                             <option value="continuity">Continuity pass</option>
-                            <option value="coherence">Check Coherence (current Scene)</option>
+                            <option value="coherence">Check Project coherence</option>
                         </select>
                     </div>
                     <div class="keep-lora-field">
@@ -2867,6 +2789,7 @@
                         </div>
                         <textarea id="storyboard-director-tools-instruction" rows="7" placeholder="Describe what should be revised across these Scenes."></textarea>
                     </div>
+                    <p class="keep-lora-source">This is a production run: revisions can save while the job runs. Generate fresh Takes is optional; existing Takes are kept.</p>
                     <div id="storyboard-director-tools-status" class="training-history-summary" aria-live="polite"></div>
                 </div>
                 <footer class="keep-lora-footer">

@@ -17,10 +17,10 @@ function section(text,start,end) {
 
 test('changing Write operation reloads saved Scene choices after a reviewed insertion', async () => {
   const handler = section(rail,"    el('studio-dw-write-operation').onchange=function () {",
-    "    ['studio-dw-write-fields', 'studio-dw-batch-fields'].forEach");
+    "    el('studio-dw-scene-mode').onchange=function () {");
   const refresh = section(rail,'  function refreshWrite() {','  function toggle(which) {');
   const elements = {
-    'studio-dw-write-operation':{value:'scene-edit'},
+    'studio-dw-write-operation':{value:'scene-write'},
     'studio-dw-write-project':{value:'project-1'}
   };
   const saved = {id:'project-1',sceneOrder:['new-scene'],scenes:{'new-scene':{title:'New Scene'}}};
@@ -101,7 +101,7 @@ test('Readiness opens a single read-only detail and never assigns one Scene ID t
   assert.match(html,/id="studio-dw-assessment-dialog"/);
   assert.match(rail,/studio-dw-assessment-dialog'\)\.showModal/);
   assert.match(rail,/studio-dw-assessment-content'\)\.textContent = item\.content/);
-  assert.match(html,/H3 Playbook · global model guidance/);
+  assert.doesNotMatch(html,/H3 Playbook · global model guidance/);
 });
 
 test('New chat and loaded session reset stale design selections without changing saved creative data',()=>{

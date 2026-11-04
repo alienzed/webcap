@@ -444,7 +444,12 @@
     return fetch(url, options || {}).then(function (response) {
       return response.json().then(function (payload) {
         if (!response.ok || !payload || payload.ok === false) {
-          throw new Error(payload && payload.error ? payload.error : (response.statusText || 'Request failed'));
+          var message = payload && payload.error ? payload.error : (response.statusText || 'Request failed');
+          if (url === '/fs/director/chat' && /Unsupported Director Chat operation/i.test(message)) {
+            message += ' The running WebCap backend does not recognize the requested chat operation. ' +
+              'Restart or update the backend so it matches the current Studio Director frontend (studio_chat is supported in the current server code).';
+          }
+          throw new Error(message);
         }
         return payload;
       });
@@ -2734,46 +2739,27 @@
     // Studio conversation needs the same authoritative H3 prompt template as Write.
     // It is reference knowledge here, not permission to draft or save a Prompt.
     return studioDirectorRequestMessages(messages, true).then(function (outbound) {
-      outbound[0].content += '\n\nCONTEXT DELIVERY CONTRACT: Only explicitly supplied Read fields are available. ' +
-        'For a WEBCAP EXPLICIT READ, begin the reply field with a line RECEIVED: ' +
-        'followed by the exact received field identifiers separated by comma and space. ' +
-        'Then discuss the contents substantively; a receipt alone is not an assessment. ' +
-        'Never claim to have inspected unavailable saved fields. ' +
-        'A WEBCAP APPLIED FIELD VALUES event contains author-reviewed saved content and supersedes older Read snapshots. ' +
-        'RESPONSE CONTRACT: Return one JSON object matching the supplied schema, with reply and readiness. ' +
-        'Put your conversational answer in reply. Put its Studio assessment in readiness, containing checks ' +
-        '(up to 10 objects with name, scope, ready, content), readHints (0-5 field identifiers), ' +
-        'writeHint (project, new-project, scene, scenes, scene-edit, scenes-batch, scene-move, scene-duplicate, scene-split, scene-invariants, playbook, or empty), ' +
-        'and sceneId (known ID or empty). Include writeFields for Write defaults: ' +
-        'with writeHint project, use title, concept, style or invariants; with scene-edit or scenes-batch, ' +
-        'use summary (Intent), prompt (H3 Prompt) or title. For other operations use an empty writeFields array. ' +
-        'Recommend only the fields relevant to this discussion; these are editable defaults, never automatic edits. ' +
-        'Name is one of Concept, Characters, Setting, ' +
-        'Action, Dialogue, Visual / atmosphere, Visual focus, Structure / formula, ' +
-        'Variation / repetition, Production feasibility. Scope is project or scene. ' +
-        'For ready true, content is complete developed material for that category. ' +
-        'For ready false, content briefly identifies the missing decision or practical weakness. ' +
-        'For Read hints use ' +
-        'project.concept, project.style, project.invariants, scene.current.summary, ' +
-        'scene.current.prompt or known scene:ID:field. Recommend Write only when appropriate; ' +
-        'unknown IDs are empty. Include only categories grounded in the actual discussion. ' +
-        'OPTIONAL CREATIVE CAPTURE: Only when you have a COMPLETE, author-acceptable final field value ' +
-        'already developed in this reply or the ongoing conversation, you may add one capture object ' +
-        '{field, content, sceneId} to the same readiness JSON. field is title, concept, style, ' +
-        'summary, prompt, invariant or scene; content is COMPLETE authored material, not a vague instruction. ' +
-        'For scene, content is the complete Scene Intent for a NEW tentative Scene, title is a string (empty when unnamed) and sceneId empty; ' +
-        'sceneId is the exact known saved Scene ID for Scene fields, otherwise empty. ' +
-        'For field invariant include kind (character/location/visual/world/sound/custom), title, ' +
-        'beforeKind and beforeTitle along with field/content/sceneId; use beforeKind/beforeTitle only ' +
-        'when editing an exact existing Invariant identity (including renames), else both empty. ' +
-        'Do not infer that a renamed character is a new additional person. ' +
-        'Never guess IDs, confuse proposal with saved content, include any field without a clear destination, ' +
-        'or propose a capture for open-ended exploration. Omit capture when not ready; ' +
-        'WebCap will bind it to a freshly selected saved destination and require editable review. ' +
-        'For ordinary discussion, use one to three short paragraphs focused on the new decision and next useful action. ' +
-        'Build on agreed material and give at most one consequential question. ' +
-        'When the author asks for a complete field or Prompt, supply its full usable content. ' +
-        'Keep assessment metadata in readiness and conversational material in reply.';
+      outbound[0].content += '\n\nCONTEXT DELIVERY: Use only the saved fields explicitly supplied by Read. ' +
+        'On WEBCAP EXPLICIT READ start reply with RECEIVED: and the exact received field IDs, comma-separated. ' +
+        'Then answer the author’s explicit question, if any; a context-only Read needs just the receipt. ' +
+        'Applied field values supersede earlier snapshots. ' +
+        'RESPONSE CONTRACT: Return JSON matching the supplied reply/readiness schema. ' +
+        'For ordinary conversation, reply in one short paragraph of 1-3 sentences, with one useful ' +
+        'creative decision or question at most. Longer complete fields and H3 Prompts belong in requested drafts. ' +
+        'Keep readiness light: normally checks=[], readHints=[], writeHint="", writeFields=[], sceneId="". ' +
+        'Use a readiness hint only when it provides a useful next action. ' +
+        'Write hints are new-project, project or scenes; include writeFields for recommended editable fields ' +
+        '(project: title/concept/style/invariants; scenes: title/summary/prompt). ' +
+        'Use the exact known saved sceneId for an existing Scene, otherwise empty. ' +
+        'If assessment is genuinely useful, provide at most two concise checks with a valid name and scope. ' +
+        'For Read recommendations use only known field identifiers, such as project.concept, ' +
+        'project.style, project.invariants or scene.current.prompt. ' +
+        'OPTIONAL CREATIVE CAPTURE: When an author-ready complete final field has already been developed, ' +
+        'include one capture matching the supplied schema, with complete content. ' +
+        'For an existing Scene use its exact ID. For a new Scene use field=scene, title and an empty sceneId. ' +
+        'For an Invariant use kind/title and beforeKind/beforeTitle only for an exact known rename or edit. ' +
+        'Use capture only for a genuinely complete proposal; WebCap selects and validates the save target ' +
+        'and opens editable review before Apply. Keep assessment metadata in readiness and conversation in reply.\n';
       return outbound;
     });
   }
@@ -3689,11 +3675,11 @@
       var composer = el('director-chat-input');
       var draft = String(composer.value || '').trim();
       var nl = String.fromCharCode(10);
-      composer.value = (instruction || draft || 'Inspect this material and suggest the next useful development step.') +
+      composer.value = (instruction || draft || 'Read the selected saved context and acknowledge receipt.') +
         nl + nl + '[WEBCAP EXPLICIT READ]' + nl +
         JSON.stringify(payload, null, 2) + nl + '[END WEBCAP READ]' + nl +
         'Begin the reply field with RECEIVED: ' + keys.join(', ') +
-        ' using exactly those field identifiers. After that line, briefly assess the supplied material and name the next useful step.';
+        ' using exactly those field identifiers. Address only any question explicitly asked above; otherwise stop after the receipt.';
       state.pendingReadAck = keys.slice();
       sendMessage();
     },
@@ -3844,6 +3830,37 @@
     updateReadiness: function (value) {
       state.studioReadiness = value;
       state.sessionDirty.storyboard = true;
+    },
+    checkProjectCoherence: function (storyId) {
+      if (!this.isReady()) return Promise.reject(new Error('Studio Director must be ready to check Project coherence.'));
+      if (!storyId) return Promise.reject(new Error('Select a Project to check.'));
+      state.pending = true;
+      state.jobId = '';
+      syncControls();
+      startProgress();
+      return requestJson('/fs/storyboard/director', {
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({storyId:storyId,operation:'check_coherence_sequence',model:state.modelId})
+      }).then(function (payload) {
+        if (!payload.job || !payload.job.jobId) throw new Error('Coherence check did not queue a job.');
+        state.jobId = String(payload.job.jobId);
+        trackTransientLlmJob(payload.job);
+        return waitForJob(payload.job);
+      }).then(function (job) {
+        var result = job.result || {};
+        if (result.storyId !== storyId || !Array.isArray(result.scenes))
+          throw new Error('Coherence check returned invalid Project results.');
+        finishProgress(null);
+        return result;
+      }).catch(function (error) {
+        finishProgress(error);
+        if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Studio coherence check', error);
+        throw error;
+      }).finally(function () {
+        state.pending = false;
+        state.jobId = '';
+        syncControls();
+      });
     },
     makeProposal: function (instruction, operation, includePromptContract) {
       if (!this.isReady()) return Promise.reject(new Error('Director must be ready to draft.'));

@@ -2790,7 +2790,7 @@
     });
     var sequenceMode = storyState.sceneViewMode === 'sequence';
     el('storyboard-generate-scenes-btn').classList.toggle('hidden', sequenceMode);
-    el('storyboard-director-tools-btn').classList.toggle('hidden', sequenceMode);
+
     var modeTitle = el('storyboard-workspace-mode-title');
     if (modeTitle) modeTitle.textContent = storyState.sceneViewMode === 'sequence' ? 'Sequence' : 'Scenes';
     var progression = el('storyboard-scene-progression');
@@ -5961,23 +5961,32 @@
     if (run) run.disabled = !directorToolsAvailable();
   }
 
+  function syncDirectorToolsRunLabel() {
+    var coherence = el('storyboard-director-tools-preset').value === 'coherence';
+    el('storyboard-director-tools-run').textContent = coherence ? 'Check Coherence' :
+      el('storyboard-director-tools-generate-takes').checked ? 'Revise & Generate Takes' : 'Revise Scenes';
+  }
+
   function openDirectorTools() {
     if (!directorToolsAvailable()) {
-      reportError(new Error('Director Tools requires an available Story with Scenes.'));
+      reportError(new Error('Revise & Generate requires an open Project with Scenes.'));
       return;
     }
     var modal = el('storyboard-director-tools-modal');
     var input = el('storyboard-director-tools-instruction');
     var preset = el('storyboard-director-tools-preset');
     var status = el('storyboard-director-tools-status');
-    if (!modal || !input || !preset || !status) throw new Error('Director Tools modal markup is missing.');
+    if (!modal || !input || !preset || !status) throw new Error('Revise & Generate modal markup is missing.');
+    el('storyboard-director-tools-target').textContent =
+      'Current Project: ' + String(storyState.story.title || storyState.story.name || storyState.story.id) +
+      ' · all ' + storyState.story.sceneOrder.length + ' Scenes';
     preset.value = '';
     input.value = '';
     sceneRevisionHistory.reset(input);
     input.readOnly = false;
-    el('storyboard-director-tools-run').textContent = 'Revise Scenes';
     el('storyboard-director-tools-generate-takes').closest('label').classList.remove('hidden');
     el('storyboard-director-tools-generate-takes').checked = false;
+    syncDirectorToolsRunLabel();
     status.textContent = '';
     modal.classList.remove('hidden');
     modal.setAttribute('aria-hidden', 'false');
@@ -6185,13 +6194,13 @@
       if (this.value === 'coherence') input.value = DIRECTOR_PASS_PRESETS.coherence.instruction;
       sceneRevisionHistory.reset(input);
       var coherence = this.value === 'coherence';
-      var run = el('storyboard-director-tools-run');
-      if (run) run.textContent = coherence ? 'Check Coherence' : 'Revise Scenes';
+      syncDirectorToolsRunLabel();
       var fresh = el('storyboard-director-tools-generate-takes').closest('label');
       if (fresh) fresh.classList.toggle('hidden', coherence);
       input.readOnly = coherence;
       input.focus();
     };
+    el('storyboard-director-tools-generate-takes').onchange = syncDirectorToolsRunLabel;
     el('storyboard-director-tools-run').onclick = runDirectorToolsRevision;
     el('storyboard-expand-concept-btn').onclick = expandConcept;
     el('storyboard-restore-concept-btn').onclick = restorePreviousConcept;

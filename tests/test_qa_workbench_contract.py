@@ -66,7 +66,7 @@ def test_qa_deep_scan_is_native_structured_and_merges_into_current_scope():
 
     assert "Run Deep QA" in qa
     assert "qaRunDeepScan();" in qa
-    assert "qaStartFocusReview();" in qa
+    assert "qaStartFocusReview({autoOpen:false, onReady:function () { qaSetView('corrections'); }});" in qa
     assert "Stop Deep QA" in qa
     assert "'deep-scan'" in qa
     assert "'/fs/qa/deep-scan'" in qa
@@ -168,9 +168,9 @@ def test_focus_review_only_promotes_current_exact_actions_without_implicit_scan(
     assert "qaFocusReviewPatches(mediaKey, candidate.text)" in primer
     assert "qaFocusReviewTagActions(mediaKey, captionAssistCandidate.text)" in primer
     assert "if (isFocusedQaReviewMode()) return presentFocusedReviewCandidate(state.currentItem);" in focused
-    start = qa.split("function qaStartFocusReview()", 1)[1].split("function renderQaWorkbench(", 1)[0]
+    start = qa.split("function qaStartFocusReview(options)", 1)[1].split("function renderQaWorkbench(", 1)[0]
     assert "qaRunDeepScan();" not in start
-    sync = qa.split("function qaSyncFocusReview()", 1)[1].split("function qaStartFocusReview()", 1)[0]
+    sync = qa.split("function qaSyncFocusReview()", 1)[1].split("function qaStartFocusReview(options)", 1)[0]
     assert "qaQueueFocusCandidatePreparation(item);" not in sync
 
 

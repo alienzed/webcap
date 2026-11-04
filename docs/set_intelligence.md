@@ -1,5 +1,14 @@
 # Set Intelligence
 
+## Deep QA correction review (2026-10-31)
+
+Deep QA's user-facing correction path is distinct from the ordinary Caption Assist workflow. **Caption Assist remains the user's final caption pass** and retains its existing generation, refinement, editing, and approval behavior.
+
+The QA Workbench's **Review & Fix** entry opens a correction review surface grouped by media item. It previews current/proposed caption text and applicable grouped-vocabulary tag operations before any mutation. Applying a card uses the existing exact-target caption patch validator, caption save path, and checklist tag assignment/removal functions. It does not create AI Validation receipts or mark media Reviewed; Deep QA corrections are not equivalent to the user's final caption/annotation validation.
+
+Ungrouped tag actions are shown as requiring item inspection rather than silently applied. Single Item remains available for deeper inspection. Hypotheses without concrete current actions remain in the Full Report/Concept Check paths and are not promoted to corrections. No inference is triggered by opening the correction review.
+
+
 ## QA evidence lifecycle correction (2026-10-13)
 
 QA retains in-memory, individually current Concept Check actions when an annotation changes within the same selection. A saved Concept Check action can also restore even when the separate set-wide Deep QA result is stale; stale Deep QA hypotheses themselves remain excluded. Set/scope switches still reload the matching review receipt. Deep QA mines all currently eligible cached Sight observations before choosing the bounded 160 observations sent to Director; normal Vocabulary Discovery remains frequency-limited.

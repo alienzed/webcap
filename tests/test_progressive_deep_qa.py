@@ -89,4 +89,4 @@ def test_progressive_review_receipts_are_scope_bound_and_do_not_touch_annotation
     assert "if (!qaWorkbenchState.deepScanSessionActive && !keepProgressiveScope)" in source
     assert "qaDeepScanScopeItems()" in source
     assert "qaSyncFocusReview();" in source
-    assert "qaStartFocusReview();" in source
+    assert "qaStartFocusReview({autoOpen:false, onReady:function () { qaSetView('corrections'); }});" in source

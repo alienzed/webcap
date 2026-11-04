@@ -107,7 +107,7 @@ def test_set_review_ui_keeps_concept_check_and_human_edits_separate():
     assert "setReview: true" in deep_scan
     assert "preflight: true" in deep_scan
     assert "window.confirm(" in deep_scan
-    assert "qaStartFocusReview()" in source
+    assert "qaStartFocusReview({autoOpen:false, onReady:function () { qaSetView('corrections'); }})" in source
     assert "qaRunConceptCheck()" in source
     assert "if (finding.concept) return finding;" in source
 

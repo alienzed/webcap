@@ -2795,6 +2795,16 @@ def _resolve_staged_test_lora(lora_file, available):
     return selected
 
 
+
+def _resolve_test_model_asset(configured, available, label):
+    """Resolve Test workflow assets, using deterministic selection for LoRAs."""
+    from . import inference_runtime
+
+    if label == "LoRA":
+        return _resolve_staged_test_lora(configured, available)
+    return inference_runtime.resolve_name(configured, available, label)
+
+
 def execute_inference(job_id, request, context):
     from . import inference_runtime
 
@@ -2852,7 +2862,7 @@ def execute_inference(job_id, request, context):
         template = model.resolve_assets(
             copy.deepcopy(frozen_template),
             inference_runtime.available_names,
-            inference_runtime.resolve_name,
+            _resolve_test_model_asset,
         )
         settings = model.normalize_settings(
             template,

@@ -2152,10 +2152,11 @@
                     </div>
                     <div id="director-chat-sidebar" class="director-chat-sidebar">
                 <section id="studio-director-workbench" class="studio-director-workbench" aria-label="Director actions and feedback">
-                  <div class="studio-dw-heading"><div><strong id="studio-dw-heading" title="Conversation is independent of Studio navigation">Director actions</strong></div><details id="storyboard-director-tools-menu" class="studio-dw-more"><summary aria-label="More Director actions" title="More Director actions">…</summary><div class="studio-dw-more-items"><button id="storyboard-director-tools-btn" type="button" title="Open legacy Director Tools">Director Tools</button></div></details><button id="studio-dw-close-actions" type="button" aria-label="Close Director actions">Close</button></div>
+                  <div class="studio-dw-heading"><div><strong id="studio-dw-heading" title="Conversation is independent of Studio navigation">Director actions</strong></div><button id="studio-dw-close-actions" type="button" aria-label="Close Director actions">Close</button></div>
                   <div class="studio-dw-actions">
                     <button id="studio-dw-read" type="button" aria-expanded="false" aria-controls="studio-dw-read-panel">Read…</button>
                     <button id="studio-dw-write" type="button" aria-expanded="false" aria-controls="studio-dw-write-panel">Write…</button>
+                    <button id="storyboard-director-tools-btn" type="button" title="Revise the open Project's Scenes, optionally generating new Takes">Revise &amp; Generate…</button>
                   </div>
                   <div class="studio-dw-shortcuts" aria-label="Write for the current Project">
                     <button id="studio-dw-current-brief" type="button">Review current Project brief</button>
@@ -2759,10 +2760,10 @@
             <section class="keep-lora-dialog storyboard-director-tools-dialog" role="dialog" aria-modal="true" aria-labelledby="storyboard-director-tools-title">
                 <header class="keep-lora-header">
                     <div>
-                        <h2 id="storyboard-director-tools-title">Director Tools</h2>
-                        <p class="keep-lora-source">Apply a targeted revision across the current Story's Scenes.</p>
+                        <h2 id="storyboard-director-tools-title">Revise &amp; Generate</h2>
+                        <p id="storyboard-director-tools-target" class="keep-lora-source">Current Project · all Scenes</p>
                     </div>
-                    <button id="storyboard-director-tools-close" type="button" class="training-review-modal-close" aria-label="Close Director Tools">&times;</button>
+                    <button id="storyboard-director-tools-close" type="button" class="training-review-modal-close" aria-label="Close Revise and Generate">&times;</button>
                 </header>
                 <div class="keep-lora-content">
                     <div class="keep-lora-field">
@@ -2788,6 +2789,7 @@
                         </div>
                         <textarea id="storyboard-director-tools-instruction" rows="7" placeholder="Describe what should be revised across these Scenes."></textarea>
                     </div>
+                    <p class="keep-lora-source">This is a production run: revisions can save while the job runs. Generate fresh Takes is optional; existing Takes are kept.</p>
                     <div id="storyboard-director-tools-status" class="training-history-summary" aria-live="polite"></div>
                 </div>
                 <footer class="keep-lora-footer">

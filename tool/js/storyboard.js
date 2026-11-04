@@ -5963,14 +5963,17 @@
 
   function openDirectorTools() {
     if (!directorToolsAvailable()) {
-      reportError(new Error('Director Tools requires an available Story with Scenes.'));
+      reportError(new Error('Revise & Generate requires an open Project with Scenes.'));
       return;
     }
     var modal = el('storyboard-director-tools-modal');
     var input = el('storyboard-director-tools-instruction');
     var preset = el('storyboard-director-tools-preset');
     var status = el('storyboard-director-tools-status');
-    if (!modal || !input || !preset || !status) throw new Error('Director Tools modal markup is missing.');
+    if (!modal || !input || !preset || !status) throw new Error('Revise & Generate modal markup is missing.');
+    el('storyboard-director-tools-target').textContent =
+      'Current Project: ' + String(storyState.story.title || storyState.story.name || storyState.story.id) +
+      ' · all ' + storyState.story.sceneOrder.length + ' Scenes';
     preset.value = '';
     input.value = '';
     sceneRevisionHistory.reset(input);
@@ -6172,10 +6175,7 @@
     el('storyboard-scenes-sequence-btn').onclick = function () { setSceneViewMode('sequence'); };
     el('storyboard-generate-scenes-btn').onclick = generateScenes;
     el('storyboard-cancel-takes-btn').onclick = cancelStoryTakes;
-    el('storyboard-director-tools-btn').onclick = function () {
-      el('storyboard-director-tools-menu').open = false;
-      openDirectorTools();
-    };
+    el('storyboard-director-tools-btn').onclick = openDirectorTools;
     el('storyboard-scene-creation-close').onclick = closeSceneCreation;
     el('storyboard-scene-creation-cancel').onclick = closeSceneCreation;
     el('storyboard-scene-creation-run').onclick = runSceneCreation;

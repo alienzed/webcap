@@ -65,12 +65,8 @@
       return body.story;
     });
   }
-  function fieldCheckbox(path, label, checked) {
-    var row = document.createElement('label'), check = document.createElement('input');
-    check.type = 'checkbox';check.dataset.path = path;check.checked = !!checked;
-    row.append(check, document.createTextNode(label));
-    return row;
-  }
+  // Read choices are complete Project and Scene units; the existing field IDs
+  // remain the wire format so the preview, receipt and chat history stay compatible.
   function renderReadStory(story) {
     readStory = story;
     var fields = el('studio-dw-project-fields'), scenes = el('studio-dw-scene-fields');
@@ -78,73 +74,47 @@
     if (!story) { updateReadSelection(); return; }
     var chosen = readChoices[story.id], firstSelection = !chosen;
     if (firstSelection) chosen = new Set();
-    function addField(path, label, suggested, host) {
-      if (firstSelection && suggested) chosen.add(path);
-      var row = fieldCheckbox(path, label, chosen.has(path));
-      row.querySelector('input').onchange = function () {
-        if (this.checked) chosen.add(path);
-        else chosen.delete(path);
-        updateReadSelection();
-      };
-      host.appendChild(row);
-    }
-    function addGroup(label, paths, host) {
-      if (!paths.length) return;
+    function addUnit(label, paths, host, suggested) {
+      if (firstSelection && suggested) paths.forEach(function (path) { chosen.add(path); });
       var row = document.createElement('label'), toggle = document.createElement('input');
-      toggle.type = 'checkbox'; toggle.dataset.groupSelect = 'true';
+      toggle.type = 'checkbox';
+      toggle.dataset.groupSelect = 'true';
       toggle.groupPaths = paths;
+      toggle.checked = paths.every(function (path) {return chosen.has(path);});
       row.append(toggle, document.createTextNode(label));
       toggle.onchange = function () {
-        paths.forEach(function (path) {if (toggle.checked) chosen.add(path); else chosen.delete(path);});
-        Array.from(el('studio-dw-read-panel').querySelectorAll('input[data-path]')).forEach(function (node) {
-          node.checked = chosen.has(node.dataset.path);
+        paths.forEach(function (path) {
+          if (toggle.checked) chosen.add(path);
+          else chosen.delete(path);
         });
         updateReadSelection();
       };
       host.appendChild(row);
     }
-    addGroup('Entire Project brief', projectFields.map(function (key) {return 'project.' + key;}), fields);
-    projectFields.forEach(function (key) {
-      var path = 'project.' + key;
-      addField(path, labels[key], recommendations.readHints.length
-        ? recommendations.readHints.indexOf(path) !== -1
-        : key !== 'title' && !!story[key], fields);
-    });
-    var sceneOrder = story.sceneOrder || [];
-    addGroup('All Scene overviews (without H3 prompts)', sceneOrder.reduce(function (paths, id) {
-      ['title', 'summary', 'durationSeconds'].forEach(function (field) {
-        paths.push('scene:' + id + ':' + field);
-      });
-      return paths;
-    }, []), scenes);
-    sceneOrder.forEach(function (id, index) {
+    var overview = projectFields.map(function (key) {return 'project.' + key;});
+    addUnit('Project Overview', overview, fields,
+      recommendations.readHints.length
+        ? overview.some(function (path) {return recommendations.readHints.includes(path);})
+        : !!(story.concept || story.style || (story.invariants || []).length));
+    (story.sceneOrder || []).forEach(function (id, index) {
       var scene = story.scenes && story.scenes[id];
       if (!scene) throw new Error('Project has a Scene index with no matching Scene.');
-      var details = document.createElement('details'), heading = document.createElement('summary');
-      heading.textContent = 'Scene ' + (index + 1) + ' · ' + (scene.title || 'Untitled');
-      details.appendChild(heading);
-      var sceneFields = ['title', 'summary', 'prompt', 'durationSeconds'];
-      addGroup('Entire Scene', sceneFields.map(function (field) {
+      var paths = ['title', 'summary', 'prompt', 'durationSeconds'].map(function (field) {
         return 'scene:' + id + ':' + field;
-      }), details);
-      sceneFields.forEach(function (field) {
-        var path = 'scene:' + id + ':' + field;
-        var current = id === (recommendations.sceneId || activeTarget().sceneId);
-        var suggested = recommendations.readHints.indexOf(path) !== -1 ||
-          (current && recommendations.readHints.indexOf('scene.current.' + field) !== -1) ||
-          (!recommendations.readHints.length && current &&
-           (field === 'summary' || field === 'prompt') && !!scene[field]);
-        addField(path, labels[field], suggested, details);
-        if (chosen.has(path)) details.open = true;
       });
-      scenes.appendChild(details);
+      var current = id === (recommendations.sceneId || activeTarget().sceneId);
+      var suggested = recommendations.readHints.some(function (hint) {
+        return paths.includes(hint) || (current && hint.startsWith('scene.current.') &&
+          paths.some(function (path) {return path.endsWith(':' + hint.slice(14));}));
+      }) || (!recommendations.readHints.length && current && !!(scene.summary || scene.prompt));
+      addUnit('Scene ' + (index + 1) + ' · ' + (scene.title || 'Untitled'), paths, scenes, suggested);
     });
     readChoices[story.id] = chosen;
     updateReadSelection();
   }
   function selectedPaths() {
-    return Array.from(el('studio-dw-read-panel').querySelectorAll('input[data-path]:checked'))
-      .map(function (node) { return node.dataset.path; });
+    return Array.from(el('studio-dw-read-panel').querySelectorAll('input[data-group-select]:checked'))
+      .flatMap(function (toggle) {return toggle.groupPaths;});
   }
   function readPayload(story, keys) {
     return {
@@ -169,14 +139,10 @@
   }
   function updateReadSelection() {
     var keys = selectedPaths();
-    Array.from(el('studio-dw-read-panel').querySelectorAll('input[data-group-select]')).forEach(function (toggle) {
-      var chosenCount = toggle.groupPaths.filter(function (key) {return keys.indexOf(key) !== -1;}).length;
-      toggle.checked = chosenCount === toggle.groupPaths.length;
-      toggle.indeterminate = chosenCount > 0 && chosenCount < toggle.groupPaths.length;
-    });
     var bytes = readStory ? JSON.stringify(readPayload(readStory, keys)).length : 0;
-    el('studio-dw-read-count').textContent = keys.length +
-      (keys.length === 1 ? ' field' : ' fields') + ' · ' + bytes.toLocaleString() + ' characters';
+    var units = el('studio-dw-read-panel').querySelectorAll('input[data-group-select]:checked').length;
+    el('studio-dw-read-count').textContent = units +
+      (units === 1 ? ' selection' : ' selections') + ' · ' + bytes.toLocaleString() + ' characters';
     el('studio-dw-read-send').disabled = !keys.length || !el('studio-dw-read-project').value;
     var name = readStory ? storyName(readStory) : 'No Project selected';
     el('studio-dw-read-scope').textContent = 'Read source: ' + name + '. Not an automatic attachment.';
@@ -194,7 +160,7 @@
       var payload = readPayload(story, keys);
       var length = JSON.stringify(payload).length;
       if (length > 48000) throw new Error('Selected Read is ' + length.toLocaleString() +
-        ' characters. Narrow the selection to a Project overview or fewer full Scene Prompts.');
+        ' characters. Select the Project Overview or fewer Scenes.');
       el('studio-dw-read-preview-data').textContent = JSON.stringify(payload, null, 2);
       window.studioDirectorBridge.sendRead(payload, keys);
       lastReadSource = story.id;

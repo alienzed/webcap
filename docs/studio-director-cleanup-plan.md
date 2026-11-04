@@ -1,6 +1,6 @@
 # Studio Director cleanup implementation plan
 
-Status: applying to PR #859. See `AGENTS.md` (especially How To Make Changes, Mutation Safety, LLM Guidance, and UX Guidance).
+Status: phases 1–3 implemented on PR #859; Studio-specific automated checks passed on the completed code run. Phase 4 awaits real-model/browser parity acceptance before the transitional Director Tools modal is removed. No changes have been merged into main. See `AGENTS.md` (especially How To Make Changes, Mutation Safety, LLM Guidance, and UX Guidance).
 
 ## Ownership and safe boundaries
 
@@ -40,3 +40,13 @@ Studio Director owns ordinary creative conversation, explicit Read, the three re
 ### Stop conditions
 
 Stop a destructive deletion if its last consumer is ambiguous, another supported feature uses it, or automated acceptance contradicts the reachability audit. Protect shared endpoints and data compatibility; report a concrete blocker rather than invent a replacement.
+
+## Execution checkpoint — 2026-11-03
+
+- **Done:** Removed unreachable workbench Scene Move/Duplicate/Split, standalone Invariant linking, legacy one-off Scene drafting, and Playbook edit/review paths. Removed their inactive dialogs/controls and one orphan CSS rule. Preserved Scene capture review, batch field updates, explicit coherence, Read/receipts, undo and persistence.
+- **Done:** Shortened `studioDirectorChatRequestMessages` instruction text by roughly 2.2k characters and strongly prefers empty readiness metadata for ordinary 1–3 sentence exchanges. Deliberately retained the established response schema and saved session format.
+- **Done:** Updated regression tests that still expected retired UI and prompts; Studio Director and Storyboard scene-header CI checks passed on the tested code revision.
+- **Deferred for proof, not design:** `storyboard.js` still exposes the older Director Tools modal with a direct multi-Scene revision path and optional fresh-Take generation. This is still a distinct author-operated action, not proven equivalent to reviewed Write Scenes; removing it prematurely would lose capability. Verify the intended replacement against real runtime before deletion.
+- **Next acceptance:** Real-model conversation, Read receipt, reviewed Project/Scene Apply, captured-field Apply, conflict behavior, persisted chat reload, and coherence check. Follow up by retiring the legacy modal when supported parity is confirmed. Other repository CI regressions outside Studio remain a separate concern.
+
+**Do not mistake the retained manual Storyboard mechanics and stable API routes for unfinished Director LLM contracts.** The active Director creative menu, routing and prompt now have a focused scope.

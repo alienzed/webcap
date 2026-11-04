@@ -16,11 +16,11 @@ function section(source, start, end) {
 }
 
 test('coherence is an explicit Studio Director operation, not a separate automatic chat executor', () => {
-  assert.match(html, /value="coherence-check">Check Project coherence/);
+  assert.match(html, /id="studio-dw-coherence-check"[^>]*>Check Project coherence/);
   assert.match(chat, /checkProjectCoherence: function \(storyId\)/);
   assert.match(chat, /operation:'check_coherence_sequence',model:state.modelId/);
-  assert.match(chat, /For a user-requested Project-wide coherence check, suggest coherence-check/);
-  assert.match(workbench, /if \(operation === 'coherence-check'\)/);
+  assert.doesNotMatch(chat, /suggest coherence-check/);
+  assert.match(workbench, /el\('studio-dw-coherence-check'\)\.onclick/);
   assert.match(server, /if operation == "check_coherence_sequence":/);
   assert.match(runner, /context.get\("operation"\) == "check_coherence_sequence"/);
 });

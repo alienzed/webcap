@@ -101,7 +101,7 @@ test('Readiness opens a single read-only detail and never assigns one Scene ID t
   assert.match(html,/id="studio-dw-assessment-dialog"/);
   assert.match(rail,/studio-dw-assessment-dialog'\)\.showModal/);
   assert.match(rail,/studio-dw-assessment-content'\)\.textContent = item\.content/);
-  assert.match(html,/H3 Playbook · global model guidance/);
+  assert.doesNotMatch(html,/H3 Playbook · global model guidance/);
 });
 
 test('New chat and loaded session reset stale design selections without changing saved creative data',()=>{

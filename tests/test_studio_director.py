@@ -40,7 +40,7 @@ def test_studio_guidance_teaches_only_focused_creative_workflows():
     assert "one or more Scenes" in actions["scenes.write"]
     assert len(result["system"]) < 6000
     assert "normally 1-3 sentences" in result["system"]
-    assert "No recaps of what you did" in result["system"]
+    assert "brief exchanges" in result["system"]
 
 
 def test_director_role_combines_webcap_workflow_expertise_with_creative_judgment():
@@ -68,8 +68,7 @@ def test_project_coherence_remains_explicit_but_not_advertised_as_creative_actio
     variants = chat_response_schema()["properties"]["readiness"]["anyOf"]
     coherence = [variant for variant in variants
                  if "coherence-check" in variant["properties"]["writeHint"]["enum"]]
-    assert len(coherence) == 1
-    assert coherence[0]["properties"]["writeFields"]["maxItems"] == 0
+    assert coherence == [], "Coherence is an explicit utility, not a conversational Write suggestion"
 
 
 def test_studio_guidance_api_is_read_only():
@@ -223,12 +222,14 @@ def test_studio_chat_schema_constrains_recommendations_to_the_selected_operation
         for operation in variant["properties"]["writeHint"]["enum"]:
             if operation == "project":
                 assert set(fields["items"]["enum"]) == {"title", "concept", "style", "invariants"}
-            elif operation in {"scene-edit", "scenes-batch"}:
+            elif operation == "scenes":
                 assert set(fields["items"]["enum"]) == {"title", "summary", "prompt"}
             else:
                 assert fields["maxItems"] == 0
         assert fields["uniqueItems"] is True
         assert "project, style, invariants" not in variant["properties"]["writeHint"]["enum"]
+        assert set(variant["properties"]["writeHint"]["enum"]).issubset(
+            {"", "new-project", "project", "scenes"})
         check = variant["properties"]["checks"]["items"]
         assert check["additionalProperties"] is False
         assert set(check["required"]) == {"name", "scope", "ready", "content"}

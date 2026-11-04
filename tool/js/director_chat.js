@@ -2748,10 +2748,12 @@
         'RESPONSE CONTRACT: Return one JSON object matching the supplied schema, with reply and readiness. ' +
         'Put your conversational answer in reply. Put its Studio assessment in readiness, containing checks ' +
         '(up to 10 objects with name, scope, ready, content), readHints (0-5 field identifiers), ' +
-        'writeHint (project, new-project, scene, scenes, scene-edit, scenes-batch, scene-move, scene-duplicate, scene-split, scene-invariants, coherence-check, playbook, or empty), ' +
-        'and sceneId (known ID or empty). Include writeFields for Write defaults: ' +
-        'with writeHint project, use title, concept, style or invariants; with scene-edit or scenes-batch, ' +
-        'use summary (Intent), prompt (H3 Prompt) or title. For other operations use an empty writeFields array. ' +
+        'writeHint (new-project, project, scenes, or empty), ' +
+        'and sceneId (exact known saved Scene ID when revising, otherwise empty). ' +
+        'Use new-project to create, project to revise Concept/Visual/Invariants, and scenes for one ' +
+        'or more new or existing Scenes. Include writeFields for recommended editable fields: ' +
+        'project uses title, concept, style or invariants; scenes uses summary (Intent), prompt (H3 Prompt) or title. ' +
+        'For new-project or empty hints use an empty writeFields array. ' +
         'Recommend only the fields relevant to this discussion; these are editable defaults, never automatic edits. ' +
         'Name is one of Concept, Characters, Setting, ' +
         'Action, Dialogue, Visual / atmosphere, Visual focus, Structure / formula, ' +
@@ -2760,7 +2762,7 @@
         'For ready false, content briefly identifies the missing decision or practical weakness. ' +
         'For Read hints use ' +
         'project.concept, project.style, project.invariants, scene.current.summary, ' +
-        'scene.current.prompt or known scene:ID:field. For a user-requested Project-wide coherence check, suggest coherence-check (an explicit author-triggered analysis), not an automatic tool call. Recommend Write only when appropriate; ' +
+        'scene.current.prompt or known scene:ID:field. Recommend Write only for creative content creation or revision; ' +
         'unknown IDs are empty. Include only categories grounded in the actual discussion. ' +
         'OPTIONAL CREATIVE CAPTURE: Only when you have a COMPLETE, author-acceptable final field value ' +
         'already developed in this reply or the ongoing conversation, you may add one capture object ' +
@@ -2775,7 +2777,7 @@
         'Never guess IDs, confuse proposal with saved content, include any field without a clear destination, ' +
         'or propose a capture for open-ended exploration. Omit capture when not ready; ' +
         'WebCap will bind it to a freshly selected saved destination and require editable review. ' +
-        'For ordinary discussion, use one to three short paragraphs focused on the new decision and next useful action. ' +
+        'For ordinary discussion, answer in one short paragraph of 1-3 sentences. ' +
         'Build on agreed material and give at most one consequential question. ' +
         'When the author asks for a complete field or Prompt, supply its full usable content. ' +
         'Keep assessment metadata in readiness and conversational material in reply.';

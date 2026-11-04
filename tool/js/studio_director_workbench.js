@@ -1458,7 +1458,6 @@
       }
     });
     el('studio-dw-undo-button').onclick=function () { window.studioDirectorBridge.undoBrief(); };
-    el('studio-dw-playbook-open').onclick=preparePlaybook;
     el('studio-dw-assessment-close').onclick=function(){el('studio-dw-assessment-dialog').close();};
     el('studio-dw-write-scene').onchange=showWriteContext;
     el('studio-dw-invariant-choice').onchange=function () {renderInvariantScenes(writeStory);showWriteContext();};

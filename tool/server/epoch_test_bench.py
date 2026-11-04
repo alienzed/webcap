@@ -2770,8 +2770,13 @@ def _resolve_staged_test_lora(lora_file, available):
     """
     from . import inference_runtime
 
-    staged = str(lora_file).replace("\\", "/").casefold()
-    candidates = [(str(name), str(name).replace("\\", "/").casefold()) for name in available]
+    def normalized_path(value):
+        return "/".join(
+            part for part in str(value).replace("\\", "/").split("/") if part
+        ).casefold()
+
+    staged = normalized_path(lora_file)
+    candidates = [(str(name), normalized_path(name)) for name in available]
     suffix_matches = [
         (name, normalized) for name, normalized in candidates
         if staged == normalized or staged.endswith("/" + normalized)

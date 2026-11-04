@@ -213,14 +213,12 @@
     var revisingScenes = operation === 'scene-write' && el('studio-dw-scene-mode').value === 'revise';
     if (operation==='new-project') {
       text='Conversation only. No saved Project fields are included.';
-    } else if (operation==='playbook') {
-      text='The saved H3 Playbook and current conversation are used. The complete saved Playbook appears in the editable review.';
     } else if (!writeStory) {
       text='Select a Project to inspect the content Director will use.';
     } else {
       var p=writeStory;
       var data={projectId:p.id,title:p.title,concept:p.concept,style:p.style,invariants:p.invariants};
-      if (writingNewScenes || operation==='scene' || operation==='scenes') {
+      if (writingNewScenes) {
         data.currentScenes=(p.sceneOrder||[]).map(function (id,index) {
           var scene=p.scenes[id];
           return {id:id,position:index+1,title:scene.title,intent:scene.summary};
@@ -233,22 +231,6 @@
             return {id:scene.id,title:scene.title,intent:scene.summary,prompt:scene.prompt,
               durationSeconds:scene.durationSeconds,invariantRefs:scene.invariantRefs};
           });
-      }
-      if (operation==='scene-edit') {
-        var id=el('studio-dw-write-scene').value, scene=p.scenes&&p.scenes[id];
-        if (scene) data.selectedScene={id:id,title:scene.title,intent:scene.summary,prompt:scene.prompt,
-          durationSeconds:scene.durationSeconds,invariantRefs:scene.invariantRefs};
-      }
-      if (operation==='scene-move' || operation==='scene-duplicate') {
-        var sourceId=el('studio-dw-write-scene').value;
-        data.sceneOrder=(p.sceneOrder||[]).map(function (id, index) {
-          return {id:id,position:index+1,title:(p.scenes[id]||{}).title};
-        });
-        data.sourceSceneId=sourceId;
-        if (operation==='scene-move') data.destination={
-          relativeSceneId:el('studio-dw-move-target').value,
-          placement:el('studio-dw-move-placement').value
-        };
       }
       text='Current saved snapshot (reloaded before drafting):' +
         String.fromCharCode(10) + JSON.stringify(data,null,2) +
@@ -324,7 +306,6 @@
       label.append(input, document.createTextNode('Scene ' + (index+1) + ' · ' + (story.scenes[id].title || 'Untitled')));
       batchHost.appendChild(label);
     });
-    renderInvariantChoices(story);
     var preferredScene = recommendations.sceneId || activeTarget().sceneId;
     if (preferredScene && story.scenes && story.scenes[preferredScene])
       select.value = preferredScene;

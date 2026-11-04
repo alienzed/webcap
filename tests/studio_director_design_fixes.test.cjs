@@ -17,10 +17,10 @@ function section(text,start,end) {
 
 test('changing Write operation reloads saved Scene choices after a reviewed insertion', async () => {
   const handler = section(rail,"    el('studio-dw-write-operation').onchange=function () {",
-    "    ['studio-dw-write-fields', 'studio-dw-batch-fields'].forEach");
+    "    el('studio-dw-scene-mode').onchange=function () {");
   const refresh = section(rail,'  function refreshWrite() {','  function toggle(which) {');
   const elements = {
-    'studio-dw-write-operation':{value:'scene-edit'},
+    'studio-dw-write-operation':{value:'scene-write'},
     'studio-dw-write-project':{value:'project-1'}
   };
   const saved = {id:'project-1',sceneOrder:['new-scene'],scenes:{'new-scene':{title:'New Scene'}}};

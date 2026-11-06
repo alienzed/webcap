@@ -501,6 +501,39 @@
       status('Project coherence check failed: ' + String(error.message || error), true);
     }).finally(function () {button.disabled = false;});
   }
+  // Validate model-produced revisions before presenting them for review. The saved
+  // Scene identity and untouched fields remain authoritative.
+  function validateSceneRevisionDraft(result, ids, selected, raw) {
+    if (!Array.isArray(result.scenes) || result.scenes.length !== ids.length)
+      throw new Error('Director returned ' + (Array.isArray(result.scenes) ? result.scenes.length : 'no') +
+        ' Scenes; expected ' + ids.length + '.\\nRaw Director response:\\n' + raw);
+    var seen = new Set();
+    result.scenes.forEach(function (candidate, index) {
+      if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate))
+        throw new Error('Director Scene ' + (index + 1) + ' is not an object.\\nRaw Director response:\\n' + raw);
+      if (!ids.includes(candidate.sceneId) || seen.has(candidate.sceneId))
+        throw new Error('Director returned a missing, duplicate, or unknown Scene ID at record ' +
+          (index + 1) + ': ' + String(candidate.sceneId) + '.\\nRaw Director response:\\n' + raw);
+      seen.add(candidate.sceneId);
+      Object.keys(candidate).forEach(function (key) {
+        if (key === 'sceneId') return;
+        if (!sceneFields.includes(key) || typeof candidate[key] !== 'string' ||
+            !candidate[key].trim())
+          throw new Error('Director returned invalid Scene field "' + key +
+            '" for Scene ' + candidate.sceneId + ' (allowed: title, summary, prompt; nonempty strings).\\nRaw Director response:\\n' + raw);
+      });
+    });
+    return ids.map(function (id) {
+      var before = selected.find(function (row) {return row.sceneId === id;});
+      var response = result.scenes.find(function (row) {return row.sceneId === id;});
+      var changed = {sceneId:id};
+      sceneFields.forEach(function (field) {
+        if (Object.prototype.hasOwnProperty.call(response, field) &&
+            response[field] !== String(before[field] || '')) changed[field] = response[field];
+      });
+      return {sceneId:id, before:before, draft:changed};
+    }).filter(function (entry) {return Object.keys(entry.draft).length > 1;});
+  }
   function prepareBatchScenes(storyId) {
     var ids = Array.from(el('studio-dw-batch-scenes').querySelectorAll('input:checked'))
       .map(function (node) {return node.value;});
@@ -528,9 +561,11 @@
         });
         var request = [
           'You are Studio Director. Revise these specific existing Scenes based on the recent creative discussion.',
-          'Return ONLY JSON: {"scenes":[{"sceneId":"existing stable ID","summary":"revised intent","prompt":"revised H3 prompt"}]}.',
-          'Return exactly one record per selected Scene ID in the same order. Each record contains sceneId and only changed fields from title, summary, prompt. Omit unchanged fields.',
-          'Use saved Scene text as the baseline. Preserve other fields and unrelated creative content.',
+          'Return ONLY a JSON object with a scenes array. Include exactly one entry for each selected Scene ID, in the same order.',
+          'Each entry has sceneId (copied exactly from the selected Scene) and only the changed fields: title, summary, and/or prompt. summary is Scene Intent; prompt is H3 Prompt.',
+          'For an intent-only change: {"scenes":[{"sceneId":"ACTUAL_SELECTED_ID","summary":"complete revised intent"}]}. For a prompt-only change, return prompt instead of summary.',
+          'Use the saved Scene values as the baseline. Return complete replacement text for changed fields; omit unchanged fields. If no changes are needed, return only sceneId.',
+          'Preserve unrelated creative content and untouched Scene fields.',
           'Project context: '+JSON.stringify({id:story.id,concept:story.concept,style:story.style,invariants:story.invariants}),
           'Selected Scenes: '+JSON.stringify(selected),
           'Recent creative discussion: '+JSON.stringify(history),
@@ -539,35 +574,7 @@
         return window.studioDirectorBridge.makeProposal(request, 'studio_scene_batch_draft', true)
           .then(function (raw) {
             var result = parseProposal(raw);
-            if (!Array.isArray(result.scenes) || result.scenes.length !== ids.length)
-              throw new Error('Director returned ' + (Array.isArray(result.scenes) ? result.scenes.length : 'no') +
-                ' Scenes; expected ' + ids.length + '.\nRaw Director response:\n' + raw);
-            var seen = new Set();
-            result.scenes.forEach(function (candidate, index) {
-              if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate))
-                throw new Error('Director Scene ' + (index + 1) + ' is not an object.\nRaw Director response:\n' + raw);
-              if (!ids.includes(candidate.sceneId) || seen.has(candidate.sceneId))
-                throw new Error('Director returned a missing, duplicate, or unknown Scene ID at record ' +
-                  (index + 1) + ': ' + String(candidate.sceneId) + '.\nRaw Director response:\n' + raw);
-              seen.add(candidate.sceneId);
-              Object.keys(candidate).forEach(function (key) {
-                if (key === 'sceneId') return;
-                if (!sceneFields.includes(key) || typeof candidate[key] !== 'string' ||
-                    !candidate[key].trim())
-                  throw new Error('Director returned invalid Scene field "' + key +
-                    '" for Scene ' + candidate.sceneId + ' (allowed: title, summary, prompt; nonempty strings).\nRaw Director response:\n' + raw);
-              });
-            });
-            proposedBatch = {storyId:storyId, scenes:ids.map(function (id) {
-              var before = selected.find(function (row) {return row.sceneId === id;});
-              var response = result.scenes.find(function (row) {return row.sceneId === id;});
-              var changed = {sceneId:id};
-              sceneFields.forEach(function (field) {
-                if (Object.prototype.hasOwnProperty.call(response, field) &&
-                    response[field] !== String(before[field] || '')) changed[field] = response[field];
-              });
-              return {sceneId:id, before:before, draft:changed};
-            }).filter(function (entry) {return Object.keys(entry.draft).length > 1;})};
+            proposedBatch = {storyId:storyId, scenes:validateSceneRevisionDraft(result, ids, selected, raw)};
             if (!proposedBatch.scenes.length) {
               proposedBatch = null;
               status('Director proposed no changes to the selected Scenes.', false);

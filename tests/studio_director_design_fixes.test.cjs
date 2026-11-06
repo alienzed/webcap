@@ -26,18 +26,17 @@ test('changing Write operation reloads saved Scene choices after a reviewed inse
   const saved = {id:'project-1',sceneOrder:['new-scene'],scenes:{'new-scene':{title:'New Scene'}}};
   let rendered = {id:'project-1',sceneOrder:[],scenes:{}};
   const scope = vm.createContext({
-    el:id=>elements[id], writeOperationChosen:false,writeFieldsManuallyChanged:true,
+    el:id=>elements[id], writeOperationChosen:false,
     refreshProjects:async()=>{},
     loadStory:async id=>{assert.equal(id,saved.id);return saved;},
     renderWriteStory:story=>{rendered=story;},
     setOperation:()=>{assert.deepEqual(rendered.sceneOrder,['new-scene']);},
-    applySuggestedWriteFields:()=>{},status:message=>assert.fail(message)
+    status:message=>assert.fail(message)
   });
   vm.runInContext(refresh+handler,scope);
   await elements['studio-dw-write-operation'].onchange();
   assert.equal(rendered,saved);
   assert.equal(scope.writeOperationChosen,true);
-  assert.equal(scope.writeFieldsManuallyChanged,false);
 });
 
 test('Undo is reachable from the visible rail and delegates to existing reviewed operation', () => {

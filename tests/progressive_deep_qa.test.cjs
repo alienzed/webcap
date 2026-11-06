@@ -446,7 +446,7 @@ test('Deep QA overview presents one progress strip with Stop and stable coverage
 });
 
 test('Deep QA shares only bounded named statistical exceptions with explicit discovery', () => {
-  const run = functionSource('qaRunNextDeepScanBatch', 'qaDeepScanNextItemBatch');
+  const run = qa.split('  function qaRunNextDeepScanBatch() {')[1].split('  function qaRunDeepScan() {')[0];
   assert.match(run, /statisticalCandidates: qaBuildAssociationFindings\(qaDeepScanScopeItems\(\)\)\.slice\(0, 3\)/);
   assert.match(run, /files: finding\.files\.slice\(0, 2\)/);
   assert.match(run, /preflight: true/);

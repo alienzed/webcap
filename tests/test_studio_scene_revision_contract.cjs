@@ -12,7 +12,7 @@ const marker = '})();';
 assert.ok(source.trimEnd().endsWith(marker), 'Expected workbench IIFE');
 const instrumented = source.slice(0, source.lastIndexOf(marker)) +
   'globalThis.validateForTest = validateSceneRevisionDraft;\n' + marker;
-const context = {document: {readyState: 'loading', addEventListener() {}}};
+const context = {window: {}, document: {readyState: 'loading', addEventListener() {}}};
 vm.runInNewContext(instrumented, context, {filename: file});
 const validate = context.validateForTest;
 

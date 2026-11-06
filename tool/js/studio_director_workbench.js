@@ -506,21 +506,21 @@
   function validateSceneRevisionDraft(result, ids, selected, raw) {
     if (!Array.isArray(result.scenes) || result.scenes.length !== ids.length)
       throw new Error('Director returned ' + (Array.isArray(result.scenes) ? result.scenes.length : 'no') +
-        ' Scenes; expected ' + ids.length + '.\\nRaw Director response:\\n' + raw);
+        ' Scenes; expected ' + ids.length + '.\nRaw Director response:\n' + raw);
     var seen = new Set();
     result.scenes.forEach(function (candidate, index) {
       if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate))
-        throw new Error('Director Scene ' + (index + 1) + ' is not an object.\\nRaw Director response:\\n' + raw);
+        throw new Error('Director Scene ' + (index + 1) + ' is not an object.\nRaw Director response:\n' + raw);
       if (!ids.includes(candidate.sceneId) || seen.has(candidate.sceneId))
         throw new Error('Director returned a missing, duplicate, or unknown Scene ID at record ' +
-          (index + 1) + ': ' + String(candidate.sceneId) + '.\\nRaw Director response:\\n' + raw);
+          (index + 1) + ': ' + String(candidate.sceneId) + '.\nRaw Director response:\n' + raw);
       seen.add(candidate.sceneId);
       Object.keys(candidate).forEach(function (key) {
         if (key === 'sceneId') return;
         if (!sceneFields.includes(key) || typeof candidate[key] !== 'string' ||
             !candidate[key].trim())
           throw new Error('Director returned invalid Scene field "' + key +
-            '" for Scene ' + candidate.sceneId + ' (allowed: title, summary, prompt; nonempty strings).\\nRaw Director response:\\n' + raw);
+            '" for Scene ' + candidate.sceneId + ' (allowed: title, summary, prompt; nonempty strings).\nRaw Director response:\n' + raw);
       });
     });
     return ids.map(function (id) {

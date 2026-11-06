@@ -993,6 +993,9 @@
           groupedTags: item.groupedTags.map(function (row) { return { group: row.group, term: row.term }; }),
           otherTags: item.tags
         };
+      }),
+      statisticalCandidates: qaBuildAssociationFindings(qaDeepScanScopeItems()).slice(0, 3).map(function (finding) {
+        return { title: finding.title, summary: finding.summary, files: finding.files.slice(0, 2) };
       })
     };
     var discovery = Promise.resolve();

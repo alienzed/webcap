@@ -181,29 +181,12 @@ test('Director guidance presents at most two field actions and keeps assessment 
   assert.match(workbench, /return 'Write Scenes'/);
 });
 
-test('Write Scenes preselects supported fields without overriding manual choices', () => {
-  const source=workbench.split('  function recommendedWriteFields(operation) {')[1]
-    .split('  function refreshRead() {')[0];
-  assert.ok(source,'missing Write field defaults');
-  const fields=['summary','prompt','title'].map(value=>({value,checked:value==='summary'}));
-  const els={
-    'studio-dw-write-operation':{value:'scene-write'},
-    'studio-dw-scene-mode':{value:'revise'},
-    'studio-dw-batch-fields':{querySelectorAll:()=>fields}
-  };
-  const create=new Function('recommendations','readinessStale','projectFields','sceneFields','writeFieldsManuallyChanged','el',
-    'function recommendedWriteFields(operation) {'+source+
-    '\nreturn {recommendedWriteFields,applySuggestedWriteFields};');
-  const harness=(stale=false, changed=false)=>create({writeFields:['prompt']},stale,
-    ['title','concept','style','invariants'],['summary','prompt','title'],changed,id=>els[id]);
-  harness().applySuggestedWriteFields();
-  assert.deepEqual(fields.map(item=>item.checked),[false,true,false]);
-  fields[0].checked=true;fields[1].checked=false;
-  harness(false,true).applySuggestedWriteFields();
-  assert.deepEqual(fields.map(item=>item.checked),[true,false,false]);
-  harness(true).applySuggestedWriteFields();
-  assert.deepEqual(fields.map(item=>item.checked),[true,false,false]);
-  assert.deepEqual(harness().recommendedWriteFields('project'),[]);
+test('Scene revisions select saved Scenes, leaving changed fields to Director', () => {
+  assert.match(workbench, /id === \(recommendations\.sceneId \|\| activeTarget\(\)\.sceneId\)/);
+  assert.match(workbench, /only the changed fields: title, summary, and\/or prompt/);
+  assert.match(workbench, /validateSceneRevisionDraft\(result, ids, selected, raw\)/);
+  assert.doesNotMatch(workbench, /applySuggestedWriteFields/);
+  assert.doesNotMatch(html, /id="studio-dw-batch-fields"/);
 });
 test('Project Write hints narrow reviewed field defaults without auto-applying',()=>{
   assert.match(workbench,/bridge\.prepareWrite\(operation, id, item && storyName\(item\),\s*Array\.isArray\(writeFields\) \? writeFields : recommendedWriteFields\(operation\)\)/);

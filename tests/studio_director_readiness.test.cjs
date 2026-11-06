@@ -183,7 +183,7 @@ test('Director guidance presents at most two field actions and keeps assessment 
 
 test('Scene revisions select saved Scenes, leaving changed fields to Director', () => {
   assert.match(workbench, /id === \(recommendations\.sceneId \|\| activeTarget\(\)\.sceneId\)/);
-  assert.match(workbench, /only the changed fields: title, summary, and\/or prompt/);
+  assert.match(workbench, /whichever fields need changing: title, summary/);
   assert.match(workbench, /validateSceneRevisionDraft\(result, ids, selected, raw\)/);
   assert.doesNotMatch(workbench, /applySuggestedWriteFields/);
   assert.doesNotMatch(html, /id="studio-dw-batch-fields"/);

@@ -115,18 +115,16 @@ test('explicit Write guidance asks for the draft, not another conversational rec
 });
 
 test('existing Project and Scene draft paths also use explicit Write guidance', () => {
-  const drafts = [
-    ['studio_project_draft', "JSON.stringify(input)"],
-    ['studio_brief_draft', "JSON.stringify(input)"],
-    ['studio_scene_sequence_draft', "JSON.stringify(input)"],
-    ['studio_scene_draft', "JSON.stringify(input, null, 2)"]
-  ];
-  for (const [operation, serialization] of drafts) {
+  for (const operation of ['studio_project_draft', 'studio_brief_draft',
+      'studio_scene_sequence_draft', 'studio_scene_draft']) {
     const marker = "showSentWriteContext('" + operation + "', messages)";
-    const before = source.slice(0, source.indexOf(marker));
-    assert.ok(before.length < source.length, 'Missing draft operation: ' + operation);
-    const call = before.slice(-850);
-    assert.match(call, /studioDirectorRequestMessages\\(\\[\\{ role: 'user', content: JSON\\.stringify\\(input(?:, null, 2)?\\) \\}\\], false, true\\)/);
+    const index = source.indexOf(marker);
+    assert.ok(index !== -1, 'Missing draft operation: ' + operation);
+    const before = source.slice(Math.max(0, index - 850), index);
+    const plain = "studioDirectorRequestMessages([{ role: 'user', content: JSON.stringify(input) }], false, true)";
+    const formatted = "studioDirectorRequestMessages([{ role: 'user', content: JSON.stringify(input, null, 2) }], false, true)";
+    assert.ok(before.includes(plain) || before.includes(formatted),
+      'Explicit Write guidance not used by ' + operation);
   }
 });
 

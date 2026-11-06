@@ -111,7 +111,7 @@ test('explicit Write guidance asks for the draft, not another conversational rec
   assert.match(writing[0].content,/EXPLICIT REVIEWED WRITE/);
   assert.match(writing[0].content,/Produce the requested complete editable proposal/);
   assert.equal(writing[1].content,'Revise Scene');
-  assert.match(director,/studioDirectorRequestMessages\(\[\{role:'user',content:instruction\}\], includePromptContract, true\)/);
+  assert.match(source,/studioDirectorRequestMessages\(\[\{role:'user',content:instruction\}\], includePromptContract, true\)/);
 });
 
 test('single-Scene revision request uses its saved ID in the example, not a placeholder', () => {

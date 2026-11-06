@@ -3595,7 +3595,7 @@
     var groups = parseVariationGroups(el('test-generations-prompt').value);
     select.replaceChildren(new Option('None', ''));
     groups.forEach(function(group, index) {
-      var choices = group.options.map(function(option) { return option.trim(); });
+      var choices = group.options.map(function(option) { return option.replace(/\s+/g, ' ').trim(); });
       var valid = !group.nested && choices.length >= 2 &&
         choices.every(Boolean) && new Set(choices).size >= 2 && choices.length <= 32;
       var option = new Option('Group ' + (index + 1) + ' · ' +

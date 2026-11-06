@@ -567,8 +567,8 @@
                     response[field] !== String(before[field] || '')) changed[field] = response[field];
               });
               return {sceneId:id, before:before, draft:changed};
-            })};
-            if (!proposedBatch.scenes.some(function (entry) {return Object.keys(entry.draft).length > 1;})) {
+            }).filter(function (entry) {return Object.keys(entry.draft).length > 1;})};
+            if (!proposedBatch.scenes.length) {
               proposedBatch = null;
               status('Director proposed no changes to the selected Scenes.', false);
               return;
@@ -918,11 +918,11 @@
     };
     el('studio-dw-write-operation').onchange=function () {
       writeOperationChosen = true;
-        return refreshWrite();
+      return refreshWrite();
     };
     el('studio-dw-scene-mode').onchange=function () {
       writeOperationChosen = true;
-        setOperation();
+      setOperation();
     };
     el('studio-dw-coherence-check').onclick=function () {
       var id = el('studio-dw-write-project').value;

@@ -375,7 +375,8 @@ textarea:focus, input:focus {
 
 .editor-floating-action-primary-row {
   display: inline-flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: flex-end;
   gap: 6px;
 }
 
@@ -965,7 +966,7 @@ textarea#editor {
   max-width: 100%;
   box-sizing: border-box;
   height: 100%;
-  padding-right: 80px;
+  padding-right: 108px;
   resize: none;
   font-family: Consolas, "Cascadia Mono", monospace;
   font-size: 13px;

@@ -2779,6 +2779,43 @@ def test_vl_wildcard_groups_preserve_choices_without_exposing_expected_in_questi
     assert [g["expected"] for g in groups] == [2, 2, 2]
 
 
+def test_variation_keeps_nested_unselected_groups_resolvable():
+    source = "a {red|blue} coat with {small {silver|gold} pin|plain} details"
+    cases = bench._deterministic_variation_cases(source, 0, 42)
+    assert [case["label"] for case in cases] == ["red", "blue"]
+    assert len(cases) == 2
+    assert all("{" not in case["prompt"] for case in cases)
+    assert cases[0]["prompt"].replace("red", "blue", 1) == cases[1]["prompt"]
+
+
+def test_variation_keeps_unselected_empty_and_single_option_groups():
+    source = "a {red|blue} coat {with a scarf|} in {studio}"
+    cases = bench._deterministic_variation_cases(source, 0, 42)
+    assert [case["label"] for case in cases] == ["red", "blue"]
+    assert all("{studio}" not in case["prompt"] for case in cases)
+    assert all(case["prompt"].endswith("in studio") for case in cases)
+    assert cases[0]["prompt"].replace("red", "blue", 1) == cases[1]["prompt"]
+
+
+def test_variation_still_rejects_nested_or_empty_selected_group():
+    with pytest.raises(ValueError, match="flat wildcard group"):
+        bench._deterministic_variation_cases(
+            "a {red|blue} coat with {small {silver|gold} pin|plain} details", 1, 42
+        )
+    with pytest.raises(ValueError, match="must be nonempty"):
+        bench._deterministic_variation_cases("a {red|} coat", 0, 42)
+
+
+def test_variation_flat_groups_remain_deterministic():
+    source = "a {red|blue} coat in {studio|garden}"
+    assert bench._deterministic_variation_cases(source, 0, 42) == (
+        bench._deterministic_variation_cases(source, 0, 42)
+    )
+    assert [case["label"] for case in bench._deterministic_variation_cases(source, 0, 42)] == [
+        "red", "blue"
+    ]
+
+
 def test_vl_wildcard_groups_support_nested_and_optional_choices():
     source = "wearing {with {blue|pink} trim|} and {striped|} top"
     groups = bench._wildcard_evaluation_groups(source, "wearing with pink trim and striped top")

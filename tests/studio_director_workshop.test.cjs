@@ -94,6 +94,37 @@ test('Studio prompting selects the current goal rather than steering every task 
   assert.equal(assembled.length,2, 'no extra request or hidden context event');
 });
 
+test('explicit Write guidance asks for the draft, not another conversational recommendation', async () => {
+  const context = vm.createContext({
+    state:{studioStoryAccess:null,storyboardAttachments:{}},
+    Object,String,Promise,
+    requestJson:async()=>({system:'Studio producer expertise',actions:[]})
+  });
+  vm.runInContext(part('  function studioDirectorRequestMessages(messages, includePromptContract) {',
+    '  function studioDirectorChatRequestMessages(messages) {'),context);
+  const conversational = await vm.runInContext(
+    "studioDirectorRequestMessages([{role:'user',content:'Discuss Scene'}],false)",context);
+  const writing = await vm.runInContext(
+    "studioDirectorRequestMessages([{role:'user',content:'Revise Scene'}],false,true)",context);
+  assert.match(conversational[0].content,/suggest at most one useful next step/);
+  assert.doesNotMatch(writing[0].content,/suggest at most one useful next step/);
+  assert.match(writing[0].content,/EXPLICIT REVIEWED WRITE/);
+  assert.match(writing[0].content,/Produce the requested complete editable proposal/);
+  assert.equal(writing[1].content,'Revise Scene');
+  assert.match(director,/studioDirectorRequestMessages\(\[\{role:'user',content:instruction\}\], includePromptContract, true\)/);
+});
+
+test('single-Scene revision request uses its saved ID in the example, not a placeholder', () => {
+  const batch = workbench.split('  function prepareBatchScenes(storyId) {')[1]
+    .split('  function renderBatchReview() {')[0];
+  assert.match(batch,/ids\.length === 1/);
+  assert.match(batch,/JSON\.stringify\(\{scenes:\[\{sceneId:ids\[0\],summary:/);
+  assert.doesNotMatch(batch,/ACTUAL_SELECTED_ID/);
+  assert.match(batch,/summary \(Scene Intent\)/);
+  assert.match(batch,/prompt \(H3 Prompt\)/);
+  assert.match(batch,/validateSceneRevisionDraft\(result, ids, selected, raw\)/);
+});
+
 test('Read sends actual selected data as a visible conversation event and expects LLM receipt', () => {
   const state = {open: true, activeMode: 'storyboard', sessionReady: true,
     pending: false, attachmentPending: false, modelId: 'local-model'};

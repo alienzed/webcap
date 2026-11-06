@@ -3561,7 +3561,6 @@
     var text = String(value || '');
     var groups = [];
     var depth = 0;
-    var start = -1;
     var optionStart = -1;
     var options = [];
     var nested = false;
@@ -3569,7 +3568,6 @@
       var ch = text[i];
       if (ch === '{') {
         if (depth === 0) {
-          start = i;
           optionStart = i + 1;
           options = [];
           nested = false;
@@ -3582,7 +3580,6 @@
         if (depth === 0) {
           options.push(text.slice(optionStart, i));
           groups.push({ options: options, nested: nested });
-          start = -1;
         }
       } else if (ch === '|' && depth === 1) {
         options.push(text.slice(optionStart, i));

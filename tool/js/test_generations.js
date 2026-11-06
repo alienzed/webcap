@@ -3555,15 +3555,57 @@
     updateTransport();
   }
 
+  function parseVariationGroups(value) {
+    // Match the backend's top-level group indexing, including nested and
+    // single-choice groups that cannot themselves be varied.
+    var text = String(value || '');
+    var groups = [];
+    var depth = 0;
+    var optionStart = -1;
+    var options = [];
+    var nested = false;
+    for (var i = 0; i < text.length; i++) {
+      var ch = text[i];
+      if (ch === '{') {
+        if (depth === 0) {
+          optionStart = i + 1;
+          options = [];
+          nested = false;
+        } else {
+          nested = true;
+        }
+        depth++;
+      } else if (ch === '}' && depth > 0) {
+        depth--;
+        if (depth === 0) {
+          options.push(text.slice(optionStart, i));
+          groups.push({ options: options, nested: nested });
+        }
+      } else if (ch === '|' && depth === 1) {
+        options.push(text.slice(optionStart, i));
+        optionStart = i + 1;
+      }
+    }
+    return groups;
+  }
+
   function syncVariationGroups() {
     var select = el('test-generations-variation-group');
     var previous = select.value;
-    var groups = parseWildcardGroups(el('test-generations-prompt').value);
+    var groups = parseVariationGroups(el('test-generations-prompt').value);
     select.replaceChildren(new Option('None', ''));
-    groups.forEach(function(group,index) {
-      select.add(new Option('Group ' + (index + 1) + ' · ' + group.options.join(' / '), String(index)));
+    groups.forEach(function(group, index) {
+      var choices = group.options.map(function(option) { return option.replace(/\s+/g, ' ').trim(); });
+      var valid = !group.nested && choices.length >= 2 &&
+        choices.every(Boolean) && new Set(choices).size >= 2 && choices.length <= 32;
+      var option = new Option('Group ' + (index + 1) + ' · ' +
+        (group.nested ? 'nested (not available for variation)' : choices.join(' / ')), String(index));
+      option.disabled = !valid;
+      select.add(option);
     });
-    select.value = groups.some(function(group,index){ return String(index) === previous; }) ? previous : '';
+    select.value = groups.some(function(group, index) {
+      return String(index) === previous && !select.options[index + 1].disabled;
+    }) ? previous : '';
   }
 
   // Prompt Tests uses Manual Screening's layout pattern: prompt columns over

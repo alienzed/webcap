@@ -2167,18 +2167,18 @@ def _deterministic_variation_cases(prompt, group_index, seed):
     groups = [value for kind, value in nodes if kind == "group"]
     if group_index < 0 or group_index >= len(groups):
         raise ValueError("Selected variation group is no longer present in the prompt.")
-    if any(_wildcard_nodes_have_group(option) for group in groups for option in group):
-        raise ValueError("Exhaustive variation requires flat wildcard groups.")
+    if any(_wildcard_nodes_have_group(option) for option in groups[group_index]):
+        raise ValueError("Select a flat wildcard group for exhaustive variation.")
     resolved_groups = []
-    for index, group in enumerate(groups):
+    for group in groups:
         options = list(dict.fromkeys(
             _normalize_wildcard_text(text)
             for option in group for text in _expand_wildcard_option(option)
         ))
-        if not options or any(not option for option in options):
-            raise ValueError("Variation options must be nonempty.")
         resolved_groups.append(options)
     selected = resolved_groups[group_index]
+    if any(not option for option in selected):
+        raise ValueError("Selected variation group options must be nonempty.")
     if len(selected) < 2:
         raise ValueError("Select a variation group with at least two distinct options.")
     if len(selected) > 32:

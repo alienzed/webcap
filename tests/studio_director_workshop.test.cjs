@@ -54,7 +54,7 @@ test('Only explicitly supplied conversation content is sent; legacy snapshots ar
         description: 'Explicitly delivered fields only'}]
     })
   });
-  vm.runInContext(part('  function studioDirectorRequestMessages(messages, includePromptContract) {',
+  vm.runInContext(part('  function studioDirectorRequestMessages(messages, includePromptContract, explicitWrite) {',
     '  function studioDirectorChatRequestMessages(messages) {'), context);
   const result = await vm.runInContext(
     'studioDirectorRequestMessages([{role:"user",content:"Develop the idea"}])', context);
@@ -79,7 +79,7 @@ test('Studio prompting selects the current goal rather than steering every task 
       promptContract:'integrated_multimodal_description: [Shot 1]'
     })
   });
-  vm.runInContext(part('  function studioDirectorRequestMessages(messages, includePromptContract) {',
+  vm.runInContext(part('  function studioDirectorRequestMessages(messages, includePromptContract, explicitWrite) {',
     '  // The creative assessment is advisory.'),context);
   const assembled = await vm.runInContext(
     "studioDirectorChatRequestMessages([{role:'user',content:'Revise only the Scene action'}])",context);
@@ -100,7 +100,7 @@ test('explicit Write guidance asks for the draft, not another conversational rec
     Object,String,Promise,
     requestJson:async()=>({system:'Studio producer expertise',actions:[]})
   });
-  vm.runInContext(part('  function studioDirectorRequestMessages(messages, includePromptContract) {',
+  vm.runInContext(part('  function studioDirectorRequestMessages(messages, includePromptContract, explicitWrite) {',
     '  function studioDirectorChatRequestMessages(messages) {'),context);
   const conversational = await vm.runInContext(
     "studioDirectorRequestMessages([{role:'user',content:'Discuss Scene'}],false)",context);
@@ -263,7 +263,7 @@ test('H3 detailed authoring contract is included when Director may propose a Pro
       promptContract:'[Shot 1] Full H3 authoring contract'
     })
   });
-  vm.runInContext(part('  function studioDirectorRequestMessages(messages, includePromptContract) {',
+  vm.runInContext(part('  function studioDirectorRequestMessages(messages, includePromptContract, explicitWrite) {',
     '  function studioDirectorChatRequestMessages(messages) {'),context);
   const ordinary = await vm.runInContext(
     "studioDirectorRequestMessages([{role:'user',content:'Discuss scene'}])",context);
@@ -281,7 +281,7 @@ test('Studio conversation receives the canonical H3 template as reference withou
     state,Object,String,Promise,
     requestJson:async () => ({system:'Studio guidance',actions:[],promptContract:template})
   });
-  vm.runInContext(part('  function studioDirectorRequestMessages(messages, includePromptContract) {',
+  vm.runInContext(part('  function studioDirectorRequestMessages(messages, includePromptContract, explicitWrite) {',
     '  // The creative assessment is advisory.'),context);
   const result = await vm.runInContext(
     "studioDirectorChatRequestMessages([{role:'user',content:'How should an H3 prompt be structured?'}])",context);

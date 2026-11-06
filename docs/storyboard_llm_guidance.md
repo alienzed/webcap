@@ -1,6 +1,6 @@
 # Storyboard LLM Guidance
 
-> **Scope note (2026-10-29):** This document describes the underlying **Storyboard LLM/generation pipeline**, including historical operations still supported for old Projects. The current **Studio Director authoring experience**, its five-field contract, the intentional exclusion of reference media/LoRA/sampling/seed controls, and the *current* implementation backlog are defined in [Studio Director — intention-to-materialization contract](studio-director-materialization-contract.md). Director supplies authored creative material; WebCap deterministically reviews, targets and saves it with the author. Do not treat the legacy operations documented here as additional Studio Director fields or feature-completeness requirements.
+> **Scope note (updated 2026-11-06):** This document describes the underlying **Storyboard LLM/generation pipeline**, including historical operations still supported for old Projects. The current **Studio Director authoring experience**, its Project Overview/Scene creative units, and the exclusion of reference media/LoRA/sampling/seed controls are defined in [Studio Director useful-function consolidation](studio-director-useful-functions-consolidation.md). Director proposes creative material; WebCap targets, reviews and saves it with the author. The legacy operations below are not additional Studio Director fields or feature-completeness requirements.
 
 ## Core vision
 

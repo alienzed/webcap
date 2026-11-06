@@ -19,7 +19,9 @@ WebCap is built with Flask plus plain browser JavaScript. There is no database o
 | **Training runs and checkpoints** | Use the managed Training Queue or generate a manual WSL command; inspect progress, next-checkpoint ETA, logs, output, and **Training History**. Resume compatible checkpoints or start a fresh run from a saved LoRA/initializer. Training History is a lightweight metadata index rather than a filesystem-derived catalog. | In Training, use **Run setup** and **Training Queue**; select **Resume checkpoint** or **Fine-tune from saved LoRA** under **Starting point** when applicable. |
 | **LoRA candidate analysis** | Review a recorded run's TensorBoard loss curves and suggested completed checkpoint epochs without changing run files. **Multiscale Loss Basins** is the primary detector; **Score Scalars · legacy baseline** remains available. Saved candidates can be copied to the configured Test root and removed again later. | In a run row with recorded output, choose **Analyze LoRA candidates**, then use the candidate actions to stage or remove Test copies. |
 | **H3 calibration** | Test MiniMax H3 video bucket shapes on the configured training hardware and retain conclusive results. Verified safe ceilings affect only newly generated or reset H3 datasets; existing TOMLs and captured runs are left unchanged. | Open **Diagnostics** → **H3 calibration**, choose an eligible source from the current folder, and select **Run calibration**. See [`docs/vram_bucket_calibration.md`](docs/vram_bucket_calibration.md). |
-| **Test Bench** | Compare staged MiniMax H3 or Krea2 LoRAs against a shared prompt/settings baseline. Queue multiple Test sessions, include or exclude the base model, use wildcard prompts (including the optional caption-driven LLM helper), revisit named/saved sessions and Recent Test Sets, switch between Grid and two-item Compare, open result folders, and rate generated items. | Choose a supported Test Base Model, stage checkpoints from Training, then open **Test** from the permanent activity rail. |
+| **Prompt Tests** | Compare staged MiniMax H3 or Krea2 LoRAs against a shared prompt/settings baseline. Queue multiple Test sessions, include or exclude the base model, use wildcard prompts (including the optional caption-driven LLM helper), revisit named/saved sessions and Recent Test Sets, switch between Grid and two-item Compare, open result folders, and rate generated items. | Choose a supported Test Base Model, stage checkpoints from Training, then open **Evaluation → Prompt Tests**. |
+| **Studio Director** | Discuss a creative idea, explicitly Read saved Project/Scene material, then create or revise a Project Overview or one/many Scenes through editable Review and explicit Apply. Suggestions can open the reviewed Write directly. | Open **Studio → Chat** or a Scene's **Workshop**. Select the Director model in the global header. |
+| **Studio Blocks** | Keep reusable Idea and Guidance text independent of Projects; insert a chosen Block into the Director composer with `/`. | Open **Studio → Blocks** to manage the library; review inserted text before sending. |
 | **App settings** | Configure the filesystem root, default caption template, optional local analysis, appearance, training runtime, Storyboard Director runtime, repeat-reference epochs, Copy-to-Test roots, enabled training models, diagnostics, and advanced JSON. | Open **App Settings** from the permanent activity rail. Use the **General**, **Models**, **Training**, **Director**, and **Advanced** tabs. |
 
 ## Workspaces and shared controls
@@ -31,8 +33,9 @@ WebCap's activity rail groups related workflows without turning them into one mo
 | **Prep** | Browse, filter, annotate, edit, and organize source Sets. Review, Media Grid, and Focus are contextual Prep surfaces. |
 | **Generate** | Produce standalone image/video generations through configured ComfyUI workflows, with Director-assisted prompt tools where available. |
 | **Training** | Configure and launch captured Diffusion Pipe runs, inspect Training History/checkpoints, and stage candidate LoRAs. |
-| **Test** | Compare staged LoRAs and base-model results in Test sessions; use Ask VL/evaluation tools where configured. |
-| **Storyboard** | Develop Stories and Scenes, use optional Director assistance, generate/review Takes, and assemble selected results. Storyboard projects are not source Sets. |
+| **Evaluation** | Use **Prompt Tests**, **Campaigns**, **Insights**, and **References** to compare generations, staged LoRAs, and recorded training evidence. |
+| **Studio** | Author Projects and Scenes, use Studio Director, generate/review Takes, and play selected results in sequence. Internally this remains the Storyboard workflow; Projects are not source Sets. |
+| **Media Explorer** | Search and inspect generated media and references, follow provenance to the owning workflow, and use supported comparison/cleanup actions. |
 | **Storage** | Inspect and navigate WebCap-managed storage and derived artifacts; deletion remains governed by each artifact's ownership. |
 
 The **Activity** drawer shows current and recently finished work with navigation to its owner. The **Inference Queue** drawer is the scheduling command center for inference, LLM, and Training lanes, with lane-appropriate controls. The **Console** provides diagnostic messages rather than replacing feature-specific results/logs. These are shared shell surfaces, not separate copies of feature state.
@@ -57,6 +60,8 @@ This section is a task-oriented quick start, not a substitute for the in-app con
 
 **Review quality and focus on fixes.** Open **Review** to inspect the caption sheet, **Media Metadata**, **Caption Report**, and **Prune Candidates** for the visible scope. Use the report and Focus Set actions to narrow an issue, then **QA Focus Review** to work through actionable items one at a time. Inspect duplicate findings before deciding to prune. [Review](docs/review.md).
 
+**Run Deep QA explicitly.** Deep QA uses saved Sight, captions and existing tag assignments to develop concrete correction proposals. Review supported caption/tag changes through QA Focus Review and Caption Assist before applying them; observations are not automatic edits or validation. Completed item checks are retained for matching scope/model/input signatures. [Deep QA behavior](docs/progressive_deep_qa.md).
+
 ### Generate: create standalone media
 
 **Start a generation.** Open **Generate**, select the supported generation configuration, enter or refine the prompt and generation settings, then submit the job. Configured ComfyUI connectivity is required for execution. A generated result is a derived artifact, not an addition to the source Set by default.
@@ -75,9 +80,9 @@ This section is a task-oriented quick start, not a substitute for the in-app con
 
 **Use Campaigns.** Open **Evaluations → Campaigns** to configure an evaluation campaign for training checkpoints. Review the selected training run, reference/control material, prompt or wildcard choices, generation settings, and candidate epochs before launching. Inspect resulting preview images and comparison evidence, then use manual ratings to inform checkpoint selection; automated visual scores are advisory, not proof that an epoch is best. Campaigns and results are separate from Training History. Do not assume that a reference image was necessarily included in the run's training capture without checking its provenance.
 
-### Test: compare candidates and examine results
+### Evaluation: compare candidates and examine results
 
-**Create a normal Test session.** Open **Test** and select staged LoRAs, a prompt, and common generation settings; include a base-model result when useful. Submit a Test session: each chosen Base/candidate rendition uses frozen session inputs and joins the shared inference queue. Reopen prior **Sessions** to inspect the saved results. Compare in **Grid** or **Compare**, and rate the previews.
+**Create a normal Test session.** Open **Evaluation → Prompt Tests** and select staged LoRAs, a prompt, and common generation settings; include a base-model result when useful. Submit a Test session: each chosen Base/candidate rendition uses frozen session inputs and joins the shared inference queue. Reopen prior **Sessions** to inspect the saved results. Compare in **Grid** or **Compare**, and rate the previews.
 
 **Use Weight Sweep or Batch Test.** Select **Weight Sweep** to compare chosen strength values, or **Batch Test + Ask VL** to queue multiple sessions with new seeds and optional automatic evaluation of completed previews. Inspect the batch progress and results; batch mode is not a separate scheduler.
 
@@ -85,13 +90,19 @@ This section is a task-oriented quick start, not a substitute for the in-app con
 
 **Build varied prompts.** Use wildcard prompts or the **Wildcard Builder** to inspect and adjust controlled variations. Preview or regenerate the proposed prompt before choosing **Use as Prompt**. [Execution Queue](docs/execution_queue.md).
 
-### Storyboard: author Stories, Scenes, and Takes
+### Studio: author Projects, Scenes, and Takes
 
-**Create and develop a Story.** Open **Storyboard**, create or select a Story, enter its concept and visual style, then add **Invariants** for facts that should remain consistent. Choose a target Scene count or **Auto**, and use **Develop Scenes** for an optional Director-assisted plan. Read and revise generated text before adopting it; manual scene authoring remains available.
+**Create and develop a Project.** Open **Studio**, create or select a Project, and develop its **Project Overview**: Concept, Visual / atmosphere, and Invariants. Each Scene combines Title, Intent, and H3 Prompt. These are coherent creative units: a revision can change one part or several while preserving the rest. Manual authoring remains available.
 
-**Edit Scenes.** Switch between **Overview** and **Focus**. For a Scene, edit the prompt, entry/exit state, duration, seed behavior, aspect settings, references, and optional LoRAs. Story defaults can be inherited or overridden by individual Scenes. **Director Tools** provides additional authoring/revision operations when a Director runtime is available.
+**Use Read → Chat → Write → Review.** Open **Chat** or a Scene's **Workshop**. Read sends only the saved Project Overview and complete Scenes you select; Director acknowledges the supplied field IDs. Navigation alone does not attach saved creative material. Discuss the idea, then use a suggested action or **Write…**: **Create Project**, **Revise Project Overview**, or **Write Scenes**. Choose the destination and existing Scenes to revise, or add new Scenes. Suggestions are advisory; Write remains available independently.
 
-**Generate and select Takes.** Use a Scene's generation action or the Story-wide **Generate** action to queue Takes. Inspect/rate the results and select the Take to use for that Scene. **First Cut** offers a more automated path from the current Story through Director preparation and initial Take generation; review its proposed changes and queued work rather than assuming it has finalized the Story.
+**Review before saving.** A suggested Write prepares editable Review directly when its destination is available. A complete captured value can reach Review without another model call; a partial capture leaves broader revision available. Changed parts are selected, and retained parts remain accessible under **Other parts**. Edit or deselect changes, then **Apply**. Conversation alone never saves Project data. Apply checks the saved fields being changed for conflicts; mixed new-Scene insertion and existing-Scene revision use separate transactions.
+
+**Edit and generate Scenes.** Use the Scene progression strip to select a Scene. Edit its Intent and full H3 Prompt, then configure duration, aspect ratio, seed, LoRAs and references as needed; Project defaults can be inherited or overridden. The H3 generation path supports 4–15 seconds per Scene. Generation controls and Takes remain outside Director's creative Read/Write operations.
+
+**Production shortcuts.** **Develop Scenes**, **Revise & Generate…**, and **Queue First Cut** are separate production operations, not the reviewed chat Write path. They can save generated authoring changes, and the latter two can queue Takes; First Cut runs its preparation stages automatically. Use them deliberately. Inspect/rate generated Takes and select the one to use for each Scene.
+
+**Reuse material and inspect context.** Manage **Blocks** for reusable Ideas/Guidance, and type `/` in the Director composer to insert one explicitly. Saved chat history retains the discussion and Read receipts. Scene and Overview revisions receive the full user/assistant discussion without frontend clipping; actual model context limits still apply. Inspect the sent request when diagnosing a mismatch. [Studio Director contract](docs/studio-director-useful-functions-consolidation.md) · [Studio Blocks](docs/studio-blocks.md).
 
 **Review the sequence.** Open **Sequence** to inspect the ordered selected Takes. Story/Scene edits do not rewrite the original provenance of already generated Takes. [Storyboard reference](docs/storyboard.md).
 
@@ -136,7 +147,7 @@ See [`docs/training_profiles.md`](docs/training_profiles.md) and [`docs/train.md
 
 WebCap uses a permanent application shell:
 
-- the left activity rail switches major activities including Prep, Generate, Training, Test, Storyboard, and Storage; it also owns global Activity, Inference Queue, Console, Settings, Help, and immersive-mode access;
+- the left activity rail switches major activities including Prep, Generate, Training, Evaluation, Studio, Media Explorer, and Storage; it also provides shared Assistant, Inference Queue, Console, and additional global controls;
 - the top header shows current folder/set context, the single editable **Base Model** selector where relevant, workspace identity, and persistent workload/system status: **Idle / Training / Testing / Generating**, GPU utilization/VRAM, and free disk space;
 - transient application status appears as a floating bottom-left shell message;
 - the multiline application console is a separate shell surface and is not the same thing as a Training run log.
@@ -168,7 +179,7 @@ H3 calibration additionally requires working NVIDIA telemetry (`nvidia-smi`) in 
 
 ### Insights
 
-Open **Evaluations → Insights** to compare recorded training runs using their archived loss, Test session evidence, and Campaign results. Choose runs, click **Analyze selected**, then optionally select one comparable campaign or Test session. **Interpret with Director** is always opt-in; preview its numerical evidence first. Scores are never combined across independent evaluation protocols. See [Run Analytics](docs/run_analytics.md) for complete usage, provenance and limitations.
+Open **Evaluation → Insights** to compare recorded training runs using their archived loss, Test session evidence, and Campaign results. Choose runs, click **Analyze selected**, then optionally select one comparable campaign or Test session. **Interpret with Director** is always opt-in; preview its numerical evidence first. Scores are never combined across independent evaluation protocols. See [Run Analytics](docs/run_analytics.md) for complete usage, provenance and limitations.
 
 ### Test Generations
 
@@ -213,10 +224,9 @@ Start from [`tool/config.example.json`](tool/config.example.json). The important
 - `training.repeat_reference_epochs` — fixed epoch count used when solving generated dataset repeats; default `90` and intentionally independent of a run's selected Epochs value.
 - `training.test_copy_roots` / `training.test_copy_subfolder` — per-model destination roots and optional subfolder for staging LoRAs into the Test Bench.
 - `training.enabled_profiles` — models offered for new training runs; at least one must remain enabled.
-- `storyboard.director.mode` — `local` for WebCap-managed llama.cpp or `remote` for an OpenAI-compatible server.
-- `storyboard.director.endpoint` — remote API base (for example `http://host:11434/v1`) when Director mode is `remote`.
-- `storyboard.director.llama_server` — optional explicit llama.cpp `llama-server` executable path used in local mode; configure this in **App Settings → Storyboard** when it is not on `PATH`.
-- `storyboard.director.port` / `context_size` / `max_tokens` — Director runtime limits; local defaults are `8189`, `8192`, and `4096`, while `max_tokens` also applies to remote requests.
+- `storyboard.director.remote_endpoints` — named remote OpenAI-compatible runtimes, each with a stable `id`, display `name`, API-base `endpoint` (for example `http://host:11434/v1`), and `enabled` flag. Local and remote models can be discovered together; the model preference includes its runtime identity. Legacy `mode` / `endpoint` configurations remain readable.
+- `storyboard.director.llama_server` — optional explicit llama.cpp `llama-server` executable path; configure this in **App Settings → Director** when it is not on `PATH`.
+- `storyboard.director.port` / `context_size` / `max_tokens` — defaults are `8189`, `null` (Auto), and `16384`. `max_tokens` also applies to remote requests; explicit `null` leaves output limits to the runtime. Remote context capacity is configured on the remote server, rather than overridden by WebCap's local context setting.
 - `analysis.enableFaceAnalysis` — optional Face Focus metadata.
 - `analysis.enableMediaPipeAnalysis` — optional selection-pose metadata/suggestions.
 - `primer.template` — default caption template.
@@ -334,6 +344,12 @@ With `pytest` installed:
 python -m pytest
 ```
 
+Frontend regression tests use Node's built-in test runner:
+
+```bash
+node --test tests/*.test.cjs
+```
+
 Training-machine behavior cannot be established from the development machine alone. Real Diffusion Pipe/GPU failures should be diagnosed from the actual training-machine logs/telemetry.
 
 ## Documentation
@@ -346,6 +362,7 @@ Current operational references include:
 
 - [`docs/execution_queue.md`](docs/execution_queue.md) — Inference, LLM, Training, Activity, and queue ownership.
 - [`docs/storyboard.md`](docs/storyboard.md) — Stories, Scenes, Takes, and Director workflow.
+- [`docs/studio-director-useful-functions-consolidation.md`](docs/studio-director-useful-functions-consolidation.md) — current Studio Director capability scope, reviewed Write behavior, and acceptance boundaries.
 - [`docs/filesystem_state_contract.md`](docs/filesystem_state_contract.md) — state and artifact lifecycle ownership.
 
 - [`docs/spec.md`](docs/spec.md) — shipped architecture/workflow contract.

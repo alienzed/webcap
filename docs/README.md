@@ -1,6 +1,6 @@
 # WebCap Docs Map
 
-Documentation index reconciled: 2026-10-30. A repo-wide link inventory covered 155 Markdown files; active-contract comparisons were targeted, not a line-by-line verification of every historical plan.
+Documentation index updated: 2026-11-06. Current README/Studio descriptions were compared with the UI markup, Director guidance, request construction, Apply paths and runtime configuration. The earlier repository-wide audit is recorded below; neither pass is a line-by-line verification of every historical plan.
 
 This folder mixes three different kinds of documents:
 
@@ -33,6 +33,7 @@ Start here when you need to know what the app does today:
 - `docs/execution_queue.md` - shared inference/LLM scheduling, backlog, GPU arbitration, and Activity/queue boundaries; state path reconciled 2026-10-18
 - `docs/gpu_coordination_invariants.md` - authoritative local-GPU coordination invariants; runtime truth, ownership, restart, and deterministic dispatch
 - `docs/storyboard.md` - broader Storyboard storage/production architecture and phased history; its underlying legacy LLM operations are **not** the active Studio Director field contract
+- `docs/studio-director-useful-functions-consolidation.md` - current Studio Director capability scope: explicit Read; Create Project, Revise Project Overview and Write Scenes; coherent creative units, editable Review, explicit Apply and acceptance boundaries. Later phased retirement work remains labeled as such.
 - `docs/storyboard_llm_guidance.md` - underlying Storyboard authoring/generation boundaries and legacy operations; distinguished from current Studio controls
 - `docs/studio-blocks.md` - current standalone Studio Blocks library and explicit `/` insertion workflow
 - `docs/mmh3-prompt-runtime-context.txt` - **active H3 model-facing prompt shape** used by Studio Director and legacy prompt authoring
@@ -66,7 +67,6 @@ These are useful product notes, not authoritative implementation references:
 
 - `docs/model-modules.md` - North Star for model-owned training configuration and policy boundaries
 - `docs/queue-semantics.md` - product queue-semantics North Star, **not** a claim that every fine-grained behavior is implemented
-- `docs/studio-director-expertise.md` - living expertise gap/evidence tracker, not runtime authority or proof of live-model behavior
 - `docs/studio-director-materialization-contract.md` - staged Studio intention-to-reviewed-Apply implementation record; distinguish historical checkpoints from shipped code
 - `docs/studio-director-revamp.md` - historical evolution/design plan, not the present Studio Director primer
 - `docs/filesystem_state_contract.md` - authoritative filesystem lifecycle rules (partially migrated; contains historical/planned sections)
@@ -86,6 +86,9 @@ These are useful product notes, not authoritative implementation references:
 
 These are intentionally retained for context. Some have a current-status preface because later implementation superseded part of their original design:
 
+- `docs/studio-director-expertise.md` - historical expertise audit baseline; its older operation matrix is not the active capability catalog
+- `docs/studio-director-coherence-consolidation.md` - historical migration phases; coherence is now a separate explicit Project utility, outside the creative Write catalog; legacy tool retirement remains deferred
+
 - `docs/epoch_test_bench_plan.md` - original Test Bench architecture; its in-memory FIFO and original session-placement design predate the shared inference lane
 - `docs/prompt_assistant_activity_plan.md` - retained-model/activity-card implementation history; its original synchronous request transport predates the durable `llm` lane
 - `docs/generic_inference_generate_plan.md` - implementation sequence/history; its current-baseline preface is maintained while older phase text remains historical
@@ -102,7 +105,13 @@ Additional superseded references:
 - `docs/caption_requirements.md`
 - `docs/train_execution_preflight.md`
 
-## Notes From This Audit
+## November 6 follow-up
+
+- **Verified against source:** Studio/Evaluation navigation labels; Project Overview/Scene units; explicit Read and receipts; advisory suggestions and captured values; full discussion handoff for Scene and Overview revisions; editable Review, selected-field conflict checks and atomic Scene-batch Apply; retained production shortcuts; local/remote runtime identity and current configuration defaults.
+- **Corrected:** README's retired entry/exit and Overview/Focus instructions, implication that First Cut waits for chat-style Review, old 8K/4K runtime defaults, missing Studio Director/Blocks introduction, and conflicting legacy/current prompt-context descriptions in the Storyboard reference.
+- **Evidence boundary:** this follow-up changes documentation only. It uses current code and the preceding real-model browser sanity check, not a new end-to-end test of every production, training or evaluation feature.
+
+## October 30 audit record
 
 - **Coverage:** inventoried 166 `docs/` files, checked local Markdown links in all 155 `.md` files, and compared priority active references against current source and tests. This was **not** a line-by-line semantic audit of every design/plan file.
 - **Confirmed drift:** Deep QA's original fail-fast plan did not describe current per-item invalid-output deferral/retry; the H3 human reference blurred active Studio fields with legacy Story Guidelines/Entry/Exit state; the Studio expertise tracker still exposed already-resolved P0 items as fresh gaps. These references have dated corrections.

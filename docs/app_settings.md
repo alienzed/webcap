@@ -1,6 +1,6 @@
 # App Settings
 
-Documentation reconciled with Settings tab markup and configuration paths: 2026-10-18
+Documentation reconciled with Settings tab markup and configuration paths: 2026-10-18; Director runtime limits checked against configuration/runtime code: 2026-11-06.
 
 The app settings modal is the global configuration surface for values stored in `tool/config.json`. Its navigation is organized by user-facing ownership rather than implementation details.
 
@@ -34,6 +34,8 @@ Specialist controls should prefer a local disclosure such as **Runtime Environme
 ## Director output limit
 
 `storyboard.director.max_tokens` defaults to `16384` as a generous runaway-generation safety limit. The Director settings field remains user-editable: clear it to use Auto/unbounded runtime behavior, or enter another limit. Existing configurations that explicitly store `null` remain Auto rather than being silently changed.
+
+`storyboard.director.context_size` defaults to `null` (Auto). An explicit context override applies to WebCap-managed local llama.cpp; remote context capacity is configured at the remote server. Sending the full creative discussion does not guarantee it fits the selected model's context window. Runtime/context failures remain operational errors, not evidence that the model rejected a creative decision.
 
 ## Repeat planning
 

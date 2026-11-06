@@ -1,6 +1,18 @@
 # Storyboard
 
-> **Documentation status (updated 2026-10-30):** This is the broader Storyboard/production system specification, with dated legacy-implementation phases. Studio Director's current author-facing five-field contract, its deliberate exclusion of media/Take/technical settings, and its user-intention-to-reviewed-materialization roadmap are specified separately in [Studio Director — intention-to-materialization contract](studio-director-materialization-contract.md). Do not interpret every manual Storyboard capability below as something Director should manage.
+> **Documentation status (updated 2026-11-06):** Studio is the current workspace label; Storyboard and Story remain internal route/storage names. This reference covers production behavior and dated implementation phases. The [Studio Director useful-function consolidation](studio-director-useful-functions-consolidation.md) owns the current creative capability scope and acceptance boundaries. Historical/backend capabilities below are not additional Director operations.
+
+## Current Studio Director workflow
+
+Director develops two creative units: **Project Overview** (Concept, Visual / atmosphere, Invariants) and **Scene** (Title, Intent, H3 Prompt). Individual stored parts remain distinct; a coherent revision can change only the parts that need it.
+
+- **Read** sends the explicitly selected saved Overview and/or complete Scenes, with exact field IDs for acknowledgment. Navigating or choosing a Write destination does not automatically Read its creative data into Chat.
+- **Chat** develops the idea and may suggest a useful action. Suggestions are advisory, not a readiness gate or model-controlled execution permission.
+- **Write** offers Create Project, Revise Project Overview, or Write Scenes. Existing-Scene revision uses the author-selected Scenes and saved baseline, Project context, and full user/assistant discussion; Overview revision likewise receives the discussion. Frontend message-count/character clipping is absent, while runtime context capacity still limits inference.
+- A suggested Write prepares **editable Review** directly after destination setup. A complete captured value can open Review without another model request. Partial captures leave broader recommended changes available.
+- **Apply** saves only selected changes with conflict checks against their saved values. Scene revisions in one batch are atomic. New-Scene insertion and existing-Scene revision remain separate transactions. Chat alone never saves creative state.
+
+Production controls, Take generation, references, LoRAs, seeds and sampling stay outside these creative Read/Write operations. The retained **Revise & Generate…** tool and **Queue First Cut** are separate production paths that can commit authoring changes and queue Takes. They do not share Director Chat's editable Review-before-Apply contract. Legacy tool retirement awaits demonstrated replacement parity.
 
 Storyboard is a first-class WebCap workspace for building longer-form visual sequences from ordered scene generations and selected takes.
 
@@ -136,11 +148,11 @@ Status is one of:
 
 Pinned is separate from status because an archived/completed Story may still be worth pinning.
 
-`style` is the Story's persistent visual/atmosphere block. `invariants` are additional typed facts that should remain stable across independently generated Scenes, such as recurring characters, world rules, or soundtrack language. The Director receives these blocks as compact Story context rather than a long conversation history. The five optional Directing Guidelines—Visual Focus, Creative Direction, Variation / Repetition, Pacing / Rhythm, and Scene Relationships—own creative priorities; general prompts supply technical instructions instead of fixed creative defaults.
+`style` is the Project's persistent visual/atmosphere block. `invariants` are typed facts that should remain stable across relevant independently generated Scenes, such as recurring characters, world rules, or soundtrack language. Older Storyboard production requests use compact task-specific context. Current Studio Director receives saved material through explicit Read or a chosen Write request and uses the discussion for revisions. The five optional Directing Guidelines remain compatible with older production paths; active Director develops creative priorities in Concept, Intent and relevant Invariants.
 
 The Story authoring panel is a dedicated, wide middle column between the Story library and Scene workspace, and is explicitly collapsible. The desktop target is a large production workspace: Story uses a comfortable authoring width rather than sidebar proportions, with readable helper text and Concept actions attached directly to the Concept field. Story and Scene are independent full-height panes rather than one long document.
 
-Scene authoring has two centered workspace modes, **Overview** and **Focus**, plus a persistent horizontal Scene progression strip for normal movement through the Story. Focus edits one Scene at a time. The Scene itself uses a large prompt surface beside a fully visible Generation panel; normal settings such as duration, aspect ratio, megapixels, and seed are not hidden. Conditioning remains visible as Scene context, while deeper reference editing can still use disclosure. Entry/Exit state are first-class Scene fields; Notes remain optional. The selected Scene's Workshop discusses timed shots with relevant Story context, offers optional per-section attachments, and applies an approved revision only after showing its diff.
+Scene authoring uses a persistent horizontal Scene progression strip to select the Scene being edited. Title, Intent and the H3 Prompt are the creative fields; duration, aspect ratio, megapixels, seed and Conditioning remain production controls. Deeper reference editing and optional Notes use disclosures. Entry/Exit state remain compatible saved fields for older production requests, with no active authoring controls. **Workshop** opens Studio Director for discussion and reviewed revision; saved context is supplied through explicit Read or the chosen Write request.
 
 The selected Scene's Takes occupy a substantial bottom evaluation dock. Take cards expand to consume available width up to a sensible maximum and only become horizontally scrollable once there are enough results to require it.
 
@@ -253,7 +265,7 @@ LLM context stays deliberately bounded and task-specific:
 - Normal whole-Story development may author the complete Scene plan in one structured response.
 - **One at a time** development is an explicit alternate strategy: Director first returns a concise complete Story outline, then WebCap authors each full H3 Scene in a separate request using the Story overview/style/invariants, the complete outline, and the immediately previous authored Scene when available.
 - The staged outline/Scene responses are session work only. They do not mutate `story.json`; WebCap assembles the normal Scene-plan shape and calls the existing atomic plan application once after every Scene succeeds and the Story revision still matches the frozen source revision.
-- Full chat transcripts and ChatGPT-like long-term memory are not part of the design.
+- These production requests use task-specific context rather than a chat transcript. Studio Director Chat is separate: it persists conversations and supplies the user/assistant discussion to reviewed revisions. Neither runtime residency nor model cache is durable Project memory.
 - ComfyUI inference calls are treated as stateless; WebCap owns any continuity worth preserving.
 
 Early authoring operations should be explicit functions rather than a general agent framework:
@@ -494,7 +506,7 @@ The architecture should leave obvious seams for later provider integration, but 
 
 ## Underlying legacy Storyboard LLM contract slice
 
-**Scope (2026-10-30):** These named backend operations describe the older Storyboard LLM pipeline, not the current Studio Director's five-field Read/Write surface. The current Studio authoring field contract and reviewed actions live in `tool/server/studio_director.py`, `tool/js/studio_director_workbench.js`, and [the materialization contract](studio-director-materialization-contract.md). Saved older fields and requests remain compatible.
+**Scope (updated 2026-11-06):** These named backend operations describe the older Storyboard LLM pipeline, not Studio Director's current unit-based Read/Write surface. The current reviewed actions live in `tool/server/studio_director.py`, `tool/js/studio_director_workbench.js`, and [the useful-function consolidation](studio-director-useful-functions-consolidation.md). Saved older fields and requests remain compatible.
 
 Storyboard keeps request meaning separate from execution. `tool/server/storyboard_llm_contract.py` remains the pure request-assembly boundary, while `tool/server/storyboard_llm_runtime.py` owns the llama.cpp process/model lifecycle and HTTP transport.
 
@@ -515,7 +527,7 @@ Entry and exit state remain in saved Story/Scene data and some **legacy** planni
 
 ## Director runtime setup
 
-Storyboard expects a recent CUDA-enabled llama.cpp build because the model-router API is relatively new and current Qwen GGUF support continues to evolve.
+The WebCap-managed local Director runtime expects a recent CUDA-enabled llama.cpp build with the model-router API. Named remote OpenAI-compatible runtimes are an alternative and own their own serving requirements.
 
 Minimal configuration lives under `storyboard.director` in `tool/config.json`:
 
@@ -525,8 +537,8 @@ Minimal configuration lives under `storyboard.director` in `tool/config.json`:
     "director": {
       "llama_server": "/absolute/path/to/llama-server",
       "port": 8189,
-      "context_size": 8192,
-      "max_tokens": 4096
+      "context_size": null,
+      "max_tokens": 16384
     }
   }
 }
@@ -538,10 +550,11 @@ Put local `.gguf` Director models in that existing `text_encoders` folder. On th
 
 On the WSL training machine, prefer running a Linux CUDA build of llama.cpp inside the same WSL environment as WebCap. A Windows `llama-server.exe` can introduce path-translation problems for model files even though WSL can launch Windows executables.
 
-Current runtime assumptions:
+Current managed-local runtime assumptions:
 
 - NVIDIA/CUDA inference with all model layers requested on GPU;
-- 8K default context, configurable;
+- Auto context by default (`null`), with an optional explicit local override;
+- output limit defaults to 16,384 tokens; explicit `null` uses runtime behavior;
 - one model loaded at a time;
 - no model autoload;
 - Jinja chat templates enabled;
@@ -550,3 +563,5 @@ Current runtime assumptions:
 - a successfully loaded Director model may remain resident between LLM calls; Training/Inference explicitly release it when they need the shared GPU, and transient KV/cache state is never treated as durable Story memory.
 
 The important operational dependency beyond model disk space is therefore a **recent CUDA-capable llama.cpp binary**. No Python llama.cpp binding, Ollama daemon, database, or ComfyUI text workflow is required.
+
+For local-plus-remote discovery, named endpoints and shared model identity, see [App Settings](app_settings.md). Configure remote context capacity on that server; WebCap's local context override does not resize a remote model's context.

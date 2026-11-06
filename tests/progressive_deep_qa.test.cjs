@@ -444,3 +444,11 @@ test('Deep QA overview presents one progress strip with Stop and stable coverage
   assert.doesNotMatch(overview, /qaWorkbenchState\.deepScanSessionActive \? 'Deep QA running'/);
   assert.match(overview, /qaCreateButton\('Review ' \+ undisposed\.length \+ ' findings', 'qa-primary'/);
 });
+
+test('Deep QA shares only bounded named statistical exceptions with explicit discovery', () => {
+  const run = functionSource('qaRunNextDeepScanBatch', 'qaDeepScanNextItemBatch');
+  assert.match(run, /statisticalCandidates: qaBuildAssociationFindings\(qaDeepScanScopeItems\(\)\)\.slice\(0, 3\)/);
+  assert.match(run, /files: finding\.files\.slice\(0, 2\)/);
+  assert.match(run, /preflight: true/);
+  assert.match(run, /qaWaitForDeepScan\(payload\.job\)/);
+});

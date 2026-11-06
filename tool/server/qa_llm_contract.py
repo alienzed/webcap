@@ -716,9 +716,9 @@ def build_set_review_request(items, vocabulary=None, training_focus="", primer="
         if not isinstance(candidate, dict):
             continue
         files = list(dict.fromkeys(
-            name for name in (candidate.get("files") if isinstance(candidate.get("files"), list) else [])[:2]
+            name for name in (candidate.get("files") if isinstance(candidate.get("files"), list) else [])
             if isinstance(name, str) and name in seen
-        ))
+        ))[:2]
         if not files:
             continue
         statistical.append({

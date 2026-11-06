@@ -624,7 +624,8 @@ def normalize_result(data, allowed_files=None, captions_by_file=None, recheck=Fa
     return result
 
 
-def build_set_review_request(items, vocabulary=None, training_focus="", primer="", sight_evidence=None):
+def build_set_review_request(items, vocabulary=None, training_focus="", primer="", sight_evidence=None,
+                             statistical_candidates=None, sight_records=None):
     """Compact, set-wide discovery. No per-item caption judgment or asserted edits."""
     if not isinstance(items, list) or not items:
         raise ValueError("Deep QA needs a non-empty training selection.")
@@ -702,10 +703,33 @@ def build_set_review_request(items, vocabulary=None, training_focus="", primer="
          "count": int(row.get("count") or 0), "examples": list(row.get("examples") or [])[:3]}
         for row in selected
     ]
+    # Statistical exceptions are unverified hypotheses, not tag corrections.
+    # Use exact-file cached Sight only; an aggregate observation cannot verify
+    # what is visible in a particular exception image.
+    sight_by_file = {
+        row.get("file"): _clean(row.get("description"))[:360]
+        for row in (sight_records if isinstance(sight_records, list) else [])
+        if isinstance(row, dict) and row.get("file") in seen and _clean(row.get("description"))
+    }
+    statistical = []
+    for candidate in (statistical_candidates if isinstance(statistical_candidates, list) else [])[:3]:
+        if not isinstance(candidate, dict):
+            continue
+        files = list(dict.fromkeys(
+            name for name in (candidate.get("files") if isinstance(candidate.get("files"), list) else [])[:2]
+            if isinstance(name, str) and name in seen
+        ))
+        if not files:
+            continue
+        statistical.append({
+            "pattern": _clean(candidate.get("title"))[:150],
+            "statistics": _clean(candidate.get("summary"))[:240],
+            "exceptions": [{"file": name, "savedSight": sight_by_file.get(name, "")} for name in files],
+        })
     payload = {"trainingFocus": _clean(training_focus), "captionPrimer": str(primer or "").strip(),
                "vocabulary": groups, "items": compact,
                "sightCoverage": {"current": int(evidence.get("itemCount") or 0), "selected": len(compact)},
-               "savedVisualObservations": visual}
+               "savedVisualObservations": visual, "statisticalHypotheses": statistical}
     prompt = (
         "[ROLE]\nYou review a LoRA training Set for consequential semantic omissions remaining after normal tagging and captioning.\n"
         "Human-approved tags are compact proxies for captions; they are not exhaustive descriptions of the media.\n\n"
@@ -715,6 +739,10 @@ def build_set_review_request(items, vocabulary=None, training_focus="", primer="
         "[RULES]\n"
         "- This is discovery, not a verdict about unseen pixels. Do not claim a particular media item is wrong without visual evidence.\n"
         "- Prefer systematic, training-relevant omissions over style, balance, rare vocabulary, or trivial wording.\n"
+        "- Investigate statisticalHypotheses only when relevant; keep semantic omissions the primary goal.\n"
+        "- For each exception, savedSight is fallible evidence for that named file only; blank means unverified.\n"
+        "- Correlations are hypotheses: viewpoint, cropping or occlusion often explain valid exceptions.\n"
+        "- Dismiss plausible exceptions; never infer or apply tag corrections from statistics alone.\n"
         "- Compare semantic meaning, not just exact tag spellings; a missing tag isn't proof of a missing visual attribute.\n"
         "- Supply a short candidate-file shortlist (up to five), each with a specific reason based on supplied tags. "
         "These are priority examples to inspect, NOT confirmed defective images. A zero-length shortlist is valid only "

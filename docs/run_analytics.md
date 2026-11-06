@@ -34,6 +34,16 @@ Automated contract tests reside in `tests/test_run_analytics_next.py`; JS source
 
 Global cross-Set search, causal learning-rate optimization, composite quality scoring, image resurrection, new training schedulers, new image analyzers, and new persistent data stores.
 
+## Original VL coverage across Test sessions
+
+The **Evaluate saved renders** card counts saved Original VL assessments across the active Set's Test sessions, independently of the selected training runs or evidence filters. Campaign staging is excluded. Unavailable previews are reported separately from the available-render denominator.
+
+**Evaluate missing** uses the global Vision model selection and existing LLM queue to submit only available previews without saved Original VL evidence or active automatic evaluation jobs. Saved assessments are retained; choosing another Vision model does not re-evaluate completed previews. Failed and stopped work can be explicitly retried. Admission is serialized so separate tabs cannot enqueue the same preview twice.
+
+**Stop** cancels outstanding automatic Original VL jobs belonging to this Set's Test sessions, including generation-time auto-VL. It leaves other LLM work alone. Leaving Insights stops progress polling, while submitted jobs continue independently of navigation. Returning or refreshing reads their saved receipts and current queue states. Progress distinguishes queued, running, failed, stopped, unavailable and completed work; it does not merge Original VL with reference VL or DINO diagnostics or change ranking protocols.
+
+The backend operations are `test_evaluation_progress`, `test_evaluate_missing` and `test_evaluation_stop` on the existing `/fs/test_generations` route. Focused tests cover coverage, duplicate admission, retries, Stop scope, async Set targeting, polling lifecycle and error reporting. Real-model browser verification uses disposable sessions; it is not evidence about training-machine runs.
+
 ## Reconciliation and validation
 
 The UI invalidates a displayed analysis when the selected runs change. Compatible Test cohorts can be selected independently of the session filter; selecting a campaign changes the visible evidence without enqueuing work. Director preview is explicit, not fetched on every render, and the server verifies that the requested numbers still match the reviewed snapshot. Real-machine testing, including training archives and historical cohorts, remains required before claiming verified operation on actual data.

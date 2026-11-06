@@ -1485,7 +1485,7 @@ def test_repeat_launch_is_native_and_session_owned():
     assert "requestForFolder(folder, 'test_enqueue', criteria)" in script
     assert "def enqueue_repeated(folder_path, criteria):" in backend
     assert "def complete_test_auto_vl(context, answer, elapsed_ms):" in backend
-    assert "def _queue_test_auto_vl(folder_path, session_name, media_file):" in backend
+    assert "def _queue_test_auto_vl(folder_path, session_name, media_file, model_override=None, raise_on_error=False):" in backend
     assert "refreshServerTestBatches" not in script
     assert "test_generations/batches" not in script
     assert 'id="test-generations-multi-actions"' not in html

@@ -1,12 +1,12 @@
 # Studio Director / Director Tools reconciliation — implementation plan
 
-Status: staged implementation, November 3, 2026. Follow [AGENTS.md](../AGENTS.md) and the [Studio Director materialization contract](studio-director-materialization-contract.md). This is a focused consolidation, not a new agent/tool-calling framework.
+Status: historical staged implementation, November 3, 2026. The [useful-function consolidation](studio-director-useful-functions-consolidation.md) owns the current interface and capability scope; the earlier phases below record implementation history, not additional active capabilities. Follow [AGENTS.md](../AGENTS.md). This is a focused consolidation, not a new agent/tool-calling framework.
 
 ## Ownership decision
 
 Studio Director owns creative conversation, suggestions, explicit Read, reviewed Write, and Project-level coherence analysis. Studio's existing author-operated generation workflow owns Take creation. Director Tools' older revision modal is transitional, not a second product direction.
 
-The capability catalog is advisory, not an LLM tool dispatcher. In the consolidated interface, coherence remains a separately invoked Project utility, outside the three creative Write workflows. `project.coherence.check` can be suggested by `readiness.writeHint = "coherence-check"`, but the author must explicitly invoke the operation in Studio Director's Write panel. This avoids adding a second executor, automatic model-controlled filesystem reads, or hidden writes.
+The capability catalog is advisory, not an LLM tool dispatcher. Coherence remains a separately invoked Project utility, outside the three creative Write workflows and the current capability catalog. Older stored `coherence-check` hints remain compatible; current guidance and schemas advertise Read, Create Project, Revise Project and Write Scenes. The author explicitly invokes coherence analysis and reviews any proposed changes before Apply.
 
 ## Code audit
 

@@ -96,7 +96,8 @@ test('Read receipt is derived from the actual next Director reply, not fabricate
 
 test('Readiness opens a single read-only detail and never assigns one Scene ID to multiple checks',()=>{
   assert.match(rail,/Scene \(current discussion\)/);
-  assert.doesNotMatch(section(rail,'  function renderReadiness(list) {','  window.studioDirectorWorkbench ='),/recommendations\.sceneId/);
+  const readiness=section(rail,'  function renderReadiness(list) {','  window.studioDirectorWorkbench =');
+  assert.doesNotMatch(readiness.slice(readiness.indexOf('    list.forEach(function (item) {')),/recommendations\.sceneId/);
   assert.match(html,/id="studio-dw-assessment-dialog"/);
   assert.match(rail,/studio-dw-assessment-dialog'\)\.showModal/);
   assert.match(rail,/studio-dw-assessment-content'\)\.textContent = item\.content/);

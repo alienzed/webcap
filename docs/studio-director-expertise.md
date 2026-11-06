@@ -1,6 +1,6 @@
 # Studio Director expertise map
 
-**Status:** Living audit and acceptance tracker. Initial codebase review: 2026-10-30, against `main` at `decccb211e88374eaeb985b709be39ebb9984270` (PR #816 included). **Evidence:** repository code and tests only; no running WebCap browser, live Director model, or GPU inference was exercised for this baseline.
+**Status:** Historical audit baseline, 2026-10-30, against `main` at `decccb211e88374eaeb985b709be39ebb9984270` (PR #816 included). The [useful-function consolidation](studio-director-useful-functions-consolidation.md) owns the current interface, capability scope and acceptance requirements. Earlier structural actions and readiness entries below are historical evidence, not current feature requirements. **Evidence:** repository code and tests only; no running WebCap browser, live Director model, or GPU inference was exercised for this baseline.
 
 **Purpose:** Answer a sharper question than "does the feature exist?": **Can Studio Director explain WebCap correctly, get the right context, make expert recommendations, and guide the author through a working, reviewed action?** It should know more about supported Studio workflows than the author needs to. This is an *audit*, **not** a second system prompt, runtime capability registry, or permission to automate edits.
 

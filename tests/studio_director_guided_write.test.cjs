@@ -54,6 +54,62 @@ test('suggestions name creative units regardless of advisory field hints', () =>
   assert.deepEqual(Array.from(scope.recommendedWriteFields('project')),[]);
 });
 
+test('captures suppress only fully covered Write suggestions for the same target', () => {
+  const node=()=>({children:[],dataset:{},replaceChildren(){this.children=[];},appendChild(n){this.children.push(n);}});
+  const actions=node(), assessment=node();
+  const scope=vm.createContext({readinessStale:false,
+    projectFields:['title','concept','style','invariants'],sceneFields:['title','summary','prompt'],
+    el:id=>id==='studio-dw-suggestions'?actions:assessment,
+    document:{createElement:node},reviewCreativeCapture(){},openRecommendedWrite(){},
+    creativeCapture:{field:'summary',content:'Complete Intent',sceneId:'a'},
+    recommendations:{writeHint:'scenes',writeFields:['summary','prompt'],sceneId:'a'}});
+  vm.runInContext(fieldsCode + part('  function captureActionLabel(capture) {','  window.studioDirectorWorkbench = {'),scope);
+  const kinds=()=>{scope.renderReadiness([]);return actions.children.map(n=>n.dataset.suggestionKind);};
+  assert.deepEqual(kinds(),['capture','write'],'Intent capture leaves aligned Prompt revision available');
+  scope.recommendations.writeFields=['summary'];
+  assert.deepEqual(kinds(),['capture'],'complete single-field capture avoids redundant generation');
+  scope.recommendations.sceneId='b';
+  assert.deepEqual(kinds(),['capture','write'],'different Scene destination remains available');
+  scope.recommendations={writeHint:'project',writeFields:['concept','style'],sceneId:''};
+  scope.creativeCapture={field:'concept',content:'Complete Concept',sceneId:''};
+  assert.deepEqual(kinds(),['capture','write'],'Concept capture leaves atmosphere revision available');
+  scope.recommendations.writeFields=['concept'];
+  assert.deepEqual(kinds(),['capture']);
+  scope.recommendations.writeFields=[];
+  assert.deepEqual(kinds(),['capture','write'],'unspecified unit scope is not assumed covered');
+  scope.creativeCapture={field:'scene',title:'New Scene',content:'Intent',sceneId:''};
+  scope.recommendations={writeHint:'scenes',writeFields:['title','summary','prompt'],sceneId:''};
+  assert.deepEqual(kinds(),['capture','write'],'new Scene capture has no H3 Prompt');
+  scope.recommendations.writeFields=['title','summary'];
+  assert.deepEqual(kinds(),['capture']);
+});
+
+test('Scene Write receives early decisions and complete long messages from the discussion', async () => {
+  const early='Agreed early decision: retain the red scarf.';
+  const long='H3 detail '.repeat(400)+' Final decision: keep the lamp unlit.';
+  const messages=[{role:'system',content:'Internal message'},null,{role:'user',content:early},
+    ...Array.from({length:20},(_,i)=>({role:i%2?'assistant':'user',content:'Discussion '+i})),
+    {role:'user',content:long}];
+  let request,complete;
+  const finished=new Promise(resolve=>{complete=resolve;});
+  const button={set disabled(value){if(!value) complete();}};
+  const scope=vm.createContext({proposedBatch:null,
+    el:id=>id==='studio-dw-batch-scenes'?{querySelectorAll:()=>[{value:'a'}]}:button,
+    status:message=>{if(message.startsWith('Scene revision draft failed:')) assert.fail(message);},
+    window:{flushStudioDirectorStoryEdits:async()=>{},studioDirectorBridge:{selectWriteProject(){},
+      messages:()=>messages,makeProposal:async input=>{request=input;return '{}';}}},
+    loadStory:async()=>({id:'p1',sceneOrder:['a'],scenes:{a:{title:'Lamp',summary:'Intent',prompt:'H3'}}}),
+    storyName:()=> 'Project',parseProposal:JSON.parse,validateSceneRevisionDraft:()=>[],renderBatchReview(){}});
+  vm.runInContext(part('  function prepareBatchScenes(storyId) {','  function renderBatchReview() {'),scope);
+  scope.prepareBatchScenes('p1');
+  await finished;
+  const history=JSON.parse(request.split('Creative discussion: ')[1].split('\n')[0]);
+  assert.equal(history.length,22);
+  assert.equal(history[0].text,early);
+  assert.equal(history.at(-1).text,long);
+  assert.ok(history.every(message=>['user','assistant'].includes(message.role)));
+});
+
 for (const hidden of [true,false]) test('suggestion prepares Review after destination setup, panel hidden='+hidden, async () => {
   const mode={}, operation={options:[{value:'scene-write'}]}, calls=[];
   const scope=vm.createContext({recommendations:{writeHint:'scenes',sceneId:'scene-a'},writeOperationChosen:false,

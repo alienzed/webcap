@@ -2,7 +2,7 @@
 
 > **Useful-functions consolidation (2026-11-03):** See [studio-director-useful-functions-consolidation.md](studio-director-useful-functions-consolidation.md) for the active three-workflow interface, current implementation boundaries and acceptance tests. Earlier capability matrices below document historical and backend capabilities, not the current Director operation menu. The explicit coherence utility remains separate from creative Write.
 
-> **Coherence consolidation (2026-11-03):** The staged implementation and acceptance gates for migrating the legacy Director Tools coherence check into Studio Director's explicit capability catalog and reviewed multi-Scene Write flow are in [studio-director-coherence-consolidation.md](studio-director-coherence-consolidation.md). It is not a new autonomous LLM tool framework. Legacy UI removal awaits runtime acceptance.
+> **Coherence consolidation (2026-11-03):** Historical implementation phases and acceptance gates for the explicit coherence utility and reviewed multi-Scene changes are in [studio-director-coherence-consolidation.md](studio-director-coherence-consolidation.md). The useful-functions consolidation above owns current capability scope; coherence is a separate Project utility. Legacy UI removal awaits runtime acceptance.
 
 ## Reconciliation checkpoint — 2026-11-03
 

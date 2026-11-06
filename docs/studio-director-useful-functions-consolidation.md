@@ -10,6 +10,8 @@ Project Overview (Concept, Visual / atmosphere, Invariants) and Scene (Title, In
 
 Scene Review presents changed parts selected and keeps unchanged parts available in one collapsed section. Completed Scene captures use that same Review without another model request. The saved fields, schemas, atomic Apply and per-changed-field conflict checks remain unchanged. A proposal may change one part or several; unity does not require rewriting every part.
 
+A capture replaces a suggested Write shortcut only when it covers every recommended part for the same destination. A partial capture leaves broader unit revision available. Scene and Overview revisions receive the full user/assistant discussion without local message-count or character clipping; model context capacity remains a runtime constraint.
+
 ## Phase 1: Align the public contract and guidance
 - Advertise only Read, Create Project, Revise Project and Write Scenes.
 - Give short, iterative conversational replies; 1-3 sentences by default.

@@ -564,8 +564,10 @@
             title:scene.title, summary:scene.summary, prompt:scene.prompt,
             durationSeconds:scene.durationSeconds, invariantRefs:scene.invariantRefs};
         });
-        var history = window.studioDirectorBridge.messages().slice(-18).map(function (message) {
-          return {role:message.role, text:String(message.content || '').slice(0,3200)};
+        var history = window.studioDirectorBridge.messages().filter(function (message) {
+          return message && (message.role === 'user' || message.role === 'assistant');
+        }).map(function (message) {
+          return {role:message.role, text:String(message.content || '')};
         });
         var request = [
           ids.length === 1
@@ -581,7 +583,7 @@
           'Preserve unrelated creative content and untouched Scene fields.',
           'Project context: '+JSON.stringify({id:story.id,concept:story.concept,style:story.style,invariants:story.invariants}),
           'Selected Scenes: '+JSON.stringify(selected),
-          'Recent creative discussion: '+JSON.stringify(history),
+          'Creative discussion: '+JSON.stringify(history),
           'For H3 Prompt revisions, time each Scene to its durationSeconds and preserve linked Character/Location Invariants. Duration and links remain read-only context.'
         ].join('\n');
         return window.studioDirectorBridge.makeProposal(request, 'studio_scene_batch_draft', true)
@@ -785,9 +787,13 @@
       var fields = recommendedWriteFields(recommendations.writeHint);
       var captureField = creativeCapture && creativeCapture.field === 'invariant' ? 'invariants' :
         creativeCapture && creativeCapture.field;
-      var duplicatesCapture = creativeCapture &&
-        (fields.indexOf(captureField) !== -1 ||
-         (creativeCapture.field === 'scene' && ['scene', 'scenes'].includes(recommendations.writeHint)));
+      var sceneHint = ['scene', 'scenes', 'scene-edit', 'scenes-batch'].includes(recommendations.writeHint);
+      var sameTarget = creativeCapture && (sceneHint
+        ? recommendations.sceneId === creativeCapture.sceneId
+        : recommendations.writeHint === 'project' && projectFields.includes(captureField));
+      var duplicatesCapture = sameTarget && fields.length > 0 && fields.every(function (field) {
+        return field === captureField || (creativeCapture.field === 'scene' && ['title','summary'].includes(field));
+      });
       var label = writeActionLabel();
       if (label && !duplicatesCapture) available.push({
         kind:'write', label:label, run:openRecommendedWrite

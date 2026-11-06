@@ -90,6 +90,8 @@ test('Studio prompting selects the current goal rather than steering every task 
   assert.match(system,/Keep readiness light: normally checks=\[\]/);
   assert.match(system,/If assessment is genuinely useful, provide at most two concise checks/);
   assert.match(system,/H3 PRODUCTION PROMPT REFERENCE/);
+  assert.match(system,/scenes writes or revises a coherent Scene, considering its Title, Intent and H3 Prompt together/);
+  assert.match(system,/writeFields describes likely changed parts as advisory metadata/);
   assert.equal(assembled[1].content,'Revise only the Scene action');
   assert.equal(assembled.length,2, 'no extra request or hidden context event');
 });
@@ -129,7 +131,7 @@ test('existing Project and Scene draft paths also use explicit Write guidance', 
 });
 
 test('single-Scene revision request uses its saved ID in the example, not a placeholder', () => {
-  const batch = workbench.split('  function prepareBatchScenes(storyId, writeFields) {')[1]
+  const batch = workbench.split('  function prepareBatchScenes(storyId) {')[1]
     .split('  function renderBatchReview() {')[0];
   assert.match(batch,/ids\.length === 1/);
   assert.match(batch,/JSON\.stringify\(\{scenes:\[\{sceneId:ids\[0\],summary:/);
@@ -140,7 +142,7 @@ test('single-Scene revision request uses its saved ID in the example, not a plac
 });
 
 test('Scene revision synchronizes the chosen Project destination before requesting a proposal', async () => {
-  const block = workbench.split('  function prepareBatchScenes(storyId, writeFields) {')[1]
+  const block = workbench.split('  function prepareBatchScenes(storyId) {')[1]
     .split('  function renderBatchReview() {')[0];
   const scene = {title:'Lamp',summary:'Saved intent',prompt:'Saved prompt',durationSeconds:8};
   const story = {id:'chosen-project',title:'Chosen Project',sceneOrder:['scene-a'],scenes:{'scene-a':scene}};
@@ -156,12 +158,13 @@ test('Scene revision synchronizes the chosen Project destination before requesti
       selectWriteProject:(id,title)=>calls.push(['destination',id,title]),
       messages:()=>[],makeProposal:async instruction=>{
         assert.deepEqual(calls,[['destination',story.id,story.title]]);
-        assert.match(instruction,/Requested Write fields: summary\. Propose complete replacement text for these fields and preserve the other fields/);
+        assert.match(instruction,/Consider Title, Intent and H3 Prompt together as one Scene/);
+        assert.doesNotMatch(instruction,/Requested Write fields/);
         complete();return '{"scenes":[]}';
       }
     }}
   });
-  vm.runInContext('function prepareBatchScenes(storyId, writeFields) {'+block+'\nprepareBatchScenes("chosen-project", ["summary"]);',scope);
+  vm.runInContext('function prepareBatchScenes(storyId) {'+block+'\nprepareBatchScenes("chosen-project");',scope);
   await finished;
 });
 
@@ -285,7 +288,7 @@ test('Scene splitting is not a Director Write operation', () => {
 });
 
 test('batch Scene revisions include duration and linked Invariants', () => {
-  const batch = workbench.split('  function prepareBatchScenes(storyId, writeFields) {')[1]
+  const batch = workbench.split('  function prepareBatchScenes(storyId) {')[1]
     .split('  function renderBatchReview() {')[0];
   const preview = workbench.split('  function showWriteContext() {')[1]
     .split('  function updateScope() {')[0];

@@ -2159,8 +2159,8 @@
                     <button id="storyboard-director-tools-btn" type="button" title="Revise the open Project's Scenes, optionally generating new Takes">Revise &amp; Generate…</button>
                   </div>
                   <div class="studio-dw-shortcuts" aria-label="Write for the current Project">
-                    <button id="studio-dw-current-brief" type="button">Review current Project brief</button>
-                    <button id="studio-dw-current-prompt" type="button">Draft current Scene H3 Prompt</button>
+                    <button id="studio-dw-current-brief" type="button">Revise current Project Overview</button>
+                    <button id="studio-dw-current-prompt" type="button">Revise current Scene</button>
                   </div>
                   <div id="studio-dw-status" class="studio-dw-status hidden" role="status" aria-live="polite"></div>
                   <div id="studio-dw-undo" class="studio-dw-undo hidden"><span id="studio-dw-undo-label">Project brief updated</span><button id="studio-dw-undo-button" type="button">Undo brief change</button></div>
@@ -2182,7 +2182,7 @@
                     <p id="studio-dw-write-scope" class="studio-dw-scope"></p>
                     <label>Operation<select id="studio-dw-write-operation">
                       <option value="new-project">Create Project</option>
-                      <option value="project">Revise Project</option>
+                      <option value="project">Revise Project Overview</option>
                       <option value="scene-write">Write Scenes</option>
                     </select></label>
                     <label id="studio-dw-scene-mode-row" class="hidden">Write Scenes
@@ -2206,7 +2206,7 @@
                   </section>
                   <section class="studio-dw-readiness" aria-label="Director suggestions">
                     <div class="studio-dw-readiness-heading"><strong>Ready to write</strong><small id="studio-dw-readiness-freshness" role="status" aria-live="polite">Not assessed yet</small></div>
-                    <div id="studio-dw-suggestions" class="studio-dw-suggestions"><p>Keep developing the idea. Director will offer a field when it is ready.</p></div>
+                    <div id="studio-dw-suggestions" class="studio-dw-suggestions"><p>Keep developing the idea. Director will suggest the next useful revision.</p></div>
                     <details class="studio-dw-assessment-details">
                       <summary>Creative assessment details</summary>
                       <div id="studio-dw-readiness-list" class="studio-dw-readiness-list"><p>No assessment details yet.</p></div>
@@ -2296,14 +2296,15 @@
             <dialog id="studio-brief-review" class="studio-scene-draft-review" aria-labelledby="studio-brief-review-title">
                 <header class="studio-scene-draft-header">
                     <div>
-                        <h2 id="studio-brief-review-title" title="Select and edit the fields to save. Apply confirms your reviewed changes.">Review Project brief</h2>
+                        <h2 id="studio-brief-review-title" title="Review the Overview together. Changed parts are selected; Apply confirms your reviewed changes.">Review Project Overview</h2>
                     </div>
                     <button id="studio-brief-close" type="button" class="review-captions-btn">Close</button>
                 </header>
                 <div class="studio-scene-draft-content">
                     <p id="studio-brief-target" class="studio-scene-draft-target"></p>
                     <p id="studio-brief-summary" class="studio-review-summary" aria-live="polite"></p>
-                    <p id="studio-brief-rationale" class="studio-scene-draft-rationale"></p>
+                    <details><summary>Director's rationale</summary><p id="studio-brief-rationale" class="studio-scene-draft-rationale"></p></details>
+                    <div id="studio-brief-parts">
                     <section class="studio-brief-field" data-brief-field="title">
                     <label for="studio-brief-title"><input id="studio-brief-title-selected" type="checkbox"> Project title</label>
                     <small id="studio-brief-title-state"></small>
@@ -2329,6 +2330,8 @@
                     <div id="studio-brief-invariants"></div>
                     <button id="studio-brief-add-invariant" type="button" class="review-captions-btn">Add invariant</button>
                     </section>
+                    <details id="studio-brief-unchanged"><summary title="Parts retained by Director; expand to inspect or edit.">Other parts</summary></details>
+                    </div>
                     <p id="studio-brief-error" class="studio-scene-draft-error" aria-live="polite"></p>
                 </div>
                 <footer class="studio-scene-draft-footer">

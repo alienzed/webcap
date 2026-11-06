@@ -246,11 +246,13 @@
     if (!story) { showWriteContext(); return; }
     var batchHost = el('studio-dw-batch-scenes');
     var checked = Array.from(batchHost.querySelectorAll('input:checked')).map(function (input) {return input.value;});
+    var suggestedScene = (story.sceneOrder || []).includes(recommendations.sceneId)
+      ? recommendations.sceneId : activeTarget().sceneId;
     batchHost.replaceChildren();
     (story.sceneOrder || []).forEach(function (id, index) {
       var label = document.createElement('label'), input = document.createElement('input');
       input.type = 'checkbox'; input.value = id;
-      input.checked = checked.length ? checked.indexOf(id) !== -1 : id === (recommendations.sceneId || activeTarget().sceneId);
+      input.checked = checked.length ? checked.indexOf(id) !== -1 : id === suggestedScene;
       label.append(input, document.createTextNode('Scene ' + (index+1) + ' · ' + (story.scenes[id].title || 'Untitled')));
       batchHost.appendChild(label);
     });
@@ -380,9 +382,14 @@
       return window.flushStudioDirectorStoryEdits(id);
     }).then(function () {return loadStory(id);})
       .then(function (story) {
-        var draft = {};
+        var scene = story.scenes && story.scenes[sceneTarget];
+        if (!scene || !story.sceneOrder.includes(sceneTarget)) throw new Error('Select a saved Scene to review.');
+        var draft = {sceneId:sceneTarget};
         draft[capture.field] = capture.content;
-        return showSceneReview(story, sceneTarget, [capture.field], draft);
+        proposedBatch = {storyId:story.id,scenes:[{sceneId:sceneTarget,
+          before:{position:story.sceneOrder.indexOf(sceneTarget)+1,title:scene.title,summary:scene.summary,prompt:scene.prompt},
+          draft:draft}]};
+        renderBatchReview();
       }).catch(function (error) {
         status('Creative Scene review failed: ' + String(error.message || error), true);
       }).finally(function () {el('studio-dw-write-prepare').disabled = false;});
@@ -415,21 +422,21 @@
       el('studio-dw-write-panel').classList.remove('hidden');
       el('studio-dw-write').setAttribute('aria-expanded','true');
       setOperation();
-      writePrepare(operation === 'project' ? ['concept','style','invariants'] : null);
+      writePrepare();
     }).catch(function (error) {status('Current Project draft failed: ' + error.message,true);})
       .finally(updateScope);
   }
-  function writePrepare(writeFields) {
+  function writePrepare() {
     var bridge = window.studioDirectorBridge;
     var operation = el('studio-dw-write-operation').value;
     var id = el('studio-dw-write-project').value;
     if (!bridge.isReady()) {status('Choose a Director model first.',true);return;}
     if (operation !== 'new-project' && !id) {status('Choose a destination Project.',true);return;}
     if (operation === 'scene-write') {
-      if (el('studio-dw-scene-mode').value === 'revise') return prepareBatchScenes(id, writeFields);
+      if (el('studio-dw-scene-mode').value === 'revise') return prepareBatchScenes(id);
       try {
         var selected = projects.find(function (p) {return p.id === id;});
-        bridge.prepareWrite('scenes', id, selected && storyName(selected), []);
+        bridge.prepareWrite('scenes', id, selected && storyName(selected));
         status('Preparing new Scenes for reviewed insertion.', false);
       } catch (error) {status('Write Scenes failed: ' + error.message, true);}
       return;
@@ -438,8 +445,7 @@
       throw new Error('Unsupported Studio creative Write goal: ' + operation);
     try {
       var item = projects.find(function (p) {return p.id === id;});
-      bridge.prepareWrite(operation, id, item && storyName(item),
-        Array.isArray(writeFields) ? writeFields : recommendedWriteFields(operation));
+      bridge.prepareWrite(operation, id, item && storyName(item));
       status('Preparing a reviewed proposal. No saved fields have changed.', false);
     } catch (error) {status('Write failed: ' + error.message, true);}
   }
@@ -535,7 +541,7 @@
       return {sceneId:id, before:before, draft:changed};
     }).filter(function (entry) {return Object.keys(entry.draft).length > 1;});
   }
-  function prepareBatchScenes(storyId, writeFields) {
+  function prepareBatchScenes(storyId) {
     var ids = Array.from(el('studio-dw-batch-scenes').querySelectorAll('input:checked'))
       .map(function (node) {return node.value;});
     if (!ids.length || ids.length > 32) {
@@ -567,9 +573,7 @@
             : 'Revise the selected existing Scenes according to the agreed creative discussion.',
           'Return ONLY a JSON object with a scenes array, with one entry per selected Scene ID in the same order.',
           'Each entry includes its exact saved sceneId and the complete final text of whichever fields need changing: title, summary (Scene Intent), and/or prompt (H3 Prompt). Omit unchanged fields.',
-          Array.isArray(writeFields) && writeFields.length
-            ? 'Requested Write fields: ' + writeFields.join(', ') + '. Propose complete replacement text for these fields and preserve the other fields.'
-            : 'Choose the relevant fields from the creative discussion.',
+          'Consider Title, Intent and H3 Prompt together as one Scene. Align the affected parts with the agreed change, preserving parts that remain appropriate and respecting any explicit limits from the author.',
           ids.length === 1
             ? 'Example of an Intent-only revision for this Scene: ' + JSON.stringify({scenes:[{sceneId:ids[0],summary:'complete revised Scene Intent'}]}) + '. For a prompt-only revision, use prompt instead of summary.'
             : 'For each selected Scene, return only the relevant changed fields. Every entry must use its corresponding saved sceneId.',
@@ -583,8 +587,7 @@
         return window.studioDirectorBridge.makeProposal(request, 'studio_scene_batch_draft', true)
           .then(function (raw) {
             var result = parseProposal(raw);
-            proposedBatch = {storyId:storyId, fields:writeFields && writeFields.length ? writeFields : null,
-              scenes:validateSceneRevisionDraft(result, ids, selected, raw)};
+            proposedBatch = {storyId:storyId, scenes:validateSceneRevisionDraft(result, ids, selected, raw)};
             if (!proposedBatch.scenes.length) {
               proposedBatch = null;
               status('Director proposed no changes to the selected Scenes.', false);
@@ -605,23 +608,36 @@
       heading.textContent = 'Scene ' + entry.before.position + ' · ' + (entry.before.title || entry.sceneId);
       section.dataset.sceneId = entry.sceneId;
       section.appendChild(heading);
-      Object.keys(entry.draft).filter(function (field) {return field !== 'sceneId';}).forEach(function (field) {
-        var row = document.createElement('label'), checkbox = document.createElement('input'),
+      var unchanged = document.createElement('details'), unchangedTitle = document.createElement('summary');
+      unchangedTitle.textContent = 'Other parts';
+      unchangedTitle.title = 'Parts retained by Director; expand to inspect or edit.';
+      unchanged.appendChild(unchangedTitle);
+      ['title','summary','prompt'].forEach(function (field) {
+        var row = document.createElement('div'), selection = document.createElement('label'), checkbox = document.createElement('input'),
           editor = document.createElement('textarea'), old = entry.before[field] || '';
+        var value = Object.prototype.hasOwnProperty.call(entry.draft, field) ? entry.draft[field] : old;
+        row.className = 'studio-dw-review-part';
         checkbox.type = 'checkbox';
         checkbox.dataset.selectField = field;
-        checkbox.checked = entry.draft[field] !== old &&
-          (!proposedBatch.fields || proposedBatch.fields.includes(field));
+        checkbox.checked = value !== old;
         editor.dataset.field = field;
-        editor.value = entry.draft[field];
-        editor.rows = field === 'prompt' ? 12 : 5;
+        editor.value = value;
+        editor.setAttribute('aria-label',labels[field]);
+        editor.rows = field === 'prompt' ? 12 : field === 'title' ? 1 : 4;
         editor.addEventListener('input', function () {checkbox.checked = true;});
-        var name = document.createElement('strong'), before = document.createElement('small');
-        name.textContent = labels[field] + ' · include this change';
-        before.textContent = 'Saved: ' + (old || '(empty)');
-        row.append(checkbox, name, before, editor);
-        section.appendChild(row);
+        var name = document.createElement('strong'), saved = document.createElement('details'),
+          savedTitle = document.createElement('summary'), before = document.createElement('pre');
+        name.textContent = labels[field];
+        checkbox.setAttribute('aria-label','Include ' + labels[field] + ' change');
+        savedTitle.textContent = 'Saved ' + labels[field];
+        before.textContent = old || '(empty)';
+        saved.append(savedTitle,before);
+        selection.append(checkbox,name);
+        row.append(selection,saved,editor);
+        if (checkbox.checked) section.appendChild(row);
+        else unchanged.appendChild(row);
       });
+      if (unchanged.children.length > 1) section.appendChild(unchanged);
       host.appendChild(section);
     });
     el('studio-dw-batch-error').textContent = '';
@@ -740,25 +756,19 @@
     writeOperationChosen = true;
     var setup = el('studio-dw-write-panel').classList.contains('hidden') ? toggle('write') : refreshWrite();
     return setup.then(function (ready) {
-      if (ready) writePrepare(recommendedWriteFields(operation));
+      if (ready) writePrepare();
     });
   }
   function captureActionLabel(capture) {
-    var names = {title:'Project Title',concept:'Project Overview',style:'Visual Atmosphere',
-      invariant:'Invariant',summary:'Scene Intent',prompt:'H3 Prompt',scene:'New Scene'};
-    return capture.field === 'scene' ? 'Add Scene' :
-      capture.field === 'invariant' ? 'Capture Invariant' :
-      'Write ' + (names[capture.field] || labels[capture.field] || capture.field);
+    return capture.field === 'scene' ? 'Review new Scene' :
+      ['summary','prompt'].includes(capture.field) ? 'Review Scene' : 'Review Project Overview';
   }
   function writeActionLabel() {
-    var hint = recommendations.writeHint, fields = recommendedWriteFields(hint);
+    var hint = recommendations.writeHint;
     if (hint === 'new-project') return 'Create Project';
-    if (hint === 'project') return fields.length
-      ? 'Write ' + fields.map(function (field) {return field === 'concept' ? 'Project Concept' : labels[field];}).join(' + ')
-      : 'Revise Project';
-    if (['scene', 'scenes', 'scene-edit', 'scenes-batch'].includes(hint)) return fields.length && recommendations.sceneId
-      ? 'Write Scene ' + fields.map(function (field) {return labels[field];}).join(' + ')
-      : 'Write Scenes';
+    if (hint === 'project') return 'Revise Project Overview';
+    if (['scene', 'scenes', 'scene-edit', 'scenes-batch'].includes(hint))
+      return recommendations.sceneId ? 'Revise Scene' : 'Write Scenes';
     return '';
   }
   function renderReadiness(list) {
@@ -798,7 +808,7 @@
       var emptyAction = document.createElement('p');
       emptyAction.className = 'studio-dw-suggestions-empty';
       emptyAction.textContent = readinessStale ? 'Waiting for a current assessment.' :
-        'Keep developing the idea. Director will offer a field when it is ready.';
+        'Keep developing the idea. Director will suggest the next useful revision.';
       actions.appendChild(emptyAction);
     }
     if (!list.length) {

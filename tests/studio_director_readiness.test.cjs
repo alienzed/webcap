@@ -125,7 +125,7 @@ test('capture is optional, bounded and remains editable authoring material, not 
   assert.match(director, /showStudioBriefReview\(\)/);
   assert.match(workbench, /creativeCapture = capture/);
   assert.ok(workbench.includes('function captureActionLabel(capture)'));
-  assert.match(workbench, /return showSceneReview\(story, sceneTarget/);
+  assert.match(workbench, /proposedBatch = \{storyId:story\.id,scenes:\[\{sceneId:sceneTarget/);
   assert.match(workbench, /setReadinessFreshness/);
 });
 
@@ -178,18 +178,18 @@ test('Director guidance presents at most two field actions and keeps assessment 
   assert.match(html, /id="studio-dw-suggestions"/);
   assert.match(html, /<details class="studio-dw-assessment-details">/);
   assert.match(html, /<summary>Creative assessment details<\/summary>/);
-  assert.match(workbench, /'Write Scene ' \+ fields\.map/);
+  assert.match(workbench, /'Revise Scene'/);
 });
 
 test('Scene revisions select saved Scenes, leaving changed fields to Director', () => {
-  assert.match(workbench, /id === \(recommendations\.sceneId \|\| activeTarget\(\)\.sceneId\)/);
+  assert.match(workbench, /includes\(recommendations\.sceneId\)/);
   assert.match(workbench, /whichever fields need changing: title, summary/);
   assert.match(workbench, /validateSceneRevisionDraft\(result, ids, selected, raw\)/);
   assert.doesNotMatch(workbench, /applySuggestedWriteFields/);
   assert.doesNotMatch(html, /id="studio-dw-batch-fields"/);
 });
-test('Project Write hints narrow reviewed field defaults without auto-applying',()=>{
-  assert.match(workbench,/bridge\.prepareWrite\(operation, id, item && storyName\(item\),\s*Array\.isArray\(writeFields\) \? writeFields : recommendedWriteFields\(operation\)\)/);
-  assert.match(director,/if \(kind === 'project'\) return prepareStudioBrief\(writeFields\)/);
-  assert.match(director,/checkbox\.checked = checkbox\.checked && writeFields\.indexOf\(field\) !== -1/);
+test('Project Overview Review selects actual changes without narrowing them to field hints',()=>{
+  assert.match(workbench,/bridge\.prepareWrite\(operation, id, item && storyName\(item\)\)/);
+  assert.match(director,/if \(kind === 'project'\) return prepareStudioBrief\(\)/);
+  assert.doesNotMatch(director,/checkbox\.checked = checkbox\.checked && writeFields\.indexOf\(field\) !== -1/);
 });

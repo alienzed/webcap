@@ -11,6 +11,47 @@ function part(source,start,end) {
   return source.slice(a,b);
 }
 
+test('Overview Review leads with changed parts and retains the same editable nodes for other parts',()=>{
+  const node=()=>({children:[],classList:{toggle(){}},
+    appendChild(child){if(child.parent) child.parent.children.splice(child.parent.children.indexOf(child),1);this.children.push(child);child.parent=this;},
+    insertBefore(child,before){if(child.parent) child.parent.children.splice(child.parent.children.indexOf(child),1);this.children.splice(this.children.indexOf(before),0,child);child.parent=this;},
+    querySelector:()=>true});
+  const parts=node(),other=node(),sections={};
+  parts.appendChild(other);
+  for(const name of ['title','concept','style','invariants']){
+    const section={dataset:{changed:String(['concept','style'].includes(name))},value:name};
+    sections[name]=section;parts.insertBefore(section,other);
+  }
+  const scope=vm.createContext({el:id=>id==='studio-brief-parts'?parts:id==='studio-brief-unchanged'?other:
+    {closest:()=>sections[id.replace('studio-brief-','').replace('-state','')]}});
+  vm.runInContext(part(chat,'  function groupStudioBriefReviewParts() {','  function prepareStudioBrief() {'),scope);
+  scope.groupStudioBriefReviewParts();
+  assert.deepEqual(parts.children,[sections.concept,sections.style,other]);
+  assert.deepEqual(other.children,[sections.title,sections.invariants]);
+  assert.equal(sections.title.value,'title');
+  sections.invariants.dataset.changed='true';
+  scope.groupStudioBriefReviewParts();
+  assert.deepEqual(parts.children,[sections.concept,sections.style,sections.invariants,other]);
+  assert.deepEqual(other.children,[sections.title]);
+  assert.doesNotMatch(part(chat,'  function updateStudioBriefReviewSummary() {','  function groupStudioBriefReviewParts() {'),/groupStudioBriefReviewParts\(/,
+    'typing and selection updates must not reparent focused editors');
+});
+
+test('editing retained Overview text includes the edit without requiring a second checkbox action',()=>{
+  const elements={};
+  for(const key of ['title','concept','style']){
+    elements['studio-brief-'+key]={addEventListener(event,fn){this[event]=fn;}};
+    elements['studio-brief-'+key+'-selected']={checked:false};
+  }
+  const code=part(chat,"    ['title','concept','style'].forEach(function (key) {","    ['input','change','click'].forEach");
+  vm.runInContext(code,vm.createContext({el:id=>elements[id]}));
+  elements['studio-brief-title'].input();
+  assert.equal(elements['studio-brief-title-selected'].checked,true);
+  assert.equal(elements['studio-brief-style-selected'].checked,false);
+  elements['studio-brief-title-selected'].checked=false;
+  assert.equal(elements['studio-brief-title-selected'].checked,false,'author can exclude the change explicitly');
+});
+
 test('review dialogs and request inspection preserve Director; ordinary outside clicks still close it',()=>{
   const handlers={};
   let modal={},closes=0;
@@ -43,7 +84,7 @@ test('Project review summary follows edits and selection without changing either
   ];
   elements['studio-brief-summary']={};
   const scope=vm.createContext({state:{studioBriefProposal:{expected:before}},el:id=>elements[id]});
-  vm.runInContext(part(chat,'  function updateStudioBriefReviewSummary() {','  function prepareStudioBrief(writeFields) {'),scope);
+  vm.runInContext(part(chat,'  function updateStudioBriefReviewSummary() {','  function prepareStudioBrief() {'),scope);
   scope.updateStudioBriefReviewSummary();
   assert.match(elements['studio-brief-concept-state'].textContent,/Changed · selected/);
   assert.match(elements['studio-brief-title-state'].textContent,/Unchanged · not selected/);
@@ -60,7 +101,7 @@ test('identical Invariants are not preselected because JSON properties arrived i
   const existing=[{kind:'character',text:'Keeper',title:'Mara'}];
   const reviewed=[{item:{kind:'character',title:'Mara',text:'Keeper'}}];
   const scope=vm.createContext({el:()=>checkbox,existing,reviewed});
-  const code=part(chat,"    el('studio-brief-invariants-selected').checked = reviewed.length",'    if (Array.isArray(writeFields)');
+  const code=part(chat,"    el('studio-brief-invariants-selected').checked = reviewed.length","    el('studio-brief-invariants').replaceChildren();");
   vm.runInContext(code,scope);
   assert.equal(checkbox.checked,false);
   reviewed[0].item.text='An older keeper.';
@@ -84,7 +125,7 @@ test('contextual Prompt action uses the current route even when Write was aimed 
     renderWriteStory:story=>assert.equal(story,saved),setOperation(){},updateScope(){},status:message=>assert.fail(message),
     writePrepare:()=>{prepared=true;},writeOperationChosen:false,writeFieldsManuallyChanged:false
   });
-  vm.runInContext(part(workbench,'  function prepareCurrentWrite(operation) {','  function writePrepare(writeFields) {'),scope);
+  vm.runInContext(part(workbench,'  function prepareCurrentWrite(operation) {','  function writePrepare() {'),scope);
   await scope.prepareCurrentWrite('scene-write');
   assert.equal(elements['studio-dw-write-project'].value,saved.id);
   assert.equal(elements['studio-dw-scene-mode'].value,'revise');

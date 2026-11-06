@@ -5,6 +5,11 @@ Status: phased implementation against PR #859, following AGENTS.md and the autho
 ## Goal
 One explicit Read path; three creative Write goals: Create Project, Revise Project, Write Scenes. Keep reviewed changes, scoped field comparisons, stable identifiers, atomic saved writes, history and H3 expertise. Preserve author-operated Studio mechanics. Converge guidance, readiness and visible UI without creating an LLM tools executor.
 
+### Unit alignment — 2026-11-06
+Project Overview (Concept, Visual / atmosphere, Invariants) and Scene (Title, Intent, H3 Prompt) are the creative units. Suggestions, shortcuts and drafting consider each unit together, while respecting explicit author limits. Advisory `writeFields` metadata describes likely changes; it does not constrain the unit proposal or deselect related changes in Review. A suggestion click prepares the existing editable Review directly; Apply remains explicit.
+
+Scene Review presents changed parts selected and keeps unchanged parts available in one collapsed section. Completed Scene captures use that same Review without another model request. The saved fields, schemas, atomic Apply and per-changed-field conflict checks remain unchanged. A proposal may change one part or several; unity does not require rewriting every part.
+
 ## Phase 1: Align the public contract and guidance
 - Advertise only Read, Create Project, Revise Project and Write Scenes.
 - Give short, iterative conversational replies; 1-3 sentences by default.

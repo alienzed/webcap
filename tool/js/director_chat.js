@@ -1799,7 +1799,7 @@
     return result;
   }
 
-  function showStudioBriefReview(writeFields) {
+  function showStudioBriefReview() {
     var proposal = state.studioBriefProposal;
     if (!proposal) throw new Error('Prepare Concept, Style and Invariants before reviewing.');
     el('studio-brief-target').textContent = 'Project: ' + (proposal.storyTitle || proposal.storyId);
@@ -1840,17 +1840,12 @@
           return row.item[field] !== existing[index][field];
         });
       });
-    if (Array.isArray(writeFields) && writeFields.length) {
-      ['title', 'concept', 'style', 'invariants'].forEach(function (field) {
-        var checkbox = el('studio-brief-' + field + '-selected');
-        checkbox.checked = checkbox.checked && writeFields.indexOf(field) !== -1;
-      });
-    }
     el('studio-brief-invariants').replaceChildren();
     reviewed.forEach(function (row) {
       addStudioProjectInvariant(row.item, 'studio-brief-invariants', row.original);
     });
     updateStudioBriefReviewSummary();
+    groupStudioBriefReviewParts();
     el('studio-brief-error').textContent = '';
     var dialog = el('studio-brief-review');
     if (dialog.open) dialog.close();
@@ -1882,9 +1877,20 @@
     el('studio-brief-summary').textContent = selected.length ? 'Selected: ' + selected.join(' · ') : 'No fields selected';
   }
 
-  function prepareStudioBrief(writeFields) {
+  function groupStudioBriefReviewParts() {
+    var parts = el('studio-brief-parts'), unchanged = el('studio-brief-unchanged');
+    unchanged.open = false;
+    ['title','concept','style','invariants'].forEach(function (key) {
+      var section = el('studio-brief-' + key + '-state').closest('.studio-brief-field');
+      if (section.dataset.changed === 'true') parts.insertBefore(section,unchanged);
+      else unchanged.appendChild(section);
+    });
+    unchanged.classList.toggle('hidden', !unchanged.querySelector('.studio-brief-field'));
+  }
+
+  function prepareStudioBrief() {
     if (state.pending || state.activeMode !== 'storyboard' || !state.sessionReady) return;
-    if (state.studioBriefProposal) { showStudioBriefReview(writeFields); return; }
+    if (state.studioBriefProposal) { showStudioBriefReview(); return; }
     if (!state.modelId) { studioActionStatus('Select a Director model.', true); return; }
     var storyId = studioAttachedStoryId();
     if (!storyId) {
@@ -1896,7 +1902,7 @@
     });
     state.pending = true;
     state.jobId = '';
-    studioActionStatus('Preparing Concept, Style and Invariants for review…', false);
+    studioActionStatus('Preparing Project Overview for review…', false);
     startProgress();
     syncControls();
     Promise.resolve().then(function () {
@@ -1910,6 +1916,7 @@
       var input = {
         task: 'Propose narrowly scoped creative brief changes that the author has actually discussed. ' +
           'Return the revised Project title, Concept, Style and FULL Invariant list as reviewable suggestions. ' +
+          'Consider Concept, Visual / atmosphere and Invariants together as one Project Overview. Align the affected parts with the agreed change, preserving parts that remain appropriate and respecting explicit author limits. ' +
           'Core Appeal stays within Concept. Preserve established details and unrelated facts. ' +
           'Do not change Scenes or prompts. Prefer no change where ideas remain undecided. ' +
           'Any changes must be reviewed by the author before WebCap stores them.',
@@ -1938,8 +1945,8 @@
             rationale: draft.rationale
           };
           finishProgress(null);
-          studioActionStatus('Concept, Style and Invariants ready for review. Nothing has changed.', false);
-          showStudioBriefReview(writeFields);
+          studioActionStatus('Project Overview ready for review. Nothing has changed.', false);
+          showStudioBriefReview();
         });
     }).catch(function (error) {
       finishProgress(error);
@@ -2750,7 +2757,8 @@
         'creative decision or question at most. Longer complete fields and H3 Prompts belong in requested drafts. ' +
         'Keep readiness light: normally checks=[], readHints=[], writeHint="", writeFields=[], sceneId="". ' +
         'Use a readiness hint only when it provides a useful next action. ' +
-        'Write hints are new-project, project or scenes; include writeFields for recommended editable fields ' +
+        'Recommend the creative unit: project revises the Project Overview; scenes writes or revises a coherent Scene, considering its Title, Intent and H3 Prompt together. ' +
+        'Write hints are new-project, project or scenes; writeFields describes likely changed parts as advisory metadata, not a separate creative workflow ' +
         '(project: title/concept/style/invariants; scenes: title/summary/prompt). ' +
         'Use the exact known saved sceneId for an existing Scene, otherwise empty. ' +
         'If assessment is genuinely useful, provide at most two concise checks with a valid name and scope. ' +
@@ -2760,7 +2768,7 @@
         'include one capture matching the supplied schema, with complete content. ' +
         'For an existing Scene use its exact ID. For a new Scene use field=scene, title and an empty sceneId. ' +
         'For an Invariant use kind/title and beforeKind/beforeTitle only for an exact known rename or edit. ' +
-        'Use capture only for a genuinely complete proposal; WebCap selects and validates the save target ' +
+        'Use capture for a complete value when the other parts of its unit remain appropriate. Use reviewed unit Write when multiple parts need alignment. WebCap selects and validates the save target ' +
         'and opens editable review before Apply. Keep assessment metadata in readiness and conversation in reply.\n';
       return outbound;
     });
@@ -3446,6 +3454,11 @@
     el('studio-brief-close').onclick = function () { el('studio-brief-review').close(); };
     el('studio-brief-discard').onclick = function () { el('studio-brief-review').close(); };
     el('studio-brief-apply').onclick = applyStudioBrief;
+    ['title','concept','style'].forEach(function (key) {
+      el('studio-brief-' + key).addEventListener('input', function () {
+        el('studio-brief-' + key + '-selected').checked = true;
+      });
+    });
     ['input','change','click'].forEach(function (eventName) {
       el('studio-brief-review').addEventListener(eventName, updateStudioBriefReviewSummary);
     });
@@ -3698,14 +3711,14 @@
       scheduleSessionSave();
       syncModeUi();
     },
-    prepareWrite: function (kind, storyId, storyTitle, writeFields) {
+    prepareWrite: function (kind, storyId, storyTitle) {
       if (!this.isReady()) throw new Error('Director must be ready before Write.');
       if (kind !== 'new-project') this.selectWriteProject(storyId,storyTitle);
       if (kind === 'new-project') {
         state.studioProjectProposal = null; // Create a fresh review from current conversation.
         return prepareStudioProject();
       }
-      if (kind === 'project') return prepareStudioBrief(writeFields);
+      if (kind === 'project') return prepareStudioBrief();
       if (kind === 'scene') return prepareStudioSceneDraft();
       if (kind === 'scenes') return prepareStudioScenes();
       throw new Error('Unsupported reviewed Write operation: ' + kind);
@@ -3789,7 +3802,7 @@
           rationale:'Director developed this material in conversation. Review and edit before saving.'
         };
         showStudioBriefReview();
-        studioActionStatus('Review the developed ' + capture.field + ' without another model request.',false);
+        studioActionStatus('Review the Project Overview without another model request.',false);
       }).finally(function () {
         state.pending = false;
         syncControls();

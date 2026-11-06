@@ -26,7 +26,7 @@ test('coherence is an explicit Studio Director operation, not a separate automat
 });
 
 test('coherence results enter existing batch review and atomic saved-field Apply', () => {
-  const code = section(workbench, '  function prepareProjectCoherence(storyId) {', '  function prepareBatchScenes(storyId) {');
+  const code = section(workbench, '  function prepareProjectCoherence(storyId) {', '  function prepareBatchScenes(storyId, writeFields) {');
   assert.match(code, /window.flushStudioDirectorStoryEdits\(storyId\)/);
   assert.match(code, /fresh.updatedAt !== originalStory.updatedAt/);
   assert.match(code, /result.scenes.length !== ids.length/);

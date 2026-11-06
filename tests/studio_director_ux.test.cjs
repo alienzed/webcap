@@ -69,14 +69,13 @@ test('identical Invariants are not preselected because JSON properties arrived i
 });
 
 test('contextual Prompt action uses the current route even when Write was aimed at another Project',async()=>{
-  const fields=[{value:'summary',checked:true},{value:'prompt',checked:false},{value:'title',checked:true}];
   const elements={};
   const node=()=>({value:'',classList:{add(){},remove(){}},setAttribute(){}});
   for(const id of ['current-brief','current-prompt','write-project','write-operation','write-scene','read-panel','read','write-panel','write']) elements['studio-dw-'+id]=node();
   elements['studio-dw-write-project'].value='unrelated-project';
   elements['studio-dw-scene-mode']=node();
-  elements['studio-dw-batch-scenes']={querySelectorAll:()=>[{value:'current-scene',checked:false},{value:'other-scene',checked:true}]};
-  elements['studio-dw-batch-fields']={querySelectorAll:()=>fields};
+  const scenes=[{value:'current-scene',checked:false},{value:'other-scene',checked:true}];
+  elements['studio-dw-batch-scenes']={querySelectorAll:()=>scenes};
   let prepared=false;
   const saved={id:'current-project'};
   const scope=vm.createContext({
@@ -91,7 +90,6 @@ test('contextual Prompt action uses the current route even when Write was aimed 
   assert.equal(elements['studio-dw-scene-mode'].value,'revise');
   assert.equal(elements['studio-dw-batch-scenes'].querySelectorAll()[0].checked,true);
   assert.equal(elements['studio-dw-batch-scenes'].querySelectorAll()[1].checked,false);
-  assert.deepEqual(fields.map(field=>field.checked),[false,true,false]);
   assert.equal(prepared,true);
 });
 

@@ -129,7 +129,7 @@ test('existing Project and Scene draft paths also use explicit Write guidance', 
 });
 
 test('single-Scene revision request uses its saved ID in the example, not a placeholder', () => {
-  const batch = workbench.split('  function prepareBatchScenes(storyId) {')[1]
+  const batch = workbench.split('  function prepareBatchScenes(storyId, writeFields) {')[1]
     .split('  function renderBatchReview() {')[0];
   assert.match(batch,/ids\.length === 1/);
   assert.match(batch,/JSON\.stringify\(\{scenes:\[\{sceneId:ids\[0\],summary:/);
@@ -137,6 +137,32 @@ test('single-Scene revision request uses its saved ID in the example, not a plac
   assert.match(batch,/summary \(Scene Intent\)/);
   assert.match(batch,/prompt \(H3 Prompt\)/);
   assert.match(batch,/validateSceneRevisionDraft\(result, ids, selected, raw\)/);
+});
+
+test('Scene revision synchronizes the chosen Project destination before requesting a proposal', async () => {
+  const block = workbench.split('  function prepareBatchScenes(storyId, writeFields) {')[1]
+    .split('  function renderBatchReview() {')[0];
+  const scene = {title:'Lamp',summary:'Saved intent',prompt:'Saved prompt',durationSeconds:8};
+  const story = {id:'chosen-project',title:'Chosen Project',sceneOrder:['scene-a'],scenes:{'scene-a':scene}};
+  const calls = [];
+  let complete;
+  const finished = new Promise(resolve => {complete=resolve;});
+  const scope = vm.createContext({
+    el:id=>id==='studio-dw-batch-scenes' ? {querySelectorAll:()=>[{value:'scene-a'}]} : {},
+    status:message=>{if (message.startsWith('Scene revision draft failed')) assert.fail(message);},
+    loadStory:async id=>{assert.equal(id,story.id);return story;},storyName:s=>s.title,
+    parseProposal:JSON.parse,validateSceneRevisionDraft:()=>[],
+    window:{flushStudioDirectorStoryEdits:async()=>{},studioDirectorBridge:{
+      selectWriteProject:(id,title)=>calls.push(['destination',id,title]),
+      messages:()=>[],makeProposal:async instruction=>{
+        assert.deepEqual(calls,[['destination',story.id,story.title]]);
+        assert.match(instruction,/Requested Write fields: summary\. Propose complete replacement text for these fields and preserve the other fields/);
+        complete();return '{"scenes":[]}';
+      }
+    }}
+  });
+  vm.runInContext('function prepareBatchScenes(storyId, writeFields) {'+block+'\nprepareBatchScenes("chosen-project", ["summary"]);',scope);
+  await finished;
 });
 
 test('Read sends actual selected data as a visible conversation event and expects LLM receipt', () => {
@@ -259,7 +285,7 @@ test('Scene splitting is not a Director Write operation', () => {
 });
 
 test('batch Scene revisions include duration and linked Invariants', () => {
-  const batch = workbench.split('  function prepareBatchScenes(storyId) {')[1]
+  const batch = workbench.split('  function prepareBatchScenes(storyId, writeFields) {')[1]
     .split('  function renderBatchReview() {')[0];
   const preview = workbench.split('  function showWriteContext() {')[1]
     .split('  function updateScope() {')[0];

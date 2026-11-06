@@ -178,7 +178,7 @@ test('Director guidance presents at most two field actions and keeps assessment 
   assert.match(html, /id="studio-dw-suggestions"/);
   assert.match(html, /<details class="studio-dw-assessment-details">/);
   assert.match(html, /<summary>Creative assessment details<\/summary>/);
-  assert.match(workbench, /return 'Write Scenes'/);
+  assert.match(workbench, /'Write Scene ' \+ fields\.map/);
 });
 
 test('Scene revisions select saved Scenes, leaving changed fields to Director', () => {

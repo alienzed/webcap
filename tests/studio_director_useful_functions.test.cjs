@@ -20,9 +20,9 @@ test('Write exposes exactly three creative workflows', () => {
 
 test('one Scenes entrypoint delegates to existing reviewed one-or-many operations', () => {
   assert.match(rail, /if \(operation === 'scene-write'\) \{/);
-  assert.match(rail, /el\('studio-dw-scene-mode'\)\.value === 'revise'\) return prepareBatchScenes\(id\)/);
+  assert.match(rail, /el\('studio-dw-scene-mode'\)\.value === 'revise'\) return prepareBatchScenes\(id, writeFields\)/);
   assert.match(rail, /bridge\.prepareWrite\('scenes', id, selected && storyName\(selected\), \[\]\)/);
-  assert.match(rail, /function prepareBatchScenes\(storyId\)/);
+  assert.match(rail, /function prepareBatchScenes\(storyId, writeFields\)/);
   assert.match(rail, /function applyBatchScenes\(\)/);
   assert.match(chat, /if \(kind === 'scenes'\) return prepareStudioScenes\(\)/);
 });
@@ -38,6 +38,6 @@ test('Read and the optional coherence utility stay separate from creative Write'
 
 test('ordinary replies prioritize short exchanges rather than full assessments', () => {
   assert.match(chat, /one short paragraph of 1-3 sentences/);
-  assert.match(chat, /keep checks and readHints empty unless/);
+  assert.match(chat, /Keep readiness light: normally checks=\[\], readHints=\[\]/);
   assert.match(backend, /normally 1-3 sentences in one short paragraph/);
 });

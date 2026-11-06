@@ -260,7 +260,7 @@
   function recommendedWriteFields(operation) {
     if (readinessStale) return [];
     var allowed = operation === 'project' ? projectFields :
-      operation === 'scene-write' ? sceneFields : [];
+      ['scene-write','scene','scenes','scene-edit','scenes-batch'].includes(operation) ? sceneFields : [];
     return recommendations.writeFields.filter(function (field) { return allowed.indexOf(field) !== -1; });
   }
   function refreshRead() {
@@ -281,8 +281,9 @@
           } else if (!projects.length) el('studio-dw-write-operation').value = 'new-project';
         }
         setOperation();
+        return true;
       })
-      .catch(function (e) { status('Write setup failed: ' + e.message, true); });
+      .catch(function (e) { status('Write setup failed: ' + e.message, true); return false; });
   }
   function toggle(which) {
     var other = which === 'read' ? 'write' : 'read', panel = el('studio-dw-' + which + '-panel'),
@@ -294,7 +295,7 @@
     el('studio-dw-quick-' + which).setAttribute('aria-expanded', show ? 'true' : 'false');
     el('studio-dw-quick-' + other).setAttribute('aria-expanded', 'false');
     updateScope();
-    if (show) (which === 'read' ? refreshRead() : refreshWrite());
+    if (show) return which === 'read' ? refreshRead() : refreshWrite();
   }
   function parseProposal(raw) {
     var text = String(raw || '').trim();
@@ -425,7 +426,7 @@
     if (!bridge.isReady()) {status('Choose a Director model first.',true);return;}
     if (operation !== 'new-project' && !id) {status('Choose a destination Project.',true);return;}
     if (operation === 'scene-write') {
-      if (el('studio-dw-scene-mode').value === 'revise') return prepareBatchScenes(id);
+      if (el('studio-dw-scene-mode').value === 'revise') return prepareBatchScenes(id, writeFields);
       try {
         var selected = projects.find(function (p) {return p.id === id;});
         bridge.prepareWrite('scenes', id, selected && storyName(selected), []);
@@ -534,7 +535,7 @@
       return {sceneId:id, before:before, draft:changed};
     }).filter(function (entry) {return Object.keys(entry.draft).length > 1;});
   }
-  function prepareBatchScenes(storyId) {
+  function prepareBatchScenes(storyId, writeFields) {
     var ids = Array.from(el('studio-dw-batch-scenes').querySelectorAll('input:checked'))
       .map(function (node) {return node.value;});
     if (!ids.length || ids.length > 32) {
@@ -548,6 +549,7 @@
       return window.flushStudioDirectorStoryEdits(storyId);
     }).then(function () {return loadStory(storyId);})
       .then(function (story) {
+        window.studioDirectorBridge.selectWriteProject(story.id, storyName(story));
         var selected = ids.map(function (id) {
           var scene = story.scenes && story.scenes[id];
           if (!scene || (story.sceneOrder || []).indexOf(id) === -1)
@@ -565,6 +567,9 @@
             : 'Revise the selected existing Scenes according to the agreed creative discussion.',
           'Return ONLY a JSON object with a scenes array, with one entry per selected Scene ID in the same order.',
           'Each entry includes its exact saved sceneId and the complete final text of whichever fields need changing: title, summary (Scene Intent), and/or prompt (H3 Prompt). Omit unchanged fields.',
+          Array.isArray(writeFields) && writeFields.length
+            ? 'Requested Write fields: ' + writeFields.join(', ') + '. Propose complete replacement text for these fields and preserve the other fields.'
+            : 'Choose the relevant fields from the creative discussion.',
           ids.length === 1
             ? 'Example of an Intent-only revision for this Scene: ' + JSON.stringify({scenes:[{sceneId:ids[0],summary:'complete revised Scene Intent'}]}) + '. For a prompt-only revision, use prompt instead of summary.'
             : 'For each selected Scene, return only the relevant changed fields. Every entry must use its corresponding saved sceneId.',
@@ -578,7 +583,8 @@
         return window.studioDirectorBridge.makeProposal(request, 'studio_scene_batch_draft', true)
           .then(function (raw) {
             var result = parseProposal(raw);
-            proposedBatch = {storyId:storyId, scenes:validateSceneRevisionDraft(result, ids, selected, raw)};
+            proposedBatch = {storyId:storyId, fields:writeFields && writeFields.length ? writeFields : null,
+              scenes:validateSceneRevisionDraft(result, ids, selected, raw)};
             if (!proposedBatch.scenes.length) {
               proposedBatch = null;
               status('Director proposed no changes to the selected Scenes.', false);
@@ -604,7 +610,8 @@
           editor = document.createElement('textarea'), old = entry.before[field] || '';
         checkbox.type = 'checkbox';
         checkbox.dataset.selectField = field;
-        checkbox.checked = entry.draft[field] !== old;
+        checkbox.checked = entry.draft[field] !== old &&
+          (!proposedBatch.fields || proposedBatch.fields.includes(field));
         editor.dataset.field = field;
         editor.value = entry.draft[field];
         editor.rows = field === 'prompt' ? 12 : 5;
@@ -731,9 +738,10 @@
     if (operation === 'scene-write') el('studio-dw-scene-mode').value =
       (recommendations.sceneId || hint === 'scene-edit' || hint === 'scenes-batch') ? 'revise' : 'create';
     writeOperationChosen = true;
-    if (el('studio-dw-write-panel').classList.contains('hidden')) toggle('write');
-    else refreshWrite();
-    status('Director suggested this operation. Choose the exact saved targets, then review.', false);
+    var setup = el('studio-dw-write-panel').classList.contains('hidden') ? toggle('write') : refreshWrite();
+    return setup.then(function (ready) {
+      if (ready) writePrepare(recommendedWriteFields(operation));
+    });
   }
   function captureActionLabel(capture) {
     var names = {title:'Project Title',concept:'Project Overview',style:'Visual Atmosphere',
@@ -743,10 +751,14 @@
       'Write ' + (names[capture.field] || labels[capture.field] || capture.field);
   }
   function writeActionLabel() {
-    var hint = recommendations.writeHint;
+    var hint = recommendations.writeHint, fields = recommendedWriteFields(hint);
     if (hint === 'new-project') return 'Create Project';
-    if (hint === 'project') return 'Revise Project';
-    if (['scene', 'scenes', 'scene-edit', 'scenes-batch'].includes(hint)) return 'Write Scenes';
+    if (hint === 'project') return fields.length
+      ? 'Write ' + fields.map(function (field) {return field === 'concept' ? 'Project Concept' : labels[field];}).join(' + ')
+      : 'Revise Project';
+    if (['scene', 'scenes', 'scene-edit', 'scenes-batch'].includes(hint)) return fields.length && recommendations.sceneId
+      ? 'Write Scene ' + fields.map(function (field) {return labels[field];}).join(' + ')
+      : 'Write Scenes';
     return '';
   }
   function renderReadiness(list) {

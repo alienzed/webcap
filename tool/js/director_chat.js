@@ -1647,7 +1647,7 @@
         'Use a short rationale. Nothing should be created yet.',
       discussion: discussion
     };
-    studioDirectorRequestMessages([{ role: 'user', content: JSON.stringify(input) }])
+    studioDirectorRequestMessages([{ role: 'user', content: JSON.stringify(input) }], false, true)
       .then(function (messages) {
         window.studioDirectorWorkbench.showSentWriteContext('studio_project_draft', messages);
         return requestJson('/fs/director/chat', {
@@ -1917,7 +1917,7 @@
           style: story.style, invariants: story.invariants },
         discussion: discussion
       };
-      return studioDirectorRequestMessages([{ role: 'user', content: JSON.stringify(input) }])
+      return studioDirectorRequestMessages([{ role: 'user', content: JSON.stringify(input) }], false, true)
         .then(function (messages) {
           window.studioDirectorWorkbench.showSentWriteContext('studio_brief_draft', messages);
           return requestJson('/fs/director/chat', {
@@ -2194,7 +2194,7 @@
         },
         discussion: discussion
       };
-      return studioDirectorRequestMessages([{ role: 'user', content: JSON.stringify(input) }])
+      return studioDirectorRequestMessages([{ role: 'user', content: JSON.stringify(input) }], false, true)
         .then(function (messages) {
           window.studioDirectorWorkbench.showSentWriteContext('studio_scene_sequence_draft', messages);
           return requestJson('/fs/director/chat', {
@@ -2397,7 +2397,7 @@
         },
         discussion: discussion.slice(-60)
       };
-      return studioDirectorRequestMessages([{ role: 'user', content: JSON.stringify(input, null, 2) }])
+      return studioDirectorRequestMessages([{ role: 'user', content: JSON.stringify(input, null, 2) }], false, true)
         .then(function (messages) {
           window.studioDirectorWorkbench.showSentWriteContext('studio_scene_draft', messages);
           return requestJson('/fs/director/chat', {

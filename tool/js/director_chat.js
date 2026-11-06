@@ -2697,7 +2697,7 @@
     });
   }
 
-  function studioDirectorRequestMessages(messages, includePromptContract) {
+  function studioDirectorRequestMessages(messages, includePromptContract, explicitWrite) {
     return requestJson('/fs/studio/director/guidance?targetModel=minimax_h3').then(function (payload) {
       if (!payload.system || typeof payload.system !== 'string') {
         throw new Error('Studio Director production guidance is missing.');
@@ -2724,10 +2724,12 @@
       outbound[0] = { role: 'system', content: payload.system +
         '\n\nCURRENT WEBCAP CAPABILITIES (available vs planned):\n' + capabilities +
         '\n\nSTUDIO WORKBENCH STATE (controls, not saved Story facts):\n' + workbench +
-        '\nFor the current author goal, suggest at most one useful next step from the listed capabilities: ' +
-        'an explicit Read, an appropriately scoped reviewed Write, or an author-operated Studio action. ' +
-        'Continue developing the idea when a change is not yet useful. ' +
-        'Treat proposed work as unsaved until WebCap confirms Apply.\n' +
+        (explicitWrite
+          ? '\nEXPLICIT REVIEWED WRITE: The author has already chosen to draft. Produce the requested complete editable proposal in the format specified by the current request. This is a draft for review, not a conversational suggestion. Only WebCap Apply saves changes.\n'
+          : '\nFor the current author goal, suggest at most one useful next step from the listed capabilities: ' +
+            'an explicit Read, an appropriately scoped reviewed Write, or an author-operated Studio action. ' +
+            'Continue developing the idea when a change is not yet useful. ' +
+            'Treat proposed work as unsaved until WebCap confirms Apply.\n') +
         outbound[0].content };
       if (includePromptContract) outbound[0].content +=
         '\n\nH3 PRODUCTION PROMPT REFERENCE (know this template when discussing H3; apply it only when drafting an H3 Prompt field, not when authoring Scene Intent or Project fields):\n' + payload.promptContract;
@@ -3867,7 +3869,7 @@
       state.pending = true;
       syncControls();
       startProgress();
-      return studioDirectorRequestMessages([{role:'user',content:instruction}], includePromptContract).then(function (messages) {
+      return studioDirectorRequestMessages([{role:'user',content:instruction}], includePromptContract, true).then(function (messages) {
         window.studioDirectorWorkbench.showSentWriteContext(operation || 'studio_scene_field_draft', messages);
         return requestJson('/fs/director/chat', {
           method:'POST',headers:{'Content-Type':'application/json'},

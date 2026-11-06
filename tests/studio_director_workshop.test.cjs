@@ -114,6 +114,22 @@ test('explicit Write guidance asks for the draft, not another conversational rec
   assert.match(source,/studioDirectorRequestMessages\(\[\{role:'user',content:instruction\}\], includePromptContract, true\)/);
 });
 
+test('existing Project and Scene draft paths also use explicit Write guidance', () => {
+  const drafts = [
+    ['studio_project_draft', "JSON.stringify(input)"],
+    ['studio_brief_draft', "JSON.stringify(input)"],
+    ['studio_scene_sequence_draft', "JSON.stringify(input)"],
+    ['studio_scene_draft', "JSON.stringify(input, null, 2)"]
+  ];
+  for (const [operation, serialization] of drafts) {
+    const marker = "showSentWriteContext('" + operation + "', messages)";
+    const before = source.slice(0, source.indexOf(marker));
+    assert.ok(before.length < source.length, 'Missing draft operation: ' + operation);
+    const call = before.slice(-850);
+    assert.match(call, /studioDirectorRequestMessages\\(\\[\\{ role: 'user', content: JSON\\.stringify\\(input(?:, null, 2)?\\) \\}\\], false, true\\)/);
+  }
+});
+
 test('single-Scene revision request uses its saved ID in the example, not a placeholder', () => {
   const batch = workbench.split('  function prepareBatchScenes(storyId) {')[1]
     .split('  function renderBatchReview() {')[0];

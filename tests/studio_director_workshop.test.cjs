@@ -197,7 +197,7 @@ test('multi-Scene review drafts together and applies selected fields in one atom
   assert.match(html, /value="scene-write">Write Scenes/);
   assert.match(html, /id="studio-dw-scene-mode"/);
   assert.match(html, /id="studio-dw-batch-review"/);
-  assert.match(workbench, /makeProposal\(request, 'studio_scene_batch_draft', fields\.indexOf\('prompt'\) !== -1\)/);
+  assert.match(workbench, /makeProposal\(request, 'studio_scene_batch_draft', true\)/);
   assert.match(workbench, /el\('studio-dw-scene-mode'\)\.value === 'revise'/);
   assert.match(workbench, /function renderBatchReview\(\)/);
   const applied = workbench.split('  function applyBatchScenes() {')[1]
@@ -219,11 +219,11 @@ test('batch Scene revisions include duration and linked Invariants', () => {
   const preview = workbench.split('  function showWriteContext() {')[1]
     .split('  function updateScope() {')[0];
   assert.match(batch, /durationSeconds:scene\.durationSeconds, invariantRefs:scene\.invariantRefs/);
-  assert.match(batch, /each selected Scene to its own durationSeconds/);
+  assert.match(batch, /each Scene to its durationSeconds/);
   assert.match(preview, /durationSeconds:scene\.durationSeconds,invariantRefs:scene\.invariantRefs/);
 });
 
-test('H3 detailed authoring contract is sent only for an explicit Prompt-field draft', async () => {
+test('H3 detailed authoring contract is included when Director may propose a Prompt revision', async () => {
   const state = {studioStoryAccess:null,storyboardAttachments:{},workshop:null};
   const context = vm.createContext({
     state,Object,String,Promise,
@@ -240,7 +240,7 @@ test('H3 detailed authoring contract is sent only for an explicit Prompt-field d
     "studioDirectorRequestMessages([{role:'user',content:'Draft H3 Prompt'}],true)",context);
   assert.doesNotMatch(ordinary[0].content,/Full H3 authoring contract/);
   assert.match(detailed[0].content,/Full H3 authoring contract/);
-  assert.match(workbench,/fields\.indexOf\('prompt'\) !== -1/);
+  assert.match(workbench, /makeProposal\(request, 'studio_scene_batch_draft', true\)/);
 });
 
 test('Studio conversation receives the canonical H3 template as reference without an automatic Write', async () => {

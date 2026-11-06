@@ -923,7 +923,6 @@
     el('studio-dw-scene-mode').onchange=function () {
       writeOperationChosen = true;
         setOperation();
-      applySuggestedWriteFields();
     };
     el('studio-dw-coherence-check').onclick=function () {
       var id = el('studio-dw-write-project').value;

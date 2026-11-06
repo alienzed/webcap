@@ -560,10 +560,14 @@
           return {role:message.role, text:String(message.content || '').slice(0,3200)};
         });
         var request = [
-          'You are Studio Director. Revise these specific existing Scenes based on the recent creative discussion.',
-          'Return ONLY a JSON object with a scenes array. Include exactly one entry for each selected Scene ID, in the same order.',
-          'Each entry has sceneId (copied exactly from the selected Scene) and only the changed fields: title, summary, and/or prompt. summary is Scene Intent; prompt is H3 Prompt.',
-          'For an intent-only change: {"scenes":[{"sceneId":"ACTUAL_SELECTED_ID","summary":"complete revised intent"}]}. For a prompt-only change, return prompt instead of summary.',
+          ids.length === 1
+            ? 'Revise the one selected existing Scene (' + ids[0] + ') according to the agreed creative discussion.'
+            : 'Revise the selected existing Scenes according to the agreed creative discussion.',
+          'Return ONLY a JSON object with a scenes array, with one entry per selected Scene ID in the same order.',
+          'Each entry includes its exact saved sceneId and the complete final text of whichever fields need changing: title, summary (Scene Intent), and/or prompt (H3 Prompt). Omit unchanged fields.',
+          ids.length === 1
+            ? 'Example of an Intent-only revision for this Scene: ' + JSON.stringify({scenes:[{sceneId:ids[0],summary:'complete revised Scene Intent'}]}) + '. For a prompt-only revision, use prompt instead of summary.'
+            : 'For each selected Scene, return only the relevant changed fields. Every entry must use its corresponding saved sceneId.',
           'Use the saved Scene values as the baseline. Return complete replacement text for changed fields; omit unchanged fields. If no changes are needed, return only sceneId.',
           'Preserve unrelated creative content and untouched Scene fields.',
           'Project context: '+JSON.stringify({id:story.id,concept:story.concept,style:story.style,invariants:story.invariants}),

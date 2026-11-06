@@ -179,7 +179,7 @@ H3 calibration additionally requires working NVIDIA telemetry (`nvidia-smi`) in 
 
 ### Insights
 
-Open **Evaluation → Insights** to compare recorded training runs using their archived loss, Test session evidence, and Campaign results. Choose runs, click **Analyze selected**, then optionally select one comparable campaign or Test session. **Interpret with Director** is always opt-in; preview its numerical evidence first. Scores are never combined across independent evaluation protocols. See [Run Analytics](docs/run_analytics.md) for complete usage, provenance and limitations.
+Open **Evaluation → Insights** to compare recorded training runs using their archived loss, Test session evidence, and Campaign results. Choose runs, click **Analyze selected**, then optionally select one comparable campaign or Test session. **Evaluate saved renders** shows Original VL coverage across the active Set's Test sessions; **Evaluate missing** explicitly queues unassessed previews using the selected Vision model, with progress and scoped Stop. **Interpret with Director** is always opt-in; preview its numerical evidence first. Scores are never combined across independent evaluation protocols. See [Run Analytics](docs/run_analytics.md) for complete usage, provenance and limitations.
 
 ### Test Generations
 

@@ -207,7 +207,7 @@
     }).catch(function(exc){if(token===generation)error(exc);});
   }
   window.runAnalyticsPrepare=function(next){
-    if(next===folder)return;folder=next;generation++;resultEpochGeneration++;runs=[];selection=new Set();report=null;sessionFilter='';
+    if(next===folder)return;folder=next;evalGeneration++;generation++;resultEpochGeneration++;runs=[];selection=new Set();report=null;sessionFilter='';
     labRequest++;labSnapshot=null;labInventory=null;labDiscovered=false;lab('status').textContent='Open Insights to read saved evidence.';el('report-surface').classList.add('hidden');
     el('run-choices').innerHTML='';el('result-epochs').textContent='Open Analytics to discover results.';el('result-epochs-note').textContent='';el('coverage').textContent='Choose a run to begin.';
     el('chart').innerHTML='';el('table').innerHTML='';el('findings').innerHTML='';el('warnings').innerHTML='';
@@ -559,6 +559,65 @@
     });
     lab('chart').innerHTML='<svg viewBox="0 0 680 195" role="img" aria-label="Saved manual ratings by epoch and run"><path d="M36 15V175H645" stroke="currentColor" stroke-opacity=".25" fill="none"/>'+paths.join('')+'</svg><p class="run-lab-footnote">'+(selected?'Measured epochs for the selected run.':'All rated epochs · select a run to follow its trajectory.')+'</p>';
   }
+  var evalTimer=null,evalBusy=false,evalInFlight=false,evalVisible=false,evalGeneration=0;
+  function renderEvaluation(data){
+    var e=data&&data.evaluation||{},total=Number(e.total||0),done=Number(e.completed||0),queued=Number(e.queued||0),running=Number(e.running||0),actionable=Number(e.actionable||0);
+    lab('eval-meter').max=total||1;lab('eval-meter').value=done;
+    lab('eval-percent').textContent=total?Math.round(done*100/total)+'%':'—';
+    lab('eval-count').textContent=done+' / '+total+' renders evaluated';
+    lab('eval-status').textContent=(running?running+' running · ':'')+(queued?queued+' queued · ':'')+
+      (Number(e.failed||0)?e.failed+' failed · ':'')+
+      (Number(e.stopped||0)?e.stopped+' stopped · ':'')+
+      (actionable?actionable+' to evaluate':total&&done===total?'All caught up!':queued||running?'Evaluation in progress':'No available renders')+
+      (Number(e.unavailable||0)?' · '+e.unavailable+' unavailable':'');
+    lab('eval-start').disabled=evalBusy||!actionable;
+    lab('eval-start').textContent=evalBusy?'Submitting…':actionable?'Evaluate missing '+actionable:
+      queued||running?'Evaluation in progress':total&&done===total?'All evaluated ✓':'No renders to evaluate';
+    lab('eval-stop').disabled=evalBusy||!queued&&!running;
+  }
+  function evalRequest(operation,criteria,scope){
+    return fetch('/fs/test_generations',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({folder:scope,operation:operation,criteria:criteria||{}})})
+      .then(function(response){return response.json().then(function(data){
+        if(!response.ok||data.ok===false)throw Error(data.error||'Test evaluation failed.');
+        return data;
+      });});
+  }
+  function evalRefresh(){
+    if(!evalVisible||evalBusy||evalInFlight)return;
+    var serial=evalGeneration,owner=folder;
+    evalInFlight=true;
+    return evalRequest('test_evaluation_progress',{},owner).then(function(data){
+      if(serial===evalGeneration)renderEvaluation(data);
+    }).catch(function(exc){
+      if(serial!==evalGeneration)return;
+      clearInterval(evalTimer);evalTimer=null;
+      lab('eval-status').textContent='Evaluation progress failed: '+String(exc.message||exc);
+      lab('eval-start').disabled=true;lab('eval-stop').disabled=true;
+      error(exc);
+    }).finally(function(){evalInFlight=false;});
+  }
+  function evalAction(operation){
+    if(evalBusy)return;
+    var serial=++evalGeneration,owner=folder;evalBusy=true;lab('eval-start').disabled=true;lab('eval-stop').disabled=true;
+    lab('eval-status').textContent=operation==='test_evaluate_missing'?'Submitting missing evaluations…':'Stopping Test evaluations…';
+    var work=operation==='test_evaluate_missing'?loadCaptionVisionCapabilities().then(function(){
+      var model=getCaptionVisionModelId();if(!model)throw Error('Select a Vision model first.');return evalRequest(operation,{model:model},owner);
+    }):evalRequest(operation,{},owner);
+    return Promise.resolve(work).then(function(data){
+      if(serial===evalGeneration){evalBusy=false;renderEvaluation(data);}
+    }).catch(function(exc){
+      if(serial===evalGeneration)lab('eval-status').textContent='Evaluation request failed: '+String(exc.message||exc);
+      error(exc);
+    }).finally(function(){evalBusy=false;evalRefresh();});
+  }
+  lab('eval-start').onclick=function(){evalAction('test_evaluate_missing');};
+  lab('eval-stop').onclick=function(){evalAction('test_evaluation_stop');};
+  window.runAnalyticsSetVisible=function(visible){
+    evalVisible=visible;evalGeneration++;
+    clearInterval(evalTimer);evalTimer=null;
+    if(visible){evalRefresh();evalTimer=setInterval(evalRefresh,4000);}
+  };
   function labRender(){
     var totals=labSnapshot.coverage||{},groups=labSnapshot.cohorts||[];
     lab('summary').innerHTML=[['Test sessions',totals.sessions],['Generated results',totals.generatedPreviews],['Rated previews',totals.ratedPreviews],['VL-reviewed previews',totals.vlReviewedPreviews]].map(function(pair){
@@ -820,6 +879,7 @@
       }).finally(function(){if(session===reviewSession)reviewBusy=false;});
   }
   function labLoad(){
+    evalRefresh();
     var serial=++labRequest,scope=folder;lab('status').textContent='Reading recorded Test and Campaign evidence…';
     fetch('/fs/epoch_finder',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({folder:scope,operation:'run_analytics_overview'})})
       .then(function(r){return r.json().then(function(d){if(!r.ok||!d.ok)throw Error(d.error||'Could not load evidence');return d;});})

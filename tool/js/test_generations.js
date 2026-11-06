@@ -4974,6 +4974,7 @@
   }
 
   function closePane() {
+    window.runAnalyticsSetVisible(false);
     ++openGeneration;
     var node = pane();
     var frame = el('app-frame');

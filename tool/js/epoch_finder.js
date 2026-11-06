@@ -189,6 +189,7 @@
     document.getElementById('test-generations-body').classList.toggle('hidden', finder || references || analytics);
     document.getElementById('test-references-screen').classList.toggle('hidden', !references);
     document.getElementById('run-analytics-screen').classList.toggle('hidden', !analytics);
+    window.runAnalyticsSetVisible(analytics);
     ['tests','finder'].forEach(function (target) {
       var control=document.getElementById('test-workspace-return-'+target);
       control.classList.toggle('hidden',(target==='finder'?!finder:next!=='tests')||!returnMode);

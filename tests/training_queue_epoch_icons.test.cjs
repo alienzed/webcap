@@ -10,7 +10,7 @@ const start = source.indexOf('function buildTrainingQueueHtml(');
 const end = source.indexOf('function buildTrainingRunnerProgressHtml(', start);
 assert.ok(start >= 0 && end > start, 'Queued training renderer must exist');
 
-test('queued epochs editor uses a compact clock and pencil while retaining its action and epoch count', () => {
+test('queued epochs editor uses a compact clock while retaining its action and epoch count', () => {
   const context = {
     trainingWorkspaceState: {runnerQueueCollapsed: false, runnerSelectedJobId: ''},
     trainingJobLabel: () => 'H3',
@@ -29,9 +29,8 @@ test('queued epochs editor uses a compact clock and pencil while retaining its a
   assert.ok(button, 'existing queued-epoch edit action remains wired');
   assert.match(button[0], /title="Change target epochs \(currently 100\) before this run starts"/);
   assert.match(button[0], /aria-label="Change target epochs \(currently 100\)"/);
-  assert.equal((button[1].match(/<svg /g) || []).length, 2, 'one clock and one pencil');
+  assert.equal((button[1].match(/<svg /g) || []).length, 1, 'one clock only');
   assert.match(button[1], /<circle cx="12" cy="12" r="9"/);
-  assert.match(button[1], /<path d="M12 20h9"/);
   assert.doesNotMatch(button[1], /100 epochs/);
   assert.match(css, /\.training-runner-queue-epochs\s*\{[^}]*min-width:\s*44px/);
 });

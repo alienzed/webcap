@@ -28,14 +28,19 @@
       });
     });
     var trainingJob = getTrainingRunnerActiveJob();
+    var shell = getShellWorkloadStatus();
     var queue = getInferenceQueueSnapshot();
-    var gpuBusy = !!trainingJob || (queue && Array.isArray(queue.jobs) && queue.jobs.some(function (job) {
-      return ['starting', 'running', 'stopping'].indexOf(String(job.status || '')) !== -1;
-    }));
+    var trainingActive = !!trainingJob || !!shellWorkloadState.trainingActive ||
+      (shell.key === 'active' && shell.lane === 'training');
+    var gpuBusy = trainingActive || (shell.key === 'active' &&
+      ['training', 'inference', 'llm'].indexOf(shell.lane) !== -1) ||
+      (queue && Array.isArray(queue.jobs) && queue.jobs.some(function (job) {
+        return ['starting', 'running', 'stopping'].indexOf(String(job.status || '')) !== -1;
+      }));
     return {
       items: items, total: items.length, phrase: phrase, balances: balances,
       sight: sight, captions: captions, configuredGroups: groups.length,
-      pending: pending, training: !!trainingJob, gpuBusy: !!gpuBusy
+      pending: pending, training: !!trainingActive, gpuBusy: !!gpuBusy
     };
   }
 
@@ -183,6 +188,7 @@
     if (selected === 'annotate') {
       if (!s.configuredGroups) {
         title.textContent = 'Establish annotation groups';
+        if (s.gpuBusy) notice('GPU work is active. Group editing is available.');
         main(s.gpuBusy ? 'Manage Groups' : 'Discover Vocabulary', function () { run(s.gpuBusy ? 'groups' : 'vocabulary'); });
         if (s.sight && !s.gpuBusy) other('Guided Tagging', function () { run('guided'); });
       } else {

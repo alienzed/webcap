@@ -232,7 +232,7 @@ test('Generate capability refresh retains the current model draft and settings',
   controls['app-header-generate-model'] = {value:'',innerHTML:''};
   const context = {
     el: id => controls[id],
-    generateState: {models:[{id:'model-a',label:'A'}], modelId:'model-a'},
+    generateState: {models:[{id:'model-a',label:'A'}], modelId:'model-a', formInitialized:true, editorMode:'working'},
     getGenerateModelPreference: () => 'model-a', setGenerateModelPreference() {}, escapeHtml: value => value,
     renderModelForm: () => Object.entries(controls).filter(([id]) => id !== 'generate-model' && id !== 'app-header-generate-model').forEach(([,node]) => node.value = 'default'),
     syncGenerateBaseLoras() {}

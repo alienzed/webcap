@@ -299,11 +299,13 @@ function updateSetFolderScopedUi() {
   var reviewBtn = document.getElementById('sidebar-open-review-output-btn');
   var trainingBtn = document.getElementById('sidebar-open-training-btn');
   var intelligenceBtn = document.getElementById('set-intelligence-open-btn');
+  var dashboardBtn = document.getElementById('set-dashboard-open-btn');
   var drawer = document.getElementById('sidebar-set-actions-drawer');
   var createSetBtn = document.getElementById('create-set-from-results-btn');
   if (reviewBtn) reviewBtn.classList.toggle('hidden', !reviewAvailable);
   if (trainingBtn) trainingBtn.classList.toggle('hidden', !inSetFolder);
   if (intelligenceBtn) intelligenceBtn.classList.toggle('hidden', !inSetFolder || !Array.isArray(state.items) || !state.items.length);
+  if (dashboardBtn) dashboardBtn.classList.toggle('hidden', !inSetFolder || !Array.isArray(state.items) || !state.items.length);
   if (drawer) drawer.classList.toggle('hidden', !inSetFolder && (!createSetBtn || createSetBtn.classList.contains('hidden')));
 }
 

@@ -98,7 +98,10 @@ def test_caption_assist_prompt_uses_house_sequence_not_annotation_order():
     assert payload["preferredCaptionSequence"] == sequence
     assert "groupOrder" not in payload
     assert "groupedAnnotations also does not define caption order" in messages[0]["content"]
-    assert "captionTemplate and renderedPrimer" in messages[0]["content"]
+    assert "captionTemplate is the Set's caption-writing template" in messages[0]["content"]
+    assert "renderedPrimer demonstrates its populated structure, preferred order" in messages[0]["content"]
+    assert "Do not use annotation group order as caption order." in messages[1]["content"]
+    assert "Do not use annotation group order or captionTemplate placeholder order" not in messages[1]["content"]
     assert "unlisted groups immediately before the final background, lighting, and view portion" in messages[1]["content"]
     assert "include it verbatim exactly once" in messages[0]["content"]
     assert "compact photographic phrases" in messages[0]["content"]

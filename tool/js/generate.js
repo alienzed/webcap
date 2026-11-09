@@ -2471,6 +2471,7 @@
 
     [
       'generate-model',
+      'app-header-generate-model',
       'generate-prompt',
       'generate-director-instruction',
       'generate-aspect',

@@ -162,7 +162,7 @@
         main('Edit Caption Template', function () {
           closeDashboard();
           setWorkspaceSurface('default');
-          setCaptionHelperTab('requirements');
+          el('caption-helper-tab-requirements-btn').click();
           var section = el('primer-template-section');
           section.open = true;
           section.scrollIntoView({ block: 'nearest' });

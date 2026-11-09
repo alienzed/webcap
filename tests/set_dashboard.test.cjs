@@ -52,7 +52,10 @@ function dashboard(options = {}) {
     isChecklistRequirementCheckedForMediaKey: () => !!options.checked,
     getTrainingRunnerActiveJob: () => options.training ? { status: 'running' } : null,
     shellWorkloadState: { trainingActive: !!options.training },
-    getShellWorkloadStatus: () => ({ key: options.training ? 'active' : 'idle', lane: options.training ? 'training' : 'idle' }),
+    getShellWorkloadStatus: () => ({
+      key: options.training || options.shellLane ? 'active' : 'idle',
+      lane: options.training ? 'training' : (options.shellLane || 'idle')
+    }),
     getInferenceQueueSnapshot: () => ({ jobs: [] }),
     isSetFolderPath: () => true,
     getFilteredMediaItems: () => state.items,
@@ -149,4 +152,23 @@ test('markup retains single authoritative guidance controls and original templat
   assert.ok(html.indexOf('id="primer-template-section"') < html.indexOf('id="set-dashboard-modal"'));
   assert.match(html, /static\/js\/set_dashboard\.js/);
   assert.match(html, /static\/css\/set_dashboard\.css/);
+});
+
+test('shared GPU activity suppresses Vocabulary as the first step', () => {
+  const app = dashboard({ phrase: 'subject', balances: 'front', shellLane: 'inference' });
+  assert.equal(app.selected(), 'annotate');
+  assert.equal(app.primary().textContent, 'Manage Groups');
+  assert.equal(app.secondary().classList.contains('hidden'), true);
+});
+
+test('outstanding annotation reviews take precedence even if captions exist', () => {
+  const app = dashboard({
+    phrase: 'subject', balances: 'front', groups: ['Shape'],
+    items: [{
+      key: 'a', fileName: 'a.png', caption: 'a full caption', hasCaption: true,
+      metadata: { vision_sight: { description: 'observed', inventory: {} } }
+    }]
+  });
+  assert.equal(app.selected(), 'annotate');
+  assert.equal(app.primary().textContent, 'Focused Annotation');
 });

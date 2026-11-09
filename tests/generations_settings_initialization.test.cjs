@@ -7,6 +7,7 @@ const vm = require('node:vm');
 
 const source = fs.readFileSync('tool/js/generate.js', 'utf8');
 const html = fs.readFileSync('tool/tool.html', 'utf8');
+const storyboard = fs.readFileSync('tool/js/storyboard.js', 'utf8');
 
 function section(start, end) {
   const from = source.indexOf(start);
@@ -92,4 +93,11 @@ test('subsequent capabilities refresh retains working editor values', async () =
 test('Generations numeric stepper increments are MP 0.1 and duration 1 second', () => {
   assert.match(html, /id="generate-megapixels"[^>]*min="0\.1"[^>]*step="0\.1"/);
   assert.match(html, /id="generate-duration"[^>]*min="3"[^>]*max="15"[^>]*step="1"/);
+});
+
+
+test('Storyboard MP and duration steppers match Generations increments', () => {
+  assert.match(html, /id="storyboard-story-megapixels"[^>]*min="0\\.1"[^>]*step="0\\.1"/);
+  assert.match(storyboard, /min="0\\.1" step="0\\.1" data-scene-field="megapixels"/);
+  assert.match(storyboard, /min="9" max="15" step="1" data-scene-field="durationSeconds"/);
 });

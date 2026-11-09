@@ -51,7 +51,7 @@
       return s.gpuBusy ? 'annotate' : 'understand';
     }
     if (!s.configuredGroups && s.sight && s.captions < s.total) return 'understand';
-    if (s.pending && s.captions < s.total) return 'annotate';
+    if (s.pending) return 'annotate';
     if (s.captions < s.total) return 'caption';
     return 'review';
   }

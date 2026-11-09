@@ -1357,7 +1357,7 @@
 .generate-settings-advanced { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, .8fr); gap: 8px; align-items: end; min-width: 0; padding-top: 9px; }
 .generate-settings-advanced.hidden { display: none; }
 .generate-settings-primary .generate-field, .generate-settings-advanced .generate-field { min-width: 0; }
-.generate-settings-primary .generate-field > span, .generate-settings-advanced .generate-field > span { font-size: 13px; }
+.generate-settings-primary .generate-field > span, .generate-settings-advanced .generate-field > span { font-size: 14px; }
 .generate-settings-primary input, .generate-settings-primary select,
 .generate-settings-advanced input, .generate-settings-advanced select { min-width: 0; padding: 8px 7px; }
 .generate-settings-primary #generate-field-dimensions:not(.hidden) { grid-column: 1 / -1; }

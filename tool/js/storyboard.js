@@ -4184,14 +4184,14 @@
             '<section class="storyboard-inspector-section storyboard-generation-inspector">' +
               '<div class="storyboard-inspector-section-heading"><strong>Generation</strong></div>' +
               '<div class="storyboard-generation-settings">' +
-                '<label class="storyboard-field" title="Scene-specific clip duration."><span>Duration (s)</span><input type="number" min="9" max="15" step="0.1" data-scene-field="durationSeconds" value="' + escapeHtml(sceneValue(scene, 'durationSeconds', 10)) + '"></label>' +
+                '<label class="storyboard-field" title="Scene-specific clip duration."><span>Duration (s)</span><input type="number" min="9" max="15" step="1" data-scene-field="durationSeconds" value="' + escapeHtml(sceneValue(scene, 'durationSeconds', 10)) + '"></label>' +
                 '<label class="storyboard-field" title="Inherit the Story aspect ratio unless this Scene needs an override."><span>Aspect ratio</span><select data-scene-field="aspectRatio">' +
                   '<option value=""' + (sceneAspectRatio === '' ? ' selected' : '') + '>Inherit · ' + escapeHtml(inheritedAspectRatio) + '</option>' +
                   ['1:1 (Square)', '2:3 (Portrait Photo)', '3:2 (Photo)', '3:4 (Portrait Standard)', '4:3 (Standard)', '9:16 (Portrait Widescreen)', '16:9 (Widescreen)', '21:9 (Ultrawide)'].map(function (value) {
                     return '<option value="' + escapeHtml(value) + '"' + (sceneAspectRatio === value ? ' selected' : '') + '>' + escapeHtml(value) + '</option>';
                   }).join('') +
                 '</select></label>' +
-                '<label class="storyboard-field" title="Leave blank to inherit the Story megapixel target."><span>Megapixels</span><input type="number" min="0.05" step="0.05" data-scene-field="megapixels" value="' + escapeHtml(sceneMegapixels) + '" placeholder="Inherit · ' + escapeHtml(inheritedMegapixels) + '"></label>' +
+                '<label class="storyboard-field" title="Leave blank to inherit the Story megapixel target."><span>Megapixels</span><input type="number" min="0.1" step="0.1" data-scene-field="megapixels" value="' + escapeHtml(sceneMegapixels) + '" placeholder="Inherit · ' + escapeHtml(inheritedMegapixels) + '"></label>' +
                 '<label class="storyboard-field" title="H3 sampling workflow used for this Scene."><span>Sampling mode</span><select data-scene-field="samplingMode">' +
                   '<option value="turbo"' + (sceneMode === 'turbo' ? ' selected' : '') + '>Turbo · 8 steps / 1.0</option>' +
                   '<option value="quality"' + (sceneMode === 'quality' ? ' selected' : '') + '>Quality · 20 steps / no Turbo</option>' +

@@ -29,6 +29,7 @@
         <link rel="stylesheet" href="/static/css/ai_validation.css">
         <link rel="stylesheet" href="/static/css/qa_workbench.css">
         <link rel="stylesheet" href="/static/css/modals.css">
+        <link rel="stylesheet" href="/static/css/set_dashboard.css">
         <link rel="stylesheet" href="/static/css/lora_library.css">
         <link rel="stylesheet" href="/static/css/media_grid.css">
         <link rel="stylesheet" href="/static/css/crop_modal.css">
@@ -446,6 +447,7 @@
                                 >x</button>
                             </div>
                         </div>
+                        <button id="set-dashboard-open-btn" class="review-captions-btn set-dashboard-open hidden" type="button" title="Set Dashboard">Set Dashboard</button>
                         <div id="media-list-header">
                             <div id="current-folder-row" class="media-item folder-item header-item current-folder-bordered" data-type="current-folder">
                                 <div>
@@ -463,7 +465,7 @@
                         >Exit SuperSet Search</button>
                     </div>
                     <div class="stats-panel sidebar-drawer-zone">
-                        <details id="sidebar-set-actions-drawer" class="sidebar-drawer sidebar-set-actions-drawer" open>
+                        <details id="sidebar-set-actions-drawer" class="sidebar-drawer sidebar-set-actions-drawer">
                             <summary class="sidebar-drawer-summary">Set Tools</summary>
                             <div class="sidebar-drawer-body">
                                 <button id="create-set-from-results-btn" type="button" class="review-captions-btn sidebar-create-set-btn hidden" title="Create a new set with the current filter results">
@@ -685,7 +687,8 @@
                                     <button id="checklist-add-btn" type="button" title="Add requirement" aria-label="Add requirement">+</button>
                                 </div>
                                 <div id="checklist-items"></div>
-                                <details id="primer-template-section" class="caption-helper-drawer caption-helper-template-drawer">
+                                
+<details id="primer-template-section" class="caption-helper-drawer caption-helper-template-drawer">
                                     <summary class="caption-helper-drawer-summary">
                                         <span class="caption-helper-drawer-summary-title">Caption Template</span>
                                     </summary>
@@ -818,8 +821,8 @@
                             <button id="review-set-btn" type="button" class="review-captions-btn" title="Refresh the current visible set"><span>Refresh</span></button>
                         </div>
                         <details id="review-options" class="review-options">
-                            <summary>Review options <span id="review-options-summary" class="small">Optional phrase, balance, and rule checks</span></summary>
-                            <div id="cation-review" aria-hidden="false"><div class="stats-controls"><label>Required key phrase</label><input id="stats-required-phrase" type="text" placeholder="e.g. subject name"><div class="section-label-inline"><label>Balance Phrases</label><button id="stats-balance-info-btn" type="button" class="mini-info-btn" title="Balance phrases help" aria-label="Balance phrases help">i</button></div><div class="checklist-input-row term-input-row"><input id="stats-phrases-add-input" type="text" class="form-control" placeholder="Add balance phrase..."><button id="stats-phrases-add-btn" type="button" title="Add balance phrase" aria-label="Add balance phrase">+</button><div id="stats-phrases-add-results" class="caption-term-results hidden"></div></div><div id="stats-phrases-items"></div><textarea id="stats-phrases" rows="4" class="hidden" placeholder="face down&#10;face up&#10;front view&#10;back view"></textarea><div class="section-label-inline"><label>Rules</label><button id="review-rules-info-btn" type="button" class="mini-info-btn" title="Rules help" aria-label="Rules help">i</button></div><div class="stats-advanced-inline-row"><button id="review-rules-edit-btn" type="button">Edit Rules</button><span id="review-rules-summary" class="small">No review rules configured.</span></div></div></div>
+                            <summary>Review options <span id="review-options-summary" class="small">Optional rule checks</span></summary>
+                            <div id="cation-review" aria-hidden="false"><div class="stats-controls"><div class="section-label-inline"><label>Rules</label><button id="review-rules-info-btn" type="button" class="mini-info-btn" title="Rules help" aria-label="Rules help">i</button></div><div class="stats-advanced-inline-row"><button id="review-rules-edit-btn" type="button">Edit Rules</button><span id="review-rules-summary" class="small">No review rules configured.</span></div></div></div>
                         </details>
                         <iframe id="review-report" title="Caption review report"></iframe>
                     </section>
@@ -3476,6 +3479,28 @@
             </div>
         </div>
         <div id="modal-overlay" class="modal-overlay hidden"></div>
+        <div id="set-dashboard-modal" class="set-dashboard-modal hidden" role="dialog" aria-modal="true" aria-labelledby="set-dashboard-title">
+  <div class="set-dashboard-dialog">
+    <header class="set-dashboard-header"><div><h2 id="set-dashboard-title">Set Dashboard</h2><span id="set-dashboard-name"></span></div><button type="button" id="set-dashboard-close" aria-label="Close Set Dashboard" title="Close">×</button></header>
+    <div class="set-dashboard-tabs" role="tablist" aria-label="Set preparation">
+      <button type="button" role="tab" data-set-dashboard-tab="guidance" aria-controls="set-dashboard-stage" aria-selected="false" tabindex="-1">Guidance</button>
+      <button type="button" role="tab" data-set-dashboard-tab="understand" aria-controls="set-dashboard-stage" aria-selected="false" tabindex="-1">Understand</button>
+      <button type="button" role="tab" data-set-dashboard-tab="annotate" aria-controls="set-dashboard-stage" aria-selected="false" tabindex="-1">Annotate</button>
+      <button type="button" role="tab" data-set-dashboard-tab="caption" aria-controls="set-dashboard-stage" aria-selected="false" tabindex="-1">Caption</button>
+      <button type="button" role="tab" data-set-dashboard-tab="review" aria-controls="set-dashboard-stage" aria-selected="false" tabindex="-1">Review</button>
+    </div>
+    <section id="set-dashboard-stage" role="tabpanel" aria-live="polite">
+      <h3 id="set-dashboard-action-title"></h3>
+      <div id="set-dashboard-action-status" class="set-dashboard-action-status hidden" role="status"></div>
+      <div id="set-dashboard-guidance" class="set-dashboard-guidance hidden">
+        <div id="set-dashboard-phrase" class="set-dashboard-guidance-edit hidden"><label>Required key phrase</label><input id="stats-required-phrase" type="text" placeholder="e.g. subject name"></div>
+        <div id="set-dashboard-balance" class="set-dashboard-guidance-edit hidden"><div class="section-label-inline"><label>Balance Phrases</label><button id="stats-balance-info-btn" type="button" class="mini-info-btn" title="Balance phrases help" aria-label="Balance phrases help">i</button></div><div class="checklist-input-row term-input-row"><input id="stats-phrases-add-input" type="text" class="form-control" placeholder="Add balance phrase..."><button id="stats-phrases-add-btn" type="button" title="Add balance phrase" aria-label="Add balance phrase">+</button><div id="stats-phrases-add-results" class="caption-term-results hidden"></div></div><div id="stats-phrases-items"></div><textarea id="stats-phrases" rows="4" class="hidden" placeholder="face down&#10;face up&#10;front view&#10;back view"></textarea></div>
+        <div id="set-dashboard-template" class="set-dashboard-template hidden"></div>
+      </div>
+      <div class="set-dashboard-actions"><button type="button" id="set-dashboard-primary" class="set-dashboard-primary"></button><button type="button" id="set-dashboard-secondary" class="set-dashboard-secondary hidden"></button></div>
+    </section>
+  </div>
+</div>
         <div id="set-scan-modal" class="set-scan-modal hidden" role="dialog" aria-modal="true" aria-labelledby="set-scan-title">
             <div class="set-scan-dialog">
                 <div class="set-scan-header">
@@ -3915,6 +3940,7 @@
         <script src="/static/js/run_analytics.js"></script>
         <script src="/static/js/epoch_info.js"></script>
         <script src="/static/js/storyboard.js"></script>
+        <script src="/static/js/set_dashboard.js"></script>
         <script src="/static/js/main.js"></script>
 <dialog id="studio-blocks-dialog" class="studio-blocks-dialog" aria-labelledby="studio-blocks-heading">
   <div class="studio-blocks-head"><h2 id="studio-blocks-heading">Studio Blocks</h2><button id="studio-blocks-close" type="button" class="review-captions-btn">Close</button></div>

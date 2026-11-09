@@ -327,3 +327,28 @@ test('actual enabledFixedLoras omits bypassed LoRAs without mutating saved selec
   state.lorasEnabledByModel.h3=true;
   assert.equal(context.enabledFixedLoras('h3').length,1,'restoring master preserves individual enablement');
 });
+
+test('Prompt Assistant locks the visible header Base Model and unlocks it afterward',()=>{
+  const begin=source.indexOf('  function syncPromptAssistantDependencies() {');
+  const end=source.indexOf('  function renderDirector() {',begin);
+  assert.ok(begin>0 && end>begin);
+  const nodes=new Map();
+  const state={director:{busy:true}};
+  const context={
+    generateState:state,
+    el:id=>{
+      if (!nodes.has(id)) nodes.set(id,{disabled:false});
+      return nodes.get(id);
+    },
+    document:{querySelectorAll:()=>[]},
+    syncGenerateRunLabel(){},
+    syncReferenceDropzone(){}
+  };
+  vm.runInNewContext(source.slice(begin,end)+'\nthis.sync=syncPromptAssistantDependencies;',context);
+  context.sync();
+  assert.equal(context.el('app-header-generate-model').disabled,true);
+  assert.equal(context.el('generate-model').disabled,true);
+  state.director.busy=false;
+  context.sync();
+  assert.equal(context.el('app-header-generate-model').disabled,false);
+});

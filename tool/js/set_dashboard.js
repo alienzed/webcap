@@ -154,8 +154,12 @@
       } else {
         title.textContent = 'Caption Template';
         main('Edit Caption Template', function () {
+          closeDashboard();
+          setWorkspaceSurface('default');
+          setCaptionHelperTab('requirements');
           var section = el('primer-template-section');
           section.open = true;
+          section.scrollIntoView({ block: 'nearest' });
           el('primer-template').focus();
         });
         other('Edit key phrase', function () { showGuidanceStep('phrase'); });

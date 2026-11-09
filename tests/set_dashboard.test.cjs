@@ -136,3 +136,15 @@ test('manual stage selection stays fixed until reopen', () => {
   assert.equal(app.selected(), 'guidance');
   assert.deepEqual(app.actions, []);
 });
+
+test('markup retains single authoritative guidance controls and original template editor', () => {
+  const html = fs.readFileSync(path.join(__dirname, '../tool/tool.html'), 'utf8');
+  for (const id of ['set-dashboard-modal', 'stats-required-phrase', 'stats-phrases', 'stats-phrases-items', 'primer-template']) {
+    const count = (html.match(new RegExp('id="' + id + '"', 'g')) || []).length;
+    assert.equal(count, 1, id + ' must have one owner');
+  }
+  assert.ok(html.indexOf('id="stats-required-phrase"') > html.indexOf('id="set-dashboard-modal"'));
+  assert.ok(html.indexOf('id="primer-template-section"') < html.indexOf('id="set-dashboard-modal"'));
+  assert.match(html, /static\/js\/set_dashboard\.js/);
+  assert.match(html, /static\/css\/set_dashboard\.css/);
+});

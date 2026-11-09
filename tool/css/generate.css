@@ -1338,3 +1338,47 @@
 .generate-editor-tabs button:disabled {opacity:.4;cursor:default}
 #generate-editor-use-working {min-height:36px;font-size:14px;white-space:nowrap}
 .generate-editor-loaded-caption {margin:0 6px 12px;color:var(--muted);font-size:13px;line-height:1.4;overflow-wrap:anywhere}
+
+/* Generations: compact existing editor; Preview and Takes remain unchanged. */
+.generate-create-controls > .generate-prompt-panel { padding-top: 0; padding-bottom: 13px; }
+.generate-create-controls > .generate-inspector { padding-top: 14px; }
+.generate-create-controls .generate-prompt { height: 190px; min-height: 170px; resize: vertical; }
+.generate-create-controls .generate-prompt-editor { gap: 9px; }
+.generate-editor-toolbar { gap: 5px; margin-bottom: 11px; }
+.generate-editor-tabs { gap: 2px; }
+.generate-editor-tabs button { min-height: 33px; padding: 5px 9px; font-size: 14px; }
+.generate-editor-toolbar .generate-prompt-heading-actions { margin-left: auto; gap: 4px; }
+.generate-editor-toolbar .generate-prompt-heading-actions .review-captions-btn { min-height: 32px; padding: 5px 8px; font-size: 13px; }
+.generate-inspector-heading { gap: 8px; }
+.generate-inspector-heading .generate-status-badge { margin-left: auto; }
+.generate-inspector-heading .generate-advanced-toggle { flex: 0 0 auto; width: auto; padding: 4px 7px; border-color: transparent; background: transparent; color: var(--muted); font-size: 13px; }
+.generate-inspector-heading .generate-advanced-toggle:hover { background: var(--hover); color: var(--text); }
+.generate-settings-primary { display: grid; grid-template-columns: minmax(0, 1.8fr) minmax(0, .8fr) minmax(0, .8fr); gap: 8px; align-items: end; min-width: 0; }
+.generate-settings-advanced { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, .8fr); gap: 8px; align-items: end; min-width: 0; padding-top: 9px; }
+.generate-settings-advanced.hidden { display: none; }
+.generate-settings-primary .generate-field, .generate-settings-advanced .generate-field { min-width: 0; }
+.generate-settings-primary .generate-field > span, .generate-settings-advanced .generate-field > span { font-size: 13px; }
+.generate-settings-primary input, .generate-settings-primary select,
+.generate-settings-advanced input, .generate-settings-advanced select { min-width: 0; padding: 8px 7px; }
+.generate-settings-primary #generate-field-dimensions:not(.hidden) { grid-column: 1 / -1; }
+.generate-conditioning { gap: 9px; padding-top: 11px; }
+.generate-conditioning-heading { justify-content: space-between; }
+.generate-lora-master, .generate-lora-heading-actions { display: inline-flex; align-items: center; min-width: 0; gap: 7px; }
+.generate-lora-master strong { font-size: 15px; }
+.generate-conditioning .generate-lora-master input[type="checkbox"],
+.generate-conditioning .generate-lora-enabled { width: 16px; min-width: 16px; height: 16px; margin: 0; accent-color: var(--accent); cursor: pointer; }
+.generate-lora-heading-actions .review-captions-btn { width: auto; padding: 5px 7px; font-size: 13px; }
+.generate-lora-mode-panel { gap: 9px; }
+.generate-lora-row { grid-template-columns: 16px minmax(0, 1fr) 51px 27px 72px 26px; gap: 5px; padding: 6px; min-height: 44px; }
+.generate-lora-name { min-width: 0; font-size: 13px; }
+.generate-lora-arrows button { width: 25px; }
+.generate-lora-row input[data-generate-lora-strength] { width: 72px; min-width: 0; padding: 5px; }
+.generate-lora-row.generate-lora-inactive .generate-lora-name,
+.generate-lora-list.generate-loras-bypassed .generate-lora-name { color: var(--muted); }
+.generate-create-controls > .generate-mode-row { padding: 10px 6px 0; }
+.generate-create-controls > .generate-mode-row::before { content: "Mode"; font-size: 13px; font-weight: 650; color: var(--muted); }
+@container (max-width: 450px) {
+  .generate-lora-row { grid-template-columns: 16px minmax(0, 1fr) 48px 25px 64px 24px; gap: 4px; }
+  .generate-lora-arrows button { width: 23px; }
+  .generate-lora-row input[data-generate-lora-strength] { width: 64px; }
+}

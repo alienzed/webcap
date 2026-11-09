@@ -1,0 +1,132 @@
+.set-dashboard-open {
+  display: block;
+  width: calc(100% - 16px);
+  margin: 8px;
+  min-height: 44px;
+  border: 1px solid var(--accent);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--accent) 10%, var(--panel));
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 700;
+}
+.set-dashboard-open.hidden { display: none; }
+.set-dashboard-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 12000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(0, 0, 0, .58);
+}
+.set-dashboard-modal.hidden, .set-dashboard-guidance .hidden, .set-dashboard-modal .hidden { display: none !important; }
+.set-dashboard-dialog {
+  width: min(100%, 580px);
+  max-height: min(86vh, 780px);
+  overflow-y: auto;
+  border-radius: 15px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text);
+  box-shadow: 0 24px 75px rgba(0,0,0,.28);
+}
+.set-dashboard-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 22px 24px 12px;
+}
+.set-dashboard-header h2 { margin: 0; font-size: 26px; font-weight: 750; }
+#set-dashboard-name { display: block; margin-top: 4px; font-size: 16px; color: var(--muted); }
+#set-dashboard-close {
+  min-height: 40px;
+  min-width: 40px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text);
+  font-size: 26px;
+  cursor: pointer;
+}
+.set-dashboard-tabs {
+  display: flex;
+  gap: 3px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+}
+.set-dashboard-tabs button {
+  flex: 1 0 auto;
+  min-height: 54px;
+  padding: 12px 6px;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: 16px;
+  cursor: pointer;
+  opacity: .8;
+}
+.set-dashboard-tabs button.is-active {
+  border-bottom-color: var(--accent);
+  font-weight: 700;
+  opacity: 1;
+}
+.set-dashboard-tabs button.has-work:not(.is-active)::after {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin: 0 0 3px 6px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+#set-dashboard-stage { padding: 26px 24px 28px; }
+#set-dashboard-action-title { font-size: 22px; font-weight: 700; margin: 0 0 20px; }
+.set-dashboard-action-status {
+  margin-bottom: 16px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--panel-soft);
+  font-size: 16px;
+}
+.set-dashboard-actions { display: flex; gap: 12px; align-items: center; margin-top: 18px; flex-wrap: wrap; }
+.set-dashboard-primary, .set-dashboard-secondary {
+  min-height: 45px;
+  padding: 9px 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 16px;
+  cursor: pointer;
+}
+.set-dashboard-primary { background: var(--accent); color: #141414; border-color: var(--accent); font-weight: 700; }
+.set-dashboard-secondary { background: var(--panel-soft); color: var(--text); }
+.set-dashboard-guidance-edit label { display: block; margin: 0 0 8px; font-size: 16px; font-weight: 600; }
+#set-dashboard-phrase input, #set-dashboard-balance input {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 12px;
+  font-size: 16px;
+}
+#set-dashboard-balance .checklist-input-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+#set-dashboard-balance #stats-phrases-add-input { flex: 1; width: auto; }
+#set-dashboard-balance #stats-phrases-add-btn { min-height: 44px; min-width: 44px; font-size: 20px; }
+#set-dashboard-balance #stats-phrases-items { margin-top: 12px; }
+#set-dashboard-balance #stats-phrases-add-results { width: 100%; }
+#set-dashboard-template #primer-template-section { display: block; border: 0; padding: 0; }
+#set-dashboard-template #primer-template-section > summary { font-size: 18px; }
+#set-dashboard-template #primer-template { width: 100%; min-height: 180px; font-size: 16px; }
+#set-dashboard-template .caption-helper-drawer-body { padding: 12px 0; }
+.set-dashboard-modal :focus-visible, .set-dashboard-open:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+@media (max-width: 620px) {
+  .set-dashboard-modal { padding: 10px; }
+  .set-dashboard-header { padding: 16px; }
+  .set-dashboard-tabs { padding: 0 8px; }
+  .set-dashboard-tabs button { font-size: 14px; min-height: 48px; }
+  #set-dashboard-stage { padding: 20px 16px; }
+}

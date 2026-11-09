@@ -688,6 +688,47 @@
                                 </div>
                                 <div id="checklist-items"></div>
                                 
+<details id="primer-template-section" class="caption-helper-drawer caption-helper-template-drawer">
+                                    <summary class="caption-helper-drawer-summary">
+                                        <span class="caption-helper-drawer-summary-title">Caption Template</span>
+                                    </summary>
+                                    <div class="caption-helper-drawer-body caption-helper-template-body">
+                                        <div class="caption-helper-template-actions">
+                                            <button
+                                                id="primer-template-info-btn"
+                                                type="button"
+                                                class="mini-info-btn"
+                                                title="Caption template help"
+                                                aria-label="Caption template help"
+                                            >i</button>
+                                            <button
+                                                id="primer-template-wand-btn"
+                                                type="button"
+                                                class="review-captions-btn"
+                                                title="Generate a better template from the current groups and vocabulary"
+                                                aria-label="Generate Caption Template"
+                                            >&#10024;</button>
+                                        </div>
+                                        <textarea id="primer-template" rows="9"></textarea>
+                                        <div id="primer-template-candidate" class="primer-template-candidate hidden" aria-live="polite" role="dialog" aria-modal="true" aria-labelledby="primer-template-candidate-title">
+                                            <div class="primer-template-candidate-dialog">
+                                                <div class="primer-template-candidate-header">
+                                                    <div id="primer-template-candidate-title" class="primer-template-candidate-title">Suggested Caption Template</div>
+                                                    <button id="primer-template-candidate-dismiss" type="button" class="primer-template-candidate-close" title="Dismiss template" aria-label="Dismiss template">&times;</button>
+                                                </div>
+                                                <pre id="primer-template-candidate-text"></pre>
+                                                <div class="primer-template-candidate-actions">
+                                                    <button id="primer-template-candidate-use" type="button">Use</button>
+                                                    <button id="primer-template-candidate-regenerate" type="button" title="Generate another template" aria-label="Generate another template">&#8635;</button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="primer-template-placeholder-row">
+                                            <div class="primer-template-placeholder-label">Insert group placeholder</div>
+                                            <div id="primer-template-placeholders" class="primer-template-placeholder-list"></div>
+                                        </div>
+                                    </div>
+                                </details>
                                 <label class="hidden">Set Notes</label>
                                 <textarea id="set-notes-editor" rows="6" class="hidden" placeholder="Set notes..."></textarea>
                             </div>
@@ -3454,47 +3495,7 @@
       <div id="set-dashboard-guidance" class="set-dashboard-guidance hidden">
         <div id="set-dashboard-phrase" class="set-dashboard-guidance-edit hidden"><label>Required key phrase</label><input id="stats-required-phrase" type="text" placeholder="e.g. subject name"></div>
         <div id="set-dashboard-balance" class="set-dashboard-guidance-edit hidden"><div class="section-label-inline"><label>Balance Phrases</label><button id="stats-balance-info-btn" type="button" class="mini-info-btn" title="Balance phrases help" aria-label="Balance phrases help">i</button></div><div class="checklist-input-row term-input-row"><input id="stats-phrases-add-input" type="text" class="form-control" placeholder="Add balance phrase..."><button id="stats-phrases-add-btn" type="button" title="Add balance phrase" aria-label="Add balance phrase">+</button><div id="stats-phrases-add-results" class="caption-term-results hidden"></div></div><div id="stats-phrases-items"></div><textarea id="stats-phrases" rows="4" class="hidden" placeholder="face down&#10;face up&#10;front view&#10;back view"></textarea></div>
-        <div id="set-dashboard-template" class="set-dashboard-template hidden"><details id="primer-template-section" class="caption-helper-drawer caption-helper-template-drawer">
-                                    <summary class="caption-helper-drawer-summary">
-                                        <span class="caption-helper-drawer-summary-title">Caption Template</span>
-                                    </summary>
-                                    <div class="caption-helper-drawer-body caption-helper-template-body">
-                                        <div class="caption-helper-template-actions">
-                                            <button
-                                                id="primer-template-info-btn"
-                                                type="button"
-                                                class="mini-info-btn"
-                                                title="Caption template help"
-                                                aria-label="Caption template help"
-                                            >i</button>
-                                            <button
-                                                id="primer-template-wand-btn"
-                                                type="button"
-                                                class="review-captions-btn"
-                                                title="Generate a better template from the current groups and vocabulary"
-                                                aria-label="Generate Caption Template"
-                                            >&#10024;</button>
-                                        </div>
-                                        <textarea id="primer-template" rows="9"></textarea>
-                                        <div id="primer-template-candidate" class="primer-template-candidate hidden" aria-live="polite" role="dialog" aria-modal="true" aria-labelledby="primer-template-candidate-title">
-                                            <div class="primer-template-candidate-dialog">
-                                                <div class="primer-template-candidate-header">
-                                                    <div id="primer-template-candidate-title" class="primer-template-candidate-title">Suggested Caption Template</div>
-                                                    <button id="primer-template-candidate-dismiss" type="button" class="primer-template-candidate-close" title="Dismiss template" aria-label="Dismiss template">&times;</button>
-                                                </div>
-                                                <pre id="primer-template-candidate-text"></pre>
-                                                <div class="primer-template-candidate-actions">
-                                                    <button id="primer-template-candidate-use" type="button">Use</button>
-                                                    <button id="primer-template-candidate-regenerate" type="button" title="Generate another template" aria-label="Generate another template">&#8635;</button>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div class="primer-template-placeholder-row">
-                                            <div class="primer-template-placeholder-label">Insert group placeholder</div>
-                                            <div id="primer-template-placeholders" class="primer-template-placeholder-list"></div>
-                                        </div>
-                                    </div>
-                                </details></div>
+        <div id="set-dashboard-template" class="set-dashboard-template hidden"></div>
       </div>
       <div class="set-dashboard-actions"><button type="button" id="set-dashboard-primary" class="set-dashboard-primary"></button><button type="button" id="set-dashboard-secondary" class="set-dashboard-secondary hidden"></button></div>
     </section>

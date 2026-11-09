@@ -51,6 +51,8 @@ function dashboard(options = {}) {
     getChecklistKeywordTermsForRequirement: () => ['tag'],
     isChecklistRequirementCheckedForMediaKey: () => !!options.checked,
     getTrainingRunnerActiveJob: () => options.training ? { status: 'running' } : null,
+    shellWorkloadState: { trainingActive: !!options.training },
+    getShellWorkloadStatus: () => ({ key: options.training ? 'active' : 'idle', lane: options.training ? 'training' : 'idle' }),
     getInferenceQueueSnapshot: () => ({ jobs: [] }),
     isSetFolderPath: () => true,
     getFilteredMediaItems: () => state.items,

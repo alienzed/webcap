@@ -128,9 +128,10 @@ CAPTION_ASSIST_SYSTEM_PROMPT = (
     "Do not invent identity, demographic traits, colors, objects, actions, setting details, camera properties, mood, "
     "or other visual facts absent from Open Sight, Context Sight, selected annotations, required phrase, or draft, apart from an "
     "explicit subject description authored in captionTemplate. If a required phrase is provided, include it verbatim "
-    "exactly once. captionTemplate and renderedPrimer are loose guidance for structure, vocabulary, affixes, "
-    "and resolved tag meaning, not prescribed phrasing or mandatory facts. The order of groupedAnnotations also does not define "
-    "caption order. Omit unpopulated facts and never invent content to fill a group. Keep each action and trait clearly "
+    "exactly once. captionTemplate is the Set's caption-writing template. renderedPrimer demonstrates its "
+    "populated structure, preferred order, and wording conventions. Use both as guidance, not as mandatory "
+    "factual content. The order of groupedAnnotations also does not define caption order. "
+    "Omit unpopulated facts and never invent content to fill a group. Keep each action and trait clearly "
     "attached to its subject. Preserve distinctive multiword tag phrases verbatim where they already read naturally. "
     "Treat concise camera and viewpoint wording as a preferred surface form: compose supplied angle and orientation "
     "facts into compact photographic phrases such as 'front view', 'low-angle side view', or "
@@ -349,7 +350,7 @@ def build_caption_assist_messages(
         + mismatch_guidance
         + sight_guidance
         + ordering +
-        "Do not use annotation group order or captionTemplate placeholder order as caption order.\n\n"
+        "Do not use annotation group order as caption order.\n\n"
         + json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
     )
     return [

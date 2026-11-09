@@ -548,7 +548,7 @@
         return Array.isArray(groups[key]) && groups[key].length > 1;
       });
       return '<div class="generate-lora-item">' +
-        '<div class="generate-lora-row" data-generate-lora-index="' + index + '">' +
+        '<div class="generate-lora-row' + (item.enabled === false ? ' generate-lora-inactive' : '') + '" data-generate-lora-index="' + index + '">' +
           '<input type="checkbox" class="generate-lora-enabled" data-generate-lora-enabled="' + index + '" aria-label="Enable LoRA ' + escapeHtml(item.name) + '"' + (item.enabled !== false ? ' checked' : '') + '>' +
           '<button type="button" class="generate-lora-name" data-generate-lora-replace="' + index +
           '" title="Change LoRA: ' + escapeHtml(item.name) + '" aria-expanded="false">' + escapeHtml(item.name) + '</button>' +

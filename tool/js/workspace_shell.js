@@ -843,6 +843,7 @@ function syncApplicationShellContext() {
   var workspaceContext = document.getElementById('app-header-workspace-context');
   var setControl = document.getElementById('app-header-set-control');
   var modelControl = document.getElementById('app-header-model-control');
+  var generateModelControl = document.getElementById('app-header-generate-model-control');
   var modelSelect = document.getElementById('app-header-model-profile-select');
   renderApplicationSetSelector();
   var workingModelProfileId = getWorkingModelProfileId();
@@ -905,6 +906,7 @@ function syncApplicationShellContext() {
 
   var modelRelevant = navigation.activity === 'training' || navigation.activity === 'test';
   if (modelControl) modelControl.classList.toggle('hidden', !modelRelevant);
+  if (generateModelControl) generateModelControl.classList.toggle('hidden', !generateOpen);
   if (modelSelect && !modelSelect.disabled) {
     modelSelect.title = navigation.activity === 'test'
       ? 'Select the Base Model for Evaluation. Active and queued tests keep their captured model.'

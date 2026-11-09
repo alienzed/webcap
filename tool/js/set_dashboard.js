@@ -43,7 +43,7 @@
     if (!s.phrase || !s.balances.length) return 'guidance';
     // Partial Sight is useful. Do not demand full coverage or force mature Sets backwards.
     if (!s.sight && s.captions < Math.ceil(s.total / 2)) {
-      return s.gpuBusy ? (s.configuredGroups ? 'annotate' : 'caption') : 'understand';
+      return s.gpuBusy ? 'annotate' : 'understand';
     }
     if (!s.configuredGroups && s.sight && s.captions < s.total) return 'understand';
     if (s.pending && s.captions < s.total) return 'annotate';
@@ -62,6 +62,7 @@
     if (destination === 'prepare') return openSetIntelligence();
     if (destination === 'vocabulary') return openVisionSchemaAssist();
     if (destination === 'annotation') return startFocusedAnnotation();
+    if (destination === 'groups') return openChecklistKeywordsModal();
     if (destination === 'guided') return openGuidedTagPass({ source: 'set' });
     if (destination === 'caption') {
       var visible = getFilteredMediaItems(false);
@@ -132,7 +133,7 @@
     if (selected === 'guidance') {
       if (guidanceStep === 'phrase') {
         title.textContent = 'Required key phrase';
-        main('Continue', function () {
+        main(s.phrase ? 'Balance terms' : 'Set key phrase', function () {
           if (!el('stats-required-phrase').value.trim()) {
             el('stats-required-phrase').focus();
             return;
@@ -142,7 +143,13 @@
         if (s.phrase) other('Balance terms', function () { showGuidanceStep('balance'); });
       } else if (guidanceStep === 'balance') {
         title.textContent = 'Balance terms';
-        main('Continue', function () { showGuidanceStep('template'); });
+        main(s.balances.length ? 'Caption Template' : 'Add balance term', function () {
+          if (!el('stats-phrases').value.trim()) {
+            el('stats-phrases-add-input').focus();
+            return;
+          }
+          showGuidanceStep('template');
+        });
         if (s.phrase) other('Key phrase', function () { showGuidanceStep('phrase'); });
       } else {
         title.textContent = 'Caption Template';
@@ -160,24 +167,24 @@
       if (s.gpuBusy) {
         title.textContent = 'Review saved Sight';
         notice('GPU work is active. New Set Intelligence will need to wait.');
-        main('Open Set Intelligence', function () { run('prepare'); });
+        main('Inspect Set Intelligence', function () { run('prepare'); });
       } else {
         title.textContent = s.sight ? 'Review Set Intelligence' : 'Prepare Set';
         main('Open Set Intelligence', function () { run('prepare'); });
       }
-      if (s.sight) other('Discover Vocabulary', function () { run('vocabulary'); });
+      if (s.sight && !s.gpuBusy) other('Discover Vocabulary', function () { run('vocabulary'); });
       return;
     }
 
     if (selected === 'annotate') {
       if (!s.configuredGroups) {
         title.textContent = 'Establish annotation groups';
-        main('Discover Vocabulary', function () { run('vocabulary'); });
-        if (s.sight) other('Guided Tagging', function () { run('guided'); });
+        main(s.gpuBusy ? 'Manage Groups' : 'Discover Vocabulary', function () { run(s.gpuBusy ? 'groups' : 'vocabulary'); });
+        if (s.sight && !s.gpuBusy) other('Guided Tagging', function () { run('guided'); });
       } else {
         title.textContent = s.pending ? 'Continue Focused Annotation' : 'Review annotations';
         main('Focused Annotation', function () { run('annotation'); });
-        if (s.sight) other('Guided Tagging', function () { run('guided'); });
+        if (s.sight && !s.gpuBusy) other('Guided Tagging', function () { run('guided'); });
       }
       return;
     }

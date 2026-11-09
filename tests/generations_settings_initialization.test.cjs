@@ -97,7 +97,7 @@ test('Generations numeric stepper increments are MP 0.1 and duration 1 second', 
 
 
 test('Storyboard MP and duration steppers match Generations increments', () => {
-  assert.match(html, /id="storyboard-story-megapixels"[^>]*min="0\\.1"[^>]*step="0\\.1"/);
-  assert.match(storyboard, /min="0\\.1" step="0\\.1" data-scene-field="megapixels"/);
+  assert.match(html, /id="storyboard-story-megapixels"[^>]*min="0\.1"[^>]*step="0\.1"/);
+  assert.match(storyboard, /min="0\.1" step="0\.1" data-scene-field="megapixels"/);
   assert.match(storyboard, /min="9" max="15" step="1" data-scene-field="durationSeconds"/);
 });

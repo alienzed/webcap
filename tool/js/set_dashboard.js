@@ -190,7 +190,7 @@
       if (!s.configuredGroups) {
         title.textContent = 'Establish annotation groups';
         if (s.gpuBusy) notice('GPU work is active. Group editing is available.');
-        main(s.gpuBusy ? 'Manage Groups' : 'Discover Vocabulary', function () { run(s.gpuBusy ? 'groups' : 'vocabulary'); });
+        main(s.gpuBusy || !s.sight ? 'Manage Groups' : 'Discover Vocabulary', function () { run(s.gpuBusy || !s.sight ? 'groups' : 'vocabulary'); });
         if (s.sight && !s.gpuBusy) other('Guided Tagging', function () { run('guided'); });
       } else {
         title.textContent = s.pending ? 'Continue Focused Annotation' : 'Review annotations';

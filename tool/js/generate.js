@@ -7,6 +7,7 @@
   var generateState = {
     models: [],
     unavailableModels: [],
+    formInitialized: false,
     modelId: getGenerateModelPreference(),
     lorasByModel: {},
     loraProfileCache: {},
@@ -397,7 +398,7 @@
     select.value = selected;
     if (generateState.editorMode === 'working' && selected !== getGenerateModelPreference()) setGenerateModelPreference(selected);
     renderModelForm();
-    if (previousModelId === selected) {
+    if (generateState.formInitialized && previousModelId === selected) {
       draft.forEach(function (field) { field.node.value = field.value; });
     }
   }
@@ -2672,10 +2673,13 @@
     return requestJson('/fs/generate/capabilities').then(function (payload) {
       generateState.models = payload.models || [];
       generateState.unavailableModels = payload.unavailableModels || [];
-      var editing = generateState.models.length ? captureGenerateEditorSnapshot() : null;
+      // Before the first capabilities response, the DOM still contains empty controls.
+      // Only preserve an editor that has actually been initialized from model defaults.
+      var editing = generateState.formInitialized ? captureGenerateEditorSnapshot() : null;
       populateModelSelector();
       if (editing && generateState.models.some(function (item) { return item.id === editing.modelId; }))
         applyGenerateEditorSnapshot(editing);
+      if (generateState.models.length) generateState.formInitialized = true;
 
       if (payload.available === false) {
         setStatus(String(payload.error || 'ComfyUI unavailable.'));

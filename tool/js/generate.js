@@ -10,6 +10,7 @@
     formInitialized: false,
     modelId: getGenerateModelPreference(),
     lorasByModel: {},
+    lorasEnabledByModel: {},
     loraProfileCache: {},
     loraMode: 'selected',
     sweepFolderByModel: {},
@@ -186,6 +187,14 @@
     var id = String(modelId || '');
     if (!Array.isArray(generateState.lorasByModel[id])) generateState.lorasByModel[id] = [];
     return generateState.lorasByModel[id];
+  }
+
+  function fixedLorasEnabled(modelId) {
+    return generateState.lorasEnabledByModel[String(modelId || '')] !== false;
+  }
+
+  function enabledFixedLoras(modelId) {
+    return fixedLorasEnabled(modelId) ? selectedLoras(modelId).filter(function (item) { return item.enabled !== false; }) : [];
   }
 
   function loraFolder(name) {
@@ -380,6 +389,12 @@
     else syncGenerateRunLabel();
   }
 
+  function syncGenerateHeaderModel() {
+    var header = el('app-header-generate-model');
+    if (!header) throw new Error('Generations header Base Model selector is missing.');
+    header.value = generateState.modelId;
+  }
+
   function populateModelSelector() {
     var select = el('generate-model');
     if (!select) return;
@@ -396,6 +411,10 @@
       : String((generateState.models.find(function (model) { return model.default; }) || generateState.models[0] || {}).id || '');
     generateState.modelId = selected;
     select.value = selected;
+    var header = el('app-header-generate-model');
+    if (!header) throw new Error('Generations header Base Model selector is missing.');
+    header.innerHTML = select.innerHTML;
+    syncGenerateHeaderModel();
     if (generateState.editorMode === 'working' && selected !== getGenerateModelPreference()) setGenerateModelPreference(selected);
     renderModelForm();
     if (generateState.formInitialized && previousModelId === selected) {
@@ -418,6 +437,7 @@
   function renderModelForm() {
     var model = currentModel();
     if (!model) return;
+    syncGenerateHeaderModel();
 
     ['aspectRatio', 'megapixels', 'duration', 'samplingMode', 'dimensions', 'seed'].forEach(function (name) {
       var node = el('generate-field-' + name);
@@ -514,6 +534,8 @@
     if (!host) throw new Error('Generate LoRA list is missing.');
     var items = selectedLoras(generateState.modelId);
     el('generate-lora-count').textContent = '(' + items.length + ')';
+    el('generate-lora-master-enabled').checked = fixedLorasEnabled(generateState.modelId);
+    host.classList.toggle('generate-loras-bypassed', !fixedLorasEnabled(generateState.modelId));
     host.innerHTML = items.length ? items.map(function (item, index) {
       var prev = generateLoraNeighbor(item.name, -1, index);
       var next = generateLoraNeighbor(item.name, 1, index);
@@ -526,7 +548,8 @@
         return Array.isArray(groups[key]) && groups[key].length > 1;
       });
       return '<div class="generate-lora-item">' +
-        '<div class="generate-lora-row" data-generate-lora-index="' + index + '">' +
+        '<div class="generate-lora-row' + (item.enabled === false ? ' generate-lora-inactive' : '') + '" data-generate-lora-index="' + index + '">' +
+          '<input type="checkbox" class="generate-lora-enabled" data-generate-lora-enabled="' + index + '" aria-label="Enable LoRA ' + escapeHtml(item.name) + '"' + (item.enabled !== false ? ' checked' : '') + '>' +
           '<button type="button" class="generate-lora-name" data-generate-lora-replace="' + index +
           '" title="Change LoRA: ' + escapeHtml(item.name) + '" aria-expanded="false">' + escapeHtml(item.name) + '</button>' +
           '<div class="generate-lora-arrows">' +
@@ -551,7 +574,7 @@
           (hasOptions ? '<button type="button" class="review-captions-btn" data-generate-lora-insert-options="' +
             index + '" title="Insert model wildcard options at the prompt cursor">Insert options</button>' : '') +
           '</div>' : '') + '</div>';
-    }).join('') : '<div class="generate-empty-inline">No added LoRAs.</div>';
+    }).join('') : '';
     items.forEach(function (item) { loadGenerateLoraProfile(item.name); });
     renderSweep();
   }
@@ -725,6 +748,7 @@
       promptModelId: el('generate-prompt').dataset.modelId || '',
       fields: fields,
       lorasByModel: JSON.parse(JSON.stringify(generateState.lorasByModel)),
+      lorasEnabledByModel: Object.assign({}, generateState.lorasEnabledByModel),
       loraMode: generateState.loraMode,
       sweepFolderByModel: Object.assign({}, generateState.sweepFolderByModel),
       sweepSelections: JSON.parse(JSON.stringify(generateState.sweepSelections)),
@@ -742,7 +766,9 @@
     closeGenerateLoraPicker();
     generateState.modelId = saved.modelId;
     el('generate-model').value = saved.modelId;
+    syncGenerateHeaderModel();
     generateState.lorasByModel = JSON.parse(JSON.stringify(saved.lorasByModel));
+    generateState.lorasEnabledByModel = Object.assign({}, saved.lorasEnabledByModel || {});
     generateState.loraMode = saved.loraMode;
     generateState.sweepFolderByModel = Object.assign({}, saved.sweepFolderByModel);
     generateState.sweepSelections = JSON.parse(JSON.stringify(saved.sweepSelections));
@@ -777,6 +803,7 @@
     take.setAttribute('aria-pressed', loaded ? 'true' : 'false');
     take.disabled = !generateState.loadedSnapshot;
     el('generate-editor-use-working').classList.toggle('hidden', !loaded);
+    syncGenerateHeaderModel();
     var label = el('generate-editor-loaded-caption');
     label.classList.toggle('hidden', !loaded);
     label.textContent = loaded ? generateState.loadedLabel : '';
@@ -801,6 +828,7 @@
     // A new Loaded Take is a clean independent recipe. Never inherit another
     // slot's LoRAs for other models or its Sweep folder/checklist selections.
     generateState.lorasByModel = {};
+    generateState.lorasEnabledByModel = {};
     generateState.loraMode = 'selected';
     generateState.sweepFolderByModel = {};
     generateState.sweepSelections = {};
@@ -830,6 +858,7 @@
     if (model) {
       generateState.modelId = resultModelId;
       el('generate-model').value = resultModelId;
+      syncGenerateHeaderModel();
       renderModelForm();
     } else if (resultModelId) {
       var unavailable = 'Saved Take uses unavailable Base Model: ' + resultModelId + '. Its settings cannot be restored.';
@@ -870,6 +899,7 @@
       if (!Array.isArray(result.loras) && typeof window.reportConsoleWarning === 'function') {
         window.reportConsoleWarning('Generate', 'Saved Take has no LoRA metadata; cannot verify its applied LoRAs.');
       }
+      generateState.lorasEnabledByModel[resultModelId] = true;
       generateState.lorasByModel[resultModelId] = Array.isArray(result.loras)
         ? result.loras.map(function (item) {
             var strength = Number(item.strength);
@@ -1139,7 +1169,7 @@
       modelId: model.id,
       prompt: prompt,
       settings: Object.assign({}, collectSettings()),
-      loras: selectedLoras(model.id).map(function (item) {
+      loras: enabledFixedLoras(model.id).map(function (item) {
         return {name:item.name, strength:item.strength};
       }),
       referenceFiles: captureReferenceFiles(model)
@@ -1211,7 +1241,7 @@
       modelId: String(model.id || ''),
       prompt: prompt,
       settings: Object.assign({}, frozenSweepSettings()),
-      fixedLoras: selectedLoras(model.id).map(function (item) {
+      fixedLoras: enabledFixedLoras(model.id).map(function (item) {
         return { name: item.name, strength: item.strength };
       }),
       strength: strength,
@@ -1932,6 +1962,7 @@
     if (model) {
       generateState.modelId = String(model.id);
       el('generate-model').value = generateState.modelId;
+      syncGenerateHeaderModel();
       renderModelForm();
     }
     generateState.activePendingJobId = '';
@@ -2440,6 +2471,7 @@
 
     [
       'generate-model',
+      'app-header-generate-model',
       'generate-prompt',
       'generate-director-instruction',
       'generate-aspect',
@@ -2711,6 +2743,7 @@
     prompt.removeAttribute('data-model-id');
     generateState.modelId = getGenerateModelPreference();
     generateState.lorasByModel = {};
+    generateState.lorasEnabledByModel = {};
     generateState.loraMode = 'selected';
     generateState.sweepFolderByModel = {};
     generateState.sweepSelections = {};
@@ -2846,14 +2879,19 @@
       try { selectGenerationResult(result); } catch (err) { reportError(err, 'Configuration restore blocked'); }
     });
 
-    el('generate-model').addEventListener('change', function () {
-      generateState.modelId = this.value;
+    function changeGenerateModel(modelId) {
+      generateState.modelId = modelId;
       generateState.promptLibrary.activeId = '';
       generateState.director.previousPrompt = null;
       setDirectorStatus('');
-      if (generateState.editorMode === 'working') setGenerateModelPreference(this.value);
+      el('generate-model').value = modelId;
+      syncGenerateHeaderModel();
+      if (generateState.editorMode === 'working') setGenerateModelPreference(modelId);
       renderModelForm();
       renderDirector();
+    }
+    el('app-header-generate-model').addEventListener('change', function () {
+      changeGenerateModel(this.value);
     });
     el('generate-prompt-save').onclick = function () {
       try { saveCurrentPrompt(); } catch (err) { reportError(err, 'Save prompt failed'); }
@@ -2871,6 +2909,16 @@
       if (renameButton) { renamePromptLibraryItem(renameButton.dataset.generatePromptRename); return; }
       var deleteButton = event.target.closest('[data-generate-prompt-delete]');
       if (deleteButton) deletePromptLibraryItem(deleteButton.dataset.generatePromptDelete);
+    });
+    el('generate-advanced-toggle').onclick = function () {
+      var panel = el('generate-advanced-panel');
+      var expanded = this.getAttribute('aria-expanded') === 'true';
+      panel.classList.toggle('hidden', expanded);
+      this.setAttribute('aria-expanded', expanded ? 'false' : 'true');
+    };
+    el('generate-lora-master-enabled').addEventListener('change', function () {
+      generateState.lorasEnabledByModel[generateState.modelId] = this.checked;
+      el('generate-lora-list').classList.toggle('generate-loras-bypassed', !this.checked);
     });
     el('generate-lora-refresh').onclick = refreshLoraCatalog;
     var fixedLoraPicker = el('generate-lora-picker');
@@ -2957,6 +3005,14 @@
       generateState.director.modelId = selected;
       var modelSelect = el('generate-director-model');
       if (modelSelect && Array.prototype.some.call(modelSelect.options, function (option) { return option.value === selected; })) modelSelect.value = selected;
+    });
+    el('generate-lora-list').addEventListener('change', function (event) {
+      var toggle = event.target.closest('[data-generate-lora-enabled]');
+      if (!toggle) return;
+      var item = selectedLoras(generateState.modelId)[Number(toggle.dataset.generateLoraEnabled)];
+      if (!item) throw new Error('Selected LoRA no longer exists.');
+      item.enabled = toggle.checked;
+      toggle.closest('.generate-lora-row').classList.toggle('generate-lora-inactive', !toggle.checked);
     });
     el('generate-lora-list').addEventListener('input', function (event) {
       var input = event.target.closest('[data-generate-lora-strength]');

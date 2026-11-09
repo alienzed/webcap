@@ -39,7 +39,7 @@ function fixture() {
   const state = {
     models:[{id:'h3',settings:['duration','seed','samplingMode','megapixels'],defaultPrompt:'default'},
       {id:'image',settings:['seed','dimensions'],defaultPrompt:'default image'}],
-    modelId:'h3', lorasByModel:{h3:[{name:'work.safetensors',strength:.35}]},
+    modelId:'h3', lorasByModel:{h3:[{name:'work.safetensors',strength:.35}]}, lorasEnabledByModel:{h3:true},
     loraMode:'sweep', sweepFolderByModel:{h3:'shapes'},
     sweepSelections:{'h3|shapes':{'strap.safetensors':true}}, editorMode:'working',
     workingSnapshot:null, loadedSnapshot:null, loadedLabel:'',
@@ -53,6 +53,7 @@ function fixture() {
       constructor() { this.files=[]; this.items={add:f=>this.files.push(f)}; }
     },
     closeGenerateLoraPicker() {},
+    syncGenerateHeaderModel() { element('app-header-generate-model').value=state.modelId; },
     renderLoras() {},
     setLoraMode(mode) { state.loraMode=mode; },
     fieldVisible() { return true; },
@@ -225,6 +226,7 @@ test('generating from Loaded freezes its recipe even if reference upload overlap
   context.postJson=(_url,payload)=>{sent.push(payload);return Promise.resolve({job:{jobId:'generated',status:'queued'}});};
   context.captureReferenceFiles=()=>({first_frame:element('generate-reference-first_frame').files[0]});
   context.selectedLoras=id=>state.lorasByModel[id] || [];
+  context.enabledFixedLoras=id=>state.lorasEnabledByModel[id]===false ? [] : (state.lorasByModel[id] || []).filter(item=>item.enabled!==false);
   context.collectSettings=()=>({
     duration:element('generate-duration').value,
     seed:element('generate-seed').value,
@@ -292,4 +294,61 @@ test('real pending Take click populates Loaded after frozen job fetch, leaving W
   api.switchGenerateEditorMode('working');
   assert.equal(element('generate-prompt').value,'Working draft');
   assert.equal(state.lorasByModel.h3[0].name,'work.safetensors');
+});
+
+test('LoRA bypass and individual enablement survive Working and Loaded Take isolation',()=>{
+  const f=fixture(), {api,state}=f;
+  state.lorasEnabledByModel.h3=false;
+  state.lorasByModel.h3[0].enabled=false;
+  api.loadGenerateTakeIntoEditor(take());
+  assert.equal(state.lorasEnabledByModel.h3,true,'historical applied LoRAs restore enabled');
+  assert.equal(state.lorasByModel.h3[0].enabled,undefined);
+  api.switchGenerateEditorMode('working');
+  assert.equal(state.lorasEnabledByModel.h3,false,'Working master bypass is preserved');
+  assert.equal(state.lorasByModel.h3[0].enabled,false,'Working individual toggle is preserved');
+  api.switchGenerateEditorMode('loaded');
+  assert.equal(state.lorasEnabledByModel.h3,true,'Loaded bypass stays independent');
+});
+
+test('actual enabledFixedLoras omits bypassed LoRAs without mutating saved selections',()=>{
+  const begin=source.indexOf('  function selectedLoras(modelId) {');
+  const end=source.indexOf('  function loraFolder(name)',begin);
+  assert.ok(begin>0 && end>begin);
+  const state={lorasByModel:{h3:[
+    {name:'keep.safetensors',strength:.9},
+    {name:'off.safetensors',strength:.7,enabled:false}
+  ]},lorasEnabledByModel:{h3:true}};
+  const context={generateState:state};
+  vm.runInNewContext(source.slice(begin,end)+'\nthis.enabledFixedLoras=enabledFixedLoras;',context);
+  assert.deepEqual(Array.from(context.enabledFixedLoras('h3'),item=>item.name),['keep.safetensors']);
+  state.lorasEnabledByModel.h3=false;
+  assert.equal(context.enabledFixedLoras('h3').length,0,'master bypass suppresses all fixed LoRAs');
+  assert.equal(state.lorasByModel.h3.length,2,'bypass does not delete either selected LoRA');
+  state.lorasEnabledByModel.h3=true;
+  assert.equal(context.enabledFixedLoras('h3').length,1,'restoring master preserves individual enablement');
+});
+
+test('Prompt Assistant locks the visible header Base Model and unlocks it afterward',()=>{
+  const begin=source.indexOf('  function syncPromptAssistantDependencies() {');
+  const end=source.indexOf('  function renderDirector() {',begin);
+  assert.ok(begin>0 && end>begin);
+  const nodes=new Map();
+  const state={director:{busy:true}};
+  const context={
+    generateState:state,
+    el:id=>{
+      if (!nodes.has(id)) nodes.set(id,{disabled:false});
+      return nodes.get(id);
+    },
+    document:{querySelectorAll:()=>[]},
+    syncGenerateRunLabel(){},
+    syncReferenceDropzone(){}
+  };
+  vm.runInNewContext(source.slice(begin,end)+'\nthis.sync=syncPromptAssistantDependencies;',context);
+  context.sync();
+  assert.equal(context.el('app-header-generate-model').disabled,true);
+  assert.equal(context.el('generate-model').disabled,true);
+  state.director.busy=false;
+  context.sync();
+  assert.equal(context.el('app-header-generate-model').disabled,false);
 });

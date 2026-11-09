@@ -229,15 +229,17 @@ test('Generate capability refresh retains the current model draft and settings',
   const source = fs.readFileSync('tool/js/generate.js', 'utf8');
   const controls = Object.fromEntries(['model','prompt','aspect','dimensions','megapixels','duration','sampling-mode','seed'].map(id => ['generate-' + id, {value:'draft-' + id}]));
   controls['generate-model'].value = 'model-a';
+  controls['app-header-generate-model'] = {value:'',innerHTML:''};
   const context = {
     el: id => controls[id],
-    generateState: {models:[{id:'model-a',label:'A'}], modelId:'model-a'},
+    generateState: {models:[{id:'model-a',label:'A'}], modelId:'model-a', formInitialized:true, editorMode:'working'},
     getGenerateModelPreference: () => 'model-a', setGenerateModelPreference() {}, escapeHtml: value => value,
-    renderModelForm: () => Object.entries(controls).filter(([id]) => id !== 'generate-model').forEach(([,node]) => node.value = 'default'),
+    renderModelForm: () => Object.entries(controls).filter(([id]) => id !== 'generate-model' && id !== 'app-header-generate-model').forEach(([,node]) => node.value = 'default'),
     syncGenerateBaseLoras() {}
   };
-  vm.runInNewContext(source.slice(source.indexOf('  function populateModelSelector()'), source.indexOf('  function fieldVisible(')), context);
+  vm.runInNewContext(source.slice(source.indexOf('  function syncGenerateHeaderModel()'), source.indexOf('  function fieldVisible(')), context);
   context.populateModelSelector();
+  assert.equal(controls['app-header-generate-model'].value, 'model-a', 'header reflects active Generations model');
   assert.equal(controls['generate-prompt'].value, 'draft-prompt');
   assert.equal(controls['generate-seed'].value, 'draft-seed');
   assert.equal(controls['generate-sampling-mode'].value, 'draft-sampling-mode');

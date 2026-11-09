@@ -309,3 +309,21 @@ test('LoRA bypass and individual enablement survive Working and Loaded Take isol
   api.switchGenerateEditorMode('loaded');
   assert.equal(state.lorasEnabledByModel.h3,true,'Loaded bypass stays independent');
 });
+
+test('actual enabledFixedLoras omits bypassed LoRAs without mutating saved selections',()=>{
+  const begin=source.indexOf('  function selectedLoras(modelId) {');
+  const end=source.indexOf('  function loraFolder(name)',begin);
+  assert.ok(begin>0 && end>begin);
+  const state={lorasByModel:{h3:[
+    {name:'keep.safetensors',strength:.9},
+    {name:'off.safetensors',strength:.7,enabled:false}
+  ]},lorasEnabledByModel:{h3:true}};
+  const context={generateState:state};
+  vm.runInNewContext(source.slice(begin,end)+'\nthis.enabledFixedLoras=enabledFixedLoras;',context);
+  assert.deepEqual(Array.from(context.enabledFixedLoras('h3'),item=>item.name),['keep.safetensors']);
+  state.lorasEnabledByModel.h3=false;
+  assert.equal(context.enabledFixedLoras('h3').length,0,'master bypass suppresses all fixed LoRAs');
+  assert.equal(state.lorasByModel.h3.length,2,'bypass does not delete either selected LoRA');
+  state.lorasEnabledByModel.h3=true;
+  assert.equal(context.enabledFixedLoras('h3').length,1,'restoring master preserves individual enablement');
+});

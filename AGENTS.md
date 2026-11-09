@@ -153,6 +153,7 @@ Write model-facing instructions as positive, actionable directions describing th
 Keep the UI efficient and calm.
 
 - Avoid adding clutter when existing space or patterns can carry the feature.
+- **The UI should be self-explanatory, not defensive.** Do not fill permanent screen space with tiny instructions, reassurances, explanations of obvious controls, or caveats about how the workflow works. Simplify labels and interaction design first; move optional, nonessential guidance to an accessible tooltip or contextual help when it adds real value, and omit it entirely when it does not. Keep essential instructions, blockers, errors, safety information, and information needed to make a decision visibly readable at normal body size—never hide them in hover-only tooltips.
 - Favor keyboard efficiency where it materially improves throughput.
 - Keep controls contextual.
 - Prefer visible status over hidden magic.

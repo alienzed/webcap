@@ -105,6 +105,7 @@
     document.querySelectorAll('[data-set-dashboard-tab]').forEach(function (button) {
       var active = button.getAttribute('data-set-dashboard-tab') === selected;
       button.setAttribute('aria-selected', active ? 'true' : 'false');
+      button.setAttribute('tabindex', active ? '0' : '-1');
       button.classList.toggle('is-active', active);
       var tabName = button.getAttribute('data-set-dashboard-tab');
       var needs = (tabName === 'guidance' && (!s.phrase || !s.balances.length)) ||
@@ -252,12 +253,39 @@
         if (selected === 'guidance') guidanceStep = guidanceInitialStep(snapshot());
         renderStage();
       });
+      button.addEventListener('keydown', function (event) {
+        var index = stages.indexOf(button.getAttribute('data-set-dashboard-tab'));
+        if (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft' && event.key !== 'Home' && event.key !== 'End') return;
+        event.preventDefault();
+        var nextIndex = event.key === 'Home' ? 0 : event.key === 'End' ? stages.length - 1
+          : (index + (event.key === 'ArrowRight' ? 1 : -1) + stages.length) % stages.length;
+        var next = document.querySelector('[data-set-dashboard-tab="' + stages[nextIndex] + '"]');
+        next.click();
+        next.focus();
+      });
     });
     document.addEventListener('keydown', function (event) {
-      if (!open || event.key !== 'Escape') return;
-      if (el('primer-template-candidate') && !el('primer-template-candidate').classList.contains('hidden')) return;
-      event.preventDefault();
-      closeDashboard();
+      if (!open) return;
+      if (event.key === 'Escape') {
+        if (el('primer-template-candidate') && !el('primer-template-candidate').classList.contains('hidden')) return;
+        event.preventDefault();
+        closeDashboard();
+        return;
+      }
+      if (event.key === 'Tab') {
+        var candidates = Array.prototype.slice.call(el('set-dashboard-modal').querySelectorAll('button, input, textarea'));
+        var visible = candidates.filter(function (node) {
+          return !node.disabled && node.getClientRects().length > 0 && node.getAttribute('tabindex') !== '-1';
+        });
+        if (!visible.length) return;
+        if (event.shiftKey && document.activeElement === visible[0]) {
+          event.preventDefault();
+          visible[visible.length - 1].focus();
+        } else if (!event.shiftKey && document.activeElement === visible[visible.length - 1]) {
+          event.preventDefault();
+          visible[0].focus();
+        }
+      }
     });
     window.addEventListener('webcap:media-metadata-updated', function () { if (open) renderStage(); });
     el('stats-required-phrase').addEventListener('change', function () { if (open) renderStage(); });

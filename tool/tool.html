@@ -1672,19 +1672,14 @@
                                     <button id="generate-editor-loaded" type="button" aria-pressed="false" disabled>Loaded Take</button>
                                 </div>
                                 <button id="generate-editor-use-working" type="button" class="review-captions-btn hidden" title="Copy this Loaded configuration into Working">Use as Working</button>
+                                <div class="generate-prompt-heading-actions">
+                                    <button id="generate-prompt-save" type="button" class="review-captions-btn">Save Prompt</button>
+                                    <button id="generate-prompt-library-open" type="button" class="review-captions-btn" aria-pressed="false">Library</button>
+                                </div>
                             </div>
                             <div id="generate-editor-loaded-caption" class="generate-editor-loaded-caption hidden" aria-live="polite"></div>
-                            <div class="generate-model-row">
-                            <label class="generate-field"><span>Base Model</span><select id="generate-model" aria-label="Generate Base Model"></select></label>
-                            </div>
+                            <div class="generate-model-row hidden" aria-hidden="true"><select id="generate-model" tabindex="-1" aria-label="Generation model state"></select></div>
                             <div class="generate-prompt-panel">
-                            <div class="generate-section-heading">
-                            <strong>Prompt</strong>
-                            <div class="generate-prompt-heading-actions">
-                            <button id="generate-prompt-save" type="button" class="review-captions-btn">Save Prompt</button>
-                            <button id="generate-prompt-library-open" type="button" class="review-captions-btn" aria-pressed="false">Library</button>
-                            </div>
-                            </div>
                             <div id="generate-prompt-editor" class="generate-prompt-editor">
                             <textarea id="generate-prompt" class="generate-prompt" rows="12" placeholder="Describe what you want — a rough idea or a finished prompt."></textarea>
                             <details id="generate-prompt-assistant" class="generate-collapsible generate-prompt-assistant">
@@ -1731,25 +1726,22 @@
                             </div>
                             </div>
                             <aside class="generate-inspector" aria-label="Generation controls">
-                            <div class="generate-inspector-heading"><strong>Generation Settings</strong><span id="generate-status" class="generate-status-badge hidden" aria-live="polite"></span></div>
+                            <div class="generate-inspector-heading"><strong>Generation Settings</strong><span id="generate-status" class="generate-status-badge hidden" aria-live="polite"></span><button id="generate-advanced-toggle" type="button" class="review-captions-btn generate-advanced-toggle" aria-expanded="false" aria-controls="generate-advanced-panel">Advanced <span aria-hidden="true">⌄</span></button></div>
                             <section class="generate-output-settings">
-                            <div class="generate-settings-grid">
-                            <div class="generate-settings-choices">
+                            <div class="generate-settings-primary">
                                 <label id="generate-field-aspectRatio" class="generate-field" title="Output aspect ratio"><span>Aspect ratio</span><select id="generate-aspect"></select></label>
-                                <label id="generate-field-samplingMode" class="generate-field" title="Choose Turbo or Quality sampling"><span>Sampling mode</span><select id="generate-sampling-mode"><option value="turbo">Turbo · 8 steps / 1.0</option><option value="quality">Quality · 20 steps / no Turbo</option></select></label>
-                                <label id="generate-field-dimensions" class="generate-field hidden" title="Output dimensions"><span>Dimensions</span><select id="generate-dimensions"></select></label>
-                            </div>
-                            <div class="generate-settings-numbers">
                                 <label id="generate-field-megapixels" class="generate-field" title="Output resolution in megapixels"><span>MP</span><input id="generate-megapixels" type="number" min="0.1" step="0.1"></label>
                                 <label id="generate-field-duration" class="generate-field" title="Clip duration in seconds"><span>Duration</span><input id="generate-duration" type="number" min="3" max="15" step="1"></label>
-                                <label id="generate-field-seed" class="generate-field" title="Seed (-1 for random)"><span>Seed</span><input id="generate-seed" type="number" min="-1" step="1" value="-1"></label>
+                                <label id="generate-field-dimensions" class="generate-field hidden" title="Output dimensions"><span>Dimensions</span><select id="generate-dimensions"></select></label>
                             </div>
+                            <div id="generate-advanced-panel" class="generate-settings-advanced hidden">
+                                <label id="generate-field-samplingMode" class="generate-field" title="Choose Turbo or Quality sampling"><span>Sampling mode</span><select id="generate-sampling-mode"><option value="turbo">Turbo · 8 steps / 1.0</option><option value="quality">Quality · 20 steps / no Turbo</option></select></label>
+                                <label id="generate-field-seed" class="generate-field" title="Seed (-1 for random)"><span>Seed</span><input id="generate-seed" type="number" min="-1" step="1" value="-1"></label>
                             </div>
                             </section>
                             <section class="generate-conditioning">
-                            <div class="generate-conditioning-heading"><strong title="LoRAs applied to every generation">Fixed LoRAs</strong><button id="generate-lora-library-open" type="button" class="review-captions-btn" title="View and edit LoRA profiles; does not change selected LoRAs">Profiles</button><button id="generate-lora-refresh" type="button" class="review-captions-btn" title="Rescan available LoRAs from ComfyUI">↻ Refresh</button></div>
+                            <div class="generate-conditioning-heading"><label class="generate-lora-master" title="Temporarily enable or disable all fixed LoRAs"><input id="generate-lora-master-enabled" type="checkbox" checked><strong>LoRAs <span id="generate-lora-count">(0)</span></strong></label><div class="generate-lora-heading-actions"><button id="generate-lora-library-open" type="button" class="review-captions-btn" title="View and edit LoRA profiles; does not change selected LoRAs">Profiles</button><button id="generate-lora-refresh" type="button" class="review-captions-btn" title="Rescan available LoRAs from ComfyUI" aria-label="Refresh available LoRAs">↻</button></div></div>
                             <div id="generate-lora-selected-panel" class="generate-lora-mode-panel">
-                                <div class="generate-lora-selected-heading"><strong>Selected LoRAs <span id="generate-lora-count">(0)</span></strong></div>
                                 <div id="generate-lora-list" class="generate-lora-list"></div>
                                 <div id="generate-lora-picker-wrap" class="generate-lora-picker-wrap">
                                     <button id="generate-lora-picker-trigger" type="button" class="generate-lora-picker-trigger" aria-expanded="false" aria-haspopup="listbox" aria-controls="generate-lora-picker-menu"><span>+ Search / add LoRA…</span><span aria-hidden="true">⌄</span></button>
@@ -1757,12 +1749,6 @@
                                         <input id="generate-lora-picker" class="generate-lora-picker" type="search" placeholder="Filter LoRAs…" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-label="Filter available LoRAs">
                                         <div id="generate-lora-picker-options" role="listbox" aria-label="Available LoRAs"></div>
                                     </div>
-                                </div>
-                            </div>
-                            <div class="generate-mode-row">
-                                <div class="generate-lora-tabs" role="group" aria-label="Generation mode">
-                                    <button id="generate-lora-selected-tab" type="button" class="review-captions-btn active" aria-pressed="true">Single</button>
-                                    <button id="generate-lora-sweep-tab" type="button" class="review-captions-btn" aria-pressed="false" aria-controls="generate-lora-sweep-panel">LoRA Sweep</button>
                                 </div>
                             </div>
                             <div id="generate-lora-sweep-panel" class="generate-lora-mode-panel hidden">
@@ -1806,6 +1792,12 @@
                             </div>
                             </details>
                             </aside>
+                            <div class="generate-mode-row">
+                                <div class="generate-lora-tabs" role="group" aria-label="Generation mode">
+                                    <button id="generate-lora-selected-tab" type="button" class="review-captions-btn active" aria-pressed="true">Single</button>
+                                    <button id="generate-lora-sweep-tab" type="button" class="review-captions-btn" aria-pressed="false" aria-controls="generate-lora-sweep-panel">LoRA Sweep</button>
+                                </div>
+                            </div>
                             <div class="generate-run-row">
                             <button id="generate-run-btn" type="button" class="storyboard-primary-btn generate-run-btn">Generate</button>
                             </div>

@@ -33,6 +33,16 @@ A **wide, on-demand Set preparation workspace presented as a modal**. Answer **W
 | Caption | Continue Focused Caption on media with missing captions | Edit Caption Template |
 | Review | Open Quality Assurance and existing Deep QA/review findings | Caption Report |
 
+### Understand presentation and IA
+
+The Dashboard owns stage progression. **Do not recreate a miniature dashboard inside Understand.** Keep one prominent context-dependent action: run/resume missing Sight, retry recorded failures, Stop while running, or Discover Vocabulary once no urgent scan work remains. When usable partial Sight exists, Vocabulary may be an unobtrusive secondary action even if gaps remain.
+
+Keep the model selector, selection scope and saved Sight coverage visible. Treat *scan progress* (work performed in the current run) and *saved Sight coverage* (reusable evidence for the selected model/scope) as different facts, never one fabricated readiness score.
+
+**Progressive disclosure:** idle live Sight preview, individual item inspection/refresh, force refresh all, and raw Vision output are initially collapsed. They remain fully usable on demand. Scanning still displays explicit progress, timing and Stop without forcing the preview open. Do not fetch media previews while inspection is collapsed. Show a genuine count of issues in the inspection disclosure without expanding it automatically; manual item inspection remains available even when no problems are flagged.
+
+Remove redundant Prepare Set stage navigation, generic explanatory footers, and duplicate primary controls. Guided Tagging and QA remain accessible through the Dashboard tabs and their existing workspaces. No changes to Sight persistence, model semantics, retries, cancellation, or background job ownership.
+
 **Set Intelligence / Prepare Set is embedded directly in Understand:** the original model, selection scope, Sight scan/progress, cached inspection, item retry, and resume controls remain owned by `set_scan.js`. A separate Prepare Set dialog must not appear over the dashboard. Its existing entry button opens Dashboard → Understand. Existing saved-Sight detail dialogs and the Vocabulary/annotation/QA workspaces remain available where their tasks justify them.
 
 Other destinations use their existing feature's navigation, scope, safeguards and persistence. Do not duplicate their workflow.

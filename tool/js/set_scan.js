@@ -129,7 +129,7 @@
   function updateSetSightTiming() {
     var timing = el('set-scan-timing');
     if (!timing) throw new Error('Set Sight timing display is missing.');
-    if (!setScanState.activityStartedAt) {
+    if (!setScanState.running || !setScanState.activityStartedAt) {
       timing.hidden = true;
       return;
     }
@@ -148,7 +148,9 @@
     var modal = el('set-scan-modal');
     var stopBtn = el('set-scan-stop-btn');
     var progressFill = el('set-scan-progress-fill');
-    var next = el('set-intelligence-next');
+    var vocabularyBtn = el('set-intelligence-primary-btn');
+    var inspection = el('set-scan-inspection-disclosure');
+    var inspectionContext = el('set-scan-inspection-context');
     var details = el('set-scan-details');
     var responseSelect = el('set-scan-response-select');
     var output = el('set-scan-raw-output');
@@ -169,7 +171,7 @@
     var openCount = el('set-scan-open-count');
     var openDetail = el('set-scan-open-detail');
     if (
-      !modal || !stopBtn || !progressFill || !next || !details || !responseSelect || !output ||
+      !modal || !stopBtn || !progressFill || !vocabularyBtn || !inspection || !inspectionContext || !details || !responseSelect || !output ||
       !reportCount || !rescanBtn || !forceBtn || !itemView || !qualitySummary || !scopeToggle || !scopeSummary || !issues || !issueCount || !itemSelect || !itemRetry || !badRetry || !openCard || !openBadge || !openCount || !openDetail
     ) {
       throw new Error('Set Intelligence UI is incomplete.');
@@ -182,8 +184,7 @@
     scopeSummary.textContent = (scopeToggle.checked ? 'Entire Set' : 'Current training selection') +
       ' · ' + String(scopeCount) + ' / ' + String(getCurrentSetMediaFileNames().length) + ' media';
     stopBtn.classList.toggle('hidden', !setScanState.running);
-    // Saved partial Sight is useful downstream; do not turn coverage gaps into a wizard gate.
-    next.classList.toggle('hidden', setScanState.running || !coverageIsUsable());
+    stopBtn.classList.toggle('set-scan-primary', setScanState.running);
 
     var coverage = setScanState.coverage;
     var totalCoverage = coverage.known ? coverage.total : 0;
@@ -198,23 +199,30 @@
         actionLabel = 'Sight current';
       }
     }
-    rescanBtn.classList.toggle('hidden', setScanState.running);
-    rescanBtn.disabled = !scopeCount || !!(coverage.known && !openMissing);
-    rescanBtn.textContent = actionLabel || 'Run Set Intelligence';
-    if (setScanState.running) rescanBtn.classList.add('hidden');
     forceBtn.disabled = setScanState.running || !scopeCount;
     var issueCountTotal = itemsCountNeedingAttention(setScanState.sightItems);
-    badRetry.classList.toggle('hidden', setScanState.running || !issueCountTotal);
+    // One dominant action: repair observed issues, resume missing Sight, or continue to vocabulary.
+    var canContinue = !setScanState.running && coverageIsUsable();
+    var shouldRetry = !setScanState.running && !!issueCountTotal;
+    var shouldScan = !setScanState.running && !shouldRetry && (!coverage.known || !!openMissing);
+    rescanBtn.classList.toggle('hidden', !shouldScan);
+    rescanBtn.disabled = !scopeCount;
+    rescanBtn.textContent = actionLabel || 'Run Set Intelligence';
+    badRetry.classList.toggle('hidden', !shouldRetry);
     badRetry.textContent = 'Retry ' + String(issueCountTotal) + ' needing attention';
-    forceBtn.classList.toggle('hidden', setScanState.running);
+    vocabularyBtn.classList.toggle('hidden', !canContinue);
+    vocabularyBtn.classList.toggle('set-scan-primary', !shouldRetry && !shouldScan && canContinue);
+    vocabularyBtn.classList.toggle('set-scan-secondary', shouldRetry || shouldScan);
+    badRetry.classList.toggle('set-scan-primary', shouldRetry);
+    rescanBtn.classList.toggle('set-scan-primary', shouldScan);
     qualitySummary.innerHTML = '';
     var flaggedTotal = setScanState.sightItems.filter(function (item) { return !!item.issue; }).length;
     var missingTotal = setScanState.sightItems.filter(function (item) { return !item.structured; }).length;
     if (setScanState.coverage.known) {
-      [['flagged', flaggedTotal + ' flagged'], ['missing', missingTotal + ' missing']].forEach(function (entry) {
+      [['flagged', flaggedTotal, 'flagged'], ['missing', missingTotal, 'missing']].filter(function (entry) { return entry[1] > 0; }).forEach(function (entry) {
         var label = document.createElement('span');
         label.className = entry[0];
-        label.textContent = entry[1];
+        label.textContent = entry[1] + ' ' + entry[2];
         qualitySummary.appendChild(label);
       });
     }
@@ -222,7 +230,7 @@
     var items = setScanState.sightItems;
     var flagged = items.filter(function (item) { return !!item.issue || !item.structured; });
     issues.classList.toggle('hidden', !items.length);
-    issueCount.textContent = flagged.length ? flagged.length + ' need attention' : 'No issues · manual refresh available';
+    issueCount.textContent = flagged.length ? flagged.length + ' need attention' : '';
     itemSelect.innerHTML = '';
     items.forEach(function (item) {
       var option = document.createElement('option');
@@ -236,13 +244,8 @@
     itemView.disabled = !items.length;
     itemRetry.disabled = setScanState.running || !items.length;
     badRetry.disabled = setScanState.running || !flagged.length;
-    if (!setScanState.running && scopeCount && flagged.length) {
-      rescanBtn.classList.remove('set-scan-primary');
-      badRetry.classList.add('set-scan-primary');
-    } else {
-      badRetry.classList.remove('set-scan-primary');
-      rescanBtn.classList.toggle('set-scan-primary', !setScanState.running && !!openMissing);
-    }
+    inspectionContext.textContent = setScanState.running ? 'Live' : '';
+
 
     var percent = 0;
     if (setScanState.phase === 'preparing') percent = 8;
@@ -252,6 +255,7 @@
         : 10;
     }
     if (setScanState.phase === 'complete') percent = 100;
+    progressFill.parentElement.classList.toggle('hidden', !setScanState.running);
     progressFill.style.width = String(percent) + '%';
     progressFill.parentElement.setAttribute('aria-valuenow', String(percent));
     updateSetSightTiming();
@@ -277,6 +281,7 @@
       );
     }
 
+    openDetail.classList.toggle('hidden', !coverage.known || !openMissing || setScanState.running);
     var responses = Array.isArray(setScanState.rawResponses) ? setScanState.rawResponses : [];
     var currentRaw = responses[setScanState.rawResponseIndex] || null;
     setScanState.currentRawResponse = currentRaw;
@@ -302,7 +307,8 @@
     el('set-scan-preview-name').textContent = file ||
       (setScanState.running ? 'Waiting for completed Sight' : 'Select a media item');
     el('set-scan-preview-review').disabled = !file;
-    updateSightPreviewMedia(el('set-scan-preview-image'), el('set-scan-preview-video'), setScanState.folder, file);
+    // Media preview is on demand; don't load hidden media just to draw the dashboard.
+    if (inspection.open) updateSightPreviewMedia(el('set-scan-preview-image'), el('set-scan-preview-video'), setScanState.folder, file);
     var observed = responses.slice().reverse().find(function (row) { return row.media === file; });
     var saved = items.find(function (row) { return row.file === file; });
     el('set-scan-preview-text').textContent = observed
@@ -917,17 +923,6 @@
     openVisionSchemaAssist();
   }
 
-  function continueToGuidedTagging() {
-    window.closeSetDashboard();
-    openGuidedTagPass({ source: 'set' });
-  }
-
-  function continueToQa() {
-    window.closeSetDashboard();
-    setWorkspaceSurface('reviewOutput');
-    setReviewDetailTab('qa');
-  }
-
   function vlWorkspaceVisibleMedia() {
     return getFilteredMediaItems(false).filter(function (item) {
       return item && isCaptionVisionSupportedMedia(item.fileName);
@@ -1129,13 +1124,11 @@
     var entireSetToggle = el('set-scan-entire-set');
     var responseSelect = el('set-scan-response-select');
     var primaryBtn = el('set-intelligence-primary-btn');
-    var guidedBtn = el('set-intelligence-guided-btn');
-    var qaBtn = el('set-intelligence-qa-btn');
     var modal = el('set-scan-modal');
     var savedModal = el('saved-intelligence-modal');
     var savedCloseBtn = el('saved-intelligence-close-btn');
     if (!savedModal || !savedCloseBtn) throw new Error('Saved Intelligence controls are missing.');
-    if (!openBtn || !closeBtn || !stopBtn || !rescanBtn || !forceBtn || !itemView || !entireSetToggle || !responseSelect || !primaryBtn || !guidedBtn || !qaBtn || !modal) {
+    if (!openBtn || !closeBtn || !stopBtn || !rescanBtn || !forceBtn || !itemView || !entireSetToggle || !responseSelect || !primaryBtn || !modal) {
       throw new Error('Set Intelligence controls are missing.');
     }
 
@@ -1155,6 +1148,13 @@
       return runVisionImageCaption(setScanState.reviewMediaItem);
     };
     el('set-scan-preview-review').onclick = function () { openSightReviewForFile(setScanState.previewFileName); };
+    el('set-scan-inspection-disclosure').addEventListener('toggle', function () {
+      if (!this.open) {
+        el('set-scan-preview-video').pause();
+        return;
+      }
+      if (setScanState.open) renderSetIntelligence();
+    });
     el('sight-review-model').onchange = renderSightReview;
     el('sight-review-activate').onclick = activateSightReviewModel;
     el('set-scan-item-retry').onclick = function () {
@@ -1178,8 +1178,6 @@
     entireSetToggle.onchange = openSetIntelligence;
     responseSelect.onchange = selectRawResponse;
     primaryBtn.onclick = continueToVocabulary;
-    guidedBtn.onclick = continueToGuidedTagging;
-    qaBtn.onclick = continueToQa;
 
     el('vl-workspace-prev').onclick = function () { navigateVlWorkspace(-1); };
     el('vl-workspace-next').onclick = function () { navigateVlWorkspace(1); };

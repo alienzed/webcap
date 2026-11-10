@@ -157,6 +157,7 @@
       progressBar.setAttribute('aria-valuenow', String(percent));
     }
     // A factual signal, not a global readiness score or a strict stage gate.
+    setHidden(overview, selected === 'understand');
     var overviewParts = [s.captions + ' of ' + s.total + ' captioned'];
     if (s.sight) overviewParts.push(s.sight + ' with saved Sight');
     overview.textContent = overviewParts.join(' · ');
@@ -320,7 +321,7 @@
         return;
       }
       if (event.key === 'Tab') {
-        var candidates = Array.prototype.slice.call(el('set-dashboard-modal').querySelectorAll('button, input, textarea'));
+        var candidates = Array.prototype.slice.call(el('set-dashboard-modal').querySelectorAll('button, input, textarea, select, summary, a[href], [tabindex]'));
         var visible = candidates.filter(function (node) {
           return !node.disabled && node.getClientRects().length > 0 && node.getAttribute('tabindex') !== '-1';
         });

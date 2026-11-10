@@ -89,7 +89,7 @@ function dashboard(options = {}) {
 test('fresh Set prioritizes required phrase without background jobs', () => {
   const app = dashboard();
   assert.equal(app.selected(), 'guidance');
-  assert.equal(app.title(), 'Required key phrase');
+  assert.equal(app.title(), 'Give this Set a consistent key phrase');
   assert.equal(app.primary().textContent, 'Set key phrase');
   assert.deepEqual(app.actions, []);
   assert.equal(app.secondary().classList.contains('hidden'), true);
@@ -98,7 +98,7 @@ test('fresh Set prioritizes required phrase without background jobs', () => {
 test('missing balance terms is its own action and remains optional', () => {
   const app = dashboard({ phrase: 'subject' });
   assert.equal(app.selected(), 'guidance');
-  assert.equal(app.title(), 'Balance terms');
+  assert.equal(app.title(), 'Add terms to help balance your captions');
   app.listeners['tab-review:click']();
   assert.equal(app.selected(), 'review');
   assert.deepEqual(app.actions, []);

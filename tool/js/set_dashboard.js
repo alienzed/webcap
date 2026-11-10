@@ -157,6 +157,7 @@
       progressBar.setAttribute('aria-valuenow', String(percent));
     }
     // A factual signal, not a global readiness score or a strict stage gate.
+    setHidden(overview, selected === 'understand');
     var overviewParts = [s.captions + ' of ' + s.total + ' captioned'];
     if (s.sight) overviewParts.push(s.sight + ' with saved Sight');
     overview.textContent = overviewParts.join(' · ');

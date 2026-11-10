@@ -742,7 +742,18 @@
     if (review) {
       var ready = qaDeepScanReadyCount();
       review.classList.toggle('hidden', !ready);
-      review.textContent = 'Review & Fix ' + ready + ' item' + (ready === 1 ? '' : 's');
+      review.textContent = 'Review & Fix ' + qaFileCountText(ready);
+      // Saved actionable findings can arrive during a running scan. Make them
+      // the primary action without navigating away or restarting the scan.
+      review.classList.toggle('qa-primary', !!ready);
+      var browseButton = document.getElementById('qa-overview-browse');
+      if (browseButton) browseButton.classList.toggle('qa-primary', !ready);
+      var heading = document.getElementById('qa-hero-next-step');
+      if (heading && qaWorkbenchState.deepScanSessionActive) {
+        heading.textContent = ready
+          ? 'Review ' + qaFileCountText(ready) + ' with actionable corrections'
+          : browseButton ? 'Review the available QA findings' : 'Deep QA is checking this selection';
+      }
     }
     var coverage = document.getElementById('qa-deep-scan-live-coverage');
     var counts = qaDeepCoverageCounts(qaDeepScanScopeItems());
@@ -2284,40 +2295,57 @@
     var copy = document.createElement('div');
     copy.className = 'qa-hero-copy';
     var h2 = document.createElement('h2');
-    var deepCoverageCounts = qaDeepCoverageCounts(items);
-    var evaluationIncomplete = true; // No set-level inference is equivalent to per-item QA certification.
-    h2.textContent = undisposed.length
-      ? corrections + ' corrections · ' + investigations + ' investigations'
-      : (evaluationIncomplete ? 'No actionable findings in available checks' : 'No outstanding QA findings');
+    h2.id = 'qa-hero-next-step';
+    var ready = qaDeepScanReadyCount();
+    var resume = qaCanResumeDeepScan();
+    var active = qaWorkbenchState.deepScanSessionActive;
+    h2.textContent = ready
+      ? 'Review ' + qaFileCountText(ready) + ' with actionable corrections'
+      : undisposed.length
+        ? 'Review ' + qaFileCountText(undisposed.length) + ' needing a QA decision'
+        : active
+          ? 'Deep QA is checking this selection'
+          : resume
+            ? 'Continue the unfinished Deep QA check'
+            : 'Check this selection for additional issues';
     var intro = document.createElement('p');
-    intro.textContent = undisposed.length
-      ? 'Investigations are unverified hypotheses; only concrete corrections enter QA Focus Review.'
-      : (evaluationIncomplete ? 'No current Deep QA review for this training selection. Reviews of other selections remain saved.'
-        : 'No outstanding findings from the current checks. Observations remain in Reports.');
+    intro.textContent = ready
+      ? 'Saved corrections are ready for your decision; nothing changes until you accept an edit.'
+      : undisposed.length
+        ? corrections + ' corrections · ' + investigations + ' investigations. Investigations are unverified hypotheses.'
+        : active
+          ? 'Progress appears below. You can review findings as they become available.'
+          : resume
+            ? 'Resume the saved check without repeating successful item assessments.'
+            : 'Existing checks have no outstanding actionable findings; this does not certify the Set.';
     copy.appendChild(h2);
     copy.appendChild(intro);
     hero.appendChild(copy);
 
     var heroActions = document.createElement('div');
     heroActions.className = 'qa-hero-actions';
-    if (undisposed.length) heroActions.appendChild(qaCreateButton('Review ' + undisposed.length + ' findings', 'qa-primary', 'browse-next'));
-    heroActions.appendChild(qaCreateButton('Curate Training Set', '', 'qa-curate-start'));
+    if (undisposed.length) {
+      var browseButton = qaCreateButton('Review ' + undisposed.length + ' findings', ready ? '' : 'qa-primary', 'browse-next');
+      browseButton.id = 'qa-overview-browse';
+      heroActions.appendChild(browseButton);
+    }
     if (qaWorkbenchState.statusMessage) {
       var qaNotice = document.createElement('div');
       qaNotice.className = 'qa-deep-scan-note';
       qaNotice.textContent = qaWorkbenchState.statusMessage;
       heroActions.appendChild(qaNotice);
     }
-    if (!qaWorkbenchState.deepScanSessionActive) {
+    if (!active) {
       heroActions.appendChild(qaCreateButton(
-        qaCanResumeDeepScan() ? 'Resume Deep QA' : 'Run Deep QA', '', 'qa-start'));
+        resume ? 'Resume Deep QA' : 'Run Deep QA',
+        ready || undisposed.length ? '' : 'qa-primary', 'qa-start'));
     }
-    var reviewButton = qaCreateButton('Review & Fix saved findings', '', 'qa-focus-review');
+    var reviewButton = qaCreateButton('Review & Fix saved findings', ready ? 'qa-primary' : '', 'qa-focus-review');
     reviewButton.id = 'qa-deep-review-ready';
-    var ready = qaDeepScanReadyCount();
-    reviewButton.textContent = 'Review & Fix ' + ready + ' item' + (ready === 1 ? '' : 's');
+    reviewButton.textContent = 'Review & Fix ' + qaFileCountText(ready);
     reviewButton.classList.toggle('hidden', !ready);
-    heroActions.appendChild(reviewButton);
+    heroActions.insertBefore(reviewButton, heroActions.firstChild);
+    heroActions.appendChild(qaCreateButton('Curate Training Set', '', 'qa-curate-start'));
     hero.appendChild(heroActions);
     container.appendChild(hero);
     var deepWrap = document.createElement('div');
@@ -2559,14 +2587,20 @@
     progress.appendChild(progressText);
     var track = document.createElement('div');
     track.className = 'qa-progress-track';
+    track.setAttribute('role', 'progressbar');
+    track.setAttribute('aria-valuemin', '0');
+    track.setAttribute('aria-valuemax', String(recommendations.length));
+    track.setAttribute('aria-valuenow', String(handled));
+    track.setAttribute('aria-label', 'Recommendations handled');
     var bar = document.createElement('div');
     bar.className = 'qa-progress-bar';
-    bar.style.width = Math.round(((qaWorkbenchState.browseIndex + 1) / recommendations.length) * 100) + '%';
+    // Position is navigation context; only handled dispositions represent work done.
+    bar.style.width = Math.round((handled / recommendations.length) * 100) + '%';
     track.appendChild(bar);
     progress.appendChild(track);
     var handledText = document.createElement('span');
     handledText.className = 'qa-muted';
-    handledText.textContent = handled + ' reviewed';
+    handledText.textContent = handled + ' handled (dismissed or skipped)';
     progress.appendChild(handledText);
     container.appendChild(progress);
 

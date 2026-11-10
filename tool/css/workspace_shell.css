@@ -1025,38 +1025,10 @@
   margin-top: 8px;
 }
 
-.app.shell-revamp .sidebar-drawer {
-  border: 1px solid var(--border);
-  border-radius: 5px;
-  background: var(--panel-soft);
-  overflow: hidden;
-}
-
-.app.shell-revamp .sidebar-drawer-summary {
-  list-style: none;
-  cursor: pointer;
-  padding: 9px 10px;
-  font-size: 12px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  line-height: 1.1;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-
-.app.shell-revamp .sidebar-drawer-summary::-webkit-details-marker {
-  display: none;
-}
-
-.app.shell-revamp .sidebar-drawer[open] .sidebar-drawer-summary {
-  border-bottom: 1px solid var(--border);
-}
-
 .app.shell-revamp .sidebar-drawer-body {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 10px;
 }
 
 .app.shell-revamp .sidebar-drawer-body .review-captions-btn,
@@ -1094,15 +1066,6 @@
 .app.shell-revamp.workspace-view-focus .preview-panel,
 .app.shell-revamp.workspace-view-focus .workbench-panel {
   overflow: hidden;
-}
-
-html[data-theme="dark"] .app.shell-revamp .sidebar-drawer {
-  background: #151b24;
-  border-color: var(--border);
-}
-
-html[data-theme="dark"] .app.shell-revamp .sidebar-drawer-summary {
-  color: #94a3b8;
 }
 
 @media (max-width: 1180px) {

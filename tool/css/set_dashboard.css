@@ -177,13 +177,6 @@
 #set-dashboard-stage .set-scan-scope-row { padding: 14px 0; }
 #set-dashboard-stage .set-scan-evidence-card { padding: 18px 12px; }
 #set-dashboard-stage .set-scan-run-actions { padding: 15px 12px; }
-#set-dashboard-stage .set-intelligence-next-main { gap: 16px; }
-#set-dashboard-stage .set-intelligence-next-copy > span,
-#set-dashboard-stage .set-intelligence-next-copy > .set-intelligence-kicker {
-  display: none;
-}
-#set-dashboard-stage #set-intelligence-qa-btn,
-#set-dashboard-stage #set-intelligence-guided-btn { display: none; }
 #set-dashboard-stage .set-scan-footer { padding: 12px; }
 #set-dashboard-stage .set-scan-footer span { font-size: 14px; }
 @media (max-width: 720px) {

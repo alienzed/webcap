@@ -1149,7 +1149,11 @@
     };
     el('set-scan-preview-review').onclick = function () { openSightReviewForFile(setScanState.previewFileName); };
     el('set-scan-inspection-disclosure').addEventListener('toggle', function () {
-      if (setScanState.open && this.open) renderSetIntelligence();
+      if (!this.open) {
+        el('set-scan-preview-video').pause();
+        return;
+      }
+      if (setScanState.open) renderSetIntelligence();
     });
     el('sight-review-model').onchange = renderSightReview;
     el('sight-review-activate').onclick = activateSightReviewModel;

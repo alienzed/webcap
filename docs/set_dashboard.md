@@ -2,7 +2,7 @@
 
 ## Product contract
 
-A focused, on-demand modal for the **current Set**. Answer one question: **What should I do next?** It is not a project tracker, a mandatory wizard, a replacement for existing editors, or another QA report.
+A **wide, on-demand Set preparation workspace presented as a modal**. Answer **What should I do next?** and let the user accomplish that step *inside* the dashboard when it is Set-level preparation. This is not merely a launcher, a mandatory wizard, a global tracker, or a replacement for specialized per-media editors.
 
 ## Interaction
 
@@ -14,7 +14,7 @@ A focused, on-demand modal for the **current Set**. Answer one question: **What 
 - Show concise, honest progress from existing evidence: caption coverage, saved Sight observations (not verified Set-wide freshness), and reviewed annotation group assignments. Do not present a universal readiness percentage, imply QA certification, or create new persisted status.
 - When a recommendation opens a scope-sensitive tool, the count and message must reflect what that tool can act on. Clearly distinguish Set-wide totals from the current filtered view.
 - Keep genuine blockers or errors visibly readable; optional low-value explanations may live in contextual help.
-- Only explicit button clicks may start a scan, an LLM call, a job, or a workflow. Opening or switching dashboard tabs performs no inference or mutations.
+- A Dashboard tab can be a full-sized working surface: **do not constrain its width to launcher dimensions**. Only explicit button clicks may start a scan, an LLM call, a job, or a workflow. Opening or switching dashboard tabs performs no inference or mutations.
 
 ## Guidance ownership
 
@@ -28,12 +28,12 @@ A focused, on-demand modal for the **current Set**. Answer one question: **What 
 | Tab | Primary intention | Optional secondary |
 | --- | --- | --- |
 | Guidance | Set key phrase, then balance terms, then existing caption template | Template or the other Guidance field |
-| Understand | Prepare Set / inspect saved Sight | Discover Vocabulary |
+| Understand | Run, resume, inspect, and retry Set Intelligence directly in this tab | Discover Vocabulary after Sight is available |
 | Annotate | Continue Focused Annotation where group review remains | Guided Tagging |
 | Caption | Continue Focused Caption on media with missing captions | Edit Caption Template |
 | Review | Open Quality Assurance and existing Deep QA/review findings | Caption Report |
 
-A destination uses the existing feature's own navigation, scope, safeguards and persistence. Do not duplicate its workflow.
+**Set Intelligence / Prepare Set is embedded directly in Understand:** the original model, selection scope, Sight scan/progress, cached inspection, item retry, and resume controls remain owned by `set_scan.js`. A separate Prepare Set dialog must not appear over the dashboard. Its existing entry button opens Dashboard → Understand. Existing saved-Sight detail dialogs and the Vocabulary/annotation/QA workspaces remain available where their tasks justify them.\n\nOther destinations use their existing feature's navigation, scope, safeguards and persistence. Do not duplicate their workflow.
 
 ## Evidence and runtime
 
@@ -47,12 +47,12 @@ A destination uses the existing feature's own navigation, scope, safeguards and 
 
 1. Opening a fresh Set selects Guidance; missing required phrase is the only prominent action. Entering it makes balance terms the next Guidance recommendation without forcing tab changes.
 2. Missing balance terms gets its own recommendation; neither missing field gates other tabs.
-3. After guidance, recommend Prepare Set if no usable Sight is evident. Support existing partial/retry behavior.
+3. After guidance, Understand displays the **real Prepare Set interface in place**, including scope/model choice, cached Sight review, resume/retry and active progress. Opening Understand may read cached evidence but may not automatically begin inference.
 4. With usable Sight and outstanding group reviews, offer focused annotation; an already mature Set can skip ahead to captions or QA.
 5. With missing captions, offer captioning. Review is available independently but never presented as a per-item certification.
 6. In an active Training session, don't offer an immediate GPU scan; allow manual editing/review. User navigation and current drafts must be preserved.
 7. Switching Sets while open must not leak stale recommendations, edits, or async responses. No automatic return from QA/Focus Set or unrelated changes to QA navigation in this feature.
-8. Maintain readable type at standard zoom, focus management, Escape and close behavior, and accessible tab/button labels.
+8. Maintain readable type at standard zoom, focus management, Escape and close behavior, and accessible tab/button labels. Navigating away from Understand must not cancel a running scan; reopening the tab reconnects to the current scan. Close and downstream transitions leave no phantom overlay or stranded dashboard.
 
 ## Implementation scope
 

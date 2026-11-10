@@ -1202,7 +1202,7 @@
       if (event.key === 'Escape' && setScanState.open) {
         event.preventDefault();
         event.stopImmediatePropagation();
-        closeSetIntelligence();
+        window.closeSetDashboard();
       }
     }, true);
   }

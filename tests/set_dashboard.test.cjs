@@ -13,7 +13,8 @@ function dashboard(options = {}) {
     if (elements[id]) return elements[id];
     const classes = new Set(id.startsWith('set-dashboard-') ? ['hidden'] : []);
     return elements[id] = {
-      id, textContent: '', value: '', isConnected: true, open: false,
+      id, textContent: '', value: '', isConnected: true, open: false, style: {},
+      removeAttribute(name) { delete elements[id + ':' + name]; },
       classList: {
         toggle(name, enabled) { if (enabled) classes.add(name); else classes.delete(name); },
         contains(name) { return classes.has(name); },

@@ -138,3 +138,9 @@
   .set-dashboard-tabs button { font-size: 14px; min-height: 48px; }
   #set-dashboard-stage { padding: 20px 16px; }
 }
+/* Dashboard owns the visible Prepare Set and Quality Assurance entry points.
+   Keep legacy sidebar nodes for existing JS handlers until callers are retired. */
+.sidebar-set-actions-drawer #set-intelligence-open-btn,
+.sidebar-set-actions-drawer #sidebar-open-review-output-btn {
+  display: none !important;
+}

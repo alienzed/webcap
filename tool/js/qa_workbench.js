@@ -746,9 +746,13 @@
       // Saved actionable findings can arrive during a running scan. Make them
       // the primary action without navigating away or restarting the scan.
       review.classList.toggle('qa-primary', !!ready);
+      var browseButton = document.getElementById('qa-overview-browse');
+      if (browseButton) browseButton.classList.toggle('qa-primary', !ready);
       var heading = document.getElementById('qa-hero-next-step');
-      if (heading && qaWorkbenchState.deepScanSessionActive && ready) {
-        heading.textContent = 'Review ' + qaFileCountText(ready) + ' with actionable corrections';
+      if (heading && qaWorkbenchState.deepScanSessionActive) {
+        heading.textContent = ready
+          ? 'Review ' + qaFileCountText(ready) + ' with actionable corrections'
+          : browseButton ? 'Review the available QA findings' : 'Deep QA is checking this selection';
       }
     }
     var coverage = document.getElementById('qa-deep-scan-live-coverage');
@@ -2320,7 +2324,11 @@
 
     var heroActions = document.createElement('div');
     heroActions.className = 'qa-hero-actions';
-    if (undisposed.length) heroActions.appendChild(qaCreateButton('Review ' + undisposed.length + ' findings', ready ? '' : 'qa-primary', 'browse-next'));
+    if (undisposed.length) {
+      var browseButton = qaCreateButton('Review ' + undisposed.length + ' findings', ready ? '' : 'qa-primary', 'browse-next');
+      browseButton.id = 'qa-overview-browse';
+      heroActions.appendChild(browseButton);
+    }
     if (qaWorkbenchState.statusMessage) {
       var qaNotice = document.createElement('div');
       qaNotice.className = 'qa-deep-scan-note';
@@ -2579,6 +2587,11 @@
     progress.appendChild(progressText);
     var track = document.createElement('div');
     track.className = 'qa-progress-track';
+    track.setAttribute('role', 'progressbar');
+    track.setAttribute('aria-valuemin', '0');
+    track.setAttribute('aria-valuemax', String(recommendations.length));
+    track.setAttribute('aria-valuenow', String(handled));
+    track.setAttribute('aria-label', 'Recommendations handled');
     var bar = document.createElement('div');
     bar.className = 'qa-progress-bar';
     // Position is navigation context; only handled dispositions represent work done.

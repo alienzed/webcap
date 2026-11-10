@@ -249,7 +249,7 @@ def normalize_vision_schema_sight_result(raw_text):
     return normalize_vision_schema_sight_payload(payload)
 
 
-def build_vision_schema_sight_messages(media_reference, groups=None):
+def build_vision_schema_sight_messages(media_reference, groups=None, video_frames=None):
     hints = []
     for raw in groups if isinstance(groups, list) else []:
         if not isinstance(raw, dict):
@@ -269,12 +269,29 @@ def build_vision_schema_sight_messages(media_reference, groups=None):
     )
     if hints:
         text += "\n\nOptional areas of interest (not a closed vocabulary): " + json.dumps(hints, ensure_ascii=False)
-    return [
-        {"role": "system", "content": VISION_SCHEMA_SIGHT_SYSTEM_PROMPT},
-        {"role": "user", "content": [
+    if video_frames is not None:
+        text = (
+            "These are ordered samples from the first seconds of one training video. "
+            "Describe the visible subjects, appearance, actions, and meaningful changes over time "
+            "as one coherent video in description. Use the structured inventory for reusable visual facts "
+            "seen across the samples. Describe supported transitions without assuming unseen events.\n\n"
+            + text
+        )
+        content = [{"type": "text", "text": text}]
+        for timestamp, image in video_frames:
+            content.append({"type": "text", "text": f"Video frame at {timestamp:.3f}s"})
+            content.append({"type": "image_url", "image_url": {"url": image}})
+    else:
+        content = [
             {"type": "text", "text": text},
             {"type": "image_url", "image_url": {"url": str(media_reference or "")}},
-        ]},
+        ]
+    return [
+        {"role": "system", "content": (
+            "You inspect a short video through ordered frames for visual discovery, not for a training caption. "
+            + VISION_SCHEMA_SIGHT_SYSTEM_PROMPT.replace("You inspect one image for visual discovery, not for a training caption. ", "")
+        ) if video_frames is not None else VISION_SCHEMA_SIGHT_SYSTEM_PROMPT},
+        {"role": "user", "content": content},
     ]
 
 
@@ -467,6 +484,9 @@ def _cached_sight_block(folder_path, media_name, metadata, model):
         return None
     if not str(sight.get("description") or "").strip():
         return None
+    # Legacy first-frame video Sight must be refreshed; existing image Sight stays reusable.
+    if media_path.suffix.casefold() in VIDEO_EXTS and int(sight.get("version") or 0) < 3:
+        return None
     return sight
 
 
@@ -559,7 +579,7 @@ def save_vision_sight(folder, media_name, model, sight_payload):
 
     stat = media_path.stat()
     sight = {
-        "version": VISION_SIGHT_VERSION,
+        "version": 3 if media_path.suffix.casefold() in VIDEO_EXTS else VISION_SIGHT_VERSION,
         "model": model,
         "description": sight_payload["description"],
         "inventory": sight_payload["inventory"],

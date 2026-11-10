@@ -913,17 +913,17 @@
   }
 
   function continueToVocabulary() {
-    closeSetIntelligence();
+    window.closeSetDashboard();
     openVisionSchemaAssist();
   }
 
   function continueToGuidedTagging() {
-    closeSetIntelligence();
+    window.closeSetDashboard();
     openGuidedTagPass({ source: 'set' });
   }
 
   function continueToQa() {
-    closeSetIntelligence();
+    window.closeSetDashboard();
     setWorkspaceSurface('reviewOutput');
     setReviewDetailTab('qa');
   }
@@ -1139,8 +1139,8 @@
       throw new Error('Set Intelligence controls are missing.');
     }
 
-    openBtn.onclick = openSetIntelligence;
-    closeBtn.onclick = closeSetIntelligence;
+    openBtn.onclick = function () { window.openSetDashboard('understand'); };
+    closeBtn.onclick = function () { window.closeSetDashboard(); };
     stopBtn.onclick = stopSetIntelligence;
     rescanBtn.onclick = function () { runSetIntelligence(); };
     forceBtn.onclick = function () { runSetIntelligence('open'); };
@@ -1272,6 +1272,8 @@
   window.openVlWorkspace = openSavedIntelligenceForMedia;
   window.closeVlWorkspace = closeSavedIntelligence;
   window.openSetIntelligence = openSetIntelligence;
+  window.closeSetIntelligence = closeSetIntelligence;
+  window.isSetIntelligenceOpen = function () { return setScanState.open; };
   window.stopSetIntelligence = stopSetIntelligence;
   window.isSetIntelligenceRunning = isSetIntelligenceRunning;
 

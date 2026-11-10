@@ -6,6 +6,7 @@ from pathlib import Path
 
 from .caption_ops import _resolve_folder, _validate_media_name, list_media_files
 from .caption_vision import VISION_MEDIA_EXTS
+from .video_frame_ops import VIDEO_EXTS
 from .media import set_media_metadata_analysis_block
 
 

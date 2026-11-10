@@ -321,7 +321,7 @@
         return;
       }
       if (event.key === 'Tab') {
-        var candidates = Array.prototype.slice.call(el('set-dashboard-modal').querySelectorAll('button, input, textarea'));
+        var candidates = Array.prototype.slice.call(el('set-dashboard-modal').querySelectorAll('button, input, textarea, select, summary, a[href], [tabindex]'));
         var visible = candidates.filter(function (node) {
           return !node.disabled && node.getClientRects().length > 0 && node.getAttribute('tabindex') !== '-1';
         });

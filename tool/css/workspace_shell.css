@@ -1028,8 +1028,7 @@
 /* Keep Create Set connected to the filtered list, not over its last row. */
 .app.shell-revamp .media-list-create-set-footer {
   flex: 0 0 auto;
-  padding: 8px;
-  border-top: 1px solid var(--border);
+  padding: 4px 8px;
   background: var(--panel-soft);
 }
 
@@ -1038,9 +1037,21 @@
 }
 
 .app.shell-revamp .media-list-create-set-footer .sidebar-create-set-btn {
-  display: block;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
   width: 100%;
   margin: 0;
+  padding: 7px 8px;
+  border: 0;
+  border-radius: 2px;
+  background: transparent;
+  box-shadow: none;
+}
+
+.app.shell-revamp .media-list-create-set-footer .sidebar-create-set-btn:hover,
+.app.shell-revamp .media-list-create-set-footer .sidebar-create-set-btn:focus-visible {
+  background: var(--hover);
 }
 
 .app.shell-revamp .media-list-create-set-footer .sidebar-create-set-btn.hidden {
@@ -1050,7 +1061,7 @@
 .app.shell-revamp .sidebar-drawer-body {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 5px;
 }
 
 .app.shell-revamp .sidebar-drawer-body .review-captions-btn,

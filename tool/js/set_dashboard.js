@@ -245,10 +245,10 @@
       } else if (!missingVisible && s.captions < s.total) {
         notice('Other media in this Set still need captions. Adjust your filters to include them.');
       }
-      main(!s.visibleTotal ? 'Return to Set' : missingVisible ? 'Continue captioning' : 'Open Focused Caption', function () {
+      main(!s.visibleTotal ? 'Edit filters' : missingVisible ? 'Continue captioning' : 'Open Focused Caption', function () {
         if (!s.visibleTotal) {
           closeDashboard();
-          setWorkspaceSurface('default');
+          el('media-filter').focus();
           return;
         }
         run('caption');

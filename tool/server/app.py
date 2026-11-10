@@ -998,11 +998,18 @@ def vision_schema_assist_route():
             vision_ids = {str(item.get("id") or "") for item in list_vision_models()}
             if not vision_model or vision_model not in vision_ids:
                 raise ValueError("Select an available Vision model.")
-            relative_media = resolve_caption_vision_media(
-                folder,
-                data.get("media", ""),
-            )
-            messages = build_vision_schema_sight_messages(relative_media, data.get("existingGroups"))
+            from .caption_vision import vision_video_sight_frames
+            from .video_frame_ops import VIDEO_EXTS
+
+            media_name = data.get("media", "")
+            if Path(str(media_name)).suffix.casefold() in VIDEO_EXTS:
+                frames = vision_video_sight_frames(folder, media_name)
+                messages = build_vision_schema_sight_messages(
+                    None, data.get("existingGroups"), video_frames=frames,
+                )
+            else:
+                relative_media = resolve_caption_vision_media(folder, media_name)
+                messages = build_vision_schema_sight_messages(relative_media, data.get("existingGroups"))
             job = enqueue_llm(
                 "caption",
                 vision_model,

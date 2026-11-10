@@ -126,6 +126,23 @@ on:
 permissions:
   contents: read
 jobs:
+  temporal-sight:
+    name: Video temporal Sight regression
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Prepare isolated config
+        run: cp tool/config.example.json tool/config.json
+      - name: Install focused test dependencies
+        run: python -m pip install pytest Flask Pillow Werkzeug imageio websocket-client opencv-python-headless
+      - name: Verify video-only Sight sampling and persistence
+        run: |
+          python -m compileall -q tool/server/app.py tool/server/caption_vision.py tool/server/vision_schema_assist.py tool/server/video_frame_ops.py
+          python -m pytest -q tests/test_video_temporal_sight.py
+
   contracts:
     runs-on: ubuntu-latest
     steps:

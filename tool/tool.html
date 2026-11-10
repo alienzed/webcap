@@ -245,7 +245,6 @@
             <div id="sidebar-panel" class="panel stack sidebar-panel">
                 <div class="panel-scrollable">
                     <div id="sidebar-content" class="sidebar-content">
-                        <button id="set-dashboard-open-btn" class="review-captions-btn set-dashboard-open hidden" type="button" title="Set Dashboard">Set Dashboard</button>
                     <div id="caption-filter-row" class="filter-row">
                         <input id="media-filter" type="search" placeholder="filter (comma terms, -exclude)">
                         <button
@@ -463,13 +462,16 @@
                             type="button"
                             class="review-captions-btn superset-exit-btn hidden"
                         >Exit SuperSet Search</button>
-                    </div>
-                    <div class="stats-panel sidebar-drawer-zone">
-                        <div class="sidebar-drawer-body">
-                                <button id="create-set-from-results-btn" type="button" class="review-captions-btn sidebar-create-set-btn hidden" title="Create a new set with the current filter results">
+                        <div class="media-list-create-set-footer">
+                            <button id="create-set-from-results-btn" type="button" class="review-captions-btn sidebar-create-set-btn hidden" title="Create a new set with the current filter results">
                                     <span class="btn-glyph" aria-hidden="true">&#8627;</span>
                                     <span>Create Set</span>
                                 </button>
+                        </div>
+                    </div>
+                    <div class="stats-panel sidebar-drawer-zone sidebar-set-actions">
+                        <div class="sidebar-drawer-body">
+                                <button id="set-dashboard-open-btn" class="review-captions-btn set-dashboard-open hidden" type="button" title="Set Dashboard">Set Dashboard</button>
                                 <button id="qa-focus-review-btn" type="button" class="review-captions-btn sidebar-review-output-btn hidden" title="Review actionable QA findings while the remaining selection is checked">QA Focus Review</button>
                                 <button id="set-intelligence-open-btn" type="button" class="review-captions-btn sidebar-review-output-btn hidden" title="Prepare this Set: collect Sight, discover vocabulary, and guide tagging">Prepare Set</button>
                                 <button id="sidebar-open-review-output-btn" type="button" class="review-captions-btn sidebar-review-output-btn hidden" title="Check and correct this Set; existing reports and utilities remain available" aria-pressed="false">Quality Assurance</button>

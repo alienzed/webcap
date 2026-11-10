@@ -129,7 +129,7 @@
   function updateSetSightTiming() {
     var timing = el('set-scan-timing');
     if (!timing) throw new Error('Set Sight timing display is missing.');
-    if (!setScanState.activityStartedAt) {
+    if (!setScanState.running || !setScanState.activityStartedAt) {
       timing.hidden = true;
       return;
     }
@@ -219,10 +219,10 @@
     var flaggedTotal = setScanState.sightItems.filter(function (item) { return !!item.issue; }).length;
     var missingTotal = setScanState.sightItems.filter(function (item) { return !item.structured; }).length;
     if (setScanState.coverage.known) {
-      [['flagged', flaggedTotal + ' flagged'], ['missing', missingTotal + ' missing']].forEach(function (entry) {
+      [['flagged', flaggedTotal, 'flagged'], ['missing', missingTotal, 'missing']].filter(function (entry) { return entry[1] > 0; }).forEach(function (entry) {
         var label = document.createElement('span');
         label.className = entry[0];
-        label.textContent = entry[1];
+        label.textContent = entry[1] + ' ' + entry[2];
         qualitySummary.appendChild(label);
       });
     }
@@ -230,7 +230,7 @@
     var items = setScanState.sightItems;
     var flagged = items.filter(function (item) { return !!item.issue || !item.structured; });
     issues.classList.toggle('hidden', !items.length);
-    issueCount.textContent = flagged.length ? flagged.length + ' need attention' : 'No issues · manual refresh available';
+    issueCount.textContent = flagged.length ? flagged.length + ' need attention' : '';
     itemSelect.innerHTML = '';
     items.forEach(function (item) {
       var option = document.createElement('option');
@@ -255,6 +255,7 @@
         : 10;
     }
     if (setScanState.phase === 'complete') percent = 100;
+    progressFill.parentElement.classList.toggle('hidden', !setScanState.running);
     progressFill.style.width = String(percent) + '%';
     progressFill.parentElement.setAttribute('aria-valuenow', String(percent));
     updateSetSightTiming();
@@ -280,6 +281,7 @@
       );
     }
 
+    openDetail.classList.toggle('hidden', !coverage.known || !openMissing || setScanState.running);
     var responses = Array.isArray(setScanState.rawResponses) ? setScanState.rawResponses : [];
     var currentRaw = responses[setScanState.rawResponseIndex] || null;
     setScanState.currentRawResponse = currentRaw;

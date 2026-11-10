@@ -74,7 +74,7 @@
 
   function run(destination) {
     closeDashboard();
-    if (destination === 'prepare') return openSetIntelligence();
+    if (destination === 'prepare') return openDashboard('understand');
     if (destination === 'vocabulary') return openVisionSchemaAssist();
     if (destination === 'annotation') return startFocusedAnnotation();
     if (destination === 'groups') return openChecklistKeywordsModal();
@@ -112,6 +112,7 @@
       return;
     }
     var s = snapshot();
+    if (selected !== 'understand' && window.isSetIntelligenceOpen()) window.closeSetIntelligence();
     document.querySelectorAll('[data-set-dashboard-tab]').forEach(function (button) {
       var active = button.getAttribute('data-set-dashboard-tab') === selected;
       button.setAttribute('aria-selected', active ? 'true' : 'false');
@@ -204,16 +205,11 @@
     }
 
     if (selected === 'understand') {
-      if (s.gpuBusy) {
-        title.textContent = 'Explore the observations you already have';
-        notice('GPU work is active. New Set Intelligence will need to wait.');
-        main('Inspect Set Intelligence', function () { run('prepare'); });
-      } else {
-        title.textContent = s.sight ? 'Explore what Set Intelligence found' : 'Understand the media in this Set';
-        main('Open Set Intelligence', function () { run('prepare'); });
-      }
-      if (s.sight) showProgress(s.sight, s.total, 'Media with saved Sight (not verified coverage)');
-      if (s.sight && !s.gpuBusy) other('Discover Vocabulary', function () { run('vocabulary'); });
+      title.textContent = 'Understand this Set';
+      setHidden(progress, true);
+      setHidden(primary, true);
+      setHidden(secondary, true);
+      if (!window.isSetIntelligenceOpen()) window.openSetIntelligence();
       return;
     }
 
@@ -262,12 +258,12 @@
     if (s.captions) other('Caption Report', function () { run('report'); });
   }
 
-  function openDashboard() {
+  function openDashboard(preferredStage) {
     if (!isSetFolderPath(state.folder) || !Array.isArray(state.items) || !state.items.length) return;
     openedFolder = String(state.folder || '');
     returnFocus = document.activeElement;
     var s = snapshot();
-    selected = earliestStage(s);
+    selected = stages.indexOf(preferredStage) !== -1 ? preferredStage : earliestStage(s);
     guidanceStep = guidanceInitialStep(s);
     el('set-dashboard-name').textContent = openedFolder.split(/[\\/]/).filter(Boolean).pop() || 'Current Set';
     open = true;
@@ -280,6 +276,7 @@
   function closeDashboard() {
     if (!open) return;
     open = false;
+    if (window.isSetIntelligenceOpen()) window.closeSetIntelligence();
     setHidden(el('set-dashboard-modal'), true);
     var target = returnFocus;
     returnFocus = null;

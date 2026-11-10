@@ -169,6 +169,25 @@ def inspect_video_frame(source_path, approximate_time=None, frame_index=None):
     }
 
 
+
+def sample_video_sight_frames(source_path):
+    """Return distinct decoded frames from the first 1.5 seconds of a video."""
+    if source_path.suffix.lower() not in VIDEO_EXTS:
+        raise ValueError("Temporal Sight requires a video.")
+    _, timestamps = _cached_frame_timestamps(source_path)
+    sampled = []
+    seen_indices = set()
+    for second in (0.0, 0.5, 1.0, 1.5):
+        if second > timestamps[-1]:
+            break
+        index = _nearest_frame_at_or_after(timestamps, second)
+        if index in seen_indices:
+            continue
+        seen_indices.add(index)
+        sampled.append((timestamps[index], _extract_frame_png(source_path, index)))
+    return sampled
+
+
 def extract_boundary_frame_png(source_path, boundary):
     if not source_path.exists() or not source_path.is_file():
         raise RuntimeError("Source media file not found")

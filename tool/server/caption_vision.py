@@ -4,7 +4,7 @@ from pathlib import Path
 
 from . import config as app_config
 from .caption_ops import _resolve_folder, _validate_media_name
-from .video_frame_ops import VIDEO_EXTS, extract_boundary_frame_png
+from .video_frame_ops import VIDEO_EXTS, extract_boundary_frame_png, sample_video_sight_frames
 
 
 VISION_IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif"}
@@ -300,6 +300,44 @@ def vision_media_data_url(media_path):
         ".gif": "image/gif",
     }
     return "data:" + mime_by_suffix[suffix] + ";base64," + base64.b64encode(media_path.read_bytes()).decode("ascii")
+
+
+
+def vision_video_sight_frames(folder, media_name, max_pixels=450000):
+    """Prepare bounded, resized video frames for Open Sight only."""
+    import io
+    import math
+    from PIL import Image
+
+    folder_path = _resolve_folder(folder)
+    media_name = _validate_media_name(media_name)
+    media_path = (folder_path / media_name).resolve()
+    if media_path.suffix.casefold() not in VIDEO_EXTS:
+        raise ValueError("Temporal Sight requires a video.")
+    root = Path(app_config.FS_ROOT).resolve()
+    media_path.relative_to(root)
+    if not media_path.is_file():
+        raise FileNotFoundError("Media file not found")
+    pixels = int(max_pixels)
+    if not 100000 <= pixels <= 1600000:
+        raise ValueError("VL image pixel budget must be between 0.1 and 1.6 MP.")
+    frames = []
+    for timestamp, raw_png in sample_video_sight_frames(media_path):
+        with Image.open(io.BytesIO(raw_png)) as source:
+            image = source.convert("RGB")
+            if image.width * image.height > pixels:
+                scale = math.sqrt(pixels / (image.width * image.height))
+                image = image.resize(
+                    (max(1, int(image.width * scale)), max(1, int(image.height * scale))),
+                    Image.Resampling.LANCZOS,
+                )
+            with io.BytesIO() as stream:
+                image.save(stream, format="JPEG", quality=85, optimize=True)
+                frames.append((
+                    timestamp,
+                    "data:image/jpeg;base64," + base64.b64encode(stream.getvalue()).decode("ascii"),
+                ))
+    return frames
 
 
 def vision_resized_image_data_url(media_path, max_pixels=450000):

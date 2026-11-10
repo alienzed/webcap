@@ -22,12 +22,12 @@ def test_set_intelligence_is_the_single_set_tools_entry_point():
     assert 'id="set-scan-open-count"' in html
     assert 'id="set-scan-rescan-btn"' in html
     assert 'id="set-intelligence-primary-btn"' in html
-    assert 'id="set-intelligence-guided-btn"' in html
-    assert 'id="set-intelligence-qa-btn"' in html
+    assert 'id="set-scan-inspection-disclosure"' in html
+    assert 'class="set-scan-advanced"' in html
     assert 'src="/static/js/set_scan.js"' in html
     assert "openVisionSchemaAssist();" in scan
-    assert "openGuidedTagPass({ source: 'set' });" in scan
-    assert "setWorkspaceSurface('reviewOutput');" in scan
+    assert "window.closeSetDashboard();" in scan
+    assert "window.openSetDashboard('understand');" in scan
     assert "intelligenceBtn.classList.toggle('hidden'" in review
 
 
@@ -81,7 +81,9 @@ def test_set_intelligence_keeps_actionable_coverage_visible_and_raw_report_secon
     assert "Set understood with gaps" in scan
     assert "Previous report preserved." in scan
     assert "setScanState.hasRun = false;" in scan
-    assert "Next: review the vocabulary" in html
+    assert 'id="set-intelligence-next"' not in html
+    assert 'id="set-intelligence-primary-btn"' in html
+    assert 'id="set-scan-issues" class="set-scan-issues hidden"' in html
 
 
 def test_set_intelligence_coverage_is_designed_for_readability_not_microcopy():
@@ -108,7 +110,7 @@ def test_set_intelligence_uses_visible_training_scope_with_explicit_full_set_ove
     assert "if (!files.length) {\n      setCoverage(0, 0);" in scan
     assert 'entireSetToggle.onchange = openSetIntelligence;' in scan
     assert 'openVisionSchemaAssist();' in scan
-    assert "openGuidedTagPass({ source: 'set' });" in scan
+    assert "window.openSetDashboard('understand');" in scan
     assert 'schemaState.scopeFiles = getCurrentSetMediaFileNames();' in schema
     assert "if (opts.source === 'set') {\n      return getCurrentSetMediaFileNames();" in schema
 
@@ -155,3 +157,23 @@ def test_prepare_set_sight_progress_has_elapsed_and_estimated_remaining():
     assert "window.setInterval(updateSetSightTiming, 1000)" in scan
     assert "window.clearInterval(setSightTimingTimer)" in scan
     assert "setScanState.activityFinishedAt = Date.now() / 1000;" in scan
+
+def test_understand_progressive_disclosure_retains_original_scan_capabilities():
+    html = _read("tool/tool.html")
+    scan = _read("tool/js/set_scan.js")
+    css = _read("tool/css/set_dashboard.css")
+    assert 'id="set-scan-inspection-disclosure"' in html
+    assert 'id="set-scan-issues" class="set-scan-issues hidden"' in html
+    assert 'id="set-scan-item-retry"' in html
+    assert 'id="set-scan-item-view"' in html
+    assert 'id="set-scan-force-btn"' in html
+    assert 'id="set-scan-rescan-btn"' in html
+    assert 'id="set-scan-bad-retry"' in html
+    assert 'id="set-scan-stop-btn"' in html
+    assert 'id="set-intelligence-primary-btn"' in html
+    assert "function continueToVocabulary()" in scan
+    assert "runSetIntelligence('open', [file])" in scan
+    assert "runSetIntelligence('open');" in scan
+    assert "if (inspection.open) updateSightPreviewMedia(" in scan
+    assert ".set-scan-inspection-disclosure" in css
+    assert 'id="set-intelligence-next"' not in html

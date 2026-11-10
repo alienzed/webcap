@@ -13,7 +13,8 @@ function dashboard(options = {}) {
     if (elements[id]) return elements[id];
     const classes = new Set(id.startsWith('set-dashboard-') ? ['hidden'] : []);
     return elements[id] = {
-      id, textContent: '', value: '', isConnected: true, open: false,
+      id, textContent: '', value: '', isConnected: true, open: false, style: {},
+      removeAttribute(name) { delete elements[id + ':' + name]; },
       classList: {
         toggle(name, enabled) { if (enabled) classes.add(name); else classes.delete(name); },
         contains(name) { return classes.has(name); },
@@ -44,9 +45,15 @@ function dashboard(options = {}) {
   const folder = 'Sets/Test';
   const state = { folder, items: options.items || [{ key: 'a', fileName: 'a.png', hasCaption: false, caption: '', metadata: {} }] };
   const actions = [];
+  let sightOpen = false;
   const context = {
     document, state,
-    window: { addEventListener() {} },
+    window: {
+      addEventListener() {},
+      isSetIntelligenceOpen: () => sightOpen,
+      openSetIntelligence: () => { sightOpen = true; actions.push('prepare'); },
+      closeSetIntelligence: () => { sightOpen = false; actions.push('hide-prepare'); }
+    },
     checklistItems: options.groups || [],
     getChecklistKeywordTermsForRequirement: () => ['tag'],
     isChecklistRequirementCheckedForMediaKey: () => !!options.checked,
@@ -82,7 +89,7 @@ function dashboard(options = {}) {
 test('fresh Set prioritizes required phrase without background jobs', () => {
   const app = dashboard();
   assert.equal(app.selected(), 'guidance');
-  assert.equal(app.title(), 'Required key phrase');
+  assert.equal(app.title(), 'Give this Set a consistent key phrase');
   assert.equal(app.primary().textContent, 'Set key phrase');
   assert.deepEqual(app.actions, []);
   assert.equal(app.secondary().classList.contains('hidden'), true);
@@ -91,18 +98,17 @@ test('fresh Set prioritizes required phrase without background jobs', () => {
 test('missing balance terms is its own action and remains optional', () => {
   const app = dashboard({ phrase: 'subject' });
   assert.equal(app.selected(), 'guidance');
-  assert.equal(app.title(), 'Balance terms');
+  assert.equal(app.title(), 'Add terms to help balance your captions');
   app.listeners['tab-review:click']();
   assert.equal(app.selected(), 'review');
   assert.deepEqual(app.actions, []);
 });
 
-test('unprepared Set opens Understand; click delegates to existing Prepare Set', () => {
+test('unprepared Set opens Understand with embedded Prepare Set, without inference', () => {
   const app = dashboard({ phrase: 'subject', balances: 'front' });
   assert.equal(app.selected(), 'understand');
-  assert.deepEqual(app.actions, []);
-  app.primary().onclick();
   assert.deepEqual(app.actions, ['prepare']);
+  assert.equal(app.primary().classList.contains('hidden'), true);
 });
 
 test('Training blocks scan recommendation, favors manual group work', () => {
@@ -171,4 +177,33 @@ test('outstanding annotation reviews take precedence even if captions exist', ()
   });
   assert.equal(app.selected(), 'annotate');
   assert.equal(app.primary().textContent, 'Focused Annotation');
+});
+
+test('tab changes hide embedded Sight without triggering a new scan', () => {
+  const app = dashboard({ phrase: 'subject', balances: 'front' });
+  assert.deepEqual(app.actions, ['prepare']);
+  app.listeners['tab-review:click']();
+  assert.equal(app.selected(), 'review');
+  assert.deepEqual(app.actions, ['prepare', 'hide-prepare']);
+  app.listeners['tab-understand:click']();
+  assert.deepEqual(app.actions, ['prepare', 'hide-prepare', 'prepare']);
+});
+
+test('closing and reopening retains earliest stage and closes embedded preparation', () => {
+  const app = dashboard({ phrase: 'subject', balances: 'front' });
+  app.context.window.closeSetDashboard();
+  assert.deepEqual(app.actions, ['prepare', 'hide-prepare']);
+  app.context.window.openSetDashboard();
+  assert.equal(app.selected(), 'understand');
+  assert.deepEqual(app.actions, ['prepare', 'hide-prepare', 'prepare']);
+});
+
+test('Prepare Set is hosted once inside Dashboard, not in another fullscreen overlay', () => {
+  const html = fs.readFileSync(path.join(__dirname, '../tool/tool.html'), 'utf8');
+  const begin = html.indexOf('id="set-dashboard-modal"');
+  const end = html.indexOf('id="saved-intelligence-modal"');
+  const hosted = html.indexOf('id="set-scan-modal"');
+  assert.ok(begin >= 0 && begin < hosted && hosted < end);
+  assert.equal((html.match(/id="set-scan-modal"/g) || []).length, 1);
+  assert.match(html, /id="set-scan-modal" class="set-scan-modal hidden" role="region"/);
 });

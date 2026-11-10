@@ -144,3 +144,52 @@
 .sidebar-set-actions-drawer #sidebar-open-review-output-btn {
   display: none !important;
 }
+
+
+/* Set Intelligence remains the single owner of Sight work; this only changes its host. */
+.set-dashboard-dialog {
+  width: min(96vw, 1320px);
+  max-height: min(94vh, 1040px);
+}
+#set-dashboard-stage:has(#set-scan-modal:not(.hidden)) {
+  padding-bottom: 18px;
+}
+#set-dashboard-stage #set-scan-modal {
+  position: static;
+  inset: auto;
+  z-index: auto;
+  display: block;
+  width: 100%;
+  padding: 0;
+  background: transparent;
+}
+#set-dashboard-stage #set-scan-modal.hidden { display: none !important; }
+#set-dashboard-stage .set-scan-dialog {
+  width: 100%;
+  max-height: none;
+  overflow: visible;
+  box-shadow: none;
+  border: 0;
+  background: transparent;
+}
+#set-dashboard-stage .set-scan-header { display: none; }
+#set-dashboard-stage .set-scan-content { padding: 0; }
+#set-dashboard-stage .set-scan-scope-row { padding: 14px 0; }
+#set-dashboard-stage .set-scan-evidence-card { padding: 18px 12px; }
+#set-dashboard-stage .set-scan-run-actions { padding: 15px 12px; }
+#set-dashboard-stage .set-intelligence-next-main { gap: 16px; }
+#set-dashboard-stage .set-intelligence-next-copy > span,
+#set-dashboard-stage .set-intelligence-next-copy > .set-intelligence-kicker {
+  display: none;
+}
+#set-dashboard-stage #set-intelligence-qa-btn,
+#set-dashboard-stage #set-intelligence-guided-btn { display: none; }
+#set-dashboard-stage .set-scan-footer { padding: 12px; }
+#set-dashboard-stage .set-scan-footer span { font-size: 14px; }
+@media (max-width: 720px) {
+  .set-dashboard-dialog { width: 100%; max-height: 94vh; }
+  #set-dashboard-stage .set-scan-scope-row { flex-wrap: wrap; }
+}
+
+/* Saved Sight inspection is a separate, intentional child dialog above Dashboard. */
+#saved-intelligence-modal:not(.hidden) { z-index: 12100; }

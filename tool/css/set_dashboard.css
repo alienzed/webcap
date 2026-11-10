@@ -190,3 +190,6 @@
   .set-dashboard-dialog { width: 100%; max-height: 94vh; }
   #set-dashboard-stage .set-scan-scope-row { flex-wrap: wrap; }
 }
+
+/* Saved Sight inspection is a separate, intentional child dialog above Dashboard. */
+#saved-intelligence-modal:not(.hidden) { z-index: 12100; }

@@ -177,7 +177,6 @@
           }
           showGuidanceStep('balance');
         });
-        if (s.phrase) other('Balance terms', function () { showGuidanceStep('balance'); });
       } else if (guidanceStep === 'balance') {
         title.textContent = s.balances.length ? 'Your balance terms are configured' : 'Add terms to help balance your captions';
         main(s.balances.length ? 'Caption Template' : 'Add balance term', function () {
@@ -227,7 +226,7 @@
       } else {
         var remaining = s.totalGroups - s.reviewedGroups;
         title.textContent = remaining ? 'Review ' + remaining + ' remaining group assignments' : 'Your visible annotation groups are reviewed';
-        showProgress(s.reviewedGroups, s.totalGroups, 'Group reviews in the current view');
+        showProgress(s.reviewedGroups, s.totalGroups, 'Configured group reviews in the current view');
         main('Focused Annotation', function () { run('annotation'); });
         if (s.sight && !s.gpuBusy) other('Guided Tagging', function () { run('guided'); });
       }
@@ -236,14 +235,24 @@
 
     if (selected === 'caption') {
       var missingVisible = s.visibleTotal - s.visibleCaptions;
-      title.textContent = missingVisible
-        ? 'Caption ' + missingVisible + ' remaining media ' + (missingVisible === 1 ? 'item' : 'items')
-        : 'Review the captions in your current view';
+      title.textContent = !s.visibleTotal ? 'No media matches the current filters'
+        : missingVisible
+          ? 'Caption ' + missingVisible + ' remaining media ' + (missingVisible === 1 ? 'item' : 'items')
+          : 'Review the captions in your current view';
       showProgress(s.visibleCaptions, s.visibleTotal, 'Captioned media in the current view');
-      if (!missingVisible && s.captions < s.total) {
+      if (!s.visibleTotal) {
+        notice('Change your filters to include media before starting Focused Caption.');
+      } else if (!missingVisible && s.captions < s.total) {
         notice('Other media in this Set still need captions. Adjust your filters to include them.');
       }
-      main(missingVisible ? 'Continue captioning' : 'Open Focused Caption', function () { run('caption'); });
+      main(!s.visibleTotal ? 'Return to Set' : missingVisible ? 'Continue captioning' : 'Open Focused Caption', function () {
+        if (!s.visibleTotal) {
+          closeDashboard();
+          setWorkspaceSurface('default');
+          return;
+        }
+        run('caption');
+      });
       other('Caption Template', function () { selected = 'guidance'; showGuidanceStep('template'); });
       return;
     }

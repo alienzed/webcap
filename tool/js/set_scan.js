@@ -148,7 +148,6 @@
     var modal = el('set-scan-modal');
     var stopBtn = el('set-scan-stop-btn');
     var progressFill = el('set-scan-progress-fill');
-    var next = el('set-intelligence-next');
     var vocabularyBtn = el('set-intelligence-primary-btn');
     var inspection = el('set-scan-inspection-disclosure');
     var inspectionContext = el('set-scan-inspection-context');
@@ -172,7 +171,7 @@
     var openCount = el('set-scan-open-count');
     var openDetail = el('set-scan-open-detail');
     if (
-      !modal || !stopBtn || !progressFill || !next || !vocabularyBtn || !inspection || !inspectionContext || !details || !responseSelect || !output ||
+      !modal || !stopBtn || !progressFill || !vocabularyBtn || !inspection || !inspectionContext || !details || !responseSelect || !output ||
       !reportCount || !rescanBtn || !forceBtn || !itemView || !qualitySummary || !scopeToggle || !scopeSummary || !issues || !issueCount || !itemSelect || !itemRetry || !badRetry || !openCard || !openBadge || !openCount || !openDetail
     ) {
       throw new Error('Set Intelligence UI is incomplete.');
@@ -185,8 +184,7 @@
     scopeSummary.textContent = (scopeToggle.checked ? 'Entire Set' : 'Current training selection') +
       ' · ' + String(scopeCount) + ' / ' + String(getCurrentSetMediaFileNames().length) + ' media';
     stopBtn.classList.toggle('hidden', !setScanState.running);
-    // The Dashboard owns progression. Keep the old downstream nodes bound but not visible.
-    next.classList.add('hidden');
+    stopBtn.classList.toggle('set-scan-primary', setScanState.running);
 
     var coverage = setScanState.coverage;
     var totalCoverage = coverage.known ? coverage.total : 0;
@@ -923,17 +921,6 @@
     openVisionSchemaAssist();
   }
 
-  function continueToGuidedTagging() {
-    window.closeSetDashboard();
-    openGuidedTagPass({ source: 'set' });
-  }
-
-  function continueToQa() {
-    window.closeSetDashboard();
-    setWorkspaceSurface('reviewOutput');
-    setReviewDetailTab('qa');
-  }
-
   function vlWorkspaceVisibleMedia() {
     return getFilteredMediaItems(false).filter(function (item) {
       return item && isCaptionVisionSupportedMedia(item.fileName);
@@ -1135,13 +1122,11 @@
     var entireSetToggle = el('set-scan-entire-set');
     var responseSelect = el('set-scan-response-select');
     var primaryBtn = el('set-intelligence-primary-btn');
-    var guidedBtn = el('set-intelligence-guided-btn');
-    var qaBtn = el('set-intelligence-qa-btn');
     var modal = el('set-scan-modal');
     var savedModal = el('saved-intelligence-modal');
     var savedCloseBtn = el('saved-intelligence-close-btn');
     if (!savedModal || !savedCloseBtn) throw new Error('Saved Intelligence controls are missing.');
-    if (!openBtn || !closeBtn || !stopBtn || !rescanBtn || !forceBtn || !itemView || !entireSetToggle || !responseSelect || !primaryBtn || !guidedBtn || !qaBtn || !modal) {
+    if (!openBtn || !closeBtn || !stopBtn || !rescanBtn || !forceBtn || !itemView || !entireSetToggle || !responseSelect || !primaryBtn || !modal) {
       throw new Error('Set Intelligence controls are missing.');
     }
 
@@ -1187,8 +1172,6 @@
     entireSetToggle.onchange = openSetIntelligence;
     responseSelect.onchange = selectRawResponse;
     primaryBtn.onclick = continueToVocabulary;
-    guidedBtn.onclick = continueToGuidedTagging;
-    qaBtn.onclick = continueToQa;
 
     el('vl-workspace-prev').onclick = function () { navigateVlWorkspace(-1); };
     el('vl-workspace-next').onclick = function () { navigateVlWorkspace(1); };

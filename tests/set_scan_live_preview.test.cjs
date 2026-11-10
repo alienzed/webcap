@@ -135,6 +135,7 @@ test('Inspection UI waits for the first completion and displays matching media p
   const context = vm.createContext({
     setScanState, el: id => nodes[id],
     document: { createElement: () => node() },
+    inspection: { open: true },
     details: node(), reportCount: node(), responseSelect: node(), output: node(),
     updateSightPreviewMedia(_image, _video, _folder, file) { files.push(file); }
   });
@@ -170,6 +171,12 @@ test('Inspection UI waits for the first completion and displays matching media p
   renderPreview(itemSelect, items);
   assert.equal(files.at(-1), 'first.jpg', 'Non-running manual selection still works');
   assert.equal(nodes['set-scan-preview-text'].textContent, 'First finished caption.');
+
+  // Collapsed inspection does not fetch/refresh preview media in the background.
+  const count = files.length;
+  context.inspection.open = false;
+  renderPreview(itemSelect, items);
+  assert.equal(files.length, count, 'Collapsed Sight inspection does not load hidden media');
 });
 
 test('New scanning sessions reset their preview and a failed restart preserves the prior selection', () => {

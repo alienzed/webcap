@@ -33,7 +33,9 @@ A **wide, on-demand Set preparation workspace presented as a modal**. Answer **W
 | Caption | Continue Focused Caption on media with missing captions | Edit Caption Template |
 | Review | Open Quality Assurance and existing Deep QA/review findings | Caption Report |
 
-**Set Intelligence / Prepare Set is embedded directly in Understand:** the original model, selection scope, Sight scan/progress, cached inspection, item retry, and resume controls remain owned by `set_scan.js`. A separate Prepare Set dialog must not appear over the dashboard. Its existing entry button opens Dashboard → Understand. Existing saved-Sight detail dialogs and the Vocabulary/annotation/QA workspaces remain available where their tasks justify them.\n\nOther destinations use their existing feature's navigation, scope, safeguards and persistence. Do not duplicate their workflow.
+**Set Intelligence / Prepare Set is embedded directly in Understand:** the original model, selection scope, Sight scan/progress, cached inspection, item retry, and resume controls remain owned by `set_scan.js`. A separate Prepare Set dialog must not appear over the dashboard. Its existing entry button opens Dashboard → Understand. Existing saved-Sight detail dialogs and the Vocabulary/annotation/QA workspaces remain available where their tasks justify them.
+
+Other destinations use their existing feature's navigation, scope, safeguards and persistence. Do not duplicate their workflow.
 
 ## Evidence and runtime
 

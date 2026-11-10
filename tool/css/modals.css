@@ -3018,62 +3018,6 @@ html[data-theme="dark"] .app-settings-environment-check {
 .set-scan-issues .review-captions-btn { font-size: 14px; }
 
 
-.set-intelligence-next {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  margin: 18px;
-  padding: 16px;
-  border: 1px solid var(--border-soft);
-  border-radius: 10px;
-  background: var(--panel-soft);
-}
-
-.set-intelligence-next.hidden {
-  display: none;
-}
-
-.set-intelligence-next-copy {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.set-intelligence-next-copy strong {
-  font-size: 16px;
-}
-
-.set-intelligence-next-copy span,
-.set-intelligence-secondary-actions {
-  color: var(--muted);
-  font-size: 14px;
-  line-height: 1.4;
-}
-
-.set-intelligence-secondary-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-.set-intelligence-link-btn {
-  appearance: none;
-  border: 0;
-  background: transparent;
-  color: var(--muted);
-  padding: 0;
-  font: inherit;
-  cursor: pointer;
-  text-decoration: underline;
-  text-underline-offset: 2px;
-}
-
-.set-intelligence-link-btn:hover,
-.set-intelligence-link-btn:focus-visible {
-  color: var(--text);
-  outline: none;
-}
-
 .set-scan-details {
   margin: 0 18px 14px;
   border: 1px solid var(--border-soft);
@@ -3221,7 +3165,7 @@ html[data-theme="dark"] .app-settings-environment-check {
 .sight-review-evidence button { align-self:flex-start; margin-top:auto; }
 @media(max-width:760px) { .set-scan-live-inspection,.sight-review-body {grid-template-columns:1fr;} .set-scan-live-media {height:250px;} .sight-review-preview {min-height:240px;} }
 .set-scan-content .set-scan-run-actions { margin: 0; padding: 12px 18px; border-top: 1px solid var(--border-soft); flex-wrap: wrap; gap: 9px; }
-.set-scan-run-actions .set-scan-primary, .set-intelligence-next .set-scan-primary { background: var(--accent); color: var(--bg, #101823); border-color: var(--accent); }
+.set-scan-run-actions .set-scan-primary { background: var(--accent); color: var(--bg, #101823); border-color: var(--accent); }
 .set-scan-run-actions .set-scan-quiet { margin-left: auto; background: transparent; border-color: transparent; color: var(--muted); }
 .set-scan-run-actions .set-scan-quiet:hover { color: var(--text); }
 .set-scan-content .set-scan-issues { display: block; margin: 16px 0 0; padding: 14px 16px; border: 1px solid var(--border-soft); border-radius: 10px; background: var(--panel-soft); }
@@ -3233,15 +3177,10 @@ html[data-theme="dark"] .app-settings-environment-check {
 .set-scan-item-row select { flex: 1 1 180px; min-width: 0; padding: 8px; }
 .set-scan-item-row .review-captions-btn { flex: 0 0 auto; font-size: 14px; }
 .set-scan-item-help { display: block; color: var(--muted); margin-top: 8px; font-size: 12px; }
-.set-scan-content .set-intelligence-next { margin: 20px 0 0; border: 0; border-top: 1px solid var(--border-soft); border-radius: 0; background: transparent; padding: 16px 0 0; }
-.set-intelligence-next-main { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
-.set-intelligence-next-main > button { flex: 0 0 auto; }
-.set-intelligence-kicker { text-transform: uppercase; letter-spacing: .06em; font-size: 11px !important; font-weight: 700; }
 .set-scan-content .set-scan-details { margin: 18px 0 14px; }
 @media (max-width: 700px) {
   .set-scan-item-row { flex-wrap: wrap; }
   .set-scan-item-row select { flex-basis: 100%; }
-  .set-intelligence-next-main { align-items: flex-start; flex-direction: column; }
   .set-scan-run-actions .set-scan-quiet { margin-left: 0; }
 }
 

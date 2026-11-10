@@ -1182,7 +1182,8 @@
     qaBtn.onclick = continueToQa;
 
     modal.addEventListener('click', function (event) {
-      if (event.target === modal) closeSetIntelligence();
+      // This element is now an embedded region, not an independent backdrop.
+      // Do not close the Sight panel when clicking its surrounding whitespace.
     });
     el('vl-workspace-prev').onclick = function () { navigateVlWorkspace(-1); };
     el('vl-workspace-next').onclick = function () { navigateVlWorkspace(1); };

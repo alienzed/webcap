@@ -193,3 +193,54 @@
 
 /* Saved Sight inspection is a separate, intentional child dialog above Dashboard. */
 #saved-intelligence-modal:not(.hidden) { z-index: 12100; }
+
+
+/* Understand is a single Dashboard stage, not another dashboard inside it. */
+#set-dashboard-stage #set-scan-modal .set-scan-sight-shell { overflow: visible; }
+#set-dashboard-stage #set-scan-modal .set-scan-evidence-card { padding-bottom: 12px; }
+#set-dashboard-stage #set-scan-modal .set-scan-live-inspection {
+  padding: 14px 0 2px;
+  border: 0;
+}
+#set-dashboard-stage .set-scan-inspection-disclosure {
+  margin: 4px 18px 8px;
+  border-top: 1px solid var(--border-soft);
+}
+#set-dashboard-stage .set-scan-inspection-disclosure > summary,
+#set-dashboard-stage .set-scan-advanced > summary,
+#set-dashboard-stage #set-scan-issues > summary {
+  cursor: pointer;
+  min-height: 46px;
+  padding: 12px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+}
+#set-dashboard-stage #set-scan-inspection-context { font-weight: 400; color: var(--muted); margin-left: 8px; }
+#set-dashboard-stage #set-scan-issues {
+  padding: 0 16px;
+  margin-top: 10px;
+  background: transparent;
+  border: 1px solid var(--border-soft);
+}
+#set-dashboard-stage #set-scan-issues .set-scan-item-heading { margin: 0; }
+#set-dashboard-stage #set-scan-issues .set-scan-item-row { padding: 6px 0 16px; }
+#set-dashboard-stage #set-scan-issues .set-scan-item-heading strong,
+#set-dashboard-stage #set-scan-issues .set-scan-item-heading span { font-size: 16px; }
+#set-dashboard-stage .set-scan-advanced {
+  margin-top: 10px;
+  padding: 0 16px 12px;
+  border: 1px solid var(--border-soft);
+  border-radius: 9px;
+}
+#set-dashboard-stage .set-scan-advanced .review-captions-btn { font-size: 16px; }
+#set-dashboard-stage .set-scan-run-actions { gap: 12px; }
+#set-dashboard-stage .set-scan-run-actions .set-scan-secondary {
+  background: transparent;
+  border-color: transparent;
+  color: var(--text);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+#set-dashboard-stage #set-scan-open-detail { font-size: 15px; }
+#set-dashboard-stage #set-scan-issues .set-scan-item-heading span { color: var(--muted); }

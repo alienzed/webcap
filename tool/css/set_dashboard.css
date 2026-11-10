@@ -21,6 +21,10 @@
   box-shadow: none;
 }
 
+.app.shell-revamp .sidebar-set-actions .review-captions-btn.hidden {
+  display: none;
+}
+
 .app.shell-revamp .sidebar-set-actions .review-captions-btn:hover {
   background: var(--hover);
 }

@@ -3489,8 +3489,13 @@
       <button type="button" role="tab" data-set-dashboard-tab="caption" aria-controls="set-dashboard-stage" aria-selected="false" tabindex="-1">Caption</button>
       <button type="button" role="tab" data-set-dashboard-tab="review" aria-controls="set-dashboard-stage" aria-selected="false" tabindex="-1">Review</button>
     </div>
+    <div class="set-dashboard-overview" id="set-dashboard-overview" aria-label="Set progress"></div>
     <section id="set-dashboard-stage" role="tabpanel" aria-live="polite">
       <h3 id="set-dashboard-action-title"></h3>
+      <div id="set-dashboard-progress" class="set-dashboard-progress hidden">
+        <div class="set-dashboard-progress-label"><span id="set-dashboard-progress-text"></span><strong id="set-dashboard-progress-value"></strong></div>
+        <div id="set-dashboard-progress-bar" class="set-dashboard-progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-label="Stage progress"><div id="set-dashboard-progress-fill" class="set-dashboard-progress-fill"></div></div>
+      </div>
       <div id="set-dashboard-action-status" class="set-dashboard-action-status hidden" role="status"></div>
       <div id="set-dashboard-guidance" class="set-dashboard-guidance hidden">
         <div id="set-dashboard-phrase" class="set-dashboard-guidance-edit hidden"><label>Required key phrase</label><input id="stats-required-phrase" type="text" placeholder="e.g. subject name"></div>

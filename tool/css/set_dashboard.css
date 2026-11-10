@@ -1,7 +1,7 @@
 .set-dashboard-open {
   display: block;
-  width: calc(100% - 16px);
-  margin: 8px;
+  width: 100%;
+  margin: 0;
   min-height: 44px;
   border: 1px solid var(--accent);
   border-radius: 9px;
@@ -140,8 +140,8 @@
 }
 /* Dashboard owns the visible Prepare Set and Quality Assurance entry points.
    Keep legacy sidebar nodes for existing JS handlers until callers are retired. */
-.sidebar-set-actions-drawer #set-intelligence-open-btn,
-.sidebar-set-actions-drawer #sidebar-open-review-output-btn {
+.sidebar-set-actions #set-intelligence-open-btn,
+.sidebar-set-actions #sidebar-open-review-output-btn {
   display: none !important;
 }
 

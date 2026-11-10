@@ -19,14 +19,22 @@
       return s && s.description && s.inventory;
     }).length;
     var captions = items.filter(function (item) { return !!(item && (item.hasCaption || String(item.caption || '').trim())); }).length;
+    // Focused Caption and Focused Annotation act on the visible scope, not every Set item.
+    var visibleItems = getFilteredMediaItems(false).filter(function (item) { return !!(item && item.key); });
+    var visibleCaptions = visibleItems.filter(function (item) {
+      return !!(item.hasCaption || String(item.caption || '').trim());
+    }).length;
     var groups = (checklistItems || []).filter(function (name) {
       return getChecklistKeywordTermsForRequirement(name).length > 0;
     });
-    var pending = groups.length > 0 && items.some(function (item) {
-      return item && item.key && groups.some(function (name) {
-        return !isChecklistRequirementCheckedForMediaKey(item.key, name);
+    var reviewedGroups = 0;
+    visibleItems.forEach(function (item) {
+      groups.forEach(function (name) {
+        if (isChecklistRequirementCheckedForMediaKey(item.key, name)) reviewedGroups++;
       });
     });
+    var totalGroups = visibleItems.length * groups.length;
+    var pending = totalGroups > reviewedGroups;
     var trainingJob = getTrainingRunnerActiveJob();
     var shell = getShellWorkloadStatus();
     var queue = getInferenceQueueSnapshot();
@@ -40,6 +48,8 @@
     return {
       items: items, total: items.length, phrase: phrase, balances: balances,
       sight: sight, captions: captions, configuredGroups: groups.length,
+      visibleTotal: visibleItems.length, visibleCaptions: visibleCaptions,
+      reviewedGroups: reviewedGroups, totalGroups: totalGroups,
       pending: pending, training: !!trainingActive, gpuBusy: !!gpuBusy
     };
   }
@@ -115,6 +125,12 @@
       button.classList.toggle('has-work', needs);
     });
     var title = el('set-dashboard-action-title');
+    var overview = el('set-dashboard-overview');
+    var progress = el('set-dashboard-progress');
+    var progressText = el('set-dashboard-progress-text');
+    var progressBar = el('set-dashboard-progress-bar');
+    var progressFill = el('set-dashboard-progress-fill');
+    var progressValue = el('set-dashboard-progress-value');
     var primary = el('set-dashboard-primary');
     var secondary = el('set-dashboard-secondary');
     var status = el('set-dashboard-action-status');
@@ -128,6 +144,21 @@
     setHidden(templateField, selected !== 'guidance' || guidanceStep !== 'template');
     setHidden(status, true);
     setHidden(secondary, true);
+    setHidden(progress, true);
+    progressBar.removeAttribute('aria-valuenow');
+    function showProgress(done, total, label) {
+      if (!total) return;
+      setHidden(progress, false);
+      progressText.textContent = label;
+      progressValue.textContent = done + ' of ' + total;
+      var percent = Math.round(100 * done / total);
+      progressFill.style.width = percent + '%';
+      progressBar.setAttribute('aria-valuenow', String(percent));
+    }
+    // A factual signal, not a global readiness score or a strict stage gate.
+    var overviewParts = [s.captions + ' of ' + s.total + ' captioned'];
+    if (s.sight) overviewParts.push(s.sight + ' with saved Sight');
+    overview.textContent = overviewParts.join(' · ');
     primary.disabled = false;
     primary.onclick = null;
     secondary.onclick = null;
@@ -138,7 +169,7 @@
 
     if (selected === 'guidance') {
       if (guidanceStep === 'phrase') {
-        title.textContent = 'Required key phrase';
+        title.textContent = s.phrase ? 'Your key phrase is configured' : 'Give this Set a consistent key phrase';
         main(s.phrase ? 'Balance terms' : 'Set key phrase', function () {
           if (!el('stats-required-phrase').value.trim()) {
             el('stats-required-phrase').focus();
@@ -148,7 +179,7 @@
         });
         if (s.phrase) other('Balance terms', function () { showGuidanceStep('balance'); });
       } else if (guidanceStep === 'balance') {
-        title.textContent = 'Balance terms';
+        title.textContent = s.balances.length ? 'Your balance terms are configured' : 'Add terms to help balance your captions';
         main(s.balances.length ? 'Caption Template' : 'Add balance term', function () {
           if (!el('stats-phrases').value.trim()) {
             el('stats-phrases-add-input').focus();
@@ -158,7 +189,7 @@
         });
         if (s.phrase) other('Key phrase', function () { showGuidanceStep('phrase'); });
       } else {
-        title.textContent = 'Caption Template';
+        title.textContent = 'Shape the captions with your template';
         main('Edit Caption Template', function () {
           closeDashboard();
           setWorkspaceSurface('default');
@@ -175,25 +206,28 @@
 
     if (selected === 'understand') {
       if (s.gpuBusy) {
-        title.textContent = 'Review saved Sight';
+        title.textContent = 'Explore the observations you already have';
         notice('GPU work is active. New Set Intelligence will need to wait.');
         main('Inspect Set Intelligence', function () { run('prepare'); });
       } else {
-        title.textContent = s.sight ? 'Review Set Intelligence' : 'Prepare Set';
+        title.textContent = s.sight ? 'Explore what Set Intelligence found' : 'Understand the media in this Set';
         main('Open Set Intelligence', function () { run('prepare'); });
       }
+      if (s.sight) showProgress(s.sight, s.total, 'Media with saved Sight (not verified coverage)');
       if (s.sight && !s.gpuBusy) other('Discover Vocabulary', function () { run('vocabulary'); });
       return;
     }
 
     if (selected === 'annotate') {
       if (!s.configuredGroups) {
-        title.textContent = 'Establish annotation groups';
+        title.textContent = 'Give your annotations a consistent structure';
         if (s.gpuBusy) notice('GPU work is active. Group editing is available.');
         main(s.gpuBusy || !s.sight ? 'Manage Groups' : 'Discover Vocabulary', function () { run(s.gpuBusy || !s.sight ? 'groups' : 'vocabulary'); });
         if (s.sight && !s.gpuBusy) other('Guided Tagging', function () { run('guided'); });
       } else {
-        title.textContent = s.pending ? 'Continue Focused Annotation' : 'Review annotations';
+        var remaining = s.totalGroups - s.reviewedGroups;
+        title.textContent = remaining ? 'Review ' + remaining + ' remaining group assignments' : 'Your visible annotation groups are reviewed';
+        showProgress(s.reviewedGroups, s.totalGroups, 'Group reviews in the current view');
         main('Focused Annotation', function () { run('annotation'); });
         if (s.sight && !s.gpuBusy) other('Guided Tagging', function () { run('guided'); });
       }
@@ -201,13 +235,20 @@
     }
 
     if (selected === 'caption') {
-      title.textContent = s.captions < s.total ? 'Continue captioning' : 'Review captions';
-      main('Focused Caption', function () { run('caption'); });
+      var missingVisible = s.visibleTotal - s.visibleCaptions;
+      title.textContent = missingVisible
+        ? 'Caption ' + missingVisible + ' remaining media ' + (missingVisible === 1 ? 'item' : 'items')
+        : 'Review the captions in your current view';
+      showProgress(s.visibleCaptions, s.visibleTotal, 'Captioned media in the current view');
+      if (!missingVisible && s.captions < s.total) {
+        notice('Other media in this Set still need captions. Adjust your filters to include them.');
+      }
+      main(missingVisible ? 'Continue captioning' : 'Open Focused Caption', function () { run('caption'); });
       other('Caption Template', function () { selected = 'guidance'; showGuidanceStep('template'); });
       return;
     }
 
-    title.textContent = 'Quality Assurance';
+    title.textContent = 'Review the quality of your prepared Set';
     main('Open Quality Assurance', function () { run('qa'); });
     if (s.captions) other('Caption Report', function () { run('report'); });
   }

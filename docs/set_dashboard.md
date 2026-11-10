@@ -2,15 +2,18 @@
 
 ## Product contract
 
-A compact, on-demand modal for the **current Set**. Answer one question: **What should I do next?** It is not a project tracker, a mandatory wizard, a replacement for existing editors, or another QA report.
+A focused, on-demand modal for the **current Set**. Answer one question: **What should I do next?** It is not a project tracker, a mandatory wizard, a replacement for existing editors, or another QA report.
 
 ## Interaction
 
 - Five freely navigable tabs, in preparation order: **Guidance · Understand · Annotate · Caption · Review**. Training remains in its own workspace, outside this dashboard.
 - **Auto-select the earliest unfinished, useful stage on every open.** The user's manual tab selection remains stable while the modal is open. Reevaluate on the next open; never bounce a user to another screen or auto-advance after completing work.
 - Show **exactly one prominent next action** per tab, and **at most one secondary action** where it genuinely matters. Specialized tools continue to exist in their owning workspaces; do not turn the dashboard into a legacy-tool directory.
-- Tabs may each indicate work remaining; this is informational, not a forced sequence. Preparation stages may overlap.
-- No tiny permanent explanatory or defensive copy. Optional instructions live in accessible titles/contextual help; keep genuine blockers or errors visibly readable.
+- Tabs may each indicate work remaining; this is informational, not a forced sequence. Preparation stages may overlap. Progress should not imply that captions or an entire stage are certified.
+- The recommendation uses prominent, action-oriented text with one clear CTA. Avoid redundant small explanations, but do not remove meaningful large-format guidance.
+- Show concise, honest progress from existing evidence: caption coverage, saved Sight observations (not verified Set-wide freshness), and reviewed annotation group assignments. Do not present a universal readiness percentage, imply QA certification, or create new persisted status.
+- When a recommendation opens a scope-sensitive tool, the count and message must reflect what that tool can act on. Clearly distinguish Set-wide totals from the current filtered view.
+- Keep genuine blockers or errors visibly readable; optional low-value explanations may live in contextual help.
 - Only explicit button clicks may start a scan, an LLM call, a job, or a workflow. Opening or switching dashboard tabs performs no inference or mutations.
 
 ## Guidance ownership

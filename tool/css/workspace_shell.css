@@ -1025,6 +1025,28 @@
   margin-top: 8px;
 }
 
+/* Keep Create Set connected to the filtered list, not over its last row. */
+.app.shell-revamp .media-list-create-set-footer {
+  flex: 0 0 auto;
+  padding: 8px;
+  border-top: 1px solid var(--border);
+  background: var(--panel-soft);
+}
+
+.app.shell-revamp .media-list-create-set-footer:has(> .hidden) {
+  display: none;
+}
+
+.app.shell-revamp .media-list-create-set-footer .sidebar-create-set-btn {
+  display: block;
+  width: 100%;
+  margin: 0;
+}
+
+.app.shell-revamp .media-list-create-set-footer .sidebar-create-set-btn.hidden {
+  display: none;
+}
+
 .app.shell-revamp .sidebar-drawer-body {
   display: flex;
   flex-direction: column;

@@ -244,3 +244,13 @@
 }
 #set-dashboard-stage #set-scan-open-detail { font-size: 15px; }
 #set-dashboard-stage #set-scan-issues .set-scan-item-heading span { color: var(--muted); }
+
+
+#set-dashboard-stage .set-scan-progress-track.hidden,
+#set-dashboard-stage .set-scan-evidence-detail.hidden { display: none; }
+#set-dashboard-stage .set-scan-scope-caption strong { font-size: 15px; letter-spacing: 0; text-transform: none; }
+#set-dashboard-stage .set-scan-quality-summary { font-size: 16px; }
+#set-dashboard-stage .set-scan-summary strong,
+#set-dashboard-stage .set-scan-evidence-detail,
+#set-dashboard-stage .set-scan-evidence-card-header strong { font-size: 16px; }
+#set-dashboard-stage .set-scan-run-actions { border-top: 1px solid var(--border-soft); }

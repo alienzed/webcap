@@ -273,7 +273,7 @@ def build_vision_schema_sight_messages(media_reference, groups=None, video_frame
         text = (
             "These are ordered samples from the first seconds of one training video. "
             "Describe the visible subjects, appearance, actions, and meaningful changes over time "
-            "as one coherent video in description. Use the structured inventory for reusable visual facts "
+            "in the description as one coherent video. Use the structured inventory for reusable visual facts "
             "seen across the samples. Describe supported transitions without assuming unseen events.\n\n"
             + text
         )
@@ -286,11 +286,14 @@ def build_vision_schema_sight_messages(media_reference, groups=None, video_frame
             {"type": "text", "text": text},
             {"type": "image_url", "image_url": {"url": str(media_reference or "")}},
         ]
+    system_prompt = VISION_SCHEMA_SIGHT_SYSTEM_PROMPT
+    if video_frames is not None:
+        system_prompt = system_prompt.replace(
+            "You inspect one image for visual discovery, not for a training caption.",
+            "You inspect ordered frames of one short video for visual discovery, not for a training caption.",
+        )
     return [
-        {"role": "system", "content": (
-            "You inspect a short video through ordered frames for visual discovery, not for a training caption. "
-            + VISION_SCHEMA_SIGHT_SYSTEM_PROMPT.replace("You inspect one image for visual discovery, not for a training caption. ", "")
-        ) if video_frames is not None else VISION_SCHEMA_SIGHT_SYSTEM_PROMPT},
+        {"role": "system", "content": system_prompt},
         {"role": "user", "content": content},
     ]
 

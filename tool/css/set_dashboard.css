@@ -23,8 +23,8 @@
 }
 .set-dashboard-modal.hidden, .set-dashboard-guidance .hidden, .set-dashboard-modal .hidden { display: none !important; }
 .set-dashboard-dialog {
-  width: min(100%, 580px);
-  max-height: min(86vh, 780px);
+  width: min(100%, 760px);
+  max-height: min(90vh, 860px);
   overflow-y: auto;
   border-radius: 15px;
   border: 1px solid var(--border);
@@ -37,7 +37,7 @@
   justify-content: space-between;
   align-items: flex-start;
   gap: 14px;
-  padding: 22px 24px 12px;
+  padding: 26px 32px 16px;
 }
 .set-dashboard-header h2 { margin: 0; font-size: 26px; font-weight: 750; }
 #set-dashboard-name { display: block; margin-top: 4px; font-size: 16px; color: var(--muted); }
@@ -54,7 +54,7 @@
 .set-dashboard-tabs {
   display: flex;
   gap: 3px;
-  padding: 0 16px;
+  padding: 0 24px;
   border-bottom: 1px solid var(--border);
   overflow-x: auto;
 }
@@ -85,8 +85,8 @@
   border-radius: 50%;
   background: var(--accent);
 }
-#set-dashboard-stage { padding: 26px 24px 28px; }
-#set-dashboard-action-title { font-size: 22px; font-weight: 700; margin: 0 0 20px; }
+#set-dashboard-stage { padding: 30px 32px 34px; min-height: 200px; }
+#set-dashboard-action-title { font-size: clamp(25px, 3vw, 32px); line-height: 1.18; font-weight: 750; letter-spacing: -.02em; margin: 0 0 24px; max-width: 630px; }
 .set-dashboard-action-status {
   margin-bottom: 16px;
   padding: 10px 12px;
@@ -94,9 +94,9 @@
   background: var(--panel-soft);
   font-size: 16px;
 }
-.set-dashboard-actions { display: flex; gap: 12px; align-items: center; margin-top: 18px; flex-wrap: wrap; }
+.set-dashboard-actions { display: flex; gap: 12px; align-items: center; margin-top: 28px; flex-wrap: wrap; }
 .set-dashboard-primary, .set-dashboard-secondary {
-  min-height: 45px;
+  min-height: 48px;
   padding: 9px 16px;
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -104,7 +104,7 @@
   cursor: pointer;
 }
 .set-dashboard-primary { background: var(--accent); color: #141414; border-color: var(--accent); font-weight: 700; }
-.set-dashboard-secondary { background: var(--panel-soft); color: var(--text); }
+.set-dashboard-secondary { background: transparent; color: var(--text); border-color: transparent; text-decoration: underline; text-underline-offset: 3px; }
 .set-dashboard-guidance-edit label { display: block; margin: 0 0 8px; font-size: 16px; font-weight: 600; }
 #set-dashboard-phrase input, #set-dashboard-balance input {
   box-sizing: border-box;
@@ -123,9 +123,17 @@
 #set-dashboard-template #primer-template { width: 100%; min-height: 180px; font-size: 16px; }
 #set-dashboard-template .caption-helper-drawer-body { padding: 12px 0; }
 .set-dashboard-modal :focus-visible, .set-dashboard-open:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.set-dashboard-overview { margin: 14px 32px 0; padding: 12px 16px; border: 1px solid var(--border); border-radius: 9px; background: var(--panel-soft); font-size: 15px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.set-dashboard-progress { margin-bottom: 20px; max-width: 540px; }
+.set-dashboard-progress-label { display: flex; justify-content: space-between; gap: 16px; color: var(--muted); font-size: 15px; margin-bottom: 9px; }
+.set-dashboard-progress-label strong { color: var(--text); font-weight: 650; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.set-dashboard-progress-track { height: 7px; border-radius: 999px; overflow: hidden; background: var(--border); }
+.set-dashboard-progress-fill { height: 100%; background: var(--accent); border-radius: inherit; transition: width 160ms ease; }
+@media (prefers-reduced-motion: reduce) { .set-dashboard-progress-fill { transition: none; } }
 @media (max-width: 620px) {
   .set-dashboard-modal { padding: 10px; }
   .set-dashboard-header { padding: 16px; }
+  .set-dashboard-overview { margin: 10px 16px 0; }
   .set-dashboard-tabs { padding: 0 8px; }
   .set-dashboard-tabs button { font-size: 14px; min-height: 48px; }
   #set-dashboard-stage { padding: 20px 16px; }

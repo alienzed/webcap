@@ -3496,102 +3496,99 @@
       <div id="set-dashboard-action-status" class="set-dashboard-action-status hidden" role="status"></div>
       <div id="set-dashboard-analyze" class="set-dashboard-analyze hidden">
         <div class="set-dashboard-sight-panel">
-          <h4>Visual understanding</h4>
+          <div class="set-dashboard-sight-heading">
+            <h4>Sight</h4>
+            <span id="set-scan-open-badge" class="set-scan-evidence-badge">Checking</span>
+          </div>
           <div id="set-scan-modal" class="set-scan-modal hidden" role="region" aria-label="Set Intelligence">
             <div class="set-scan-dialog">
-                <div class="set-scan-header">
-                    <div>
-                        <h2 id="set-scan-title">Prepare Set</h2>
-                        <div class="set-scan-subtitle">Collect Sight, discover vocabulary, then guide tagging.</div>
-                    </div>
-                    <button id="set-scan-close-btn" type="button" class="modal-close-btn" aria-label="Close Set Intelligence">&times;</button>
+              <div class="set-scan-header">
+                <div>
+                  <h2 id="set-scan-title">Prepare Set</h2>
+                  <div class="set-scan-subtitle">Collect Sight, discover vocabulary, then guide tagging.</div>
                 </div>
-                <div class="set-scan-content">
-                    <div class="set-scan-scope-row">
-                        <div class="set-scan-scope-caption">
-                            <strong>Scope</strong>
-                            <span id="set-scan-scope-summary">Current training selection</span>
-                        </div>
-                        <label><input id="set-scan-entire-set" type="checkbox"> Scan entire Set (ignore filters)</label>
-                        <label class="set-scan-model-picker">Vision model <select id="set-scan-vision-model" aria-label="Vision model for Prepare Set"></select></label>
+                <button id="set-scan-close-btn" type="button" class="modal-close-btn" aria-label="Close Set Intelligence">&times;</button>
+              </div>
+              <div class="set-scan-content">
+                <section class="set-scan-sight-shell" aria-label="Sight scan">
+                  <section id="set-scan-open-card" class="set-scan-evidence-card">
+                    <div class="set-scan-sight-totals">
+                      <div class="set-scan-sight-count-line">
+                        <div id="set-scan-open-count" class="set-scan-evidence-count">—</div>
+                        <span>with Sight from selected model</span>
+                      </div>
+                      <div id="set-scan-quality-summary" class="set-scan-quality-summary" aria-live="polite"></div>
                     </div>
-                    <section class="set-scan-sight-shell" aria-label="Sight scan">
-                        <div class="set-scan-evidence-grid" aria-label="Set Intelligence coverage">
-                            <section id="set-scan-open-card" class="set-scan-evidence-card">
-                                <div class="set-scan-evidence-card-header">
-                                    <div>
-                                        <strong>Sight</strong>
-                                        
-                                    </div>
-                                    <span id="set-scan-open-badge" class="set-scan-evidence-badge">Checking</span>
-                                </div>
-                                <div class="set-scan-sight-totals">
-                                    <div class="set-scan-sight-count-line">
-                                        <div id="set-scan-open-count" class="set-scan-evidence-count">—</div>
-                                        <span>with Sight from selected model</span>
-                                    </div>
-                                    <div id="set-scan-quality-summary" class="set-scan-quality-summary" aria-live="polite"></div>
-                                </div>
-                                <div class="set-scan-progress-track" role="progressbar" aria-label="Sight scan progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
-                                    <span id="set-scan-progress-fill"></span>
-                                </div>
-                                <div id="set-scan-timing" class="set-scan-timing" aria-live="off" hidden></div>
-                                <div class="set-scan-summary">
-                                    <strong id="set-scan-stage">Checking Set</strong>
-                                    <span id="set-scan-status" aria-live="polite"></span>
-                                </div>
-                                <div id="set-scan-open-detail" class="set-scan-evidence-detail">Checking saved coverage…</div>
-                            </section>
+                    <div class="set-scan-progress-track" role="progressbar" aria-label="Sight scan progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+                      <span id="set-scan-progress-fill"></span>
+                    </div>
+                    <div id="set-scan-timing" class="set-scan-timing" aria-live="off" hidden></div>
+                    <div class="set-scan-summary">
+                      <strong id="set-scan-stage">Checking Set</strong>
+                      <span id="set-scan-status" aria-live="polite"></span>
+                    </div>
+                    <div id="set-scan-open-detail" class="set-scan-evidence-detail">Checking saved coverage…</div>
+                  </section>
+                  <div class="set-scan-scope-row">
+                    <div class="set-scan-scope-caption">
+                      <strong>Scope</strong>
+                      <span id="set-scan-scope-summary">Current training selection</span>
+                    </div>
+                    <label><input id="set-scan-entire-set" type="checkbox"> Scan entire Set (ignore filters)</label>
+                    <label class="set-scan-model-picker">Vision model <select id="set-scan-vision-model" aria-label="Vision model for Prepare Set"></select></label>
+                  </div>
+                  <div class="set-scan-run-actions">
+                    <button id="set-scan-bad-retry" type="button" class="review-captions-btn set-scan-primary hidden">Retry flagged</button>
+                    <button id="set-scan-rescan-btn" type="button" class="review-captions-btn hidden">Resume Set Intelligence</button>
+                    <button id="set-scan-stop-btn" type="button" class="review-captions-btn hidden">Stop</button>
+                    <button id="set-intelligence-primary-btn" type="button" class="review-captions-btn set-scan-primary hidden">Discover Vocabulary</button>
+                  </div>
+                  <details class="set-scan-inspection-disclosure" id="set-scan-inspection-disclosure">
+                    <summary>Inspect &amp; troubleshoot <span id="set-scan-inspection-context"></span></summary>
+                    <div class="set-scan-inspection-body">
+                      <section id="set-scan-issues" class="set-scan-issues hidden" aria-label="Inspect and refresh individual Sight">
+                        <div class="set-scan-item-heading">
+                          <strong>Inspect or refresh media</strong>
+                          <span id="set-scan-issue-count"></span>
                         </div>
-                        <div class="set-scan-run-actions">
-                            <button id="set-scan-bad-retry" type="button" class="review-captions-btn set-scan-primary hidden">Retry flagged</button>
-                            <button id="set-scan-rescan-btn" type="button" class="review-captions-btn hidden">Resume Set Intelligence</button>
-                            <button id="set-scan-stop-btn" type="button" class="review-captions-btn hidden">Stop</button>
-                            <button id="set-intelligence-primary-btn" type="button" class="review-captions-btn set-scan-primary hidden">Discover Vocabulary</button>
-                        </div>
-                        <details class="set-scan-inspection-disclosure" id="set-scan-inspection-disclosure">
-                            <summary>Inspect Sight <span id="set-scan-inspection-context"></span></summary>
-                            <div class="set-scan-live-inspection" id="set-scan-live-inspection">
-                            <div class="set-scan-live-media">
-                                <img id="set-scan-preview-image" alt="Current Sight media" hidden>
-                                <video id="set-scan-preview-video" controls muted playsinline preload="metadata" hidden></video>
-                            </div>
-                            <div class="set-scan-live-summary">
-                                <strong id="set-scan-preview-name">Select a media item</strong>
-                                <div id="set-scan-preview-text" class="set-scan-live-text">Run Sight to inspect its visual observations.</div>
-                                <button id="set-scan-preview-review" type="button" class="review-captions-btn">Review saved VL outputs</button>
-                            </div>
-                            </div>
-                        </details>
-
-                    </section>
-                    <details id="set-scan-issues" class="set-scan-issues hidden" aria-label="Inspect and refresh individual Sight">
-                        <summary class="set-scan-item-heading">
-                            <strong>Inspect or refresh media</strong>
-                            <span id="set-scan-issue-count"></span>
-                        </summary>
                         <div class="set-scan-item-row">
-                            <select id="set-scan-item-select" aria-label="Choose a media item"></select>
-                            <button id="set-scan-item-view" type="button" class="review-captions-btn">Review VL outputs</button>
-                            <button id="set-scan-item-retry" type="button" class="review-captions-btn">Refresh item</button>
+                          <select id="set-scan-item-select" aria-label="Choose a media item"></select>
+                          <button id="set-scan-item-view" type="button" class="review-captions-btn">Review VL outputs</button>
+                          <button id="set-scan-item-retry" type="button" class="review-captions-btn">Refresh item</button>
                         </div>
-                    </details>
-                    <details class="set-scan-advanced">
-                        <summary>Advanced scan options</summary>
-                        <button id="set-scan-force-btn" type="button" class="review-captions-btn set-scan-quiet" title="Rerun Sight for every item in the current scope; previous valid evidence is preserved when a retry fails">Force refresh all</button>
-                    </details>
-                    <details id="set-scan-details" class="set-scan-details hidden">
-                        <summary><strong>Vision report</strong><span id="set-scan-report-count">0 saved responses</span></summary>
+                      </section>
+                      <div class="set-scan-live-inspection" id="set-scan-live-inspection">
+                        <div class="set-scan-live-media">
+                          <img id="set-scan-preview-image" alt="Current Sight media" hidden>
+                          <video id="set-scan-preview-video" controls muted playsinline preload="metadata" hidden></video>
+                        </div>
+                        <div class="set-scan-live-summary">
+                          <strong id="set-scan-preview-name">Select a media item</strong>
+                          <div id="set-scan-preview-text" class="set-scan-live-text">Run Sight to inspect its visual observations.</div>
+                          <button id="set-scan-preview-review" type="button" class="review-captions-btn">Review saved VL outputs</button>
+                        </div>
+                      </div>
+                      <section id="set-scan-details" class="set-scan-details hidden" aria-label="Vision report">
+                        <div class="set-scan-report-heading">
+                          <strong>Vision report</strong>
+                          <span id="set-scan-report-count">0 saved responses</span>
+                        </div>
                         <div class="set-scan-report-toolbar">
-                            <label for="set-scan-response-select">Response</label>
-                            <select id="set-scan-response-select" class="form-control"></select>
+                          <label for="set-scan-response-select">Response</label>
+                          <select id="set-scan-response-select" class="form-control"></select>
                         </div>
                         <pre id="set-scan-raw-output" class="set-scan-raw-output" aria-live="polite"></pre>
-                    </details>
-                </div>
-
+                      </section>
+                      <div class="set-scan-advanced">
+                        <strong>Advanced</strong>
+                        <button id="set-scan-force-btn" type="button" class="review-captions-btn set-scan-quiet" title="Rerun Sight for every item in the current scope; previous valid evidence is preserved when a retry fails">Force refresh all</button>
+                      </div>
+                    </div>
+                  </details>
+                </section>
+              </div>
             </div>
-        </div>
+          </div>
         </div>
         <aside class="set-dashboard-tags-panel" aria-label="Vocabulary and annotation">
           <h4>Vocabulary &amp; Tags</h4>

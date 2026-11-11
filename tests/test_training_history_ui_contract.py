@@ -378,3 +378,55 @@ def test_training_archive_unlinks_only_attempts_sharing_physical_output():
     assert 'history_ids = [context["jobId"]] + [job["id"] for job in context["relatedRuns"]]' in archive
     assert 'clear_history_jobs(set_folder, history_ids)' in archive
     assert 'def clear_history_jobs(folder_path, job_ids):' in history
+
+
+def test_history_prefers_captured_lr_and_displays_rank_in_both_views():
+    script = (ROOT / "tool" / "js" / "training_history_ui.js").read_text(encoding="utf-8")
+    assert "function trainingHistoryLearningRate(job)" in script
+    assert "return trainingHistoryCompactNumber(summary.lr);" in script
+    assert "return String(job && job.progress && job.progress.lr || '').trim();" in script
+    assert "var learningRate = trainingHistoryLearningRate(job);" in script
+    assert "trainingHistoryMetric('LR', learningRate)" in script
+    assert "trainingHistoryMetric('Rank', Number(runConfig.rank) > 0" in script
+    assert "var currentLr = trainingHistoryLearningRate(representative);" in script
+    assert "training-history-group-setting" in script
+    assert "var currentRank = Number(currentSettings.rank);" in script
+    assert "currentDropout" in script
+
+
+def test_older_partial_history_summary_recovers_each_attempt_config(tmp_path):
+    from tool.server import training_history
+
+    def make_capture(name, lr, rank):
+        directory = tmp_path / name
+        directory.mkdir()
+        (directory / "config.h3.toml").write_text(
+            'epochs = 100\\n'
+            '[model]\\n'
+            'diffusion_model = "/models/h3.safetensors"\\n'
+            'cfg = 1\\n'
+            'shift = 8\\n'
+            'image_shift = 1\\n'
+            '[adapter]\\n'
+            'type = "lora"\\n'
+            'rank = ' + str(rank) + '\\n'
+            'dropout = 0.1\\n'
+            '[optimizer]\\n'
+            'lr = ' + str(lr) + '\\n',
+            encoding="utf-8",
+        )
+        return directory
+
+    first = make_capture("first", 0.0001, 16)
+    resumed = make_capture("resumed", 0.0002, 32)
+    base = {"stages": "h3", "folder": "", "runSummary": {"shift": 8}, "progress": {"lr": "0.00009"}}
+    earlier = training_history._history_job_view({**base, "recordPath": str(first)})
+    later = training_history._history_job_view({**base, "recordPath": str(resumed)})
+    assert earlier["runSummary"]["lr"] == 0.0001
+    assert earlier["runSummary"]["rank"] == 16
+    assert later["runSummary"]["lr"] == 0.0002
+    assert later["runSummary"]["rank"] == 32
+    assert earlier["runSummary"]["dropout"] == later["runSummary"]["dropout"] == 0.1
+    assert earlier["runSummary"]["epochs"] == later["runSummary"]["epochs"] == 100
+    assert earlier["progress"]["lr"] == later["progress"]["lr"] == "0.00009"
+    assert base["runSummary"] == {"shift": 8}

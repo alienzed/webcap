@@ -377,3 +377,182 @@
   #set-dashboard-stage { padding: 18px 16px 24px; }
   .set-dashboard-sight-panel, .set-dashboard-tags-panel, .set-dashboard-work-panel, .set-dashboard-guidance-panel { padding: 16px; }
 }
+
+
+/* Analyze & Tag: Sight is one work area, with a single optional inspection level. */
+#set-dashboard-analyze .set-dashboard-sight-panel {
+  background: var(--panel-soft);
+}
+#set-dashboard-analyze .set-dashboard-sight-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+#set-dashboard-analyze .set-dashboard-sight-heading h4 {
+  margin: 0;
+}
+#set-dashboard-analyze .set-scan-sight-shell {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  overflow: visible;
+}
+#set-dashboard-analyze .set-scan-content .set-scan-evidence-card {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+#set-dashboard-analyze .set-scan-sight-totals {
+  margin-top: 0;
+}
+#set-dashboard-analyze .set-scan-sight-count-line {
+  flex-wrap: wrap;
+}
+#set-dashboard-analyze .set-scan-sight-count-line > span,
+#set-dashboard-analyze .set-scan-scope-row,
+#set-dashboard-analyze .set-scan-scope-row label,
+#set-dashboard-analyze .set-scan-scope-caption strong {
+  font-size: 16px;
+}
+#set-dashboard-analyze .set-scan-quality-summary,
+#set-dashboard-analyze .set-scan-summary strong,
+#set-dashboard-analyze .set-scan-summary span,
+#set-dashboard-analyze #set-scan-open-detail {
+  font-size: 16px;
+}
+#set-dashboard-analyze .set-scan-content .set-scan-scope-row {
+  margin: 18px 0 0;
+  padding: 14px 0;
+  border-top: 1px solid var(--border-soft);
+  justify-content: flex-start;
+  gap: 12px 18px;
+}
+#set-dashboard-analyze .set-scan-scope-caption {
+  flex: 1 1 100%;
+  flex-wrap: wrap;
+}
+#set-dashboard-analyze .set-scan-scope-row select {
+  min-height: 38px;
+  max-width: 100%;
+  font-size: 16px;
+}
+#set-dashboard-analyze .set-scan-content .set-scan-run-actions {
+  margin: 0;
+  padding: 16px 0;
+  border-top: 0;
+  border-bottom: 1px solid var(--border-soft);
+}
+#set-dashboard-analyze .set-scan-run-actions .review-captions-btn {
+  min-height: 44px;
+  font-size: 16px;
+}
+#set-dashboard-analyze .set-scan-inspection-disclosure {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+#set-dashboard-analyze .set-scan-inspection-disclosure > summary {
+  min-height: 48px;
+  padding: 12px 0;
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: 650;
+}
+#set-dashboard-analyze .set-scan-inspection-body {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 8px 0 4px;
+}
+#set-dashboard-analyze .set-scan-inspection-disclosure:not([open]) > .set-scan-inspection-body {
+  display: none !important;
+}
+#set-dashboard-analyze .set-scan-content #set-scan-issues,
+#set-dashboard-analyze .set-scan-content #set-scan-details {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+#set-dashboard-analyze .set-scan-content #set-scan-issues.hidden,
+#set-dashboard-analyze .set-scan-content #set-scan-details.hidden {
+  display: none !important;
+}
+#set-dashboard-analyze .set-scan-item-heading {
+  margin-bottom: 10px;
+}
+#set-dashboard-analyze .set-scan-item-heading strong,
+#set-dashboard-analyze .set-scan-item-heading span,
+#set-dashboard-analyze .set-scan-report-heading strong,
+#set-dashboard-analyze .set-scan-report-heading span {
+  font-size: 16px;
+}
+#set-dashboard-analyze .set-scan-item-row {
+  flex-wrap: wrap;
+  padding: 0;
+}
+#set-dashboard-analyze .set-scan-item-row select {
+  flex: 1 1 100%;
+  font-size: 16px;
+}
+#set-dashboard-analyze .set-scan-item-row .review-captions-btn {
+  font-size: 16px;
+  min-height: 40px;
+}
+#set-dashboard-analyze .set-scan-live-inspection {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+  padding: 0;
+  border: 0;
+}
+#set-dashboard-analyze .set-scan-live-media {
+  height: 230px;
+  min-height: 180px;
+}
+#set-dashboard-analyze .set-scan-report-heading {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+#set-dashboard-analyze .set-scan-report-heading span {
+  color: var(--muted);
+}
+#set-dashboard-analyze .set-scan-report-toolbar {
+  padding: 0 0 10px;
+}
+#set-dashboard-analyze .set-scan-report-toolbar label,
+#set-dashboard-analyze .set-scan-report-toolbar select {
+  font-size: 16px;
+}
+#set-dashboard-analyze .set-scan-raw-output {
+  padding: 10px;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  font-size: 14px;
+}
+#set-dashboard-analyze .set-scan-advanced {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+  padding: 14px 0 0;
+  border: 0;
+  border-top: 1px solid var(--border-soft);
+  border-radius: 0;
+}
+#set-dashboard-analyze .set-scan-advanced > strong {
+  font-size: 16px;
+}
+#set-dashboard-analyze .set-scan-advanced .review-captions-btn {
+  margin: 0;
+  font-size: 16px;
+}

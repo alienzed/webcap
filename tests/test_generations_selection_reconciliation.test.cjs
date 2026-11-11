@@ -19,14 +19,15 @@ test('Grid inclusion overlays share staged candidate selection without replacing
     el: id => document.getElementById(id)
   };
   vm.createContext(context);
+  vm.runInContext('selectedCandidates = new Set(["epoch07.safetensors"])', context);
   const start = source.indexOf('  function syncGridCandidateSelection()');
   const end = source.indexOf('  function syncMatrixCandidateSelection()', start);
   assert.ok(start >= 0 && end > start);
   vm.runInContext(source.slice(start, end), context);
   const staged = document.querySelector('[data-candidate-select]');
   staged.addEventListener('change', () => {
-    if (staged.checked) selectedCandidates.add(staged.dataset.candidateSelect);
-    else selectedCandidates.delete(staged.dataset.candidateSelect);
+    if (staged.checked) context.selectedCandidates.add(staged.dataset.candidateSelect);
+    else context.selectedCandidates.delete(staged.dataset.candidateSelect);
     context.syncGridCandidateSelection();
   });
   const delegateStart = source.indexOf("    el('test-generations-results').addEventListener('change'");
@@ -55,14 +56,14 @@ test('Grid inclusion overlays share staged candidate selection without replacing
   toggle.checked = false;
   toggle.dispatchEvent(new dom.window.Event('change', {bubbles:true}));
   assert.equal(staged.checked, false);
-  assert.equal(selectedCandidates.has('epoch07.safetensors'), false);
+  assert.equal(context.selectedCandidates.has('epoch07.safetensors'), false);
   assert.equal(two.node.querySelector('[data-test-grid-select]').checked, false);
   assert.equal(one.node.classList.contains('is-excluded'), true);
   assert.strictEqual(one.node.querySelector('video'), one.video);
   assert.strictEqual(two.node.querySelector('video'), two.video);
   toggle.checked = true;
   toggle.dispatchEvent(new dom.window.Event('change', {bubbles:true}));
-  assert.equal(selectedCandidates.has('epoch07.safetensors'), true);
+  assert.equal(context.selectedCandidates.has('epoch07.safetensors'), true);
   assert.equal(two.node.querySelector('[data-test-grid-select]').checked, true);
   context.prepared.files = [];
   context.syncGridCandidateSelection();

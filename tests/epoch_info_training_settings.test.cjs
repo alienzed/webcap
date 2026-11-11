@@ -43,12 +43,13 @@ test('Epoch inspector uses the existing navigation row for readable training set
   const settings = nav.querySelector('.epoch-info-settings');
   assert.ok(settings, 'settings belong to the back navigation row, not a new header row');
   assert.match(settings.querySelector('summary').textContent,
-    /Training settingsOstris · LR 8e-5 · Dropout 0.05 · Video shift 3/);
+    /Training settingsOstris · LR 8e-5 · Dropout 0.05/);
   settings.open = true;
   assert.deepEqual(Array.from(settings.querySelectorAll('dt'),x=>x.textContent),
-    ['Training method','Learning rate','Dropout','LoRA rank','Focused blocks','Video shift','Image shift']);
+    ['Training method','Learning rate','Dropout','LoRA rank','Focused blocks']);
   assert.deepEqual(Array.from(settings.querySelectorAll('dd'),x=>x.textContent),
-    ['Ostris','8e-5','0.05','32','On','3','1']);
+    ['Ostris','8e-5','0.05','32','On']);
+  assert.doesNotMatch(settings.textContent, /image shift|video shift/i);
   assert.equal(host.querySelector('.epoch-info-training'), null,
     'no empty loss panel when training settings exist but loss measurements do not');
   const headerCss = css.slice(css.indexOf('.epoch-info-header{'),css.indexOf('.epoch-info-stats{'));

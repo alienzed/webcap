@@ -54,7 +54,7 @@ test('Epoch inspector uses the existing navigation row for readable training set
   const headerCss = css.slice(css.indexOf('.epoch-info-header{'),css.indexOf('.epoch-info-stats{'));
   assert.match(headerCss,/\.epoch-info-header p\{[^}]*font-size:16px/);
   assert.match(headerCss,/\.epoch-info-settings summary strong\{[^}]*font-size:18px/);
-  assert.match(headerCss,/\.epoch-info-settings-summary\{font-size:16px/);
+  assert.match(headerCss,/\.epoch-info-settings-summary\{font-size:18px/);
   assert.match(headerCss,/\.epoch-info-settings-list dt,\.epoch-info-settings-list dd\{[^}]*font-size:16px/);
 });
 

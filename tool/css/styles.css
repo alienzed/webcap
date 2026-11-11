@@ -4232,6 +4232,43 @@ iframe {
   border-radius: 8px;
   background: var(--panel-soft);
 }
+/* Grid selection is a lightweight, always-visible counterpart to Matrix's row toggle. */
+.test-generations-grid-selection {
+  appearance: none;
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 4;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  margin: 0;
+  border: 1px solid color-mix(in srgb, var(--text) 34%, transparent);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--panel) 72%, transparent);
+  color: var(--text);
+  cursor: pointer;
+}
+.test-generations-grid-selection::after {
+  content: '✓';
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1;
+  opacity: 0;
+}
+.test-generations-grid-selection:checked::after { opacity: 1; }
+.test-generations-grid-selection:hover { background: color-mix(in srgb, var(--panel) 90%, transparent); }
+.test-generations-grid-selection:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+#test-generations-results .test-generations-result-card.is-excluded {
+  border-color: color-mix(in srgb, var(--border) 65%, var(--muted) 35%);
+}
+#test-generations-results .test-generations-result-card.is-excluded .test-generations-result-footer {
+  opacity: .72;
+}
 .test-generations-result-card video,
 .test-generations-result-card img {
   display: block;

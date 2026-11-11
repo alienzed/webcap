@@ -193,6 +193,8 @@ jobs:
           node tests/focused_annotation_integration.test.js
       - name: Install DOM test dependency
         run: npm install --no-save --no-package-lock jsdom
+      - name: Test Grid selection and Matrix reconciliation
+        run: node --test tests/test_generations_selection_reconciliation.test.cjs
       - name: Evaluation DOM ownership and navigation smoke
         run: |
           node --test tests/test_generations_unified_dom.test.cjs

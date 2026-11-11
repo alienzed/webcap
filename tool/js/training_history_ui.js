@@ -56,11 +56,21 @@ function trainingHistoryCompactNumber(value) {
 // but avoid repeating the backend's standard "Finished early at ..." receipt.
 function trainingHistoryCompletionNote(job) {
   var note = String(job && job.completionNote || '').trim();
-  if (job && job.status === 'finished_early' &&
-      /^Finished early(?: at (?:epoch \d+ \/ \d+(?: · step [\d,]+)?|step [\d,]+))?\.?$/.test(note)) {
-    return '';
+  if (!job || job.status !== 'finished_early') return note;
+  var progress = job.progress && typeof job.progress === 'object' ? job.progress : {};
+  var details = [];
+  var epoch = Number(progress.epoch);
+  var epochs = Number(progress.epochs);
+  var step = Number(progress.step);
+  if (progress.epoch != null && progress.epochs != null &&
+      isFinite(epoch) && isFinite(epochs) && epochs) {
+    details.push('epoch ' + Math.trunc(epoch) + ' / ' + Math.trunc(epochs));
   }
-  return note;
+  if (progress.step != null && isFinite(step)) {
+    details.push('step ' + Math.trunc(step).toLocaleString('en-US'));
+  }
+  var generated = 'Finished early' + (details.length ? ' at ' + details.join(' · ') : '.');
+  return note === generated ? '' : note;
 }
 
 function trainingHistoryLearningRate(job) {

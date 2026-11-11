@@ -86,7 +86,7 @@ function dashboard(options = {}) {
   };
 }
 
-test('fresh Set prioritizes required phrase without background jobs', () => {
+test('fresh Set opens Caption with editable guidance and no background jobs', () => {
   const app = dashboard();
   assert.equal(app.selected(), 'caption');
   assert.equal(app.title(), 'Caption 1 remaining media item');
@@ -95,7 +95,7 @@ test('fresh Set prioritizes required phrase without background jobs', () => {
   assert.equal(app.secondary().textContent, 'Review captions');
 });
 
-test('missing balance terms is its own action and remains optional', () => {
+test('missing balance terms are optional and do not gate Review', () => {
   const app = dashboard({ phrase: 'subject' });
   assert.equal(app.selected(), 'caption');
   assert.equal(app.title(), 'Caption 1 remaining media item');
@@ -104,7 +104,7 @@ test('missing balance terms is its own action and remains optional', () => {
   assert.deepEqual(app.actions, []);
 });
 
-test('unprepared Set opens Understand with embedded Prepare Set, without inference', () => {
+test('unprepared Set opens Analyze with embedded Sight, without inference', () => {
   const app = dashboard({ phrase: 'subject', balances: 'front' });
   assert.equal(app.selected(), 'analyze');
   assert.deepEqual(app.actions, ['prepare']);
@@ -116,7 +116,7 @@ test('Training blocks scan recommendation, favors manual group work', () => {
   assert.equal(app.selected(), 'analyze');
   assert.equal(app.elements['set-dashboard-tags-primary'].textContent, 'Manage Groups');
   app.elements['set-dashboard-tags-primary'].onclick();
-  assert.deepEqual(app.actions, ['groups']);
+  assert.deepEqual(app.actions, ['prepare', 'hide-prepare', 'groups']);
 });
 
 test('pending annotation before incomplete captions', () => {
@@ -128,7 +128,7 @@ test('pending annotation before incomplete captions', () => {
   assert.equal(app.elements['set-dashboard-tags-primary'].textContent, 'Focused Annotation');
 });
 
-test('mature Set opens Review with only one secondary action', () => {
+test('mature Set opens Review with QA and caption inspection actions', () => {
   const app = dashboard({
     phrase: 'subject', balances: 'front', groups: ['Shape'], checked: true,
     items: [{ key: 'a', fileName: 'a.png', caption: 'subject, front', hasCaption: true, metadata: { vision_sight: { description: 'observed', inventory: {} } } }]
@@ -160,11 +160,11 @@ test('markup retains single authoritative guidance controls and original templat
   assert.match(html, /static\/css\/set_dashboard\.css/);
 });
 
-test('shared GPU activity suppresses Vocabulary as the first step', () => {
+test('shared GPU activity leaves manual actions available', () => {
   const app = dashboard({ phrase: 'subject', balances: 'front', shellLane: 'inference' });
   assert.equal(app.selected(), 'analyze');
   assert.equal(app.elements['set-dashboard-tags-primary'].textContent, 'Manage Groups');
-  assert.equal(app.secondary().textContent, 'Review captions');
+  assert.equal(app.elements['set-dashboard-tags-vocabulary'].classList.contains('hidden'), true);
 });
 
 test('outstanding annotation reviews take precedence even if captions exist', () => {
@@ -225,8 +225,8 @@ test('caption guidance stays directly accessible regardless of completeness', ()
   const app = dashboard({ phrase: 'subject', balances: 'front' });
   app.listeners['tab-caption:click']();
   assert.equal(app.selected(), 'caption');
-  assert.equal(app.elements['set-dashboard-guidance'].classList.contains('hidden'), false);
-  assert.equal(app.elements['set-dashboard-phrase'].classList.contains('hidden'), true);
+  assert.equal(app.elements['set-dashboard-caption'].classList.contains('hidden'), false);
+  assert.equal(app.elements['set-dashboard-analyze'].classList.contains('hidden'), true);
   assert.equal(app.primary().textContent, 'Continue captioning');
 });
 

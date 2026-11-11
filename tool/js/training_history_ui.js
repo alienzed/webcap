@@ -55,7 +55,7 @@ function trainingHistoryCompactNumber(value) {
 function trainingHistoryLearningRate(job) {
   var summary = job && job.runSummary && typeof job.runSummary === 'object' ? job.runSummary : {};
   if (summary.lr !== undefined && summary.lr !== null && summary.lr !== '') {
-    return trainingHistoryCompactNumber(summary.lr);
+    return formatTrainingRunLearningRate(summary.lr);
   }
   return String(job && job.progress && job.progress.lr || '').trim();
 }

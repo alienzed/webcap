@@ -638,13 +638,21 @@ def _history_job_view(job):
             item.get("stages"),
             item.get("capturedItemCount"),
         )
-    # Backfill older summaries from the captured run config without changing persisted history.
+    # Recover settings omitted by older partial summaries from each attempt's
+    # own captured config. Leave the stored record and existing values intact.
     h3_fields = ("trainingVariant", "imageShift", "focusedH3Blocks")
-    if item.get("stages") == "h3" and any(key not in item["runSummary"] for key in h3_fields):
+    summary_fields = ("lr", "rank", "dropout", "epochs", "shift")
+    if item.get("stages") == "h3":
+        summary_fields += h3_fields
+    if any(key not in item["runSummary"] for key in summary_fields):
         captured_summary = run_summary_from_capture(
-            item.get("recordPath") or item.get("inputPath"), "h3", item.get("capturedItemCount")
+            item.get("recordPath") or item.get("inputPath"),
+            item.get("stages"), item.get("capturedItemCount"),
         )
-        recovered = {key: captured_summary[key] for key in h3_fields if key in captured_summary}
+        recovered = {
+            key: captured_summary[key]
+            for key in summary_fields if key not in item["runSummary"] and key in captured_summary
+        }
         if recovered:
             item["runSummary"] = {**item["runSummary"], **recovered}
     raw_output = str(item.get("outputRunPath") or item.get("effectiveOutputDir") or item.get("outputRoot") or "").strip()

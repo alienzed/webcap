@@ -275,6 +275,9 @@ function renderTrainingHistory() {
     var checkpointLabel = trainingHistoryCheckpointLabel(artifact);
     var checkpointStage = String(job.stage || job.stages || '').toLowerCase();
     var canOpenCheckpointRun = !!(checkpointLabel && job.folder && job.outputRunPath && ['hi', 'lo', 'krea2', 'wan21', 'h3'].indexOf(checkpointStage) !== -1);
+    var checkpointStepMatch = /^global_step(\d+)$/i.exec(String(artifact.checkpointTag || '').trim());
+    var stepOpensCheckpoint = canOpenCheckpointRun && checkpointStepMatch &&
+      isFinite(finalStep) && finalStep > 0 && Number(checkpointStepMatch[1]) === finalStep;
     var runDirectory = String(job.outputRunPath || '').trim();
     var capturedItems = Number(job.capturedItemCount || runConfig.capturedItems || 0);
     var startedAt = Number(job.startedAt || 0);
@@ -304,7 +307,12 @@ function renderTrainingHistory() {
     var modelTitle = modelSource ? 'Base model: ' + modelSource : '';
     var metricHtml =
       trainingHistoryMetric('Epoch', isFinite(epoch) && epoch >= 0 ? Math.round(epoch).toLocaleString() + (isFinite(epochs) && epochs > 0 ? ' / ' + Math.round(epochs).toLocaleString() : '') : '') +
-      trainingHistoryMetric('Step', isFinite(finalStep) && finalStep >= 0 ? Math.round(finalStep).toLocaleString() + (isFinite(plannedSteps) && plannedSteps > 0 ? ' / ' + Math.round(plannedSteps).toLocaleString() : '') : '') +
+      trainingHistoryMetric(
+        'Step',
+        isFinite(finalStep) && finalStep >= 0 ? Math.round(finalStep).toLocaleString() + (isFinite(plannedSteps) && plannedSteps > 0 ? ' / ' + Math.round(plannedSteps).toLocaleString() : '') : '',
+        stepOpensCheckpoint ? 'Open the saved checkpoint in the run directory' : '',
+        stepOpensCheckpoint ? 'data-training-history-run="' + escapeHtml(job.id || '') + '"' : ''
+      ) +
       trainingHistoryMetric('LR', learningRate) +
       trainingHistoryMetric('Rank', Number(runConfig.rank) > 0 ? String(Math.round(Number(runConfig.rank))) : '') +
       trainingHistoryMetric('Dropout', runConfig.dropout !== undefined && runConfig.dropout !== null ? trainingHistoryCompactNumber(runConfig.dropout) : '') +
@@ -314,12 +322,12 @@ function renderTrainingHistory() {
           trainingHistoryMetric('Focused H3 blocks', typeof runConfig.focusedH3Blocks === 'boolean' ? (runConfig.focusedH3Blocks ? 'On' : 'Off') : '')
         : '') +
       trainingHistoryMetric('Selected epoch', selectedEpochLabel ? String(Math.round(selectedEpochNumber)) : '') +
-      trainingHistoryMetric(
+      (stepOpensCheckpoint ? '' : trainingHistoryMetric(
         'Latest checkpoint',
         checkpointLabel,
         canOpenCheckpointRun ? 'Open the run directory containing this checkpoint' : '',
         canOpenCheckpointRun ? 'data-training-history-run="' + escapeHtml(job.id || '') + '"' : ''
-      );
+      ));
     return '<div class="training-history-item training-history-run' + (selectedEpochLabel ? ' has-selected-epoch' : '') + '" data-training-history-job="' + escapeHtml(job.id || '') + '">' +
       '<div class="training-history-header">' +
         '<div class="training-history-identity">' +

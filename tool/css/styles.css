@@ -7617,6 +7617,14 @@ html[data-theme="dark"] iframe {
   font-weight: 600;
   color: var(--muted);
 }
+.workspace-surface-training .training-history-group .training-history-group-setting {
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 600;
+}
+.workspace-surface-training .training-history-group .training-history-meta {
+  font-size: 14px;
+}
 .workspace-surface-training .training-history-attempts {
   min-width: 0;
   border-top: 1px solid var(--border);

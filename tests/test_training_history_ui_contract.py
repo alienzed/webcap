@@ -367,7 +367,7 @@ def test_training_history_groups_only_known_physical_run_identity():
     assert 'data-training-history-group="' in script
     assert "trainingHistoryOpenGroups[group.key]" in script
     assert "var visibleGroups = trainingWorkspaceState.historyExpanded ? groups : groups.slice(0, 2)" in script
-    assert "'Delete run and files…</button>' : '')" in script
+    assert "(!groupedAttempt ? '<button type=\"button\" data-training-history-delete=" in script
 
 
 def test_training_archive_unlinks_only_attempts_sharing_physical_output():

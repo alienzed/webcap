@@ -8,6 +8,61 @@
       .then(function(r){return r.json().then(function(data){if(!r.ok||!data.ok)throw new Error(data.error||'Epoch inspection failed');return data;});});
   }
   function stat(title,value){var box=element('div','epoch-info-stat');box.appendChild(element('strong','',value));box.appendChild(element('span','',title));return box;}
+  function formatTrainingNumber(value) {
+    if (value === undefined || value === null || value === '') return '';
+    var number = Number(value);
+    if (!Number.isFinite(number)) return '';
+    if (number !== 0 && Math.abs(number) < .001) return number.toExponential(1).replace('.0e', 'e').replace('e+', 'e');
+    return String(number);
+  }
+  function epochRunIdentity(run, jobId) {
+    var sequence = String(run && run.runSequence || '').trim().replace(/^0+(?=\d)/, '');
+    var identity = sequence ? 'Run ' + sequence : 'Run ' + String(jobId || '').slice(-8);
+    var name = String(run && run.label || '').trim();
+    if (name && name.toLowerCase() !== 'run train' && name !== identity) identity += ' · ' + name;
+    return identity;
+  }
+  function epochTrainingSettings(run) {
+    var settings = run && run.runSummary && typeof run.runSummary === 'object' ? run.runSummary : {};
+    var facts = [];
+    function add(label, value) {
+      if (value !== '' && value !== null && value !== undefined) facts.push({label:label, value:String(value)});
+    }
+    add('Training method', String(settings.trainingVariant || '').trim());
+    add('Learning rate', formatTrainingNumber(settings.lr));
+    add('Dropout', formatTrainingNumber(settings.dropout));
+    add('LoRA rank', formatTrainingNumber(settings.rank));
+    if (typeof settings.focusedH3Blocks === 'boolean') add('Focused blocks', settings.focusedH3Blocks ? 'On' : 'Off');
+    add(run && String(run.stage || '').toLowerCase() === 'h3' ? 'Video shift' : 'Shift', formatTrainingNumber(settings.shift));
+    add('Image shift', formatTrainingNumber(settings.imageShift));
+    return facts;
+  }
+  function epochTrainingControl(run) {
+    var facts = epochTrainingSettings(run);
+    if (!facts.length) return element('span','epoch-info-settings-unavailable','Training settings unavailable');
+    var values = facts.filter(function (item) {
+      return ['Training method','Learning rate','Dropout','Video shift','Shift'].indexOf(item.label) !== -1;
+    }).map(function (item) {
+      if (item.label === 'Training method') return item.value;
+      if (item.label === 'Learning rate') return 'LR ' + item.value;
+      return item.label + ' ' + item.value;
+    });
+    var details = element('details','epoch-info-settings');
+    var summary = element('summary');
+    summary.appendChild(element('strong','', 'Training settings'));
+    summary.appendChild(element('span','epoch-info-settings-summary', values.join(' · ') || 'View recipe'));
+    details.appendChild(summary);
+    var panel = element('div','epoch-info-settings-panel');
+    panel.appendChild(element('strong','epoch-info-settings-heading','Recorded training configuration'));
+    var list = element('dl','epoch-info-settings-list');
+    facts.forEach(function (item) {
+      list.appendChild(element('dt','',item.label));
+      list.appendChild(element('dd','',item.value));
+    });
+    panel.appendChild(list);
+    details.appendChild(panel);
+    return details;
+  }
   function backToInsights(){
     var back=element('button','review-captions-btn epoch-info-back','← Back to Insights');
     back.type='button';back.onclick=window.epochInfoShowAnalytics;
@@ -30,10 +85,15 @@
     root.replaceChildren();
     var header=element('div','epoch-info-header');
     var heading=element('div','epoch-info-header-text');
+    var training = view.training;
+    var run = training && training.run;
     heading.appendChild(element('h3','', 'Epoch '+view.epoch));
-    heading.appendChild(element('p','', 'Run '+view.jobId.slice(-8)+' · All recorded Test and Campaign evidence'));
+    heading.appendChild(element('p','', epochRunIdentity(run,view.jobId)+' · All recorded Test and Campaign evidence'));
     header.appendChild(heading);
-    header.appendChild(view.mode==='analytics'?backToInsights():backToTestResults());
+    var nav = element('div','epoch-info-nav');
+    nav.appendChild(view.mode==='analytics'?backToInsights():backToTestResults());
+    nav.appendChild(epochTrainingControl(run));
+    header.appendChild(nav);
     root.appendChild(header);
     var summary=view.summary||{};
     var grid=element('div','epoch-info-stats');
@@ -44,22 +104,23 @@
     grid.appendChild(stat('Test VL agreement',summary.testVl==null?'—':Math.round(summary.testVl*100)+'%'));
     grid.appendChild(stat('Scored VL attributes',summary.testVlJudgments||0));
     root.appendChild(grid);
-    var training=view.training;
     if(training) {
       var loss=(training.lossPoints||[]).find(function(p){return p.epoch===view.epoch;});
-      var box=element('div','epoch-info-training');
-      box.appendChild(element('strong','', 'Training context'));
-      box.appendChild(element('span','',loss&&Number.isFinite(loss.loss)?'Epoch loss '+Number(loss.loss).toFixed(4):'No saved loss measurement for this epoch'));
       var points=(training.lossPoints||[]).filter(function(p){return Number.isFinite(p.loss);});
-      if(points.length>1) {
+      if ((loss && Number.isFinite(loss.loss)) || points.length > 1) {
+        var box=element('div','epoch-info-training');
+        box.appendChild(element('strong','', 'Training context'));
+        if (loss && Number.isFinite(loss.loss)) box.appendChild(element('span','', 'Epoch loss '+Number(loss.loss).toFixed(4)));
+        if(points.length>1) {
         var svg=document.createElementNS('http://www.w3.org/2000/svg','svg');svg.setAttribute('viewBox','0 0 650 100');svg.setAttribute('role','img');svg.setAttribute('aria-label','Recorded training loss by epoch');
         var mn=Math.min.apply(null,points.map(function(p){return p.loss;})),mx=Math.max.apply(null,points.map(function(p){return p.loss;}));
         var x0=points[0].epoch,x1=points[points.length-1].epoch;
         var line=document.createElementNS(svg.namespaceURI,'polyline');
         line.setAttribute('points',points.map(function(p){return (15+620*(p.epoch-x0)/Math.max(1,x1-x0)).toFixed(1)+','+(10+80*(mx-p.loss)/Math.max(.000001,mx-mn)).toFixed(1);}).join(' '));
         line.setAttribute('fill','none');line.setAttribute('stroke','currentColor');line.setAttribute('stroke-width','2');svg.appendChild(line);box.appendChild(svg);
+        }
+        root.appendChild(box);
       }
-      root.appendChild(box);
     }
     (summary.campaignScores||[]).forEach(function(score) {
       var p=element('p','epoch-info-campaign-score',score.name+': VL '+(score.score==null?'unscored':Math.round(score.score*100)+'%')+' · '+(score.observations||0)+' weighted observations (independent campaign protocol)');

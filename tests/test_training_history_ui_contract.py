@@ -383,7 +383,7 @@ def test_training_archive_unlinks_only_attempts_sharing_physical_output():
 def test_history_prefers_captured_lr_and_displays_rank_in_both_views():
     script = (ROOT / "tool" / "js" / "training_history_ui.js").read_text(encoding="utf-8")
     assert "function trainingHistoryLearningRate(job)" in script
-    assert "return trainingHistoryCompactNumber(summary.lr);" in script
+    assert "return formatTrainingRunLearningRate(summary.lr);" in script
     assert "return String(job && job.progress && job.progress.lr || '').trim();" in script
     assert "var learningRate = trainingHistoryLearningRate(job);" in script
     assert "trainingHistoryMetric('LR', learningRate)" in script

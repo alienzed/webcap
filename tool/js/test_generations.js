@@ -3823,11 +3823,10 @@
       }).map(function (row) { return row.entry; });
     }
     var layout = JSON.stringify([String(status && status.session || ''), sweep,
-      variations.map(function (v) { return [v.label, v.prompt]; }),
-      rows.map(function (entry) { return entry[0]; }).sort()]);
+      variations.map(function (v) { return [v.label, v.prompt]; })]);
     var board = host.querySelector('.test-generations-matrix-board');
+    var previous = new Map();
     if (!board || host.dataset.layout !== layout) {
-      var previous = new Map();
       if (host.dataset.session === String(status && status.session || '')) {
         host.querySelectorAll('[data-matrix-key]').forEach(function (row) {
           previous.set(row.dataset.matrixKey, row.classList.contains('is-collapsed'));
@@ -3862,7 +3861,22 @@
         labels.appendChild(label);
       }
       board.appendChild(labels);
+      scroller.appendChild(board);
+      host.appendChild(scroller);
+    }
+
+    // Candidate membership changes only affect individual keyed rows.
+    var existingRows = new Map(Array.from(board.querySelectorAll('.test-generations-matrix-row')).map(function (row) {
+      return [row.dataset.matrixKey, row];
+    }));
+    var desiredKeys = new Set(rows.map(function (entry) { return entry[0]; }));
+    existingRows.forEach(function (row, key) {
+      if (desiredKeys.has(key)) return;
+      row.remove();
+      existingRows.delete(key);
+    });
       rows.forEach(function (entry) {
+        if (existingRows.has(entry[0])) return;
         var info = entry[1];
         var row = document.createElement('section');
         row.className = 'test-generations-matrix-row';
@@ -3963,16 +3977,15 @@
           ? !!el('test-generations-base-include').checked
           : selectedCandidates instanceof Set && selectedCandidates.has(info.candidateFile);
         setMatrixRowCollapsed(row, previous.has(entry[0]) ? previous.get(entry[0]) : !selected);
+        existingRows.set(entry[0], row);
       });
-      scroller.appendChild(board);
-      host.appendChild(scroller);
+    if (!rows.length) {
+      host.textContent = 'Generated previews will appear here.';
+      return;
     }
 
     syncMatrixCandidateSelection();
     // Reorder keyed rows for Rating/VL sorting without replacing video elements.
-    var existingRows = new Map(Array.from(board.querySelectorAll('.test-generations-matrix-row')).map(function (row) {
-      return [row.dataset.matrixKey, row];
-    }));
     rows.forEach(function (entry, index) {
       var rowNode = existingRows.get(entry[0]);
       var next = board.children[index + 1];

@@ -1,71 +1,48 @@
-# Set Dashboard
+# Set Dashboard — three working surfaces
 
-## Product contract
+## Purpose
 
-A **wide, on-demand Set preparation workspace presented as a modal**. Answer **What should I do next?** and let the user accomplish that step *inside* the dashboard when it is Set-level preparation. This is not merely a launcher, a mandatory wizard, a global tracker, or a replacement for specialized per-media editors.
+The Dashboard is an on-demand, wide, stable Set control center, not a mandatory wizard, an all-purpose workspace, or a set of redundant launch buttons. From the user's perspective:
 
-## Interaction
-
-- Five freely navigable tabs, in preparation order: **Guidance · Understand · Annotate · Caption · Review**. Training remains in its own workspace, outside this dashboard.
-- **Auto-select the earliest unfinished, useful stage on every open.** The user's manual tab selection remains stable while the modal is open. Reevaluate on the next open; never bounce a user to another screen or auto-advance after completing work.
-- Show **exactly one prominent next action** per tab, and **at most one secondary action** where it genuinely matters. Specialized tools continue to exist in their owning workspaces; do not turn the dashboard into a legacy-tool directory.
-- Tabs may each indicate work remaining; this is informational, not a forced sequence. Preparation stages may overlap. Progress should not imply that captions or an entire stage are certified.
-- The recommendation uses prominent, action-oriented text with one clear CTA. Avoid redundant small explanations, but do not remove meaningful large-format guidance.
-- Show concise, honest progress from existing evidence: caption coverage, saved Sight observations (not verified Set-wide freshness), and reviewed annotation group assignments. Do not present a universal readiness percentage, imply QA certification, or create new persisted status.
-- When a recommendation opens a scope-sensitive tool, the count and message must reflect what that tool can act on. Clearly distinguish Set-wide totals from the current filtered view.
-- Keep genuine blockers or errors visibly readable; optional low-value explanations may live in contextual help.
-- A Dashboard tab can be a full-sized working surface: **do not constrain its width to launcher dimensions**. Only explicit button clicks may start a scan, an LLM call, a job, or a workflow. Opening or switching dashboard tabs performs no inference or mutations.
-
-## Guidance ownership
-
-- **Required key phrase** and **balance terms** are strongly recommended but optional; missing either should be the Guidance tab's primary recommendation, in that order. Do not block navigation or other tools because they are absent.
-- Show the existing Set-owned controls, preserving the existing save and reporting semantics; no competing persisted fields.
-- The **Caption Template** remains a meaningful Guidance step; expose an obvious way to edit the actual existing template, without making it mandatory or inventing a separate copy.
-- QA report-only rules remain in QA.
-
-## Tab destinations
-
-| Tab | Primary intention | Optional secondary |
+| Tab | Question | In-place work and destinations |
 | --- | --- | --- |
-| Guidance | Set key phrase, then balance terms, then existing caption template | Template or the other Guidance field |
-| Understand | Run, resume, inspect, and retry Set Intelligence directly in this tab | Discover Vocabulary after Sight is available |
-| Annotate | Continue Focused Annotation where group review remains | Guided Tagging |
-| Caption | Continue Focused Caption on media with missing captions | Edit Caption Template |
-| Review | Open Quality Assurance and existing Deep QA/review findings | Caption Report |
+| **Analyze & Tag** | What is here, and what should I identify? | Existing Set Intelligence Sight model/scope/scan/progress/inspection in place; current-scope group review coverage alongside Manage Groups, Focused Annotation, Guided Tagging, and Vocabulary Discovery |
+| **Caption** | How do I describe it? | Required phrase and balance phrases edited in place; existing Caption Template editor opened explicitly; current-scope caption coverage and Focused Caption; Caption Sheet available for review |
+| **Review** | What should I improve? | Existing QA/Deep QA review workspace, Caption Sheet, and Caption Report through the established destinations |
 
-### Understand presentation and IA
+Training stays in its existing workspace. Neither the Dashboard nor switching tabs starts a model, scan, QA job, or mutation. The Set Intelligence component owns Sight; the QA workspace owns QA evidence; caption/group fields retain their existing save and persistence semantics. A Dashboard action that enters a specialist editor closes the Dashboard.
 
-The Dashboard owns stage progression. **Do not recreate a miniature dashboard inside Understand.** Keep one prominent context-dependent action: run/resume missing Sight, retry recorded failures, Stop while running, or Discover Vocabulary once no urgent scan work remains. When usable partial Sight exists, Vocabulary may be an unobtrusive secondary action even if gaps remain.
+## Delivery phases and regression boundaries
 
-Keep the model selector, selection scope and saved Sight coverage visible. Treat *scan progress* (work performed in the current run) and *saved Sight coverage* (reusable evidence for the selected model/scope) as different facts, never one fabricated readiness score.
+1. **Grounding & ownership:** Read `AGENTS.md`, the prior Dashboard implementation, Set Intelligence ownership, template/group control locations, focused workflows, review destinations and existing tests. Preserve original field ids and the single embedded Sight host. No new backend state or job schedulers.
+2. **Structure & sizing:** Replace the five thin tabs with Analyze & Tag, Caption, Review. Use a top-anchored, consistently wide and tall dialog with stationary header/tabs/progress and a scrolling body. Use a two-column desktop layout and stacked narrow layout. Do not reparent stateful media controls during polling.
+3. **Functional placement:** Embed the existing Sight control once on Analyze & Tag and place annotation actions beside it. Keep existing phrase/balance inputs and autosave under Caption, without inventing duplicate editors. Keep template authoring in its existing editor and launch it explicitly. Review links to existing QA, captions and report surfaces. Use prominent contextual actions and quieter supporting operations.
+4. **Evidence and checks:** The shared strip reports (a) saved Sight presence across the whole Set, which does **not** certify freshness/model parity, (b) configured group assignments reviewed in the **current filtered view**, and (c) captions present in the **whole Set**. Caption's own bar uses the current filtered view. Missing groups show no denominator. The latest model-specific Sight scope stays visible inside Set Intelligence. Update deterministic Dashboard tests, inspect the changed files and run practical browser acceptance on representative Sets before shipping to production.
 
-**Progressive disclosure:** idle live Sight preview, individual item inspection/refresh, force refresh all, and raw Vision output are initially collapsed. They remain fully usable on demand. Scanning still displays explicit progress, timing and Stop without forcing the preview open. Do not fetch media previews while inspection is collapsed. Show a genuine count of issues in the inspection disclosure without expanding it automatically; manual item inspection remains available even when no problems are flagged.
+## Interaction invariants
 
-Remove redundant Prepare Set stage navigation, generic explanatory footers, and duplicate primary controls. Guided Tagging and QA remain accessible through the Dashboard tabs and their existing workspaces. No changes to Sight persistence, model semantics, retries, cancellation, or background job ownership.
+- Default to Caption when key phrase/balance terms need configuration; otherwise default to Analyze & Tag for unprepared Sight or pending annotation; default to Caption for unfinished captions, otherwise Review. Users can navigate freely; no forced progress or automatic tab jump while open.
+- Sight scan controls, stop, resume/retry, cached inspection, and vocabulary handoff stay with `set_scan.js`. The Dashboard does not implement competing scan logic, and switching tabs must never cancel a running job.
+- The only authoritative phrase and balance controls remain `stats-required-phrase`, `stats-phrases`, and their existing list/editor handlers. The single actual caption primer remains `primer-template`. The dashboard offers an explicit Edit Template link instead of cloning its field.
+- Group definitions and assignments continue to be owned by checklist and focused annotation. The Dashboard's review metric measures checked assignments, **not annotation correctness or QA certification**.
+- Caption Assist, Focused Caption, Focused Annotation, Guided Tagging, QA, reports and Set Intelligence retain their own operation semantics. This Dashboard does not rewrite their models, persistence, cancellation, error reporting, or queue behavior.
+- Respect active GPU work by withholding optional Guided Tagging and Vocabulary launch controls while GPU lanes are busy. Manual group management and annotation remain possible.
+- Present honest empty selections, missing captions and disabled report options; preserve focused keyboard navigation, Escape, overlay dismissal and Set-switch isolation.
 
-**Set Intelligence / Prepare Set is embedded directly in Understand:** the original model, selection scope, Sight scan/progress, cached inspection, item retry, and resume controls remain owned by `set_scan.js`. A separate Prepare Set dialog must not appear over the dashboard. Its existing entry button opens Dashboard → Understand. Existing saved-Sight detail dialogs and the Vocabulary/annotation/QA workspaces remain available where their tasks justify them.
+## Focused acceptance
 
-Other destinations use their existing feature's navigation, scope, safeguards and persistence. Do not duplicate their workflow.
+- Fresh Set with missing guidance opens Caption. Both phrase and balance fields are visible/editable, and no inferencing starts.
+- Set with guidance but no Sight opens Analyze & Tag, with Sight embedded rather than overlaid; any scan still requires explicit action.
+- Analyze & Tag offers Manage Groups on an unconfigured Set, Focused Annotation on configured groups, and optional vocabulary/tagging only with saved Sight and an available GPU.
+- Mature Set opens Review; QA, caption inspection and report destinations work independently without a new Dashboard-side QA process.
+- A filtered selection distinguishes current-view assignment/caption coverage from whole-Set coverage. The saved Sight metric is clearly labeled as any-model evidence and is not a completion certificate.
+- Changing tabs doesn't shift the header, resize the dashboard, replace live Sight progress, or start a second scan. Returning to Analyze & Tag reconnects the existing UI.
+- Focus and closing restore the preceding UI without stranded modal overlays.
+- Existing specialized workflows and Set-owned saved state remain usable; run `node --test tests/set_dashboard.test.cjs` plus adjacent Sight/QA/Caption tests and representative desktop/narrow browser checks.
 
-## Evidence and runtime
+## Scope not included
 
-- Read only the current loaded Set's state on demand: caption presence, required phrase, balance phrases, group reviews, and saved Sight metadata. Distinguish partial/unknown from verified complete.
-- Reuse Set-owned Sight and QA information. Saved Sight can be model-scoped; do not claim a Set-wide up-to-date scan simply because one item contains observations. Incomplete Sight is a reason to inspect Prepare Set.
-- Deep QA is **not** a default recommendation on fresh or barely captioned Sets. Existing saved findings remain accessible through QA; do not invent dashboard-side QA findings or freshness checks.
-- Active Training and other runtime work must not be represented as immediately launchable GPU work. Show a visible reason and offer an appropriate read-only/manual action; existing queues remain authoritative.
-- The dashboard must not create a global registry, new file persistence, app-wide Set scanner, background poller, or cleanup obligations when Sets are deleted.
-
-## Navigation and acceptance
-
-1. Opening a fresh Set selects Guidance; missing required phrase is the only prominent action. Entering it makes balance terms the next Guidance recommendation without forcing tab changes.
-2. Missing balance terms gets its own recommendation; neither missing field gates other tabs.
-3. After guidance, Understand displays the **real Prepare Set interface in place**, including scope/model choice, cached Sight review, resume/retry and active progress. Opening Understand may read cached evidence but may not automatically begin inference.
-4. With usable Sight and outstanding group reviews, offer focused annotation; an already mature Set can skip ahead to captions or QA.
-5. With missing captions, offer captioning. Review is available independently but never presented as a per-item certification.
-6. In an active Training session, don't offer an immediate GPU scan; allow manual editing/review. User navigation and current drafts must be preserved.
-7. Switching Sets while open must not leak stale recommendations, edits, or async responses. No automatic return from QA/Focus Set or unrelated changes to QA navigation in this feature.
-8. Maintain readable type at standard zoom, focus management, Escape and close behavior, and accessible tab/button labels. Navigating away from Understand must not cancel a running scan; reopening the tab reconnects to the current scan. Close and downstream transitions leave no phantom overlay or stranded dashboard.
-
-## Implementation scope
-
-Implement a small read-only recommendation layer and reuse the live fields, existing entry points, and existing autosave. Keep the former tool actions available in their normal workspaces; minimize UI duplication. QA focus-set return navigation is a separate issue and is explicitly deferred.
+- Embedding Caption Assist, full QA, or all focused editors into the dashboard.
+- New QA finding summaries, inferred readiness scores, freshness certification or new server endpoints.
+- Training workflow redesign or GPU/queue scheduling changes.
+- Deleting legacy feature entry points or changing unrelated navigation.

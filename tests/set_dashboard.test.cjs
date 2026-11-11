@@ -26,7 +26,7 @@ function dashboard(options = {}) {
       setAttribute(name, value) { elements[id + ':' + name] = value; }
     };
   }
-  const names = ['guidance', 'understand', 'annotate', 'caption', 'review'];
+  const names = ['analyze', 'caption', 'review'];
   const tabs = names.map(name => {
     const tab = element('tab-' + name);
     tab.getAttribute = key => key === 'data-set-dashboard-tab' ? name : null;
@@ -86,37 +86,37 @@ function dashboard(options = {}) {
   };
 }
 
-test('fresh Set prioritizes required phrase without background jobs', () => {
+test('fresh Set opens Caption with editable guidance and no background jobs', () => {
   const app = dashboard();
-  assert.equal(app.selected(), 'guidance');
-  assert.equal(app.title(), 'Give this Set a consistent key phrase');
-  assert.equal(app.primary().textContent, 'Set key phrase');
+  assert.equal(app.selected(), 'caption');
+  assert.equal(app.title(), 'Caption 1 remaining media item');
+  assert.equal(app.primary().textContent, 'Continue captioning');
   assert.deepEqual(app.actions, []);
-  assert.equal(app.secondary().classList.contains('hidden'), true);
+  assert.equal(app.elements['set-dashboard-secondary'].disabled, undefined);
 });
 
-test('missing balance terms is its own action and remains optional', () => {
+test('missing balance terms are optional and do not gate Review', () => {
   const app = dashboard({ phrase: 'subject' });
-  assert.equal(app.selected(), 'guidance');
-  assert.equal(app.title(), 'Add terms to help balance your captions');
+  assert.equal(app.selected(), 'caption');
+  assert.equal(app.title(), 'Caption 1 remaining media item');
   app.listeners['tab-review:click']();
   assert.equal(app.selected(), 'review');
   assert.deepEqual(app.actions, []);
 });
 
-test('unprepared Set opens Understand with embedded Prepare Set, without inference', () => {
+test('unprepared Set opens Analyze with embedded Sight, without inference', () => {
   const app = dashboard({ phrase: 'subject', balances: 'front' });
-  assert.equal(app.selected(), 'understand');
+  assert.equal(app.selected(), 'analyze');
   assert.deepEqual(app.actions, ['prepare']);
-  assert.equal(app.primary().classList.contains('hidden'), true);
+  assert.equal(app.elements['set-dashboard-tags-primary'].textContent, 'Manage Groups');
 });
 
 test('Training blocks scan recommendation, favors manual group work', () => {
   const app = dashboard({ phrase: 'subject', balances: 'front', training: true });
-  assert.equal(app.selected(), 'annotate');
-  assert.equal(app.primary().textContent, 'Manage Groups');
-  app.primary().onclick();
-  assert.deepEqual(app.actions, ['groups']);
+  assert.equal(app.selected(), 'analyze');
+  assert.equal(app.elements['set-dashboard-tags-primary'].textContent, 'Manage Groups');
+  app.elements['set-dashboard-tags-primary'].onclick();
+  assert.deepEqual(app.actions, ['prepare', 'hide-prepare', 'groups']);
 });
 
 test('pending annotation before incomplete captions', () => {
@@ -124,18 +124,18 @@ test('pending annotation before incomplete captions', () => {
     phrase: 'subject', balances: 'front', groups: ['Shape'],
     items: [{ key: 'a', fileName: 'a.png', caption: '', hasCaption: false, metadata: { vision_sight: { description: 'observed', inventory: {} } } }]
   });
-  assert.equal(app.selected(), 'annotate');
-  assert.equal(app.primary().textContent, 'Focused Annotation');
+  assert.equal(app.selected(), 'analyze');
+  assert.equal(app.elements['set-dashboard-tags-primary'].textContent, 'Focused Annotation');
 });
 
-test('mature Set opens Review with only one secondary action', () => {
+test('mature Set opens Review with QA and caption inspection actions', () => {
   const app = dashboard({
     phrase: 'subject', balances: 'front', groups: ['Shape'], checked: true,
     items: [{ key: 'a', fileName: 'a.png', caption: 'subject, front', hasCaption: true, metadata: { vision_sight: { description: 'observed', inventory: {} } } }]
   });
   assert.equal(app.selected(), 'review');
-  assert.equal(app.primary().textContent, 'Open Quality Assurance');
-  assert.equal(app.secondary().textContent, 'Caption Report');
+  assert.equal(typeof app.elements['set-dashboard-review-qa'].onclick, 'function');
+  assert.equal(app.elements['set-dashboard-review-report'].disabled, false);
 });
 
 test('manual stage selection stays fixed until reopen', () => {
@@ -144,7 +144,7 @@ test('manual stage selection stays fixed until reopen', () => {
   assert.equal(app.selected(), 'caption');
   app.context.window.closeSetDashboard();
   app.context.window.openSetDashboard();
-  assert.equal(app.selected(), 'guidance');
+  assert.equal(app.selected(), 'caption');
   assert.deepEqual(app.actions, []);
 });
 
@@ -160,11 +160,11 @@ test('markup retains single authoritative guidance controls and original templat
   assert.match(html, /static\/css\/set_dashboard\.css/);
 });
 
-test('shared GPU activity suppresses Vocabulary as the first step', () => {
+test('shared GPU activity leaves manual actions available', () => {
   const app = dashboard({ phrase: 'subject', balances: 'front', shellLane: 'inference' });
-  assert.equal(app.selected(), 'annotate');
-  assert.equal(app.primary().textContent, 'Manage Groups');
-  assert.equal(app.secondary().classList.contains('hidden'), true);
+  assert.equal(app.selected(), 'analyze');
+  assert.equal(app.elements['set-dashboard-tags-primary'].textContent, 'Manage Groups');
+  assert.equal(app.elements['set-dashboard-tags-vocabulary'].classList.contains('hidden'), true);
 });
 
 test('outstanding annotation reviews take precedence even if captions exist', () => {
@@ -175,8 +175,8 @@ test('outstanding annotation reviews take precedence even if captions exist', ()
       metadata: { vision_sight: { description: 'observed', inventory: {} } }
     }]
   });
-  assert.equal(app.selected(), 'annotate');
-  assert.equal(app.primary().textContent, 'Focused Annotation');
+  assert.equal(app.selected(), 'analyze');
+  assert.equal(app.elements['set-dashboard-tags-primary'].textContent, 'Focused Annotation');
 });
 
 test('tab changes hide embedded Sight without triggering a new scan', () => {
@@ -185,7 +185,7 @@ test('tab changes hide embedded Sight without triggering a new scan', () => {
   app.listeners['tab-review:click']();
   assert.equal(app.selected(), 'review');
   assert.deepEqual(app.actions, ['prepare', 'hide-prepare']);
-  app.listeners['tab-understand:click']();
+  app.listeners['tab-analyze:click']();
   assert.deepEqual(app.actions, ['prepare', 'hide-prepare', 'prepare']);
 });
 
@@ -194,7 +194,7 @@ test('closing and reopening retains earliest stage and closes embedded preparati
   app.context.window.closeSetDashboard();
   assert.deepEqual(app.actions, ['prepare', 'hide-prepare']);
   app.context.window.openSetDashboard();
-  assert.equal(app.selected(), 'understand');
+  assert.equal(app.selected(), 'analyze');
   assert.deepEqual(app.actions, ['prepare', 'hide-prepare', 'prepare']);
 });
 
@@ -206,4 +206,42 @@ test('Prepare Set is hosted once inside Dashboard, not in another fullscreen ove
   assert.ok(begin >= 0 && begin < hosted && hosted < end);
   assert.equal((html.match(/id="set-scan-modal"/g) || []).length, 1);
   assert.match(html, /id="set-scan-modal" class="set-scan-modal hidden" role="region"/);
+});
+
+test('three navigation tabs and progress strip use separate scope labels', () => {
+  const app = dashboard({ phrase: 'subject', balances: 'front' });
+  assert.equal(app.tabs.length, 3);
+  assert.equal(app.elements['set-dashboard-sight-count'].textContent, '0 / 1');
+  assert.equal(app.elements['set-dashboard-captions-count'].textContent, '0 / 1');
+  assert.equal(app.elements['set-dashboard-tags-count'].textContent, '—');
+  const html = fs.readFileSync(path.join(__dirname, '../tool/tool.html'), 'utf8');
+  assert.match(html, /Group assignments reviewed/);
+  assert.match(html, /Current filtered view/);
+  assert.match(html, /id="set-dashboard-template-open"/);
+  assert.equal((html.match(/id="stats-required-phrase"/g) || []).length, 1);
+});
+
+test('caption guidance stays directly accessible regardless of completeness', () => {
+  const app = dashboard({ phrase: 'subject', balances: 'front' });
+  app.listeners['tab-caption:click']();
+  assert.equal(app.selected(), 'caption');
+  assert.equal(app.elements['set-dashboard-caption'].classList.contains('hidden'), false);
+  assert.equal(app.elements['set-dashboard-analyze'].classList.contains('hidden'), true);
+  assert.equal(app.primary().textContent, 'Continue captioning');
+});
+
+test('review exposes inspection and QA without triggering inference', () => {
+  const app = dashboard();
+  app.listeners['tab-review:click']();
+  assert.equal(app.actions.length, 0);
+  assert.equal(app.elements['set-dashboard-review-report'].disabled, true);
+  app.elements['set-dashboard-review-qa'].onclick();
+  assert.deepEqual(app.actions, ['workspace', 'qa']);
+});
+
+test('fixed dashboard shell and tab content scroll independently', () => {
+  const css = fs.readFileSync(path.join(__dirname, '../tool/css/set_dashboard.css'), 'utf8');
+  assert.match(css, /\.set-dashboard-modal\s*\{\s*align-items: flex-start;/);
+  assert.match(css, /#set-dashboard-stage\s*\{[^}]*overflow-y: auto;/);
+  assert.match(css, /\.set-dashboard-dialog\s*\{[^}]*display: flex;/);
 });

@@ -747,7 +747,6 @@
     setScanState.currentRawResponse = null;
     setScanState.rawResponses = [];
     setScanState.rawResponseIndex = -1;
-    el('set-scan-inspection-disclosure').open = false;
     setScanState.completed = 0;
     setScanState.total = 0;
     setScanState.phase = 'preparing';

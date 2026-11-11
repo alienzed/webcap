@@ -3482,27 +3482,22 @@
   <div class="set-dashboard-dialog">
     <header class="set-dashboard-header"><div><h2 id="set-dashboard-title">Set Dashboard</h2><span id="set-dashboard-name"></span></div><button type="button" id="set-dashboard-close" aria-label="Close Set Dashboard" title="Close">×</button></header>
     <div class="set-dashboard-tabs" role="tablist" aria-label="Set preparation">
-      <button type="button" role="tab" data-set-dashboard-tab="guidance" aria-controls="set-dashboard-stage" aria-selected="false" tabindex="-1">Guidance</button>
-      <button type="button" role="tab" data-set-dashboard-tab="understand" aria-controls="set-dashboard-stage" aria-selected="false" tabindex="-1">Understand</button>
-      <button type="button" role="tab" data-set-dashboard-tab="annotate" aria-controls="set-dashboard-stage" aria-selected="false" tabindex="-1">Annotate</button>
+      <button type="button" role="tab" data-set-dashboard-tab="analyze" aria-controls="set-dashboard-stage" aria-selected="false" tabindex="-1">Analyze &amp; Tag</button>
       <button type="button" role="tab" data-set-dashboard-tab="caption" aria-controls="set-dashboard-stage" aria-selected="false" tabindex="-1">Caption</button>
       <button type="button" role="tab" data-set-dashboard-tab="review" aria-controls="set-dashboard-stage" aria-selected="false" tabindex="-1">Review</button>
     </div>
-    <div class="set-dashboard-overview" id="set-dashboard-overview" aria-label="Set progress"></div>
+    <div class="set-dashboard-overview" id="set-dashboard-overview" aria-label="Set progress">
+      <div class="set-dashboard-metric"><span>Saved Sight</span><strong id="set-dashboard-sight-count">—</strong><small>Any model · entire Set</small></div>
+      <div class="set-dashboard-metric"><span>Group assignments reviewed</span><strong id="set-dashboard-tags-count">—</strong><small>Current filtered view</small></div>
+      <div class="set-dashboard-metric"><span>Captions present</span><strong id="set-dashboard-captions-count">—</strong><small>Entire Set</small></div>
+    </div>
     <section id="set-dashboard-stage" role="tabpanel" aria-live="polite">
       <h3 id="set-dashboard-action-title"></h3>
-      <div id="set-dashboard-progress" class="set-dashboard-progress hidden">
-        <div class="set-dashboard-progress-label"><span id="set-dashboard-progress-text"></span><strong id="set-dashboard-progress-value"></strong></div>
-        <div id="set-dashboard-progress-bar" class="set-dashboard-progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-label="Stage progress"><div id="set-dashboard-progress-fill" class="set-dashboard-progress-fill"></div></div>
-      </div>
       <div id="set-dashboard-action-status" class="set-dashboard-action-status hidden" role="status"></div>
-      <div id="set-dashboard-guidance" class="set-dashboard-guidance hidden">
-        <div id="set-dashboard-phrase" class="set-dashboard-guidance-edit hidden"><label>Required key phrase</label><input id="stats-required-phrase" type="text" placeholder="e.g. subject name"></div>
-        <div id="set-dashboard-balance" class="set-dashboard-guidance-edit hidden"><div class="section-label-inline"><label>Balance Phrases</label><button id="stats-balance-info-btn" type="button" class="mini-info-btn" title="Balance phrases help" aria-label="Balance phrases help">i</button></div><div class="checklist-input-row term-input-row"><input id="stats-phrases-add-input" type="text" class="form-control" placeholder="Add balance phrase..."><button id="stats-phrases-add-btn" type="button" title="Add balance phrase" aria-label="Add balance phrase">+</button><div id="stats-phrases-add-results" class="caption-term-results hidden"></div></div><div id="stats-phrases-items"></div><textarea id="stats-phrases" rows="4" class="hidden" placeholder="face down&#10;face up&#10;front view&#10;back view"></textarea></div>
-        <div id="set-dashboard-template" class="set-dashboard-template hidden"></div>
-      </div>
-      <div class="set-dashboard-actions"><button type="button" id="set-dashboard-primary" class="set-dashboard-primary"></button><button type="button" id="set-dashboard-secondary" class="set-dashboard-secondary hidden"></button></div>
-              <div id="set-scan-modal" class="set-scan-modal hidden" role="region" aria-label="Set Intelligence">
+      <div id="set-dashboard-analyze" class="set-dashboard-analyze hidden">
+        <div class="set-dashboard-sight-panel">
+          <h4>Visual understanding</h4>
+          <div id="set-scan-modal" class="set-scan-modal hidden" role="region" aria-label="Set Intelligence">
             <div class="set-scan-dialog">
                 <div class="set-scan-header">
                     <div>
@@ -3597,7 +3592,57 @@
 
             </div>
         </div>
-
+        </div>
+        <aside class="set-dashboard-tags-panel" aria-label="Vocabulary and annotation">
+          <h4>Vocabulary &amp; Tags</h4>
+          <p id="set-dashboard-tags-status" class="set-dashboard-section-copy"></p>
+          <div id="set-dashboard-tags-progress" class="set-dashboard-progress hidden">
+            <div class="set-dashboard-progress-label"><span>Reviewed assignments in current view</span><strong id="set-dashboard-tags-progress-value"></strong></div>
+            <div class="set-dashboard-progress-track"><div id="set-dashboard-tags-progress-fill" class="set-dashboard-progress-fill"></div></div>
+          </div>
+          <div class="set-dashboard-section-actions">
+            <button type="button" id="set-dashboard-tags-primary" class="set-dashboard-primary"></button>
+            <button type="button" id="set-dashboard-tags-guided" class="set-dashboard-quiet hidden">Guided Tagging</button>
+            <button type="button" id="set-dashboard-tags-vocabulary" class="set-dashboard-quiet hidden">Discover Vocabulary</button>
+            <button type="button" id="set-dashboard-tags-groups" class="set-dashboard-quiet hidden">Manage Groups</button>
+          </div>
+          <p id="set-dashboard-tags-note" class="set-dashboard-section-copy hidden"></p>
+        </aside>
+      </div>
+      <div id="set-dashboard-caption" class="set-dashboard-split hidden">
+        <div class="set-dashboard-work-panel">
+          <h4>Caption coverage</h4>
+          <div id="set-dashboard-progress" class="set-dashboard-progress hidden">
+            <div class="set-dashboard-progress-label"><span id="set-dashboard-progress-text"></span><strong id="set-dashboard-progress-value"></strong></div>
+            <div id="set-dashboard-progress-bar" class="set-dashboard-progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-label="Caption coverage"><div id="set-dashboard-progress-fill" class="set-dashboard-progress-fill"></div></div>
+          </div>
+          <div class="set-dashboard-actions">
+            <button type="button" id="set-dashboard-primary" class="set-dashboard-primary"></button>
+            <button type="button" id="set-dashboard-secondary" class="set-dashboard-secondary">Review captions</button>
+          </div>
+        </div>
+        <aside id="set-dashboard-guidance" class="set-dashboard-guidance set-dashboard-guidance-panel">
+          <h4>Caption guidance</h4>
+          <div id="set-dashboard-phrase" class="set-dashboard-guidance-edit"><label for="stats-required-phrase">Required key phrase</label><input id="stats-required-phrase" type="text" placeholder="e.g. subject name"></div>
+          <div id="set-dashboard-balance" class="set-dashboard-guidance-edit"><div class="section-label-inline"><label for="stats-phrases-add-input">Balance Phrases</label><button id="stats-balance-info-btn" type="button" class="mini-info-btn" title="Balance phrases help" aria-label="Balance phrases help">i</button></div><div class="checklist-input-row term-input-row"><input id="stats-phrases-add-input" type="text" class="form-control" placeholder="Add balance phrase..."><button id="stats-phrases-add-btn" type="button" title="Add balance phrase" aria-label="Add balance phrase">+</button><div id="stats-phrases-add-results" class="caption-term-results hidden"></div></div><div id="stats-phrases-items"></div><textarea id="stats-phrases" rows="4" class="hidden" placeholder="face down&#10;face up&#10;front view&#10;back view"></textarea></div>
+          <div class="set-dashboard-template-action"><span>Caption Template</span><button id="set-dashboard-template-open" type="button" class="set-dashboard-quiet">Edit Template</button></div>
+        </aside>
+      </div>
+      <div id="set-dashboard-review" class="set-dashboard-review hidden">
+        <section class="set-dashboard-work-panel">
+          <h4>Quality Assurance</h4>
+          <p>Investigate Set-level issues and review actionable Deep QA findings and corrections.</p>
+          <button type="button" id="set-dashboard-review-qa" class="set-dashboard-primary">Open Quality Assurance</button>
+        </section>
+        <section class="set-dashboard-work-panel">
+          <h4>Review captions</h4>
+          <p>Inspect captions together or open the existing caption report.</p>
+          <div class="set-dashboard-section-actions">
+            <button type="button" id="set-dashboard-review-captions" class="set-dashboard-quiet">Caption Sheet</button>
+            <button type="button" id="set-dashboard-review-report" class="set-dashboard-quiet">Caption Report</button>
+          </div>
+        </section>
+      </div>
     </section>
   </div>
 </div>

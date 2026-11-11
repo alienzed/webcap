@@ -441,3 +441,7 @@ def test_history_hides_only_redundant_finished_early_receipts():
     assert "(completionNote ? '<div class=" in script
     assert 'job["completionNote"] = "Finished early"' in progress
     assert "trainingHistoryMetric('Dropout'" in script
+    assert "return note === generated ? '' : note;" in script
+    assert "var stepOpensCheckpoint = canOpenCheckpointRun && checkpointStepMatch" in script
+    assert "stepOpensCheckpoint ? 'data-training-history-run=" in script
+    assert "(stepOpensCheckpoint ? '' : trainingHistoryMetric(" in script

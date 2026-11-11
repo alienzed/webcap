@@ -441,11 +441,10 @@ def test_run_setup_uses_compact_parameter_rail_and_resume_canvas():
     styles = (root / "tool" / "css" / "workbench.css").read_text(encoding="utf-8")
 
     assert 'training-run-parameter-rail' in html
-    assert 'id="training-run-h3-image-shift-input"' in html
-    assert 'id="training-run-h3-image-shift-option"' in html
-    assert "bindDraft(imageShiftInput, 'h3ImageShift')" in script
-    assert "imageShiftOption.classList.toggle('hidden', stage !== 'h3')" in script
-    assert 'if (stage === \'h3\') trainingWorkspaceState.runConfigDraft.h3ImageShift = draft.h3ImageShift;' in script
+    assert 'training-run-h3-image-shift-input' not in html
+    assert 'training-run-h3-image-shift-option' not in html
+    assert "bindDraft(imageShiftInput, 'h3ImageShift')" not in script
+    assert "h3ImageShift" not in script
     assert 'training-run-main' in html
     assert 'training-run-primary-row' in html
     assert '<span>Custom checkpoint directory</span>' in html
@@ -499,7 +498,7 @@ context.refreshTrainingReview().then(value => {
     subprocess.run(["node", "-e", script, str(root / "tool" / "js" / "training_review.js")], check=True)
 
 
-def test_h3_image_shift_run_setup_validation():
+def test_run_setup_ignores_historical_shift_draft_inputs():
     root = Path(__file__).resolve().parents[1]
     source = (root / "tool" / "js" / "training_review.js").read_text(encoding="utf-8")
     script = r"""
@@ -514,8 +513,8 @@ vm.runInNewContext(source.slice(start, stop), ctx);
 const settings = {optimizerLr: '8e-5', adapterRank: '32', epochs: '90', adapterDropout: '0', h3ImageShift: '0.67'};
 const assert = require('node:assert/strict');
 assert.equal(ctx.validateTrainingRunSettings(settings), '');
-for (const bad of ['', '0', '-1', 'NaN', 'Infinity', 'wrong']) {
-  assert.match(ctx.validateTrainingRunSettings({...settings, h3ImageShift: bad}), /image shift/i);
+for (const legacy of ['', '0', '-1', 'NaN', 'Infinity', 'wrong']) {
+  assert.equal(ctx.validateTrainingRunSettings({...settings, h3ImageShift: legacy}), '');
 }
 ctx.trainingWorkspaceState.runStages = 'wan21';
 assert.equal(ctx.validateTrainingRunSettings({...settings, h3ImageShift: ''}), '');
@@ -584,3 +583,17 @@ def test_training_queue_has_direct_reorder_and_epoch_controls():
     assert "runnerQueue.addEventListener('drop'" in events
     assert "reorderManagedTraining(movingId, '', to)" in events
     assert 'training-runner-queue-item[data-training-queue-drop]' in styles
+
+
+def test_run_setup_uses_template_shift_without_removing_backend_override_support():
+    root = Path(__file__).resolve().parents[1]
+    ui = (root / "tool" / "js" / "training_runner_ui.js").read_text(encoding="utf-8")
+    review = (root / "tool" / "js" / "training_review.js").read_text(encoding="utf-8")
+    config = (root / "tool" / "server" / "training_config_files.py").read_text(encoding="utf-8")
+    template = (root / "tool" / "templates" / "config.h3.toml").read_text(encoding="utf-8")
+    assert "delete settings.h3ImageShift;" in ui
+    assert "settings.h3ImageShift" not in ui[ui.index("function formatTrainingJobSettings"):ui.index("function trainingOutputIdentity")]
+    assert "h3ImageShift" not in review
+    assert 'if "h3ImageShift" in data:' in config
+    assert "image_shift = 1" in template
+    assert "shift = 8" in template

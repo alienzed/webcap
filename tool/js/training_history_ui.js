@@ -52,10 +52,20 @@ function trainingHistoryCompactNumber(value) {
   return String(number);
 }
 
+function trainingHistoryLearningRate(job) {
+  var summary = job && job.runSummary && typeof job.runSummary === 'object' ? job.runSummary : {};
+  if (summary.lr !== undefined && summary.lr !== null && summary.lr !== '') {
+    return trainingHistoryCompactNumber(summary.lr);
+  }
+  return String(job && job.progress && job.progress.lr || '').trim();
+}
+
 function trainingHistoryRunSummary(job) {
   var summary = job && job.runSummary && typeof job.runSummary === 'object' ? job.runSummary : {};
   var parts = [];
-  if (summary.lr !== undefined && summary.lr !== null) parts.push('LR ' + trainingHistoryCompactNumber(summary.lr));
+  var lr = trainingHistoryLearningRate(job);
+  if (lr) parts.push('LR ' + lr);
+  if (Number(summary.rank) > 0) parts.push('R' + Math.round(Number(summary.rank)));
   if (summary.dropout !== undefined && summary.dropout !== null) parts.push('dropout ' + trainingHistoryCompactNumber(summary.dropout));
   if (job && job.stages === 'h3') {
     if (summary.shift !== undefined && summary.shift !== null) parts.push('video shift ' + trainingHistoryCompactNumber(summary.shift));
@@ -219,7 +229,7 @@ function renderTrainingHistory() {
     var epochs = Number(progress.epochs);
     var finalStep = Number(progress.step);
     var plannedSteps = Number(progress.plannedSteps);
-    var learningRate = String(progress.lr || '').trim();
+    var learningRate = trainingHistoryLearningRate(job);
     var artifact = job.artifactSummary && typeof job.artifactSummary === 'object' ? job.artifactSummary : {};
     var hasStarted = Number(job.startedAt || 0) > 0;
     var hasFinished = Number(job.finishedAt || 0) > 0;
@@ -284,6 +294,7 @@ function renderTrainingHistory() {
       trainingHistoryMetric('Epoch', isFinite(epoch) && epoch >= 0 ? Math.round(epoch).toLocaleString() + (isFinite(epochs) && epochs > 0 ? ' / ' + Math.round(epochs).toLocaleString() : '') : '') +
       trainingHistoryMetric('Step', isFinite(finalStep) && finalStep >= 0 ? Math.round(finalStep).toLocaleString() + (isFinite(plannedSteps) && plannedSteps > 0 ? ' / ' + Math.round(plannedSteps).toLocaleString() : '') : '') +
       trainingHistoryMetric('LR', learningRate) +
+      trainingHistoryMetric('Rank', Number(runConfig.rank) > 0 ? String(Math.round(Number(runConfig.rank))) : '') +
       trainingHistoryMetric(job.stages === 'h3' ? 'Video shift' : 'Shift', runConfig.shift !== undefined && runConfig.shift !== null ? trainingHistoryCompactNumber(runConfig.shift) : '') +
       (job.stages === 'h3'
         ? trainingHistoryMetric('Image shift', runConfig.imageShift !== undefined && runConfig.imageShift !== null ? trainingHistoryCompactNumber(runConfig.imageShift) : '') +
@@ -347,6 +358,11 @@ function renderTrainingHistory() {
     var epochNumber = progress.epoch == null ? NaN : Number(progress.epoch);
     var epochLabel = isFinite(epochNumber) && epochNumber > 0 ? 'Latest attempt · epoch ' + Math.round(epochNumber) : '';
     var runName = trainingHistoryRunDisplayName(representative, trainingModelLabel(representative));
+    var currentSettings = representative.runSummary && typeof representative.runSummary === 'object' ? representative.runSummary : {};
+    var currentLr = trainingHistoryLearningRate(representative);
+    var currentRank = Number(currentSettings.rank);
+    var currentDropout = currentSettings.dropout !== undefined && currentSettings.dropout !== null
+      ? trainingHistoryCompactNumber(currentSettings.dropout) : '';
     var opened = trainingHistoryOpenGroups[group.key] ? ' open' : '';
     return '<section class="training-history-group' + (selectedLabel ? ' has-selected-epoch' : '') + '">' +
       '<div class="training-history-group-header">' +
@@ -354,11 +370,14 @@ function renderTrainingHistory() {
           '<div class="training-history-title">' +
             '<strong class="training-history-run-name">' + escapeHtml(runName) + '</strong>' +
             '<span class="training-history-attempt-count">' + group.jobs.length + ' attempts</span>' +
+            (currentLr ? '<span class="training-history-group-setting">LR <strong>' + escapeHtml(currentLr) + '</strong></span>' : '') +
             '<span class="training-history-stage">' + escapeHtml(trainingStageLabel(representative.stages || '')) + '</span>' +
             '<span class="training-history-status training-history-status--' + escapeHtml(String(representative.status || '')) + '">Last attempt: ' + escapeHtml(trainingRunnerStatusLabel(representative.status || '')) + '</span>' +
           '</div>' +
           '<div class="training-history-meta">' +
             (epochLabel ? '<span>' + escapeHtml(epochLabel) + '</span>' : '') +
+            (isFinite(currentRank) && currentRank > 0 ? '<span>R' + escapeHtml(String(Math.round(currentRank))) + '</span>' : '') +
+            (currentDropout ? '<span>Dropout ' + escapeHtml(currentDropout) + '</span>' : '') +
             (selectedLabel ? '<span>' + escapeHtml(selectedLabel) + '</span>' : '') +
             '<span>Shared training output</span>' +
             (representative.folder ? '<button type="button" class="training-history-folder" data-training-open-folder="' + escapeHtml(representative.folder) + '" title="Open set: ' + escapeHtml(representative.folder) + '">' + escapeHtml(representative.folder) + '</button>' : '') +

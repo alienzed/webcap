@@ -649,6 +649,11 @@ def _history_job_view(job):
             item["runSummary"] = {**item["runSummary"], **recovered}
     raw_output = str(item.get("outputRunPath") or item.get("effectiveOutputDir") or item.get("outputRoot") or "").strip()
     raw_candidate = str(item.get("outputRunPath") or item.get("resumeFromCheckpoint") or "").strip()
+    # Stable physical identity for History presentation; no new stored registry.
+    try:
+        item["physicalRunKey"] = str(host_path_for_training_path(raw_candidate).resolve(strict=False)) if raw_candidate else ""
+    except (OSError, ValueError):
+        item["physicalRunKey"] = ""
     try:
         output_path = host_path_for_training_path(raw_output) if raw_output else None
         item["outputAvailable"] = bool(output_path) and output_path.is_dir()
@@ -724,26 +729,30 @@ def history_job_output_path(folder_path, job_id):
     return Path(job["outputRoot"])
 
 
-def clear_history_job(folder_path, job_id):
-    """Remove one history index entry without touching its logs or training artifacts."""
+def clear_history_jobs(folder_path, job_ids):
+    """Atomically remove selected presentation entries; never delete run files."""
     folder_key = _folder_key(folder_path)
-    wanted_id = str(job_id or "").strip()
-    if not wanted_id:
-        return False
+    wanted_ids = {str(job_id or "").strip() for job_id in job_ids}
+    wanted_ids.discard("")
+    if not wanted_ids:
+        return 0
     with _history_lock:
         recent = _read_recent_runs()
         original = recent["jobs"]
         retained = [
             job for job in original
             if not (
-                str(job.get("id") or "") == wanted_id
+                str(job.get("id") or "") in wanted_ids
                 and str(job.get("folder") or "") == folder_key
             )
         ]
-        if len(retained) == len(original):
-            return False
-        recent["jobs"] = retained
-        _write_recent_runs(recent)
-        return True
+        removed = len(original) - len(retained)
+        if removed:
+            recent["jobs"] = retained
+            _write_recent_runs(recent)
+        return removed
 
 
+def clear_history_job(folder_path, job_id):
+    """Remove one history index entry without touching its logs or training artifacts."""
+    return bool(clear_history_jobs(folder_path, [job_id]))

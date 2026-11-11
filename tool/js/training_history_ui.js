@@ -119,6 +119,38 @@ function loadTrainingHistoryMetrics(job) {
     });
 }
 
+
+var trainingHistoryOpenGroups = Object.create(null);
+
+// A physical output is the grouping boundary, not a Set name or action ID.
+function trainingHistoryGroupJobs(jobs) {
+  var groups = [];
+  var byKey = Object.create(null);
+  (jobs || []).forEach(function (job, index) {
+    var physical = String(job.physicalRunKey || '').trim();
+    var key = physical
+      ? JSON.stringify(['output', String(job.folder || ''), physical])
+      : JSON.stringify(['job', String(job.folder || ''), String(job.id || index)]);
+    if (!byKey[key]) {
+      byKey[key] = { key: key, jobs: [] };
+      groups.push(byKey[key]);
+    }
+    byKey[key].jobs.push(job);
+  });
+  return groups;
+}
+
+function trainingHistoryMatchesSearch(job, searchText) {
+  if (!searchText) return true;
+  var model = job.model && typeof job.model === 'object' ? job.model : {};
+  var haystack = [
+    job.folder, job.profileId, job.stages, job.status, job.modelLabel, model.label, model.source,
+    job.runName, job.sequence, trainingHistoryRunDisplayName(job, ''), trainingHistoryRunSummary(job), trainingH3ImageModelLabel(job),
+    job.runSummary && job.runSummary.trainingVariant, job.id
+  ].join(' ').toLowerCase();
+  return haystack.indexOf(searchText) !== -1;
+}
+
 function renderTrainingHistory() {
   var els = getTrainingWorkspaceEls();
   if (!els.historySummary || !els.historyList || !els.checkpointSelect) return;
@@ -148,35 +180,37 @@ function renderTrainingHistory() {
     });
   }
   var jobs = (history.jobs || []).filter(function (job) {
-    if (scope === 'set' && String(job.folder || '') !== currentFolder) return false;
-    if (!searchText) return true;
-    var model = job.model && typeof job.model === 'object' ? job.model : {};
-    var haystack = [
-      job.folder, job.profileId, job.stages, job.status, job.modelLabel, model.label, model.source,
-      job.runName, job.sequence, trainingHistoryRunDisplayName(job, ''), trainingHistoryRunSummary(job), trainingH3ImageModelLabel(job),
-      job.runSummary && job.runSummary.trainingVariant
-    ].join(' ').toLowerCase();
-    return haystack.indexOf(searchText) !== -1;
+    return scope !== 'set' || String(job.folder || '') === currentFolder;
   }).sort(function (a, b) {
     return Number(b.finishedAt || b.startedAt || b.createdAt || 0) - Number(a.finishedAt || a.startedAt || a.createdAt || 0);
   });
+  var groups = trainingHistoryGroupJobs(jobs).filter(function (group) {
+    return group.jobs.some(function (job) { return trainingHistoryMatchesSearch(job, searchText); });
+  });
   var runs = Array.isArray(history.runs) ? history.runs : [];
-  var latest = jobs.length ? jobs[0] : null;
+  var latest = groups.length ? groups[0].jobs[0] : null;
   if (els.historyContent) els.historyContent.classList.toggle('hidden', trainingWorkspaceState.historyCollapsed);
   if (els.historyTools) els.historyTools.classList.toggle('hidden', archiveActive || trainingWorkspaceState.historyCollapsed);
   if (els.historyCollapseBtn) {
-    els.historyCollapseBtn.textContent = 'Training' + (archiveActive ? ' · Archive' : (jobs.length ? ' · ' + jobs.length : ''));
+    els.historyCollapseBtn.textContent = 'Training' + (archiveActive ? ' · Archive' : (groups.length ? ' · ' + groups.length : ''));
     els.historyCollapseBtn.setAttribute('aria-expanded', trainingWorkspaceState.historyCollapsed ? 'false' : 'true');
   }
   els.historySummary.classList.toggle('hidden', archiveActive || !!latest);
   els.historySummary.textContent = latest ? '' : (scope === 'set'
     ? 'No completed or actionable training outcomes for this set yet.'
     : 'No completed or actionable training outcomes yet.');
-  var visibleJobs = trainingWorkspaceState.historyExpanded ? jobs : jobs.slice(0, 2);
+  var visibleGroups = trainingWorkspaceState.historyExpanded ? groups : groups.slice(0, 2);
+  var visibleJobs = visibleGroups.reduce(function (result, group) {
+    result.push(group.jobs[0]);
+    if (trainingHistoryOpenGroups[group.key]) result.push.apply(result, group.jobs.slice(1));
+    return result;
+  }, []);
   visibleJobs.forEach(function (job) {
     loadTrainingHistoryMetrics(job);
   });
-  els.historyList.innerHTML = visibleJobs.map(function (job) {
+  els.historyList.innerHTML = visibleGroups.map(function (group) {
+    var groupedAttempt = group.jobs.length > 1;
+    var attemptsHtml = group.jobs.map(function (job) {
     var progress = job.progress && typeof job.progress === 'object' ? job.progress : {};
     var modelLabel = trainingModelLabel(job);
     if (job.model && typeof job.model === 'object') job.model.label = modelLabel;
@@ -207,12 +241,13 @@ function renderTrainingHistory() {
     var stageLabel = trainingStageLabel(job.stages || '');
     var profileLabel = modelLabel + (stageLabel && stageLabel.toLowerCase() !== modelLabel.toLowerCase() ? ' · ' + stageLabel : '');
     var runConfig = job.runSummary && typeof job.runSummary === 'object' ? job.runSummary : {};
-    var runDisplayName = trainingHistoryRunDisplayName(job, profileLabel);
+    var runDisplayName = groupedAttempt ? 'Attempt · ' + String(job.id || '').slice(0, 8) : trainingHistoryRunDisplayName(job, profileLabel);
     var runSequence = String(job.sequence || "").replace(/^0+(?=\d)/, "");
     var runIdentityLabel = runSequence && runDisplayName !== 'Run ' + runSequence ? 'Run ' + runSequence : '';
     var trainingVariant = String(runConfig.trainingVariant || "").trim();
     var imageModelLabel = trainingH3ImageModelLabel(job);
     var selectedEpoch = job.selectedEpoch && typeof job.selectedEpoch === 'object' ? job.selectedEpoch : null;
+    if (groupedAttempt) selectedEpoch = null; // The shared output selection belongs to the group.
     var selectedEpochNumber = selectedEpoch ? Number(selectedEpoch.epoch) : NaN;
     var selectedEpochLabel = isFinite(selectedEpochNumber) && selectedEpochNumber > 0 ? 'Selected Epoch ' + Math.round(selectedEpochNumber).toLocaleString() : '';
     var checkpointLabel = trainingHistoryCheckpointLabel(artifact);
@@ -282,15 +317,15 @@ function renderTrainingHistory() {
           '</div>' +
         '</div>' +
         '<div class="training-history-actions">' +
-          (selectedEpochLabel ? '<button type="button" class="training-btn training-history-finalize" data-training-history-finalize="' + escapeHtml(job.id || '') + '">Archive</button>' : '') +
+          (selectedEpochLabel && !groupedAttempt ? '<button type="button" class="training-btn training-history-finalize" data-training-history-finalize="' + escapeHtml(job.id || '') + '">Archive</button>' : '') +
           (job.logAvailable !== false ? '<button type="button" class="training-history-action" data-training-history-log="' + escapeHtml(job.id || '') + '" title="Show run log" aria-label="Show run log">&#128196;</button>' : '') +
           (job.candidateRunAvailable ? '<button type="button" class="training-history-action" data-training-history-candidates="' + escapeHtml(job.id || '') + '" title="Analyze LoRA candidates" aria-label="Analyze LoRA candidates">&#128200;</button>' : '') +
-          (canResume ? '<button type="button" class="training-history-action" data-training-history-resume="' + escapeHtml(job.id || '') + '" title="Continue captured run" aria-label="Continue captured run">&#8635;</button>' : '') +
+          (canResume ? '<button type="button" class="training-history-action" data-training-history-resume="' + escapeHtml(job.id || '') + '" title="Continue using this attempt\'s captured inputs" aria-label="Continue captured run">&#8635;</button>' : '') +
           '<details class="training-history-more"><summary class="training-history-action" title="More run actions" aria-label="More run actions">&#8230;</summary><div class="training-history-more-menu">' +
             (job.folder && job.outputRoot && job.outputAvailable !== false ? '<button type="button" data-training-history-output="' + escapeHtml(job.id || '') + '">&#128193; Open output</button>' : '') +
             (job.actionAvailable !== false && job.actionPath ? '<button type="button" data-training-history-action="' + escapeHtml(job.id || '') + '">&#128451; Open action folder</button>' : '') +
             '<button type="button" data-training-history-remove="' + escapeHtml(job.id || '') + '">Remove from History</button>' +
-            '<button type="button" data-training-history-delete="' + escapeHtml(job.id || '') + '">Delete run and files…</button>' +
+            (!groupedAttempt ? '<button type="button" data-training-history-delete="' + escapeHtml(job.id || '') + '">Delete run and files…</button>' : '') +
           '</div></details>' +
         '</div>' +
       '</div>' +
@@ -301,10 +336,52 @@ function renderTrainingHistory() {
       (job.completionNote ? '<div class="training-runner-detail is-warning">' + escapeHtml(job.completionNote) + '</div>' : '') +
       (unavailable.length ? '<div class="training-runner-detail is-warning">Unavailable: ' + escapeHtml(unavailable.join(', ')) + '</div>' : '') +
       '</div>';
+    }).join('');
+    if (!groupedAttempt) return attemptsHtml;
+
+    var representative = group.jobs[0];
+    var selected = representative.selectedEpoch && typeof representative.selectedEpoch === 'object' ? representative.selectedEpoch : null;
+    var selectedNumber = selected ? Number(selected.epoch) : NaN;
+    var selectedLabel = isFinite(selectedNumber) && selectedNumber > 0 ? 'Selected epoch ' + Math.round(selectedNumber) : '';
+    var progress = representative.progress && typeof representative.progress === 'object' ? representative.progress : {};
+    var epochNumber = progress.epoch == null ? NaN : Number(progress.epoch);
+    var epochLabel = isFinite(epochNumber) && epochNumber > 0 ? 'Latest attempt · epoch ' + Math.round(epochNumber) : '';
+    var runName = trainingHistoryRunDisplayName(representative, trainingModelLabel(representative));
+    var opened = trainingHistoryOpenGroups[group.key] ? ' open' : '';
+    return '<section class="training-history-group' + (selectedLabel ? ' has-selected-epoch' : '') + '">' +
+      '<div class="training-history-group-header">' +
+        '<div class="training-history-identity">' +
+          '<div class="training-history-title">' +
+            '<strong class="training-history-run-name">' + escapeHtml(runName) + '</strong>' +
+            '<span class="training-history-attempt-count">' + group.jobs.length + ' attempts</span>' +
+            '<span class="training-history-stage">' + escapeHtml(trainingStageLabel(representative.stages || '')) + '</span>' +
+            '<span class="training-history-status training-history-status--' + escapeHtml(String(representative.status || '')) + '">Last attempt: ' + escapeHtml(trainingRunnerStatusLabel(representative.status || '')) + '</span>' +
+          '</div>' +
+          '<div class="training-history-meta">' +
+            (epochLabel ? '<span>' + escapeHtml(epochLabel) + '</span>' : '') +
+            (selectedLabel ? '<span>' + escapeHtml(selectedLabel) + '</span>' : '') +
+            '<span>Shared training output</span>' +
+            (representative.folder ? '<button type="button" class="training-history-folder" data-training-open-folder="' + escapeHtml(representative.folder) + '" title="Open set: ' + escapeHtml(representative.folder) + '">' + escapeHtml(representative.folder) + '</button>' : '') +
+          '</div>' +
+        '</div>' +
+        '<div class="training-history-actions">' +
+          (selectedLabel ? '<button type="button" class="training-btn training-history-finalize" data-training-history-finalize="' + escapeHtml(representative.id || '') + '">Archive</button>' : '') +
+          (representative.candidateRunAvailable ? '<button type="button" class="training-history-action" data-training-history-candidates="' + escapeHtml(representative.id || '') + '" title="Analyze LoRA candidates" aria-label="Analyze LoRA candidates">&#128200;</button>' : '') +
+          '<details class="training-history-more"><summary class="training-history-action" title="More run actions" aria-label="More run actions">&#8230;</summary><div class="training-history-more-menu">' +
+            (representative.folder && representative.outputRoot && representative.outputAvailable !== false ? '<button type="button" data-training-history-output="' + escapeHtml(representative.id || '') + '">Open output</button>' : '') +
+            '<button type="button" data-training-history-delete="' + escapeHtml(representative.id || '') + '">Delete run and files…</button>' +
+          '</div></details>' +
+        '</div>' +
+      '</div>' +
+      '<details class="training-history-attempts" data-training-history-group="' + escapeHtml(group.key) + '"' + opened + '>' +
+        '<summary>Review ' + group.jobs.length + ' attempts <span>Captured settings, logs and per-attempt actions</span></summary>' +
+        '<div class="training-history-attempt-list">' + attemptsHtml + '</div>' +
+      '</details>' +
+    '</section>';
   }).join('');
   if (els.historyShowAllBtn) {
-    els.historyShowAllBtn.classList.toggle('hidden', archiveActive || jobs.length <= 2);
-    els.historyShowAllBtn.textContent = trainingWorkspaceState.historyExpanded ? 'Show less' : 'Show all (' + jobs.length + ')';
+    els.historyShowAllBtn.classList.toggle('hidden', archiveActive || groups.length <= 2);
+    els.historyShowAllBtn.textContent = trainingWorkspaceState.historyExpanded ? 'Show less' : 'Show all (' + groups.length + ')';
   }
   var selectedCheckpoint = String(els.checkpointSelect.value || '');
   var resumeStage = String(trainingWorkspaceState.runStages || '');
@@ -970,4 +1047,11 @@ document.addEventListener('click', function (event) {
   if (!target) return;
   event.preventDefault();
   deleteTrainingHistoryRun(target.getAttribute('data-training-history-delete'));
+});
+
+document.addEventListener('click', function (event) {
+  var summary = event.target.closest('.training-history-attempts > summary');
+  if (!summary) return;
+  var details = summary.parentElement;
+  trainingHistoryOpenGroups[details.getAttribute('data-training-history-group')] = !details.open;
 });

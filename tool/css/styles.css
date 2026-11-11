@@ -4248,7 +4248,9 @@ iframe {
   border-radius: 6px;
   background: color-mix(in srgb, var(--panel) 72%, transparent);
   color: var(--text);
+  opacity: .28;
   cursor: pointer;
+  transition: opacity .12s ease, background .12s ease;
 }
 .test-generations-grid-selection::after {
   content: '✓';
@@ -4258,6 +4260,9 @@ iframe {
   opacity: 0;
 }
 .test-generations-grid-selection:checked::after { opacity: 1; }
+.test-generations-result-card:hover .test-generations-grid-selection,
+.test-generations-grid-selection:hover,
+.test-generations-grid-selection:focus-visible { opacity: 1; }
 .test-generations-grid-selection:hover { background: color-mix(in srgb, var(--panel) 90%, transparent); }
 .test-generations-grid-selection:focus-visible {
   outline: 2px solid var(--accent);

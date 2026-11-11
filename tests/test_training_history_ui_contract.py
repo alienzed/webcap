@@ -401,18 +401,18 @@ def test_older_partial_history_summary_recovers_each_attempt_config(tmp_path):
         directory = tmp_path / name
         directory.mkdir()
         (directory / "config.h3.toml").write_text(
-            'epochs = 100\\n'
-            '[model]\\n'
-            'diffusion_model = "/models/h3.safetensors"\\n'
-            'cfg = 1\\n'
-            'shift = 8\\n'
-            'image_shift = 1\\n'
-            '[adapter]\\n'
-            'type = "lora"\\n'
-            'rank = ' + str(rank) + '\\n'
-            'dropout = 0.1\\n'
-            '[optimizer]\\n'
-            'lr = ' + str(lr) + '\\n',
+            'epochs = 100\n'
+            '[model]\n'
+            'diffusion_model = "/models/h3.safetensors"\n'
+            'cfg = 1\n'
+            'shift = 8\n'
+            'image_shift = 1\n'
+            '[adapter]\n'
+            'type = "lora"\n'
+            'rank = ' + str(rank) + '\n'
+            'dropout = 0.1\n'
+            '[optimizer]\n'
+            'lr = ' + str(lr) + '\n',
             encoding="utf-8",
         )
         return directory
@@ -430,3 +430,14 @@ def test_older_partial_history_summary_recovers_each_attempt_config(tmp_path):
     assert earlier["runSummary"]["epochs"] == later["runSummary"]["epochs"] == 100
     assert earlier["progress"]["lr"] == later["progress"]["lr"] == "0.00009"
     assert base["runSummary"] == {"shift": 8}
+
+
+def test_history_hides_only_redundant_finished_early_receipts():
+    script = (ROOT / "tool" / "js" / "training_history_ui.js").read_text(encoding="utf-8")
+    progress = (ROOT / "tool" / "server" / "training_progress.py").read_text(encoding="utf-8")
+    assert "function trainingHistoryCompletionNote(job)" in script
+    assert "job.status === 'finished_early'" in script
+    assert "var completionNote = trainingHistoryCompletionNote(job);" in script
+    assert "(completionNote ? '<div class=" in script
+    assert 'job["completionNote"] = "Finished early"' in progress
+    assert "trainingHistoryMetric('Dropout'" in script

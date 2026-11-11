@@ -88,12 +88,8 @@ function trainingHistoryRunSummary(job) {
   if (lr) parts.push('LR ' + lr);
   if (Number(summary.rank) > 0) parts.push('R' + Math.round(Number(summary.rank)));
   if (summary.dropout !== undefined && summary.dropout !== null) parts.push('dropout ' + trainingHistoryCompactNumber(summary.dropout));
-  if (job && job.stages === 'h3') {
-    if (summary.shift !== undefined && summary.shift !== null) parts.push('video shift ' + trainingHistoryCompactNumber(summary.shift));
-    if (summary.imageShift !== undefined && summary.imageShift !== null) parts.push('image shift ' + trainingHistoryCompactNumber(summary.imageShift));
-    if (typeof summary.focusedH3Blocks === 'boolean') parts.push('focused blocks ' + (summary.focusedH3Blocks ? 'on' : 'off'));
-  } else if (summary.shift !== undefined && summary.shift !== null) {
-    parts.push('shift ' + trainingHistoryCompactNumber(summary.shift));
+  if (job && job.stages === 'h3' && typeof summary.focusedH3Blocks === 'boolean') {
+    parts.push('focused blocks ' + (summary.focusedH3Blocks ? 'on' : 'off'));
   }
   if (Number(summary.capturedItems || 0) > 0) parts.push(Math.round(Number(summary.capturedItems)).toLocaleString() + ' items');
   if (Number(summary.epochs || 0) > 0) parts.push(Math.round(Number(summary.epochs)).toLocaleString() + ' epochs');
@@ -326,10 +322,8 @@ function renderTrainingHistory() {
       trainingHistoryMetric('LR', learningRate) +
       trainingHistoryMetric('Rank', Number(runConfig.rank) > 0 ? String(Math.round(Number(runConfig.rank))) : '') +
       trainingHistoryMetric('Dropout', runConfig.dropout !== undefined && runConfig.dropout !== null ? trainingHistoryCompactNumber(runConfig.dropout) : '') +
-      trainingHistoryMetric(job.stages === 'h3' ? 'Video shift' : 'Shift', runConfig.shift !== undefined && runConfig.shift !== null ? trainingHistoryCompactNumber(runConfig.shift) : '') +
       (job.stages === 'h3'
-        ? trainingHistoryMetric('Image shift', runConfig.imageShift !== undefined && runConfig.imageShift !== null ? trainingHistoryCompactNumber(runConfig.imageShift) : '') +
-          trainingHistoryMetric('Focused H3 blocks', typeof runConfig.focusedH3Blocks === 'boolean' ? (runConfig.focusedH3Blocks ? 'On' : 'Off') : '')
+        ? trainingHistoryMetric('Focused H3 blocks', typeof runConfig.focusedH3Blocks === 'boolean' ? (runConfig.focusedH3Blocks ? 'On' : 'Off') : '')
         : '') +
       trainingHistoryMetric('Selected epoch', selectedEpochLabel ? String(Math.round(selectedEpochNumber)) : '') +
       (stepOpensCheckpoint ? '' : trainingHistoryMetric(
@@ -649,7 +643,6 @@ function renderTrainingArchives() {
     var settings = [];
     if (summary.lr !== undefined) settings.push('LR ' + summary.lr);
     if (summary.dropout !== undefined) settings.push('dropout ' + summary.dropout);
-    if (summary.shift !== undefined) settings.push('shift ' + summary.shift);
     var alternates = Array.isArray(archive.retainedAlternateEpochs) ? archive.retainedAlternateEpochs : [];
     var archiveName = String(archive.name || '');
     var detailsOpen = !!trainingWorkspaceState.archiveDetailOpen[archiveName];

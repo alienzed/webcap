@@ -52,6 +52,17 @@ function trainingHistoryCompactNumber(value) {
   return String(number);
 }
 
+// History already shows terminal state, epoch and step. Keep exceptional notes,
+// but avoid repeating the backend's standard "Finished early at ..." receipt.
+function trainingHistoryCompletionNote(job) {
+  var note = String(job && job.completionNote || '').trim();
+  if (job && job.status === 'finished_early' &&
+      /^Finished early(?: at (?:epoch \d+ \/ \d+(?: · step [\d,]+)?|step [\d,]+))?\.?$/.test(note)) {
+    return '';
+  }
+  return note;
+}
+
 function trainingHistoryLearningRate(job) {
   var summary = job && job.runSummary && typeof job.runSummary === 'object' ? job.runSummary : {};
   if (summary.lr !== undefined && summary.lr !== null && summary.lr !== '') {
@@ -230,6 +241,7 @@ function renderTrainingHistory() {
     var finalStep = Number(progress.step);
     var plannedSteps = Number(progress.plannedSteps);
     var learningRate = trainingHistoryLearningRate(job);
+    var completionNote = trainingHistoryCompletionNote(job);
     var artifact = job.artifactSummary && typeof job.artifactSummary === 'object' ? job.artifactSummary : {};
     var hasStarted = Number(job.startedAt || 0) > 0;
     var hasFinished = Number(job.finishedAt || 0) > 0;
@@ -295,12 +307,12 @@ function renderTrainingHistory() {
       trainingHistoryMetric('Step', isFinite(finalStep) && finalStep >= 0 ? Math.round(finalStep).toLocaleString() + (isFinite(plannedSteps) && plannedSteps > 0 ? ' / ' + Math.round(plannedSteps).toLocaleString() : '') : '') +
       trainingHistoryMetric('LR', learningRate) +
       trainingHistoryMetric('Rank', Number(runConfig.rank) > 0 ? String(Math.round(Number(runConfig.rank))) : '') +
+      trainingHistoryMetric('Dropout', runConfig.dropout !== undefined && runConfig.dropout !== null ? trainingHistoryCompactNumber(runConfig.dropout) : '') +
       trainingHistoryMetric(job.stages === 'h3' ? 'Video shift' : 'Shift', runConfig.shift !== undefined && runConfig.shift !== null ? trainingHistoryCompactNumber(runConfig.shift) : '') +
       (job.stages === 'h3'
         ? trainingHistoryMetric('Image shift', runConfig.imageShift !== undefined && runConfig.imageShift !== null ? trainingHistoryCompactNumber(runConfig.imageShift) : '') +
           trainingHistoryMetric('Focused H3 blocks', typeof runConfig.focusedH3Blocks === 'boolean' ? (runConfig.focusedH3Blocks ? 'On' : 'Off') : '')
         : '') +
-      trainingHistoryMetric('Dropout', runConfig.dropout !== undefined && runConfig.dropout !== null ? trainingHistoryCompactNumber(runConfig.dropout) : '') +
       trainingHistoryMetric('Selected epoch', selectedEpochLabel ? String(Math.round(selectedEpochNumber)) : '') +
       trainingHistoryMetric(
         'Latest checkpoint',
@@ -344,7 +356,7 @@ function renderTrainingHistory() {
       (timingError ? '<div class="training-runner-detail is-error">' + escapeHtml(timingError) + '</div>' : '') +
       (job.error ? '<div class="training-runner-detail is-error">' + escapeHtml(job.error) + '</div>' : '') +
       buildTrainingFailureDetailsHtml(job) +
-      (job.completionNote ? '<div class="training-runner-detail is-warning">' + escapeHtml(job.completionNote) + '</div>' : '') +
+      (completionNote ? '<div class="training-runner-detail is-warning">' + escapeHtml(completionNote) + '</div>' : '') +
       (unavailable.length ? '<div class="training-runner-detail is-warning">Unavailable: ' + escapeHtml(unavailable.join(', ')) + '</div>' : '') +
       '</div>';
     }).join('');

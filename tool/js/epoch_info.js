@@ -19,6 +19,8 @@
     var sequence = String(run && run.runSequence || '').trim().replace(/^0+(?=\d)/, '');
     var identity = sequence ? 'Run ' + sequence : 'Run ' + String(jobId || '').slice(-8);
     var name = String(run && run.label || '').trim();
+    var numberedName = name.match(/^Run\s+(\d+)$/i);
+    if (numberedName && sequence && String(Number(numberedName[1])) === sequence) name = '';
     if (name && name.toLowerCase() !== 'run train' && name !== identity) identity += ' · ' + name;
     return identity;
   }
@@ -88,7 +90,9 @@
     var training = view.training;
     var run = training && training.run;
     heading.appendChild(element('h3','', 'Epoch '+view.epoch));
-    heading.appendChild(element('p','', epochRunIdentity(run,view.jobId)+' · All recorded Test and Campaign evidence'));
+    var subtitle = element('p','', epochRunIdentity(run,view.jobId)+' · All recorded Test and Campaign evidence');
+    subtitle.title = 'Training job ID: ' + view.jobId;
+    heading.appendChild(subtitle);
     header.appendChild(heading);
     var nav = element('div','epoch-info-nav');
     nav.appendChild(view.mode==='analytics'?backToInsights():backToTestResults());
@@ -112,12 +116,12 @@
         box.appendChild(element('strong','', 'Training context'));
         if (loss && Number.isFinite(loss.loss)) box.appendChild(element('span','', 'Epoch loss '+Number(loss.loss).toFixed(4)));
         if(points.length>1) {
-        var svg=document.createElementNS('http://www.w3.org/2000/svg','svg');svg.setAttribute('viewBox','0 0 650 100');svg.setAttribute('role','img');svg.setAttribute('aria-label','Recorded training loss by epoch');
-        var mn=Math.min.apply(null,points.map(function(p){return p.loss;})),mx=Math.max.apply(null,points.map(function(p){return p.loss;}));
-        var x0=points[0].epoch,x1=points[points.length-1].epoch;
-        var line=document.createElementNS(svg.namespaceURI,'polyline');
-        line.setAttribute('points',points.map(function(p){return (15+620*(p.epoch-x0)/Math.max(1,x1-x0)).toFixed(1)+','+(10+80*(mx-p.loss)/Math.max(.000001,mx-mn)).toFixed(1);}).join(' '));
-        line.setAttribute('fill','none');line.setAttribute('stroke','currentColor');line.setAttribute('stroke-width','2');svg.appendChild(line);box.appendChild(svg);
+          var svg=document.createElementNS('http://www.w3.org/2000/svg','svg');svg.setAttribute('viewBox','0 0 650 100');svg.setAttribute('role','img');svg.setAttribute('aria-label','Recorded training loss by epoch');
+          var mn=Math.min.apply(null,points.map(function(p){return p.loss;})),mx=Math.max.apply(null,points.map(function(p){return p.loss;}));
+          var x0=points[0].epoch,x1=points[points.length-1].epoch;
+          var line=document.createElementNS(svg.namespaceURI,'polyline');
+          line.setAttribute('points',points.map(function(p){return (15+620*(p.epoch-x0)/Math.max(1,x1-x0)).toFixed(1)+','+(10+80*(mx-p.loss)/Math.max(.000001,mx-mn)).toFixed(1);}).join(' '));
+          line.setAttribute('fill','none');line.setAttribute('stroke','currentColor');line.setAttribute('stroke-width','2');svg.appendChild(line);box.appendChild(svg);
         }
         root.appendChild(box);
       }

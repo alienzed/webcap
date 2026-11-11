@@ -2569,6 +2569,7 @@
       host.appendChild(emptyCandidates);
       syncCandidateMasterSelect(files);
       syncSweepControls();
+      syncGridCandidateSelection();
       return;
     }
     files.forEach(function (fileName) {
@@ -2791,6 +2792,7 @@
     syncCandidateMasterSelect(files);
     syncSweepControls();
     syncTestVlCandidateRows();
+    syncGridCandidateSelection();
   }
 
   function sessionStatusText(session) {
@@ -3617,6 +3619,34 @@
     return JSON.stringify([kind, file, weight]);
   }
 
+  // Grid uses the staged candidates' persisted next-run selection.
+  // Reconcile the overlay without replacing existing media elements.
+  function syncGridCandidateSelection() {
+    var host = el('test-generations-results');
+    var available = prepared && Array.isArray(prepared.files) ? prepared.files : [];
+    host.querySelectorAll('.test-generations-result-card:not(.is-pending)').forEach(function (card) {
+      var file = String(card.dataset.testCandidateFile || '');
+      var staged = !!file && available.includes(file);
+      var checkbox = card.querySelector('[data-test-grid-select]');
+      if (!staged) {
+        if (checkbox) checkbox.remove();
+        card.classList.remove('is-excluded');
+        return;
+      }
+      if (!checkbox) {
+        checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.className = 'test-generations-grid-selection';
+        checkbox.dataset.testGridSelect = file;
+        checkbox.setAttribute('aria-label', 'Include ' + file + ' in the next Test run');
+        card.appendChild(checkbox);
+      }
+      checkbox.checked = selectedCandidates instanceof Set && selectedCandidates.has(file);
+      checkbox.title = checkbox.checked ? 'Included in next Test run' : 'Excluded from next Test run';
+      card.classList.toggle('is-excluded', !checkbox.checked);
+    });
+  }
+
   function syncMatrixCandidateSelection() {
     var host = el('test-generations-matrix');
     var available = prepared && Array.isArray(prepared.files) ? prepared.files : [];
@@ -4292,6 +4322,7 @@
       var resultKey = mediaFile || (String(result.sourceLoRA || 'result') + ':' + index);
       var existing = cards.get(resultKey);
       if (existing) {
+        existing.dataset.testCandidateFile = candidateFileForResult(result);
         syncResultElapsed(existing, result, false);
         renderTestVlCard(existing, result, candidateScores);
         return;
@@ -4299,6 +4330,7 @@
 
       var card = sharedTestCard(result, status, 'test-generations-result-card', false);
       card.dataset.resultKey = resultKey;
+      card.dataset.testCandidateFile = candidateFileForResult(result);
       cards.set(resultKey, card);
       renderTestVlCard(card, result, candidateScores);
 
@@ -4321,12 +4353,14 @@
       }
       var existing = cards.get(failureKey);
       if (existing) {
+        existing.dataset.testCandidateFile = candidateFileForResult(failure);
         syncResultElapsed(existing, failure, true);
         return;
       }
 
       var card = sharedTestCard(failure, status, 'test-generations-result-card is-failed', false, true);
       card.dataset.resultKey = failureKey;
+      card.dataset.testCandidateFile = candidateFileForResult(failure);
       cards.set(failureKey, card);
 
       var pending = host.querySelector('.test-generations-result-card.is-pending');
@@ -4364,6 +4398,7 @@
     } else if (pending) {
       pending.remove();
     }
+    syncGridCandidateSelection();
     sortTestPreviewCards(status);
     syncPendingElapsed(status);
     syncTestVlControls();
@@ -5690,6 +5725,7 @@
       saveTestBenchState();
       syncActiveRunControls(currentStatus);
       syncMatrixCandidateSelection();
+      syncGridCandidateSelection();
     });
     el('test-generations-master-select').addEventListener('change', function () {
       var files = prepared && Array.isArray(prepared.files) ? prepared.files : [];
@@ -5810,6 +5846,16 @@
       var row = event.target.closest('[data-session-name]');
       if (row) openSession(row.dataset.sessionName);
     };
+    el('test-generations-results').addEventListener('change', function (event) {
+      var checkbox = event.target.closest('[data-test-grid-select]');
+      if (!checkbox) return;
+      var file = String(checkbox.dataset.testGridSelect || '');
+      var staged = Array.from(el('test-generations-files').querySelectorAll('[data-candidate-select]'))
+        .find(function (input) { return input.dataset.candidateSelect === file; });
+      if (!staged) throw new Error('Grid selection has no matching staged candidate: ' + file);
+      staged.checked = checkbox.checked;
+      staged.dispatchEvent(new Event('change', {bubbles: true}));
+    });
     el('test-generations-results').onclick = function (event) {
       var epoch = event.target.closest('[data-test-epoch-media-job]');
       if (epoch) {

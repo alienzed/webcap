@@ -412,7 +412,7 @@ button.epoch-finder-ranking-row:hover,button.epoch-finder-ranking-row:focus-visi
 .epoch-info-header{margin-bottom:16px;min-width:0}
 .epoch-info-header h3{font-size:28px;margin:0 0 5px}
 .epoch-info-header p{opacity:.85;margin:0;font-size:16px;line-height:1.4}
-.epoch-info-nav{display:flex;align-items:center;justify-content:space-between;gap:16px;min-width:0;min-height:56px;margin-top:12px;padding:8px 14px;background:var(--input-bg,var(--background-secondary,#182330));border:1px solid var(--border-color,var(--border,#384653));border-left:3px solid var(--accent-color,var(--accent,#e6a930));border-radius:5px;position:relative;z-index:5}
+.epoch-info-nav{display:flex;align-items:center;justify-content:space-between;gap:16px;min-width:0;width:100%;flex:1 0 100%;min-height:56px;margin-top:12px;padding:8px 14px;background:var(--input-bg,var(--background-secondary,#182330));border:1px solid var(--border-color,var(--border,#384653));border-left:3px solid var(--accent-color,var(--accent,#e6a930));border-radius:5px;position:relative;z-index:5}
 .epoch-info-nav .epoch-info-back{display:inline-flex;align-items:center;width:auto;min-height:40px;padding:4px 8px;border:0;background:transparent;color:inherit;font-size:18px;font-weight:700;white-space:nowrap;cursor:pointer}
 .epoch-info-nav .epoch-info-back:hover{text-decoration:underline}
 .epoch-info-settings{margin-left:auto;min-width:0;position:relative}

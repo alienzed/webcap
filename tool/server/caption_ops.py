@@ -167,7 +167,7 @@ CAPTION_ENRICHMENT_SYSTEM_PROMPT = (
 
 def build_caption_enrichment_messages(
     draft="", open_sight=None, assignments=None, tags=None, rendered_primer="",
-    preferred_sequence="", saved_sights=None,
+    saved_sights=None,
 ):
     caption = str(draft or "").strip()
     if not caption:
@@ -182,7 +182,6 @@ def build_caption_enrichment_messages(
         "currentCaption": caption,
         "openSight": open_sight,
         "renderedPrimer": str(rendered_primer or "").strip(),
-        "preferredCaptionSequence": str(preferred_sequence or "").strip(),
         "selectedAnnotations": facts,
         "otherTags": [str(tag) for tag in (tags or []) if str(tag).strip()],
     }
@@ -215,7 +214,6 @@ def build_caption_assist_messages(
     draft="",
     template="",
     rendered_primer="",
-    preferred_sequence="",
     corrections=None,
     tag_mismatches=None,
     open_sight=None,
@@ -254,7 +252,6 @@ def build_caption_assist_messages(
 
     required_phrase = str(required_phrase or "").strip()
     draft = str(draft or "").strip()
-    preferred_sequence = str(preferred_sequence or "").replace("\r\n", "\n").strip()
     repair_corrections = []
     seen_corrections = set()
     for raw in corrections if isinstance(corrections, list) else []:
@@ -299,25 +296,12 @@ def build_caption_assist_messages(
         "currentDraft": draft,
         "captionTemplate": str(template or "").strip(),
         "renderedPrimer": str(rendered_primer or "").strip(),
-        "preferredCaptionSequence": preferred_sequence,
         "corrections": repair_corrections,
         "openSight": open_sight if isinstance(open_sight, dict) else None,
         "contextSight": context_sight if isinstance(context_sight, dict) else None,
     }
     if mismatch_hints and not repair_corrections:
         payload["tagMismatches"] = mismatch_hints
-    if preferred_sequence:
-        ordering = (
-            "preferredCaptionSequence is the user's preferred order for caption content. Follow its broad sequence, "
-            "making local moves only for natural grammar or to keep a detail attached to its subject. Groups not explicitly "
-            "named in the sequence still belong in the caption; place those unlisted groups immediately before the "
-            "final background, lighting, and view portion when that terminal portion is present. "
-        )
-    else:
-        ordering = (
-            "preferredCaptionSequence is blank, so do not impose a house order. Arrange every supplied fact in the "
-            "most natural concise order while preserving all facts. "
-        )
     repair_instruction = ""
     if repair_corrections:
         repair_instruction = (
@@ -337,7 +321,7 @@ def build_caption_assist_messages(
         "as optional style and ordering guidance, not content to copy or fill with empty placeholders. "
         "Include distinctive subject, position, clothing, construction and scene details when actually observed. "
         "Relate clear Sight facts to familiar annotation-group concepts where natural; do not assign tags or "
-        "invent missing group values. Preserve any requiredPhrase and the preferredCaptionSequence. "
+        "invent missing group values. Preserve any requiredPhrase. "
     ) if sight_led else ""
     user_prompt = (
         "Write the caption using these WebCap inputs. Cover every nonredundant tag in groupedAnnotations and otherTags; "
@@ -349,8 +333,7 @@ def build_caption_assist_messages(
         + repair_instruction
         + mismatch_guidance
         + sight_guidance
-        + ordering +
-        "Do not use annotation group order as caption order.\n\n"
+        + "Do not use annotation group order as caption order.\n\n"
         + json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
     )
     return [
@@ -367,9 +350,8 @@ named values, then renders a reusable text template. Your job is to improve that
 naturally across many combinations of selected values.
 
 Primer data model and rendering rules:
-1. Each group has a stable template key supplied in the input. groupsInOrder is the user's intended template order.
-   Preserve the relative order of group placeholders by default; make only small local deviations when grammar requires
-   a value to stay attached to related literal text.
+1. Each group has a stable template key supplied in the input. The group list is an inventory of available
+   fields and vocabulary, not a caption-order signal. Its order reflects tagging convenience.
 2. A group's selected terms are rendered before template substitution. For each term:
    - descriptorPrefix/descriptorSuffix are applied directly around the raw term first;
    - wrapperPrefix/wrapperSuffix are then applied around that descriptor-rendered result;
@@ -405,10 +387,10 @@ Design requirements:
 - Infer each group's meaning from its label, optional semantic alias, AND vocabulary, including renderedDefault and affixes. Abbreviated or
   unfamiliar labels are not enough by themselves: values may reveal garment shape, limb positioning, accessories,
   a second subject, a relationship, or environmental detail. Do not expand uncertain abbreviations into invented facts.
-- Treat groupsInOrder as the primary sequence. Infer what each group describes so you can write good conditional
-  glue around it, but do not reorganize the schema into your own preferred semantic order. Keep adjacent related
-  groups together when they are adjacent in groupsInOrder. Mapping-only keys may be placed where their meaning fits
-  without disturbing the relative order of group keys. Do not drop unfamiliar groups or dump them at the end.
+- Treat preferredCaptionSequence as a broad hint for structuring a new template, not a strict ordering constraint.
+  Use each group's meaning, aliases, and vocabulary to position its placeholder naturally. Never infer caption order
+  from the input group list. When currentTemplate already establishes an intentional structure, refine rather than
+  needlessly reorder it. Place mapping-only keys where their meaning fits, and give every group a natural place.
 - Only include actions or other details through populated keys; a schema must also work for still images and
   items with no action annotations. Preserve the vocabulary's wording rather than substituting synonyms.
 - Design for arbitrary subsets of groups being populated. A template that reads well only when every group is present
@@ -428,7 +410,7 @@ Design requirements:
 """.strip()
 
 
-def build_caption_template_assist_messages(groups=None, mappings=None, current_template=""):
+def build_caption_template_assist_messages(groups=None, mappings=None, current_template="", preferred_sequence=""):
     clean_groups = []
     available_keys = []
     seen_keys = set()
@@ -493,7 +475,8 @@ def build_caption_template_assist_messages(groups=None, mappings=None, current_t
 
     payload = {
         "availableKeys": available_keys,
-        "groupsInOrder": clean_groups,
+        "groups": clean_groups,
+        "preferredCaptionSequence": str(preferred_sequence or "").strip(),
         "customMappings": clean_mappings,
         "currentTemplate": str(current_template or ""),
     }
@@ -503,10 +486,9 @@ def build_caption_template_assist_messages(groups=None, mappings=None, current_t
             "role": "user",
             "content": (
                 "Create one improved WebCap Caption Primer template from this exact schema. "
-                "groupsInOrder is the user's intended template sequence: keep group placeholders in that relative "
-                "order unless a small local move is necessary for grammatical attachment. Do not reorganize the "
-                "groups into your own preferred semantic order. Use the vocabulary examples to choose grammatical "
-                "placement and conditional glue.\n\n"
+                "Use preferredCaptionSequence as a broad sequence hint for a new template, and preserve useful "
+                "structure already present in currentTemplate. Treat groups as an unordered inventory of "
+                "available placeholders. Place them by meaning with natural conditional glue.\n\n"
                 + json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
             ),
         },

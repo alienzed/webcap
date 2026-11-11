@@ -1313,6 +1313,7 @@ function buildPrimerTemplateAssistRequest() {
     model: getDirectorModelPreference('webcap.director.model'),
     groups: groups,
     mappings: typeof getPrimerMappingsRows === 'function' ? getPrimerMappingsRows() : [],
+    preferredCaptionSequence: getPreferredCaptionSequence(),
     currentTemplate: templateEl ? String(templateEl.value || '') : ''
   };
 }
@@ -1587,7 +1588,6 @@ function buildCaptionAssistRequest(mediaItem) {
     assignments: assignments,
     tags: getUnscopedTagsForMediaKey(mediaKey),
     requiredPhrase: requiredPhraseEl ? String(requiredPhraseEl.value || '').trim() : '',
-    preferredCaptionSequence: getPreferredCaptionSequence(),
     template: primer.template,
     renderedPrimer: buildPrimerFromConfig(mediaItem.fileName, mediaKey, primer),
     draft: getCaptionAssistDraftForMediaItem(mediaItem),

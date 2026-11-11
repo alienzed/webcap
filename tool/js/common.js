@@ -14,14 +14,13 @@ var DEFAULT_PRIMER_TEMPLATE = [
 
 var DEFAULT_CAPTION_ASSIST_SEQUENCE = [
   'subject',
-  'position / action',
-  'required phrase',
-  'setting',
-  'body',
+  'action',
+  'position',
   'traits',
   'clothing',
-  'background',
+  'setting / background',
   'lighting',
+  'framing',
   'view'
 ].join('\n');
 

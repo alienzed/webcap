@@ -780,7 +780,6 @@ def caption_assist_route():
             assignments=data.get("assignments"),
             tags=data.get("tags"),
             rendered_primer=data.get("renderedPrimer", ""),
-            preferred_sequence=data.get("preferredCaptionSequence", ""),
         ) if enrich else build_caption_assist_messages(
             assignments=data.get("assignments"),
             tags=data.get("tags"),
@@ -788,7 +787,6 @@ def caption_assist_route():
             draft=data.get("draft", ""),
             template=data.get("template", ""),
             rendered_primer=data.get("renderedPrimer", ""),
-            preferred_sequence=data.get("preferredCaptionSequence", ""),
             corrections=data.get("corrections"),
             tag_mismatches=data.get("tagMismatches"),
             open_sight=data.get("openSight"),
@@ -1200,6 +1198,7 @@ def caption_template_assist_route():
             groups=data.get("groups"),
             mappings=data.get("mappings"),
             current_template=data.get("currentTemplate", ""),
+            preferred_sequence=data.get("preferredCaptionSequence", ""),
         )
         job = enqueue_llm(
             "caption",

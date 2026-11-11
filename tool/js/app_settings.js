@@ -292,7 +292,7 @@ function renderAppSettingsCaptionSequenceGroups() {
     button.type = 'button';
     button.className = 'review-captions-btn app-settings-caption-sequence-chip';
     button.textContent = label;
-    button.title = 'Insert ' + label + ' into the preferred caption sequence';
+    button.title = 'Insert ' + label + ' into the new-template sequence hint';
     button.addEventListener('click', function () {
       var value = String(sequenceEl.value || '');
       var start = appSettingsCaptionSequenceCursor && Number.isInteger(appSettingsCaptionSequenceCursor.start) ? appSettingsCaptionSequenceCursor.start : value.length;

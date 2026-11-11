@@ -233,7 +233,7 @@ function captionAssistEnrichmentInputs(item, candidate) {
   var fingerprint = JSON.stringify([
     String(state.folder || ''), item.key, original, request.model,
     captionAssistSightFingerprint(request.openSight),
-    request.renderedPrimer, request.preferredCaptionSequence, request.assignments, request.tags
+    request.renderedPrimer, request.assignments, request.tags
   ]);
   request.draft = original;
   request.mode = 'enrich';

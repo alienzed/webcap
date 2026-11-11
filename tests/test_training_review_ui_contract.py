@@ -498,7 +498,7 @@ context.refreshTrainingReview().then(value => {
     subprocess.run(["node", "-e", script, str(root / "tool" / "js" / "training_review.js")], check=True)
 
 
-def test_run_setup_ignores_historical_shift_draft_inputs():
+def test_h3_image_shift_run_setup_validation():
     root = Path(__file__).resolve().parents[1]
     source = (root / "tool" / "js" / "training_review.js").read_text(encoding="utf-8")
     script = r"""

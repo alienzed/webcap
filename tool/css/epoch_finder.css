@@ -409,12 +409,33 @@ button.epoch-finder-ranking-row:hover,button.epoch-finder-ranking-row:focus-visi
 #run-analytics-screen .epoch-info-report-surface>p[role="alert"]{grid-column:1/-1}
 #run-analytics-screen .epoch-info-report-surface #run-analytics-chart{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:10px}
 #run-analytics-screen .epoch-info-report-surface .run-analytics-table-wrap{max-height:60vh;overflow:auto}
-.epoch-info-header{margin-bottom:16px}.epoch-info-header h3{font-size:23px;margin:0 0 5px}
-.epoch-info-header p{opacity:.7;margin:0;font-size:12px}
+.epoch-info-header{margin-bottom:16px;min-width:0}
+.epoch-info-header h3{font-size:28px;margin:0 0 5px}
+.epoch-info-header p{opacity:.85;margin:0;font-size:16px;line-height:1.4}
+.epoch-info-nav{display:flex;align-items:center;justify-content:space-between;gap:16px;min-width:0;width:100%;flex:1 0 100%;min-height:56px;margin-top:12px;padding:8px 14px;background:var(--input-bg,var(--background-secondary,#182330));border:1px solid var(--border-color,var(--border,#384653));border-left:3px solid var(--accent-color,var(--accent,#e6a930));border-radius:5px;position:relative;z-index:5}
+.epoch-info-nav .epoch-info-back{display:inline-flex;align-items:center;width:auto;min-height:40px;padding:4px 8px;border:0;background:transparent;color:inherit;font-size:18px;font-weight:700;white-space:nowrap;cursor:pointer}
+.epoch-info-nav .epoch-info-back:hover{text-decoration:underline}
+.epoch-info-settings{margin-left:auto;min-width:0;position:relative}
+.epoch-info-settings summary{display:flex;align-items:baseline;justify-content:flex-end;gap:12px;flex-wrap:wrap;list-style:none;padding:6px 8px;border-radius:5px;font-size:16px;line-height:1.4;cursor:pointer;text-align:right}
+.epoch-info-settings summary::-webkit-details-marker{display:none}
+.epoch-info-settings summary::after{content:'▾';font-size:17px;line-height:1}
+.epoch-info-settings[open] summary::after{content:'▴'}
+.epoch-info-settings summary:hover,.epoch-info-settings[open] summary{background:var(--background-secondary,#243342)}
+.epoch-info-settings summary:focus-visible{outline:2px solid var(--accent-color,var(--accent,#e6a930));outline-offset:2px}
+.epoch-info-settings summary strong{font-size:18px;font-weight:700;white-space:nowrap}
+.epoch-info-settings-summary{font-size:18px}
+.epoch-info-settings-unavailable{font-size:16px;opacity:.85}
+.epoch-info-settings-panel{position:absolute;z-index:20;right:0;top:calc(100% + 9px);width:min(520px,calc(100vw - 48px));padding:18px 20px;border-radius:9px;border:1px solid var(--border-color,var(--border,#384653));background:var(--input-bg,var(--background-secondary,#17202b));box-shadow:0 14px 38px rgba(0,0,0,.36);font-size:16px;text-align:left}
+.epoch-info-settings-heading{font-size:19px;display:block;margin-bottom:14px}
+.epoch-info-settings-list{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px 20px;margin:0}
+.epoch-info-settings-list dt,.epoch-info-settings-list dd{margin:0;font-size:16px;line-height:1.4}
+.epoch-info-settings-list dt{opacity:.85}
+.epoch-info-settings-list dd{font-weight:700;overflow-wrap:anywhere}
+@media(max-width:900px){.epoch-info-nav{flex-wrap:wrap}.epoch-info-settings{margin-left:0;width:100%}.epoch-info-settings summary{justify-content:flex-start;text-align:left}.epoch-info-settings-panel{right:auto;left:0}}
 .epoch-info-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:9px;margin-bottom:12px}
 .epoch-info-stat{border:1px solid var(--border-color,var(--border));border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:3px}
-.epoch-info-stat strong{font-size:21px;font-variant-numeric:tabular-nums}.epoch-info-stat span{font-size:11px;opacity:.7}
-.epoch-info-training{border:1px solid var(--border-color,var(--border));border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:5px;margin-bottom:12px}
+.epoch-info-stat strong{font-size:23px;font-variant-numeric:tabular-nums}.epoch-info-stat span{font-size:16px;opacity:.85}
+.epoch-info-training{border:1px solid var(--border-color,var(--border));border-radius:8px;padding:14px;display:flex;flex-direction:column;gap:6px;margin-bottom:12px;font-size:16px}
 .epoch-info-training svg{height:95px;width:100%;max-width:900px}
 .epoch-info-campaign-score{font-size:12px;margin:5px 0}
 .epoch-info-toolbar{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin:20px 0 13px}

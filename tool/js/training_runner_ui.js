@@ -381,6 +381,8 @@ function getManagedTrainingOptions() {
     forceConstantLr: '',
     trainingSettings: (function () {
       var settings = Object.assign({}, trainingWorkspaceState.runConfigDraft || {});
+      // Shift comes from the captured template, never a stale UI draft override.
+      delete settings.h3ImageShift;
       if (usingResume) { delete settings.h3ImageTrainingAdapter; delete settings.h3TrainingMethod; }
       return settings;
     })()
@@ -746,7 +748,6 @@ function formatTrainingJobSettings(job) {
   if (lr) parts.push('LR ' + lr);
   if (isFinite(rank) && rank > 0) parts.push('R' + Math.round(rank));
   if (dropoutText && isFinite(dropout)) parts.push('D' + dropoutText);
-  if (job && job.stages === 'h3' && settings.h3ImageShift != null && settings.h3ImageShift !== '') parts.push('Shift ' + settings.h3ImageShift);
   if (job && job.stages === 'h3' && settings.h3FocusedBlocks) parts.push('Focused 20–49');
   return parts.join(' · ');
 }

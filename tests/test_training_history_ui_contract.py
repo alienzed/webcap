@@ -131,7 +131,6 @@ def test_training_history_shows_captured_run_settings_and_short_unnamed_identity
 
     assert "trainingHistoryRunSummary(job)" in script
     assert "'dropout '" in script
-    assert "'shift '" in script
     assert "' items'" in script
     assert "'Run ' + sequence" in script
     assert "def run_summary_from_capture" in history
@@ -185,12 +184,18 @@ def test_h3_training_history_recovers_image_shift_and_focused_blocks(tmp_path):
     assert legacy["focusedH3Blocks"] is False
 
 
-def test_training_history_labels_h3_image_shift_and_focused_blocks():
+def test_training_history_hides_shift_but_preserves_its_capture():
     script = (ROOT / "tool" / "js" / "training_history_ui.js").read_text(encoding="utf-8")
-    assert "trainingHistoryMetric('Image shift'" in script
+    history = (ROOT / "tool" / "server" / "training_history.py").read_text(encoding="utf-8")
+    assert "trainingHistoryMetric('Image shift'" not in script
+    assert "'Video shift'" not in script
+    assert "settings.push('shift '" not in script
+    assert "summary.imageShift" not in script
+    assert "summary.shift" not in script
     assert "trainingHistoryMetric('Focused H3 blocks'" in script
-    assert "'Video shift'" in script
     assert "typeof runConfig.focusedH3Blocks === 'boolean'" in script
+    assert 'summary["shift"] = shift' in history
+    assert 'summary["imageShift"] = image_shift' in history
 
 
 def test_metadata_backed_training_history_contract():

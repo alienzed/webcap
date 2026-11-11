@@ -35,15 +35,13 @@
     add('Dropout', formatTrainingNumber(settings.dropout));
     add('LoRA rank', formatTrainingNumber(settings.rank));
     if (typeof settings.focusedH3Blocks === 'boolean') add('Focused blocks', settings.focusedH3Blocks ? 'On' : 'Off');
-    add(run && String(run.stage || '').toLowerCase() === 'h3' ? 'Video shift' : 'Shift', formatTrainingNumber(settings.shift));
-    add('Image shift', formatTrainingNumber(settings.imageShift));
     return facts;
   }
   function epochTrainingControl(run) {
     var facts = epochTrainingSettings(run);
     if (!facts.length) return element('span','epoch-info-settings-unavailable','Training settings unavailable');
     var values = facts.filter(function (item) {
-      return ['Training method','Learning rate','Dropout','Video shift','Shift'].indexOf(item.label) !== -1;
+      return ['Training method','Learning rate','Dropout'].indexOf(item.label) !== -1;
     }).map(function (item) {
       if (item.label === 'Training method') return item.value;
       if (item.label === 'Learning rate') return 'LR ' + item.value;

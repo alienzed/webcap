@@ -272,9 +272,7 @@
 #set-dashboard-stage .set-scan-run-actions { border-top: 1px solid var(--border-soft); }
 
 /* Closed disclosures stay genuinely closed despite the child grid/flex rules. */
-#set-dashboard-stage .set-scan-inspection-disclosure:not([open]) > :not(summary),
-#set-dashboard-stage #set-scan-issues:not([open]) > :not(summary),
-#set-dashboard-stage .set-scan-advanced:not([open]) > :not(summary) {
+#set-dashboard-stage .set-scan-inspection-disclosure:not([open]) > :not(summary) {
   display: none !important;
 }
 

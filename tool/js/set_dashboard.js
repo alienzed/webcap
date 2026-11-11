@@ -1,10 +1,9 @@
 (function () {
   'use strict';
 
-  var stages = ['guidance', 'understand', 'annotate', 'caption', 'review'];
+  var stages = ['analyze', 'caption', 'review'];
   var open = false;
-  var selected = 'guidance';
-  var guidanceStep = 'phrase';
+  var selected = 'analyze';
   var openedFolder = '';
   var returnFocus = null;
 
@@ -55,26 +54,19 @@
   }
 
   function earliestStage(s) {
-    if (!s.phrase || !s.balances.length) return 'guidance';
-    // Partial Sight is useful. Do not demand full coverage or force mature Sets backwards.
-    if (!s.sight && s.captions < Math.ceil(s.total / 2)) {
-      return s.gpuBusy ? 'annotate' : 'understand';
-    }
-    if (!s.configuredGroups && s.sight && s.captions < s.total) return 'understand';
-    if (s.pending) return 'annotate';
+    // Guidance lives in Caption; Sight and annotation live together in Analyze & Tag.
+    if (!s.phrase || !s.balances.length) return 'caption';
+    if ((!s.sight && s.captions < Math.ceil(s.total / 2)) ||
+        (!s.configuredGroups && s.sight && s.captions < s.total) || s.pending) return 'analyze';
     if (s.captions < s.total) return 'caption';
     return 'review';
   }
 
   function setHidden(node, hidden) { node.classList.toggle('hidden', !!hidden); }
 
-  function guidanceInitialStep(s) {
-    return !s.phrase ? 'phrase' : !s.balances.length ? 'balance' : 'template';
-  }
-
   function run(destination) {
     closeDashboard();
-    if (destination === 'prepare') return openDashboard('understand');
+    if (destination === 'prepare') return openDashboard('analyze');
     if (destination === 'vocabulary') return openVisionSchemaAssist();
     if (destination === 'annotation') return startFocusedAnnotation();
     if (destination === 'groups') return openChecklistKeywordsModal();
@@ -90,19 +82,11 @@
       setWorkspaceSurface('reviewOutput');
       return setReviewDetailTab('qa');
     }
-    if (destination === 'report') {
+    if (destination === 'report' || destination === 'captions') {
       setWorkspaceSurface('reviewOutput');
-      return setReviewDetailTab('report');
+      return setReviewDetailTab(destination === 'report' ? 'report' : 'captions');
     }
     throw new Error('Unknown Set Dashboard action: ' + destination);
-  }
-
-  function showGuidanceStep(step) {
-    guidanceStep = step;
-    renderStage();
-    var focusTarget = step === 'phrase' ? el('stats-required-phrase')
-      : step === 'balance' ? el('stats-phrases-add-input') : null;
-    if (focusTarget) focusTarget.focus();
   }
 
   function renderStage() {
@@ -112,151 +96,125 @@
       return;
     }
     var s = snapshot();
-    if (selected !== 'understand' && window.isSetIntelligenceOpen()) window.closeSetIntelligence();
+    if (selected !== 'analyze' && window.isSetIntelligenceOpen()) window.closeSetIntelligence();
+
     document.querySelectorAll('[data-set-dashboard-tab]').forEach(function (button) {
-      var active = button.getAttribute('data-set-dashboard-tab') === selected;
+      var tab = button.getAttribute('data-set-dashboard-tab');
+      var active = tab === selected;
       button.setAttribute('aria-selected', active ? 'true' : 'false');
       button.setAttribute('tabindex', active ? '0' : '-1');
       button.classList.toggle('is-active', active);
-      var tabName = button.getAttribute('data-set-dashboard-tab');
-      var needs = (tabName === 'guidance' && (!s.phrase || !s.balances.length)) ||
-        (tabName === 'understand' && !s.sight && s.captions < s.total) ||
-        (tabName === 'annotate' && s.pending) ||
-        (tabName === 'caption' && s.captions < s.total);
-      button.classList.toggle('has-work', needs);
+      button.classList.toggle('has-work', (tab === 'analyze' && (s.pending || (!s.sight && s.captions < s.total))) ||
+        (tab === 'caption' && (!s.phrase || !s.balances.length || s.captions < s.total)));
     });
+
+    // Real evidence, with distinct denominators and scope labels. No readiness score.
+    el('set-dashboard-sight-count').textContent = s.sight + ' / ' + s.total;
+    el('set-dashboard-tags-count').textContent = s.totalGroups ? s.reviewedGroups + ' / ' + s.totalGroups : '—';
+    el('set-dashboard-captions-count').textContent = s.captions + ' / ' + s.total;
     var title = el('set-dashboard-action-title');
-    var overview = el('set-dashboard-overview');
-    var progress = el('set-dashboard-progress');
-    var progressText = el('set-dashboard-progress-text');
-    var progressBar = el('set-dashboard-progress-bar');
-    var progressFill = el('set-dashboard-progress-fill');
-    var progressValue = el('set-dashboard-progress-value');
-    var primary = el('set-dashboard-primary');
-    var secondary = el('set-dashboard-secondary');
     var status = el('set-dashboard-action-status');
-    var guidance = el('set-dashboard-guidance');
-    var phraseField = el('set-dashboard-phrase');
-    var balanceField = el('set-dashboard-balance');
-    var templateField = el('set-dashboard-template');
-    setHidden(guidance, selected !== 'guidance');
-    setHidden(phraseField, selected !== 'guidance' || guidanceStep !== 'phrase');
-    setHidden(balanceField, selected !== 'guidance' || guidanceStep !== 'balance');
-    setHidden(templateField, selected !== 'guidance' || guidanceStep !== 'template');
     setHidden(status, true);
-    setHidden(secondary, true);
-    setHidden(progress, true);
-    progressBar.removeAttribute('aria-valuenow');
-    function showProgress(done, total, label) {
-      if (!total) return;
-      setHidden(progress, false);
-      progressText.textContent = label;
-      progressValue.textContent = done + ' of ' + total;
-      var percent = Math.round(100 * done / total);
-      progressFill.style.width = percent + '%';
-      progressBar.setAttribute('aria-valuenow', String(percent));
-    }
-    // A factual signal, not a global readiness score or a strict stage gate.
-    setHidden(overview, selected === 'understand');
-    var overviewParts = [s.captions + ' of ' + s.total + ' captioned'];
-    if (s.sight) overviewParts.push(s.sight + ' with saved Sight');
-    overview.textContent = overviewParts.join(' · ');
-    primary.disabled = false;
-    primary.onclick = null;
-    secondary.onclick = null;
+    ['analyze', 'caption', 'review'].forEach(function (tab) {
+      setHidden(el('set-dashboard-' + tab), selected !== tab);
+    });
 
-    function main(label, click) { primary.textContent = label; primary.onclick = click; }
-    function other(label, click) { secondary.textContent = label; secondary.onclick = click; setHidden(secondary, false); }
-    function notice(text) { status.textContent = text; setHidden(status, false); }
-
-    if (selected === 'guidance') {
-      if (guidanceStep === 'phrase') {
-        title.textContent = s.phrase ? 'Your key phrase is configured' : 'Give this Set a consistent key phrase';
-        main(s.phrase ? 'Balance terms' : 'Set key phrase', function () {
-          if (!el('stats-required-phrase').value.trim()) {
-            el('stats-required-phrase').focus();
-            return;
-          }
-          showGuidanceStep('balance');
-        });
-      } else if (guidanceStep === 'balance') {
-        title.textContent = s.balances.length ? 'Your balance terms are configured' : 'Add terms to help balance your captions';
-        main(s.balances.length ? 'Caption Template' : 'Add balance term', function () {
-          if (!el('stats-phrases').value.trim()) {
-            el('stats-phrases-add-input').focus();
-            return;
-          }
-          showGuidanceStep('template');
-        });
-        if (s.phrase) other('Key phrase', function () { showGuidanceStep('phrase'); });
-      } else {
-        title.textContent = 'Shape the captions with your template';
-        main('Edit Caption Template', function () {
-          closeDashboard();
-          setWorkspaceSurface('default');
-          el('caption-helper-tab-requirements-btn').click();
-          var section = el('primer-template-section');
-          section.open = true;
-          section.scrollIntoView({ block: 'nearest' });
-          el('primer-template').focus();
-        });
-        other('Edit key phrase', function () { showGuidanceStep('phrase'); });
-      }
-      return;
-    }
-
-    if (selected === 'understand') {
-      title.textContent = 'Understand this Set';
-      setHidden(progress, true);
-      setHidden(primary, true);
-      setHidden(secondary, true);
+    if (selected === 'analyze') {
+      title.textContent = 'See what is present, then annotate it';
       if (!window.isSetIntelligenceOpen()) window.openSetIntelligence();
-      return;
-    }
-
-    if (selected === 'annotate') {
-      if (!s.configuredGroups) {
-        title.textContent = 'Give your annotations a consistent structure';
-        if (s.gpuBusy) notice('GPU work is active. Group editing is available.');
-        main(s.gpuBusy || !s.sight ? 'Manage Groups' : 'Discover Vocabulary', function () { run(s.gpuBusy || !s.sight ? 'groups' : 'vocabulary'); });
-        if (s.sight && !s.gpuBusy) other('Guided Tagging', function () { run('guided'); });
-      } else {
-        var remaining = s.totalGroups - s.reviewedGroups;
-        title.textContent = remaining ? 'Review ' + remaining + ' remaining group assignments' : 'Your visible annotation groups are reviewed';
-        showProgress(s.reviewedGroups, s.totalGroups, 'Configured group reviews in the current view');
-        main('Focused Annotation', function () { run('annotation'); });
-        if (s.sight && !s.gpuBusy) other('Guided Tagging', function () { run('guided'); });
+      var remaining = s.totalGroups - s.reviewedGroups;
+      var tagsStatus = el('set-dashboard-tags-status');
+      var tagsProgress = el('set-dashboard-tags-progress');
+      var tagPrimary = el('set-dashboard-tags-primary');
+      var guided = el('set-dashboard-tags-guided');
+      var vocabulary = el('set-dashboard-tags-vocabulary');
+      var groups = el('set-dashboard-tags-groups');
+      var note = el('set-dashboard-tags-note');
+      setHidden(note, !s.gpuBusy);
+      if (s.gpuBusy) note.textContent = 'GPU work is active. Manual group and annotation work remains available.';
+      setHidden(tagsProgress, !s.totalGroups);
+      if (s.totalGroups) {
+        el('set-dashboard-tags-progress-value').textContent = s.reviewedGroups + ' of ' + s.totalGroups;
+        el('set-dashboard-tags-progress-fill').style.width = Math.round(s.reviewedGroups * 100 / s.totalGroups) + '%';
       }
+      tagsStatus.textContent = !s.configuredGroups
+        ? 'No configured groups with vocabulary terms yet.'
+        : !s.visibleTotal
+          ? 'No media matches the current filters. Group configuration remains available.'
+          : remaining
+            ? remaining + ' of ' + s.totalGroups + ' group assignments remain to be reviewed in the current view.'
+            : 'All configured group assignments in the current view have been reviewed.';
+      tagPrimary.textContent = s.configuredGroups && s.visibleTotal ? 'Focused Annotation' : 'Manage Groups';
+      tagPrimary.onclick = function () { run(s.configuredGroups && s.visibleTotal ? 'annotation' : 'groups'); };
+      // Discover Vocabulary and Guided Tagging are existing LLM/GPU workflows.
+      // Do not advertise their launch as ready while a competing GPU task is running.
+      setHidden(guided, !s.sight || s.gpuBusy);
+      guided.onclick = function () { run('guided'); };
+      setHidden(vocabulary, !s.sight || s.gpuBusy);
+      vocabulary.onclick = function () { run('vocabulary'); };
+      setHidden(groups, !s.configuredGroups);
+      groups.onclick = function () { run('groups'); };
       return;
     }
 
     if (selected === 'caption') {
-      var missingVisible = s.visibleTotal - s.visibleCaptions;
-      title.textContent = !s.visibleTotal ? 'No media matches the current filters'
-        : missingVisible
-          ? 'Caption ' + missingVisible + ' remaining media ' + (missingVisible === 1 ? 'item' : 'items')
-          : 'Review the captions in your current view';
-      showProgress(s.visibleCaptions, s.visibleTotal, 'Captioned media in the current view');
-      if (!s.visibleTotal) {
-        notice('Change your filters to include media before starting Focused Caption.');
-      } else if (!missingVisible && s.captions < s.total) {
-        notice('Other media in this Set still need captions. Adjust your filters to include them.');
+      var visibleMissing = s.visibleTotal - s.visibleCaptions;
+      title.textContent = !s.visibleTotal ? 'Configure captions or adjust your selection'
+        : visibleMissing ? 'Caption ' + visibleMissing + ' remaining media ' + (visibleMissing === 1 ? 'item' : 'items')
+          : 'Refine and review your captions';
+      var progress = el('set-dashboard-progress');
+      setHidden(progress, !s.visibleTotal);
+      if (s.visibleTotal) {
+        el('set-dashboard-progress-text').textContent = 'Captioned media in the current view';
+        el('set-dashboard-progress-value').textContent = s.visibleCaptions + ' of ' + s.visibleTotal;
+        var percent = Math.round(100 * s.visibleCaptions / s.visibleTotal);
+        el('set-dashboard-progress-fill').style.width = percent + '%';
+        el('set-dashboard-progress-bar').setAttribute('aria-valuenow', String(percent));
+      } else {
+        el('set-dashboard-progress-bar').removeAttribute('aria-valuenow');
       }
-      main(!s.visibleTotal ? 'Edit filters' : missingVisible ? 'Continue captioning' : 'Open Focused Caption', function () {
+      var primary = el('set-dashboard-primary');
+      primary.textContent = !s.visibleTotal ? 'Edit filters' : visibleMissing ? 'Continue captioning' : 'Open Focused Caption';
+      primary.onclick = function () {
         if (!s.visibleTotal) {
           closeDashboard();
           el('media-filter').focus();
-          return;
+        } else {
+          run('caption');
         }
-        run('caption');
-      });
-      other('Caption Template', function () { selected = 'guidance'; showGuidanceStep('template'); });
+      };
+      var secondary = el('set-dashboard-secondary');
+      secondary.onclick = function () { run('captions'); };
+      if (!s.visibleTotal) {
+        status.textContent = 'The current filters exclude all media.';
+        setHidden(status, false);
+      } else if (!visibleMissing && s.captions < s.total) {
+        status.textContent = 'Other media in this Set still need captions; adjust filters to include them.';
+        setHidden(status, false);
+      }
+      el('set-dashboard-template-open').onclick = function () {
+        // Keep the original template editor as the single owner.
+        closeDashboard();
+        setWorkspaceSurface('default');
+        el('caption-helper-tab-requirements-btn').click();
+        var section = el('primer-template-section');
+        section.open = true;
+        section.scrollIntoView({ block: 'nearest' });
+        el('primer-template').focus();
+      };
       return;
     }
 
-    title.textContent = 'Review the quality of your prepared Set';
-    main('Open Quality Assurance', function () { run('qa'); });
-    if (s.captions) other('Caption Report', function () { run('report'); });
+    title.textContent = 'Review and improve this Set';
+    el('set-dashboard-review-qa').onclick = function () { run('qa'); };
+    el('set-dashboard-review-captions').onclick = function () { run('captions'); };
+    el('set-dashboard-review-report').onclick = function () { run('report'); };
+    el('set-dashboard-review-captions').disabled = !s.captions;
+    el('set-dashboard-review-report').disabled = !s.captions;
+    if (!s.captions) {
+      status.textContent = 'No captions are present yet. QA is available for other Set checks.';
+      setHidden(status, false);
+    }
   }
 
   function openDashboard(preferredStage) {
@@ -265,7 +223,6 @@
     returnFocus = document.activeElement;
     var s = snapshot();
     selected = stages.indexOf(preferredStage) !== -1 ? preferredStage : earliestStage(s);
-    guidanceStep = guidanceInitialStep(s);
     el('set-dashboard-name').textContent = openedFolder.split(/[\\/]/).filter(Boolean).pop() || 'Current Set';
     open = true;
     setHidden(el('set-dashboard-modal'), false);
@@ -298,7 +255,6 @@
     document.querySelectorAll('[data-set-dashboard-tab]').forEach(function (button) {
       button.addEventListener('click', function () {
         selected = button.getAttribute('data-set-dashboard-tab');
-        if (selected === 'guidance') guidanceStep = guidanceInitialStep(snapshot());
         renderStage();
       });
       button.addEventListener('keydown', function (event) {

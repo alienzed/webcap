@@ -12,7 +12,7 @@ from .execution_queue import lane_snapshot as execution_lane_snapshot
 from .epoch_test_bench import archive_run_session_cleanup_status, clear_archived_run_sessions
 from .training_action import read_action
 from .training_candidates import aggregate_detailed_loss_by_epoch, map_detailed_loss_to_epochs, read_loss_events, smooth_step_loss
-from .training_history import all_history_payload, clear_history_job
+from .training_history import all_history_payload, clear_history_jobs
 from .training_run_manifest import read_run_manifest, record_archive_metadata
 from .training_runner import action_live_job_ids, candidate_run_snapshot, candidate_run_snapshot_from_provenance, candidate_staged_run_snapshot
 from .training_test_paths import test_copy_destination, test_source_path
@@ -292,9 +292,12 @@ def _context(folder, job_id="", stage="", staged_file_name=""):
     if targeted_active:
         raise RuntimeError("Staged Test candidates are still referenced by active Test work: " + ", ".join(targeted_active))
     sibling_outputs = _sibling_output_directories(output_root, run_dir)
+    # A Set may contain unrelated runs: related means the same physical output.
+    physical_key = str(run_dir.resolve(strict=False))
     related = [
         job for job in all_history_payload(folder=folder).get("jobs") or []
         if str(job.get("id") or "") != effective_job_id
+        and str(job.get("physicalRunKey") or "") == physical_key
     ]
     return {
         "runDir": run_dir,
@@ -466,8 +469,9 @@ def finalize(folder, job_id, archive_name, retain_epochs=None, stage="", staged_
             pass
 
     set_folder = app_config.safe_join_fs_root(folder)
-    if context.get("jobId"):
-        clear_history_job(set_folder, context["jobId"])
+    # Archival moves this physical output: retire every indexed attempt together.
+    history_ids = [context["jobId"]] + [job["id"] for job in context["relatedRuns"]]
+    clear_history_jobs(set_folder, history_ids)
     test_cleanup_warning = ""
     removed_test_sessions = 0
     removed_test_session_names = []

@@ -353,3 +353,28 @@ def test_h3_image_adapter_resume_is_inherited_not_selectable():
     assert "data-image-adapter=" in history
     assert "if (usingResume) { delete settings.h3ImageTrainingAdapter; delete settings.h3TrainingMethod; }" in runner
     assert "Start a fresh run to change this variant" in backend
+
+
+def test_training_history_groups_only_known_physical_run_identity():
+    script = (ROOT / "tool" / "js" / "training_history_ui.js").read_text(encoding="utf-8")
+    history = (ROOT / "tool" / "server" / "training_history.py").read_text(encoding="utf-8")
+    assert 'item["physicalRunKey"]' in history
+    assert 'function trainingHistoryGroupJobs(jobs)' in script
+    assert "job.physicalRunKey" in script
+    assert "['output', String(job.folder || ''), physical]" in script
+    assert "['job', String(job.folder || ''), String(job.id || index)]" in script
+    assert "group.jobs.some(function (job) { return trainingHistoryMatchesSearch(job, searchText); })" in script
+    assert 'data-training-history-group="' in script
+    assert "trainingHistoryOpenGroups[group.key]" in script
+    assert "var visibleGroups = trainingWorkspaceState.historyExpanded ? groups : groups.slice(0, 2)" in script
+    assert "'Delete run and files…</button>' : '')" in script
+
+
+def test_training_archive_unlinks_only_attempts_sharing_physical_output():
+    archive = (ROOT / "tool" / "server" / "training_archive.py").read_text(encoding="utf-8")
+    history = (ROOT / "tool" / "server" / "training_history.py").read_text(encoding="utf-8")
+    assert 'physical_key = str(run_dir.resolve(strict=False))' in archive
+    assert 'str(job.get("physicalRunKey") or "") == physical_key' in archive
+    assert 'history_ids = [context["jobId"]] + [job["id"] for job in context["relatedRuns"]]' in archive
+    assert 'clear_history_jobs(set_folder, history_ids)' in archive
+    assert 'def clear_history_jobs(folder_path, job_ids):' in history

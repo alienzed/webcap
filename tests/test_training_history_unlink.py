@@ -47,3 +47,25 @@ def test_history_remove_requires_exact_record_target():
     response = client.post("/fs/training_history/job/remove", json={"folder": "", "jobId": ""})
     assert response.status_code == 400
     assert "Folder and Training History job ID" in response.get_json()["error"]
+
+
+def test_batch_unlink_preserves_other_runs_and_shared_output(tmp_path, monkeypatch):
+    monkeypatch.setattr(app_config, "FS_ROOT", tmp_path)
+    monkeypatch.setattr(app_config, "training_history_state_path", lambda: tmp_path / ".state" / "recent_runs.json")
+    folder = tmp_path / "sets" / "subject"
+    folder.mkdir(parents=True)
+    other_folder = tmp_path / "sets" / "other"
+    other_folder.mkdir(parents=True)
+    run_dir = tmp_path / "output" / "runs" / "shared"
+    run_dir.mkdir(parents=True)
+    (run_dir / "latest").write_text("global_step12\\n", encoding="utf-8")
+    for name, target in (("attempt-1", folder), ("attempt-2", folder), ("unrelated", folder), ("attempt-1", other_folder)):
+        training_history.record_job(target, {
+            "id": name, "stages": "h3", "status": "completed",
+            "outputRunPath": str(run_dir),
+        })
+    assert training_history.clear_history_jobs(folder, ["attempt-1", "attempt-2", "missing"]) == 2
+    assert [job["id"] for job in training_history.read_history(folder)["jobs"]] == ["unrelated"]
+    assert [job["id"] for job in training_history.read_history(other_folder)["jobs"]] == ["attempt-1"]
+    assert (run_dir / "latest").read_text(encoding="utf-8") == "global_step12\\n"
+    assert training_history.clear_history_jobs(folder, ["attempt-1", "attempt-2"]) == 0

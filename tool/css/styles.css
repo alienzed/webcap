@@ -7578,3 +7578,82 @@ html[data-theme="dark"] iframe {
   white-space:nowrap;
   vertical-align:middle;
 }
+
+
+/* Training History: one physical output with expandable individual attempts. */
+.workspace-surface-training .training-history-group {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel);
+}
+.workspace-surface-training .training-history-group.has-selected-epoch {
+  border-left-color: #d9a441;
+}
+.workspace-surface-training .training-history-group-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  min-width: 0;
+}
+.workspace-surface-training .training-history-group-header .training-history-run-name {
+  color: var(--text);
+  font-size: 18px;
+  font-weight: 700;
+}
+.workspace-surface-training .training-history-group-header .training-history-actions {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.workspace-surface-training .training-history-attempt-count {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.workspace-surface-training .training-history-attempts {
+  min-width: 0;
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+}
+.workspace-surface-training .training-history-attempts > summary {
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.workspace-surface-training .training-history-attempts > summary span {
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 400;
+  margin-left: 8px;
+}
+.workspace-surface-training .training-history-attempt-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+.workspace-surface-training .training-history-attempt-list .training-history-item.training-history-run {
+  background: var(--panel-soft);
+  padding: 12px;
+  margin: 0;
+}
+@media (max-width: 760px) {
+  .workspace-surface-training .training-history-group-header {
+    flex-wrap: wrap;
+  }
+  .workspace-surface-training .training-history-group-header .training-history-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+  .workspace-surface-training .training-history-attempts > summary span {
+    display: block;
+    margin: 3px 0 0 19px;
+  }
+}

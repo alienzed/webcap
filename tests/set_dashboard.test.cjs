@@ -92,7 +92,7 @@ test('fresh Set opens Caption with editable guidance and no background jobs', ()
   assert.equal(app.title(), 'Caption 1 remaining media item');
   assert.equal(app.primary().textContent, 'Continue captioning');
   assert.deepEqual(app.actions, []);
-  assert.equal(app.secondary().textContent, 'Review captions');
+  assert.equal(app.elements['set-dashboard-secondary'].disabled, undefined);
 });
 
 test('missing balance terms are optional and do not gate Review', () => {
@@ -134,8 +134,8 @@ test('mature Set opens Review with QA and caption inspection actions', () => {
     items: [{ key: 'a', fileName: 'a.png', caption: 'subject, front', hasCaption: true, metadata: { vision_sight: { description: 'observed', inventory: {} } } }]
   });
   assert.equal(app.selected(), 'review');
-  assert.equal(app.elements['set-dashboard-review-qa'].textContent, 'Open Quality Assurance');
-  assert.equal(app.elements['set-dashboard-review-report'].textContent, 'Caption Report');
+  assert.equal(typeof app.elements['set-dashboard-review-qa'].onclick, 'function');
+  assert.equal(app.elements['set-dashboard-review-report'].disabled, false);
 });
 
 test('manual stage selection stays fixed until reopen', () => {

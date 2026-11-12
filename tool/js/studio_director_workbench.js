@@ -841,6 +841,7 @@
   }
   window.studioDirectorWorkbench = {
     setStatus:status,
+    reviewGeneratedCapture:reviewCreativeCapture,
     updateContext:updateScope,
     showSentWriteContext: function(operation, messages) {
       var preview = el('studio-dw-write-context-json');

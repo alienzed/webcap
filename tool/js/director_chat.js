@@ -564,7 +564,10 @@
     if (!persistentMode(mode)) return Promise.resolve();
     if (!state.sessionReady) return Promise.reject(new Error('Assistant conversation history has not loaded.'));
     var messages = (mode === 'chat' ? state.messages : state.modeMessages.storyboard || []).map(function (message) {
-      return { role: message.role, content: message.content };
+      var stored = { role: message.role, content: message.content };
+      if (mode === 'storyboard' && message.role === 'assistant' && message.rawResponse)
+        stored.rawResponse = message.rawResponse;
+      return stored;
     });
     var draft = state.draftByMode[mode] || '';
     var attachments = mode === 'storyboard' ? JSON.parse(JSON.stringify(state.storyboardAttachments)) : {};
@@ -1158,6 +1161,30 @@
 
       row.appendChild(label);
       row.appendChild(body);
+      if (state.activeMode === 'storyboard' && message.role === 'assistant' && message.rawResponse) {
+        // Raw structured output is author-inspectable, not normal conversational text.
+        var fullOutput = document.createElement('details');
+        fullOutput.className = 'director-chat-full-response';
+        var fullOutputTitle = document.createElement('summary');
+        fullOutputTitle.textContent = 'Inspect complete model response';
+        var fullOutputBody = document.createElement('pre');
+        fullOutputBody.textContent = message.rawResponse;
+        fullOutput.append(fullOutputTitle, fullOutputBody);
+        row.appendChild(fullOutput);
+
+        var generated = JSON.parse(message.rawResponse);
+        var capture = generated.readiness && generated.readiness.capture;
+        if (capture) {
+          var reuse = document.createElement('button');
+          reuse.type = 'button';
+          reuse.className = 'director-chat-review-draft';
+          reuse.textContent = 'Review generated draft';
+          reuse.onclick = function () {
+            window.studioDirectorWorkbench.reviewGeneratedCapture(capture);
+          };
+          row.appendChild(reuse);
+        }
+      }
       if (message.role === 'user' && message.content.indexOf('[WEBCAP EXPLICIT READ]') !== -1) {
         var next = currentMessages()[index + 1];
         var receipt = document.createElement('div');
@@ -1627,6 +1654,8 @@
     if (!state.modelId) { studioActionStatus('Choose a Director model first.', true); return; }
     var discussion = (state.modeMessages.storyboard || []).filter(function (message) {
       return message && (message.role === 'assistant' || message.role === 'user');
+    }).map(function (message) {
+      return {role:message.role,content:message.content};
     });
     if (!discussion.some(function (message) { return message.role === 'user'; })) {
       studioActionStatus('Discuss an idea first, then prepare a Project.', true);
@@ -1899,6 +1928,8 @@
     }
     var discussion = (state.modeMessages.storyboard || []).filter(function (message) {
       return message && (message.role === 'assistant' || message.role === 'user');
+    }).map(function (message) {
+      return {role:message.role,content:message.content};
     });
     state.pending = true;
     state.jobId = '';
@@ -2167,6 +2198,8 @@
     }
     var discussion = (state.modeMessages.storyboard || []).filter(function (message) {
       return message && (message.role === 'assistant' || message.role === 'user');
+    }).map(function (message) {
+      return {role:message.role,content:message.content};
     });
     if (!discussion.some(function (message) { return message.role === 'user'; })) {
       studioActionStatus('Discuss the Scenes first, then prepare a sequence.', true);
@@ -2369,6 +2402,8 @@
     }
     var discussion = (state.modeMessages.storyboard || []).filter(function (message) {
       return message && (message.role === 'assistant' || message.role === 'user');
+    }).map(function (message) {
+      return {role:message.role,content:message.content};
     });
     if (!discussion.some(function (message) { return message.role === 'user'; })) {
       studioActionStatus('Explore the idea with Director first, then prepare a Scene from your conversation.', true);
@@ -2715,7 +2750,9 @@
       var capabilities = payload.actions.map(function (action) {
         return action.name + ' (' + action.status + '): ' + action.description;
       }).join(String.fromCharCode(10));
-      var outbound = [{role:'system', content:''}].concat(messages); // No hidden workshop/attachment re-injection.
+      var outbound = [{role:'system', content:''}].concat(messages.map(function (message) {
+        return {role:message.role,content:message.content};
+      })); // Persisted inspection metadata is not part of the LLM conversation.
       // Conversation context is opt-in. The workbench state only tells Director
       // what WebCap can review next; it is not a fresh Story or Scene attachment.
       var storyRefs = Object.keys(state.storyboardAttachments || {}).filter(function (key) {
@@ -2753,8 +2790,10 @@
         'Then answer the author’s explicit question, if any; a context-only Read needs just the receipt. ' +
         'Applied field values supersede earlier snapshots. ' +
         'RESPONSE CONTRACT: Return JSON matching the supplied reply/readiness schema. ' +
-        'For ordinary conversation, reply in one short paragraph of 1-3 sentences, with one useful ' +
-        'creative decision or question at most. Longer complete fields and H3 Prompts belong in requested drafts. ' +
+        'For ordinary conversation, prefer 1-3 concise sentences with one useful ' +
+        'creative decision or question at most. When the author explicitly asks for full draft text, ' +
+        'a complete H3 Prompt, or detailed material, include the requested content in full in reply. ' +
+        'When an authored field is complete, also supply its reusable capture when possible. ' +
         'Keep readiness light: normally checks=[], readHints=[], writeHint="", writeFields=[], sceneId="". ' +
         'Use a readiness hint only when it provides a useful next action. ' +
         'Recommend the creative unit: project revises the Project Overview; scenes writes or revises a coherent Scene, considering its Title, Intent and H3 Prompt together. ' +
@@ -2968,6 +3007,8 @@
     if (state.workshopProposal) { showWorkshopReview(); return; }
     var decisions = (state.modeMessages.storyboard || []).filter(function (message) {
       return message && (message.role === 'assistant' || message.role === 'user');
+    }).map(function (message) {
+      return {role:message.role,content:message.content};
     });
     if (!decisions.some(function (message) { return message.role === 'user'; })) {
       throw new Error('Discuss an improvement before preparing the revision.');
@@ -3084,6 +3125,8 @@
     if (state.storyGuidelineProposal) { reviewStoryChanges(); return; }
     var discussion = currentMessages().filter(function (message) {
       return message && (message.role === 'assistant' || message.role === 'user');
+    }).map(function (message) {
+      return {role:message.role,content:message.content};
     });
     if (!discussion.some(function (message) { return message.role === 'user'; })) {
       throw new Error('Discuss the desired Story direction before preparing changes.');
@@ -3310,6 +3353,7 @@
           }
         }
         messages.push({ role: 'assistant', content: assistantText });
+        if (studioResponse) messages[messages.length - 1].rawResponse = String(result.text || '');
         var assistantIndex = messages.length - 1;
         elapsedMap[assistantIndex] = performance.now() - startedAt;
         metricsMap[assistantIndex] = completedResponseMetrics(result);
@@ -3683,7 +3727,11 @@
     },
     workingStoryId: studioAttachedStoryId,
     modelId: function () { return state.modelId; },
-    messages: function () { return (state.modeMessages.storyboard || []).slice(); },
+    messages: function () {
+      return (state.modeMessages.storyboard || []).map(function (message) {
+        return {role:message.role,content:message.content};
+      });
+    },
     sendRead: function (payload, keys, instruction) {
       if (!this.isReady()) throw new Error('Open Studio Director and select an available LLM before Read.');
       if (!Array.isArray(keys) || !keys.length) throw new Error('Select at least one field to Read.');

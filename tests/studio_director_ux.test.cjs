@@ -83,7 +83,8 @@ test('Project review summary follows edits and selection without changing either
     {querySelectorAll:()=>[{value:'character'},{value:'Mara'},{value:'Keeper'}]}
   ];
   elements['studio-brief-summary']={};
-  const scope=vm.createContext({state:{studioBriefProposal:{expected:before}},el:id=>elements[id]});
+  const scope=vm.createContext({state:{studioBriefProposal:{expected:before}},el:id=>elements[id],
+    studioDirectorRenderDiff:()=>{}});
   vm.runInContext(part(chat,'  function updateStudioBriefReviewSummary() {','  function prepareStudioBrief() {'),scope);
   scope.updateStudioBriefReviewSummary();
   assert.match(elements['studio-brief-concept-state'].textContent,/Changed · selected/);
@@ -159,7 +160,8 @@ test('compact Director replies keep the exact full text and leave General Chat a
 
 test('Apply receipt names the actual scoped Scene fields and retains authoritative values',async()=>{
   const state={modeMessages:{storyboard:[]},sessionDirty:{}};
-  const scope=vm.createContext({state,markStudioReadinessOutdated(){},renderMessages(){},persistSession:async()=>{}});
+  const scope=vm.createContext({state,markStudioReadinessOutdated(){},renderMessages(){},persistSession:async()=>{},
+    window:{studioDirectorWorkbench:{markSavedFields(){}}}});
   const bridge=vm.runInContext('({'+part(chat,'    recordApplied: function (kind, story, selected) {','    undoBrief: function () {')+'})',scope);
   await bridge.recordApplied('scene.update',{id:'project-1',title:'Project',updatedAt:'now'},
     {sceneId:'scene-1',savedFields:{prompt:'The reviewed prompt.'}});

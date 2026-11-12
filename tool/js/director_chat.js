@@ -3862,7 +3862,7 @@
         savedAt: story.updatedAt, fields: selected
       };
       markStudioReadinessOutdated();
-      window.studioDirectorWorkbench.markSavedFields(selected);
+      window.studioDirectorWorkbench.markSavedFields(selected,story);
       var names = {title:'Title',concept:'Concept',style:'Visual / atmosphere',invariants:'Invariants',summary:'Intent',prompt:'H3 Prompt'};
       var values = selected.savedFields || selected.fields || selected;
       var savedFields = Object.keys(values).filter(function(key){return names[key];}).map(function(key){

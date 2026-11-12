@@ -1325,6 +1325,7 @@ def test_missing_result_recovery_resume_uses_captured_target_not_set_toml(tmp_pa
         assert "epoch 60 of 60" in payload["error"]
         assert restored["queuePaused"] is True
         assert restored["jobs"][0]["status"] == "queued"
+        assert restored["jobs"][0]["resumePoint"]["epoch"] == 60
 
 
 def test_runner_completed_marker_is_written_only_after_successful_result_save():

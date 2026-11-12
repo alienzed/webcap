@@ -2152,6 +2152,7 @@
                     <div class="director-chat-composer-footer">
                         <span class="director-chat-composer-hint">Enter to send · Shift+Enter for newline</span>
                         <div class="director-chat-composer-actions">
+                            <button id="studio-director-inspect" type="button" class="review-captions-btn hidden" title="Inspect the latest Director request and response">I/O</button>
                             <button id="director-chat-send" type="button" class="review-captions-btn">Send</button>
                         </div>
                     </div>
@@ -2271,6 +2272,17 @@
                     </div>
                 </div>
             </aside>
+            <dialog id="studio-director-io-dialog" class="studio-scene-draft-review" aria-labelledby="studio-director-io-title">
+              <header class="studio-scene-draft-header"><h2 id="studio-director-io-title">Director I/O</h2><button id="studio-director-io-close" type="button" class="review-captions-btn">Close</button></header>
+              <div class="studio-scene-draft-content">
+                <p id="studio-director-io-status" role="status"></p>
+                <button id="studio-director-io-request" type="button" class="review-captions-btn">Inspect exact request…</button>
+                <label for="studio-director-io-exchange">Response</label>
+                <select id="studio-director-io-exchange" aria-label="Director response to inspect"></select>
+                <details open><summary>Raw model response</summary><pre id="studio-director-io-raw"></pre></details>
+                <details><summary>Parsed response</summary><pre id="studio-director-io-parsed"></pre></details>
+              </div>
+            </dialog>
             <dialog id="studio-dw-assessment-dialog" class="studio-scene-draft-review" aria-labelledby="studio-dw-assessment-title"><header class="studio-scene-draft-header"><h2 id="studio-dw-assessment-title">Creative assessment</h2><button id="studio-dw-assessment-close" type="button">Close</button></header><div class="studio-scene-draft-content"><pre id="studio-dw-assessment-content"></pre></div></dialog>
             <dialog id="studio-dw-batch-review" class="studio-scene-draft-review" aria-labelledby="studio-dw-batch-title">
               <header class="studio-scene-draft-header"><div><h2 id="studio-dw-batch-title" title="Choose the exact changes to save together. Other Scenes, prompts and Takes remain unchanged.">Review Scene revisions</h2></div>

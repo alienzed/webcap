@@ -7380,6 +7380,114 @@ html[data-theme="dark"] iframe {
 .test-generations-vl-candidate-score { display:block; color:var(--muted); font-size:12px; }
 .test-generations-vl-epoch-score { display:block; margin-top:4px; font-size:12px; color:var(--muted); }
 
+/* Shared Test preview-card footer. Keep expanded text inside the card's width. */
+.test-preview-card-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+  min-width: 0;
+  margin-top: 3px;
+}
+.test-preview-card-chip {
+  max-width: 100%;
+  padding: 2px 7px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--muted);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.test-preview-card-chip-more {
+  padding: 2px 6px;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font-size: 13px;
+  cursor: pointer;
+}
+.test-preview-card-utility {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px 10px;
+  min-width: 0;
+  margin-top: 3px;
+}
+.test-preview-card-evaluations { display: flex; flex: 1 1 auto; min-width: 0; gap: 6px; }
+.test-preview-card-details { min-width: 0; max-width: 100%; }
+.test-preview-card-details > summary,
+.test-preview-card-menu > summary {
+  cursor: pointer;
+  color: var(--accent);
+  font-size: 14px;
+  font-weight: 600;
+}
+.test-preview-card-details > summary::-webkit-details-marker,
+.test-preview-card-menu > summary::-webkit-details-marker { display: none; }
+.test-preview-card-details[open] {
+  flex: 1 1 100%;
+  order: 3;
+  min-width: 0;
+}
+.test-preview-card-details[open] > summary { text-align: right; }
+.test-preview-card-details-content {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  max-width: 100%;
+  margin-top: 6px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel);
+}
+.test-preview-card-details-content > section { min-width: 0; max-width: 100%; }
+.test-preview-card-details-content > section > strong {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.test-preview-card-details-content p,
+.test-preview-card-details-content pre {
+  max-width: 100%;
+  margin: 0;
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.test-preview-card-details-content pre { max-height: 280px; overflow: auto; }
+.test-preview-card-epoch-metrics { display: grid; gap: 4px; }
+.test-preview-card-menu { margin-left: auto; }
+.test-preview-card-menu[open] {
+  flex: 1 1 100%;
+  order: 4;
+  min-width: 0;
+}
+.test-preview-card-menu[open] > summary { text-align: right; }
+.test-preview-card-menu-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 0 2px;
+}
+.test-preview-card-menu-items > button,
+.test-preview-card-menu-items > a {
+  width: auto;
+  margin: 0;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--panel);
+  color: var(--text);
+  font-size: 14px;
+  text-decoration: none;
+  cursor: pointer;
+}
+
 /* Three-line Test result footer; shared by Grid and Compare. */
 .test-generations-result-name { display:block; }
 .test-generations-result-name .test-generations-result-source { font-weight:400; }

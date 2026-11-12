@@ -3340,7 +3340,7 @@
         if (activeChatMode === 'storyboard' && state.pendingReadAck) {
           var expected = state.pendingReadAck;
           state.pendingReadAck = null;
-          var reply = assistantText;
+          var reply = studioResponse ? studioResponse.reply : assistantText;
           var line = reply.split(String.fromCharCode(10)).find(function (item) { return /^RECEIVED:/i.test(item.trim()); }) || '';
           var received = line.trim().replace(/^RECEIVED:/i, '').trim().split(',').map(function (key) { return key.trim(); });
           var missing = expected.filter(function (key) { return received.indexOf(key) === -1; });

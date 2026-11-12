@@ -193,3 +193,55 @@ test('Project Overview Review selects actual changes without narrowing them to f
   assert.match(director,/if \(kind === 'project'\) return prepareStudioBrief\(\)/);
   assert.doesNotMatch(director,/checkbox\.checked = checkbox\.checked && writeFields\.indexOf\(field\) !== -1/);
 });
+
+
+test('complete Studio model output is inspectable and its original capture reopens review', () => {
+  const capture={field:'prompt',sceneId:'scene-1',content:'Full draft from earlier reply'};
+  const raw=JSON.stringify({reply:"Here's the draft.",readiness:{
+    checks:[],readHints:[],writeHint:'',writeFields:[],sceneId:'',capture
+  }});
+  const created=[];
+  function node(tag) {
+    const el={tagName:tag,children:[],className:'',classList:{toggle(){}},
+      appendChild(child){this.children.push(child);return child;},
+      append(...children){this.children.push(...children);},
+      replaceChildren(...children){this.children=children;},
+      set textContent(value){this.value=value;this.children=[];},
+      get textContent(){return this.value||'';}};
+    created.push(el);
+    return el;
+  }
+  const host=node('div'),empty=node('div'),calls=[];
+  const context=vm.createContext({
+    state:{activeMode:'storyboard'},
+    el:id=>id==='director-chat-messages'?host:empty,
+    document:{createElement:node},
+    currentMessages:()=>[{role:'assistant',content:"Here's the draft.",rawResponse:raw}],
+    currentElapsedMap:()=>({}),currentMetricsMap:()=>({}),
+    window:{studioDirectorWorkbench:{reviewGeneratedCapture:result=>calls.push(result)}},
+    Object,JSON,String
+  });
+  vm.runInContext(part('  function renderMessages() {','  function renderStudioOperations() {'),context);
+  vm.runInContext('renderMessages()',context);
+  const details=created.find(n=>n.className==='director-chat-full-response');
+  const action=created.find(n=>n.className==='director-chat-review-draft');
+  assert.ok(details,'full raw output must remain inspectable after response');
+  assert.equal(details.children[1].textContent,raw);
+  assert.ok(action,'capture must be directly actionable in its original message');
+  action.onclick();
+  assert.deepEqual(calls,[capture]);
+});
+
+test('structured inspection metadata is not sent back with later Studio prompts', async () => {
+  const context=vm.createContext({
+    state:{studioStoryAccess:null,storyboardAttachments:{},workshop:null},
+    Object,String,Promise,
+    requestJson:async()=>({system:'Studio Director',actions:[]})
+  });
+  vm.runInContext(part('  function studioDirectorRequestMessages(messages, includePromptContract, explicitWrite) {',
+    '  function studioDirectorChatRequestMessages(messages) {'),context);
+  const outgoing=await vm.runInContext(
+    'studioDirectorRequestMessages([{role:"assistant",content:"Ready.",rawResponse:"PRIVATE CAPTURE"}],false)',context);
+  assert.equal(outgoing[1].content,'Ready.');
+  assert.equal(Object.hasOwn(outgoing[1],'rawResponse'),false);
+});

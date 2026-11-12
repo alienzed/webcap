@@ -82,15 +82,6 @@
     return state.modeMessages[state.activeMode];
   }
 
-  function studioDiscussionMessages() {
-    // Structured response inspection belongs to history, not future model prompts.
-    return (state.modeMessages.storyboard || []).filter(function (message) {
-      return message && (message.role === 'assistant' || message.role === 'user');
-    }).map(function (message) {
-      return {role:message.role,content:message.content};
-    });
-  }
-
   function currentElapsedMap() {
     if (state.activeMode === 'chat') return state.elapsedByAssistantIndex;
     if (!state.modeElapsedByAssistantIndex[state.activeMode]) state.modeElapsedByAssistantIndex[state.activeMode] = {};
@@ -1661,7 +1652,11 @@
     if (state.pending || state.activeMode !== 'storyboard' || !state.sessionReady) return;
     if (state.studioProjectProposal) { showStudioProjectReview(); return; }
     if (!state.modelId) { studioActionStatus('Choose a Director model first.', true); return; }
-    var discussion = studioDiscussionMessages();
+    var discussion = (state.modeMessages.storyboard || []).filter(function (message) {
+      return message && (message.role === 'assistant' || message.role === 'user');
+    }).map(function (message) {
+      return {role:message.role,content:message.content};
+    });
     if (!discussion.some(function (message) { return message.role === 'user'; })) {
       studioActionStatus('Discuss an idea first, then prepare a Project.', true);
       return;
@@ -1931,7 +1926,11 @@
       studioActionStatus('Attach a Project explicitly before updating Concept, Style or Invariants.', true);
       return;
     }
-    var discussion = studioDiscussionMessages();
+    var discussion = (state.modeMessages.storyboard || []).filter(function (message) {
+      return message && (message.role === 'assistant' || message.role === 'user');
+    }).map(function (message) {
+      return {role:message.role,content:message.content};
+    });
     state.pending = true;
     state.jobId = '';
     studioActionStatus('Preparing Project Overview for review…', false);
@@ -2197,7 +2196,11 @@
       studioActionStatus('Attach one Project explicitly before preparing a Scene sequence.', true);
       return;
     }
-    var discussion = studioDiscussionMessages();
+    var discussion = (state.modeMessages.storyboard || []).filter(function (message) {
+      return message && (message.role === 'assistant' || message.role === 'user');
+    }).map(function (message) {
+      return {role:message.role,content:message.content};
+    });
     if (!discussion.some(function (message) { return message.role === 'user'; })) {
       studioActionStatus('Discuss the Scenes first, then prepare a sequence.', true);
       return;
@@ -2397,7 +2400,11 @@
       studioActionStatus('Connect a Project before preparing a Scene.', true);
       return;
     }
-    var discussion = studioDiscussionMessages();
+    var discussion = (state.modeMessages.storyboard || []).filter(function (message) {
+      return message && (message.role === 'assistant' || message.role === 'user');
+    }).map(function (message) {
+      return {role:message.role,content:message.content};
+    });
     if (!discussion.some(function (message) { return message.role === 'user'; })) {
       studioActionStatus('Explore the idea with Director first, then prepare a Scene from your conversation.', true);
       return;
@@ -2998,7 +3005,11 @@
     if (state.workshop.shotError) throw new Error(state.workshop.shotError);
     if (state.pending || !state.modelId) return;
     if (state.workshopProposal) { showWorkshopReview(); return; }
-    var decisions = studioDiscussionMessages();
+    var decisions = (state.modeMessages.storyboard || []).filter(function (message) {
+      return message && (message.role === 'assistant' || message.role === 'user');
+    }).map(function (message) {
+      return {role:message.role,content:message.content};
+    });
     if (!decisions.some(function (message) { return message.role === 'user'; })) {
       throw new Error('Discuss an improvement before preparing the revision.');
     }
@@ -3112,7 +3123,11 @@
     if (state.activeMode !== 'storyboard' || !guidelineStoryId()) throw new Error('Attach a Story or open its Scene Workshop first.');
     if (state.pending || !state.modelId) return;
     if (state.storyGuidelineProposal) { reviewStoryChanges(); return; }
-    var discussion = studioDiscussionMessages();
+    var discussion = currentMessages().filter(function (message) {
+      return message && (message.role === 'assistant' || message.role === 'user');
+    }).map(function (message) {
+      return {role:message.role,content:message.content};
+    });
     if (!discussion.some(function (message) { return message.role === 'user'; })) {
       throw new Error('Discuss the desired Story direction before preparing changes.');
     }
@@ -3337,8 +3352,8 @@
             window.studioDirectorWorkbench.setReadinessFreshness(true);
           }
         }
-        messages.push({ role: 'assistant', content: assistantText,
-          ...(studioResponse ? {rawResponse:String(result.text || '')} : {}) });
+        messages.push({ role: 'assistant', content: assistantText });
+        if (studioResponse) messages[messages.length - 1].rawResponse = String(result.text || '');
         var assistantIndex = messages.length - 1;
         elapsedMap[assistantIndex] = performance.now() - startedAt;
         metricsMap[assistantIndex] = completedResponseMetrics(result);
@@ -3712,7 +3727,11 @@
     },
     workingStoryId: studioAttachedStoryId,
     modelId: function () { return state.modelId; },
-    messages: studioDiscussionMessages,
+    messages: function () {
+      return (state.modeMessages.storyboard || []).map(function (message) {
+        return {role:message.role,content:message.content};
+      });
+    },
     sendRead: function (payload, keys, instruction) {
       if (!this.isReady()) throw new Error('Open Studio Director and select an available LLM before Read.');
       if (!Array.isArray(keys) || !keys.length) throw new Error('Select at least one field to Read.');

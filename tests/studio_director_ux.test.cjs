@@ -190,3 +190,30 @@ test('editable revision comparison identifies retained, removed and added words 
   scope.studioDirectorRenderDiff(host,'Same text','Same text');
   assert.equal(host.textContent,'No text changes.');
 });
+
+test('field update indicators identify the saved Project, and clear after author edits',()=>{
+  const controls={};
+  for(const id of ['studio-dw-write','studio-dw-quick-write','storyboard-story-title',
+    'storyboard-story-concept','storyboard-story-style']){
+    controls[id]={dataset:{},title:'',addEventListener(event,fn){this[event]=fn;}};
+  }
+  const logs=[];
+  const scope=vm.createContext({
+    el:id=>controls[id],activeTarget:()=>({storyId:'current-project'}),
+    storyName:story=>story.title,window:{reportConsoleInfo:(source,message)=>logs.push(message)}
+  });
+  const code=part(workbench,'    markSavedFields:function(selected,story){',
+    '    setReadStatus:function(state,detail){');
+  const receiver=vm.runInContext('({'+code+'})',scope);
+  receiver.markSavedFields({concept:'New concept'},{id:'different-project',title:'Other Project'});
+  assert.equal(controls['storyboard-story-concept'].dataset.directorUpdated,undefined,
+    'an update to another Project must not mark the open Concept as saved');
+  assert.match(controls['studio-dw-write'].title,/Other Project/);
+  receiver.markSavedFields({concept:'Current concept'},{id:'current-project',title:'Current Project'});
+  assert.equal(controls['storyboard-story-concept'].dataset.directorUpdated,'true');
+  assert.match(controls['storyboard-story-concept'].title,/Updated by Studio Director/);
+  controls['storyboard-story-concept'].input();
+  assert.equal(controls['storyboard-story-concept'].dataset.directorUpdated,undefined,
+    'manual editing clears the recent Studio Director update indication');
+  assert.ok(logs.some(line=>line.includes('Current Project')));
+});

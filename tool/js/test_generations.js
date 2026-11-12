@@ -3328,11 +3328,13 @@
       rating: rating
     }).then(function (payload) {
       syncResultRatingButtons(sessionName, mediaFile, payload && payload.rating);
-      if (onSaved) onSaved();
       if (currentStatus && String(currentStatus.session || '') === sessionName && Array.isArray(currentStatus.results)) {
         currentStatus.results.forEach(function (result) {
           if (resultMediaFile(result) === mediaFile) result.rating = payload.rating;
         });
+      }
+      if (onSaved) onSaved();
+      if (currentStatus && String(currentStatus.session || '') === sessionName) {
         if (previewSort === 'rating') refreshTestPreviewOrder();
         else if (resultsView === 'matrix') renderMatrix(currentStatus);
       }
@@ -4069,11 +4071,29 @@
     });
   }
 
+  function reviewNextUnratedIndex(results, afterIndex) {
+    for (var offset = 1; offset <= results.length; offset++) {
+      var index = (afterIndex + offset) % results.length;
+      if (!(Number(results[index].rating) > 0)) return index;
+    }
+    return -1;
+  }
+
   function moveReview(direction) {
     var results = reviewResults(currentStatus);
     if (!results.length) return;
     reviewIndex = Math.max(0, Math.min(results.length - 1, reviewIndex + direction));
     reviewKey = resultMediaFile(results[reviewIndex]);
+    renderReview(currentStatus);
+  }
+
+  function advanceReviewToUnrated() {
+    var results = reviewResults(currentStatus);
+    var next = reviewNextUnratedIndex(results, reviewIndex);
+    if (next >= 0) {
+      reviewIndex = next;
+      reviewKey = resultMediaFile(results[next]);
+    }
     renderReview(currentStatus);
   }
 
@@ -4094,11 +4114,17 @@
       return resultMediaFile(result) === reviewKey;
     });
     if (current >= 0) reviewIndex = current;
-    else reviewIndex = Math.max(0, Math.min(reviewIndex, Math.max(0, results.length - 1)));
+    else {
+      var firstUnrated = reviewNextUnratedIndex(results, -1);
+      reviewIndex = firstUnrated >= 0 ? firstUnrated : 0;
+    }
     var result = results[reviewIndex];
     reviewKey = result ? resultMediaFile(result) : '';
     var key = session + '|' + reviewKey;
-    position.textContent = results.length ? (reviewIndex + 1) + ' / ' + results.length : '0 / 0';
+    var unratedCount = results.filter(function (item) { return !(Number(item.rating) > 0); }).length;
+    position.textContent = results.length
+      ? (reviewIndex + 1) + ' / ' + results.length + (unratedCount ? ' · ' + unratedCount + ' unrated' : ' · All rated')
+      : '0 / 0';
     el('test-generations-review').querySelector('[data-test-review-previous]').disabled = !results.length || reviewIndex === 0 || reviewRatingPending;
     el('test-generations-review').querySelector('[data-test-review-next]').disabled = !results.length || reviewIndex >= results.length - 1 || reviewRatingPending;
     if (host.dataset.reviewKey === key && host.firstElementChild) {
@@ -4142,7 +4168,7 @@
     var savedKey = reviewKey;
     rateTestResult(star, function () {
       if (resultsView === 'review' && String(currentStatus.session || '') === savedSession && reviewKey === savedKey) {
-        moveReview(1);
+        advanceReviewToUnrated();
       }
     }).finally(function () {
       reviewRatingPending = false;
@@ -4187,6 +4213,10 @@
     review.classList.toggle('hidden', resultsView !== 'review');
     if (grid) grid.classList.toggle('hidden', resultsView !== 'grid');
     if (compare) compare.classList.toggle('hidden', resultsView !== 'compare');
+    if (resultsView === 'review' && previousView !== 'review') {
+      reviewIndex = 0;
+      reviewKey = '';
+    }
     renderResults(currentStatus);
     if (resultsView === 'review' && previousView !== 'review') {
       var activeVideo = review.querySelector('video');
@@ -5270,6 +5300,11 @@
     if (typeof window.syncApplicationShellContext === 'function') window.syncApplicationShellContext();
     if (typeof window.syncShellLocationRoute === 'function') window.syncShellLocationRoute();
     if (warmReturn) {
+      // Re-enter Review at unfinished work; other Test views retain their warm state.
+      if (resultsView === 'review') {
+        reviewIndex = 0;
+        reviewKey = '';
+      }
       if (pendingActivityCampaign) {
         window.epochFinderInspectCampaign(pendingActivityCampaign);
         pendingActivityCampaign = '';
@@ -5309,8 +5344,9 @@
               else renderStatus(status || { status: 'idle' });
             });
       warmStatus.then(function () {
-        if (generation === openGeneration && isOpen() &&
-            (testStatusHasPendingWork(currentStatus) || queuedTestJobs.length)) pollStatus();
+        if (generation !== openGeneration || !isOpen()) return;
+        if (resultsView === 'review') renderReview(currentStatus);
+        if (testStatusHasPendingWork(currentStatus) || queuedTestJobs.length) pollStatus();
       }).catch(showError);
       return;
     }

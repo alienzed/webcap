@@ -646,6 +646,10 @@
     }
     state.sessionByMode[chat.mode] = chat;
     state.sessionActiveByMode[chat.mode] = chat.id;
+    state.requestDiagnostic = null;
+    state.lastStudioIoError = '';
+    state.lastStudioIoRaw = '';
+    el('studio-director-inspect').dataset.newResult = 'false';
     if (chat.mode === 'chat') {
       state.messages = chat.messages.slice();
       state.elapsedByAssistantIndex = {};
@@ -2651,6 +2655,10 @@
       });
     }).then(function (payload) {
       var chat = payload.chat;
+      state.requestDiagnostic = null;
+      state.lastStudioIoError = '';
+      state.lastStudioIoRaw = '';
+      el('studio-director-inspect').dataset.newResult = 'false';
       state.sessionByMode[mode] = chat;
       state.sessionActiveByMode[mode] = chat.id;
       created = true;
@@ -3290,6 +3298,10 @@
     renderMessages();
     syncControls();
     startProgress();
+    if (activeChatMode === 'storyboard') {
+      state.lastStudioIoError = '';
+      state.lastStudioIoRaw = '';
+    }
 
     var startedAt = performance.now();
     var requestError = null;
@@ -3335,6 +3347,7 @@
         // Do not allow model-generated hidden read tokens or private continuation.
         return result;
       }).then(function (result) {
+        if (activeChatMode === 'storyboard') state.lastStudioIoRaw = String(result.text || '');
         var studioResponse = activeChatMode === 'storyboard' ? parseStudioChatResponse(result.text) : null;
         var assistantText = studioResponse ? studioResponse.reply.replace(/^\s*RECEIVED:[^\r\n]*(?:\r?\n)?/i, '').trim() : String(result.text || '');
         if (activeChatMode === 'storyboard' && state.pendingReadAck) {
@@ -3383,6 +3396,10 @@
 
     requestPromise.catch(function (err) {
       requestError = err;
+      if (activeChatMode === 'storyboard') {
+        state.lastStudioIoError = String(err.message || err);
+        el('studio-director-inspect').dataset.newResult = 'true';
+      }
       if (activeChatMode === 'storyboard' && state.pendingReadAck) {
         state.pendingReadAck = null;
         if (window.studioDirectorWorkbench) {
@@ -3464,6 +3481,8 @@
   function studioDirectorOpenIo() {
     var dialog = el('studio-director-io-dialog'), chooser = el('studio-director-io-exchange');
     var responses = currentMessages().filter(function(m){return m.role === 'assistant' && m.rawResponse;});
+    if (state.lastStudioIoError && state.lastStudioIoRaw)
+      responses.push({content:'Failed response',rawResponse:state.lastStudioIoRaw});
     chooser.replaceChildren();
     responses.forEach(function(message,index){
       var option=document.createElement('option');
@@ -3485,9 +3504,11 @@
     render();
     var hasRequest=!!(state.requestDiagnostic && Array.isArray(state.requestDiagnostic.messages));
     el('studio-director-io-request').disabled=!hasRequest;
-    el('studio-director-io-status').textContent = hasRequest
-      ? 'Latest request available. Select a response to inspect its raw and parsed output.'
-      : 'Exact request not retained for this conversation. Recorded responses remain inspectable.';
+    el('studio-director-io-status').textContent = (state.lastStudioIoError
+      ? 'Latest request failed: ' + state.lastStudioIoError + ' '
+      : '') + (hasRequest
+      ? 'Latest request is available.'
+      : 'Exact request not retained for this conversation. Recorded responses remain inspectable.');
     el('studio-director-inspect').dataset.newResult='false';
     dialog.showModal();
   }

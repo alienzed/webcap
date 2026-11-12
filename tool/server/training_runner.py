@@ -1,5 +1,6 @@
 import json
 import logging
+from logging.handlers import RotatingFileHandler
 import math
 import os
 import re
@@ -60,6 +61,9 @@ TRAINING_RESOURCE_OWNER = "training"
 _lock = threading.Lock()
 _monitor_lock = threading.Lock()
 _monitor_thread = None
+_monitor_log_handler = None
+_monitor_last_error = ""
+_monitor_last_heartbeat = 0.0
 _startup_reconciled = False
 _state_file_seen = None
 _persisted_managed_job_ids = set()
@@ -2559,14 +2563,88 @@ def _refresh_state(state):
     _startup_reconciled = True
     _launch_next_queued_job(state)
 
+def _ensure_monitor_diagnostics():
+    """Keep a bounded Training scheduler trace independently of terminal scrollback."""
+    global _monitor_log_handler
+    if _monitor_log_handler is not None:
+        return
+    try:
+        path = app_config.app_diagnostics_root() / "training_queue.log"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        handler = RotatingFileHandler(path, maxBytes=4 * 1024 * 1024, backupCount=2, encoding="utf-8")
+    except OSError:
+        _logger.exception("Could not initialize the Training queue diagnostic log; continuing without file logging.")
+        return
+    handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
+    _logger.setLevel(logging.INFO)
+    _logger.addHandler(handler)
+    _monitor_log_handler = handler
+
+
+def _queue_transition_snapshot(state):
+    return {
+        "active": str(state.get("activeJobId") or ""),
+        "paused": bool(state.get("queuePaused")),
+        "reason": str(state.get("queuePauseReason") or ""),
+        "jobs": {
+            str(job.get("id") or ""): str(job.get("status") or "")
+            for job in state.get("jobs", [])
+            if job.get("status") in ACTIVE_STATUSES | QUEUE_STATUSES
+        },
+    }
+
+
+def _log_queue_transition(before, state):
+    after = _queue_transition_snapshot(state)
+    if before == after:
+        return
+    previous_jobs = before["jobs"]
+    current_jobs = after["jobs"]
+    changed = [
+        job_id + ":" + previous_jobs.get(job_id, "-") + "->" + current_jobs.get(job_id, "-")
+        for job_id in dict.fromkeys(list(previous_jobs) + list(current_jobs))
+        if previous_jobs.get(job_id) != current_jobs.get(job_id)
+    ]
+    if len(changed) > 12:
+        changed = changed[:12] + ["(" + str(len(changed) - 12) + " additional job changes)"]
+    _logger.info(
+        "Training queue transition: active=%s->%s paused=%s->%s reason=%r->%r jobs=%s",
+        before["active"] or "-", after["active"] or "-",
+        before["paused"], after["paused"], before["reason"], after["reason"],
+        ", ".join(changed) or "unchanged",
+    )
+
+
+def _monitor_pass():
+    """One durable reconciliation pass, also callable by focused lifecycle tests."""
+    global _monitor_last_error, _monitor_last_heartbeat
+    with _lock:
+        state = _read_state()
+        before = _queue_transition_snapshot(state)
+        _refresh_state(state)
+        _persist_reconciled_state(state)
+        _log_queue_transition(before, state)
+        now = time.time()
+        if (now - _monitor_last_heartbeat >= 300
+                and any(job.get("status") in ACTIVE_STATUSES | QUEUE_STATUSES for job in state["jobs"])):
+            _logger.info(
+                "Training queue observer alive: active=%s queued=%d paused=%s",
+                state.get("activeJobId") or "-",
+                sum(job.get("status") in QUEUE_STATUSES for job in state["jobs"]),
+                bool(state.get("queuePaused")),
+            )
+            _monitor_last_heartbeat = now
+        _monitor_last_error = ""
+
+
 def _monitor_loop():
+    global _monitor_last_error
+    _logger.info("Training queue observer started.")
     while True:
         try:
-            with _lock:
-                state = _read_state()
-                _refresh_state(state)
-                _persist_reconciled_state(state)
-        except Exception:
+            _monitor_pass()
+        except Exception as exc:
+            _monitor_last_error = "Training queue monitor failed: " + str(exc)
             _logger.exception("Training queue monitor failed; the existing queue state was not replaced.")
         time.sleep(2)
 
@@ -2574,6 +2652,7 @@ def _monitor_loop():
 def _ensure_monitor_started():
     global _monitor_thread
     with _monitor_lock:
+        _ensure_monitor_diagnostics()
         if _monitor_thread and _monitor_thread.is_alive():
             return
         _monitor_thread = threading.Thread(target=_monitor_loop, name="webcap-training-runner", daemon=True)
@@ -2582,10 +2661,13 @@ def _ensure_monitor_started():
 
 def reconcile_startup():
     """Synchronously establish Training runtime truth before normal dispatch starts."""
+    _ensure_monitor_diagnostics()
     with _lock:
         state = _read_state()
+        before = _queue_transition_snapshot(state)
         _refresh_state(state)
         _persist_reconciled_state(state)
+        _log_queue_transition(before, state)
 
 
 def start_observer():
@@ -3207,7 +3289,7 @@ def passive_status_snapshot():
         "waitingGpuOwner": waiting_owner,
         "queuePaused": bool(state.get("queuePaused")),
         "queuePauseReason": str(state.get("queuePauseReason") or ""),
-        "runnerNotice": str(state.get("runnerNotice") or ""),
+        "runnerNotice": " ".join(filter(None, (str(state.get("runnerNotice") or ""), _monitor_last_error))),
         "jobs": [_public_job(job) for job in jobs],
     }, 200
 
@@ -3575,11 +3657,14 @@ def reorder_response(job_id, direction, position=None):
 def resume_queue_response():
     with _lock:
         state = _read_state()
+        before = _queue_transition_snapshot(state)
+        _logger.info("Training queue Resume requested; active=%s", state.get("activeJobId") or "-")
         _refresh_state(state)
         state["queuePaused"] = False
         state["queuePauseReason"] = ""
         _refresh_state(state)
         _persist_reconciled_state(state)
+        _log_queue_transition(before, state)
         if state.get("queuePaused") and not state.get("activeJobId"):
             return {
                 "ok": False,

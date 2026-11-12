@@ -485,7 +485,7 @@ def test_test_result_stars_are_shared_by_grid_and_compare():
 
     shared = (ROOT / 'tool/js/test_preview_card.js').read_text(encoding='utf-8')
     assert "function createTestPreviewCard(options)" in shared
-    assert "function rateTestResult(button)" in script
+    assert "function rateTestResult(button, onSaved)" in script
     assert "function syncResultRatingButtons(sessionName, mediaFile, rating)" in script
     assert "request('test_rate_result'" in script
     assert "star.dataset.testSession = text(o.rating.session);" in shared
@@ -512,12 +512,12 @@ def test_history_mutations_do_not_replace_another_models_prepared_candidates():
 def test_test_rating_refresh_preserves_preview_dom():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
 
-    sync_block = script.split("function syncResultRatingButtons(sessionName, mediaFile, rating)", 1)[1].split("function rateTestResult(button)", 1)[0]
+    sync_block = script.split("function syncResultRatingButtons(sessionName, mediaFile, rating)", 1)[1].split("function rateTestResult(button, onSaved)", 1)[0]
     assert "document.querySelectorAll" in sync_block
     assert "star.classList.toggle('active', active);" in sync_block
     assert "star.textContent = active ? '★' : '☆';" in sync_block
 
-    rate_block = script.split("function rateTestResult(button)", 1)[1].split("function sharedTestCard", 1)[0]
+    rate_block = script.split("function rateTestResult(button, onSaved)", 1)[1].split("function sharedTestCard", 1)[0]
     assert "var sessionName = String(button && button.dataset.testSession || '').trim();" in rate_block
     assert "request('test_rate_result'" in rate_block
     assert "syncResultRatingButtons(sessionName, mediaFile, payload && payload.rating);" in rate_block
@@ -705,7 +705,7 @@ def test_test_generations_has_no_legacy_rate_review_workflow():
     assert 'id="test-generations-rate-items-btn"' not in html
     assert "data-session-rate" not in script
 
-def test_test_generations_reuses_normal_folder_review_for_assessment():
+def test_test_generations_keeps_native_review_and_candidate_selection():
     script = (ROOT / "tool/js/test_generations.js").read_text(encoding="utf-8")
     html = (ROOT / "tool/tool.html").read_text(encoding="utf-8")
     assert 'id="test-generations-session-name"' not in html
@@ -717,7 +717,7 @@ def test_test_generations_reuses_normal_folder_review_for_assessment():
     assert "master.indeterminate = selectedCount > 0 && selectedCount < available.length;" in script
     assert "includeBase: el('test-generations-base-include').checked" in script
     assert "function openResultsFolder(folder)" not in script
-    assert "refreshCurrentDirectory();" in script
+    assert "function renderReview(status)" in script
     assert "function testRunCriteria()" in script
 
 def test_test_generations_surfaces_save_and_selected_epoch_state():
@@ -1212,7 +1212,7 @@ def test_test_candidate_mutations_and_ratings_preserve_unaffected_dom():
     assert "row.remove();" in mutation
     assert "syncStagedSummary(prepared);" in mutation
     assert "if (localRemoval)" in mutation
-    rating = script.split("function rateTestResult(button)", 1)[1].split("function buildResultRemoveButton", 1)[0]
+    rating = script.split("function rateTestResult(button, onSaved)", 1)[1].split("function buildResultRemoveButton", 1)[0]
     assert "syncStagedCandidateScores(prepared.candidateScores);" in rating
     assert "renderStagedFiles(prepared);" not in rating
     assert "row.dataset.stagedFile" in script

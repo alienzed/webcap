@@ -13,5 +13,5 @@ def test_evaluation_uses_existing_native_surfaces_and_warm_return():
     assert "window.epochFinderShowMode = showMode;" in finder
     assert "if (warmReturn)" in tests
     for id in ("test-generations-body","epoch-finder-screen","test-references-screen",
-               "run-analytics-screen","epoch-finder-manual-matrix"):
+               "run-analytics-screen","test-generations-matrix"):
         assert 'id="'+id+'"' in html

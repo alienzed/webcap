@@ -1,4 +1,5 @@
 import io
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
@@ -7,6 +8,7 @@ from tool.server import app as app_module
 
 
 def test_linux_ram_counts_reclaimable_cache_as_available(monkeypatch):
+    monkeypatch.setattr(app_module, "os", SimpleNamespace(name="posix"))
     monkeypatch.setattr(app_module.sys, "platform", "linux")
     data = "MemTotal:       32768000 kB\nMemFree:          200000 kB\nMemAvailable:   18000000 kB\nCached:         15000000 kB\n"
     with patch("builtins.open", return_value=io.StringIO(data)) as opened:
@@ -23,6 +25,7 @@ def test_linux_ram_counts_reclaimable_cache_as_available(monkeypatch):
     "MemTotal: 12000 kB\nMemAvailable: 13000 kB\n",
 ])
 def test_linux_ram_rejects_incomplete_or_invalid_meminfo(monkeypatch, content):
+    monkeypatch.setattr(app_module, "os", SimpleNamespace(name="posix"))
     monkeypatch.setattr(app_module.sys, "platform", "linux")
     with patch("builtins.open", return_value=io.StringIO(content)):
         with pytest.raises((OSError, ValueError)):

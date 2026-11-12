@@ -6,7 +6,7 @@ def test_evaluation_surfaces_use_native_controllers_without_reparenting():
     html=(ROOT/"tool/tool.html").read_text(encoding="utf-8")
     finder=(ROOT/"tool/js/epoch_finder.js").read_text(encoding="utf-8")
     backend=(ROOT/"tool/server/epoch_finder.py").read_text(encoding="utf-8")
-    for mode in ("tests","screening","finder","analytics","references"):
+    for mode in ("tests","finder","analytics","references"):
         assert f'data-test-workspace-mode="{mode}"' in html
     assert 'id="test-unified-builder"' not in html
     assert 'id="test-unified-gallery"' not in html

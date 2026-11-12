@@ -46,10 +46,10 @@ test('planned work is visible before starting without queuing any jobs', async (
   assert.equal(calls[0].action, 'preview');
   assert.equal(calls[0].config.depth, 'quick');
   assert.equal(calls[0].config.directorModels[0].modelRef, 'local::director.gguf');
-  assert.equal(nodes.get('diagnostics-assessment-run').textContent, 'Complete 4 Tests');
+  assert.equal(nodes.get('diagnostics-assessment-run').textContent, 'Run 4 untested probes');
   assert.equal(nodes.get('diagnostics-assessment-run').disabled, false);
-  assert.match(nodes.get('diagnostics-assessment-selection').textContent, /2 already complete · 3 missing · 1 retry/);
-  assert.equal(labels[0].textContent, '3 missing · 1 retry');
+  assert.match(nodes.get('diagnostics-assessment-selection').textContent, /2 already complete · 3 untested/);
+  assert.equal(labels[0].textContent, '3 untested · 1 to retry');
   ctx.diagnosticsRefreshSelectionPlan();
   assert.equal(calls.length, 1, 'no duplicate preview for unchanged selection');
 });
@@ -66,7 +66,7 @@ test('all tests complete disables the action and changing depth replans', async 
   await Promise.resolve();
   assert.equal(nodes.get('diagnostics-assessment-run').textContent, 'Already Complete');
   assert.equal(nodes.get('diagnostics-assessment-run').disabled, true);
-  assert.equal(labels[0].textContent, 'Tests complete');
+  assert.equal(labels[0].textContent, 'Assessed');
   nodes.get('diagnostics-assessment-deep').checked = true;
   ctx.diagnosticsRefreshSelectionPlan();
   await Promise.resolve();
@@ -88,7 +88,7 @@ test('late responses cannot overwrite a newer selection', async () => {
   await Promise.resolve();
   responders[0]({plan: {missing: 0, retry: 0, total: 0}, reused: 4, models: {}});
   await Promise.resolve();
-  assert.equal(nodes.get('diagnostics-assessment-run').textContent, 'Complete 1 Test');
+  assert.equal(nodes.get('diagnostics-assessment-run').textContent, 'Run 1 untested probe');
   assert.equal(nodes.get('diagnostics-assessment-run').disabled, false);
 });
 

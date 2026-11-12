@@ -108,8 +108,12 @@ def test_100_renditions_expand_only_when_session_is_dispatched(bulk_root, monkey
     assert len(calls) == 1
 
 
-def test_skip_checkpoint_test_batch_only_cancels_its_queued_variations(bulk_root, monkeypatch):
+def test_remove_checkpoint_test_batch_only_cancels_its_queued_variations(bulk_root, monkeypatch):
     monkeypatch.setattr(inference_runner, "start_requested_inference", lambda: None)
+    # Frozen-request fixtures use this local staging directory rather than a
+    # configured Copy to Test root. Keep queue/removal behavior real.
+    monkeypatch.setattr(bench, "_test_directory", lambda *_: bulk_root / "staged")
+    monkeypatch.setattr(bench, "_staged_loras_for_set", lambda *_: bench._lora_files(bulk_root / "staged"))
     _, session, _ = submit_bulk(
         bulk_root, count=2, include_base=False,
         variations=[
@@ -123,27 +127,23 @@ def test_skip_checkpoint_test_batch_only_cancels_its_queued_variations(bulk_root
 
     before = bench._visible_session_status(bulk_root, session)
     assert before["total"] == 4
-    assert before["pendingCandidates"] == [
-        {"kind": "lora", "fileName": "epoch000.safetensors", "strength": None},
-        {"kind": "lora", "fileName": "epoch001.safetensors", "strength": None},
-    ]
-
-    after = bench.skip_candidate(bulk_root, session.name, "lora", "epoch000.safetensors")
+    after = bench.remove_candidate(
+        bulk_root, "epoch000.safetensors", session.name, cancel_active=True,
+    )["sessionStatus"]
     assert after["total"] == 2
-    assert after["skippedCandidates"] == [
-        {"kind": "lora", "fileName": "epoch000.safetensors", "strength": None},
-    ]
-    assert after["pendingCandidates"] == [
-        {"kind": "lora", "fileName": "epoch001.safetensors", "strength": None},
-    ]
+    assert [candidate["fileName"] for candidate in after["candidates"]] == ["epoch001.safetensors"] * 2
+    assert not (bulk_root / "staged" / "epoch000.safetensors").exists()
+    assert (bulk_root / "staged" / "epoch001.safetensors").is_file()
     # Cancelled child jobs may be consumed immediately after reconciliation;
     # the Session's durable cancellation markers remain authoritative.
     assert set(ids[:2]) <= set(bench._read_status(session)["cancelledJobIds"])
     assert [execution_queue.get_job(job_id)["status"] for job_id in ids[2:]] == [
         "queued", "queued"
     ]
-    # A second skip is idempotent, and the other checkpoint is unaffected.
-    again = bench.skip_candidate(bulk_root, session.name, "lora", "epoch000.safetensors")
+    # A second removal is idempotent, and the other checkpoint is unaffected.
+    again = bench.remove_candidate(
+        bulk_root, "epoch000.safetensors", session.name, cancel_active=True,
+    )["sessionStatus"]
     assert again["total"] == 2
     assert [execution_queue.get_job(job_id)["status"] for job_id in ids[2:]] == [
         "queued", "queued"

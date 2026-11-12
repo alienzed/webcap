@@ -1,4 +1,25 @@
 from tool.server import training_runtime
+from types import SimpleNamespace
+
+import pytest
+
+
+@pytest.mark.parametrize("distribution", ["", "Ubuntu_W"])
+def test_windows_training_keeps_wsl_and_selected_distribution(monkeypatch, distribution):
+    calls = []
+
+    def run(args, **kwargs):
+        calls.append(args)
+        return SimpleNamespace(returncode=0, stdout="ok", stderr="")
+
+    monkeypatch.setattr(training_runtime, "os", SimpleNamespace(name="nt"))
+    monkeypatch.setattr(training_runtime, "wsl_executable", lambda: "wsl.exe")
+    monkeypatch.setattr(training_runtime.subprocess, "run", run)
+    assert training_runtime.run_wsl("nvidia-smi", distribution=distribution) == (0, "ok", "")
+    expected = ["wsl.exe"]
+    if distribution:
+        expected += ["--distribution", distribution]
+    assert calls == [expected + ["--", "bash", "-lc", "nvidia-smi"]]
 
 
 def test_training_runtime_h3_split_cache_phase_defaults_false_and_maps_true():

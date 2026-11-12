@@ -504,7 +504,7 @@ function renderShellSystemStatus() {
       parts.push('<span class="shell-system-gpu" title="Live GPU utilization and VRAM use.">' + gpuSummary + '</span>');
     }
   } else if (gpu && !gpu.available) {
-    parts.push('<span class="is-warning" title="' + escapeHtml(gpu.error || 'GPU status unavailable.') + '">GPU unavailable</span>');
+    parts.push('<span class="is-warning" title="' + escapeHtml(gpu.error || 'GPU telemetry unavailable.') + '">GPU telemetry unavailable</span>');
   }
 
   var ram = shellSystemStatusState.ram;

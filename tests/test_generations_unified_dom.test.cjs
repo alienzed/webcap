@@ -10,7 +10,7 @@ const finder = fs.readFileSync(path.join(root, 'tool/js/epoch_finder.js'), 'utf8
 
 test('native Evaluation methods reachable and obsolete shells absent', () => {
   const nav = html.split('<nav id="test-workspace-main-tabs"', 2)[1].split('</nav>', 1)[0];
-  for (const mode of ['tests','screening','finder','analytics','references'])
+  for (const mode of ['tests','finder','analytics','references'])
     assert.ok(nav.includes('data-test-workspace-mode="'+mode+'"'), mode);
   for (const obsolete of ['id="test-unified-workspace"', 'data-test-generations-perspective',
       'src="/static/js/test_generations_unified.js"',
@@ -44,7 +44,7 @@ test('Test preview Details expands with wrapped bounded content in every Evaluat
 test('original controls and generated evidence owners preserved', () => {
   for (const id of ['test-generations-run-btn','test-generations-inline-count',
       'test-generations-files','test-generations-sessions-list','epoch-finder-start',
-      'epoch-finder-manual-matrix','test-references-gallery','run-analytics-director'])
+      'epoch-finder-wizard-progress','test-references-gallery','run-analytics-director'])
     assert.ok(html.includes('id="'+id+'"'), id);
   assert.ok(html.indexOf('id="test-generations-body"') < html.indexOf('id="test-generations-run-btn"'));
 });
@@ -233,7 +233,7 @@ test('Matrix uses Screening wildcard choices and keeps full prompts in session d
   assert.ok(testJS.includes("heading.textContent = choice;"));
   assert.ok(testJS.includes("heading.title = prompt;"));
   assert.ok(testJS.includes('<summary>Variation prompts</summary>'));
-  assert.ok(testJS.includes("['test-generations-results','test-generations-compare','test-generations-matrix']"));
+  assert.ok(testJS.includes("['test-generations-results','test-generations-review-card','test-generations-compare','test-generations-matrix']"));
   const sort = testJS.split('function refreshTestPreviewOrder()',2)[1]
     .split('function comparePairs(status)',1)[0];
   assert.ok(sort.includes("if (resultsView === 'grid') sortTestPreviewCards(currentStatus);"));

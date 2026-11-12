@@ -10,10 +10,10 @@ def test_one_persistent_evaluation_navigation_outside_native_screens():
     first_screen = html.index('<section id="epoch-finder-screen"')
     assert html.index('<section id="test-generations-pane"') < start < first_screen
     tabs = html[start:html.index("</nav>", start)]
-    assert tabs.count('data-test-workspace-mode=') == 5
-    for mode in ("tests", "screening", "finder", "analytics", "references"):
+    assert tabs.count('data-test-workspace-mode=') == 4
+    for mode in ("tests", "finder", "analytics", "references"):
         assert f'data-test-workspace-mode="{mode}"' in tabs
-    assert tabs.index('data-test-workspace-mode="tests"') < tabs.index('data-test-workspace-mode="screening"') < tabs.index('data-test-workspace-mode="finder"') < tabs.index('data-test-workspace-mode="analytics"') < tabs.index('data-test-workspace-mode="references"')
+    assert tabs.index('data-test-workspace-mode="tests"') < tabs.index('data-test-workspace-mode="finder"') < tabs.index('data-test-workspace-mode="analytics"') < tabs.index('data-test-workspace-mode="references"')
 
 
 def test_original_left_and_right_owners_remain_intact():
@@ -96,7 +96,7 @@ def test_retired_navigation_is_gone_but_live_owners_remain():
     # The removed intro belonged to the shared Screening/Campaign view only.
     campaign_markup = html.split('<section id="epoch-finder-screen"', 1)[1].split('<div class="epoch-finder-layout">', 1)[0]
     assert 'epoch-finder-intro' not in campaign_markup
-    assert 'aria-label="Manual Screening and Campaigns"' in campaign_markup
+    assert 'aria-label="Campaigns"' in campaign_markup
     assert 'id="epoch-finder-run"' in html  # Hidden compatibility selector is still live.
     assert 'id="test-references-screen"' in html
     assert '#test-generations-pane > #test-references-screen > .epoch-finder-intro' in css

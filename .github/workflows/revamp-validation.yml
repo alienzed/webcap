@@ -52,6 +52,10 @@ on:
       - 'tool/css/modals.css'
       - 'tests/test_vision_schema_assist.py'
       - 'tests/test_video_temporal_sight.py'
+      - 'tests/test_host_gpu_status.py'
+      - 'tests/test_linux_ram_status.py'
+      - 'tests/test_training_runtime.py'
+      - 'tests/test_training_preflight.py'
       - 'tests/test_vision_schema_route.py'
       - 'tests/test_set_scan_ui_contract.py'
       - 'tests/test_caption_atomic.py'
@@ -100,9 +104,7 @@ on:
       - 'tests/test_test_repeat.py'
       - 'tests/test_epoch_finder.py'
       - 'tests/test_epoch_finder_scaling.py'
-      - 'tests/test_epoch_finder_scaling_dom.test.cjs'
       - 'tests/epoch_finder_compact_header.test.cjs'
-      - 'tests/epoch_screening_round_cards.test.cjs'
       - 'tests/test_epoch_finder_multirun.py'
       - 'tests/test_run_analytics_next.py'
       - 'tool/js/epoch_info.js'
@@ -202,9 +204,7 @@ jobs:
           node --test tests/test_generations_unified_dom.test.cjs
           node --test tests/lora_library_ui.test.cjs
           node --test tests/test_test_surface_context_navigation.test.cjs
-          node --test tests/test_epoch_finder_scaling_dom.test.cjs
           node --test tests/epoch_finder_compact_header.test.cjs
-          node --test tests/epoch_screening_round_cards.test.cjs
           node --test tests/qa_curation_ui.test.cjs
           node --test tests/caption_assist_typing_performance.test.cjs
           node --test tests/caption_assist_opening_sight.test.cjs
@@ -222,6 +222,8 @@ jobs:
         run: cp tool/config.example.json tool/config.json
       - name: Install test essentials
         run: python -m pip install pytest Flask Pillow Werkzeug imageio websocket-client opencv-python-headless
+      - name: Host telemetry and Windows WSL training boundaries
+        run: python -m pytest -q tests/test_host_gpu_status.py tests/test_linux_ram_status.py tests/test_training_runtime.py tests/test_training_preflight.py
       - name: Inactive Fizgig and Diffusion Pipe backend contracts
         run: python -m pytest -q tests/test_training_backend.py tests/test_training_fizgig.py
       - name: Training resume variant and History-only removal

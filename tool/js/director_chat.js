@@ -1386,9 +1386,6 @@
       state.activeMode !== 'storyboard';
     el('director-studio-prepare-scenes').disabled = state.pending || !state.sessionReady ||
       state.activeMode !== 'storyboard' || !state.modelId;
-    var briefUndo = el('director-studio-undo-brief');
-    briefUndo.classList.toggle('hidden', state.activeMode !== 'storyboard' || !state.studioBriefUndo);
-    briefUndo.disabled = state.pending || !state.studioBriefUndo;
     if (state.activeMode === 'storyboard' && window.studioDirectorWorkbench) {
       window.studioDirectorWorkbench.setUndo(state.studioBriefUndo);
       window.studioDirectorWorkbench.updateContext();
@@ -3562,7 +3559,6 @@
     };
     el('director-studio-prepare-scene').onclick = prepareStudioSceneDraft;
     el('director-studio-prepare-scenes').onclick = prepareStudioScenes;
-    el('director-studio-undo-brief').onclick = undoStudioBrief;
     el('studio-project-add-scene').onclick = function () {
       if (el('studio-project-extra-scenes').children.length +
           (el('studio-project-include-scene').checked ? 1 : 0) >= 32) {

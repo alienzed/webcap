@@ -3371,7 +3371,7 @@
         }
         messages.push({ role: 'assistant', content: assistantText });
         if (studioResponse) messages[messages.length - 1].rawResponse = String(result.text || '');
-        if (activeChatMode === 'storyboard') el('studio-director-inspect').dataset.newResult = 'true';
+        if (activeChatMode === 'storyboard' && studioResponse) el('studio-director-inspect').dataset.newResult = 'true';
         var assistantIndex = messages.length - 1;
         elapsedMap[assistantIndex] = performance.now() - startedAt;
         metricsMap[assistantIndex] = completedResponseMetrics(result);
@@ -3837,6 +3837,7 @@
         savedAt: story.updatedAt, fields: selected
       };
       markStudioReadinessOutdated();
+      window.studioDirectorWorkbench.markSavedFields(selected);
       var names = {title:'Title',concept:'Concept',style:'Visual / atmosphere',invariants:'Invariants',summary:'Intent',prompt:'H3 Prompt'};
       var values = selected.savedFields || selected.fields || selected;
       var savedFields = Object.keys(values).filter(function(key){return names[key];}).map(function(key){

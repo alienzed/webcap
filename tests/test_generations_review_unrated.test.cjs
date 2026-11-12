@@ -83,4 +83,7 @@ test('re-entering Review resets its cursor and rating is updated before automati
   const callback = source.indexOf('if (onSaved) onSaved();');
   assert.ok(rated > -1 && callback > rated, 'saved rating must be reflected before selecting next unrated');
   assert.match(source, /advanceReviewToUnrated\(\);/);
+  const warmReturn = source.split('if (warmReturn) {', 2)[1].split('return;\n    }', 1)[0];
+  assert.match(warmReturn, /if \(resultsView === 'review'\) \{\s*reviewIndex = 0;\s*reviewKey = '';/);
+  assert.match(warmReturn, /if \(resultsView === 'review'\) renderReview\(currentStatus\);/);
 });

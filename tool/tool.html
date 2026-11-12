@@ -1538,7 +1538,7 @@
                                         <option value="vl">VL match ↓</option>
                                     </select>
                                 <div class="test-generations-view-tabs" role="tablist" aria-label="Results view">
-                                    <button id="test-generations-view-grid-btn" type="button" class="test-generations-view-tab active" role="tab" aria-selected="true">Grid</button>
+                                    <button id="test-generations-view-grid-btn" type="button" class="test-generations-view-tab active" role="tab" aria-selected="true">Grid</button><button id="test-generations-view-review-btn" type="button" class="test-generations-view-tab" role="tab" aria-selected="false">Review</button>
                                     <button id="test-generations-view-compare-btn" type="button" class="test-generations-view-tab" role="tab" aria-selected="false">Compare</button><button id="test-generations-view-matrix-btn" type="button" class="test-generations-view-tab" role="tab" aria-selected="false">Matrix</button>
                                 </div>
                                 </div>
@@ -1562,6 +1562,14 @@
                                 </details>
                             </section>
                             <div id="test-generations-results" class="test-generations-results"></div>
+                            <div id="test-generations-review" class="test-generations-review hidden" role="tabpanel" aria-label="Review test results">
+                                <div id="test-generations-review-card" class="test-generations-review-card-host"></div>
+                                <nav class="test-generations-review-navigation" aria-label="Review navigation">
+                                    <button type="button" data-test-review-previous aria-label="Previous Test result" title="Previous result (Left arrow)">←</button>
+                                    <span id="test-generations-review-position" aria-live="polite">0 / 0</span>
+                                    <button type="button" data-test-review-next aria-label="Next Test result" title="Next result (Right arrow)">→</button>
+                                </nav>
+                            </div>
                             <div id="test-generations-compare" class="test-generations-compare hidden"></div><div id="test-generations-matrix" class="test-generations-matrix hidden"></div>
                             </div>
                             <section id="test-generations-epoch-info" class="epoch-info-workspace hidden" aria-label="Checkpoint inspection"></section>

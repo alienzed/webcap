@@ -1166,18 +1166,6 @@
       row.appendChild(body);
       if (state.activeMode === 'storyboard' && message.role === 'assistant' && message.rawResponse) {
         // Raw structured output is author-inspectable, not normal conversational text.
-        var generated = JSON.parse(message.rawResponse);
-        var capture = generated.readiness && generated.readiness.capture;
-        if (capture) {
-          var reuse = document.createElement('button');
-          reuse.type = 'button';
-          reuse.className = 'director-chat-review-draft';
-          reuse.textContent = 'Review generated draft';
-          reuse.onclick = function () {
-            window.studioDirectorWorkbench.reviewGeneratedCapture(capture);
-          };
-          row.appendChild(reuse);
-        }
       }
       var elapsedMap = currentElapsedMap();
       var metricsMap = currentMetricsMap();
@@ -3489,9 +3477,14 @@
       option.textContent='Response ' + (index+1) + ' · ' + String(message.content || '').slice(0,55);
       chooser.appendChild(option);
     });
+    var chosenCapture = null;
     function render() {
       var item = responses[Number(chooser.value)];
       var raw = item ? String(item.rawResponse) : '';
+      chosenCapture = null;
+      try { chosenCapture = JSON.parse(raw).readiness?.capture || null; }
+      catch(error) { chosenCapture = null; }
+      el('studio-director-io-review').classList.toggle('hidden', !chosenCapture);
       el('studio-director-io-raw').textContent = raw || 'No model response recorded yet.';
       var parsed;
       try { parsed = raw ? JSON.stringify(JSON.parse(raw),null,2) : 'No response to parse.'; }
@@ -3499,6 +3492,11 @@
       el('studio-director-io-parsed').textContent = parsed;
     }
     chooser.onchange=render;
+    el('studio-director-io-review').onclick=function(){
+      if (!chosenCapture) throw new Error('Selected model response has no complete draft to review.');
+      dialog.close();
+      window.studioDirectorWorkbench.reviewGeneratedCapture(chosenCapture);
+    };
     if (responses.length) chooser.value=String(responses.length-1);
     render();
     var recorded = currentMessages().filter(function(message){

@@ -2152,6 +2152,7 @@
                     <div class="director-chat-composer-footer">
                         <span class="director-chat-composer-hint">Enter to send · Shift+Enter for newline</span>
                         <div class="director-chat-composer-actions">
+                            <button id="studio-director-inspect" type="button" class="review-captions-btn hidden" title="Inspect the latest Director request and response">I/O</button>
                             <button id="director-chat-send" type="button" class="review-captions-btn">Send</button>
                         </div>
                     </div>
@@ -2163,14 +2164,8 @@
                   <div class="studio-dw-actions">
                     <button id="studio-dw-read" type="button" aria-expanded="false" aria-controls="studio-dw-read-panel">Read…</button>
                     <button id="studio-dw-write" type="button" aria-expanded="false" aria-controls="studio-dw-write-panel">Write…</button>
-                    <button id="storyboard-director-tools-btn" type="button" title="Revise the open Project's Scenes, optionally generating new Takes">Revise &amp; Generate…</button>
-                  </div>
-                  <div class="studio-dw-shortcuts" aria-label="Write for the current Project">
-                    <button id="studio-dw-current-brief" type="button">Revise current Project Overview</button>
-                    <button id="studio-dw-current-prompt" type="button">Revise current Scene</button>
                   </div>
                   <div id="studio-dw-status" class="studio-dw-status hidden" role="status" aria-live="polite"></div>
-                  <div id="studio-dw-undo" class="studio-dw-undo hidden"><span id="studio-dw-undo-label">Project brief updated</span><button id="studio-dw-undo-button" type="button">Undo brief change</button></div>
                   <section id="studio-dw-read-panel" class="studio-dw-panel hidden" aria-label="Read selected Project and Scenes">
                     <h3>Read saved material</h3>
                     <label>Read from Project<select id="studio-dw-read-project"></select></label>
@@ -2208,11 +2203,15 @@
                     </details>
                     <div class="studio-dw-submit"><button id="studio-dw-write-prepare" type="button" class="studio-dw-primary">Prepare editable review</button></div>
                     <details class="studio-dw-source-preview"><summary>Other Project utilities</summary>
+                      <button id="studio-dw-current-brief" type="button">Revise current Project Overview</button>
+                      <button id="studio-dw-current-prompt" type="button">Revise current Scene</button>
+                      <button id="storyboard-director-tools-btn" type="button" title="Revise the open Project's Scenes, optionally generating new Takes">Revise &amp; Generate…</button>
                       <button id="studio-dw-coherence-check" type="button">Check Project coherence</button>
+                      <div id="studio-dw-undo" class="studio-dw-undo hidden"><span id="studio-dw-undo-label">Project Overview updated</span><button id="studio-dw-undo-button" type="button">Revert latest Overview update…</button></div>
                     </details>
                   </section>
                   <section class="studio-dw-readiness" aria-label="Director suggestions">
-                    <div class="studio-dw-readiness-heading"><strong>Ready to write</strong><small id="studio-dw-readiness-freshness" role="status" aria-live="polite">Not assessed yet</small></div>
+                    <div id="studio-dw-suggestion-heading" class="studio-dw-readiness-heading"><strong>Suggested next step</strong><small id="studio-dw-readiness-freshness" role="status" aria-live="polite">Not assessed yet</small></div>
                     <div id="studio-dw-suggestions" class="studio-dw-suggestions"><p>Keep developing the idea. Director will suggest the next useful revision.</p></div>
                     <details class="studio-dw-assessment-details">
                       <summary>Creative assessment details</summary>
@@ -2266,13 +2265,25 @@
                                 <button id="director-studio-prepare-scene" type="button" title="Review one tentative Scene and its placement">Prepare a Scene</button>
                             </div>
                         </details>
-                        <button id="director-studio-undo-brief" type="button" class="review-captions-btn hidden">Undo brief change</button>
                     </div>
                     <span id="director-studio-action-status" class="director-studio-action-status hidden" aria-live="polite"></span>
                 </section>
                     </div>
                 </div>
             </aside>
+            <dialog id="studio-director-io-dialog" class="studio-scene-draft-review" aria-labelledby="studio-director-io-title">
+              <header class="studio-scene-draft-header"><h2 id="studio-director-io-title">Director I/O</h2><button id="studio-director-io-close" type="button" class="review-captions-btn">Close</button></header>
+              <div class="studio-scene-draft-content">
+                <p id="studio-director-io-status" role="status"></p>
+                <button id="studio-director-io-request" type="button" class="review-captions-btn">Inspect exact request…</button>
+                <label for="studio-director-io-exchange">Response</label>
+                <select id="studio-director-io-exchange" aria-label="Director response to inspect"></select>
+                <details open><summary>Raw model response</summary><pre id="studio-director-io-raw"></pre></details>
+                <details><summary>Parsed response</summary><pre id="studio-director-io-parsed"></pre></details>
+                <button id="studio-director-io-review" type="button" class="review-captions-btn hidden">Review contained draft…</button>
+                <details><summary>Recorded Read and Apply payloads</summary><pre id="studio-director-io-history"></pre></details>
+              </div>
+            </dialog>
             <dialog id="studio-dw-assessment-dialog" class="studio-scene-draft-review" aria-labelledby="studio-dw-assessment-title"><header class="studio-scene-draft-header"><h2 id="studio-dw-assessment-title">Creative assessment</h2><button id="studio-dw-assessment-close" type="button">Close</button></header><div class="studio-scene-draft-content"><pre id="studio-dw-assessment-content"></pre></div></dialog>
             <dialog id="studio-dw-batch-review" class="studio-scene-draft-review" aria-labelledby="studio-dw-batch-title">
               <header class="studio-scene-draft-header"><div><h2 id="studio-dw-batch-title" title="Choose the exact changes to save together. Other Scenes, prompts and Takes remain unchanged.">Review Scene revisions</h2></div>
@@ -2316,18 +2327,21 @@
                     <label for="studio-brief-title"><input id="studio-brief-title-selected" type="checkbox"> Project title</label>
                     <small id="studio-brief-title-state"></small>
                     <details><summary>Saved Project title</summary><p id="studio-brief-title-before" class="studio-scene-draft-rationale"></p></details>
+                    <details class="studio-director-diff" open><summary>What changes?</summary><div id="studio-brief-title-diff" class="studio-director-diff-content"></div></details>
                     <input id="studio-brief-title" type="text" maxlength="240" aria-label="Project title">
                     </section>
                     <section class="studio-brief-field" data-brief-field="concept">
                     <label for="studio-brief-concept"><input id="studio-brief-concept-selected" type="checkbox" checked> Concept / overview <small>(including Core Appeal)</small></label>
                     <small id="studio-brief-concept-state"></small>
                     <details><summary>Saved Concept</summary><p id="studio-brief-concept-before" class="studio-scene-draft-rationale"></p></details>
+                    <details class="studio-director-diff" open><summary>What changes?</summary><div id="studio-brief-concept-diff" class="studio-director-diff-content"></div></details>
                     <textarea id="studio-brief-concept" rows="5"></textarea>
                     </section>
                     <section class="studio-brief-field" data-brief-field="style">
                     <label for="studio-brief-style"><input id="studio-brief-style-selected" type="checkbox" checked> Visual / atmosphere</label>
                     <small id="studio-brief-style-state"></small>
                     <details><summary>Saved Visual / atmosphere</summary><p id="studio-brief-style-before" class="studio-scene-draft-rationale"></p></details>
+                    <details class="studio-director-diff" open><summary>What changes?</summary><div id="studio-brief-style-diff" class="studio-director-diff-content"></div></details>
                     <textarea id="studio-brief-style" rows="3"></textarea>
                     </section>
                     <section class="studio-brief-field" data-brief-field="invariants">

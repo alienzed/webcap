@@ -83,7 +83,8 @@ test('Project review summary follows edits and selection without changing either
     {querySelectorAll:()=>[{value:'character'},{value:'Mara'},{value:'Keeper'}]}
   ];
   elements['studio-brief-summary']={};
-  const scope=vm.createContext({state:{studioBriefProposal:{expected:before}},el:id=>elements[id]});
+  const scope=vm.createContext({state:{studioBriefProposal:{expected:before}},el:id=>elements[id],
+    studioDirectorRenderDiff:()=>{}});
   vm.runInContext(part(chat,'  function updateStudioBriefReviewSummary() {','  function prepareStudioBrief() {'),scope);
   scope.updateStudioBriefReviewSummary();
   assert.match(elements['studio-brief-concept-state'].textContent,/Changed · selected/);
@@ -135,8 +136,7 @@ test('contextual Prompt action uses the current route even when Write was aimed 
 });
 
 test('ordinary discussion asks for concise new decisions while complete creative fields remain complete',()=>{
-  assert.match(chat,/one short paragraph of 1-3 sentences/);
-  assert.match(chat,/Longer complete fields and H3 Prompts belong in requested drafts/);
+  assert.match(chat,/Keep readiness light: normally checks=\[\]/);
   assert.match(chat,/Keep assessment metadata in readiness and conversation in reply/);
 });
 
@@ -159,7 +159,8 @@ test('compact Director replies keep the exact full text and leave General Chat a
 
 test('Apply receipt names the actual scoped Scene fields and retains authoritative values',async()=>{
   const state={modeMessages:{storyboard:[]},sessionDirty:{}};
-  const scope=vm.createContext({state,markStudioReadinessOutdated(){},renderMessages(){},persistSession:async()=>{}});
+  const scope=vm.createContext({state,markStudioReadinessOutdated(){},renderMessages(){},persistSession:async()=>{},
+    window:{studioDirectorWorkbench:{markSavedFields(){}}}});
   const bridge=vm.runInContext('({'+part(chat,'    recordApplied: function (kind, story, selected) {','    undoBrief: function () {')+'})',scope);
   await bridge.recordApplied('scene.update',{id:'project-1',title:'Project',updatedAt:'now'},
     {sceneId:'scene-1',savedFields:{prompt:'The reviewed prompt.'}});
@@ -167,4 +168,91 @@ test('Apply receipt names the actual scoped Scene fields and retains authoritati
   assert.match(message,/^Saved: H3 Prompt\./);
   const saved=JSON.parse(message.split('[WEBCAP APPLIED FIELD VALUES]')[1].split('[END WEBCAP APPLY]')[0]);
   assert.equal(saved.fields.savedFields.prompt,'The reviewed prompt.');
+});
+
+test('editable revision comparison identifies retained, removed and added words without mutating sources',()=>{
+  const before='A woman walks toward the sink, then brushes her teeth.';
+  const after='A woman brushes her teeth.';
+  const elements=[];
+  const host={children:[],replaceChildren(){this.children=[];},appendChild(n){this.children.push(n);}};
+  const scope=vm.createContext({document:{createElement:tag=>{
+    const element={tag,textContent:''};elements.push(element);return element;
+  }}});
+  vm.runInContext(part(chat,'  function studioDirectorRenderDiff(host, before, after) {',
+    '  window.studioDirectorRenderDiff = studioDirectorRenderDiff;'),scope);
+  scope.studioDirectorRenderDiff(host,before,after);
+  assert.ok(host.children.some(n=>n.tag==='del'),'comparison visibly marks removed text');
+  assert.ok(!host.children.some(n=>n.tag==='ins'),'pure deletion does not invent inserted words');
+  assert.ok(host.children.some(n=>n.tag==='del' && n.textContent.includes('walks')),'extra movement is visibly removed');
+  assert.ok(host.children.some(n=>n.tag==='span' && n.textContent.includes('woman')),'unchanged text stays identifiable');
+  assert.equal(before,'A woman walks toward the sink, then brushes her teeth.');
+  assert.equal(after,'A woman brushes her teeth.');
+  scope.studioDirectorRenderDiff(host,'Same text','Same text');
+  assert.equal(host.textContent,'No text changes.');
+});
+
+test('field update indicators identify the saved Project, and clear after author edits',()=>{
+  const controls={};
+  for(const id of ['studio-dw-write','studio-dw-quick-write','storyboard-story-title',
+    'storyboard-story-concept','storyboard-story-style']){
+    controls[id]={dataset:{},title:'',addEventListener(event,fn){this[event]=fn;}};
+  }
+  const logs=[];
+  const scope=vm.createContext({
+    el:id=>controls[id],activeTarget:()=>({storyId:'current-project'}),
+    storyName:story=>story.title,window:{reportConsoleInfo:(source,message)=>logs.push(message)}
+  });
+  const code=part(workbench,'    markSavedFields:function(selected,story){',
+    '    setReadStatus:function(state,detail){');
+  const receiver=vm.runInContext('({'+code+'})',scope);
+  receiver.markSavedFields({concept:'New concept'},{id:'different-project',title:'Other Project'});
+  assert.equal(controls['storyboard-story-concept'].dataset.directorUpdated,undefined,
+    'an update to another Project must not mark the open Concept as saved');
+  assert.match(controls['studio-dw-write'].title,/Other Project/);
+  receiver.markSavedFields({concept:'Current concept'},{id:'current-project',title:'Current Project'});
+  assert.equal(controls['storyboard-story-concept'].dataset.directorUpdated,'true');
+  assert.match(controls['storyboard-story-concept'].title,/Updated by Studio Director/);
+  controls['storyboard-story-concept'].input();
+  assert.equal(controls['storyboard-story-concept'].dataset.directorUpdated,undefined,
+    'manual editing clears the recent Studio Director update indication');
+  assert.ok(logs.some(line=>line.includes('Current Project')));
+});
+
+test('routine operation feedback does not leave a separate status card in the chat workbench',()=>{
+  const status={classList:{hidden:false,toggle(name,flag){if(name==='hidden')this.hidden=flag;}},dataset:{},textContent:''};
+  const messages=[];
+  const scope=vm.createContext({state:{activeMode:'storyboard'},
+    el:()=>status,window:{studioDirectorWorkbench:{setStatus:(text,error)=>messages.push([text,error])}}});
+  vm.runInContext(part(chat,'  function studioActionStatus(message, error) {',
+    '  function parseStudioProjectDraft(raw) {'),scope);
+  scope.studioActionStatus('Director acknowledged selected fields.',false);
+  assert.equal(status.classList.hidden,true);
+  assert.equal(status.textContent,'');
+  assert.equal(messages.length,1);
+  scope.studioActionStatus('Director read failed.',true);
+  assert.equal(status.classList.hidden,false);
+  assert.equal(status.textContent,'Director read failed.');
+});
+
+test('field update indication clears when the Storyboard opens another Project',()=>{
+  const elements={};
+  const node=()=>({dataset:{},title:'',value:'',disabled:false,textContent:'',
+    classList:{contains:()=>true}});
+  for(const id of ['storyboard-story-title','storyboard-story-concept','storyboard-story-style',
+    'studio-dw-current-brief','studio-dw-current-prompt','studio-dw-read-project',
+    'studio-dw-write-project','studio-dw-write-operation','studio-dw-write-scope',
+    'studio-dw-read-panel','studio-dw-write-panel','studio-dw-heading']) elements[id]=node();
+  elements['storyboard-story-concept'].dataset.directorUpdated='true';
+  elements['storyboard-story-concept'].dataset.directorUpdatedProject='project-a';
+  elements['storyboard-story-concept'].title='Updated by Studio Director — Concept';
+  const scope=vm.createContext({el:id=>elements[id],projects:[],lastReadSource:null,
+    activeTarget:()=>({storyId:'project-b'}),window:{studioDirectorBridge:{isReady:()=>true}}});
+  vm.runInContext(part(workbench,'  function updateScope() {','  function setOperation() {'),scope);
+  scope.updateScope();
+  assert.equal(elements['storyboard-story-concept'].dataset.directorUpdated,undefined);
+  assert.equal(elements['storyboard-story-concept'].dataset.directorUpdatedProject,undefined);
+  assert.equal(elements['storyboard-story-concept'].title,'');
+  assert.match(fs.readFileSync(path.join(__dirname,'../tool/js/storyboard.js'),'utf8'),
+    /window\.studioDirectorWorkbench\.updateContext\(\)/,
+    'Storyboard refresh must invoke the existing Studio context sync');
 });

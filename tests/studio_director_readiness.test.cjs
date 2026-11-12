@@ -29,6 +29,7 @@ function processResponse(text,accept=true,pendingReadAck=null,mode='storyboard')
       return true;
     },
     setReadinessFreshness:stale=>statuses.push('freshness:'+stale),
+    setReadStatus:(state,detail)=>statuses.push('read:'+state+':'+detail),
     setStatus:msg=>statuses.push(msg)
   },reportConsoleError:(label,err)=>failures.push(label+': '+err.message)};
   const code=part("        var studioResponse = activeChatMode === 'storyboard' ? parseStudioChatResponse(result.text) : null;",
@@ -165,10 +166,10 @@ test('Scene suggestions route to one focused Write Scenes workflow', () => {
   assert.match(director, /this\.canReview\(\)/);
 });
 
-test('Director guidance presents at most two field actions and keeps assessment details secondary', () => {
+test('Director guidance presents at most one contextual action and keeps assessment details secondary', () => {
   assert.ok(workbench.includes('function captureActionLabel(capture)'));
   assert.match(workbench, /function writeActionLabel\(\)/);
-  assert.match(workbench, /available\.slice\(0,2\)\.forEach/);
+  assert.match(workbench, /available\.slice\(0,1\)\.forEach/);
   assert.match(workbench, /button\.dataset\.suggestionKind = action\.kind/);
   assert.match(workbench, /dataset\.captureAction = 'true'/);
   assert.match(workbench, /dataset\.guidedWrite = 'true'/);
@@ -225,11 +226,12 @@ test('complete Studio model output is inspectable and its original capture reope
   vm.runInContext('renderMessages()',context);
   const details=created.find(n=>n.className==='director-chat-full-response');
   const action=created.find(n=>n.className==='director-chat-review-draft');
-  assert.ok(details,'full raw output must remain inspectable after response');
-  assert.equal(details.children[1].textContent,raw);
-  assert.ok(action,'capture must be directly actionable in its original message');
-  action.onclick();
-  assert.deepEqual(calls,[capture]);
+  assert.equal(details,undefined,'raw model output stays out of the creative conversation');
+  assert.equal(action,undefined,'draft review no longer competes with the conversation');
+  assert.match(director,/studioDirectorOpenIo\(\)/);
+  assert.match(director,/studio-director-io-raw/);
+  assert.match(director,/studio-director-io-review/);
+  assert.match(director,/reviewGeneratedCapture\(chosenCapture\)/);
 });
 
 test('structured inspection metadata is not sent back with later Studio prompts', async () => {

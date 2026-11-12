@@ -4041,3 +4041,14 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
 .director-chat-context-status { margin-top: 5px; color: var(--muted); font-size: 14px; line-height: 1.4; }
 .director-chat-context-panel #director-chat-context-refresh { margin-top: 8px; min-height: 36px; font-size: 15px; }
 .director-chat-temporary-note { flex: 0 0 auto; margin: 6px 20px 10px; color: var(--muted); font-size: 14px; }
+
+/* Director action states are communicated by their owning controls. */
+#studio-dw-read[data-result="working"], #studio-dw-quick-read[data-result="working"] { outline: 2px solid var(--accent); outline-offset: 1px; }
+#studio-dw-read[data-result="success"], #studio-dw-quick-read[data-result="success"] { border-color: var(--accent); }
+#studio-dw-read[data-result="error"], #studio-dw-quick-read[data-result="error"] { outline: 2px solid var(--danger, #f87171); }
+#studio-director-inspect[data-new-result="true"] { border-color: var(--accent); font-weight: 700; }
+#studio-dw-suggestion-heading.hidden { display: none !important; }
+#storyboard-story-concept[data-director-updated="true"],
+#storyboard-story-style[data-director-updated="true"],
+#storyboard-story-title[data-director-updated="true"] { border-left: 3px solid var(--accent); }
+#studio-dw-write[data-result="success"], #studio-dw-quick-write[data-result="success"] { border-color: var(--accent); }

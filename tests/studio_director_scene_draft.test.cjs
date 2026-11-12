@@ -134,7 +134,7 @@ test('Studio brief review limits Apply to explicitly checked Story fields', () =
     'director-studio-capture', 'studio-brief-review',
     'studio-brief-concept-selected', 'studio-brief-style-selected',
     'studio-brief-invariants-selected', 'studio-brief-apply',
-    'director-studio-undo-brief'
+    'studio-dw-undo-button'
   ]) assert.match(html, new RegExp('id="' + id + '"'));
   const prep = part('  function prepareStudioBrief(', '  function applyStudioBrief() {');
   assert.match(prep, /studioAttachedStoryId\(\)/);
@@ -148,6 +148,8 @@ test('Studio brief review limits Apply to explicitly checked Story fields', () =
   assert.match(apply, /expected: expected, changes: changes/);
   assert.match(apply, /\/fs\/studio\/director\/brief'/);
   assert.match(source, /\/fs\/studio\/director\/brief\/undo/);
+  assert.doesNotMatch(html, /id="director-studio-undo-brief"/,
+    'legacy direct Undo shortcut must not bypass reviewed confirmation');
 });
 
 

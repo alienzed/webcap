@@ -4260,6 +4260,8 @@
 
   function renderStory() {
     window.syncStoryboardAssistantStory(storyState.story && storyState.story.id, storyState.story && storyState.story.sceneOrder);
+    // Keep Studio Director's field-update indicators aligned with this Project.
+    window.studioDirectorWorkbench.updateContext();
     syncDirectorToolsUi();
     var empty = el('storyboard-editor-empty');
     var editor = el('storyboard-editor-content');

@@ -646,6 +646,10 @@
     }
     state.sessionByMode[chat.mode] = chat;
     state.sessionActiveByMode[chat.mode] = chat.id;
+    state.requestDiagnostic = null;
+    state.lastStudioIoError = '';
+    state.lastStudioIoRaw = '';
+    el('studio-director-inspect').dataset.newResult = 'false';
     if (chat.mode === 'chat') {
       state.messages = chat.messages.slice();
       state.elapsedByAssistantIndex = {};
@@ -1115,6 +1119,8 @@
     empty.classList.toggle('hidden', currentMessages().length > 0);
 
     currentMessages().forEach(function (message, index) {
+      if (state.activeMode === 'storyboard' && message.role === 'assistant' && !String(message.content || '').trim())
+        return;
       var row = document.createElement('div');
       row.className = 'director-chat-message director-chat-message-' + message.role;
 
@@ -1148,74 +1154,16 @@
         var marker = message.content.indexOf(startMark);
         var closing = message.content.indexOf(endMark, marker);
         if (closing !== -1) {
-          var details = document.createElement('details');
-          var heading = document.createElement('summary');
-          heading.textContent = applied ? 'Applied content · inspect saved fields' : 'Read context · inspect exact fields delivered';
-          var content = document.createElement('pre');
-          content.textContent = message.content.slice(marker, closing + endMark.length);
-          details.append(heading, content);
-          body.textContent = message.content.slice(0, marker).trim();
-          body.appendChild(details);
+          // Preserve the original payload in session history, not the creative chat.
+          var description = message.content.slice(0, marker).trim();
+          body.textContent = description === 'Read the selected saved context and acknowledge receipt.'
+            ? 'Read saved Project fields'
+            : (description || (applied ? 'Reviewed changes saved' : 'Read saved Project fields'));
         }
       }
 
       row.appendChild(label);
       row.appendChild(body);
-      if (state.activeMode === 'storyboard' && message.role === 'assistant' && message.rawResponse) {
-        // Raw structured output is author-inspectable, not normal conversational text.
-        var fullOutput = document.createElement('details');
-        fullOutput.className = 'director-chat-full-response';
-        var fullOutputTitle = document.createElement('summary');
-        fullOutputTitle.textContent = 'Inspect complete model response';
-        var fullOutputBody = document.createElement('pre');
-        fullOutputBody.textContent = message.rawResponse;
-        fullOutput.append(fullOutputTitle, fullOutputBody);
-        row.appendChild(fullOutput);
-
-        var generated = JSON.parse(message.rawResponse);
-        var capture = generated.readiness && generated.readiness.capture;
-        if (capture) {
-          var reuse = document.createElement('button');
-          reuse.type = 'button';
-          reuse.className = 'director-chat-review-draft';
-          reuse.textContent = 'Review generated draft';
-          reuse.onclick = function () {
-            window.studioDirectorWorkbench.reviewGeneratedCapture(capture);
-          };
-          row.appendChild(reuse);
-        }
-      }
-      if (message.role === 'user' && message.content.indexOf('[WEBCAP EXPLICIT READ]') !== -1) {
-        var next = currentMessages()[index + 1];
-        var receipt = document.createElement('div');
-        receipt.className = 'director-chat-read-receipt';
-        if (!next || next.role !== 'assistant') {
-          receipt.textContent = 'Awaiting Director’s field acknowledgment';
-        } else {
-          try {
-            var source = message.content.split('[WEBCAP EXPLICIT READ]')[1]
-              .split('[END WEBCAP READ]')[0].trim();
-            var fields = JSON.parse(source).fields;
-            if (!Array.isArray(fields)) throw new Error('Read event contains no fields.');
-            var match = String(next.content || '').split(String.fromCharCode(10))
-              .find(function (line) { return /^RECEIVED:/i.test(line.trim()); }) || '';
-            var found = match.trim().replace(/^RECEIVED:/i, '').split(',')
-              .map(function (key) { return key.trim(); }).filter(Boolean);
-            var expected = fields.map(function (item) { return item.id; });
-            var ok = found.length === expected.length &&
-              expected.every(function (id) { return found.indexOf(id) >= 0; });
-            receipt.textContent = ok
-              ? 'Director acknowledged ' + expected.length + ' selected fields'
-              : 'Director acknowledgment incomplete or mismatched · inspect its response';
-            receipt.dataset.error = ok ? 'false' : 'true';
-          } catch (error) {
-            receipt.textContent = 'Read receipt could not be checked: ' + error.message;
-            receipt.dataset.error = 'true';
-          }
-        }
-        row.appendChild(receipt);
-      }
-
       var elapsedMap = currentElapsedMap();
       var metricsMap = currentMetricsMap();
       if (message.role === 'assistant' && Object.prototype.hasOwnProperty.call(elapsedMap, index)) {
@@ -1418,6 +1366,8 @@
 
   function syncControls() {
     var send = el('director-chat-send');
+    var inspect = el('studio-director-inspect');
+    if (inspect) inspect.classList.toggle('hidden', state.activeMode !== 'storyboard');
     var input = el('director-chat-input');
     var model = el('director-chat-model');
     var refresh = el('director-chat-model-refresh');
@@ -1436,9 +1386,6 @@
       state.activeMode !== 'storyboard';
     el('director-studio-prepare-scenes').disabled = state.pending || !state.sessionReady ||
       state.activeMode !== 'storyboard' || !state.modelId;
-    var briefUndo = el('director-studio-undo-brief');
-    briefUndo.classList.toggle('hidden', state.activeMode !== 'storyboard' || !state.studioBriefUndo);
-    briefUndo.disabled = state.pending || !state.studioBriefUndo;
     if (state.activeMode === 'storyboard' && window.studioDirectorWorkbench) {
       window.studioDirectorWorkbench.setUndo(state.studioBriefUndo);
       window.studioDirectorWorkbench.updateContext();
@@ -1509,8 +1456,10 @@
 
   function studioActionStatus(message, error) {
     var status = el('director-studio-action-status');
-    status.classList.toggle('hidden', !message);
-    status.textContent = message || '';
+    // Routine operation receipts belong on their controls and in Console.
+    // Preserve conspicuous feedback for real errors.
+    status.classList.toggle('hidden', !message || !error);
+    status.textContent = error ? (message || '') : '';
     status.dataset.error = error ? 'true' : 'false';
     if (state.activeMode === 'storyboard' && window.studioDirectorWorkbench) {
       window.studioDirectorWorkbench.setStatus(String(message || ''), !!error);
@@ -1828,6 +1777,55 @@
     return result;
   }
 
+  // A bounded, editable-review-only word comparison. No source text is rewritten.
+  function studioDirectorRenderDiff(host, before, after) {
+    before = String(before || ''); after = String(after || '');
+    host.replaceChildren();
+    if (before === after) { host.textContent = 'No text changes.'; return; }
+    var oldWords = before.match(/\s+|[^\s]+/g) || [];
+    var newWords = after.match(/\s+|[^\s]+/g) || [];
+    if (oldWords.length > 650 || newWords.length > 650) {
+      var prefix = 0;
+      while (prefix < Math.min(before.length, after.length) && before[prefix] === after[prefix]) prefix++;
+      var suffix = 0;
+      while (suffix < Math.min(before.length, after.length) - prefix &&
+        before[before.length - 1 - suffix] === after[after.length - 1 - suffix]) suffix++;
+      var append = function(tag, value) {
+        if (!value) return;
+        var element = document.createElement(tag);
+        element.textContent = value; host.appendChild(element);
+      };
+      append('span', before.slice(0,prefix));
+      append('del', before.slice(prefix,before.length-suffix));
+      append('ins', after.slice(prefix,after.length-suffix));
+      append('span', after.slice(after.length-suffix));
+      return;
+    }
+    var rows = Array.from({length:oldWords.length+1},function(){return new Uint16Array(newWords.length+1);});
+    for(var i=oldWords.length-1;i>=0;i--)
+      for(var j=newWords.length-1;j>=0;j--)
+        rows[i][j] = oldWords[i] === newWords[j] ? rows[i+1][j+1]+1 :
+          Math.max(rows[i+1][j],rows[i][j+1]);
+    var i=0,j=0,segments=[];
+    function add(tag,word) {
+      var last=segments[segments.length-1];
+      if (last && last.tag === tag) last.text+=word;
+      else segments.push({tag:tag,text:word});
+    }
+    while(i<oldWords.length || j<newWords.length){
+      if(i<oldWords.length && j<newWords.length && oldWords[i]===newWords[j]){
+        add('span',oldWords[i]);i++;j++;
+      } else if(i<oldWords.length && (j===newWords.length || rows[i+1][j]>=rows[i][j+1])) add('del',oldWords[i++]);
+      else add('ins',newWords[j++]);
+    }
+    segments.forEach(function(segment){
+      var node=document.createElement(segment.tag);
+      node.textContent=segment.text;
+      host.appendChild(node);
+    });
+  }
+  window.studioDirectorRenderDiff = studioDirectorRenderDiff;
+
   function showStudioBriefReview() {
     var proposal = state.studioBriefProposal;
     if (!proposal) throw new Error('Prepare Concept, Style and Invariants before reviewing.');
@@ -1840,6 +1838,9 @@
     el('studio-brief-style-before').textContent = 'Current: ' + (proposal.expected.style || '(empty)');
     el('studio-brief-concept').value = proposal.draft.concept;
     el('studio-brief-style').value = proposal.draft.style;
+    ['title','concept','style'].forEach(function(key){
+      studioDirectorRenderDiff(el('studio-brief-'+key+'-diff'), proposal.expected[key], proposal.draft[key]);
+    });
     el('studio-brief-concept-selected').checked = proposal.draft.concept !== proposal.expected.concept;
     el('studio-brief-style-selected').checked = proposal.draft.style !== proposal.expected.style;
     // A model's omission never becomes a proposed deletion by accident.
@@ -1899,7 +1900,9 @@
       var checked = el('studio-brief-' + key + '-selected').checked;
       var section = el('studio-brief-' + key + '-state').closest('.studio-brief-field');
       section.dataset.changed = String(changed);
-      el('studio-brief-' + key + '-state').textContent = (changed ? 'Changed' : 'Unchanged') +
+      if (key !== 'invariants') studioDirectorRenderDiff(el('studio-brief-' + key + '-diff'),
+      proposal.expected[key], el('studio-brief-' + key).value);
+    el('studio-brief-' + key + '-state').textContent = (changed ? 'Changed' : 'Unchanged') +
         (checked ? ' · selected' : ' · not selected');
       if (checked) selected.push(names[key] + (key === 'invariants' ? ' (' + invariants.length + ')' : ''));
     });
@@ -2635,6 +2638,10 @@
       });
     }).then(function (payload) {
       var chat = payload.chat;
+      state.requestDiagnostic = null;
+      state.lastStudioIoError = '';
+      state.lastStudioIoRaw = '';
+      el('studio-director-inspect').dataset.newResult = 'false';
       state.sessionByMode[mode] = chat;
       state.sessionActiveByMode[mode] = chat.id;
       created = true;
@@ -3274,6 +3281,10 @@
     renderMessages();
     syncControls();
     startProgress();
+    if (activeChatMode === 'storyboard') {
+      state.lastStudioIoError = '';
+      state.lastStudioIoRaw = '';
+    }
 
     var startedAt = performance.now();
     var requestError = null;
@@ -3319,12 +3330,13 @@
         // Do not allow model-generated hidden read tokens or private continuation.
         return result;
       }).then(function (result) {
+        if (activeChatMode === 'storyboard') state.lastStudioIoRaw = String(result.text || '');
         var studioResponse = activeChatMode === 'storyboard' ? parseStudioChatResponse(result.text) : null;
-        var assistantText = studioResponse ? studioResponse.reply : String(result.text || '');
+        var assistantText = studioResponse ? studioResponse.reply.replace(/^\s*RECEIVED:[^\r\n]*(?:\r?\n)?/i, '').trim() : String(result.text || '');
         if (activeChatMode === 'storyboard' && state.pendingReadAck) {
           var expected = state.pendingReadAck;
           state.pendingReadAck = null;
-          var reply = assistantText;
+          var reply = studioResponse ? studioResponse.reply : assistantText;
           var line = reply.split(String.fromCharCode(10)).find(function (item) { return /^RECEIVED:/i.test(item.trim()); }) || '';
           var received = line.trim().replace(/^RECEIVED:/i, '').trim().split(',').map(function (key) { return key.trim(); });
           var missing = expected.filter(function (key) { return received.indexOf(key) === -1; });
@@ -3333,6 +3345,7 @@
             ? 'Director acknowledgement mismatch. Missing: ' + (missing.join(', ') || 'none') +
               '; unexpected: ' + (extra.join(', ') || 'none')
             : 'Director acknowledged ' + expected.length + ' selected fields.';
+          window.studioDirectorWorkbench.setReadStatus(missing.length || extra.length ? 'error' : 'success', feedback);
           studioActionStatus(feedback, !!(missing.length || extra.length));
           if (window.studioDirectorWorkbench) window.studioDirectorWorkbench.setStatus(feedback, !!(missing.length || extra.length));
           if (missing.length || extra.length) {
@@ -3344,7 +3357,7 @@
           try {
             if (!window.studioDirectorWorkbench.updateReadiness(studioResponse.readiness))
               throw new Error('Director readiness did not match the expected contract.\nRaw structured response:\n' + result.text);
-            studioActionStatus('Director assessment updated.', false);
+            // Assessment is metadata, not another user-visible success card.
           } catch (processingError) {
             requestError = processingError;
             window.reportConsoleError('Studio readiness fields', processingError);
@@ -3354,6 +3367,7 @@
         }
         messages.push({ role: 'assistant', content: assistantText });
         if (studioResponse) messages[messages.length - 1].rawResponse = String(result.text || '');
+        if (activeChatMode === 'storyboard' && studioResponse) el('studio-director-inspect').dataset.newResult = 'true';
         var assistantIndex = messages.length - 1;
         elapsedMap[assistantIndex] = performance.now() - startedAt;
         metricsMap[assistantIndex] = completedResponseMetrics(result);
@@ -3365,9 +3379,16 @@
 
     requestPromise.catch(function (err) {
       requestError = err;
+      if (activeChatMode === 'storyboard') {
+        state.lastStudioIoError = String(err.message || err);
+        el('studio-director-inspect').dataset.newResult = 'true';
+      }
       if (activeChatMode === 'storyboard' && state.pendingReadAck) {
         state.pendingReadAck = null;
-        if (window.studioDirectorWorkbench) window.studioDirectorWorkbench.setStatus('Read failed: ' + String(err.message || err), true);
+        if (window.studioDirectorWorkbench) {
+          window.studioDirectorWorkbench.setReadStatus('error','Read failed: ' + String(err.message || err));
+          window.studioDirectorWorkbench.setStatus('Read failed: ' + String(err.message || err), true);
+        }
       }
       if (['stopped', 'cancelled'].indexOf(String(err && err.jobStatus || '')) === -1) {
         if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Assistant', err);
@@ -3440,6 +3461,58 @@
   }
 
 
+  function studioDirectorOpenIo() {
+    var dialog = el('studio-director-io-dialog'), chooser = el('studio-director-io-exchange');
+    var responses = currentMessages().filter(function(m){return m.role === 'assistant' && m.rawResponse;});
+    if (state.lastStudioIoError && state.lastStudioIoRaw)
+      responses.push({content:'Failed response',rawResponse:state.lastStudioIoRaw});
+    chooser.replaceChildren();
+    responses.forEach(function(message,index){
+      var option=document.createElement('option');
+      option.value=String(index);
+      option.textContent='Response ' + (index+1) + ' · ' + String(message.content || '').slice(0,55);
+      chooser.appendChild(option);
+    });
+    var chosenCapture = null;
+    function render() {
+      var item = responses[Number(chooser.value)];
+      var raw = item ? String(item.rawResponse) : '';
+      chosenCapture = null;
+      try { chosenCapture = JSON.parse(raw).readiness?.capture || null; }
+      catch(error) { chosenCapture = null; }
+      el('studio-director-io-review').classList.toggle('hidden', !chosenCapture);
+      el('studio-director-io-raw').textContent = raw || 'No model response recorded yet.';
+      var parsed;
+      try { parsed = raw ? JSON.stringify(JSON.parse(raw),null,2) : 'No response to parse.'; }
+      catch(error) { parsed = 'Response could not be parsed: ' + error.message; }
+      el('studio-director-io-parsed').textContent = parsed;
+    }
+    chooser.onchange=render;
+    el('studio-director-io-review').onclick=function(){
+      if (!chosenCapture) throw new Error('Selected model response has no complete draft to review.');
+      dialog.close();
+      window.studioDirectorWorkbench.reviewGeneratedCapture(chosenCapture);
+    };
+    if (responses.length) chooser.value=String(responses.length-1);
+    render();
+    var recorded = currentMessages().filter(function(message){
+      return message.role === 'user' && (message.content.includes('[WEBCAP EXPLICIT READ]') ||
+        message.content.includes('[WEBCAP APPLIED FIELD VALUES]'));
+    });
+    el('studio-director-io-history').textContent = recorded.length ? recorded.map(function(message,index){
+      return 'Event ' + (index+1) + '\n' + message.content;
+    }).join('\n\n') : 'No recorded Read or Apply payloads in this conversation.';
+    var hasRequest=!!(state.requestDiagnostic && Array.isArray(state.requestDiagnostic.messages));
+    el('studio-director-io-request').disabled=!hasRequest;
+    el('studio-director-io-status').textContent = (state.lastStudioIoError
+      ? 'Latest request failed: ' + state.lastStudioIoError + ' '
+      : '') + (hasRequest
+      ? 'Latest request is available.'
+      : 'Exact request not retained for this conversation. Recorded responses remain inspectable.');
+    el('studio-director-inspect').dataset.newResult='false';
+    dialog.showModal();
+  }
+
   function bind() {
     var toggle = el('director-chat-rail-btn');
     var drawer = el('director-chat-drawer');
@@ -3486,7 +3559,6 @@
     };
     el('director-studio-prepare-scene').onclick = prepareStudioSceneDraft;
     el('director-studio-prepare-scenes').onclick = prepareStudioScenes;
-    el('director-studio-undo-brief').onclick = undoStudioBrief;
     el('studio-project-add-scene').onclick = function () {
       if (el('studio-project-extra-scenes').children.length +
           (el('studio-project-include-scene').checked ? 1 : 0) >= 32) {
@@ -3536,6 +3608,11 @@
       renderSessionHistory();
     };
     send.onclick = sendMessage;
+    el('studio-director-inspect').onclick = studioDirectorOpenIo;
+    el('studio-director-io-close').onclick = function(){el('studio-director-io-dialog').close();};
+    el('studio-director-io-request').onclick = function(){
+      openDirectorRequestInspector(state.requestDiagnostic,'Director request (latest)');
+    };
     stop.onclick = stopJob;
     copy.onclick = function () {
       openDirectorRequestInspector(state.requestDiagnostic, 'Director Chat Request');
@@ -3780,6 +3857,7 @@
         savedAt: story.updatedAt, fields: selected
       };
       markStudioReadinessOutdated();
+      window.studioDirectorWorkbench.markSavedFields(selected,story);
       var names = {title:'Title',concept:'Concept',style:'Visual / atmosphere',invariants:'Invariants',summary:'Intent',prompt:'H3 Prompt'};
       var values = selected.savedFields || selected.fields || selected;
       var savedFields = Object.keys(values).filter(function(key){return names[key];}).map(function(key){

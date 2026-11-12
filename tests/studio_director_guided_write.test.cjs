@@ -54,34 +54,38 @@ test('suggestions name creative units regardless of advisory field hints', () =>
   assert.deepEqual(Array.from(scope.recommendedWriteFields('project')),[]);
 });
 
-test('captures suppress only fully covered Write suggestions for the same target', () => {
+test('only one contextual action is presented, with completed capture taking priority', () => {
   const node=()=>({children:[],dataset:{},replaceChildren(){this.children=[];},appendChild(n){this.children.push(n);}});
   const actions=node(), assessment=node();
   const scope=vm.createContext({readinessStale:false,
     projectFields:['title','concept','style','invariants'],sceneFields:['title','summary','prompt'],
-    el:id=>id==='studio-dw-suggestions'?actions:assessment,
+    el:id=>id==='studio-dw-suggestions'?actions:id==='studio-dw-suggestion-heading'?{classList:{toggle(){}}}:assessment,
     document:{createElement:node},reviewCreativeCapture(){},openRecommendedWrite(){},
     creativeCapture:{field:'summary',content:'Complete Intent',sceneId:'a'},
     recommendations:{writeHint:'scenes',writeFields:['summary','prompt'],sceneId:'a'}});
   vm.runInContext(fieldsCode + part('  function captureActionLabel(capture) {','  window.studioDirectorWorkbench = {'),scope);
   const kinds=()=>{scope.renderReadiness([]);return actions.children.map(n=>n.dataset.suggestionKind);};
-  assert.deepEqual(kinds(),['capture','write'],'Intent capture leaves aligned Prompt revision available');
+  assert.deepEqual(kinds(),['capture'],'Intent capture is the one focused next step');
   scope.recommendations.writeFields=['summary'];
   assert.deepEqual(kinds(),['capture'],'complete single-field capture avoids redundant generation');
   scope.recommendations.sceneId='b';
-  assert.deepEqual(kinds(),['capture','write'],'different Scene destination remains available');
+  assert.deepEqual(kinds(),['capture'],'a different Scene operation remains available through Write');
   scope.recommendations={writeHint:'project',writeFields:['concept','style'],sceneId:''};
   scope.creativeCapture={field:'concept',content:'Complete Concept',sceneId:''};
-  assert.deepEqual(kinds(),['capture','write'],'Concept capture leaves atmosphere revision available');
+  assert.deepEqual(kinds(),['capture'],'Concept capture is the next step; other fields remain in Write');
   scope.recommendations.writeFields=['concept'];
   assert.deepEqual(kinds(),['capture']);
   scope.recommendations.writeFields=[];
-  assert.deepEqual(kinds(),['capture','write'],'unspecified unit scope is not assumed covered');
+  assert.deepEqual(kinds(),['capture'],'even unspecified unit scope must not create competing suggestions');
   scope.creativeCapture={field:'scene',title:'New Scene',content:'Intent',sceneId:''};
   scope.recommendations={writeHint:'scenes',writeFields:['title','summary','prompt'],sceneId:''};
-  assert.deepEqual(kinds(),['capture','write'],'new Scene capture has no H3 Prompt');
+  assert.deepEqual(kinds(),['capture'],'new Scene capture remains the next step');
   scope.recommendations.writeFields=['title','summary'];
   assert.deepEqual(kinds(),['capture']);
+  scope.creativeCapture = null;
+  assert.deepEqual(kinds(),['write'],'Write suggestion remains accessible when there is no capture');
+  scope.readinessStale = true;
+  assert.deepEqual(kinds(),[],'outdated recommendations disappear');
 });
 
 test('Scene Write receives early decisions and complete long messages from the discussion', async () => {
@@ -145,7 +149,8 @@ test('Scene Review includes the whole unit and selects all actual changes, irres
     draft:{sceneId:'scene-a',summary:'New intent',prompt:'Extra prompt proposal'}}]},
     document:{createElement:()=>{const n=node();created.push(n);return n;}},
     el:id=>id==='studio-dw-batch-editors' ? {...node(),replaceChildren(){}} : {showModal(){}},
-    labels:{title:'Title',summary:'Intent',prompt:'H3 Prompt'},status(){}});
+    labels:{title:'Title',summary:'Intent',prompt:'H3 Prompt'},status(){},
+    window:{studioDirectorRenderDiff:()=>{}}});
   vm.runInContext(part('  function renderBatchReview() {','  function applyBatchScenes() {'),scope);
   scope.renderBatchReview();
   const checks=created.filter(n=>n.type==='checkbox');

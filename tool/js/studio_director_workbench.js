@@ -23,12 +23,12 @@
   function status(message, error) {
     var node = el('studio-dw-status');
     if (node) {
-      node.textContent = message || '';
+      node.textContent = error ? (message || '') : '';
       node.dataset.error = error ? 'true' : 'false';
-      node.classList.toggle('hidden', !message);
+      node.classList.toggle('hidden', !message || !error);
     }
-    if (error && typeof window.reportConsoleError === 'function')
-      window.reportConsoleError('Studio Director workbench', new Error(message));
+    if (error) window.reportConsoleError('Studio Director workbench', new Error(message));
+    else if (message) window.reportConsoleInfo('Studio Director workbench', message);
   }
   function option(select, id, name) {
     var node = document.createElement('option');
@@ -155,6 +155,7 @@
     if (!id || !keys.length) { status('Choose a Project and at least one field.', true); return; }
     if (!window.studioDirectorBridge.isReady()) { status('Open Director and choose a model first.', true); return; }
     el('studio-dw-read-send').disabled = true;
+    window.studioDirectorWorkbench.setReadStatus('working','Reading selected saved fields…');
     // Same exact serializer drives the inspector and the outbound LLM message.
     loadStory(id).then(function (story) {
       var payload = readPayload(story, keys);
@@ -170,7 +171,10 @@
       updateScope();
       if (el('director-chat-drawer').classList.contains('studio-actions-open'))
         el('studio-dw-close-actions').click();
-    }).catch(function (error) { status('Read failed: ' + String(error.message || error), true); })
+    }).catch(function (error) {
+      window.studioDirectorWorkbench.setReadStatus('error','Read failed: ' + String(error.message || error));
+      status('Read failed: ' + String(error.message || error), true);
+    })
       .finally(function () { updateReadSelection(); });
   }
   function showWriteContext() {
@@ -209,6 +213,17 @@
 
   function updateScope() {
     var current = activeTarget();
+    // The Storyboard form reuses input nodes across Projects. Do not carry a
+    // "just updated" indication onto a different Project's saved fields.
+    ['storyboard-story-title','storyboard-story-concept','storyboard-story-style'].forEach(function(id) {
+      var field = el(id);
+      if (field && field.dataset.directorUpdatedProject &&
+          field.dataset.directorUpdatedProject !== current.storyId) {
+        delete field.dataset.directorUpdated;
+        delete field.dataset.directorUpdatedProject;
+        if (field.title.startsWith('Updated by Studio Director')) field.title = '';
+      }
+    });
     var ready = window.studioDirectorBridge.isReady();
     el('studio-dw-current-brief').disabled = !current.storyId || !ready;
     el('studio-dw-current-prompt').disabled = !current.storyId || !current.sceneId || !ready;
@@ -334,9 +349,16 @@
           textarea = document.createElement('textarea');
         label.textContent = labels[key];hint.textContent = 'Saved ' + labels[key];
         before.textContent = old || '(empty)'; saved.append(hint,before);
-        textarea.dataset.field = key;textarea.value = candidate[key];textarea.rows = key === 'prompt' ? 13 : 5;
+        var diff = document.createElement('details'), diffSummary = document.createElement('summary'), diffBody = document.createElement('div');
+        diff.className = 'studio-director-diff'; diffSummary.textContent = 'What changes?';
+        diff.open = old !== candidate[key];
+        diffBody.className = 'studio-director-diff-content';
+        window.studioDirectorRenderDiff(diffBody,old,candidate[key]);
+        diff.append(diffSummary,diffBody);
+        textarea.dataset.field = key;textarea.value = candidate[key];
+        textarea.addEventListener('input',function(){window.studioDirectorRenderDiff(diffBody,old,textarea.value);});textarea.rows = key === 'prompt' ? 13 : 5;
         textarea.setAttribute('aria-label',labels[key]);
-        label.append(textarea);host.append(saved,label);
+        label.append(textarea);host.append(saved,diff,label);
       });
       el('studio-dw-scene-target').textContent = storyName(story) + ' · ' + (scene.title || sceneId);
       el('studio-dw-scene-review-title').textContent = fields.length === 1 ? 'Review ' + labels[fields[0]] : 'Review Scene changes';
@@ -626,7 +648,10 @@
         editor.value = value;
         editor.setAttribute('aria-label',labels[field]);
         editor.rows = field === 'prompt' ? 12 : field === 'title' ? 1 : 4;
-        editor.addEventListener('input', function () {checkbox.checked = true;});
+        editor.addEventListener('input', function () {
+          checkbox.checked = true;
+          window.studioDirectorRenderDiff(diffBody,old,editor.value);
+        });
         var name = document.createElement('strong'), saved = document.createElement('details'),
           savedTitle = document.createElement('summary'), before = document.createElement('pre');
         name.textContent = labels[field];
@@ -634,8 +659,15 @@
         savedTitle.textContent = 'Saved ' + labels[field];
         before.textContent = old || '(empty)';
         saved.append(savedTitle,before);
+        var diff = document.createElement('details'), diffSummary = document.createElement('summary');
+        let diffBody = document.createElement('div');
+        diff.className = 'studio-director-diff'; diffSummary.textContent = 'What changes?';
+        diff.open = old !== value;
+        diffBody.className = 'studio-director-diff-content';
+        window.studioDirectorRenderDiff(diffBody,old,value);
+        diff.append(diffSummary,diffBody);
         selection.append(checkbox,name);
-        row.append(selection,saved,editor);
+        row.append(selection,diff,saved,editor);
         if (checkbox.checked) section.appendChild(row);
         else unchanged.appendChild(row);
       });
@@ -733,8 +765,7 @@
   }
   function setReadinessFreshness(stale) {
     readinessStale = !!stale;
-    Array.from(el('studio-dw-suggestions').querySelectorAll('button[data-capture-action], button[data-guided-write]'))
-      .forEach(function (action) {action.disabled = readinessStale;});
+    renderReadiness(readiness);
     var label = el('studio-dw-readiness-freshness');
     label.textContent = readinessStale
       ? (readiness.length ? 'Outdated · latest exchange not assessed' : 'Latest exchange not assessed')
@@ -799,7 +830,7 @@
         kind:'write', label:label, run:openRecommendedWrite
       });
     }
-    available.slice(0,2).forEach(function (action) {
+    available.slice(0,1).forEach(function (action) {
       var button = document.createElement('button');
       button.type = 'button';
       button.className = 'studio-dw-suggestion-action';
@@ -810,13 +841,7 @@
       button.onclick = action.run;
       actions.appendChild(button);
     });
-    if (!available.length) {
-      var emptyAction = document.createElement('p');
-      emptyAction.className = 'studio-dw-suggestions-empty';
-      emptyAction.textContent = readinessStale ? 'Waiting for a current assessment.' :
-        'Keep developing the idea. Director will suggest the next useful revision.';
-      actions.appendChild(emptyAction);
-    }
+    el('studio-dw-suggestion-heading').classList.toggle('hidden', !available.length || readinessStale);
     if (!list.length) {
       var empty = document.createElement('p');
       empty.textContent = readinessStale ? 'No current assessment.' : 'No assessment details yet.';
@@ -841,6 +866,45 @@
   }
   window.studioDirectorWorkbench = {
     setStatus:status,
+    markSavedFields:function(selected,story){
+      if (!story || !story.id) throw new Error('Field update feedback needs the saved Project identity.');
+      var values=selected.savedFields || selected.fields || selected;
+      var keys=Object.keys(values).filter(function(key){return ['title','concept','style','invariants','summary','prompt'].includes(key);});
+      if (selected.scenes && typeof selected.scenes==='object') keys.push('Scene revisions');
+      var descriptions={title:'Title',concept:'Concept',style:'Visual / atmosphere',invariants:'Invariants',summary:'Scene Intent',prompt:'H3 Prompt'};
+      var label=keys.map(function(key){return descriptions[key] || key;}).join(', ');
+      ['studio-dw-write','studio-dw-quick-write'].forEach(function(id){
+        var button=el(id);
+        button.dataset.result='success';
+        button.title='Saved to ' + storyName(story) + ': ' + (label || 'reviewed changes');
+      });
+      window.reportConsoleInfo('Studio Director', 'Saved to ' + storyName(story) + ': ' + (label || 'reviewed changes'));
+      if (activeTarget().storyId !== story.id) return;
+      [['title','storyboard-story-title'],['concept','storyboard-story-concept'],['style','storyboard-story-style']].forEach(function(item){
+        if (!keys.includes(item[0])) return;
+        var input=el(item[1]);
+        if (input) {
+          input.dataset.directorUpdated='true';
+          input.dataset.directorUpdatedProject=story.id;
+          input.title='Updated by Studio Director — ' + descriptions[item[0]];
+          if (!input.dataset.directorUpdateListener) {
+            input.dataset.directorUpdateListener='true';
+            input.addEventListener('input',function(){
+              delete input.dataset.directorUpdated;
+              delete input.dataset.directorUpdatedProject;
+              if (input.title.startsWith('Updated by Studio Director')) input.title='';
+            });
+          }
+        }
+      });
+    },
+    setReadStatus:function(state,detail){
+      ['studio-dw-read','studio-dw-quick-read'].forEach(function(id){
+        var button=el(id);
+        button.dataset.result=state;
+        button.title=detail || 'Read selected Project fields';
+      });
+    },
     reviewGeneratedCapture:reviewCreativeCapture,
     updateContext:updateScope,
     showSentWriteContext: function(operation, messages) {
@@ -1003,7 +1067,10 @@
         el('studio-dw-close-actions').click();
       }
     });
-    el('studio-dw-undo-button').onclick=function () { window.studioDirectorBridge.undoBrief(); };
+    el('studio-dw-undo-button').onclick=function () {
+      if (window.confirm('Revert the latest reviewed Project Overview update? The saved Concept, Visual / atmosphere and/or Invariants changed by that update will be restored to their previous values.'))
+        window.studioDirectorBridge.undoBrief();
+    };
     el('studio-dw-assessment-close').onclick=function(){el('studio-dw-assessment-dialog').close();};
     el('studio-dw-read-send').onclick=readSend;
     el('studio-dw-write-prepare').onclick=writePrepare;

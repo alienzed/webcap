@@ -4213,3 +4213,14 @@ html[data-theme="dark"] .storyboard-prompt-take-status {
 .studio-dw-assessment-details { margin:8px 0; border-top:1px solid var(--border); padding-top:8px; }
 .studio-dw-assessment-details > summary { color:var(--muted); font-size:12px; cursor:pointer; }
 .studio-dw-assessment-details .studio-dw-readiness-list { margin-top:8px; }
+
+/* Studio Director: comparison is subordinate to the editable proposal. */
+.studio-director-diff { margin: 10px 0; border: 1px solid var(--border); border-radius: 8px; }
+.studio-director-diff > summary { cursor: pointer; padding: 10px 12px; font-size: 15px; font-weight: 600; }
+.studio-director-diff-content { white-space: pre-wrap; overflow-wrap: anywhere; padding: 12px; font-size: 16px; line-height: 1.5; border-top: 1px solid var(--border); max-height: 340px; overflow: auto; }
+.studio-director-diff-content del { background: rgba(230, 86, 86, .18); text-decoration: line-through; }
+.studio-director-diff-content ins { background: rgba(73, 178, 113, .2); text-decoration: none; }
+#studio-director-io-dialog pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 48vh; overflow: auto; font-size: 14px; }
+#studio-director-io-dialog .studio-scene-draft-content { display: grid; gap: 12px; }
+#studio-director-io-dialog .studio-scene-draft-content > details { border: 1px solid var(--border); border-radius: 8px; padding: 10px; }
+#studio-director-io-dialog .studio-scene-draft-content > details > summary { cursor: pointer; font-size: 16px; }

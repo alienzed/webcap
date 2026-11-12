@@ -334,9 +334,15 @@
           textarea = document.createElement('textarea');
         label.textContent = labels[key];hint.textContent = 'Saved ' + labels[key];
         before.textContent = old || '(empty)'; saved.append(hint,before);
-        textarea.dataset.field = key;textarea.value = candidate[key];textarea.rows = key === 'prompt' ? 13 : 5;
+        var diff = document.createElement('details'), diffSummary = document.createElement('summary'), diffBody = document.createElement('div');
+        diff.className = 'studio-director-diff'; diffSummary.textContent = 'What changes?';
+        diffBody.className = 'studio-director-diff-content';
+        window.studioDirectorRenderDiff(diffBody,old,candidate[key]);
+        diff.append(diffSummary,diffBody);
+        textarea.dataset.field = key;textarea.value = candidate[key];
+        textarea.addEventListener('input',function(){window.studioDirectorRenderDiff(diffBody,old,textarea.value);});textarea.rows = key === 'prompt' ? 13 : 5;
         textarea.setAttribute('aria-label',labels[key]);
-        label.append(textarea);host.append(saved,label);
+        label.append(textarea);host.append(saved,diff,label);
       });
       el('studio-dw-scene-target').textContent = storyName(story) + ' · ' + (scene.title || sceneId);
       el('studio-dw-scene-review-title').textContent = fields.length === 1 ? 'Review ' + labels[fields[0]] : 'Review Scene changes';
@@ -626,7 +632,10 @@
         editor.value = value;
         editor.setAttribute('aria-label',labels[field]);
         editor.rows = field === 'prompt' ? 12 : field === 'title' ? 1 : 4;
-        editor.addEventListener('input', function () {checkbox.checked = true;});
+        editor.addEventListener('input', function () {
+          checkbox.checked = true;
+          window.studioDirectorRenderDiff(diffBody,old,editor.value);
+        });
         var name = document.createElement('strong'), saved = document.createElement('details'),
           savedTitle = document.createElement('summary'), before = document.createElement('pre');
         name.textContent = labels[field];
@@ -634,8 +643,13 @@
         savedTitle.textContent = 'Saved ' + labels[field];
         before.textContent = old || '(empty)';
         saved.append(savedTitle,before);
+        var diff = document.createElement('details'), diffSummary = document.createElement('summary'), diffBody = document.createElement('div');
+        diff.className = 'studio-director-diff'; diffSummary.textContent = 'What changes?';
+        diffBody.className = 'studio-director-diff-content';
+        window.studioDirectorRenderDiff(diffBody,old,value);
+        diff.append(diffSummary,diffBody);
         selection.append(checkbox,name);
-        row.append(selection,saved,editor);
+        row.append(selection,diff,saved,editor);
         if (checkbox.checked) section.appendChild(row);
         else unchanged.appendChild(row);
       });

@@ -3393,6 +3393,17 @@
   }
 
   function sharedTestCard(result, status, className, muted, failed) {
+    var inReview = className.indexOf('test-generations-review-item') !== -1;
+    var variation = result && result.variationIndex != null &&
+      status && Array.isArray(status.variationCases)
+      ? status.variationCases[Number(result.variationIndex)] : null;
+    var wildcardChoices = result && result.prompt && result.prompt === status.resolvedPrompt
+      ? (status.wildcardSummary || []) : [];
+    if (inReview) {
+      var variationLabel = String(variation && variation.label || '').trim();
+      if (variationLabel) wildcardChoices = [variationLabel];
+      else if (!wildcardChoices.length) wildcardChoices = status.wildcardSummary || status.wildcardValues || [];
+    }
     var mediaFile = resultMediaFile(result), session = String(status && status.session || '');
     var identity = candidateIdentity(result), provenance = result && result.provenance || {};
     var title = identity.primary;
@@ -3430,8 +3441,8 @@
       epochLink: epochText ? {text: epochText, jobId: provenance.sourceJobId, epoch: provenance.sourceEpoch} : null,
       videoTransport: appendTestPreviewVideo,
       dataset: { testVlFile: mediaFile },
-      wildcards: !failed && status && result && result.prompt && result.prompt===status.resolvedPrompt
-        ? (status.wildcardSummary || []) : [],
+      wildcards: !failed ? wildcardChoices : [],
+      showAllWildcards: inReview,
       details: failed ? [] : [
         {label:'Resolved prompt',value:result && result.prompt || status && status.resolvedPrompt || '',pre:true},
         {label:'Seed',value:result && result.seed!=null?String(result.seed):''},
@@ -4140,6 +4151,7 @@
   }
 
   function setResultsView(mode) {
+    var previousView = resultsView;
     resultsView = ['grid','review','compare','matrix'].includes(mode) ? mode : 'grid';
     var gridBtn = el('test-generations-view-grid-btn');
     var reviewBtn = el('test-generations-view-review-btn');
@@ -4176,6 +4188,15 @@
     if (grid) grid.classList.toggle('hidden', resultsView !== 'grid');
     if (compare) compare.classList.toggle('hidden', resultsView !== 'compare');
     renderResults(currentStatus);
+    if (resultsView === 'review' && previousView !== 'review') {
+      var activeVideo = review.querySelector('video');
+      if (activeVideo) {
+        activeVideo.muted = true;
+        activeVideo.loop = true;
+        var playback = activeVideo.play();
+        if (playback && typeof playback.catch === 'function') playback.catch(showError);
+      }
+    }
   }
 
   function syncCompareVideos(videos) {

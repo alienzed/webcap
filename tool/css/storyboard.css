@@ -3207,19 +3207,6 @@ html[data-theme="dark"] .storyboard-prompt-take-status {
   opacity: .48;
 }
 
-.storyboard-scene-count-auto {
-  width: auto;
-  min-height: 38px;
-  padding: 7px 10px;
-}
-
-.storyboard-scene-count-auto.active,
-.storyboard-scene-count-auto[aria-pressed="true"] {
-  border-color: color-mix(in srgb, var(--accent) 70%, var(--border));
-  background: color-mix(in srgb, var(--accent) 18%, var(--panel-soft));
-  color: var(--text);
-}
-
 .storyboard-develop-individual {
   min-height: 38px;
   display: inline-flex;

@@ -340,6 +340,7 @@
         before.textContent = old || '(empty)'; saved.append(hint,before);
         var diff = document.createElement('details'), diffSummary = document.createElement('summary'), diffBody = document.createElement('div');
         diff.className = 'studio-director-diff'; diffSummary.textContent = 'What changes?';
+        diff.open = old !== candidate[key];
         diffBody.className = 'studio-director-diff-content';
         window.studioDirectorRenderDiff(diffBody,old,candidate[key]);
         diff.append(diffSummary,diffBody);
@@ -650,6 +651,7 @@
         var diff = document.createElement('details'), diffSummary = document.createElement('summary');
         let diffBody = document.createElement('div');
         diff.className = 'studio-director-diff'; diffSummary.textContent = 'What changes?';
+        diff.open = old !== value;
         diffBody.className = 'studio-director-diff-content';
         window.studioDirectorRenderDiff(diffBody,old,value);
         diff.append(diffSummary,diffBody);

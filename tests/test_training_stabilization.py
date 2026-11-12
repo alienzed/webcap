@@ -1296,10 +1296,10 @@ def test_missing_result_recovery_resume_uses_captured_target_not_set_toml(tmp_pa
     _configure_root(monkeypatch, tmp_path)
     folder = tmp_path / "sets" / "subject"
     folder.mkdir(parents=True)
-    (folder / "config.h3.toml").write_text("epochs = 100\\n", encoding="utf-8")
+    (folder / "config.h3.toml").write_text("epochs = 100\n", encoding="utf-8")
     captured = tmp_path / "captures" / "config.h3.toml"
     captured.parent.mkdir(parents=True)
-    captured.write_text("epochs = 60\\n", encoding="utf-8")
+    captured.write_text("epochs = 60\n", encoding="utf-8")
     job = {
         "id": "recovered", "folder": "sets/subject", "status": "queued", "stages": "h3",
         "resumeFromCheckpoint": "/runs/existing", "snapshot": {"h3": str(captured)},

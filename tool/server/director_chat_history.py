@@ -89,7 +89,13 @@ def _validate_messages(messages):
         if (not isinstance(item, dict) or item.get("role") not in {"user", "assistant"}
                 or not isinstance(item.get("content"), str)):
             raise ValueError("Assistant conversation contains an invalid message.")
-        result.append({"role": item["role"], "content": item["content"]})
+        message = {"role": item["role"], "content": item["content"]}
+        if "rawResponse" in item:
+            if (item["role"] != "assistant" or not isinstance(item["rawResponse"], str)
+                    or not item["rawResponse"].strip()):
+                raise ValueError("Only assistant messages can store a complete model response.")
+            message["rawResponse"] = item["rawResponse"]
+        result.append(message)
     return result
 
 

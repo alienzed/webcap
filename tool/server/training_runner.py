@@ -75,6 +75,7 @@ _legacy_active_time_cache = {}
 _SAVE_PAUSE_TRAINING_STAGES = {"hi", "lo", "krea2", "wan21", "h3"}
 _LOW_DISK_THRESHOLD_BYTES = 10 * 1024 ** 3
 _RESULT_EVIDENCE_GRACE_SECONDS = 10
+_MISSING_RESULT_RECOVERY_REASON = "Previous runner ended without a result. Resume or restart the first item."
 _LOW_DISK_REASON_PREFIX = "Queue auto-paused: low disk space"
 _DISK_INSPECTION_NOTICE_PREFIX = "Training disk-space protection could not inspect the output volume"
 
@@ -2341,7 +2342,7 @@ def _recover_dead_runner(job, detail):
     _queue_paused_job(job)
     job["error"] = str(detail or "The recorded runner is no longer active and did not write a result record.").strip()
     return {
-        "holdReason": "Previous runner ended without a result. Resume or restart the first item.",
+        "holdReason": _MISSING_RESULT_RECOVERY_REASON,
         "recovered": True,
     }
 
@@ -3603,10 +3604,36 @@ def reorder_response(job_id, direction, position=None):
         return {"ok": True, "jobs": [_public_job(job) for job in jobs]}, 200
 
 
+def _recovered_job_already_at_target(state):
+    """Do not Resume an unconfirmed runner beyond its own captured epoch target."""
+    if not state.get("queuePaused") or state.get("queuePauseReason") != _MISSING_RESULT_RECOVERY_REASON:
+        return ""
+    job = next((item for item in state.get("jobs", []) if item.get("status") in QUEUE_STATUSES), None)
+    if not job or not job.get("resumeFromCheckpoint"):
+        return ""
+    stage = str(job.get("stages") or "")
+    target = _read_config_epochs((job.get("snapshot") or {}).get(stage))
+    if target <= 0:
+        return ""
+    _populate_queued_resume_point(job)
+    point = job.get("resumePoint") if isinstance(job.get("resumePoint"), dict) else {}
+    last_epoch = int(point.get("epoch") or 0)
+    if last_epoch < target:
+        return ""
+    return (
+        "The recovered run already saved epoch " + str(last_epoch) + " of " + str(target)
+        + ". Resuming would train past the captured target. Choose Finish for this queued run, "
+        "or increase its epoch target before resuming."
+    )
+
+
 def resume_queue_response():
     with _lock:
         state = _read_state()
         _refresh_state(state)
+        already_at_target = _recovered_job_already_at_target(state)
+        if already_at_target:
+            return {"ok": False, "error": already_at_target, "jobs": [_public_job(job) for job in state["jobs"]]}, 409
         state["queuePaused"] = False
         state["queuePauseReason"] = ""
         _refresh_state(state)

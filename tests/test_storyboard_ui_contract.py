@@ -1035,7 +1035,7 @@ def test_storyboard_story_context_is_a_collapsible_middle_column():
     assert ".storyboard-scene-workspace" in css
 
 
-def test_storyboard_overview_stretches_to_scroll_in_its_desktop_grid_row():
+def test_storyboard_overview_stretches_to_scroll_at_desktop_and_stacked_widths():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     css = (ROOT / "tool" / "css" / "storyboard.css").read_text(encoding="utf-8")
 
@@ -1050,10 +1050,14 @@ def test_storyboard_overview_stretches_to_scroll_in_its_desktop_grid_row():
     assert "align-self: stretch;" in overview
     assert "min-height: 0;" in overview
     assert "overflow-y: auto;" in overview
-    # The stacked layout still deliberately scrolls at editor level.
+    # Stacked widths still scroll between Story and Scenes, but Story also
+    # needs its own bounded scroll area for long Invariants lists.
     stacked = css.split("@media (max-width: 1180px) {", 1)[1]
     assert "overflow: auto;" in stacked
-    assert ".storyboard-story-overview-surface {\n    overflow: visible;" in stacked
+    assert "max-height: calc(100dvh - 96px);" in stacked
+    assert "grid-template-rows: minmax(0, 1fr) auto auto;" in stacked
+    assert ".storyboard-story-overview-surface {\n    overflow-y: auto;" in stacked
+    assert ".storyboard-story-overview-surface {\n    overflow: visible;" not in stacked
 
 
 def test_storyboard_scene_focus_mode_scrolls_naturally_and_has_peer_sequence_view():

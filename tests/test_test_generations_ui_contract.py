@@ -942,6 +942,21 @@ def test_wildcard_builder_footer_buttons_stay_compact_and_single_line():
     assert "#test-generations-wildcard-use-btn" in css
 
 
+def test_wildcard_builder_dimensions_scroll_inside_dialog_and_keep_footer_visible():
+    css = (ROOT / "tool" / "css" / "styles.css").read_text(encoding="utf-8")
+
+    dialog = css.split(".keep-lora-modal .test-generations-wildcard-dialog {", 1)[1].split("}", 1)[0]
+    content = css.split(".test-generations-wildcard-dialog > .test-generations-wildcard-content {", 1)[1].split("}", 1)[0]
+    footer = css.split(".test-generations-wildcard-dialog > .test-generations-wildcard-footer {", 1)[1].split("}", 1)[0]
+    assert "display: flex;" in dialog
+    assert "flex-direction: column;" in dialog
+    assert "max-height: min(88dvh, 920px);" in dialog
+    assert "min-height: 0;" in content
+    assert "overflow-y: auto;" in content
+    assert "flex: 1 1 auto;" in content
+    assert "flex: 0 0 auto;" in footer
+
+
 def test_generated_wildcard_review_uses_modal_and_derived_dimension_controls():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     css = (ROOT / "tool" / "css" / "styles.css").read_text(encoding="utf-8")

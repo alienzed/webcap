@@ -138,7 +138,6 @@ test('contextual Prompt action uses the current route even when Write was aimed 
 test('ordinary discussion asks for concise new decisions while complete creative fields remain complete',()=>{
   assert.match(chat,/Keep readiness light: normally checks=\[\]/);
   assert.match(chat,/Keep assessment metadata in readiness and conversation in reply/);
-  assert.match(chat,/Keep assessment metadata in readiness and conversation in reply/);
 });
 
 test('compact Director replies keep the exact full text and leave General Chat alone',()=>{
@@ -182,7 +181,8 @@ test('editable revision comparison identifies retained, removed and added words 
   vm.runInContext(part(chat,'  function studioDirectorRenderDiff(host, before, after) {',
     '  window.studioDirectorRenderDiff = studioDirectorRenderDiff;'),scope);
   scope.studioDirectorRenderDiff(host,before,after);
-  assert.equal(host.children.map(n=>n.textContent).join(''),before === after ? before : host.children.map(n=>n.textContent).join(''));
+  assert.ok(host.children.some(n=>n.tag==='del'),'comparison visibly marks removed text');
+  assert.ok(!host.children.some(n=>n.tag==='ins'),'pure deletion does not invent inserted words');
   assert.ok(host.children.some(n=>n.tag==='del' && n.textContent.includes('walks')),'extra movement is visibly removed');
   assert.ok(host.children.some(n=>n.tag==='span' && n.textContent.includes('woman')),'unchanged text stays identifiable');
   assert.equal(before,'A woman walks toward the sink, then brushes her teeth.');
@@ -216,4 +216,20 @@ test('field update indicators identify the saved Project, and clear after author
   assert.equal(controls['storyboard-story-concept'].dataset.directorUpdated,undefined,
     'manual editing clears the recent Studio Director update indication');
   assert.ok(logs.some(line=>line.includes('Current Project')));
+});
+
+test('routine operation feedback does not leave a separate status card in the chat workbench',()=>{
+  const status={classList:{hidden:false,toggle(name,flag){if(name==='hidden')this.hidden=flag;}},dataset:{},textContent:''};
+  const messages=[];
+  const scope=vm.createContext({state:{activeMode:'storyboard'},
+    el:()=>status,window:{studioDirectorWorkbench:{setStatus:(text,error)=>messages.push([text,error])}}});
+  vm.runInContext(part(chat,'  function studioActionStatus(message, error) {',
+    '  function parseStudioProjectDraft(raw) {'),scope);
+  scope.studioActionStatus('Director acknowledged selected fields.',false);
+  assert.equal(status.classList.hidden,true);
+  assert.equal(status.textContent,'');
+  assert.equal(messages.length,1);
+  scope.studioActionStatus('Director read failed.',true);
+  assert.equal(status.classList.hidden,false);
+  assert.equal(status.textContent,'Director read failed.');
 });

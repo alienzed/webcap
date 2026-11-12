@@ -2163,14 +2163,8 @@
                   <div class="studio-dw-actions">
                     <button id="studio-dw-read" type="button" aria-expanded="false" aria-controls="studio-dw-read-panel">Read…</button>
                     <button id="studio-dw-write" type="button" aria-expanded="false" aria-controls="studio-dw-write-panel">Write…</button>
-                    <button id="storyboard-director-tools-btn" type="button" title="Revise the open Project's Scenes, optionally generating new Takes">Revise &amp; Generate…</button>
-                  </div>
-                  <div class="studio-dw-shortcuts" aria-label="Write for the current Project">
-                    <button id="studio-dw-current-brief" type="button">Revise current Project Overview</button>
-                    <button id="studio-dw-current-prompt" type="button">Revise current Scene</button>
                   </div>
                   <div id="studio-dw-status" class="studio-dw-status hidden" role="status" aria-live="polite"></div>
-                  <div id="studio-dw-undo" class="studio-dw-undo hidden"><span id="studio-dw-undo-label">Project brief updated</span><button id="studio-dw-undo-button" type="button">Undo brief change</button></div>
                   <section id="studio-dw-read-panel" class="studio-dw-panel hidden" aria-label="Read selected Project and Scenes">
                     <h3>Read saved material</h3>
                     <label>Read from Project<select id="studio-dw-read-project"></select></label>
@@ -2208,11 +2202,15 @@
                     </details>
                     <div class="studio-dw-submit"><button id="studio-dw-write-prepare" type="button" class="studio-dw-primary">Prepare editable review</button></div>
                     <details class="studio-dw-source-preview"><summary>Other Project utilities</summary>
+                      <button id="studio-dw-current-brief" type="button">Revise current Project Overview</button>
+                      <button id="studio-dw-current-prompt" type="button">Revise current Scene</button>
+                      <button id="storyboard-director-tools-btn" type="button" title="Revise the open Project's Scenes, optionally generating new Takes">Revise &amp; Generate…</button>
                       <button id="studio-dw-coherence-check" type="button">Check Project coherence</button>
+                      <div id="studio-dw-undo" class="studio-dw-undo hidden"><span id="studio-dw-undo-label">Project Overview updated</span><button id="studio-dw-undo-button" type="button">Revert latest Overview update…</button></div>
                     </details>
                   </section>
                   <section class="studio-dw-readiness" aria-label="Director suggestions">
-                    <div class="studio-dw-readiness-heading"><strong>Ready to write</strong><small id="studio-dw-readiness-freshness" role="status" aria-live="polite">Not assessed yet</small></div>
+                    <div id="studio-dw-suggestion-heading" class="studio-dw-readiness-heading"><strong>Suggested next step</strong><small id="studio-dw-readiness-freshness" role="status" aria-live="polite">Not assessed yet</small></div>
                     <div id="studio-dw-suggestions" class="studio-dw-suggestions"><p>Keep developing the idea. Director will suggest the next useful revision.</p></div>
                     <details class="studio-dw-assessment-details">
                       <summary>Creative assessment details</summary>

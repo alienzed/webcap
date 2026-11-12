@@ -233,3 +233,26 @@ test('routine operation feedback does not leave a separate status card in the ch
   assert.equal(status.classList.hidden,false);
   assert.equal(status.textContent,'Director read failed.');
 });
+
+test('field update indication clears when the Storyboard opens another Project',()=>{
+  const elements={};
+  const node=()=>({dataset:{},title:'',value:'',disabled:false,textContent:'',
+    classList:{contains:()=>true}});
+  for(const id of ['storyboard-story-title','storyboard-story-concept','storyboard-story-style',
+    'studio-dw-current-brief','studio-dw-current-prompt','studio-dw-read-project',
+    'studio-dw-write-project','studio-dw-write-operation','studio-dw-write-scope',
+    'studio-dw-read-panel','studio-dw-write-panel','studio-dw-heading']) elements[id]=node();
+  elements['storyboard-story-concept'].dataset.directorUpdated='true';
+  elements['storyboard-story-concept'].dataset.directorUpdatedProject='project-a';
+  elements['storyboard-story-concept'].title='Updated by Studio Director — Concept';
+  const scope=vm.createContext({el:id=>elements[id],projects:[],lastReadSource:null,
+    activeTarget:()=>({storyId:'project-b'}),window:{studioDirectorBridge:{isReady:()=>true}}});
+  vm.runInContext(part(workbench,'  function updateScope() {','  function setOperation() {'),scope);
+  scope.updateScope();
+  assert.equal(elements['storyboard-story-concept'].dataset.directorUpdated,undefined);
+  assert.equal(elements['storyboard-story-concept'].dataset.directorUpdatedProject,undefined);
+  assert.equal(elements['storyboard-story-concept'].title,'');
+  assert.match(fs.readFileSync(path.join(__dirname,'../tool/js/storyboard.js'),'utf8'),
+    /window\.studioDirectorWorkbench\.updateContext\(\)/,
+    'Storyboard refresh must invoke the existing Studio context sync');
+});

@@ -1166,7 +1166,8 @@ def test_restart_recovers_definitely_missing_runner_as_paused_resume(tmp_path, m
     state = {
         "version": 3, "activeJobId": "active", "queuePaused": False, "queuePauseReason": "",
         "jobs": [
-            {"id": "later", "status": "queued", "stages": "h3"},
+            {"id": "later", "status": "queued", "stages": "h3",
+             "artifactDir": str(tmp_path / "output/runs/subject/jobs/later")},
             {
                 "id": "active", "status": "running", "stages": "h3", "pid": 4242,
                 "runnerScriptWsl": "/runs/runner.sh", "outputRunPath": "/runs/original",

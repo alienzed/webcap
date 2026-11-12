@@ -13,7 +13,6 @@ def test_enrichment_request_is_grounded_in_saved_sight_and_exact_current_caption
         assignments=[{"group": "Clothing", "term": "black swimsuit"}],
         tags=["front view"],
         rendered_primer="A woman posing in a black swimsuit, front view.",
-        preferred_sequence="subject, clothing, background, view",
     )
     assert "visual caption enrichment editor" in messages[0]["content"]
     assert "style and broad sequence" in messages[0]["content"]
@@ -25,7 +24,7 @@ def test_enrichment_request_is_grounded_in_saved_sight_and_exact_current_caption
     assert payload["selectedAnnotations"] == [{"group": "Clothing", "term": "black swimsuit"}]
     assert payload["otherTags"] == ["front view"]
     assert payload["renderedPrimer"] == "A woman posing in a black swimsuit, front view."
-    assert payload["preferredCaptionSequence"] == "subject, clothing, background, view"
+    assert "preferredCaptionSequence" not in payload
 
 
 @pytest.mark.parametrize("draft,sight", [

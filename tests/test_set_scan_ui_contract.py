@@ -12,7 +12,7 @@ def test_set_intelligence_is_the_single_set_tools_entry_point():
     scan = _read("tool/js/set_scan.js")
     review = _read("tool/js/review_output.js")
 
-    assert '<summary class="sidebar-drawer-summary">Set Tools</summary>' in html
+    assert '>Prepare Set</button>' in html
     assert 'id="set-intelligence-open-btn"' in html
     assert 'id="discover-vocabulary-set-btn"' not in html
     assert 'id="guided-tag-pass-open-btn"' not in html
@@ -55,7 +55,7 @@ def test_set_intelligence_keeps_actionable_coverage_visible_and_raw_report_secon
     assert "Face Focus, MediaPipe pose" not in html
     assert 'id="set-scan-open-card"' in html
     assert 'id="set-scan-context-card"' not in html
-    assert "Broad discovery, optionally guided by existing groups" in html
+    assert "with Sight from selected model" in html
     assert 'id="set-scan-item-view"' in html
     assert 'id="set-scan-quality-summary"' in html
     assert 'id="set-scan-force-mode"' not in html
@@ -72,7 +72,7 @@ def test_set_intelligence_keeps_actionable_coverage_visible_and_raw_report_secon
     assert "responseSelect.onchange = selectRawResponse;" in scan
     assert "rescanBtn.onclick = function () { runSetIntelligence(); };" in scan
     assert "'Resume ' + String(openMissing) + ' Sight'" in scan
-    assert "rescanBtn.disabled = !scopeCount || !!(coverage.known && !openMissing);" in scan
+    assert "rescanBtn.disabled = !scopeCount;" in scan
     assert "operation: 'intelligence_report'" in scan
     assert "function restoreCachedIntelligence(" in scan
     assert "if (setScanState.hasRun) return;" not in scan

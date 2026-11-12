@@ -321,6 +321,7 @@ function singleItemScanFixture(responses, options = {}) {
       candidate === scan && token === wb.deepScanSessionToken &&
       wb.deepScanSessionActive && !wb.deepScanStopRequested,
     qaDeepScanScopeItems: () => items,
+    qaBuildAssociationFindings: () => [],
     qaDeepScanPrioritizedFiles: () => scan.orderedFiles.slice(),
     qaCurrentItemSignatureMap: () => signatures,
     qaDeepScanProgress(_scan, phase) { wb.deepScanStatus = phase; },
@@ -442,7 +443,8 @@ test('Deep QA overview presents one progress strip with Stop and stable coverage
   assert.match(progress, /progress\.value = total - counts\.unchecked/);
   assert.match(css, /\.qa-deep-scan-progress \{ display:block; width:100%/);
   assert.doesNotMatch(overview, /qaWorkbenchState\.deepScanSessionActive \? 'Deep QA running'/);
-  assert.match(overview, /qaCreateButton\('Review ' \+ undisposed\.length \+ ' findings', 'qa-primary'/);
+  assert.match(overview, /qaCreateButton\('Review ' \+ undisposed\.length \+ ' findings', ready \? '' : 'qa-primary'/);
+  assert.match(overview, /qaCreateButton\('Review & Fix saved findings', ready \? 'qa-primary' : ''/);
 });
 
 test('Deep QA shares only bounded named statistical exceptions with explicit discovery', () => {

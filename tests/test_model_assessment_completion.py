@@ -63,7 +63,17 @@ def test_scene_assessment_uses_actual_storyboard_director_contract(monkeypatch):
     prompt = queued[0]["messages"][0]["content"]
     assert "[DIRECTOR CONTEXT]" in prompt
     assert "[STORY CONCEPT]" in prompt
-    assert "Develop the complete concept into MiniMax H3 Scenes" in prompt
+    from tool.server.storyboard_llm_contract import build_request
+    expected = build_request({
+        "title": "Night Shift",
+        "concept": ("An overnight maintenance worker investigates a malfunctioning "
+                    "elevator in a quiet apartment building. A flickering floor "
+                    "indicator leads to an unexpected mechanical discovery."),
+        "style": "Grounded cinematic realism with practical lighting and consistent spaces.",
+        "targetSceneCount": 8,
+    }, "", "develop_story")
+    assert prompt == expected["prompt"]
+    assert queued[0]["response_schema"] == expected["response_schema"]
     assert queued[0]["response_schema"]["properties"]["scenes"]["type"] == "array"
 
 
@@ -242,4 +252,4 @@ def test_scene_structure_and_capacity_remain_explicit_failures(monkeypatch, cont
 
 
 def test_scene_plan_protocol_bumped_after_assessment_semantics_change():
-    assert model_lab.ASSESSMENT_PROTOCOL == "webcap-model-assessment-structured-v3"
+    assert model_lab.ASSESSMENT_PROTOCOL == "webcap-model-assessment-structured-v4"

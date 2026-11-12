@@ -24,69 +24,77 @@ function evaluate(tests,options={}) {
 const passed={counts:{completed:1}};
 const failed=(error)=>({counts:{failed:1},error});
 
-test('Required validation failures remain genuine technical failures',()=>{
+test('Failed probes do not erase independently demonstrated capabilities',()=>{
   const r=evaluate({director_scene_plan_2048:failed('Invalid JSON'),language_synthesis:passed,language_challenge:passed});
-  assert.equal(r.state,'Failed');
-  assert.match(r.labels[1],/Invalid JSON/);
+  assert.equal(r.state,'Demonstrated');
+  assert.deepEqual(r.labels,['Schema Assist · Vocabulary challenge']);
 });
-test('Deep stress-only failures yield Limited instead of Failed',()=>{
+test('Deep stress-only failures do not erase the verified Storyboard tier',()=>{
   const r=evaluate({director_scene_plan_2048:passed,language_synthesis:passed,language_challenge:passed,
     director_scene_plan_16384:failed('Token budget exhausted')});
-  assert.equal(r.state,'Limited');
-  assert.match(r.labels[1],/16384/);
-  assert.match(r.labels[1],/Token budget exhausted/);
+  assert.equal(r.state,'Demonstrated');
+  assert.match(r.labels[1],/2K budget verified/);
 });
-test('Valid but count-short scene output has an explicit limitation',()=>{
+test('Completed count-short scene output remains a demonstrated request budget',()=>{
   const r=evaluate({director_scene_plan_2048:{
     counts:{completed:1},scenePlanAssessment:{countMatched:false,actualScenes:5,requestedScenes:8,validScenes:5,detailedScenes:5}
   },language_synthesis:passed,language_challenge:passed});
-  assert.equal(r.state,'Limited');
-  assert.match(r.labels[1],/5\/8 scenes/);
+  assert.equal(r.state,'Demonstrated');
+  assert.match(r.labels[1],/2K budget verified/);
 });
-test('Missing and interrupted required probes are Not established, not Failed',()=>{
+test('Missing and interrupted probes do not claim additional capabilities',()=>{
   const r=evaluate({director_scene_plan_2048:passed,language_synthesis:{counts:{interrupted:1}},
     director_scene_plan_8192:failed('Long-form timeout')});
-  assert.equal(r.state,'Not established');
-  assert.match(r.labels[1],/language_synthesis/);
+  assert.equal(r.state,'Demonstrated');
+  assert.equal(r.labels[0],'Storyboard');
+  assert.match(r.labels[1],/2K budget verified/);
 });
 test('Vision-only models are not limited by unrelated historic Storyboard evidence',()=>{
   const r=evaluate({vision_open:passed, director_scene_plan_8192:failed('Long-form truncation')},
     {role:'vision'});
-  assert.equal(r.state,'Passed');
+  assert.equal(r.state,'Demonstrated');
+  assert.deepEqual(r.labels,['Sight']);
 });
 test('Historical v2 scene-count-only failure is not proven invalid JSON',()=>{
   const r=evaluate({director_scene_plan_2048:{counts:{failed:1},
     error:'Storyboard structured-output validation failed: Wrong number of Storyboard Scenes.',
     _runProtocol:'webcap-model-assessment-structured-v2'},
     language_synthesis:passed,language_challenge:passed});
-  assert.equal(r.state,'Not established');
-  assert.match(r.labels[1],/legacy scene-count mismatch/);
+  assert.equal(r.state,'Demonstrated');
+  assert.deepEqual(r.labels,['Schema Assist · Vocabulary challenge']);
 });
-test('A valid required set and no known limitations reports Passed',()=>{
+test('Completed probes name demonstrated capabilities and their verified budget',()=>{
   const r=evaluate({director_scene_plan_2048:passed,language_synthesis:passed,language_challenge:passed});
-  assert.equal(r.state,'Passed');
-  assert.equal(r.reason,null);
+  assert.equal(r.state,'Demonstrated');
+  assert.equal(r.labels[0],'Storyboard · Schema Assist · Vocabulary challenge');
+  assert.match(r.labels[1],/2K budget verified/);
 });
-test('Set vocabulary requires BOTH synthesis and challenge',()=>{
+test('Set vocabulary synthesis does not claim an untested challenge capability',()=>{
   const r=evaluate({director_scene_plan_2048:passed,set_vocabulary_synthesis:passed},
     {setVocabulary:true});
-  assert.equal(r.state,'Not established');
-  assert.match(r.labels[1],/set_vocabulary_challenge/);
+  assert.equal(r.state,'Demonstrated');
+  assert.equal(r.labels[0],'Storyboard · Schema Assist');
 });
-test('Combined Director and Vision role requires Vision as well',()=>{
+test('Combined roles name successful Sight independently of failed group-aware Sight',()=>{
   const r=evaluate({director_scene_plan_2048:passed,language_synthesis:passed,language_challenge:passed,
     vision_open:passed,vision_group_aware:failed('Image decode failed')},
     {role:'both',groupAware:true});
-  assert.equal(r.state,'Failed');
-  assert.match(r.labels[1],/Image decode failed/);
+  assert.equal(r.state,'Demonstrated');
+  assert.equal(r.labels[0],'Storyboard · Schema Assist · Vocabulary challenge · Sight');
 });
-test('LLM quality-review operation errors are labeled Judge error, not model quality failure',()=>{
+test('Observed failures alone are assessed, and absent observations remain untested',()=>{
+  const observed=evaluate({vision_open:failed('Image decode failed')},{role:'vision'});
+  assert.equal(observed.state,'Assessed');
+  assert.deepEqual(observed.labels,['Assessed']);
+  const empty=evaluate({},{role:'vision'});
+  assert.equal(empty.state,'Untested');
+  assert.deepEqual(empty.labels,['Not assessed']);
+});
+test('LLM quality-review operation errors remain unmeasured',()=>{
   const a=source.indexOf('function diagnosticsAssessmentReviewLabel(');
   const b=source.indexOf('function diagnosticsAssessmentJudge(',a);
   assert.ok(a>=0&&b>a);
   vm.runInContext(source.slice(a,b),ctx);
-  assert.equal(ctx.diagnosticsAssessmentReviewLabel({status:'failed',error:'Exceeded maxTokens'}),'Judge error');
+  assert.equal(ctx.diagnosticsAssessmentReviewLabel({status:'failed',error:'Exceeded maxTokens'}),'Not measured');
   assert.equal(ctx.diagnosticsAssessmentReviewLabel({status:'running'}),'Judging…');
-  assert.match(source,/qualityCell\.textContent = qualityReview\.status === 'failed' \? 'Judge error'/);
-  assert.match(source,/diagnosticsAssessmentShowReason\(qualityCell, qualityReview\.error, qualityReview\.error\)/);
 });

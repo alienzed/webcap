@@ -22,7 +22,6 @@ def test_caption_assist_leaves_room_for_runtime_reasoning(monkeypatch):
             "assignments": [{"group": "Position", "key": "position", "term": "standing"}],
             "template": "{position, }{background}",
             "renderedPrimer": "standing, plain wall",
-            "preferredCaptionSequence": "subject\nposition / action\nbackground\nlighting\nview",
         })
 
     assert response.status_code == 202
@@ -32,7 +31,7 @@ def test_caption_assist_leaves_room_for_runtime_reasoning(monkeypatch):
     payload = json.loads(captured["contract"]["messages"][1]["content"].split("\n\n", 1)[1])
     assert payload["captionTemplate"] == "{position, }{background}"
     assert payload["renderedPrimer"] == "standing, plain wall"
-    assert payload["preferredCaptionSequence"].startswith("subject\nposition / action")
+    assert "preferredCaptionSequence" not in payload
     assert payload["groupedAnnotations"][0]["key"] == "position"
     assert "groupOrder" not in payload
 
@@ -58,7 +57,7 @@ def test_template_assist_receives_custom_group_meaning_and_uses_runtime_budget(m
     assert "runtimeOverrides" not in captured["context"]
     payload = json.loads(captured["contract"]["messages"][1]["content"].split("\n\n", 1)[1])
     assert payload["availableKeys"] == ["bt_shape"]
-    assert payload["groupsInOrder"][0]["terms"][1]["renderedDefault"] == "bandeau top"
+    assert payload["groups"][0]["terms"][1]["renderedDefault"] == "bandeau top"
     assert payload["currentTemplate"] == "{bt_shape}"
 
 
@@ -77,8 +76,8 @@ def test_failed_caption_replace_keeps_existing_caption(tmp_path, monkeypatch):
     assert not list(folder.glob(".clip.txt.*.tmp"))
 
 
-def test_caption_assist_prompt_uses_house_sequence_not_annotation_order():
-    sequence = "subject\nposition / action\nrequired phrase\nsetting\nbody\ntraits\nclothing\nbackground\nlighting\nview"
+def test_caption_assist_prompt_uses_set_template_not_annotation_order():
+    template = "{subject, }{position, }{clothing, }{lighting, }{view}"
     messages = caption_ops.build_caption_assist_messages(
         assignments=[
             {"group": "View", "term": "front"},
@@ -89,20 +88,21 @@ def test_caption_assist_prompt_uses_house_sequence_not_annotation_order():
         tags=["studio"],
         required_phrase="subject",
         draft="standing studio, soft lighting, front view",
-        preferred_sequence=sequence,
+        template=template,
+        rendered_primer="subject, standing, triangle, soft, front",
     )
 
     assert messages[0]["role"] == "system"
     assert messages[1]["role"] == "user"
     payload = json.loads(messages[1]["content"].split("\n\n", 1)[1])
-    assert payload["preferredCaptionSequence"] == sequence
+    assert payload["captionTemplate"] == template
+    assert payload["renderedPrimer"] == "subject, standing, triangle, soft, front"
     assert "groupOrder" not in payload
-    assert "groupedAnnotations also does not define caption order" in messages[0]["content"]
+    assert "order of groupedAnnotations also does not define caption order" in messages[0]["content"]
     assert "captionTemplate is the Set's caption-writing template" in messages[0]["content"]
     assert "renderedPrimer demonstrates its populated structure, preferred order" in messages[0]["content"]
     assert "Do not use annotation group order as caption order." in messages[1]["content"]
     assert "Do not use annotation group order or captionTemplate placeholder order" not in messages[1]["content"]
-    assert "unlisted groups immediately before the final background, lighting, and view portion" in messages[1]["content"]
     assert "include it verbatim exactly once" in messages[0]["content"]
     assert "compact photographic phrases" in messages[0]["content"]
     assert "high-angle three-quarter rear view" in messages[0]["content"]
@@ -117,7 +117,7 @@ def test_caption_assist_prioritizes_every_selected_tag_without_dropping_details(
         ],
         tags=["bracelet"],
         draft="a person standing",
-        preferred_sequence="subject\npose\nclothing\nhair",
+        template="{subject, }{pose, }{clothing, }{hair}",
         open_sight={"summary": "a person standing"},
         context_sight={"summary": "a person standing"},
     )
@@ -132,17 +132,18 @@ def test_caption_assist_prioritizes_every_selected_tag_without_dropping_details(
     assert "never silently omit a nonredundant selected value" in system
     assert "Cover every nonredundant tag in groupedAnnotations and otherTags" in user
     assert "supplemental visual evidence, not replacements" in user
-    assert "preferred order for caption content" in user
+    assert payload["captionTemplate"] == "{subject, }{pose, }{clothing, }{hair}"
 
 
-def test_caption_assist_blank_sequence_uses_natural_order():
+def test_caption_assist_without_template_supplies_no_order_override():
     messages = caption_ops.build_caption_assist_messages(
         assignments=[{"group": "Position", "term": "standing"}],
-        preferred_sequence="",
     )
     payload = json.loads(messages[1]["content"].split("\n\n", 1)[1])
-    assert payload["preferredCaptionSequence"] == ""
-    assert "do not impose a house order" in messages[1]["content"]
+    assert payload["captionTemplate"] == ""
+    assert payload["renderedPrimer"] == ""
+    assert "preferredCaptionSequence" not in payload
+    assert "Do not use annotation group order as caption order." in messages[1]["content"]
 
 def test_caption_template_assist_prompt_explains_primer_grammar():
     messages = caption_ops.build_caption_template_assist_messages(
@@ -181,12 +182,11 @@ def test_caption_template_assist_prompt_explains_primer_grammar():
     assert '"surface"' in user
     assert '"setting"' in user
     assert '"on red bed"' in user
-    assert "groupsInOrder is the user's intended template order" in system
+    assert "fields and vocabulary, not a caption-order signal" in system
     assert "compact compositional photographic wording" in system
     assert '"[angle] [orientation] view"' in system
     assert "viewed from the front" in system
-    assert "keep group placeholders in that relative order" in user
-    assert "does not prescribe caption order" not in system
+    assert "Treat groups as an unordered inventory" in user
 
 
 def test_caption_assist_corrections_make_retry_a_targeted_repair():
@@ -245,7 +245,7 @@ def test_semantic_group_alias_reaches_caption_and_template_assist_without_changi
                "terms": [{"value": "thong"}]}]
     template = caption_ops.build_caption_template_assist_messages(groups=groups)
     data = json.loads(template[1]["content"].split("\n\n", 1)[1])
-    assert data["groupsInOrder"][0]["alias"] == "Bikini Bottom Back"
+    assert data["groups"][0]["alias"] == "Bikini Bottom Back"
     assert data["availableKeys"] == ["bb_back"]
 
 

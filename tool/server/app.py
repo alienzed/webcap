@@ -1,4 +1,5 @@
 import ctypes
+import csv
 import os
 import json
 from flask import Response, stream_with_context
@@ -9,6 +10,7 @@ from flask import Flask, jsonify, request, send_from_directory
 import shutil
 import subprocess
 import sys
+import time
 
 from . import config as app_config
 from .caption_ops import _resolve_folder, build_caption_assist_messages, build_caption_enrichment_messages, build_caption_template_assist_messages, list_media_files, load_caption_text, save_caption_text, serve_media_file
@@ -268,6 +270,25 @@ def fs_root():
     return jsonify({"root": str(app_config.FS_ROOT)})
 
 
+def _system_gpu_status():
+    """Read host NVIDIA telemetry independently of the training environment."""
+    fields = ("index", "name", "utilization", "memoryUsed", "memoryTotal", "temperature", "powerDraw")
+    try:
+        result = subprocess.run(
+            ["nvidia-smi", "--query-gpu=index,name,utilization.gpu,memory.used,memory.total,temperature.gpu,power.draw",
+             "--format=csv,noheader,nounits"],
+            capture_output=True, text=True, timeout=5, check=True,
+        )
+        gpus = [dict(zip(fields, (value.strip() for value in row), strict=True))
+                for row in csv.reader(result.stdout.splitlines(), skipinitialspace=True) if row]
+        return {"available": True, "gpus": gpus, "checkedAt": time.time()}
+    except subprocess.CalledProcessError as exc:
+        error = (exc.stderr or exc.stdout or str(exc)).strip()
+    except (OSError, subprocess.TimeoutExpired, ValueError) as exc:
+        error = str(exc)
+    return {"available": False, "gpus": [], "error": error, "checkedAt": time.time()}
+
+
 def _system_ram_status():
     if os.name == "nt":
         class MEMORYSTATUSEX(ctypes.Structure):
@@ -325,7 +346,7 @@ def _system_ram_status():
 
 @app.route("/fs/system_status", methods=["GET"])
 def fs_system_status():
-    gpu_payload, _gpu_status = training_runner_gpu_status_response()
+    gpu = _system_gpu_status()
     try:
         ram = _system_ram_status()
     except (OSError, ValueError, AttributeError) as exc:
@@ -347,7 +368,7 @@ def fs_system_status():
         }
     return jsonify({
         "ok": True,
-        "gpu": gpu_payload.get("gpu"),
+        "gpu": gpu,
         "ram": ram,
         "disk": disk,
     })

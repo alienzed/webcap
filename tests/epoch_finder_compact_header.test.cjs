@@ -38,7 +38,7 @@ test('campaign evaluation and optional comparison counters retain their elements
   }
   assert.ok(metrics.querySelector('#epoch-finder-rvn-progress').classList.contains('hidden'));
   assert.ok(metrics.querySelector('#epoch-finder-dino-progress').classList.contains('hidden'));
-  assert.match(script, /els\('vl-count'\)\.parentElement\.classList\.add\('hidden'\)/);
+  assert.match(script, /els\('vl-count'\)\.parentElement\.classList\.remove\('hidden'\)/);
   assert.match(script, /els\('render-bar'\)\.style\.width/);
   assert.match(script, /els\('field-count'\)\.textContent/);
 });

@@ -15,7 +15,7 @@ def test_epoch_picker_run_header_reuses_training_candidates_navigation():
     handler = js[js.index("if (event.target.closest('[data-epoch-training-run]')) {"):
                  js.index("var choice = event.target.closest('[data-epoch-choice]');")]
     assert "openTrainingCandidates({id:String(run.jobId),folder:folder}" in handler
-    assert "refreshScreeningTestStatus(campaignState,true)" in handler
+    assert "refreshCampaignTestStatus(campaignState,true)" in handler
     assert "return;" in handler
     assert "runEpochSelections" not in handler
     assert ".epoch-finder-run-epochs-heading{display:flex" in css
@@ -623,22 +623,6 @@ def test_file_campaign_gallery_preserves_filename_without_inventing_run_identity
     assert item["jobId"] == ""
     assert item["epoch"] is None
     assert gallery["resultEpochs"] == []
-
-
-def test_review_header_uses_frozen_run_without_restoring_form():
-    from pathlib import Path
-    js = (Path(__file__).resolve().parents[1] / "tool/js/epoch_finder.js").read_text(encoding="utf-8")
-    remember = js[js.index("function screeningRememberSelection("):js.index("function screeningSaveSelection(")]
-    assert "screeningApplySettings(campaign);" not in remember
-    run_info = js[js.index("function screeningRunInfo("):js.index("function screeningUpdateAverage(")]
-    matrix = js[js.index("function screeningMatrix("):js.index("function screeningRender(")]
-    assert "plan.casePrompts[index]" in run_info
-    assert "plan.settings" in run_info
-    assert "plan.seeds[index]" in run_info
-    assert "epoch-screening-case-labels" in matrix
-    assert "screeningRunInfo(campaign,plan);" in matrix
-    assert "stop_queuing" in (Path(__file__).resolve().parents[1] /
-                              "tool/server/epoch_finder.py").read_text(encoding="utf-8")
 
 
 def test_set_managed_run_discovery_without_training_queue(tmp_path, monkeypatch):

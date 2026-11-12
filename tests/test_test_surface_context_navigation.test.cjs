@@ -27,11 +27,11 @@ function makeClassList(initial=[]){
 }
 function harness(){
   const nodes=new Map();
-  const tabs=['tests','screening','finder','analytics','references'].map(mode=>({
+  const tabs=['tests','finder','analytics','references'].map(mode=>({
     dataset:{testWorkspaceMode:mode},classList:makeClassList(),attributes:{},
     setAttribute(name,value){this.attributes[name]=value;}
   }));
-  const stats={finder:0,references:0,analytics:0,screening:0,draft:0,urlWrites:[]};
+  const stats={finder:0,references:0,analytics:0,urlWrites:[]};
   function makeNode(id){
     return {id,classList:makeClassList(id.startsWith('test-workspace-return-')?['hidden']:[]),
       link:{textContent:''},querySelector(selector){
@@ -49,18 +49,17 @@ function harness(){
     getWorkingModelProfileId(){return 'h3';},
     testReferencesOpen(){stats.references++;},
     runAnalyticsOpen(){stats.analytics++;},
+    runAnalyticsSetVisible(visible){stats.analyticsVisible=visible;},
     syncShellLocationRoute(options){stats.urlWrites.push(options||null);}
   };
   const ctx={window:win,document,els:id=>node('epoch-finder-'+id),
-    refresh:()=>{stats.finder++;},screeningModeUi:()=>{stats.screening++;},
-    screeningApplySettings:()=>{stats.draft++;},currentFolder:'my-set',activeCampaign:'',
-    campaignState:null,campaigns:[],manualSelectionCampaign:'',screeningShowExcluded:false,
-    screeningDraftContext:'my-set|h3',listRequestVersion:0,
+    refresh:()=>{stats.finder++;},currentFolder:'my-set',activeCampaign:'',
+    campaignState:null,campaigns:[],listRequestVersion:0,
     runEpochSelections:{},stagedSelection:new Set(),sourceMode:'runs',
-    manualSelectedRound:0,referenceSelections:{},referenceGeneration:0,
+    referenceSelections:{},referenceGeneration:0,
     inspectedEpoch:null,inspectedFrame:0,lastFrameKey:'',wizardStep:1,
     showStep:()=>{stats.referenceRestores=(stats.referenceRestores||0)+1;},Set};
-  vm.runInNewContext("var mode='tests';var returnMode='';var surfaceLabels={tests:'Prompt Tests',screening:'Manual Screening',finder:'Campaigns',references:'References',analytics:'Insights'};"+methodHelpers+modeController,ctx);
+  vm.runInNewContext("var mode='tests';var returnMode='';var surfaceLabels={tests:'Prompt Tests',finder:'Campaigns',references:'References',analytics:'Insights'};"+methodHelpers+modeController,ctx);
   return {window:win,node,tabs,stats,ctx};
 }
 
@@ -79,7 +78,7 @@ test('Campaign deep-link returns to Insights without destroying the report',()=>
   assert.equal(h.window.epochFinderCurrentMode(),'analytics');
 });
 
-test('Manual Screening and Campaigns retain independent history and picker state',()=>{
+test('Campaign history and picker state survive a visit to Insights',()=>{
   const h=harness();
   h.window.epochFinderShowMode('finder');
   h.ctx.activeCampaign='campaign-one';
@@ -87,19 +86,9 @@ test('Manual Screening and Campaigns retain independent history and picker state
   h.ctx.stagedSelection.add('campaign.safetensors');
   h.ctx.runEpochSelections={'run-a':new Set([1,2])};
   h.ctx.referenceSelections={red:{media:'ref.jpg'}};
-  h.window.epochFinderShowMode('screening');
-  assert.equal(h.window.epochFinderCurrentMode(),'screening');
-  assert.equal(h.ctx.activeCampaign,'');
-  assert.equal(h.ctx.sourceMode,'runs');
-  assert.equal(h.node('epoch-finder-new-heading').textContent,'New screening');
-  assert.equal(h.node('epoch-finder-history-heading').textContent,'Screenings');
-  assert.equal(h.node('epoch-finder-new').textContent,'+ New Screening');
-  assert.equal(h.tabs.find(t=>t.dataset.testWorkspaceMode==='screening').attributes['aria-pressed'],'true');
-  h.ctx.activeCampaign='screening-two';
-  h.ctx.runEpochSelections={'run-b':new Set([9,10])};
-  h.ctx.manualSelectedRound=3;
-  h.ctx.manualSelectionCampaign='screening-two';
-  h.ctx.referenceSelections={}; // Screening must not erase Campaign reference choices.
+  h.window.epochFinderShowMode('analytics');
+  assert.equal(h.window.epochFinderCurrentMode(),'analytics');
+  assert.equal(h.stats.analyticsVisible,true);
 
   h.window.epochFinderShowMode('finder');
   assert.equal(h.ctx.activeCampaign,'campaign-one');
@@ -107,20 +96,14 @@ test('Manual Screening and Campaigns retain independent history and picker state
   assert.deepEqual([...h.ctx.stagedSelection],['campaign.safetensors']);
   assert.deepEqual([...h.ctx.runEpochSelections['run-a']],[1,2]);
   assert.equal(h.ctx.referenceSelections.red.media,'ref.jpg');
-  assert.equal(h.node('epoch-finder-new-heading').textContent,'New campaign');
-  assert.equal(h.node('epoch-finder-history-heading').textContent,'Campaigns');
-
-  h.window.epochFinderShowMode('screening');
-  assert.equal(h.ctx.activeCampaign,'screening-two');
-  assert.deepEqual([...h.ctx.runEpochSelections['run-b']],[9,10]);
-  assert.equal(h.ctx.manualSelectedRound,3);
-  assert.equal(h.ctx.manualSelectionCampaign,'screening-two');
+  assert.equal(h.stats.analyticsVisible,false);
+  assert.throws(()=>h.window.epochFinderShowMode('screening'),/Unknown Test workspace destination/);
   assert.doesNotMatch(html,/id="epoch-finder-campaign-type"/);
 });
 
 test('returning to Campaign references restarts an interrupted reference lookup',()=>{
   const h=harness();
-  h.window.epochFinderShowMode('screening');
+  h.window.epochFinderShowMode('analytics');
   h.ctx.wizardStep=4;
   h.window.epochFinderShowMode('finder');
   assert.equal(h.stats.referenceRestores,1);
@@ -128,29 +111,29 @@ test('returning to Campaign references restarts an interrupted reference lookup'
 
 test('native Test deep-link and explicit tab reset preserve contextual returns',()=>{
   const h=harness();
-  h.window.epochFinderShowMode('tests',{returnTo:'screening'});
+  h.window.epochFinderShowMode('tests',{returnTo:'finder'});
   assert.equal(h.node('test-workspace-return-tests').classList.contains('hidden'),false);
-  assert.equal(h.node('test-workspace-return-tests').link.textContent,'← Back to Manual Screening');
+  assert.equal(h.node('test-workspace-return-tests').link.textContent,'← Back to Campaigns');
   h.window.epochFinderShowMode('finder');
   assert.equal(h.node('test-workspace-return-tests').classList.contains('hidden'),true);
   assert.equal(h.node('test-workspace-return-finder').classList.contains('hidden'),true);
   assert.throws(()=>h.window.epochFinderShowMode('bogus'),/Unknown Test workspace destination/);
 });
 
-test('origin-aware links keep the native checkpoint and screening return path',()=>{
+test('origin-aware links keep the native checkpoint and campaign return path',()=>{
   assert.match(testJs,/window\.openTestBenchAnalyticsSession = function \(sessionId\)/);
   assert.match(testJs,/window\.epochFinderCurrentMode\(\)/);
   assert.match(inspector,/function backToTestResults\(\)/);
   assert.match(inspector,/back\.onclick=window\.epochInfoShowSession/);
   assert.match(html,/id="test-workspace-return-tests"/);
   assert.match(html,/id="test-workspace-return-finder"/);
-  assert.match(finder,/mode==='screening'\?'screening':'finder'/);
+  assert.match(finder,/returnTo:previous,keepCampaign:true,campaignId:String\(campaignId\)/);
 });
 
 test('switching methods before a status response does not replace the new method',async()=>{
   const h=harness();
-  h.window.epochFinderShowMode('screening');
-  h.ctx.activeCampaign='manual-loading';
+  h.window.epochFinderShowMode('finder');
+  h.ctx.activeCampaign='campaign-loading';
   const pending=[];
   const rendered=[];
   h.ctx.api=()=>new Promise(resolve=>pending.push(resolve));
@@ -158,13 +141,12 @@ test('switching methods before a status response does not replace the new method
   vm.runInNewContext(finder.slice(finder.indexOf('  function refreshStatus() {'),
     finder.indexOf('  function refresh() {')),h.ctx);
   const status=h.ctx.refreshStatus();
-  h.window.epochFinderShowMode('finder');
-  assert.equal(h.ctx.activeCampaign,'');
-  pending.shift()({campaign:{id:'manual-loading',mode:'manual'}});
+  h.window.epochFinderShowMode('analytics');
+  pending.shift()({campaign:{id:'campaign-loading',mode:'campaign'}});
   await status;
   assert.equal(rendered.length,0);
-  h.window.epochFinderShowMode('screening');
-  assert.equal(h.ctx.activeCampaign,'manual-loading');
+  h.window.epochFinderShowMode('finder');
+  assert.equal(h.ctx.activeCampaign,'campaign-loading');
 });
 
 test('switching between live method lists rejects stale responses',()=>{

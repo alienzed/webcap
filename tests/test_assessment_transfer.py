@@ -18,7 +18,8 @@ def bundle():
                 "id": "run-1", "version": 1, "status": "completed", "startedAt": "2026-10-17T00:00:00Z",
                 "directorModels": [model], "attempts": [
                     {"kind": "director_writing", "modelRef": model["modelRef"], "status": "completed",
-                     "result": {"text": "actual evidence"}},
+                     "result": {"text": "generated prose", "verifiedOutputTokens": 120,
+                                "usage": {"completion_tokens": 120}}},
                     {"kind": "vision_open", "modelRef": model["modelRef"], "status": "failed", "error": "empty response"},
                     {"kind": "vision_open", "modelRef": model["modelRef"], "status": "completed"}],
             }]}
@@ -29,7 +30,8 @@ def test_roundtrip_remaps_runtime_preserves_evidence_and_deduplicates():
     assert transfer.import_results(data, {"remote-1": "local"})["runsImported"] == 1
     run = model_lab.get_run(model_lab.list_runs()[0]["id"])
     assert run["attempts"][0]["modelRef"] == "local::model:q4"
-    assert run["attempts"][0]["result"]["text"] == "actual evidence"
+    assert run["attempts"][0]["result"] == {
+        "verifiedOutputTokens": 120, "usage": {"completion_tokens": 120}}
     assert run["importedFrom"]["host"] == "source"
     assert transfer.import_results(data, {"remote-1": "local"})["runsAlreadyPresent"] == 1
     data["exportedAt"] = "2026-10-19T00:00:00Z"
@@ -87,7 +89,8 @@ def test_summary_does_not_hide_earlier_failures():
 ])
 def test_vision_probe_keeps_raw_evidence_but_does_not_count_invalid_answers_as_success(monkeypatch, result, expected):
     from tool.server import llm_runner
-    run = {**bundle()["runs"][0], "attempts": [], "progress": {}, "options": {"activeTimeoutSeconds": 20}}
+    run = {**bundle()["runs"][0], "status": "running", "attempts": [], "progress": {},
+           "options": {"activeTimeoutSeconds": 20}}
     monkeypatch.setattr(llm_runner, "job_status", lambda *args, **kwargs: {"status": "completed", "result": result})
     attempt = model_lab._probe_job(run, kind="vision_open", role="vision", model_ref="remote-1::model:q4",
                                    enqueue=lambda: {"id": "job-1"})
@@ -95,6 +98,12 @@ def test_vision_probe_keeps_raw_evidence_but_does_not_count_invalid_answers_as_s
     assert attempt["result"] == result
     if expected == "failed":
         assert attempt["error"]
+    run["status"] = "completed"
+    model_lab._write_run(run)
+    saved = model_lab.get_run(run["id"])["attempts"][0]
+    assert saved["status"] == expected
+    assert saved["result"] == {key: value for key, value in result.items()
+                               if key not in {"text", "reasoning"}}
 
 
 def test_import_reports_preserves_newer_evidence_and_runtime_profiles():

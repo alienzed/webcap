@@ -65,6 +65,10 @@ jobs:
       - run: python -m pip install pytest Flask Pillow Werkzeug imageio websocket-client opencv-python-headless
       - run: node --check tool/js/training_runner_ui.js && node --check tool/js/training_workspace.js
       - run: python -m pytest -q tests/test_training_stabilization.py -k 'update_queued_epochs or training_queue_reorder_position'
+      - name: Training completion handoff and recovery regression
+        run: |
+          python -m compileall -q tool/server/training_runner.py tests/test_training_stabilization.py
+          python -m pytest -q tests/test_training_stabilization.py -k 'restart_recovers_definitely_missing_runner_as_paused_resume or delayed_training_result_completes_and_launches_next_queued_job or missing_training_result_timer_resets_if_runner_returns or missing_result_recovery_resume_uses_captured_target_not_set_toml or runner_completed_marker_is_written_only_after_successful_result_save'
       - run: python -m pytest -q tests/test_training_review_ui_contract.py -k 'training_queue_has_direct_reorder_and_epoch_controls'
   calibration:
     runs-on: ubuntu-latest

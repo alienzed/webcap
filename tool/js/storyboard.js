@@ -4288,13 +4288,7 @@
     });
     el('storyboard-story-status').value = storyState.story.status || 'active';
     var targetSceneCount = storyState.story.targetSceneCount;
-    var targetScenesInput = el('storyboard-story-target-scenes');
-    var autoSceneCountButton = el('storyboard-scene-count-auto');
-    var autoSceneCount = targetSceneCount == null;
-    targetScenesInput.value = autoSceneCount ? '' : targetSceneCount;
-    targetScenesInput.disabled = autoSceneCount;
-    autoSceneCountButton.classList.toggle('active', autoSceneCount);
-    autoSceneCountButton.setAttribute('aria-pressed', autoSceneCount ? 'true' : 'false');
+    el('storyboard-story-target-scenes').value = targetSceneCount == null ? '' : targetSceneCount;
     var storyDefaults = storyState.story.generationDefaults || {};
     el('storyboard-story-aspect-ratio').value = storyDefaults.aspectRatio || '4:3 (Standard)';
     el('storyboard-story-megapixels').value = storyDefaults.megapixels == null ? 0.2 : storyDefaults.megapixels;
@@ -4554,6 +4548,7 @@
   }
 
   function storyPayloadFromUi() {
+    var targetScenesValue = el('storyboard-story-target-scenes').value;
     var payload = {
       title: el('storyboard-story-title').value,
       icon: el('storyboard-story-icon').value,
@@ -4567,9 +4562,7 @@
       })),
       loras: storyLorasFromUi(),
       directorLoraPlanning: el('storyboard-director-lora-enable').checked,
-      targetSceneCount: el('storyboard-scene-count-auto').getAttribute('aria-pressed') === 'true'
-        ? null
-        : (el('storyboard-story-target-scenes').value || 12),
+      targetSceneCount: targetScenesValue === '' ? null : targetScenesValue,
       generationDefaults: {
         aspectRatio: el('storyboard-story-aspect-ratio').value || '4:3 (Standard)',
         megapixels: el('storyboard-story-megapixels').value || 0.2
@@ -6205,15 +6198,6 @@
     el('storyboard-expand-concept-btn').onclick = expandConcept;
     el('storyboard-restore-concept-btn').onclick = restorePreviousConcept;
     el('storyboard-develop-btn').onclick = developStory;
-    el('storyboard-scene-count-auto').onclick = function () {
-      var input = el('storyboard-story-target-scenes');
-      var nextAuto = this.getAttribute('aria-pressed') !== 'true';
-      this.setAttribute('aria-pressed', nextAuto ? 'true' : 'false');
-      this.classList.toggle('active', nextAuto);
-      input.disabled = nextAuto;
-      if (!nextAuto && !input.value) input.value = '12';
-      scheduleStorySave();
-    };
     var sceneWorkspace = document.querySelector('.storyboard-scene-workspace');
     if (sceneWorkspace) {
       sceneWorkspace.addEventListener('scroll', function () {

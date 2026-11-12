@@ -155,6 +155,7 @@
     if (!id || !keys.length) { status('Choose a Project and at least one field.', true); return; }
     if (!window.studioDirectorBridge.isReady()) { status('Open Director and choose a model first.', true); return; }
     el('studio-dw-read-send').disabled = true;
+    window.studioDirectorWorkbench.setReadStatus('working','Reading selected saved fields…');
     // Same exact serializer drives the inspector and the outbound LLM message.
     loadStory(id).then(function (story) {
       var payload = readPayload(story, keys);
@@ -170,7 +171,10 @@
       updateScope();
       if (el('director-chat-drawer').classList.contains('studio-actions-open'))
         el('studio-dw-close-actions').click();
-    }).catch(function (error) { status('Read failed: ' + String(error.message || error), true); })
+    }).catch(function (error) {
+      window.studioDirectorWorkbench.setReadStatus('error','Read failed: ' + String(error.message || error));
+      status('Read failed: ' + String(error.message || error), true);
+    })
       .finally(function () { updateReadSelection(); });
   }
   function showWriteContext() {
@@ -643,7 +647,8 @@
         savedTitle.textContent = 'Saved ' + labels[field];
         before.textContent = old || '(empty)';
         saved.append(savedTitle,before);
-        var diff = document.createElement('details'), diffSummary = document.createElement('summary'), diffBody = document.createElement('div');
+        var diff = document.createElement('details'), diffSummary = document.createElement('summary');
+        let diffBody = document.createElement('div');
         diff.className = 'studio-director-diff'; diffSummary.textContent = 'What changes?';
         diffBody.className = 'studio-director-diff-content';
         window.studioDirectorRenderDiff(diffBody,old,value);
@@ -848,6 +853,13 @@
   }
   window.studioDirectorWorkbench = {
     setStatus:status,
+    setReadStatus:function(state,detail){
+      ['studio-dw-read','studio-dw-quick-read'].forEach(function(id){
+        var button=el(id);
+        button.dataset.result=state;
+        button.title=detail || 'Read selected Project fields';
+      });
+    },
     reviewGeneratedCapture:reviewCreativeCapture,
     updateContext:updateScope,
     showSentWriteContext: function(operation, messages) {

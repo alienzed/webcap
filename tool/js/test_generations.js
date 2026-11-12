@@ -21,6 +21,10 @@
   var resultsView = 'grid';
   var previewSort = 'original';
   var compareIndex = 0;
+  var reviewIndex = 0;
+  var reviewSession = '';
+  var reviewKey = '';
+  var reviewRatingPending = false;
   var matrixRatingPending = new Set();
   var pendingActivityFolder = '';
   var testActivity = {};
@@ -360,7 +364,7 @@
   // Update only the timer label; leave the preview cards and their media nodes intact.
   function refreshTestVlElapsedButtons() {
     if (!isOpen() || testVl.scope !== testVlScope(currentStatus)) return;
-    ['test-generations-results', 'test-generations-compare'].forEach(function (id) {
+    ['test-generations-results', 'test-generations-review-card', 'test-generations-compare'].forEach(function (id) {
       var host = el(id);
       if (!host) return;
       Array.prototype.forEach.call(host.querySelectorAll('[data-test-vl-result]'), function (button) {
@@ -433,7 +437,7 @@
     var candidateScores = testVlCandidateScores(results);
     var byMedia = Object.create(null);
     results.forEach(function (result) { byMedia[resultMediaFile(result)] = result; });
-    ['test-generations-results','test-generations-compare','test-generations-matrix'].forEach(function (id) {
+    ['test-generations-results','test-generations-review-card','test-generations-compare','test-generations-matrix'].forEach(function (id) {
       var host = el(id);
       if (!host) return;
       Array.prototype.forEach.call(host.querySelectorAll('.test-generations-result-card, .test-generations-compare-item'), function (card) {
@@ -3305,7 +3309,7 @@
     );
   }
 
-  function rateTestResult(button) {
+  function rateTestResult(button, onSaved) {
     var rating = Number(button && button.dataset.testRating || 0);
     var mediaFile = String(button && button.dataset.mediaFile || '').trim();
     var sessionName = String(button && button.dataset.testSession || '').trim();
@@ -3324,6 +3328,7 @@
       rating: rating
     }).then(function (payload) {
       syncResultRatingButtons(sessionName, mediaFile, payload && payload.rating);
+      if (onSaved) onSaved();
       if (currentStatus && String(currentStatus.session || '') === sessionName && Array.isArray(currentStatus.results)) {
         currentStatus.results.forEach(function (result) {
           if (resultMediaFile(result) === mediaFile) result.rating = payload.rating;
@@ -4047,18 +4052,109 @@
     });
   }
 
+  function reviewResults(status) {
+    return (status && Array.isArray(status.results) ? status.results : []).filter(function (result) {
+      return !!resultMediaFile(result) && !result.error;
+    });
+  }
+
+  function moveReview(direction) {
+    var results = reviewResults(currentStatus);
+    if (!results.length) return;
+    reviewIndex = Math.max(0, Math.min(results.length - 1, reviewIndex + direction));
+    reviewKey = resultMediaFile(results[reviewIndex]);
+    renderReview(currentStatus);
+  }
+
+  function renderReview(status) {
+    if (resultsView !== 'review') return;
+    var host = el('test-generations-review-card');
+    var position = el('test-generations-review-position');
+    var results = reviewResults(status);
+    var session = String(status && status.session || '');
+    if (reviewSession !== session) {
+      reviewSession = session;
+      reviewIndex = 0;
+      reviewKey = '';
+      host.replaceChildren();
+      host.dataset.reviewKey = '';
+    }
+    var current = reviewKey && results.findIndex(function (result) {
+      return resultMediaFile(result) === reviewKey;
+    });
+    if (current >= 0) reviewIndex = current;
+    else reviewIndex = Math.max(0, Math.min(reviewIndex, Math.max(0, results.length - 1)));
+    var result = results[reviewIndex];
+    reviewKey = result ? resultMediaFile(result) : '';
+    var key = session + '|' + reviewKey;
+    position.textContent = results.length ? (reviewIndex + 1) + ' / ' + results.length : '0 / 0';
+    el('test-generations-review').querySelector('[data-test-review-previous]').disabled = !results.length || reviewIndex === 0 || reviewRatingPending;
+    el('test-generations-review').querySelector('[data-test-review-next]').disabled = !results.length || reviewIndex >= results.length - 1 || reviewRatingPending;
+    if (host.dataset.reviewKey === key && host.firstElementChild) {
+      if (result) {
+        updateTestPreviewCardRating(host.firstElementChild, result.rating);
+        renderTestVlCard(host.firstElementChild, result, testVlCandidateScores(results));
+      }
+      return;
+    }
+    var previousVideo = host.querySelector('video');
+    if (previousVideo) previousVideo.pause();
+    host.replaceChildren();
+    host.dataset.reviewKey = key;
+    if (!result) {
+      var empty = document.createElement('div');
+      empty.className = 'test-generations-empty';
+      empty.textContent = 'Generated previews will appear here.';
+      host.appendChild(empty);
+      return;
+    }
+    var card = sharedTestCard(result, status, 'test-generations-result-card test-generations-review-item', true, false);
+    host.appendChild(card);
+    renderTestVlCard(card, result, testVlCandidateScores(results));
+    var video = card.querySelector('video');
+    if (video) {
+      video.muted = true;
+      video.loop = true;
+      video.autoplay = true;
+      var playing = video.play();
+      if (playing && typeof playing.catch === 'function') playing.catch(showError);
+    }
+  }
+
+  function rateCurrentReview(value) {
+    if (reviewRatingPending) return;
+    var card = el('test-generations-review-card').querySelector('.test-generations-review-item');
+    var star = card && card.querySelector('[data-test-rating="' + value + '"]');
+    if (!star) return;
+    reviewRatingPending = true;
+    var savedSession = String(currentStatus && currentStatus.session || '');
+    var savedKey = reviewKey;
+    rateTestResult(star, function () {
+      if (resultsView === 'review' && String(currentStatus.session || '') === savedSession && reviewKey === savedKey) {
+        moveReview(1);
+      }
+    }).finally(function () {
+      reviewRatingPending = false;
+      if (resultsView === 'review') renderReview(currentStatus);
+    });
+  }
+
   function setResultsView(mode) {
-    resultsView = ['grid','compare','matrix'].includes(mode) ? mode : 'grid';
+    resultsView = ['grid','review','compare','matrix'].includes(mode) ? mode : 'grid';
     var gridBtn = el('test-generations-view-grid-btn');
+    var reviewBtn = el('test-generations-view-review-btn');
     var compareBtn = el('test-generations-view-compare-btn');
     var matrixBtn = el('test-generations-view-matrix-btn');
     var matrix = el('test-generations-matrix');
     var grid = el('test-generations-results');
     var compare = el('test-generations-compare');
+    var review = el('test-generations-review');
     if (gridBtn) {
       gridBtn.classList.toggle('active', resultsView === 'grid');
       gridBtn.setAttribute('aria-selected', resultsView === 'grid' ? 'true' : 'false');
     }
+    reviewBtn.classList.toggle('active', resultsView === 'review');
+    reviewBtn.setAttribute('aria-selected', String(resultsView === 'review'));
     if (compareBtn) {
       compareBtn.classList.toggle('active', resultsView === 'compare');
       compareBtn.setAttribute('aria-selected', resultsView === 'compare' ? 'true' : 'false');
@@ -4072,6 +4168,11 @@
     } else {
       matrix.querySelectorAll('video').forEach(function(video){video.pause();});
     }
+    if (resultsView !== 'review') {
+      var reviewVideo = review.querySelector('video');
+      if (reviewVideo) reviewVideo.pause();
+    }
+    review.classList.toggle('hidden', resultsView !== 'review');
     if (grid) grid.classList.toggle('hidden', resultsView !== 'grid');
     if (compare) compare.classList.toggle('hidden', resultsView !== 'compare');
     renderResults(currentStatus);
@@ -4175,6 +4276,7 @@
     if (resultsView === 'grid') sortTestPreviewCards(currentStatus);
     else if (resultsView === 'compare') renderCompare(currentStatus);
     else if (resultsView === 'matrix') renderMatrix(currentStatus);
+    else if (resultsView === 'review') renderReview(currentStatus);
   }
 
   function comparePairs(status) {
@@ -4286,6 +4388,11 @@
   }
 
   function renderResults(status) {
+    if (resultsView === 'review') {
+      renderReview(status || {});
+      syncTestVlControls();
+      return;
+    }
     if (resultsView === 'matrix') {
       renderMatrix(status || {});
       syncTestVlControls();
@@ -5673,6 +5780,7 @@
     el('test-generations-view-grid-btn').onclick = function () {
       setResultsView('grid');
     };
+    el('test-generations-view-review-btn').onclick = function () { setResultsView('review'); };
     el('test-generations-view-compare-btn').onclick = function () {
       setResultsView('compare');
     };
@@ -5888,6 +5996,44 @@
         return;
       }
     };
+    el('test-generations-review').onclick = function (event) {
+      if (event.target.closest('[data-test-review-previous]')) { if (!reviewRatingPending) moveReview(-1); return; }
+      if (event.target.closest('[data-test-review-next]')) { if (!reviewRatingPending) moveReview(1); return; }
+      var rating = event.target.closest('[data-test-rating]');
+      if (rating) { rateCurrentReview(Number(rating.dataset.testRating)); return; }
+      var remove = event.target.closest('[data-remove-candidate]');
+      if (remove && !reviewRatingPending) { removeCurrentSessionCandidate(remove); return; }
+      var vl = event.target.closest('[data-test-vl-result]');
+      if (vl) { showTestVlResult(vl.dataset.testVlResult); return; }
+      var epoch = event.target.closest('[data-test-epoch-media-job]');
+      if (epoch) window.runAnalyticsViewEpoch(epoch.dataset.testEpochMediaJob, Number(epoch.dataset.testEpochMediaEpoch), 'tests');
+    };
+    document.addEventListener('keydown', function (event) {
+      if (!isOpen() || resultsView !== 'review' || event.defaultPrevented || reviewRatingPending ||
+          event.ctrlKey || event.metaKey || event.altKey || isEditableElement(event.target)) return;
+      if (/^[1-5]$/.test(event.key)) {
+        event.preventDefault();
+        if (!event.repeat) rateCurrentReview(Number(event.key));
+      } else if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+        if (event.target.closest && event.target.closest('video, input[type="range"]')) return;
+        event.preventDefault();
+        if (!event.repeat) moveReview(event.key === 'ArrowLeft' ? -1 : 1);
+      } else if (event.key === ' ' && !event.target.closest('button, summary, select, input, textarea')) {
+        event.preventDefault();
+        var video = el('test-generations-review-card').querySelector('video');
+        if (video && !event.repeat) {
+          if (video.paused) {
+            var playback = video.play();
+            if (playback && typeof playback.catch === 'function') playback.catch(showError);
+          } else video.pause();
+        }
+      } else if (event.key === 'Delete') {
+        event.preventDefault();
+        if (event.repeat) return;
+        var remove = el('test-generations-review-card').querySelector('[data-remove-candidate]');
+        if (remove) removeCurrentSessionCandidate(remove);
+      }
+    });
     el('test-generations-compare').onclick = function (event) {
       var epoch = event.target.closest('[data-test-epoch-media-job]');
       if (epoch) {

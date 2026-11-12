@@ -855,7 +855,8 @@
   }
   window.studioDirectorWorkbench = {
     setStatus:status,
-    markSavedFields:function(selected){
+    markSavedFields:function(selected,story){
+      if (!story || !story.id) throw new Error('Field update feedback needs the saved Project identity.');
       var values=selected.savedFields || selected.fields || selected;
       var keys=Object.keys(values).filter(function(key){return ['title','concept','style','invariants','summary','prompt'].includes(key);});
       if (selected.scenes && typeof selected.scenes==='object') keys.push('Scene revisions');
@@ -864,14 +865,23 @@
       ['studio-dw-write','studio-dw-quick-write'].forEach(function(id){
         var button=el(id);
         button.dataset.result='success';
-        button.title='Saved: ' + (label || 'reviewed changes');
+        button.title='Saved to ' + storyName(story) + ': ' + (label || 'reviewed changes');
       });
+      window.reportConsoleInfo('Studio Director', 'Saved to ' + storyName(story) + ': ' + (label || 'reviewed changes'));
+      if (activeTarget().storyId !== story.id) return;
       [['title','storyboard-story-title'],['concept','storyboard-story-concept'],['style','storyboard-story-style']].forEach(function(item){
         if (!keys.includes(item[0])) return;
         var input=el(item[1]);
         if (input) {
           input.dataset.directorUpdated='true';
           input.title='Updated by Studio Director — ' + descriptions[item[0]];
+          if (!input.dataset.directorUpdateListener) {
+            input.dataset.directorUpdateListener='true';
+            input.addEventListener('input',function(){
+              delete input.dataset.directorUpdated;
+              if (input.title.startsWith('Updated by Studio Director')) input.title='';
+            });
+          }
         }
       });
     },

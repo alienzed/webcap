@@ -170,3 +170,23 @@ test('Apply receipt names the actual scoped Scene fields and retains authoritati
   const saved=JSON.parse(message.split('[WEBCAP APPLIED FIELD VALUES]')[1].split('[END WEBCAP APPLY]')[0]);
   assert.equal(saved.fields.savedFields.prompt,'The reviewed prompt.');
 });
+
+test('editable revision comparison identifies retained, removed and added words without mutating sources',()=>{
+  const before='A woman walks toward the sink, then brushes her teeth.';
+  const after='A woman brushes her teeth.';
+  const elements=[];
+  const host={children:[],replaceChildren(){this.children=[];},appendChild(n){this.children.push(n);}};
+  const scope=vm.createContext({document:{createElement:tag=>{
+    const element={tag,textContent:''};elements.push(element);return element;
+  }}});
+  vm.runInContext(part(chat,'  function studioDirectorRenderDiff(host, before, after) {',
+    '  window.studioDirectorRenderDiff = studioDirectorRenderDiff;'),scope);
+  scope.studioDirectorRenderDiff(host,before,after);
+  assert.equal(host.children.map(n=>n.textContent).join(''),before === after ? before : host.children.map(n=>n.textContent).join(''));
+  assert.ok(host.children.some(n=>n.tag==='del' && n.textContent.includes('walks')),'extra movement is visibly removed');
+  assert.ok(host.children.some(n=>n.tag==='span' && n.textContent.includes('woman')),'unchanged text stays identifiable');
+  assert.equal(before,'A woman walks toward the sink, then brushes her teeth.');
+  assert.equal(after,'A woman brushes her teeth.');
+  scope.studioDirectorRenderDiff(host,'Same text','Same text');
+  assert.equal(host.textContent,'No text changes.');
+});

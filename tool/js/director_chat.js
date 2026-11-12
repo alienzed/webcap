@@ -1157,9 +1157,9 @@
           heading.textContent = applied ? 'Applied content · inspect saved fields' : 'Read context · inspect exact fields delivered';
           var content = document.createElement('pre');
           content.textContent = message.content.slice(marker, closing + endMark.length);
-          details.append(heading, content);
-          body.textContent = message.content.slice(0, marker).trim();
-          body.appendChild(details);
+          // Keep the saved payload in history for inspection, but not inside creative chat.
+          body.textContent = message.content.slice(0, marker).trim() ||
+            (applied ? 'Reviewed changes saved' : 'Read saved Project fields');
         }
       }
 

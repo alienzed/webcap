@@ -227,11 +227,11 @@ test('complete Studio model output is inspectable and its original capture reope
   const details=created.find(n=>n.className==='director-chat-full-response');
   const action=created.find(n=>n.className==='director-chat-review-draft');
   assert.equal(details,undefined,'raw model output stays out of the creative conversation');
+  assert.equal(action,undefined,'draft review no longer competes with the conversation');
   assert.match(director,/studioDirectorOpenIo\(\)/);
   assert.match(director,/studio-director-io-raw/);
-  assert.ok(action,'capture must be directly actionable in its original message');
-  action.onclick();
-  assert.deepEqual(calls,[capture]);
+  assert.match(director,/studio-director-io-review/);
+  assert.match(director,/reviewGeneratedCapture\(chosenCapture\)/);
 });
 
 test('structured inspection metadata is not sent back with later Studio prompts', async () => {

@@ -4626,6 +4626,26 @@ iframe {
 .keep-lora-header h2 { margin: 0; font-size: 17px; }
 .keep-lora-source { margin: 4px 0 0; color: var(--muted-text, #a3adba); font-size: 13px; overflow-wrap: anywhere; }
 .keep-lora-content { display: grid; gap: 14px; padding: 16px; }
+
+/* Wildcard Builder must have one bounded scroll area between its fixed header
+   and footer; a long Dimensions list must not enlarge the clipped dialog. */
+.keep-lora-modal .test-generations-wildcard-dialog {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  width: min(980px, calc(100vw - 36px));
+  max-height: min(88dvh, 920px);
+}
+.test-generations-wildcard-dialog > .keep-lora-header,
+.test-generations-wildcard-dialog > .test-generations-wildcard-footer {
+  flex: 0 0 auto;
+}
+.test-generations-wildcard-dialog > .test-generations-wildcard-content {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
 .keep-lora-field { display: grid; gap: 7px; min-width: 0; }
 .keep-lora-field > label { font-size: 13px; font-weight: 650; }
 .keep-lora-path-row { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 7px; align-items: center; }

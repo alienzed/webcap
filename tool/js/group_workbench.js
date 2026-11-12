@@ -79,7 +79,7 @@ function renderGroupWorkbenchEmpty(targetEl, message) {
 function groupWorkbenchCanUseRoomyTerms(targetEl, mode) {
   return mode === 'item'
     && targetEl && targetEl.id === 'group-workbench-list'
-    && (!workspaceState || workspaceState.surface === 'default');
+    && (typeof workspaceState === 'undefined' || !workspaceState || workspaceState.surface === 'default');
 }
 
 function syncGroupWorkbenchTermScale(targetEl, mode) {

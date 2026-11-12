@@ -29,6 +29,18 @@ test('Test preview footer shows the existing aggregate human rating beside epoch
   assert.ok(testJS.includes('aggregateCount <= 0'));
 });
 
+test('Test preview Details expands with wrapped bounded content in every Evaluation view', () => {
+  const card = fs.readFileSync(path.join(root, 'tool/js/test_preview_card.js'), 'utf8');
+  const css = fs.readFileSync(path.join(root, 'tool/css/styles.css'), 'utf8');
+  assert.ok(card.includes("node('details','test-preview-card-details')"));
+  assert.ok(card.includes("node('div','test-preview-card-details-content')"));
+  assert.match(css, /\.test-preview-card-utility\s*\{[^}]*flex-wrap:\s*wrap/s);
+  assert.match(css, /\.test-preview-card-details\[open\]\s*\{[^}]*flex:\s*1 1 100%/s);
+  assert.match(css, /\.test-preview-card-details-content\s*\{[^}]*min-width:\s*0;[^}]*max-width:\s*100%/s);
+  assert.match(css, /\.test-preview-card-details-content p,\s*\.test-preview-card-details-content pre\s*\{[^}]*white-space:\s*pre-wrap;[^}]*overflow-wrap:\s*anywhere/s);
+  assert.match(css, /\.test-preview-card-details-content pre\s*\{[^}]*max-height:\s*280px;\s*overflow:\s*auto/);
+});
+
 test('original controls and generated evidence owners preserved', () => {
   for (const id of ['test-generations-run-btn','test-generations-inline-count',
       'test-generations-files','test-generations-sessions-list','epoch-finder-start',

@@ -87,11 +87,12 @@ test('Read preview and outbound values use the same validated field serializer',
   assert.match(rail,/sendRead\(payload, keys\)/);
 });
 
-test('Read receipt is derived from the actual next Director reply, not fabricated',()=>{
-  assert.match(chat,/Director acknowledged/);
-  assert.match(chat,/next\.role !== 'assistant'/);
-  assert.match(chat,/next\.content/);
-  assert.match(chat,/Director acknowledgment incomplete or mismatched/);
+test('Read acknowledgment is verified from the original reply and reported on the Read controls',()=>{
+  assert.match(chat,/var reply = studioResponse \? studioResponse\.reply : assistantText/);
+  assert.match(chat,/received = line\.trim\(\)/);
+  assert.match(chat,/setReadStatus\(missing\.length \|\| extra\.length/);
+  assert.match(rail,/setReadStatus:function\(state,detail\)/);
+  assert.doesNotMatch(chat,/director-chat-read-receipt/);
 });
 
 test('Readiness opens a single read-only detail and never assigns one Scene ID to multiple checks',()=>{

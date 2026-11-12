@@ -1157,12 +1157,17 @@ def test_queue_paused_job_preserves_existing_resume_path_when_output_path_is_unb
 
 def test_restart_recovers_definitely_missing_runner_as_paused_resume(tmp_path, monkeypatch):
     _configure_root(monkeypatch, tmp_path)
+    execution_queue._resource_owner = ""
+    clock = [1000.0]
+    monkeypatch.setattr(training_runner, "time", SimpleNamespace(time=lambda: clock[0]))
     monkeypatch.setattr(training_runner, "_run_wsl", lambda *_args, **_kwargs: (3, "", ""))
+    monkeypatch.setattr(training_runner, "_apply_training_disk_protection", lambda *_args: "safe")
     monkeypatch.setattr(training_runner, "_launch_job", lambda *_args, **_kwargs: pytest.fail("must not launch during restart recovery"))
     state = {
         "version": 3, "activeJobId": "active", "queuePaused": False, "queuePauseReason": "",
         "jobs": [
-            {"id": "later", "status": "queued", "stages": "h3"},
+            {"id": "later", "status": "queued", "stages": "h3",
+             "artifactDir": str(tmp_path / "output/runs/subject/jobs/later")},
             {
                 "id": "active", "status": "running", "stages": "h3", "pid": 4242,
                 "runnerScriptWsl": "/runs/runner.sh", "outputRunPath": "/runs/original",
@@ -1172,6 +1177,16 @@ def test_restart_recovers_definitely_missing_runner_as_paused_resume(tmp_path, m
     }
     training_runner._write_state(state)
 
+    training_runner._refresh_state(state)
+    assert state["activeJobId"] == "active"
+    assert state["queuePaused"] is False
+    assert state["jobs"][1]["runnerResultMissingSince"] == 1000.0
+    clock[0] += training_runner._RESULT_EVIDENCE_GRACE_SECONDS - 1
+    training_runner._refresh_state(state)
+    assert state["jobs"][1]["status"] == "running"
+    assert state["queuePaused"] is False
+
+    clock[0] += 1
     training_runner._refresh_state(state)
     training_runner._write_state(state)
     restored = training_runner._read_state()
@@ -1184,9 +1199,139 @@ def test_restart_recovers_definitely_missing_runner_as_paused_resume(tmp_path, m
     assert recovered["resumeStage"] == "h3"
     assert "pid" not in recovered
     assert "runnerVerified" not in recovered
+    assert "runnerResultMissingSince" not in recovered
     assert "no longer active" in recovered["error"]
     assert restored["queuePaused"] is True
     assert restored["queuePauseReason"] == "Previous runner ended without a result. Resume or restart the first item."
+    execution_queue._resource_owner = ""
+
+
+@pytest.mark.parametrize("initial_result", ["missing", "unreadable"])
+def test_delayed_training_result_completes_and_launches_next_queued_job(tmp_path, monkeypatch, initial_result):
+    _configure_root(monkeypatch, tmp_path)
+    execution_queue._resource_owner = ""
+    clock = [1000.0]
+    monkeypatch.setattr(training_runner, "time", SimpleNamespace(time=lambda: clock[0]))
+    monkeypatch.setattr(training_runner, "_inspect_job_runner", lambda _job: ("absent", ""))
+    monkeypatch.setattr(training_runner, "_sync_job_log_evidence", lambda _job: ("TRAINING COMPLETE!\n[webcap] completed", None))
+    monkeypatch.setattr(training_runner, "_finish_active_training_session", lambda *_args: None)
+    monkeypatch.setattr(training_runner, "_active_h3_training_runtime", lambda: None)
+    monkeypatch.setattr(training_runner, "_apply_training_disk_protection", lambda *_args: "safe")
+    monkeypatch.setattr(training_runner, "execution_resource_owner", lambda: "")
+    monkeypatch.setattr(training_runner, "reserve_execution_resource", lambda _owner: True)
+    monkeypatch.setattr(training_runner, "release_execution_resource", lambda _owner: None)
+    monkeypatch.setattr(training_runner.app_config, "safe_join_fs_root", lambda _folder: tmp_path)
+    monkeypatch.setattr(gpu_prep, "prepare_gpu_for", lambda _owner: True)
+    launches = []
+
+    def fake_launch(job, _folder):
+        launches.append(job["id"])
+        job["status"] = "starting"
+        return True
+
+    monkeypatch.setattr(training_runner, "_launch_job", fake_launch)
+    job_dir = tmp_path / "output" / "runs" / "subject" / "jobs" / "first"
+    job_dir.mkdir(parents=True)
+    result_file = job_dir / "result.json"
+    if initial_result == "unreadable":
+        result_file.write_text("{incomplete", encoding="utf-8")
+    state = {
+        "version": 3, "activeJobId": "first", "queuePaused": False, "queuePauseReason": "",
+        "jobs": [
+            {"id": "first", "folder": "sets/subject", "status": "running", "stages": "h3",
+             "pid": 4242, "runnerScriptWsl": "/runs/runner.sh", "artifactDir": str(job_dir)},
+            {"id": "second", "folder": "sets/subject", "status": "queued", "stages": "h3"},
+        ],
+    }
+    training_runner._startup_reconciled = True
+    training_runner._write_state(state)
+
+    training_runner._refresh_state(state)
+    assert launches == []
+    assert state["activeJobId"] == "first"
+    assert state["jobs"][0]["status"] == "running"
+    assert state["queuePaused"] is False
+    assert state["jobs"][0]["runnerResultMissingSince"] == 1000.0
+
+    # The monitor persists this observation and wakes for the next poll.
+    training_runner._write_state(state)
+    clock[0] += 2.0
+    result_file.write_text(json.dumps({"status": "completed", "exitCode": 0, "finishedAt": 1001}), encoding="utf-8")
+    state = training_runner._read_state()
+    training_runner._refresh_state(state)
+
+    assert state["jobs"][0]["status"] == "completed"
+    assert "runnerResultMissingSince" not in state["jobs"][0]
+    assert state["queuePaused"] is False
+    assert launches == ["second"]
+    assert state["activeJobId"] == "second"
+    assert state["jobs"][1]["status"] == "starting"
+    execution_queue._resource_owner = ""
+
+
+def test_missing_training_result_timer_resets_if_runner_returns(tmp_path, monkeypatch):
+    _configure_root(monkeypatch, tmp_path)
+    clock = [1000.0]
+    monkeypatch.setattr(training_runner, "time", SimpleNamespace(time=lambda: clock[0]))
+    observations = iter(["absent", "running", "absent"])
+    monkeypatch.setattr(training_runner, "_inspect_job_runner", lambda _job: (next(observations), ""))
+    monkeypatch.setattr(training_runner, "_sync_job_log_evidence", lambda _job: ("TRAINING COMPLETE!", None))
+    monkeypatch.setattr(training_runner, "_log_has_progress", lambda _text: True)
+    monkeypatch.setattr(training_runner, "_trigger_scheduled_finish", lambda _job: None)
+    job = {
+        "id": "first", "status": "running", "stages": "h3", "pid": 4242,
+        "runnerScriptWsl": "/runs/runner.sh", "artifactDir": str(tmp_path / "jobs" / "first"),
+    }
+    assert training_runner._refresh_job(job)["holdReason"] == ""
+    assert job["runnerResultMissingSince"] == 1000.0
+    clock[0] += training_runner._RESULT_EVIDENCE_GRACE_SECONDS + 5
+    assert training_runner._refresh_job(job)["holdReason"] == ""
+    assert "runnerResultMissingSince" not in job
+    assert job["status"] == "running"
+    assert training_runner._refresh_job(job)["holdReason"] == ""
+    assert job["runnerResultMissingSince"] == clock[0]
+
+
+@pytest.mark.parametrize("saved_epoch, allowed", [(60, False), (40, True)])
+def test_missing_result_recovery_resume_uses_captured_target_not_set_toml(tmp_path, monkeypatch, saved_epoch, allowed):
+    _configure_root(monkeypatch, tmp_path)
+    folder = tmp_path / "sets" / "subject"
+    folder.mkdir(parents=True)
+    (folder / "config.h3.toml").write_text("epochs = 100\n", encoding="utf-8")
+    captured = tmp_path / "captures" / "config.h3.toml"
+    captured.parent.mkdir(parents=True)
+    captured.write_text("epochs = 60\n", encoding="utf-8")
+    job = {
+        "id": "recovered", "folder": "sets/subject", "status": "queued", "stages": "h3",
+        "resumeFromCheckpoint": "/runs/existing", "snapshot": {"h3": str(captured)},
+        "artifactDir": str(tmp_path / "jobs" / "recovered"),
+    }
+    training_runner._write_state({
+        "version": 3, "activeJobId": "", "queuePaused": True,
+        "queuePauseReason": training_runner._MISSING_RESULT_RECOVERY_REASON,
+        "jobs": [job],
+    })
+    monkeypatch.setattr(training_runner, "_refresh_state", lambda _state: None)
+    monkeypatch.setattr(training_runner, "_populate_queued_resume_point",
+                        lambda item: item.update(resumePoint={"epoch": saved_epoch, "checkpointAvailable": True}))
+
+    payload, status = training_runner.resume_queue_response()
+    restored = training_runner._read_state()
+    if allowed:
+        assert status == 200 and payload["ok"] is True
+        assert restored["queuePaused"] is False
+    else:
+        assert status == 409 and payload["ok"] is False
+        assert "epoch 60 of 60" in payload["error"]
+        assert restored["queuePaused"] is True
+        assert restored["jobs"][0]["status"] == "queued"
+        assert restored["jobs"][0]["resumePoint"]["epoch"] == 60
+
+
+def test_runner_completed_marker_is_written_only_after_successful_result_save():
+    source = (Path(__file__).resolve().parents[1] / "tool" / "server" / "training_runner.py").read_text(encoding="utf-8")
+    assert "if write_result completed 0; then echo '[webcap] completed'" in source
+    assert "ERROR: training finished but the completion result could not be saved" in source
 
 
 def test_runner_inspection_failure_is_an_error_not_a_coordination_state(tmp_path, monkeypatch):

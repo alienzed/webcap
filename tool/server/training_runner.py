@@ -74,6 +74,8 @@ _DISTRIBUTED_SOCKET_HOLD_REASON = (
 _legacy_active_time_cache = {}
 _SAVE_PAUSE_TRAINING_STAGES = {"hi", "lo", "krea2", "wan21", "h3"}
 _LOW_DISK_THRESHOLD_BYTES = 10 * 1024 ** 3
+_RESULT_EVIDENCE_GRACE_SECONDS = 10
+_MISSING_RESULT_RECOVERY_REASON = "Previous runner ended without a result. Resume or restart the first item."
 _LOW_DISK_REASON_PREFIX = "Queue auto-paused: low disk space"
 _DISK_INSPECTION_NOTICE_PREFIX = "Training disk-space protection could not inspect the output volume"
 
@@ -1830,7 +1832,10 @@ def _build_runner_script(job, settings, artifacts, job_dir):
             "if [ \"$H3_CODE\" -eq 130 ]; then echo '[webcap] stopped'; write_result stopped \"$H3_CODE\"; exit \"$H3_CODE\"; fi",
             "if [ \"$H3_CODE\" -ne 0 ]; then echo '[webcap] MiniMax H3 failed'; write_result failed \"$H3_CODE\"; exit \"$H3_CODE\"; fi",
         ])
-    lines.extend(["echo '[webcap] completed'", "write_result completed 0"])
+    lines.append(
+        "if write_result completed 0; then echo '[webcap] completed'; "
+        "else echo '[webcap] ERROR: training finished but the completion result could not be saved' >&2; exit 1; fi"
+    )
     script = "\n".join(lines) + "\n"
     return script, {"hi": hi_wsl, "lo": lo_wsl, "krea2": lo_wsl if stages == "krea2" else "", "wan21": lo_wsl if stages == "wan21" else "", "h3": lo_wsl if stages == "h3" else "", "usedSnapshot": False}
 
@@ -2282,7 +2287,7 @@ def _queue_paused_job(job):
     for field in (
         "pid", "runnerVerified", "actionRequested", "actionRequestedAt", "startedAt", "finishedAt",
         "lastLogAt", "exitCode", "failureScope", "failureExcerpt", "completionNote", "confirmationNote",
-        "finishAfterEpoch", "finishScheduledAt", "finishTriggeredEpoch", "progress", "error", "checkpointedStopLatestMtime", "savePauseLatestMtime",
+        "finishAfterEpoch", "finishScheduledAt", "finishTriggeredEpoch", "progress", "error", "checkpointedStopLatestMtime", "savePauseLatestMtime", "runnerResultMissingSince",
     ):
         job.pop(field, None)
     job["status"] = "queued"
@@ -2307,12 +2312,37 @@ def _recover_queued_live_runner(job):
     return True
 
 
+def _await_missing_runner_result(job, detail):
+    """Confirm absent completion evidence before converting active work to a resume."""
+    now = time.time()
+    first_seen = job.get("runnerResultMissingSince")
+    try:
+        first_seen = float(first_seen) if first_seen is not None else None
+    except (TypeError, ValueError):
+        first_seen = None
+    if first_seen is None or first_seen > now:
+        job["runnerResultMissingSince"] = now
+        _logger.warning(
+            "Training runner %s is absent without a result; allowing %s seconds for terminal evidence.",
+            job.get("id"), _RESULT_EVIDENCE_GRACE_SECONDS,
+        )
+        return {"holdReason": ""}
+    if now - first_seen < _RESULT_EVIDENCE_GRACE_SECONDS:
+        return {"holdReason": ""}
+    job.pop("runnerResultMissingSince", None)
+    _logger.error(
+        "Training runner %s has no readable result after %s seconds; holding the queue for recovery: %s",
+        job.get("id"), _RESULT_EVIDENCE_GRACE_SECONDS, detail,
+    )
+    return _recover_dead_runner(job, detail)
+
+
 def _recover_dead_runner(job, detail):
     """Return a positively absent runner to an explicit paused resume state."""
     _queue_paused_job(job)
     job["error"] = str(detail or "The recorded runner is no longer active and did not write a result record.").strip()
     return {
-        "holdReason": "Previous runner ended without a result. Resume or restart the first item.",
+        "holdReason": _MISSING_RESULT_RECOVERY_REASON,
         "recovered": True,
     }
 
@@ -2360,11 +2390,12 @@ def _refresh_job(job):
     )
     if result_state == "absent" and not has_runner_evidence:
         if prior_status in ACTIVE_STATUSES:
-            return _recover_dead_runner(job, "Runner PID and script evidence are unavailable.")
+            return _await_missing_runner_result(job, "Runner PID and script evidence are unavailable.")
         return {"holdReason": ""}
     if not job.get("progressPlan"):
         job["progressPlan"] = _default_progress_plan()
     if result_state == "result":
+        job.pop("runnerResultMissingSince", None)
         prior_projection = _terminal_projection_signature(job)
         prior_updated_at = job.get("updatedAt")
         job.pop("runnerVerified", None)
@@ -2411,6 +2442,7 @@ def _refresh_job(job):
         job["pid"] = runner_pid
     process_state, process_detail = _inspect_job_runner(job)
     if process_state == "running":
+        job.pop("runnerResultMissingSince", None)
         if prior_status in HISTORY_STATUSES:
             _remove_stale_terminal_history(job)
         _clear_terminal_projection(job)
@@ -2421,7 +2453,7 @@ def _refresh_job(job):
         _trigger_scheduled_finish(job)
         return {"holdReason": ""}
     if prior_status in ACTIVE_STATUSES and not job.get("actionRequested"):
-        return _recover_dead_runner(
+        return _await_missing_runner_result(
             job,
             result_error or "The recorded runner is no longer active and did not write a result record.",
         )
@@ -3572,10 +3604,37 @@ def reorder_response(job_id, direction, position=None):
         return {"ok": True, "jobs": [_public_job(job) for job in jobs]}, 200
 
 
+def _recovered_job_already_at_target(state):
+    """Do not Resume an unconfirmed runner beyond its own captured epoch target."""
+    if not state.get("queuePaused") or state.get("queuePauseReason") != _MISSING_RESULT_RECOVERY_REASON:
+        return ""
+    job = next((item for item in state.get("jobs", []) if item.get("status") in QUEUE_STATUSES), None)
+    if not job or not job.get("resumeFromCheckpoint"):
+        return ""
+    stage = str(job.get("stages") or "")
+    target = _read_config_epochs((job.get("snapshot") or {}).get(stage))
+    if target <= 0:
+        return ""
+    _populate_queued_resume_point(job)
+    point = job.get("resumePoint") if isinstance(job.get("resumePoint"), dict) else {}
+    last_epoch = int(point.get("epoch") or 0)
+    if last_epoch < target:
+        return ""
+    return (
+        "The recovered run already saved epoch " + str(last_epoch) + " of " + str(target)
+        + ". Resuming would train past the captured target. Choose Finish for this queued run, "
+        "or increase its epoch target before resuming."
+    )
+
+
 def resume_queue_response():
     with _lock:
         state = _read_state()
         _refresh_state(state)
+        already_at_target = _recovered_job_already_at_target(state)
+        if already_at_target:
+            _persist_reconciled_state(state)
+            return {"ok": False, "error": already_at_target, "jobs": [_public_job(job) for job in state["jobs"]]}, 409
         state["queuePaused"] = False
         state["queuePauseReason"] = ""
         _refresh_state(state)

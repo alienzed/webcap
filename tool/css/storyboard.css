@@ -3315,8 +3315,10 @@ html[data-theme="dark"] .storyboard-prompt-take-status {
   }
 
   .storyboard-story-authoring {
-    min-height: auto;
-    overflow: visible;
+    /* Bound the stacked Story pane so its growing Invariants cannot leave the viewport. */
+    min-height: 0;
+    max-height: calc(100dvh - 96px);
+    overflow: hidden;
     border-right: 0;
     border-bottom: 1px solid var(--border);
   }
@@ -3888,14 +3890,14 @@ html[data-theme="dark"] .storyboard-prompt-take-status {
 }
 
 @media (max-width: 1180px) {
-  /* On stacked layouts, the workspace itself scrolls. */
+  /* The outer editor navigates between Story and Scenes, while long Story
+     content scrolls independently above the docked Develop/Defaults controls. */
   .storyboard-story-authoring {
-    grid-template-rows: auto auto auto;
-    overflow: visible;
+    grid-template-rows: minmax(0, 1fr) auto auto;
   }
 
   .storyboard-story-overview-surface {
-    overflow: visible;
+    overflow-y: auto;
   }
 }
 

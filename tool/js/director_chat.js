@@ -82,6 +82,15 @@
     return state.modeMessages[state.activeMode];
   }
 
+  function studioDiscussionMessages() {
+    // Structured response inspection belongs to history, not future model prompts.
+    return (state.modeMessages.storyboard || []).filter(function (message) {
+      return message && (message.role === 'assistant' || message.role === 'user');
+    }).map(function (message) {
+      return {role:message.role,content:message.content};
+    });
+  }
+
   function currentElapsedMap() {
     if (state.activeMode === 'chat') return state.elapsedByAssistantIndex;
     if (!state.modeElapsedByAssistantIndex[state.activeMode]) state.modeElapsedByAssistantIndex[state.activeMode] = {};
@@ -1652,9 +1661,7 @@
     if (state.pending || state.activeMode !== 'storyboard' || !state.sessionReady) return;
     if (state.studioProjectProposal) { showStudioProjectReview(); return; }
     if (!state.modelId) { studioActionStatus('Choose a Director model first.', true); return; }
-    var discussion = (state.modeMessages.storyboard || []).filter(function (message) {
-      return message && (message.role === 'assistant' || message.role === 'user');
-    });
+    var discussion = studioDiscussionMessages();
     if (!discussion.some(function (message) { return message.role === 'user'; })) {
       studioActionStatus('Discuss an idea first, then prepare a Project.', true);
       return;
@@ -1924,9 +1931,7 @@
       studioActionStatus('Attach a Project explicitly before updating Concept, Style or Invariants.', true);
       return;
     }
-    var discussion = (state.modeMessages.storyboard || []).filter(function (message) {
-      return message && (message.role === 'assistant' || message.role === 'user');
-    });
+    var discussion = studioDiscussionMessages();
     state.pending = true;
     state.jobId = '';
     studioActionStatus('Preparing Project Overview for review…', false);
@@ -2192,9 +2197,7 @@
       studioActionStatus('Attach one Project explicitly before preparing a Scene sequence.', true);
       return;
     }
-    var discussion = (state.modeMessages.storyboard || []).filter(function (message) {
-      return message && (message.role === 'assistant' || message.role === 'user');
-    });
+    var discussion = studioDiscussionMessages();
     if (!discussion.some(function (message) { return message.role === 'user'; })) {
       studioActionStatus('Discuss the Scenes first, then prepare a sequence.', true);
       return;
@@ -2394,9 +2397,7 @@
       studioActionStatus('Connect a Project before preparing a Scene.', true);
       return;
     }
-    var discussion = (state.modeMessages.storyboard || []).filter(function (message) {
-      return message && (message.role === 'assistant' || message.role === 'user');
-    });
+    var discussion = studioDiscussionMessages();
     if (!discussion.some(function (message) { return message.role === 'user'; })) {
       studioActionStatus('Explore the idea with Director first, then prepare a Scene from your conversation.', true);
       return;
@@ -2997,9 +2998,7 @@
     if (state.workshop.shotError) throw new Error(state.workshop.shotError);
     if (state.pending || !state.modelId) return;
     if (state.workshopProposal) { showWorkshopReview(); return; }
-    var decisions = (state.modeMessages.storyboard || []).filter(function (message) {
-      return message && (message.role === 'assistant' || message.role === 'user');
-    });
+    var decisions = studioDiscussionMessages();
     if (!decisions.some(function (message) { return message.role === 'user'; })) {
       throw new Error('Discuss an improvement before preparing the revision.');
     }
@@ -3113,9 +3112,7 @@
     if (state.activeMode !== 'storyboard' || !guidelineStoryId()) throw new Error('Attach a Story or open its Scene Workshop first.');
     if (state.pending || !state.modelId) return;
     if (state.storyGuidelineProposal) { reviewStoryChanges(); return; }
-    var discussion = currentMessages().filter(function (message) {
-      return message && (message.role === 'assistant' || message.role === 'user');
-    });
+    var discussion = studioDiscussionMessages();
     if (!discussion.some(function (message) { return message.role === 'user'; })) {
       throw new Error('Discuss the desired Story direction before preparing changes.');
     }
@@ -3715,7 +3712,7 @@
     },
     workingStoryId: studioAttachedStoryId,
     modelId: function () { return state.modelId; },
-    messages: function () { return (state.modeMessages.storyboard || []).slice(); },
+    messages: studioDiscussionMessages,
     sendRead: function (payload, keys, instruction) {
       if (!this.isReady()) throw new Error('Open Studio Director and select an available LLM before Read.');
       if (!Array.isArray(keys) || !keys.length) throw new Error('Select at least one field to Read.');

@@ -140,7 +140,7 @@
         if (!value) return;
         var chip = node('span', 'test-preview-card-chip', value);
         if (choice && typeof choice === 'object' && choice.label) chip.title = text(choice.label);
-        if (chips.querySelectorAll('.test-preview-card-chip').length >= 2) {
+        if (!o.showAllWildcards && chips.querySelectorAll('.test-preview-card-chip').length >= 2) {
           chip.classList.add('hidden');
           extra.push(chip);
         }

@@ -3912,6 +3912,11 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
 .studio-director-workbench .studio-dw-readiness-list summary span {flex:1;}
 .studio-director-workbench .studio-dw-readiness-list pre,
 .director-chat-message-body details pre {white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;font-size:15px;max-height:320px;overflow-y:auto;padding:8px;border-radius:8px;background:var(--panel-soft);}
+.director-chat-full-response {margin:8px 4px 0;min-width:0;}
+.director-chat-full-response > summary {cursor:pointer;color:var(--accent);font-size:15px;font-weight:600;}
+.director-chat-full-response > pre {margin:8px 0 0;max-height:320px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;padding:12px;border:1px solid var(--border);border-radius:8px;background:var(--panel-soft);color:var(--text);font-size:14px;line-height:1.45;}
+.director-chat-review-draft {align-self:flex-start;margin:8px 4px 0;padding:8px 12px;border:1px solid var(--border);border-radius:8px;background:var(--panel-soft);color:var(--text);font-size:16px;cursor:pointer;}
+.director-chat-review-draft:hover,.director-chat-review-draft:focus-visible {border-color:var(--accent);}
 .director-chat-long-reply {margin-top:10px;white-space:normal;}
 .director-chat-long-reply > summary {cursor:pointer;font-size:16px;font-weight:650;color:var(--accent);}
 .director-chat-long-reply > div {margin-top:12px;white-space:pre-wrap;overflow-wrap:anywhere;}

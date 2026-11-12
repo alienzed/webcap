@@ -1164,9 +1164,6 @@
 
       row.appendChild(label);
       row.appendChild(body);
-      if (state.activeMode === 'storyboard' && message.role === 'assistant' && message.rawResponse) {
-        // Raw structured output is author-inspectable, not normal conversational text.
-      }
       var elapsedMap = currentElapsedMap();
       var metricsMap = currentMetricsMap();
       if (message.role === 'assistant' && Object.prototype.hasOwnProperty.call(elapsedMap, index)) {
@@ -1462,8 +1459,10 @@
 
   function studioActionStatus(message, error) {
     var status = el('director-studio-action-status');
-    status.classList.toggle('hidden', !message);
-    status.textContent = message || '';
+    // Routine operation receipts belong on their controls and in Console.
+    // Preserve conspicuous feedback for real errors.
+    status.classList.toggle('hidden', !message || !error);
+    status.textContent = error ? (message || '') : '';
     status.dataset.error = error ? 'true' : 'false';
     if (state.activeMode === 'storyboard' && window.studioDirectorWorkbench) {
       window.studioDirectorWorkbench.setStatus(String(message || ''), !!error);

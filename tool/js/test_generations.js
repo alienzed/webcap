@@ -5300,6 +5300,11 @@
     if (typeof window.syncApplicationShellContext === 'function') window.syncApplicationShellContext();
     if (typeof window.syncShellLocationRoute === 'function') window.syncShellLocationRoute();
     if (warmReturn) {
+      // Re-enter Review at unfinished work; other Test views retain their warm state.
+      if (resultsView === 'review') {
+        reviewIndex = 0;
+        reviewKey = '';
+      }
       if (pendingActivityCampaign) {
         window.epochFinderInspectCampaign(pendingActivityCampaign);
         pendingActivityCampaign = '';
@@ -5339,8 +5344,9 @@
               else renderStatus(status || { status: 'idle' });
             });
       warmStatus.then(function () {
-        if (generation === openGeneration && isOpen() &&
-            (testStatusHasPendingWork(currentStatus) || queuedTestJobs.length)) pollStatus();
+        if (generation !== openGeneration || !isOpen()) return;
+        if (resultsView === 'review') renderReview(currentStatus);
+        if (testStatusHasPendingWork(currentStatus) || queuedTestJobs.length) pollStatus();
       }).catch(showError);
       return;
     }

@@ -564,7 +564,10 @@
     if (!persistentMode(mode)) return Promise.resolve();
     if (!state.sessionReady) return Promise.reject(new Error('Assistant conversation history has not loaded.'));
     var messages = (mode === 'chat' ? state.messages : state.modeMessages.storyboard || []).map(function (message) {
-      return { role: message.role, content: message.content };
+      var stored = { role: message.role, content: message.content };
+      if (mode === 'storyboard' && message.role === 'assistant' && message.rawResponse)
+        stored.rawResponse = message.rawResponse;
+      return stored;
     });
     var draft = state.draftByMode[mode] || '';
     var attachments = mode === 'storyboard' ? JSON.parse(JSON.stringify(state.storyboardAttachments)) : {};

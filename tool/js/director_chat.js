@@ -1828,6 +1828,55 @@
     return result;
   }
 
+  // A bounded, editable-review-only word comparison. No source text is rewritten.
+  function studioDirectorRenderDiff(host, before, after) {
+    before = String(before || ''); after = String(after || '');
+    host.replaceChildren();
+    if (before === after) { host.textContent = 'No text changes.'; return; }
+    var oldWords = before.match(/\s+|[^\s]+/g) || [];
+    var newWords = after.match(/\s+|[^\s]+/g) || [];
+    if (oldWords.length > 650 || newWords.length > 650) {
+      var prefix = 0;
+      while (prefix < Math.min(before.length, after.length) && before[prefix] === after[prefix]) prefix++;
+      var suffix = 0;
+      while (suffix < Math.min(before.length, after.length) - prefix &&
+        before[before.length - 1 - suffix] === after[after.length - 1 - suffix]) suffix++;
+      var append = function(tag, value) {
+        if (!value) return;
+        var element = document.createElement(tag);
+        element.textContent = value; host.appendChild(element);
+      };
+      append('span', before.slice(0,prefix));
+      append('del', before.slice(prefix,before.length-suffix));
+      append('ins', after.slice(prefix,after.length-suffix));
+      append('span', after.slice(after.length-suffix));
+      return;
+    }
+    var rows = Array.from({length:oldWords.length+1},function(){return new Uint16Array(newWords.length+1);});
+    for(var i=oldWords.length-1;i>=0;i--)
+      for(var j=newWords.length-1;j>=0;j--)
+        rows[i][j] = oldWords[i] === newWords[j] ? rows[i+1][j+1]+1 :
+          Math.max(rows[i+1][j],rows[i][j+1]);
+    var i=0,j=0,segments=[];
+    function add(tag,word) {
+      var last=segments[segments.length-1];
+      if (last && last.tag === tag) last.text+=word;
+      else segments.push({tag:tag,text:word});
+    }
+    while(i<oldWords.length || j<newWords.length){
+      if(i<oldWords.length && j<newWords.length && oldWords[i]===newWords[j]){
+        add('span',oldWords[i]);i++;j++;
+      } else if(i<oldWords.length && (j===newWords.length || rows[i+1][j]>=rows[i][j+1])) add('del',oldWords[i++]);
+      else add('ins',newWords[j++]);
+    }
+    segments.forEach(function(segment){
+      var node=document.createElement(segment.tag);
+      node.textContent=segment.text;
+      host.appendChild(node);
+    });
+  }
+  window.studioDirectorRenderDiff = studioDirectorRenderDiff;
+
   function showStudioBriefReview() {
     var proposal = state.studioBriefProposal;
     if (!proposal) throw new Error('Prepare Concept, Style and Invariants before reviewing.');
@@ -1840,6 +1889,9 @@
     el('studio-brief-style-before').textContent = 'Current: ' + (proposal.expected.style || '(empty)');
     el('studio-brief-concept').value = proposal.draft.concept;
     el('studio-brief-style').value = proposal.draft.style;
+    ['title','concept','style'].forEach(function(key){
+      studioDirectorRenderDiff(el('studio-brief-'+key+'-diff'), proposal.expected[key], proposal.draft[key]);
+    });
     el('studio-brief-concept-selected').checked = proposal.draft.concept !== proposal.expected.concept;
     el('studio-brief-style-selected').checked = proposal.draft.style !== proposal.expected.style;
     // A model's omission never becomes a proposed deletion by accident.
@@ -1899,7 +1951,9 @@
       var checked = el('studio-brief-' + key + '-selected').checked;
       var section = el('studio-brief-' + key + '-state').closest('.studio-brief-field');
       section.dataset.changed = String(changed);
-      el('studio-brief-' + key + '-state').textContent = (changed ? 'Changed' : 'Unchanged') +
+      if (key !== 'invariants') studioDirectorRenderDiff(el('studio-brief-' + key + '-diff'),
+      proposal.expected[key], el('studio-brief-' + key).value);
+    el('studio-brief-' + key + '-state').textContent = (changed ? 'Changed' : 'Unchanged') +
         (checked ? ' · selected' : ' · not selected');
       if (checked) selected.push(names[key] + (key === 'invariants' ? ' (' + invariants.length + ')' : ''));
     });

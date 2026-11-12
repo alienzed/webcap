@@ -2566,13 +2566,17 @@ def _refresh_state(state):
 def _ensure_monitor_diagnostics():
     """Keep a bounded Training scheduler trace independently of terminal scrollback."""
     global _monitor_log_handler
-    if _monitor_log_handler is not None:
-        return
     try:
         path = app_config.app_diagnostics_root() / "training_queue.log"
+        if _monitor_log_handler is not None:
+            if Path(_monitor_log_handler.baseFilename) == path:
+                return
+            _logger.removeHandler(_monitor_log_handler)
+            _monitor_log_handler.close()
+            _monitor_log_handler = None
         path.parent.mkdir(parents=True, exist_ok=True)
         handler = RotatingFileHandler(path, maxBytes=4 * 1024 * 1024, backupCount=2, encoding="utf-8")
-    except OSError:
+    except (OSError, ValueError):
         _logger.exception("Could not initialize the Training queue diagnostic log; continuing without file logging.")
         return
     handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))

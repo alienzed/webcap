@@ -149,7 +149,8 @@ test('Scene Review includes the whole unit and selects all actual changes, irres
     draft:{sceneId:'scene-a',summary:'New intent',prompt:'Extra prompt proposal'}}]},
     document:{createElement:()=>{const n=node();created.push(n);return n;}},
     el:id=>id==='studio-dw-batch-editors' ? {...node(),replaceChildren(){}} : {showModal(){}},
-    labels:{title:'Title',summary:'Intent',prompt:'H3 Prompt'},status(){}});
+    labels:{title:'Title',summary:'Intent',prompt:'H3 Prompt'},status(){},
+    window:{studioDirectorRenderDiff:()=>{}}});
   vm.runInContext(part('  function renderBatchReview() {','  function applyBatchScenes() {'),scope);
   scope.renderBatchReview();
   const checks=created.filter(n=>n.type==='checkbox');

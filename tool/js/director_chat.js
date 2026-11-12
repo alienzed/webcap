@@ -1119,6 +1119,8 @@
     empty.classList.toggle('hidden', currentMessages().length > 0);
 
     currentMessages().forEach(function (message, index) {
+      if (state.activeMode === 'storyboard' && message.role === 'assistant' && !String(message.content || '').trim())
+        return;
       var row = document.createElement('div');
       row.className = 'director-chat-message director-chat-message-' + message.role;
 
@@ -1152,14 +1154,11 @@
         var marker = message.content.indexOf(startMark);
         var closing = message.content.indexOf(endMark, marker);
         if (closing !== -1) {
-          var details = document.createElement('details');
-          var heading = document.createElement('summary');
-          heading.textContent = applied ? 'Applied content · inspect saved fields' : 'Read context · inspect exact fields delivered';
-          var content = document.createElement('pre');
-          content.textContent = message.content.slice(marker, closing + endMark.length);
-          // Keep the saved payload in history for inspection, but not inside creative chat.
-          body.textContent = message.content.slice(0, marker).trim() ||
-            (applied ? 'Reviewed changes saved' : 'Read saved Project fields');
+          // Preserve the original payload in session history, not the creative chat.
+          var description = message.content.slice(0, marker).trim();
+          body.textContent = description === 'Read the selected saved context and acknowledge receipt.'
+            ? 'Read saved Project fields'
+            : (description || (applied ? 'Reviewed changes saved' : 'Read saved Project fields'));
         }
       }
 
@@ -3502,6 +3501,13 @@
     chooser.onchange=render;
     if (responses.length) chooser.value=String(responses.length-1);
     render();
+    var recorded = currentMessages().filter(function(message){
+      return message.role === 'user' && (message.content.includes('[WEBCAP EXPLICIT READ]') ||
+        message.content.includes('[WEBCAP APPLIED FIELD VALUES]'));
+    });
+    el('studio-director-io-history').textContent = recorded.length ? recorded.map(function(message,index){
+      return 'Event ' + (index+1) + '\n' + message.content;
+    }).join('\n\n') : 'No recorded Read or Apply payloads in this conversation.';
     var hasRequest=!!(state.requestDiagnostic && Array.isArray(state.requestDiagnostic.messages));
     el('studio-director-io-request').disabled=!hasRequest;
     el('studio-director-io-status').textContent = (state.lastStudioIoError

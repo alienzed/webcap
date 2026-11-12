@@ -853,6 +853,26 @@
   }
   window.studioDirectorWorkbench = {
     setStatus:status,
+    markSavedFields:function(selected){
+      var values=selected.savedFields || selected.fields || selected;
+      var keys=Object.keys(values).filter(function(key){return ['title','concept','style','invariants','summary','prompt'].includes(key);});
+      if (selected.scenes && typeof selected.scenes==='object') keys.push('Scene revisions');
+      var descriptions={title:'Title',concept:'Concept',style:'Visual / atmosphere',invariants:'Invariants',summary:'Scene Intent',prompt:'H3 Prompt'};
+      var label=keys.map(function(key){return descriptions[key] || key;}).join(', ');
+      ['studio-dw-write','studio-dw-quick-write'].forEach(function(id){
+        var button=el(id);
+        button.dataset.result='success';
+        button.title='Saved: ' + (label || 'reviewed changes');
+      });
+      [['title','storyboard-story-title'],['concept','storyboard-story-concept'],['style','storyboard-story-style']].forEach(function(item){
+        if (!keys.includes(item[0])) return;
+        var input=el(item[1]);
+        if (input) {
+          input.dataset.directorUpdated='true';
+          input.title='Updated by Studio Director — ' + descriptions[item[0]];
+        }
+      });
+    },
     setReadStatus:function(state,detail){
       ['studio-dw-read','studio-dw-quick-read'].forEach(function(id){
         var button=el(id);

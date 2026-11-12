@@ -733,8 +733,7 @@
   }
   function setReadinessFreshness(stale) {
     readinessStale = !!stale;
-    Array.from(el('studio-dw-suggestions').querySelectorAll('button[data-capture-action], button[data-guided-write]'))
-      .forEach(function (action) {action.disabled = readinessStale;});
+    renderReadiness(readiness);
     var label = el('studio-dw-readiness-freshness');
     label.textContent = readinessStale
       ? (readiness.length ? 'Outdated · latest exchange not assessed' : 'Latest exchange not assessed')
@@ -799,7 +798,7 @@
         kind:'write', label:label, run:openRecommendedWrite
       });
     }
-    available.slice(0,2).forEach(function (action) {
+    available.slice(0,1).forEach(function (action) {
       var button = document.createElement('button');
       button.type = 'button';
       button.className = 'studio-dw-suggestion-action';
@@ -810,13 +809,7 @@
       button.onclick = action.run;
       actions.appendChild(button);
     });
-    if (!available.length) {
-      var emptyAction = document.createElement('p');
-      emptyAction.className = 'studio-dw-suggestions-empty';
-      emptyAction.textContent = readinessStale ? 'Waiting for a current assessment.' :
-        'Keep developing the idea. Director will suggest the next useful revision.';
-      actions.appendChild(emptyAction);
-    }
+    el('studio-dw-suggestion-heading').classList.toggle('hidden', !available.length || readinessStale);
     if (!list.length) {
       var empty = document.createElement('p');
       empty.textContent = readinessStale ? 'No current assessment.' : 'No assessment details yet.';
@@ -1003,7 +996,10 @@
         el('studio-dw-close-actions').click();
       }
     });
-    el('studio-dw-undo-button').onclick=function () { window.studioDirectorBridge.undoBrief(); };
+    el('studio-dw-undo-button').onclick=function () {
+      if (window.confirm('Revert the latest reviewed Project Overview update? The saved Concept, Visual / atmosphere and/or Invariants changed by that update will be restored to their previous values.'))
+        window.studioDirectorBridge.undoBrief();
+    };
     el('studio-dw-assessment-close').onclick=function(){el('studio-dw-assessment-dialog').close();};
     el('studio-dw-read-send').onclick=readSend;
     el('studio-dw-write-prepare').onclick=writePrepare;

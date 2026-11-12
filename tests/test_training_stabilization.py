@@ -1275,6 +1275,7 @@ def test_missing_training_result_timer_resets_if_runner_returns(tmp_path, monkey
     observations = iter(["absent", "running", "absent"])
     monkeypatch.setattr(training_runner, "_inspect_job_runner", lambda _job: (next(observations), ""))
     monkeypatch.setattr(training_runner, "_sync_job_log_evidence", lambda _job: ("TRAINING COMPLETE!", None))
+    monkeypatch.setattr(training_runner, "_log_has_progress", lambda _text: True)
     monkeypatch.setattr(training_runner, "_trigger_scheduled_finish", lambda _job: None)
     job = {
         "id": "first", "status": "running", "stages": "h3", "pid": 4242,
@@ -1294,6 +1295,7 @@ def test_runner_completed_marker_is_written_only_after_successful_result_save():
     source = (Path(__file__).resolve().parents[1] / "tool" / "server" / "training_runner.py").read_text(encoding="utf-8")
     assert "if write_result completed 0; then echo '[webcap] completed'" in source
     assert "ERROR: training finished but the completion result could not be saved" in source
+
 
 def test_runner_inspection_failure_is_an_error_not_a_coordination_state(tmp_path, monkeypatch):
     _configure_root(monkeypatch, tmp_path)

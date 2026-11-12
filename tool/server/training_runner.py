@@ -3633,6 +3633,7 @@ def resume_queue_response():
         _refresh_state(state)
         already_at_target = _recovered_job_already_at_target(state)
         if already_at_target:
+            _persist_reconciled_state(state)
             return {"ok": False, "error": already_at_target, "jobs": [_public_job(job) for job in state["jobs"]]}, 409
         state["queuePaused"] = False
         state["queuePauseReason"] = ""

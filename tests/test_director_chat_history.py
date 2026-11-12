@@ -47,6 +47,55 @@ def test_roundtrip_persists_messages_draft_and_explicit_snapshot(sessions):
     assert history.list_chats()["activeByMode"]["storyboard"] == created["id"]
 
 
+
+def test_studio_model_response_and_prior_capture_survive_followup_and_reload(sessions):
+    chat = history.create_chat("storyboard")
+    prior_capture = {"field": "prompt", "sceneId": "scene-1",
+                     "content": "Complete authored H3 Prompt with timed shots."}
+    raw = json.dumps({
+        "reply": "Here's the draft.",
+        "readiness": {"checks": [], "readHints": [], "writeHint": "",
+                      "writeFields": [], "sceneId": "", "capture": prior_capture},
+    })
+    first_messages = [
+        {"role": "user", "content": "Write the H3 Prompt."},
+        {"role": "assistant", "content": "Here's the draft.", "rawResponse": raw},
+    ]
+    first = history.save_chat(chat["id"], {
+        "expectedRevision": 0, "title": "Scene development", "draft": "",
+        "messages": first_messages,
+    })
+    second = history.save_chat(chat["id"], {
+        "expectedRevision": first["revision"], "title": "Scene development", "draft": "",
+        "messages": first_messages + [
+            {"role": "user", "content": "Let's discuss an alternative."},
+            {"role": "assistant", "content": "We could move the camera lower."},
+        ],
+        "readiness": {"checks": [], "readHints": [], "writeHint": "",
+                      "writeFields": [], "sceneId": ""},
+    })
+    assert second["readiness"].get("capture") is None
+    restored = history.open_chat(chat["id"])
+    assert restored["messages"][1]["rawResponse"] == raw
+    assert json.loads(restored["messages"][1]["rawResponse"])["readiness"]["capture"] == prior_capture
+    assert "rawResponse" not in restored["messages"][-1]
+    assert json.loads((sessions / chat["id"] / "conversation.json").read_text())["messages"][1]["rawResponse"] == raw
+
+
+@pytest.mark.parametrize("message", [
+    {"role": "user", "content": "A prompt", "rawResponse": "{}"},
+    {"role": "assistant", "content": "A reply", "rawResponse": ""},
+    {"role": "assistant", "content": "A reply", "rawResponse": 123},
+])
+def test_complete_response_metadata_is_assistant_only(sessions, message):
+    chat = history.create_chat("storyboard")
+    with pytest.raises(ValueError, match="Only assistant messages"):
+        history.save_chat(chat["id"], {
+            "expectedRevision": 0, "title": "Invalid raw response", "draft": "",
+            "messages": [message],
+        })
+    assert history.open_chat(chat["id"])["revision"] == 0
+
 def test_multiple_independent_conversations_and_active_history(sessions):
     first = history.create_chat("chat")
     storyboard = history.create_chat("storyboard")

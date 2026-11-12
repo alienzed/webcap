@@ -1291,6 +1291,41 @@ def test_missing_training_result_timer_resets_if_runner_returns(tmp_path, monkey
     assert job["runnerResultMissingSince"] == clock[0]
 
 
+@pytest.mark.parametrize("saved_epoch, allowed", [(60, False), (40, True)])
+def test_missing_result_recovery_resume_uses_captured_target_not_set_toml(tmp_path, monkeypatch, saved_epoch, allowed):
+    _configure_root(monkeypatch, tmp_path)
+    folder = tmp_path / "sets" / "subject"
+    folder.mkdir(parents=True)
+    (folder / "config.h3.toml").write_text("epochs = 100\\n", encoding="utf-8")
+    captured = tmp_path / "captures" / "config.h3.toml"
+    captured.parent.mkdir(parents=True)
+    captured.write_text("epochs = 60\\n", encoding="utf-8")
+    job = {
+        "id": "recovered", "folder": "sets/subject", "status": "queued", "stages": "h3",
+        "resumeFromCheckpoint": "/runs/existing", "snapshot": {"h3": str(captured)},
+        "artifactDir": str(tmp_path / "jobs" / "recovered"),
+    }
+    training_runner._write_state({
+        "version": 3, "activeJobId": "", "queuePaused": True,
+        "queuePauseReason": training_runner._MISSING_RESULT_RECOVERY_REASON,
+        "jobs": [job],
+    })
+    monkeypatch.setattr(training_runner, "_refresh_state", lambda _state: None)
+    monkeypatch.setattr(training_runner, "_populate_queued_resume_point",
+                        lambda item: item.update(resumePoint={"epoch": saved_epoch, "checkpointAvailable": True}))
+
+    payload, status = training_runner.resume_queue_response()
+    restored = training_runner._read_state()
+    if allowed:
+        assert status == 200 and payload["ok"] is True
+        assert restored["queuePaused"] is False
+    else:
+        assert status == 409 and payload["ok"] is False
+        assert "epoch 60 of 60" in payload["error"]
+        assert restored["queuePaused"] is True
+        assert restored["jobs"][0]["status"] == "queued"
+
+
 def test_runner_completed_marker_is_written_only_after_successful_result_save():
     source = (Path(__file__).resolve().parents[1] / "tool" / "server" / "training_runner.py").read_text(encoding="utf-8")
     assert "if write_result completed 0; then echo '[webcap] completed'" in source

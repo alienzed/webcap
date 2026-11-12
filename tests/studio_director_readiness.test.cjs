@@ -225,8 +225,9 @@ test('complete Studio model output is inspectable and its original capture reope
   vm.runInContext('renderMessages()',context);
   const details=created.find(n=>n.className==='director-chat-full-response');
   const action=created.find(n=>n.className==='director-chat-review-draft');
-  assert.ok(details,'full raw output must remain inspectable after response');
-  assert.equal(details.children[1].textContent,raw);
+  assert.equal(details,undefined,'raw model output stays out of the creative conversation');
+  assert.match(chat,/studioDirectorOpenIo\(\)/);
+  assert.match(chat,/studio-director-io-raw/);
   assert.ok(action,'capture must be directly actionable in its original message');
   action.onclick();
   assert.deepEqual(calls,[capture]);

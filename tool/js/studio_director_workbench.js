@@ -213,6 +213,17 @@
 
   function updateScope() {
     var current = activeTarget();
+    // The Storyboard form reuses input nodes across Projects. Do not carry a
+    // "just updated" indication onto a different Project's saved fields.
+    ['storyboard-story-title','storyboard-story-concept','storyboard-story-style'].forEach(function(id) {
+      var field = el(id);
+      if (field && field.dataset.directorUpdatedProject &&
+          field.dataset.directorUpdatedProject !== current.storyId) {
+        delete field.dataset.directorUpdated;
+        delete field.dataset.directorUpdatedProject;
+        if (field.title.startsWith('Updated by Studio Director')) field.title = '';
+      }
+    });
     var ready = window.studioDirectorBridge.isReady();
     el('studio-dw-current-brief').disabled = !current.storyId || !ready;
     el('studio-dw-current-prompt').disabled = !current.storyId || !current.sceneId || !ready;
@@ -874,11 +885,13 @@
         var input=el(item[1]);
         if (input) {
           input.dataset.directorUpdated='true';
+          input.dataset.directorUpdatedProject=story.id;
           input.title='Updated by Studio Director — ' + descriptions[item[0]];
           if (!input.dataset.directorUpdateListener) {
             input.dataset.directorUpdateListener='true';
             input.addEventListener('input',function(){
               delete input.dataset.directorUpdated;
+              delete input.dataset.directorUpdatedProject;
               if (input.title.startsWith('Updated by Studio Director')) input.title='';
             });
           }

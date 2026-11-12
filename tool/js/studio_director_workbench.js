@@ -23,12 +23,12 @@
   function status(message, error) {
     var node = el('studio-dw-status');
     if (node) {
-      node.textContent = message || '';
+      node.textContent = error ? (message || '') : '';
       node.dataset.error = error ? 'true' : 'false';
-      node.classList.toggle('hidden', !message);
+      node.classList.toggle('hidden', !message || !error);
     }
-    if (error && typeof window.reportConsoleError === 'function')
-      window.reportConsoleError('Studio Director workbench', new Error(message));
+    if (error) window.reportConsoleError('Studio Director workbench', new Error(message));
+    else if (message) window.reportConsoleInfo('Studio Director workbench', message);
   }
   function option(select, id, name) {
     var node = document.createElement('option');

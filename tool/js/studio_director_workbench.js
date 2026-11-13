@@ -103,7 +103,7 @@
       var paths = ['title', 'summary', 'prompt', 'durationSeconds'].map(function (field) {
         return 'scene:' + id + ':' + field;
       });
-      var current = id === (recommendations.sceneId || activeTarget().sceneId);
+      var current = id === (recommendedSceneId(story) || activeTarget().sceneId);
       var suggested = recommendations.readHints.some(function (hint) {
         return paths.includes(hint) || (current && hint.startsWith('scene.current.') &&
           paths.some(function (path) {return path.endsWith(':' + hint.slice(14));}));

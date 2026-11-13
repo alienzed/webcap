@@ -87,12 +87,28 @@ test('Read preview and outbound values use the same validated field serializer',
   assert.match(rail,/sendRead\(payload, keys\)/);
 });
 
-test('Read acknowledgment is verified from the original reply and reported on the Read controls',()=>{
-  assert.match(chat,/var reply = studioResponse \? studioResponse\.reply : assistantText/);
-  assert.match(chat,/received = line\.trim\(\)/);
-  assert.match(chat,/setReadStatus\(missing\.length \|\| extra\.length/);
+test('Read receipt uses delivery and response status, not model text parsing',()=>{
+  assert.match(chat,/var fieldCount = state\.pendingReadAck\.length/);
+  assert.match(chat,/setReadStatus\('success', feedback\)/);
+  assert.doesNotMatch(chat,/Director acknowledgement mismatch/);
   assert.match(rail,/setReadStatus:function\(state,detail\)/);
   assert.doesNotMatch(chat,/director-chat-read-receipt/);
+});
+
+test('Select entire Project reuses the existing Read selection and size validation',()=>{
+  assert.match(html,/id="studio-dw-read-all"/);
+  assert.match(rail,/function selectEntireReadProject\(\)/);
+  assert.match(rail,/toggle\.groupPaths\.forEach/);
+  assert.match(rail,/updateReadSelection\(\)/);
+  assert.match(rail,/length > 48000/);
+  assert.match(rail,/readPayload\(story, keys\)/);
+});
+
+test('Transient model discovery error preserves selected model',()=>{
+  const load=section(chat,'  function loadModels() {','  function studioAttachedStoryId() {');
+  assert.match(load,/if \(state\.modelId\)/);
+  assert.match(load,/retained\.value = state\.modelId/);
+  assert.doesNotMatch(load,/\.catch\(function \(err\) \{\s*state\.modelsLoaded = true;\s*state\.modelId = ''/);
 });
 
 test('Readiness opens a single read-only detail and never assigns one Scene ID to multiple checks',()=>{

@@ -156,3 +156,12 @@ test('Rapid rating unlocks on save without waiting for earlier summary refresh',
   pending[1]();
   await new Promise(resolve => setImmediate(resolve));
 });
+
+test('Focused Review uses each rendered preview’s wildcard selections and a flat card layout', () => {
+  const css = fs.readFileSync(path.join(root, 'tool/css/styles.css'), 'utf8');
+  assert.ok(source.includes('wildcardChoices = Array.isArray(result && result.wildcardValues)'));
+  assert.ok(!source.includes('if (variationLabel) wildcardChoices = [variationLabel]'));
+  assert.ok(css.includes('.test-generations-review-dialog .test-generations-review-item {'));
+  assert.ok(css.includes('border: 0;\n  border-radius: 0;\n  background: transparent;'));
+  assert.ok(css.includes('.test-generations-review-dialog .test-preview-card-details-content {'));
+});

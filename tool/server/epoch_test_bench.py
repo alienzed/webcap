@@ -2369,6 +2369,22 @@ def _project_wildcard_fields(payload):
     source = visible.get("sourcePrompt")
     resolved = visible.get("resolvedPrompt") or visible.get("prompt")
     visible["wildcardValues"] = _resolved_wildcard_values(source, resolved)
+    # Each Test rendition may resolve different wildcard values (notably
+    # exhaustive variations). Project them from its saved actual prompt, not
+    # from the session-wide resolved prompt.
+    results = visible.get("results")
+    if isinstance(results, list):
+        by_prompt = {str(resolved or ""): visible["wildcardValues"]}
+        rendered_results = []
+        for item in results:
+            if not isinstance(item, dict) or not item.get("prompt") or isinstance(item.get("wildcardValues"), list):
+                rendered_results.append(item)
+                continue
+            item_prompt = str(item["prompt"])
+            if item_prompt not in by_prompt:
+                by_prompt[item_prompt] = _resolved_wildcard_values(source, item_prompt)
+            rendered_results.append({**item, "wildcardValues": list(by_prompt[item_prompt])})
+        visible["results"] = rendered_results
     groups = _wildcard_evaluation_groups(source, resolved)
     dimensions = visible.get("wildcardDimensions") or []
     selections = visible.get("wildcardSelections") or []
@@ -3206,6 +3222,7 @@ def execute_inference(job_id, request, context):
             "mediaFile": media_path.name,
             "mediaKind": model.MEDIA_KIND,
             "prompt": prompt,
+            "wildcardValues": list(wildcard_values),
             "variationIndex": context.get("variationIndex"),
             "variationLabel": context.get("variationLabel"),
             "seed": model.workflow_seed(workflow),

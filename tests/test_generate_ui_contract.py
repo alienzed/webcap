@@ -92,7 +92,6 @@ def test_generate_director_is_a_reversible_prompt_editor():
     assert "bindUi();\n  resetGeneratePromptScratch();" in script
     assert "generateState.lorasByModel = {};" in script
     assert "generateState.loraMode = 'selected';" in script
-    assert "generateState.sweepFolderByModel = {};" in script
     assert "generateState.sweepSelections = {};" in script
     assert "input.value = '';" in script
     assert "generateState.modelId = getGenerateModelPreference();" in script
@@ -473,23 +472,15 @@ def test_generate_lora_sweep_uses_existing_generate_queue_without_set_semantics(
     script = (ROOT / "tool" / "js" / "generate.js").read_text(encoding="utf-8")
     css = (ROOT / "tool" / "css" / "generate.css").read_text(encoding="utf-8")
 
-    assert 'id="generate-lora-selected-tab"' in html
-    assert 'id="generate-lora-sweep-tab"' in html
-    assert 'id="generate-sweep-folder"' in html
-    assert 'id="generate-sweep-strength"' in html
-    assert 'id="generate-sweep-base"' in html
-    assert 'id="generate-sweep-all"' in html
-    assert 'id="generate-sweep-none"' in html
-    assert "function sweepFolders(model)" in script
-    assert "return loraFolder(name) === String(folder || '');" in script
-    assert "function selectedSweepLoras(model, folder)" in script
-    assert "function setSweepSelection(model, folder, name, selected)" in script
-    assert "function setAllSweepSelections(selected)" in script
-    assert "data-generate-sweep-lora" in script
-    assert "selectedNames.length + ' of ' + names.length + ' selected · '" in script
-    assert "button.disabled = generateState.director.busy || submitBusy || count === 0;" in script
+    for name in ("generate-lora-sweep-tab", "generate-sweep-folder", "generate-sweep-strength",
+                 "generate-sweep-base", "generate-sweep-clear", "generate-sweep-list",
+                 "generate-sweep-picker-trigger", "generate-sweep-summary"):
+        assert f'id="{name}"' in html
+    assert 'id="generate-sweep-filter"' not in html
+    assert 'id="generate-sweep-all"' not in html
+    assert 'id="generate-sweep-none"' not in html
     assert "function captureSweepSubmission()" in script
-    assert "var names = selectedSweepLoras(model, folder).slice();" in script
+    assert "var names = selectedSweepLoras(model).slice();" in script
     assert "Select at least one Sweep LoRA or include the fixed-only baseline." in script
     assert "function runGenerateSweep()" in script
     assert "referenceFiles: captureReferenceFiles(model)" in script
@@ -506,36 +497,44 @@ def test_generate_lora_sweep_uses_existing_generate_queue_without_set_semantics(
     assert "button.disabled" not in sweep
     assert "sourceFolder" not in script
     assert "sourceJobId" not in script
-    assert ".generate-lora-tabs" in css
     assert ".generate-sweep-list" in css
-    assert ".generate-sweep-selection-actions" in css
 
-def test_generate_sweep_matches_storyboard_lora_picker_language_without_losing_multiselect():
+
+def test_generate_sweep_reuses_single_lora_picker_without_second_catalog_or_checklist():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     script = (ROOT / "tool" / "js" / "generate.js").read_text(encoding="utf-8")
     css = (ROOT / "tool" / "css" / "generate.css").read_text(encoding="utf-8")
 
-    assert 'id="generate-sweep-filter"' in html
-    assert 'placeholder="Filter / choose LoRAs…"' in html
-    assert "el('generate-sweep-filter').addEventListener('input', renderSweep);" in script
-    assert "var visibleNames = query" in script
-    assert "No matching LoRAs" in script
-    assert "data-generate-sweep-lora" in script
-    assert "generate-sweep-row-copy" in script
+    assert html.count('id="generate-lora-picker-menu"') == 1
+    assert 'id="generate-sweep-picker-trigger"' in html
+    assert 'id="generate-sweep-picker-wrap"' in html
+    assert 'class="generate-lora-picker-trigger"' in html
+    assert "generateLoraPickerTarget === 'sweep'" in script
+    assert "el('generate-sweep-picker-wrap').appendChild(menu);" in script
+    assert "setSweepSelection(model, found, !isSelected);" in script
+    assert "renderGenerateLoraPickerMenu();" in script
+    assert "data-generate-sweep-remove" in script
     assert ".generate-sweep-row {" in css
-    assert "min-height: 38px;" in css
-    assert ".generate-sweep-row:hover" in css
-    assert ".generate-sweep-row:has(input:checked)" in css
 
 
-def test_generate_sweep_preserves_folder_prefixes_from_model_capabilities():
+def test_generate_sweep_folders_only_bulk_add_to_per_model_selection():
     backend = (ROOT / "tool" / "server" / "generate_generation.py").read_text(encoding="utf-8")
     script = (ROOT / "tool" / "js" / "generate.js").read_text(encoding="utf-8")
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
 
     assert 'selectable = [_portable_name(value) for value in selectable]' in backend
     assert '"loras": selectable' in backend
     assert "normalized.lastIndexOf('/')" in script
-    assert "savedSweepFolder(model && model.id, folders)" in script
+    assert "function sweepSelectionMap(model)" in script
+    assert "function selectedSweepLoras(model)" in script
+    assert "function setSweepSelection(model, name, selected)" in script
+    assert "function addSweepFolder(model, folder)" in script
+    assert "names.forEach(function (name) { selections[name] = true; });" in script
+    assert "function clearSweepSelections()" in script
+    assert "generateState.sweepSelections[String(model && model.id || '')] = {};" in script
+    assert "generateState.sweepFolderByModel" not in script
+    assert "savedSweepFolder(" not in script
+    assert 'id="generate-sweep-folder"' in html
 
 
 
@@ -559,7 +558,6 @@ def test_generate_ephemeral_ui_state_stays_in_memory():
     assert "loraMode: 'selected'" in script
     assert "viewMode: 'create'" in script
     assert "takesCollapsed: false" in script
-    assert "generateState.sweepFolderByModel[id] = '';" in script
 
     for obsolete in (
         "webcap.generate.loraMode",

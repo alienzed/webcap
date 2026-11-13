@@ -13,7 +13,6 @@
     lorasEnabledByModel: {},
     loraProfileCache: {},
     loraMode: 'selected',
-    sweepFolderByModel: {},
     sweepSelections: {},
     sweepSubmissionSerial: 0,
     promptLibrary: { items: [], open: false, activeId: '', query: '' },
@@ -224,84 +223,55 @@
     });
   }
 
-  function savedSweepFolder(modelId, folders) {
-    var id = String(modelId || '');
-    var available = Array.isArray(folders) ? folders : [];
-    if (!Object.prototype.hasOwnProperty.call(generateState.sweepFolderByModel, id)) {
-      generateState.sweepFolderByModel[id] = '';
-    }
-    var selected = String(generateState.sweepFolderByModel[id] || '');
-    if (available.indexOf(selected) === -1) selected = available.length ? available[0] : '';
-    generateState.sweepFolderByModel[id] = selected;
-    return selected;
+function sweepLoras(model, folder) {
+    return availableSweepLoras(model).filter(function (name) { return loraFolder(name) === String(folder || ''); });
   }
 
-  function sweepLoras(model, folder) {
-    return availableSweepLoras(model).filter(function (name) {
-      return loraFolder(name) === String(folder || '');
-    });
-  }
-
-  function sweepSelectionKey(modelId, folder) {
-    return String(modelId || '') + '|' + String(folder || '');
-  }
-
-  function selectedSweepLoras(model, folder) {
-    var available = sweepLoras(model, folder);
-    var key = sweepSelectionKey(model && model.id, folder);
-    if (!Object.prototype.hasOwnProperty.call(generateState.sweepSelections, key)) {
-      generateState.sweepSelections[key] = available.reduce(function (selected, name) {
-        selected[name] = true;
-        return selected;
-      }, {});
-    }
-    var selected = generateState.sweepSelections[key];
+  function sweepSelectionMap(model) {
+    var id = String(model && model.id || '');
+    if (!Object.prototype.hasOwnProperty.call(generateState.sweepSelections, id)) generateState.sweepSelections[id] = {};
+    var selected = generateState.sweepSelections[id];
+    var available = availableSweepLoras(model);
     Object.keys(selected).forEach(function (name) {
       if (available.indexOf(name) === -1) delete selected[name];
     });
-    return available.filter(function (name) { return selected[name] === true; });
+    return selected;
   }
 
-  function setSweepSelection(model, folder, name, selected) {
-    var available = sweepLoras(model, folder);
-    if (available.indexOf(name) === -1) throw new Error('Sweep LoRA is not available in the selected folder.');
-    var key = sweepSelectionKey(model && model.id, folder);
-    selectedSweepLoras(model, folder);
-    generateState.sweepSelections[key][name] = !!selected;
+  function selectedSweepLoras(model) {
+    var selected = sweepSelectionMap(model);
+    return availableSweepLoras(model).filter(function (name) { return selected[name] === true; });
+  }
+
+  function setSweepSelection(model, name, selected) {
+    if (availableSweepLoras(model).indexOf(name) === -1) throw new Error('Sweep LoRA is not available for this Base Model.');
+    var selections = sweepSelectionMap(model);
+    if (selected) selections[name] = true;
+    else delete selections[name];
+  }
+
+  function addSweepFolder(model, folder) {
+    var names = sweepLoras(model, folder);
+    if (!names.length) throw new Error('No eligible LoRAs in the selected folder.');
+    var selections = sweepSelectionMap(model);
+    names.forEach(function (name) { selections[name] = true; });
+    renderSweep();
+  }
+
+  function clearSweepSelections() {
+    var model = currentModel();
+    generateState.sweepSelections[String(model && model.id || '')] = {};
+    renderSweep();
   }
 
   function syncSweepSelectionState() {
-    var model = currentModel();
-    var folders = sweepFolders(model);
-    var folder = savedSweepFolder(model && model.id, folders);
-    var names = sweepLoras(model, folder);
-    var selectedNames = selectedSweepLoras(model, folder);
+    var selectedNames = selectedSweepLoras(currentModel());
     var summary = el('generate-sweep-summary');
-    var allButton = el('generate-sweep-all');
-    var noneButton = el('generate-sweep-none');
-    if (!summary || !allButton || !noneButton) throw new Error('Generate Sweep selection controls are missing.');
-
-    summary.textContent = names.length
-      ? selectedNames.length + ' of ' + names.length + ' selected · ' + (folder || 'root')
-      : 'No LoRAs available for Sweep.';
-    allButton.disabled = !names.length || selectedNames.length === names.length;
-    noneButton.disabled = !selectedNames.length;
+    var clearButton = el('generate-sweep-clear');
+    if (!summary || !clearButton) throw new Error('Generate Sweep selection controls are missing.');
+    summary.textContent = selectedNames.length + ' LoRA' + (selectedNames.length === 1 ? '' : 's') + ' selected for Sweep';
+    clearButton.disabled = selectedNames.length === 0;
     syncGenerateRunLabel();
-  }
-
-  function setAllSweepSelections(selected) {
-    var model = currentModel();
-    var folders = sweepFolders(model);
-    var folder = savedSweepFolder(model && model.id, folders);
-    var key = sweepSelectionKey(model && model.id, folder);
-    generateState.sweepSelections[key] = sweepLoras(model, folder).reduce(function (values, name) {
-      values[name] = !!selected;
-      return values;
-    }, {});
-    el('generate-sweep-list').querySelectorAll('[data-generate-sweep-lora]').forEach(function (checkbox) {
-      checkbox.checked = !!selected;
-    });
-    syncSweepSelectionState();
   }
 
   function syncGenerateRunLabel() {
@@ -313,10 +283,7 @@
       button.disabled = generateState.director.busy || submitBusy;
       return;
     }
-    var model = currentModel();
-    var folders = sweepFolders(model);
-    var folder = savedSweepFolder(model && model.id, folders);
-    var count = selectedSweepLoras(model, folder).length +
+    var count = selectedSweepLoras(currentModel()).length +
       (el('generate-sweep-base') && el('generate-sweep-base').checked ? 1 : 0);
     button.textContent = count ? 'Generate Sweep (' + count + ')' : 'Generate Sweep';
     button.disabled = generateState.director.busy || submitBusy || count === 0;
@@ -324,54 +291,31 @@
 
   function renderSweep() {
     var model = currentModel();
-    var select = el('generate-sweep-folder');
-    var summary = el('generate-sweep-summary');
+    var folderSelect = el('generate-sweep-folder');
     var host = el('generate-sweep-list');
-    var filter = el('generate-sweep-filter');
-    var allButton = el('generate-sweep-all');
-    var noneButton = el('generate-sweep-none');
-    if (!select || !summary || !host || !filter || !allButton || !noneButton) {
-      throw new Error('Generate Sweep controls are missing.');
-    }
-
+    if (!folderSelect || !host) throw new Error('Generate Sweep controls are missing.');
     var folders = sweepFolders(model);
-    var folder = savedSweepFolder(model && model.id, folders);
-    select.innerHTML = folders.map(function (value) {
-      var label = value || '(Root)';
-      return '<option value="' + escapeHtml(value) + '">' + escapeHtml(label) + '</option>';
+    folderSelect.innerHTML = '<option value="__add_folder__">+ Add folder…</option>' + folders.map(function (value) {
+      return '<option value="' + escapeHtml(value) + '">' + escapeHtml(value || '(Root)') + '</option>';
     }).join('');
-    select.disabled = !folders.length;
-    if (folders.length) select.value = folder;
-
-    var names = sweepLoras(model, folder);
-    var selectedNames = selectedSweepLoras(model, folder);
-    var selectedLookup = selectedNames.reduce(function (values, name) {
-      values[name] = true;
-      return values;
-    }, {});
-    var query = String(filter.value || '').trim().toLowerCase();
-    var visibleNames = query
-      ? names.filter(function (name) { return String(name || '').toLowerCase().indexOf(query) !== -1; })
-      : names;
-
-    host.innerHTML = visibleNames.length
-      ? visibleNames.map(function (name) {
-          var leaf = String(name || '').split('/').pop();
-          var parent = loraFolder(name);
-          return '<label class="generate-sweep-row" title="' + escapeHtml(name) + '">' +
-            '<input type="checkbox" data-generate-sweep-lora="' + escapeHtml(name) + '"' +
-              (selectedLookup[name] ? ' checked' : '') + '>' +
-            '<span class="generate-sweep-row-copy"><strong>' + escapeHtml(leaf) + '</strong>' +
-              (parent ? '<small>' + escapeHtml(parent) + '</small>' : '') +
-            '</span>' +
-          '</label>';
-        }).join('')
-      : '<div class="generate-sweep-empty">No matching LoRAs</div>';
+    folderSelect.value = '__add_folder__';
+    folderSelect.disabled = !folders.length;
+    host.innerHTML = selectedSweepLoras(model).map(function (name) {
+      var leaf = String(name || '').split('/').pop();
+      var parent = loraFolder(name);
+      return '<div class="generate-sweep-row" title="' + escapeHtml(name) + '">' +
+        '<span class="generate-sweep-row-copy"><strong>' + escapeHtml(leaf) + '</strong>' +
+          (parent ? '<small>' + escapeHtml(parent) + '</small>' : '') + '</span>' +
+        '<button type="button" class="generate-lora-icon generate-lora-remove" data-generate-sweep-remove="' +
+          escapeHtml(name) + '" aria-label="Remove ' + escapeHtml(name) + ' from Sweep" title="Remove from Sweep">×</button>' +
+      '</div>';
+    }).join('');
     syncSweepSelectionState();
   }
 
   function setLoraMode(mode) {
     var selectedMode = mode === 'sweep' ? 'sweep' : 'selected';
+    if (generateState.loraMode !== selectedMode) closeGenerateLoraPicker();
     generateState.loraMode = selectedMode;
 
     var selectedTab = el('generate-lora-selected-tab');
@@ -617,11 +561,14 @@
   }
 
   var generateLoraReplaceIndex = -1;
+  var generateLoraPickerTarget = 'fixed';
 
   function generateLoraNamesMatching(query) {
     var needle = String(query || '').trim().toLowerCase();
+    var sweepNames = generateLoraPickerTarget === 'sweep' ? new Set(availableSweepLoras(currentModel())) : null;
     return generateLoraOrder().filter(function (name) {
-      return !needle || name.toLowerCase().indexOf(needle) !== -1;
+      return (!needle || name.toLowerCase().indexOf(needle) !== -1) &&
+        (!sweepNames || sweepNames.has(name));
     });
   }
 
@@ -636,16 +583,20 @@
   function renderGenerateLoraPickerMenu() {
     var picker = el('generate-lora-picker'), menu = el('generate-lora-picker-menu');
     var names = generateLoraNamesMatching(picker.value);
-    var selected = selectedLoras(generateState.modelId);
+    var selected = generateLoraPickerTarget === 'sweep'
+      ? selectedSweepLoras(currentModel())
+      : selectedLoras(generateState.modelId).map(function (item) { return item.name; });
     el('generate-lora-picker-options').innerHTML = names.length ? names.map(function (name) {
-      var picked = selected.some(function (item) { return item.name.toLowerCase() === name.toLowerCase(); });
+      var picked = selected.some(function (item) { return item.toLowerCase() === name.toLowerCase(); });
       return '<button type="button" class="generate-lora-picker-option" data-generate-lora-option="' + escapeHtml(name) +
         '" role="option" aria-selected="' + picked + '" title="' + escapeHtml(name) + '">' +
         '<span class="generate-lora-picker-option-label">' + escapeHtml(name) + '</span>' +
         '<span class="generate-lora-picker-option-state">' + (picked ? '✓ Selected' : generateLoraReplaceIndex < 0 ? '+ Add' : 'Select') + '</span></button>';
     }).join('') : '<div class="generate-lora-picker-empty">No matching LoRAs</div>';
     menu.classList.remove('hidden');
-    var rect = (menu.parentNode === el('generate-lora-picker-wrap') ? el('generate-lora-picker-trigger') : menu.parentNode).getBoundingClientRect();
+    var anchor = menu.parentNode === el('generate-lora-picker-wrap') ? el('generate-lora-picker-trigger') :
+      menu.parentNode === el('generate-sweep-picker-wrap') ? el('generate-sweep-picker-trigger') : menu.parentNode;
+    var rect = anchor.getBoundingClientRect();
     var below = Math.max(0, window.innerHeight - rect.bottom - 8), above = Math.max(0, rect.top - 8);
     var opensUp = below < 190 && above > below;
     menu.classList.toggle('opens-up', opensUp);
@@ -662,17 +613,23 @@
     menu.dataset.activeIndex = '-1';
     el('generate-lora-picker').setAttribute('aria-expanded', 'false');
     el('generate-lora-picker-trigger').setAttribute('aria-expanded', 'false');
+    el('generate-sweep-picker-trigger').setAttribute('aria-expanded', 'false');
     var active = el('generate-lora-list').querySelector('[data-generate-lora-replace][aria-expanded="true"]');
     if (active) active.setAttribute('aria-expanded', 'false');
     wrap.appendChild(menu);
     generateLoraReplaceIndex = -1;
+    generateLoraPickerTarget = 'fixed';
   }
 
-  function openGenerateLoraPicker(index) {
+  function openGenerateLoraPicker(index, target) {
     closeGenerateLoraPicker();
     generateLoraReplaceIndex = index;
+    generateLoraPickerTarget = target === 'sweep' ? 'sweep' : 'fixed';
     var menu = el('generate-lora-picker-menu');
-    if (index >= 0) {
+    if (generateLoraPickerTarget === 'sweep') {
+      el('generate-sweep-picker-wrap').appendChild(menu);
+      el('generate-sweep-picker-trigger').setAttribute('aria-expanded', 'true');
+    } else if (index >= 0) {
       var row = el('generate-lora-list').querySelector('[data-generate-lora-index="' + index + '"]');
       if (!row) throw new Error('Selected LoRA row is missing.');
       row.appendChild(menu);
@@ -689,6 +646,18 @@
     var wanted = String(name || '').toLowerCase();
     var found = generateLoraNamesMatching('').find(function (candidate) { return candidate.toLowerCase() === wanted; });
     if (!found) throw new Error('Selected LoRA is no longer available.');
+    if (generateLoraPickerTarget === 'sweep') {
+      var model = currentModel();
+      var isSelected = selectedSweepLoras(model).indexOf(found) !== -1;
+      var activeIndex = Number(el('generate-lora-picker-menu').dataset.activeIndex || 0);
+      setSweepSelection(model, found, !isSelected);
+      renderSweep();
+      // Keep the shared picker open and its active option stable for multi-selection.
+      renderGenerateLoraPickerMenu();
+      setGenerateLoraPickerActive(activeIndex);
+      el('generate-lora-picker').focus();
+      return;
+    }
     var selected = selectedLoras(generateState.modelId);
     var existing = selected.findIndex(function (item) { return item.name.toLowerCase() === wanted; });
     var index = generateLoraReplaceIndex;
@@ -750,7 +719,6 @@
       lorasByModel: JSON.parse(JSON.stringify(generateState.lorasByModel)),
       lorasEnabledByModel: Object.assign({}, generateState.lorasEnabledByModel),
       loraMode: generateState.loraMode,
-      sweepFolderByModel: Object.assign({}, generateState.sweepFolderByModel),
       sweepSelections: JSON.parse(JSON.stringify(generateState.sweepSelections)),
       references: references,
       promptLibraryActiveId: generateState.promptLibrary.activeId,
@@ -770,8 +738,7 @@
     generateState.lorasByModel = JSON.parse(JSON.stringify(saved.lorasByModel));
     generateState.lorasEnabledByModel = Object.assign({}, saved.lorasEnabledByModel || {});
     generateState.loraMode = saved.loraMode;
-    generateState.sweepFolderByModel = Object.assign({}, saved.sweepFolderByModel);
-    generateState.sweepSelections = JSON.parse(JSON.stringify(saved.sweepSelections));
+    generateState.sweepSelections = JSON.parse(JSON.stringify(saved.sweepSelections || {}));
     renderModelForm();
     el('generate-prompt').value = saved.prompt;
     el('generate-prompt').dataset.modelId = saved.promptModelId || saved.modelId;
@@ -830,7 +797,6 @@
     generateState.lorasByModel = {};
     generateState.lorasEnabledByModel = {};
     generateState.loraMode = 'selected';
-    generateState.sweepFolderByModel = {};
     generateState.sweepSelections = {};
     restoreResultConfiguration(result);
     generateState.editorMode = 'loaded';
@@ -1227,9 +1193,7 @@
     if (!model) throw new Error('Choose a Base Model.');
     if (!prompt) throw new Error('Enter a generation prompt.');
 
-    var folders = sweepFolders(model);
-    var folder = savedSweepFolder(model.id, folders);
-    var names = selectedSweepLoras(model, folder).slice();
+    var names = selectedSweepLoras(model).slice();
     var includeBase = !!(el('generate-sweep-base') && el('generate-sweep-base').checked);
     var strength = Number(el('generate-sweep-strength').value);
     if (!Number.isFinite(strength)) throw new Error('Sweep LoRA strength must be numeric.');
@@ -2745,7 +2709,6 @@
     generateState.lorasByModel = {};
     generateState.lorasEnabledByModel = {};
     generateState.loraMode = 'selected';
-    generateState.sweepFolderByModel = {};
     generateState.sweepSelections = {};
     generateState.promptLibrary.activeId = '';
     generateState.promptLibrary.query = '';
@@ -2923,8 +2886,12 @@
     el('generate-lora-refresh').onclick = refreshLoraCatalog;
     var fixedLoraPicker = el('generate-lora-picker');
     el('generate-lora-picker-trigger').onclick = function () {
-      if (fixedLoraPicker.getAttribute('aria-expanded') === 'true' && generateLoraReplaceIndex < 0) closeGenerateLoraPicker();
-      else openGenerateLoraPicker(-1);
+      if (fixedLoraPicker.getAttribute('aria-expanded') === 'true' && generateLoraPickerTarget === 'fixed' && generateLoraReplaceIndex < 0) closeGenerateLoraPicker();
+      else openGenerateLoraPicker(-1, 'fixed');
+    };
+    el('generate-sweep-picker-trigger').onclick = function () {
+      if (fixedLoraPicker.getAttribute('aria-expanded') === 'true' && generateLoraPickerTarget === 'sweep') closeGenerateLoraPicker();
+      else openGenerateLoraPicker(-1, 'sweep');
     };
     fixedLoraPicker.addEventListener('input', renderGenerateLoraPickerMenu);
     fixedLoraPicker.addEventListener('keydown', handleGenerateLoraPickerKeydown);
@@ -2934,27 +2901,21 @@
     });
     document.addEventListener('pointerdown', function (event) {
       if (el('generate-lora-picker-menu').classList.contains('hidden')) return;
-      if (event.target.closest('#generate-lora-picker-menu, #generate-lora-picker-trigger, [data-generate-lora-replace]')) return;
+      if (event.target.closest('#generate-lora-picker-menu, #generate-lora-picker-trigger, #generate-sweep-picker-trigger, [data-generate-lora-replace]')) return;
       closeGenerateLoraPicker();
     });
     el('generate-lora-selected-tab').onclick = function () { setLoraMode('selected'); };
     el('generate-lora-sweep-tab').onclick = function () { setLoraMode('sweep'); };
-    el('generate-sweep-folder').addEventListener('change', function () {
-      generateState.sweepFolderByModel[generateState.modelId] = this.value;
-      el('generate-sweep-filter').value = '';
-      renderSweep();
+el('generate-sweep-folder').addEventListener('change', function () {
+      if (this.value === '__add_folder__') return;
+      addSweepFolder(currentModel(), this.value);
     });
-    el('generate-sweep-filter').addEventListener('input', renderSweep);
-    el('generate-sweep-all').onclick = function () { setAllSweepSelections(true); };
-    el('generate-sweep-none').onclick = function () { setAllSweepSelections(false); };
-    el('generate-sweep-list').addEventListener('change', function (event) {
-      var checkbox = event.target.closest('[data-generate-sweep-lora]');
-      if (!checkbox) return;
-      var model = currentModel();
-      var folders = sweepFolders(model);
-      var folder = savedSweepFolder(model && model.id, folders);
-      setSweepSelection(model, folder, String(checkbox.dataset.generateSweepLora || ''), checkbox.checked);
-      syncSweepSelectionState();
+    el('generate-sweep-clear').onclick = clearSweepSelections;
+    el('generate-sweep-list').addEventListener('click', function (event) {
+      var button = event.target.closest('[data-generate-sweep-remove]');
+      if (!button) return;
+      setSweepSelection(currentModel(), String(button.dataset.generateSweepRemove || ''), false);
+      renderSweep();
     });
     el('generate-sweep-base').addEventListener('change', syncGenerateRunLabel);
     el('generate-run-btn').onclick = function () {

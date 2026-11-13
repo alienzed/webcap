@@ -188,6 +188,7 @@ jobs:
           node --test tests/caption_enrichment.test.cjs
           node --check tool/js/generate.js
           node --test tests/generations_form_preservation.test.cjs
+          node --test tests/generate_sweep_selection.test.cjs
           node --test tests/generations_editor_tabs.test.cjs
           node --check tool/js/sight_group_suggestions.js
           node --check tool/js/focused_annotation.js
@@ -222,6 +223,8 @@ jobs:
         run: cp tool/config.example.json tool/config.json
       - name: Install test essentials
         run: python -m pip install pytest Flask Pillow Werkzeug imageio websocket-client opencv-python-headless
+      - name: Generations Sweep UI contracts
+        run: python -m pytest -q tests/test_generate_ui_contract.py -k 'sweep or ephemeral_ui_state'
       - name: Host telemetry and Windows WSL training boundaries
         run: python -m pytest -q tests/test_host_gpu_status.py tests/test_linux_ram_status.py tests/test_training_runtime.py tests/test_training_preflight.py
       - name: Inactive Fizgig and Diffusion Pipe backend contracts

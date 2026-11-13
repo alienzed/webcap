@@ -40,8 +40,7 @@ function fixture() {
     models:[{id:'h3',settings:['duration','seed','samplingMode','megapixels'],defaultPrompt:'default'},
       {id:'image',settings:['seed','dimensions'],defaultPrompt:'default image'}],
     modelId:'h3', lorasByModel:{h3:[{name:'work.safetensors',strength:.35}]}, lorasEnabledByModel:{h3:true},
-    loraMode:'sweep', sweepFolderByModel:{h3:'shapes'},
-    sweepSelections:{'h3|shapes':{'strap.safetensors':true}}, editorMode:'working',
+    loraMode:'sweep', sweepSelections:{h3:{'strap.safetensors':true}}, editorMode:'working',
     workingSnapshot:null, loadedSnapshot:null, loadedLabel:'',
     director:{busy:false,previousPrompt:'old prompt'},
     promptLibrary:{activeId:'saved-prompt'},
@@ -110,7 +109,7 @@ test('loading a completed Take isolates all Working fields, LoRAs and File refer
   assert.equal(element('generate-sampling-mode').value,'quality');
   assert.equal(state.loraMode,'sweep');
   assert.equal(state.lorasByModel.h3[0].strength,.35);
-  assert.equal(state.sweepSelections['h3|shapes']['strap.safetensors'],true);
+  assert.equal(state.sweepSelections.h3['strap.safetensors'],true);
   assert.equal(element('generate-reference-first_frame').files[0],f.workingFile);
   assert.equal(element('generate-editor-loaded').disabled,false);
 });
@@ -126,12 +125,11 @@ test('Loaded never inherits other-model LoRAs or Sweep selections from Working',
   assert.equal(element('generate-prompt').value,'A different model');
   assert.equal(state.lorasByModel.h3,undefined,'Working H3 LoRA must not appear in Loaded');
   assert.deepEqual(JSON.parse(JSON.stringify(state.sweepSelections)),{});
-  assert.deepEqual(JSON.parse(JSON.stringify(state.sweepFolderByModel)),{});
   assert.equal(state.lorasByModel.image[0].name,'image-only.safetensors');
   api.switchGenerateEditorMode('working');
   assert.equal(state.modelId,'h3');
   assert.equal(state.lorasByModel.h3[0].name,'work.safetensors');
-  assert.equal(state.sweepSelections['h3|shapes']['strap.safetensors'],true);
+  assert.equal(state.sweepSelections.h3['strap.safetensors'],true);
 });
 
 test('each tab retains editable settings, LoRAs and references on repeated switching',()=>{

@@ -4297,7 +4297,8 @@
     var position = el('test-generations-review-position');
     var all = reviewResults(status);
     var pending = reviewPendingResults(status);
-    el('test-generations-review-title').textContent = reviewDimensionLabel();
+    el('test-generations-review-title').textContent = reviewScope
+      ? 'Epoch ' + reviewScope.epoch + ' · ' + reviewDimensionLabel() : reviewDimensionLabel();
     var session = String(status && status.session || '');
     if (reviewSession !== session) {
       reviewSession = session;

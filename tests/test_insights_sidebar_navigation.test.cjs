@@ -203,3 +203,12 @@ test('Insights challenge inspect actions follow the same leader definitions', ()
   assert.match(analytics, /var leaders=labLeaders\(labRanked\(\)\),p=action==='challenger'\?leaders\.alternate:\(leaders\.primary\|\|labPoints\(\)\[0\]\)/);
   assert.match(css, /#run-analytics-screen #run-lab-featured\.is-single\{grid-template-columns:minmax\(0,1fr\)\}/);
 });
+
+test('Insights blind rating loops video renders without looping still images', () => {
+  const start = analytics.indexOf('  function labReviewRender(){');
+  const end = analytics.indexOf('  function labReviewLoad(){', start);
+  assert.ok(start >= 0 && end > start, 'Blind rating renderer must exist');
+  const render = analytics.slice(start, end);
+  assert.match(render, /if\(video\)\{[^}]*media\.autoplay=true;media\.loop=true;/);
+  assert.match(render, /else \{media\.alt='Test render under blind review';\}/);
+});

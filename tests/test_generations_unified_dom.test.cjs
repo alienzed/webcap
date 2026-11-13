@@ -193,7 +193,7 @@ test('Matrix individual preview stars persist ratings and refresh checkpoint sum
   const status = {session:'session-x',results:[{mediaFile:'clip.mp4',rating:0}]};
   let refreshed = 0;
   const ctx = {
-    document, currentStatus: status, resultsView: 'matrix', previewSort: 'original',
+    document, currentStatus: status, launchFolder: 'test-set', resultsView: 'matrix', previewSort: 'original',
     prepared: null, queuedTestJobs: [], currentTestModelId: () => 'h3',
     resultMediaFile: item => item.mediaFile,
     renderMatrix: () => { refreshed++; },

@@ -2147,6 +2147,7 @@
   }
 
   function prepareTestBenchSetSwitch(folder) {
+    if (resultsView === 'review') setResultsView(reviewReturnView);
     var targetFolder = String(folder || '').replace(/^[/\\]+|[/\\]+$/g, '');
     if (!targetFolder) throw new Error('Test Generations Set switching requires a Set folder.');
     pendingActivityFolder = targetFolder;
@@ -4199,8 +4200,8 @@
     var previousPending = current > 0 && all.slice(0, current).some(function (item) { return reviewRatingValue(item) <= 0; });
     var nextPending = current >= 0 && all.slice(current + 1).some(function (item) { return reviewRatingValue(item) <= 0; });
     dialog.querySelector('[data-test-review-previous]').disabled = reviewRatingPending || (!reviewHistory.length && !previousPending);
-    dialog.querySelector('[data-test-review-next]').disabled = reviewRatingPending || !pending.length ||
-      (!nextPending && !reviewRevisiting);
+    dialog.querySelector('[data-test-review-next]').disabled = reviewRatingPending ||
+      (!reviewRevisiting && pending.length <= 1) || !pending.length;
     var statusNode = el('test-generations-review-status');
     statusNode.textContent = !all.length ? 'Generate a Test session to begin.' :
       !pending.length && !reviewRevisiting ? reviewDimensionLabel() + ' complete. Switch dimensions or close.' :
@@ -5274,6 +5275,7 @@
   }
 
   function closePane() {
+    if (resultsView === 'review') setResultsView(reviewReturnView);
     window.runAnalyticsSetVisible(false);
     ++openGeneration;
     var node = pane();

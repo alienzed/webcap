@@ -4236,9 +4236,9 @@
       (reviewBrowseCompleted ? completedIndex < 0 || completedIndex >= completed.length - 1 :
         ((!reviewRevisiting && pending.length <= 1) || !pending.length));
     var completedToggle = el('test-generations-review-completed');
-    completedToggle.classList.toggle('hidden',
-      !reviewBrowseCompleted && (pending.length > 0 || !completeCount));
-    completedToggle.textContent = reviewBrowseCompleted ? 'Return to review' : 'Revisit rated';
+    completedToggle.classList.toggle('hidden', !reviewBrowseCompleted && !completeCount);
+    completedToggle.textContent = reviewBrowseCompleted
+      ? (pending.length ? 'Resume pending' : 'Done') : 'Revisit rated';
     var statusNode = el('test-generations-review-status');
     statusNode.textContent = !all.length ? 'Generate a Test session to begin.' :
       reviewBrowseCompleted ? 'Revisiting saved ' + reviewDimensionLabel() + ' ratings.' :
@@ -4270,6 +4270,7 @@
     var ratingGroup = card.querySelector('.test-generations-result-rating');
     if (ratingGroup) {
       ratingGroup.setAttribute('aria-label', 'Rate ' + reviewDimensionLabel());
+      ratingGroup.title = 'Keyboard: 1–5 to rate';
       ratingGroup.querySelectorAll('[data-test-rating]').forEach(function (star) {
         star.dataset.ratingDimension = reviewDimensionId;
       });
@@ -5992,6 +5993,10 @@
     };
     el('test-generations-review-completed').onclick = function () {
       if (reviewRatingPending || reviewCatalogPending) return;
+      if (reviewBrowseCompleted && !reviewPendingResults(currentStatus).length) {
+        el('test-generations-review').close();
+        return;
+      }
       reviewBrowseCompleted = !reviewBrowseCompleted;
       reviewKey = '';
       reviewHistory = [];

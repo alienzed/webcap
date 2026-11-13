@@ -223,7 +223,7 @@ def test_studio_chat_schema_constrains_recommendations_to_the_selected_operation
     variants = schema["properties"]["readiness"]["anyOf"]
     for variant in variants:
         assert variant["additionalProperties"] is False
-        assert set(variant["required"]) == {"checks", "readHints", "writeHint", "writeFields", "sceneId"}
+        assert set(variant["required"]) == {"checks", "readHints", "writeHint", "writeFields", "sceneId", "sceneNumber"}
         fields = variant["properties"]["writeFields"]
         for operation in variant["properties"]["writeHint"]["enum"]:
             if operation == "project":

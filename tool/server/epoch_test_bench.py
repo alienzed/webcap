@@ -2377,7 +2377,7 @@ def _project_wildcard_fields(payload):
         by_prompt = {str(resolved or ""): visible["wildcardValues"]}
         rendered_results = []
         for item in results:
-            if not isinstance(item, dict) or not item.get("prompt"):
+            if not isinstance(item, dict) or not item.get("prompt") or isinstance(item.get("wildcardValues"), list):
                 rendered_results.append(item)
                 continue
             item_prompt = str(item["prompt"])
@@ -3222,6 +3222,7 @@ def execute_inference(job_id, request, context):
             "mediaFile": media_path.name,
             "mediaKind": model.MEDIA_KIND,
             "prompt": prompt,
+            "wildcardValues": list(wildcard_values),
             "variationIndex": context.get("variationIndex"),
             "variationLabel": context.get("variationLabel"),
             "seed": model.workflow_seed(workflow),

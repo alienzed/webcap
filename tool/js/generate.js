@@ -2883,8 +2883,12 @@ function sweepLoras(model, folder) {
     el('generate-lora-refresh').onclick = refreshLoraCatalog;
     var fixedLoraPicker = el('generate-lora-picker');
     el('generate-lora-picker-trigger').onclick = function () {
-      if (fixedLoraPicker.getAttribute('aria-expanded') === 'true' && generateLoraReplaceIndex < 0) closeGenerateLoraPicker();
-      else openGenerateLoraPicker(-1);
+      if (fixedLoraPicker.getAttribute('aria-expanded') === 'true' && generateLoraPickerTarget === 'fixed' && generateLoraReplaceIndex < 0) closeGenerateLoraPicker();
+      else openGenerateLoraPicker(-1, 'fixed');
+    };
+    el('generate-sweep-picker-trigger').onclick = function () {
+      if (fixedLoraPicker.getAttribute('aria-expanded') === 'true' && generateLoraPickerTarget === 'sweep') closeGenerateLoraPicker();
+      else openGenerateLoraPicker(-1, 'sweep');
     };
     fixedLoraPicker.addEventListener('input', renderGenerateLoraPickerMenu);
     fixedLoraPicker.addEventListener('keydown', handleGenerateLoraPickerKeydown);
@@ -2894,27 +2898,21 @@ function sweepLoras(model, folder) {
     });
     document.addEventListener('pointerdown', function (event) {
       if (el('generate-lora-picker-menu').classList.contains('hidden')) return;
-      if (event.target.closest('#generate-lora-picker-menu, #generate-lora-picker-trigger, [data-generate-lora-replace]')) return;
+      if (event.target.closest('#generate-lora-picker-menu, #generate-lora-picker-trigger, #generate-sweep-picker-trigger, [data-generate-lora-replace]')) return;
       closeGenerateLoraPicker();
     });
     el('generate-lora-selected-tab').onclick = function () { setLoraMode('selected'); };
     el('generate-lora-sweep-tab').onclick = function () { setLoraMode('sweep'); };
-    el('generate-sweep-folder').addEventListener('change', function () {
-      generateState.sweepFolderByModel[generateState.modelId] = this.value;
-      el('generate-sweep-filter').value = '';
-      renderSweep();
+el('generate-sweep-folder').addEventListener('change', function () {
+      if (this.value === '__add_folder__') return;
+      addSweepFolder(currentModel(), this.value);
     });
-    el('generate-sweep-filter').addEventListener('input', renderSweep);
-    el('generate-sweep-all').onclick = function () { setAllSweepSelections(true); };
-    el('generate-sweep-none').onclick = function () { setAllSweepSelections(false); };
-    el('generate-sweep-list').addEventListener('change', function (event) {
-      var checkbox = event.target.closest('[data-generate-sweep-lora]');
-      if (!checkbox) return;
-      var model = currentModel();
-      var folders = sweepFolders(model);
-      var folder = savedSweepFolder(model && model.id, folders);
-      setSweepSelection(model, folder, String(checkbox.dataset.generateSweepLora || ''), checkbox.checked);
-      syncSweepSelectionState();
+    el('generate-sweep-clear').onclick = clearSweepSelections;
+    el('generate-sweep-list').addEventListener('click', function (event) {
+      var button = event.target.closest('[data-generate-sweep-remove]');
+      if (!button) return;
+      setSweepSelection(currentModel(), String(button.dataset.generateSweepRemove || ''), false);
+      renderSweep();
     });
     el('generate-sweep-base').addEventListener('change', syncGenerateRunLabel);
     el('generate-run-btn').onclick = function () {

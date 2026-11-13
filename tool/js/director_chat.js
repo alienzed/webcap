@@ -50,7 +50,7 @@
     studioBriefUndo: null,
     studioOperations: [],
     pendingReadAck: null,
-    studioReadiness: {checks:[], readHints:[], writeHint:'', writeFields:[], sceneId:''}
+    studioReadiness: {checks:[], readHints:[], writeHint:'', writeFields:[], sceneId:'', sceneNumber:0}
   };
   var STORYBOARD_WORKSHOP_PRIMER = [
     'You are collaborating with an author developing short AI-generated videos.',
@@ -2808,6 +2808,8 @@
         'Write hints are new-project, project or scenes; writeFields describes likely changed parts as advisory metadata, not a separate creative workflow ' +
         '(project: title/concept/style/invariants; scenes: title/summary/prompt). ' +
         'Use the exact known saved sceneId for an existing Scene, otherwise empty. ' +
+        'Scene numbers are one-based positions in the current Project. When the discussion clearly identifies a specific existing Scene by number, set sceneNumber to it (otherwise 0); WebCap resolves it to an actual saved Scene. ' +
+        'When the selected Write scene differs from the intended Scene, recommend the intended one instead of trusting incidental UI state. ' +
         'If assessment is genuinely useful, provide at most two concise checks with a valid name and scope. ' +
         'For Read recommendations use only known field identifiers, such as project.concept, ' +
         'project.style, project.invariants or scene.current.prompt. ' +

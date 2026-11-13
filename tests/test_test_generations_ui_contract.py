@@ -1009,7 +1009,7 @@ def test_test_results_media_and_ratings_use_session_identity_not_fs_root_navigat
     assert "request('test_rate_result'" in script
     assert '@app.route("/fs/test_generations/media", methods=["GET"])' in app
     assert "def resolve_result_media(folder_path, session_name, media_name):" in backend
-    assert "def rate_result(folder_path, session_name, media_name, rating):" in backend
+    assert "def rate_result(folder_path, session_name, media_name, rating, dimension_id=\"overall\"):" in backend
 
 
 def test_test_result_grid_identity_is_session_scoped_when_output_root_is_external():

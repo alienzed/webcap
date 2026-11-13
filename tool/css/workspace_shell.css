@@ -3847,8 +3847,19 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
   gap: 12px;
 }
 .inference-queue-error-heading strong {
+  flex: 1 1 auto;
+  min-width: 0;
   font-size: 18px;
   line-height: 1.3;
+}
+.inference-queue-error-heading .review-captions-btn {
+  flex: 0 0 auto;
+  width: auto;
+  min-height: 32px;
+  padding: 6px 11px;
+  justify-content: center;
+  white-space: nowrap;
+  font-size: 14px;
 }
 .inference-queue-error-message {
   font-size: 16px;

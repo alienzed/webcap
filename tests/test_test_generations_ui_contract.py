@@ -318,7 +318,7 @@ def test_test_generations_compare_mode_reuses_current_session_results():
     assert "sharedTestCard(result, status, 'test-generations-compare-item', true)" in compare_block
     assert "sharedTestCard(result, status, 'test-generations-result-card', false)" in result_block
     assert "sharedTestCard(failure, status, 'test-generations-result-card is-failed', false, true)" in result_block
-    assert "removeNode: buildResultRemoveButton(result)" in script
+    assert "removeNode: inReview ? null : buildResultRemoveButton(result)" in script
     assert "remove.dataset.removeCandidate = candidateFile" in script
     assert ".test-generations-compare-stage" in css
     assert "grid-template-columns: repeat(2, minmax(0, 1fr));" in css

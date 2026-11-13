@@ -44,7 +44,7 @@ test('Scene-number recommendation resolves to a saved ID; deliberate choices sta
   scope.sceneSelectionManual=false;
   scope.recommendations.sceneNumber=5;
   scope.renderWriteStory(story);
-  assert.deepEqual(checked(),['a'],'invalid recommendation falls back only to current Scene');
+  assert.deepEqual(checked(),[],'an unresolved recommendation must not silently target Scene 1');
   scope.readinessStale=true;
   scope.recommendations.sceneNumber=2;
   scope.renderWriteStory(story);

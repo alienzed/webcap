@@ -231,11 +231,15 @@
     var readId = el('studio-dw-read-project').value;
     var writeId = el('studio-dw-write-project').value;
     var op = el('studio-dw-write-operation').value;
+    var unresolvedScene = op === 'scene-write' && writeStory && writeStory.id === writeId &&
+      !readinessStale && (recommendations.sceneId || recommendations.sceneNumber) &&
+      !recommendedSceneId(writeStory);
     el('studio-dw-write-scope').textContent = op === 'new-project'
       ? 'Creates a new Project. No existing destination.'
       : 'Write destination: ' + (projects.find(function(p){return p.id===writeId;}) || {title:'Choose a Project'}).title +
         (lastReadSource && writeId && lastReadSource !== writeId
-          ? ' · Different from last Read source.' : '');
+          ? ' · Different from last Read source.' : '') +
+        (unresolvedScene ? ' · Director’s Scene recommendation could not be matched. Choose a Scene explicitly.' : '');
     var mode = !el('studio-dw-read-panel').classList.contains('hidden') ? 'Read' :
       !el('studio-dw-write-panel').classList.contains('hidden') ? 'Write' : '';
     el('studio-dw-heading').textContent = mode ? mode + ' · Director' : 'Director actions';
@@ -278,7 +282,10 @@
     }
     var checked = new Set(Array.from(batchHost.querySelectorAll('input:checked'))
       .map(function (input) {return input.value;}));
-    var suggestedScene = recommendedSceneId(story) || activeTarget().sceneId;
+    var suggestedScene = recommendedSceneId(story);
+    var hasUnresolvedHint = !readinessStale &&
+      !!(recommendations.sceneId || recommendations.sceneNumber);
+    if (!suggestedScene && !hasUnresolvedHint) suggestedScene = activeTarget().sceneId;
     batchHost.replaceChildren();
     (story.sceneOrder || []).forEach(function (id, index) {
       var label = document.createElement('label'), input = document.createElement('input');

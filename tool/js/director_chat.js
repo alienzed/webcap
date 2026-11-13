@@ -1427,8 +1427,16 @@
       syncControls();
     }).catch(function (err) {
       state.modelsLoaded = true;
-      state.modelId = '';
-      select.innerHTML = '<option value="">Director unavailable</option>';
+      // A transient discovery failure does not invalidate the existing model choice.
+      if (state.modelId) {
+        select.innerHTML = '';
+        var retained = document.createElement('option');
+        retained.value = state.modelId;
+        retained.textContent = state.modelId + ' (model list unavailable)';
+        select.appendChild(retained);
+      } else {
+        select.innerHTML = '<option value="">Director unavailable</option>';
+      }
       syncControls();
       if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Assistant', err);
     });
@@ -2793,8 +2801,8 @@
     // It is reference knowledge here, not permission to draft or save a Prompt.
     return studioDirectorRequestMessages(messages, true).then(function (outbound) {
       outbound[0].content += '\n\nCONTEXT DELIVERY: Use only the saved fields explicitly supplied by Read. ' +
-        'On WEBCAP EXPLICIT READ start reply with RECEIVED: and the exact received field IDs, comma-separated. ' +
-        'Then answer the author’s explicit question, if any; a context-only Read needs just the receipt. ' +
+        'When an explicit Read supplies saved fields, briefly confirm the context you received in natural language. ' +
+        'Then answer the author’s explicit question, if any; a context-only Read needs just that confirmation. ' +
         'Applied field values supersede earlier snapshots. ' +
         'RESPONSE CONTRACT: Return JSON matching the supplied reply/readiness schema. ' +
         'For ordinary conversation, prefer 1-3 concise sentences; contribute a concrete visual ' +
@@ -3341,24 +3349,13 @@
         var studioResponse = activeChatMode === 'storyboard' ? parseStudioChatResponse(result.text) : null;
         var assistantText = studioResponse ? studioResponse.reply.replace(/^\s*RECEIVED:[^\r\n]*(?:\r?\n)?/i, '').trim() : String(result.text || '');
         if (activeChatMode === 'storyboard' && state.pendingReadAck) {
-          var expected = state.pendingReadAck;
+          var fieldCount = state.pendingReadAck.length;
           state.pendingReadAck = null;
-          var reply = studioResponse ? studioResponse.reply : assistantText;
-          var line = reply.split(String.fromCharCode(10)).find(function (item) { return /^RECEIVED:/i.test(item.trim()); }) || '';
-          var received = line.trim().replace(/^RECEIVED:/i, '').trim().split(',').map(function (key) { return key.trim(); });
-          var missing = expected.filter(function (key) { return received.indexOf(key) === -1; });
-          var extra = received.filter(function (key) { return key && expected.indexOf(key) === -1; });
-          var feedback = missing.length || extra.length
-            ? 'Director acknowledgement mismatch. Missing: ' + (missing.join(', ') || 'none') +
-              '; unexpected: ' + (extra.join(', ') || 'none')
-            : 'Director acknowledged ' + expected.length + ' selected fields.';
-          window.studioDirectorWorkbench.setReadStatus(missing.length || extra.length ? 'error' : 'success', feedback);
-          studioActionStatus(feedback, !!(missing.length || extra.length));
-          if (window.studioDirectorWorkbench) window.studioDirectorWorkbench.setStatus(feedback, !!(missing.length || extra.length));
-          if (missing.length || extra.length) {
-            if (typeof window.reportConsoleError === 'function')
-              window.reportConsoleError('Studio Read acknowledgement', new Error(feedback));
-          }
+          // The selected saved fields are already in the completed request.
+          // Model-generated wording cannot independently prove their delivery.
+          var feedback = 'Director replied to Read · ' + fieldCount + ' saved fields supplied.';
+          window.studioDirectorWorkbench.setReadStatus('success', feedback);
+          studioActionStatus(feedback, false);
         }
         if (studioResponse) {
           try {
@@ -3825,8 +3822,7 @@
       composer.value = (instruction || draft || 'Read the selected saved context and acknowledge receipt.') +
         nl + nl + '[WEBCAP EXPLICIT READ]' + nl +
         JSON.stringify(payload, null, 2) + nl + '[END WEBCAP READ]' + nl +
-        'Begin the reply field with RECEIVED: ' + keys.join(', ') +
-        ' using exactly those field identifiers. Address only any question explicitly asked above; otherwise stop after the receipt.';
+        'Confirm the saved fields in your own words. Address only any question explicitly asked above; otherwise stop after a brief confirmation.';
       state.pendingReadAck = keys.slice();
       sendMessage();
     },

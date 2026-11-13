@@ -117,6 +117,14 @@
     return Array.from(el('studio-dw-read-panel').querySelectorAll('input[data-group-select]:checked'))
       .flatMap(function (toggle) {return toggle.groupPaths;});
   }
+  function selectEntireReadProject() {
+    if (!readStory) return;
+    el('studio-dw-read-panel').querySelectorAll('input[data-group-select]').forEach(function (toggle) {
+      toggle.checked = true;
+      toggle.groupPaths.forEach(function (path) { readChoices[readStory.id].add(path); });
+    });
+    updateReadSelection();
+  }
   function readPayload(story, keys) {
     return {
       projectId: story.id, projectTitle: storyName(story), savedAt: story.updatedAt,
@@ -145,6 +153,7 @@
     el('studio-dw-read-count').textContent = units +
       (units === 1 ? ' selection' : ' selections') + ' · ' + bytes.toLocaleString() + ' characters';
     el('studio-dw-read-send').disabled = !keys.length || !el('studio-dw-read-project').value;
+    el('studio-dw-read-all').disabled = !readStory || !el('studio-dw-read-project').value;
     var name = readStory ? storyName(readStory) : 'No Project selected';
     el('studio-dw-read-scope').textContent = 'Read source: ' + name + '. Not an automatic attachment.';
     var details = el('studio-dw-read-preview');
@@ -1130,6 +1139,7 @@
     };
     el('studio-dw-assessment-close').onclick=function(){el('studio-dw-assessment-dialog').close();};
     el('studio-dw-read-send').onclick=readSend;
+    el('studio-dw-read-all').onclick=selectEntireReadProject;
     el('studio-dw-write-prepare').onclick=writePrepare;
     el('studio-dw-scene-apply').onclick=applyScene;
     el('studio-dw-batch-apply').onclick=applyBatchScenes;

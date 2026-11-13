@@ -78,11 +78,22 @@ test('missing readiness preserves the last assessment without pretending it succ
   assert.ok(response.error);
 });
 
-test('Read acknowledgment is checked against the reply field rather than raw JSON',()=>{
-  const response=processResponse(envelope(valid,'RECEIVED: project.concept\n\nA strong visual premise.'),true,['project.concept']);
-  assert.equal(response.state.pendingReadAck,null);
-  assert.ok(response.statuses.includes('Director acknowledged 1 selected fields.'));
-  assert.deepEqual(response.failures,[]);
+test('Read success is based on completed response, not exact model-produced field identifiers',()=>{
+  for (const reply of [
+    'RECEIVED: project.concept\\n\\nA strong visual premise.',
+    'I have received the Project concept.',
+    'RECEIVED: Concept, rather than project.concept'
+  ]) {
+    const response=processResponse(envelope(valid,reply),true,['project.concept']);
+    assert.equal(response.state.pendingReadAck,null);
+    assert.ok(response.statuses.includes('Director replied to Read · 1 saved fields supplied.'));
+    assert.deepEqual(response.failures,[]);
+  }
+});
+
+test('Read still fails on malformed model response instead of inventing success',()=>{
+  assert.throws(()=>processResponse('not a valid structured response',true,['project.concept']),
+    /Raw Director response/);
 });
 
 test('General Chat keeps free-form responses',()=>{

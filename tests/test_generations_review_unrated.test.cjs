@@ -115,3 +115,42 @@ test('Completed ratings are revisitable only after explicitly entering that mode
   h.moveReview(1);
   assert.equal(h.reviewKey, 'c.mp4', 'returning to pending ignores already rated results');
 });
+
+test('Rapid rating unlocks on save without waiting for earlier summary refresh', async () => {
+  const pending = [], callbacks = [];
+  const star = {dataset: {testRating: '4'}};
+  const card = {querySelector: () => star};
+  const ctx = {
+    reviewRatingPending: false, reviewSaveSerial: 0,
+    reviewKey: 'a.mp4', reviewDimensionId: 'motion',
+    currentStatus: {session: 'session-1'}, advanced: 0, rendered: 0,
+    el: () => ({querySelector: () => card}),
+    rateTestResult: (_star, saved) => {
+      callbacks.push(saved);
+      return new Promise(resolve => pending.push(resolve));
+    },
+    reviewDialogOpen: () => true,
+    advanceReviewToUnrated() { this.advanced++; this.reviewKey = 'next-' + this.advanced; },
+    renderReview() { this.rendered++; }
+  };
+  vm.createContext(ctx);
+  vm.runInContext(source.slice(
+    source.indexOf('  function rateCurrentReview(value) {'),
+    source.indexOf('  function openFocusedReview()')
+  ), ctx);
+  ctx.rateCurrentReview(4);
+  assert.equal(ctx.reviewRatingPending, true);
+  callbacks[0]();
+  assert.equal(ctx.reviewRatingPending, false, 'persisted rating releases keyboard immediately');
+  assert.equal(ctx.advanced, 1);
+  ctx.rateCurrentReview(3);
+  assert.equal(ctx.reviewRatingPending, true);
+  pending[0]();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(ctx.reviewRatingPending, true, 'earlier summary cannot unlock a new save');
+  callbacks[1]();
+  assert.equal(ctx.reviewRatingPending, false);
+  assert.equal(ctx.advanced, 2);
+  pending[1]();
+  await new Promise(resolve => setImmediate(resolve));
+});

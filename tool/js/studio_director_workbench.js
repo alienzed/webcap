@@ -243,6 +243,12 @@
       : mode === 'Write' ? 'Reviewed destination · nothing saved until Apply'
       : 'Conversation is independent of Studio navigation';
   }
+  // An already-developed single Scene can enter the existing review without another Director call.
+  // A deliberate manual Write choice still uses the full one-or-many drafting workflow.
+  function readyNewSceneCapture() {
+    return !readinessStale && !writeOperationChosen && creativeCapture &&
+      creativeCapture.field === 'scene' && !creativeCapture.sceneId ? creativeCapture : null;
+  }
   function setOperation() {
     var operation = el('studio-dw-write-operation').value;
     var sceneWrite = operation === 'scene-write';
@@ -251,7 +257,7 @@
     el('studio-dw-batch-controls').classList.toggle('hidden', !revise);
     el('studio-dw-write-project').disabled = operation === 'new-project';
     el('studio-dw-write-prepare').textContent = sceneWrite
-      ? (revise ? 'Review Scene revisions' : 'Review new Scenes')
+      ? (revise ? 'Draft Scene revisions' : readyNewSceneCapture() ? 'Review prepared Scene' : 'Draft new Scenes')
       : 'Prepare editable review';
     showWriteContext();
     updateScope();
@@ -456,6 +462,8 @@
     if (operation !== 'new-project' && !id) {status('Choose a destination Project.',true);return;}
     if (operation === 'scene-write') {
       if (el('studio-dw-scene-mode').value === 'revise') return prepareBatchScenes(id);
+      var capturedScene = readyNewSceneCapture();
+      if (capturedScene) return reviewCreativeCapture(capturedScene);
       try {
         var selected = projects.find(function (p) {return p.id === id;});
         bridge.prepareWrite('scenes', id, selected && storyName(selected));
@@ -766,6 +774,7 @@
   function setReadinessFreshness(stale) {
     readinessStale = !!stale;
     renderReadiness(readiness);
+    if (!el('studio-dw-write-panel').classList.contains('hidden')) setOperation();
     var label = el('studio-dw-readiness-freshness');
     label.textContent = readinessStale
       ? (readiness.length ? 'Outdated · latest exchange not assessed' : 'Latest exchange not assessed')
@@ -801,7 +810,7 @@
     if (hint === 'new-project') return 'Create Project';
     if (hint === 'project') return 'Revise Project Overview';
     if (['scene', 'scenes', 'scene-edit', 'scenes-batch'].includes(hint))
-      return recommendations.sceneId ? 'Revise Scene' : 'Write Scenes';
+      return recommendations.sceneId ? 'Draft Scene revisions' : 'Draft Scenes';
     return '';
   }
   function renderReadiness(list) {

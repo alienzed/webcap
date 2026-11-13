@@ -41,12 +41,14 @@ test('suggestions name creative units regardless of advisory field hints', () =>
   vm.runInContext(fieldsCode + labelCode,scope);
   for (const hint of ['scenes','scene-edit','scenes-batch']) {
     scope.recommendations.writeHint = hint;
-    assert.equal(scope.writeActionLabel(),'Revise Scene');
+    assert.equal(scope.writeActionLabel(),'Draft Scene revisions');
   }
   scope.recommendations.writeFields=['prompt'];
-  assert.equal(scope.writeActionLabel(),'Revise Scene');
+  assert.equal(scope.writeActionLabel(),'Draft Scene revisions');
   scope.recommendations={writeHint:'project',writeFields:['concept'],sceneId:''};
   assert.equal(scope.writeActionLabel(),'Revise Project Overview');
+  scope.recommendations={writeHint:'scenes',writeFields:['title','summary'],sceneId:''};
+  assert.equal(scope.writeActionLabel(),'Draft Scenes');
   vm.runInContext(part('  function captureActionLabel(capture) {','  function writeActionLabel() {'),scope);
   assert.equal(scope.captureActionLabel({field:'summary'}),'Review Scene');
   assert.equal(scope.captureActionLabel({field:'style'}),'Review Project Overview');
@@ -161,6 +163,87 @@ test('Scene Review includes the whole unit and selects all actual changes, irres
   assert.equal(unchanged.children.length,2,'unchanged Title remains available within the Scene');
   editors[0].input();
   assert.equal(checks[0].checked,true,'author can deliberately revise an unchanged part');
+});
+
+test('automatic new-Scene Write reuses a fresh capture and preserves explicit drafting', () => {
+  const calls=[];
+  const capture={field:'scene',sceneId:'',title:'Sunlit crossing',content:'The subject crosses the sunlit square.'};
+  const select={value:'scene-write'};
+  const mode={value:'create'};
+  const project={value:'p1'};
+  const scope=vm.createContext({
+    readinessStale:false,writeOperationChosen:false,creativeCapture:capture,
+    recommendations:{writeHint:'scenes',writeFields:['title','summary'],sceneId:''},
+    projects:[{id:'p1',title:'Project One'}],
+    el:id=>({
+      'studio-dw-write-operation':select,
+      'studio-dw-scene-mode':mode,
+      'studio-dw-write-project':project
+    })[id],
+    window:{studioDirectorBridge:{
+      isReady:()=>true,
+      prepareWrite:(...args)=>calls.push(['draft',...args])
+    }},
+    storyName:()=> 'Project One',
+    reviewCreativeCapture:chosen=>calls.push(['review',chosen]),
+    prepareBatchScenes:()=>calls.push(['batch']),
+    status:message=>{if(message.includes('failed'))assert.fail(message);}
+  });
+  vm.runInContext(
+    part('  function readyNewSceneCapture() {', '  function setOperation() {') +
+    part('  function writePrepare() {','  function prepareProjectCoherence(storyId) {'),
+    scope
+  );
+  scope.writePrepare();
+  assert.equal(calls.length,1);
+  assert.equal(calls[0][0],'review');
+  assert.equal(calls[0][1],capture,'the complete authored content is reused verbatim');
+
+  calls.length=0;
+  scope.writeOperationChosen=true;
+  scope.writePrepare();
+  assert.equal(calls[0][0],'draft','explicit one-or-many drafting still calls Director');
+
+  calls.length=0;
+  scope.writeOperationChosen=false;
+  scope.readinessStale=true;
+  scope.writePrepare();
+  assert.equal(calls[0][0],'draft','stale captures cannot be applied');
+
+  calls.length=0;
+  scope.readinessStale=false;
+  scope.creativeCapture=null;
+  scope.writePrepare();
+  assert.equal(calls[0][0],'draft','missing captures fall back to drafting');
+
+  calls.length=0;
+  scope.creativeCapture=capture;
+  mode.value='revise';
+  scope.writePrepare();
+  assert.equal(calls[0][0],'batch','existing Scene revisions keep their reviewed workflow');
+});
+
+test('completed new Scene capture reviews directly without another Director request', async () => {
+  const capture={field:'scene',sceneId:'',title:'Sunlit crossing',content:'The subject crosses the sunlit square.'};
+  let complete;
+  const finished=new Promise(resolve=>{complete=resolve;});
+  const scope=vm.createContext({
+    el:id=>id==='studio-dw-write-project' ? {value:'p1'} : {},
+    window:{studioDirectorBridge:{
+      canReview:()=>true,
+      reviewSceneCapture:(item,id)=>{
+        assert.equal(id,'p1');
+        assert.equal(item,capture);
+        complete();
+        return Promise.resolve();
+      },
+      makeProposal:()=>assert.fail('No second LLM request is needed')
+    }},
+    status:msg=>assert.fail('Unexpected status: '+msg)
+  });
+  vm.runInContext(part('  function reviewCreativeCapture(capture) {','  function openWriteForCapture() {'),scope);
+  scope.reviewCreativeCapture(capture);
+  await finished;
 });
 
 test('completed Scene capture enters the same unit Review without generating another proposal', async () => {

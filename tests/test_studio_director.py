@@ -19,6 +19,7 @@ def test_writer_workshop_uses_existing_h3_prompt_contract_and_user_playbook(monk
     assert "ask one focused question; otherwise offer a specific idea" in text
     assert "4–15 seconds" in text
     assert "FIELD DEVELOPMENT" in text
+    assert "Capture complete agreed material for immediate review" in text
     assert "Entry and exit state fields are retired" in text
     assert "These controls and media inspection are outside Studio Director" in text
     assert "Write Scenes" in text and "reviewed" in text.lower()

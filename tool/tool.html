@@ -1763,21 +1763,21 @@
                             </div>
                             <div id="generate-lora-sweep-panel" class="generate-lora-mode-panel hidden">
                                 <div class="generate-sweep-options">
-                                    <label class="generate-field" title="Each selected LoRA is added to the fixed LoRAs above. Fixed LoRAs are excluded from Sweep choices."><span>Sweep folder</span><select id="generate-sweep-folder" aria-label="Sweep LoRA folder"></select></label>
+                                    <label class="generate-field"><span>Add folder</span><select id="generate-sweep-folder" aria-label="Add all LoRAs from a folder"></select></label>
                                     <label class="generate-field"><span>Strength</span><input id="generate-sweep-strength" type="number" min="-2" max="2" step="0.05" value="0.9"></label>
                                 </div>
                                 <div class="generate-sweep-group generate-sweep-selection-group">
-                                    <input id="generate-sweep-filter" class="generate-lora-picker" type="search" placeholder="Filter / choose LoRAs…" autocomplete="off" aria-label="Filter Sweep LoRAs">
                                     <div class="generate-sweep-selection-bar">
-                                        <label class="generate-sweep-base" title="Add one comparison using only the fixed LoRAs above. Without fixed LoRAs, this is the base model alone."><input id="generate-sweep-base" type="checkbox"> Fixed-only baseline</label>
-                                        <div class="generate-sweep-selection-actions">
-                                            <button id="generate-sweep-all" type="button" class="review-captions-btn">All</button>
-                                            <button id="generate-sweep-none" type="button" class="review-captions-btn">None</button>
-                                        </div>
+                                        <div id="generate-sweep-summary" class="generate-empty-inline"></div>
+                                        <button id="generate-sweep-clear" type="button" class="review-captions-btn">Clear</button>
                                     </div>
-                                    <div id="generate-sweep-summary" class="generate-empty-inline"></div>
                                     <div id="generate-sweep-list" class="generate-sweep-list"></div>
+                                    <div id="generate-sweep-picker-wrap" class="generate-lora-picker-wrap">
+                                        <button id="generate-sweep-picker-trigger" type="button" class="generate-lora-picker-trigger" aria-expanded="false" aria-haspopup="listbox" aria-controls="generate-lora-picker-menu"><span>+ Search / add LoRA…</span><span aria-hidden="true">⌄</span></button>
+                                    </div>
+                                    <label class="generate-sweep-base" title="Add one comparison using only the fixed LoRAs above. Without fixed LoRAs, this is the base model alone."><input id="generate-sweep-base" type="checkbox"> Fixed-only baseline</label>
                                 </div>
+                            </div>
                             </div>
                             </section>
                             <details id="generate-references" class="generate-references generate-collapsible hidden">

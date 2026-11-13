@@ -565,9 +565,10 @@ function sweepLoras(model, folder) {
 
   function generateLoraNamesMatching(query) {
     var needle = String(query || '').trim().toLowerCase();
+    var sweepNames = generateLoraPickerTarget === 'sweep' ? new Set(availableSweepLoras(currentModel())) : null;
     return generateLoraOrder().filter(function (name) {
       return (!needle || name.toLowerCase().indexOf(needle) !== -1) &&
-        (generateLoraPickerTarget !== 'sweep' || availableSweepLoras(currentModel()).indexOf(name) !== -1);
+        (!sweepNames || sweepNames.has(name));
     });
   }
 
@@ -648,10 +649,12 @@ function sweepLoras(model, folder) {
     if (generateLoraPickerTarget === 'sweep') {
       var model = currentModel();
       var isSelected = selectedSweepLoras(model).indexOf(found) !== -1;
+      var activeIndex = Number(el('generate-lora-picker-menu').dataset.activeIndex || 0);
       setSweepSelection(model, found, !isSelected);
       renderSweep();
-      // Keep the shared picker open for adding multiple Sweep candidates.
+      // Keep the shared picker open and its active option stable for multi-selection.
       renderGenerateLoraPickerMenu();
+      setGenerateLoraPickerActive(activeIndex);
       el('generate-lora-picker').focus();
       return;
     }

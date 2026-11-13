@@ -87,6 +87,9 @@ test('Studio prompting selects the current goal rather than steering every task 
   assert.match(system,/For the current author goal, suggest at most one useful next step/);
   assert.match(system,/an explicit Read, an appropriately scoped reviewed Write, or an author-operated Studio action/);
   assert.doesNotMatch(system,/When choices are clear, offer to review Concept/);
+  assert.match(system,/contribute a concrete visual/);
+  assert.match(system,/ask a question only when a consequential choice needs the author/);
+  assert.match(system,/When the author explicitly asks for full draft text/);
   assert.match(system,/Keep readiness light: normally checks=\[\]/);
   assert.match(system,/If assessment is genuinely useful, provide at most two concise checks/);
   assert.match(system,/H3 PRODUCTION PROMPT REFERENCE/);

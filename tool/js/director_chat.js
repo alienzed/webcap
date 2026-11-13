@@ -2797,8 +2797,9 @@
         'Then answer the author’s explicit question, if any; a context-only Read needs just the receipt. ' +
         'Applied field values supersede earlier snapshots. ' +
         'RESPONSE CONTRACT: Return JSON matching the supplied reply/readiness schema. ' +
-        'For ordinary conversation, prefer 1-3 concise sentences with one useful ' +
-        'creative decision or question at most. When the author explicitly asks for full draft text, ' +
+        'For ordinary conversation, prefer 1-3 concise sentences; contribute a concrete visual ' +
+        'or prompting idea when useful, and ask a question only when a consequential choice needs the author. ' +
+        'When the author explicitly asks for full draft text, ' +
         'a complete H3 Prompt, or detailed material, include the requested content in full in reply. ' +
         'When an authored field is complete, also supply its reusable capture when possible. ' +
         'Keep readiness light: normally checks=[], readHints=[], writeHint="", writeFields=[], sceneId="". ' +

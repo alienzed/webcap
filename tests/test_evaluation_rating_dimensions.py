@@ -118,3 +118,17 @@ def test_candidate_and_insights_read_the_same_combined_human_score(tmp_path, mon
     points, _, _, _ = run_analytics._test_series(tmp_path, "run-1")
     assert points[0]["manual"] == 3
     assert points[0]["manualCount"] == 2
+
+def test_review_wildcards_follow_each_render_prompt_not_session_default():
+    source = "A {red|blue} hat and a {small|large} scarf"
+    original = {"mediaFile": "variation.mp4", "prompt": "A blue hat and a large scarf"}
+    status = {
+        "sourcePrompt": source,
+        "resolvedPrompt": "A red hat and a small scarf",
+        "results": [original, {"mediaFile": "default.mp4", "prompt": "A red hat and a small scarf"}],
+    }
+    bench._project_wildcard_fields(status)
+    assert status["wildcardValues"] == ["red", "small"]
+    assert status["results"][0]["wildcardValues"] == ["blue", "large"]
+    assert status["results"][1]["wildcardValues"] == ["red", "small"]
+    assert "wildcardValues" not in original, "projection must not rewrite saved render records"

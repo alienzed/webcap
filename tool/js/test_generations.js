@@ -4339,7 +4339,9 @@
     completedToggle.textContent = reviewBrowseCompleted
       ? (pending.length ? 'Resume pending' : 'Done') : 'Revisit rated';
     var statusNode = el('test-generations-review-status');
-    statusNode.textContent = !all.length ? 'Generate a Test session to begin.' :
+    statusNode.textContent = !all.length ? (reviewScope
+      ? 'No rateable Test renders in this epoch. Campaign frames remain in the collection.'
+      : 'Generate a Test session to begin.') :
       reviewBrowseCompleted ? 'Revisiting saved ' + reviewDimensionLabel() + ' ratings.' :
       !pending.length && !reviewRevisiting ? reviewDimensionLabel() + ' complete. Switch dimensions or close.' :
       reviewRevisiting ? 'Revisiting a saved rating. Choose a new score to update it.' : '';

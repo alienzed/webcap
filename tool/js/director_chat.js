@@ -1132,20 +1132,19 @@
 
       var body = document.createElement('div');
       body.className = 'director-chat-message-body';
-      body.textContent = message.content;
-      if (state.activeMode === 'storyboard' && message.role === 'assistant' && message.content.length > 1200) {
-        var preview = document.createElement('div');
-        preview.className = 'director-chat-reply-preview';
-        var opening = message.content.split(/\n\s*\n/)[0];
-        preview.textContent = opening.length > 480 ? opening.slice(0,480).replace(/\s+\S*$/, '') + '…' : opening;
-        var fullReply = document.createElement('details'), fullHeading = document.createElement('summary'),
-          fullText = document.createElement('div');
-        fullReply.className = 'director-chat-long-reply';
-        fullHeading.textContent = 'Full Director reply';
-        fullText.textContent = message.content;
-        fullReply.append(fullHeading,fullText);
-        body.replaceChildren(preview,fullReply);
+      var visibleContent = message.content;
+      if (state.activeMode === 'storyboard' && message.role === 'assistant' && message.rawResponse) {
+        // Recover draft text hidden by older saved conversations without a new model call.
+        try {
+          var storedResponse = JSON.parse(message.rawResponse);
+          if (storedResponse && storedResponse.readiness && storedResponse.readiness.capture)
+            visibleContent = studioDirectorVisibleReply({reply:visibleContent,readiness:storedResponse.readiness});
+        } catch (error) {
+          // Older diagnostic captures may not contain structured Studio JSON.
+        }
       }
+      body.textContent = visibleContent;
+      // Studio creative text stays visible, including long explicitly requested drafts.
       if (message.role === 'user' && (message.content.indexOf('[WEBCAP EXPLICIT READ]') !== -1 ||
           message.content.indexOf('[WEBCAP APPLIED FIELD VALUES]') !== -1)) {
         var applied = message.content.indexOf('[WEBCAP APPLIED FIELD VALUES]') !== -1;
@@ -2807,8 +2806,9 @@
         'RESPONSE CONTRACT: Return JSON matching the supplied reply/readiness schema. ' +
         'For ordinary conversation, prefer 1-3 concise sentences; contribute a concrete visual ' +
         'or prompting idea when useful, and ask a question only when a consequential choice needs the author. ' +
-        'When the author explicitly asks for full draft text, ' +
-        'a complete H3 Prompt, or detailed material, include the requested content in full in reply. ' +
+        'When the author asks to see, copy, or revise text (including revision instructions, a draft, ' +
+        'or an H3 Prompt), put the complete requested text in reply so it is visible in conversation. ' +
+        'Capture is optional structured reuse metadata, never a substitute for the visible reply. ' +
         'When an authored field is complete, also supply its reusable capture when possible. ' +
         'Keep readiness light: normally checks=[], readHints=[], writeHint="", writeFields=[], sceneId="". ' +
         'Use a readiness hint only when it provides a useful next action. ' +
@@ -2854,6 +2854,15 @@
         typeof value.reply !== 'string' || !value.reply.trim())
       throw new Error('Director response requires a conversational reply.\nRaw Director response:\n' + String(raw || ''));
     return value;
+  }
+
+  function studioDirectorVisibleReply(value) {
+    var reply = value.reply.replace(/^\s*RECEIVED:[^\r\n]*(?:\r?\n)?/i, '').trim();
+    var capture = value.readiness && value.readiness.capture;
+    var drafted = capture && typeof capture.content === 'string' ? capture.content.trim() : '';
+    // A complete creative draft belongs in the conversation, not only in I/O.
+    // Avoid displaying it twice when the model already included it in reply.
+    return drafted && !reply.includes(drafted) ? (reply ? reply + '\n\n' : '') + drafted : reply;
   }
 
   function storyboardRequestMessages(messages, includePrimer) {
@@ -3347,7 +3356,7 @@
       }).then(function (result) {
         if (activeChatMode === 'storyboard') state.lastStudioIoRaw = String(result.text || '');
         var studioResponse = activeChatMode === 'storyboard' ? parseStudioChatResponse(result.text) : null;
-        var assistantText = studioResponse ? studioResponse.reply.replace(/^\s*RECEIVED:[^\r\n]*(?:\r?\n)?/i, '').trim() : String(result.text || '');
+        var assistantText = studioResponse ? studioDirectorVisibleReply(studioResponse) : String(result.text || '');
         if (activeChatMode === 'storyboard' && state.pendingReadAck) {
           var fieldCount = state.pendingReadAck.length;
           state.pendingReadAck = null;

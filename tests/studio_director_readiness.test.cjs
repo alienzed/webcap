@@ -110,7 +110,7 @@ test('the first accepted assessment is current immediately, rather than labelled
     setReadinessFreshness:stale=>{
       assert.equal(stale,false);
       assert.equal(scope.readiness.length,1,'freshness must see the newly accepted checks');
-    },window:{studioDirectorBridge:{updateReadiness(){}}}});
+    },activeTarget:()=>({storyId:'p1'}),window:{studioDirectorBridge:{workingStoryId:()=> 'p1',updateReadiness(){}}}});
   const receiver=vm.runInContext('({'+workbench.slice(start,end)+'})',scope);
   assert.equal(receiver.updateReadiness(valid),true);
 });

@@ -4,7 +4,7 @@
   var readiness = [], recommendations = {readHints:[],writeHint:'',writeFields:[],sceneId:''};
   var readinessStale = false;
   var readChoices = {}, writeOperationChosen = false, lastReadSource = null;
-  var sceneSelectionManual = false, sceneSelectionProject = '';
+  var sceneSelectionManual = false, sceneSelectionProject = '', recommendationProject = '';
   var lastQuickAction = 'read', creativeCapture = null;
   var sceneFields = ['summary', 'prompt', 'title'];
   var projectFields = ['title', 'concept', 'style', 'invariants'];
@@ -267,9 +267,8 @@
       return story.sceneOrder.includes(recommendations.sceneId) ? recommendations.sceneId : '';
     // The model may know "Scene 5" without having Read its opaque saved ID.
     // Resolve the one-based position only for the currently selected Project.
-    var currentProject = window.studioDirectorBridge.workingStoryId() || activeTarget().storyId;
     var number = recommendations.sceneNumber;
-    return currentProject === story.id && Number.isInteger(number) && number >= 1 &&
+    return recommendationProject === story.id && Number.isInteger(number) && number >= 1 &&
       number <= story.sceneOrder.length ? story.sceneOrder[number - 1] : '';
   }
   function renderWriteStory(story) {
@@ -963,6 +962,7 @@
       writeOperationChosen = false;
       sceneSelectionManual = false;
       sceneSelectionProject = '';
+      recommendationProject = '';
         lastReadSource = null;
       readStory = null;
       writeStory = null;
@@ -1038,6 +1038,7 @@
       }
       recommendations = {readHints:hints, writeHint:writeHint, writeFields:writeFields,
         sceneId:sceneId, sceneNumber:sceneNumber};
+      recommendationProject = window.studioDirectorBridge.workingStoryId() || activeTarget().storyId || '';
       creativeCapture = capture;
       readiness = list;
       setReadinessFreshness(!!(restoring && result && result.stale));

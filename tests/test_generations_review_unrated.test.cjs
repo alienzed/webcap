@@ -18,7 +18,7 @@ function harness(results, dimension = 'overall', key = '') {
     currentStatus: {session: 'session-1', results},
     reviewDimensionId: dimension,
     reviewDimensions: [{id:'color',label:'Toothbrush Color'}, {id:'motion',label:'Brushing Motion'}],
-    reviewKey: key, reviewIndex: 0, reviewHistory: [], reviewRevisiting: false,
+    reviewKey: key, reviewIndex: 0, reviewHistory: [], reviewRevisiting: false, reviewBrowseCompleted: false,
     rendered: 0,
     resultMediaFile: result => result.mediaFile,
     renderReview() { this.rendered++; }
@@ -81,6 +81,8 @@ test('Review is a modal activity, and the saved rating is applied before auto-ad
   assert.ok(html.includes('<dialog id="test-generations-review"'));
   assert.ok(review.includes('id="test-generations-review-dimension"'));
   assert.ok(review.includes('id="test-generations-review-new-scope"'));
+  assert.ok(review.includes('id="test-generations-review-completed"'));
+  assert.ok(source.includes("reviewBrowseCompleted = !reviewBrowseCompleted;"));
   assert.ok(source.includes('review.showModal();'));
   assert.ok(source.includes("el('test-generations-review').addEventListener('close'"));
   const update = source.indexOf('result.dimensionRatings[dimensionId] = payload.rating;');
@@ -88,4 +90,20 @@ test('Review is a modal activity, and the saved rating is applied before auto-ad
   assert.ok(update >= 0 && callback > update, 'persisted dimension must update before navigation');
   assert.ok(source.includes('advanceReviewToUnrated();'));
   assert.ok(source.includes("savedDimension = reviewDimensionId;"));
+});
+
+test('Completed ratings are revisitable only after explicitly entering that mode', () => {
+  const h = harness([
+    {mediaFile:'a.mp4',rating:3},
+    {mediaFile:'b.mp4',rating:5},
+    {mediaFile:'c.mp4',rating:0}
+  ], 'overall', 'a.mp4');
+  h.reviewBrowseCompleted = true;
+  h.moveReview(1);
+  assert.equal(h.reviewKey, 'b.mp4');
+  h.moveReview(1);
+  assert.equal(h.reviewKey, 'b.mp4', 'completed browsing does not wrap unexpectedly');
+  h.reviewBrowseCompleted = false;
+  h.moveReview(1);
+  assert.equal(h.reviewKey, 'c.mp4', 'returning to pending ignores already rated results');
 });

@@ -3464,8 +3464,8 @@
       error: failed ? String(result.error || 'Generation failed.') : '',
       removeNode: inReview ? null : buildResultRemoveButton(result),
       rating: !failed && session && mediaFile ? { value: inReview ? reviewRatingValue(result) : result.rating, session: session, mediaFile: mediaFile } : null,
-      testEvaluation: !failed && mediaFile ? {mediaFile: mediaFile} : null,
-      epochLink: epochText ? {text: epochText, jobId: provenance.sourceJobId, epoch: provenance.sourceEpoch} : null,
+      testEvaluation: !failed && mediaFile && !(inReview && reviewScope) ? {mediaFile: mediaFile} : null,
+      epochLink: epochText && !(inReview && reviewScope) ? {text: epochText, jobId: provenance.sourceJobId, epoch: provenance.sourceEpoch} : null,
       videoTransport: appendTestPreviewVideo,
       dataset: { testVlFile: mediaFile },
       wildcards: !failed ? wildcardChoices : [],
@@ -4267,7 +4267,7 @@
         }
       }
       if (following < 0 && direction > 0 && pending.length) {
-        following = all.findIndex(function (item) { return resultMediaFile(item) === reviewItemKey(pending[0]); });
+        following = all.findIndex(function (item) { return reviewItemKey(item) === reviewItemKey(pending[0]); });
       }
       if (following < 0) return;
       reviewKey = reviewItemKey(all[following]);
@@ -4280,7 +4280,7 @@
     if (reviewBrowseCompleted) { renderReview(reviewStatus()); return; }
     var all = reviewResults(reviewStatus());
     var previous = reviewKey;
-    var index = all.findIndex(function (result) { return resultMediaFile(result) === previous; });
+    var index = all.findIndex(function (result) { return reviewItemKey(result) === previous; });
     if (previous) reviewHistory.push(previous);
     var next = reviewNextUnratedIndex(all, index);
     reviewKey = next >= 0 ? reviewItemKey(all[next]) : '';
@@ -4319,7 +4319,7 @@
       reviewRevisiting = false;
     }
     var result = current >= 0 ? all[current] : null;
-    reviewKey = result ? resultMediaFile(result) : '';
+    reviewKey = result ? reviewItemKey(result) : '';
     var completeCount = all.length - pending.length;
     position.textContent = (all.length
       ? completeCount + ' of ' + all.length + ' rated · ' + pending.length + ' remaining'
@@ -4420,7 +4420,6 @@
       }).finally(function(){
         if (reviewScope !== scope || serial !== reviewSaveSerial) return;
         reviewRatingPending = false;
-        if (reviewDialogOpen()) renderReview(reviewStatus());
       });
       return;
     }
@@ -4439,9 +4438,9 @@
   }
 
   function openFocusedReview() {
-    reviewScope = null;
     var dialog = el('test-generations-review');
     if (dialog.open) return;
+    reviewScope = null;
     reviewKey = '';
     reviewHistory = [];
     reviewRevisiting = false;

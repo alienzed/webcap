@@ -12,25 +12,63 @@ function part(start, end) {
 const fieldsCode = part('  function recommendedWriteFields(operation) {', '  function refreshRead() {');
 const labelCode = part('  function writeActionLabel() {', '  function renderReadiness(list) {');
 
-test('Scene default uses a valid recommendation or the current Scene, while manual choices prevail', () => {
-  const host={children:[],querySelectorAll(){return this.children.flatMap(n=>n.children).filter(n=>n.checked);},
-    replaceChildren(){this.children=[];},appendChild(n){this.children.push(n);}};
-  const scope=vm.createContext({writeStory:null,recommendations:{sceneId:'scene:a'},
-    activeTarget:()=>({sceneId:'a'}),el:()=>host,showWriteContext(){},updateScope(){},
-    document:{createElement:()=>({children:[],append(...nodes){this.children.push(...nodes);}}),createTextNode:text=>({text})}});
-  vm.runInContext(part('  function renderWriteStory(story) {','  function recommendedWriteFields(operation) {'),scope);
-  const story={sceneOrder:['a','b'],scenes:{a:{title:'A'},b:{title:'B'}}};
+test('Scene-number recommendation resolves to a saved ID; deliberate choices stay selected', () => {
+  const host={children:[],querySelectorAll(selector){
+    const controls=this.children.flatMap(n=>n.children).filter(n=>n.type==='checkbox');
+    return selector === 'input:checked' ? controls.filter(n=>n.checked) : controls;
+  }, replaceChildren(){this.children=[];},appendChild(n){this.children.push(n);}};
+  const scope=vm.createContext({writeStory:null,readinessStale:false,
+    sceneSelectionManual:false,sceneSelectionProject:'',recommendationProject:'p1',
+    recommendations:{writeHint:'scenes',sceneId:'',sceneNumber:2},
+    activeTarget:()=>({storyId:'p1',sceneId:'a'}),
+    window:{studioDirectorBridge:{workingStoryId:()=> 'p1'}},
+    el:()=>host,showWriteContext(){},updateScope(){},
+    document:{createElement:()=>({children:[],append(...nodes){this.children.push(...nodes);}}),
+      createTextNode:text=>({text})}});
+  vm.runInContext(part('  function recommendedSceneId(story) {','  function recommendedWriteFields(operation) {'),scope);
+  const story={id:'p1',sceneOrder:['a','b'],scenes:{a:{title:'A'},b:{title:'B'}}};
+  const checked=()=>host.querySelectorAll('input:checked').map(n=>n.value);
   scope.renderWriteStory(story);
-  assert.deepEqual(host.querySelectorAll().map(n=>n.value),['a']);
-  host.children[0].children[0].checked=false;
-  host.children[1].children[0].checked=true;
-  scope.recommendations.sceneId='a';
+  assert.deepEqual(checked(),['b'],'Director’s Scene 2 should override incidental Scene 1 focus');
+  scope.recommendations.sceneNumber=1;
   scope.renderWriteStory(story);
-  assert.deepEqual(host.querySelectorAll().map(n=>n.value),['b']);
-  host.replaceChildren();
+  assert.deepEqual(checked(),['a'],'a fresh recommendation updates a default, not manual state');
+  const inputs=host.querySelectorAll('input');
+  inputs[0].checked=false;inputs[1].checked=true;inputs[1].onchange();
+  scope.renderWriteStory(story);
+  assert.deepEqual(checked(),['b'],'an explicit choice survives refresh');
+  host.querySelectorAll('input')[1].checked=false;
+  host.querySelectorAll('input')[1].onchange();
+  scope.renderWriteStory(story);
+  assert.deepEqual(checked(),[],'intentionally clearing the selection must not reselect Scene 1');
+  scope.sceneSelectionManual=false;
+  scope.recommendations.sceneNumber=5;
+  scope.renderWriteStory(story);
+  assert.deepEqual(checked(),[],'an unresolved recommendation must not silently target Scene 1');
+  scope.readinessStale=true;
+  scope.recommendations.sceneNumber=2;
+  scope.renderWriteStory(story);
+  assert.deepEqual(checked(),['a'],'stale recommendations are ignored');
+  scope.readinessStale=false;
   scope.recommendations.sceneId='b';
+  scope.recommendations.sceneNumber=1;
   scope.renderWriteStory(story);
-  assert.deepEqual(host.querySelectorAll().map(n=>n.value),['b']);
+  assert.deepEqual(checked(),[],'contradictory saved ID and Scene number must not select anything');
+  scope.recommendations.sceneNumber=2;
+  scope.renderWriteStory(story);
+  assert.deepEqual(checked(),['b'],'matching ID and number identify the same saved Scene');
+  scope.recommendations.sceneNumber=1;
+  scope.recommendations.sceneId='';
+  scope.recommendationProject='other-project';
+  scope.activeTarget=()=>({storyId:'other-project',sceneId:''});
+  scope.renderWriteStory(story);
+  assert.deepEqual(checked(),[],'a number from another Project must not be applied');
+  scope.recommendationProject='p1';
+  scope.activeTarget=()=>({storyId:'p1',sceneId:'a'});
+  scope.renderWriteStory(story);
+  assert.deepEqual(checked(),['a']);
+  scope.renderWriteStory({id:'p2',sceneOrder:['x'],scenes:{x:{title:'X'}}});
+  assert.deepEqual(checked(),[],'changing Project does not inherit the previous Scene selection');
 });
 
 test('suggestions name creative units regardless of advisory field hints', () => {
@@ -105,7 +143,8 @@ test('Scene Write receives early decisions and complete long messages from the d
     window:{flushStudioDirectorStoryEdits:async()=>{},studioDirectorBridge:{selectWriteProject(){},
       messages:()=>messages,makeProposal:async input=>{request=input;return '{}';}}},
     loadStory:async()=>({id:'p1',sceneOrder:['a'],scenes:{a:{title:'Lamp',summary:'Intent',prompt:'H3'}}}),
-    storyName:()=> 'Project',parseProposal:JSON.parse,validateSceneRevisionDraft:()=>[],renderBatchReview(){}});
+    storyName:()=> 'Project',parseProposal:JSON.parse,validateSceneRevisionDraft:()=>[],
+    recommendedSceneId:()=>'',renderBatchReview(){}});
   vm.runInContext(part('  function prepareBatchScenes(storyId) {','  function renderBatchReview() {'),scope);
   scope.prepareBatchScenes('p1');
   await finished;
@@ -282,4 +321,22 @@ test('unit Apply saves aligned changed parts atomically and leaves the unchanged
   await finished;
   assert.deepEqual(payload,{storyId:'p1',revisions:[{sceneId:'a',
     expected:{summary:'Old intent',prompt:'Old H3'},changes:{summary:'New intent',prompt:'Aligned H3'}}]});
+});
+
+test('mismatched Scene targets require confirmation before any saved mutation', () => {
+  let called=0, confirmed=0;
+  const section={dataset:{sceneId:'a'},
+    querySelectorAll:()=>[{dataset:{selectField:'summary'}}],
+    querySelector:()=>({value:'New intent'})};
+  const scope=vm.createContext({proposedBatch:{storyId:'p1',
+    targetWarning:'Director suggested Scene 5, but Write targets Scene 1.',
+    scenes:[{sceneId:'a',before:{title:'A',summary:'Old intent',prompt:'Old prompt'}}]},
+    el:id=>id==='studio-dw-batch-editors' ? {querySelectorAll:()=>[section]} : {},
+    window:{confirm:()=>{confirmed++;return false;},
+      flushStudioDirectorStoryEdits:async()=>{}},
+    api:async()=>{called++;return {};},status:()=>{}});
+  vm.runInContext(part('  function applyBatchScenes() {','  function applyScene() {'),scope);
+  scope.applyBatchScenes();
+  assert.equal(confirmed,1);
+  assert.equal(called,0,'declining a conflicting target must not call the mutation API');
 });

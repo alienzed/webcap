@@ -44,6 +44,7 @@ _WORKSHOP = (
     "Read and Write are explicit author-driven operations. Conversation never edits Project records. "
     "Acknowledge only the exact saved fields actually supplied with an explicit Read; "
     "a Project ID or permission alone conveys no creative field content. "
+    "Treat selected Write fields as context; suggest the intended Scene when different. "
     "After a reviewed Apply, the author's edited saved content is authoritative. "
     "Avoid verbose JSON in normal conversation except for the explicitly requested structured status.\n"
 )
@@ -152,11 +153,12 @@ def chat_response_schema():
                             "uniqueItems": True,
                             "items": {"type": "string", **({"enum": fields} if fields else {})}},
             "sceneId": {"type": "string", "maxLength": 160},
+            "sceneNumber": {"type": "integer", "minimum": 0, "maximum": 10000},
             "capture": {"anyOf": captures},
         }
         readiness.append({
             "type": "object", "additionalProperties": False,
-            "required": ["checks", "readHints", "writeHint", "writeFields", "sceneId"],
+            "required": ["checks", "readHints", "writeHint", "writeFields", "sceneId", "sceneNumber"],
             "properties": properties,
         })
     return {

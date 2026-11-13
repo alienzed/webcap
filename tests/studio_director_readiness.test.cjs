@@ -110,7 +110,7 @@ test('the first accepted assessment is current immediately, rather than labelled
     setReadinessFreshness:stale=>{
       assert.equal(stale,false);
       assert.equal(scope.readiness.length,1,'freshness must see the newly accepted checks');
-    },window:{studioDirectorBridge:{updateReadiness(){}}}});
+    },activeTarget:()=>({storyId:'p1'}),window:{studioDirectorBridge:{workingStoryId:()=> 'p1',updateReadiness(){}}}});
   const receiver=vm.runInContext('({'+workbench.slice(start,end)+'})',scope);
   assert.equal(receiver.updateReadiness(valid),true);
 });
@@ -183,7 +183,8 @@ test('Director guidance presents at most one contextual action and keeps assessm
 });
 
 test('Scene revisions select saved Scenes, leaving changed fields to Director', () => {
-  assert.match(workbench, /includes\(recommendations\.sceneId\)/);
+  assert.match(workbench, /function recommendedSceneId\(story\)/);
+  assert.match(workbench, /story\.sceneOrder\.includes\(id\)/);
   assert.match(workbench, /whichever fields need changing: title, summary/);
   assert.match(workbench, /validateSceneRevisionDraft\(result, ids, selected, raw\)/);
   assert.doesNotMatch(workbench, /applySuggestedWriteFields/);

@@ -280,12 +280,14 @@
     cancelCaptionAssistJob(directorJob).catch(error);
     el('director-status').textContent='Stop requested…';
   };
-  var epochMediaScope=null, epochMediaSerial=0, epochMediaOffset=0, epochMediaTotal=0, epochMediaLoading=false, epochMediaReturnMode='analytics';
+  var epochMediaScope=null, epochMediaSerial=0, epochMediaOffset=0, epochMediaTotal=0, epochMediaLoading=false, epochMediaHasTests=false, epochMediaReturnMode='analytics';
   function epochMediaClose() {
     var back=epochMediaReturnMode;
     epochMediaSerial++;
     epochMediaScope=null;
     epochMediaLoading=false;
+    epochMediaHasTests=false;
+    el('epoch-media-focus').disabled=true;
     el('epoch-media-dialog').close();
     el('epoch-media-grid').replaceChildren();
     el('epoch-media-more').classList.add('hidden');
@@ -304,7 +306,7 @@
         return data;
       });}).then(function(data){
         if(serial!==epochMediaSerial || scope!==epochMediaScope)return;
-        if(!more) {el('epoch-media-grid').replaceChildren();epochMediaOffset=0;}
+        if(!more) {el('epoch-media-grid').replaceChildren();epochMediaOffset=0;epochMediaHasTests=false;}
         (data.media||[]).forEach(function(item) {
           var card=document.createElement('article');card.className='run-analytics-epoch-media-card';
           var url=item.source==='campaign'
@@ -338,8 +340,10 @@
           });card.appendChild(source);
           el('epoch-media-grid').appendChild(card);
         });
+        epochMediaHasTests=epochMediaHasTests||(data.media||[]).some(function(item){return item.source==='test'&&item.mediaAvailable!==false;});
         epochMediaOffset += (data.media||[]).length;
         epochMediaTotal=Number(data.total||0);
+        el('epoch-media-focus').disabled=!epochMediaHasTests && epochMediaOffset>=epochMediaTotal;
         el('epoch-media-status').textContent=epochMediaTotal?epochMediaOffset+' of '+epochMediaTotal+' recorded results':'No recorded media for this checkpoint.';
         if (!epochMediaTotal && !more) {
           var empty=document.createElement('p');
@@ -365,11 +369,28 @@
     epochMediaLoading=false;
     epochMediaScope={jobId:id,epoch:num};
     epochMediaOffset=0;
+    epochMediaHasTests=false;
     el('epoch-media-grid').replaceChildren();
     el('epoch-media-more').classList.add('hidden');
+    el('epoch-media-focus').disabled=false;
     el('epoch-media-title').textContent='Epoch '+num+' · combined generated results';
     el('epoch-media-dialog').showModal();
     epochMediaLoad(false);
+  };
+  el('epoch-media-focus').onclick=function(){
+    if(!epochMediaScope)return;
+    if(typeof window.testGenerationsOpenEpochFocusedReview!=='function'){
+      error(new Error('Focused Review is unavailable.'));return;
+    }
+    var scope=epochMediaScope, button=this;
+    button.disabled=true;
+    try {
+      window.testGenerationsOpenEpochFocusedReview(folder,scope.jobId,scope.epoch,function(){
+        if(scope!==epochMediaScope)return;
+        button.disabled=false;
+        epochMediaLoad(false);
+      });
+    }catch(exc){button.disabled=false;error(exc);}
   };
   el('epoch-media-close').onclick=epochMediaClose;
   el('epoch-media-more').onclick=function(){epochMediaLoad(true);};
@@ -378,6 +399,7 @@
     epochMediaSerial++;
     epochMediaScope=null;
     epochMediaLoading=false;
+    el('epoch-media-focus').disabled=true;
     el('epoch-media-grid').replaceChildren();
     el('epoch-media-more').classList.add('hidden');
     if(['finder','screening','tests'].includes(epochMediaReturnMode))window.epochFinderShowMode(epochMediaReturnMode);

@@ -83,6 +83,8 @@ test('suggestions name creative units regardless of advisory field hints', () =>
   }
   scope.recommendations.writeFields=['prompt'];
   assert.equal(scope.writeActionLabel(),'Draft Scene revisions');
+  scope.recommendations={writeHint:'scenes',writeFields:[],sceneId:'',sceneNumber:1};
+  assert.equal(scope.writeActionLabel(),'Draft Scene revisions');
   scope.recommendations={writeHint:'project',writeFields:['concept'],sceneId:''};
   assert.equal(scope.writeActionLabel(),'Revise Project Overview');
   scope.recommendations={writeHint:'scenes',writeFields:['title','summary'],sceneId:''};
@@ -155,9 +157,11 @@ test('Scene Write receives early decisions and complete long messages from the d
   assert.ok(history.every(message=>['user','assistant'].includes(message.role)));
 });
 
-for (const hidden of [true,false]) test('suggestion prepares Review after destination setup, panel hidden='+hidden, async () => {
+for (const hidden of [true,false]) for (const target of [
+  {sceneId:'scene-a',sceneNumber:0}, {sceneId:'',sceneNumber:1}, {sceneId:'',sceneNumber:0}
+]) test('suggestion prepares the correct Scene operation, panel hidden='+hidden+', target='+JSON.stringify(target), async () => {
   const mode={}, operation={options:[{value:'scene-write'}]}, calls=[];
-  const scope=vm.createContext({recommendations:{writeHint:'scenes',sceneId:'scene-a'},writeOperationChosen:false,
+  const scope=vm.createContext({recommendations:{writeHint:'scenes',...target},writeOperationChosen:false,
     el:id=>({'studio-dw-write-operation':operation,'studio-dw-scene-mode':mode,
       'studio-dw-write-panel':{classList:{contains:()=>hidden}}})[id],
     toggle:async which=>{assert.equal(which,'write');calls.push('setup');return true;},
@@ -167,8 +171,24 @@ for (const hidden of [true,false]) test('suggestion prepares Review after destin
   vm.runInContext(part('  function openRecommendedWrite() {','  function captureActionLabel(capture) {'),scope);
   await scope.openRecommendedWrite();
   assert.deepEqual(calls,['setup','prepare']);
-  assert.equal(mode.value,'revise');
+  assert.equal(mode.value,target.sceneId || target.sceneNumber ? 'revise' : 'create');
   assert.equal(operation.value,'scene-write');
+});
+
+test('opening Write defaults to revising a numbered Scene and preserves deliberate mode choices',async()=>{
+  const mode={},operation={},project={value:'p1'};
+  const scope=vm.createContext({recommendations:{writeHint:'scenes',sceneId:'',sceneNumber:1},
+    writeOperationChosen:false,projects:[{id:'p1'}],
+    el:id=>({'studio-dw-write-operation':operation,'studio-dw-scene-mode':mode,'studio-dw-write-project':project})[id],
+    refreshProjects:async()=>{},loadStory:async()=>({id:'p1'}),renderWriteStory(){},setOperation(){},
+    status:message=>assert.fail(message)});
+  vm.runInContext(part('  function refreshWrite() {','  function toggle(which) {'),scope);
+  await scope.refreshWrite();
+  assert.equal(operation.value,'scene-write');
+  assert.equal(mode.value,'revise');
+  scope.writeOperationChosen=true;mode.value='create';
+  await scope.refreshWrite();
+  assert.equal(mode.value,'create','explicit Add Scenes choice survives refresh');
 });
 
 test('failed destination setup reports its failure without starting a proposal', async () => {

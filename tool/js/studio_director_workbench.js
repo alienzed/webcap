@@ -336,7 +336,7 @@
           } else if (['scene', 'scenes', 'scene-edit', 'scenes-batch'].includes(hint)) {
             el('studio-dw-write-operation').value = 'scene-write';
             el('studio-dw-scene-mode').value =
-              (recommendations.sceneId || hint === 'scene-edit' || hint === 'scenes-batch') ? 'revise' : 'create';
+              (recommendations.sceneId || recommendations.sceneNumber || hint === 'scene-edit' || hint === 'scenes-batch') ? 'revise' : 'create';
           } else if (!projects.length) el('studio-dw-write-operation').value = 'new-project';
         }
         setOperation();
@@ -842,7 +842,7 @@
     }
     select.value = operation;
     if (operation === 'scene-write') el('studio-dw-scene-mode').value =
-      (recommendations.sceneId || hint === 'scene-edit' || hint === 'scenes-batch') ? 'revise' : 'create';
+      (recommendations.sceneId || recommendations.sceneNumber || hint === 'scene-edit' || hint === 'scenes-batch') ? 'revise' : 'create';
     writeOperationChosen = true;
     sceneSelectionManual = false; // Explicitly follow Director's proposed Write target.
     var setup = el('studio-dw-write-panel').classList.contains('hidden') ? toggle('write') : refreshWrite();
@@ -859,7 +859,7 @@
     if (hint === 'new-project') return 'Create Project';
     if (hint === 'project') return 'Revise Project Overview';
     if (['scene', 'scenes', 'scene-edit', 'scenes-batch'].includes(hint))
-      return recommendations.sceneId ? 'Draft Scene revisions' : 'Draft Scenes';
+      return recommendations.sceneId || recommendations.sceneNumber ? 'Draft Scene revisions' : 'Draft Scenes';
     return '';
   }
   function renderReadiness(list) {

@@ -3966,7 +3966,8 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
 #studio-dw-assessment-content {white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;font-size:16px;max-height:min(65vh,700px);overflow:auto;}
 #studio-dw-assessment-dialog {max-width:min(760px,96vw);max-height:calc(100dvh - 40px);}
 @container (max-width:820px) {
-  .director-chat-drawer.studio-director #studio-dw-quick-read,\n  .director-chat-drawer.studio-director #studio-dw-quick-write {display:inline-flex;align-items:center;}
+  .director-chat-drawer.studio-director #studio-dw-quick-read,
+  .director-chat-drawer.studio-director #studio-dw-quick-write {display:inline-flex;align-items:center;}
   .director-chat-drawer.studio-director .director-chat-layout {display:flex;flex-direction:column;}
   .director-chat-drawer.studio-director .director-chat-conversation {height:100%;}
   .director-chat-drawer.studio-director .director-chat-sidebar {
@@ -3997,7 +3998,8 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
 @container (max-width:820px) {
   .director-chat-drawer.studio-director .director-chat-drawer-header {gap:8px;}
   .director-chat-drawer.studio-director .director-chat-header-actions {gap:6px;}
-  .director-chat-drawer.studio-director #studio-dw-quick-read,\n  .director-chat-drawer.studio-director #studio-dw-quick-write {min-height:40px;font-size:15px;font-weight:700;}
+  .director-chat-drawer.studio-director #studio-dw-quick-read,
+  .director-chat-drawer.studio-director #studio-dw-quick-write {min-height:40px;font-size:15px;font-weight:700;}
   .director-chat-drawer.studio-director .director-chat-sidebar {background:var(--panel-soft);}
 }
 

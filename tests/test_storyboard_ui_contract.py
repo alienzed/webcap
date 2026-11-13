@@ -1054,7 +1054,7 @@ def test_storyboard_overview_stretches_to_scroll_at_desktop_and_stacked_widths()
     # needs its own bounded scroll area for long Invariants lists.
     stacked = css.split("@media (max-width: 1180px) {", 1)[1]
     assert "overflow: auto;" in stacked
-    assert "max-height: calc(100dvh - 96px);" in stacked
+    assert "\n    height: calc(100dvh - 96px);" in stacked
     assert "grid-template-rows: minmax(0, 1fr) auto auto;" in stacked
     assert ".storyboard-story-overview-surface {\n    overflow-y: auto;" in stacked
     assert ".storyboard-story-overview-surface {\n    overflow: visible;" not in stacked

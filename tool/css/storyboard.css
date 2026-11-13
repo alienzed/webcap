@@ -2674,6 +2674,8 @@ html[data-theme="dark"] .storyboard-prompt-take-status {
   align-self: stretch;
   min-height: 0;
   align-content: start;
+  /* Keep clipped details sections at content height so this pane owns scrolling. */
+  grid-auto-rows: max-content;
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: 20px 22px 28px;
@@ -3315,9 +3317,9 @@ html[data-theme="dark"] .storyboard-prompt-take-status {
   }
 
   .storyboard-story-authoring {
-    /* Bound the stacked Story pane so its growing Invariants cannot leave the viewport. */
+    /* Give the stacked scroll pane a definite height; a maximum alone lets its row collapse. */
     min-height: 0;
-    max-height: calc(100dvh - 96px);
+    height: calc(100dvh - 96px);
     overflow: hidden;
     border-right: 0;
     border-bottom: 1px solid var(--border);

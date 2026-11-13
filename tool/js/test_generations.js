@@ -4308,6 +4308,10 @@
     button.classList.add('active');
     button.setAttribute('aria-expanded', 'true');
     el('test-generations-review-dimension').disabled = true;
+    el('test-generations-review-add').disabled = true;
+    el('test-generations-review-completed').classList.add('hidden');
+    el('test-generations-review').querySelector('[data-test-review-previous]').disabled = true;
+    el('test-generations-review').querySelector('[data-test-review-next]').disabled = true;
     el('test-generations-review-card').replaceChildren();
     el('test-generations-review-position').textContent = 'Loading dimensions…';
     el('test-generations-review-status').textContent = '';
@@ -4319,6 +4323,7 @@
       setReviewDimensions(catalog);
       reviewCatalogPending = false;
       el('test-generations-review-dimension').disabled = false;
+      el('test-generations-review-add').disabled = false;
       renderReview(currentStatus);
     }).catch(function (error) {
       if (!dialog.open || requestId !== reviewCatalogRequest) return;
@@ -5970,7 +5975,7 @@
       el('test-generations-review').close();
     };
     el('test-generations-review-completed').onclick = function () {
-      if (reviewRatingPending) return;
+      if (reviewRatingPending || reviewCatalogPending) return;
       reviewBrowseCompleted = !reviewBrowseCompleted;
       reviewKey = '';
       reviewHistory = [];
@@ -5987,7 +5992,7 @@
       button.setAttribute('aria-expanded', 'false');
     });
     el('test-generations-review-dimension').onchange = function () {
-      if (reviewRatingPending) { this.value = reviewDimensionId; return; }
+      if (reviewRatingPending || reviewCatalogPending) { this.value = reviewDimensionId; return; }
       reviewDimensionId = this.value;
       reviewHistory = [];
       reviewRevisiting = false;
@@ -6239,8 +6244,8 @@
       }
     };
     el('test-generations-review').onclick = function (event) {
-      if (event.target.closest('[data-test-review-previous]')) { if (!reviewRatingPending) moveReview(-1); return; }
-      if (event.target.closest('[data-test-review-next]')) { if (!reviewRatingPending) moveReview(1); return; }
+      if (event.target.closest('[data-test-review-previous]')) { if (!reviewRatingPending && !reviewCatalogPending) moveReview(-1); return; }
+      if (event.target.closest('[data-test-review-next]')) { if (!reviewRatingPending && !reviewCatalogPending) moveReview(1); return; }
       var rating = event.target.closest('[data-test-rating]');
       if (rating) { rateCurrentReview(Number(rating.dataset.testRating)); return; }
       var vl = event.target.closest('[data-test-vl-result]');
@@ -6249,7 +6254,7 @@
       if (epoch) window.runAnalyticsViewEpoch(epoch.dataset.testEpochMediaJob, Number(epoch.dataset.testEpochMediaEpoch), 'tests');
     };
     document.addEventListener('keydown', function (event) {
-      if (!isOpen() || !reviewDialogOpen() || event.defaultPrevented || reviewRatingPending ||
+      if (!isOpen() || !reviewDialogOpen() || event.defaultPrevented || reviewRatingPending || reviewCatalogPending ||
           event.ctrlKey || event.metaKey || event.altKey || isEditableElement(event.target)) return;
       if (/^[1-5]$/.test(event.key)) {
         event.preventDefault();

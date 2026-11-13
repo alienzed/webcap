@@ -1990,7 +1990,7 @@ def normalize_freeform_messages(messages, allow_image_data_urls=False):
         normalized.append({"role": role, "content": content})
     return normalized
 
-def run_freeform_chat(model_id, messages, gpu_reserved=False, max_tokens=None, context_size=None, assessment_evidence=False, response_schema=None, allow_image_data_urls=False, thinking=None, use_configured_max_tokens=True):
+def run_freeform_chat(model_id, messages, gpu_reserved=False, max_tokens=None, context_size=None, assessment_evidence=False, response_schema=None, allow_image_data_urls=False, thinking=None, use_configured_max_tokens=True, sampling_profile=None):
     normalized = normalize_freeform_messages(messages, allow_image_data_urls=allow_image_data_urls)
 
     operation = "freeform_chat"
@@ -2025,6 +2025,7 @@ def run_freeform_chat(model_id, messages, gpu_reserved=False, max_tokens=None, c
                 allow_truncated=True,
                 assessment_evidence=assessment_evidence,
                 thinking=thinking,
+                **({"sampling": _sampling_profile(sampling_profile)} if sampling_profile else {}),
                 **({"use_configured_max_tokens": False} if not use_configured_max_tokens else {}),
             )
             _set_activity(

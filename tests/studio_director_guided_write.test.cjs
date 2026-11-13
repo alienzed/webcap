@@ -234,3 +234,21 @@ test('unit Apply saves aligned changed parts atomically and leaves the unchanged
   assert.deepEqual(payload,{storyId:'p1',revisions:[{sceneId:'a',
     expected:{summary:'Old intent',prompt:'Old H3'},changes:{summary:'New intent',prompt:'Aligned H3'}}]});
 });
+
+test('mismatched Scene targets require confirmation before any saved mutation', () => {
+  let called=0, confirmed=0;
+  const section={dataset:{sceneId:'a'},
+    querySelectorAll:()=>[{dataset:{selectField:'summary'}}],
+    querySelector:()=>({value:'New intent'})};
+  const scope=vm.createContext({proposedBatch:{storyId:'p1',
+    targetWarning:'Director suggested Scene 5, but Write targets Scene 1.',
+    scenes:[{sceneId:'a',before:{title:'A',summary:'Old intent',prompt:'Old prompt'}}]},
+    el:id=>id==='studio-dw-batch-editors' ? {querySelectorAll:()=>[section]} : {},
+    window:{confirm:()=>{confirmed++;return false;},
+      flushStudioDirectorStoryEdits:async()=>{}},
+    api:async()=>{called++;return {};},status:()=>{}});
+  vm.runInContext(part('  function applyBatchScenes() {','  function applyScene() {'),scope);
+  scope.applyBatchScenes();
+  assert.equal(confirmed,1);
+  assert.equal(called,0,'declining a conflicting target must not call the mutation API');
+});

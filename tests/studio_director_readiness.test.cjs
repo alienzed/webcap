@@ -179,7 +179,7 @@ test('Director guidance presents at most one contextual action and keeps assessm
   assert.match(html, /id="studio-dw-suggestions"/);
   assert.match(html, /<details class="studio-dw-assessment-details">/);
   assert.match(html, /<summary>Creative assessment details<\/summary>/);
-  assert.match(workbench, /'Revise Scene'/);
+  assert.match(workbench, /'Draft Scene revisions'/);
 });
 
 test('Scene revisions select saved Scenes, leaving changed fields to Director', () => {

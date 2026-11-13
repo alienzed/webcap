@@ -156,7 +156,7 @@ test('Scene revision synchronizes the chosen Project destination before requesti
     el:id=>id==='studio-dw-batch-scenes' ? {querySelectorAll:()=>[{value:'scene-a'}]} : {},
     status:message=>{if (message.startsWith('Scene revision draft failed')) assert.fail(message);},
     loadStory:async id=>{assert.equal(id,story.id);return story;},storyName:s=>s.title,
-    parseProposal:JSON.parse,validateSceneRevisionDraft:()=>[],
+    parseProposal:JSON.parse,validateSceneRevisionDraft:()=>[],recommendedSceneId:()=>'',
     window:{flushStudioDirectorStoryEdits:async()=>{},studioDirectorBridge:{
       selectWriteProject:(id,title)=>calls.push(['destination',id,title]),
       messages:()=>[],makeProposal:async instruction=>{

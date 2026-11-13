@@ -256,10 +256,13 @@ test('complete Studio model output is inspectable and its original capture reope
     currentMessages:()=>[{role:'assistant',content:"Here's the draft.",rawResponse:raw}],
     currentElapsedMap:()=>({}),currentMetricsMap:()=>({}),
     window:{studioDirectorWorkbench:{reviewGeneratedCapture:result=>calls.push(result)}},
-    Object,JSON,String
+    studioDirectorVisibleReply:visible,Object,JSON,String
   });
   vm.runInContext(part('  function renderMessages() {','  function renderStudioOperations() {'),context);
   vm.runInContext('renderMessages()',context);
+  assert.equal(host.children[0].children[1].textContent,
+    "Here's the draft.\n\nFull draft from earlier reply",
+    'older structured captures should become visible without repeating inference');
   const details=created.find(n=>n.className==='director-chat-full-response');
   const action=created.find(n=>n.className==='director-chat-review-draft');
   assert.equal(details,undefined,'raw model output stays out of the creative conversation');

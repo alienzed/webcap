@@ -135,10 +135,10 @@ def _validate_operations(operations):
 def _validate_readiness(value):
     """Bounded, explicitly model-proposed conversation working state; never Project authority."""
     if value is None:
-        return {"checks": [], "readHints": [], "writeHint": "", "sceneId": ""}
+        return {"checks": [], "readHints": [], "writeHint": "", "sceneId": "", "sceneNumber": 0}
     if (not isinstance(value, dict) or
             not {"checks", "readHints", "writeHint", "sceneId"}.issubset(value) or
-            not set(value).issubset({"checks", "readHints", "writeHint", "writeFields", "sceneId", "stale", "capture"})):
+            not set(value).issubset({"checks", "readHints", "writeHint", "writeFields", "sceneId", "sceneNumber", "stale", "capture"})):
         raise ValueError("Studio readiness must contain checks, Read hints and Write hint.")
     checks = value["checks"]
     if not isinstance(checks, list) or len(checks) > 30:
@@ -160,6 +160,9 @@ def _validate_readiness(value):
         raise ValueError("Studio Write recommendation is invalid.")
     if not isinstance(value["sceneId"], str) or len(value["sceneId"]) > 160:
         raise ValueError("Studio Scene recommendation is invalid.")
+    scene_number = value.get("sceneNumber", 0)
+    if (type(scene_number) is not int or not 0 <= scene_number <= 10000):
+        raise ValueError("Studio Scene number recommendation is invalid.")
     write_fields = value.get("writeFields", [])
     allowed_fields = (
         {"title", "concept", "style", "invariants"} if value["writeHint"] == "project"
@@ -207,6 +210,8 @@ def _validate_readiness(value):
               "writeHint": value["writeHint"], "sceneId": value["sceneId"]}
     if "writeFields" in value:
         result["writeFields"] = write_fields
+    if "sceneNumber" in value:
+        result["sceneNumber"] = scene_number
     if "stale" in value:
         result["stale"] = value["stale"]
     if capture is not None:

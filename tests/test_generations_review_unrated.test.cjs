@@ -76,7 +76,7 @@ test('Back revisits the last rated item; forward goes to pending work', () => {
 });
 
 test('Review is a modal activity, and the saved rating is applied before auto-advance', () => {
-  const review = html.split('id="test-generations-review"', 1)[1].split('</dialog>', 1)[0];
+  const review = html.split('id="test-generations-review"')[1].split('</dialog>')[0];
   assert.ok(html.includes('id="test-generations-view-review-btn" type="button" class="test-generations-review-open"'));
   assert.ok(html.includes('<dialog id="test-generations-review"'));
   assert.ok(review.includes('id="test-generations-review-dimension"'));

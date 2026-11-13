@@ -18,7 +18,7 @@ test('Scene-number recommendation resolves to a saved ID; deliberate choices sta
     return selector === 'input:checked' ? controls.filter(n=>n.checked) : controls;
   }, replaceChildren(){this.children=[];},appendChild(n){this.children.push(n);}};
   const scope=vm.createContext({writeStory:null,readinessStale:false,
-    sceneSelectionManual:false,sceneSelectionProject:'',
+    sceneSelectionManual:false,sceneSelectionProject:'',recommendationProject:'p1',
     recommendations:{writeHint:'scenes',sceneId:'',sceneNumber:2},
     activeTarget:()=>({storyId:'p1',sceneId:'a'}),
     window:{studioDirectorBridge:{workingStoryId:()=> 'p1'}},
@@ -55,11 +55,11 @@ test('Scene-number recommendation resolves to a saved ID; deliberate choices sta
   scope.renderWriteStory(story);
   assert.deepEqual(checked(),['b'],'an exact saved ID takes priority over a conflicting number');
   scope.recommendations.sceneId='';
-  scope.window.studioDirectorBridge.workingStoryId=()=> 'other-project';
+  scope.recommendationProject='other-project';
   scope.activeTarget=()=>({storyId:'other-project',sceneId:''});
   scope.renderWriteStory(story);
   assert.deepEqual(checked(),[],'a number from another Project must not be applied');
-  scope.window.studioDirectorBridge.workingStoryId=()=> 'p1';
+  scope.recommendationProject='p1';
   scope.activeTarget=()=>({storyId:'p1',sceneId:'a'});
   scope.renderWriteStory(story);
   assert.deepEqual(checked(),['a']);

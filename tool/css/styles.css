@@ -4427,6 +4427,19 @@ iframe {
   font-size: 16px;
   font-weight: 650;
 }
+.test-generations-review-completed {
+  width: auto;
+  min-height: 40px;
+  flex: 0 0 auto;
+  padding: 8px 13px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 650;
+  cursor: pointer;
+}
 .test-generations-review-footer > span { font-size: 14px; color: var(--muted); }
 .test-generations-review-footer #test-generations-review-status {
   flex: 1 1 260px;

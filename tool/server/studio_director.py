@@ -44,7 +44,7 @@ _WORKSHOP = (
     "Read and Write are explicit author-driven operations. Conversation never edits Project records. "
     "Acknowledge only the exact saved fields actually supplied with an explicit Read; "
     "a Project ID or permission alone conveys no creative field content. "
-    "A Write field or current Scene selection is context, not proof of creative intent; identify a different intended Scene when the discussion warrants it. "
+    "Treat selected Write fields as context; suggest the intended Scene when different. "
     "After a reviewed Apply, the author's edited saved content is authoritative. "
     "Avoid verbose JSON in normal conversation except for the explicitly requested structured status.\n"
 )

@@ -25,7 +25,8 @@
   var reviewSession = '';
   var reviewKey = '';
   var reviewRatingPending = false;
-  var reviewReturnView = 'grid';
+  var reviewCatalogPending = false;
+  var reviewCatalogRequest = 0;
   var reviewHistory = [];
   var reviewRevisiting = false;
   var reviewBrowseCompleted = false;
@@ -3451,7 +3452,7 @@
       } : null,
       placeholder: failed ? 'Generation failed' : (!mediaFile ? 'Preview unavailable' : null),
       error: failed ? String(result.error || 'Generation failed.') : '',
-      removeNode: buildResultRemoveButton(result),
+      removeNode: inReview ? null : buildResultRemoveButton(result),
       rating: !failed && session && mediaFile ? { value: inReview ? reviewRatingValue(result) : result.rating, session: session, mediaFile: mediaFile } : null,
       testEvaluation: !failed && mediaFile ? {mediaFile: mediaFile} : null,
       epochLink: epochText ? {text: epochText, jobId: provenance.sourceJobId, epoch: provenance.sourceEpoch} : null,
@@ -4079,6 +4080,8 @@
     });
   }
 
+  function reviewDialogOpen() { return el('test-generations-review').open; }
+
   function reviewResults(status) {
     return (status && Array.isArray(status.results) ? status.results : []).filter(function (result) {
       return !!resultMediaFile(result) && !result.error;
@@ -4179,12 +4182,13 @@
   }
 
   function renderReview(status) {
-    if (resultsView !== 'review') return;
+    if (!reviewDialogOpen() || reviewCatalogPending) return;
     var dialog = el('test-generations-review');
     var host = el('test-generations-review-card');
     var position = el('test-generations-review-position');
     var all = reviewResults(status);
     var pending = reviewPendingResults(status);
+    el('test-generations-review-title').textContent = reviewDimensionLabel();
     var session = String(status && status.session || '');
     if (reviewSession !== session) {
       reviewSession = session;
@@ -4279,13 +4283,13 @@
     var savedSession = String(currentStatus && currentStatus.session || '');
     var savedKey = reviewKey, savedDimension = reviewDimensionId;
     rateTestResult(star, function () {
-      if (resultsView === 'review' && String(currentStatus.session || '') === savedSession &&
+      if (reviewDialogOpen() && String(currentStatus.session || '') === savedSession &&
           reviewKey === savedKey && reviewDimensionId === savedDimension) {
         advanceReviewToUnrated();
       }
     }).finally(function () {
       reviewRatingPending = false;
-      if (resultsView === 'review') renderReview(currentStatus);
+      if (reviewDialogOpen()) renderReview(currentStatus);
     });
   }
 
@@ -5479,7 +5483,7 @@
             });
       warmStatus.then(function () {
         if (generation !== openGeneration || !isOpen()) return;
-        if (resultsView === 'review') renderReview(currentStatus);
+        if (reviewDialogOpen()) renderReview(currentStatus);
         if (testStatusHasPendingWork(currentStatus) || queuedTestJobs.length) pollStatus();
       }).catch(showError);
       return;
@@ -6243,15 +6247,13 @@
       if (event.target.closest('[data-test-review-next]')) { if (!reviewRatingPending) moveReview(1); return; }
       var rating = event.target.closest('[data-test-rating]');
       if (rating) { rateCurrentReview(Number(rating.dataset.testRating)); return; }
-      var remove = event.target.closest('[data-remove-candidate]');
-      if (remove && !reviewRatingPending) { removeCurrentSessionCandidate(remove); return; }
       var vl = event.target.closest('[data-test-vl-result]');
       if (vl) { showTestVlResult(vl.dataset.testVlResult); return; }
       var epoch = event.target.closest('[data-test-epoch-media-job]');
       if (epoch) window.runAnalyticsViewEpoch(epoch.dataset.testEpochMediaJob, Number(epoch.dataset.testEpochMediaEpoch), 'tests');
     };
     document.addEventListener('keydown', function (event) {
-      if (!isOpen() || resultsView !== 'review' || event.defaultPrevented || reviewRatingPending ||
+      if (!isOpen() || !reviewDialogOpen() || event.defaultPrevented || reviewRatingPending ||
           event.ctrlKey || event.metaKey || event.altKey || isEditableElement(event.target)) return;
       if (/^[1-5]$/.test(event.key)) {
         event.preventDefault();
@@ -6269,11 +6271,6 @@
             if (playback && typeof playback.catch === 'function') playback.catch(showError);
           } else video.pause();
         }
-      } else if (event.key === 'Delete') {
-        event.preventDefault();
-        if (event.repeat) return;
-        var remove = el('test-generations-review-card').querySelector('[data-remove-candidate]');
-        if (remove) removeCurrentSessionCandidate(remove);
       }
     });
     el('test-generations-compare').onclick = function (event) {

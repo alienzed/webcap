@@ -4729,7 +4729,7 @@
   }
 
   function renderResults(status) {
-    if (reviewDialogOpen()) renderReview(status || {});
+    if (reviewDialogOpen()) renderReview(reviewScope ? reviewStatus() : (status || {}));
     if (resultsView === 'matrix') {
       renderMatrix(status || {});
       syncTestVlControls();

@@ -757,6 +757,7 @@ def overview(folder_path):
             "results": len(stored.get("results") or []),
         })
         ratings = bench._session_effective_rating_map(directory)
+        overall_ratings = bench._session_rating_map(directory)
         vision = bench._session_vision_state(directory)
         by_media = vision.get("byMedia") if isinstance(vision.get("byMedia"), dict) else {}
         disabled = set(vision.get("disabledGroups") or [])
@@ -800,7 +801,9 @@ def overview(folder_path):
             entry = epoch_record(job_id, epoch, name)
             entry["testCount"] += 1
             entry["sessions"].add(directory.name)
-            if not rated and media and (directory / media).is_file():
+            # Insights Blind Rate still targets missing Overall ratings, even if
+            # a preview already has separate dimensional evidence.
+            if media not in overall_ratings and media and (directory / media).is_file():
                 totals["reviewableUnrated"] += 1
             if rated:
                 entry["ratedCount"] += 1

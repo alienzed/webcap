@@ -13,7 +13,7 @@ from datetime import datetime
 from pathlib import Path, PurePosixPath
 
 from . import config as app_config
-from .folder_state_store import read_folder_state, set_media_rating, set_test_vision_assessment, set_test_workspace_prompt, migrate_test_workspace_prompts, set_test_campaign_settings
+from .folder_state_store import read_folder_state, set_media_rating, set_media_dimension_rating, add_set_rating_dimension, set_test_vision_assessment, set_test_workspace_prompt, migrate_test_workspace_prompts, set_test_campaign_settings
 from .test_models import get_test_model, get_test_model_for_staging_key, supported_models as registered_test_models, supported_profile_ids
 from .training_test_paths import browse_test_source, test_copy_path
 from .training_runner import candidate_run_snapshot_from_provenance, candidate_selected_epoch_from_provenance
@@ -659,6 +659,88 @@ def _session_rating_map(session_directory):
     return ratings
 
 
+
+def _rating_dimensions(folder_path):
+    """Global presets and Set additions. IDs, not mutable labels, own saved scores."""
+    global_items = app_config.load_config_from_disk().get("evaluation_rating_dimensions") or []
+    state_path = _owning_set_directory(folder_path) / ".webcap_state.json"
+    local_items = read_folder_state(state_path).get("evaluation_rating_dimensions") or []
+    if not isinstance(local_items, list):
+        raise ValueError("Set rating dimensions must be a list.")
+    # A Set's existing dimension wins over a later global preset with
+    # the same name. Do not strand historical Set-specific scores.
+    local_labels = {str(item.get("label") or "").strip().casefold()
+                    for item in local_items if isinstance(item, dict)}
+    visible_globals = [item for item in global_items
+                       if str(item.get("label") or "").strip().casefold() not in local_labels]
+    seen_ids, seen_labels, merged = set(), set(), []
+    for item in [*visible_globals, *local_items]:
+        if not isinstance(item, dict):
+            raise ValueError("Set rating dimension must be an object.")
+        identifier = str(item.get("id") or "").strip()
+        label = str(item.get("label") or "").strip()
+        if not identifier or not label:
+            raise ValueError("Set rating dimension requires an ID and label.")
+        if identifier in seen_ids or label.casefold() in seen_labels:
+            raise ValueError("Set and global rating dimensions overlap; rename the duplicate.")
+        seen_ids.add(identifier)
+        seen_labels.add(label.casefold())
+        merged.append({"id": identifier, "label": label})
+    return {"dimensions": merged, "globalDimensions": global_items, "setDimensions": local_items}
+
+
+def add_rating_dimension(folder_path, label, scope):
+    name = str(label or "").strip()
+    if not name or len(name) > 80 or any(ord(ch) < 32 for ch in name) or name.casefold() == "overall":
+        raise ValueError("Enter a dimension name of at most 80 characters other than Overall.")
+    if scope not in ("set", "global"):
+        raise ValueError("Rating dimension scope must be Set or global.")
+    catalog = _rating_dimensions(folder_path)
+    if any(item["label"].casefold() == name.casefold() for item in catalog["dimensions"]):
+        raise ValueError("A rating dimension with that name already exists.")
+    item = {"id": secrets.token_hex(8), "label": name}
+    if scope == "global":
+        saved = app_config.load_config_from_disk()
+        saved["evaluation_rating_dimensions"] = catalog["globalDimensions"] + [item]
+        app_config.save_config_to_disk(saved)
+    else:
+        add_set_rating_dimension(_owning_set_directory(folder_path) / ".webcap_state.json", item)
+    return _rating_dimensions(folder_path)
+
+
+def _session_dimension_rating_map(session_directory):
+    raw = read_folder_state(Path(session_directory) / ".webcap_state.json").get("ratings_by_dimension") or {}
+    if not isinstance(raw, dict):
+        raise ValueError("Saved dimensional ratings must be an object.")
+    collected = {}
+    for media, dimensions in raw.items():
+        if not isinstance(dimensions, dict):
+            raise ValueError("Saved per-media dimensional ratings must be an object.")
+        valid = {}
+        for identifier, value in dimensions.items():
+            try:
+                rating = int(round(float(value)))
+            except (ValueError, TypeError):
+                continue
+            if 1 <= rating <= 5:
+                valid[str(identifier)] = rating
+        if valid:
+            collected[str(media)] = valid
+    return collected
+
+
+def _session_effective_rating_map(session_directory):
+    """One equal-weight mean per rated preview; unchanged for legacy Overall-only media."""
+    overall = _session_rating_map(session_directory)
+    dimensions = _session_dimension_rating_map(session_directory)
+    combined = {}
+    for media in overall.keys() | dimensions.keys():
+        values = ([overall[media]] if media in overall else []) + list(dimensions.get(media, {}).values())
+        if values:
+            combined[media] = sum(values) / len(values)
+    return combined
+
+
 def _result_media_file(result):
     if not isinstance(result, dict):
         return ""
@@ -670,6 +752,8 @@ def _with_session_ratings(session_directory, payload):
         return payload
     visible = dict(payload)
     ratings = _session_rating_map(session_directory)
+    dimension_ratings = _session_dimension_rating_map(session_directory)
+    effective = _session_effective_rating_map(session_directory)
     results = visible.get("results") if isinstance(visible.get("results"), list) else []
     enriched = []
     for result in results:
@@ -680,6 +764,8 @@ def _with_session_ratings(session_directory, payload):
         output_name = _result_media_file(item)
         if output_name in ratings:
             item["rating"] = ratings[output_name]
+        item["dimensionRatings"] = dimension_ratings.get(output_name, {})
+        item["combinedRating"] = effective.get(output_name)
         enriched.append(item)
     visible["results"] = enriched
     return visible
@@ -1062,7 +1148,7 @@ def _candidate_rating_scores(folder_path, model_id=None, session_snapshot=None, 
         if payload.get("sweepWeights"):
             continue
         results = payload.get("results") if isinstance(payload.get("results"), list) else []
-        ratings = _session_rating_map(session)
+        ratings = _session_effective_rating_map(session)
         for result in results:
             if not isinstance(result, dict) or str(result.get("kind") or "") == "base":
                 continue
@@ -1226,14 +1312,22 @@ def resolve_result_media(folder_path, session_name, media_name):
     return media
 
 
-def rate_result(folder_path, session_name, media_name, rating):
+def rate_result(folder_path, session_name, media_name, rating, dimension_id="overall"):
     session = _session_directory(folder_path, session_name)
     media = resolve_result_media(folder_path, session_name, media_name)
-    value = set_media_rating(session / ".webcap_state.json", media.name, rating)
+    dimension = str(dimension_id or "overall").strip()
+    if dimension == "overall":
+        value = set_media_rating(session / ".webcap_state.json", media.name, rating)
+    else:
+        catalog = _rating_dimensions(folder_path)
+        if not any(item["id"] == dimension for item in catalog["dimensions"]):
+            raise ValueError("Choose a saved rating dimension for this Set.")
+        value = set_media_dimension_rating(session / ".webcap_state.json", media.name, dimension, rating)
     return {
         "operation": "test_rate_result",
         "session": session.name,
         "mediaFile": media.name,
+        "dimensionId": dimension,
         "rating": value,
     }
 
@@ -1585,6 +1679,11 @@ def handle_request(folder_path, mode, selection_criteria=None):
     if operation == "test_vision_update":
         criteria = selection_criteria if isinstance(selection_criteria, dict) else {}
         return update_vision(folder_path, criteria.get("session"), criteria)
+    if operation == "test_rating_dimensions":
+        return _rating_dimensions(folder_path)
+    if operation == "test_rating_dimension_add":
+        criteria = selection_criteria if isinstance(selection_criteria, dict) else {}
+        return add_rating_dimension(folder_path, criteria.get("label"), criteria.get("scope"))
     if operation == "test_rate_result":
         criteria = selection_criteria if isinstance(selection_criteria, dict) else {}
         return rate_result(
@@ -1592,6 +1691,7 @@ def handle_request(folder_path, mode, selection_criteria=None):
             criteria.get("session"),
             criteria.get("mediaFile"),
             criteria.get("rating"),
+            criteria.get("dimensionId", "overall"),
         )
     if operation == "test_stop":
         criteria = selection_criteria if isinstance(selection_criteria, dict) else {}

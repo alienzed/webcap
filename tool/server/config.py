@@ -216,6 +216,24 @@ def validate_config_payload(payload):
         "models": models,
     }
 
+    # Shared rating dimensions are optional presets; each Set owns its additions.
+    raw_dimensions = out.get("evaluation_rating_dimensions", [])
+    if not isinstance(raw_dimensions, list):
+        raise ValueError("Config.evaluation_rating_dimensions must be a list.")
+    dimensions, seen_ids, seen_names = [], set(), set()
+    for item in raw_dimensions:
+        if not isinstance(item, dict):
+            raise ValueError("Each global rating dimension must be an object.")
+        identifier, label = str(item.get("id") or "").strip(), str(item.get("label") or "").strip()
+        if not identifier or len(identifier) > 64 or not label or len(label) > 80 or any(ord(ch) < 32 for ch in label):
+            raise ValueError("Global rating dimensions require an ID and a short name.")
+        if label.casefold() == "overall" or identifier in seen_ids or label.casefold() in seen_names:
+            raise ValueError("Global rating dimensions must have unique IDs and names other than Overall.")
+        seen_ids.add(identifier)
+        seen_names.add(label.casefold())
+        dimensions.append({"id": identifier, "label": label})
+    out["evaluation_rating_dimensions"] = dimensions
+
     out["debug"] = bool(out.get("debug", False))
 
     theme = str(out.get("theme") or "light").strip().lower()

@@ -662,7 +662,8 @@ def test_blind_rating_videos_autoplay_muted_without_losing_controls():
     from pathlib import Path
     script = (Path(__file__).resolve().parents[1] / "tool/js/run_analytics.js").read_text(encoding="utf-8")
     review = script.split("  function labReviewRender(){", 1)[1].split("  function labReviewLoad(){", 1)[0]
-    assert "if(video){media.controls=true;media.preload='auto';media.playsInline=true;media.muted=true;media.defaultMuted=true;media.autoplay=true;}" in review
+    assert "if(video){media.controls=true;media.preload='auto';media.playsInline=true;media.muted=true;media.defaultMuted=true;media.autoplay=true;" in review
+    assert "media.loop=true;" in review
     assert "lab('review-media').appendChild(media);" in review
 
 

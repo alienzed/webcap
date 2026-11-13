@@ -318,7 +318,7 @@ def test_test_generations_compare_mode_reuses_current_session_results():
     assert "sharedTestCard(result, status, 'test-generations-compare-item', true)" in compare_block
     assert "sharedTestCard(result, status, 'test-generations-result-card', false)" in result_block
     assert "sharedTestCard(failure, status, 'test-generations-result-card is-failed', false, true)" in result_block
-    assert "removeNode: buildResultRemoveButton(result)" in script
+    assert "removeNode: inReview ? null : buildResultRemoveButton(result)" in script
     assert "remove.dataset.removeCandidate = candidateFile" in script
     assert ".test-generations-compare-stage" in css
     assert "grid-template-columns: repeat(2, minmax(0, 1fr));" in css
@@ -1009,7 +1009,7 @@ def test_test_results_media_and_ratings_use_session_identity_not_fs_root_navigat
     assert "request('test_rate_result'" in script
     assert '@app.route("/fs/test_generations/media", methods=["GET"])' in app
     assert "def resolve_result_media(folder_path, session_name, media_name):" in backend
-    assert "def rate_result(folder_path, session_name, media_name, rating):" in backend
+    assert "def rate_result(folder_path, session_name, media_name, rating, dimension_id=\"overall\"):" in backend
 
 
 def test_test_result_grid_identity_is_session_scoped_when_output_root_is_external():

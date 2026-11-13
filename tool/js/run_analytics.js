@@ -280,12 +280,13 @@
     cancelCaptionAssistJob(directorJob).catch(error);
     el('director-status').textContent='Stop requested…';
   };
-  var epochMediaScope=null, epochMediaSerial=0, epochMediaOffset=0, epochMediaTotal=0, epochMediaLoading=false, epochMediaReturnMode='analytics';
+  var epochMediaScope=null, epochMediaSerial=0, epochMediaOffset=0, epochMediaTotal=0, epochMediaLoading=false, epochMediaHasTests=false, epochMediaReturnMode='analytics';
   function epochMediaClose() {
     var back=epochMediaReturnMode;
     epochMediaSerial++;
     epochMediaScope=null;
     epochMediaLoading=false;
+    epochMediaHasTests=false;
     el('epoch-media-focus').disabled=true;
     el('epoch-media-dialog').close();
     el('epoch-media-grid').replaceChildren();
@@ -305,7 +306,7 @@
         return data;
       });}).then(function(data){
         if(serial!==epochMediaSerial || scope!==epochMediaScope)return;
-        if(!more) {el('epoch-media-grid').replaceChildren();epochMediaOffset=0;}
+        if(!more) {el('epoch-media-grid').replaceChildren();epochMediaOffset=0;epochMediaHasTests=false;}
         (data.media||[]).forEach(function(item) {
           var card=document.createElement('article');card.className='run-analytics-epoch-media-card';
           var url=item.source==='campaign'
@@ -339,9 +340,10 @@
           });card.appendChild(source);
           el('epoch-media-grid').appendChild(card);
         });
+        epochMediaHasTests=epochMediaHasTests||(data.media||[]).some(function(item){return item.source==='test'&&item.mediaAvailable!==false;});
         epochMediaOffset += (data.media||[]).length;
         epochMediaTotal=Number(data.total||0);
-        el('epoch-media-focus').disabled=!data.media?.some(function(item){return item.source==='test' && item.mediaAvailable!==false;}) && epochMediaOffset>=epochMediaTotal;
+        el('epoch-media-focus').disabled=!epochMediaHasTests && epochMediaOffset>=epochMediaTotal;
         el('epoch-media-status').textContent=epochMediaTotal?epochMediaOffset+' of '+epochMediaTotal+' recorded results':'No recorded media for this checkpoint.';
         if (!epochMediaTotal && !more) {
           var empty=document.createElement('p');
@@ -367,6 +369,7 @@
     epochMediaLoading=false;
     epochMediaScope={jobId:id,epoch:num};
     epochMediaOffset=0;
+    epochMediaHasTests=false;
     el('epoch-media-grid').replaceChildren();
     el('epoch-media-more').classList.add('hidden');
     el('epoch-media-focus').disabled=false;

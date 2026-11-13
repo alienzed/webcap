@@ -258,9 +258,7 @@
     updateScope();
   }
   function recommendedSceneId(story) {
-    if (readinessStale || !story || !Array.isArray(story.sceneOrder) ||
-        !['scenes', 'scene', 'scene-edit', 'scenes-batch'].includes(recommendations.writeHint))
-      return '';
+    if (readinessStale || !story || !Array.isArray(story.sceneOrder)) return '';
     if (recommendations.sceneId)
       return story.sceneOrder.includes(recommendations.sceneId) ? recommendations.sceneId : '';
     // The model may know "Scene 5" without having Read its opaque saved ID.

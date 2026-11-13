@@ -4308,6 +4308,143 @@ iframe {
   color: var(--text);
   font-variant-numeric: tabular-nums;
 }
+/* Focused Review is an activity, not another gallery tab. */
+.test-generations-review-open {
+  align-self: center;
+  width: auto;
+  flex: 0 0 auto;
+  min-height: 40px;
+  padding: 8px 16px;
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  background: var(--panel-soft);
+  color: var(--text);
+  font: inherit;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.test-generations-review-open.active { background: var(--accent); color: var(--panel); }
+.test-generations-review-dialog {
+  position: fixed;
+  box-sizing: border-box;
+  width: min(1540px, calc(100vw - 32px));
+  height: calc(100dvh - 32px);
+  max-height: calc(100dvh - 32px);
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--panel);
+  color: var(--text);
+  box-shadow: 0 24px 60px #0008;
+  overflow: hidden;
+}
+.test-generations-review-dialog:not([open]) { display: none !important; }
+.test-generations-review-dialog[open] { display: flex; flex-direction: column; gap: 0; }
+.test-generations-review-dialog::backdrop { background: rgba(0, 0, 0, .7); }
+.test-generations-review-header {
+  display: flex;
+  gap: 22px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 24px;
+  border-bottom: 1px solid var(--border);
+}
+.test-generations-review-title { flex: 1 1 auto; min-width: 0; }
+.test-generations-review-title > span { font-size: 14px; color: var(--muted); font-weight: 700; }
+.test-generations-review-title h2 { margin: 3px 0 6px; font-size: 27px; line-height: 1.2; }
+.test-generations-review-title p { margin: 0; font-size: 16px; }
+.test-generations-review-criteria {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 260px;
+  flex: 0 1 340px;
+}
+.test-generations-review-criteria > label { font-size: 16px; font-weight: 650; }
+.test-generations-review-criteria select,
+.test-generations-review-add-fields input {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 42px;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-soft);
+  color: var(--text);
+  font-size: 16px;
+}
+.test-generations-review-criteria details { position: relative; }
+.test-generations-review-criteria summary { font-size: 15px; cursor: pointer; }
+.test-generations-review-add-fields {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.test-generations-review-add-fields input { flex: 1 1 190px; min-width: 0; }
+.test-generations-review-add-fields select { flex: 1 1 130px; width: auto; }
+.test-generations-review-add-fields button,
+.test-generations-review-close {
+  width: auto;
+  min-height: 42px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-soft);
+  color: var(--text);
+  padding: 8px 15px;
+  font-size: 16px;
+  font-weight: 650;
+  cursor: pointer;
+}
+.test-generations-review-close { flex: 0 0 auto; }
+.test-generations-review-dialog .test-generations-review-card-host {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 12px 18px;
+  background: var(--panel-soft);
+}
+.test-generations-review-dialog .test-generations-review-item { max-width: 1100px; }
+.test-generations-review-dialog .test-generations-review-item .test-generations-result-footer {
+  max-height: 36%;
+}
+.test-generations-review-footer {
+  flex: 0 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 24px 16px;
+  border-top: 1px solid var(--border);
+}
+.test-generations-review-dialog .test-generations-review-navigation { padding: 0; gap: 10px; }
+.test-generations-review-dialog .test-generations-review-navigation button {
+  min-height: 44px;
+  min-width: 90px;
+  padding: 8px 15px;
+  font-size: 16px;
+  font-weight: 650;
+}
+.test-generations-review-footer > span { font-size: 14px; color: var(--muted); }
+.test-generations-review-footer #test-generations-review-status {
+  flex: 1 1 260px;
+  margin: 0;
+  font-size: 16px;
+}
+@media (max-width: 800px) {
+  .test-generations-review-header { flex-wrap: wrap; gap: 10px; padding: 12px 14px; }
+  .test-generations-review-title h2 { font-size: 22px; }
+  .test-generations-review-criteria { flex: 1 1 240px; min-width: 0; }
+  .test-generations-review-dialog .test-generations-review-card-host { padding: 6px; }
+  .test-generations-review-footer { padding: 10px 14px; }
+}
+@media (max-height: 620px) {
+  .test-generations-review-dialog[open] { overflow-y: auto; }
+  .test-generations-review-dialog .test-generations-review-card-host { flex: 0 0 330px; min-height: 220px; }
+}
+
 .test-generations-result-card {
   position: relative;
   align-self: start;

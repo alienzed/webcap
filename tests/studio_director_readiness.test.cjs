@@ -155,7 +155,7 @@ test('capture is optional, bounded and remains editable authoring material, not 
   const proposal = {...valid, capture};
   assert.deepEqual(parse(envelope(proposal)).readiness.capture, capture);
   const response = processResponse(envelope(proposal));
-  assert.equal(response.text, 'A concise suggestion.');
+  assert.equal(response.text, 'A concise suggestion.\n\n' + capture.content);
   assert.deepEqual(response.state.studioReadiness.capture, capture);
   assert.match(director, /reviewCapture: function \(capture, storyId\)/);
   assert.match(director, /showStudioBriefReview\(\)/);

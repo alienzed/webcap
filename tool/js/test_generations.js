@@ -3422,15 +3422,12 @@
 
   function sharedTestCard(result, status, className, muted, failed) {
     var inReview = className.indexOf('test-generations-review-item') !== -1;
-    var variation = result && result.variationIndex != null &&
-      status && Array.isArray(status.variationCases)
-      ? status.variationCases[Number(result.variationIndex)] : null;
     var wildcardChoices = result && result.prompt && result.prompt === status.resolvedPrompt
       ? (status.wildcardSummary || []) : [];
     if (inReview) {
-      var variationLabel = String(variation && variation.label || '').trim();
-      if (variationLabel) wildcardChoices = [variationLabel];
-      else if (!wildcardChoices.length) wildcardChoices = status.wildcardSummary || status.wildcardValues || [];
+      // Show every choice made for this render, not one variation label
+      // or the session-level choices that may belong to a different render.
+      wildcardChoices = Array.isArray(result && result.wildcardValues) ? result.wildcardValues : [];
     }
     var mediaFile = resultMediaFile(result), session = String(status && status.session || '');
     var identity = candidateIdentity(result), provenance = result && result.provenance || {};

@@ -1110,11 +1110,26 @@
     setProgressVisible(false);
   }
 
+  function placeStudioSuggestion(node) {
+    node.classList.add('hidden');
+    var messages = currentMessages(), latest = messages[messages.length - 1];
+    var row = el('director-chat-messages').lastElementChild;
+    if (state.activeMode === 'storyboard' && latest && latest.role === 'assistant' &&
+        row && node.children.length) {
+      row.appendChild(node);
+      node.classList.remove('hidden');
+    }
+  }
+
   function renderMessages() {
     var host = el('director-chat-messages');
     var empty = el('director-chat-empty');
     if (!host || !empty) return;
 
+    // Preserve the workbench-owned action while rebuilding message rows.
+    var suggestion = el('studio-dw-suggestions');
+    host.before(suggestion);
+    suggestion.classList.add('hidden');
     host.innerHTML = '';
     empty.classList.toggle('hidden', currentMessages().length > 0);
 
@@ -1175,6 +1190,7 @@
       host.appendChild(row);
     });
 
+    placeStudioSuggestion(suggestion);
     host.scrollTop = host.scrollHeight;
   }
 
@@ -3797,6 +3813,7 @@
   }
 
   window.studioDirectorBridge = {
+    placeSuggestedAction: placeStudioSuggestion,
     canReview: function () {
       return state.open && state.activeMode === 'storyboard' && state.sessionReady &&
         !state.pending && !state.attachmentPending;

@@ -189,7 +189,7 @@ test('Director guidance presents at most one contextual action and keeps assessm
   assert.match(workbench, /openRecommendedWrite/);
   assert.match(html, /id="studio-dw-suggestions"/);
   assert.match(html, /<details class="studio-dw-assessment-details">/);
-  assert.match(html, /<summary>Creative assessment details<\/summary>/);
+  assert.match(html, /<summary>Assessment<\/summary>/);
   assert.match(workbench, /'Draft Scene revisions'/);
 });
 
@@ -215,7 +215,7 @@ test('complete Studio model output is inspectable and its original capture reope
   }});
   const created=[];
   function node(tag) {
-    const el={tagName:tag,children:[],className:'',classList:{toggle(){}},
+    const el={tagName:tag,children:[],className:'',classList:{toggle(){},add(){},remove(){}},before(){},
       appendChild(child){this.children.push(child);return child;},
       append(...children){this.children.push(...children);},
       replaceChildren(...children){this.children=children;},
@@ -234,7 +234,7 @@ test('complete Studio model output is inspectable and its original capture reope
     window:{studioDirectorWorkbench:{reviewGeneratedCapture:result=>calls.push(result)}},
     Object,JSON,String
   });
-  vm.runInContext(part('  function renderMessages() {','  function renderStudioOperations() {'),context);
+  vm.runInContext(part('  function placeStudioSuggestion(node) {','  function renderStudioOperations() {'),context);
   vm.runInContext('renderMessages()',context);
   const details=created.find(n=>n.className==='director-chat-full-response');
   const action=created.find(n=>n.className==='director-chat-review-draft');

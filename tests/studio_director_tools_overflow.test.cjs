@@ -8,11 +8,12 @@ const storyboard = fs.readFileSync(path.join(root, 'tool/js/storyboard.js'), 'ut
 const chat = fs.readFileSync(path.join(root, 'tool/js/director_chat.js'), 'utf8');
 const server = fs.readFileSync(path.join(root, 'tool/server/app.py'), 'utf8');
 
-test('Revise & Generate is a direct Director production action, not an overflow tool', () => {
+test('Revise & Generate remains available in the existing Project utilities', () => {
   const actions = markup.split('<div class="studio-dw-actions">')[1].split('</div>')[0];
   assert.match(actions, /id="studio-dw-read"/);
   assert.match(actions, /id="studio-dw-write"/);
-  assert.match(actions, /id="storyboard-director-tools-btn"/);
+  const utilities = markup.split('<summary>Other Project utilities</summary>')[1].split('</details>')[0];
+  assert.match(utilities, /id="storyboard-director-tools-btn"/);
   assert.equal((markup.match(/id="storyboard-director-tools-btn"/g) || []).length, 1);
   assert.doesNotMatch(markup, /id="storyboard-director-tools-menu"/);
   assert.match(storyboard, /el\('storyboard-director-tools-btn'\)\.onclick = openDirectorTools/);

@@ -154,8 +154,6 @@
       (units === 1 ? ' selection' : ' selections') + ' · ' + bytes.toLocaleString() + ' characters';
     el('studio-dw-read-send').disabled = !keys.length || !el('studio-dw-read-project').value;
     el('studio-dw-read-all').disabled = !readStory || !el('studio-dw-read-project').value;
-    var name = readStory ? storyName(readStory) : 'No Project selected';
-    el('studio-dw-read-scope').textContent = 'Read source: ' + name + '. Not an automatic attachment.';
     var details = el('studio-dw-read-preview');
     if (details.open && readStory) el('studio-dw-read-preview-data').textContent =
       JSON.stringify(readPayload(readStory, keys), null, 2);
@@ -217,7 +215,7 @@
         String.fromCharCode(10) + 'Recent conversation context is also supplied.';
     }
     el('studio-dw-write-context').querySelector('summary').textContent =
-      'Inspect saved context for this draft (preview)';
+      'Inspect draft context';
     el('studio-dw-write-context-json').textContent=text;
   }
 
@@ -237,18 +235,16 @@
     var ready = window.studioDirectorBridge.isReady();
     el('studio-dw-current-brief').disabled = !current.storyId || !ready;
     el('studio-dw-current-prompt').disabled = !current.storyId || !current.sceneId || !ready;
-    var readId = el('studio-dw-read-project').value;
     var writeId = el('studio-dw-write-project').value;
     var op = el('studio-dw-write-operation').value;
     var unresolvedScene = op === 'scene-write' && writeStory && writeStory.id === writeId &&
       !readinessStale && (recommendations.sceneId || recommendations.sceneNumber) &&
       !recommendedSceneId(writeStory);
-    el('studio-dw-write-scope').textContent = op === 'new-project'
-      ? 'Creates a new Project. No existing destination.'
-      : 'Write destination: ' + (projects.find(function(p){return p.id===writeId;}) || {title:'Choose a Project'}).title +
-        (lastReadSource && writeId && lastReadSource !== writeId
-          ? ' · Different from last Read source.' : '') +
-        (unresolvedScene ? ' · Director’s Scene recommendation could not be matched. Choose a Scene explicitly.' : '');
+    el('studio-dw-write-scope').textContent = [
+      op !== 'new-project' && lastReadSource && writeId && lastReadSource !== writeId
+        ? 'Destination differs from the last Read source.' : '',
+      unresolvedScene ? 'Scene target unresolved. Select a Scene.' : ''
+    ].filter(Boolean).join(' ');
     var mode = !el('studio-dw-read-panel').classList.contains('hidden') ? 'Read' :
       !el('studio-dw-write-panel').classList.contains('hidden') ? 'Write' : '';
     el('studio-dw-heading').textContent = mode ? mode + ' · Director' : 'Director actions';
@@ -824,9 +820,7 @@
     renderReadiness(readiness);
     if (!el('studio-dw-write-panel').classList.contains('hidden')) setOperation();
     var label = el('studio-dw-readiness-freshness');
-    label.textContent = readinessStale
-      ? (readiness.length ? 'Outdated · latest exchange not assessed' : 'Latest exchange not assessed')
-      : (readiness.length ? 'Assessed for latest reply · advisory only' : 'Not assessed yet');
+    label.textContent = readinessStale ? 'Outdated' : readiness.length ? 'Current' : 'No assessment';
     var empty = el('studio-dw-readiness-list').querySelector('p');
     if (empty) empty.textContent = readinessStale ? 'No current assessment.' : 'Not assessed yet';
   }
@@ -859,7 +853,8 @@
     if (hint === 'new-project') return 'Create Project';
     if (hint === 'project') return 'Revise Project Overview';
     if (['scene', 'scenes', 'scene-edit', 'scenes-batch'].includes(hint))
-      return recommendations.sceneId || recommendations.sceneNumber ? 'Draft Scene revisions' : 'Draft Scenes';
+      return recommendations.sceneNumber ? 'Draft Scene ' + recommendations.sceneNumber :
+        recommendations.sceneId ? 'Draft Scene revisions' : 'Draft Scenes';
     return '';
   }
   function renderReadiness(list) {
@@ -899,7 +894,7 @@
       button.onclick = action.run;
       actions.appendChild(button);
     });
-    el('studio-dw-suggestion-heading').classList.toggle('hidden', !available.length || readinessStale);
+    window.studioDirectorBridge.placeSuggestedAction(actions);
     if (!list.length) {
       var empty = document.createElement('p');
       empty.textContent = readinessStale ? 'No current assessment.' : 'No assessment details yet.';

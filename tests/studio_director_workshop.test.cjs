@@ -185,6 +185,7 @@ test('Read sends actual saved data and asks for a conversational confirmation', 
       return composer;
     },
     studioAttachedStoryId: () => '',
+    placeStudioSuggestion(){},
     sendMessage: () => {outgoing = composer.value;},
     window: {}
   });
@@ -260,7 +261,7 @@ test('Read offers one Project Overview and per-Scene complete selections without
   assert.match(workbench, /addUnit\('Scene ' \+ \(index \+ 1\)/);
   assert.match(workbench, /\['title', 'summary', 'prompt', 'durationSeconds'\]/);
   assert.match(workbench, /input\[data-group-select\]:checked/);
-  assert.match(html, /Scenes · select complete Scenes/);
+  assert.match(html, /<summary>Scenes<\/summary>/);
   const read = workbench.split('  function renderReadStory(story) {', 2)[1].split('  function selectedPaths() {', 2)[0];
   assert.doesNotMatch(read, /'references'/);
   assert.doesNotMatch(read, /'generationSettings'/);

@@ -4060,7 +4060,11 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
 #studio-dw-read[data-result="success"], #studio-dw-quick-read[data-result="success"] { border-color: var(--accent); }
 #studio-dw-read[data-result="error"], #studio-dw-quick-read[data-result="error"] { outline: 2px solid var(--danger, #f87171); }
 #studio-director-inspect[data-new-result="true"] { border-color: var(--accent); font-weight: 700; }
-#studio-dw-suggestion-heading.hidden { display: none !important; }
+.studio-dw-suggestions {margin-top:12px;}
+.studio-dw-suggestions.hidden {display:none!important;}
+.studio-dw-suggestions button {min-height:44px;padding:10px 16px;border:1px solid var(--accent);border-radius:8px;background:var(--panel-soft);color:var(--text);font:inherit;font-size:18px;font-weight:650;cursor:pointer;}
+.studio-dw-suggestions button:hover {background:var(--panel);}
+.studio-director-workbench .studio-dw-scope:empty {display:none;}
 #storyboard-story-concept[data-director-updated="true"],
 #storyboard-story-style[data-director-updated="true"],
 #storyboard-story-title[data-director-updated="true"] { border-left: 3px solid var(--accent); }

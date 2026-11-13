@@ -84,7 +84,7 @@ test('suggestions name creative units regardless of advisory field hints', () =>
   scope.recommendations.writeFields=['prompt'];
   assert.equal(scope.writeActionLabel(),'Draft Scene revisions');
   scope.recommendations={writeHint:'scenes',writeFields:[],sceneId:'',sceneNumber:1};
-  assert.equal(scope.writeActionLabel(),'Draft Scene revisions');
+  assert.equal(scope.writeActionLabel(),'Draft Scene 1');
   scope.recommendations={writeHint:'project',writeFields:['concept'],sceneId:''};
   assert.equal(scope.writeActionLabel(),'Revise Project Overview');
   scope.recommendations={writeHint:'scenes',writeFields:['title','summary'],sceneId:''};
@@ -103,6 +103,7 @@ test('only one contextual action is presented, with completed capture taking pri
     projectFields:['title','concept','style','invariants'],sceneFields:['title','summary','prompt'],
     el:id=>id==='studio-dw-suggestions'?actions:id==='studio-dw-suggestion-heading'?{classList:{toggle(){}}}:assessment,
     document:{createElement:node},reviewCreativeCapture(){},openRecommendedWrite(){},
+    window:{studioDirectorBridge:{placeSuggestedAction(node){assert.equal(node,actions);}}},
     creativeCapture:{field:'summary',content:'Complete Intent',sceneId:'a'},
     recommendations:{writeHint:'scenes',writeFields:['summary','prompt'],sceneId:'a'}});
   vm.runInContext(fieldsCode + part('  function captureActionLabel(capture) {','  window.studioDirectorWorkbench = {'),scope);

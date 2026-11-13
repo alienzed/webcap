@@ -130,6 +130,10 @@ def add_set_rating_dimension(state_path, dimension):
         existing = state.get("evaluation_rating_dimensions") or []
         if not isinstance(existing, list):
             raise FolderStateReadError("Saved Set rating dimensions must be a list.")
+        if any(str(item.get("id") or "") == dimension["id"] or
+               str(item.get("label") or "").casefold() == str(dimension["label"]).casefold()
+               for item in existing):
+            raise ValueError("Set rating dimension already exists.")
         state["evaluation_rating_dimensions"] = existing + [dict(dimension)]
         write_folder_state_atomic(path, state)
     return state["evaluation_rating_dimensions"]
@@ -291,7 +295,7 @@ def write_folder_state_with_owned_drafts(state_path, snapshot):
         previous = read_folder_state(path)
         next_state = dict(snapshot)
         for field in ("test_workspace_prompts", "test_manual_screening_by_model",
-                      "test_campaign_by_model"):
+                      "test_campaign_by_model", "evaluation_rating_dimensions"):
             if field in previous:
                 next_state[field] = previous[field]
         reject_wholesale_state_map_clear(previous, next_state)

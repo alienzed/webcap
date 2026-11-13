@@ -186,7 +186,7 @@ def test_llm_queue_payload_never_reaches_execution_state_file(llm_root, monkeypa
 @pytest.mark.parametrize("operation", [
     "studio_brief_draft", "studio_project_draft", "studio_scene_draft", "studio_scene_sequence_draft",
     "studio_scene_field_draft", "studio_scene_batch_draft", "studio_scene_split_draft", "studio_playbook_draft",
-    "freeform_chat",
+    "studio_chat", "freeform_chat",
 ])
 def test_studio_chat_response_schema_reaches_model_without_changing_freeform(llm_root, monkeypatch, operation):
     calls = []
@@ -213,6 +213,13 @@ def test_studio_chat_response_schema_reaches_model_without_changing_freeform(llm
         assert "response_schema" not in calls[0]
     else:
         assert calls[0]["response_schema"] == schema
+    if operation == "studio_chat":
+        assert calls[0]["sampling_profile"] == "expand_concept"
+        profile = storyboard_llm_runtime._sampling_profile(calls[0]["sampling_profile"])
+        assert profile["temperature"] == 0.35
+        assert profile["top_p"] == 0.9
+    else:
+        assert "sampling_profile" not in calls[0]
 
 
 def test_llm_chat_job_runs_through_shared_lane_without_persisting_conversation(llm_root, monkeypatch):

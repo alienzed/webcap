@@ -21,6 +21,11 @@ on:
       - 'tool/server/test_models/h3.py'
       - '.github/workflows/test-launch-epoch-parity.yml'
       - 'tool/server/epoch_test_bench.py'
+      - 'tool/server/folder_state_store.py'
+      - 'tool/server/config.py'
+      - 'tool/server/run_analytics.py'
+      - 'tests/test_evaluation_rating_dimensions.py'
+      - 'tests/test_generations_review_unrated.test.cjs'
       - 'tool/server/epoch_finder.py'
       - 'tests/test_epoch_finder.py'
       - 'tool/server/llm_runner.py'
@@ -58,13 +63,17 @@ jobs:
           node --check tool/js/test_references.js
           node --check tool/js/run_analytics.js
           node --check tool/js/inference_queue.js
-          node --test tests/inference_error_passthrough.test.cjs
+          node --test tests/inference_error_passthrough.test.cjs tests/test_generations_review_unrated.test.cjs
       - name: Install tests
         run: python -m pip install pytest "Flask>=3,<4" "Pillow>=10,<12" opencv-python-headless imageio websocket-client
       - name: Staged LoRA resolution for Test Evaluations
         run: |
           cp tool/config.example.json tool/config.json
           python -m pytest -q tests/test_epoch_test_bench.py -k "staged_test_lora"
+      - name: Focused Evaluation ratings and central scoring
+        run: |
+          cp tool/config.example.json tool/config.json
+          python -m pytest -q tests/test_evaluation_rating_dimensions.py tests/test_test_generations_ui_contract.py tests/test_run_analytics_next.py
       - name: Inference queue Backlog and cancellation regression
         run: |
           cp tool/config.example.json tool/config.json

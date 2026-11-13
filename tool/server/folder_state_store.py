@@ -122,6 +122,53 @@ def set_media_rating(state_path, media_key, rating):
 
 
 
+def add_set_rating_dimension(state_path, dimension):
+    """Append one Set-specific dimension without rewriting other user-authored state."""
+    path = Path(state_path)
+    with _folder_state_mutation_lock:
+        state = read_folder_state(path)
+        existing = state.get("evaluation_rating_dimensions") or []
+        if not isinstance(existing, list):
+            raise FolderStateReadError("Saved Set rating dimensions must be a list.")
+        state["evaluation_rating_dimensions"] = existing + [dict(dimension)]
+        write_folder_state_atomic(path, state)
+    return state["evaluation_rating_dimensions"]
+
+
+def set_media_dimension_rating(state_path, media_key, dimension_id, rating):
+    key, dimension = str(media_key or "").strip(), str(dimension_id or "").strip()
+    if not key or not dimension:
+        raise ValueError("Rating requires a media key and dimension.")
+    try:
+        normalized = int(round(float(rating)))
+    except (TypeError, ValueError) as exc:
+        raise ValueError("Media rating must be between 0 and 5.") from exc
+    if normalized < 0 or normalized > 5:
+        raise ValueError("Media rating must be between 0 and 5.")
+    path = Path(state_path)
+    with _folder_state_mutation_lock:
+        state = read_folder_state(path)
+        ratings = state.get("ratings_by_dimension") or {}
+        if not isinstance(ratings, dict):
+            raise FolderStateReadError("Saved dimensional ratings must be an object.")
+        ratings = dict(ratings)
+        by_dimension = ratings.get(key) or {}
+        if not isinstance(by_dimension, dict):
+            raise FolderStateReadError("Saved dimensional ratings for this media must be an object.")
+        by_dimension = dict(by_dimension)
+        if normalized:
+            by_dimension[dimension] = normalized
+        else:
+            by_dimension.pop(dimension, None)
+        if by_dimension:
+            ratings[key] = by_dimension
+        else:
+            ratings.pop(key, None)
+        state["ratings_by_dimension"] = ratings
+        write_folder_state_atomic(path, state)
+    return normalized
+
+
 def set_test_vision_assessment(
     state_path, *, media_key=None, assessment=None, ignored_groups=None, disabled_groups=None
 ):
@@ -159,6 +206,7 @@ def reject_wholesale_state_map_clear(previous_state, next_state):
     """Reject an ordinary save that would erase a populated protected map."""
     protected_maps = (
         "ratings_by_media",
+        "ratings_by_dimension",
         "caption_tags_by_media",
         "caption_group_tags_by_media",
         "flags",

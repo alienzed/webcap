@@ -667,8 +667,14 @@ def _rating_dimensions(folder_path):
     local_items = read_folder_state(state_path).get("evaluation_rating_dimensions") or []
     if not isinstance(local_items, list):
         raise ValueError("Set rating dimensions must be a list.")
+    # A Set's existing dimension wins over a later global preset with
+    # the same name. Do not strand historical Set-specific scores.
+    local_labels = {str(item.get("label") or "").strip().casefold()
+                    for item in local_items if isinstance(item, dict)}
+    visible_globals = [item for item in global_items
+                       if str(item.get("label") or "").strip().casefold() not in local_labels]
     seen_ids, seen_labels, merged = set(), set(), []
-    for item in [*global_items, *local_items]:
+    for item in [*visible_globals, *local_items]:
         if not isinstance(item, dict):
             raise ValueError("Set rating dimension must be an object.")
         identifier = str(item.get("id") or "").strip()

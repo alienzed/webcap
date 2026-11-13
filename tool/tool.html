@@ -1541,7 +1541,7 @@
                                     <button id="test-generations-view-grid-btn" type="button" class="test-generations-view-tab active" role="tab" aria-selected="true">Grid</button>
                                     <button id="test-generations-view-compare-btn" type="button" class="test-generations-view-tab" role="tab" aria-selected="false">Compare</button><button id="test-generations-view-matrix-btn" type="button" class="test-generations-view-tab" role="tab" aria-selected="false">Matrix</button>
                                 </div>
-                                <button id="test-generations-view-review-btn" type="button" class="test-generations-review-open">Focused Review</button>
+                                <button id="test-generations-view-review-btn" type="button" class="test-generations-review-open" aria-haspopup="dialog" aria-expanded="false">Focused Review</button>
                                 </div>
                             </div>
                             <details id="test-generations-vl-filters" class="test-generations-vl-filters hidden">
@@ -1565,7 +1565,7 @@
                             <div id="test-generations-results" class="test-generations-results"></div>
                             <dialog id="test-generations-review" class="test-generations-review test-generations-review-dialog" aria-label="Focused Review" tabindex="-1">
                                 <header class="test-generations-review-header">
-                                    <div class="test-generations-review-title"><span>Evaluations / Focused Review</span><h2>Rate one attribute at a time</h2><p id="test-generations-review-position" aria-live="polite">0 remaining</p></div>
+                                    <div class="test-generations-review-title"><span>Evaluations / Focused Review</span><h2 id="test-generations-review-title">Overall</h2><p id="test-generations-review-position" aria-live="polite">0 remaining</p></div>
                                     <div class="test-generations-review-criteria">
                                         <label for="test-generations-review-dimension">Rating dimension</label>
                                         <select id="test-generations-review-dimension" aria-label="Current rating dimension"><option value="overall">Overall</option></select>
@@ -1583,7 +1583,7 @@
                                 <div id="test-generations-review-card" class="test-generations-review-card-host"></div>
                                 <footer class="test-generations-review-footer">
                                     <nav class="test-generations-review-navigation" aria-label="Review navigation">
-                                        <button type="button" data-test-review-previous aria-label="Previous rated result" title="Back to previous rated result (Left arrow)">← Back</button>
+                                        <button type="button" data-test-review-previous aria-label="Previous review result" title="Previous result (Left arrow)">← Back</button>
                                         <button type="button" data-test-review-next aria-label="Next unrated result" title="Next pending result (Right arrow)">Next →</button>
                                     </nav>
                                     <button id="test-generations-review-completed" type="button" class="test-generations-review-completed hidden">Revisit rated</button>

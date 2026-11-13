@@ -4307,8 +4307,10 @@
       review.classList.remove('hidden');
       review.showModal();
       var openingSession = String(currentStatus && currentStatus.session || '');
+      var openingFolder = String(launchFolder || '');
       request('test_rating_dimensions').then(function (catalog) {
-        if (resultsView !== 'review' || String(currentStatus && currentStatus.session || '') !== openingSession) return;
+        if (resultsView !== 'review' || String(launchFolder || '') !== openingFolder ||
+            String(currentStatus && currentStatus.session || '') !== openingSession) return;
         setReviewDimensions(catalog);
         renderReview(currentStatus);
       }).catch(function (err) {
@@ -5930,6 +5932,47 @@
       setResultsView('grid');
     };
     el('test-generations-view-review-btn').onclick = function () { setResultsView('review'); };
+    el('test-generations-review-close').onclick = function () {
+      el('test-generations-review').close();
+    };
+    el('test-generations-review').addEventListener('close', function () {
+      if (resultsView === 'review') setResultsView(reviewReturnView);
+    });
+    el('test-generations-review-dimension').onchange = function () {
+      if (reviewRatingPending) { this.value = reviewDimensionId; return; }
+      reviewDimensionId = this.value;
+      reviewHistory = [];
+      reviewRevisiting = false;
+      reviewKey = '';
+      renderReview(currentStatus);
+    };
+    el('test-generations-review-add').onclick = function () {
+      var button = this;
+      var nameInput = el('test-generations-review-new-name');
+      var name = String(nameInput.value || '').trim();
+      if (!name) {
+        el('test-generations-review-status').textContent = 'Enter a rating dimension name.';
+        nameInput.focus();
+        return;
+      }
+      var scope = el('test-generations-review-new-scope').value;
+      button.disabled = true;
+      request('test_rating_dimension_add', {label: name, scope: scope}).then(function (catalog) {
+        var created = catalog.dimensions.find(function (item) { return item.label.toLowerCase() === name.toLowerCase(); });
+        if (!created) throw new Error('Saved rating dimension is missing from the returned catalog.');
+        reviewDimensionId = created.id;
+        setReviewDimensions(catalog);
+        reviewHistory = [];
+        reviewRevisiting = false;
+        reviewKey = '';
+        nameInput.value = '';
+        el('test-generations-review-add-details').open = false;
+        renderReview(currentStatus);
+      }).catch(function (err) {
+        el('test-generations-review-status').textContent = 'Could not save dimension: ' + String(err.message || err);
+        showError(err);
+      }).finally(function () { button.disabled = false; });
+    };
     el('test-generations-view-compare-btn').onclick = function () {
       setResultsView('compare');
     };
@@ -6164,7 +6207,7 @@
         event.preventDefault();
         if (!event.repeat) rateCurrentReview(Number(event.key));
       } else if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
-        if (event.target.closest && event.target.closest('video, input[type="range"]')) return;
+        if (event.target.closest && event.target.closest('video, select, input, textarea, summary')) return;
         event.preventDefault();
         if (!event.repeat) moveReview(event.key === 'ArrowLeft' ? -1 : 1);
       } else if (event.key === ' ' && !event.target.closest('button, summary, select, input, textarea')) {

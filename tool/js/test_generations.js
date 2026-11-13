@@ -4187,6 +4187,7 @@
     reviewKey = next >= 0 ? resultMediaFile(all[next]) : '';
     reviewRevisiting = false;
     renderReview(currentStatus);
+    el('test-generations-review').focus();
   }
 
   function renderReview(status) {
@@ -6009,6 +6010,7 @@
       reviewBrowseCompleted = false;
       reviewKey = '';
       renderReview(currentStatus);
+      el('test-generations-review').focus();
     };
     el('test-generations-review-add').onclick = function () {
       var button = this;
@@ -6033,6 +6035,7 @@
         nameInput.value = '';
         el('test-generations-review-add-details').open = false;
         renderReview(currentStatus);
+        el('test-generations-review').focus();
       }).catch(function (err) {
         el('test-generations-review-status').textContent = 'Could not save dimension: ' + String(err.message || err);
         showError(err);

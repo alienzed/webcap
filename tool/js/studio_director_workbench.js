@@ -263,13 +263,17 @@
   }
   function recommendedSceneId(story) {
     if (readinessStale || !story || !Array.isArray(story.sceneOrder)) return '';
-    if (recommendations.sceneId)
-      return story.sceneOrder.includes(recommendations.sceneId) ? recommendations.sceneId : '';
-    // The model may know "Scene 5" without having Read its opaque saved ID.
-    // Resolve the one-based position only for the currently selected Project.
-    var number = recommendations.sceneNumber;
-    return recommendationProject === story.id && Number.isInteger(number) && number >= 1 &&
-      number <= story.sceneOrder.length ? story.sceneOrder[number - 1] : '';
+    // If both recommendations exist, they must identify the same saved Scene.
+    // A conflict means no automatic destination, not a reason to guess.
+    var id = recommendations.sceneId, number = recommendations.sceneNumber;
+    if (id && !story.sceneOrder.includes(id)) return '';
+    if (number) {
+      if (recommendationProject !== story.id || !Number.isInteger(number) ||
+          number < 1 || number > story.sceneOrder.length) return '';
+      var numberedId = story.sceneOrder[number - 1];
+      return id && id !== numberedId ? '' : numberedId;
+    }
+    return id || '';
   }
   function renderWriteStory(story) {
     writeStory = story;

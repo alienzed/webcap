@@ -8,6 +8,9 @@ const root = path.join(__dirname, '..');
 const source = fs.readFileSync(path.join(root, 'tool/js/test_generations.js'), 'utf8');
 const html = fs.readFileSync(path.join(root, 'tool/tool.html'), 'utf8');
 const navigation = source.slice(
+  source.indexOf('  function reviewStatus() {'),
+  source.indexOf('  function openEpochReview(')
+) + source.slice(
   source.indexOf('  function reviewResults(status) {'),
   source.indexOf('  function renderReview(status) {')
 );
@@ -15,7 +18,7 @@ assert.ok(navigation.includes('function advanceReviewToUnrated()'), 'Focused Rev
 
 function harness(results, dimension = 'overall', key = '') {
   const scope = {
-    currentStatus: {session: 'session-1', results},
+    currentStatus: {session: 'session-1', results}, reviewScope: null,
     reviewDimensionId: dimension,
     reviewDimensions: [{id:'color',label:'Toothbrush Color'}, {id:'motion',label:'Brushing Motion'}],
     reviewKey: key, reviewIndex: 0, reviewHistory: [], reviewRevisiting: false, reviewBrowseCompleted: false,
@@ -92,7 +95,7 @@ test('Review is a modal activity, and the saved rating is applied before auto-ad
   assert.ok(!source.includes("resultsView === 'review'"), 'review must remain separate from result tabs');
   assert.ok(source.includes("removeNode: inReview ? null : buildResultRemoveButton(result)"));
   assert.ok(html.includes('id="test-generations-review-title"'));
-  assert.ok(source.includes("el('test-generations-review-title').textContent = reviewDimensionLabel();"));
+  assert.ok(source.includes("el('test-generations-review-title').textContent = reviewScope"));
   assert.ok(source.includes("el('test-generations-review').addEventListener('close'"));
   assert.ok(source.includes("el('test-generations-view-review-btn').onclick = openFocusedReview;"));
   const update = source.indexOf('result.dimensionRatings[dimensionId] = payload.rating;');
@@ -125,7 +128,8 @@ test('Rapid rating unlocks on save without waiting for earlier summary refresh',
   const ctx = {
     reviewRatingPending: false, reviewSaveSerial: 0,
     reviewKey: 'a.mp4', reviewDimensionId: 'motion',
-    currentStatus: {session: 'session-1'}, advanced: 0, rendered: 0,
+    currentStatus: {session: 'session-1'}, reviewScope: null, advanced: 0, rendered: 0,
+    reviewStatus: () => ctx.currentStatus,
     el: () => ({querySelector: () => card}),
     rateTestResult: (_star, saved) => {
       callbacks.push(saved);
@@ -164,4 +168,19 @@ test('Focused Review uses each rendered preview’s wildcard selections and a fl
   assert.ok(css.includes('.test-generations-review-dialog .test-generations-review-item {'));
   assert.ok(css.includes('border: 0;\n  border-radius: 0;\n  background: transparent;'));
   assert.ok(css.includes('.test-generations-review-dialog .test-preview-card-details-content {'));
+});
+
+test('Epoch review navigation qualifies identical media names by owning session', () => {
+  const results = [
+    {session:'first',mediaFile:'same.mp4',rating:0},
+    {session:'second',mediaFile:'same.mp4',rating:0}
+  ];
+  const h = harness(results, 'overall', 'first|same.mp4');
+  h.reviewScope = {identity:'epoch:run-a:5',results};
+  assert.equal(h.reviewItemKey(results[0]), 'first|same.mp4');
+  assert.equal(h.reviewItemKey(results[1]), 'second|same.mp4');
+  results[0].rating = 4;
+  h.advanceReviewToUnrated();
+  assert.equal(h.reviewKey, 'second|same.mp4');
+  assert.deepEqual(Array.from(h.reviewHistory), ['first|same.mp4']);
 });

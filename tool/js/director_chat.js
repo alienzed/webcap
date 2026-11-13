@@ -50,7 +50,7 @@
     studioBriefUndo: null,
     studioOperations: [],
     pendingReadAck: null,
-    studioReadiness: {checks:[], readHints:[], writeHint:'', writeFields:[], sceneId:''}
+    studioReadiness: {checks:[], readHints:[], writeHint:'', writeFields:[], sceneId:'', sceneNumber:0}
   };
   var STORYBOARD_WORKSHOP_PRIMER = [
     'You are collaborating with an author developing short AI-generated videos.',
@@ -2808,14 +2808,20 @@
         'Write hints are new-project, project or scenes; writeFields describes likely changed parts as advisory metadata, not a separate creative workflow ' +
         '(project: title/concept/style/invariants; scenes: title/summary/prompt). ' +
         'Use the exact known saved sceneId for an existing Scene, otherwise empty. ' +
+        'Scene numbers are one-based positions in the current Project. When the discussion clearly identifies a specific existing Scene by number, set sceneNumber to it (otherwise 0); WebCap resolves it to an actual saved Scene. ' +
+        'When the selected Write scene differs from the intended Scene, recommend the intended one instead of trusting incidental UI state. ' +
         'If assessment is genuinely useful, provide at most two concise checks with a valid name and scope. ' +
         'For Read recommendations use only known field identifiers, such as project.concept, ' +
         'project.style, project.invariants or scene.current.prompt. ' +
-        'OPTIONAL CREATIVE CAPTURE: When an author-ready complete final field has already been developed, ' +
-        'include one capture matching the supplied schema, with complete content. ' +
-        'For an existing Scene use its exact ID. For a new Scene use field=scene, title and an empty sceneId. ' +
+        'OPTIONAL CREATIVE CAPTURE: When a complete agreed field has been developed in conversation, ' +
+        'include one capture matching the supplied schema, with its full content. ' +
+        'When telling the author a single new Scene is ready for review, include field=scene, a working title, ' +
+        'sceneId="", and content containing its complete observable Scene Intent. ' +
+        'A tentative Scene capture needs no H3 Prompt; WebCap can review and insert it directly. ' +
+        'When a Scene still needs synthesis or several Scenes need drafting, recommend Write as the drafting step. ' +
+        'For an existing Scene capture use its exact saved ID. ' +
         'For an Invariant use kind/title and beforeKind/beforeTitle only for an exact known rename or edit. ' +
-        'Use capture for a complete value when the other parts of its unit remain appropriate. Use reviewed unit Write when multiple parts need alignment. WebCap selects and validates the save target ' +
+        'Capture an already-complete field when the remaining unit stays appropriate; use reviewed unit Write when multiple parts need alignment. WebCap selects and validates the save target ' +
         'and opens editable review before Apply. Keep assessment metadata in readiness and conversation in reply.\n';
       return outbound;
     });

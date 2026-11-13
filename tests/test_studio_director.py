@@ -19,6 +19,7 @@ def test_writer_workshop_uses_existing_h3_prompt_contract_and_user_playbook(monk
     assert "ask one focused question; otherwise offer a specific idea" in text
     assert "4–15 seconds" in text
     assert "FIELD DEVELOPMENT" in text
+    assert "Capture complete agreed material for immediate review" in text
     assert "Entry and exit state fields are retired" in text
     assert "These controls and media inspection are outside Studio Director" in text
     assert "Write Scenes" in text and "reviewed" in text.lower()
@@ -223,7 +224,7 @@ def test_studio_chat_schema_constrains_recommendations_to_the_selected_operation
     variants = schema["properties"]["readiness"]["anyOf"]
     for variant in variants:
         assert variant["additionalProperties"] is False
-        assert set(variant["required"]) == {"checks", "readHints", "writeHint", "writeFields", "sceneId"}
+        assert set(variant["required"]) == {"checks", "readHints", "writeHint", "writeFields", "sceneId", "sceneNumber"}
         fields = variant["properties"]["writeFields"]
         for operation in variant["properties"]["writeHint"]["enum"]:
             if operation == "project":
@@ -261,3 +262,22 @@ def test_studio_chat_schema_keeps_creative_captures_optional_and_compatible_with
                 readiness = {"checks": [], "readHints": [], "writeHint": "", "writeFields": [],
                              "sceneId": "", "capture": capture}
                 assert _validate_readiness(readiness)["capture"] == capture
+
+
+def test_studio_chat_scene_numbers_are_advisory_and_persist_with_older_sessions():
+    from tool.server.studio_director import chat_response_schema
+    from tool.server.director_chat_history import _validate_readiness
+
+    for variant in chat_response_schema()["properties"]["readiness"]["anyOf"]:
+        number = variant["properties"]["sceneNumber"]
+        assert number["type"] == "integer"
+        assert number["minimum"] == 0
+        assert number["maximum"] == 10000
+
+    existing = {"checks": [], "readHints": [], "writeHint": "scenes",
+                "writeFields": [], "sceneId": ""}
+    assert "sceneNumber" not in _validate_readiness(existing)
+    assert _validate_readiness({**existing, "sceneNumber": 5})["sceneNumber"] == 5
+    for invalid in (True, -1, 10001, 1.5, "5"):
+        with pytest.raises(ValueError, match="Scene number"):
+            _validate_readiness({**existing, "sceneNumber": invalid})

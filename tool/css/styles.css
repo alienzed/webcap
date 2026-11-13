@@ -7720,6 +7720,8 @@ html[data-theme="dark"] iframe {
 .run-analytics-epoch-media-head {display:flex;justify-content:space-between;gap:14px;align-items:center;border-bottom:1px solid var(--border);padding-bottom:10px;margin-bottom:14px;}
 .run-analytics-epoch-media-head h3 {margin:0 0 4px;}
 .run-analytics-epoch-media-head p {margin:0;color:var(--muted);}
+.run-analytics-epoch-media-actions {display:flex;gap:10px;align-items:center;justify-content:flex-end;flex-wrap:wrap;}
+#run-analytics-epoch-media-focus {font-size:14px;padding:9px 14px;}
 .run-analytics-epoch-media-grid {display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px;}
 .run-analytics-epoch-media-card {min-width:0;padding:8px;border:1px solid var(--border);border-radius:9px;background:var(--panel-soft);}
 .run-analytics-epoch-media-card img,.run-analytics-epoch-media-card video {display:block;width:100%;height:auto;max-height:270px;object-fit:contain;background:#111;}

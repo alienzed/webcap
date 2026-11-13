@@ -12,25 +12,63 @@ function part(start, end) {
 const fieldsCode = part('  function recommendedWriteFields(operation) {', '  function refreshRead() {');
 const labelCode = part('  function writeActionLabel() {', '  function renderReadiness(list) {');
 
-test('Scene default uses a valid recommendation or the current Scene, while manual choices prevail', () => {
-  const host={children:[],querySelectorAll(){return this.children.flatMap(n=>n.children).filter(n=>n.checked);},
-    replaceChildren(){this.children=[];},appendChild(n){this.children.push(n);}};
-  const scope=vm.createContext({writeStory:null,recommendations:{sceneId:'scene:a'},
-    activeTarget:()=>({sceneId:'a'}),el:()=>host,showWriteContext(){},updateScope(){},
-    document:{createElement:()=>({children:[],append(...nodes){this.children.push(...nodes);}}),createTextNode:text=>({text})}});
-  vm.runInContext(part('  function renderWriteStory(story) {','  function recommendedWriteFields(operation) {'),scope);
-  const story={sceneOrder:['a','b'],scenes:{a:{title:'A'},b:{title:'B'}}};
+test('Scene-number recommendation resolves to a saved ID; deliberate choices stay selected', () => {
+  const host={children:[],querySelectorAll(selector){
+    const controls=this.children.flatMap(n=>n.children).filter(n=>n.type==='checkbox');
+    return selector === 'input:checked' ? controls.filter(n=>n.checked) : controls;
+  }, replaceChildren(){this.children=[];},appendChild(n){this.children.push(n);}};
+  const scope=vm.createContext({writeStory:null,readinessStale:false,
+    sceneSelectionManual:false,sceneSelectionProject:'',recommendationProject:'p1',
+    recommendations:{writeHint:'scenes',sceneId:'',sceneNumber:2},
+    activeTarget:()=>({storyId:'p1',sceneId:'a'}),
+    window:{studioDirectorBridge:{workingStoryId:()=> 'p1'}},
+    el:()=>host,showWriteContext(){},updateScope(){},
+    document:{createElement:()=>({children:[],append(...nodes){this.children.push(...nodes);}}),
+      createTextNode:text=>({text})}});
+  vm.runInContext(part('  function recommendedSceneId(story) {','  function recommendedWriteFields(operation) {'),scope);
+  const story={id:'p1',sceneOrder:['a','b'],scenes:{a:{title:'A'},b:{title:'B'}}};
+  const checked=()=>host.querySelectorAll('input:checked').map(n=>n.value);
   scope.renderWriteStory(story);
-  assert.deepEqual(host.querySelectorAll().map(n=>n.value),['a']);
-  host.children[0].children[0].checked=false;
-  host.children[1].children[0].checked=true;
-  scope.recommendations.sceneId='a';
+  assert.deepEqual(checked(),['b'],'Director’s Scene 2 should override incidental Scene 1 focus');
+  scope.recommendations.sceneNumber=1;
   scope.renderWriteStory(story);
-  assert.deepEqual(host.querySelectorAll().map(n=>n.value),['b']);
-  host.replaceChildren();
+  assert.deepEqual(checked(),['a'],'a fresh recommendation updates a default, not manual state');
+  const inputs=host.querySelectorAll('input');
+  inputs[0].checked=false;inputs[1].checked=true;inputs[1].onchange();
+  scope.renderWriteStory(story);
+  assert.deepEqual(checked(),['b'],'an explicit choice survives refresh');
+  host.querySelectorAll('input')[1].checked=false;
+  host.querySelectorAll('input')[1].onchange();
+  scope.renderWriteStory(story);
+  assert.deepEqual(checked(),[],'intentionally clearing the selection must not reselect Scene 1');
+  scope.sceneSelectionManual=false;
+  scope.recommendations.sceneNumber=5;
+  scope.renderWriteStory(story);
+  assert.deepEqual(checked(),[],'an unresolved recommendation must not silently target Scene 1');
+  scope.readinessStale=true;
+  scope.recommendations.sceneNumber=2;
+  scope.renderWriteStory(story);
+  assert.deepEqual(checked(),['a'],'stale recommendations are ignored');
+  scope.readinessStale=false;
   scope.recommendations.sceneId='b';
+  scope.recommendations.sceneNumber=1;
   scope.renderWriteStory(story);
-  assert.deepEqual(host.querySelectorAll().map(n=>n.value),['b']);
+  assert.deepEqual(checked(),[],'contradictory saved ID and Scene number must not select anything');
+  scope.recommendations.sceneNumber=2;
+  scope.renderWriteStory(story);
+  assert.deepEqual(checked(),['b'],'matching ID and number identify the same saved Scene');
+  scope.recommendations.sceneNumber=1;
+  scope.recommendations.sceneId='';
+  scope.recommendationProject='other-project';
+  scope.activeTarget=()=>({storyId:'other-project',sceneId:''});
+  scope.renderWriteStory(story);
+  assert.deepEqual(checked(),[],'a number from another Project must not be applied');
+  scope.recommendationProject='p1';
+  scope.activeTarget=()=>({storyId:'p1',sceneId:'a'});
+  scope.renderWriteStory(story);
+  assert.deepEqual(checked(),['a']);
+  scope.renderWriteStory({id:'p2',sceneOrder:['x'],scenes:{x:{title:'X'}}});
+  assert.deepEqual(checked(),[],'changing Project does not inherit the previous Scene selection');
 });
 
 test('suggestions name creative units regardless of advisory field hints', () => {
@@ -41,12 +79,14 @@ test('suggestions name creative units regardless of advisory field hints', () =>
   vm.runInContext(fieldsCode + labelCode,scope);
   for (const hint of ['scenes','scene-edit','scenes-batch']) {
     scope.recommendations.writeHint = hint;
-    assert.equal(scope.writeActionLabel(),'Revise Scene');
+    assert.equal(scope.writeActionLabel(),'Draft Scene revisions');
   }
   scope.recommendations.writeFields=['prompt'];
-  assert.equal(scope.writeActionLabel(),'Revise Scene');
+  assert.equal(scope.writeActionLabel(),'Draft Scene revisions');
   scope.recommendations={writeHint:'project',writeFields:['concept'],sceneId:''};
   assert.equal(scope.writeActionLabel(),'Revise Project Overview');
+  scope.recommendations={writeHint:'scenes',writeFields:['title','summary'],sceneId:''};
+  assert.equal(scope.writeActionLabel(),'Draft Scenes');
   vm.runInContext(part('  function captureActionLabel(capture) {','  function writeActionLabel() {'),scope);
   assert.equal(scope.captureActionLabel({field:'summary'}),'Review Scene');
   assert.equal(scope.captureActionLabel({field:'style'}),'Review Project Overview');
@@ -103,7 +143,8 @@ test('Scene Write receives early decisions and complete long messages from the d
     window:{flushStudioDirectorStoryEdits:async()=>{},studioDirectorBridge:{selectWriteProject(){},
       messages:()=>messages,makeProposal:async input=>{request=input;return '{}';}}},
     loadStory:async()=>({id:'p1',sceneOrder:['a'],scenes:{a:{title:'Lamp',summary:'Intent',prompt:'H3'}}}),
-    storyName:()=> 'Project',parseProposal:JSON.parse,validateSceneRevisionDraft:()=>[],renderBatchReview(){}});
+    storyName:()=> 'Project',parseProposal:JSON.parse,validateSceneRevisionDraft:()=>[],
+    recommendedSceneId:()=>'',renderBatchReview(){}});
   vm.runInContext(part('  function prepareBatchScenes(storyId) {','  function renderBatchReview() {'),scope);
   scope.prepareBatchScenes('p1');
   await finished;
@@ -163,6 +204,87 @@ test('Scene Review includes the whole unit and selects all actual changes, irres
   assert.equal(checks[0].checked,true,'author can deliberately revise an unchanged part');
 });
 
+test('automatic new-Scene Write reuses a fresh capture and preserves explicit drafting', () => {
+  const calls=[];
+  const capture={field:'scene',sceneId:'',title:'Sunlit crossing',content:'The subject crosses the sunlit square.'};
+  const select={value:'scene-write'};
+  const mode={value:'create'};
+  const project={value:'p1'};
+  const scope=vm.createContext({
+    readinessStale:false,writeOperationChosen:false,creativeCapture:capture,
+    recommendations:{writeHint:'scenes',writeFields:['title','summary'],sceneId:''},
+    projects:[{id:'p1',title:'Project One'}],
+    el:id=>({
+      'studio-dw-write-operation':select,
+      'studio-dw-scene-mode':mode,
+      'studio-dw-write-project':project
+    })[id],
+    window:{studioDirectorBridge:{
+      isReady:()=>true,
+      prepareWrite:(...args)=>calls.push(['draft',...args])
+    }},
+    storyName:()=> 'Project One',
+    reviewCreativeCapture:chosen=>calls.push(['review',chosen]),
+    prepareBatchScenes:()=>calls.push(['batch']),
+    status:message=>{if(message.includes('failed'))assert.fail(message);}
+  });
+  vm.runInContext(
+    part('  function readyNewSceneCapture() {', '  function setOperation() {') +
+    part('  function writePrepare() {','  function prepareProjectCoherence(storyId) {'),
+    scope
+  );
+  scope.writePrepare();
+  assert.equal(calls.length,1);
+  assert.equal(calls[0][0],'review');
+  assert.equal(calls[0][1],capture,'the complete authored content is reused verbatim');
+
+  calls.length=0;
+  scope.writeOperationChosen=true;
+  scope.writePrepare();
+  assert.equal(calls[0][0],'draft','explicit one-or-many drafting still calls Director');
+
+  calls.length=0;
+  scope.writeOperationChosen=false;
+  scope.readinessStale=true;
+  scope.writePrepare();
+  assert.equal(calls[0][0],'draft','stale captures cannot be applied');
+
+  calls.length=0;
+  scope.readinessStale=false;
+  scope.creativeCapture=null;
+  scope.writePrepare();
+  assert.equal(calls[0][0],'draft','missing captures fall back to drafting');
+
+  calls.length=0;
+  scope.creativeCapture=capture;
+  mode.value='revise';
+  scope.writePrepare();
+  assert.equal(calls[0][0],'batch','existing Scene revisions keep their reviewed workflow');
+});
+
+test('completed new Scene capture reviews directly without another Director request', async () => {
+  const capture={field:'scene',sceneId:'',title:'Sunlit crossing',content:'The subject crosses the sunlit square.'};
+  let complete;
+  const finished=new Promise(resolve=>{complete=resolve;});
+  const scope=vm.createContext({
+    el:id=>id==='studio-dw-write-project' ? {value:'p1'} : {},
+    window:{studioDirectorBridge:{
+      canReview:()=>true,
+      reviewSceneCapture:(item,id)=>{
+        assert.equal(id,'p1');
+        assert.equal(item,capture);
+        complete();
+        return Promise.resolve();
+      },
+      makeProposal:()=>assert.fail('No second LLM request is needed')
+    }},
+    status:msg=>assert.fail('Unexpected status: '+msg)
+  });
+  vm.runInContext(part('  function reviewCreativeCapture(capture) {','  function openWriteForCapture() {'),scope);
+  scope.reviewCreativeCapture(capture);
+  await finished;
+});
+
 test('completed Scene capture enters the same unit Review without generating another proposal', async () => {
   let complete;
   const finished=new Promise(resolve=>{complete=resolve;});
@@ -199,4 +321,22 @@ test('unit Apply saves aligned changed parts atomically and leaves the unchanged
   await finished;
   assert.deepEqual(payload,{storyId:'p1',revisions:[{sceneId:'a',
     expected:{summary:'Old intent',prompt:'Old H3'},changes:{summary:'New intent',prompt:'Aligned H3'}}]});
+});
+
+test('mismatched Scene targets require confirmation before any saved mutation', () => {
+  let called=0, confirmed=0;
+  const section={dataset:{sceneId:'a'},
+    querySelectorAll:()=>[{dataset:{selectField:'summary'}}],
+    querySelector:()=>({value:'New intent'})};
+  const scope=vm.createContext({proposedBatch:{storyId:'p1',
+    targetWarning:'Director suggested Scene 5, but Write targets Scene 1.',
+    scenes:[{sceneId:'a',before:{title:'A',summary:'Old intent',prompt:'Old prompt'}}]},
+    el:id=>id==='studio-dw-batch-editors' ? {querySelectorAll:()=>[section]} : {},
+    window:{confirm:()=>{confirmed++;return false;},
+      flushStudioDirectorStoryEdits:async()=>{}},
+    api:async()=>{called++;return {};},status:()=>{}});
+  vm.runInContext(part('  function applyBatchScenes() {','  function applyScene() {'),scope);
+  scope.applyBatchScenes();
+  assert.equal(confirmed,1);
+  assert.equal(called,0,'declining a conflicting target must not call the mutation API');
 });

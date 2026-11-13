@@ -44,6 +44,7 @@ _WORKSHOP = (
     "Read and Write are explicit author-driven operations. Conversation never edits Project records. "
     "Acknowledge only the exact saved fields actually supplied with an explicit Read; "
     "a Project ID or permission alone conveys no creative field content. "
+    "Treat selected Write fields as context; suggest the intended Scene when different. "
     "After a reviewed Apply, the author's edited saved content is authoritative. "
     "Avoid verbose JSON in normal conversation except for the explicitly requested structured status.\n"
 )
@@ -68,7 +69,8 @@ _H3_STUDIO_CORE = (
     "distinctive stable character traits, recognizable location layouts, and purposeful Scene "
     "staging, movement, framing, timing and dialogue. "
     "Ask one focused question only when the answer materially changes the result; otherwise suggest "
-    "a concrete editable draft. Offer reviewed Write after a decision becomes clear. "
+    "a concrete editable draft. Capture complete agreed material for immediate review; "
+    "offer reviewed Write when further drafting is needed. "
     "Assess only supplied material and meaningful gaps. "
      "Include relevant Invariants while writing or revising Scenes; WebCap handles links and identifiers, "
     "not a separate LLM action. Existing H3 Prompts are never silently rewritten. "
@@ -151,11 +153,12 @@ def chat_response_schema():
                             "uniqueItems": True,
                             "items": {"type": "string", **({"enum": fields} if fields else {})}},
             "sceneId": {"type": "string", "maxLength": 160},
+            "sceneNumber": {"type": "integer", "minimum": 0, "maximum": 10000},
             "capture": {"anyOf": captures},
         }
         readiness.append({
             "type": "object", "additionalProperties": False,
-            "required": ["checks", "readHints", "writeHint", "writeFields", "sceneId"],
+            "required": ["checks", "readHints", "writeHint", "writeFields", "sceneId", "sceneNumber"],
             "properties": properties,
         })
     return {

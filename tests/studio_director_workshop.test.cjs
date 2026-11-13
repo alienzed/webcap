@@ -92,6 +92,8 @@ test('Studio prompting selects the current goal rather than steering every task 
   assert.match(system,/When the author explicitly asks for full draft text/);
   assert.match(system,/Keep readiness light: normally checks=\[\]/);
   assert.match(system,/If assessment is genuinely useful, provide at most two concise checks/);
+  assert.match(system,/single new Scene is ready for review/);
+  assert.match(system,/A tentative Scene capture needs no H3 Prompt/);
   assert.match(system,/H3 PRODUCTION PROMPT REFERENCE/);
   assert.match(system,/scenes writes or revises a coherent Scene, considering its Title, Intent and H3 Prompt together/);
   assert.match(system,/writeFields describes likely changed parts as advisory metadata/);
@@ -156,7 +158,7 @@ test('Scene revision synchronizes the chosen Project destination before requesti
     el:id=>id==='studio-dw-batch-scenes' ? {querySelectorAll:()=>[{value:'scene-a'}]} : {},
     status:message=>{if (message.startsWith('Scene revision draft failed')) assert.fail(message);},
     loadStory:async id=>{assert.equal(id,story.id);return story;},storyName:s=>s.title,
-    parseProposal:JSON.parse,validateSceneRevisionDraft:()=>[],
+    parseProposal:JSON.parse,validateSceneRevisionDraft:()=>[],recommendedSceneId:()=>'',
     window:{flushStudioDirectorStoryEdits:async()=>{},studioDirectorBridge:{
       selectWriteProject:(id,title)=>calls.push(['destination',id,title]),
       messages:()=>[],makeProposal:async instruction=>{

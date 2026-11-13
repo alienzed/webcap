@@ -84,6 +84,8 @@ test('Review is a modal activity, and the saved rating is applied before auto-ad
   assert.ok(review.includes('id="test-generations-review-new-scope"'));
   assert.ok(review.includes('id="test-generations-review-completed"'));
   assert.ok(source.includes("reviewBrowseCompleted = !reviewBrowseCompleted;"));
+  assert.ok(source.includes("completedToggle.classList.toggle('hidden', !reviewBrowseCompleted && !completeCount);"), 'rated previews remain revisitable before the queue is complete');
+  assert.ok(source.includes("'Resume pending' : 'Done'"), 'revisiting offers a clear route back or completion');
   assert.ok(source.includes('dialog.showModal();'));
   assert.ok(source.includes("var reviewCatalogPending = false;"));
   assert.ok(source.includes("reviewCatalogPending = true;"));

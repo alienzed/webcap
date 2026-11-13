@@ -173,7 +173,7 @@ test('Scene revision synchronizes the chosen Project destination before requesti
   await finished;
 });
 
-test('Read sends actual selected data as a visible conversation event and expects LLM receipt', () => {
+test('Read sends actual saved data and asks for a conversational confirmation', () => {
   const state = {open: true, activeMode: 'storyboard', sessionReady: true,
     pending: false, attachmentPending: false, modelId: 'local-model'};
   const composer = {value: 'Please inspect this Project'};
@@ -199,11 +199,11 @@ test('Read sends actual selected data as a visible conversation event and expect
   assert.match(outgoing, /Please inspect this Project/);
   assert.match(outgoing, /\[WEBCAP EXPLICIT READ\]/);
   assert.match(outgoing, /A meaningful conversation/);
-  assert.match(outgoing, /RECEIVED: project\.concept, scene:scene-two:summary/);
-  assert.match(outgoing, /Address only any question explicitly asked above; otherwise stop after the receipt/);
+  assert.match(outgoing, /Confirm the saved fields in your own words/);
+  assert.match(outgoing, /Address only any question explicitly asked above; otherwise stop after a brief confirmation/);
   assert.equal(state.pendingReadAck.length, 2);
-  assert.match(source, /Director acknowledgement mismatch/);
-  assert.match(source, /reportConsoleError\('Studio Read acknowledgement'/);
+  assert.match(source, /Director replied to Read/);
+  assert.doesNotMatch(source, /reportConsoleError\('Studio Read acknowledgement'/);
   assert.match(source, /\[WEBCAP APPLIED FIELD VALUES\]/);
 });
 
@@ -370,5 +370,5 @@ test('legacy Studio field Read remains a neutral context handoff by default', ()
   assert.match(read, /Acknowledge the saved context without assessing it or suggesting next steps/);
   assert.doesNotMatch(read, /give a concise substantive assessment/);
   assert.match(source, /state\.pendingReadAck = keys\.slice\(\)/);
-  assert.match(source, /Address only any question explicitly asked above; otherwise stop after the receipt/);
+  assert.match(source, /Address only any question explicitly asked above; otherwise stop after a brief confirmation/);
 });

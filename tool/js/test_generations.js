@@ -33,6 +33,8 @@
   var reviewBrowseCompleted = false;
   var reviewDimensionId = 'overall';
   var reviewDimensions = [];
+  var reviewScope = null;
+  var reviewDialogHome = null;
   var matrixRatingPending = new Set();
   var pendingActivityFolder = '';
   var testActivity = {};
@@ -3474,7 +3476,7 @@
         {label:'Model',value:status && status.modelId || ''},
         {label:'Checkpoint file',value:identity.secondary}
       ],
-      actions: failed || !session || !mediaFile ? [] : [
+      actions: failed || !session || !mediaFile || (inReview && reviewScope) ? [] : [
         {label:'Ask VL for this render',onClick:function(){
           queueTestVlForSession(status,[result]);
         }},
@@ -4089,6 +4091,103 @@
   }
 
   function reviewDialogOpen() { return el('test-generations-review').open; }
+  function reviewStatus() {
+    return reviewScope ? {results:reviewScope.results, session:reviewScope.identity} : currentStatus;
+  }
+  function reviewItemKey(result) {
+    var file = resultMediaFile(result);
+    return reviewScope ? String(result && result.session || '') + '|' + file : file;
+  }
+  function reviewRequest(operation, criteria) {
+    if (!reviewScope) return request(operation, criteria);
+    return fetch('/fs/test_generations', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({folder:reviewScope.folder, operation:operation, criteria:criteria || {}})
+    }).then(function(response) { return response.json().then(function(payload) {
+      if (!response.ok || !payload || payload.ok === false)
+        throw new Error(payload && payload.error || 'Focused Review request failed.');
+      return payload;
+    }); });
+  }
+  function openEpochReview(folder, jobId, epoch, onClose) {
+    var dialog = el('test-generations-review');
+    if (dialog.open) throw new Error('Close the current Focused Review first.');
+    if (!folder || !jobId || !Number.isInteger(epoch)) throw new Error('Choose a valid epoch collection.');
+    // A native dialog inside the inactive Tests view cannot reliably enter the top layer.
+    reviewDialogHome = dialog.parentNode;
+    document.body.appendChild(dialog);
+    var scope = {folder:folder, jobId:jobId, epoch:epoch,
+      identity:'epoch:' + jobId + ':' + epoch, results:[], campaigns:0,
+      unavailable:0, onClose:onClose};
+    reviewScope = scope;
+    reviewKey = '';
+    reviewSession = '';
+    reviewHistory = [];
+    reviewRevisiting = false;
+    reviewBrowseCompleted = false;
+    reviewCatalogPending = true;
+    var serial = ++reviewCatalogRequest;
+    var host = el('test-generations-review-card');
+    host.replaceChildren();
+    host.dataset.reviewKey = '';
+    el('test-generations-review-title').textContent = 'Focused Review · Epoch ' + epoch;
+    el('test-generations-review-position').textContent = 'Loading epoch results…';
+    el('test-generations-review-status').textContent = '';
+    el('test-generations-review-dimension').disabled = true;
+    el('test-generations-review-add').disabled = true;
+    el('test-generations-review-completed').classList.add('hidden');
+    dialog.showModal();
+    dialog.focus();
+
+    function page(offset) {
+      return fetch('/fs/epoch_finder', {method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({folder:folder,operation:'checkpoint_workspace',
+          criteria:{jobId:jobId,epoch:epoch,limit:96,offset:offset}})})
+        .then(function(response){return response.json().then(function(data){
+          if (!response.ok || !data || !data.ok) throw new Error(data && data.error || 'Epoch results unavailable.');
+          return data;
+        });}).then(function(data){
+          if (reviewScope !== scope || serial !== reviewCatalogRequest) return;
+          (data.media || []).forEach(function(item) {
+            if (item.source !== 'test') { scope.campaigns++; return; }
+            if (item.mediaAvailable === false) { scope.unavailable++; return; }
+            scope.results.push({
+              session:item.session, mediaFile:item.mediaFile, mediaKind:item.mediaKind,
+              prompt:item.prompt, seed:item.seed, rating:item.rating,
+              dimensionRatings:item.dimensionRatings || {}, wildcardValues:item.wildcards || [],
+              candidateFile:item.candidateFile, sourceLoRA:item.candidate, kind:item.kind,
+              strength:item.strength, elapsedMs:item.elapsedMs,
+              provenance:{sourceJobId:item.jobId,sourceEpoch:item.epoch,
+                sourceRunName:item.runName,sourceRunSequence:item.runSequence},
+              settings:item.settings, modelId:item.modelId
+            });
+          });
+          var next = offset + (data.media || []).length;
+          if (next < Number(data.total || 0)) {
+            if (next === offset) throw new Error('Epoch results pagination did not advance.');
+            el('test-generations-review-position').textContent = 'Loading '+next+' of '+data.total+' results…';
+            return page(next);
+          }
+        });
+    }
+    return page(0).then(function(){
+      if (reviewScope !== scope || serial !== reviewCatalogRequest) return;
+      return reviewRequest('test_rating_dimensions').then(function(catalog){
+        if (reviewScope !== scope || serial !== reviewCatalogRequest) return;
+        setReviewDimensions(catalog);
+        reviewCatalogPending = false;
+        el('test-generations-review-dimension').disabled = false;
+        el('test-generations-review-add').disabled = false;
+        renderReview(reviewStatus());
+      });
+    }).catch(function(err){
+      if (reviewScope !== scope || serial !== reviewCatalogRequest) return;
+      el('test-generations-review-position').textContent = 'Could not load epoch review';
+      el('test-generations-review-status').textContent = String(err.message || err);
+      showError(err);
+    });
+  }
+  window.testGenerationsOpenEpochFocusedReview = openEpochReview;
 
   function reviewResults(status) {
     return (status && Array.isArray(status.results) ? status.results : []).filter(function (result) {
@@ -4140,23 +4239,23 @@
   }
 
   function moveReview(direction) {
-    var all = reviewResults(currentStatus);
+    var all = reviewResults(reviewStatus());
     if (reviewBrowseCompleted) {
       var completed = all.filter(function (item) { return reviewRatingValue(item) > 0; });
-      var selected = completed.findIndex(function (item) { return resultMediaFile(item) === reviewKey; });
+      var selected = completed.findIndex(function (item) { return reviewItemKey(item) === reviewKey; });
       var destination = selected + (direction < 0 ? -1 : 1);
       if (destination < 0 || destination >= completed.length) return;
-      reviewKey = resultMediaFile(completed[destination]);
+      reviewKey = reviewItemKey(completed[destination]);
       reviewRevisiting = false;
-      renderReview(currentStatus);
+      renderReview(reviewStatus());
       return;
     }
-    var pending = reviewPendingResults(currentStatus);
+    var pending = reviewPendingResults(reviewStatus());
     if (direction < 0 && reviewHistory.length) {
       reviewKey = reviewHistory.pop();
       reviewRevisiting = true;
     } else {
-      var position = all.findIndex(function (item) { return resultMediaFile(item) === reviewKey; });
+      var position = all.findIndex(function (item) { return reviewItemKey(item) === reviewKey; });
       var following = all.findIndex(function (item, index) {
         return (direction > 0 ? index > position : index < position) &&
           reviewRatingValue(item) <= 0;
@@ -4168,25 +4267,25 @@
         }
       }
       if (following < 0 && direction > 0 && pending.length) {
-        following = all.findIndex(function (item) { return resultMediaFile(item) === resultMediaFile(pending[0]); });
+        following = all.findIndex(function (item) { return resultMediaFile(item) === reviewItemKey(pending[0]); });
       }
       if (following < 0) return;
-      reviewKey = resultMediaFile(all[following]);
+      reviewKey = reviewItemKey(all[following]);
       reviewRevisiting = false;
     }
-    renderReview(currentStatus);
+    renderReview(reviewStatus());
   }
 
   function advanceReviewToUnrated() {
-    if (reviewBrowseCompleted) { renderReview(currentStatus); return; }
-    var all = reviewResults(currentStatus);
+    if (reviewBrowseCompleted) { renderReview(reviewStatus()); return; }
+    var all = reviewResults(reviewStatus());
     var previous = reviewKey;
     var index = all.findIndex(function (result) { return resultMediaFile(result) === previous; });
     if (previous) reviewHistory.push(previous);
     var next = reviewNextUnratedIndex(all, index);
-    reviewKey = next >= 0 ? resultMediaFile(all[next]) : '';
+    reviewKey = next >= 0 ? reviewItemKey(all[next]) : '';
     reviewRevisiting = false;
-    renderReview(currentStatus);
+    renderReview(reviewStatus());
     el('test-generations-review').focus();
   }
 
@@ -4210,23 +4309,26 @@
     }
     var completed = all.filter(function (result) { return reviewRatingValue(result) > 0; });
     var pool = reviewBrowseCompleted ? completed : pending;
-    var current = all.findIndex(function (result) { return resultMediaFile(result) === reviewKey; });
+    var current = all.findIndex(function (result) { return reviewItemKey(result) === reviewKey; });
     if (current < 0 || (!reviewRevisiting && !pool.some(function (result) {
-      return resultMediaFile(result) === reviewKey;
+      return reviewItemKey(result) === reviewKey;
     }))) {
       current = pool.length ? all.findIndex(function (result) {
-        return resultMediaFile(result) === resultMediaFile(pool[0]);
+        return reviewItemKey(result) === reviewItemKey(pool[0]);
       }) : -1;
       reviewRevisiting = false;
     }
     var result = current >= 0 ? all[current] : null;
     reviewKey = result ? resultMediaFile(result) : '';
     var completeCount = all.length - pending.length;
-    position.textContent = all.length
+    position.textContent = (all.length
       ? completeCount + ' of ' + all.length + ' rated · ' + pending.length + ' remaining'
-      : 'No reviewable previews';
+      : 'No reviewable previews') + (reviewScope
+        ? ' · ' + reviewScope.campaigns + ' Campaign frames (view only)' +
+          (reviewScope.unavailable ? ' · ' + reviewScope.unavailable + ' unavailable' : '')
+        : '');
     var previousPending = current > 0 && all.slice(0, current).some(function (item) { return reviewRatingValue(item) <= 0; });
-    var completedIndex = completed.findIndex(function (item) { return resultMediaFile(item) === reviewKey; });
+    var completedIndex = completed.findIndex(function (item) { return reviewItemKey(item) === reviewKey; });
     dialog.querySelector('[data-test-review-previous]').disabled = reviewRatingPending ||
       (reviewBrowseCompleted ? completedIndex <= 0 : (!reviewHistory.length && !previousPending));
     dialog.querySelector('[data-test-review-next]').disabled = reviewRatingPending ||
@@ -4245,7 +4347,7 @@
     if (host.dataset.reviewKey === key && host.firstElementChild) {
       if (result) {
         updateTestPreviewCardRating(host.firstElementChild, reviewRatingValue(result));
-        renderTestVlCard(host.firstElementChild, result, testVlCandidateScores(all));
+        if (!reviewScope) renderTestVlCard(host.firstElementChild, result, testVlCandidateScores(all));
       }
       return;
     }
@@ -4262,7 +4364,10 @@
       host.appendChild(empty);
       return;
     }
-    var card = sharedTestCard(result, status, 'test-generations-result-card test-generations-review-item', true, false);
+    var cardStatus = reviewScope ? {
+      session:result.session, settings:result.settings || {}, modelId:result.modelId
+    } : status;
+    var card = sharedTestCard(result, cardStatus, 'test-generations-result-card test-generations-review-item', true, false);
     host.appendChild(card);
     var ratingGroup = card.querySelector('.test-generations-result-rating');
     if (ratingGroup) {
@@ -4272,7 +4377,7 @@
         star.dataset.ratingDimension = reviewDimensionId;
       });
     }
-    renderTestVlCard(card, result, testVlCandidateScores(all));
+    if (!reviewScope) renderTestVlCard(card, result, testVlCandidateScores(all));
     var video = card.querySelector('video');
     if (video) {
       video.muted = true;
@@ -4289,9 +4394,36 @@
     var star = card && card.querySelector('[data-test-rating="' + value + '"]');
     if (!star) return;
     reviewRatingPending = true;
-    var savedSession = String(currentStatus && currentStatus.session || '');
+    var savedSession = String(reviewScope ? (reviewStatus().results.find(function(item){return reviewItemKey(item)===reviewKey;}) || {}).session : currentStatus && currentStatus.session || '');
     var savedKey = reviewKey, savedDimension = reviewDimensionId;
     var serial = ++reviewSaveSerial;
+    if (reviewScope) {
+      var scope = reviewScope;
+      reviewRequest('test_rate_result', {
+        session:savedSession,mediaFile:String(star.dataset.mediaFile || ''),
+        rating:value,dimensionId:savedDimension
+      }).then(function(payload){
+        if (reviewScope !== scope || serial !== reviewSaveSerial) return;
+        scope.results.forEach(function(item){
+          if (item.session !== savedSession || resultMediaFile(item) !== star.dataset.mediaFile) return;
+          if (savedDimension === 'overall') item.rating = payload.rating;
+          else item.dimensionRatings[savedDimension] = payload.rating;
+        });
+        reviewRatingPending = false;
+        if (reviewDialogOpen() && reviewKey === savedKey && reviewDimensionId === savedDimension)
+          advanceReviewToUnrated();
+      }).catch(function(err){
+        if (reviewScope === scope) {
+          el('test-generations-review-status').textContent = 'Rating not saved: ' + String(err.message || err);
+          showError(err);
+        }
+      }).finally(function(){
+        if (reviewScope !== scope || serial !== reviewSaveSerial) return;
+        reviewRatingPending = false;
+        if (reviewDialogOpen()) renderReview(reviewStatus());
+      });
+      return;
+    }
     rateTestResult(star, function () {
       if (serial !== reviewSaveSerial) return;
       reviewRatingPending = false;
@@ -4302,11 +4434,12 @@
     }).finally(function () {
       if (serial !== reviewSaveSerial) return;
       reviewRatingPending = false;
-      if (reviewDialogOpen()) renderReview(currentStatus);
+      if (reviewDialogOpen()) renderReview(reviewStatus());
     });
   }
 
   function openFocusedReview() {
+    reviewScope = null;
     var dialog = el('test-generations-review');
     if (dialog.open) return;
     reviewKey = '';
@@ -4331,14 +4464,14 @@
     el('test-generations-review-status').textContent = '';
     dialog.showModal();
     dialog.focus();
-    request('test_rating_dimensions').then(function (catalog) {
+    reviewRequest('test_rating_dimensions').then(function (catalog) {
       if (!dialog.open || requestId !== reviewCatalogRequest || folder !== String(launchFolder || '') ||
           session !== String(currentStatus && currentStatus.session || '')) return;
       setReviewDimensions(catalog);
       reviewCatalogPending = false;
       el('test-generations-review-dimension').disabled = false;
       el('test-generations-review-add').disabled = false;
-      renderReview(currentStatus);
+      renderReview(reviewStatus());
     }).catch(function (error) {
       if (!dialog.open || requestId !== reviewCatalogRequest) return;
       el('test-generations-review-position').textContent = 'Could not load dimensions';
@@ -5492,7 +5625,7 @@
             });
       warmStatus.then(function () {
         if (generation !== openGeneration || !isOpen()) return;
-        if (reviewDialogOpen()) renderReview(currentStatus);
+        if (reviewDialogOpen()) renderReview(reviewStatus());
         if (testStatusHasPendingWork(currentStatus) || queuedTestJobs.length) pollStatus();
       }).catch(showError);
       return;
@@ -5990,7 +6123,7 @@
     };
     el('test-generations-review-completed').onclick = function () {
       if (reviewRatingPending || reviewCatalogPending) return;
-      if (reviewBrowseCompleted && !reviewPendingResults(currentStatus).length) {
+      if (reviewBrowseCompleted && !reviewPendingResults(reviewStatus()).length) {
         el('test-generations-review').close();
         return;
       }
@@ -5998,7 +6131,7 @@
       reviewKey = '';
       reviewHistory = [];
       reviewRevisiting = false;
-      renderReview(currentStatus);
+      renderReview(reviewStatus());
     };
     el('test-generations-review').addEventListener('close', function () {
       ++reviewCatalogRequest;
@@ -6008,6 +6141,15 @@
       var button = el('test-generations-view-review-btn');
       button.classList.remove('active');
       button.setAttribute('aria-expanded', 'false');
+      if (reviewScope) {
+        var finished = reviewScope;
+        reviewScope = null;
+        reviewSession = '';
+        el('test-generations-review-card').replaceChildren();
+        if (reviewDialogHome) reviewDialogHome.appendChild(this);
+        reviewDialogHome = null;
+        if (typeof finished.onClose === 'function') finished.onClose();
+      }
     });
     el('test-generations-review-dimension').onchange = function () {
       if (reviewRatingPending || reviewCatalogPending) { this.value = reviewDimensionId; return; }
@@ -6016,7 +6158,7 @@
       reviewRevisiting = false;
       reviewBrowseCompleted = false;
       reviewKey = '';
-      renderReview(currentStatus);
+      renderReview(reviewStatus());
       el('test-generations-review').focus();
     };
     el('test-generations-review-add').onclick = function () {
@@ -6030,7 +6172,7 @@
       }
       var scope = el('test-generations-review-new-scope').value;
       button.disabled = true;
-      request('test_rating_dimension_add', {label: name, scope: scope}).then(function (catalog) {
+      reviewRequest('test_rating_dimension_add', {label: name, scope: scope}).then(function (catalog) {
         var created = catalog.dimensions.find(function (item) { return item.label.toLowerCase() === name.toLowerCase(); });
         if (!created) throw new Error('Saved rating dimension is missing from the returned catalog.');
         reviewDimensionId = created.id;
@@ -6041,7 +6183,7 @@
         reviewKey = '';
         nameInput.value = '';
         el('test-generations-review-add-details').open = false;
-        renderReview(currentStatus);
+        renderReview(reviewStatus());
         el('test-generations-review').focus();
       }).catch(function (err) {
         el('test-generations-review-status').textContent = 'Could not save dimension: ' + String(err.message || err);
@@ -6274,7 +6416,7 @@
       if (epoch) window.runAnalyticsViewEpoch(epoch.dataset.testEpochMediaJob, Number(epoch.dataset.testEpochMediaEpoch), 'tests');
     };
     document.addEventListener('keydown', function (event) {
-      if (!isOpen() || !reviewDialogOpen() || event.defaultPrevented || reviewRatingPending || reviewCatalogPending ||
+      if ((!isOpen() && !reviewScope) || !reviewDialogOpen() || event.defaultPrevented || reviewRatingPending || reviewCatalogPending ||
           event.ctrlKey || event.metaKey || event.altKey || isEditableElement(event.target)) return;
       if (/^[1-5]$/.test(event.key)) {
         event.preventDefault();

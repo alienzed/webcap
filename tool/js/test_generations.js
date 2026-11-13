@@ -21,10 +21,11 @@
   var resultsView = 'grid';
   var previewSort = 'original';
   var compareIndex = 0;
-  var reviewIndex = 0;
   var reviewSession = '';
   var reviewKey = '';
   var reviewRatingPending = false;
+  var reviewSaveSerial = 0;
+  var candidateSummarySerial = 0;
   var reviewCatalogPending = false;
   var reviewCatalogRequest = 0;
   var reviewHistory = [];
@@ -3322,6 +3323,7 @@
     var mediaFile = String(button && button.dataset.mediaFile || '').trim();
     var sessionName = String(button && button.dataset.testSession || '').trim();
     var dimensionId = String(button && button.dataset.ratingDimension || 'overall');
+    var sourceFolder = String(launchFolder || '');
     if (!mediaFile || !sessionName || rating < 1 || rating > 5) return;
 
     var row = button.closest('.test-generations-result-rating');
@@ -3353,8 +3355,14 @@
         if (previewSort === 'rating') refreshTestPreviewOrder();
         else if (resultsView === 'matrix') renderMatrix(currentStatus);
       }
-      return request('test_rating_summary', { modelId: currentTestModelId() });
-    }).then(function (payload) {
+      var refreshSerial = ++candidateSummarySerial;
+      return request('test_rating_summary', { modelId: currentTestModelId() }).then(function (payload) {
+        return { payload: payload, refreshSerial: refreshSerial };
+      });
+    }).then(function (refresh) {
+      if (!refresh || refresh.refreshSerial !== candidateSummarySerial ||
+          String(launchFolder || '') !== sourceFolder) return;
+      var payload = refresh.payload;
       if (prepared && payload && payload.candidateScores) {
         prepared.candidateScores = payload.candidateScores;
         prepared.candidateVisionScores = payload.candidateVisionScores || {};
@@ -4193,7 +4201,6 @@
     if (reviewSession !== session) {
       reviewSession = session;
       reviewKey = '';
-      reviewIndex = 0;
       reviewHistory = [];
       reviewRevisiting = false;
       reviewBrowseCompleted = false;
@@ -4212,7 +4219,6 @@
       reviewRevisiting = false;
     }
     var result = current >= 0 ? all[current] : null;
-    reviewIndex = current;
     reviewKey = result ? resultMediaFile(result) : '';
     var completeCount = all.length - pending.length;
     position.textContent = all.length
@@ -4282,12 +4288,16 @@
     reviewRatingPending = true;
     var savedSession = String(currentStatus && currentStatus.session || '');
     var savedKey = reviewKey, savedDimension = reviewDimensionId;
+    var serial = ++reviewSaveSerial;
     rateTestResult(star, function () {
+      if (serial !== reviewSaveSerial) return;
+      reviewRatingPending = false;
       if (reviewDialogOpen() && String(currentStatus.session || '') === savedSession &&
           reviewKey === savedKey && reviewDimensionId === savedDimension) {
         advanceReviewToUnrated();
       }
     }).finally(function () {
+      if (serial !== reviewSaveSerial) return;
       reviewRatingPending = false;
       if (reviewDialogOpen()) renderReview(currentStatus);
     });

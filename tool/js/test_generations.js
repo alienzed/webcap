@@ -28,6 +28,7 @@
   var reviewReturnView = 'grid';
   var reviewHistory = [];
   var reviewRevisiting = false;
+  var reviewBrowseCompleted = false;
   var reviewDimensionId = 'overall';
   var reviewDimensions = [];
   var matrixRatingPending = new Set();
@@ -4129,6 +4130,16 @@
 
   function moveReview(direction) {
     var all = reviewResults(currentStatus);
+    if (reviewBrowseCompleted) {
+      var completed = all.filter(function (item) { return reviewRatingValue(item) > 0; });
+      var selected = completed.findIndex(function (item) { return resultMediaFile(item) === reviewKey; });
+      var destination = selected + (direction < 0 ? -1 : 1);
+      if (destination < 0 || destination >= completed.length) return;
+      reviewKey = resultMediaFile(completed[destination]);
+      reviewRevisiting = false;
+      renderReview(currentStatus);
+      return;
+    }
     var pending = reviewPendingResults(currentStatus);
     if (direction < 0 && reviewHistory.length) {
       reviewKey = reviewHistory.pop();
@@ -4156,6 +4167,7 @@
   }
 
   function advanceReviewToUnrated() {
+    if (reviewBrowseCompleted) { renderReview(currentStatus); return; }
     var all = reviewResults(currentStatus);
     var previous = reviewKey;
     var index = all.findIndex(function (result) { return resultMediaFile(result) === previous; });
@@ -4180,13 +4192,18 @@
       reviewIndex = 0;
       reviewHistory = [];
       reviewRevisiting = false;
+      reviewBrowseCompleted = false;
       host.replaceChildren();
       host.dataset.reviewKey = '';
     }
+    var completed = all.filter(function (result) { return reviewRatingValue(result) > 0; });
+    var pool = reviewBrowseCompleted ? completed : pending;
     var current = all.findIndex(function (result) { return resultMediaFile(result) === reviewKey; });
-    if (current < 0 || (!reviewRevisiting && reviewRatingValue(all[current]) > 0)) {
-      current = pending.length ? all.findIndex(function (result) {
-        return resultMediaFile(result) === resultMediaFile(pending[0]);
+    if (current < 0 || (!reviewRevisiting && !pool.some(function (result) {
+      return resultMediaFile(result) === reviewKey;
+    }))) {
+      current = pool.length ? all.findIndex(function (result) {
+        return resultMediaFile(result) === resultMediaFile(pool[0]);
       }) : -1;
       reviewRevisiting = false;
     }
@@ -4198,14 +4215,21 @@
       ? completeCount + ' of ' + all.length + ' rated · ' + pending.length + ' remaining'
       : 'No reviewable previews';
     var previousPending = current > 0 && all.slice(0, current).some(function (item) { return reviewRatingValue(item) <= 0; });
-    dialog.querySelector('[data-test-review-previous]').disabled = reviewRatingPending || (!reviewHistory.length && !previousPending);
+    var completedIndex = completed.findIndex(function (item) { return resultMediaFile(item) === reviewKey; });
+    dialog.querySelector('[data-test-review-previous]').disabled = reviewRatingPending ||
+      (reviewBrowseCompleted ? completedIndex <= 0 : (!reviewHistory.length && !previousPending));
     dialog.querySelector('[data-test-review-next]').disabled = reviewRatingPending ||
-      (!reviewRevisiting && pending.length <= 1) || !pending.length;
+      (reviewBrowseCompleted ? completedIndex < 0 || completedIndex >= completed.length - 1 :
+        ((!reviewRevisiting && pending.length <= 1) || !pending.length));
+    var completedToggle = el('test-generations-review-completed');
+    completedToggle.classList.toggle('hidden', !completeCount && !reviewBrowseCompleted);
+    completedToggle.textContent = reviewBrowseCompleted ? 'Review pending' : 'Revisit rated';
     var statusNode = el('test-generations-review-status');
     statusNode.textContent = !all.length ? 'Generate a Test session to begin.' :
+      reviewBrowseCompleted ? 'Revisiting saved ' + reviewDimensionLabel() + ' ratings.' :
       !pending.length && !reviewRevisiting ? reviewDimensionLabel() + ' complete. Switch dimensions or close.' :
       reviewRevisiting ? 'Revisiting a saved rating. Choose a new score to update it.' : '';
-    var key = session + '|' + reviewDimensionId + '|' + reviewKey;
+    var key = session + '|' + reviewDimensionId + '|' + (reviewBrowseCompleted ? 'completed' : 'pending') + '|' + reviewKey;
     if (host.dataset.reviewKey === key && host.firstElementChild) {
       if (result) {
         updateTestPreviewCardRating(host.firstElementChild, reviewRatingValue(result));
@@ -4220,7 +4244,9 @@
     if (!result) {
       var empty = document.createElement('div');
       empty.className = 'test-generations-empty';
-      empty.textContent = all.length ? 'All results rated for ' + reviewDimensionLabel() + '.' : 'No saved Test results to review.';
+      empty.textContent = all.length ? (reviewBrowseCompleted
+        ? 'No completed ratings for ' + reviewDimensionLabel() + '.'
+        : 'All results rated for ' + reviewDimensionLabel() + '.') : 'No saved Test results to review.';
       host.appendChild(empty);
       return;
     }
@@ -4304,6 +4330,7 @@
       reviewKey = '';
       reviewHistory = [];
       reviewRevisiting = false;
+      reviewBrowseCompleted = false;
       review.classList.remove('hidden');
       review.showModal();
       var openingSession = String(currentStatus && currentStatus.session || '');
@@ -5947,6 +5974,14 @@
     el('test-generations-review-close').onclick = function () {
       el('test-generations-review').close();
     };
+    el('test-generations-review-completed').onclick = function () {
+      if (reviewRatingPending) return;
+      reviewBrowseCompleted = !reviewBrowseCompleted;
+      reviewKey = '';
+      reviewHistory = [];
+      reviewRevisiting = false;
+      renderReview(currentStatus);
+    };
     el('test-generations-review').addEventListener('close', function () {
       if (resultsView === 'review') setResultsView(reviewReturnView);
     });
@@ -5955,6 +5990,7 @@
       reviewDimensionId = this.value;
       reviewHistory = [];
       reviewRevisiting = false;
+      reviewBrowseCompleted = false;
       reviewKey = '';
       renderReview(currentStatus);
     };
@@ -5976,6 +6012,7 @@
         setReviewDimensions(catalog);
         reviewHistory = [];
         reviewRevisiting = false;
+        reviewBrowseCompleted = false;
         reviewKey = '';
         nameInput.value = '';
         el('test-generations-review-add-details').open = false;

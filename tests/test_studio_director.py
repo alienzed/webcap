@@ -16,7 +16,7 @@ def test_writer_workshop_uses_existing_h3_prompt_contract_and_user_playbook(monk
     text = result["system"]
     assert "STUDIO DIRECTOR | EXPERT CREATIVE PRODUCER" in text
     assert "core appeal" in text.lower()
-    assert "Ask one focused question when a consequential creative decision is missing" in text
+    assert "ask one focused question; otherwise offer a specific idea" in text
     assert "4–15 seconds" in text
     assert "FIELD DEVELOPMENT" in text
     assert "Entry and exit state fields are retired" in text
@@ -115,6 +115,9 @@ def test_freeform_workshop_does_not_claim_hidden_context_or_mutations():
     assert "Read and Write are explicit author-driven operations" in text
     assert "Conversation never edits Project records" in text
     assert "strengthen the idea, do not replace it" in text
+    assert "Enthusiastically elevate the author\'s vision" in text
+    assert "compelling visual ideas, and expert prompting techniques" in text
+    assert "subject, action, interaction or atmosphere" in text
 
 
 

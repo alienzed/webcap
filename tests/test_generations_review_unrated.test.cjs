@@ -83,8 +83,15 @@ test('Review is a modal activity, and the saved rating is applied before auto-ad
   assert.ok(review.includes('id="test-generations-review-new-scope"'));
   assert.ok(review.includes('id="test-generations-review-completed"'));
   assert.ok(source.includes("reviewBrowseCompleted = !reviewBrowseCompleted;"));
-  assert.ok(source.includes('review.showModal();'));
+  assert.ok(source.includes('dialog.showModal();'));
+  assert.ok(source.includes("var reviewCatalogPending = false;"));
+  assert.ok(source.includes("reviewCatalogPending = true;"));
+  assert.ok(!source.includes("resultsView === 'review'"), 'review must remain separate from result tabs');
+  assert.ok(source.includes("removeNode: inReview ? null : buildResultRemoveButton(result)"));
+  assert.ok(html.includes('id="test-generations-review-title"'));
+  assert.ok(source.includes("el('test-generations-review-title').textContent = reviewDimensionLabel();"));
   assert.ok(source.includes("el('test-generations-review').addEventListener('close'"));
+  assert.ok(source.includes("el('test-generations-view-review-btn').onclick = openFocusedReview;"));
   const update = source.indexOf('result.dimensionRatings[dimensionId] = payload.rating;');
   const callback = source.indexOf('if (onSaved) onSaved();');
   assert.ok(update >= 0 && callback > update, 'persisted dimension must update before navigation');

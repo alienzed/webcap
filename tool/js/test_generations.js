@@ -4236,8 +4236,9 @@
       (reviewBrowseCompleted ? completedIndex < 0 || completedIndex >= completed.length - 1 :
         ((!reviewRevisiting && pending.length <= 1) || !pending.length));
     var completedToggle = el('test-generations-review-completed');
-    completedToggle.classList.toggle('hidden', !completeCount && !reviewBrowseCompleted);
-    completedToggle.textContent = reviewBrowseCompleted ? 'Review pending' : 'Revisit rated';
+    completedToggle.classList.toggle('hidden',
+      !reviewBrowseCompleted && (pending.length > 0 || !completeCount));
+    completedToggle.textContent = reviewBrowseCompleted ? 'Return to review' : 'Revisit rated';
     var statusNode = el('test-generations-review-status');
     statusNode.textContent = !all.length ? 'Generate a Test session to begin.' :
       reviewBrowseCompleted ? 'Revisiting saved ' + reviewDimensionLabel() + ' ratings.' :
@@ -4327,6 +4328,7 @@
     el('test-generations-review').querySelector('[data-test-review-previous]').disabled = true;
     el('test-generations-review').querySelector('[data-test-review-next]').disabled = true;
     el('test-generations-review-card').replaceChildren();
+    el('test-generations-review-title').textContent = 'Focused Review';
     el('test-generations-review-position').textContent = 'Loading dimensions…';
     el('test-generations-review-status').textContent = '';
     dialog.showModal();

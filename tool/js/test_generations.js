@@ -4333,6 +4333,7 @@
       reviewBrowseCompleted = false;
       review.classList.remove('hidden');
       review.showModal();
+      review.focus();
       var openingSession = String(currentStatus && currentStatus.session || '');
       var openingFolder = String(launchFolder || '');
       request('test_rating_dimensions').then(function (catalog) {

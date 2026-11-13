@@ -74,3 +74,17 @@ test('queue error panel is wired without replacing existing scheduling or refres
   assert.match(source, /navigator\.clipboard\.writeText\(failure\.full\)/);
   assert.match(source, /toggle\.classList\.toggle\('inference-has-error'/);
 });
+
+test('ComfyUI error heading retains room for title beside compact Copy Error control', () => {
+  const html = fs.readFileSync('tool/tool.html', 'utf8');
+  const css = fs.readFileSync('tool/css/workspace_shell.css', 'utf8');
+  assert.match(html, /class="inference-queue-error-heading"><strong>ComfyUI execution failed<\/strong><button id="inference-queue-error-copy"/);
+  const heading = css.match(/\.inference-queue-error-heading strong\s*\{([^}]+)\}/);
+  const button = css.match(/\.inference-queue-error-heading \.review-captions-btn\s*\{([^}]+)\}/);
+  assert.ok(heading && button, 'error heading and button have dedicated scoped layout rules');
+  assert.match(heading[1], /flex:\s*1 1 auto/);
+  assert.match(heading[1], /min-width:\s*0/);
+  assert.match(button[1], /flex:\s*0 0 auto/);
+  assert.match(button[1], /width:\s*auto/);
+  assert.match(button[1], /white-space:\s*nowrap/);
+});

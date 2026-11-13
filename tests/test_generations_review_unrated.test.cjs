@@ -87,5 +87,5 @@ test('Review is a modal activity, and the saved rating is applied before auto-ad
   const callback = source.indexOf('if (onSaved) onSaved();');
   assert.ok(update >= 0 && callback > update, 'persisted dimension must update before navigation');
   assert.ok(source.includes('advanceReviewToUnrated();'));
-  assert.ok(source.includes("var savedDimension = reviewDimensionId;"));
+  assert.ok(source.includes("savedDimension = reviewDimensionId;"));
 });

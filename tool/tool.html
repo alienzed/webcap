@@ -1538,9 +1538,10 @@
                                         <option value="vl">VL match ↓</option>
                                     </select>
                                 <div class="test-generations-view-tabs" role="tablist" aria-label="Results view">
-                                    <button id="test-generations-view-grid-btn" type="button" class="test-generations-view-tab active" role="tab" aria-selected="true">Grid</button><button id="test-generations-view-review-btn" type="button" class="test-generations-view-tab" role="tab" aria-selected="false">Review</button>
+                                    <button id="test-generations-view-grid-btn" type="button" class="test-generations-view-tab active" role="tab" aria-selected="true">Grid</button>
                                     <button id="test-generations-view-compare-btn" type="button" class="test-generations-view-tab" role="tab" aria-selected="false">Compare</button><button id="test-generations-view-matrix-btn" type="button" class="test-generations-view-tab" role="tab" aria-selected="false">Matrix</button>
                                 </div>
+                                <button id="test-generations-view-review-btn" type="button" class="test-generations-review-open">Focused Review</button>
                                 </div>
                             </div>
                             <details id="test-generations-vl-filters" class="test-generations-vl-filters hidden">
@@ -1562,14 +1563,33 @@
                                 </details>
                             </section>
                             <div id="test-generations-results" class="test-generations-results"></div>
-                            <div id="test-generations-review" class="test-generations-review hidden" role="tabpanel" aria-label="Review test results">
+                            <dialog id="test-generations-review" class="test-generations-review test-generations-review-dialog" aria-label="Focused Review">
+                                <header class="test-generations-review-header">
+                                    <div class="test-generations-review-title"><span>Evaluations / Focused Review</span><h2>Rate one attribute at a time</h2><p id="test-generations-review-position" aria-live="polite">0 remaining</p></div>
+                                    <div class="test-generations-review-criteria">
+                                        <label for="test-generations-review-dimension">Rating dimension</label>
+                                        <select id="test-generations-review-dimension" aria-label="Current rating dimension"><option value="overall">Overall</option></select>
+                                        <details id="test-generations-review-add-details">
+                                            <summary>+ Dimension</summary>
+                                            <div class="test-generations-review-add-fields">
+                                                <input id="test-generations-review-new-name" type="text" maxlength="80" placeholder="e.g. Brushing Motion" aria-label="New dimension name">
+                                                <select id="test-generations-review-new-scope" aria-label="Save dimension for"><option value="set">This Set</option><option value="global">Global default</option></select>
+                                                <button id="test-generations-review-add" type="button">Add</button>
+                                            </div>
+                                        </details>
+                                    </div>
+                                    <button id="test-generations-review-close" type="button" class="test-generations-review-close">Close</button>
+                                </header>
                                 <div id="test-generations-review-card" class="test-generations-review-card-host"></div>
-                                <nav class="test-generations-review-navigation" aria-label="Review navigation">
-                                    <button type="button" data-test-review-previous aria-label="Previous Test result" title="Previous result (Left arrow)">←</button>
-                                    <span id="test-generations-review-position" aria-live="polite">0 / 0</span>
-                                    <button type="button" data-test-review-next aria-label="Next Test result" title="Next result (Right arrow)">→</button>
-                                </nav>
-                            </div>
+                                <footer class="test-generations-review-footer">
+                                    <nav class="test-generations-review-navigation" aria-label="Review navigation">
+                                        <button type="button" data-test-review-previous aria-label="Previous rated result" title="Back to previous rated result (Left arrow)">← Back</button>
+                                        <button type="button" data-test-review-next aria-label="Next unrated result" title="Next pending result (Right arrow)">Next →</button>
+                                    </nav>
+                                    <p id="test-generations-review-status" role="status" aria-live="polite"></p>
+                                    <span>1–5 rate &amp; advance · ← back · → next pending</span>
+                                </footer>
+                            </dialog>
                             <div id="test-generations-compare" class="test-generations-compare hidden"></div><div id="test-generations-matrix" class="test-generations-matrix hidden"></div>
                             </div>
                             <section id="test-generations-epoch-info" class="epoch-info-workspace hidden" aria-label="Checkpoint inspection"></section>

@@ -1132,7 +1132,18 @@
 
       var body = document.createElement('div');
       body.className = 'director-chat-message-body';
-      body.textContent = message.content;
+      var visibleContent = message.content;
+      if (state.activeMode === 'storyboard' && message.role === 'assistant' && message.rawResponse) {
+        // Recover draft text hidden by older saved conversations without a new model call.
+        try {
+          var storedResponse = JSON.parse(message.rawResponse);
+          if (storedResponse && storedResponse.readiness && storedResponse.readiness.capture)
+            visibleContent = studioDirectorVisibleReply({reply:visibleContent,readiness:storedResponse.readiness});
+        } catch (error) {
+          // Older diagnostic captures may not contain structured Studio JSON.
+        }
+      }
+      body.textContent = visibleContent;
       // Studio creative text stays visible, including long explicitly requested drafts.
       if (message.role === 'user' && (message.content.indexOf('[WEBCAP EXPLICIT READ]') !== -1 ||
           message.content.indexOf('[WEBCAP APPLIED FIELD VALUES]') !== -1)) {

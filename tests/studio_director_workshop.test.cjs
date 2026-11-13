@@ -16,7 +16,7 @@ function part(start, end) {
   return source.slice(a, b);
 }
 
-test('Studio has a wide conversation and a real side-panel Read/Write workbench', () => {
+test('Director occupies the Projects work area with an optional manual workbench', () => {
   for (const id of [
     'director-chat-drawer', 'director-chat-messages', 'director-chat-input',
     'studio-director-workbench', 'studio-dw-read', 'studio-dw-write',
@@ -30,6 +30,11 @@ test('Studio has a wide conversation and a real side-panel Read/Write workbench'
   assert.match(css, /\.director-chat-drawer\.studio-director #director-studio-flow \{ display: none !important; \}/);
   assert.match(css, /studio-dw-actions/);
   assert.match(css, /font-size:16px/);
+  assert.match(css,/grid-area:workspace;position:relative;inset:auto/);
+  assert.match(css,/\.app-frame\.director-chat-pinned\.studio-director-active \{grid-template-columns:42px minmax\(0,1fr\)/);
+  assert.match(css,/\.studio-director-active > \.storyboard-workspace \{visibility:hidden;/);
+  assert.match(html,/id="storyboard-open-director"/);
+  assert.match(html,/id="studio-dw-open-tools"/);
 });
 
 test('New Director conversation is passive until the author explicitly sends', () => {

@@ -48,16 +48,15 @@ test('Undo is reachable from the visible rail and delegates to existing reviewed
   assert.match(rail,/resetConversation: function \(\)/);
 });
 
-test('Narrow Studio exposes Read and Write directly instead of burying them behind Actions', () => {
-  for(const id of ['studio-dw-quick-read','studio-dw-quick-write','studio-dw-close-actions'])
+test('manual Read and Write remain available through the on-demand Advanced panel', () => {
+  for(const id of ['studio-dw-open-tools','studio-dw-read','studio-dw-write','studio-dw-close-actions'])
     assert.match(html,new RegExp('id="'+id+'"'));
   assert.doesNotMatch(html,/id="studio-dw-open-actions"/);
-  assert.match(css,/@container \(max-width:820px\)/);
-  assert.match(css,/\.studio-actions-open \.director-chat-sidebar/);
-  assert.match(css,/visibility:hidden;pointer-events:none/);
+  assert.match(css,/@container \(max-width:1000px\)/);
+  assert.match(css,/\.studio-actions-open \.director-chat-sidebar \{display:flex;/);
+  assert.match(css,/\.director-chat-sidebar \{display:none;/);
   assert.match(rail,/function openDirectAction\(which\)/);
-  assert.match(rail,/openDirectAction\('read'\)/);
-  assert.match(rail,/openDirectAction\('write'\)/);
+  assert.match(rail,/openDirectAction\(lastQuickAction\)/);
   assert.match(rail,/el\('studio-dw-' \+ which\)\.click\(\)/);
 });
 
@@ -69,6 +68,44 @@ test('Read and Write stay distinct; Read persists field choices on panel changes
   assert.match(rail,/preferredRead/);
   assert.match(rail,/preferredWrite/);
   assert.match(rail,/lastReadSource && writeId && lastReadSource !== writeId/);
+});
+
+test('operational errors reveal Advanced and preserve the shared Console detail',()=>{
+  const nodes={},classes=new Set(),logs=[];
+  const el=id=>nodes[id] ||= {dataset:{},attrs:{},classList:{toggle(){},add:x=>classes.add(x)},setAttribute(k,v){this.attrs[k]=v;}};
+  const scope=vm.createContext({el,window:{reportConsoleError:(label,error)=>logs.push(error.message)}});
+  vm.runInContext(section(rail,'  function status(message, error) {','  function option('),scope);
+  scope.status('Draft failed: exact backend error',true);
+  assert.equal(classes.has('studio-actions-open'),true);
+  assert.equal(el('studio-dw-open-tools').attrs['aria-expanded'],'true');
+  assert.equal(el('studio-dw-status').textContent,'Draft failed: exact backend error');
+  assert.deepEqual(logs,['Draft failed: exact backend error']);
+});
+
+test('Advanced opens and closes the last manual panel without submitting Read or Write',()=>{
+  const nodes={};
+  function node(id) {
+    const classes=new Set();
+    return nodes[id] ||= {attrs:{},classList:{add:x=>classes.add(x),remove:x=>classes.delete(x),contains:x=>classes.has(x),toggle(x,on){if(on)classes.add(x);else classes.delete(x);}},
+      setAttribute(k,v){this.attrs[k]=v;},focus(){this.focused=true;},click(){this.onclick();}};
+  }
+  let selected=0;
+  node('studio-dw-write-panel').classList.add('hidden');
+  const a=rail.indexOf('    function openDirectAction(which) {');
+  const b=rail.indexOf("    rail.addEventListener('keydown'",a);
+  const scope=vm.createContext({el:node,lastQuickAction:'write',updateScope(){},refreshWrite:async()=>{selected++;}});
+  vm.runInContext(section(rail,'  function toggle(which) {','  function parseProposal(raw) {')+rail.slice(a,b),scope);
+  node('studio-dw-write').onclick=()=>scope.toggle('write');
+  node('studio-dw-open-tools').click();
+  assert.equal(selected,1);
+  assert.equal(node('studio-dw-open-tools').attrs['aria-expanded'],'true');
+  assert.equal(node('director-chat-drawer').classList.contains('studio-actions-open'),true);
+  node('studio-dw-open-tools').click();
+  assert.equal(node('studio-dw-open-tools').attrs['aria-expanded'],'false');
+  assert.equal(node('director-chat-drawer').classList.contains('studio-actions-open'),false);
+  assert.equal(node('studio-dw-open-tools').focused,true);
+  node('studio-dw-open-tools').click();
+  assert.equal(selected,1,'opening again preserves the panel and its current choices');
 });
 
 test('Read preview and outbound values use the same validated field serializer', () => {

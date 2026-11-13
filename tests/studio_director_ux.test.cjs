@@ -52,7 +52,7 @@ test('editing retained Overview text includes the edit without requiring a secon
   assert.equal(elements['studio-brief-title-selected'].checked,false,'author can exclude the change explicitly');
 });
 
-test('review dialogs and request inspection preserve Director; ordinary outside clicks still close it',()=>{
+test('Director is stable on outside clicks and Escape; general Assistant retains dismissal',()=>{
   const handlers={};
   let modal={},closes=0;
   const scope=vm.createContext({state:{open:true,pinned:false},
@@ -67,6 +67,10 @@ test('review dialogs and request inspection preserve Director; ordinary outside 
   handlers.pointerdown({target:{}});
   handlers.keydown({key:'Escape'});
   assert.equal(closes,2,'ordinary dismissal remains available');
+  scope.state.activeMode='storyboard';
+  handlers.pointerdown({target:{}});
+  handlers.keydown({key:'Escape'});
+  assert.equal(closes,2,'a Projects work surface stays open until explicit navigation');
 });
 
 test('Project review summary follows edits and selection without changing either',()=>{
@@ -193,7 +197,7 @@ test('editable revision comparison identifies retained, removed and added words 
 
 test('field update indicators identify the saved Project, and clear after author edits',()=>{
   const controls={};
-  for(const id of ['studio-dw-write','studio-dw-quick-write','storyboard-story-title',
+  for(const id of ['studio-dw-write','storyboard-story-title',
     'storyboard-story-concept','storyboard-story-style']){
     controls[id]={dataset:{},title:'',addEventListener(event,fn){this[event]=fn;}};
   }

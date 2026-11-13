@@ -28,7 +28,11 @@
       node.dataset.error = error ? 'true' : 'false';
       node.classList.toggle('hidden', !message || !error);
     }
-    if (error) window.reportConsoleError('Studio Director workbench', new Error(message));
+    if (error) {
+      el('director-chat-drawer').classList.add('studio-actions-open');
+      el('studio-dw-open-tools').setAttribute('aria-expanded','true');
+      window.reportConsoleError('Studio Director workbench', new Error(message));
+    }
     else if (message) window.reportConsoleInfo('Studio Director workbench', message);
   }
   function option(select, id, name) {
@@ -347,8 +351,6 @@
     button.setAttribute('aria-expanded', show ? 'true' : 'false');
     el('studio-dw-' + other + '-panel').classList.add('hidden');
     el('studio-dw-' + other).setAttribute('aria-expanded', 'false');
-    el('studio-dw-quick-' + which).setAttribute('aria-expanded', show ? 'true' : 'false');
-    el('studio-dw-quick-' + other).setAttribute('aria-expanded', 'false');
     updateScope();
     if (show) return which === 'read' ? refreshRead() : refreshWrite();
   }
@@ -456,6 +458,7 @@
   }
   function openWriteForCapture() {
     el('director-chat-drawer').classList.add('studio-actions-open');
+    el('studio-dw-open-tools').setAttribute('aria-expanded','true');
     if (el('studio-dw-write-panel').classList.contains('hidden')) el('studio-dw-write').click();
     refreshWrite();
   }
@@ -926,11 +929,9 @@
       if (selected.scenes && typeof selected.scenes==='object') keys.push('Scene revisions');
       var descriptions={title:'Title',concept:'Concept',style:'Visual / atmosphere',invariants:'Invariants',summary:'Scene Intent',prompt:'H3 Prompt'};
       var label=keys.map(function(key){return descriptions[key] || key;}).join(', ');
-      ['studio-dw-write','studio-dw-quick-write'].forEach(function(id){
-        var button=el(id);
-        button.dataset.result='success';
-        button.title='Saved to ' + storyName(story) + ': ' + (label || 'reviewed changes');
-      });
+      var button=el('studio-dw-write');
+      button.dataset.result='success';
+      button.title='Saved to ' + storyName(story) + ': ' + (label || 'reviewed changes');
       window.reportConsoleInfo('Studio Director', 'Saved to ' + storyName(story) + ': ' + (label || 'reviewed changes'));
       if (activeTarget().storyId !== story.id) return;
       [['title','storyboard-story-title'],['concept','storyboard-story-concept'],['style','storyboard-story-style']].forEach(function(item){
@@ -952,11 +953,9 @@
       });
     },
     setReadStatus:function(state,detail){
-      ['studio-dw-read','studio-dw-quick-read'].forEach(function(id){
-        var button=el(id);
-        button.dataset.result=state;
-        button.title=detail || 'Read selected Project fields';
-      });
+      var button=el('studio-dw-read');
+      button.dataset.result=state;
+      button.title=detail || 'Read selected Project fields';
     },
     reviewGeneratedCapture:reviewCreativeCapture,
     updateContext:updateScope,
@@ -988,8 +987,7 @@
       el('studio-dw-write-panel').classList.add('hidden');
       el('studio-dw-read').setAttribute('aria-expanded','false');
       el('studio-dw-write').setAttribute('aria-expanded','false');
-      el('studio-dw-quick-read').setAttribute('aria-expanded','false');
-      el('studio-dw-quick-write').setAttribute('aria-expanded','false');
+      el('studio-dw-open-tools').setAttribute('aria-expanded','false');
       el('director-chat-drawer').classList.remove('studio-actions-open');
       status('', false);
       updateScope();
@@ -1071,8 +1069,8 @@
 
   function bind() {
     var rail = el('studio-director-workbench');if (!rail) return;
-    el('studio-dw-read').onclick=function () { toggle('read'); };
-    el('studio-dw-write').onclick=function () { toggle('write'); };
+    el('studio-dw-read').onclick=function () { lastQuickAction='read'; return toggle('read'); };
+    el('studio-dw-write').onclick=function () { lastQuickAction='write'; return toggle('write'); };
     el('studio-dw-current-brief').onclick=function () {return prepareCurrentWrite('project');};
     el('studio-dw-current-prompt').onclick=function () {return prepareCurrentWrite('scene-write');};
     el('studio-dw-read-project').onchange=function () {
@@ -1109,18 +1107,17 @@
       el('director-chat-drawer').classList.add('studio-actions-open');
       if (el('studio-dw-' + which + '-panel').classList.contains('hidden'))
         el('studio-dw-' + which).click();
-      el('studio-dw-quick-' + which).setAttribute('aria-expanded','true');
-      el('studio-dw-quick-' + (which === 'read' ? 'write' : 'read'))
-        .setAttribute('aria-expanded','false');
+      el('studio-dw-open-tools').setAttribute('aria-expanded','true');
       el('studio-dw-close-actions').focus();
     }
-    el('studio-dw-quick-read').onclick=function () { openDirectAction('read'); };
-    el('studio-dw-quick-write').onclick=function () { openDirectAction('write'); };
+    el('studio-dw-open-tools').onclick=function () {
+      if (el('director-chat-drawer').classList.contains('studio-actions-open')) el('studio-dw-close-actions').click();
+      else openDirectAction(lastQuickAction);
+    };
     el('studio-dw-close-actions').onclick=function () {
       el('director-chat-drawer').classList.remove('studio-actions-open');
-      el('studio-dw-quick-read').setAttribute('aria-expanded','false');
-      el('studio-dw-quick-write').setAttribute('aria-expanded','false');
-      el('studio-dw-quick-' + lastQuickAction).focus();
+      el('studio-dw-open-tools').setAttribute('aria-expanded','false');
+      el('studio-dw-open-tools').focus();
     };
     rail.addEventListener('keydown',function(event){
       if(event.key==='Escape' && el('director-chat-drawer').classList.contains('studio-actions-open')) {

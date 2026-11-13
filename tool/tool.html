@@ -2069,7 +2069,7 @@
                                 <div class="storyboard-scenes-heading-actions">
                                     <button id="storyboard-scenes-focus-btn" type="button" class="review-captions-btn hidden">← Scenes</button>
                                     <button id="storyboard-scenes-sequence-btn" type="button" class="review-captions-btn">Sequence</button>
-                                    <button type="button" class="review-captions-btn" onclick="openStoryboardAssistant()" title="Discuss the Project with Director without changing Scenes">Chat</button>
+                                    <button id="storyboard-open-director" type="button" class="review-captions-btn" onclick="openStoryboardAssistant()" title="Open the Projects Director work surface">Director</button>
                                     <button id="studio-blocks-open" type="button" class="review-captions-btn" title="Manage reusable Studio Ideas and Guidance">Blocks</button>
 
                                 </div>
@@ -2084,13 +2084,13 @@
             <aside id="director-chat-drawer" class="director-chat-drawer hidden" aria-label="Assistant" aria-hidden="true">
                 <header class="director-chat-drawer-header">
                     <div class="director-chat-header-copy">
+                        <span class="studio-director-breadcrumb">Projects / Director</span>
                         <strong id="director-chat-title">Assistant</strong>
                         <span id="director-chat-mode-description">Assistant conversation</span>
                         <span id="director-chat-save-status" aria-live="polite"></span>
                     </div>
                     <div class="director-chat-header-actions">
-                        <button id="studio-dw-quick-read" type="button" class="review-captions-btn" aria-controls="studio-dw-read-panel" aria-expanded="false">Read…</button>
-                        <button id="studio-dw-quick-write" type="button" class="review-captions-btn" aria-controls="studio-dw-write-panel" aria-expanded="false">Write…</button>
+                        <button id="studio-dw-open-tools" type="button" class="review-captions-btn" aria-controls="director-chat-sidebar" aria-expanded="false">Advanced</button>
                         <button id="director-chat-pin" type="button" class="director-chat-pin" title="Pin Assistant" aria-label="Pin Assistant" aria-pressed="false">
                             <svg viewBox="0 0 24 24" aria-hidden="true">
                                 <path d="M9 4h6"></path>

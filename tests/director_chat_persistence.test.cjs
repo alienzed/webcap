@@ -112,6 +112,7 @@ test('global Assistant opens Chat, never stale Studio Director outside Studio', 
     studioWorkspaceVisible: () => false,
     setMode: mode => {if (!state.pending) state.activeMode = mode;},
     el: id => ({'director-chat-drawer': drawer, 'director-chat-rail-btn': toggle,
+      'app-frame':{classList:{toggle(name,on){if(name==='studio-director-active')properties.studio=on;}}},
       'director-chat-input': {focus() {}}})[id],
     syncPinnedUi: () => {}, syncModeUi: () => {},
     loadModels: async () => {}, maybeOpenNewStudioConversation: () => {
@@ -134,6 +135,12 @@ test('global Assistant opens Chat, never stale Studio Director outside Studio', 
   assert.equal(state.open, false);
   assert.equal(state.activeMode, 'storyboard');
   assert.equal(properties.hidden, true);
+  context.studioWorkspaceVisible=()=>true;
+  state.pending=false;
+  setOpen(true,'storyboard');
+  assert.equal(properties.studio,true);
+  setOpen(false);
+  assert.equal(properties.studio,false,'returning to the editor releases the Director work area');
 });
 
 test('Studio mode selection is unavailable outside its workspace', () => {

@@ -335,12 +335,15 @@
       el('director-chat-history-toggle').setAttribute('aria-expanded', 'false');
       el('director-chat-history-panel').classList.add('hidden');
     }
-    el('director-chat-clear').textContent = context ? 'New QA chat' : 'New chat';
+    el('director-chat-clear').textContent = context ? 'New QA chat' : studio ? 'New conversation' : 'New chat';
     var drawer = el('director-chat-drawer');
     drawer.classList.toggle('studio-director', studio);
     el('app-frame').classList.toggle('studio-director-active', studio && state.open);
-    el('director-chat-title').textContent = studio ? 'Studio Director' :
+    drawer.setAttribute('aria-label', studio ? 'Projects Director' : 'Assistant');
+    el('director-chat-title').textContent = studio ? studioWorkingStoryLabel() :
       (context ? 'Ask QA' : 'Assistant');
+    el('director-chat-close').textContent = studio ? 'Project editor' : '×';
+    el('director-chat-close').setAttribute('aria-label', studio ? 'Return to Project editor' : 'Close Assistant');
     el('director-studio-starters').classList.toggle('hidden', !studio);
     el('director-chat-empty-title').textContent = studio ? "Let's make something" :
       (context ? 'Discuss this recommendation' : 'Your conversation');
@@ -361,8 +364,7 @@
     if (description) {
       description.textContent = studio
         ? (state.attachmentPending ? 'Connecting Project…'
-          : 'Write destination: ' + (state.studioStoryAccess ? studioWorkingStoryLabel() : 'Not selected') +
-            (state.workshop ? ' · Scene: ' + state.workshop.sceneTitle : ''))
+          : (state.workshop ? 'Scene · ' + state.workshop.sceneTitle : ''))
         : (active ? String(active.description || active.label || '') : 'Saved Assistant conversation');
     }
     if (input) {
@@ -3460,6 +3462,7 @@
     }
 
     drawer.classList.toggle('hidden', !state.open);
+    el('app-frame').classList.toggle('studio-director-active', state.open && state.activeMode === 'storyboard');
     drawer.setAttribute('aria-hidden', state.open ? 'false' : 'true');
     toggle.classList.toggle('active', state.open);
     toggle.setAttribute('aria-expanded', state.open ? 'true' : 'false');
@@ -3557,7 +3560,11 @@
       else setOpen(true, 'chat');
     };
     pin.onclick = function () { setPinned(!state.pinned); };
-    close.onclick = function () { setOpen(false); };
+    close.onclick = function () {
+      var studio = state.activeMode === 'storyboard';
+      setOpen(false);
+      if (studio) el('storyboard-open-director').focus();
+    };
     clear.onclick = newChat;
     contextRefresh.onclick = function () {
       var mode = activeContextMode();
@@ -3789,12 +3796,13 @@
       }
     });
     document.addEventListener('pointerdown', function (event) {
-      if (!state.open || state.pinned || document.querySelector('dialog[open]') ||
+      if (!state.open || state.activeMode === 'storyboard' || state.pinned || document.querySelector('dialog[open]') ||
           drawer.contains(event.target) || toggle.contains(event.target)) return;
       setOpen(false);
     });
     window.addEventListener('keydown', function (event) {
-      if (event.key === 'Escape' && state.open && !document.querySelector('dialog[open]')) setOpen(false);
+      if (event.key === 'Escape' && state.open && state.activeMode !== 'storyboard' &&
+          !document.querySelector('dialog[open]')) setOpen(false);
     });
 
     window.addEventListener('beforeunload', function (event) {

@@ -4120,6 +4120,7 @@
       identity:'epoch:' + jobId + ':' + epoch, results:[], campaigns:0,
       unavailable:0, onClose:onClose};
     reviewScope = scope;
+    reviewRatingPending = false;
     reviewKey = '';
     reviewSession = '';
     reviewHistory = [];
@@ -6120,8 +6121,12 @@
     };
     el('test-generations-view-review-btn').onclick = openFocusedReview;
     el('test-generations-review-close').onclick = function () {
+      if (reviewScope && reviewRatingPending) return;
       el('test-generations-review').close();
     };
+    el('test-generations-review').addEventListener('cancel', function(event){
+      if (reviewScope && reviewRatingPending) event.preventDefault();
+    });
     el('test-generations-review-completed').onclick = function () {
       if (reviewRatingPending || reviewCatalogPending) return;
       if (reviewBrowseCompleted && !reviewPendingResults(reviewStatus()).length) {
@@ -6136,6 +6141,8 @@
     };
     el('test-generations-review').addEventListener('close', function () {
       ++reviewCatalogRequest;
+      ++reviewSaveSerial;
+      reviewRatingPending = false;
       reviewCatalogPending = false;
       var video = this.querySelector('video');
       if (video) video.pause();

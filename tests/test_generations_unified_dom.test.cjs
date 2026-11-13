@@ -223,7 +223,7 @@ test('Matrix individual preview stars persist ratings and refresh checkpoint sum
   star.click();
   await new Promise(resolve => setImmediate(resolve));
   assert.equal(writes.length, 1);
-  assert.deepEqual({...writes[0]}, {session:'session-x',mediaFile:'clip.mp4',rating:4});
+  assert.deepEqual({...writes[0]}, {session:'session-x',mediaFile:'clip.mp4',rating:4,dimensionId:'overall'});
   assert.equal(status.results[0].rating, 4);
   assert.equal(star.textContent, '★');
   assert.equal(refreshed, 1);

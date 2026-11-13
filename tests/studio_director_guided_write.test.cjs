@@ -137,7 +137,8 @@ test('Scene Write receives early decisions and complete long messages from the d
     window:{flushStudioDirectorStoryEdits:async()=>{},studioDirectorBridge:{selectWriteProject(){},
       messages:()=>messages,makeProposal:async input=>{request=input;return '{}';}}},
     loadStory:async()=>({id:'p1',sceneOrder:['a'],scenes:{a:{title:'Lamp',summary:'Intent',prompt:'H3'}}}),
-    storyName:()=> 'Project',parseProposal:JSON.parse,validateSceneRevisionDraft:()=>[],renderBatchReview(){}});
+    storyName:()=> 'Project',parseProposal:JSON.parse,validateSceneRevisionDraft:()=>[],
+    recommendedSceneId:()=>'',renderBatchReview(){}});
   vm.runInContext(part('  function prepareBatchScenes(storyId) {','  function renderBatchReview() {'),scope);
   scope.prepareBatchScenes('p1');
   await finished;

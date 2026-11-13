@@ -130,8 +130,8 @@ test('Rapid rating unlocks on save without waiting for earlier summary refresh',
       return new Promise(resolve => pending.push(resolve));
     },
     reviewDialogOpen: () => true,
-    advanceReviewToUnrated() { this.advanced++; this.reviewKey = 'next-' + this.advanced; },
-    renderReview() { this.rendered++; }
+    advanceReviewToUnrated: () => { ctx.advanced++; ctx.reviewKey = 'next-' + ctx.advanced; },
+    renderReview: () => { ctx.rendered++; }
   };
   vm.createContext(ctx);
   vm.runInContext(source.slice(

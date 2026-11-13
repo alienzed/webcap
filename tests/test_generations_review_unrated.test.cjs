@@ -21,6 +21,7 @@ function harness(results, dimension = 'overall', key = '') {
     reviewKey: key, reviewIndex: 0, reviewHistory: [], reviewRevisiting: false, reviewBrowseCompleted: false,
     rendered: 0,
     resultMediaFile: result => result.mediaFile,
+    el: () => ({focus() {}}),
     renderReview() { this.rendered++; }
   };
   vm.createContext(scope);

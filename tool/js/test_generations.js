@@ -4198,7 +4198,6 @@
       ? completeCount + ' of ' + all.length + ' rated · ' + pending.length + ' remaining'
       : 'No reviewable previews';
     var previousPending = current > 0 && all.slice(0, current).some(function (item) { return reviewRatingValue(item) <= 0; });
-    var nextPending = current >= 0 && all.slice(current + 1).some(function (item) { return reviewRatingValue(item) <= 0; });
     dialog.querySelector('[data-test-review-previous]').disabled = reviewRatingPending || (!reviewHistory.length && !previousPending);
     dialog.querySelector('[data-test-review-next]').disabled = reviewRatingPending ||
       (!reviewRevisiting && pending.length <= 1) || !pending.length;
@@ -4364,6 +4363,17 @@
     });
   }
 
+  function resultEffectiveRating(result) {
+    var values = [];
+    var overall = Number(result && result.rating || 0);
+    if (overall >= 1 && overall <= 5) values.push(overall);
+    Object.values(result && result.dimensionRatings || {}).forEach(function (score) {
+      var value = Number(score);
+      if (value >= 1 && value <= 5) values.push(value);
+    });
+    return values.length ? values.reduce(function (a, b) { return a + b; }, 0) / values.length : 0;
+  }
+
   // Session-local preview ordering; keep the saved Test order as the stable tie-breaker.
   // Candidate list sorting intentionally uses separate, cross-session aggregates.
   function sortedTestPreviewRows(results) {
@@ -4373,7 +4383,7 @@
     if (previewSort === 'original') return rows;
     rows.forEach(function (row) {
       if (previewSort === 'rating') {
-        var rating = Number(row.result && row.result.rating || 0);
+        var rating = resultEffectiveRating(row.result);
         if (rating > 0) row.score = { value: rating, count: 1 };
         return;
       }

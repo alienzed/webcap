@@ -149,7 +149,7 @@ def _test_series(folder_path, job_id, session_name=''):
         stored = bench._read_status(path) or {}
         if stored.get("campaignStaging"):
             continue
-        rating = bench._session_rating_map(path)
+        rating = bench._session_effective_rating_map(path)
         vision = bench._session_vision_state(path)
         disabled = set(vision.get("disabledGroups") or [])
         per_media = vision.get("byMedia") if isinstance(vision.get("byMedia"), dict) else {}
@@ -330,7 +330,7 @@ def _test_cohorts(folder_path, job_id, session_name="", sessions=None):
         stored = bench._read_status(path) or {}
         if stored.get("campaignStaging") or (session_name and path.name != session_name):
             continue
-        ratings = bench._session_rating_map(path)
+        ratings = bench._session_effective_rating_map(path)
         vision = bench._session_vision_state(path)
         by_media = vision.get("byMedia") if isinstance(vision.get("byMedia"), dict) else {}
         disabled = set(vision.get("disabledGroups") or [])
@@ -756,7 +756,7 @@ def overview(folder_path):
             "status": str(stored.get("status") or ""),
             "results": len(stored.get("results") or []),
         })
-        ratings = bench._session_rating_map(directory)
+        ratings = bench._session_effective_rating_map(directory)
         vision = bench._session_vision_state(directory)
         by_media = vision.get("byMedia") if isinstance(vision.get("byMedia"), dict) else {}
         disabled = set(vision.get("disabledGroups") or [])
@@ -805,7 +805,7 @@ def overview(folder_path):
             if rated:
                 entry["ratedCount"] += 1
                 entry["ratingSum"] += ratings[media]
-                entry["ratingDistribution"][str(ratings[media])] += 1
+                entry["ratingDistribution"][str(max(1, min(5, int(ratings[media] + 0.5))))] += 1
             # Show four real surviving examples: rated first, then unrated
             # examples if an epoch has fewer than four ratings. Each VL match
             # percentage is per-image evidence, never a cross-protocol score.

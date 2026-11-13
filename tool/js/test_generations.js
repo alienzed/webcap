@@ -3339,6 +3339,9 @@
       rating: rating,
       dimensionId: dimensionId
     }).then(function (payload) {
+      // The save belongs to its original Set even if the user navigated away.
+      // Do not mutate the new Set's preview DOM or request its score summary.
+      if (String(launchFolder || '') !== sourceFolder) return;
       if (dimensionId === 'overall') syncResultRatingButtons(sessionName, mediaFile, payload && payload.rating);
       if (currentStatus && String(currentStatus.session || '') === sessionName && Array.isArray(currentStatus.results)) {
         currentStatus.results.forEach(function (result) {

@@ -286,6 +286,7 @@
     epochMediaSerial++;
     epochMediaScope=null;
     epochMediaLoading=false;
+    el('epoch-media-focus').disabled=true;
     el('epoch-media-dialog').close();
     el('epoch-media-grid').replaceChildren();
     el('epoch-media-more').classList.add('hidden');
@@ -340,6 +341,7 @@
         });
         epochMediaOffset += (data.media||[]).length;
         epochMediaTotal=Number(data.total||0);
+        el('epoch-media-focus').disabled=!data.media?.some(function(item){return item.source==='test' && item.mediaAvailable!==false;}) && epochMediaOffset>=epochMediaTotal;
         el('epoch-media-status').textContent=epochMediaTotal?epochMediaOffset+' of '+epochMediaTotal+' recorded results':'No recorded media for this checkpoint.';
         if (!epochMediaTotal && !more) {
           var empty=document.createElement('p');
@@ -367,9 +369,25 @@
     epochMediaOffset=0;
     el('epoch-media-grid').replaceChildren();
     el('epoch-media-more').classList.add('hidden');
+    el('epoch-media-focus').disabled=false;
     el('epoch-media-title').textContent='Epoch '+num+' · combined generated results';
     el('epoch-media-dialog').showModal();
     epochMediaLoad(false);
+  };
+  el('epoch-media-focus').onclick=function(){
+    if(!epochMediaScope)return;
+    if(typeof window.testGenerationsOpenEpochFocusedReview!=='function'){
+      error(new Error('Focused Review is unavailable.'));return;
+    }
+    var scope=epochMediaScope, button=this;
+    button.disabled=true;
+    try {
+      window.testGenerationsOpenEpochFocusedReview(folder,scope.jobId,scope.epoch,function(){
+        if(scope!==epochMediaScope)return;
+        button.disabled=false;
+        epochMediaLoad(false);
+      });
+    }catch(exc){button.disabled=false;error(exc);}
   };
   el('epoch-media-close').onclick=epochMediaClose;
   el('epoch-media-more').onclick=function(){epochMediaLoad(true);};
@@ -378,6 +396,7 @@
     epochMediaSerial++;
     epochMediaScope=null;
     epochMediaLoading=false;
+    el('epoch-media-focus').disabled=true;
     el('epoch-media-grid').replaceChildren();
     el('epoch-media-more').classList.add('hidden');
     if(['finder','screening','tests'].includes(epochMediaReturnMode))window.epochFinderShowMode(epochMediaReturnMode);

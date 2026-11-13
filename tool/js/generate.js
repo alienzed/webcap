@@ -315,6 +315,7 @@ function sweepLoras(model, folder) {
 
   function setLoraMode(mode) {
     var selectedMode = mode === 'sweep' ? 'sweep' : 'selected';
+    if (generateState.loraMode !== selectedMode) closeGenerateLoraPicker();
     generateState.loraMode = selectedMode;
 
     var selectedTab = el('generate-lora-selected-tab');
@@ -560,11 +561,13 @@ function sweepLoras(model, folder) {
   }
 
   var generateLoraReplaceIndex = -1;
+  var generateLoraPickerTarget = 'fixed';
 
   function generateLoraNamesMatching(query) {
     var needle = String(query || '').trim().toLowerCase();
     return generateLoraOrder().filter(function (name) {
-      return !needle || name.toLowerCase().indexOf(needle) !== -1;
+      return (!needle || name.toLowerCase().indexOf(needle) !== -1) &&
+        (generateLoraPickerTarget !== 'sweep' || availableSweepLoras(currentModel()).indexOf(name) !== -1);
     });
   }
 
@@ -579,16 +582,20 @@ function sweepLoras(model, folder) {
   function renderGenerateLoraPickerMenu() {
     var picker = el('generate-lora-picker'), menu = el('generate-lora-picker-menu');
     var names = generateLoraNamesMatching(picker.value);
-    var selected = selectedLoras(generateState.modelId);
+    var selected = generateLoraPickerTarget === 'sweep'
+      ? selectedSweepLoras(currentModel())
+      : selectedLoras(generateState.modelId).map(function (item) { return item.name; });
     el('generate-lora-picker-options').innerHTML = names.length ? names.map(function (name) {
-      var picked = selected.some(function (item) { return item.name.toLowerCase() === name.toLowerCase(); });
+      var picked = selected.some(function (item) { return item.toLowerCase() === name.toLowerCase(); });
       return '<button type="button" class="generate-lora-picker-option" data-generate-lora-option="' + escapeHtml(name) +
         '" role="option" aria-selected="' + picked + '" title="' + escapeHtml(name) + '">' +
         '<span class="generate-lora-picker-option-label">' + escapeHtml(name) + '</span>' +
         '<span class="generate-lora-picker-option-state">' + (picked ? '✓ Selected' : generateLoraReplaceIndex < 0 ? '+ Add' : 'Select') + '</span></button>';
     }).join('') : '<div class="generate-lora-picker-empty">No matching LoRAs</div>';
     menu.classList.remove('hidden');
-    var rect = (menu.parentNode === el('generate-lora-picker-wrap') ? el('generate-lora-picker-trigger') : menu.parentNode).getBoundingClientRect();
+    var anchor = menu.parentNode === el('generate-lora-picker-wrap') ? el('generate-lora-picker-trigger') :
+      menu.parentNode === el('generate-sweep-picker-wrap') ? el('generate-sweep-picker-trigger') : menu.parentNode;
+    var rect = anchor.getBoundingClientRect();
     var below = Math.max(0, window.innerHeight - rect.bottom - 8), above = Math.max(0, rect.top - 8);
     var opensUp = below < 190 && above > below;
     menu.classList.toggle('opens-up', opensUp);
@@ -605,17 +612,23 @@ function sweepLoras(model, folder) {
     menu.dataset.activeIndex = '-1';
     el('generate-lora-picker').setAttribute('aria-expanded', 'false');
     el('generate-lora-picker-trigger').setAttribute('aria-expanded', 'false');
+    el('generate-sweep-picker-trigger').setAttribute('aria-expanded', 'false');
     var active = el('generate-lora-list').querySelector('[data-generate-lora-replace][aria-expanded="true"]');
     if (active) active.setAttribute('aria-expanded', 'false');
     wrap.appendChild(menu);
     generateLoraReplaceIndex = -1;
+    generateLoraPickerTarget = 'fixed';
   }
 
-  function openGenerateLoraPicker(index) {
+  function openGenerateLoraPicker(index, target) {
     closeGenerateLoraPicker();
     generateLoraReplaceIndex = index;
+    generateLoraPickerTarget = target === 'sweep' ? 'sweep' : 'fixed';
     var menu = el('generate-lora-picker-menu');
-    if (index >= 0) {
+    if (generateLoraPickerTarget === 'sweep') {
+      el('generate-sweep-picker-wrap').appendChild(menu);
+      el('generate-sweep-picker-trigger').setAttribute('aria-expanded', 'true');
+    } else if (index >= 0) {
       var row = el('generate-lora-list').querySelector('[data-generate-lora-index="' + index + '"]');
       if (!row) throw new Error('Selected LoRA row is missing.');
       row.appendChild(menu);
@@ -632,6 +645,16 @@ function sweepLoras(model, folder) {
     var wanted = String(name || '').toLowerCase();
     var found = generateLoraNamesMatching('').find(function (candidate) { return candidate.toLowerCase() === wanted; });
     if (!found) throw new Error('Selected LoRA is no longer available.');
+    if (generateLoraPickerTarget === 'sweep') {
+      var model = currentModel();
+      var isSelected = selectedSweepLoras(model).indexOf(found) !== -1;
+      setSweepSelection(model, found, !isSelected);
+      renderSweep();
+      // Keep the shared picker open for adding multiple Sweep candidates.
+      renderGenerateLoraPickerMenu();
+      el('generate-lora-picker').focus();
+      return;
+    }
     var selected = selectedLoras(generateState.modelId);
     var existing = selected.findIndex(function (item) { return item.name.toLowerCase() === wanted; });
     var index = generateLoraReplaceIndex;

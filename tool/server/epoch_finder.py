@@ -1543,12 +1543,14 @@ def checkpoint_workspace(folder_path, job_id, epoch, offset=0, limit=24):
                 if not stored:
                     raise FileNotFoundError("Test session unavailable: " + session)
                 sessions[session] = (test_bench._session_rating_map(directory),
+                                     test_bench._session_dimension_rating_map(directory),
                                      test_bench._session_vision_state(directory),
                                      test_bench._project_wildcard_fields(dict(stored)),
                                      test_reference.read(folder_path, session))
-            ratings, vision, stored, references = sessions[session]
+            ratings, dimensions, vision, stored, references = sessions[session]
             name = item["mediaFile"]
             item["rating"] = ratings.get(name)
+            item["dimensionRatings"] = dimensions.get(name, {})
             item["assessment"] = (vision.get("byMedia") or {}).get(name)
             records = (references.get("byMedia") or {}).get(name) or {}
             item["referenceAssessments"] = [v for v in records.values()

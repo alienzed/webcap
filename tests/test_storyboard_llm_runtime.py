@@ -764,6 +764,24 @@ def test_director_sampling_profiles_are_explicit_and_conservative():
     assert refine["temperature"] < develop["temperature"]
 
 
+
+def test_freeform_chat_can_reuse_concept_sampling_without_changing_default(monkeypatch):
+    calls = []
+
+    def fake_chat(model_id, messages, **kwargs):
+        calls.append(kwargs)
+        return {"text": "Visual direction.", "model": model_id}
+
+    monkeypatch.setattr(storyboard_llm_runtime, "chat", fake_chat)
+    messages = [{"role": "user", "content": "Show the subject clearly."}]
+
+    storyboard_llm_runtime.run_freeform_chat("qwen-large", messages, sampling_profile="expand_concept")
+    storyboard_llm_runtime.run_freeform_chat("qwen-large", messages)
+
+    assert calls[0]["sampling"] == storyboard_llm_runtime._sampling_profile("expand_concept")
+    assert "sampling" not in calls[1]
+
+
 def test_run_contract_exposes_lifecycle_activity(monkeypatch):
     observed = {}
 

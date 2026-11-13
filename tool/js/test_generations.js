@@ -25,6 +25,11 @@
   var reviewSession = '';
   var reviewKey = '';
   var reviewRatingPending = false;
+  var reviewReturnView = 'grid';
+  var reviewHistory = [];
+  var reviewRevisiting = false;
+  var reviewDimensionId = 'overall';
+  var reviewDimensions = [];
   var matrixRatingPending = new Set();
   var pendingActivityFolder = '';
   var testActivity = {};
@@ -3313,6 +3318,7 @@
     var rating = Number(button && button.dataset.testRating || 0);
     var mediaFile = String(button && button.dataset.mediaFile || '').trim();
     var sessionName = String(button && button.dataset.testSession || '').trim();
+    var dimensionId = String(button && button.dataset.ratingDimension || 'overall');
     if (!mediaFile || !sessionName || rating < 1 || rating > 5) return;
 
     var row = button.closest('.test-generations-result-rating');
@@ -3325,12 +3331,18 @@
     return request('test_rate_result', {
       session: sessionName,
       mediaFile: mediaFile,
-      rating: rating
+      rating: rating,
+      dimensionId: dimensionId
     }).then(function (payload) {
-      syncResultRatingButtons(sessionName, mediaFile, payload && payload.rating);
+      if (dimensionId === 'overall') syncResultRatingButtons(sessionName, mediaFile, payload && payload.rating);
       if (currentStatus && String(currentStatus.session || '') === sessionName && Array.isArray(currentStatus.results)) {
         currentStatus.results.forEach(function (result) {
-          if (resultMediaFile(result) === mediaFile) result.rating = payload.rating;
+          if (resultMediaFile(result) !== mediaFile) return;
+          if (dimensionId === 'overall') result.rating = payload.rating;
+          else {
+            if (!result.dimensionRatings) result.dimensionRatings = {};
+            result.dimensionRatings[dimensionId] = payload.rating;
+          }
         });
       }
       if (onSaved) onSaved();
@@ -3438,7 +3450,7 @@
       placeholder: failed ? 'Generation failed' : (!mediaFile ? 'Preview unavailable' : null),
       error: failed ? String(result.error || 'Generation failed.') : '',
       removeNode: buildResultRemoveButton(result),
-      rating: !failed && session && mediaFile ? { value: result.rating, session: session, mediaFile: mediaFile } : null,
+      rating: !failed && session && mediaFile ? { value: inReview ? reviewRatingValue(result) : result.rating, session: session, mediaFile: mediaFile } : null,
       testEvaluation: !failed && mediaFile ? {mediaFile: mediaFile} : null,
       epochLink: epochText ? {text: epochText, jobId: provenance.sourceJobId, epoch: provenance.sourceEpoch} : null,
       videoTransport: appendTestPreviewVideo,
@@ -4071,66 +4083,133 @@
     });
   }
 
+  function reviewDimensionLabel() {
+    var selected = reviewDimensions.find(function (item) { return item.id === reviewDimensionId; });
+    return selected ? selected.label : 'Overall';
+  }
+
+  function reviewRatingValue(result) {
+    if (reviewDimensionId === 'overall') return Number(result && result.rating || 0);
+    return Number(result && result.dimensionRatings && result.dimensionRatings[reviewDimensionId] || 0);
+  }
+
+  function reviewPendingResults(status) {
+    return reviewResults(status).filter(function (result) { return reviewRatingValue(result) <= 0; });
+  }
+
   function reviewNextUnratedIndex(results, afterIndex) {
     for (var offset = 1; offset <= results.length; offset++) {
       var index = (afterIndex + offset) % results.length;
-      if (!(Number(results[index].rating) > 0)) return index;
+      if (reviewRatingValue(results[index]) <= 0) return index;
     }
     return -1;
   }
 
+  function setReviewDimensions(catalog) {
+    if (!catalog || !Array.isArray(catalog.dimensions)) throw new Error('Rating dimension catalog is missing.');
+    reviewDimensions = catalog.dimensions;
+    var selector = el('test-generations-review-dimension');
+    selector.replaceChildren();
+    var overall = document.createElement('option');
+    overall.value = 'overall';
+    overall.textContent = 'Overall';
+    selector.appendChild(overall);
+    reviewDimensions.forEach(function (dimension) {
+      var option = document.createElement('option');
+      option.value = dimension.id;
+      option.textContent = dimension.label;
+      selector.appendChild(option);
+    });
+    if (reviewDimensionId !== 'overall' && !reviewDimensions.some(function (item) { return item.id === reviewDimensionId; })) {
+      reviewDimensionId = 'overall';
+    }
+    selector.value = reviewDimensionId;
+  }
+
   function moveReview(direction) {
-    var results = reviewResults(currentStatus);
-    if (!results.length) return;
-    reviewIndex = Math.max(0, Math.min(results.length - 1, reviewIndex + direction));
-    reviewKey = resultMediaFile(results[reviewIndex]);
+    var all = reviewResults(currentStatus);
+    var pending = reviewPendingResults(currentStatus);
+    if (direction < 0 && reviewHistory.length) {
+      reviewKey = reviewHistory.pop();
+      reviewRevisiting = true;
+    } else {
+      var position = all.findIndex(function (item) { return resultMediaFile(item) === reviewKey; });
+      var following = all.findIndex(function (item, index) {
+        return (direction > 0 ? index > position : index < position) &&
+          reviewRatingValue(item) <= 0;
+      });
+      if (direction < 0) {
+        following = -1;
+        for (var i = position - 1; i >= 0; i--) {
+          if (reviewRatingValue(all[i]) <= 0) { following = i; break; }
+        }
+      }
+      if (following < 0 && direction > 0 && pending.length) {
+        following = all.findIndex(function (item) { return resultMediaFile(item) === resultMediaFile(pending[0]); });
+      }
+      if (following < 0) return;
+      reviewKey = resultMediaFile(all[following]);
+      reviewRevisiting = false;
+    }
     renderReview(currentStatus);
   }
 
   function advanceReviewToUnrated() {
-    var results = reviewResults(currentStatus);
-    var next = reviewNextUnratedIndex(results, reviewIndex);
-    if (next >= 0) {
-      reviewIndex = next;
-      reviewKey = resultMediaFile(results[next]);
-    }
+    var all = reviewResults(currentStatus);
+    var previous = reviewKey;
+    var index = all.findIndex(function (result) { return resultMediaFile(result) === previous; });
+    if (previous) reviewHistory.push(previous);
+    var next = reviewNextUnratedIndex(all, index);
+    reviewKey = next >= 0 ? resultMediaFile(all[next]) : '';
+    reviewRevisiting = false;
     renderReview(currentStatus);
   }
 
   function renderReview(status) {
     if (resultsView !== 'review') return;
+    var dialog = el('test-generations-review');
     var host = el('test-generations-review-card');
     var position = el('test-generations-review-position');
-    var results = reviewResults(status);
+    var all = reviewResults(status);
+    var pending = reviewPendingResults(status);
     var session = String(status && status.session || '');
     if (reviewSession !== session) {
       reviewSession = session;
-      reviewIndex = 0;
       reviewKey = '';
+      reviewIndex = 0;
+      reviewHistory = [];
+      reviewRevisiting = false;
       host.replaceChildren();
       host.dataset.reviewKey = '';
     }
-    var current = reviewKey && results.findIndex(function (result) {
-      return resultMediaFile(result) === reviewKey;
-    });
-    if (current >= 0) reviewIndex = current;
-    else {
-      var firstUnrated = reviewNextUnratedIndex(results, -1);
-      reviewIndex = firstUnrated >= 0 ? firstUnrated : 0;
+    var current = all.findIndex(function (result) { return resultMediaFile(result) === reviewKey; });
+    if (current < 0 || (!reviewRevisiting && reviewRatingValue(all[current]) > 0)) {
+      current = pending.length ? all.findIndex(function (result) {
+        return resultMediaFile(result) === resultMediaFile(pending[0]);
+      }) : -1;
+      reviewRevisiting = false;
     }
-    var result = results[reviewIndex];
+    var result = current >= 0 ? all[current] : null;
+    reviewIndex = current;
     reviewKey = result ? resultMediaFile(result) : '';
-    var key = session + '|' + reviewKey;
-    var unratedCount = results.filter(function (item) { return !(Number(item.rating) > 0); }).length;
-    position.textContent = results.length
-      ? (reviewIndex + 1) + ' / ' + results.length + (unratedCount ? ' · ' + unratedCount + ' unrated' : ' · All rated')
-      : '0 / 0';
-    el('test-generations-review').querySelector('[data-test-review-previous]').disabled = !results.length || reviewIndex === 0 || reviewRatingPending;
-    el('test-generations-review').querySelector('[data-test-review-next]').disabled = !results.length || reviewIndex >= results.length - 1 || reviewRatingPending;
+    var completeCount = all.length - pending.length;
+    position.textContent = all.length
+      ? completeCount + ' of ' + all.length + ' rated · ' + pending.length + ' remaining'
+      : 'No reviewable previews';
+    var previousPending = current > 0 && all.slice(0, current).some(function (item) { return reviewRatingValue(item) <= 0; });
+    var nextPending = current >= 0 && all.slice(current + 1).some(function (item) { return reviewRatingValue(item) <= 0; });
+    dialog.querySelector('[data-test-review-previous]').disabled = reviewRatingPending || (!reviewHistory.length && !previousPending);
+    dialog.querySelector('[data-test-review-next]').disabled = reviewRatingPending || !pending.length ||
+      (!nextPending && !reviewRevisiting);
+    var statusNode = el('test-generations-review-status');
+    statusNode.textContent = !all.length ? 'Generate a Test session to begin.' :
+      !pending.length && !reviewRevisiting ? reviewDimensionLabel() + ' complete. Switch dimensions or close.' :
+      reviewRevisiting ? 'Revisiting a saved rating. Choose a new score to update it.' : '';
+    var key = session + '|' + reviewDimensionId + '|' + reviewKey;
     if (host.dataset.reviewKey === key && host.firstElementChild) {
       if (result) {
-        updateTestPreviewCardRating(host.firstElementChild, result.rating);
-        renderTestVlCard(host.firstElementChild, result, testVlCandidateScores(results));
+        updateTestPreviewCardRating(host.firstElementChild, reviewRatingValue(result));
+        renderTestVlCard(host.firstElementChild, result, testVlCandidateScores(all));
       }
       return;
     }
@@ -4141,13 +4220,20 @@
     if (!result) {
       var empty = document.createElement('div');
       empty.className = 'test-generations-empty';
-      empty.textContent = 'Generated previews will appear here.';
+      empty.textContent = all.length ? 'All results rated for ' + reviewDimensionLabel() + '.' : 'No saved Test results to review.';
       host.appendChild(empty);
       return;
     }
     var card = sharedTestCard(result, status, 'test-generations-result-card test-generations-review-item', true, false);
     host.appendChild(card);
-    renderTestVlCard(card, result, testVlCandidateScores(results));
+    var ratingGroup = card.querySelector('.test-generations-result-rating');
+    if (ratingGroup) {
+      ratingGroup.setAttribute('aria-label', 'Rate ' + reviewDimensionLabel());
+      ratingGroup.querySelectorAll('[data-test-rating]').forEach(function (star) {
+        star.dataset.ratingDimension = reviewDimensionId;
+      });
+    }
+    renderTestVlCard(card, result, testVlCandidateScores(all));
     var video = card.querySelector('video');
     if (video) {
       video.muted = true;
@@ -4165,9 +4251,10 @@
     if (!star) return;
     reviewRatingPending = true;
     var savedSession = String(currentStatus && currentStatus.session || '');
-    var savedKey = reviewKey;
+    var savedKey = reviewKey, savedDimension = reviewDimensionId;
     rateTestResult(star, function () {
-      if (resultsView === 'review' && String(currentStatus.session || '') === savedSession && reviewKey === savedKey) {
+      if (resultsView === 'review' && String(currentStatus.session || '') === savedSession &&
+          reviewKey === savedKey && reviewDimensionId === savedDimension) {
         advanceReviewToUnrated();
       }
     }).finally(function () {
@@ -4179,6 +4266,7 @@
   function setResultsView(mode) {
     var previousView = resultsView;
     resultsView = ['grid','review','compare','matrix'].includes(mode) ? mode : 'grid';
+    if (resultsView === 'review' && previousView !== 'review') reviewReturnView = previousView;
     var gridBtn = el('test-generations-view-grid-btn');
     var reviewBtn = el('test-generations-view-review-btn');
     var compareBtn = el('test-generations-view-compare-btn');
@@ -4192,41 +4280,45 @@
       gridBtn.setAttribute('aria-selected', resultsView === 'grid' ? 'true' : 'false');
     }
     reviewBtn.classList.toggle('active', resultsView === 'review');
-    reviewBtn.setAttribute('aria-selected', String(resultsView === 'review'));
+    reviewBtn.setAttribute('aria-expanded', String(resultsView === 'review'));
     if (compareBtn) {
       compareBtn.classList.toggle('active', resultsView === 'compare');
       compareBtn.setAttribute('aria-selected', resultsView === 'compare' ? 'true' : 'false');
     }
     matrixBtn.classList.toggle('active', resultsView === 'matrix');
     matrixBtn.setAttribute('aria-selected', String(resultsView === 'matrix'));
-    matrix.classList.toggle('hidden',resultsView !== 'matrix');
+    matrix.classList.toggle('hidden', resultsView !== 'matrix');
     if (resultsView === 'matrix') {
       grid.replaceChildren();
-      grid.dataset.resultScope='';
+      grid.dataset.resultScope = '';
     } else {
-      matrix.querySelectorAll('video').forEach(function(video){video.pause();});
+      matrix.querySelectorAll('video').forEach(function (video) { video.pause(); });
     }
     if (resultsView !== 'review') {
       var reviewVideo = review.querySelector('video');
       if (reviewVideo) reviewVideo.pause();
     }
-    review.classList.toggle('hidden', resultsView !== 'review');
     if (grid) grid.classList.toggle('hidden', resultsView !== 'grid');
     if (compare) compare.classList.toggle('hidden', resultsView !== 'compare');
     if (resultsView === 'review' && previousView !== 'review') {
-      reviewIndex = 0;
       reviewKey = '';
+      reviewHistory = [];
+      reviewRevisiting = false;
+      review.classList.remove('hidden');
+      review.showModal();
+      var openingSession = String(currentStatus && currentStatus.session || '');
+      request('test_rating_dimensions').then(function (catalog) {
+        if (resultsView !== 'review' || String(currentStatus && currentStatus.session || '') !== openingSession) return;
+        setReviewDimensions(catalog);
+        renderReview(currentStatus);
+      }).catch(function (err) {
+        el('test-generations-review-status').textContent = 'Could not load rating dimensions: ' + String(err.message || err);
+        showError(err);
+      });
+    } else if (resultsView !== 'review' && review.open) {
+      review.close();
     }
     renderResults(currentStatus);
-    if (resultsView === 'review' && previousView !== 'review') {
-      var activeVideo = review.querySelector('video');
-      if (activeVideo) {
-        activeVideo.muted = true;
-        activeVideo.loop = true;
-        var playback = activeVideo.play();
-        if (playback && typeof playback.catch === 'function') playback.catch(showError);
-      }
-    }
   }
 
   function syncCompareVideos(videos) {

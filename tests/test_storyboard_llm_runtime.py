@@ -766,6 +766,7 @@ def test_director_sampling_profiles_are_explicit_and_conservative():
 
 
 def test_freeform_chat_can_reuse_concept_sampling_without_changing_default(monkeypatch):
+    monkeypatch.setattr(storyboard_llm_runtime, "_director_config", lambda: {"mode": "remote", "context_size": None})
     calls = []
 
     def fake_chat(model_id, messages, **kwargs):

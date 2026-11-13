@@ -53,7 +53,11 @@ test('Scene-number recommendation resolves to a saved ID; deliberate choices sta
   scope.recommendations.sceneId='b';
   scope.recommendations.sceneNumber=1;
   scope.renderWriteStory(story);
-  assert.deepEqual(checked(),['b'],'an exact saved ID takes priority over a conflicting number');
+  assert.deepEqual(checked(),[],'contradictory saved ID and Scene number must not select anything');
+  scope.recommendations.sceneNumber=2;
+  scope.renderWriteStory(story);
+  assert.deepEqual(checked(),['b'],'matching ID and number identify the same saved Scene');
+  scope.recommendations.sceneNumber=1;
   scope.recommendations.sceneId='';
   scope.recommendationProject='other-project';
   scope.activeTarget=()=>({storyId:'other-project',sceneId:''});

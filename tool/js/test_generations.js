@@ -2149,7 +2149,7 @@
   }
 
   function prepareTestBenchSetSwitch(folder) {
-    if (resultsView === 'review') setResultsView(reviewReturnView);
+    if (reviewDialogOpen()) el('test-generations-review').close();
     var targetFolder = String(folder || '').replace(/^[/\\]+|[/\\]+$/g, '');
     if (!targetFolder) throw new Error('Test Generations Set switching requires a Set folder.');
     pendingActivityFolder = targetFolder;
@@ -4293,30 +4293,55 @@
     });
   }
 
+  function openFocusedReview() {
+    var dialog = el('test-generations-review');
+    if (dialog.open) return;
+    reviewKey = '';
+    reviewHistory = [];
+    reviewRevisiting = false;
+    reviewBrowseCompleted = false;
+    reviewCatalogPending = true;
+    var requestId = ++reviewCatalogRequest;
+    var folder = String(launchFolder || '');
+    var session = String(currentStatus && currentStatus.session || '');
+    var button = el('test-generations-view-review-btn');
+    button.classList.add('active');
+    button.setAttribute('aria-expanded', 'true');
+    el('test-generations-review-dimension').disabled = true;
+    el('test-generations-review-card').replaceChildren();
+    el('test-generations-review-position').textContent = 'Loading dimensions…';
+    el('test-generations-review-status').textContent = '';
+    dialog.showModal();
+    dialog.focus();
+    request('test_rating_dimensions').then(function (catalog) {
+      if (!dialog.open || requestId !== reviewCatalogRequest || folder !== String(launchFolder || '') ||
+          session !== String(currentStatus && currentStatus.session || '')) return;
+      setReviewDimensions(catalog);
+      reviewCatalogPending = false;
+      el('test-generations-review-dimension').disabled = false;
+      renderReview(currentStatus);
+    }).catch(function (error) {
+      if (!dialog.open || requestId !== reviewCatalogRequest) return;
+      el('test-generations-review-position').textContent = 'Could not load dimensions';
+      el('test-generations-review-status').textContent = String(error.message || error);
+      showError(error);
+    });
+  }
+
   function setResultsView(mode) {
-    var previousView = resultsView;
-    resultsView = ['grid','review','compare','matrix'].includes(mode) ? mode : 'grid';
-    if (resultsView === 'review' && previousView !== 'review') reviewReturnView = previousView;
+    resultsView = ['grid','compare','matrix'].includes(mode) ? mode : 'grid';
     var gridBtn = el('test-generations-view-grid-btn');
-    var reviewBtn = el('test-generations-view-review-btn');
     var compareBtn = el('test-generations-view-compare-btn');
     var matrixBtn = el('test-generations-view-matrix-btn');
     var matrix = el('test-generations-matrix');
     var grid = el('test-generations-results');
     var compare = el('test-generations-compare');
-    var review = el('test-generations-review');
-    if (gridBtn) {
-      gridBtn.classList.toggle('active', resultsView === 'grid');
-      gridBtn.setAttribute('aria-selected', resultsView === 'grid' ? 'true' : 'false');
-    }
-    reviewBtn.classList.toggle('active', resultsView === 'review');
-    reviewBtn.setAttribute('aria-expanded', String(resultsView === 'review'));
-    if (compareBtn) {
-      compareBtn.classList.toggle('active', resultsView === 'compare');
-      compareBtn.setAttribute('aria-selected', resultsView === 'compare' ? 'true' : 'false');
-    }
+    gridBtn.classList.toggle('active', resultsView === 'grid');
+    gridBtn.setAttribute('aria-selected', resultsView === 'grid' ? 'true' : 'false');
+    compareBtn.classList.toggle('active', resultsView === 'compare');
+    compareBtn.setAttribute('aria-selected', resultsView === 'compare' ? 'true' : 'false');
     matrixBtn.classList.toggle('active', resultsView === 'matrix');
-    matrixBtn.setAttribute('aria-selected', String(resultsView === 'matrix'));
+    matrixBtn.setAttribute('aria-selected', resultsView === 'matrix' ? 'true' : 'false');
     matrix.classList.toggle('hidden', resultsView !== 'matrix');
     if (resultsView === 'matrix') {
       grid.replaceChildren();
@@ -4324,34 +4349,8 @@
     } else {
       matrix.querySelectorAll('video').forEach(function (video) { video.pause(); });
     }
-    if (resultsView !== 'review') {
-      var reviewVideo = review.querySelector('video');
-      if (reviewVideo) reviewVideo.pause();
-    }
-    if (grid) grid.classList.toggle('hidden', resultsView !== 'grid');
-    if (compare) compare.classList.toggle('hidden', resultsView !== 'compare');
-    if (resultsView === 'review' && previousView !== 'review') {
-      reviewKey = '';
-      reviewHistory = [];
-      reviewRevisiting = false;
-      reviewBrowseCompleted = false;
-      review.classList.remove('hidden');
-      review.showModal();
-      review.focus();
-      var openingSession = String(currentStatus && currentStatus.session || '');
-      var openingFolder = String(launchFolder || '');
-      request('test_rating_dimensions').then(function (catalog) {
-        if (resultsView !== 'review' || String(launchFolder || '') !== openingFolder ||
-            String(currentStatus && currentStatus.session || '') !== openingSession) return;
-        setReviewDimensions(catalog);
-        renderReview(currentStatus);
-      }).catch(function (err) {
-        el('test-generations-review-status').textContent = 'Could not load rating dimensions: ' + String(err.message || err);
-        showError(err);
-      });
-    } else if (resultsView !== 'review' && review.open) {
-      review.close();
-    }
+    grid.classList.toggle('hidden', resultsView !== 'grid');
+    compare.classList.toggle('hidden', resultsView !== 'compare');
     renderResults(currentStatus);
   }
 
@@ -4464,7 +4463,7 @@
     if (resultsView === 'grid') sortTestPreviewCards(currentStatus);
     else if (resultsView === 'compare') renderCompare(currentStatus);
     else if (resultsView === 'matrix') renderMatrix(currentStatus);
-    else if (resultsView === 'review') renderReview(currentStatus);
+
   }
 
   function comparePairs(status) {
@@ -4576,11 +4575,7 @@
   }
 
   function renderResults(status) {
-    if (resultsView === 'review') {
-      renderReview(status || {});
-      syncTestVlControls();
-      return;
-    }
+    if (reviewDialogOpen()) renderReview(status || {});
     if (resultsView === 'matrix') {
       renderMatrix(status || {});
       syncTestVlControls();
@@ -5317,7 +5312,7 @@
   }
 
   function closePane() {
-    if (resultsView === 'review') setResultsView(reviewReturnView);
+    if (reviewDialogOpen()) el('test-generations-review').close();
     window.runAnalyticsSetVisible(false);
     ++openGeneration;
     var node = pane();
@@ -5438,11 +5433,6 @@
     if (typeof window.syncApplicationShellContext === 'function') window.syncApplicationShellContext();
     if (typeof window.syncShellLocationRoute === 'function') window.syncShellLocationRoute();
     if (warmReturn) {
-      // Re-enter Review at unfinished work; other Test views retain their warm state.
-      if (resultsView === 'review') {
-        reviewIndex = 0;
-        reviewKey = '';
-      }
       if (pendingActivityCampaign) {
         window.epochFinderInspectCampaign(pendingActivityCampaign);
         pendingActivityCampaign = '';
@@ -5975,7 +5965,7 @@
     el('test-generations-view-grid-btn').onclick = function () {
       setResultsView('grid');
     };
-    el('test-generations-view-review-btn').onclick = function () { setResultsView('review'); };
+    el('test-generations-view-review-btn').onclick = openFocusedReview;
     el('test-generations-review-close').onclick = function () {
       el('test-generations-review').close();
     };
@@ -5988,7 +5978,13 @@
       renderReview(currentStatus);
     };
     el('test-generations-review').addEventListener('close', function () {
-      if (resultsView === 'review') setResultsView(reviewReturnView);
+      ++reviewCatalogRequest;
+      reviewCatalogPending = false;
+      var video = this.querySelector('video');
+      if (video) video.pause();
+      var button = el('test-generations-view-review-btn');
+      button.classList.remove('active');
+      button.setAttribute('aria-expanded', 'false');
     });
     el('test-generations-review-dimension').onchange = function () {
       if (reviewRatingPending) { this.value = reviewDimensionId; return; }

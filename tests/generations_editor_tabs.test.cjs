@@ -226,6 +226,88 @@ test('loading another Take replaces Loaded, not Working',()=>{
   assert.equal(element('generate-prompt').value,'Still Working');
 });
 
+test('unsent Working draft warns before a Loaded edit can replace it',()=>{
+  const f=fixture(),{api,state,element,confirmations}=f;
+  element('generate-prompt').value='Unsent Working draft';
+  api.noteGenerateEditorEdit(false);
+  api.loadGenerateTakeIntoEditor(take());
+  element('generate-prompt').value='Loaded change just typed';
+  f.setConfirmChoice(false);
+  assert.equal(api.noteGenerateEditorEdit(false),false,'Cancel declines replacement');
+  assert.equal(state.editorMode,'loaded');
+  assert.equal(element('generate-prompt').value,'Loaded prompt a','cancel restores the immutable reference');
+  assert.equal(state.workingDraftDirty,true);
+  api.switchGenerateEditorMode('working');
+  assert.equal(element('generate-prompt').value,'Unsent Working draft','the existing draft survived');
+  api.switchGenerateEditorMode('loaded');
+  element('generate-prompt').value='Loaded edit accepted';
+  f.setConfirmChoice(true);
+  assert.equal(api.noteGenerateEditorEdit(false),true);
+  assert.equal(state.editorMode,'working');
+  assert.equal(element('generate-prompt').value,'Loaded edit accepted');
+  assert.equal(element('generate-seed').value,'-1');
+  assert.equal(confirmations.length,2,'warn only at real Working replacement');
+  api.switchGenerateEditorMode('loaded');
+  assert.equal(element('generate-prompt').value,'Loaded prompt a');
+});
+
+test('queued Working recipes no longer warn; later edits remain unsent',()=>{
+  const f=fixture(),{api,state,element,confirmations}=f;
+  element('generate-prompt').value='Queued from Working';
+  api.noteGenerateEditorEdit(false);
+  const submittedSerial=state.workingEditSerial;
+  api.markSubmittedWorkingDraft('working',submittedSerial);
+  assert.equal(state.workingDraftDirty,false,'a successful queued snapshot is no longer unsent');
+  api.loadGenerateTakeIntoEditor(take());
+  element('generate-prompt').value='Fork with no unnecessary warning';
+  api.noteGenerateEditorEdit(false);
+  assert.equal(state.editorMode,'working');
+  assert.equal(confirmations.length,0);
+  // A delayed queue result must not clear edits made since that submission.
+  const staleSerial=state.workingEditSerial;
+  element('generate-prompt').value='New unsent revision';
+  api.noteGenerateEditorEdit(false);
+  api.markSubmittedWorkingDraft('working',staleSerial);
+  assert.equal(state.workingDraftDirty,true);
+  api.switchGenerateEditorMode('loaded');
+  element('generate-prompt').value='Attempt conflicting fork';
+  f.setConfirmChoice(false);
+  api.noteGenerateEditorEdit(false);
+  assert.equal(confirmations.length,1);
+});
+
+test('editor input and LoRA actions fork on actual changes, not search or assistant instructions',()=>{
+  const begin=source.indexOf('    // Catch the first actual edit after the browser has applied it.');
+  const end=source.indexOf("    el('generate-editor-working').onclick",begin);
+  assert.ok(begin>0 && end>begin);
+  const calls=[],listeners={};
+  const workspace={addEventListener:(kind,handler,capture)=>{listeners[kind+(capture?'Capture':'')]=handler;}};
+  const context={workspace,generateEditorFieldIds:[
+    'generate-aspect','generate-dimensions','generate-megapixels',
+    'generate-duration','generate-sampling-mode','generate-seed'
+  ],noteGenerateEditorEdit:keep=>{calls.push(keep);return true;}};
+  vm.runInNewContext(source.slice(begin,end),context);
+  const field=id=>({id,hasAttribute:()=>false});
+  listeners.input({target:field('generate-prompt')});
+  listeners.input({target:field('generate-megapixels')});
+  listeners.change({target:field('generate-duration')});
+  listeners.change({target:field('generate-aspect')});
+  listeners.input({target:field('generate-seed')});
+  listeners.change({target:field('generate-reference-first_frame')});
+  listeners.input({target:field('generate-director-instruction')});
+  listeners.input({target:field('generate-lora-picker')});
+  assert.deepEqual(calls,[false,false,false,false,true,false]);
+  let prevented=false,stopped=false;
+  const event={target:{closest:()=>({})},
+    preventDefault(){prevented=true;},stopImmediatePropagation(){stopped=true;}};
+  listeners.clickCapture(event);
+  assert.equal(calls.length,7,'LoRA and Sweep changes fork at capture time');
+  context.noteGenerateEditorEdit=()=>false;
+  listeners.clickCapture(event);
+  assert.equal(prevented,true,'cancel prevents the LoRA mutation');
+  assert.equal(stopped,true,'cancel stops handlers that would edit the frozen Take');
+});
+
 test('Loaded is unavailable until a Take is selected and mode changes are explicit',()=>{
   const f=fixture(),{api,element}=f;
   assert.equal(element('generate-editor-loaded').disabled,true);

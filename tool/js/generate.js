@@ -2809,7 +2809,7 @@ function sweepLoras(model, folder) {
       setGenerateViewMode('library');
     };
     el('generate-takes-explore-btn').onclick = function () {
-      window.openMediaExplorerActivity({source: 'generate'});
+      window.openMediaExplorerActivity({source: 'generate', id: ''});
     };
     el('generate-cancel-queued-btn').onclick = function () {
       cancelQueuedGenerateJobs();

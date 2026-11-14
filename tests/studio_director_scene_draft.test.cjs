@@ -260,7 +260,7 @@ test('Apply saves usable Scenes and retains incomplete rows for later Apply', as
   const first=node('Opening','Complete H3 Prompt A','twelve');
   const incomplete=node('Unfinished','','10');
   const last=node('Ending','Complete H3 Prompt C','12.5');
-  const rows=[first,incomplete,last], requests=[], receipts=[], errors=[];
+  const rows=[first,incomplete,last], requests=[], receipts=[], errors=[], statuses=[];
   let dialogClosed=0;
   let currentStory={id:'p1',title:'Project',sceneOrder:['old'],scenes:{}};
   const proposal={storyId:'p1',storyTitle:'Project',sceneOrder:['old'],scenes:{},
@@ -274,7 +274,7 @@ test('Apply saves usable Scenes and retains incomplete rows for later Apply', as
       id==='studio-scenes-placement'?{value:'end'}:
       id==='studio-scenes-error'?status:
       id==='studio-scenes-review'?{close(){dialogClosed++;}}:{},
-    syncControls(){},recordStudioOperation(){},studioActionStatus(){},
+    syncControls(){},recordStudioOperation(){},studioActionStatus:message=>statuses.push(message),
     window:{flushStudioDirectorStoryEdits:async()=>{},
       studioDirectorBridge:{recordApplied:async(_kind,_story,fields)=>{receipts.push(fields);}},
       refreshStudioDirectorStoryIfOpen:async()=>{},
@@ -308,6 +308,7 @@ test('Apply saves usable Scenes and retains incomplete rows for later Apply', as
   assert.equal(proposal.drafts[0].title,'Unfinished');
   assert.match(status.textContent,/2 Scenes saved/);
   assert.match(status.textContent,/still need a Prompt/);
+  assert.match(statuses.at(-1),/1 duration defaulted to 6s/);
   incomplete.fields.prompt.value='Completed H3 Prompt B';
   await run();
   assert.deepEqual(errors,[]);

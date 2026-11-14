@@ -89,7 +89,7 @@ test('Studio prompting selects the current goal rather than steering every task 
   assert.doesNotMatch(system,/When choices are clear, offer to review Concept/);
   assert.match(system,/contribute a concrete visual/);
   assert.match(system,/ask a question only when a consequential choice needs the author/);
-  assert.match(system,/put the complete requested text in reply so it is visible in conversation/);
+  assert.match(system,/When the author explicitly asks for full draft text/);
   assert.match(system,/Keep readiness light: normally checks=\[\]/);
   assert.match(system,/If assessment is genuinely useful, provide at most two concise checks/);
   assert.match(system,/single new Scene is ready for review/);

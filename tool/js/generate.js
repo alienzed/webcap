@@ -770,6 +770,7 @@ function sweepLoras(model, folder) {
     take.setAttribute('aria-pressed', loaded ? 'true' : 'false');
     take.disabled = !generateState.loadedSnapshot;
     el('generate-editor-use-working').classList.toggle('hidden', !loaded);
+    el('generate-new-btn').classList.toggle('hidden', loaded);
     syncGenerateHeaderModel();
     var label = el('generate-editor-loaded-caption');
     label.classList.toggle('hidden', !loaded);
@@ -2802,10 +2803,13 @@ function sweepLoras(model, folder) {
       setGenerateViewMode('create');
     };
     el('generate-new-btn').onclick = function () {
-      try { startNewGeneration(); } catch (err) { reportError(err, 'New generation blocked'); }
+      try { startNewGeneration(); } catch (err) { reportError(err, 'Could not reset Working'); }
     };
     el('generate-library-mode-btn').onclick = function () {
       setGenerateViewMode('library');
+    };
+    el('generate-takes-explore-btn').onclick = function () {
+      window.openMediaExplorerActivity({source: 'generate'});
     };
     el('generate-cancel-queued-btn').onclick = function () {
       cancelQueuedGenerateJobs();

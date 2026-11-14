@@ -97,14 +97,14 @@ def test_refine_prompt_preserves_existing_prompt_and_keeps_scene_fields_optional
 
     assert "EXISTING SECOND PROMPT" in prompt
     assert "[PREVIOUS SCENE" not in prompt
-    assert "OLD FIRST PROMPT" not in prompt
+    assert "OLD FIRST PROMPT" in prompt
     assert "[STORY CONCEPT / OVERVIEW]" not in prompt
     assert "full MiniMax H3 prompt" not in prompt
     assert "smallest relevant edit" in prompt
     assert "Keep the camera behind her" in prompt
     assert schema["required"] == ["changed", "prompt"]
-    assert {"summary", "entryState", "exitState", "durationSeconds"}.issubset(schema["properties"])
-    assert "summary" not in schema["required"]
+    assert {"entryState", "exitState", "durationSeconds"}.issubset(schema["properties"])
+    assert "summary" not in schema["properties"]
     assert "entryState" not in schema["required"]
     assert "exitState" not in schema["required"]
     assert schema["properties"]["durationSeconds"]["minimum"] == 6
@@ -138,7 +138,7 @@ def test_develop_story_uses_simple_scene_schema_and_dense_scene_guidance():
     scene_schema = request["response_schema"]["properties"]["scenes"]["items"]
 
     assert request["response_schema"]["required"] == ["scenes"]
-    assert set(scene_schema["required"]) == {"title", "summary", "prompt", "suggestedDurationSeconds"}
+    assert set(scene_schema["required"]) == {"title", "prompt", "suggestedDurationSeconds"}
     assert scene_schema["properties"]["prompt"]["type"] == "string"
     assert "entryState" in scene_schema["properties"]
     assert "exitState" in scene_schema["properties"]
@@ -178,13 +178,13 @@ def test_insert_scene_uses_adjacent_scene_facts_not_prompt_templates():
     assert request["operation"] == "insert_scene"
     assert schema["required"] == ["scene"]
     scene_schema = schema["properties"]["scene"]
-    assert set(scene_schema["required"]) == {"title", "summary", "prompt", "suggestedDurationSeconds"}
+    assert set(scene_schema["required"]) == {"title", "prompt", "suggestedDurationSeconds"}
     assert "[SCENE BEFORE - PLACEMENT CONTEXT]" in prompt
     assert "[SCENE AFTER - PLACEMENT CONTEXT]" in prompt
     assert "[STORY CONCEPT]" in prompt
-    assert "[EXISTING SCENE OUTLINE]" in prompt
-    assert "OLD FIRST PROMPT" not in prompt
-    assert "EXISTING SECOND PROMPT" not in prompt
+    assert "[EXISTING SCENE PROMPTS]" in prompt
+    assert "OLD FIRST PROMPT" in prompt
+    assert "EXISTING SECOND PROMPT" in prompt
     assert "Use neighbouring Scene descriptions as placement context" in prompt
     assert "GENERATION UNIT." in prompt
 
@@ -205,9 +205,9 @@ def test_insert_custom_scene_direction_drives_without_story_or_other_prompts():
     assert prompt.startswith("[USER DIRECTION - PRIMARY CREATIVE BRIEF]\n" + instruction)
     assert "[STORY CONCEPT]" not in prompt
     assert "A woman enters an empty hotel" not in prompt
-    assert "[EXISTING SCENE OUTLINE]" not in prompt
-    assert "OLD FIRST PROMPT" not in prompt
-    assert "EXISTING SECOND PROMPT" not in prompt
+    assert "[EXISTING SCENE PROMPTS]" not in prompt
+    assert "OLD FIRST PROMPT" in prompt
+    assert "EXISTING SECOND PROMPT" in prompt
     assert "She is just inside the closed front door." in prompt
     assert "[STORY VISUAL / ATMOSPHERE - CONSTRAINT]" in prompt
     assert "[STORY INVARIANTS - CONSTRAINTS]" in prompt
@@ -219,10 +219,10 @@ def test_extend_story_preserves_distinction_from_redevelopment():
     )
     assert request["operation"] == "extend_story"
     assert "Append exactly 3 new Scenes" in request["prompt"]
-    assert "[EXISTING SCENE OUTLINE]" in request["prompt"]
+    assert "[EXISTING SCENE PROMPTS]" in request["prompt"]
     assert "[LAST SCENE GENERATION PROMPT]" not in request["prompt"]
-    assert "OLD FIRST PROMPT" not in request["prompt"]
-    assert "EXISTING SECOND PROMPT" not in request["prompt"]
+    assert "OLD FIRST PROMPT" in request["prompt"]
+    assert "EXISTING SECOND PROMPT" in request["prompt"]
     assert "[LAST SCENE EXIT STATE]" not in request["prompt"]
     assert "Use the Project Concept, Visual / atmosphere, Invariants" in request["prompt"]
     assert "[USER DIRECTION]\nDifferent cubicle vignettes." in request["prompt"]
@@ -243,7 +243,7 @@ def test_repair_scenes_is_sparse_and_prompt_is_complete_string():
     prompt = request["prompt"]
     fields = request["response_schema"]["properties"]["changes"]["items"]["properties"]["fields"]
 
-    assert set(fields["properties"]) == {"summary", "entryState", "exitState", "prompt"}
+    assert set(fields["properties"]) == {"entryState", "exitState", "prompt"}
     assert fields["properties"]["prompt"]["type"] == "string"
     assert "complete revised H3 prompt" in prompt
     assert "Return sparse updates to existing Scenes" in prompt
@@ -285,12 +285,14 @@ def test_define_invariants_preserves_legacy_context_without_generating_new_guide
     assert "Refresh the four guideline proposals" not in refreshed["prompt"]
 
 
-def test_write_prompt_requires_scene_intent():
+def test_write_prompt_accepts_missing_or_empty_scene_intent():
     story = _story()
-    story["scenes"]["scene-2"]["summary"] = ""
-
-    with pytest.raises(ValueError, match="summary / intent"):
-        storyboard_llm_contract.build_request(story, "scene-2", "write_prompt")
+    for missing in (False, True):
+        if missing:
+            story["scenes"]["scene-2"].pop("summary", None)
+        else:
+            story["scenes"]["scene-2"]["summary"] = ""
+        assert storyboard_llm_contract.build_request(story, "scene-2", "write_prompt")["response_schema"]["required"] == ["prompt"]
 
 
 def test_refine_prompt_requires_prompt_and_instruction():
@@ -320,7 +322,7 @@ def test_unknown_llm_operation_fails_loudly():
 
 
 
-def test_individual_development_outline_keeps_story_context_and_defers_prompts():
+def test_individual_development_outline_keeps_story_context_and_requires_full_prompts():
     story = _story()
     request = storyboard_llm_contract.build_request(
         story,
@@ -334,13 +336,12 @@ def test_individual_development_outline_keeps_story_context_and_defers_prompts()
     assert request["output"] == "json"
     assert request["response_schema"]["properties"]["scenes"]["minItems"] == 12
     assert request["response_schema"]["properties"]["scenes"]["maxItems"] == 12
-    assert set(scene_schema["required"]) == {"title", "summary", "suggestedDurationSeconds"}
-    assert "prompt" not in scene_schema["properties"]
+    assert set(scene_schema["required"]) == {"title", "prompt", "suggestedDurationSeconds"}
+    assert "summary" not in scene_schema["properties"]
     assert "[STORY CONCEPT]" in prompt
     assert "[STORY VISUAL / ATMOSPHERE]" in prompt
     assert "[STORY INVARIANTS]" in prompt
-    assert "Generation prompts will be authored separately." in prompt
-    assert "Generation prompts will be authored separately." in prompt
+    assert "complete H3 prompt and suggested duration" in prompt
 
 
 def test_individual_development_scene_uses_whole_outline_and_previous_authored_scene():
@@ -387,7 +388,7 @@ def test_individual_development_scene_uses_whole_outline_and_previous_authored_s
 
     assert request["operation"] == "develop_story_scene"
     assert request["output"] == "json"
-    assert set(scene_schema["required"]) == {"title", "summary", "prompt", "suggestedDurationSeconds"}
+    assert set(scene_schema["required"]) == {"title", "prompt", "suggestedDurationSeconds"}
     assert "[STORY CONCEPT / OVERVIEW]" in prompt
     assert "[STORY VISUAL / ATMOSPHERE]" in prompt
     assert "[STORY INVARIANTS]" in prompt
@@ -395,7 +396,7 @@ def test_individual_development_scene_uses_whole_outline_and_previous_authored_s
     assert "[CURRENT PLANNED SCENE]" in prompt
     assert "[PREVIOUS AUTHORED SCENE - RELATIONSHIP CONTEXT]" in prompt
     assert "She reaches the station." in prompt
-    assert "PREVIOUS FULL H3 PROMPT" not in prompt
+    assert "PREVIOUS FULL H3 PROMPT" in prompt
     assert "Scene 2 of 2" in prompt
     assert "Author exactly this one planned Scene" in prompt
 
@@ -443,7 +444,7 @@ def test_individual_scene_development_still_uses_previous_authored_scene_when_in
         "outline": outline, "sceneIndex": 1,
         "previousScene": {"title": "Arrival", "prompt": "PREVIOUS FULL H3 PROMPT"},
     })["prompt"]
-    assert "PREVIOUS FULL H3 PROMPT" not in prompt
+    assert "PREVIOUS FULL H3 PROMPT" in prompt
     assert '"suggestedDurationSeconds": 12' in prompt
 
 
@@ -484,7 +485,7 @@ def test_extend_story_uses_only_last_exit_state_as_continuity_handoff():
     story["scenes"]["scene-2"]["exitState"] = "Mara reaches the locked lift."
     prompt = storyboard_llm_contract.build_request(story, "", "extend_story", scene_count=2)["prompt"]
     assert "[LAST SCENE EXIT STATE]\nMara reaches the locked lift." in prompt
-    assert "EXISTING SECOND PROMPT" not in prompt
+    assert "EXISTING SECOND PROMPT" in prompt
 
 
 def test_optional_story_guidelines_in_creative_operations_not_narrow_refinement():
@@ -546,7 +547,7 @@ def test_new_scene_authoring_uses_five_fields_without_new_guideline_values():
     assert "[STORY CONCEPT / OVERVIEW]" in request["prompt"]
     assert "[STORY VISUAL / ATMOSPHERE]" in request["prompt"]
     assert "[STORY INVARIANTS]" in request["prompt"]
-    assert "Summary / intent: She notices wet footprints" in request["prompt"]
-    assert "EXISTING SECOND PROMPT" not in request["prompt"]
+    assert "Prompt: EXISTING SECOND PROMPT" in request["prompt"]
+    assert "EXISTING SECOND PROMPT" in request["prompt"]
     assert "[STORY DIRECTING GUIDELINES" not in request["prompt"]
     assert request["response_schema"]["required"] == ["prompt"]

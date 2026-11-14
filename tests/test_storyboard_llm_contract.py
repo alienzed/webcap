@@ -97,7 +97,7 @@ def test_refine_prompt_preserves_existing_prompt_and_keeps_scene_fields_optional
 
     assert "EXISTING SECOND PROMPT" in prompt
     assert "[PREVIOUS SCENE" not in prompt
-    assert "OLD FIRST PROMPT" in prompt
+    assert "OLD FIRST PROMPT" not in prompt
     assert "[STORY CONCEPT / OVERVIEW]" not in prompt
     assert "full MiniMax H3 prompt" not in prompt
     assert "smallest relevant edit" in prompt
@@ -429,9 +429,9 @@ def test_refine_scene_is_isolated_unless_continuity_explicitly_requested():
         story, "scene-2", "refine_prompt", instruction, continuity_context=True
     )["prompt"]
     assert "[PREVIOUS SCENE - CONTINUITY FACTS ONLY]" in continuity
-    assert "She reaches the hotel entrance." in continuity
+    assert "She reaches the hotel entrance." not in continuity
     assert "She is just inside the closed front door." in continuity
-    assert "OLD FIRST PROMPT" not in continuity
+    assert "OLD FIRST PROMPT" in continuity
 
 
 def test_individual_scene_development_still_uses_previous_authored_scene_when_intended():

@@ -45,6 +45,8 @@
     freshDraft: false,
     editorMode: 'working',
     workingSnapshot: null,
+    workingDraftDirty: false,
+    workingEditSerial: 0,
     loadedSnapshot: null,
     loadedLabel: '',
     takesCollapsed: false,
@@ -778,13 +780,44 @@ function sweepLoras(model, folder) {
     label.textContent = loaded ? generateState.loadedLabel : '';
   }
 
+  // Loaded is a historical reference; an edit forks a Working draft, not the Take.
+  function promoteLoadedTakeToWorking(keepSeed) {
+    if (generateState.editorMode !== 'loaded') return true;
+    if (generateState.workingDraftDirty && !window.confirm(
+      'Replace your unsent Working draft with a draft from this Take? Cancel preserves Working.')) {
+      applyGenerateEditorSnapshot(generateState.loadedSnapshot);
+      renderGenerateEditorTabs();
+      return false;
+    }
+    generateState.editorMode = 'working';
+    if (!keepSeed) el('generate-seed').value = '-1';
+    generateState.workingSnapshot = captureGenerateEditorSnapshot();
+    generateState.workingDraftDirty = true;
+    ++generateState.workingEditSerial;
+    renderGenerateEditorTabs();
+    return true;
+  }
+
+  function noteGenerateEditorEdit(keepSeed) {
+    if (generateState.editorMode === 'loaded') return promoteLoadedTakeToWorking(keepSeed);
+    generateState.workingDraftDirty = true;
+    ++generateState.workingEditSerial;
+    return true;
+  }
+
+  function markSubmittedWorkingDraft(mode, serial) {
+    if (mode === 'working' && generateState.workingEditSerial === serial)
+      generateState.workingDraftDirty = false;
+  }
+
   function switchGenerateEditorMode(mode) {
     if (mode !== 'working' && mode !== 'loaded') throw new Error('Unknown Generations editor tab: ' + mode);
     if (generateState.director.busy) throw new Error('Finish Prompt Assistant before switching configurations.');
     ++pendingRestoreSelection;
     if (mode === generateState.editorMode) return;
     if (mode === 'loaded' && !generateState.loadedSnapshot) throw new Error('Select a Take to load it.');
-    generateState[generateState.editorMode + 'Snapshot'] = captureGenerateEditorSnapshot();
+    if (generateState.editorMode === 'working')
+      generateState.workingSnapshot = captureGenerateEditorSnapshot();
     applyGenerateEditorSnapshot(generateState[mode + 'Snapshot']);
     generateState.editorMode = mode;
     renderGenerateEditorTabs();
@@ -801,8 +834,7 @@ function sweepLoras(model, folder) {
     generateState.loraMode = 'selected';
     generateState.sweepSelections = {};
     restoreResultConfiguration(result);
-    // Reuse the Take's recipe, but generate fresh noise unless a seed is chosen explicitly.
-    el('generate-seed').value = '-1';
+    // Loaded keeps the recorded seed; only a new Working fork starts randomized.
     generateState.editorMode = 'loaded';
     generateState.loadedSnapshot = captureGenerateEditorSnapshot();
     var missingReferences = result.references && Object.keys(result.references).length;
@@ -814,9 +846,7 @@ function sweepLoras(model, folder) {
 
   function useLoadedAsWorking() {
     if (generateState.editorMode !== 'loaded') throw new Error('Select the Loaded Take tab first.');
-    generateState.loadedSnapshot = captureGenerateEditorSnapshot();
-    generateState.workingSnapshot = captureGenerateEditorSnapshot();
-    switchGenerateEditorMode('working');
+    promoteLoadedTakeToWorking(false);
   }
 
   function restoreResultConfiguration(result) {
@@ -1096,6 +1126,7 @@ function sweepLoras(model, folder) {
   function usePromptLibraryItem(promptId) {
     var item = promptLibraryItem(promptId);
     if (!item) throw new Error('Saved prompt is missing from the Prompt Library.');
+    if (!noteGenerateEditorEdit(false)) return;
     var prompt = el('generate-prompt');
     prompt.value = String(item.prompt || '');
 
@@ -1135,6 +1166,8 @@ function sweepLoras(model, folder) {
     if (!prompt) throw new Error('Enter a generation prompt.');
     // Freeze the chosen tab's submitted values before asynchronous reference upload.
     // Switching tabs or editing the other form cannot change this job's recipe.
+    var submittedMode = generateState.editorMode;
+    var submittedSerial = generateState.workingEditSerial;
     var submission = {
       modelId: model.id,
       prompt: prompt,
@@ -1158,6 +1191,7 @@ function sweepLoras(model, folder) {
         references: references
       });
     }).then(function (payload) {
+      markSubmittedWorkingDraft(submittedMode, submittedSerial);
       trackGenerateJob(payload.job && payload.job.jobId);
       syncGenerationPreviewCard(payload.job, true);
       reportConsoleInfo('Generate', 'Submitted job ' + String(payload.job && payload.job.jobId || 'unknown') + '.');
@@ -1224,6 +1258,8 @@ function sweepLoras(model, folder) {
 
   function runGenerateSweep() {
     var submission = captureSweepSubmission();
+    var submittedMode = generateState.editorMode;
+    var submittedSerial = generateState.workingEditSerial;
     var queued = 0;
     setSweepSubmissionStatus(submission, 'Queueing Sweep…');
 
@@ -1241,6 +1277,7 @@ function sweepLoras(model, folder) {
         });
       }).then(function (payload) {
         queued += 1;
+        markSubmittedWorkingDraft(submittedMode, submittedSerial);
         trackGenerateJob(payload.job && payload.job.jobId);
         syncGenerationPreviewCard(payload.job, queued === 1);
         setSweepSubmissionStatus(submission, 'Queued Sweep · ' + queued + ' / ' + submission.items.length);
@@ -2000,6 +2037,7 @@ function sweepLoras(model, folder) {
     generateState.activeResultKey = '';
     generateState.inspectedResult = null;
     generateState.freshDraft = true;
+    generateState.workingDraftDirty = false;
     generateState.workingSnapshot = captureGenerateEditorSnapshot();
     renderStageEmpty();
     syncActiveTakeState();
@@ -2572,6 +2610,7 @@ function sweepLoras(model, folder) {
 
   function restoreDirectorPrompt() {
     if (generateState.director.busy || generateState.director.previousPrompt === null) return;
+    if (!noteGenerateEditorEdit(false)) return;
     var prompt = el('generate-prompt');
     prompt.value = generateState.director.previousPrompt;
     generateState.director.previousPrompt = null;
@@ -2681,6 +2720,7 @@ function sweepLoras(model, folder) {
 
   function runDirector(operation, skipPlanning, approvedVocabulary) {
     if (generateState.director.busy) return;
+    if (generateState.editorMode === 'loaded' && !promoteLoadedTakeToWorking(false)) return;
     if (!skipPlanning && el('generate-director-lora-enable').checked) return planGenerateLoras(operation);
     if (!generateState.director.modelId) throw new Error('Choose a Prompt Assistant model.');
     var promptNode = el('generate-prompt');
@@ -2917,6 +2957,7 @@ function sweepLoras(model, folder) {
     });
 
     function changeGenerateModel(modelId) {
+      if (!noteGenerateEditorEdit(false)) return;
       generateState.modelId = modelId;
       generateState.promptLibrary.activeId = '';
       generateState.director.previousPrompt = null;

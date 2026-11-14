@@ -1530,7 +1530,8 @@ def extend_director_story(story_id, plan, model_id=""):
     return story, added_ids
 
 
-STUDIO_SCENE_FIELDS = {"title", "prompt", "durationSeconds"}
+STUDIO_SCENE_FIELDS = {"title", "prompt"}
+STUDIO_SCENE_SINGLE_FIELDS = STUDIO_SCENE_FIELDS | {"durationSeconds"}
 
 
 @_serialized_mutation
@@ -1538,7 +1539,7 @@ def apply_studio_scene_fields(story_id, scene_id, expected, changes):
     """Commit a reviewed, field-scoped Scene revision without touching Takes or settings."""
     if not isinstance(expected, dict) or not isinstance(changes, dict) or not changes:
         raise ValueError("Select at least one Scene field to apply.")
-    if set(changes) - STUDIO_SCENE_FIELDS or set(expected) != set(changes):
+    if set(changes) - STUDIO_SCENE_SINGLE_FIELDS or set(expected) != set(changes):
         raise ValueError("Reviewed Scene fields must match exact supported originals.")
     for key, value in changes.items():
         if key == "durationSeconds":

@@ -2850,6 +2850,7 @@
         }
       }
       renderScenes();
+      window.refreshAssistantModes(); // Re-resolve the open Director badge after Scene navigation.
       renderSequencePreview();
       if (typeof window.syncShellLocationRoute === 'function') window.syncShellLocationRoute();
       if (mode !== previousMode || sceneId) {

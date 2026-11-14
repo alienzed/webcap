@@ -2381,17 +2381,6 @@ def director_chat_route():
                             },
                         },
                     },
-                    "firstScenes": {
-                        "type": "array", "maxItems": 32,
-                        "items": {
-                            "type": "object", "additionalProperties": False,
-                            "required": ["title", "prompt"],
-                            "properties": {
-                                "title": {"type": "string"},
-                                "prompt": {"type": "string", "minLength": 1},
-                            },
-                        },
-                    },
                     "rationale": {"type": "string"},
                 },
             }

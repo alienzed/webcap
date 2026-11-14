@@ -214,9 +214,9 @@ test('Scene revisions select saved Scenes, leaving changed fields to Director', 
   assert.doesNotMatch(workbench, /applySuggestedWriteFields/);
   assert.doesNotMatch(html, /id="studio-dw-batch-fields"/);
 });
-test('Project Overview Review selects actual changes without narrowing them to field hints',()=>{
+test('Project Overview Review limits guided selection while preserving the editable review',()=>{
   assert.match(workbench,/bridge\.prepareWrite\(operation, id, item && storyName\(item\)\)/);
-  assert.match(director,/if \(kind === 'project'\) return prepareStudioBrief\(\)/);
+  assert.match(director,/if \(kind === 'project'\) return prepareStudioBrief\(options\)/);
   assert.doesNotMatch(director,/checkbox\.checked = checkbox\.checked && writeFields\.indexOf\(field\) !== -1/);
 });
 

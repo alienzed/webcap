@@ -261,7 +261,7 @@ test('automatic new-Scene Write reuses a fresh capture and preserves explicit dr
   });
   vm.runInContext(
     part('  function readyNewSceneCapture() {', '  function setOperation() {') +
-    part('  function writePrepare() {','  function prepareProjectCoherence(storyId) {'),
+    part('  function writePrepare(options) {','  function prepareProjectCoherence(storyId) {'),
     scope
   );
   scope.writePrepare();
@@ -390,4 +390,135 @@ test('mismatched Scene targets require confirmation before any saved mutation', 
   scope.applyBatchScenes();
   assert.equal(confirmed,1);
   assert.equal(called,0,'declining a conflicting target must not call the mutation API');
+});
+
+
+// Focused Write Project regressions: guided action, fresh saved baseline and scoped review.
+const chatSource = fs.readFileSync(path.join(__dirname, '../tool/js/director_chat.js'), 'utf8');
+function chatPart(start, end) {
+  const a = chatSource.indexOf(start), b = chatSource.indexOf(end, a + start.length);
+  assert.ok(a >= 0 && b > a, 'Missing Project authoring function boundary');
+  return chatSource.slice(a, b);
+}
+
+test('guided Project revision binds the established destination and retains launch metadata', async () => {
+  const operation={value:'',options:[{value:'project'}]},project={value:'stale-project'};
+  const calls=[];
+  const scope=vm.createContext({
+    recommendations:{writeHint:'project',writeInstruction:'Soften the fog.',writeFields:['style']},
+    activeTarget:()=>({storyId:'old-navigation'}),sceneSelectionManual:false,
+    writeOperationChosen:false,
+    window:{studioDirectorBridge:{workingStoryId:()=> 'selected-project'}},
+    el:id=>({
+      'studio-dw-write-operation':operation,'studio-dw-write-project':project,
+      'studio-dw-write-panel':{classList:{contains:()=>false}}
+    })[id],
+    refreshWrite:async()=>true,writePrepare:options=>calls.push(options),
+    status:message=>assert.fail(message)
+  });
+  vm.runInContext(part('  function openRecommendedWrite() {','  function captureActionLabel(capture) {'),scope);
+  await scope.openRecommendedWrite();
+  assert.equal(project.value,'selected-project');
+  assert.equal(operation.value,'project');
+  assert.equal(calls.length,1);
+  assert.equal(calls[0].guided,true);
+});
+
+test('guided Project Write sends instruction and intended fields into the existing bridge', () => {
+  const calls=[],operation={value:'project'},project={value:'selected-project'};
+  const scope=vm.createContext({
+    readinessStale:false,
+    recommendations:{writeHint:'project',writeInstruction:'Soften the fog.',writeFields:['style']},
+    projects:[{id:'selected-project',title:'Beacon'}],
+    el:id=>id==='studio-dw-write-operation'?operation:id==='studio-dw-write-project'?project:{},
+    window:{studioDirectorBridge:{isReady:()=>true,readinessMessage:()=>'',prepareWrite:(...args)=>calls.push(args)}},
+    storyName:story=>story.title, recommendedWriteFields:()=>['style'],
+    status:()=>{}
+  });
+  vm.runInContext(part('  function writePrepare(options) {','  function prepareProjectCoherence(storyId) {'),scope);
+  scope.writePrepare({guided:true});
+  assert.equal(calls[0][0],'project');
+  assert.equal(calls[0][1],'selected-project');
+  assert.equal(calls[0][3].instruction,'Soften the fog.');
+  assert.deepEqual(Array.from(calls[0][3].requestedFields),['style']);
+});
+
+test('Project revision drafts against fresh saved fields and carries the exact request', async () => {
+  const story={id:'selected-project',title:'Beacon',concept:'Keep the signal visible.',
+    style:'Cold fog.',invariants:[{kind:'location',title:'Tower',text:'Stone'}],
+    sceneOrder:['scene-1'],scenes:{'scene-1':{prompt:'Do not change.'}}};
+  const state={pending:false,activeMode:'storyboard',sessionReady:true,modelId:'qwen',
+    modeMessages:{storyboard:[{role:'user',content:'Please soften the fog.'}]},
+    studioBriefProposal:null,jobId:''};
+  let input, reviewed=0;
+  const scope=vm.createContext({
+    state,
+    studioAttachedStoryId:()=>story.id,
+    el:()=>({}),
+    window:{flushStudioDirectorStoryEdits:async()=>{},
+      studioDirectorWorkbench:{showSentWriteContext:()=>{}},
+      reportConsoleError:(subject,e)=>assert.fail(subject+': '+e.message)},
+    requestJson:async(url)=>{
+      if(url.startsWith('/fs/storyboard?')) return {story};
+      return {job:{jobId:'job-1'}};
+    },
+    studioDirectorRequestMessages:async(messages)=>{
+      input=JSON.parse(messages[0].content);
+      return messages;
+    },
+    waitForJob:async()=>({result:{text:JSON.stringify({
+      title:'Beacon',concept:'Keep the signal visible.',style:'Softer fog.',
+      invariants:story.invariants,rationale:'The fog is less harsh.'})}}),
+    parseStudioBriefDraft:raw=>JSON.parse(raw),
+    studioActionStatus:()=>{},startProgress:()=>{},finishProgress:()=>{},
+    syncControls:()=>{},trackTransientLlmJob:()=>{},showStudioBriefReview:()=>reviewed++
+  });
+  vm.runInContext(chatPart('  function prepareStudioBrief(options) {','  function applyStudioBrief() {'),scope);
+  scope.prepareStudioBrief({instruction:'Soften the fog.',requestedFields:['style']});
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(input.instruction,'Soften the fog.');
+  assert.deepEqual(Array.from(input.requestedFields),['style']);
+  assert.equal(input.project.concept,'Keep the signal visible.');
+  assert.equal(input.project.style,'Cold fog.');
+  assert.equal(input.project.invariants[0].title,'Tower');
+  assert.equal(input.project.sceneOrder,undefined,'no Scene prompts in Project authoring input');
+  assert.equal(state.studioBriefProposal.storyId,'selected-project');
+  assert.deepEqual(Array.from(state.studioBriefProposal.requestedFields),['style']);
+  assert.equal(reviewed,1);
+  assert.equal(state.pending,false);
+});
+
+test('Project overview review leaves off-target model changes unselected', () => {
+  const proposal={storyId:'selected-project',storyTitle:'Beacon',
+    expected:{title:'Beacon',concept:'Signal',style:'Cold fog',invariants:[]},
+    draft:{title:'New title',concept:'Different story',style:'Soft fog',invariants:[],rationale:'Fog'},
+    requestedFields:['style'],rationale:'Fog'};
+  const nodes={},node=id=>nodes[id] ||= {
+    value:'',checked:false,textContent:'',open:false,
+    replaceChildren(){},classList:{toggle(){}},showModal(){this.open=true;}
+  };
+  const scope=vm.createContext({
+    state:{studioBriefProposal:proposal},el:node,
+    studioDirectorRenderDiff:()=>{},addStudioProjectInvariant:()=>{},
+    updateStudioBriefReviewSummary:()=>{},groupStudioBriefReviewParts:()=>{}
+  });
+  vm.runInContext(chatPart('  function showStudioBriefReview() {','  function updateStudioBriefReviewSummary() {'),scope);
+  scope.showStudioBriefReview();
+  assert.equal(node('studio-brief-title-selected').checked,false);
+  assert.equal(node('studio-brief-concept-selected').checked,false);
+  assert.equal(node('studio-brief-style-selected').checked,true);
+  assert.equal(node('studio-brief-invariants-selected').checked,false);
+  assert.equal(node('studio-brief-review').open,true);
+});
+
+test('new Project draft requires complete Concept and Visual direction, without Scene authoring', () => {
+  const scope=vm.createContext({});
+  vm.runInContext(chatPart('  function parseStudioProjectDraft(raw) {','  function addStudioProjectInvariant(item, destination, original) {'),scope);
+  assert.throws(()=>scope.parseStudioProjectDraft(JSON.stringify({
+    title:'Beacon',concept:'A lighthouse',style:'',invariants:[],rationale:'New project'})),
+  /complete Project Concept and Visual/);
+  const draft=scope.parseStudioProjectDraft(JSON.stringify({
+    title:'Beacon',concept:'A lighthouse',style:'Noir coastal dusk.',invariants:[],rationale:'New project'}));
+  assert.equal(draft.style,'Noir coastal dusk.');
+  assert.equal(draft.firstScenes,undefined);
 });

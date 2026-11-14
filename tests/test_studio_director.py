@@ -36,7 +36,8 @@ def test_studio_guidance_teaches_only_focused_creative_workflows():
     actions = {entry["name"]: entry["description"] for entry in result["actions"]}
     assert set(actions) == {"context.read", "project.create", "project.revise", "scenes.write"}
     assert "selected Scene automatically" in actions["context.read"]
-    assert "optional initial Scenes" in actions["project.create"]
+    assert "complete Concept" in actions["project.create"]
+    assert "initial Scenes" not in actions["project.create"]
     assert "Invariants" in actions["project.revise"]
     assert "one or more Scenes" in actions["scenes.write"]
     assert len(result["system"]) < 6000
@@ -175,7 +176,7 @@ def test_h3_playbook_review_uses_existing_config_and_checks_conflicts(monkeypatc
 
 @pytest.mark.parametrize("operation, expected_fields", [
     ("studio_brief_draft", {"title", "concept", "style", "invariants", "rationale"}),
-    ("studio_project_draft", {"title", "concept", "style", "invariants", "firstScenes", "rationale"}),
+    ("studio_project_draft", {"title", "concept", "style", "invariants", "rationale"}),
     ("studio_scene_draft", {"title", "prompt", "rationale"}),
     ("studio_scene_sequence_draft", {"scenes", "rationale"}),
     ("studio_scene_field_draft", {"title", "prompt", "durationSeconds"}),
@@ -211,9 +212,11 @@ def test_director_chat_route_preserves_all_structured_schemas(monkeypatch, opera
         assert captured["schema"]["type"] == "object"
         assert set(captured["schema"]["properties"]) == expected_fields
         assert captured["schema"]["additionalProperties"] is False
-        if operation == "studio_brief_draft":
+        if operation in {"studio_brief_draft", "studio_project_draft"}:
             assert captured["schema"]["required"] == ["title", "concept", "style", "invariants", "rationale"]
             assert captured["schema"]["properties"]["invariants"]["items"]["required"] == ["kind", "title", "text"]
+        if operation == "studio_project_draft":
+            assert "firstScenes" not in captured["schema"]["properties"]
 
 
 def test_studio_chat_schema_constrains_recommendations_to_the_selected_operation():

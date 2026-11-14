@@ -145,11 +145,16 @@ test('current focused Scene wins over an older Scene entry, and changing Project
   const outgoing=await h.scope.studioDirectorChatRequestMessages([{role:'user',content:'What happens?'}],selected);
   assert.match(outgoing[0].content,/The rover drives into a crater/);
   assert.doesNotMatch(outgoing[0].content,/Mara walks toward the rover/);
+  h.stories.p2={id:'p2',title:'New Project',concept:'Fresh direction',style:'Blue dusk',
+    invariants:[],sceneOrder:[],scenes:{}};
   h.setNavigation({projectId:'p2',projectTitle:'New Project',sceneId:'',sceneNumber:0,sceneOrder:[]});
   assert.equal(h.scope.studioDirectorSelectedScene(),null);
   const withoutScene=await h.scope.studioDirectorChatRequestMessages([{role:'user',content:'Discuss an idea.'}],null);
   assert.doesNotMatch(withoutScene[0].content,/CURRENT SAVED SCENE/);
-  assert.equal(h.requests.filter(url=>url.startsWith('/fs/storyboard?story=')).length,1);
+  assert.match(withoutScene[0].content,/CURRENT SAVED PROJECT OVERVIEW/);
+  assert.match(withoutScene[0].content,/Fresh direction/);
+  assert.doesNotMatch(withoutScene[0].content,/Mara walks toward the rover/);
+  assert.equal(h.requests.filter(url=>url.startsWith('/fs/storyboard?story=')).length,2);
 });
 
 test('missing Scene and retrieval errors reject instead of sending guessed or stale context',async()=>{

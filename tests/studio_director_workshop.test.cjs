@@ -76,20 +76,25 @@ test('Studio prompting selects the current goal rather than steering every task 
   const context = vm.createContext({
     state: {studioStoryAccess:null,storyboardAttachments:{},workshop:null},
     Object, String, Promise, window:{getStudioDirectorNavigation:()=>({projectId:'p1',sceneOrder:['scene-a']})},
-    requestJson: async () => ({
-      system: 'WebCap Studio Director role',
-      actions: [
-        {name:'context.read',status:'available',description:'Read chosen saved fields'},
-        {name:'scene.revise',status:'available',description:'Revise the full Scene H3 Prompt'}
-      ],
-      promptContract:'integrated_multimodal_description: [Shot 1]'
-    })
+    requestJson: async url => url.startsWith('/fs/storyboard?story=')
+      ? {story:{id:'p1',title:'Selected Project',concept:'A narrow concept',
+          style:'Night atmosphere',invariants:[]}}
+      : {
+        system: 'WebCap Studio Director role',
+        actions: [
+          {name:'context.read',status:'available',description:'Read chosen saved fields'},
+          {name:'scene.revise',status:'available',description:'Revise the full Scene H3 Prompt'}
+        ],
+        promptContract:'integrated_multimodal_description: [Shot 1]'
+      }
   });
   vm.runInContext(part('  function studioDirectorRequestMessages(messages, includePromptContract, explicitWrite, navigationSnapshot) {',
     '  // The creative assessment is advisory.'),context);
   const assembled = await vm.runInContext(
     "studioDirectorChatRequestMessages([{role:'user',content:'Revise only the Scene action'}])",context);
   const system = assembled[0].content;
+  assert.match(system,/CURRENT SAVED PROJECT OVERVIEW/);
+  assert.match(system,/A narrow concept/);
   assert.match(system,/For a direct question, answer fully and finish without a workflow suggestion/);
   assert.match(system,/an appropriately scoped reviewed Write or an author-operated Studio action/);
   assert.doesNotMatch(system,/When choices are clear, offer to review Concept/);

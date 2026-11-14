@@ -447,7 +447,7 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
             else "Choose the Scene count that best serves the concept and useful coverage. "
         )
         blocks.append(
-            "[CURRENT TASK]\nPlan the Story as a concise ordered Scene outline. "
+            "[CURRENT TASK]\nPlan the Story as ordered, complete Scenes. "
             + scene_count_guidance
             + "Use the Project Concept, Visual / atmosphere and Invariants. For each Scene return a title, "
             "complete H3 prompt and suggested duration. "
@@ -614,7 +614,7 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
             blocks.append("[USER DIRECTION]\n" + _clean(instruction))
         blocks.append(
             "[CURRENT TASK]\nAppend exactly " + str(scene_count) + " new Scenes after the existing sequence. "
-            "Use the Project Concept, Visual / atmosphere, Invariants, established facts and existing Scene outline to author the new material. "
+            "Use the Project Concept, Visual / atmosphere, Invariants, established facts and existing Scene Prompts to author the new material. "
             "Return only the new Scenes, each with a complete standalone H3 generation prompt, as JSON matching the supplied schema."
         )
         return {

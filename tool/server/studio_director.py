@@ -115,7 +115,8 @@ def chat_response_schema():
         {"field": {"type": "string", "enum": ["prompt"]},
          "sceneId": {"type": "string", "minLength": 1, "maxLength": 160}},
         {"field": {"type": "string", "enum": ["scene"]},
-         "title": {"type": "string", "maxLength": 240}},
+         "title": {"type": "string", "maxLength": 240},
+         "durationSeconds": {"type": "integer", "minimum": 4, "maximum": 15}},
         {"field": {"type": "string", "enum": ["invariant"]},
          "kind": {"type": "string", "enum": ["character", "location", "visual", "world", "sound", "custom"]},
          "title": {"type": "string", "minLength": 1, "maxLength": 240},
@@ -128,7 +129,7 @@ def chat_response_schema():
     readiness = []
     for operations, fields in (
         (["project"], ["title", "concept", "style", "invariants"]),
-        (["scenes"], ["title", "prompt", "durationSeconds"]),
+        (["scene", "scenes"], ["title", "prompt", "durationSeconds"]),
         (["", "new-project"], []),
     ):
         properties = {

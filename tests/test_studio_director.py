@@ -230,14 +230,14 @@ def test_studio_chat_schema_constrains_recommendations_to_the_selected_operation
         for operation in variant["properties"]["writeHint"]["enum"]:
             if operation == "project":
                 assert set(fields["items"]["enum"]) == {"title", "concept", "style", "invariants"}
-            elif operation == "scenes":
+            elif operation in {"scene", "scenes"}:
                 assert set(fields["items"]["enum"]) == {"title", "prompt", "durationSeconds"}
             else:
                 assert fields["maxItems"] == 0
         assert fields["uniqueItems"] is True
         assert "project, style, invariants" not in variant["properties"]["writeHint"]["enum"]
         assert set(variant["properties"]["writeHint"]["enum"]).issubset(
-            {"", "new-project", "project", "scenes"})
+            {"", "new-project", "project", "scene", "scenes"})
         check = variant["properties"]["checks"]["items"]
         assert check["additionalProperties"] is False
         assert set(check["required"]) == {"name", "scope", "ready", "content"}
@@ -261,6 +261,8 @@ def test_studio_chat_schema_requires_a_capture_decision_and_preserves_older_save
                            "sceneId": "scene-1" if field == "prompt" else ""}
                 if field == "scene":
                     capture["title"] = "A quiet reply"
+                    if "durationSeconds" in schema["properties"]:
+                        capture["durationSeconds"] = 12
                     if "prompt" in schema["properties"]:
                         capture["prompt"] = "integrated_multimodal_description: [Shot 1] A quiet reply."
                 if field == "invariant":

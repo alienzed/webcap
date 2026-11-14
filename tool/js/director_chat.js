@@ -2425,7 +2425,7 @@
       el('studio-scenes-review').close();
       recordStudioOperation('scenes.create', 'Created ' + payload.scenes.length + ' Scenes with prompts',
         proposal.storyId, payload.scenes.map(function (scene) { return scene.id; }));
-      studioActionStatus(payload.scenes.length + ' Scenes created.', false);
+      studioActionStatus(payload.scenes.length === 1 ? 'Scene created.' : payload.scenes.length + ' Scenes created.', false);
       return window.studioDirectorBridge.recordApplied('scenes.create',payload.story,{
         scenes:payload.scenes.map(function (scene) {
           return {id:scene.id,title:scene.title,prompt:scene.prompt,durationSeconds:scene.durationSeconds};
@@ -2916,14 +2916,14 @@
         'Applied values supersede earlier snapshots.\n' +
         'REPLY: Discuss concepts in 1-3 concise sentences. Ask one focused question only for a consequential missing decision. ' +
         'For an agreed concrete change to the selected existing Scene, propose a targeted Write instead of drafting the entire replacement in discussion. ' +
-        'Set writeHint="scenes", capture=null, writeInstruction to the concise agreed change, writeFields to the fields the author actually requested, and sceneId/sceneNumber to the supplied target. ' +
+        'For existing-Scene revisions set writeHint="scenes", capture=null, writeInstruction to the agreed change, writeFields to the requested fields, and sceneId/sceneNumber to the supplied target. For one new Scene set writeHint="scene", capture=null, sceneId="", sceneNumber=0, writeFields=["title","prompt","durationSeconds"], and writeInstruction to the agreed brief including requested title and duration. WebCap will draft it for review in the selected Project. ' +
         'If the author explicitly wants the complete Prompt shown in chat now, author it in capture.content with the H3 template and Scene duration; WebCap reuses this draft for Review without another authoring call. ' +
         'Use reply for a brief introduction or creative explanation. ' +
         'For other drafting requests, include the complete requested text in reply. ' +
         'Writing a Scene means a useful title and a full H3 Prompt. An outline alone is a planning draft, not a second authoritative Scene description. ' +
         'Name actions in plain language. Conversation alone never saves; a launched Scene revision saves directly and reviewed Apply saves reviewed drafts.\n' +
         'READINESS: Usually checks=[], readHints=[], writeHint="", writeFields=[], sceneId="", sceneNumber=0, capture=null. ' +
-        'Always include writeInstruction: use an empty string unless proposing an existing Scene revision, then use one concrete agreed instruction grounded in the conversation. ' +
+        'Always include writeInstruction: use an empty string unless proposing an existing Scene revision or one new Scene; then include the concrete agreed instruction, title and duration when specified. ' +
         'For factual questions answerable from supplied context, keep readiness fields empty and finish with the answer. ' +
         'For requested creative development, suggest at most one useful next action. Use new-project, project or scenes for Write. ' +
         'writeFields names affected fields; Scene numbers are one-based. Use bare Scene IDs from navigation.sceneOrder. ' +
@@ -2931,7 +2931,7 @@
         'CAPTURE: Use null for discussion, questions, outlines and work still to be drafted. ' +
         'For a complete existing Scene prompt, set capture.field="prompt", capture.sceneId to its saved ID, ' +
         'and capture.content to the full usable prompt itself. WebCap uses this one authored text for both chat and Review Scene, without another LLM call. ' +
-        'For other complete fields use the matching capture schema. A new Scene uses field="scene", title and content as the full usable H3 Prompt. ' +
+        'For other complete fields use the matching capture schema. When a complete new Scene is already authored in conversation, use field="scene", title and content as the full usable H3 Prompt and durationSeconds (requested duration or default 6). WebCap reuses that material for review. ' +
         'For an Invariant use its kind/title, with beforeKind/beforeTitle for an exact known edit.\n';
       if (!selectedScene) return outbound;
       return requestJson('/fs/storyboard?story=' + encodeURIComponent(selectedScene.projectId))
@@ -3407,6 +3407,10 @@
       state.studioBriefProposal = null;
       el('director-chat-workshop-status').textContent = '';
     }
+    // Freeze the Project destination alongside the user's instruction.
+    var selectedProjectId = activeChatMode === 'storyboard' ?
+      (studioAttachedStoryId() || (selectedNavigation && selectedNavigation.projectId) || '') : '';
+    var selectedProject = selectedProjectId ? {projectId:selectedProjectId} : null;
     var messages = currentMessages();
     var elapsedMap = currentElapsedMap();
     var metricsMap = currentMetricsMap();
@@ -3490,7 +3494,7 @@
           try {
             // Every capture still requires editable human Review before Apply.
             var capture = studioResponse.readiness && studioResponse.readiness.capture;
-            if (!window.studioDirectorWorkbench.updateReadiness(studioResponse.readiness, false, selectedScene))
+            if (!window.studioDirectorWorkbench.updateReadiness(studioResponse.readiness, false, selectedScene, selectedProject, content))
               throw new Error('Director readiness did not match the expected contract.\nRaw structured response:\n' + result.text);
             // One authored prompt feeds the visible transcript and the existing review.
             if (capture && capture.field === 'prompt' && !assistantText.includes(capture.content))
@@ -4162,7 +4166,7 @@
           typeof capture.title !== 'string') {
         return Promise.reject(new Error('Choose a Project and a complete Scene Prompt.'));
       }
-      if (state.studioSceneProposal) {
+      if (state.studioSceneProposal || state.studioScenesProposal) {
         return Promise.reject(new Error('An unfinished Scene draft exists. Finish or discard it first.'));
       }
       state.pending = true;
@@ -4175,14 +4179,26 @@
         var story = payload.story;
         if (!story || story.id !== storyId) throw new Error('Selected Project is unavailable.');
         state.studioStoryAccess = {storyId:storyId,label:story.title || storyId};
-        state.studioSceneProposal = {
-          storyId:storyId, storyTitle:story.title, expectedUpdatedAt:story.updatedAt,
-          sceneOrder:(story.sceneOrder || []).slice(), scenes:story.scenes,
-          title:capture.title, prompt:capture.content,
-          rationale:'Director developed this Scene in conversation. Review the fields and position before saving.',
-          placement:'end'
-        };
-        showStudioSceneDraftReview();
+        if (Number.isInteger(capture.durationSeconds)) {
+          // Reuse complete authored material with its duration in the existing review.
+          state.studioScenesProposal = {
+            storyId:storyId, storyTitle:story.title, sceneOrder:(story.sceneOrder || []).slice(),
+            scenes:story.scenes, drafts:[{title:capture.title,prompt:capture.content,
+              durationSeconds:capture.durationSeconds}],
+            rationale:'Director developed this Scene in conversation. Review before saving.'
+          };
+          showStudioScenesReview();
+        } else {
+          // Old captures did not carry a duration; retain their original review.
+          state.studioSceneProposal = {
+            storyId:storyId, storyTitle:story.title, expectedUpdatedAt:story.updatedAt,
+            sceneOrder:(story.sceneOrder || []).slice(), scenes:story.scenes,
+            title:capture.title, prompt:capture.content,
+            rationale:'Director developed this Scene in conversation. Review before saving.',
+            placement:'end'
+          };
+          showStudioSceneDraftReview();
+        }
         studioActionStatus('Review the developed Scene without another model request.',false);
       }).finally(function () {
         state.pending = false;
@@ -4217,6 +4233,65 @@
       }).catch(function (error) {
         finishProgress(error);
         if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Studio coherence check', error);
+        throw error;
+      }).finally(function () {
+        state.pending = false;
+        state.jobId = '';
+        syncControls();
+      });
+    },
+    writeNewScene: function (launch) {
+      if (!this.isReady()) return Promise.reject(new Error(this.readinessMessage()));
+      if (!launch || !launch.projectId || !String(launch.instruction || '').trim())
+        return Promise.reject(new Error('A saved Project and agreed new-Scene brief are required.'));
+      var storyId = launch.projectId;
+      state.lastStudioIoRaw = '';
+      state.lastStudioIoError = '';
+      state.pending = true;
+      syncControls();
+      return window.flushStudioDirectorStoryEdits(storyId).then(function () {
+        return requestJson('/fs/storyboard?story=' + encodeURIComponent(storyId));
+      }).then(function (payload) {
+        var story = payload && payload.story;
+        if (!story || story.id !== storyId || !Array.isArray(story.sceneOrder) || !story.scenes)
+          throw new Error('The selected Project is no longer available.');
+        var order = story.sceneOrder.slice();
+        var instruction = JSON.stringify({
+          task:'Author exactly ONE new Scene in this existing Project. Return the established Scene sequence JSON shape with exactly one entry in scenes, a complete usable H3 prompt, a title and durationSeconds. ' +
+            'Use the author-requested title and duration exactly; use 6 seconds only when no duration was requested. ' +
+            'Keep the Scene independently generatable, align the full prompt with its duration and the saved Project visual direction. ' +
+            'The existing Scenes are retained and are not revision destinations.',
+          instruction:launch.instruction,
+          authorRequest:launch.authorRequest || launch.instruction,
+          project:{
+            title:story.title,concept:story.concept,style:story.style,
+            invariants:story.invariants,
+            existingSceneTitles:order.map(function (id) {
+              var scene = story.scenes[id];
+              return scene && scene.title || '';
+            })
+          }
+        });
+        // Reuse the existing Scene writer and reviewed insertion/Apply.
+        state.pending = false;
+        return window.studioDirectorBridge.makeProposal(instruction,
+          'studio_scene_sequence_draft', true,
+          {projectId:storyId,projectTitle:story.title,sceneOrder:order}).then(function (raw) {
+          state.lastStudioIoRaw = raw;
+          var draft = parseStudioScenesDraft(raw);
+          if (draft.scenes.length !== 1 || !Number.isInteger(draft.scenes[0].durationSeconds))
+            throw new Error('Director must return exactly one Scene with a whole-second duration.\nRaw response:\n' + raw);
+          state.studioScenesProposal = {
+            storyId:storyId, storyTitle:story.title, sceneOrder:order,
+            scenes:story.scenes, drafts:draft.scenes, rationale:draft.rationale
+          };
+          showStudioScenesReview();
+          studioActionStatus('One new Scene is ready for review. Nothing has been saved.', false);
+        });
+      }).catch(function (error) {
+        state.lastStudioIoError = String(error.message || error);
+        studioActionStatus('New Scene draft failed: ' + state.lastStudioIoError, true);
+        window.reportConsoleError('Director new Scene', error);
         throw error;
       }).finally(function () {
         state.pending = false;

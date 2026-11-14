@@ -110,7 +110,7 @@ test('only one contextual action is presented, with completed capture taking pri
     el:id=>id==='studio-dw-suggestions'?actions:id==='studio-dw-suggestion-heading'?{classList:{toggle(){}}}:assessment,
     document:{createElement:node},reviewCreativeCapture(){},openRecommendedWrite(){},
     window:{studioDirectorBridge:{workingStoryId:()=> 'p1',placeSuggestedAction(node){assert.equal(node,actions);}}},
-    creativeCapture:{field:'prompt',content:'Complete Prompt',sceneId:'a'},preparedSceneWrite:null,
+    creativeCapture:{field:'prompt',content:'Complete Prompt',sceneId:'a'},preparedSceneWrite:null,preparedNewSceneWrite:null,
     recommendations:{readHints:[],writeHint:'scenes',writeFields:['prompt'],sceneId:'a'}});
   vm.runInContext(fieldsCode + part('  function captureActionLabel(capture) {','  window.studioDirectorWorkbench = {'),scope);
   const kinds=()=>{scope.renderReadiness([]);return actions.children.map(n=>n.dataset.suggestionKind);};
@@ -297,7 +297,7 @@ test('completed new Scene with Title and H3 Prompt reviews directly without anot
   const capture={field:'scene',sceneId:'',title:'Sunlit crossing',content:'integrated_multimodal_description: [Shot 1] Crossing the bright square.'};
   let complete;
   const finished=new Promise(resolve=>{complete=resolve;});
-  const scope=vm.createContext({
+  const scope=vm.createContext({captureProjectId:'',
     el:id=>id==='studio-dw-write-project' ? {value:'p1'} : {},
     window:{studioDirectorBridge:{
       canReview:()=>true,
@@ -320,7 +320,7 @@ for (const sceneId of ['a','scene:a','scene:a:prompt']) test('completed Scene ca
   let complete;
   const finished=new Promise(resolve=>{complete=resolve;});
   const saved={id:'p1',sceneOrder:['a'],scenes:{a:{title:'Lamp',summary:'Old intent',prompt:'Saved H3'}}};
-  const scope=vm.createContext({proposedBatch:null,
+  const scope=vm.createContext({proposedBatch:null,captureProjectId:'',
     el:id=>id==='studio-dw-write-project' ? {value:'p1'} : {},
     window:{studioDirectorBridge:{canReview:()=>true},flushStudioDirectorStoryEdits:async()=>{}},
     loadStory:async()=>saved,renderBatchReview:()=>complete(),status:message=>assert.fail(message)});

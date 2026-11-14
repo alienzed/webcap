@@ -1132,7 +1132,22 @@
 
       var body = document.createElement('div');
       body.className = 'director-chat-message-body';
-      body.textContent = message.content;
+      var displayed = message.content, captured = null;
+      if (state.activeMode === 'storyboard' && message.role === 'assistant' && message.rawResponse) {
+        try {
+          var stored = JSON.parse(message.rawResponse);
+          captured = stored && stored.readiness && stored.readiness.capture;
+          var rawReply = stored && typeof stored.reply === 'string' ? studioDirectorVisibleReply(stored) : '';
+          var draftInStore = captured && typeof captured.content === 'string' ? captured.content.trim() : '';
+          // Undo the exact automatic append saved by the previous version.
+          // Deliberately authored reply text is never altered.
+          if (draftInStore && displayed === rawReply + '\n\n' + draftInStore)
+            displayed = rawReply;
+        } catch (error) {
+          // Raw diagnostics may not be structured Studio responses.
+        }
+      }
+      body.textContent = displayed;
       // Studio creative text stays visible, including long explicitly requested drafts.
       if (message.role === 'user' && (message.content.indexOf('[WEBCAP EXPLICIT READ]') !== -1 ||
           message.content.indexOf('[WEBCAP APPLIED FIELD VALUES]') !== -1)) {
@@ -1152,16 +1167,9 @@
 
       row.appendChild(label);
       row.appendChild(body);
-      if (state.activeMode === 'storyboard' && message.role === 'assistant' && message.rawResponse) {
-        var captured = null;
-        try {
-          var original = JSON.parse(message.rawResponse);
-          captured = original && original.readiness && original.readiness.capture;
-        } catch (error) {
-          // Older diagnostic replies may not contain structured capture data.
-        }
+      if (state.activeMode === 'storyboard' && message.role === 'assistant') {
         var draftText = captured && typeof captured.content === 'string' ? captured.content.trim() : '';
-        if (draftText && !message.content.includes(draftText)) {
+        if (draftText && !displayed.includes(draftText)) {
           // Captured material supports reviewed Write behind the scenes.
           // Only the author's explicit action reveals it in the conversation.
           var showDraft = document.createElement('button');

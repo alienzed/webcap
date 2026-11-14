@@ -267,7 +267,7 @@ jobs:
         run: python -m pytest -q tests/test_epoch_test_bench.py -k 'stop_session or stop_shared_test_session'
       - name: Native Test, VL, Finder and Analytics regressions
         run: |
-          python -m pytest -q tests/test_test_generations_ui_contract.py tests/test_test_generations_route.py tests/test_test_generations_ask_vl_navigation_contract.py tests/test_test_repeat.py tests/test_epoch_finder.py tests/test_epoch_finder_scaling.py tests/test_epoch_finder_multirun.py tests/test_run_analytics_next.py
+          python -m pytest -q tests/test_test_generations_ui_contract.py tests/test_test_generations_route.py tests/test_test_generations_ask_vl_navigation_contract.py tests/test_test_repeat.py tests/test_epoch_finder.py tests/test_epoch_finder_scaling.py tests/test_epoch_finder_multirun.py tests/test_epoch_checkpoint_evidence.py tests/test_run_analytics_next.py
           node --test tests/test_insights_sidebar_navigation.test.cjs
 
   caption-mismatch:

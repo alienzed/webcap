@@ -1,5 +1,9 @@
 # Studio Director useful-function consolidation (2026-11-03)
 
+> **Current requirements (2026-11-14):**
+> [studio-director-contract.md](studio-director-contract.md) supersedes this dated
+> plan where their scope, context, execution or response-format rules differ.
+
 Status: phased implementation against PR #859, following AGENTS.md and the authoritative Studio materialization contract.
 
 ## Goal

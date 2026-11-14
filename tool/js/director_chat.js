@@ -1587,20 +1587,17 @@
             typeof item.kind !== 'string' || typeof item.title !== 'string' || typeof item.text !== 'string' ||
             ['visual', 'character', 'location', 'world', 'sound', 'custom'].indexOf(item.kind) === -1;
         }) ||
-        (proposal.firstScene != null && (
-          typeof proposal.firstScene !== 'object' || Array.isArray(proposal.firstScene) ||
-          typeof proposal.firstScene.title !== 'string' || typeof proposal.firstScene.prompt !== 'string' ||
-          !proposal.firstScene.prompt.trim()
-        ))) {
-      throw new Error('Project proposal must contain Concept, Style, optional Invariants, and an optional first Scene.\nRaw Director response:\n' + String(raw || ''));
+        (proposal.initialScenes != null && (!Array.isArray(proposal.initialScenes) ||
+          proposal.initialScenes.length > 32 || proposal.initialScenes.some(function (item) {
+            return !item || typeof item.title !== 'string' || item.title.length > 240 ||
+              typeof item.brief !== 'string' || !item.brief.trim() || item.brief.length > 4000 ||
+              !Number.isInteger(item.durationSeconds) || item.durationSeconds < 4 ||
+              item.durationSeconds > 15;
+          })))) {
+      throw new Error('Director returned invalid Project fields or initial Scene briefs.\nRaw Director response:\n' + String(raw || ''));
     }
-    if (proposal.firstScenes != null && (!Array.isArray(proposal.firstScenes) ||
-        proposal.firstScenes.length > 32 || proposal.firstScenes.some(function (item) {
-          return !item || typeof item.title !== 'string' || typeof item.prompt !== 'string' ||
-            !item.prompt.trim();
-        }))) throw new Error('Project contains invalid initial Scene drafts.\nRaw Director response:\n' + String(raw || ''));
-    if (!proposal.concept.trim() && !proposal.firstScene && !(proposal.firstScenes || []).length) {
-      throw new Error('Director needs at least an idea or first Scene to prepare a Project.\nRaw Director response:\n' + String(raw || ''));
+    if (!proposal.concept.trim() || !proposal.style.trim()) {
+      throw new Error('Director must provide complete Concept and Visual / atmosphere.\nRaw Director response:\n' + String(raw || ''));
     }
     return proposal;
   }
@@ -1661,16 +1658,21 @@
     var host = el('studio-project-extra-scenes');
     var row = document.createElement('div');
     row.className = 'studio-project-extra-scene';
-    var title = document.createElement('input'), prompt = document.createElement('textarea'),
-      remove = document.createElement('button'), label = document.createElement('strong');
+    var title = document.createElement('input'), duration = document.createElement('input'),
+      prompt = document.createElement('textarea'), remove = document.createElement('button'),
+      label = document.createElement('strong');
     label.textContent = 'Additional Scene';
-    title.placeholder = 'Scene title (optional)'; title.value = scene && scene.title || '';
+    title.type = 'text'; title.placeholder = 'Scene title'; title.value = scene && scene.title || '';
     title.setAttribute('aria-label', 'Additional Scene title');
-    prompt.placeholder = 'Full H3 production prompt';prompt.value = scene && scene.prompt || '';
-    prompt.rows = 8; prompt.setAttribute('aria-label', 'Additional Scene prompt');
+    duration.type = 'number'; duration.min = 4; duration.max = 15; duration.step = 1;
+    duration.value = scene && scene.durationSeconds || 6;
+    duration.setAttribute('aria-label', 'Additional Scene duration in seconds');
+    prompt.placeholder = 'Short Scene brief for Director to author after Project creation';
+    prompt.value = scene && scene.brief || '';
+    prompt.rows = 3; prompt.setAttribute('aria-label', 'Additional Scene brief');
     remove.type = 'button'; remove.className = 'review-captions-btn';
     remove.textContent = 'Remove Scene'; remove.onclick = function () {row.remove();};
-    row.append(label, title, prompt, remove); host.appendChild(row);
+    row.append(label, title, duration, prompt, remove); host.appendChild(row);
   }
 
   function showStudioProjectReview() {
@@ -1684,7 +1686,7 @@
     el('studio-project-error').textContent = '';
     el('studio-project-invariants').replaceChildren();
     proposal.invariants.forEach(addStudioProjectInvariant);
-    var initial = proposal.firstScenes || (proposal.firstScene ? [proposal.firstScene] : []);
+    var initial = proposal.initialScenes || [];
     var first = initial[0] || null;
     el('studio-project-extra-scenes').replaceChildren();
     initial.slice(1).forEach(addStudioProjectExtraScene);
@@ -1692,7 +1694,8 @@
     el('studio-project-continue').checked = true;
     el('studio-project-first-scene-fields').classList.toggle('hidden', !first);
     el('studio-project-scene-title').value = first ? first.title : '';
-    el('studio-project-scene-prompt').value = first ? first.prompt : '';
+    el('studio-project-scene-prompt').value = first ? first.brief : '';
+    el('studio-project-scene-duration').value = first ? first.durationSeconds : 6;
     var dialog = el('studio-project-review');
     if (dialog.open) dialog.close();
     dialog.showModal();
@@ -1717,13 +1720,13 @@
     startProgress();
     syncControls();
     var input = {
-      task: 'Extract only the agreed creative direction into ONE new Studio Project. ' +
-        'Provide an editable title (may be blank), concise Concept including the core appeal, ' +
-        'optional Style, and only essential Invariants. Include firstScenes when concrete tentative ' +
-        'clips have emerged; propose as many Scenes as actually developed (up to 32), ' +
-        'and do not fabricate extra Scenes to fill a count. It is fine to have zero Scenes. ' +
-        'Do not invent a fixed Scene count. Give each included Scene a complete H3 Prompt. ' +
-        'Use a short rationale. Nothing should be created yet.',
+      task: 'Author ONE new Studio Project with a complete Concept (including core appeal), ' +
+        'complete Visual / atmosphere, a useful title and only relevant stable Invariants. ' +
+        'When the author explicitly requests initial Scenes, include one short initialScenes ' +
+        'brief per agreed Scene with title, brief and whole-second durationSeconds (4-15, default 6). ' +
+        'Those briefs will be passed to individual Scene-writing calls after this Project is saved. ' +
+        'Return an empty initialScenes array when no Scenes were requested. ' +
+        'Use a short rationale. This is a draft for the existing Project review.',
       instruction: String(options && options.instruction || '').trim(),
       discussion: discussion
     };

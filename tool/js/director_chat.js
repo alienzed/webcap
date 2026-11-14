@@ -50,6 +50,7 @@
     studioBriefUndo: null,
     studioOperations: [],
     pendingReadAck: null,
+    sceneRead: null,
     studioReadiness: {checks:[], readHints:[], writeHint:'', writeFields:[], sceneId:'', sceneNumber:0}
   };
   var STORYBOARD_WORKSHOP_PRIMER = [
@@ -296,6 +297,8 @@
   }
 
   function syncModeUi() {
+    var sceneContext = el('director-chat-scene-context');
+    sceneContext.classList.toggle('hidden', state.activeMode !== 'storyboard' || !state.sceneRead);
     var row = el('director-chat-mode-row');
     var host = el('director-chat-mode-switch');
     var description = el('director-chat-mode-description');
@@ -666,6 +669,7 @@
   }
 
   function restoreSession(chat) {
+    state.sceneRead = null;
     if (!chat || !persistentMode(chat.mode) || !Array.isArray(chat.messages)) {
       throw new Error('Saved Assistant conversation is invalid.');
     }
@@ -2717,6 +2721,7 @@
 
   function newChat(options) {
     if (state.pending || (persistentMode(state.activeMode) && !state.sessionReady)) return;
+    state.sceneRead = null;
     var preserveContext = !!(options && options.preserveContext);
     if (!persistentMode(state.activeMode)) {
       state.modeMessages[state.activeMode] = [];
@@ -3350,6 +3355,14 @@
       return;
     }
 
+    if (activeChatMode === 'storyboard' && state.sceneRead) {
+      content += '\n\n[WEBCAP EXPLICIT READ]\n' + JSON.stringify(state.sceneRead.payload, null, 2) +
+        '\n[END WEBCAP READ]\nUse this Scene and Project as the context for the author’s request above.';
+      state.pendingReadAck = state.sceneRead.keys;
+      state.sceneRead = null;
+      el('director-chat-scene-context').classList.add('hidden');
+    }
+
     if (!inputHistory.length || inputHistory[inputHistory.length - 1] !== content) inputHistory.push(content);
     inputHistoryIndex = inputHistory.length;
     inputHistoryDraft = '';
@@ -3549,7 +3562,7 @@
 
     if (state.open) {
       syncModeUi();
-      (state.modelsLoaded ? Promise.resolve() : loadModels()).then(function () {
+      return (state.modelsLoaded ? Promise.resolve() : loadModels()).then(function () {
         // An async model refresh may finish after Studio was closed or left.
         if (!state.open) return;
         if (state.activeMode === 'storyboard') {
@@ -3953,7 +3966,7 @@
         event.returnValue = '';
       }
     });
-    loadSessionHistory();
+    state.sessionLoadPromise = loadSessionHistory();
     if (state.pinned) setOpen(true);
     else {
       syncPinnedUi();
@@ -3992,6 +4005,8 @@
     sendRead: function (payload, keys, instruction) {
       if (!this.isReady()) throw new Error('Open Studio Director and select an available LLM before Read.');
       if (!Array.isArray(keys) || !keys.length) throw new Error('Select at least one field to Read.');
+      state.sceneRead = null;
+      el('director-chat-scene-context').classList.add('hidden');
       var composer = el('director-chat-input');
       var draft = String(composer.value || '').trim();
       var nl = String.fromCharCode(10);
@@ -4219,6 +4234,68 @@
     // their explicitly attached reference snapshots.
   };
   window.openStoryboardAssistant = function () { setOpen(true, 'storyboard'); };
+  window.openStudioDirectorScene = function (story, sceneId, instruction) {
+    if (state.pending || state.attachmentPending) return Promise.reject(new Error('Finish the current Director request first.'));
+    var context = window.studioDirectorWorkbench.sceneRead(story, sceneId);
+    return Promise.all([setOpen(true, 'storyboard'), state.sessionLoadPromise]).then(function () {
+      if (!state.sessionReady) throw new Error('Director conversation could not load. Check the Console.');
+      state.workshop = null;
+      state.workshopProposal = null;
+      state.lastStudioIoError = '';
+      state.lastStudioIoRaw = '';
+      window.studioDirectorBridge.selectWriteProject(story.id, story.title);
+      state.sceneRead = null;
+      var label = el('director-chat-scene-context');
+      label.classList.add('hidden');
+      if (!instruction) {
+        state.sceneRead = context;
+        label.textContent = context.label;
+        label.title = 'This Scene and its Project context will accompany your next message.';
+        label.classList.remove('hidden');
+        el('director-chat-input').focus();
+        syncModeUi();
+        return;
+      }
+      if (!window.studioDirectorBridge.isReady()) throw new Error(window.studioDirectorBridge.readinessMessage());
+      state.modeMessages.storyboard.push({role:'user', content:instruction +
+        '\n\n[WEBCAP EXPLICIT READ]\n' + JSON.stringify(context.payload, null, 2) + '\n[END WEBCAP READ]'});
+      renderMessages();
+      state.pending = true;
+      syncControls();
+      return persistSession('storyboard').then(function () {
+        state.pending = false;
+        return window.studioDirectorBridge.makeProposal(JSON.stringify({
+          task:'Revise the selected Scene’s H3 prompt according to the author instruction. Return only {"prompt":"complete revised H3 prompt"}. ' +
+            'Preserve the rest of the existing prompt, its duration, and established Project facts. For an empty prompt, author a complete prompt from the supplied Scene and Project.',
+          sceneId:sceneId, instruction:instruction, context:context.payload
+        }), 'studio_scene_field_draft', true);
+      }).then(function (raw) {
+        state.lastStudioIoRaw = raw;
+        state.pending = true;
+        syncControls();
+        var draft;
+        try { draft = JSON.parse(raw); }
+        catch (error) { throw new Error('Director returned invalid Scene JSON.\nRaw response:\n' + raw); }
+        if (!draft || Object.keys(draft).length !== 1 || typeof draft.prompt !== 'string' || !draft.prompt.trim())
+          throw new Error('Director must return one complete Scene prompt.\nRaw response:\n' + raw);
+        state.modeMessages.storyboard.push({role:'assistant', content:draft.prompt, rawResponse:raw});
+        renderMessages();
+        return persistSession('storyboard').then(function () {
+          return window.studioDirectorWorkbench.applyScenePrompt(story, sceneId, draft.prompt);
+        });
+      }).then(function () {
+        studioActionStatus(context.label + ' updated.', false);
+      }).catch(function (error) {
+        state.lastStudioIoError = String(error.message || error);
+        studioActionStatus('Scene revision failed: ' + String(error.message || error), true);
+        window.reportConsoleError('Director Scene revision', error);
+        throw error;
+      }).finally(function () {
+        state.pending = false;
+        syncControls();
+      });
+    });
+  };
   window.closeStudioDirectorOnExit = function () {
     if (state.activeMode !== 'storyboard') return;
     if (state.open) setOpen(false);

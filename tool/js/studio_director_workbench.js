@@ -946,6 +946,29 @@
     });
   }
   window.studioDirectorWorkbench = {
+    sceneRead: function (story, sceneId) {
+      if (!story || !story.sceneOrder.includes(sceneId)) throw new Error('Select a saved Scene in this Project.');
+      var keys = projectFields.map(function (field) {return 'project.' + field;})
+        .concat(['title','summary','prompt','durationSeconds'].map(function (field) {return 'scene:' + sceneId + ':' + field;}));
+      return {payload:readPayload(story, keys), keys:keys,
+        label:'Scene ' + (story.sceneOrder.indexOf(sceneId) + 1) + ' · ' + (story.scenes[sceneId].title || 'Untitled')};
+    },
+    applyScenePrompt: function (story, sceneId, prompt) {
+      if (typeof prompt !== 'string' || !prompt.trim()) throw new Error('Director returned an empty Scene prompt.');
+      return window.flushStudioDirectorStoryEdits(story.id).then(function () {
+        return api('/fs/studio/director/scene-fields', {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({storyId:story.id, sceneId:sceneId,
+            expected:{prompt:story.scenes[sceneId].prompt || ''}, changes:{prompt:prompt}})
+        });
+      }).then(function (result) {
+        return window.refreshStudioDirectorStoryIfOpen(story.id).then(function () {
+          return window.studioDirectorBridge.recordApplied('scene.update',result.story,{
+            sceneId:sceneId, savedFields:{prompt:result.scene.prompt}
+          });
+        });
+      });
+    },
     setStatus:status,
     markSavedFields:function(selected,story){
       if (!story || !story.id) throw new Error('Field update feedback needs the saved Project identity.');

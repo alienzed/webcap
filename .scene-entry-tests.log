@@ -1,0 +1,13 @@
+✔ prompt recovery is bounded, supports redo and branches after a new edit (4.7055ms)
+✔ opening Scene Director stages context without a model request or overwriting the composer (1.3926ms)
+✔ a revision uses one existing model operation, shows the full result, and applies to the exact Scene (3.6669ms)
+✔ an incomplete revision is visible in I/O and cannot change the Scene (2.3156ms)
+✔ quick Apply changes only prompt, retaining the original prompt as its conflict check (1.8189ms)
+ℹ tests 5
+ℹ suites 0
+ℹ pass 5
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 92.6941

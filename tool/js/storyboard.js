@@ -3,6 +3,49 @@
 
   // Session-only submitted instructions, independent of saved Story/Scene prompts.
   var sceneRefineHistory, sceneRevisionHistory, sceneCreationHistory;
+  var scenePromptHistory = Object.create(null);
+
+  function rememberScenePrompt(storyId, sceneId, before, after) {
+    if (before === after) return;
+    var key = storyId + ':' + sceneId;
+    var history = scenePromptHistory[key] || {versions:[before], index:0};
+    history.versions = history.versions.slice(0, history.index + 1);
+    history.versions.push(after);
+    if (history.versions.length > 11) history.versions.shift();
+    history.index = history.versions.length - 1;
+    scenePromptHistory[key] = history;
+  }
+
+  function syncScenePromptHistory(sceneId) {
+    var root = sceneElement(sceneId);
+    if (!root) return;
+    var history = scenePromptHistory[storyState.story.id + ':' + sceneId];
+    root.querySelector('[data-prompt-undo]').disabled = !history || history.busy || history.index === 0;
+    root.querySelector('[data-prompt-redo]').disabled = !history || history.busy || history.index === history.versions.length - 1;
+  }
+
+  function moveScenePromptHistory(sceneId, direction) {
+    var storyId = storyState.story.id;
+    flushPendingSaves().then(function () {
+      var history = scenePromptHistory[storyId + ':' + sceneId];
+      var index = history.index + direction;
+      if (history.busy || index < 0 || index >= history.versions.length) return;
+      history.busy = true;
+      syncScenePromptHistory(sceneId);
+      return request({operation:'update_scene', storyId:storyId, sceneId:sceneId,
+        scene:{prompt:history.versions[index]}}).then(function (payload) {
+        history.index = index;
+        if (storyState.story && storyState.story.id === storyId) {
+          storyState.story = payload.story;
+          renderStory();
+          setSaveState('Saved');
+        }
+      }).finally(function () {
+        history.busy = false;
+        if (storyState.story && storyState.story.id === storyId) syncScenePromptHistory(sceneId);
+      });
+    }).catch(reportError);
+  }
   var storyboardGuidelineReview = null;
   var storyboardDefineGuidelineDrafts = Object.create(null);
   var STORY_GUIDELINE_LABELS = {
@@ -550,6 +593,7 @@
           currentScene.summary = savedScene.summary;
           currentScene.entryState = savedScene.entryState;
           currentScene.exitState = savedScene.exitState;
+          rememberScenePrompt(storyId, sceneId, currentScene.prompt || '', savedScene.prompt || '');
           currentScene.prompt = savedScene.prompt;
           currentScene.previousPrompt = savedScene.previousPrompt;
           currentScene.previousRevision = savedScene.previousRevision || null;
@@ -576,6 +620,7 @@
           syncSceneDirectorRestore(sceneId);
           syncPromptTakeStatus(sceneId);
           syncSceneRefineState(sceneId);
+          syncScenePromptHistory(sceneId);
           updateSceneDirectorStatus(sceneId, 'Director completed.');
         }
       } else if (operation === 'insert_scene' || operation === 'extend_story') {
@@ -1495,15 +1540,10 @@
     var root = sceneElement(sceneId);
     var button = root && root.querySelector('[data-director-refine]');
     if (!button) return;
-    var scene = storyState.story && storyState.story.scenes ? storyState.story.scenes[sceneId] : null;
-    var correction = root.querySelector('[data-director-correction]');
-    var complete = !!(scene && scene.refineComplete) && !(correction && correction.value.trim());
     var label = button.querySelector('[data-director-refine-label]');
     if (!label) throw new Error('Scene Refine button label is missing.');
-    label.textContent = complete ? '✓' : 'Refine';
-    button.title = complete
-      ? 'Last refinement completed. Start typing another instruction to refine again.'
-      : 'Apply this correction to the existing generation prompt.';
+    label.textContent = 'Revise';
+    button.title = 'Revise this prompt with Director and apply the result. Undo restores recent changes.';
   }
 
   function restoreSceneDirectorPrompt(sceneId) {
@@ -4143,33 +4183,29 @@
                   '</span>' +
                 '</span>' +
                 '<div class="storyboard-prompt-actions">' +
-                  '<button type="button" class="review-captions-btn" data-storyboard-workshop title="Discuss and prepare a reviewed revision of this Scene’s timed shots.">Workshop</button>' +
-                  '<button type="button" class="review-captions-btn storyboard-director-action" data-director-write title="Draft a complete H3 prompt from this Scene intent and the useful Story context.">Write with Director</button>' +
-                  '<button type="button" class="review-captions-btn' +
-                    (typeof scene.previousPrompt === 'string' ? '' : ' hidden') +
-                    '" data-director-restore title="Restore the Scene state from before the last Director edit.">Restore Previous</button>' +
+                  '<button type="button" class="review-captions-btn" data-scene-director title="Open Director with this Scene and its Project context.">Director</button>' +
+                  '<button type="button" class="review-captions-btn" data-prompt-undo disabled title="Undo a recent prompt change from this browser session.">Undo</button>' +
+                  '<button type="button" class="review-captions-btn" data-prompt-redo disabled title="Redo a prompt change from this browser session.">Redo</button>' +
                   '<button type="button" class="review-captions-btn' +
                     (typeof scene.previousPrompt === 'string' ? '' : ' hidden') +
                     '" data-storyboard-last-diff title="Inspect differences from the previous Scene prompt.">View Changes</button>' +
                 '</div>' +
               '</div>' +
-              '<textarea class="storyboard-prompt-textarea" data-scene-field="prompt" rows="7" placeholder="Full model-facing prompt. Write it directly or let the Director draft it from the Scene intent.">' + escapeHtml(sceneValue(scene, 'prompt', '')) + '</textarea>' +
+              '<textarea class="storyboard-prompt-textarea" data-scene-field="prompt" rows="7" placeholder="Write a prompt or develop it with Director.">' + escapeHtml(sceneValue(scene, 'prompt', '')) + '</textarea>' +
               '<div class="storyboard-director-actions">' +
                 '<input type="text" data-director-correction placeholder="Tell the Director what to change in this prompt...">' +
                 '<button type="button" class="review-captions-btn storyboard-director-action" data-director-refine title="' +
-                  (scene.refineComplete ? 'Last refinement completed. Start typing another instruction to refine again.' : 'Apply this correction to the existing generation prompt.') +
-                  '"><span class="storyboard-director-wand" aria-hidden="true">✦</span><span data-director-refine-label>' + (scene.refineComplete ? '✓' : 'Refine') + '</span></button>' +
+                  'Revise this prompt with Director and apply the result. Undo restores recent changes.' +
+                  '"><span class="storyboard-director-wand" aria-hidden="true">✦</span><span data-director-refine-label>Revise</span></button>' +
                 '<span class="storyboard-save-state" data-director-status></span>' +
               '</div>' +
               '<details class="storyboard-scene-disclosure storyboard-prompt-pipeline-details">' +
                 '<summary><span>Prompt pipeline</span><span class="storyboard-disclosure-summary-state">Inspect Director → H3</span></summary>' +
                 '<div class="storyboard-disclosure-body storyboard-prompt-pipeline-body">' +
                   '<div class="storyboard-prompt-pipeline-actions">' +
-                    '<button type="button" class="review-captions-btn" data-director-preview="write_prompt">Preview Write request</button>' +
-                    '<button type="button" class="review-captions-btn" data-director-preview="refine_prompt">Preview Refine request</button>' +
+                    '<button type="button" class="review-captions-btn" data-scene-director>Open Director</button>' +
                   '</div>' +
-                  '<span class="storyboard-prompt-pipeline-note">This is the exact current Director contract. Generated Takes preserve the exact effective H3 input separately.</span>' +
-                  '<pre data-director-request-preview-output>Choose a request to inspect what WebCap will send to the Director.</pre>' +
+                  '<span class="storyboard-prompt-pipeline-note">Director’s I/O shows its requests and full responses. Takes preserve their effective H3 input separately.</span>' +
                 '</div>' +
               '</details>' +
             '</div>' +
@@ -4253,6 +4289,7 @@
     if (!activeHtml) activeHtml = '<div class="storyboard-library-empty">No Scenes yet. Add the first generatable scene.</div>';
 
     host.innerHTML = activeHtml + removedScenesHtml(removedScenes);
+    order.forEach(syncScenePromptHistory);
     if (focusedSceneId) syncPromptTakeStatus(focusedSceneId);
     syncDirectorPendingControls();
     if (storyState.director.busy && storyState.director.activityTarget) positionDirectorActivity();
@@ -4724,7 +4761,9 @@
       });
     }).then(function (payload) {
       if (storyState.story && String(storyState.story.id || '') === String(storyId)) {
+        rememberScenePrompt(storyId, sceneId, storyState.story.scenes[sceneId].prompt || '', payload.story.scenes[sceneId].prompt || '');
         storyState.story = payload.story;
+        syncScenePromptHistory(sceneId);
         setSaveState('Saved');
       }
       if (storyState.sceneSavePromises[saveKey] === promise) delete storyState.sceneSaveErrors[saveKey];
@@ -5829,16 +5868,23 @@
     scheduleSceneSave(sceneId);
   }
 
-  function openSceneWorkshop(sceneId) {
-    if (!storyState.story) throw new Error('Open a Story to use Scene Workshop.');
+  function openSceneDirector(sceneId, instruction) {
+    if (!storyState.story) throw new Error('Open a Project to use Director.');
     var storyId = storyState.story.id;
     flushPendingSaves().then(function () {
-      return request({ operation: 'workshop_context', storyId: storyId, sceneId: sceneId });
+      return request(null, 'story=' + encodeURIComponent(storyId));
     }).then(function (payload) {
-      if (!payload.workshop) throw new Error('Scene Workshop context is missing.');
-      if (!storyState.story || storyState.story.id !== storyId) throw new Error('Story changed while preparing the Workshop.');
-      window.openStoryboardSceneWorkshop(payload.workshop);
+      if (!storyState.story || storyState.story.id !== storyId) throw new Error('Project changed while opening Director.');
+      return window.openStudioDirectorScene(payload.story, sceneId, instruction || '');
     }).catch(reportError);
+  }
+
+  function reviseSceneWithDirector(sceneId) {
+    var root = sceneElement(sceneId);
+    var instruction = root.querySelector('[data-director-correction]').value.trim();
+    if (!instruction) { openSceneDirector(sceneId); return; }
+    sceneRefineHistory.remember(instruction, root.querySelector('[data-director-correction]'));
+    openSceneDirector(sceneId, instruction);
   }
 
   function handleSceneAction(event) {
@@ -6555,7 +6601,7 @@
       var scene = correction.closest('.storyboard-scene[data-scene-id]');
       if (!scene) return;
       event.preventDefault();
-      runDirector(scene.dataset.sceneId, 'refine_prompt');
+      reviseSceneWithDirector(scene.dataset.sceneId);
     });
     el('storyboard-scenes-list').addEventListener('input', function (event) {
       if (event.target.closest('[data-director-correction]')) sceneRefineHistory.handleInput(event);
@@ -6687,11 +6733,15 @@
         previewDirectorRequest(previewScene.dataset.sceneId, directorPreview.dataset.directorPreview);
         return;
       }
-      var workshopButton = event.target.closest('[data-storyboard-workshop]');
-      if (workshopButton) {
-        var workshopScene = workshopButton.closest('.storyboard-scene[data-scene-id]');
-        if (!workshopScene) throw new Error('Workshop Scene is missing.');
-        openSceneWorkshop(workshopScene.dataset.sceneId);
+      var sceneDirector = event.target.closest('[data-scene-director]');
+      if (sceneDirector) {
+        openSceneDirector(sceneDirector.closest('.storyboard-scene[data-scene-id]').dataset.sceneId);
+        return;
+      }
+      var historyButton = event.target.closest('[data-prompt-undo], [data-prompt-redo]');
+      if (historyButton) {
+        moveScenePromptHistory(historyButton.closest('.storyboard-scene[data-scene-id]').dataset.sceneId,
+          historyButton.hasAttribute('data-prompt-undo') ? -1 : 1);
         return;
       }
       var lastDiff = event.target.closest('[data-storyboard-last-diff]');
@@ -6707,18 +6757,11 @@
         );
         return;
       }
-      var directorWrite = event.target.closest('[data-director-write]');
-      if (directorWrite) {
-        var writeScene = directorWrite.closest('.storyboard-scene[data-scene-id]');
-        if (!writeScene) throw new Error('Director Scene is missing.');
-        runDirector(writeScene.dataset.sceneId, 'write_prompt');
-        return;
-      }
       var directorRefine = event.target.closest('[data-director-refine]');
       if (directorRefine) {
         var refineScene = directorRefine.closest('.storyboard-scene[data-scene-id]');
         if (!refineScene) throw new Error('Director Scene is missing.');
-        runDirector(refineScene.dataset.sceneId, 'refine_prompt');
+        reviseSceneWithDirector(refineScene.dataset.sceneId);
         return;
       }
       var directorRestore = event.target.closest('[data-director-restore]');
@@ -7017,6 +7060,10 @@
       if (payload && payload.story) {
         if (payload.story.id !== storyId) throw new Error('Studio refresh returned the wrong Story.');
         if (storyState.story && storyState.story.id === storyId) {
+          (payload.story.sceneOrder || []).forEach(function (id) {
+            var before = storyState.story.scenes[id];
+            if (before) rememberScenePrompt(storyId, id, before.prompt || '', payload.story.scenes[id].prompt || '');
+          });
           storyState.story = payload.story;
           renderStory();
           setSaveState('Saved');

@@ -104,7 +104,11 @@
     (story.sceneOrder || []).forEach(function (id, index) {
       var scene = story.scenes && story.scenes[id];
       if (!scene) throw new Error('Project has a Scene index with no matching Scene.');
-      var paths = ['title', 'summary', 'prompt', 'durationSeconds'].map(function (field) {
+      // Once authored, the complete H3 Prompt replaces the separate outline in Director context.
+      var contextFields = String(scene.prompt || '').trim()
+        ? ['title', 'prompt', 'durationSeconds']
+        : ['title', 'summary', 'durationSeconds'];
+      var paths = contextFields.map(function (field) {
         return 'scene:' + id + ':' + field;
       });
       var current = id === (recommendedSceneId(story) || activeTarget().sceneId);
@@ -922,8 +926,12 @@
   window.studioDirectorWorkbench = {
     sceneRead: function (story, sceneId) {
       if (!story || !story.sceneOrder.includes(sceneId)) throw new Error('Select a saved Scene in this Project.');
+      var scene = story.scenes[sceneId];
+      var fields = String(scene.prompt || '').trim()
+        ? ['title','prompt','durationSeconds']
+        : ['title','summary','durationSeconds'];
       var keys = projectFields.map(function (field) {return 'project.' + field;})
-        .concat(['title','summary','prompt','durationSeconds'].map(function (field) {return 'scene:' + sceneId + ':' + field;}));
+        .concat(fields.map(function (field) {return 'scene:' + sceneId + ':' + field;}));
       return {payload:readPayload(story, keys), keys:keys,
         label:'Scene ' + (story.sceneOrder.indexOf(sceneId) + 1) + ' · ' + (story.scenes[sceneId].title || 'Untitled')};
     },

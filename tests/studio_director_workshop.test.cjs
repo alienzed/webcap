@@ -351,8 +351,11 @@ test('Studio conversation receives the canonical H3 template as reference withou
 
 test('large explicit Read selections are sent intact, with no arbitrary client character cap', async () => {
   const start=workbench.indexOf('  function readPayload(story, keys) {');
-  const end=workbench.indexOf('  function showWriteContext() {',start);
-  assert.ok(start>=0 && end>start,'Read serialization and action must remain available');
+  const middle=workbench.indexOf('  function updateReadSelection() {',start);
+  const sendStart=workbench.indexOf('  function readSend() {',middle);
+  const end=workbench.indexOf('  function showWriteContext() {',sendStart);
+  assert.ok(start>=0 && middle>start && sendStart>middle && end>sendStart,
+    'Read serialization and action must remain available');
   const prompt='A richly detailed scene. '.repeat(3600);
   const story={id:'project-1',title:'Long Project',updatedAt:'saved',
     sceneOrder:['scene-a'],scenes:{'scene-a':{prompt}}};
@@ -381,7 +384,7 @@ test('large explicit Read selections are sent intact, with no arbitrary client c
       studioDirectorWorkbench:{setReadStatus:(_state,message)=>{readStatus=message;}}
     }
   });
-  vm.runInContext(workbench.slice(start,end),scope);
+  vm.runInContext(workbench.slice(start,middle) + workbench.slice(sendStart,end),scope);
   scope.readSend();
   await new Promise(resolve=>setImmediate(resolve));
   assert.ok(sent,'the selected saved fields must reach Director');

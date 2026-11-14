@@ -260,6 +260,8 @@ def test_studio_chat_schema_requires_a_capture_decision_and_preserves_older_save
                            "sceneId": "scene-1" if field in {"summary", "prompt"} else ""}
                 if field == "scene":
                     capture["title"] = "A quiet reply"
+                    if "prompt" in schema["properties"]:
+                        capture["prompt"] = "integrated_multimodal_description: [Shot 1] A quiet reply."
                 if field == "invariant":
                     capture.update(kind="character", title="Mara", beforeKind="", beforeTitle="")
                 readiness = {"checks": [], "readHints": [], "writeHint": "", "writeFields": [],

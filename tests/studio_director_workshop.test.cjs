@@ -149,7 +149,7 @@ test('single-Scene revision request uses its saved ID in the example, not a plac
   assert.match(batch,/JSON\.stringify\(\{scenes:\[\{sceneId:ids\[0\],prompt:/);
   assert.doesNotMatch(batch,/ACTUAL_SELECTED_ID/);
   assert.match(batch,/summary is available for planning/);
-  assert.match(batch,/prompt \(H3 Prompt\)/);
+  assert.match(batch,/prompt is the authoritative description/);
   assert.match(batch,/validateSceneRevisionDraft\(result, ids, selected, raw\)/);
 });
 

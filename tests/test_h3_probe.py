@@ -555,6 +555,26 @@ def test_prepare_route_fails_visibly_without_saved_caption(tmp_path, monkeypatch
     assert "saved non-empty caption" in response.get_json()["error"]
 
 
+def test_h3_runtime_json_overlapping_writes_keep_separate_staging_files(tmp_path, monkeypatch):
+    path = tmp_path / "runtime.json"
+    replace = h3_probe_module.os.replace
+    staged = []
+
+    def overlapping_replace(source, destination):
+        staged.append(Path(source))
+        if len(staged) == 1:
+            # Interleave a monitor write before Stop replaces its staged file.
+            h3_probe_module._write_json(path, {"status": "running", "pid": 4242})
+        return replace(source, destination)
+
+    monkeypatch.setattr(h3_probe_module.os, "replace", overlapping_replace)
+    h3_probe_module._write_json(path, {"status": "stopping", "pid": 4242})
+    assert len(staged) == 2
+    assert staged[0] != staged[1]
+    assert json.loads(path.read_text(encoding="utf-8")) == {"status": "stopping", "pid": 4242}
+    assert not list(tmp_path.glob("runtime.json.*.tmp"))
+
+
 def test_start_and_stop_h3_probe_use_detached_runtime_state(tmp_path, monkeypatch):
     fs_root = tmp_path / "fs"
     probe_root = fs_root / "output" / "work" / "h3-probes" / "h3-test"
@@ -588,6 +608,9 @@ def test_start_and_stop_h3_probe_use_detached_runtime_state(tmp_path, monkeypatc
         return (0, "4242\n", "")
 
     monkeypatch.setattr(h3_probe_module, "run_wsl", fake_run_wsl)
+    # This test mocks process launch, not liveness; don't let its fake
+    # process response drive the real background monitor concurrently.
+    monkeypatch.setattr(h3_probe_module, "_monitor_runtime", lambda _path: None)
     payload = h3_probe_module.start_h3_probe("set", "clip.mp4")
     assert launch_wrappers == [True]
     assert payload["status"] == "running"

@@ -99,7 +99,7 @@ test('Studio prompting selects the current goal rather than steering every task 
   assert.match(system,/"projectId":"p1","sceneOrder":\["scene-a"\]/);
   assert.match(system,/Usually checks=\[\], readHints=\[\]/);
   assert.match(system,/at most two useful checks/);
-  assert.match(system,/also include prompt when a full H3 Prompt was authored/);
+  assert.match(system,/title and content as the full usable H3 Prompt/);
   assert.match(system,/H3 PRODUCTION PROMPT REFERENCE/);
   assert.match(system,/Use new-project, project or scenes for Write/);
   assert.match(system,/writeFields names affected fields/);

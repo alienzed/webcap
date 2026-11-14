@@ -35,7 +35,7 @@ def test_studio_guidance_teaches_only_focused_creative_workflows():
     result = guidance("minimax_h3")
     actions = {entry["name"]: entry["description"] for entry in result["actions"]}
     assert set(actions) == {"context.read", "project.create", "project.revise", "scenes.write"}
-    assert "explicitly selected" in actions["context.read"]
+    assert "selected Scene automatically" in actions["context.read"]
     assert "optional initial Scenes" in actions["project.create"]
     assert "Invariants" in actions["project.revise"]
     assert "one or more Scenes" in actions["scenes.write"]
@@ -47,9 +47,9 @@ def test_studio_guidance_teaches_only_focused_creative_workflows():
 def test_director_role_combines_webcap_workflow_expertise_with_creative_judgment():
     system = guidance("minimax_h3")["system"]
     assert "MiniMax H3 production expert, and WebCap Studio workflow guide" in system
-    assert "Choose the smallest relevant Read, reviewed Write, or author-operated Studio step" in system
+    assert "Answer supplied-context questions directly" in system
     assert "Readiness is advisory, never a gate" in system
-    assert "Acknowledge only the exact saved fields actually supplied" in system
+    assert "Use only saved creative material actually supplied" in system
     assert "Conversation never edits Project records" in system
     assert "Project Overview (Concept, Visual / atmosphere, Invariants)" in system
     assert "Scene (Title, H3 Prompt)" in system
@@ -113,8 +113,8 @@ def test_h3_runtime_reference_uses_current_studio_fields_and_conditional_legacy_
 
 def test_freeform_workshop_does_not_claim_hidden_context_or_mutations():
     text = guidance("minimax_h3")["system"]
-    assert "Acknowledge only the exact saved fields actually supplied" in text
-    assert "Read and Write are explicit author-driven operations" in text
+    assert "WebCap supplies the selected Scene\'s saved fields" in text
+    assert "explicit Read remains available for other scopes" in text
     assert "Conversation never edits Project records" in text
     assert "strengthen the idea, do not replace it" in text
     assert "Enthusiastically elevate the author\'s vision" in text

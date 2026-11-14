@@ -296,9 +296,30 @@
     list.scrollTop = previousScroll;
   }
 
+  // Navigation is authoritative in Scene focus; a Scene toolbar entry also
+  // binds its Scene when the Storyboard is in the overview/list view.
+  function studioDirectorSelectedScene(navigation) {
+    navigation = navigation || window.getStudioDirectorNavigation();
+    if (!navigation.projectId) return null;
+    if (navigation.sceneId) return {
+      projectId: navigation.projectId, sceneId: navigation.sceneId,
+      label: navigation.sceneNumber > 0 ? 'Scene ' + navigation.sceneNumber : 'Selected Scene'
+    };
+    var entry = state.sceneRead;
+    if (entry && entry.projectId === navigation.projectId && entry.sceneId) return {
+      projectId: entry.projectId, sceneId: entry.sceneId, label: entry.label
+    };
+    return null;
+  }
+
   function syncModeUi() {
     var sceneContext = el('director-chat-scene-context');
-    sceneContext.classList.toggle('hidden', state.activeMode !== 'storyboard' || !state.sceneRead);
+    var selectedScene = state.activeMode === 'storyboard' ? studioDirectorSelectedScene() : null;
+    sceneContext.classList.toggle('hidden', !selectedScene);
+    if (selectedScene) {
+      sceneContext.textContent = selectedScene.label;
+      sceneContext.title = 'Saved Scene context is supplied with each Director message.';
+    }
     var row = el('director-chat-mode-row');
     var host = el('director-chat-mode-switch');
     var description = el('director-chat-mode-description');
@@ -2836,7 +2857,7 @@
     });
   }
 
-  function studioDirectorRequestMessages(messages, includePromptContract, explicitWrite) {
+  function studioDirectorRequestMessages(messages, includePromptContract, explicitWrite, navigationSnapshot) {
     return requestJson('/fs/studio/director/guidance?targetModel=minimax_h3').then(function (payload) {
       if (!payload.system || typeof payload.system !== 'string') {
         throw new Error('Studio Director production guidance is missing.');
@@ -2850,7 +2871,7 @@
       var outbound = [{role:'system', content:''}].concat(messages.map(function (message) {
         return {role:message.role,content:message.content};
       })); // Persisted inspection metadata is not part of the LLM conversation.
-      // Navigation and destination identity convey no saved creative material.
+      // Navigation and destination identity alone convey no saved creative material.
       var storyRefs = Object.keys(state.storyboardAttachments || {}).filter(function (key) {
         return key.indexOf('story:') === 0;
       });
@@ -2861,16 +2882,16 @@
         : storyRefs.length === 1
           ? 'A legacy historical Story snapshot exists in history (' + storyRefs[0].slice(6) + '), but it has not been automatically resent.'
           : 'No saved Project Write destination has been selected. Prior explicitly Read content may still exist in conversation history.';
-      var navigation = window.getStudioDirectorNavigation();
+      var navigation = navigationSnapshot || window.getStudioDirectorNavigation();
       outbound[0] = { role: 'system', content: payload.system +
         '\n\nCURRENT WEBCAP CAPABILITIES (available vs planned):\n' + capabilities +
         '\n\nSTUDIO WORKBENCH STATE (controls, not saved Story facts):\n' + workbench +
-        '\nCURRENT PROJECT NAVIGATION (identity and one-based Scene positions only; creative material is supplied through explicit Read):\n' + JSON.stringify(navigation) +
+        '\nCURRENT PROJECT NAVIGATION (identity and one-based Scene positions; saved content is supplied separately when available):\n' + JSON.stringify(navigation) +
         (explicitWrite
           ? '\nEXPLICIT REVIEWED WRITE: The author has already chosen to draft. Produce the requested complete editable proposal in the format specified by the current request. This is a draft for review, not a conversational suggestion. Only WebCap Apply saves changes.\n'
           : '\nFor a direct question, answer fully and finish without a workflow suggestion. ' +
             'When the author is developing material or requests a next step, suggest at most one useful action: ' +
-            'an explicit Read, an appropriately scoped reviewed Write, or an author-operated Studio action. ' +
+            'an appropriately scoped reviewed Write or an author-operated Studio action. ' +
             'Fulfil the author’s request in conversation, including drafting complete material when asked. ' +
             'Treat proposed work as unsaved until WebCap confirms Apply.\n') +
         outbound[0].content };
@@ -2880,15 +2901,16 @@
     });
   }
 
-  function studioDirectorChatRequestMessages(messages) {
-    // Studio conversation needs the same authoritative H3 prompt template as Write.
-    // Drafting is conversation; saving still requires reviewed Apply.
-    return studioDirectorRequestMessages(messages, true).then(function (outbound) {
+  function studioDirectorChatRequestMessages(messages, selectedScene, navigationSnapshot) {
+    // Studio conversation uses the normal request shape; saved Scene fields
+    // are transient request context, never a mutation or persisted user message.
+    return studioDirectorRequestMessages(messages, true, false, navigationSnapshot).then(function (outbound) {
       outbound[0].content += '\n\nRESPONSE CONTRACT: Return JSON matching the reply/readiness schema.\n' +
-        'CONTEXT: Navigation supplies Project and Scene identity, not their creative content. ' +
-        'For an existing Scene revision, first use its saved text supplied by explicit Read. ' +
-        'When that text is missing, ask to Read Project and set readHints=["project.concept"], capture=null. ' +
-        'A Read-only request needs a brief natural acknowledgement; answer any question included with Read. ' +
+        'CONTEXT: WebCap supplies the current selected Scene’s saved fields below when a Scene is selected. ' +
+        'Answer questions about those fields directly; use them as the baseline for requested revisions. ' +
+        'Project/Scene identities alone do not imply access to other fields. ' +
+        'Earlier conversational drafts are unsaved unless WebCap reports a completed Apply. ' +
+        'When saved material is unavailable, explain what is missing instead of claiming to have read it. ' +
         'Applied values supersede earlier snapshots.\n' +
         'REPLY: Discuss concepts in 1-3 concise sentences. Ask one focused question only for a consequential missing decision. ' +
         'When asked to write, revise or paste an existing Scene prompt, author its complete text in capture.content on this turn, using the H3 template and Scene duration. ' +
@@ -2907,7 +2929,24 @@
         'and capture.content to the full usable prompt itself. WebCap uses this one authored text for both chat and Review Scene, without another LLM call. ' +
         'For other complete fields use the matching capture schema. A new Scene uses field="scene", title and content as the full usable H3 Prompt. ' +
         'For an Invariant use its kind/title, with beforeKind/beforeTitle for an exact known edit.\n';
-      return outbound;
+      if (!selectedScene) return outbound;
+      return requestJson('/fs/storyboard?story=' + encodeURIComponent(selectedScene.projectId))
+        .then(function (result) {
+          var story = result && result.story;
+          if (!story || story.id !== selectedScene.projectId ||
+              !Array.isArray(story.sceneOrder) || !story.sceneOrder.includes(selectedScene.sceneId) ||
+              !story.scenes || !story.scenes[selectedScene.sceneId])
+            throw new Error('The selected Scene is no longer available in its saved Project.');
+          var context = window.studioDirectorWorkbench.sceneRead(story, selectedScene.sceneId);
+          outbound[0].content += '\n\nCURRENT SAVED SCENE (WebCap supplied, not an unsaved conversational proposal):\n' +
+            JSON.stringify({
+              sceneId: selectedScene.sceneId,
+              sceneNumber: story.sceneOrder.indexOf(selectedScene.sceneId) + 1,
+              ...context.payload
+            }) +
+            '\nAnswer using these saved values. Other conversation drafts remain unsaved until applied.\n';
+          return outbound;
+        });
     });
   }
 
@@ -3339,13 +3378,10 @@
       return;
     }
 
-    if (activeChatMode === 'storyboard' && state.sceneRead) {
-      content += '\n\n[WEBCAP EXPLICIT READ]\n' + JSON.stringify(state.sceneRead.payload, null, 2) +
-        '\n[END WEBCAP READ]\nUse this Scene and Project as the context for the author’s request above.';
-      state.pendingReadAck = state.sceneRead.keys;
-      state.sceneRead = null;
-      el('director-chat-scene-context').classList.add('hidden');
-    }
+    // Freeze the selected Scene before conversation persistence or network work.
+    // Fetch its latest saved fields later, when building the actual LLM request.
+    var selectedNavigation = activeChatMode === 'storyboard' ? window.getStudioDirectorNavigation() : null;
+    var selectedScene = selectedNavigation ? studioDirectorSelectedScene(selectedNavigation) : null;
 
     if (!inputHistory.length || inputHistory[inputHistory.length - 1] !== content) inputHistory.push(content);
     inputHistoryIndex = inputHistory.length;
@@ -3411,7 +3447,7 @@
         });
       }
       return (activeChatMode === 'storyboard'
-        ? studioDirectorChatRequestMessages(messages)
+        ? studioDirectorChatRequestMessages(messages, selectedScene, selectedNavigation)
         : Promise.resolve(messages)).then(function (outboundMessages) {
         return requestJson('/fs/director/chat', {
           method: 'POST',
@@ -4234,9 +4270,11 @@
       var label = el('director-chat-scene-context');
       label.classList.add('hidden');
       if (!instruction) {
-        state.sceneRead = context;
+        // Keep only the target binding as authority; refresh saved values on
+        // every conversational request instead of reusing this opening snapshot.
+        state.sceneRead = {projectId:story.id, sceneId:sceneId, label:context.label};
         label.textContent = context.label;
-        label.title = 'This Scene and its Project context will accompany your next message.';
+        label.title = 'Saved Scene context will accompany each Director message.';
         label.classList.remove('hidden');
         el('director-chat-input').focus();
         syncModeUi();

@@ -60,8 +60,8 @@ test('Only explicitly supplied conversation content is sent; legacy snapshots ar
         description: 'Explicitly delivered fields only'}]
     })
   });
-  vm.runInContext(part('  function studioDirectorRequestMessages(messages, includePromptContract, explicitWrite) {',
-    '  function studioDirectorChatRequestMessages(messages) {'), context);
+  vm.runInContext(part('  function studioDirectorRequestMessages(messages, includePromptContract, explicitWrite, navigationSnapshot) {',
+    '  function studioDirectorChatRequestMessages(messages, selectedScene, navigationSnapshot) {'), context);
   const result = await vm.runInContext(
     'studioDirectorRequestMessages([{role:"user",content:"Develop the idea"}])', context);
   assert.equal(result.length, 2);
@@ -85,13 +85,13 @@ test('Studio prompting selects the current goal rather than steering every task 
       promptContract:'integrated_multimodal_description: [Shot 1]'
     })
   });
-  vm.runInContext(part('  function studioDirectorRequestMessages(messages, includePromptContract, explicitWrite) {',
+  vm.runInContext(part('  function studioDirectorRequestMessages(messages, includePromptContract, explicitWrite, navigationSnapshot) {',
     '  // The creative assessment is advisory.'),context);
   const assembled = await vm.runInContext(
     "studioDirectorChatRequestMessages([{role:'user',content:'Revise only the Scene action'}])",context);
   const system = assembled[0].content;
   assert.match(system,/For a direct question, answer fully and finish without a workflow suggestion/);
-  assert.match(system,/an explicit Read, an appropriately scoped reviewed Write, or an author-operated Studio action/);
+  assert.match(system,/an appropriately scoped reviewed Write or an author-operated Studio action/);
   assert.doesNotMatch(system,/When choices are clear, offer to review Concept/);
   assert.match(system,/Ask one focused question only for a consequential missing decision/);
   assert.match(system,/author its complete text in capture.content on this turn/);
@@ -113,8 +113,8 @@ test('explicit Write guidance asks for the draft, not another conversational rec
     Object,String,Promise,window:{getStudioDirectorNavigation:()=>({})},
     requestJson:async()=>({system:'Studio producer expertise',actions:[]})
   });
-  vm.runInContext(part('  function studioDirectorRequestMessages(messages, includePromptContract, explicitWrite) {',
-    '  function studioDirectorChatRequestMessages(messages) {'),context);
+  vm.runInContext(part('  function studioDirectorRequestMessages(messages, includePromptContract, explicitWrite, navigationSnapshot) {',
+    '  function studioDirectorChatRequestMessages(messages, selectedScene, navigationSnapshot) {'),context);
   const conversational = await vm.runInContext(
     "studioDirectorRequestMessages([{role:'user',content:'Discuss Scene'}],false)",context);
   const writing = await vm.runInContext(
@@ -224,7 +224,7 @@ test('Read sends actual saved data and asks for a conversational confirmation', 
 
 test('Ordinary Studio conversation has no model-requested hidden Read or capture token', () => {
   const send = part('  function sendMessage() {', '  function syncPinnedUi() {');
-  assert.match(send, /studioDirectorChatRequestMessages\(messages\)/);
+  assert.match(send, /studioDirectorChatRequestMessages\(messages, selectedScene, selectedNavigation\)/);
   assert.match(send, /: Promise\.resolve\(messages\)/);
   assert.doesNotMatch(source, /parseStudioReadRequest|resumeStudioAfterRead|parseStudioCaptureRequest/);
   assert.doesNotMatch(send, /pendingCapture/);
@@ -261,7 +261,7 @@ test('Write preserves reviewed Apply and carries final saved content into conver
 
 test('General Chat has a separate request path and Studio keeps native storage IDs', () => {
   const send = part('  function sendMessage() {', '  function syncPinnedUi() {');
-  assert.match(send, /activeChatMode === 'storyboard'\s*\? studioDirectorChatRequestMessages\(messages\)/);
+  assert.match(send, /activeChatMode === 'storyboard'\s*\? studioDirectorChatRequestMessages\(messages, selectedScene, selectedNavigation\)/);
   assert.match(send, /: Promise\.resolve\(messages\)/);
   const shell = fs.readFileSync(path.join(__dirname, '..', 'tool/js/workspace_shell.js'), 'utf8');
   assert.match(shell, /workspaceTitle\.textContent = 'Studio'/);
@@ -326,8 +326,8 @@ test('H3 detailed authoring contract is included when Director may propose a Pro
       promptContract:'[Shot 1] Full H3 authoring contract'
     })
   });
-  vm.runInContext(part('  function studioDirectorRequestMessages(messages, includePromptContract, explicitWrite) {',
-    '  function studioDirectorChatRequestMessages(messages) {'),context);
+  vm.runInContext(part('  function studioDirectorRequestMessages(messages, includePromptContract, explicitWrite, navigationSnapshot) {',
+    '  function studioDirectorChatRequestMessages(messages, selectedScene, navigationSnapshot) {'),context);
   const ordinary = await vm.runInContext(
     "studioDirectorRequestMessages([{role:'user',content:'Discuss scene'}])",context);
   const detailed = await vm.runInContext(
@@ -344,7 +344,7 @@ test('Studio conversation receives the canonical H3 template as reference withou
     state,Object,String,Promise,window:{getStudioDirectorNavigation:()=>({})},
     requestJson:async () => ({system:'Studio guidance',actions:[],promptContract:template})
   });
-  vm.runInContext(part('  function studioDirectorRequestMessages(messages, includePromptContract, explicitWrite) {',
+  vm.runInContext(part('  function studioDirectorRequestMessages(messages, includePromptContract, explicitWrite, navigationSnapshot) {',
     '  // The creative assessment is advisory.'),context);
   const result = await vm.runInContext(
     "studioDirectorChatRequestMessages([{role:'user',content:'How should an H3 prompt be structured?'}])",context);

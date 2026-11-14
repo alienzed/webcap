@@ -3068,7 +3068,9 @@
         'For other complete fields use the matching capture schema. When a complete new Scene is already authored in conversation, use field="scene", title and content as the full usable H3 Prompt and durationSeconds (requested duration or default 6). WebCap reuses that material for review. ' +
         'For an Invariant use its kind/title, with beforeKind/beforeTitle for an exact known edit.\n';
       if (!selectedScene) {
-        var projectId = studioAttachedStoryId() || (navigationSnapshot && navigationSnapshot.projectId);
+        var projectId = studioAttachedStoryId() ||
+          (navigationSnapshot && navigationSnapshot.projectId) ||
+          window.getStudioDirectorNavigation().projectId;
         if (!projectId) return outbound;
         return requestJson('/fs/storyboard?story=' + encodeURIComponent(projectId)).then(function (result) {
           var story = result && result.story;

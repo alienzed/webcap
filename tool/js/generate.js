@@ -2895,6 +2895,38 @@ function sweepLoras(model, folder) {
     promptAssistantInstructionHistory.bind(el('generate-director-instruction'));
     bindReferenceDropzones();
     renderGenerateEditorTabs();
+
+    // Catch the first actual edit after the browser has applied it. Do not
+    // recreate the prompt element: its caret and first keystroke must survive.
+    function onGenerateFieldEdit(event) {
+      var target = event.target, id = target.id || '';
+      if (id === 'generate-prompt' || generateEditorFieldIds.indexOf(id) !== -1 ||
+          id === 'generate-lora-master-enabled' || id === 'generate-sweep-base' ||
+          id === 'generate-sweep-strength' || id === 'generate-sweep-folder' ||
+          id === 'generate-reference-first_frame' || id === 'generate-reference-last_frame' ||
+          target.hasAttribute('data-generate-lora-enabled') ||
+          target.hasAttribute('data-generate-lora-strength')) {
+        noteGenerateEditorEdit(id === 'generate-seed');
+      }
+    }
+    workspace.addEventListener('input', onGenerateFieldEdit);
+    workspace.addEventListener('change', onGenerateFieldEdit);
+
+    // Button-driven LoRA/ Sweep mutations happen before bubbling, so promote
+    // on capture to avoid ever applying them to the immutable Loaded reference.
+    workspace.addEventListener('click', function (event) {
+      var button = event.target.closest(
+        '[data-generate-lora-option], [data-generate-lora-step], [data-generate-lora-remove], ' +
+        '[data-generate-lora-insert-phrases], [data-generate-lora-insert-options], ' +
+        '[data-generate-sweep-remove], #generate-sweep-clear, ' +
+        '#generate-lora-selected-tab, #generate-lora-sweep-tab');
+      if (!button) return;
+      if (!noteGenerateEditorEdit(false)) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+      }
+    }, true);
+
     el('generate-editor-working').onclick = function () {
       try { switchGenerateEditorMode('working'); } catch (err) { reportError(err, 'Could not switch to Working'); }
     };

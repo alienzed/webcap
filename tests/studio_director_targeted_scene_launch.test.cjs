@@ -196,7 +196,7 @@ test('structured Scene suggestion binds the actual selected ID and instruction t
   });
   vm.runInContext(section(workbench,'  function renderReadiness(list) {',
     '  window.studioDirectorWorkbench = {'),scope);
-  const begin=workbench.indexOf('    updateReadiness:function (result, restoring, selectedScene) {');
+  const begin=workbench.indexOf('    updateReadiness:function (result, restoring, selectedScene, selectedProject, authorRequest) {');
   const end=workbench.indexOf('\n  };\n\n  function bind()',begin);
   assert.ok(begin>0 && end>begin);
   const receiver=vm.runInContext('({'+workbench.slice(begin,end)+'})',scope);

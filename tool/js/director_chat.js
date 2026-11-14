@@ -1666,7 +1666,7 @@
   function prepareStudioProject() {
     if (state.pending || state.activeMode !== 'storyboard' || !state.sessionReady) return;
     if (state.studioProjectProposal) { showStudioProjectReview(); return; }
-    if (!state.modelId) { studioActionStatus('Choose a Director model first.', true); return; }
+    if (!state.modelId) { studioActionStatus('No Director model is available. Refresh models.', true); return; }
     var discussion = (state.modeMessages.storyboard || []).filter(function (message) {
       return message && (message.role === 'assistant' || message.role === 'user');
     }).map(function (message) {
@@ -3873,6 +3873,20 @@
     }
   }
 
+  // A Director model is selected automatically when discovery returns models.
+  // Readiness also depends on the Studio conversation and active requests; these
+  // states must not be misreported as a missing model selection.
+  function studioDirectorReadinessIssue() {
+    if (!state.open || state.activeMode !== 'storyboard') return 'Open Studio Director to continue.';
+    if (!state.sessionReady) return state.sessionError
+      ? 'Director conversation is unavailable. Check the Console.'
+      : 'Director conversation is loading.';
+    if (state.pending || state.attachmentPending) return 'Finish the current Director request first.';
+    if (!state.modelsLoaded) return 'Director models are loading.';
+    if (!state.modelId) return 'No Director model is available. Refresh models.';
+    return '';
+  }
+
   window.studioDirectorBridge = {
     placeSuggestedAction: placeStudioSuggestion,
     canReview: function () {
@@ -3880,10 +3894,8 @@
         !state.pending && !state.attachmentPending;
     },
     isStudioMode: function () {return state.open && state.activeMode === 'storyboard';},
-    isReady: function () {
-      return state.open && state.activeMode === 'storyboard' && state.sessionReady &&
-        !state.pending && !state.attachmentPending && !!state.modelId;
-    },
+    isReady: function () { return !studioDirectorReadinessIssue(); },
+    readinessMessage: studioDirectorReadinessIssue,
     workingStoryId: function () { return studioAttachedStoryId() || window.getStudioDirectorNavigation().projectId; },
     modelId: function () { return state.modelId; },
     messages: function () {

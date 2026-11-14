@@ -13,8 +13,8 @@ test('Write exposes exactly three creative workflows', () => {
   assert.deepEqual([...choices.matchAll(/<option value="([^"]+)"/g)].map(x => x[1]),
     ['new-project', 'project', 'scene-write']);
   assert.match(html, /id="studio-dw-scene-mode"/);
-  assert.match(html, /value="create">Add one or more Scenes/);
-  assert.match(html, /value="revise">Revise one or more existing Scenes/);
+  assert.match(html, /value="create">Add Scenes/);
+  assert.match(html, /value="revise">Revise Scenes/);
   assert.doesNotMatch(choices, /scene-split|scene-move|scene-duplicate|scene-invariants|playbook/);
 });
 

@@ -50,12 +50,13 @@
     studioBriefUndo: null,
     studioOperations: [],
     pendingReadAck: null,
+    sceneRead: null,
     studioReadiness: {checks:[], readHints:[], writeHint:'', writeFields:[], sceneId:'', sceneNumber:0}
   };
   var STORYBOARD_WORKSHOP_PRIMER = [
     'You are collaborating with an author developing short AI-generated videos.',
-    'A Project (internally Story) has Concept / overview, Visual / atmosphere and Invariants. A Scene has its own Intent (summary) and separate saved H3 Prompt.',
-    'Use Concept for premise and Scene relationships, Visual / atmosphere for the shared look, and Invariants for recurring fixed facts. Scene Intent describes what happens; the Prompt is the reviewed production instruction.',
+    'A Project (internally Story) has Concept / overview, Visual / atmosphere and Invariants. A Scene has a full H3 Prompt and may retain an earlier planning outline (summary).',
+    'Use Concept for premise and Scene relationships, Visual / atmosphere for the shared look, and Invariants for recurring fixed facts. For a Scene with a complete H3 Prompt, treat that prompt as authoritative, including its Scene overview when present. Use the outline to develop Scenes that have no prompt yet.',
     'Each Scene is one video clip lasting at most 15 seconds. A Scene prompt has established subject, environment, visual treatment and audio sections, with timed shots in integrated_multimodal_description describing actions and changes.',
     'This is a creative workshop. Explore the author\'s current interests for the selected Scene: actions, choreography, interactions, dialogue, camera behavior, timing, and visual development.',
     'Storyboard references are supplied as readable text inside the request, including inline material in the latest user message. Use that text as source context and build on the author\'s decisions as the discussion develops.',
@@ -296,6 +297,8 @@
   }
 
   function syncModeUi() {
+    var sceneContext = el('director-chat-scene-context');
+    sceneContext.classList.toggle('hidden', state.activeMode !== 'storyboard' || !state.sceneRead);
     var row = el('director-chat-mode-row');
     var host = el('director-chat-mode-switch');
     var description = el('director-chat-mode-description');
@@ -666,6 +669,7 @@
   }
 
   function restoreSession(chat) {
+    state.sceneRead = null;
     if (!chat || !persistentMode(chat.mode) || !Array.isArray(chat.messages)) {
       throw new Error('Saved Assistant conversation is invalid.');
     }
@@ -1177,7 +1181,8 @@
       var label = document.createElement('div');
       label.className = 'director-chat-message-label';
       label.textContent = message.role === 'assistant' ? 'Director' :
-        (message.content.indexOf('[WEBCAP APPLIED FIELD VALUES]') !== -1 ? 'WebCap · Reviewed Apply' :
+        (message.content.indexOf('[WEBCAP APPLIED FIELD VALUES]') !== -1
+          ? (message.content.startsWith('Director revision saved:') ? 'WebCap · Director revision' : 'WebCap · Reviewed Apply') :
          message.content.indexOf('[WEBCAP EXPLICIT READ]') !== -1 ? 'You · Read to Director' : 'You');
 
       var body = document.createElement('div');
@@ -2219,11 +2224,13 @@
     title.placeholder = 'Working title (optional)';
     title.maxLength = 240;
     title.value = item.title || '';
-    var summary = document.createElement('textarea');
-    summary.setAttribute('aria-label', 'Scene description');
+    // Keep the stored outline for older Project workflows, but don't make it a
+    // second editable description when the Director already supplied a prompt.
+    var summary = document.createElement(item.prompt ? 'input' : 'textarea');
+    summary.setAttribute('aria-label', 'Scene outline');
     summary.dataset.field = 'summary';
-    summary.placeholder = 'What happens in this one generatable clip?';
-    summary.rows = 3;
+    if (item.prompt) summary.type = 'hidden';
+    else { summary.placeholder = 'What happens in this one generatable clip?'; summary.rows = 3; }
     summary.value = item.summary || '';
     var durationLabel = document.createElement('label');
     durationLabel.textContent = 'Duration (s)';
@@ -2458,6 +2465,7 @@
     el('studio-scene-draft-title').value = proposal.title;
     el('studio-scene-draft-summary').value = proposal.summary;
     var includesPrompt = Object.prototype.hasOwnProperty.call(proposal, 'prompt');
+    el('studio-scene-draft-summary-row').classList.toggle('hidden', includesPrompt);
     el('studio-scene-draft-prompt-row').classList.toggle('hidden', !includesPrompt);
     el('studio-scene-draft-prompt').value = includesPrompt ? proposal.prompt : '';
     el('studio-scene-draft-apply').textContent = includesPrompt ? 'Create Scene' : 'Create tentative Scene';
@@ -2717,6 +2725,7 @@
 
   function newChat(options) {
     if (state.pending || (persistentMode(state.activeMode) && !state.sessionReady)) return;
+    state.sceneRead = null;
     var preserveContext = !!(options && options.preserveContext);
     if (!persistentMode(state.activeMode)) {
       state.modeMessages[state.activeMode] = [];
@@ -2878,7 +2887,8 @@
         '\nCURRENT PROJECT NAVIGATION (identity and one-based Scene positions only; creative material is supplied through explicit Read):\n' + JSON.stringify(navigation) +
         (explicitWrite
           ? '\nEXPLICIT REVIEWED WRITE: The author has already chosen to draft. Produce the requested complete editable proposal in the format specified by the current request. This is a draft for review, not a conversational suggestion. Only WebCap Apply saves changes.\n'
-          : '\nFor the current author goal, suggest at most one useful next step from the listed capabilities: ' +
+          : '\nFor a direct question, answer fully and finish without a workflow suggestion. ' +
+            'When the author is developing material or requests a next step, suggest at most one useful action: ' +
             'an explicit Read, an appropriately scoped reviewed Write, or an author-operated Studio action. ' +
             'Fulfil the author’s request in conversation, including drafting complete material when asked. ' +
             'Treat proposed work as unsaved until WebCap confirms Apply.\n') +
@@ -2903,18 +2913,19 @@
         'When asked to write, revise or paste an existing Scene prompt, author its complete text in capture.content on this turn, using the H3 template and Scene duration. ' +
         'WebCap displays that full text directly in the conversation. Use reply for a brief introduction or creative explanation. ' +
         'For other drafting requests, include the complete requested text in reply. ' +
-        'Writing a Scene means a useful title and a full H3 Prompt. An Intent alone is an outline. ' +
+        'Writing a Scene means a useful title and a full H3 Prompt. An outline alone is a planning draft, not a second authoritative Scene description. ' +
         'Name user actions in plain language: Read Project, Review Scene, Apply. ' +
         'Drafting is conversation; only reviewed Apply saves.\n' +
         'READINESS: Usually checks=[], readHints=[], writeHint="", writeFields=[], sceneId="", sceneNumber=0, capture=null. ' +
-        'Suggest at most one useful next action. Use new-project, project or scenes for Write. ' +
+        'For factual questions answerable from supplied context, keep readiness fields empty and finish with the answer. ' +
+        'For requested creative development, suggest at most one useful next action. Use new-project, project or scenes for Write. ' +
         'writeFields names affected fields; Scene numbers are one-based. Use bare Scene IDs from navigation.sceneOrder. ' +
         'Default to the current Project, respecting an explicit author-selected destination. Assess only supplied material, with at most two useful checks.\n' +
         'CAPTURE: Use null for discussion, questions, outlines and work still to be drafted. ' +
         'For a complete existing Scene prompt, set capture.field="prompt", capture.sceneId to its saved ID, ' +
         'and capture.content to the full usable prompt itself. WebCap uses this one authored text for both chat and Review Scene, without another LLM call. ' +
-        'For other complete fields use the matching capture schema. A new Scene uses field="scene", title and content as its Intent; ' +
-        'also include prompt when a full H3 Prompt was authored in conversation. An Intent-only Scene is still a useful draft. ' +
+        'For other complete fields use the matching capture schema. A new Scene uses field="scene", title and content as an initial outline; ' +
+        'also include prompt when a full H3 Prompt was authored in conversation. An outline-only Scene is still a useful planning draft. ' +
         'For an Invariant use its kind/title, with beforeKind/beforeTitle for an exact known edit.\n';
       return outbound;
     });
@@ -3350,6 +3361,14 @@
       return;
     }
 
+    if (activeChatMode === 'storyboard' && state.sceneRead) {
+      content += '\n\n[WEBCAP EXPLICIT READ]\n' + JSON.stringify(state.sceneRead.payload, null, 2) +
+        '\n[END WEBCAP READ]\nUse this Scene and Project as the context for the author’s request above.';
+      state.pendingReadAck = state.sceneRead.keys;
+      state.sceneRead = null;
+      el('director-chat-scene-context').classList.add('hidden');
+    }
+
     if (!inputHistory.length || inputHistory[inputHistory.length - 1] !== content) inputHistory.push(content);
     inputHistoryIndex = inputHistory.length;
     inputHistoryDraft = '';
@@ -3549,7 +3568,7 @@
 
     if (state.open) {
       syncModeUi();
-      (state.modelsLoaded ? Promise.resolve() : loadModels()).then(function () {
+      return (state.modelsLoaded ? Promise.resolve() : loadModels()).then(function () {
         // An async model refresh may finish after Studio was closed or left.
         if (!state.open) return;
         if (state.activeMode === 'storyboard') {
@@ -3953,7 +3972,7 @@
         event.returnValue = '';
       }
     });
-    loadSessionHistory();
+    state.sessionLoadPromise = loadSessionHistory();
     if (state.pinned) setOpen(true);
     else {
       syncPinnedUi();
@@ -3992,6 +4011,8 @@
     sendRead: function (payload, keys, instruction) {
       if (!this.isReady()) throw new Error('Open Studio Director and select an available LLM before Read.');
       if (!Array.isArray(keys) || !keys.length) throw new Error('Select at least one field to Read.');
+      state.sceneRead = null;
+      el('director-chat-scene-context').classList.add('hidden');
       var composer = el('director-chat-input');
       var draft = String(composer.value || '').trim();
       var nl = String.fromCharCode(10);
@@ -4031,6 +4052,7 @@
       if (!story || !story.id || !selected || typeof selected !== 'object') {
         throw new Error('Reviewed Apply receipt requires saved Project data.');
       }
+      var isDirectorRevision = kind === 'scene.director.revision';
       var body = {
         operation: kind, projectId: story.id, projectTitle: story.title,
         savedAt: story.updatedAt, fields: selected
@@ -4044,7 +4066,9 @@
       });
       if (Array.isArray(selected.scenes)) savedFields.push(selected.scenes.length + (selected.scenes.length === 1 ? ' Scene' : ' Scenes'));
       state.modeMessages.storyboard.push({role:'user',
-        content:'Saved: ' + (savedFields.join(' · ') || 'Scene changes') + '. Reviewed values are now authoritative.' +
+        content:(isDirectorRevision ? 'Director revision saved: ' : 'Saved: ') +
+          (savedFields.join(' · ') || 'Scene changes') +
+          (isDirectorRevision ? '. Saved values are now authoritative.' : '. Reviewed values are now authoritative.') +
           String.fromCharCode(10) + '[WEBCAP APPLIED FIELD VALUES]' +
           String.fromCharCode(10) + JSON.stringify(body, null, 2) +
           String.fromCharCode(10) + '[END WEBCAP APPLY]'});
@@ -4219,6 +4243,68 @@
     // their explicitly attached reference snapshots.
   };
   window.openStoryboardAssistant = function () { setOpen(true, 'storyboard'); };
+  window.openStudioDirectorScene = function (story, sceneId, instruction) {
+    if (state.pending || state.attachmentPending) return Promise.reject(new Error('Finish the current Director request first.'));
+    var context = window.studioDirectorWorkbench.sceneRead(story, sceneId);
+    return Promise.all([setOpen(true, 'storyboard'), state.sessionLoadPromise]).then(function () {
+      if (!state.sessionReady) throw new Error('Director conversation could not load. Check the Console.');
+      state.workshop = null;
+      state.workshopProposal = null;
+      state.lastStudioIoError = '';
+      state.lastStudioIoRaw = '';
+      window.studioDirectorBridge.selectWriteProject(story.id, story.title);
+      state.sceneRead = null;
+      var label = el('director-chat-scene-context');
+      label.classList.add('hidden');
+      if (!instruction) {
+        state.sceneRead = context;
+        label.textContent = context.label;
+        label.title = 'This Scene and its Project context will accompany your next message.';
+        label.classList.remove('hidden');
+        el('director-chat-input').focus();
+        syncModeUi();
+        return;
+      }
+      if (!window.studioDirectorBridge.isReady()) throw new Error(window.studioDirectorBridge.readinessMessage());
+      state.modeMessages.storyboard.push({role:'user', content:instruction +
+        '\n\n[WEBCAP EXPLICIT READ]\n' + JSON.stringify(context.payload, null, 2) + '\n[END WEBCAP READ]'});
+      renderMessages();
+      state.pending = true;
+      syncControls();
+      return persistSession('storyboard').then(function () {
+        state.pending = false;
+        return window.studioDirectorBridge.makeProposal(JSON.stringify({
+          task:'Revise the selected Scene’s H3 prompt according to the author instruction. Return only {"prompt":"complete revised H3 prompt"}. ' +
+            'Preserve the rest of the existing prompt, its duration, and established Project facts. For an empty prompt, author a complete prompt from the supplied Scene and Project.',
+          sceneId:sceneId, instruction:instruction, context:context.payload
+        }), 'studio_scene_field_draft', true);
+      }).then(function (raw) {
+        state.lastStudioIoRaw = raw;
+        state.pending = true;
+        syncControls();
+        var draft;
+        try { draft = JSON.parse(raw); }
+        catch (error) { throw new Error('Director returned invalid Scene JSON.\nRaw response:\n' + raw); }
+        if (!draft || Object.keys(draft).length !== 1 || typeof draft.prompt !== 'string' || !draft.prompt.trim())
+          throw new Error('Director must return one complete Scene prompt.\nRaw response:\n' + raw);
+        state.modeMessages.storyboard.push({role:'assistant', content:draft.prompt, rawResponse:raw});
+        renderMessages();
+        return persistSession('storyboard').then(function () {
+          return window.studioDirectorWorkbench.applyScenePrompt(story, sceneId, draft.prompt);
+        });
+      }).then(function () {
+        studioActionStatus(context.label + ' updated.', false);
+      }).catch(function (error) {
+        state.lastStudioIoError = String(error.message || error);
+        studioActionStatus('Scene revision failed: ' + String(error.message || error), true);
+        window.reportConsoleError('Director Scene revision', error);
+        throw error;
+      }).finally(function () {
+        state.pending = false;
+        syncControls();
+      });
+    });
+  };
   window.closeStudioDirectorOnExit = function () {
     if (state.activeMode !== 'storyboard') return;
     if (state.open) setOpen(false);

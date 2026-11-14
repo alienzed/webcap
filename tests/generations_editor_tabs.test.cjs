@@ -9,7 +9,7 @@ const source = fs.readFileSync('tool/js/generate.js', 'utf8');
 const from = source.indexOf('  // The existing form is the sole editor.');
 const to = source.indexOf('  function uploadReference(file) {', from);
 assert.ok(from !== -1 && to > from, 'Generations editor snapshot code is present');
-const code = source.slice(from, to) + '\nthis.api = {captureGenerateEditorSnapshot, applyGenerateEditorSnapshot, switchGenerateEditorMode, loadGenerateTakeIntoEditor, useLoadedAsWorking};';
+const code = source.slice(from, to) + '\nthis.api = {captureGenerateEditorSnapshot, applyGenerateEditorSnapshot, switchGenerateEditorMode, loadGenerateTakeIntoEditor, useLoadedAsWorking, noteGenerateEditorEdit, markSubmittedWorkingDraft};';
 
 function fixture() {
   const nodes = new Map();
@@ -41,11 +41,14 @@ function fixture() {
       {id:'image',settings:['seed','dimensions'],defaultPrompt:'default image'}],
     modelId:'h3', lorasByModel:{h3:[{name:'work.safetensors',strength:.35}]}, lorasEnabledByModel:{h3:true},
     loraMode:'sweep', sweepSelections:{h3:{'strap.safetensors':true}}, editorMode:'working',
-    workingSnapshot:null, loadedSnapshot:null, loadedLabel:'',
+    workingSnapshot:null, workingDraftDirty:false, workingEditSerial:0,
+    loadedSnapshot:null, loadedLabel:'',
     director:{busy:false,previousPrompt:'old prompt'},
     promptLibrary:{activeId:'saved-prompt'},
   };
   const warnings=[];
+  const confirmations=[];
+  let allowOverwrite=true;
   const context = {
     generateState:state, el:element, pendingRestoreSelection:0,
     DataTransfer: class {
@@ -67,7 +70,10 @@ function fixture() {
     renderStageEmpty() {},
     syncActiveTakeState() {},
     setGenerateViewMode() {},
-    window:{reportConsoleWarning:(_,message)=>warnings.push(message)},
+    window:{
+      reportConsoleWarning:(_,message)=>warnings.push(message),
+      confirm:message=>{confirmations.push(message); return allowOverwrite;}
+    },
     renderModelForm() {
       settings.forEach(name=>element(name).value='default');
       element('generate-prompt').value=state.modelId==='h3'?'default':'default image';
@@ -85,7 +91,8 @@ function fixture() {
   element('generate-reference-first_frame').files=[workingFile];
   context.api.renderGenerateEditorTabs = context.renderGenerateEditorTabs;
   context.renderGenerateEditorTabs();
-  return {api:context.api,state,element,warnings,workingFile,context};
+  return {api:context.api,state,element,warnings,workingFile,context,
+    confirmations,setConfirmChoice:allow=>{allowOverwrite=allow;}};
 }
 const take=(name='a')=>({
   jobId:name, modelId:'h3',sourcePrompt:'Loaded prompt '+name,
@@ -93,19 +100,31 @@ const take=(name='a')=>({
   loras:[{name:'take.safetensors',strength:.75}],references:{first_frame:'some/saved/reference.png'}
 });
 
-test('loading a Take defaults to a fresh seed while preserving explicit seed edits',()=>{
-  const f=fixture(), {api,element}=f;
+test('Loaded preserves its recorded seed; editing forks randomized Working except for explicit seed edits',()=>{
+  const f=fixture(),{api,state,element}=f;
   const saved=take();
   api.loadGenerateTakeIntoEditor(saved);
-  assert.equal(saved.settings.seed,101,'the recorded Take seed stays available for reproduction');
-  assert.equal(element('generate-seed').value,'-1','a loaded Take should not repeat its prior noise by default');
-  element('generate-seed').value='4567';
-  api.switchGenerateEditorMode('working');
-  assert.equal(element('generate-seed').value,'-1','Working retains its independent seed');
+  assert.equal(saved.settings.seed,101);
+  assert.equal(element('generate-seed').value,'101','Loaded shows the reproducible original seed');
+  element('generate-prompt').value='Loaded prompt a, plus one word';
+  assert.equal(api.noteGenerateEditorEdit(false),true);
+  assert.equal(state.editorMode,'working');
+  assert.equal(element('generate-prompt').value,'Loaded prompt a, plus one word','first edit survives fork');
+  assert.equal(element('generate-seed').value,'-1','new Working is randomized');
   api.switchGenerateEditorMode('loaded');
-  assert.equal(element('generate-seed').value,'4567','explicit seed survives tab switches');
+  assert.equal(element('generate-prompt').value,'Loaded prompt a','Loaded remains frozen');
+  assert.equal(element('generate-seed').value,'101');
   api.loadGenerateTakeIntoEditor(take('another'));
-  assert.equal(element('generate-seed').value,'-1','loading another Take resets the seed again');
+  assert.equal(element('generate-seed').value,'101','each Loaded Take retains its own recorded seed');
+
+  // An intentional edit to the seed is an explicit request to keep that value.
+  const separate=fixture();
+  separate.api.loadGenerateTakeIntoEditor(take());
+  separate.element('generate-seed').value='4567';
+  separate.api.noteGenerateEditorEdit(true);
+  assert.equal(separate.element('generate-seed').value,'4567');
+  separate.api.switchGenerateEditorMode('loaded');
+  assert.equal(separate.element('generate-seed').value,'101');
 });
 
 test('loading a completed Take isolates all Working fields, LoRAs and File references',()=>{
@@ -147,44 +166,53 @@ test('Loaded never inherits other-model LoRAs or Sweep selections from Working',
   assert.equal(state.sweepSelections.h3['strap.safetensors'],true);
 });
 
-test('each tab retains editable settings, LoRAs and references on repeated switching',()=>{
-  const f=fixture(), {api,state,element}=f;
+test('a loaded edit moves all recipe settings, LoRAs and Files to Working without modifying Loaded',()=>{
+  const f=fixture(),{api,state,element}=f;
   api.loadGenerateTakeIntoEditor(take());
   element('generate-prompt').value='Edited loaded prompt';
   element('generate-duration').value='9';
   state.lorasByModel.h3[0].strength=.9;
   const loadedFile={name:'loaded.png'};
   element('generate-reference-first_frame').files=[loadedFile];
-  api.switchGenerateEditorMode('working');
-  element('generate-prompt').value='More Working edits';
-  state.lorasByModel.h3[0].strength=.22;
-  api.switchGenerateEditorMode('loaded');
+  api.noteGenerateEditorEdit(false);
+  assert.equal(state.editorMode,'working');
   assert.equal(element('generate-prompt').value,'Edited loaded prompt');
   assert.equal(element('generate-duration').value,'9');
   assert.equal(state.lorasByModel.h3[0].strength,.9);
   assert.equal(element('generate-reference-first_frame').files[0],loadedFile);
+  api.switchGenerateEditorMode('loaded');
+  assert.equal(element('generate-prompt').value,'Loaded prompt a');
+  assert.equal(element('generate-duration').value,'3');
+  assert.equal(state.lorasByModel.h3[0].strength,.75);
+  assert.equal(element('generate-reference-first_frame').files.length,0);
   api.switchGenerateEditorMode('working');
-  assert.equal(element('generate-prompt').value,'More Working edits');
-  assert.equal(state.lorasByModel.h3[0].strength,.22);
-  assert.equal(element('generate-reference-first_frame').files[0],f.workingFile);
+  assert.equal(element('generate-prompt').value,'Edited loaded prompt');
+  assert.equal(element('generate-duration').value,'9');
+  assert.equal(state.lorasByModel.h3[0].strength,.9);
+  assert.equal(element('generate-reference-first_frame').files[0],loadedFile);
 });
 
-test('Use as Working copies current Loaded values without erasing editable Loaded configuration',()=>{
+test('Use as Working copies Loaded with a fresh seed and preserves its original recipe',()=>{
   const f=fixture(),{api,state,element}=f;
   api.loadGenerateTakeIntoEditor(take());
-  element('generate-prompt').value='Promoted prompt';
+  api.useLoadedAsWorking();
+  assert.equal(state.editorMode,'working');
+  assert.equal(element('generate-prompt').value,'Loaded prompt a');
+  assert.equal(element('generate-seed').value,'-1');
+  assert.equal(state.workingDraftDirty,true);
+  element('generate-prompt').value='Promoted and adjusted';
+  api.noteGenerateEditorEdit(false);
   state.lorasByModel.h3[0].strength=.65;
   const newFile={name:'fresh.png'};
   element('generate-reference-first_frame').files=[newFile];
-  api.useLoadedAsWorking();
-  assert.equal(state.editorMode,'working');
-  assert.equal(element('generate-prompt').value,'Promoted prompt');
+  api.switchGenerateEditorMode('loaded');
+  assert.equal(element('generate-prompt').value,'Loaded prompt a');
+  assert.equal(element('generate-seed').value,'101');
+  assert.equal(state.lorasByModel.h3[0].strength,.75);
+  api.switchGenerateEditorMode('working');
+  assert.equal(element('generate-prompt').value,'Promoted and adjusted');
   assert.equal(state.lorasByModel.h3[0].strength,.65);
   assert.equal(element('generate-reference-first_frame').files[0],newFile);
-  element('generate-prompt').value='Separate Working change';
-  api.switchGenerateEditorMode('loaded');
-  assert.equal(element('generate-prompt').value,'Promoted prompt');
-  assert.equal(state.lorasByModel.h3[0].strength,.65);
 });
 
 test('loading another Take replaces Loaded, not Working',()=>{
@@ -196,6 +224,144 @@ test('loading another Take replaces Loaded, not Working',()=>{
   assert.equal(element('generate-prompt').value,'Loaded prompt second');
   api.switchGenerateEditorMode('working');
   assert.equal(element('generate-prompt').value,'Still Working');
+});
+
+test('unsent Working draft warns before a Loaded edit can replace it',()=>{
+  const f=fixture(),{api,state,element,confirmations}=f;
+  element('generate-prompt').value='Unsent Working draft';
+  api.noteGenerateEditorEdit(false);
+  api.loadGenerateTakeIntoEditor(take());
+  element('generate-prompt').value='Loaded change just typed';
+  f.setConfirmChoice(false);
+  assert.equal(api.noteGenerateEditorEdit(false),false,'Cancel declines replacement');
+  assert.equal(state.editorMode,'loaded');
+  assert.equal(element('generate-prompt').value,'Loaded prompt a','cancel restores the immutable reference');
+  assert.equal(state.workingDraftDirty,true);
+  api.switchGenerateEditorMode('working');
+  assert.equal(element('generate-prompt').value,'Unsent Working draft','the existing draft survived');
+  api.switchGenerateEditorMode('loaded');
+  element('generate-prompt').value='Loaded edit accepted';
+  f.setConfirmChoice(true);
+  assert.equal(api.noteGenerateEditorEdit(false),true);
+  assert.equal(state.editorMode,'working');
+  assert.equal(element('generate-prompt').value,'Loaded edit accepted');
+  assert.equal(element('generate-seed').value,'-1');
+  assert.equal(confirmations.length,2,'warn only at real Working replacement');
+  api.switchGenerateEditorMode('loaded');
+  assert.equal(element('generate-prompt').value,'Loaded prompt a');
+});
+
+test('queued Working recipes no longer warn; later edits remain unsent',()=>{
+  const f=fixture(),{api,state,element,confirmations}=f;
+  element('generate-prompt').value='Queued from Working';
+  api.noteGenerateEditorEdit(false);
+  const submittedSerial=state.workingEditSerial;
+  api.markSubmittedWorkingDraft('working',submittedSerial);
+  assert.equal(state.workingDraftDirty,false,'a successful queued snapshot is no longer unsent');
+  api.loadGenerateTakeIntoEditor(take());
+  element('generate-prompt').value='Fork with no unnecessary warning';
+  api.noteGenerateEditorEdit(false);
+  assert.equal(state.editorMode,'working');
+  assert.equal(confirmations.length,0);
+  // A delayed queue result must not clear edits made since that submission.
+  const staleSerial=state.workingEditSerial;
+  element('generate-prompt').value='New unsent revision';
+  api.noteGenerateEditorEdit(false);
+  api.markSubmittedWorkingDraft('working',staleSerial);
+  assert.equal(state.workingDraftDirty,true);
+  api.switchGenerateEditorMode('loaded');
+  element('generate-prompt').value='Attempt conflicting fork';
+  f.setConfirmChoice(false);
+  api.noteGenerateEditorEdit(false);
+  assert.equal(confirmations.length,1);
+});
+
+test('editor input and LoRA actions fork on actual changes, not search or assistant instructions',()=>{
+  const begin=source.indexOf('    // Catch the first actual edit after the browser has applied it.');
+  const end=source.indexOf("    el('generate-editor-working').onclick",begin);
+  assert.ok(begin>0 && end>begin);
+  const calls=[],listeners={};
+  const workspace={addEventListener:(kind,handler,capture)=>{listeners[kind+(capture?'Capture':'')]=handler;}};
+  const context={workspace,generateEditorFieldIds:[
+    'generate-aspect','generate-dimensions','generate-megapixels',
+    'generate-duration','generate-sampling-mode','generate-seed'
+  ],noteGenerateEditorEdit:keep=>{calls.push(keep);return true;}};
+  vm.runInNewContext(source.slice(begin,end),context);
+  const field=id=>({id,hasAttribute:()=>false});
+  listeners.input({target:field('generate-prompt')});
+  listeners.input({target:field('generate-megapixels')});
+  listeners.change({target:field('generate-duration')});
+  listeners.change({target:field('generate-aspect')});
+  listeners.input({target:field('generate-seed')});
+  listeners.change({target:field('generate-reference-first_frame')});
+  listeners.input({target:field('generate-director-instruction')});
+  listeners.input({target:field('generate-lora-picker')});
+  assert.deepEqual(calls,[false,false,false,false,true,false]);
+  let prevented=false,stopped=false;
+  const event={target:{closest:()=>({})},
+    preventDefault(){prevented=true;},stopImmediatePropagation(){stopped=true;}};
+  listeners.clickCapture(event);
+  assert.equal(calls.length,7,'LoRA and Sweep changes fork at capture time');
+  context.noteGenerateEditorEdit=()=>false;
+  listeners.clickCapture(event);
+  assert.equal(prevented,true,'cancel prevents the LoRA mutation');
+  assert.equal(stopped,true,'cancel stops handlers that would edit the frozen Take');
+});
+
+test('forked Working prompt survives capability refresh when returning to Generations', async()=>{
+  const f=fixture(),{api,state,element,context}=f;
+  api.loadGenerateTakeIntoEditor(take());
+  element('generate-prompt').value='A lasting Working edit';
+  api.noteGenerateEditorEdit(false);
+  state.formInitialized=true;
+  const begin=source.indexOf('  function refreshCapabilities() {');
+  const end=source.indexOf('  function resetGeneratePromptScratch() {',begin);
+  assert.ok(begin>0 && end>begin);
+  context.requestJson=async()=>({models:state.models,unavailableModels:[],available:true});
+  context.populateModelSelector=()=>{
+    element('generate-prompt').value='Model default after re-entry';
+    element('generate-duration').value='3';
+  };
+  context.applyGenerateEditorSnapshot=api.applyGenerateEditorSnapshot;
+  context.setStatus=()=>{};
+  context.reportError=error=>{throw error;};
+  vm.runInContext(source.slice(begin,end)+'\nthis.refreshCapabilities = refreshCapabilities;',context);
+  await context.refreshCapabilities();
+  assert.equal(state.editorMode,'working');
+  assert.equal(element('generate-prompt').value,'A lasting Working edit');
+  assert.equal(element('generate-seed').value,'-1');
+  assert.equal(state.workingDraftDirty,true);
+  api.switchGenerateEditorMode('loaded');
+  assert.equal(element('generate-prompt').value,'Loaded prompt a');
+  assert.equal(element('generate-seed').value,'101');
+});
+
+test('a successfully queued Working generation clears the replacement warning',async()=>{
+  const f=fixture(),{api,state,element,context,confirmations}=f;
+  element('generate-prompt').value='Queued Working draft';
+  api.noteGenerateEditorEdit(false);
+  const begin=source.indexOf('  function runGenerate() {');
+  const end=source.indexOf('  function frozenSweepSettings()',begin);
+  context.uploadReferenceFiles=async()=>({});
+  context.postJson=async()=>({job:{jobId:'queued',status:'queued'}});
+  context.captureReferenceFiles=()=>({});
+  context.enabledFixedLoras=id=>state.lorasByModel[id] || [];
+  context.collectSettings=()=>({seed:element('generate-seed').value});
+  context.syncPromptAssistantDependencies=()=>{};
+  context.trackGenerateJob=()=>{};
+  context.syncGenerationPreviewCard=()=>{};
+  context.reportConsoleInfo=()=>{};
+  context.reportError=error=>{throw error;};
+  context.setStatus=()=>{};
+  vm.runInContext(source.slice(begin,end)+'\nthis.runGenerate = runGenerate;',context);
+  await context.runGenerate();
+  assert.equal(state.workingDraftDirty,false);
+  api.loadGenerateTakeIntoEditor(take());
+  element('generate-duration').value='6';
+  api.noteGenerateEditorEdit(false);
+  assert.equal(confirmations.length,0);
+  assert.equal(state.editorMode,'working');
+  assert.equal(element('generate-duration').value,'6');
 });
 
 test('Loaded is unavailable until a Take is selected and mode changes are explicit',()=>{
@@ -224,7 +390,7 @@ test('New Generation intentionally resets Working and leaves editable Loaded int
   assert.deepEqual(JSON.parse(JSON.stringify(state.lorasByModel)),{});
   assert.equal(state.freshDraft,true);
   api.switchGenerateEditorMode('loaded');
-  assert.equal(element('generate-prompt').value,'Edited Loaded');
+  assert.equal(element('generate-prompt').value,'Loaded prompt a','New Working does not alter the Take reference');
   assert.equal(state.lorasByModel.h3[0].name,'take.safetensors');
 });
 
@@ -262,7 +428,7 @@ test('generating from Loaded freezes its recipe even if reference upload overlap
   assert.equal(sent.length,1);
   assert.equal(sent[0].prompt,'Loaded prompt a');
   assert.equal(sent[0].settings.duration,'3');
-  assert.equal(sent[0].settings.seed,'-1','generating from a loaded Take requests a fresh seed');
+  assert.equal(sent[0].settings.seed,'101','generating directly from Loaded can reproduce the saved seed');
   assert.equal(sent[0].loras[0].name,'take.safetensors');
   assert.equal(sent[0].loras[0].strength,.75);
   assert.equal(sent[0].references.first_frame,'submitted-ref.png');

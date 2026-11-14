@@ -90,7 +90,7 @@ test('Studio prompting selects the current goal rather than steering every task 
   const assembled = await vm.runInContext(
     "studioDirectorChatRequestMessages([{role:'user',content:'Revise only the Scene action'}])",context);
   const system = assembled[0].content;
-  assert.match(system,/For the current author goal, suggest at most one useful next step/);
+  assert.match(system,/For a direct question, answer fully and finish without a workflow suggestion/);
   assert.match(system,/an explicit Read, an appropriately scoped reviewed Write, or an author-operated Studio action/);
   assert.doesNotMatch(system,/When choices are clear, offer to review Concept/);
   assert.match(system,/Ask one focused question only for a consequential missing decision/);
@@ -119,8 +119,8 @@ test('explicit Write guidance asks for the draft, not another conversational rec
     "studioDirectorRequestMessages([{role:'user',content:'Discuss Scene'}],false)",context);
   const writing = await vm.runInContext(
     "studioDirectorRequestMessages([{role:'user',content:'Revise Scene'}],false,true)",context);
-  assert.match(conversational[0].content,/suggest at most one useful next step/);
-  assert.doesNotMatch(writing[0].content,/suggest at most one useful next step/);
+  assert.match(conversational[0].content,/suggest at most one useful action/);
+  assert.doesNotMatch(writing[0].content,/suggest at most one useful action/);
   assert.match(writing[0].content,/EXPLICIT REVIEWED WRITE/);
   assert.match(writing[0].content,/Produce the requested complete editable proposal/);
   assert.equal(writing[1].content,'Revise Scene');
@@ -133,10 +133,11 @@ test('existing Project and Scene draft paths also use explicit Write guidance', 
     const marker = "showSentWriteContext('" + operation + "', messages)";
     const index = source.indexOf(marker);
     assert.ok(index !== -1, 'Missing draft operation: ' + operation);
-    const before = source.slice(Math.max(0, index - 850), index);
+    const before = source.slice(Math.max(0, index - 1400), index);
     const plain = "studioDirectorRequestMessages([{ role: 'user', content: JSON.stringify(input) }], false, true)";
+    const prompt = "studioDirectorRequestMessages([{ role: 'user', content: JSON.stringify(input) }], true, true)";
     const formatted = "studioDirectorRequestMessages([{ role: 'user', content: JSON.stringify(input, null, 2) }], false, true)";
-    assert.ok(before.includes(plain) || before.includes(formatted),
+    assert.ok(before.includes(plain) || before.includes(prompt) || before.includes(formatted),
       'Explicit Write guidance not used by ' + operation);
   }
 });
@@ -145,10 +146,10 @@ test('single-Scene revision request uses its saved ID in the example, not a plac
   const batch = workbench.split('  function prepareBatchScenes(storyId) {')[1]
     .split('  function renderBatchReview() {')[0];
   assert.match(batch,/ids\.length === 1/);
-  assert.match(batch,/JSON\.stringify\(\{scenes:\[\{sceneId:ids\[0\],summary:/);
+  assert.match(batch,/JSON\.stringify\(\{scenes:\[\{sceneId:ids\[0\],prompt:/);
   assert.doesNotMatch(batch,/ACTUAL_SELECTED_ID/);
-  assert.match(batch,/summary \(Scene Intent\)/);
-  assert.match(batch,/prompt \(H3 Prompt\)/);
+  assert.match(batch,/summary is available for planning/);
+  assert.match(batch,/prompt is the authoritative description/);
   assert.match(batch,/validateSceneRevisionDraft\(result, ids, selected, raw\)/);
 });
 
@@ -169,7 +170,7 @@ test('Scene revision synchronizes the chosen Project destination before requesti
       selectWriteProject:(id,title)=>calls.push(['destination',id,title]),
       messages:()=>[],makeProposal:async instruction=>{
         assert.deepEqual(calls,[['destination',story.id,story.title]]);
-        assert.match(instruction,/Consider Title, Intent and H3 Prompt together as one Scene/);
+        assert.match(instruction,/Treat an existing H3 Prompt as authoritative/);
         assert.doesNotMatch(instruction,/Requested Write fields/);
         complete();return '{"scenes":[]}';
       }
@@ -187,6 +188,7 @@ test('Read sends actual saved data and asks for a conversational confirmation', 
   const context = vm.createContext({
     state, Promise, String, JSON,
     el: id => {
+      if (id === 'director-chat-scene-context') return {classList:{add(){}}};
       assert.equal(id, 'director-chat-input');
       return composer;
     },
@@ -268,12 +270,13 @@ test('General Chat has a separate request path and Studio keeps native storage I
 });
 
 
-test('Read offers one Project Overview and per-Scene complete selections without media fields', () => {
-  assert.match(workbench, /addUnit\('Project Overview', overview, fields/);
+test('Context selects Overview and full Scenes without media fields', () => {
+  assert.match(workbench, /addUnit\('Overview', overview, fields/);
   assert.match(workbench, /addUnit\('Scene ' \+ \(index \+ 1\)/);
-  assert.match(workbench, /\['title', 'summary', 'prompt', 'durationSeconds'\]/);
+  assert.match(workbench, /\['title', 'prompt', 'durationSeconds'\]/);
+  assert.match(workbench, /\['title', 'summary', 'durationSeconds'\]/);
   assert.match(workbench, /input\[data-group-select\]:checked/);
-  assert.match(html, /<summary>Scenes<\/summary>/);
+  assert.match(html, /id="studio-dw-read-selection-summary">Entire Project<\/summary>/);
   const read = workbench.split('  function renderReadStory(story) {', 2)[1].split('  function selectedPaths() {', 2)[0];
   assert.doesNotMatch(read, /'references'/);
   assert.doesNotMatch(read, /'generationSettings'/);

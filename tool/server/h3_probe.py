@@ -74,9 +74,14 @@ def _probe_command(seed_path, settings, publish_config_path=None):
 
 def _write_json(path, payload):
     path = Path(path)
-    temporary = path.with_suffix(path.suffix + ".tmp")
-    temporary.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    os.replace(temporary, path)
+    # The launch, monitor and Stop paths can write the same runtime file concurrently.
+    # Each writer needs its own staging file before the atomic replace.
+    temporary = path.with_name(path.name + "." + uuid.uuid4().hex + ".tmp")
+    try:
+        temporary.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        os.replace(temporary, path)
+    finally:
+        temporary.unlink(missing_ok=True)
     normalize_path_permissions(path)
 
 

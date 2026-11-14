@@ -21,7 +21,7 @@ ACTIONS = (
     {"name": "project.revise", "status": "available",
      "description": "Revise an existing Project's Concept, Visual / atmosphere, or Invariants in one editable review."},
     {"name": "scenes.write", "status": "available",
-     "description": "Create or revise one or more Scenes in a chosen Project, including Scene Intent, H3 Prompt and relevant Invariants; review before applying."},
+     "description": "Create or revise one or more Scenes in a chosen Project, including H3 Prompt and relevant Invariants; review before applying."},
 )
 
 _WORKSHOP = (
@@ -57,14 +57,15 @@ _H3_STUDIO_CORE = (
     "overall structure and how Scenes relate. Project Visual / atmosphere (story.style) "
     "sets the shared look, mood and camera language. Project Invariants (story.invariants) "
     "record only fixed identities or facts that must survive across relevant Scenes. "
-    "Scene Intent (scene.summary) describes this clip's purpose, observable action, "
-    "and any scene-specific beats; it can be brief and is not a video prompt. "
-    "H3 Prompt (scene.prompt) is the separate, complete generation instruction derived "
-    "from agreed Intent and relevant Project context, then reviewed and editable. "
-    "MH3 Take generation uses the saved H3 Prompt, not the Intent directly. "
-    "Revise each Project Overview (Concept, Visual / atmosphere, Invariants) and Scene (Title, Intent, H3 Prompt) "
-    "as a coherent unit. Align affected parts, preserve others and respect author limits. "
-    "Pacing, variation and Scene relationships go in Concept or the relevant Scene Intent. "
+    "Scene summary (scene.summary) is a planning outline until an H3 Prompt exists. "
+    "Once an H3 Prompt (scene.prompt) is authored, that complete saved prompt is the "
+    "authoritative Scene description, including its Scene Overview when present. "
+    "Treat older saved summaries as historical outlines, not competing instructions. "
+    "MH3 Take generation uses the saved H3 Prompt directly. "
+    "Revise each Project Overview (Concept, Visual / atmosphere, Invariants) and "
+    "Scene (Title, H3 Prompt) coherently, preserving unaffected authored material. "
+    "For planning-only Scenes, develop the outline before authoring the prompt. "
+    "Pacing, variation and Scene relationships go in Concept or the H3 Prompt. "
     "FIELD DEVELOPMENT: Based on discussed or explicitly Read material, fill consequential gaps: "
     "distinctive stable character traits, recognizable location layouts, and purposeful Scene "
     "staging, movement, framing, timing and dialogue. "
@@ -74,7 +75,7 @@ _H3_STUDIO_CORE = (
     "Assess only supplied material and meaningful gaps. "
      "Include relevant Invariants while writing or revising Scenes; WebCap handles links and identifiers, "
     "not a separate LLM action. Existing H3 Prompts are never silently rewritten. "
-    "A Scene remains independently movable: put any necessary starting condition or handoff in its Intent "
+    "A Scene remains independently movable: put necessary starting conditions in its H3 Prompt "
     "and relevant shared constraints in Concept or Invariants. "
     "Entry and exit state fields are retired from active creative planning. "
     "Give practical H3 feedback on whether the action fits 4-15 seconds, using achievable actions and "
@@ -91,7 +92,7 @@ _H3_STUDIO_CORE = (
     "Treat uncertain model behavior as practical risks, not impossibilities.\n"
     "AVAILABLE AUTHOR-REVIEWED CREATIVE WORKFLOWS: Create Project with Concept, Visual / atmosphere, "
     "Invariants and optional initial Scenes; Revise Project with those same fields; Write Scenes to create "
-    "or revise one or multiple Scenes, with reviewed insertion or revision of Intent and H3 Prompt. "
+    "or revise one or multiple Scenes, with reviewed insertion or revision of the H3 Prompt. "
     "These are the only creative Write goals to suggest. Read remains explicit and author-selected. "
     "Do not suggest Director operations for renaming, moving, duplicating, splitting Scenes, linking "
     "Invariants separately, undoing a Project brief or updating the H3 Playbook; WebCap or the author "

@@ -73,7 +73,7 @@
     if(!modelId)return;
     var settings={concept:els('concept').value,rounds:els('rounds').value,
       cases:els('cases').value,retention:els('retention').value,
-      referenceRvn:els('enable-rvn').checked,referenceDino:els('enable-dino').checked};
+      referenceRvn:els('enable-rvn').checked};
     if(els('round-plan').querySelector('[data-epoch-round]'))settings.roundPlans=getRoundPlans();
     campaignDraftRevision++;
     if(campaignSaveTimer)clearTimeout(campaignSaveTimer);
@@ -109,7 +109,6 @@
           if(saved[pair[1]]!=null)els(pair[0]).value=String(saved[pair[1]]);
         });
         if(typeof saved.referenceRvn==='boolean')els('enable-rvn').checked=saved.referenceRvn;
-        if(typeof saved.referenceDino==='boolean')els('enable-dino').checked=saved.referenceDino;
         dimensions=[];
         els('round-plan').innerHTML='';
         roundPlan();
@@ -900,22 +899,17 @@
     var evaluated = units.filter(function (u) { return u.assessment !== null; }).length;
     els('render-count').textContent = frames + ' / ' + total;
     els('vl-count').textContent = evaluated + ' / ' + total;
-    ['rvn','dino'].forEach(function (kind) {
-      var enabled = (campaign.referenceEvaluation || {})[kind];
-      els(kind + '-progress').classList.toggle('hidden', !enabled);
-      if (!enabled) return;
-      var key = kind === 'rvn' ? 'referenceComplete' : 'dinoComplete';
-      var errorKey = kind === 'rvn' ? 'referenceError' : 'dinoError';
-      var completed = units.filter(function (u) { return u[key]; }).length;
-      var errors = units.filter(function (u) { return u[errorKey]; }).length;
-      els(kind + '-count').textContent = completed + ' / ' + total + (errors ? ' · ' + errors + ' failed' : '');
-      if (kind === 'rvn') {
-        var firstError = units.find(function (unit) { return !!unit.referenceError; });
-        els('reference-compare-error').textContent = firstError ?
-          'Reference Compare failed at ' + candidateLabel(campaign, firstError.epoch) + ': ' + firstError.referenceError : '';
-        els('reference-compare-error').classList.toggle('hidden', !firstError);
-      }
-    });
+    var rvnEnabled = !!(campaign.referenceEvaluation || {}).rvn;
+    els('rvn-progress').classList.toggle('hidden', !rvnEnabled);
+    if (rvnEnabled) {
+      var completed = units.filter(function (u) { return !!u.referenceComplete; }).length;
+      var errors = units.filter(function (u) { return !!u.referenceError; }).length;
+      els('rvn-count').textContent = completed + ' / ' + total + (errors ? ' · ' + errors + ' failed' : '');
+    }
+    var firstError = rvnEnabled ? units.find(function (unit) { return !!unit.referenceError; }) : null;
+    els('reference-compare-error').textContent = firstError ?
+      'Reference Compare failed at ' + candidateLabel(campaign, firstError.epoch) + ': ' + firstError.referenceError : '';
+    els('reference-compare-error').classList.toggle('hidden', !firstError);
     els('field-count').textContent = plan.epochs.length + ' checkpoints';
     els('render-bar').style.width = (total ? frames / total * 100 : 0) + '%';
     els('vl-bar').style.width = (total ? evaluated / total * 100 : 0) + '%';
@@ -965,7 +959,7 @@
       (errors ? ' · ' + errors + ' failed observation(s)' : '') :
       'Results appear as VL evaluates frames.';
     // The existing campaign retention plan owns recommendations: no second cutoff
-    // or unvalidated RVN/DINO score. All boundary ties already survive retention.
+    // or unvalidated reference comparison score. All boundary ties already survive retention.
     var eligible = ranking.filter(function (entry) { return entry.score != null; });
     // During a running campaign, only epochs surviving an actual completed cut
     // are recommendations. At completion, the final round makes no further cut:
@@ -994,8 +988,7 @@
     els('ranking').innerHTML = ranking.length ? ranking.map(function (entry, index) {
       var observed = scoredByEpoch.get(entry.epoch)||[];
       var extra = (campaign.referenceEvaluation || {});
-      var evidence = (extra.rvn ? ' · RVN ' + observed.filter(function (u) { return u.referenceComplete; }).length + '/' + observed.length : '') +
-        (extra.dino ? ' · DINO ' + observed.filter(function (u) { return u.dinoComplete; }).length + '/' + observed.length : '');
+      var evidence = extra.rvn ? ' · RVN ' + observed.filter(function (u) { return u.referenceComplete; }).length + '/' + observed.length : '';
       return '<button type="button" class="epoch-finder-ranking-row' + (campaignTestStatus[String(entry.epoch)]===true?' is-in-test':'') + '" data-inspect-epoch="' + entry.epoch + '" title="Inspect all retained tests for this epoch' + (campaignTestStatus[String(entry.epoch)]===true?' · In Test Generations':'') + '"><span class="rank">#' + (index + 1) +
         '</span><span class="epoch">' + escape(candidateLabel(campaign, entry.epoch)) + (recommended.has(entry.epoch) && entry.score != null ? ' · recommended' : '') + (entry.active === false ? ' · sidelined' : '') +
         '</span><span class="epoch-finder-score-track"><i style="width:' +
@@ -1042,16 +1035,13 @@
     if (second && first.frames !== second.frames) caveats.push('Unequal scored-frame coverage');
     if (pending) caveats.push(pending + ' pending frame(s)');
     if (failed) caveats.push(failed + ' failed frame(s)');
-    ['rvn', 'dino'].forEach(function (kind) {
-      if (!(campaign.referenceEvaluation || {})[kind]) return;
-      var key = kind === 'rvn' ? 'referenceComplete' : 'dinoComplete';
-      var errorKey = kind === 'rvn' ? 'referenceError' : 'dinoError';
+    if ((campaign.referenceEvaluation || {}).rvn) {
       var assessed = (campaign.units || []).filter(function (u) { return !!u.assessment; });
-      var complete = assessed.filter(function (u) { return !!u[key]; }).length;
-      var errors = assessed.filter(function (u) { return !!u[errorKey]; }).length;
-      caveats.push((kind === 'rvn' ? 'RVN' : 'DINO') + ' ' + complete + '/' + assessed.length +
+      var complete = assessed.filter(function (u) { return !!u.referenceComplete; }).length;
+      var errors = assessed.filter(function (u) { return !!u.referenceError; }).length;
+      caveats.push('RVN ' + complete + '/' + assessed.length +
         (errors ? ' (' + errors + ' failed)' : '') + ' · separate evidence');
-    });
+    }
     host.innerHTML = '<div class="epoch-finder-summary-stats">' +
       '<div><small>Leading checkpoint</small><strong>' + escape(candidateLabel(campaign, first.epoch)) + '</strong><span>' +
       Math.round(first.score * 100) + '% · ' + first.frames + ' scored frames</span></div>' +
@@ -1068,7 +1058,7 @@
     var shown=inspectedEpoch==null?units.slice(-40).reverse():units.slice().sort(function(a,b){return a.round-b.round||a.case-b.case;});
     var key=campaign.id+':'+inspectedEpoch+':'+shown.map(function(u){
       return [u.frame,JSON.stringify(u.assessment||null),JSON.stringify(u.referenceAssessments||[]),
-        JSON.stringify(u.dinoAssessments||[]),u.error||''].join(':');
+        u.error||''].join(':');
     }).join('|');
     if(lastFrameKey===key)return;
     lastFrameKey=key;
@@ -1092,7 +1082,7 @@
     shown.forEach(function(unit){
       var identity=unit.epoch+':'+unit.round+':'+unit.case;
       keep.add(identity);
-      var version=[unit.frame,JSON.stringify(unit.assessment||null),JSON.stringify(unit.referenceAssessments||[]),JSON.stringify(unit.dinoAssessments||[]),unit.error||''].join('|');
+      var version=[unit.frame,JSON.stringify(unit.assessment||null),JSON.stringify(unit.referenceAssessments||[]),unit.error||''].join('|');
       var prior=preserved.get(identity);
       if(prior&&prior.dataset.cardVersion===version){host.appendChild(prior);return;}
       var url='/fs/epoch_finder/frame?folder='+encodeURIComponent(currentFolder)+'&campaign='+encodeURIComponent(campaign.id)+'&frame='+encodeURIComponent(unit.frame);
@@ -1104,7 +1094,6 @@
       var evidence=[];
       if(unit.assessment)evidence.push({label:counted?'VL '+matched+'/'+counted:'VL ✓'});
       if((unit.referenceAssessments||[]).length)evidence.push({label:'Ref '+unit.referenceAssessments.length});
-      if((unit.dinoAssessments||[]).length)evidence.push({label:'DINO '+unit.dinoAssessments.length});
       var details=[];
       if(unit.prompt)details.push({label:'Resolved prompt',value:unit.prompt,pre:true});
       if(unit.seed!=null)details.push({label:'Seed',value:String(unit.seed)});
@@ -1113,9 +1102,6 @@
       })});
       if((unit.referenceAssessments||[]).length)details.push({label:'Reference VL',value:unit.referenceAssessments.map(function(r){
         return (r.group||r.label||'Reference')+' · '+r.option+': '+r.verdict+' · '+(r.reference||'');
-      })});
-      if((unit.dinoAssessments||[]).length)details.push({label:'DINOv2',value:unit.dinoAssessments.map(function(r){
-        return (r.reference||'Reference')+': '+Number(r.similarity).toFixed(3);
       })});
       var card=createTestPreviewCard({
         tag:'figure',className:'epoch-finder-frame',role:'button',tabIndex:0,
@@ -1152,7 +1138,6 @@
           ' · ' + row.weightedObservations + ' weighted observations' +
           ' · RVN ' + (verdicts.MATCH || 0) + '/' + (verdicts.PARTIAL || 0) + '/' +
           (verdicts.MISMATCH || 0) + '/' + (verdicts.UNCLEAR || 0) + ' (match/partial/mismatch/unclear)' +
-          ' · DINO ' + row.dinoComparisons + ' comparisons' +
           (row.failedUnits ? ' · ' + row.failedUnits + ' failed units' : '') +
           (row.campaignId === campaign.id ? ' · current' : '') + '</p>';
       }).join('') : '<p>No saved campaign evidence.</p>';
@@ -1191,8 +1176,7 @@
         return r.attribute === g.label && r.option === g.options[g.expected - 1];
       }); }).filter(Boolean).map(function (r) { return r.media; });
     var referenceNames = Array.from(new Set(plannedReferences
-      .concat((unit.referenceAssessments || []).map(function (v) { return v.reference; }))
-      .concat((unit.dinoAssessments || []).map(function (v) { return v.reference; }))));
+      .concat((unit.referenceAssessments || []).map(function (v) { return v.reference; }))));
     var referenceThumbnails = referenceNames.map(function (name) {
       var href = '/caption/media?folder=' + encodeURIComponent(currentFolder) + '&media=' + encodeURIComponent(name);
       return '<a href="' + escape(href) + '" target="_blank" rel="noopener" title="Open full training reference">' +
@@ -1231,14 +1215,7 @@
           '<div>' + escape(v.response) + '</div><small>Reference: ' + escape(v.reference) +
           ' · ' + escape(v.elapsedSeconds) + 's</small></div>';
         }).join('') + '</details>' : '') +
-      ((unit.dinoAssessments || []).length ? '<details open><summary>DINOv2 whole-image similarity (' +
-        unit.dinoAssessments.length + ' distinct references)</summary>' + unit.dinoAssessments.map(function (v) {
-          return '<div class="epoch-finder-reference-verdict"><strong>' + escape(v.reference) +
-            '</strong><span>' + Number(v.similarity).toFixed(3) + '</span><div>' +
-            escape((v.attributes || []).join(' · ')) + '</div></div>';
-        }).join('') + '</details>' : '') +
       (unit.referenceError ? '<p class="epoch-finder-error">Reference VL: ' + escape(unit.referenceError) + '</p>' : '') +
-      (unit.dinoError ? '<p class="epoch-finder-error">DINOv2: ' + escape(unit.dinoError) + '</p>' : '') +
       (unit.error ? '<p class="epoch-finder-error">' + escape(unit.error) + '</p>' : '') + evidenceSection(campaign);
   }
 
@@ -1399,7 +1376,6 @@
     els('cases').value = String(first.seeds.length);
     els('retention').value = String(first.keepPercent);
     els('enable-rvn').checked = !!source.referenceEvaluation.rvn;
-    els('enable-dino').checked = !!source.referenceEvaluation.dino;
     referenceSelections = {};
     source.dimensions.filter(function (item) { return item.role === 'primary'; }).forEach(function (item) {
       item.options.forEach(function (option) { referenceSelections[JSON.stringify([item.label, option])] = null; });
@@ -1445,7 +1421,7 @@
       roundPlans: getRoundPlans(), concept: els("concept").value.trim(), dimensions: recordDimensions(),
       vlImageMP: 0.45,
       referencePlan: approvedReferences(),
-      referenceEvaluation: {rvn: els('enable-rvn').checked, dino: els('enable-dino').checked},
+      referenceEvaluation: {rvn: els('enable-rvn').checked},
       parentCampaignId: followUpSource};
     if (sourceMode === 'staged') {
       criteria.modelId = window.getWorkingModelProfileId();
@@ -1650,7 +1626,7 @@
   if (testDuration) testDuration.addEventListener('input', function () {
     if (mode === 'finder') roundPlan();
   });
-  ['concept','rounds','cases','retention','enable-rvn','enable-dino'].forEach(function(id){
+  ['concept','rounds','cases','retention','enable-rvn'].forEach(function(id){
     els(id).addEventListener('input',function(){campaignDraftRevision++;});
     if(!['rounds','cases','retention'].includes(id))els(id).addEventListener('change',campaignSaveDraft);
   });

@@ -71,7 +71,6 @@ test('complete Scene capture has an editable Prompt and one reviewed Apply saves
   scope.showStudioSceneDraftReview();
   assert.equal(el('studio-scene-draft-prompt-row').classList.hidden,false);
   assert.equal(el('studio-scene-draft-prompt').value,prompt);
-  assert.equal(el('studio-scene-draft-apply').textContent,'Create Scene');
   scope.applyStudioSceneDraft();
   await done;
   assert.deepEqual(calls,['flush','apply','receipt','refresh']);

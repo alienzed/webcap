@@ -14,9 +14,6 @@ function part(start, end) {
 const parse = new Function(part('  function parseStudioChatResponse(raw) {',
   '  function storyboardRequestMessages(messages, includePrimer) {') +
   '\nreturn parseStudioChatResponse;')();
-const visible = new Function(part('  function studioDirectorVisibleReply(value) {',
-  '  function storyboardRequestMessages(messages, includePrimer) {') +
-  '\nreturn studioDirectorVisibleReply;')();
 const valid = {
   checks:[{name:'Concept',scope:'project',ready:true,content:'A scene with dialogue, and "quotation" marks'}],
   readHints:['project.concept'],writeHint:'project',writeFields:['concept'],sceneId:''
@@ -37,9 +34,9 @@ function processResponse(text,accept=true,pendingReadAck=null,mode='storyboard')
   },reportConsoleError:(label,err)=>failures.push(label+': '+err.message)};
   const code=part("        var studioResponse = activeChatMode === 'storyboard' ? parseStudioChatResponse(result.text) : null;",
     "        messages.push({ role: 'assistant', content: assistantText });");
-  const run=new Function('result','activeChatMode','state','window','studioActionStatus','parseStudioChatResponse','studioDirectorVisibleReply',
+  const run=new Function('result','activeChatMode','state','window','studioActionStatus','parseStudioChatResponse',
     'var requestError=null;'+code+'\nreturn {text:assistantText,error:requestError};');
-  return {...run({text},mode,state,window,msg=>statuses.push(msg),parse,visible),state,statuses,failures};
+  return {...run({text},mode,state,window,msg=>statuses.push(msg),parse),state,statuses,failures};
 }
 
 test('one structured response supplies the exact reply and readiness separately',()=>{
@@ -49,27 +46,6 @@ test('one structured response supplies the exact reply and readiness separately'
   assert.equal(response.state.studioReadiness.stale,false);
   assert.deepEqual(response.state.studioReadiness.checks,valid.checks);
   assert.deepEqual(response.failures,[]);
-});
-
-test('a complete generated prompt is visible in chat even when Director puts it in capture',()=>{
-  const draft='Scene 4: An actor enters the kitchen. Keep the camera steady for eight seconds.';
-  const capture={field:'prompt',sceneId:'scene-four',content:draft};
-  const result=processResponse(envelope({...valid,capture},'Here is the prompt:'));
-  assert.equal(result.text,'Here is the prompt:\n\n'+draft);
-  assert.deepEqual(result.failures,[]);
-});
-
-test('draft content is not repeated when Director already includes it in reply',()=>{
-  const draft='Revise the sequence for continuity while retaining the original lighting.';
-  const capture={field:'prompt',sceneId:'scene-four',content:draft};
-  const result=processResponse(envelope({...valid,capture},'Proposed revision:\n'+draft));
-  assert.equal(result.text,'Proposed revision:\n'+draft);
-  assert.deepEqual(result.failures,[]);
-});
-
-test('a conversational reply with no capture remains intact',()=>{
-  const result=processResponse(envelope(valid,'An idea without any authored draft.'));
-  assert.equal(result.text,'An idea without any authored draft.');
 });
 
 test('assessment without a reply fails loudly instead of inventing conversation',()=>{
@@ -155,7 +131,7 @@ test('capture is optional, bounded and remains editable authoring material, not 
   const proposal = {...valid, capture};
   assert.deepEqual(parse(envelope(proposal)).readiness.capture, capture);
   const response = processResponse(envelope(proposal));
-  assert.equal(response.text, 'A concise suggestion.\n\n' + capture.content);
+  assert.equal(response.text, 'A concise suggestion.');
   assert.deepEqual(response.state.studioReadiness.capture, capture);
   assert.match(director, /reviewCapture: function \(capture, storyId\)/);
   assert.match(director, /showStudioBriefReview\(\)/);
@@ -256,13 +232,10 @@ test('complete Studio model output is inspectable and its original capture reope
     currentMessages:()=>[{role:'assistant',content:"Here's the draft.",rawResponse:raw}],
     currentElapsedMap:()=>({}),currentMetricsMap:()=>({}),
     window:{studioDirectorWorkbench:{reviewGeneratedCapture:result=>calls.push(result)}},
-    studioDirectorVisibleReply:visible,Object,JSON,String
+    Object,JSON,String
   });
   vm.runInContext(part('  function renderMessages() {','  function renderStudioOperations() {'),context);
   vm.runInContext('renderMessages()',context);
-  assert.equal(host.children[0].children[1].textContent,
-    "Here's the draft.\n\nFull draft from earlier reply",
-    'older structured captures should become visible without repeating inference');
   const details=created.find(n=>n.className==='director-chat-full-response');
   const action=created.find(n=>n.className==='director-chat-review-draft');
   assert.equal(details,undefined,'raw model output stays out of the creative conversation');

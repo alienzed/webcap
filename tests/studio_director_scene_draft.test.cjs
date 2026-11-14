@@ -224,7 +224,7 @@ test('Scene review retains prompts and flags durations for author correction', (
   assert.doesNotMatch(messages(host.children[2]),/correct it before Apply/,'fractional seconds are not automatically invalid');
 });
 
-test('new Scene Apply sends the edited prompt and durationtest('new Scene Apply sends the edited prompt and duration and records the authoritative saved values',async()=>{
+test('new Scene Apply sends the edited prompt and duration and records the authoritative saved values',async()=>{
   let payload,receipt,finish;
   const done=new Promise(resolve=>{finish=resolve;});
   const values={title:'Edited title',prompt:'Edited full prompt',durationSeconds:'8'};

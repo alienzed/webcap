@@ -44,7 +44,7 @@ function directorHarness(raw='{"prompt":"Revised full prompt"}') {
   return {scope,state,calls,elements};
 }
 test('opening Scene Director stages context without a model request or overwriting the composer',async()=>{
-  const h=directorHarness();await h.scope.window.openStudioDirectorScene({id:'p',title:'Project'},'s','');
+  const h=directorHarness();await h.scope.window.openStudioDirectorScene({id:'p',title:'Project',sceneOrder:['s']},'s','');
   assert.equal(h.state.sceneRead.projectId,'p');
   assert.equal(h.state.sceneRead.sceneId,'s');
   assert.equal(h.state.sceneRead.payload,undefined,'the opening snapshot is not authoritative');

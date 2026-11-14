@@ -118,8 +118,8 @@ test('Read preview and outbound values use the same validated field serializer',
   const result=scope.readPayload(story,['project.concept','scene:s1:prompt']);
   assert.equal(result.fields.length,2);
   assert.equal(result.fields[0].value,'A specific premise');
-  assert.equal(result.fields[1].value,'Tense dialogue');
-  assert.throws(()=>scope.readPayload(story,['scene:missing:summary']),/not in this Project/);
+  assert.equal(result.fields[1].value,'Close-up');
+  assert.throws(()=>scope.readPayload(story,['scene:missing:prompt']),/not in this Project/);
   assert.match(rail,/readPayload\(story, keys\)/);
   assert.match(rail,/sendRead\(payload, keys, typeof instruction === 'string' \? instruction : undefined\)/);
 });

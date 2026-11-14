@@ -590,7 +590,6 @@
         var savedScene = canonical && canonical.scenes ? canonical.scenes[sceneId] : null;
         var currentScene = storyState.story.scenes ? storyState.story.scenes[sceneId] : null;
         if (savedScene && currentScene) {
-          currentScene.summary = savedScene.summary;
           currentScene.entryState = savedScene.entryState;
           currentScene.exitState = savedScene.exitState;
           rememberScenePrompt(storyId, sceneId, currentScene.prompt || '', savedScene.prompt || '');
@@ -603,12 +602,10 @@
           currentScene.durationSeconds = savedScene.durationSeconds;
           currentScene.updatedAt = savedScene.updatedAt;
           var currentRoot = sceneElement(sceneId);
-          var currentSummary = currentRoot && currentRoot.querySelector('[data-scene-field="summary"]');
           var currentEntry = currentRoot && currentRoot.querySelector('[data-scene-field="entryState"]');
           var currentExit = currentRoot && currentRoot.querySelector('[data-scene-field="exitState"]');
           var currentPrompt = currentRoot && currentRoot.querySelector('[data-scene-field="prompt"]');
           var currentDuration = currentRoot && currentRoot.querySelector('[data-scene-field="durationSeconds"]');
-          if (currentSummary) currentSummary.value = savedScene.summary || '';
           if (currentEntry) currentEntry.value = savedScene.entryState || '';
           if (currentExit) currentExit.value = savedScene.exitState || '';
           if (currentPrompt) currentPrompt.value = savedScene.prompt || '';
@@ -1564,12 +1561,10 @@
       if (!storyState.story || String(storyState.story.id || '') !== String(storyId)) return;
       storyState.story.scenes[sceneId] = payload.scene;
       var root = sceneElement(sceneId);
-      var summary = root && root.querySelector('[data-scene-field="summary"]');
       var entry = root && root.querySelector('[data-scene-field="entryState"]');
       var exit = root && root.querySelector('[data-scene-field="exitState"]');
       var prompt = root && root.querySelector('[data-scene-field="prompt"]');
       var duration = root && root.querySelector('[data-scene-field="durationSeconds"]');
-      if (summary) summary.value = payload.scene.summary || '';
       if (entry) entry.value = payload.scene.entryState || '';
       if (exit) exit.value = payload.scene.exitState || '';
       if (prompt) prompt.value = payload.scene.prompt || '';
@@ -2172,7 +2167,7 @@
       }
       var scenes = (story.sceneOrder || []).map(function (id) {
         var scene = story.scenes[id] || {};
-        return {id:id, title:scene.title || id, summary:scene.summary || scene.prompt || ''};
+        return {id:id, title:scene.title || id, summary:scene.prompt || ''};
       });
       return fetch('/fs/lora_library/plan', {
         method:'POST', headers:{'Content-Type':'application/json'},
@@ -4171,9 +4166,6 @@
         '<div class="storyboard-scene-body">' +
           '<div class="storyboard-scene-main">' +
             '<label class="storyboard-field storyboard-scene-title-field"><span>Scene title</span><input data-scene-field="title" value="' + escapeHtml(sceneValue(scene, 'title', '')) + '" placeholder="Scene title"></label>' +
-            (String(sceneValue(scene, 'prompt', '')).trim()
-              ? '<input type="hidden" data-scene-field="summary" value="' + escapeHtml(sceneValue(scene, 'summary', '')) + '">'
-              : '<label class="storyboard-field storyboard-scene-intent"><span>Scene outline</span><textarea data-scene-field="summary" rows="2" placeholder="Describe the Scene before authoring its H3 Prompt.">' + escapeHtml(sceneValue(scene, 'summary', '')) + '</textarea></label>') +
             '<div class="storyboard-prompt-block">' +
               '<div class="storyboard-prompt-heading">' +
                 '<span class="storyboard-prompt-label">' +
@@ -4695,7 +4687,6 @@
     var refineComplete = promptUnchanged && !!currentScene.refineComplete;
     var payload = {
       title: field('title').value,
-      summary: field('summary').value,
       prompt: promptValue,
       promptDirectorModel: promptDirectorModel,
       promptDirectorJobId: promptDirectorJobId,
@@ -4731,7 +4722,6 @@
       delete payload.refineComplete;
     }
     if (directorTargetPending({ kind: 'repair', storyId: storyState.story.id })) {
-      delete payload.summary;
       delete payload.prompt;
       delete payload.promptDirectorModel;
       delete payload.promptDirectorJobId;
@@ -7110,7 +7100,7 @@
             style: story.style, guidelines: story.guidelines, invariants: story.invariants,
             scenes: (story.sceneOrder || []).map(function (id, index) {
               var scene = story.scenes[id];
-              return { number: index + 1, id: id, title: scene.title, summary: scene.summary };
+              return { number: index + 1, id: id, title: scene.title, prompt: scene.prompt };
             })
           }, null, 2)
         };
@@ -7121,7 +7111,7 @@
         key: 'scene:' + story.id + ':' + sceneId,
         label: 'Scene ' + ((story.sceneOrder || []).indexOf(sceneId) + 1),
         content: JSON.stringify({
-          title: scene.title, summary: scene.summary,
+          title: scene.title,
           entryState: scene.entryState, exitState: scene.exitState,
           prompt: scene.prompt, notes: scene.notes
         }, null, 2)

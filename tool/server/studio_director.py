@@ -128,7 +128,7 @@ def chat_response_schema():
     readiness = []
     for operations, fields in (
         (["project"], ["title", "concept", "style", "invariants"]),
-        (["scenes"], ["title", "prompt"]),
+        (["scenes"], ["title", "prompt", "durationSeconds"]),
         (["", "new-project"], []),
     ):
         properties = {
@@ -147,6 +147,9 @@ def chat_response_schema():
             "readHints": {"type": "array", "maxItems": 5,
                           "items": {"type": "string", "maxLength": 120}},
             "writeHint": {"type": "string", "enum": operations},
+            # Structured single-Scene launch instruction, authored from discussion.
+            # Older persisted readiness records remain valid without this field.
+            "writeInstruction": {"type": "string", "maxLength": 3000},
             "writeFields": {"type": "array", "maxItems": 4 if fields else 0,
                             "uniqueItems": True,
                             "items": {"type": "string", **({"enum": fields} if fields else {})}},
@@ -158,7 +161,7 @@ def chat_response_schema():
         }
         readiness.append({
             "type": "object", "additionalProperties": False,
-            "required": ["checks", "readHints", "writeHint", "writeFields", "sceneId", "sceneNumber", "capture"],
+            "required": ["checks", "readHints", "writeHint", "writeInstruction", "writeFields", "sceneId", "sceneNumber", "capture"],
             "properties": properties,
         })
     return {

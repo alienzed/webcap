@@ -110,7 +110,7 @@ test('only one contextual action is presented, with completed capture taking pri
     el:id=>id==='studio-dw-suggestions'?actions:id==='studio-dw-suggestion-heading'?{classList:{toggle(){}}}:assessment,
     document:{createElement:node},reviewCreativeCapture(){},openRecommendedWrite(){},
     window:{studioDirectorBridge:{workingStoryId:()=> 'p1',placeSuggestedAction(node){assert.equal(node,actions);}}},
-    creativeCapture:{field:'prompt',content:'Complete Prompt',sceneId:'a'},
+    creativeCapture:{field:'prompt',content:'Complete Prompt',sceneId:'a'},preparedSceneWrite:null,
     recommendations:{readHints:[],writeHint:'scenes',writeFields:['prompt'],sceneId:'a'}});
   vm.runInContext(fieldsCode + part('  function captureActionLabel(capture) {','  window.studioDirectorWorkbench = {'),scope);
   const kinds=()=>{scope.renderReadiness([]);return actions.children.map(n=>n.dataset.suggestionKind);};

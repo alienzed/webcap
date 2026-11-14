@@ -94,7 +94,7 @@ test('Studio prompting selects the current goal rather than steering every task 
   assert.match(system,/an appropriately scoped reviewed Write or an author-operated Studio action/);
   assert.doesNotMatch(system,/When choices are clear, offer to review Concept/);
   assert.match(system,/Ask one focused question only for a consequential missing decision/);
-  assert.match(system,/author its complete text in capture.content on this turn/);
+  assert.match(system,/author it in capture.content with the H3 template/);
   assert.match(system,/one authored text for both chat and Review Scene/);
   assert.match(system,/"projectId":"p1","sceneOrder":\["scene-a"\]/);
   assert.match(system,/Usually checks=\[\], readHints=\[\]/);
@@ -121,10 +121,10 @@ test('explicit Write guidance asks for the draft, not another conversational rec
     "studioDirectorRequestMessages([{role:'user',content:'Revise Scene'}],false,true)",context);
   assert.match(conversational[0].content,/suggest at most one useful action/);
   assert.doesNotMatch(writing[0].content,/suggest at most one useful action/);
-  assert.match(writing[0].content,/EXPLICIT REVIEWED WRITE/);
+  assert.match(writing[0].content,/EXPLICIT WRITE/);
   assert.match(writing[0].content,/Produce the requested complete editable proposal/);
   assert.equal(writing[1].content,'Revise Scene');
-  assert.match(source,/studioDirectorRequestMessages\(\[\{role:'user',content:instruction\}\], includePromptContract, true\)/);
+  assert.match(source,/studioDirectorRequestMessages\(\[\{role:'user',content:instruction\}\], includePromptContract, true, navigationSnapshot\)/);
 });
 
 test('existing Project and Scene draft paths also use explicit Write guidance', () => {

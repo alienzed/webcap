@@ -178,7 +178,7 @@ def test_h3_playbook_review_uses_existing_config_and_checks_conflicts(monkeypatc
     ("studio_project_draft", {"title", "concept", "style", "invariants", "firstScenes", "rationale"}),
     ("studio_scene_draft", {"title", "prompt", "rationale"}),
     ("studio_scene_sequence_draft", {"scenes", "rationale"}),
-    ("studio_scene_field_draft", {"title", "prompt"}),
+    ("studio_scene_field_draft", {"title", "prompt", "durationSeconds"}),
     ("studio_scene_batch_draft", {"scenes"}),
     ("studio_playbook_draft", {"guidance"}),
     ("storyboard_workshop_shots", {"summary", "shots"}),
@@ -225,13 +225,13 @@ def test_studio_chat_schema_constrains_recommendations_to_the_selected_operation
     variants = schema["properties"]["readiness"]["anyOf"]
     for variant in variants:
         assert variant["additionalProperties"] is False
-        assert set(variant["required"]) == {"checks", "readHints", "writeHint", "writeFields", "sceneId", "sceneNumber", "capture"}
+        assert set(variant["required"]) == {"checks", "readHints", "writeHint", "writeInstruction", "writeFields", "sceneId", "sceneNumber", "capture"}
         fields = variant["properties"]["writeFields"]
         for operation in variant["properties"]["writeHint"]["enum"]:
             if operation == "project":
                 assert set(fields["items"]["enum"]) == {"title", "concept", "style", "invariants"}
             elif operation == "scenes":
-                assert set(fields["items"]["enum"]) == {"title", "prompt"}
+                assert set(fields["items"]["enum"]) == {"title", "prompt", "durationSeconds"}
             else:
                 assert fields["maxItems"] == 0
         assert fields["uniqueItems"] is True
@@ -271,6 +271,27 @@ def test_studio_chat_schema_requires_a_capture_decision_and_preserves_older_save
     legacy = {"checks": [], "readHints": [], "writeHint": "", "sceneId": ""}
     assert "capture" not in _validate_readiness(legacy)
     assert "capture" not in _validate_readiness({**legacy, "capture": None})
+
+
+def test_scene_write_instruction_is_structured_and_survives_conversation_storage():
+    from tool.server.studio_director import chat_response_schema
+    from tool.server.director_chat_history import _validate_readiness
+
+    for variant in chat_response_schema()["properties"]["readiness"]["anyOf"]:
+        field = variant["properties"]["writeInstruction"]
+        assert field["type"] == "string"
+        assert field["maxLength"] == 3000
+        assert "writeInstruction" in variant["required"]
+
+    original = {"checks": [], "readHints": [], "writeHint": "scenes",
+                "writeFields": ["prompt"], "sceneId": "real-scene", "sceneNumber": 1,
+                "writeInstruction": "Make the ending quieter."}
+    assert _validate_readiness(original)["writeInstruction"] == "Make the ending quieter."
+    assert "writeInstruction" not in _validate_readiness(
+        {key: value for key, value in original.items() if key != "writeInstruction"})
+    for invalid in (None, 3, "x" * 3001):
+        with pytest.raises(ValueError, match="write instruction"):
+            _validate_readiness({**original, "writeInstruction": invalid})
 
 
 def test_studio_chat_scene_numbers_are_advisory_and_persist_with_older_sessions():

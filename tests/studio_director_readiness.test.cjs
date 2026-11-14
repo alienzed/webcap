@@ -34,9 +34,9 @@ function processResponse(text,accept=true,pendingReadAck=null,mode='storyboard')
   },reportConsoleError:(label,err)=>failures.push(label+': '+err.message)};
   const code=part("        var studioResponse = activeChatMode === 'storyboard' ? parseStudioChatResponse(result.text) : null;",
     "        messages.push({ role: 'assistant', content: assistantText });");
-  const run=new Function('result','activeChatMode','state','window','studioActionStatus','parseStudioChatResponse',
+  const run=new Function('result','activeChatMode','state','window','studioActionStatus','parseStudioChatResponse','selectedScene',
     'var requestError=null;'+code+'\nreturn {text:assistantText,error:requestError};');
-  return {...run({text},mode,state,window,msg=>statuses.push(msg),parse),state,statuses,failures};
+  return {...run({text},mode,state,window,msg=>statuses.push(msg),parse,null),state,statuses,failures};
 }
 
 test('one structured response supplies the exact reply and readiness separately',()=>{
@@ -125,7 +125,7 @@ test('workbench exposes freshness and only accepted assessments are stored',()=>
 });
 
 test('the first accepted assessment is current immediately, rather than labelled not assessed',()=>{
-  const start=workbench.indexOf('    updateReadiness:function (result, restoring) {');
+  const start=workbench.indexOf('    updateReadiness:function (result, restoring, selectedScene) {');
   const end=workbench.indexOf('\n  };\n\n  function bind()',start);
   assert.ok(start>=0 && end>start);
   const scope=vm.createContext({readiness:[],projectFields:['title','concept','style','invariants'],

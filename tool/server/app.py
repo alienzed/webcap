@@ -2324,6 +2324,7 @@ def director_chat_route():
                 "properties": {
                     "title": {"type": "string"},
                     "prompt": {"type": "string"},
+                    "durationSeconds": {"type": "integer", "minimum": 4, "maximum": 15},
                 },
             }
         if operation == "studio_scene_batch_draft":

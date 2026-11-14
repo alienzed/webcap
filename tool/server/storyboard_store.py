@@ -1531,6 +1531,7 @@ def extend_director_story(story_id, plan, model_id=""):
 
 
 STUDIO_SCENE_FIELDS = {"title", "prompt"}
+STUDIO_SCENE_SINGLE_FIELDS = STUDIO_SCENE_FIELDS | {"durationSeconds"}
 
 
 @_serialized_mutation
@@ -1538,20 +1539,27 @@ def apply_studio_scene_fields(story_id, scene_id, expected, changes):
     """Commit a reviewed, field-scoped Scene revision without touching Takes or settings."""
     if not isinstance(expected, dict) or not isinstance(changes, dict) or not changes:
         raise ValueError("Select at least one Scene field to apply.")
-    if set(changes) - STUDIO_SCENE_FIELDS or set(expected) != set(changes):
+    if set(changes) - STUDIO_SCENE_SINGLE_FIELDS or set(expected) != set(changes):
         raise ValueError("Reviewed Scene fields must match exact supported originals.")
-    if any(not isinstance(value, str) or len(value) > 60000
-           or not isinstance(expected[key], str) for key, value in changes.items()):
-        raise ValueError("Reviewed Scene field values must be text with saved originals.")
+    for key, value in changes.items():
+        if key == "durationSeconds":
+            if (type(value) not in (int, float) or type(expected[key]) not in (int, float)
+                    or not 4 <= value <= 15 or int(value) != value):
+                raise ValueError("Scene duration must be a whole number from 4 to 15 seconds.")
+        elif (not isinstance(value, str) or len(value) > 60000
+              or not isinstance(expected[key], str)):
+            raise ValueError("Reviewed Scene field values must be text with saved originals.")
 
     story = load_story(story_id)
     current = (story.get("scenes") or {}).get(scene_id)
     if not isinstance(current, dict) or scene_id not in (story.get("sceneOrder") or []):
         raise FileNotFoundError("Selected Scene no longer exists.")
     for key in changes:
-        if str(current.get(key) or "") != expected[key]:
+        original = current.get(key) if key == "durationSeconds" else str(current.get(key) or "")
+        if original != expected[key]:
             raise RuntimeError("Scene " + key + " changed since review. Read the current value and review again.")
-    clean = {key: value.strip() for key, value in changes.items()}
+    clean = {key: value if key == "durationSeconds" else value.strip()
+             for key, value in changes.items()}
     if "title" in clean and len(clean["title"]) > 240:
         raise ValueError("Scene title is too long.")
     revised = _normalize_scene(scene_id, clean, existing=current)

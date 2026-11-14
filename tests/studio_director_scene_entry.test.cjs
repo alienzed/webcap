@@ -44,7 +44,7 @@ function directorHarness(raw='{"prompt":"Revised full prompt"}') {
   return {scope,state,calls,elements};
 }
 test('opening Scene Director stages context without a model request or overwriting the composer',async()=>{
-  const h=directorHarness();await h.scope.window.openStudioDirectorScene({id:'p',title:'Project'},'s','');
+  const h=directorHarness();await h.scope.window.openStudioDirectorScene({id:'p',title:'Project',sceneOrder:['s']},'s','');
   assert.equal(h.state.sceneRead.projectId,'p');
   assert.equal(h.state.sceneRead.sceneId,'s');
   assert.equal(h.state.sceneRead.payload,undefined,'the opening snapshot is not authoritative');
@@ -60,6 +60,12 @@ test('a revision uses one existing model operation, shows the full result, and a
   assert.equal(h.state.modeMessages.storyboard.at(-1).content,'Revised full prompt');
   assert.equal(h.state.pending,false);
 });
+test('direct Scene Revise accepts a complete prompt and ignores unrequested optional metadata',async()=>{
+  const h=directorHarness('{"prompt":"Quieter full prompt","title":"Not requested","durationSeconds":14}');
+  await h.scope.window.openStudioDirectorScene({id:'p',title:'Project'},'s','Quieter ending');
+  assert.deepEqual(h.calls.find(c=>c[0]==='apply').slice(2),['s','Quieter full prompt']);
+});
+
 test('an incomplete revision is visible in I/O and cannot change the Scene',async()=>{
   const h=directorHarness('{"summary":"Outline only"}');
   await assert.rejects(h.scope.window.openStudioDirectorScene({id:'p'},'s','Quieter ending'),/complete Scene prompt/);
@@ -73,7 +79,7 @@ test('quick Apply changes only prompt, retaining the original prompt as its conf
     api:async(url,options)=>{sent={url,body:JSON.parse(options.body)};return {story:{id:'p'},scene:{prompt:'After'}};}});
   const method=section(workbench,'    applyScenePrompt: function','    setStatus:status,').trim().replace(/,$/,'');
   vm.runInContext('window.studioDirectorWorkbench={'+method+'};',scope);
-  await scope.window.studioDirectorWorkbench.applyScenePrompt({id:'p',scenes:{s:{prompt:'Before'}}},'s','After');
+  await scope.window.studioDirectorWorkbench.applyScenePrompt({id:'p',sceneOrder:['s'],scenes:{s:{prompt:'Before'}}},'s','After');
   assert.deepEqual(sent,{url:'/fs/studio/director/scene-fields',body:{storyId:'p',sceneId:'s',
     expected:{prompt:'Before'},changes:{prompt:'After'}}});
   assert.equal(receiptKind,'scene.director.revision');

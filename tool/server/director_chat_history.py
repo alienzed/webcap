@@ -138,7 +138,7 @@ def _validate_readiness(value):
         return {"checks": [], "readHints": [], "writeHint": "", "sceneId": "", "sceneNumber": 0}
     if (not isinstance(value, dict) or
             not {"checks", "readHints", "writeHint", "sceneId"}.issubset(value) or
-            not set(value).issubset({"checks", "readHints", "writeHint", "writeFields", "sceneId", "sceneNumber", "stale", "capture"})):
+            not set(value).issubset({"checks", "readHints", "writeHint", "writeInstruction", "writeFields", "sceneId", "sceneNumber", "stale", "capture"})):
         raise ValueError("Studio readiness must contain checks, Read hints and Write hint.")
     checks = value["checks"]
     if not isinstance(checks, list) or len(checks) > 30:
@@ -160,13 +160,17 @@ def _validate_readiness(value):
         raise ValueError("Studio Write recommendation is invalid.")
     if not isinstance(value["sceneId"], str) or len(value["sceneId"]) > 160:
         raise ValueError("Studio Scene recommendation is invalid.")
+    if "writeInstruction" in value and (
+        not isinstance(value["writeInstruction"], str) or len(value["writeInstruction"]) > 3000
+    ):
+        raise ValueError("Studio Scene write instruction is invalid.")
     scene_number = value.get("sceneNumber", 0)
     if (type(scene_number) is not int or not 0 <= scene_number <= 10000):
         raise ValueError("Studio Scene number recommendation is invalid.")
     write_fields = value.get("writeFields", [])
     allowed_fields = (
         {"title", "concept", "style", "invariants"} if value["writeHint"] == "project"
-        else {"title", "summary", "prompt"} if value["writeHint"] in {"scenes", "scene-edit", "scenes-batch"}
+        else {"title", "summary", "prompt", "durationSeconds"} if value["writeHint"] in {"scenes", "scene-edit", "scenes-batch"}
         else set()
     )
     if (not isinstance(write_fields, list) or len(write_fields) > 4
@@ -215,6 +219,8 @@ def _validate_readiness(value):
         result["writeFields"] = write_fields
     if "sceneNumber" in value:
         result["sceneNumber"] = scene_number
+    if "writeInstruction" in value:
+        result["writeInstruction"] = value["writeInstruction"]
     if "stale" in value:
         result["stale"] = value["stale"]
     if capture is not None:

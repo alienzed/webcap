@@ -125,7 +125,6 @@ def _campaign_series(campaigns, job_id):
                 "unclear": item["unclear"], "renders": sum(bool(u.get("assessment")) for u in units),
                 "rounds": item["roundsTested"],
                 "rvn": sum(len(u.get("referenceAssessments") or []) for u in units),
-                "dino": sum(len(u.get("dinoAssessments") or []) for u in units),
             })
         if points:
             output.append({

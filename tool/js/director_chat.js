@@ -342,8 +342,8 @@
     drawer.setAttribute('aria-label', studio ? 'Projects Director' : 'Assistant');
     el('director-chat-title').textContent = studio ? studioWorkingStoryLabel() :
       (context ? 'Ask QA' : 'Assistant');
-    el('director-chat-close').textContent = studio ? 'Project editor' : '×';
-    el('director-chat-close').setAttribute('aria-label', studio ? 'Return to Project editor' : 'Close Assistant');
+    el('director-chat-close').textContent = studio ? 'Close' : '×';
+    el('director-chat-close').setAttribute('aria-label', studio ? 'Close Director' : 'Close Assistant');
     el('director-studio-starters').classList.toggle('hidden', !studio);
     el('director-chat-empty-title').textContent = studio ? "Let's make something" :
       (context ? 'Discuss this recommendation' : 'Your conversation');
@@ -3590,7 +3590,60 @@
     dialog.showModal();
   }
 
+  function bindStudioDrawerResize() {
+    var grip = el('studio-director-resizer'), drawer = el('director-chat-drawer');
+    var start = null, key = 'webcap.studioDirector.width';
+    function setWidth(width) {
+      var maximum = Math.max(1, el('app-frame').clientWidth - 42);
+      var minimum = Math.min(420, maximum);
+      width = Math.round(Math.max(minimum, Math.min(maximum, width)));
+      drawer.style.setProperty('--studio-director-width', width + 'px');
+      grip.setAttribute('aria-valuemin', minimum);
+      grip.setAttribute('aria-valuemax', maximum);
+      grip.setAttribute('aria-valuenow', width);
+      return width;
+    }
+    var saved = Number(localStorage.getItem(key));
+    setWidth(saved > 0 && Number.isFinite(saved) ? saved : 820);
+    function refreshBounds() {
+      var maximum = Math.max(1, el('app-frame').clientWidth - 42);
+      grip.setAttribute('aria-valuemin', Math.min(420, maximum));
+      grip.setAttribute('aria-valuemax', maximum);
+      grip.setAttribute('aria-valuenow', Math.round(drawer.getBoundingClientRect().width));
+    }
+    grip.addEventListener('focus', refreshBounds);
+    window.addEventListener('resize', function () {
+      if (state.open && state.activeMode === 'storyboard') refreshBounds();
+    });
+    grip.addEventListener('pointerdown', function (event) {
+      if (event.button !== 0) return;
+      event.preventDefault();
+      start = {x:event.clientX,width:drawer.getBoundingClientRect().width};
+      grip.classList.add('dragging');
+      grip.setPointerCapture(event.pointerId);
+    });
+    grip.addEventListener('pointermove', function (event) {
+      if (start) setWidth(start.width + start.x - event.clientX);
+    });
+    function finish() {
+      if (!start) return;
+      start = null;
+      grip.classList.remove('dragging');
+      localStorage.setItem(key, Math.round(drawer.getBoundingClientRect().width));
+    }
+    grip.addEventListener('pointerup', finish);
+    grip.addEventListener('pointercancel', finish);
+    grip.addEventListener('lostpointercapture', finish);
+    grip.addEventListener('keydown', function (event) {
+      if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+      event.preventDefault();
+      localStorage.setItem(key, setWidth(drawer.getBoundingClientRect().width + (event.key === 'ArrowLeft' ? 40 : -40)));
+    });
+    grip.addEventListener('dblclick', function () {localStorage.setItem(key, setWidth(820));});
+  }
+
   function bind() {
+    bindStudioDrawerResize();
     var toggle = el('director-chat-rail-btn');
     var drawer = el('director-chat-drawer');
     var pin = el('director-chat-pin');

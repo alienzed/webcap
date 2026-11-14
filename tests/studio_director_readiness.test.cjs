@@ -70,18 +70,15 @@ test('unsupported readiness preserves the reply and marks the exchange failed',(
   assert.ok(response.statuses.some(message=>message.includes('assessment failed')));
 });
 
-test('a placeholder prompt capture cannot become Review Scene; the exact reply remains visible',()=>{
+test('slightly imperfect replies remain visible and editable captures can still be reviewed',()=>{
   const readiness={...valid,capture:{field:'prompt',sceneId:'scene-a',
-    content:'The full revised prompt will be provided in the reply.'}};
-  const response=processResponse(envelope(readiness,'I am drafting the prompt now.'));
-  assert.equal(response.text,'I am drafting the prompt now.');
-  assert.ok(response.error.message.includes('complete prompt supplied in the reply'));
-  assert.ok(response.statuses.includes('freshness:true'),'invalid review metadata is unavailable');
-  const complete='Subject: Mara\n\nintegrated_multimodal_description: [Shot 1] A relieved blink.';
-  readiness.capture.content=complete;
-  const accepted=processResponse(envelope(readiness,'Here is the full prompt:\n'+complete));
-  assert.equal(accepted.error,null);
-  assert.equal(accepted.state.studioReadiness.capture.content,complete);
+    content:'Subject: Mara\n\nintegrated_multimodal_description: [Shot 1] A relieved blink.'}};
+  const response=processResponse(envelope(readiness,'Here is the prompt I prepared.'));
+  assert.equal(response.text,'Here is the prompt I prepared.');
+  assert.equal(response.error,null);
+  assert.equal(response.state.studioReadiness.stale,false);
+  assert.equal(response.state.studioReadiness.capture.content,readiness.capture.content);
+  assert.deepEqual(response.failures,[]);
 });
 
 test('missing readiness preserves the last assessment without pretending it succeeded',()=>{

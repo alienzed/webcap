@@ -760,17 +760,15 @@
     }
     host.querySelector('[data-reference-pair-title]').textContent =
       String(value.group || '') + ' · ' + String(value.option || '') +
-      ' · ' + (value.method === 'dino' ? 'DINOv2' : 'VL');
+      ' · VL';
     referenceCompare.pairIsPreview = !!value.previewOnly;
     host.querySelector('[data-reference-follow-live]').hidden = !referenceCompare.pinned;
     host.querySelector('[data-reference-pair-verdict]').textContent =
-      value.previewOnly ? 'Preview only' : value.method === 'dino' && value.similarity != null
-        ? 'DINO cosine ' + Number(value.similarity).toFixed(3)
-        : (value.verdict || 'Comparing…') +
+      value.previewOnly ? 'Preview only' : (value.verdict || 'Comparing…') +
           (value.selectedText ? ' · ' + value.selectedText : '');
     host.querySelector('[data-reference-pair-response]').textContent =
       String(value.response || (value.previewOnly ? 'Run a comparison to evaluate this pair.' :
-        value.verdict || value.similarity != null ? '' : 'Images A and B are being evaluated.'));
+        value.verdict ? '' : 'Images A and B are being evaluated.'));
   }
 
   function showLiveReferencePair(file, value) {
@@ -791,9 +789,9 @@
       Object.keys(saved).sort().forEach(function (file) {
         Object.keys(saved[file] || {}).sort().forEach(function (key) {
           var value = saved[file][key];
-          if (referenceCompare.resultMethod !== 'all' && value.method !== referenceCompare.resultMethod) return;
-          var verdict = value.method === 'dino' ? 'DINO cosine ' + Number(value.similarity).toFixed(3) :
-            (value.verdict || 'UNCLEAR') + (value.selectedText ? ' · ' + value.selectedText : '');
+          // Older DINO records remain on disk but are not active evaluations.
+          if (value.method !== 'rvn') return;
+          var verdict = (value.verdict || 'UNCLEAR') + (value.selectedText ? ' · ' + value.selectedText : '');
           var reason = String(value.response || '').match(/^REASON\s*:\s*(.+)$/im);
           rows.push({file:file, value:value, key:JSON.stringify([file,key]),
             verdict:verdict, reason:reason ? reason[1] : ''});
@@ -820,8 +818,7 @@
         node.dataset.referenceIndex = String(index);
         var markup = '<strong>' + escapeHtml(row.file) + '</strong><b>' +
           escapeHtml(row.verdict) + '</b><span>' +
-          escapeHtml((row.value.method === 'dino' ? 'DINOv2' : 'VL') + ' · ' +
-            row.value.group + ' · ' + row.value.option) + '</span>' +
+          escapeHtml('VL · ' + row.value.group + ' · ' + row.value.option) + '</span>' +
           (row.reason ? '<small>' + escapeHtml(row.reason) + '</small>' : '') +
           '<small>Reference: ' + escapeHtml(row.value.reference) + '</small>';
         if (node.dataset.renderedMarkup !== markup) {
@@ -879,8 +876,7 @@
     var dialog = el('test-generations-reference-dialog');
     referenceCompare.resultMethod = method;
     el('test-generations-reference-title').textContent =
-      method === 'all' ? 'Evaluate All · Training References' :
-      method === 'dino' ? 'DINOv2 · Training References' : 'VL Compare · Training References';
+      method === 'all' ? 'Evaluate All · Training References' : 'VL Compare · Training References';
     var statusLine = el('test-generations-reference-status');
     statusLine.textContent = referenceCompare.plan.length
       ? referenceCompare.plan.length + ' compatible selected references · ' +
@@ -896,7 +892,7 @@
       if (firstPreview) {
         var firstChoice = referenceCompare.plan[0].choice;
         showReferencePair(firstPreview, {reference:firstChoice.media,group:firstChoice.group,
-          option:firstChoice.term,method:method === 'dino' ? 'dino' : 'rvn',previewOnly:true});
+          option:firstChoice.term,method:'rvn',previewOnly:true});
       }
     }
     drawReferenceResults();
@@ -904,7 +900,6 @@
 
   async function runReferenceComparison() {
     if (referenceCompare.busy) return;
-    var method = el('test-generations-evaluator').value;
     var plan = (referenceCompare.plan || []).slice();
     if (!plan.length) throw new Error('Select compatible training references in References first.');
     var previews = (currentStatus.results || []).map(resultMediaFile).filter(Boolean);
@@ -916,48 +911,40 @@
     button.disabled = true;
     el('test-generations-evaluator').disabled = true;
     try {
-      var methods = referenceCompare.runAll ? ['rvn', 'dino'] : [method];
-      var done = 0, total = plan.length * previews.length * methods.length;
-      for (var m = 0; m < methods.length; m++) {
-        method = methods[m];
+      var done = 0, total = plan.length * previews.length;
       for (var p = 0; p < plan.length; p++) {
         var row = plan[p], choice = row.choice, attribute = row.attribute;
         for (var i = 0; i < previews.length; i++) {
           if (referenceCompare.folder !== folder || referenceCompare.session !== session)
             throw new Error('Session changed; stopped further comparisons.');
-          status.textContent = method.toUpperCase() + ' · ' + (++done) + ' / ' + total +
+          status.textContent = 'RVN · ' + (++done) + ' / ' + total +
             ' · ' + choice.group + ': ' + choice.term;
-          showLiveReferencePair(previews[i], {reference:choice.media, group:choice.group, option:choice.term, method:method});
+          showLiveReferencePair(previews[i], {reference:choice.media, group:choice.group, option:choice.term, method:'rvn'});
           var payload = await testReferenceRequest({
-            folder:folder, session:session, action:'evaluate', method:method, media:previews[i],
+            folder:folder, session:session, action:'evaluate', method:'rvn', media:previews[i],
             group:choice.group, groupAlias:getRequirementGroupAlias(choice.group), option:choice.term,
             reference:choice.media, jobId:choice.runId,
-            choices:attribute.options, model:method === 'rvn' ? getCaptionVisionModelId() : ''
+            choices:attribute.options, model:getCaptionVisionModelId()
           });
-          if (method === 'rvn') {
-            if (!payload.job || !payload.job.jobId) throw new Error('Reference VL did not return a job.');
-            trackTransientLlmJob(payload.job);
-            var completion = await waitForCaptionAssistJob(payload.job);
-            var raw = String(completion && completion.result && completion.result.text || '');
-            var optionMatch = raw.match(/^OPTION\s*:\s*(\d+)/im);
-            var verdictMatch = raw.match(/^VERDICT\s*:\s*(MATCH|PARTIAL|MISMATCH|UNCLEAR)/im);
-            var selected = optionMatch ? Number(optionMatch[1]) : null;
-            if (selected && selected > attribute.options.length) selected = null;
-            var assessment = {
-              method:'rvn',group:choice.group,option:choice.term,reference:choice.media,jobId:choice.runId,
-              attribute:attribute.label || attribute.id,
-              selected:selected,selectedText:selected == null ? '' : attribute.options[selected - 1],
-              verdict:verdictMatch ? verdictMatch[1].toUpperCase() : 'UNCLEAR',
-              response:raw,modelId:getCaptionVisionModelId(),at:Date.now()/1000
-            };
-            await testReferenceRequest({folder:folder,session:session,action:'save',media:previews[i],assessment:assessment});
-            showLiveReferencePair(previews[i], assessment);
-          } else if (payload.assessment) {
-            showLiveReferencePair(previews[i], payload.assessment);
-          }
+          if (!payload.job || !payload.job.jobId) throw new Error('Reference VL did not return a job.');
+          trackTransientLlmJob(payload.job);
+          var completion = await waitForCaptionAssistJob(payload.job);
+          var raw = String(completion && completion.result && completion.result.text || '');
+          var optionMatch = raw.match(/^OPTION\\s*:\\s*(\\d+)/im);
+          var verdictMatch = raw.match(/^VERDICT\\s*:\\s*(MATCH|PARTIAL|MISMATCH|UNCLEAR)/im);
+          var selected = optionMatch ? Number(optionMatch[1]) : null;
+          if (selected && selected > attribute.options.length) selected = null;
+          var assessment = {
+            method:'rvn',group:choice.group,option:choice.term,reference:choice.media,jobId:choice.runId,
+            attribute:attribute.label || attribute.id,
+            selected:selected,selectedText:selected == null ? '' : attribute.options[selected - 1],
+            verdict:verdictMatch ? verdictMatch[1].toUpperCase() : 'UNCLEAR',
+            response:raw,modelId:getCaptionVisionModelId(),at:Date.now()/1000
+          };
+          await testReferenceRequest({folder:folder,session:session,action:'save',media:previews[i],assessment:assessment});
+          showLiveReferencePair(previews[i], assessment);
           drawReferenceResults();
         }
-      }
       }
       status.textContent = 'Finished ' + total + ' preview comparisons. Results saved.';
       if (referenceCompare.runAll) {

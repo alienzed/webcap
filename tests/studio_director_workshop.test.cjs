@@ -93,8 +93,8 @@ test('Studio prompting selects the current goal rather than steering every task 
   assert.match(system,/an explicit Read, an appropriately scoped reviewed Write, or an author-operated Studio action/);
   assert.doesNotMatch(system,/When choices are clear, offer to review Concept/);
   assert.match(system,/Ask one focused question only for a consequential missing decision/);
-  assert.match(system,/deliver the actual complete text in reply on this turn/);
-  assert.match(system,/use capture.field="prompt"/);
+  assert.match(system,/author its complete text in capture.content on this turn/);
+  assert.match(system,/one authored text for both chat and Review Scene/);
   assert.match(system,/"projectId":"p1","sceneOrder":\["scene-a"\]/);
   assert.match(system,/Usually checks=\[\], readHints=\[\]/);
   assert.match(system,/at most two useful checks/);
@@ -205,9 +205,15 @@ test('Read sends actual saved data and asks for a conversational confirmation', 
   assert.match(outgoing, /Please inspect this Project/);
   assert.match(outgoing, /\[WEBCAP EXPLICIT READ\]/);
   assert.match(outgoing, /A meaningful conversation/);
-  assert.match(outgoing, /Confirm the saved fields in your own words/);
-  assert.match(outgoing, /Address only any question explicitly asked above; otherwise stop after a brief confirmation/);
-  assert.equal(state.pendingReadAck.length, 2);
+  assert.match(outgoing, /Briefly acknowledge the supplied context, then fulfil the author request above/);
+  assert.match(outgoing, /For a context-only Read, stop after a brief confirmation/);
+  composer.value='';
+  context.window.studioDirectorBridge.sendRead(payload,['project.concept'],'Write Scene 1 with the agreed blink.');
+  assert.ok(outgoing.startsWith('Write Scene 1 with the agreed blink.'));
+  composer.value='Use a warmer mood instead.';
+  context.window.studioDirectorBridge.sendRead(payload,['project.concept'],'Write Scene 1 with the agreed blink.');
+  assert.ok(outgoing.startsWith('Use a warmer mood instead.'),'the current author draft takes precedence');
+  assert.equal(state.pendingReadAck.length, 1);
   assert.match(source, /Director replied to Read/);
   assert.doesNotMatch(source, /reportConsoleError\('Studio Read acknowledgement'/);
   assert.match(source, /\[WEBCAP APPLIED FIELD VALUES\]/);
@@ -352,7 +358,7 @@ test('Studio conversation receives the canonical H3 template as reference withou
 test('large explicit Read selections are sent intact, with no arbitrary client character cap', async () => {
   const start=workbench.indexOf('  function readPayload(story, keys) {');
   const middle=workbench.indexOf('  function updateReadSelection() {',start);
-  const sendStart=workbench.indexOf('  function readSend() {',middle);
+  const sendStart=workbench.indexOf('  function readSend(instruction) {',middle);
   const end=workbench.indexOf('  function showWriteContext() {',sendStart);
   assert.ok(start>=0 && middle>start && sendStart>middle && end>sendStart,
     'Read serialization and action must remain available');
@@ -417,5 +423,5 @@ test('legacy Studio field Read remains a neutral context handoff by default', ()
   assert.match(read, /Acknowledge the saved context without assessing it or suggesting next steps/);
   assert.doesNotMatch(read, /give a concise substantive assessment/);
   assert.match(source, /state\.pendingReadAck = keys\.slice\(\)/);
-  assert.match(source, /Address only any question explicitly asked above; otherwise stop after a brief confirmation/);
+  assert.match(source, /For a context-only Read, stop after a brief confirmation/);
 });

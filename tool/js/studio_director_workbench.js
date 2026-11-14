@@ -162,7 +162,7 @@
     if (details.open && readStory) el('studio-dw-read-preview-data').textContent =
       JSON.stringify(readPayload(readStory, keys), null, 2);
   }
-  function readSend() {
+  function readSend(instruction) {
     var id = el('studio-dw-read-project').value, keys = selectedPaths();
     if (!id || !keys.length) { status('Choose a Project and at least one field.', true); return; }
     if (!window.studioDirectorBridge.isReady()) { status(window.studioDirectorBridge.readinessMessage(), true); return; }
@@ -172,7 +172,7 @@
     loadStory(id).then(function (story) {
       var payload = readPayload(story, keys);
       el('studio-dw-read-preview-data').textContent = JSON.stringify(payload, null, 2);
-      window.studioDirectorBridge.sendRead(payload, keys);
+      window.studioDirectorBridge.sendRead(payload, keys, typeof instruction === 'string' ? instruction : undefined);
       lastReadSource = story.id;
       status('Selected fields sent. Awaiting Director’s own acknowledgment.', false);
       el('studio-dw-read-panel').classList.add('hidden');
@@ -858,13 +858,18 @@
   }
   function readRecommendedProject() {
     var id = window.studioDirectorBridge.workingStoryId() || activeTarget().storyId;
+    var requests = window.studioDirectorBridge.messages().filter(function (message) {
+      return message.role === 'user' && !message.content.includes('[WEBCAP EXPLICIT READ]') &&
+        !message.content.includes('[WEBCAP APPLIED FIELD VALUES]');
+    });
+    var instruction = requests.length ? requests[requests.length - 1].content : '';
     return refreshProjects().then(function () {
       el('studio-dw-read-project').value = id;
       return loadStory(id);
     }).then(function (story) {
       renderReadStory(story);
       selectEntireReadProject();
-      readSend();
+      readSend(instruction);
     }).catch(function (error) { status('Project Read failed: ' + error.message, true); });
   }
   function writeActionLabel() {

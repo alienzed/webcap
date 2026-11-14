@@ -2875,7 +2875,9 @@
         'A Read-only request needs a brief natural acknowledgement; answer any question included with Read. ' +
         'Applied values supersede earlier snapshots.\n' +
         'REPLY: Discuss concepts in 1-3 concise sentences. Ask one focused question only for a consequential missing decision. ' +
-        'When asked to write, revise or paste a prompt, deliver the actual complete text in reply on this turn, using the H3 template and Scene duration. ' +
+        'When asked to write, revise or paste an existing Scene prompt, author its complete text in capture.content on this turn, using the H3 template and Scene duration. ' +
+        'WebCap displays that full text directly in the conversation. Use reply for a brief introduction or creative explanation. ' +
+        'For other drafting requests, include the complete requested text in reply. ' +
         'Writing a Scene means a useful title and a full H3 Prompt. An Intent alone is an outline. ' +
         'Name user actions in plain language: Read Project, Review Scene, Apply. ' +
         'Drafting is conversation; only reviewed Apply saves.\n' +
@@ -2884,7 +2886,8 @@
         'writeFields names affected fields; Scene numbers are one-based. Use bare Scene IDs from navigation.sceneOrder. ' +
         'Default to the current Project, respecting an explicit author-selected destination. Assess only supplied material, with at most two useful checks.\n' +
         'CAPTURE: Use null for discussion, questions, outlines and work still to be drafted. ' +
-        'When reply contains an authored prompt for an existing Scene, use capture.field="prompt" and its saved sceneId to offer Review Scene without another LLM call. ' +
+        'For a complete existing Scene prompt, set capture.field="prompt", capture.sceneId to its saved ID, ' +
+        'and capture.content to the full usable prompt itself. WebCap uses this one authored text for both chat and Review Scene, without another LLM call. ' +
         'For other complete fields use the matching capture schema. A new Scene uses field="scene", title and content as its Intent; ' +
         'also include prompt when a full H3 Prompt was authored in conversation. An Intent-only Scene is still a useful draft. ' +
         'For an Invariant use its kind/title, with beforeKind/beforeTitle for an exact known edit.\n';
@@ -3423,10 +3426,13 @@
         }
         if (studioResponse) {
           try {
-            // Conversation stays useful even when a suggested capture and visible reply differ.
             // Every capture still requires editable human Review before Apply.
+            var capture = studioResponse.readiness && studioResponse.readiness.capture;
             if (!window.studioDirectorWorkbench.updateReadiness(studioResponse.readiness))
               throw new Error('Director readiness did not match the expected contract.\nRaw structured response:\n' + result.text);
+            // One authored prompt feeds the visible transcript and the existing review.
+            if (capture && capture.field === 'prompt' && !assistantText.includes(capture.content))
+              assistantText += '\n\n' + capture.content;
             // Assessment is metadata, not another user-visible success card.
           } catch (processingError) {
             requestError = processingError;
@@ -3907,10 +3913,10 @@
       var composer = el('director-chat-input');
       var draft = String(composer.value || '').trim();
       var nl = String.fromCharCode(10);
-      composer.value = (instruction || draft || 'Read the selected saved context and acknowledge receipt.') +
+      composer.value = (draft || instruction || 'Read the selected saved context and acknowledge receipt.') +
         nl + nl + '[WEBCAP EXPLICIT READ]' + nl +
         JSON.stringify(payload, null, 2) + nl + '[END WEBCAP READ]' + nl +
-        'Confirm the saved fields in your own words. Address only any question explicitly asked above; otherwise stop after a brief confirmation.';
+        'Briefly acknowledge the supplied context, then fulfil the author request above. For a context-only Read, stop after a brief confirmation.';
       state.pendingReadAck = keys.slice();
       sendMessage();
     },

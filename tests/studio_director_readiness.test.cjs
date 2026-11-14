@@ -70,15 +70,17 @@ test('unsupported readiness preserves the reply and marks the exchange failed',(
   assert.ok(response.statuses.some(message=>message.includes('assessment failed')));
 });
 
-test('slightly imperfect replies remain visible and editable captures can still be reviewed',()=>{
-  const readiness={...valid,capture:{field:'prompt',sceneId:'scene-a',
-    content:'Subject: Mara\n\nintegrated_multimodal_description: [Shot 1] A relieved blink.'}};
-  const response=processResponse(envelope(readiness,'Here is the prompt I prepared.'));
-  assert.equal(response.text,'Here is the prompt I prepared.');
-  assert.equal(response.error,null);
-  assert.equal(response.state.studioReadiness.stale,false);
-  assert.equal(response.state.studioReadiness.capture.content,readiness.capture.content);
-  assert.deepEqual(response.failures,[]);
+test('one complete prompt supplies both visible chat text and the unchanged review capture',()=>{
+  const complete='Subject: Mara\n\nintegrated_multimodal_description: [Shot 1] A relieved blink.';
+  const readiness={...valid,capture:{field:'prompt',sceneId:'scene-a',content:complete}};
+  const accepted=processResponse(envelope(readiness,'Here is the full prompt.'));
+  assert.equal(accepted.error,null);
+  assert.equal(accepted.text,'Here is the full prompt.\n\n'+complete);
+  assert.equal(accepted.state.studioReadiness.capture.content,complete);
+  const legacy=processResponse(envelope(readiness,'Here is the full prompt:\n'+complete));
+  assert.equal(legacy.text,'Here is the full prompt:\n'+complete,'older repeated material is shown once');
+  const invalid=processResponse(envelope(readiness,'Original reply.'),false);
+  assert.equal(invalid.text,'Original reply.','rejected metadata leaves the original reply available');
 });
 
 test('missing readiness preserves the last assessment without pretending it succeeded',()=>{

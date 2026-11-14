@@ -10,6 +10,7 @@ from tool.server.app import app
 @pytest.fixture
 def isolated_storyboard(tmp_path, monkeypatch):
     monkeypatch.setattr(app_config, "output_root", lambda: tmp_path)
+    monkeypatch.setattr(app_config, "app_state_root", lambda: tmp_path / "app_state")
     return app.test_client()
 
 

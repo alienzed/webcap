@@ -206,6 +206,20 @@ test('Director guidance presents at most one contextual action and keeps assessm
   assert.match(workbench, /'Draft Scene revisions'/);
 });
 
+test('Scene revision guidance keeps requested duration and title fields',()=>{
+  const i=workbench.indexOf('  var sceneFields = ');
+  const j=workbench.indexOf('  var labels = ',i);
+  const from=workbench.indexOf('  function recommendedWriteFields(operation) {');
+  const to=workbench.indexOf('  function refreshRead() {',from);
+  assert.ok(i>=0&&j>i&&from>=0&&to>from);
+  const scope=vm.createContext({readinessStale:false,recommendations:{
+    writeFields:['durationSeconds','title','prompt']
+  }});
+  vm.runInContext(workbench.slice(i,j)+workbench.slice(from,to),scope);
+  assert.deepEqual(Array.from(scope.recommendedWriteFields('scenes')),
+    ['durationSeconds','title','prompt']);
+});
+
 test('Scene revisions select saved Scenes, leaving changed fields to Director', () => {
   assert.match(workbench, /function recommendedSceneId\(story\)/);
   assert.match(workbench, /story\.sceneOrder\.includes\(id\)/);

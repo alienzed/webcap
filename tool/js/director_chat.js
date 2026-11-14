@@ -2923,7 +2923,7 @@
         'Writing a Scene means a useful title and a full H3 Prompt. An outline alone is a planning draft, not a second authoritative Scene description. ' +
         'Name actions in plain language. Conversation alone never saves; a launched Scene revision saves directly and reviewed Apply saves reviewed drafts.\n' +
         'READINESS: Usually checks=[], readHints=[], writeHint="", writeFields=[], sceneId="", sceneNumber=0, capture=null. ' +
-        'writeInstruction is optional; provide a concrete instruction grounded in the conversation only for a recommended Scene revision. ' +
+        'Always include writeInstruction: use an empty string unless proposing an existing Scene revision, then use one concrete agreed instruction grounded in the conversation. ' +
         'For factual questions answerable from supplied context, keep readiness fields empty and finish with the answer. ' +
         'For requested creative development, suggest at most one useful next action. Use new-project, project or scenes for Write. ' +
         'writeFields names affected fields; Scene numbers are one-based. Use bare Scene IDs from navigation.sceneOrder. ' +

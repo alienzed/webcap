@@ -1549,3 +1549,23 @@ def test_retired_scene_intent_empty_and_missing_are_compatible_with_prompt_edits
         })
         assert revised["prompt"] == "A complete revised production Prompt."
         assert revised.get("summary", "") == ""
+
+def test_legacy_workshop_context_uses_saved_prompt_without_scene_intent(storyboard_fs):
+    prompt = (
+        "Subject:\\nPerson\\n\\n"
+        "Scene Overview:\\nAn approved action.\\n\\n"
+        "integrated_multimodal_description:\\n[Shot 1] (0s-8s) Person moves."
+    )
+    story = storyboard_store.create_story({"title": "Workshop context"})
+    story, scene = storyboard_store.add_scene(story["id"], {
+        "title": "Arrival",
+        "summary": "Legacy intent must remain stored but cannot drive revision.",
+        "prompt": prompt,
+    })
+    context = storyboard_store.workshop_scene_context(story["id"], scene["id"])
+    assert "sceneSummary" not in context
+    assert context["expectedPrompt"] == prompt
+    assert context["extraSections"]["Scene Overview"] == "An approved action."
+    assert "[Shot 1]" in context["shots"]
+    persisted = storyboard_store.load_story(story["id"])["scenes"][scene["id"]]
+    assert persisted["summary"] == scene["summary"]

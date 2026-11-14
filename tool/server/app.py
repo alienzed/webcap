@@ -1402,7 +1402,7 @@ def storyboard_route():
             scene_payload = data.get("scene") or {}
             if llm_storyboard_target_busy(story_id, "scenes"):
                 raise ValueError("Story Scenes have pending Director work.")
-            repair_keys = {"summary", "entryState", "exitState", "prompt", "previousPrompt", "promptDirectorModel", "promptDirectorJobId"}
+            repair_keys = {"entryState", "exitState", "prompt", "previousPrompt", "promptDirectorModel", "promptDirectorJobId"}
             if repair_keys.intersection(scene_payload) and llm_storyboard_target_busy(story_id, "repair"):
                 raise ValueError("Scene fields targeted by Check & Repair have pending Director work.")
             protected_prompt_keys = {"prompt", "previousPrompt", "promptDirectorModel", "promptDirectorJobId"}

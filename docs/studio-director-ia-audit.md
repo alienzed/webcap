@@ -1,5 +1,11 @@
 # Studio Director — Information Architecture Audit → Design Audit Handoff
 
+> **Historical reference:** Current requirements are in
+> [studio-director-contract.md](studio-director-contract.md); current implementation
+> and browser-acceptance work is in
+> [studio-director-implementation.md](studio-director-implementation.md).
+> The dated statuses and instructions below do not define the current feature set.
+
 > **Documentation status (2026-10-29):** This is a dated information-architecture audit, not the present implementation backlog. Some findings were addressed by PRs #788–792. The current intention-to-materialization vision, updated capability matrix, actual gaps and next implementation sequence live in [Studio Director — intention-to-materialization contract](studio-director-materialization-contract.md). Preserve this document as design evidence; verify every historical defect against current `main` before acting.
 
 **Audit date:** 2026-10-28  

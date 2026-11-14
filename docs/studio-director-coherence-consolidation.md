@@ -1,5 +1,11 @@
 # Studio Director / Director Tools reconciliation — implementation plan
 
+> **Historical reference:** Current requirements are in
+> [studio-director-contract.md](studio-director-contract.md); current implementation
+> and browser-acceptance work is in
+> [studio-director-implementation.md](studio-director-implementation.md).
+> The dated statuses and instructions below do not define the current feature set.
+
 Status: historical staged implementation, November 3, 2026. The [useful-function consolidation](studio-director-useful-functions-consolidation.md) owns the current interface and capability scope; the earlier phases below record implementation history, not additional active capabilities. Follow [AGENTS.md](../AGENTS.md). This is a focused consolidation, not a new agent/tool-calling framework.
 
 ## Ownership decision

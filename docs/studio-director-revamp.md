@@ -1,5 +1,11 @@
 # Studio Director — conversational production contract and incremental delivery
 
+> **Historical reference:** Current requirements are in
+> [studio-director-contract.md](studio-director-contract.md); current implementation
+> and browser-acceptance work is in
+> [studio-director-implementation.md](studio-director-implementation.md).
+> The dated statuses and instructions below do not define the current feature set.
+
 > **Current implementation handoff (2026-10-29, post-PR #792):** [Studio Director — intention-to-materialization contract](studio-director-materialization-contract.md) is the authoritative **current** workflow audit, capability matrix, materialization design, phase plan and acceptance suite. This document preserves architectural history, early decisions and old phase records; **do not treat older “missing” statuses or earlier solution designs below as the present backlog**. Current `main` code and the new contract supersede stale claims. The new plan changes docs only, not Studio behavior.
 
 Status: **living implementation contract** initially audited at `95dd999b4678d02c10b81df059886ac3c4594ed4`, with initial implementation phases merged through **PRs #758–761** and production-slate workflow clarification audited against `main` at `ca1246c0041f1dd0ffeaa83dc4363f452703b33d` (2026-10-27). Historical finding tables and old unchecked phase items describe their audit baseline, not the latest implementation status; verify current code before each new change. This update modifies **the plan only**. Follow `AGENTS.md`, `docs/filesystem_state_contract.md` and `docs/gpu_coordination_invariants.md`.

@@ -1,5 +1,11 @@
 # Studio Director: production capability and information architecture audit
 
+> **Historical reference:** Current requirements are in
+> [studio-director-contract.md](studio-director-contract.md); current implementation
+> and browser-acceptance work is in
+> [studio-director-implementation.md](studio-director-implementation.md).
+> The dated statuses and instructions below do not define the current feature set.
+
 Date: 2026-11-03. Implemented in PR #859. Grounded in `AGENTS.md`, `tool/js/storyboard.js`, `tool/js/studio_director_workbench.js`, `tool/js/director_chat.js` and `tool/tool.html`.
 
 ## Core IA principle

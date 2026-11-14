@@ -39,7 +39,7 @@ authoring. The remaining work is to connect and prune these paths consistently.
 
 ## Safe implementation sequence
 
-### 1. One Scene result and one execution path
+### 1. Write one Scene reliably
 
 Align the supported Scene fields and their validation/save handling first. Cover
 creation, revision and requested title/duration changes without requiring Intent.
@@ -47,11 +47,26 @@ Reuse existing per-Scene authoring and persistence behavior. Preserve the separa
 Revise & Generate utility and its optional production handoff; do not introduce
 automatic Take generation into Director writes.
 
-Run one or a selected list of Scene calls through the same behavior, applying each
-success. Add per-item failure reporting/continuation and retain existing Stop.
-Do not add a generic orchestrator, alternate batch mode or routine retries.
+Prove creation and revision end to end: correct target, required context, complete
+output, requested title/duration preserved through saving, accurate outcome and
+basic field recovery. Establish the consistent Scene result used by each entry
+point before extending it to a list.
 
-### 2. Bind scope and supply context
+### 2. Repeat that Scene write over a selected list
+
+Use the same single-Scene behavior for each selected item, applying each success.
+Add per-item failure reporting/continuation and retain existing Stop. Keep each
+request bounded; simple corrections do not need the full conversation. This is
+Write Scene(s), not another LLM capability or alternate batch authoring system.
+Do not add a generic orchestrator or routine retries.
+
+### 3. Finish Project writing, automatic context and the conversation handoff
+
+Align new/existing Project writes around the agreed Project fields. Requested
+initial Scenes use the Scene calls. Mixed Project/Scene intentions use those same
+operations, not an all-at-once authoring schema. Prune stale model guidance,
+readiness/capture requirements and duplicate active paths. Preserve compatibility
+data and working unrelated editor/production functionality.
 
 WebCap resolves destinations and supplies required baselines/constraints. Give the
 model the narrow authoring task, not UI state management. Eliminate redundant
@@ -60,20 +75,30 @@ Use the targeted launch action for conversational write requests; retain direct
 launch shortcuts. Reuse already authored complete material rather than drafting it
 again. Replace competing active schemas/dispatch paths as their consumers migrate.
 
-### 3. Finish Project integration and remove competing contracts
-
-Align new/existing Project writes around the agreed Project fields. Requested
-initial Scenes use the Scene calls. Mixed Project/Scene intentions use those same
-operations, not an all-at-once authoring schema. Prune stale model guidance,
-readiness/capture requirements and duplicate active paths. Preserve compatibility
-data and working unrelated editor/production functionality.
-
-### 4. Make outcomes and recovery dependable
-
 Retain authored results through follow-up questions. Reflect actual saved values
 in conversation and distinguish subsequent reporting failures. Provide the basic
 per-field recovery controls. Keep status legible and contextual; do not add
 assessment dashboards or permanent explanatory paragraphs.
+Outcomes and recovery are part of each phase's acceptance, not a final polish pass.
+
+## Ownership and stable handoffs
+
+- **Implementation owner (ChatGPT):** owns product code, guidance/schema alignment,
+  focused regression checks and fixes. Complete one bounded phase and hand over a
+  stable commit. Passing automated checks is not browser/model acceptance.
+- **Acceptance owner (Codex/browser agent):** tests the handed-over commit with the
+  real browser and selected model. Report concrete reproductions, expected/actual
+  behavior, saved effects and evidence. Do not edit product code concurrently;
+  the implementation owner fixes findings unless ownership is explicitly handed over.
+- **Author:** resolves material product-scope or control decisions. Ordinary
+  implementation choices and hypothetical edge cases are not escalated routinely.
+
+Do not test against a tree being edited or an unresolved merge. Each handoff names
+the commit, changed behavior, checks run, known limitations and cases to verify.
+The running app must serve that code, with backend changes loaded and the intended
+model available. The acceptance report identifies the same commit/model and
+separates real-browser/model evidence from automated coverage. Fix and recheck
+failures within the phase before expanding scope.
 
 ## Small acceptance set
 

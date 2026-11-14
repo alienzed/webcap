@@ -20,6 +20,8 @@ must not change the material the LLM is asked to return.
 The LLM does not manage UI controls, permissions, save policy, real IDs, queues,
 readiness scores or recovery. WebCap does not act as a creative-quality judge.
 It checks the mechanical requirements needed to execute the operation correctly.
+Core authoring uses a consistent field/result structure. Ordinary discussion and
+utility briefs can remain prose; WebCap need not mine arbitrary prose for writes.
 
 ## 2. The three capabilities
 
@@ -67,7 +69,7 @@ a giant combined review or a new compound LLM capability.
 
 ### Write Scene(s)
 
-A selection of Scenes is a call list for this same capability. Prefer one bounded
+A selection of Scenes is a call list for this same capability. Use one bounded
 Scene-authoring call per Scene, following the stable revision-sequence pattern.
 A common instruction can be reused across the list. There is no mandatory extra
 planning call when the author's instruction already suffices.

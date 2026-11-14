@@ -1,5 +1,11 @@
 # Studio Director — Design Audit and Implementation Brief
 
+> **Historical reference:** Current requirements are in
+> [studio-director-contract.md](studio-director-contract.md); current implementation
+> and browser-acceptance work is in
+> [studio-director-implementation.md](studio-director-implementation.md).
+> The dated statuses and instructions below do not define the current feature set.
+
 > **Documentation status (2026-10-29):** This is a dated design critique, not the current definition of Studio Director feature completeness. The active goal is natural creative collaboration, focused review and deterministic WebCap materialization—not feature parity with every production control. Use [Studio Director — intention-to-materialization contract](studio-director-materialization-contract.md) for the up-to-date code audit, scope, phased implementation and acceptance tests; verify old findings on current `main`.
 
 **Baseline:** `main` after IA audit PR #786 (2026-10-28)  

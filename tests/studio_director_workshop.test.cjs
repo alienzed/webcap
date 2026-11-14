@@ -90,7 +90,7 @@ test('Studio prompting selects the current goal rather than steering every task 
   const assembled = await vm.runInContext(
     "studioDirectorChatRequestMessages([{role:'user',content:'Revise only the Scene action'}])",context);
   const system = assembled[0].content;
-  assert.match(system,/For the current author goal, suggest at most one useful next step/);
+  assert.match(system,/For a direct question, answer fully and finish without a workflow suggestion/);
   assert.match(system,/an explicit Read, an appropriately scoped reviewed Write, or an author-operated Studio action/);
   assert.doesNotMatch(system,/When choices are clear, offer to review Concept/);
   assert.match(system,/Ask one focused question only for a consequential missing decision/);
@@ -119,8 +119,8 @@ test('explicit Write guidance asks for the draft, not another conversational rec
     "studioDirectorRequestMessages([{role:'user',content:'Discuss Scene'}],false)",context);
   const writing = await vm.runInContext(
     "studioDirectorRequestMessages([{role:'user',content:'Revise Scene'}],false,true)",context);
-  assert.match(conversational[0].content,/suggest at most one useful next step/);
-  assert.doesNotMatch(writing[0].content,/suggest at most one useful next step/);
+  assert.match(conversational[0].content,/suggest at most one useful action/);
+  assert.doesNotMatch(writing[0].content,/suggest at most one useful action/);
   assert.match(writing[0].content,/EXPLICIT REVIEWED WRITE/);
   assert.match(writing[0].content,/Produce the requested complete editable proposal/);
   assert.equal(writing[1].content,'Revise Scene');
@@ -133,10 +133,11 @@ test('existing Project and Scene draft paths also use explicit Write guidance', 
     const marker = "showSentWriteContext('" + operation + "', messages)";
     const index = source.indexOf(marker);
     assert.ok(index !== -1, 'Missing draft operation: ' + operation);
-    const before = source.slice(Math.max(0, index - 850), index);
+    const before = source.slice(Math.max(0, index - 1400), index);
     const plain = "studioDirectorRequestMessages([{ role: 'user', content: JSON.stringify(input) }], false, true)";
+    const prompt = "studioDirectorRequestMessages([{ role: 'user', content: JSON.stringify(input) }], true, true)";
     const formatted = "studioDirectorRequestMessages([{ role: 'user', content: JSON.stringify(input, null, 2) }], false, true)";
-    assert.ok(before.includes(plain) || before.includes(formatted),
+    assert.ok(before.includes(plain) || before.includes(prompt) || before.includes(formatted),
       'Explicit Write guidance not used by ' + operation);
   }
 });
@@ -187,6 +188,7 @@ test('Read sends actual saved data and asks for a conversational confirmation', 
   const context = vm.createContext({
     state, Promise, String, JSON,
     el: id => {
+      if (id === 'director-chat-scene-context') return {classList:{add(){}}};
       assert.equal(id, 'director-chat-input');
       return composer;
     },

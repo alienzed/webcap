@@ -874,7 +874,8 @@
         label:'Revise Scene ' + (launch.sceneNumber || 'selected') + ' · Save',
         run:function () {
           return window.studioDirectorBridge.writeSelectedScene(launch).catch(function (error) {
-            status('Scene revision failed: ' + String(error.message || error), true);
+            status((error.saved ? 'Scene saved, but follow-up reporting failed: ' :
+              'Scene revision failed: ') + String(error.message || error), true);
           });
         }
       });

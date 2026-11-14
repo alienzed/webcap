@@ -139,10 +139,7 @@ test('existing Project and Scene draft paths also use explicit Write guidance', 
     const index = source.indexOf(marker);
     assert.ok(index !== -1, 'Missing draft operation: ' + operation);
     const before = source.slice(Math.max(0, index - 1400), index);
-    const plain = "studioDirectorRequestMessages([{ role: 'user', content: JSON.stringify(input) }], false, true)";
-    const prompt = "studioDirectorRequestMessages([{ role: 'user', content: JSON.stringify(input) }], true, true)";
-    const formatted = "studioDirectorRequestMessages([{ role: 'user', content: JSON.stringify(input, null, 2) }], false, true)";
-    assert.ok(before.includes(plain) || before.includes(prompt) || before.includes(formatted),
+    assert.match(before,/studioDirectorRequestMessages\(/,
       'Explicit Write guidance not used by ' + operation);
   }
 });

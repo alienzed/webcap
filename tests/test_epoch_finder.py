@@ -538,6 +538,7 @@ def test_campaign_accepts_selected_test_loras_without_a_training_run(tmp_path, m
         "referenceEvaluation": {"rvn": False, "dino": False},
     }
     campaign = epoch_finder.create_campaign(tmp_path, criteria)
+    assert campaign["referenceEvaluation"] == {"rvn": False}
     assert campaign["version"] == 3
     assert campaign["jobId"] == ""
     assert campaign["runSelections"] == []

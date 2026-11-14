@@ -25,7 +25,8 @@ def test_separates_campaigns_and_training_runs(tmp_path, monkeypatch):
     assert len(entries) == 2
     assert [row["score"] for row in entries] == [1.0, 0.0]
     assert all(row["weightedObservations"] == 1 for row in entries)
-    assert all(row["dinoComparisons"] == 0 for row in entries)
+    assert all(sum(row["rvnVerdicts"].values()) == 0 for row in entries)
+    assert all("dinoComparisons" not in row for row in entries)
 
 
 def test_missing_evaluation_is_not_failure(tmp_path, monkeypatch):

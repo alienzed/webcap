@@ -326,7 +326,6 @@ def checkpoint_evidence(folder_path, job_id):
                     "evaluatedRenders": sum(unit.get("assessment") is not None for unit in units),
                     "failedUnits": sum(bool(unit.get("error")) for unit in units),
                     "rvnVerdicts": verdicts,
-                    "dinoComparisons": sum(len(unit.get("dinoAssessments") or []) for unit in units),
                     "visionModel": campaign.get("visionModel"),
                 })
     return {"jobId": job_id, "checkpoints": [
@@ -502,8 +501,10 @@ def create_campaign(folder_path, criteria):
     if not set(approved).issubset(required):
         raise ValueError("Only Primary wildcard choices may have training references.")
     evaluation = criteria.get("referenceEvaluation")
-    if not isinstance(evaluation, dict) or any(type(evaluation.get(k)) is not bool for k in ("rvn", "dino")):
+    if not isinstance(evaluation, dict) or type(evaluation.get("rvn")) is not bool:
         raise ValueError("Select reference evaluation mechanisms explicitly.")
+    if evaluation.get("dino") is True:
+        raise ValueError("DINOv2 evaluation has been retired.")
     scoped = reference_vocabulary(folder, None) if approved else []
     reference_groups = {
         (attribute, option): {group["group"] for group in scoped
@@ -522,9 +523,6 @@ def create_campaign(folder_path, criteria):
                            "dimensionId": str(entry.get("dimensionId") or ""),
                            "option": option, "group": group,
                            "tag": tag, "alias": str(entry.get("alias") or "").strip(), **reference})
-    if evaluation["dino"]:
-        from .epoch_dino import preflight as dino_preflight
-        dino_preflight()
     parent_id = str(criteria.get("parentCampaignId") or "")
     if parent_id:
         parent = _load(folder_path, parent_id)
@@ -559,7 +557,7 @@ def create_campaign(folder_path, criteria):
         "status": "paused", "phase": "Ready", "detail": "Ready to generate.",
         "round": 1, "rounds": plans,
         "visionModel": vision_model, "vlImageMP": vl_image_mp, "dimensions": dimensions,
-        "referencePlan": references, "referenceEvaluation": {"rvn": evaluation["rvn"], "dino": evaluation["dino"]}, "concept": str(criteria.get("concept") or "").strip(),
+        "referencePlan": references, "referenceEvaluation": {"rvn": evaluation["rvn"]}, "concept": str(criteria.get("concept") or "").strip(),
         "units": [], "scores": [], "startedAt": time.time(),
         "finishedAt": None,
     }
@@ -942,43 +940,6 @@ def _evaluate_reference_unit(folder_path, campaign, unit):
     _save(folder_path, campaign)
 
 
-def _evaluate_dino_unit(folder_path, campaign, unit):
-    if not campaign.get("referenceEvaluation", {}).get("dino") or unit.get("dinoComplete"):
-        return
-    from .epoch_dino import compare_images
-    from .epoch_reference import verified_reference
-    frame = _directory(folder_path, campaign["id"]) / "frames" / unit["frame"]
-    if not frame.is_file():
-        raise FileNotFoundError("Generated DINO comparison frame is unavailable.")
-    references = {(entry.get("dimensionId") or entry["attribute"], entry["option"]): entry
-                  for entry in campaign["referencePlan"]}
-    unique = {}
-    for group in unit.get("groups", []):
-        if not _requires_reference(group.get("role")) or group.get("expected") is None:
-            continue
-        option = group["options"][group["expected"] - 1]
-        entry = references.get((group["id"], option)) or references.get((group["label"], option))
-        if entry is None:
-            continue
-        actual = verified_reference(_folder_key(folder_path), entry["group"], entry.get("tag") or option, entry["media"], None)
-        if actual["size"] != entry["size"] or actual["mtimeNs"] != entry["mtimeNs"]:
-            raise ValueError("Training reference changed since approval.")
-        unique.setdefault(entry["media"], []).append(entry["group"] + ": " + option)
-    results = unit.get("dinoAssessments", [])
-    completed = {item["reference"] for item in results}
-    for name, attributes in unique.items():
-        if name in completed:
-            continue
-        started = time.monotonic()
-        score = compare_images(folder_path / name, frame, _directory(folder_path, campaign["id"]) / "embedding-cache")
-        results.append({"reference": name, "attributes": attributes,
-                        "similarity": score, "elapsedSeconds": round(time.monotonic() - started, 2)})
-        unit["dinoAssessments"] = results
-        _save(folder_path, campaign)
-    unit["dinoAssessments"] = results
-    unit["dinoComplete"] = True
-    _save(folder_path, campaign)
-
 
 def _mark_unit_error(folder_path, campaign, unit, stage, exc):
     """Retain actionable failure evidence without scoring a failed observation."""
@@ -1113,8 +1074,7 @@ def _run(folder_path, campaign_id, control):
                     continue
                 needs_vl = unit.get("assessment") is None
                 needs_rvn = campaign.get("referenceEvaluation", {}).get("rvn") and not unit.get("referenceComplete") and "referenceError" not in unit
-                needs_dino = campaign.get("referenceEvaluation", {}).get("dino") and not unit.get("dinoComplete") and "dinoError" not in unit
-                if not (needs_vl or needs_rvn or needs_dino):
+                if not (needs_vl or needs_rvn):
                     continue
                 if not _check_signal(folder_path, campaign, control):
                     return
@@ -1131,14 +1091,6 @@ def _run(folder_path, campaign_id, control):
                         _evaluate_reference_unit(folder_path, campaign, unit)
                     except Exception as exc:
                         unit["referenceError"] = str(exc)
-                        _save(folder_path, campaign)
-                if unit.get("assessment") is not None and needs_dino:
-                    try:
-                        _update(folder_path, campaign, detail="DINOv2 · epoch " + str(unit["epoch"]) +
-                                " · frame " + str(unit["case"] + 1))
-                        _evaluate_dino_unit(folder_path, campaign, unit)
-                    except Exception as exc:
-                        unit["dinoError"] = str(exc)
                         _save(folder_path, campaign)
                 if unit.get("assessment") is not None:
                     _retire_scored_session(folder_path, campaign, unit)
@@ -1505,7 +1457,6 @@ def workspace_gallery(folder_path, model_id="", *, limit=48, offset=0, collectio
                     "seed": unit.get("seed"),
                     "assessment": unit.get("assessment"),
                     "referenceAssessments": unit.get("referenceAssessments") or [],
-                    "dinoAssessments": unit.get("dinoAssessments") or [],
                     "startedAt": campaign.get("startedAt"),
                 })
     warnings = []
@@ -1555,8 +1506,6 @@ def checkpoint_workspace(folder_path, job_id, epoch, offset=0, limit=24):
             records = (references.get("byMedia") or {}).get(name) or {}
             item["referenceAssessments"] = [v for v in records.values()
                                             if isinstance(v, dict) and v.get("method") == "rvn"]
-            item["dinoAssessments"] = [v for v in records.values()
-                                       if isinstance(v, dict) and v.get("method") == "dino"]
             # A repeated session can have a distinct resolved prompt per render.
             # Never attribute the session's selection to a different generated image.
             item["wildcards"] = test_bench._resolved_wildcard_summary(

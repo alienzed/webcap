@@ -47,6 +47,13 @@ def test_campaign_accepts_same_tag_in_multiple_groups(monkeypatch, tmp_path, cho
     campaign = epoch_finder.create_campaign("set", criteria)
     assert len(campaign["referencePlan"]) == len(selected_options)
     assert seen == [(choice_group, tag, tag + ".png") for tag in sorted(selected_options)]
+    assert campaign["referenceEvaluation"] == {"rvn": True}
+
+    # A stale caller cannot silently restart the retired DINO evaluator.
+    with pytest.raises(ValueError, match="DINOv2 evaluation has been retired"):
+        epoch_finder.create_campaign("set", dict(
+            criteria, referenceEvaluation={"rvn": True, "dino": True}))
+
 
 
 def test_reference_group_must_contain_selected_exact_tag(monkeypatch, tmp_path):

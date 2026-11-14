@@ -212,10 +212,6 @@
       evaluations.push({label:'Ref '+item.referenceAssessments.length,title:'Saved reference VL comparisons'});
       details.push({label:'Reference VL',value:item.referenceAssessments.map(function(v){return (v.label||v.group||'Reference')+': '+(v.verdict||'unclear')+' · '+(v.reference||'');})});
     }
-    if((item.dinoAssessments||[]).length){
-      evaluations.push({label:'DINO '+item.dinoAssessments.length,title:'Saved distinct DINO comparisons; per-reference scores under Details'});
-      details.push({label:'DINOv2',value:item.dinoAssessments.map(function(v){return (v.reference||'Reference')+': '+(Number.isFinite(Number(v.similarity))?Number(v.similarity).toFixed(3):'unavailable');})});
-    }
     if(item.prompt)details.push({label:'Resolved prompt',value:item.prompt,pre:true});
     if(item.seed!=null)details.push({label:'Seed',value:String(item.seed)});
     if(item.modelId)details.push({label:'Model',value:item.modelId});

@@ -1167,7 +1167,7 @@
                         <button type="button" class="test-workspace-pane-btn active" data-test-workspace-mode="tests" aria-pressed="true">Prompt Tests</button>
                         <button type="button" class="test-workspace-pane-btn" data-test-workspace-mode="finder" aria-pressed="false">Campaigns</button>
                         <button type="button" class="test-workspace-pane-btn" data-test-workspace-mode="analytics" aria-pressed="false">Insights</button>
-                        <button type="button" class="test-workspace-pane-btn test-workspace-reference-link" data-test-workspace-mode="references" aria-pressed="false" title="Manage training reference images for VL and DINO comparisons">References</button>
+                        <button type="button" class="test-workspace-pane-btn test-workspace-reference-link" data-test-workspace-mode="references" aria-pressed="false" title="Manage training reference images for VL comparisons">References</button>
                     </nav>
                     <section id="epoch-finder-screen" class="epoch-finder-screen hidden" aria-label="Campaigns">
                         <div class="epoch-finder-layout">
@@ -1210,7 +1210,7 @@
                                     <p class="epoch-finder-muted">Sampling settings come from Prompt Tests. Vision uses the selected model in the global header.</p>
                                     </div>
                                     <div data-epoch-wizard-step="4" class="hidden">
-                                        <section class="epoch-finder-reference-setup"><h4>Training references</h4><p class="epoch-finder-muted">Review suggested training images for Primary options with matching Set tags. Options without candidates are skipped for reference comparisons; original VL is unchanged.</p><div id="epoch-finder-reference-options"></div><p class="epoch-finder-muted">Images are shown in the right-hand gallery during this step.</p><div id="epoch-finder-reference-choices"></div><label><input type="checkbox" id="epoch-finder-enable-rvn" checked> Compare with training references</label><label><input type="checkbox" id="epoch-finder-enable-dino" checked> DINOv2 visual similarity</label></section>
+                                        <section class="epoch-finder-reference-setup"><h4>Training references</h4><p class="epoch-finder-muted">Review suggested training images for Primary options with matching Set tags. Options without candidates are skipped for reference comparisons; original VL is unchanged.</p><div id="epoch-finder-reference-options"></div><p class="epoch-finder-muted">Images are shown in the right-hand gallery during this step.</p><div id="epoch-finder-reference-choices"></div><label><input type="checkbox" id="epoch-finder-enable-rvn" checked> Compare with training references</label></section>
                                         <strong>Review your campaign</strong>
                                         <div id="epoch-finder-review" class="epoch-finder-review"></div>
                                     </div>
@@ -1251,7 +1251,6 @@
                                         <div class="epoch-finder-frames-metric"><span>Frames</span><strong id="epoch-finder-render-count">0 / 0</strong><div class="epoch-finder-track"><i id="epoch-finder-render-bar"></i></div></div>
                                         <div class="epoch-finder-vl-metric"><span>VL</span><strong id="epoch-finder-vl-count">0 / 0</strong><div class="epoch-finder-track"><i id="epoch-finder-vl-bar"></i></div></div>
                                         <div id="epoch-finder-rvn-progress" class="hidden"><span>Reference Compare</span><strong id="epoch-finder-rvn-count">0 / 0</strong><small id="epoch-finder-reference-compare-error" class="epoch-finder-error hidden" role="alert"></small></div>
-                                        <div id="epoch-finder-dino-progress" class="hidden"><span>DINOv2</span><strong id="epoch-finder-dino-count">0 / 0</strong></div>
                                         <div class="epoch-finder-field-metric" title="Current field"><strong id="epoch-finder-field-count">—</strong></div>
                                     </div>
                                     <div class="epoch-finder-live-layout" id="epoch-finder-live-layout">
@@ -1376,7 +1375,7 @@
                                   <div class="run-lab-evaluation-top"><div><span class="run-lab-eyebrow">ORIGINAL VL</span><h3>Evaluate saved renders</h3></div><strong id="run-lab-eval-percent">—</strong></div>
                                   <p id="run-lab-eval-count" role="status">Checking saved evaluations…</p>
                                   <progress id="run-lab-eval-meter" max="1" value="0" aria-label="Test render evaluation coverage"></progress>
-                                  <div class="run-lab-evaluation-bottom"><strong id="run-lab-eval-status">Checking queue…</strong><div class="run-lab-evaluation-actions"><button type="button" id="run-lab-eval-start" class="training-btn training-launch-btn" title="Evaluate renders without a completed Original VL assessment across all Test sessions. Reference VL and DINO remain separate diagnostics.">Evaluate missing</button><button type="button" id="run-lab-eval-stop" class="review-captions-btn" title="Stop the outstanding automatic Original VL requests for this Set without touching other LLM work." disabled>Stop</button></div></div>
+                                  <div class="run-lab-evaluation-bottom"><strong id="run-lab-eval-status">Checking queue…</strong><div class="run-lab-evaluation-actions"><button type="button" id="run-lab-eval-start" class="training-btn training-launch-btn" title="Evaluate renders without a completed Original VL assessment across all Test sessions. Reference VL remains a separate diagnostic.">Evaluate missing</button><button type="button" id="run-lab-eval-stop" class="review-captions-btn" title="Stop the outstanding automatic Original VL requests for this Set without touching other LLM work." disabled>Stop</button></div></div>
                               </section>
                               <section class="run-lab-featured" aria-label="Leading epochs"><div id="run-lab-featured"></div></section>
                               <section id="run-lab-ai-panel" class="run-lab-card run-lab-ai-panel hidden" aria-live="polite">
@@ -1509,14 +1508,12 @@
                                     <select id="test-generations-evaluator" class="hidden" aria-hidden="true" tabindex="-1">
                                         <option value="original">Ask VL — Original</option>
                                         <option value="rvn">VL Compare — Training Reference</option>
-                                        <option value="dino">DINOv2 Compare — Training Reference</option>
                                     </select>
                                     <div class="test-evaluate-control">
                                         <button id="test-generations-ask-vl" class="review-captions-btn" type="button" aria-expanded="false" aria-controls="test-generations-evaluate-menu" disabled>Evaluate ▾</button>
                                         <div id="test-generations-evaluate-menu" class="test-evaluate-menu hidden" role="menu" aria-label="Evaluation methods">
                                             <button type="button" role="menuitem" data-test-evaluate="original">Ask VL · Original</button>
                                             <button type="button" role="menuitem" data-test-evaluate="rvn">VL · Training Reference</button>
-                                            <button type="button" role="menuitem" data-test-evaluate="dino">DINOv2 · Training Reference</button>
                                             <button type="button" role="menuitem" data-test-evaluate="all">Evaluate All</button>
                                         </div>
                                     </div>

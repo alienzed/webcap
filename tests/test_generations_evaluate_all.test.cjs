@@ -10,7 +10,7 @@ const end = script.indexOf('  function runTestVlBatch() {', start);
 assert.ok(start >= 0 && end > start, 'Reference evaluation function must exist');
 const source = script.slice(start, end) + '\nthis.run = runReferenceComparison;';
 
-function harness(failDino = false) {
+function harness(failReference = false) {
   const requests = [], errors = [], payloads = [], shownPairs = [];
   const elements = {
     'test-generations-evaluator': { value: 'rvn', disabled: false },
@@ -30,7 +30,7 @@ function harness(failDino = false) {
     testReferenceRequest: async args => {
       payloads.push(args);
       requests.push(args.action + ':' + (args.method || 'save'));
-      if (failDino && args.method === 'dino') throw Error('DINO failed');
+      if (failReference && args.method === 'rvn') throw Error('Reference VL failed');
       return args.action === 'evaluate' && args.method === 'rvn' ? { job: { jobId: 'llm1' } } : {};
     },
     trackTransientLlmJob: () => {},
@@ -48,24 +48,23 @@ function harness(failDino = false) {
   return { run: sandbox.run, requests, errors, references, elements, payloads, shownPairs };
 }
 
-test('Evaluate All saves VL reference, runs DINO, then queues Original VL', async () => {
+test('Evaluate All saves reference VL, then queues Original VL', async () => {
   const h = harness();
   await h.run();
-  assert.deepEqual(h.requests, ['evaluate:rvn', 'save:save', 'evaluate:dino', 'queue:original']);
+  assert.deepEqual(h.requests, ['evaluate:rvn', 'save:save', 'queue:original']);
   assert.equal(h.payloads[0].groupAlias, 'Garment color');
-  assert.equal(h.shownPairs.length, 3);
+  assert.equal(h.shownPairs.length, 2);
   assert.equal(h.shownPairs[0].file, 'media.png');
   assert.equal(h.shownPairs[0].value.reference, 'ref.png');
   assert.equal(h.shownPairs[1].value.verdict, 'MATCH');
-  assert.equal(h.shownPairs[2].value.method, 'dino');
   assert.equal(h.references.busy, false);
   assert.equal(h.references.runAll, false);
 });
 
 test('Evaluate All stops on reference error before Original VL', async () => {
   const h = harness(true);
-  await assert.rejects(h.run(), /DINO failed/);
-  assert.deepEqual(h.requests, ['evaluate:rvn', 'save:save', 'evaluate:dino']);
+  await assert.rejects(h.run(), /Reference VL failed/);
+  assert.deepEqual(h.requests, ['evaluate:rvn']);
   assert.equal(h.errors.length, 1);
   assert.equal(h.references.busy, false);
   assert.equal(h.references.runAll, false);
@@ -117,8 +116,8 @@ test('Training Reference viewer shows the exact A/B media and restores latest sa
     '/fs/test_generations/media?folder=set1&session=session1&media=render.png');
   sandbox.drawReferenceResults();
   await new Promise(resolve=>setImmediate(resolve));
-  assert.equal(compare.rows.length, 2);
-  assert.match(pair.textContent, /DINO cosine 0\.780/);
+  assert.equal(compare.rows.length, 1);
+  assert.ok(!pair.textContent.includes('DINO'));
   assert.ok(!pair.textContent.includes('Comparing…'));
   sandbox.showReferencePair('render.png', compare.rows.find(row=>row.value.method==='rvn').value);
   assert.match(pair.textContent, /Rear detail is not visible/);

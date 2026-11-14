@@ -1,5 +1,8 @@
 """On-demand Test reference evidence never overwrites original Ask VL records."""
 from pathlib import Path
+import json
+
+import pytest
 
 from tool.server import test_reference, epoch_test_bench as bench
 
@@ -64,15 +67,25 @@ def test_reference_vl_uses_real_set_group_and_alias(tmp_path, monkeypatch):
     assert "BT Back" in question
 
 
-def test_dino_result_is_saved_without_altering_legacy_vl(tmp_path, monkeypatch):
+def test_retired_dino_is_rejected_and_existing_records_survive(tmp_path, monkeypatch):
     folder, session, media = _setup(tmp_path, monkeypatch)
-    from tool.server import epoch_dino
-    monkeypatch.setattr(epoch_dino, "compare_images",
-                        lambda reference, generated, cache_dir: 0.751)
-    result = test_reference.prepare(folder, {
-        "method": "dino", "session": "test", "media": media.name,
-        "group": "Shape", "option": "v-front", "reference": "ref.png",
-        "choices": ["v-front", "micro"],
-    })
-    assert result["assessment"]["similarity"] == 0.751
-    assert "dino|Shape|v-front" in test_reference.read(folder, "test")["byMedia"][media.name]
+    legacy = {"version": 1, "byMedia": {media.name: {
+        "dino|Shape|v-front": {
+            "method": "dino", "group": "Shape", "option": "v-front",
+            "reference": "ref.png", "similarity": 0.751,
+        }
+    }}}
+    (session / "test_reference.json").write_text(json.dumps(legacy), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="Unknown reference evaluator"):
+        test_reference.prepare(folder, {
+            "method": "dino", "session": "test", "media": media.name,
+            "group": "Shape", "option": "v-front", "reference": "ref.png",
+            "choices": ["v-front", "micro"],
+        })
+    with pytest.raises(ValueError, match="Invalid reference assessment"):
+        test_reference.save(folder, "test", media.name, {
+            "method": "dino", "group": "Shape", "option": "v-front",
+            "reference": "ref.png", "similarity": 0.9,
+        })
+    assert test_reference.read(folder, "test") == legacy

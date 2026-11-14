@@ -29,15 +29,15 @@ test('Campaign header is two compact bands with live IDs intact', () => {
   assert.equal(doc.querySelectorAll('#epoch-finder-render-count').length, 1);
 });
 
-test('campaign evaluation and optional comparison counters retain their elements and hidden defaults', () => {
+test('Campaign metrics retain VL and RVN counters without retired DINO controls', () => {
   const metrics = doc.querySelector('#epoch-finder-metrics');
   for (const id of ['epoch-finder-vl-count', 'epoch-finder-vl-bar',
-    'epoch-finder-rvn-count', 'epoch-finder-dino-count',
-    'epoch-finder-reference-compare-error']) {
+    'epoch-finder-rvn-count', 'epoch-finder-reference-compare-error']) {
     assert.ok(metrics.querySelector('#' + id), id);
   }
   assert.ok(metrics.querySelector('#epoch-finder-rvn-progress').classList.contains('hidden'));
-  assert.ok(metrics.querySelector('#epoch-finder-dino-progress').classList.contains('hidden'));
+  assert.equal(metrics.querySelector('#epoch-finder-dino-count'), null);
+  assert.equal(metrics.querySelector('#epoch-finder-dino-progress'), null);
   assert.match(script, /els\('vl-count'\)\.parentElement\.classList\.remove\('hidden'\)/);
   assert.match(script, /els\('render-bar'\)\.style\.width/);
   assert.match(script, /els\('field-count'\)\.textContent/);

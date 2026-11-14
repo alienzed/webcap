@@ -141,31 +141,53 @@ test('only one contextual action is presented, with completed capture taking pri
   assert.deepEqual(kinds(),[],'outdated recommendations disappear');
 });
 
-test('Scene Write receives early decisions and complete long messages from the discussion', async () => {
-  const early='Agreed early decision: retain the red scarf.';
-  const long='H3 detail '.repeat(400)+' Final decision: keep the lamp unlit.';
-  const messages=[{role:'system',content:'Internal message'},null,{role:'user',content:early},
-    ...Array.from({length:20},(_,i)=>({role:i%2?'assistant':'user',content:'Discussion '+i})),
-    {role:'user',content:long}];
-  let request,complete;
-  const finished=new Promise(resolve=>{complete=resolve;});
-  const button={set disabled(value){if(!value) complete();}};
-  const scope=vm.createContext({proposedBatch:null,
-    el:id=>id==='studio-dw-batch-scenes'?{querySelectorAll:()=>[{value:'a'}]}:button,
-    status:message=>{if(message.startsWith('Scene revision draft failed:')) assert.fail(message);},
-    window:{flushStudioDirectorStoryEdits:async()=>{},studioDirectorBridge:{selectWriteProject(){},
-      messages:()=>messages,makeProposal:async input=>{request=input;return '{}';}}},
-    loadStory:async()=>({id:'p1',sceneOrder:['a'],scenes:{a:{title:'Lamp',summary:'Intent',prompt:'H3'}}}),
-    storyName:()=> 'Project',parseProposal:JSON.parse,validateSceneRevisionDraft:()=>[],
-    recommendedSceneId:()=>'',renderBatchReview(){}});
+
+test('selected Scene list uses one bounded call per Scene, preserving successes after failures', async () => {
+  const ids=['a','b','c'],calls=[];
+  const scope=vm.createContext({
+    readinessStale:false,recommendations:{writeHint:'scenes',writeInstruction:'Keep the lamp unlit.',writeFields:['prompt']},
+    recommendedWriteFields:()=>['prompt'],
+    el:id=>id==='studio-dw-batch-scenes'?{querySelectorAll:()=>ids.map(value=>({value}))}:{disabled:false},
+    status:()=>{},window:{flushStudioDirectorStoryEdits:async()=>{},studioDirectorBridge:{
+      messages:()=>[{role:'user',content:'Agreed early: retain the red scarf.'}],selectWriteProject:()=>{},
+      writeSelectedScene:async launch=>{
+        calls.push(launch);
+        if(launch.sceneId==='b') throw new Error('Invalid Scene-specific model output');
+        if(launch.sceneId==='c') return null;
+      }
+    }},
+    loadStory:async()=>({id:'p1',title:'Beacon',sceneOrder:ids,
+      scenes:{a:{title:'First'},b:{title:'Second'},c:{title:'Third'}}}),storyName:x=>x.title
+  });
   vm.runInContext(part('  function prepareBatchScenes(storyId) {','  function renderBatchReview() {'),scope);
-  scope.prepareBatchScenes('p1');
-  await finished;
-  const history=JSON.parse(request.split('Creative discussion: ')[1].split('\n')[0]);
-  assert.equal(history.length,22);
-  assert.equal(history[0].text,early);
-  assert.equal(history.at(-1).text,long);
-  assert.ok(history.every(message=>['user','assistant'].includes(message.role)));
+  const outcome=await scope.prepareBatchScenes('p1');
+  assert.deepEqual(calls.map(x=>x.sceneId),ids);
+  assert.equal(calls[0].instruction,'Keep the lamp unlit.');
+  assert.deepEqual(Array.from(calls[0].fields),['prompt']);
+  assert.equal(outcome.saved.length,1);
+  assert.equal(outcome.failed.length,1);
+  assert.equal(outcome.unchanged.length,1);
+  assert.equal(outcome.notAttempted.length,0);
+});
+
+test('selected Scene list stops on a shared runtime failure',async()=>{
+  const ids=['a','b'],calls=[];
+  const scope=vm.createContext({
+    readinessStale:false,recommendations:{writeHint:'scenes',writeInstruction:'Quiet the ending.',writeFields:[]},
+    recommendedWriteFields:()=>[],
+    el:id=>id==='studio-dw-batch-scenes'?{querySelectorAll:()=>ids.map(value=>({value}))}:{disabled:false},
+    status:()=>{},window:{flushStudioDirectorStoryEdits:async()=>{},studioDirectorBridge:{
+      messages:()=>[],selectWriteProject:()=>{},
+      writeSelectedScene:async launch=>{calls.push(launch.sceneId);throw new Error('Failed to fetch');}
+    }},
+    loadStory:async()=>({id:'p1',title:'Beacon',sceneOrder:ids,
+      scenes:{a:{title:'First'},b:{title:'Second'}}}),storyName:x=>x.title
+  });
+  vm.runInContext(part('  function prepareBatchScenes(storyId) {','  function renderBatchReview() {'),scope);
+  const outcome=await scope.prepareBatchScenes('p1');
+  assert.deepEqual(calls,['a']);
+  assert.equal(outcome.failed.length,1);
+  assert.equal(outcome.notAttempted.length,1);
 });
 
 for (const hidden of [true,false]) for (const target of [
@@ -261,7 +283,7 @@ test('automatic new-Scene Write reuses a fresh capture and preserves explicit dr
   });
   vm.runInContext(
     part('  function readyNewSceneCapture() {', '  function setOperation() {') +
-    part('  function writePrepare() {','  function prepareProjectCoherence(storyId) {'),
+    part('  function writePrepare(options) {','  function prepareProjectCoherence(storyId) {'),
     scope
   );
   scope.writePrepare();

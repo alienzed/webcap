@@ -274,7 +274,7 @@ test('multi-Scene review drafts together and applies selected fields in one atom
   assert.match(html, /value="scene-write">Write Scenes/);
   assert.match(html, /id="studio-dw-scene-mode"/);
   assert.match(html, /id="studio-dw-batch-review"/);
-  assert.match(workbench, /makeProposal\(request, 'studio_scene_batch_draft', true\)/);
+  assert.match(workbench, /writeSelectedScene\(\{/);
   assert.match(workbench, /el\('studio-dw-scene-mode'\)\.value === 'revise'/);
   assert.match(workbench, /function renderBatchReview\(\)/);
   const applied = workbench.split('  function applyBatchScenes() {')[1]
@@ -317,7 +317,7 @@ test('H3 detailed authoring contract is included when Director may propose a Pro
     "studioDirectorRequestMessages([{role:'user',content:'Draft H3 Prompt'}],true)",context);
   assert.doesNotMatch(ordinary[0].content,/Full H3 authoring contract/);
   assert.match(detailed[0].content,/Full H3 authoring contract/);
-  assert.match(workbench, /makeProposal\(request, 'studio_scene_batch_draft', true\)/);
+  assert.match(workbench, /writeSelectedScene\(\{/);
 });
 
 test('Studio conversation receives the canonical H3 template as reference without an automatic Write', async () => {
@@ -396,7 +396,7 @@ test('standalone Invariant linking is not a Director Write operation', () => {
 });
 
 test('multi-Scene review preserves actual Project positions and distinguishes a saved Scene from receipt failure', () => {
-  assert.match(workbench, /position:\(story\.sceneOrder \|\| \[\]\)\.indexOf\(id\) \+ 1/);
+  assert.match(workbench, /position = story\.sceneOrder\.indexOf\(id\) \+ 1/);
   assert.match(workbench, /heading\.textContent = 'Scene ' \+ entry\.before\.position/);
   const apply = workbench.split('  function applyScene() {')[1]
     .split('  function setReadinessFreshness(stale) {')[0];

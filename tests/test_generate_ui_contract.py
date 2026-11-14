@@ -353,13 +353,20 @@ def test_generate_inference_creates_and_updates_pending_preview_card():
     assert ".generate-result-pending-media" in css
 
 
-def test_generate_has_lightroom_style_create_and_library_modes():
+def test_generate_compact_navigation_with_legacy_library_compatibility():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     script = (ROOT / "tool" / "js" / "generate.js").read_text(encoding="utf-8")
     css = (ROOT / "tool" / "css" / "generate.css").read_text(encoding="utf-8")
 
+    assert 'class="generate-view-toggle hidden"' in html
     assert 'id="generate-create-mode-btn"' in html
     assert 'id="generate-library-mode-btn"' in html
+    assert 'id="generate-new-btn"' in html
+    assert 'id="generate-takes-explore-btn"' in html
+    assert "window.openMediaExplorerActivity({source: 'generate', id: ''});" in script
+    assert ".generate-view-toggle.hidden { display: none; }" in css
+    assert ".generate-create-view.takes-collapsed .generate-takes-heading > div:first-child," in css
+    assert ".generate-create-view.takes-collapsed .generate-takes-actions > :not(#generate-takes-collapse-btn)" in css
     assert 'id="generate-create-view"' in html
     assert 'id="generate-library-view"' in html
     assert 'id="generate-active-preview"' in html

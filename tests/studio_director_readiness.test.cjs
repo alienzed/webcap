@@ -209,7 +209,7 @@ test('Director guidance presents at most one contextual action and keeps assessm
 test('Scene revisions select saved Scenes, leaving changed fields to Director', () => {
   assert.match(workbench, /function recommendedSceneId\(story\)/);
   assert.match(workbench, /story\.sceneOrder\.includes\(id\)/);
-  assert.match(workbench, /whichever fields need changing: title, summary/);
+  assert.match(workbench, /For Scenes with an H3 Prompt, revise title and\/or prompt/);
   assert.match(workbench, /validateSceneRevisionDraft\(result, ids, selected, raw\)/);
   assert.doesNotMatch(workbench, /applySuggestedWriteFields/);
   assert.doesNotMatch(html, /id="studio-dw-batch-fields"/);

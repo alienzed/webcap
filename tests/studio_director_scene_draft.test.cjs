@@ -70,6 +70,7 @@ test('complete Scene capture has an editable Prompt and one reviewed Apply saves
     part('  function applyStudioSceneDraft() {','  function startStudioWorkshop() {'),scope);
   scope.showStudioSceneDraftReview();
   assert.equal(el('studio-scene-draft-prompt-row').classList.hidden,false);
+  assert.equal(el('studio-scene-draft-summary-row').classList.hidden,true);
   assert.equal(el('studio-scene-draft-prompt').value,prompt);
   assert.equal(el('studio-scene-draft-apply').textContent,'Create Scene');
   scope.applyStudioSceneDraft();
@@ -82,6 +83,7 @@ test('complete Scene capture has an editable Prompt and one reviewed Apply saves
   delete scope.state.studioSceneProposal.prompt;
   scope.showStudioSceneDraftReview();
   assert.equal(el('studio-scene-draft-prompt-row').classList.hidden,true);
+  assert.equal(el('studio-scene-draft-summary-row').classList.hidden,false);
 });
 
 test('Only explicitly attached Story ID qualifies as a Scene target', () => {

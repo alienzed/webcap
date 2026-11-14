@@ -146,10 +146,10 @@ test('single-Scene revision request uses its saved ID in the example, not a plac
   const batch = workbench.split('  function prepareBatchScenes(storyId) {')[1]
     .split('  function renderBatchReview() {')[0];
   assert.match(batch,/ids\.length === 1/);
-  assert.match(batch,/JSON\.stringify\(\{scenes:\[\{sceneId:ids\[0\],summary:/);
+  assert.match(batch,/JSON\.stringify\(\{scenes:\[\{sceneId:ids\[0\],prompt:/);
   assert.doesNotMatch(batch,/ACTUAL_SELECTED_ID/);
-  assert.match(batch,/summary \(Scene Intent\)/);
-  assert.match(batch,/prompt \(H3 Prompt\)/);
+  assert.match(batch,/summary is available for planning/);
+  assert.match(batch,/prompt is the authoritative description/);
   assert.match(batch,/validateSceneRevisionDraft\(result, ids, selected, raw\)/);
 });
 
@@ -170,7 +170,7 @@ test('Scene revision synchronizes the chosen Project destination before requesti
       selectWriteProject:(id,title)=>calls.push(['destination',id,title]),
       messages:()=>[],makeProposal:async instruction=>{
         assert.deepEqual(calls,[['destination',story.id,story.title]]);
-        assert.match(instruction,/Consider Title, Intent and H3 Prompt together as one Scene/);
+        assert.match(instruction,/Treat an existing H3 Prompt as authoritative/);
         assert.doesNotMatch(instruction,/Requested Write fields/);
         complete();return '{"scenes":[]}';
       }
@@ -273,7 +273,8 @@ test('General Chat has a separate request path and Studio keeps native storage I
 test('Context selects Overview and full Scenes without media fields', () => {
   assert.match(workbench, /addUnit\('Overview', overview, fields/);
   assert.match(workbench, /addUnit\('Scene ' \+ \(index \+ 1\)/);
-  assert.match(workbench, /\['title', 'summary', 'prompt', 'durationSeconds'\]/);
+  assert.match(workbench, /\['title', 'prompt', 'durationSeconds'\]/);
+  assert.match(workbench, /\['title', 'summary', 'durationSeconds'\]/);
   assert.match(workbench, /input\[data-group-select\]:checked/);
   assert.match(html, /id="studio-dw-read-selection-summary">Entire Project<\/summary>/);
   const read = workbench.split('  function renderReadStory(story) {', 2)[1].split('  function selectedPaths() {', 2)[0];

@@ -52,8 +52,9 @@ def test_director_role_combines_webcap_workflow_expertise_with_creative_judgment
     assert "Acknowledge only the exact saved fields actually supplied" in system
     assert "Conversation never edits Project records" in system
     assert "Project Overview (Concept, Visual / atmosphere, Invariants)" in system
-    assert "Scene (Title, Intent, H3 Prompt)" in system
-    assert "as a coherent unit. Align affected parts, preserve others" in system
+    assert "Scene (Title, H3 Prompt)" in system
+    assert "the authoritative Scene description" in system
+    assert "preserving unaffected authored material" in system
     assert len(system) < 6000
 
 
@@ -122,7 +123,7 @@ def test_freeform_workshop_does_not_claim_hidden_context_or_mutations():
 
 
 
-def test_five_field_contract_has_explicit_ownership_and_review_boundary():
+def test_planning_only_scene_summary_keeps_legacy_storage_and_review_boundary():
     text = guidance("minimax_h3")["system"]
     for phrase in (
         "story.concept", "story.style", "story.invariants",

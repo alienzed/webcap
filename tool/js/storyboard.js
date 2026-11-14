@@ -4171,7 +4171,9 @@
         '<div class="storyboard-scene-body">' +
           '<div class="storyboard-scene-main">' +
             '<label class="storyboard-field storyboard-scene-title-field"><span>Scene title</span><input data-scene-field="title" value="' + escapeHtml(sceneValue(scene, 'title', '')) + '" placeholder="Scene title"></label>' +
-            '<label class="storyboard-field storyboard-scene-intent"><span>Intent</span><textarea data-scene-field="summary" rows="2" placeholder="Describe what happens in this Scene.">' + escapeHtml(sceneValue(scene, 'summary', '')) + '</textarea></label>' +
+            (String(sceneValue(scene, 'prompt', '')).trim()
+              ? '<input type="hidden" data-scene-field="summary" value="' + escapeHtml(sceneValue(scene, 'summary', '')) + '">'
+              : '<label class="storyboard-field storyboard-scene-intent"><span>Scene outline</span><textarea data-scene-field="summary" rows="2" placeholder="Describe the Scene before authoring its H3 Prompt.">' + escapeHtml(sceneValue(scene, 'summary', '')) + '</textarea></label>') +
             '<div class="storyboard-prompt-block">' +
               '<div class="storyboard-prompt-heading">' +
                 '<span class="storyboard-prompt-label">' +

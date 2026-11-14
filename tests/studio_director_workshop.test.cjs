@@ -94,11 +94,11 @@ test('Studio prompting selects the current goal rather than steering every task 
   assert.doesNotMatch(system,/When choices are clear, offer to review Concept/);
   assert.match(system,/Ask one focused question only for a consequential missing decision/);
   assert.match(system,/deliver the actual complete text in reply on this turn/);
-  assert.match(system,/capture.content to the exact full prompt also present in reply/);
+  assert.match(system,/use capture.field="prompt"/);
   assert.match(system,/"projectId":"p1","sceneOrder":\["scene-a"\]/);
   assert.match(system,/Usually checks=\[\], readHints=\[\]/);
   assert.match(system,/at most two useful checks/);
-  assert.match(system,/A new tentative Scene uses field="scene", title and its observable Intent/);
+  assert.match(system,/also include prompt when a full H3 Prompt was authored/);
   assert.match(system,/H3 PRODUCTION PROMPT REFERENCE/);
   assert.match(system,/Use new-project, project or scenes for Write/);
   assert.match(system,/writeFields names affected fields/);

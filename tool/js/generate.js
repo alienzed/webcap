@@ -786,7 +786,7 @@ function sweepLoras(model, folder) {
   function promoteLoadedTakeToWorking(keepSeed) {
     if (generateState.editorMode !== 'loaded') return true;
     if (generateState.workingDraftDirty && !window.confirm(
-      'Replace your unsent Working draft with a draft from this Take? Cancel preserves Working.')) {
+      'Working has unsent edits. Replace them with changes from this Take? Cancel preserves Working and restores the original Take.')) {
       applyGenerateEditorSnapshot(generateState.loadedSnapshot);
       renderGenerateEditorTabs();
       return false;

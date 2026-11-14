@@ -115,7 +115,7 @@ test('Read preview and outbound values use the same validated field serializer',
   vm.runInContext(body,scope);
   const story={id:'p1',title:'The Interview',updatedAt:'now',concept:'A specific premise',
     scenes:{s1:{title:'Question',summary:'Tense dialogue',prompt:'Close-up'}},sceneOrder:['s1']};
-  const result=scope.readPayload(story,['project.concept','scene:s1:summary']);
+  const result=scope.readPayload(story,['project.concept','scene:s1:prompt']);
   assert.equal(result.fields.length,2);
   assert.equal(result.fields[0].value,'A specific premise');
   assert.equal(result.fields[1].value,'Tense dialogue');

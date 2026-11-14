@@ -215,13 +215,14 @@ test('Scene review retains prompts and flags durations for author correction', (
   const messages=item=>[item.textContent,...item.children.flatMap(messages)].filter(Boolean).join(' ');
   assert.equal(host.children.length,3);
   assert.equal(find(host.children[0],item=>item.dataset.field==='prompt').value,'Useful first Prompt');
-  assert.match(messages(host.children[0]),/correct it before Apply/);
+  assert.equal(find(host.children[0],item=>item.dataset.field==='durationSeconds').value,6);
+  assert.match(messages(host.children[0]),/using 6s/);
   assert.equal(find(host.children[1],item=>item.dataset.field==='prompt').value,'Useful second Prompt');
   assert.equal(find(host.children[1],item=>item.dataset.field==='durationSeconds').value,6);
-  assert.match(messages(host.children[1]),/6s default shown/);
+  assert.match(messages(host.children[1]),/6s default/);
   assert.equal(find(host.children[2],item=>item.dataset.field==='durationSeconds').value,'12.5');
-  assert.match(messages(host.children[2]),/Complete this Prompt/);
-  assert.doesNotMatch(messages(host.children[2]),/correct it before Apply/,'fractional seconds are not automatically invalid');
+  assert.match(messages(host.children[2]),/No Prompt supplied/);
+  assert.doesNotMatch(messages(host.children[2]),/not supported/,'fractional seconds are not automatically invalid');
 });
 
 test('new Scene Apply sends the edited prompt and duration and records the authoritative saved values',async()=>{
@@ -248,6 +249,87 @@ test('new Scene Apply sends the edited prompt and duration and records the autho
   assert.equal(receipt.scenes[0].durationSeconds,8);
 });
 
+
+test('Apply saves usable Scenes and retains incomplete rows for later Apply', async () => {
+  const node=(title,prompt,duration)=>({
+    fields:{title:{value:title},prompt:{value:prompt},durationSeconds:{value:duration}},
+    removed:false,
+    querySelector(selector){return this.fields[selector.match(/data-field="([^"]+)"/)[1]];},
+    remove(){this.removed=true;}
+  });
+  const first=node('Opening','Complete H3 Prompt A','twelve');
+  const incomplete=node('Unfinished','','10');
+  const last=node('Ending','Complete H3 Prompt C','12.5');
+  const rows=[first,incomplete,last], requests=[], receipts=[];
+  let activeDone,dialogClosed=0;
+  let currentStory={id:'p1',title:'Project',sceneOrder:['old'],scenes:{}};
+  const proposal={storyId:'p1',storyTitle:'Project',sceneOrder:['old'],scenes:{},
+    drafts:[{title:'Opening',prompt:'Complete H3 Prompt A'},{title:'Unfinished',prompt:''},
+      {title:'Ending',prompt:'Complete H3 Prompt C'}]};
+  const status={textContent:''};
+  const state={pending:false,studioScenesProposal:proposal};
+  const scope=vm.createContext({
+    state,Number,String,Array,Promise,JSON,
+    el:id=>id==='studio-scenes-rows'?{querySelectorAll:()=>rows.filter(row=>!row.removed)}:
+      id==='studio-scenes-placement'?{value:'end'}:
+      id==='studio-scenes-error'?status:
+      id==='studio-scenes-review'?{close(){dialogClosed++;}}:{},
+    syncControls(){},recordStudioOperation(){},studioActionStatus(){},
+    window:{flushStudioDirectorStoryEdits:async()=>{},
+      studioDirectorBridge:{recordApplied:async(_kind,_story,fields)=>{receipts.push(fields);}},
+      refreshStudioDirectorStoryIfOpen:async()=>{activeDone();},
+      reportConsoleError:(_label,error)=>assert.fail(error.message)},
+    requestJson:async(url,options)=>{
+      assert.equal(url,'/fs/studio/director/scenes-draft');
+      const payload=JSON.parse(options.body);
+      requests.push(payload);
+      assert.deepEqual(payload.expectedSceneOrder,currentStory.sceneOrder);
+      const created=payload.scenes.map((item,i)=>({...item,id:'created-'+requests.length+'-'+i}));
+      currentStory={...currentStory,sceneOrder:[...currentStory.sceneOrder,...created.map(x=>x.id)],
+        scenes:{...currentStory.scenes,...Object.fromEntries(created.map(x=>[x.id,x]))}};
+      return{story:currentStory,scenes:created};
+    }
+  });
+  vm.runInContext(part('  function applyStudioScenes() {',
+    '  function parseStudioSceneDraft(raw) {'),scope);
+  const run=()=>new Promise(resolve=>{activeDone=resolve;scope.applyStudioScenes();});
+  await run();
+  assert.equal(requests.length,1);
+  assert.deepEqual(requests[0].scenes.map(x=>x.prompt),['Complete H3 Prompt A','Complete H3 Prompt C']);
+  assert.deepEqual(requests[0].scenes.map(x=>x.durationSeconds),[6,12.5]);
+  assert.equal(first.removed,true);
+  assert.equal(last.removed,true);
+  assert.equal(incomplete.removed,false);
+  assert.equal(dialogClosed,0);
+  assert.equal(state.studioScenesProposal,proposal);
+  assert.deepEqual(Array.from(proposal.sceneOrder),currentStory.sceneOrder);
+  assert.equal(proposal.drafts.length,1);
+  assert.equal(proposal.drafts[0].title,'Unfinished');
+  assert.match(status.textContent,/2 Scenes saved/);
+  assert.match(status.textContent,/still need a Prompt/);
+  incomplete.fields.prompt.value='Completed H3 Prompt B';
+  await run();
+  assert.equal(requests.length,2);
+  assert.equal(requests[1].scenes[0].prompt,'Completed H3 Prompt B');
+  assert.equal(requests[1].scenes[0].durationSeconds,10);
+  assert.equal(state.studioScenesProposal,null);
+  assert.equal(dialogClosed,1);
+  assert.equal(receipts.length,2);
+});
+
+test('Apply with only empty prompts leaves the review intact without a save request', () => {
+  const row={querySelector:selector=>({value:selector.includes('prompt')?'':'Incomplete'})};
+  const status={textContent:''},proposal={storyId:'p1',sceneOrder:[]};
+  const scope=vm.createContext({
+    state:{pending:false,studioScenesProposal:proposal},Array,Number,String,
+    el:id=>id==='studio-scenes-rows'?{querySelectorAll:()=>[row]}:status,
+    requestJson:()=>assert.fail('No write is possible without a Prompt')
+  });
+  vm.runInContext(part('  function applyStudioScenes() {',
+    '  function parseStudioSceneDraft(raw) {'),scope);
+  scope.applyStudioScenes();
+  assert.match(status.textContent,/No complete H3 Prompts to save/);
+});
 
 test('Studio brief review limits Apply to explicitly checked Story fields', () => {
   for (const id of [

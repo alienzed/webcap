@@ -260,8 +260,8 @@ test('Apply saves usable Scenes and retains incomplete rows for later Apply', as
   const first=node('Opening','Complete H3 Prompt A','twelve');
   const incomplete=node('Unfinished','','10');
   const last=node('Ending','Complete H3 Prompt C','12.5');
-  const rows=[first,incomplete,last], requests=[], receipts=[];
-  let activeDone,dialogClosed=0;
+  const rows=[first,incomplete,last], requests=[], receipts=[], errors=[];
+  let dialogClosed=0;
   let currentStory={id:'p1',title:'Project',sceneOrder:['old'],scenes:{}};
   const proposal={storyId:'p1',storyTitle:'Project',sceneOrder:['old'],scenes:{},
     drafts:[{title:'Opening',prompt:'Complete H3 Prompt A'},{title:'Unfinished',prompt:''},
@@ -277,8 +277,8 @@ test('Apply saves usable Scenes and retains incomplete rows for later Apply', as
     syncControls(){},recordStudioOperation(){},studioActionStatus(){},
     window:{flushStudioDirectorStoryEdits:async()=>{},
       studioDirectorBridge:{recordApplied:async(_kind,_story,fields)=>{receipts.push(fields);}},
-      refreshStudioDirectorStoryIfOpen:async()=>{activeDone();},
-      reportConsoleError:(_label,error)=>assert.fail(error.message)},
+      refreshStudioDirectorStoryIfOpen:async()=>{},
+      reportConsoleError:(_label,error)=>errors.push(error)},
     requestJson:async(url,options)=>{
       assert.equal(url,'/fs/studio/director/scenes-draft');
       const payload=JSON.parse(options.body);
@@ -292,8 +292,9 @@ test('Apply saves usable Scenes and retains incomplete rows for later Apply', as
   });
   vm.runInContext(part('  function applyStudioScenes() {',
     '  function parseStudioSceneDraft(raw) {'),scope);
-  const run=()=>new Promise(resolve=>{activeDone=resolve;scope.applyStudioScenes();});
+  const run=()=>scope.applyStudioScenes();
   await run();
+  assert.deepEqual(errors,[]);
   assert.equal(requests.length,1);
   assert.deepEqual(requests[0].scenes.map(x=>x.prompt),['Complete H3 Prompt A','Complete H3 Prompt C']);
   assert.deepEqual(requests[0].scenes.map(x=>x.durationSeconds),[6,12.5]);
@@ -309,6 +310,7 @@ test('Apply saves usable Scenes and retains incomplete rows for later Apply', as
   assert.match(status.textContent,/still need a Prompt/);
   incomplete.fields.prompt.value='Completed H3 Prompt B';
   await run();
+  assert.deepEqual(errors,[]);
   assert.equal(requests.length,2);
   assert.equal(requests[1].scenes[0].prompt,'Completed H3 Prompt B');
   assert.equal(requests[1].scenes[0].durationSeconds,10);

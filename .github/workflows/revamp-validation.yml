@@ -189,6 +189,7 @@ jobs:
           node --check tool/js/caption_enrichment.js
           node --test tests/caption_enrichment.test.cjs
           node --check tool/js/generate.js
+          node --test tests/generations_take_actions.test.cjs
           node --test tests/generations_preview_fit.test.cjs
           node --test tests/generations_form_preservation.test.cjs
           node --test tests/generate_sweep_selection.test.cjs

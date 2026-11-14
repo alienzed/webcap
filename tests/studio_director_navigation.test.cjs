@@ -501,3 +501,32 @@ test('Project creation label is truthful for zero Scenes',()=>{
   const html=fs.readFileSync(path.join(__dirname,'../tool/tool.html'),'utf8');
   assert.ok(html.includes('id="studio-project-create" type="button">Create Project</button>'));
 });
+
+
+test('ordinary Director conversation preserves prepared Scene reviews without mutating saved Projects',()=>{
+  const chat=fs.readFileSync(path.join(__dirname,'../tool/js/director_chat.js'),'utf8');
+  const start=chat.indexOf("    if (activeChatMode === 'storyboard') {\n      // An explicit message starts work");
+  const end=chat.indexOf('    // Freeze the Project destination alongside the user',start);
+  assert.ok(start>=0&&end>start,'Director conversation transition section exists');
+  const scene={storyId:'p1',prompt:'Complete existing prompt'};
+  const scenes={storyId:'p1',drafts:[{title:'First',prompt:'Complete first prompt'}]};
+  const project={storyId:'p1',draft:{concept:'A complete concept'}};
+  const state={studioStoryAccess:{storyId:'p1',label:'Moon crossing'},
+    storyboardAttachments:{},sceneRead:{projectId:'p1',sceneId:'a'},
+    studioSceneProposal:scene,studioScenesProposal:scenes,studioBriefProposal:project,
+    storyGuidelineProposal:{text:'Temporary'},workshopProposal:{text:'Temporary'}};
+  const status={textContent:'prior message'};
+  const ctx=vm.createContext({state,activeChatMode:'storyboard',
+    studioAttachedStoryId:()=>state.studioStoryAccess.storyId,
+    window:{getStudioDirectorNavigation:()=>({projectId:'p1',projectTitle:'Moon crossing'})},
+    el:()=>status});
+  vm.runInContext(chat.slice(start,end),ctx);
+  assert.strictEqual(state.studioSceneProposal,scene);
+  assert.strictEqual(state.studioScenesProposal,scenes);
+  assert.strictEqual(state.studioBriefProposal,project);
+  assert.equal(state.storyGuidelineProposal,null);
+  assert.equal(state.workshopProposal,null);
+  assert.equal(status.textContent,'');
+  assert.equal(state.sceneRead.sceneId,'a');
+  assert.equal(state.studioStoryAccess.storyId,'p1');
+});

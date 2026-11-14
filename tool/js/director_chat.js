@@ -3640,10 +3640,8 @@
       }
       state.storyGuidelineProposal = null;
       state.workshopProposal = null;
-      state.studioSceneProposal = null;
-      // A follow-up question must not discard an authored Project review.
-      // A new explicit write with a new instruction replaces the prior proposal.
-      state.studioScenesProposal = null;
+      // Keep authored Scene and Project reviews available across questions.
+      // Explicit new Write actions own replacement of existing drafts.
       el('director-chat-workshop-status').textContent = '';
     }
     // Freeze the Project destination alongside the user's instruction.

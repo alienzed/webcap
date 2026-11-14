@@ -800,6 +800,8 @@ function sweepLoras(model, folder) {
     generateState.loraMode = 'selected';
     generateState.sweepSelections = {};
     restoreResultConfiguration(result);
+    // Reuse the Take's recipe, but generate fresh noise unless a seed is chosen explicitly.
+    el('generate-seed').value = '-1';
     generateState.editorMode = 'loaded';
     generateState.loadedSnapshot = captureGenerateEditorSnapshot();
     var missingReferences = result.references && Object.keys(result.references).length;

@@ -2698,6 +2698,7 @@ function sweepLoras(model, folder) {
           });
           if (missing.length) el('generate-prompt').value = originalPrompt +
             (originalPrompt.trim() ? ', ' : '') + missing.join(', ');
+          noteGenerateEditorEdit(false);
           renderLoras();
           generateState.director.busy = false;
           renderDirector();
@@ -2752,6 +2753,7 @@ function sweepLoras(model, folder) {
         }
       });
       promptNode.value = rewritten;
+      noteGenerateEditorEdit(false);
       generateState.director.previousPrompt = previousPrompt;
 
       if (operation === 'refine_prompt') el('generate-director-instruction').value = '';

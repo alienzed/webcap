@@ -843,7 +843,8 @@
     var setup = el('studio-dw-write-panel').classList.contains('hidden') ? toggle('write') : refreshWrite();
     return setup.then(function (ready) {
       if (!ready) return;
-      return writePrepare(operation === 'project' || operation === 'new-project' ? {guided:true} : undefined);
+      if (operation === 'project' || operation === 'new-project') return writePrepare({guided:true});
+      return writePrepare();
     });
   }
   function captureActionLabel(capture) {

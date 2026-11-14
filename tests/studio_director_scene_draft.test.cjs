@@ -144,7 +144,7 @@ test('Unbound Project parser accepts zero Scenes and refuses invented or invalid
   }));
   assert.equal(project.firstScene, undefined);
   assert.equal(project.title, '');
-  assert.throws(() => parse('{}'), /Project proposal must contain/);
+  assert.throws(() => parse('{}'), /invalid Project fields or initial Scene briefs/);
   assert.throws(() => parse(JSON.stringify({
     title: '', concept: '', style: '', rationale: '', invariants: []
   })), /complete Concept and Visual/);
@@ -263,6 +263,7 @@ test('Review Create Project persists explicit continuation without touching unbo
         return nodes[id];
       },
       syncControls() {}, syncModeUi() {},
+      writeInitialProjectScenes:async()=>({saved:[],failed:[],notAttempted:[]}),
       requestJson: async (url, opts) => {
         assert.equal(url, '/fs/studio/director/project-create');
         const payload = JSON.parse(opts.body);
@@ -295,7 +296,7 @@ test('Review Create Project persists explicit continuation without touching unbo
     assert.equal(receipt.kind, 'project.create');
     assert.equal(receipt.storyId, 'story-created');
     assert.equal(refreshed, 'story-created');
-    assert.match(message, /Project created/);
+    assert.match(message, /Project saved/);
     return persisted;
   }
   const attached = await create(true);

@@ -281,6 +281,7 @@ function assistantRailHarness() {
     console,Promise
   });
   vm.runInContext(instrumented,ctx);
+  ctx.document.getElementById('director-chat-input'); // The production composer exists before binding.
   const {state,setOpen,setMode}=ctx.window.__assistantNav;
   state.modelsLoaded=true;
   state.sessionReady=true;

@@ -1090,7 +1090,6 @@ def test_scene_repair_applies_sparse_fields_and_restores_across_sessions(storybo
         "scenes": {
             first["id"]: {
                 "title": first["title"],
-                "summary": first["summary"],
                 "entryState": first["entryState"],
                 "exitState": first["exitState"],
                 "prompt": first["prompt"],
@@ -1100,7 +1099,6 @@ def test_scene_repair_applies_sparse_fields_and_restores_across_sessions(storybo
             },
             second["id"]: {
                 "title": second["title"],
-                "summary": second["summary"],
                 "entryState": second["entryState"],
                 "exitState": second["exitState"],
                 "prompt": second["prompt"],
@@ -1126,6 +1124,7 @@ def test_scene_repair_applies_sparse_fields_and_restores_across_sessions(storybo
 
     assert scene_count == 1
     assert field_count == 1
+    assert "summary" not in base["scenes"][first["id"]]
     assert repaired["sceneOrder"] == [first["id"], second["id"]]
     assert repaired["scenes"][first["id"]]["title"] == "Funeral"
     assert repaired["scenes"][first["id"]]["durationSeconds"] == first["durationSeconds"]
@@ -1154,7 +1153,6 @@ def test_scene_repair_refuses_to_overwrite_a_field_edited_while_director_was_run
         "scenes": {
             scene["id"]: {
                 "title": scene["title"],
-                "summary": "Original summary.",
                 "entryState": "",
                 "exitState": "",
                 "prompt": "Original prompt.",
@@ -1187,7 +1185,6 @@ def test_scene_repair_refuses_stale_whole_story_context(storyboard_fs):
         "scenes": {
             scene["id"]: {
                 "title": scene["title"],
-                "summary": scene["summary"],
                 "entryState": scene["entryState"],
                 "exitState": scene["exitState"],
                 "prompt": scene["prompt"],
@@ -1229,7 +1226,6 @@ def test_scene_repair_rejects_duplicate_scene_patch(storyboard_fs):
         "scenes": {
             scene["id"]: {
                 "title": scene["title"],
-                "summary": scene["summary"],
                 "entryState": scene["entryState"],
                 "exitState": scene["exitState"],
                 "prompt": scene["prompt"],
@@ -1269,7 +1265,6 @@ def test_scene_repair_rejects_malformed_patch_instead_of_skipping_it(storyboard_
         "scenes": {
             scene["id"]: {
                 "title": scene["title"],
-                "summary": scene["summary"],
                 "entryState": scene["entryState"],
                 "exitState": scene["exitState"],
                 "prompt": scene["prompt"],

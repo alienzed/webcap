@@ -291,3 +291,20 @@ def test_studio_chat_scene_numbers_are_advisory_and_persist_with_older_sessions(
     for invalid in (True, -1, 10001, 1.5, "5"):
         with pytest.raises(ValueError, match="Scene number"):
             _validate_readiness({**existing, "sceneNumber": invalid})
+
+
+def test_director_scene_index_is_lightweight_and_selected_scene_reads_full_prompt():
+    from tool.server.studio_director import read_story_scope
+
+    long_prompt = "A" * 20000
+    story = {"sceneOrder": ["scene-a", "scene-b"], "scenes": {
+        "scene-a": {"title": "Arrival", "prompt": long_prompt, "summary": "Legacy Intent"},
+        "scene-b": {"title": "Departure", "prompt": long_prompt, "summary": ""},
+    }}
+    assert read_story_scope(story, "index") == [
+        {"id": "scene-a", "position": 1, "title": "Arrival"},
+        {"id": "scene-b", "position": 2, "title": "Departure"},
+    ]
+    selected = read_story_scope(story, "scene", "scene-a")
+    assert selected["prompt"] == long_prompt
+    assert "summary" not in selected

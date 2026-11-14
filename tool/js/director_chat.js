@@ -1803,9 +1803,10 @@
           if (draft.scenes.length !== 1)
             throw new Error('Initial Scene authoring must return exactly one Scene.');
           var scene = draft.scenes[0];
-          if (!Number.isInteger(scene.durationSeconds) ||
-              scene.durationSeconds !== brief.durationSeconds)
-            throw new Error('Scene duration differs from the approved brief.');
+          if (!scene.prompt.trim())
+            throw new Error('Director did not return a complete Prompt for this initial Scene.');
+          // The reviewed brief, not model metadata, owns the saved duration.
+          scene.durationSeconds = brief.durationSeconds;
           if (brief.title) scene.title = brief.title;
           return requestJson('/fs/studio/director/scenes-draft', {
             method:'POST',headers:{'Content-Type':'application/json'},
@@ -2355,16 +2356,24 @@
     try { result = JSON.parse(value); }
     catch (error) { throw new Error('Director returned invalid Scene sequence JSON: ' + error.message + '\nRaw Director response:\n' + String(raw || '')); }
     if (!result || typeof result !== 'object' || Array.isArray(result) ||
-        !Array.isArray(result.scenes) || result.scenes.length < 1 || result.scenes.length > 32 ||
-        typeof result.rationale !== 'string' || result.scenes.some(function (item) {
-          return !item || typeof item !== 'object' || Array.isArray(item) ||
-            typeof item.title !== 'string' ||
-            typeof item.prompt !== 'string' || !item.prompt.trim() ||
-            !Number.isFinite(item.durationSeconds) || item.durationSeconds < 4 || item.durationSeconds > 15;
-        })) {
-      throw new Error('Director must return one to 32 Scenes with full prompts, 4–15 second durations and a rationale.\nRaw Director response:\n' + String(raw || ''));
+        !Array.isArray(result.scenes) || result.scenes.length < 1 || result.scenes.length > 32) {
+      throw new Error('Director must return one to 32 Scene entries.\nRaw Director response:\n' + String(raw || ''));
     }
-    return result;
+    // One malformed field must not discard the other authored Scenes.
+    // The existing review lets the author correct or remove incomplete rows.
+    return {
+      scenes: result.scenes.map(function (entry) {
+        var item = entry && typeof entry === 'object' && !Array.isArray(entry) ? entry : {};
+        var scene = {
+          title: typeof item.title === 'string' ? item.title : '',
+          prompt: typeof item.prompt === 'string' ? item.prompt : ''
+        };
+        if (Object.prototype.hasOwnProperty.call(item, 'durationSeconds'))
+          scene.durationSeconds = item.durationSeconds;
+        return scene;
+      }),
+      rationale: typeof result.rationale === 'string' ? result.rationale : ''
+    };
   }
 
   function addStudioScenesRow(item) {
@@ -2392,14 +2401,30 @@
     var duration = document.createElement('input');
     duration.type = 'number'; duration.min = '4'; duration.max = '15'; duration.step = 'any';
     duration.dataset.field = 'durationSeconds';
-    duration.value = item.durationSeconds == null ? 6 : item.durationSeconds;
+    duration.value = item.durationSeconds === undefined ? 6 :
+      item.durationSeconds == null ? '' : String(item.durationSeconds);
     durationLabel.appendChild(duration);
+    var suppliedDuration = item.durationSeconds != null && String(item.durationSeconds).trim() !== '';
+    var numericDuration = Number(item.durationSeconds);
+    if (!suppliedDuration || !Number.isFinite(numericDuration) ||
+        numericDuration < 4 || numericDuration > 15) {
+      var durationNote = document.createElement('span');
+      durationNote.textContent = item.durationSeconds === undefined
+        ? 'Director omitted duration; 6s default shown. Check before Apply.'
+        : 'Director returned duration ' + String(item.durationSeconds) + '; correct it before Apply.';
+      durationLabel.appendChild(durationNote);
+    }
     var promptLabel = document.createElement('label');
     promptLabel.textContent = 'H3 Prompt';
     var prompt = document.createElement('textarea');
     prompt.dataset.field = 'prompt'; prompt.rows = 8;
     prompt.value = item.prompt || '';
     promptLabel.appendChild(prompt);
+    if (!prompt.value.trim()) {
+      var promptNote = document.createElement('span');
+      promptNote.textContent = 'Complete this Prompt or remove this Scene before Apply.';
+      promptLabel.appendChild(promptNote);
+    }
     row.append(header, title, durationLabel, promptLabel);
     el('studio-scenes-rows').appendChild(row);
   }
@@ -2535,7 +2560,8 @@
       return !item.prompt || !Number.isFinite(item.durationSeconds) ||
         item.durationSeconds < 4 || item.durationSeconds > 15;
     })) {
-      el('studio-scenes-error').textContent = 'Each Scene needs a full prompt and a duration of 4–15 seconds.';
+      el('studio-scenes-error').textContent =
+        'Complete or remove any Scene with a missing Prompt or duration outside 4–15 seconds. Your drafts remain available.';
       return;
     }
     var pieces = el('studio-scenes-placement').value.split('|');
@@ -4435,8 +4461,8 @@
           {projectId:storyId,projectTitle:story.title,sceneOrder:order}).then(function (raw) {
           state.lastStudioIoRaw = raw;
           var draft = parseStudioScenesDraft(raw);
-          if (draft.scenes.length !== 1 || !Number.isInteger(draft.scenes[0].durationSeconds))
-            throw new Error('Director must return exactly one Scene with a whole-second duration.\nRaw response:\n' + raw);
+          if (draft.scenes.length !== 1)
+            throw new Error('Director must return exactly one Scene.\nRaw response:\n' + raw);
           state.studioScenesProposal = {
             storyId:storyId, storyTitle:story.title, sceneOrder:order,
             scenes:story.scenes, drafts:draft.scenes, rationale:draft.rationale

@@ -69,6 +69,35 @@ test('one new Scene keeps the selected Project and complete brief through a sing
   assert.equal(story.scenes.s1.prompt,'Existing saved text');
 });
 
+test('a malformed duration from Director leaves the full new Scene available for review', async () => {
+  const state={pending:false,jobId:'',studioScenesProposal:null};
+  let reviewed=0;
+  const scope=vm.createContext({
+    state,syncControls(){},studioActionStatus(){},
+    showStudioScenesReview(){reviewed++;},
+    window:{
+      flushStudioDirectorStoryEdits:async()=>{},
+      reportConsoleError:()=>{assert.fail('An editable duration is not a writer failure');},
+      studioDirectorBridge:{
+        isReady:()=>true,readinessMessage:()=> '',
+        makeProposal:async()=>JSON.stringify({scenes:[{
+          title:'Closing the Logbook',prompt:'Complete H3 prompt for a quiet ending',
+          durationSeconds:'twelve'
+        }],rationale:'Quiet ending'})
+      }
+    },
+    requestJson:async()=>({story:{id:'p1',title:'Project',sceneOrder:[],scenes:{}}}),
+    parseStudioScenesDraft:raw=>JSON.parse(raw),
+    Promise,JSON,Number,String,Error,encodeURIComponent
+  });
+  const writer=vm.runInContext('({' + method + '})',scope).writeNewScene;
+  await writer.call(scope.window.studioDirectorBridge,
+    {projectId:'p1',instruction:'Add a twelve-second closing Scene'});
+  assert.equal(reviewed,1);
+  assert.equal(state.studioScenesProposal.drafts[0].prompt,'Complete H3 prompt for a quiet ending');
+  assert.equal(state.studioScenesProposal.drafts[0].durationSeconds,'twelve');
+});
+
 test('invalid output prevents review or mutation and reports failure', async () => {
   const state={pending:false,jobId:'',studioScenesProposal:null};
   const failures=[];

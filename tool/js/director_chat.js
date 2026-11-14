@@ -2890,7 +2890,7 @@
         '\n\nSTUDIO WORKBENCH STATE (controls, not saved Story facts):\n' + workbench +
         '\nCURRENT PROJECT NAVIGATION (identity and one-based Scene positions; saved content is supplied separately when available):\n' + JSON.stringify(navigation) +
         (explicitWrite
-          ? '\nEXPLICIT REVIEWED WRITE: The author has already chosen to draft. Produce the requested complete editable proposal in the format specified by the current request. This is a draft for review, not a conversational suggestion. Only WebCap Apply saves changes.\n'
+          ? '\nEXPLICIT WRITE: The author has chosen to draft. Produce the complete requested material in the specified format. WebCap handles validation and the selected review or direct-save policy.\n'
           : '\nFor a direct question, answer fully and finish without a workflow suggestion. ' +
             'When the author is developing material or requests a next step, suggest at most one useful action: ' +
             'an appropriately scoped reviewed Write or an author-operated Studio action. ' +
@@ -4269,8 +4269,7 @@
             catch (error) {throw new Error('Director returned invalid Scene JSON.\nRaw response:\n' + raw);}
             if (!proposed || typeof proposed !== 'object' || Array.isArray(proposed) ||
                 Object.keys(proposed).some(function (key) {
-                  return key !== 'prompt' && !(key === 'title' && wantsTitle) &&
-                    !(key === 'durationSeconds' && wantsDuration);
+                  return !['prompt','title','durationSeconds'].includes(key);
                 }) || typeof proposed.prompt !== 'string' || !proposed.prompt.trim() ||
                 proposed.prompt.length > 60000 ||
                 (wantsTitle && (typeof proposed.title !== 'string' || !proposed.title.trim() ||
@@ -4395,7 +4394,10 @@
         var draft;
         try { draft = JSON.parse(raw); }
         catch (error) { throw new Error('Director returned invalid Scene JSON.\nRaw response:\n' + raw); }
-        if (!draft || Object.keys(draft).length !== 1 || typeof draft.prompt !== 'string' || !draft.prompt.trim())
+        if (!draft || typeof draft !== 'object' || Array.isArray(draft) ||
+            Object.keys(draft).some(function (key) {
+              return !['prompt','title','durationSeconds'].includes(key);
+            }) || typeof draft.prompt !== 'string' || !draft.prompt.trim())
           throw new Error('Director must return one complete Scene prompt.\nRaw response:\n' + raw);
         state.modeMessages.storyboard.push({role:'assistant', content:draft.prompt, rawResponse:raw});
         renderMessages();

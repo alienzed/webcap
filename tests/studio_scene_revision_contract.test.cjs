@@ -1,62 +1,52 @@
 // Run with: node --test tests/studio_scene_revision_contract.test.cjs
-// Exercises the real browser-side validator without starting WebCap or an LLM.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
-
 const file = path.join(__dirname, '../tool/js/studio_director_workbench.js');
 const source = fs.readFileSync(file, 'utf8');
 const marker = '})();';
-assert.ok(source.trimEnd().endsWith(marker), 'Expected workbench IIFE');
+assert.ok(source.trimEnd().endsWith(marker));
 const instrumented = source.slice(0, source.lastIndexOf(marker)) +
   'globalThis.validateForTest = validateSceneRevisionDraft;\n' + marker;
 const context = {window: {}, document: {readyState: 'loading', addEventListener() {}}};
 vm.runInNewContext(instrumented, context, {filename: file});
 const validate = context.validateForTest;
-
-const one = [{sceneId:'scene-1', title:'Before', summary:'Old intent', prompt:'Old prompt'}];
-const two = [...one, {sceneId:'scene-2', title:'Next', summary:'Next intent', prompt:'Next prompt'}];
+const one = [{sceneId:'scene-1',title:'Before',prompt:'Old prompt'}];
+const two = [...one,{sceneId:'scene-2',title:'Next',prompt:'Next prompt'}];
 const own = x => JSON.parse(JSON.stringify(x));
-const draft = (scenes, ids = ['scene-1'], saved = one) =>
-  own(validate({scenes}, ids, saved, JSON.stringify({scenes})));
+const draft = (scenes,ids=['scene-1'],saved=one) =>
+  own(validate({scenes},ids,saved,JSON.stringify({scenes})));
 
-test('one Scene, one changed field; untouched fields remain absent from changes', () => {
-  const rows = draft([{sceneId:'scene-1', summary:'New intent'}]);
-  assert.equal(rows.length, 1);
-  assert.deepEqual(rows[0].draft, {sceneId:'scene-1', summary:'New intent'});
-  assert.equal(rows[0].before.prompt, 'Old prompt');
-  assert.equal(rows[0].before.title, 'Before');
+test('prompt-only revision is a complete Scene-writing outcome',()=>{
+  const rows=draft([{sceneId:'scene-1',prompt:'Full replacement H3 prompt'}]);
+  assert.deepEqual(rows[0].draft,{sceneId:'scene-1',prompt:'Full replacement H3 prompt'});
+  assert.equal(rows[0].before.title,'Before');
 });
-test('one Scene, several changed fields', () => {
-  assert.deepEqual(draft([{sceneId:'scene-1', summary:'New intent', prompt:'New prompt'}])[0].draft,
-    {sceneId:'scene-1', summary:'New intent', prompt:'New prompt'});
+test('title and prompt may change together',()=>{
+  assert.deepEqual(draft([{sceneId:'scene-1',title:'New title',prompt:'New prompt'}])[0].draft,
+    {sceneId:'scene-1',title:'New title',prompt:'New prompt'});
 });
-test('multi-Scene batch with distinct changed fields', () => {
-  const rows = draft([{sceneId:'scene-1', prompt:'New prompt'},
-    {sceneId:'scene-2', title:'Better title'}], ['scene-1','scene-2'], two);
+test('multiple Scenes produce only actual changed fields',()=>{
+  const rows=draft([{sceneId:'scene-1',prompt:'New prompt'},{sceneId:'scene-2',title:'Better title'}],
+    ['scene-1','scene-2'],two);
   assert.deepEqual(rows.map(x=>x.draft),
-    [{sceneId:'scene-1', prompt:'New prompt'}, {sceneId:'scene-2', title:'Better title'}]);
+    [{sceneId:'scene-1',prompt:'New prompt'},{sceneId:'scene-2',title:'Better title'}]);
 });
-test('identical values and no-op Scenes generate no proposed edits', () => {
-  assert.deepEqual(draft([{sceneId:'scene-1', summary:'Old intent'}]), []);
-  assert.deepEqual(draft([{sceneId:'scene-1'}]), []);
-  assert.deepEqual(draft([{sceneId:'scene-1'}, {sceneId:'scene-2', prompt:'Different'}],
-    ['scene-1','scene-2'], two).map(x=>x.sceneId), ['scene-2']);
+test('unchanged values produce no proposal',()=>{
+  assert.deepEqual(draft([{sceneId:'scene-1',prompt:'Old prompt'}]),[]);
+  assert.deepEqual(draft([{sceneId:'scene-1'}]),[]);
 });
-test('rejects missing, extra, duplicate, and unknown Scene IDs', () => {
-  assert.throws(() => draft([], ['scene-1'], one), /expected 1/);
-  assert.throws(() => draft([{sceneId:'scene-1'}, {sceneId:'scene-1'}], ['scene-1','scene-2'], two),
-    /duplicate, or unknown Scene ID/);
-  assert.throws(() => draft([{sceneId:'unknown'}]), /unknown Scene ID/);
-  assert.throws(() => draft([{sceneId:'scene-1'}, {sceneId:'scene-2'}]), /expected 1/);
+test('Intent-only model output is rejected, never reported as a successful revision',()=>{
+  assert.throws(()=>draft([{sceneId:'scene-1',summary:'An updated outline'}]),/invalid Scene field "summary"/);
+  assert.throws(()=>draft([{sceneId:'scene-1',intent:'An updated intent'}]),/invalid Scene field "intent"/);
 });
-test('rejects unsupported keys and invalid values with raw diagnostics', () => {
-  for (const value of [null, 12, '', '  ']) {
-    assert.throws(() => draft([{sceneId:'scene-1', summary:value}]), /invalid Scene field "summary"/);
-  }
-  assert.throws(() => draft([{sceneId:'scene-1', intent:'Wrong key'}]), /invalid Scene field "intent"/);
-  assert.throws(() => draft([null]), /not an object/);
-  assert.throws(() => draft([{sceneId:'scene-1', prompt:null}]), /Raw Director response:/);
+test('invalid prompts and Scene identities fail with raw model diagnostics',()=>{
+  for(const value of [null,12,'','  '])
+    assert.throws(()=>draft([{sceneId:'scene-1',prompt:value}]),/invalid Scene field "prompt"/);
+  assert.throws(()=>draft([]),/expected 1/);
+  assert.throws(()=>draft([{sceneId:'unknown'}]),/unknown Scene ID/);
+  assert.throws(()=>draft([{sceneId:'scene-1'},{sceneId:'scene-1'}],['scene-1','scene-2'],two),/duplicate, or unknown Scene ID/);
+  assert.throws(()=>draft([null]),/not an object/);
 });

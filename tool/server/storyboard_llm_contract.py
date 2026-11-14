@@ -60,11 +60,6 @@ def _prompt_response_schema(allow_duration=False, allow_scene_fields=False, allo
         }
         schema["required"] = ["changed", "prompt"]
     if allow_scene_fields:
-        schema["properties"]["summary"] = {
-            "type": "string",
-            "minLength": 1,
-            "description": "Optional revised Scene intent. Include only when the requested refinement requires it.",
-        }
         schema["properties"]["entryState"] = {
             "type": "string",
             "description": "Optional revised Scene entry state.",
@@ -104,10 +99,10 @@ def _story_outline_response_schema(target_scene_count=None):
     scene = {
         "type": "object",
         "additionalProperties": False,
-        "required": ["title", "summary", "suggestedDurationSeconds"],
+        "required": ["title", "prompt", "suggestedDurationSeconds"],
         "properties": {
             "title": {"type": "string", "minLength": 1},
-            "summary": {"type": "string", "minLength": 1},
+            "prompt": {"type": "string", "minLength": 1},
             "entryState": {"type": "string"},
             "exitState": {"type": "string"},
             "suggestedDurationSeconds": {
@@ -171,7 +166,7 @@ def _scene_context(scene):
     lines = []
     fields = (
         ("Title", scene.get("title")),
-        ("Summary / intent", scene.get("summary")),
+        ("Prompt", scene.get("prompt")),
         ("Entry state", scene.get("entryState")),
         ("Exit state", scene.get("exitState")),
         ("Duration seconds", scene.get("durationSeconds")),
@@ -225,7 +220,6 @@ def _repair_scene_plan(story):
         result.append({
             "sceneNumber": index,
             "title": _clean(scene.get("title")),
-            "summary": _clean(scene.get("summary")),
             "entryState": _clean(scene.get("entryState")),
             "exitState": _clean(scene.get("exitState")),
             "durationSeconds": scene.get("durationSeconds"),
@@ -248,7 +242,7 @@ def _previous_scene_context(story, scene_id):
         return ""
     fields = (
         ("Title", scene.get("title")),
-        ("Summary / intent", scene.get("summary")),
+        ("Prompt", scene.get("prompt")),
         ("Entry state", scene.get("entryState")),
         ("Exit state", scene.get("exitState")),
     )
@@ -420,7 +414,7 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
             "[CURRENT TASK]\nDevelop the Story into independently generatable MiniMax H3 Scenes. "
             + scene_count_guidance
             + "Use the Project Concept, Visual / atmosphere, Invariants and established facts to author "
-            "the Scene content and relationships. Return each Scene's title, summary, optional entry/exit "
+            "the Scene content and relationships. Return each Scene's title, optional entry/exit "
             "state, duration, and complete H3 prompt in the supplied JSON schema."
         )
         return {
@@ -456,8 +450,8 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
             "[CURRENT TASK]\nPlan the Story as a concise ordered Scene outline. "
             + scene_count_guidance
             + "Use the Project Concept, Visual / atmosphere and Invariants. For each Scene return a title, "
-            "summary / intent, optional entry/exit state, and suggested duration. "
-            "Generation prompts will be authored separately. Return JSON matching the supplied schema."
+            "complete H3 prompt and suggested duration. "
+            "Return JSON matching the supplied schema."
         )
         return {
             "operation": operation,
@@ -512,7 +506,7 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
                 "[PREVIOUS AUTHORED SCENE - RELATIONSHIP CONTEXT]\n"
                 + json.dumps({
                     key: previous_scene.get(key)
-                    for key in ("title", "summary", "entryState", "exitState")
+                    for key in ("title", "prompt", "entryState", "exitState")
                     if _clean(previous_scene.get(key))
                 }, indent=2, ensure_ascii=False)
                 + "\n\nThe planned outline and author direction establish this Scene's creative scope."
@@ -520,7 +514,7 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
         blocks.append(
             "[CURRENT TASK]\nAuthor exactly this one planned Scene as a complete MiniMax H3 Scene. "
             "Preserve the planned Scene's purpose and its place in the complete outline. "
-            "Return the complete title, summary, optional entryState / exitState, suggestedDurationSeconds, and the full H3 generation prompt exactly as it should be stored. "
+            "Return the complete title, optional entryState / exitState, suggestedDurationSeconds, and the full H3 generation prompt exactly as it should be stored. "
             "Follow the supplied Director and H3 guidance. Return only JSON matching the supplied schema."
         )
         return {
@@ -564,9 +558,9 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
         if after_scene is not None:
             blocks.append("[SCENE AFTER - PLACEMENT CONTEXT]\n" + _scene_context(after_scene))
         if not custom_instruction:
-            blocks.append("[EXISTING SCENE OUTLINE]\n" + "\n".join(
+            blocks.append("[EXISTING SCENE PROMPTS]\n" + "\n".join(
                 str(number) + ". " + _clean(scenes.get(ordered_id, {}).get("title"))
-                + ": " + _clean(scenes.get(ordered_id, {}).get("summary"))
+                + ": " + _clean(scenes.get(ordered_id, {}).get("prompt"))
                 for number, ordered_id in enumerate(order, start=1)
             ))
         blocks.append(
@@ -608,9 +602,9 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
             blocks.append("[STORY INVARIANTS]\n" + invariants)
         blocks.append("[H3 GUIDANCE]\n" + h3_runtime_context)
         _add_model_limitations(blocks, "minimax_h3")
-        blocks.append("[EXISTING SCENE OUTLINE]\n" + "\n".join(
+        blocks.append("[EXISTING SCENE PROMPTS]\n" + "\n".join(
             str(number) + ". " + _clean(scenes[ordered_id].get("title"))
-            + ": " + _clean(scenes[ordered_id].get("summary"))
+            + ": " + _clean(scenes[ordered_id].get("prompt"))
             for number, ordered_id in enumerate(order, start=1)
         ))
         last_exit = _clean(scenes[order[-1]].get("exitState"))
@@ -667,7 +661,7 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
             "[USER REPAIR INSTRUCTION]\n" + correction
             + "\n\n[CURRENT TASK]\nApply the user's instruction to the current Scene plan. "
             "Return sparse updates to existing Scenes, preserving their order and count. "
-            "Include only fields that need changing: summary, entryState, exitState, or complete revised H3 prompt. "
+            "Include only fields that need changing: entryState, exitState, or complete revised H3 prompt. "
             "Use the supplied 1-based sceneNumber for each affected Scene, once per Scene. "
             "Return {\"changes\":[]} when the instruction is already satisfied."
         )
@@ -711,8 +705,6 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
     blocks.append("[REFERENCE MODE]\n" + h3_mode)
 
     if operation == "write_prompt":
-        if not _clean(scene.get("summary")):
-            raise ValueError("Scene summary / intent is required to write a prompt.")
         blocks.append(
             "[CURRENT TASK]\nWrite the complete MiniMax H3 generation prompt for this Scene exactly as it should be used, following the supplied guidance and Scene context."
         )

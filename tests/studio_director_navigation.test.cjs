@@ -256,7 +256,7 @@ function assistantRailHarness() {
   const instrumented=chat.replace(bootstrap,
     '  syncModeUi = function () {};\n  syncControls = function () {};\n' +
     '  finishProgress = function () {};\n' +
-    '  window.__assistantNav = {state:state,setMode:setMode,setOpen:setOpen};\n})();');
+    '  window.__assistantNav = {state:state,setMode:setMode,setOpen:setOpen,studioWorkspaceVisible:studioWorkspaceVisible};\n})();');
   const elements={};
   const node=()=>({
     value:'',attrs:{},classes:{},
@@ -288,7 +288,9 @@ function assistantRailHarness() {
   const begin=chat.indexOf('    toggle.onclick = function () {');
   const end=chat.indexOf('    pin.onclick',begin);
   assert.ok(begin>0 && end>begin);
-  vm.runInContext('var toggle=document.getElementById("director-chat-rail-btn");\n' +
+  vm.runInContext('var state=window.__assistantNav.state, setOpen=window.__assistantNav.setOpen, ' +
+    'studioWorkspaceVisible=window.__assistantNav.studioWorkspaceVisible;\n' +
+    'var toggle=document.getElementById("director-chat-rail-btn");\n' +
     chat.slice(begin,end),ctx);
   return {
     state,requests,elements,setMode,setOpen,

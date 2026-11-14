@@ -413,3 +413,171 @@ test('mismatched Scene targets require confirmation before any saved mutation', 
   assert.equal(confirmed,1);
   assert.equal(called,0,'declining a conflicting target must not call the mutation API');
 });
+
+
+const projectSource = fs.readFileSync(path.join(__dirname,'../tool/js/director_chat.js'),'utf8');
+function projectPart(start,end) {
+  const a=projectSource.indexOf(start),b=projectSource.indexOf(end,a+start.length);
+  assert.ok(a>=0&&b>a,'Missing Project path: '+start);
+  return projectSource.slice(a,b);
+}
+
+test('guided Project revision preserves existing target and selected overview fields',async()=>{
+  const operation={value:'',options:[{value:'project'}]},project={value:'stale'};
+  const calls=[],scope=vm.createContext({
+    recommendations:{writeHint:'project',writeInstruction:'Make the fog subtler.',writeFields:['style']},
+    writeOperationChosen:false,sceneSelectionManual:false,activeTarget:()=>({storyId:'other'}),
+    window:{studioDirectorBridge:{workingStoryId:()=> 'chosen-project'}},
+    el:id=>id==='studio-dw-write-operation'?operation:
+      id==='studio-dw-write-project'?project:{classList:{contains:()=>false}},
+    refreshWrite:async()=>true,writePrepare:options=>calls.push(options),
+    status:msg=>assert.fail(msg)
+  });
+  vm.runInContext(part('  function openRecommendedWrite() {','  function captureActionLabel(capture) {'),scope);
+  await scope.openRecommendedWrite();
+  assert.equal(project.value,'chosen-project');
+  assert.equal(operation.value,'project');
+  assert.equal(calls[0].guided,true);
+  const metadata=[],prep=vm.createContext({
+    recommendations:{writeHint:'project',writeInstruction:'Make the fog subtler.',writeFields:['style']},
+    readinessStale:false,projects:[{id:'chosen-project',title:'Beacon'}],
+    el:id=>id==='studio-dw-write-operation'?operation:project,
+    window:{studioDirectorBridge:{isReady:()=>true,
+      prepareWrite:(...args)=>metadata.push(args)}},
+    storyName:x=>x.title,recommendedWriteFields:()=>['style'],status:()=>{}
+  });
+  vm.runInContext(part('  function writePrepare(options) {','  function prepareProjectCoherence(storyId) {'),prep);
+  prep.writePrepare({guided:true});
+  assert.equal(metadata[0][1],'chosen-project');
+  assert.equal(metadata[0][3].instruction,'Make the fog subtler.');
+  assert.deepEqual(Array.from(metadata[0][3].requestedFields),['style']);
+});
+
+test('new Project writer accepts complete overview and brief-only initial Scenes',()=>{
+  const scope=vm.createContext({});
+  vm.runInContext(projectPart('  function parseStudioProjectDraft(raw) {',
+    '  function addStudioProjectInvariant(item, destination, original) {'),scope);
+  const accepted=scope.parseStudioProjectDraft(JSON.stringify({
+    title:'Beacon',concept:'A watchful keeper',style:'Coastal dusk',rationale:'Agreed direction',
+    invariants:[{kind:'location',title:'Tower',text:'Old stone stairs'}],
+    initialScenes:[{title:'Closing the Logbook',brief:'Mara closes the logbook at an oak desk',
+      durationSeconds:12}]
+  }));
+  assert.equal(accepted.initialScenes[0].durationSeconds,12);
+  assert.equal(accepted.invariants[0].title,'Tower');
+  assert.throws(()=>scope.parseStudioProjectDraft(JSON.stringify({
+    title:'Beacon',concept:'A watchful keeper',style:'',rationale:'',
+    invariants:[],initialScenes:[]})),/complete Concept and Visual/);
+  assert.throws(()=>scope.parseStudioProjectDraft(JSON.stringify({
+    title:'Beacon',concept:'A watchful keeper',style:'Coastal dusk',rationale:'',
+    invariants:[],initialScenes:[{title:'A',brief:'Scene brief',durationSeconds:16}]
+  })),/invalid Project/);
+});
+
+test('initial Scene briefs produce bounded independent saves; a failed item retains successes',async()=>{
+  const calls=[],saves=[],errors=[],briefs=[
+    {title:'One',brief:'First action',durationSeconds:8},
+    {title:'Two',brief:'Second action',durationSeconds:10},
+    {title:'Three',brief:'Third action',durationSeconds:12}
+  ];
+  const initial={id:'p1',title:'Beacon',concept:'Keep the light alive',style:'Cold twilight',
+    invariants:[],sceneOrder:[],scenes:{}};
+  let current=initial;
+  const scope=vm.createContext({
+    state:{modelId:'director-model',jobId:''},
+    studioDirectorRequestMessages:async messages=>{
+      calls.push(JSON.parse(messages[0].content));
+      return messages;
+    },
+    requestJson:async (url,options)=>{
+      if(url==='/fs/director/chat')return {job:{jobId:'job-'+calls.length}};
+      if(url==='/fs/studio/director/scenes-draft') {
+        const payload=JSON.parse(options.body),id='created-'+(saves.length+1);
+        assert.deepEqual(Array.from(payload.expectedSceneOrder),current.sceneOrder);
+        assert.equal(payload.scenes.length,1);
+        saves.push(payload.scenes[0].title);
+        current={...current,sceneOrder:[...current.sceneOrder,id]};
+        return {story:current,scenes:[{...payload.scenes[0],id}]};
+      }
+      assert.fail('Unexpected route '+url);
+    },
+    trackTransientLlmJob:()=>{},
+    waitForJob:async()=>{
+      const item=calls.at(-1);
+      return {result:{text:JSON.stringify({
+        scenes:item.requestedTitle==='Two'?[]:[{title:item.requestedTitle,
+          prompt:'Complete full H3 Prompt for '+item.instruction,
+          durationSeconds:item.durationSeconds}],rationale:''})}};
+    },
+    parseStudioScenesDraft:raw=>{
+      const value=JSON.parse(raw);
+      if(value.scenes.length!==1)throw new Error('Incomplete initial Scene');
+      return value;
+    },
+    recordStudioOperation:()=>{},
+    window:{studioDirectorWorkbench:{showSentWriteContext:()=>{}},
+      reportConsoleError:(label,error)=>errors.push(label+': '+error.message),
+      studioDirectorBridge:{recordApplied:async()=>{}}}
+  });
+  vm.runInContext(projectPart('  // The reviewed Project is saved before any Scene authoring.',
+    '  function applyStudioProject() {'),scope);
+  const outcome=await scope.writeInitialProjectScenes(initial,briefs);
+  assert.deepEqual(calls.map(x=>x.instruction),['First action','Second action','Third action']);
+  assert.deepEqual(saves,['One','Three']);
+  assert.equal(outcome.saved.length,2);
+  assert.equal(outcome.failed.length,1);
+  assert.equal(outcome.notAttempted.length,0);
+  assert.ok(errors.some(x=>x.includes('Two')));
+});
+
+test('new Project Apply persists only reviewed Project fields before Scene authoring',async()=>{
+  const story={id:'project-created',title:'Beacon',concept:'Keeper',style:'Night',invariants:[],
+    scenes:{},sceneOrder:[]};
+  const fields={
+    'studio-project-title':{value:story.title},'studio-project-concept':{value:story.concept},
+    'studio-project-style':{value:story.style},
+    'studio-project-invariants':{querySelectorAll:()=>[]},
+    'studio-project-include-scene':{checked:true},
+    'studio-project-scene-title':{value:'First Scene'},
+    'studio-project-scene-prompt':{value:'Keep the beacon lit.'},
+    'studio-project-scene-duration':{value:'8'},
+    'studio-project-extra-scenes':{querySelectorAll:()=>[]},
+    'studio-project-continue':{checked:false},
+    'studio-project-review':{close:()=>{}},
+    'studio-project-error':{textContent:''}
+  };
+  let projectSaved=false,sceneAuthoring=false,finish;
+  const done=new Promise(resolve=>finish=resolve);
+  const scope=vm.createContext({
+    state:{studioProjectProposal:{title:story.title},pending:false,studioStoryAccess:null},
+    el:id=>fields[id]||{},
+    syncControls:()=>{},recordStudioOperation:()=>{},studioActionStatus:()=>{},
+    window:{
+      studioDirectorBridge:{recordApplied:async()=>{}},
+      refreshStudioDirectorStoryIfOpen:async()=>finish(),
+      reportConsoleError:(label,e)=>assert.fail(label+': '+e.message)
+    },
+    requestJson:async (url,options)=>{
+      assert.equal(url,'/fs/studio/director/project-create');
+      const payload=JSON.parse(options.body);
+      assert.equal(payload.proposal.firstScenes,undefined);
+      assert.equal(payload.proposal.initialScenes,undefined);
+      assert.equal(payload.proposal.concept,story.concept);
+      projectSaved=true;
+      return {story};
+    },
+    writeInitialProjectScenes:async (_story,briefs)=>{
+      assert.equal(projectSaved,true);
+      assert.equal(_story.id,story.id);
+      assert.equal(briefs[0].brief,'Keep the beacon lit.');
+      assert.equal(briefs[0].durationSeconds,8);
+      sceneAuthoring=true;
+      return {saved:['scene-one'],failed:[],notAttempted:[]};
+    }
+  });
+  vm.runInContext(projectPart('  function applyStudioProject() {',
+    '  function parseStudioBriefDraft(raw) {'),scope);
+  scope.applyStudioProject();
+  await done;
+  assert.equal(sceneAuthoring,true);
+});

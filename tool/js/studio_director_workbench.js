@@ -473,7 +473,7 @@
     if (el('studio-dw-write-panel').classList.contains('hidden')) el('studio-dw-write').click();
     refreshWrite();
   }
-  function writePrepare() {
+  function writePrepare(options) {
     var bridge = window.studioDirectorBridge;
     var operation = el('studio-dw-write-operation').value;
     var id = el('studio-dw-write-project').value;
@@ -494,7 +494,12 @@
       throw new Error('Unsupported Studio creative Write goal: ' + operation);
     try {
       var item = projects.find(function (p) {return p.id === id;});
-      bridge.prepareWrite(operation, id, item && storyName(item));
+      if (options && options.guided && !readinessStale && recommendations.writeHint === operation) {
+        bridge.prepareWrite(operation, id, item && storyName(item), {
+          instruction:String(recommendations.writeInstruction || '').trim(),
+          requestedFields:operation === 'project' ? recommendedWriteFields('project') : []
+        });
+      } else bridge.prepareWrite(operation, id, item && storyName(item));
       status('Preparing a reviewed proposal. No saved fields have changed.', false);
     } catch (error) {status('Write failed: ' + error.message, true);}
   }
@@ -827,13 +832,18 @@
       return;
     }
     select.value = operation;
+    if (operation === 'project') {
+      var destination = window.studioDirectorBridge.workingStoryId() || activeTarget().storyId;
+      if (destination) el('studio-dw-write-project').value = destination;
+    }
     if (operation === 'scene-write') el('studio-dw-scene-mode').value =
       (recommendations.sceneId || recommendations.sceneNumber || hint === 'scene-edit' || hint === 'scenes-batch') ? 'revise' : 'create';
     writeOperationChosen = true;
     sceneSelectionManual = false; // Explicitly follow Director's proposed Write target.
     var setup = el('studio-dw-write-panel').classList.contains('hidden') ? toggle('write') : refreshWrite();
     return setup.then(function (ready) {
-      if (ready) writePrepare();
+      if (!ready) return;
+      return writePrepare(operation === 'project' || operation === 'new-project' ? {guided:true} : undefined);
     });
   }
   function captureActionLabel(capture) {

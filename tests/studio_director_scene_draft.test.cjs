@@ -25,6 +25,65 @@ test('Studio scene reviewer has editable intent, placement and approval controls
   assert.match(source, /\/fs\/studio\/director\/scene-draft/);
 });
 
+test('complete Scene capture has an editable Prompt and one reviewed Apply saves all fields', async () => {
+  const prompt='integrated_multimodal_description: [Shot 1] A crimson kite rises.';
+  const proposal={
+    storyId:'project-1',storyTitle:'Kite Project',expectedUpdatedAt:'before',
+    sceneOrder:[],scenes:{},title:'Kite flight',summary:'The kite rises.',
+    prompt,rationale:'Authored together in chat.',placement:'end'
+  };
+  const nodes=new Map();
+  const el=id=>{
+    if (!nodes.has(id)) nodes.set(id,{
+      value:'',textContent:'',disabled:false,open:false,
+      classList:{hidden:false,toggle(name,on){if(name==='hidden')this.hidden=on;}},
+      appendChild(item){this.options.push(item);},replaceChildren(){this.options=[];},
+      options:[],showModal(){this.open=true;},close(){this.open=false;}
+    });
+    return nodes.get(id);
+  };
+  const calls=[];
+  let completed;
+  const done=new Promise(resolve=>{completed=resolve;});
+  const scope=vm.createContext({
+    state:{studioSceneProposal:proposal,pending:false},el,
+    document:{createElement:()=>({value:'',textContent:''})},
+    window:{
+      flushStudioDirectorStoryEdits:async()=>{calls.push('flush');},
+      studioDirectorBridge:{recordApplied:async (_kind,_story,changes)=>{
+        calls.push('receipt');assert.equal(changes.scenes[0].prompt,prompt);
+      }},
+      refreshStudioDirectorStoryIfOpen:async()=>{calls.push('refresh');completed();}
+    },
+    syncControls(){},studioActionStatus(){},recordStudioOperation(){},
+    requestJson:async(url,args)=>{
+      calls.push('apply');assert.equal(url,'/fs/studio/director/scene-draft');
+      const payload=JSON.parse(args.body);
+      assert.deepEqual(payload.scene,{title:'Kite flight',summary:'The kite rises.',prompt});
+      assert.equal(payload.expectedUpdatedAt,'before');
+      return {story:{id:'project-1',sceneOrder:['scene-1']},
+        scene:{id:'scene-1',...payload.scene}};
+    },
+  });
+  vm.runInContext(
+    part('  function showStudioSceneDraftReview() {','  function prepareStudioSceneDraft() {')+
+    part('  function applyStudioSceneDraft() {','  function startStudioWorkshop() {'),scope);
+  scope.showStudioSceneDraftReview();
+  assert.equal(el('studio-scene-draft-prompt-row').classList.hidden,false);
+  assert.equal(el('studio-scene-draft-prompt').value,prompt);
+  assert.equal(el('studio-scene-draft-apply').textContent,'Create Scene');
+  scope.applyStudioSceneDraft();
+  await done;
+  assert.deepEqual(calls,['flush','apply','receipt','refresh']);
+  assert.equal(scope.state.studioSceneProposal,null);
+
+  // The existing Intent-only extraction still shows the smaller review.
+  scope.state.studioSceneProposal={...proposal,prompt:undefined};
+  delete scope.state.studioSceneProposal.prompt;
+  scope.showStudioSceneDraftReview();
+  assert.equal(el('studio-scene-draft-prompt-row').classList.hidden,true);
+});
+
 test('Only explicitly attached Story ID qualifies as a Scene target', () => {
   const state = { storyboardAttachments: {} };
   const context = vm.createContext({ state, Object });

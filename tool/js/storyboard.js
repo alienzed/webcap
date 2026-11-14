@@ -5878,6 +5878,19 @@
     };
   }
 
+  // Navigation identity only. Creative saved fields still enter Director through Read.
+  function getStudioDirectorNavigation() {
+    var story = storyState.story;
+    var target = getStoryboardRouteTarget();
+    return {
+      projectId: target.storyId,
+      projectTitle: story ? story.title : '',
+      sceneId: target.sceneId,
+      sceneNumber: story && target.sceneId ? story.sceneOrder.indexOf(target.sceneId) + 1 : 0,
+      sceneOrder: story ? story.sceneOrder.slice() : []
+    };
+  }
+
   function openStoryboardActivity(target) {
     if (window.closeMediaExplorerActivity) window.closeMediaExplorerActivity();
     target = target && typeof target === 'object' ? target : {};
@@ -7069,6 +7082,7 @@
 
   window.openStoryboardActivity = openStoryboardActivity;
   window.getStoryboardRouteTarget = getStoryboardRouteTarget;
+  window.getStudioDirectorNavigation = getStudioDirectorNavigation;
   window.closeStoryboardActivity = closeStoryboardActivity;
 
   el('storyboard-guidelines-review-close').onclick = function () { el('storyboard-guidelines-review').close(); };

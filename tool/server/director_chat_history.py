@@ -180,8 +180,11 @@ def _validate_readiness(value):
         if not isinstance(capture, dict):
             raise ValueError("Studio creative capture is invalid.")
         if capture.get("field") == "scene":
-            if (set(capture) != {"field", "content", "sceneId", "title"}
+            if (set(capture) not in ({"field", "content", "sceneId", "title"},
+                                     {"field", "content", "sceneId", "title", "prompt"})
                     or not isinstance(capture["title"], str) or len(capture["title"]) > 240
+                    or ("prompt" in capture and (not isinstance(capture["prompt"], str)
+                                                  or len(capture["prompt"]) > 20000))
                     or capture["sceneId"] != ""):
                 raise ValueError("Studio creative capture Scene identity is invalid.")
         elif capture.get("field") == "invariant":
@@ -243,7 +246,8 @@ def _validate_workshop(workshop):
 
 
 def _summary(chat):
-    return {key: chat[key] for key in ("id", "mode", "title", "createdAt", "updatedAt", "revision")}
+    return {**{key: chat[key] for key in ("id", "mode", "title", "createdAt", "updatedAt", "revision")},
+            "projectTitle": (chat.get("storyAccess") or {}).get("label", "")}
 
 
 def list_chats():

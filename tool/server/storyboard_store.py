@@ -1175,19 +1175,23 @@ def add_scene(story_id, payload=None):
 
 @_serialized_mutation
 def add_tentative_scene_at(story_id, expected_updated_at, scene_draft, placement, relative_scene_id=""):
-    """Atomically create exactly one prompt-free Scene in an explicit position.
+    """Atomically create one reviewed Scene with an optional authored prompt.
 
-    Placement, creative text and target ID come from a human-reviewed proposal.
-    No Scene is generated, deleted or renumbered implicitly.
+    Placement and content come from a human-reviewed proposal, not a new
+    generation. Intent-only callers continue to create prompt-free Scenes.
     """
     story = load_story(story_id)
     if str(story.get("updatedAt") or "") != str(expected_updated_at or ""):
         raise RuntimeError("Studio project changed during Scene review. Refresh the proposal before applying.")
-    if not isinstance(scene_draft, dict) or set(scene_draft) != {"title", "summary"}:
-        raise ValueError("Tentative Scene must contain only title and summary.")
+    if (not isinstance(scene_draft, dict) or
+            not {"title", "summary"}.issubset(scene_draft) or
+            not set(scene_draft).issubset({"title", "summary", "prompt"})):
+        raise ValueError("Reviewed Scene needs title and summary, with optional prompt.")
     title, summary = scene_draft["title"], scene_draft["summary"]
-    if not isinstance(title, str) or not isinstance(summary, str) or not summary.strip():
-        raise ValueError("Tentative Scene needs a description of what happens.")
+    if (not isinstance(title, str) or not isinstance(summary, str) or
+            not summary.strip() or
+            ("prompt" in scene_draft and not isinstance(scene_draft["prompt"], str))):
+        raise ValueError("Reviewed Scene needs a description and a text prompt if supplied.")
     if placement not in {"start", "end", "before", "after"}:
         raise ValueError("Choose start, end, before or after for the new Scene.")
     order = list(story.get("sceneOrder") or [])
@@ -1199,7 +1203,7 @@ def add_tentative_scene_at(story_id, expected_updated_at, scene_draft, placement
     else:
         index = 0 if placement == "start" else len(order)
     scene_id = _new_id("scene")
-    scene = _normalize_scene(scene_id, {"title": title, "summary": summary})
+    scene = _normalize_scene(scene_id, scene_draft)
     story["scenes"][scene_id] = scene
     order.insert(index, scene_id)
     story["sceneOrder"] = order

@@ -52,7 +52,7 @@ test('editing retained Overview text includes the edit without requiring a secon
   assert.equal(elements['studio-brief-title-selected'].checked,false,'author can exclude the change explicitly');
 });
 
-test('review dialogs and request inspection preserve Director; ordinary outside clicks still close it',()=>{
+test('Director is stable on outside clicks and Escape; general Assistant retains dismissal',()=>{
   const handlers={};
   let modal={},closes=0;
   const scope=vm.createContext({state:{open:true,pinned:false},
@@ -67,6 +67,10 @@ test('review dialogs and request inspection preserve Director; ordinary outside 
   handlers.pointerdown({target:{}});
   handlers.keydown({key:'Escape'});
   assert.equal(closes,2,'ordinary dismissal remains available');
+  scope.state.activeMode='storyboard';
+  handlers.pointerdown({target:{}});
+  handlers.keydown({key:'Escape'});
+  assert.equal(closes,2,'a Projects work surface stays open until explicit navigation');
 });
 
 test('Project review summary follows edits and selection without changing either',()=>{
@@ -136,23 +140,23 @@ test('contextual Prompt action uses the current route even when Write was aimed 
 });
 
 test('ordinary discussion asks for concise new decisions while complete creative fields remain complete',()=>{
-  assert.match(chat,/Keep readiness light: normally checks=\[\]/);
-  assert.match(chat,/Keep assessment metadata in readiness and conversation in reply/);
+  assert.match(chat,/Discuss concepts in 1-3 concise sentences/);
+  assert.match(chat,/deliver the actual complete text in reply on this turn/);
 });
 
 test('compact Director replies keep the exact full text and leave General Chat alone',()=>{
-  const code=part(chat,"      if (state.activeMode === 'storyboard' && message.role === 'assistant' && message.content.length > 1200) {",
+  const code=part(chat,"      if (studioReply && visibleText.length > 1200) {",
     "      if (message.role === 'user' && (message.content.indexOf('[WEBCAP EXPLICIT READ]')");
   const node=()=>({children:[],append(...children){this.children.push(...children);},replaceChildren(...children){this.children=children;}});
   const message={role:'assistant',content:'A useful opening recommendation.\n\n'+('Complete creative details with "quotes" and line breaks.\n').repeat(40)};
   const body=node();
-  const scope=vm.createContext({state:{activeMode:'storyboard'},message,body,document:{createElement:node}});
+  const scope=vm.createContext({studioReply:true,visibleText:message.content,message,body,document:{createElement:node}});
   vm.runInContext(code,scope);
   assert.equal(body.children[0].textContent,'A useful opening recommendation.');
   assert.equal(body.children[1].children[1].textContent,message.content);
   const general=node();
   scope.body=general;
-  scope.state.activeMode='chat';
+  scope.studioReply=false;
   vm.runInContext(code,scope);
   assert.equal(general.children.length,0);
 });
@@ -193,7 +197,7 @@ test('editable revision comparison identifies retained, removed and added words 
 
 test('field update indicators identify the saved Project, and clear after author edits',()=>{
   const controls={};
-  for(const id of ['studio-dw-write','studio-dw-quick-write','storyboard-story-title',
+  for(const id of ['studio-dw-write','storyboard-story-title',
     'storyboard-story-concept','storyboard-story-style']){
     controls[id]={dataset:{},title:'',addEventListener(event,fn){this[event]=fn;}};
   }

@@ -70,6 +70,17 @@ test('unsupported readiness preserves the reply and marks the exchange failed',(
   assert.ok(response.statuses.some(message=>message.includes('assessment failed')));
 });
 
+test('slightly imperfect replies remain visible and editable captures can still be reviewed',()=>{
+  const readiness={...valid,capture:{field:'prompt',sceneId:'scene-a',
+    content:'Subject: Mara\n\nintegrated_multimodal_description: [Shot 1] A relieved blink.'}};
+  const response=processResponse(envelope(readiness,'Here is the prompt I prepared.'));
+  assert.equal(response.text,'Here is the prompt I prepared.');
+  assert.equal(response.error,null);
+  assert.equal(response.state.studioReadiness.stale,false);
+  assert.equal(response.state.studioReadiness.capture.content,readiness.capture.content);
+  assert.deepEqual(response.failures,[]);
+});
+
 test('missing readiness preserves the last assessment without pretending it succeeded',()=>{
   const response=processResponse(JSON.stringify({reply:'A useful suggestion.'}));
   assert.equal(response.text,'A useful suggestion.');
@@ -189,7 +200,7 @@ test('Director guidance presents at most one contextual action and keeps assessm
   assert.match(workbench, /openRecommendedWrite/);
   assert.match(html, /id="studio-dw-suggestions"/);
   assert.match(html, /<details class="studio-dw-assessment-details">/);
-  assert.match(html, /<summary>Creative assessment details<\/summary>/);
+  assert.match(html, /<summary>Assessment<\/summary>/);
   assert.match(workbench, /'Draft Scene revisions'/);
 });
 
@@ -215,7 +226,7 @@ test('complete Studio model output is inspectable and its original capture reope
   }});
   const created=[];
   function node(tag) {
-    const el={tagName:tag,children:[],className:'',classList:{toggle(){}},
+    const el={tagName:tag,children:[],className:'',classList:{toggle(){},add(){},remove(){}},before(){},
       appendChild(child){this.children.push(child);return child;},
       append(...children){this.children.push(...children);},
       replaceChildren(...children){this.children=children;},
@@ -234,7 +245,7 @@ test('complete Studio model output is inspectable and its original capture reope
     window:{studioDirectorWorkbench:{reviewGeneratedCapture:result=>calls.push(result)}},
     Object,JSON,String
   });
-  vm.runInContext(part('  function renderMessages() {','  function renderStudioOperations() {'),context);
+  vm.runInContext(part('  function studioReplyText(content) {','  function renderStudioOperations() {'),context);
   vm.runInContext('renderMessages()',context);
   const details=created.find(n=>n.className==='director-chat-full-response');
   const action=created.find(n=>n.className==='director-chat-review-draft');
@@ -249,7 +260,7 @@ test('complete Studio model output is inspectable and its original capture reope
 test('structured inspection metadata is not sent back with later Studio prompts', async () => {
   const context=vm.createContext({
     state:{studioStoryAccess:null,storyboardAttachments:{},workshop:null},
-    Object,String,Promise,
+    Object,String,Promise,window:{getStudioDirectorNavigation:()=>({})},
     requestJson:async()=>({system:'Studio Director',actions:[]})
   });
   vm.runInContext(part('  function studioDirectorRequestMessages(messages, includePromptContract, explicitWrite) {',

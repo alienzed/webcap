@@ -118,6 +118,9 @@ def chat_response_schema():
          "sceneId": {"type": "string", "minLength": 1, "maxLength": 160}},
         {"field": {"type": "string", "enum": ["scene"]},
          "title": {"type": "string", "maxLength": 240}},
+        {"field": {"type": "string", "enum": ["scene"]},
+         "title": {"type": "string", "maxLength": 240},
+         "prompt": {"type": "string", "maxLength": 20000}},
         {"field": {"type": "string", "enum": ["invariant"]},
          "kind": {"type": "string", "enum": ["character", "location", "visual", "world", "sound", "custom"]},
          "title": {"type": "string", "minLength": 1, "maxLength": 240},
@@ -154,11 +157,13 @@ def chat_response_schema():
                             "items": {"type": "string", **({"enum": fields} if fields else {})}},
             "sceneId": {"type": "string", "maxLength": 160},
             "sceneNumber": {"type": "integer", "minimum": 0, "maximum": 10000},
-            "capture": {"anyOf": captures},
+            # Always choose between ordinary discussion and a reusable draft.
+            # An optional property was repeatedly omitted after complete prompts.
+            "capture": {"anyOf": [{"type": "null"}, *captures]},
         }
         readiness.append({
             "type": "object", "additionalProperties": False,
-            "required": ["checks", "readHints", "writeHint", "writeFields", "sceneId", "sceneNumber"],
+            "required": ["checks", "readHints", "writeHint", "writeFields", "sceneId", "sceneNumber", "capture"],
             "properties": properties,
         })
     return {

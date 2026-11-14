@@ -224,7 +224,7 @@ def test_studio_chat_schema_constrains_recommendations_to_the_selected_operation
     variants = schema["properties"]["readiness"]["anyOf"]
     for variant in variants:
         assert variant["additionalProperties"] is False
-        assert set(variant["required"]) == {"checks", "readHints", "writeHint", "writeFields", "sceneId", "sceneNumber"}
+        assert set(variant["required"]) == {"checks", "readHints", "writeHint", "writeFields", "sceneId", "sceneNumber", "capture"}
         fields = variant["properties"]["writeFields"]
         for operation in variant["properties"]["writeHint"]["enum"]:
             if operation == "project":
@@ -242,14 +242,17 @@ def test_studio_chat_schema_constrains_recommendations_to_the_selected_operation
         assert set(check["required"]) == {"name", "scope", "ready", "content"}
 
 
-def test_studio_chat_schema_keeps_creative_captures_optional_and_compatible_with_saved_readiness():
+def test_studio_chat_schema_requires_a_capture_decision_and_preserves_older_saved_readiness():
     from tool.server.studio_director import chat_response_schema
     from tool.server.director_chat_history import _validate_readiness
 
     for variant in chat_response_schema()["properties"]["readiness"]["anyOf"]:
-        assert "capture" not in variant["required"]
+        assert "capture" in variant["required"]
         captures = variant["properties"]["capture"]["anyOf"]
+        assert {"type": "null"} in captures
         for schema in captures:
+            if schema == {"type": "null"}:
+                continue
             assert schema["additionalProperties"] is False
             assert set(schema["required"]) == set(schema["properties"])
             for field in schema["properties"]["field"]["enum"]:
@@ -257,11 +260,16 @@ def test_studio_chat_schema_keeps_creative_captures_optional_and_compatible_with
                            "sceneId": "scene-1" if field in {"summary", "prompt"} else ""}
                 if field == "scene":
                     capture["title"] = "A quiet reply"
+                    if "prompt" in schema["properties"]:
+                        capture["prompt"] = "integrated_multimodal_description: [Shot 1] A quiet reply."
                 if field == "invariant":
                     capture.update(kind="character", title="Mara", beforeKind="", beforeTitle="")
                 readiness = {"checks": [], "readHints": [], "writeHint": "", "writeFields": [],
                              "sceneId": "", "capture": capture}
                 assert _validate_readiness(readiness)["capture"] == capture
+    legacy = {"checks": [], "readHints": [], "writeHint": "", "sceneId": ""}
+    assert "capture" not in _validate_readiness(legacy)
+    assert "capture" not in _validate_readiness({**legacy, "capture": None})
 
 
 def test_studio_chat_scene_numbers_are_advisory_and_persist_with_older_sessions():

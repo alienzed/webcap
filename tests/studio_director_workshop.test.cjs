@@ -16,7 +16,7 @@ function part(start, end) {
   return source.slice(a, b);
 }
 
-test('Studio has a wide conversation and a real side-panel Read/Write workbench', () => {
+test('Director occupies the Projects work area with an optional manual workbench', () => {
   for (const id of [
     'director-chat-drawer', 'director-chat-messages', 'director-chat-input',
     'studio-director-workbench', 'studio-dw-read', 'studio-dw-write',
@@ -30,6 +30,11 @@ test('Studio has a wide conversation and a real side-panel Read/Write workbench'
   assert.match(css, /\.director-chat-drawer\.studio-director #director-studio-flow \{ display: none !important; \}/);
   assert.match(css, /studio-dw-actions/);
   assert.match(css, /font-size:16px/);
+  assert.match(css,/grid-area:workspace;position:relative;inset:auto/);
+  assert.match(css,/\.app-frame\.director-chat-pinned\.studio-director-active \{grid-template-columns:42px minmax\(0,1fr\)/);
+  assert.match(css,/\.studio-director-active > \.storyboard-workspace \{visibility:hidden;/);
+  assert.match(html,/id="storyboard-open-director"/);
+  assert.match(html,/id="studio-dw-open-tools"/);
 });
 
 test('New Director conversation is passive until the author explicitly sends', () => {
@@ -47,7 +52,7 @@ test('Only explicitly supplied conversation content is sent; legacy snapshots ar
     workshop: null
   };
   const context = vm.createContext({
-    state, Object, String, Promise,
+    state, Object, String, Promise, window:{getStudioDirectorNavigation:()=>({})},
     requestJson: async () => ({
       system: 'Authoritative expertise',
       actions: [{name: 'context.read', status: 'available',
@@ -69,7 +74,7 @@ test('Only explicitly supplied conversation content is sent; legacy snapshots ar
 test('Studio prompting selects the current goal rather than steering every task to Project edits', async () => {
   const context = vm.createContext({
     state: {studioStoryAccess:null,storyboardAttachments:{},workshop:null},
-    Object, String, Promise,
+    Object, String, Promise, window:{getStudioDirectorNavigation:()=>({projectId:'p1',sceneOrder:['scene-a']})},
     requestJson: async () => ({
       system: 'WebCap Studio Director role',
       actions: [
@@ -87,16 +92,16 @@ test('Studio prompting selects the current goal rather than steering every task 
   assert.match(system,/For the current author goal, suggest at most one useful next step/);
   assert.match(system,/an explicit Read, an appropriately scoped reviewed Write, or an author-operated Studio action/);
   assert.doesNotMatch(system,/When choices are clear, offer to review Concept/);
-  assert.match(system,/contribute a concrete visual/);
-  assert.match(system,/ask a question only when a consequential choice needs the author/);
-  assert.match(system,/When the author explicitly asks for full draft text/);
-  assert.match(system,/Keep readiness light: normally checks=\[\]/);
-  assert.match(system,/If assessment is genuinely useful, provide at most two concise checks/);
-  assert.match(system,/single new Scene is ready for review/);
-  assert.match(system,/A tentative Scene capture needs no H3 Prompt/);
+  assert.match(system,/Ask one focused question only for a consequential missing decision/);
+  assert.match(system,/deliver the actual complete text in reply on this turn/);
+  assert.match(system,/use capture.field="prompt"/);
+  assert.match(system,/"projectId":"p1","sceneOrder":\["scene-a"\]/);
+  assert.match(system,/Usually checks=\[\], readHints=\[\]/);
+  assert.match(system,/at most two useful checks/);
+  assert.match(system,/also include prompt when a full H3 Prompt was authored/);
   assert.match(system,/H3 PRODUCTION PROMPT REFERENCE/);
-  assert.match(system,/scenes writes or revises a coherent Scene, considering its Title, Intent and H3 Prompt together/);
-  assert.match(system,/writeFields describes likely changed parts as advisory metadata/);
+  assert.match(system,/Use new-project, project or scenes for Write/);
+  assert.match(system,/writeFields names affected fields/);
   assert.equal(assembled[1].content,'Revise only the Scene action');
   assert.equal(assembled.length,2, 'no extra request or hidden context event');
 });
@@ -104,7 +109,7 @@ test('Studio prompting selects the current goal rather than steering every task 
 test('explicit Write guidance asks for the draft, not another conversational recommendation', async () => {
   const context = vm.createContext({
     state:{studioStoryAccess:null,storyboardAttachments:{}},
-    Object,String,Promise,
+    Object,String,Promise,window:{getStudioDirectorNavigation:()=>({})},
     requestJson:async()=>({system:'Studio producer expertise',actions:[]})
   });
   vm.runInContext(part('  function studioDirectorRequestMessages(messages, includePromptContract, explicitWrite) {',
@@ -185,6 +190,7 @@ test('Read sends actual saved data and asks for a conversational confirmation', 
       return composer;
     },
     studioAttachedStoryId: () => '',
+    placeStudioSuggestion(){},
     sendMessage: () => {outgoing = composer.value;},
     window: {}
   });
@@ -260,7 +266,7 @@ test('Read offers one Project Overview and per-Scene complete selections without
   assert.match(workbench, /addUnit\('Scene ' \+ \(index \+ 1\)/);
   assert.match(workbench, /\['title', 'summary', 'prompt', 'durationSeconds'\]/);
   assert.match(workbench, /input\[data-group-select\]:checked/);
-  assert.match(html, /Scenes · select complete Scenes/);
+  assert.match(html, /<summary>Scenes<\/summary>/);
   const read = workbench.split('  function renderReadStory(story) {', 2)[1].split('  function selectedPaths() {', 2)[0];
   assert.doesNotMatch(read, /'references'/);
   assert.doesNotMatch(read, /'generationSettings'/);
@@ -305,7 +311,7 @@ test('batch Scene revisions include duration and linked Invariants', () => {
 test('H3 detailed authoring contract is included when Director may propose a Prompt revision', async () => {
   const state = {studioStoryAccess:null,storyboardAttachments:{},workshop:null};
   const context = vm.createContext({
-    state,Object,String,Promise,
+    state,Object,String,Promise,window:{getStudioDirectorNavigation:()=>({})},
     requestJson:async () => ({
       system:'Small creative guidance',actions:[],
       promptContract:'[Shot 1] Full H3 authoring contract'
@@ -326,7 +332,7 @@ test('Studio conversation receives the canonical H3 template as reference withou
   const template = fs.readFileSync(path.join(__dirname, '..', 'docs/mmh3-prompt-runtime-context.txt'), 'utf8').trim();
   const state = {studioStoryAccess:null,storyboardAttachments:{},workshop:null};
   const context = vm.createContext({
-    state,Object,String,Promise,
+    state,Object,String,Promise,window:{getStudioDirectorNavigation:()=>({})},
     requestJson:async () => ({system:'Studio guidance',actions:[],promptContract:template})
   });
   vm.runInContext(part('  function studioDirectorRequestMessages(messages, includePromptContract, explicitWrite) {',
@@ -343,10 +349,51 @@ test('Studio conversation receives the canonical H3 template as reference withou
   assert.doesNotMatch(result[0].content,/\[WEBCAP EXPLICIT READ\]/);
 });
 
-test('large explicit Read selections report their true size and refuse silent truncation', () => {
-  assert.match(workbench,/JSON\.stringify\(payload\)\.length/);
-  assert.match(workbench,/length > 48000/);
-  assert.match(workbench,/Select the Project Overview or fewer Scenes/);
+test('large explicit Read selections are sent intact, with no arbitrary client character cap', async () => {
+  const start=workbench.indexOf('  function readPayload(story, keys) {');
+  const middle=workbench.indexOf('  function updateReadSelection() {',start);
+  const sendStart=workbench.indexOf('  function readSend() {',middle);
+  const end=workbench.indexOf('  function showWriteContext() {',sendStart);
+  assert.ok(start>=0 && middle>start && sendStart>middle && end>sendStart,
+    'Read serialization and action must remain available');
+  const prompt='A richly detailed scene. '.repeat(3600);
+  const story={id:'project-1',title:'Long Project',updatedAt:'saved',
+    sceneOrder:['scene-a'],scenes:{'scene-a':{prompt}}};
+  let sent=null,readStatus='',updates=0;
+  const nodes=new Map();
+  const el=id=>{
+    if(!nodes.has(id))nodes.set(id,{
+      value:id==='studio-dw-read-project'?'project-1':'',
+      textContent:'',disabled:false,
+      classList:{add(){},contains:()=>false},
+      setAttribute(){},click(){}
+    });
+    return nodes.get(id);
+  };
+  const scope=vm.createContext({
+    el,Promise,JSON,String,Array,
+    projectFields:['title','concept','style','invariants'],
+    storyName:value=>value.title,
+    selectedPaths:()=>['scene:scene-a:prompt'],
+    loadStory:async()=>story,
+    status:()=>{},
+    updateScope:()=>{},
+    updateReadSelection:()=>{updates++;},
+    window:{
+      studioDirectorBridge:{isReady:()=>true,sendRead:(payload,keys)=>{sent={payload,keys};}},
+      studioDirectorWorkbench:{setReadStatus:(_state,message)=>{readStatus=message;}}
+    }
+  });
+  vm.runInContext(workbench.slice(start,middle) + workbench.slice(sendStart,end),scope);
+  scope.readSend();
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.ok(sent,'the selected saved fields must reach Director');
+  assert.deepEqual(sent.keys,['scene:scene-a:prompt']);
+  assert.ok(JSON.stringify(sent.payload).length>48000,'this case exceeds the old cutoff');
+  assert.equal(sent.payload.fields[0].value,prompt,'no Read field is truncated');
+  assert.ok(readStatus.includes('Reading selected saved fields'));
+  assert.ok(updates>0,'existing selection UI still refreshes');
+  assert.match(workbench,/bytes.toLocaleString\(\)/,'the actual payload size stays visible');
 });
 
 test('standalone Invariant linking is not a Director Write operation', () => {

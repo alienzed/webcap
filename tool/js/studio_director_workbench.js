@@ -28,7 +28,11 @@
       node.dataset.error = error ? 'true' : 'false';
       node.classList.toggle('hidden', !message || !error);
     }
-    if (error) window.reportConsoleError('Studio Director workbench', new Error(message));
+    if (error) {
+      el('director-chat-drawer').classList.add('studio-actions-open');
+      el('studio-dw-open-tools').setAttribute('aria-expanded','true');
+      window.reportConsoleError('Studio Director workbench', new Error(message));
+    }
     else if (message) window.reportConsoleInfo('Studio Director workbench', message);
   }
   function option(select, id, name) {
@@ -154,8 +158,6 @@
       (units === 1 ? ' selection' : ' selections') + ' · ' + bytes.toLocaleString() + ' characters';
     el('studio-dw-read-send').disabled = !keys.length || !el('studio-dw-read-project').value;
     el('studio-dw-read-all').disabled = !readStory || !el('studio-dw-read-project').value;
-    var name = readStory ? storyName(readStory) : 'No Project selected';
-    el('studio-dw-read-scope').textContent = 'Read source: ' + name + '. Not an automatic attachment.';
     var details = el('studio-dw-read-preview');
     if (details.open && readStory) el('studio-dw-read-preview-data').textContent =
       JSON.stringify(readPayload(readStory, keys), null, 2);
@@ -169,9 +171,6 @@
     // Same exact serializer drives the inspector and the outbound LLM message.
     loadStory(id).then(function (story) {
       var payload = readPayload(story, keys);
-      var length = JSON.stringify(payload).length;
-      if (length > 48000) throw new Error('Selected Read is ' + length.toLocaleString() +
-        ' characters. Select the Project Overview or fewer Scenes.');
       el('studio-dw-read-preview-data').textContent = JSON.stringify(payload, null, 2);
       window.studioDirectorBridge.sendRead(payload, keys);
       lastReadSource = story.id;
@@ -217,7 +216,7 @@
         String.fromCharCode(10) + 'Recent conversation context is also supplied.';
     }
     el('studio-dw-write-context').querySelector('summary').textContent =
-      'Inspect saved context for this draft (preview)';
+      'Inspect draft context';
     el('studio-dw-write-context-json').textContent=text;
   }
 
@@ -237,18 +236,16 @@
     var ready = window.studioDirectorBridge.isReady();
     el('studio-dw-current-brief').disabled = !current.storyId || !ready;
     el('studio-dw-current-prompt').disabled = !current.storyId || !current.sceneId || !ready;
-    var readId = el('studio-dw-read-project').value;
     var writeId = el('studio-dw-write-project').value;
     var op = el('studio-dw-write-operation').value;
     var unresolvedScene = op === 'scene-write' && writeStory && writeStory.id === writeId &&
       !readinessStale && (recommendations.sceneId || recommendations.sceneNumber) &&
       !recommendedSceneId(writeStory);
-    el('studio-dw-write-scope').textContent = op === 'new-project'
-      ? 'Creates a new Project. No existing destination.'
-      : 'Write destination: ' + (projects.find(function(p){return p.id===writeId;}) || {title:'Choose a Project'}).title +
-        (lastReadSource && writeId && lastReadSource !== writeId
-          ? ' · Different from last Read source.' : '') +
-        (unresolvedScene ? ' · Director’s Scene recommendation could not be matched. Choose a Scene explicitly.' : '');
+    el('studio-dw-write-scope').textContent = [
+      op !== 'new-project' && lastReadSource && writeId && lastReadSource !== writeId
+        ? 'Destination differs from the last Read source.' : '',
+      unresolvedScene ? 'Scene target unresolved. Select a Scene.' : ''
+    ].filter(Boolean).join(' ');
     var mode = !el('studio-dw-read-panel').classList.contains('hidden') ? 'Read' :
       !el('studio-dw-write-panel').classList.contains('hidden') ? 'Write' : '';
     el('studio-dw-heading').textContent = mode ? mode + ' · Director' : 'Director actions';
@@ -281,6 +278,12 @@
     // If both recommendations exist, they must identify the same saved Scene.
     // A conflict means no automatic destination, not a reason to guess.
     var id = recommendations.sceneId, number = recommendations.sceneNumber;
+    // Read field paths contain `scene:<saved-id>:<field>`; accept that identity
+    // only when it maps exactly to a Scene in this destination Project.
+    if (id && !story.sceneOrder.includes(id) && id.startsWith('scene:')) {
+      var readId = id.split(':')[1];
+      if (story.sceneOrder.includes(readId)) id = readId;
+    }
     if (id && !story.sceneOrder.includes(id)) return '';
     if (number) {
       if (recommendationProject !== story.id || !Number.isInteger(number) ||
@@ -336,7 +339,7 @@
           } else if (['scene', 'scenes', 'scene-edit', 'scenes-batch'].includes(hint)) {
             el('studio-dw-write-operation').value = 'scene-write';
             el('studio-dw-scene-mode').value =
-              (recommendations.sceneId || hint === 'scene-edit' || hint === 'scenes-batch') ? 'revise' : 'create';
+              (recommendations.sceneId || recommendations.sceneNumber || hint === 'scene-edit' || hint === 'scenes-batch') ? 'revise' : 'create';
           } else if (!projects.length) el('studio-dw-write-operation').value = 'new-project';
         }
         setOperation();
@@ -351,8 +354,6 @@
     button.setAttribute('aria-expanded', show ? 'true' : 'false');
     el('studio-dw-' + other + '-panel').classList.add('hidden');
     el('studio-dw-' + other).setAttribute('aria-expanded', 'false');
-    el('studio-dw-quick-' + which).setAttribute('aria-expanded', show ? 'true' : 'false');
-    el('studio-dw-quick-' + other).setAttribute('aria-expanded', 'false');
     updateScope();
     if (show) return which === 'read' ? refreshRead() : refreshWrite();
   }
@@ -446,6 +447,8 @@
       return window.flushStudioDirectorStoryEdits(id);
     }).then(function () {return loadStory(id);})
       .then(function (story) {
+        if (!story.sceneOrder.includes(sceneTarget) && sceneTarget.startsWith('scene:'))
+          sceneTarget = sceneTarget.split(':')[1];
         var scene = story.scenes && story.scenes[sceneTarget];
         if (!scene || !story.sceneOrder.includes(sceneTarget)) throw new Error('Select a saved Scene to review.');
         var draft = {sceneId:sceneTarget};
@@ -460,6 +463,7 @@
   }
   function openWriteForCapture() {
     el('director-chat-drawer').classList.add('studio-actions-open');
+    el('studio-dw-open-tools').setAttribute('aria-expanded','true');
     if (el('studio-dw-write-panel').classList.contains('hidden')) el('studio-dw-write').click();
     refreshWrite();
   }
@@ -824,9 +828,7 @@
     renderReadiness(readiness);
     if (!el('studio-dw-write-panel').classList.contains('hidden')) setOperation();
     var label = el('studio-dw-readiness-freshness');
-    label.textContent = readinessStale
-      ? (readiness.length ? 'Outdated · latest exchange not assessed' : 'Latest exchange not assessed')
-      : (readiness.length ? 'Assessed for latest reply · advisory only' : 'Not assessed yet');
+    label.textContent = readinessStale ? 'Outdated' : readiness.length ? 'Current' : 'No assessment';
     var empty = el('studio-dw-readiness-list').querySelector('p');
     if (empty) empty.textContent = readinessStale ? 'No current assessment.' : 'Not assessed yet';
   }
@@ -842,7 +844,7 @@
     }
     select.value = operation;
     if (operation === 'scene-write') el('studio-dw-scene-mode').value =
-      (recommendations.sceneId || hint === 'scene-edit' || hint === 'scenes-batch') ? 'revise' : 'create';
+      (recommendations.sceneId || recommendations.sceneNumber || hint === 'scene-edit' || hint === 'scenes-batch') ? 'revise' : 'create';
     writeOperationChosen = true;
     sceneSelectionManual = false; // Explicitly follow Director's proposed Write target.
     var setup = el('studio-dw-write-panel').classList.contains('hidden') ? toggle('write') : refreshWrite();
@@ -854,12 +856,24 @@
     return capture.field === 'scene' ? 'Review new Scene' :
       ['summary','prompt'].includes(capture.field) ? 'Review Scene' : 'Review Project Overview';
   }
+  function readRecommendedProject() {
+    var id = window.studioDirectorBridge.workingStoryId() || activeTarget().storyId;
+    return refreshProjects().then(function () {
+      el('studio-dw-read-project').value = id;
+      return loadStory(id);
+    }).then(function (story) {
+      renderReadStory(story);
+      selectEntireReadProject();
+      readSend();
+    }).catch(function (error) { status('Project Read failed: ' + error.message, true); });
+  }
   function writeActionLabel() {
     var hint = recommendations.writeHint;
     if (hint === 'new-project') return 'Create Project';
     if (hint === 'project') return 'Revise Project Overview';
     if (['scene', 'scenes', 'scene-edit', 'scenes-batch'].includes(hint))
-      return recommendations.sceneId ? 'Draft Scene revisions' : 'Draft Scenes';
+      return recommendations.sceneNumber ? 'Draft Scene ' + recommendations.sceneNumber :
+        recommendations.sceneId ? 'Draft Scene revisions' : 'Draft Scenes';
     return '';
   }
   function renderReadiness(list) {
@@ -868,6 +882,10 @@
     actions.replaceChildren();
     assessment.replaceChildren();
     var available = [];
+    if (!readinessStale && !creativeCapture && recommendations.readHints.length &&
+        (window.studioDirectorBridge.workingStoryId() || activeTarget().storyId)) available.push({
+      kind:'read', label:'Read Project', run:readRecommendedProject
+    });
     if (!readinessStale && creativeCapture) available.push({
       kind:'capture', label:captureActionLabel(creativeCapture),
       run:function () { reviewCreativeCapture(creativeCapture); }
@@ -899,7 +917,7 @@
       button.onclick = action.run;
       actions.appendChild(button);
     });
-    el('studio-dw-suggestion-heading').classList.toggle('hidden', !available.length || readinessStale);
+    window.studioDirectorBridge.placeSuggestedAction(actions);
     if (!list.length) {
       var empty = document.createElement('p');
       empty.textContent = readinessStale ? 'No current assessment.' : 'No assessment details yet.';
@@ -931,11 +949,9 @@
       if (selected.scenes && typeof selected.scenes==='object') keys.push('Scene revisions');
       var descriptions={title:'Title',concept:'Concept',style:'Visual / atmosphere',invariants:'Invariants',summary:'Scene Intent',prompt:'H3 Prompt'};
       var label=keys.map(function(key){return descriptions[key] || key;}).join(', ');
-      ['studio-dw-write','studio-dw-quick-write'].forEach(function(id){
-        var button=el(id);
-        button.dataset.result='success';
-        button.title='Saved to ' + storyName(story) + ': ' + (label || 'reviewed changes');
-      });
+      var button=el('studio-dw-write');
+      button.dataset.result='success';
+      button.title='Saved to ' + storyName(story) + ': ' + (label || 'reviewed changes');
       window.reportConsoleInfo('Studio Director', 'Saved to ' + storyName(story) + ': ' + (label || 'reviewed changes'));
       if (activeTarget().storyId !== story.id) return;
       [['title','storyboard-story-title'],['concept','storyboard-story-concept'],['style','storyboard-story-style']].forEach(function(item){
@@ -957,11 +973,9 @@
       });
     },
     setReadStatus:function(state,detail){
-      ['studio-dw-read','studio-dw-quick-read'].forEach(function(id){
-        var button=el(id);
-        button.dataset.result=state;
-        button.title=detail || 'Read selected Project fields';
-      });
+      var button=el('studio-dw-read');
+      button.dataset.result=state;
+      button.title=detail || 'Read selected Project fields';
     },
     reviewGeneratedCapture:reviewCreativeCapture,
     updateContext:updateScope,
@@ -993,8 +1007,7 @@
       el('studio-dw-write-panel').classList.add('hidden');
       el('studio-dw-read').setAttribute('aria-expanded','false');
       el('studio-dw-write').setAttribute('aria-expanded','false');
-      el('studio-dw-quick-read').setAttribute('aria-expanded','false');
-      el('studio-dw-quick-write').setAttribute('aria-expanded','false');
+      el('studio-dw-open-tools').setAttribute('aria-expanded','false');
       el('director-chat-drawer').classList.remove('studio-actions-open');
       status('', false);
       updateScope();
@@ -1038,7 +1051,10 @@
       if (capture) {
         var isInvariant = capture.field === 'invariant';
         var expectedKeys = isInvariant ? 'beforeKind,beforeTitle,content,field,kind,sceneId,title' :
-          capture.field === 'scene' ? 'content,field,sceneId,title' : 'content,field,sceneId';
+          capture.field === 'scene'
+            ? (Object.prototype.hasOwnProperty.call(capture, 'prompt')
+                ? 'content,field,prompt,sceneId,title' : 'content,field,sceneId,title')
+            : 'content,field,sceneId';
         if (typeof capture !== 'object' || Array.isArray(capture) ||
             Object.keys(capture).sort().join(',') !== expectedKeys ||
             ['title','concept','style','summary','prompt','invariant','scene'].indexOf(capture.field) === -1 ||
@@ -1046,7 +1062,9 @@
             typeof capture.sceneId !== 'string' || capture.sceneId.length > 160 ||
             (['title','concept','style','invariant','scene'].indexOf(capture.field) !== -1 && capture.sceneId) ||
             (['summary','prompt'].indexOf(capture.field) !== -1 && !capture.sceneId) ||
-            (capture.field === 'scene' && (typeof capture.title !== 'string' || capture.title.length > 240)) ||
+            (capture.field === 'scene' && (typeof capture.title !== 'string' || capture.title.length > 240 ||
+              (Object.prototype.hasOwnProperty.call(capture, 'prompt') &&
+                (typeof capture.prompt !== 'string' || capture.prompt.length > 20000)))) ||
             (isInvariant && (
               ['character','location','visual','world','sound','custom'].indexOf(capture.kind) === -1 ||
               typeof capture.title !== 'string' || !capture.title.trim() || capture.title.length > 240 ||
@@ -1076,8 +1094,8 @@
 
   function bind() {
     var rail = el('studio-director-workbench');if (!rail) return;
-    el('studio-dw-read').onclick=function () { toggle('read'); };
-    el('studio-dw-write').onclick=function () { toggle('write'); };
+    el('studio-dw-read').onclick=function () { lastQuickAction='read'; return toggle('read'); };
+    el('studio-dw-write').onclick=function () { lastQuickAction='write'; return toggle('write'); };
     el('studio-dw-current-brief').onclick=function () {return prepareCurrentWrite('project');};
     el('studio-dw-current-prompt').onclick=function () {return prepareCurrentWrite('scene-write');};
     el('studio-dw-read-project').onchange=function () {
@@ -1114,18 +1132,17 @@
       el('director-chat-drawer').classList.add('studio-actions-open');
       if (el('studio-dw-' + which + '-panel').classList.contains('hidden'))
         el('studio-dw-' + which).click();
-      el('studio-dw-quick-' + which).setAttribute('aria-expanded','true');
-      el('studio-dw-quick-' + (which === 'read' ? 'write' : 'read'))
-        .setAttribute('aria-expanded','false');
+      el('studio-dw-open-tools').setAttribute('aria-expanded','true');
       el('studio-dw-close-actions').focus();
     }
-    el('studio-dw-quick-read').onclick=function () { openDirectAction('read'); };
-    el('studio-dw-quick-write').onclick=function () { openDirectAction('write'); };
+    el('studio-dw-open-tools').onclick=function () {
+      if (el('director-chat-drawer').classList.contains('studio-actions-open')) el('studio-dw-close-actions').click();
+      else openDirectAction(lastQuickAction);
+    };
     el('studio-dw-close-actions').onclick=function () {
       el('director-chat-drawer').classList.remove('studio-actions-open');
-      el('studio-dw-quick-read').setAttribute('aria-expanded','false');
-      el('studio-dw-quick-write').setAttribute('aria-expanded','false');
-      el('studio-dw-quick-' + lastQuickAction).focus();
+      el('studio-dw-open-tools').setAttribute('aria-expanded','false');
+      el('studio-dw-open-tools').focus();
     };
     rail.addEventListener('keydown',function(event){
       if(event.key==='Escape' && el('director-chat-drawer').classList.contains('studio-actions-open')) {

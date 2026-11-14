@@ -1878,6 +1878,9 @@
                         </div>
                     </header>
                     <div id="storyboard-library-list" class="storyboard-library-list"></div>
+                    <footer class="storyboard-library-footer">
+                        <button id="studio-blocks-open" type="button" class="review-captions-btn" title="Reusable Studio Ideas and Guidance" aria-label="Open Blocks"><span aria-hidden="true">▧</span><span class="storyboard-blocks-label">Blocks</span></button>
+                    </footer>
                 </aside>
                 <section class="storyboard-editor" aria-label="Project editor">
                     <aside id="storyboard-director-activity" class="storyboard-director-activity hidden" aria-live="polite">
@@ -1907,6 +1910,7 @@
                                 <div class="storyboard-story-panel-heading">
                                     <strong>Project Overview</strong>
                                     <div class="storyboard-story-heading-actions">
+                                        <button id="storyboard-open-director" type="button" class="review-captions-btn" onclick="openStoryboardAssistant()" title="Open the Projects Director work surface">Director</button>
                                         <div class="storyboard-story-action-wrap">
                                             <button id="storyboard-first-cut-btn" type="button" class="storyboard-primary-btn storyboard-director-action" title="Take this Project from its current concept through Director refinement and queue one first Take per Scene.">First Cut</button>
                                         <div id="storyboard-story-action-card" class="storyboard-story-action-card hidden" aria-live="polite">
@@ -2066,8 +2070,6 @@
                                 <div class="storyboard-scenes-heading-actions">
                                     <button id="storyboard-scenes-focus-btn" type="button" class="review-captions-btn hidden">← Scenes</button>
                                     <button id="storyboard-scenes-sequence-btn" type="button" class="review-captions-btn">Sequence</button>
-                                    <button type="button" class="review-captions-btn" onclick="openStoryboardAssistant()" title="Discuss the Project with Director without changing Scenes">Chat</button>
-                                    <button id="studio-blocks-open" type="button" class="review-captions-btn" title="Manage reusable Studio Ideas and Guidance">Blocks</button>
 
                                 </div>
                             </div>
@@ -2081,13 +2083,13 @@
             <aside id="director-chat-drawer" class="director-chat-drawer hidden" aria-label="Assistant" aria-hidden="true">
                 <header class="director-chat-drawer-header">
                     <div class="director-chat-header-copy">
+                        <span class="studio-director-breadcrumb">Projects / Director</span>
                         <strong id="director-chat-title">Assistant</strong>
                         <span id="director-chat-mode-description">Assistant conversation</span>
                         <span id="director-chat-save-status" aria-live="polite"></span>
                     </div>
                     <div class="director-chat-header-actions">
-                        <button id="studio-dw-quick-read" type="button" class="review-captions-btn" aria-controls="studio-dw-read-panel" aria-expanded="false">Read…</button>
-                        <button id="studio-dw-quick-write" type="button" class="review-captions-btn" aria-controls="studio-dw-write-panel" aria-expanded="false">Write…</button>
+                        <button id="studio-dw-open-tools" type="button" class="review-captions-btn" aria-controls="director-chat-sidebar" aria-expanded="false">Advanced</button>
                         <button id="director-chat-pin" type="button" class="director-chat-pin" title="Pin Assistant" aria-label="Pin Assistant" aria-pressed="false">
                             <svg viewBox="0 0 24 24" aria-hidden="true">
                                 <path d="M9 4h6"></path>
@@ -2100,10 +2102,10 @@
                         <button id="director-chat-close" type="button" class="director-chat-close" aria-label="Close Assistant">×</button>
                     </div>
                 </header>
-                <section id="director-chat-history-panel" class="director-chat-history-panel hidden" aria-label="Saved Assistant conversations">
-                    <div class="director-chat-history-heading">Saved conversations</div>
+                <dialog id="director-chat-history-panel" class="director-chat-history-panel" aria-labelledby="director-chat-history-title">
+                    <header class="director-chat-history-heading"><h2 id="director-chat-history-title">Conversations</h2><button id="director-chat-history-close" type="button" class="review-captions-btn">Close</button></header>
                     <div id="director-chat-history-list" class="director-chat-history-list"></div>
-                </section>
+                </dialog>
                 <div class="director-chat-layout">
                     <div class="director-chat-conversation">
                 <div id="director-chat-mode-row" class="director-chat-mode-row hidden" aria-label="Assistant mode">
@@ -2156,6 +2158,7 @@
                     </div>
                     <div class="director-chat-progress-track" aria-hidden="true"><span></span></div>
                 </div>
+                <div id="studio-dw-suggestions" class="studio-dw-suggestions hidden" aria-label="Suggested next action"></div>
                 <div id="director-chat-messages" class="director-chat-messages" aria-live="polite"></div>
                 <div id="director-chat-empty" class="director-chat-empty">
                     <strong id="director-chat-empty-title">Your creative workshop</strong>
@@ -2186,11 +2189,10 @@
                   <section id="studio-dw-read-panel" class="studio-dw-panel hidden" aria-label="Read selected Project and Scenes">
                     <h3>Read saved material</h3>
                     <label>Read from Project<select id="studio-dw-read-project"></select></label>
-                    <p id="studio-dw-read-scope" class="studio-dw-scope"></p>
                     <button id="studio-dw-read-all" type="button">Select entire Project</button>
                     <div id="studio-dw-project-fields" class="studio-dw-field-list" aria-label="Project fields"></div>
                     <details id="studio-dw-scenes">
-                      <summary>Scenes · select complete Scenes</summary>
+                      <summary>Scenes</summary>
                       <div id="studio-dw-scene-fields" class="studio-dw-scene-list"></div>
                     </details>
                     <details id="studio-dw-read-preview"><summary>Inspect selected material</summary><pre id="studio-dw-read-preview-data"></pre></details>
@@ -2212,7 +2214,6 @@
                       </select>
                     </label>
                     <div id="studio-dw-batch-controls" class="hidden">
-                      <p>Choose the Scenes to revise. Director will propose the relevant changes from your discussion.</p>
                       <div id="studio-dw-batch-scenes" class="studio-dw-scene-list"></div>
                     </div>
                     <details id="studio-dw-write-context" class="studio-dw-source-preview">
@@ -2228,11 +2229,10 @@
                       <div id="studio-dw-undo" class="studio-dw-undo hidden"><span id="studio-dw-undo-label">Project Overview updated</span><button id="studio-dw-undo-button" type="button">Revert latest Overview update…</button></div>
                     </details>
                   </section>
-                  <section class="studio-dw-readiness" aria-label="Director suggestions">
-                    <div id="studio-dw-suggestion-heading" class="studio-dw-readiness-heading"><strong>Suggested next step</strong><small id="studio-dw-readiness-freshness" role="status" aria-live="polite">Not assessed yet</small></div>
-                    <div id="studio-dw-suggestions" class="studio-dw-suggestions"><p>Keep developing the idea. Director will suggest the next useful revision.</p></div>
+                  <section class="studio-dw-readiness" aria-label="Director assessment">
                     <details class="studio-dw-assessment-details">
-                      <summary>Creative assessment details</summary>
+                      <summary>Assessment</summary>
+                      <small id="studio-dw-readiness-freshness" role="status" aria-live="polite">No assessment</small>
                       <div id="studio-dw-readiness-list" class="studio-dw-readiness-list"><p>No assessment details yet.</p></div>
                     </details>
 
@@ -2449,6 +2449,10 @@
                     <input id="studio-scene-draft-title" type="text" placeholder="Untitled Scene">
                     <label for="studio-scene-draft-summary">What happens <small>(editable Scene intent)</small></label>
                     <textarea id="studio-scene-draft-summary" rows="6" placeholder="A single clear, renderable moment…"></textarea>
+                    <div id="studio-scene-draft-prompt-row" class="hidden">
+                        <label for="studio-scene-draft-prompt">H3 Prompt <small>(editable)</small></label>
+                        <textarea id="studio-scene-draft-prompt" rows="12" placeholder="Full H3 production prompt…"></textarea>
+                    </div>
                     <label for="studio-scene-draft-placement">Place the new Scene</label>
                     <select id="studio-scene-draft-placement" aria-label="New Scene placement"></select>
                     <p id="studio-scene-draft-error" class="studio-scene-draft-error" aria-live="polite"></p>

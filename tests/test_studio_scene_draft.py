@@ -39,6 +39,26 @@ def test_create_tentative_scene_without_prompt_or_ghosts(isolated_storyboard):
     assert storyboard_store.load_story(project["id"])["sceneOrder"] == [created["id"]]
 
 
+def test_complete_authored_scene_saves_title_intent_and_prompt_together(isolated_storyboard):
+    client = isolated_storyboard
+    project = storyboard_store.create_story({"title": "Complete scene"})
+    prompt = "integrated_multimodal_description:\n[Shot 1] A red kite arcs upward."
+    response = client.post("/fs/studio/director/scene-draft", json={
+        "storyId": project["id"],
+        "expectedUpdatedAt": project["updatedAt"],
+        "scene": {"title": "Red kite", "summary": "The kite takes flight.", "prompt": prompt},
+        "placement": "end",
+    })
+    assert response.status_code == 200
+    created = response.json["scene"]
+    assert created["title"] == "Red kite"
+    assert created["summary"] == "The kite takes flight."
+    assert created["prompt"] == prompt
+    assert created["takes"] == {}
+    saved = storyboard_store.load_story(project["id"])
+    assert saved["scenes"][created["id"]]["prompt"] == prompt
+
+
 def test_insert_before_and_after_using_stable_scene_ids(isolated_storyboard):
     client = isolated_storyboard
     project = storyboard_store.create_story({"title": "Placement"})
@@ -74,7 +94,7 @@ def test_reject_missing_placement_or_unexpected_fields(isolated_storyboard):
     unexpected = client.post("/fs/studio/director/scene-draft", json={
         "storyId": project["id"],
         "expectedUpdatedAt": project["updatedAt"],
-        "scene": {"title": "", "summary": "A", "prompt": "Sneaked in"},
+        "scene": {"title": "", "summary": "A", "unexpected": "Not a Scene field"},
         "placement": "end",
     })
     assert unexpected.status_code == 400

@@ -333,14 +333,17 @@
     el('director-chat-save-status').classList.toggle('hidden', contextual);
     if (contextual) {
       el('director-chat-history-toggle').setAttribute('aria-expanded', 'false');
-      el('director-chat-history-panel').classList.add('hidden');
+      if (el('director-chat-history-panel').open) el('director-chat-history-panel').close();
     }
-    el('director-chat-clear').textContent = context ? 'New QA chat' : 'New chat';
+    el('director-chat-clear').textContent = context ? 'New QA chat' : studio ? 'New conversation' : 'New chat';
     var drawer = el('director-chat-drawer');
     drawer.classList.toggle('studio-director', studio);
     el('app-frame').classList.toggle('studio-director-active', studio && state.open);
-    el('director-chat-title').textContent = studio ? 'Studio Director' :
+    drawer.setAttribute('aria-label', studio ? 'Projects Director' : 'Assistant');
+    el('director-chat-title').textContent = studio ? studioWorkingStoryLabel() :
       (context ? 'Ask QA' : 'Assistant');
+    el('director-chat-close').textContent = studio ? 'Project editor' : '×';
+    el('director-chat-close').setAttribute('aria-label', studio ? 'Return to Project editor' : 'Close Assistant');
     el('director-studio-starters').classList.toggle('hidden', !studio);
     el('director-chat-empty-title').textContent = studio ? "Let's make something" :
       (context ? 'Discuss this recommendation' : 'Your conversation');
@@ -361,8 +364,7 @@
     if (description) {
       description.textContent = studio
         ? (state.attachmentPending ? 'Connecting Project…'
-          : 'Write destination: ' + (state.studioStoryAccess ? studioWorkingStoryLabel() : 'Not selected') +
-            (state.workshop ? ' · Scene: ' + state.workshop.sceneTitle : ''))
+          : (state.workshop ? 'Scene · ' + state.workshop.sceneTitle : ''))
         : (active ? String(active.description || active.label || '') : 'Saved Assistant conversation');
     }
     if (input) {
@@ -474,9 +476,29 @@
     }
   }
 
+  function conversationTitle(messages) {
+    for (var message of messages) {
+      if (message.role !== 'user' || message.content.includes('[WEBCAP APPLIED FIELD VALUES]')) continue;
+      var text = message.content.split('[WEBCAP EXPLICIT READ]')[0].trim();
+      if (!text || text === 'Read the selected saved context and acknowledge receipt.') continue;
+      return text.replace(/\s+/g, ' ').slice(0,72);
+    }
+    return 'New chat';
+  }
+
+  function historyDisplayTitle(chat) {
+    // Older auto-titles captured the protocol instead of the author's subject.
+    // Keep stored titles intact, including deliberate renames.
+    if (/^Read the selected saved context and acknowledge receipt\./.test(chat.title))
+      return chat.projectTitle ? chat.projectTitle + ' · context' : 'Project context';
+    if (chat.title === 'New chat') return 'New conversation';
+    return chat.title;
+  }
+
   function upsertSessionSummary(chat) {
     var summary = {
       id: chat.id, mode: chat.mode, title: chat.title,
+      projectTitle: chat.storyAccess ? chat.storyAccess.label : '',
       createdAt: chat.createdAt, updatedAt: chat.updatedAt, revision: chat.revision
     };
     state.sessionList = state.sessionList.filter(function (item) { return item.id !== chat.id; });
@@ -490,8 +512,6 @@
     var button = el('director-chat-history-toggle');
     var panel = el('director-chat-history-panel');
     if (!list || !button || !panel) return;
-    var expanded = button.getAttribute('aria-expanded') === 'true';
-    panel.classList.toggle('hidden', !expanded);
     list.replaceChildren();
     if (!state.sessionList.length) {
       var empty = document.createElement('p');
@@ -507,14 +527,20 @@
       var open = document.createElement('button');
       open.type = 'button';
       open.className = 'review-captions-btn';
-      open.textContent = (chat.mode === 'storyboard' ? 'Storyboard · ' : '') + chat.title;
-      open.title = chat.title + ' · ' + new Date(chat.updatedAt).toLocaleString();
+      var title = document.createElement('strong');
+      title.textContent = historyDisplayTitle(chat);
+      var meta = document.createElement('span');
+      meta.className = 'director-chat-history-meta';
+      meta.textContent = [chat.projectTitle || (chat.mode === 'storyboard' ? 'Projects' : 'Chat'),
+        new Date(chat.updatedAt).toLocaleString()].join(' · ');
+      open.append(title,meta);
+      open.title = historyDisplayTitle(chat);
       open.onclick = function () { selectSession(chat.id); };
       item.appendChild(open);
 
       var rename = document.createElement('button');
       rename.type = 'button';
-      rename.className = 'review-captions-btn';
+      rename.className = 'review-captions-btn director-chat-history-secondary';
       rename.textContent = 'Rename';
       rename.title = 'Rename conversation';
       rename.onclick = function () {
@@ -546,7 +572,7 @@
 
       var remove = document.createElement('button');
       remove.type = 'button';
-      remove.className = 'review-captions-btn';
+      remove.className = 'review-captions-btn director-chat-history-secondary';
       remove.textContent = 'Delete';
       remove.title = 'Permanently delete this saved conversation';
       remove.onclick = function () { deleteSession(chat.id); };
@@ -577,8 +603,7 @@
     var readiness = mode === 'storyboard' ? state.studioReadiness : null;
     var title = state.sessionByMode[mode] ? state.sessionByMode[mode].title : 'New chat';
     if (title === 'New chat') {
-      var first = messages.find(function (message) { return message.role === 'user' && message.content.trim(); });
-      if (first) title = first.content.replace(/\s+/g, ' ').trim().slice(0, 72);
+      title = conversationTitle(messages);
     }
     state.sessionDirty[mode] = false;
     showSessionStatus('Saving…', false);
@@ -713,6 +738,7 @@
     }).then(function (result) {
       state.activeMode = result.chat.mode;
       restoreSession(result.chat);
+      if (el('director-chat-history-panel').open) el('director-chat-history-panel').close();
       finishProgress(null);
       syncModeUi();
     }).catch(showSessionFailure).finally(function () {
@@ -1110,16 +1136,40 @@
     setProgressVisible(false);
   }
 
+  function studioReplyText(content) {
+    return String(content || '').replace(/^\s*RECEIVED:\s*(?:project\.\w+|scene:[\w-]+:\w+)(?:[ \t]*,[ \t]*(?:project\.\w+|scene:[\w-]+:\w+))*[ \t]*[.;]?[ \t]*(?:\r?\n)?/i, '').trim();
+  }
+
+  function placeStudioSuggestion(node) {
+    node.classList.add('hidden');
+    var messages = currentMessages(), latest = messages[messages.length - 1];
+    var row = el('director-chat-messages').lastElementChild;
+    if (state.activeMode === 'storyboard' && latest && latest.role === 'assistant' &&
+        row && node.children.length) {
+      row.appendChild(node);
+      node.classList.remove('hidden');
+    }
+  }
+
   function renderMessages() {
     var host = el('director-chat-messages');
     var empty = el('director-chat-empty');
     if (!host || !empty) return;
 
+    // Preserve the workbench-owned action while rebuilding message rows.
+    var suggestion = el('studio-dw-suggestions');
+    host.before(suggestion);
+    suggestion.classList.add('hidden');
     host.innerHTML = '';
     empty.classList.toggle('hidden', currentMessages().length > 0);
 
     currentMessages().forEach(function (message, index) {
-      if (state.activeMode === 'storyboard' && message.role === 'assistant' && !String(message.content || '').trim())
+      var studioReply = state.activeMode === 'storyboard' && message.role === 'assistant';
+      var previous = currentMessages()[index-1];
+      var readReceipt = studioReply && previous && previous.role === 'user' &&
+        previous.content.includes('[WEBCAP EXPLICIT READ]');
+      var visibleText = studioReply ? studioReplyText(message.content) : message.content;
+      if (studioReply && !visibleText.trim() && !readReceipt)
         return;
       var row = document.createElement('div');
       row.className = 'director-chat-message director-chat-message-' + message.role;
@@ -1132,17 +1182,17 @@
 
       var body = document.createElement('div');
       body.className = 'director-chat-message-body';
-      body.textContent = message.content;
-      if (state.activeMode === 'storyboard' && message.role === 'assistant' && message.content.length > 1200) {
+      body.textContent = visibleText;
+      if (studioReply && visibleText.length > 1200) {
         var preview = document.createElement('div');
         preview.className = 'director-chat-reply-preview';
-        var opening = message.content.split(/\n\s*\n/)[0];
+        var opening = visibleText.split(/\n\s*\n/)[0];
         preview.textContent = opening.length > 480 ? opening.slice(0,480).replace(/\s+\S*$/, '') + '…' : opening;
         var fullReply = document.createElement('details'), fullHeading = document.createElement('summary'),
           fullText = document.createElement('div');
         fullReply.className = 'director-chat-long-reply';
         fullHeading.textContent = 'Full Director reply';
-        fullText.textContent = message.content;
+        fullText.textContent = visibleText;
         fullReply.append(fullHeading,fullText);
         body.replaceChildren(preview,fullReply);
       }
@@ -1163,7 +1213,14 @@
       }
 
       row.appendChild(label);
-      row.appendChild(body);
+      if (readReceipt) {
+        var receipt = document.createElement('span');
+        receipt.className = 'director-chat-context-receipt';
+        receipt.textContent = '✓ Context supplied';
+        receipt.title = 'Saved Project material supplied with this request. Full response is available in I/O.';
+        row.appendChild(receipt);
+      }
+      if (body.textContent || body.children.length) row.appendChild(body);
       var elapsedMap = currentElapsedMap();
       var metricsMap = currentMetricsMap();
       if (message.role === 'assistant' && Object.prototype.hasOwnProperty.call(elapsedMap, index)) {
@@ -1175,6 +1232,7 @@
       host.appendChild(row);
     });
 
+    placeStudioSuggestion(suggestion);
     host.scrollTop = host.scrollHeight;
   }
 
@@ -1452,7 +1510,7 @@
 
   function studioWorkingStoryLabel() {
     var storyId = studioAttachedStoryId();
-    if (!storyId) return 'New Project';
+    if (!storyId) return window.getStudioDirectorNavigation().projectTitle || 'New Project';
     if (state.studioStoryAccess && state.studioStoryAccess.storyId === storyId) {
       return String(state.studioStoryAccess.label || storyId);
     }
@@ -2374,6 +2432,10 @@
       'A tentative Scene. No prompt, Takes or generation job will be created.';
     el('studio-scene-draft-title').value = proposal.title;
     el('studio-scene-draft-summary').value = proposal.summary;
+    var includesPrompt = Object.prototype.hasOwnProperty.call(proposal, 'prompt');
+    el('studio-scene-draft-prompt-row').classList.toggle('hidden', !includesPrompt);
+    el('studio-scene-draft-prompt').value = includesPrompt ? proposal.prompt : '';
+    el('studio-scene-draft-apply').textContent = includesPrompt ? 'Create Scene' : 'Create tentative Scene';
     el('studio-scene-draft-error').textContent = '';
     var placement = el('studio-scene-draft-placement');
     placement.replaceChildren();
@@ -2500,6 +2562,9 @@
     if (!proposal || state.pending) return;
     var title = el('studio-scene-draft-title').value.trim();
     var summary = el('studio-scene-draft-summary').value.trim();
+    var reviewedScene = {title: title, summary: summary};
+    if (Object.prototype.hasOwnProperty.call(proposal, 'prompt'))
+      reviewedScene.prompt = el('studio-scene-draft-prompt').value;
     var placementValue = el('studio-scene-draft-placement').value.split('|');
     var placement = placementValue[0];
     var relativeSceneId = placementValue[1] || '';
@@ -2521,7 +2586,7 @@
         body: JSON.stringify({
           storyId: proposal.storyId,
           expectedUpdatedAt: proposal.expectedUpdatedAt,
-          scene: { title: title, summary: summary },
+          scene: reviewedScene,
           placement: placement,
           relativeSceneId: relativeSceneId
         })
@@ -2534,13 +2599,15 @@
       state.studioSceneProposal = null;
       el('studio-scene-draft-review').close();
       var index = payload.story.sceneOrder.indexOf(created.id) + 1;
-      var receipt = 'Created tentative Scene ' + index + (title ? ' · ' + title : '') +
+      var receipt = 'Created Scene ' + index + (title ? ' · ' + title : '') +
         ' in ' + (proposal.storyTitle || proposal.storyId) +
-        '. Its intent is saved; the production prompt and Takes remain empty.';
+        (created.prompt ? '. Intent and H3 Prompt saved; Takes remain empty.'
+          : '. Intent saved; the H3 Prompt and Takes remain empty.');
       recordStudioOperation('scene.create', receipt, proposal.storyId, [created.id]);
       studioActionStatus(receipt, false);
       return window.studioDirectorBridge.recordApplied('scene.create',payload.story,{
-        scenes:[{id:created.id,title:created.title,summary:created.summary}]
+        scenes:[{id:created.id,title:created.title,summary:created.summary,
+          ...(created.prompt ? {prompt:created.prompt} : {})}]
       }).catch(function (error) {
         studioActionStatus(receipt + ' Conversation receipt could not be saved: ' + String(error.message || error), true);
       }).then(function () {
@@ -2768,8 +2835,7 @@
       var outbound = [{role:'system', content:''}].concat(messages.map(function (message) {
         return {role:message.role,content:message.content};
       })); // Persisted inspection metadata is not part of the LLM conversation.
-      // Conversation context is opt-in. The workbench state only tells Director
-      // what WebCap can review next; it is not a fresh Story or Scene attachment.
+      // Navigation and destination identity convey no saved creative material.
       var storyRefs = Object.keys(state.storyboardAttachments || {}).filter(function (key) {
         return key.indexOf('story:') === 0;
       });
@@ -2780,14 +2846,16 @@
         : storyRefs.length === 1
           ? 'A legacy historical Story snapshot exists in history (' + storyRefs[0].slice(6) + '), but it has not been automatically resent.'
           : 'No saved Project Write destination has been selected. Prior explicitly Read content may still exist in conversation history.';
+      var navigation = window.getStudioDirectorNavigation();
       outbound[0] = { role: 'system', content: payload.system +
         '\n\nCURRENT WEBCAP CAPABILITIES (available vs planned):\n' + capabilities +
         '\n\nSTUDIO WORKBENCH STATE (controls, not saved Story facts):\n' + workbench +
+        '\nCURRENT PROJECT NAVIGATION (identity and one-based Scene positions only; creative material is supplied through explicit Read):\n' + JSON.stringify(navigation) +
         (explicitWrite
           ? '\nEXPLICIT REVIEWED WRITE: The author has already chosen to draft. Produce the requested complete editable proposal in the format specified by the current request. This is a draft for review, not a conversational suggestion. Only WebCap Apply saves changes.\n'
           : '\nFor the current author goal, suggest at most one useful next step from the listed capabilities: ' +
             'an explicit Read, an appropriately scoped reviewed Write, or an author-operated Studio action. ' +
-            'Continue developing the idea when a change is not yet useful. ' +
+            'Fulfil the author’s request in conversation, including drafting complete material when asked. ' +
             'Treat proposed work as unsaved until WebCap confirms Apply.\n') +
         outbound[0].content };
       if (includePromptContract) outbound[0].content +=
@@ -2798,39 +2866,28 @@
 
   function studioDirectorChatRequestMessages(messages) {
     // Studio conversation needs the same authoritative H3 prompt template as Write.
-    // It is reference knowledge here, not permission to draft or save a Prompt.
+    // Drafting is conversation; saving still requires reviewed Apply.
     return studioDirectorRequestMessages(messages, true).then(function (outbound) {
-      outbound[0].content += '\n\nCONTEXT DELIVERY: Use only the saved fields explicitly supplied by Read. ' +
-        'When an explicit Read supplies saved fields, briefly confirm the context you received in natural language. ' +
-        'Then answer the author’s explicit question, if any; a context-only Read needs just that confirmation. ' +
-        'Applied field values supersede earlier snapshots. ' +
-        'RESPONSE CONTRACT: Return JSON matching the supplied reply/readiness schema. ' +
-        'For ordinary conversation, prefer 1-3 concise sentences; contribute a concrete visual ' +
-        'or prompting idea when useful, and ask a question only when a consequential choice needs the author. ' +
-        'When the author explicitly asks for full draft text, ' +
-        'a complete H3 Prompt, or detailed material, include the requested content in full in reply. ' +
-        'When an authored field is complete, also supply its reusable capture when possible. ' +
-        'Keep readiness light: normally checks=[], readHints=[], writeHint="", writeFields=[], sceneId="". ' +
-        'Use a readiness hint only when it provides a useful next action. ' +
-        'Recommend the creative unit: project revises the Project Overview; scenes writes or revises a coherent Scene, considering its Title, Intent and H3 Prompt together. ' +
-        'Write hints are new-project, project or scenes; writeFields describes likely changed parts as advisory metadata, not a separate creative workflow ' +
-        '(project: title/concept/style/invariants; scenes: title/summary/prompt). ' +
-        'Use the exact known saved sceneId for an existing Scene, otherwise empty. ' +
-        'Scene numbers are one-based positions in the current Project. When the discussion clearly identifies a specific existing Scene by number, set sceneNumber to it (otherwise 0); WebCap resolves it to an actual saved Scene. ' +
-        'When the selected Write scene differs from the intended Scene, recommend the intended one instead of trusting incidental UI state. ' +
-        'If assessment is genuinely useful, provide at most two concise checks with a valid name and scope. ' +
-        'For Read recommendations use only known field identifiers, such as project.concept, ' +
-        'project.style, project.invariants or scene.current.prompt. ' +
-        'OPTIONAL CREATIVE CAPTURE: When a complete agreed field has been developed in conversation, ' +
-        'include one capture matching the supplied schema, with its full content. ' +
-        'When telling the author a single new Scene is ready for review, include field=scene, a working title, ' +
-        'sceneId="", and content containing its complete observable Scene Intent. ' +
-        'A tentative Scene capture needs no H3 Prompt; WebCap can review and insert it directly. ' +
-        'When a Scene still needs synthesis or several Scenes need drafting, recommend Write as the drafting step. ' +
-        'For an existing Scene capture use its exact saved ID. ' +
-        'For an Invariant use kind/title and beforeKind/beforeTitle only for an exact known rename or edit. ' +
-        'Capture an already-complete field when the remaining unit stays appropriate; use reviewed unit Write when multiple parts need alignment. WebCap selects and validates the save target ' +
-        'and opens editable review before Apply. Keep assessment metadata in readiness and conversation in reply.\n';
+      outbound[0].content += '\n\nRESPONSE CONTRACT: Return JSON matching the reply/readiness schema.\n' +
+        'CONTEXT: Navigation supplies Project and Scene identity, not their creative content. ' +
+        'For an existing Scene revision, first use its saved text supplied by explicit Read. ' +
+        'When that text is missing, ask to Read Project and set readHints=["project.concept"], capture=null. ' +
+        'A Read-only request needs a brief natural acknowledgement; answer any question included with Read. ' +
+        'Applied values supersede earlier snapshots.\n' +
+        'REPLY: Discuss concepts in 1-3 concise sentences. Ask one focused question only for a consequential missing decision. ' +
+        'When asked to write, revise or paste a prompt, deliver the actual complete text in reply on this turn, using the H3 template and Scene duration. ' +
+        'Writing a Scene means a useful title and a full H3 Prompt. An Intent alone is an outline. ' +
+        'Name user actions in plain language: Read Project, Review Scene, Apply. ' +
+        'Drafting is conversation; only reviewed Apply saves.\n' +
+        'READINESS: Usually checks=[], readHints=[], writeHint="", writeFields=[], sceneId="", sceneNumber=0, capture=null. ' +
+        'Suggest at most one useful next action. Use new-project, project or scenes for Write. ' +
+        'writeFields names affected fields; Scene numbers are one-based. Use bare Scene IDs from navigation.sceneOrder. ' +
+        'Default to the current Project, respecting an explicit author-selected destination. Assess only supplied material, with at most two useful checks.\n' +
+        'CAPTURE: Use null for discussion, questions, outlines and work still to be drafted. ' +
+        'When reply contains an authored prompt for an existing Scene, use capture.field="prompt" and its saved sceneId to offer Review Scene without another LLM call. ' +
+        'For other complete fields use the matching capture schema. A new Scene uses field="scene", title and content as its Intent; ' +
+        'also include prompt when a full H3 Prompt was authored in conversation. An Intent-only Scene is still a useful draft. ' +
+        'For an Invariant use its kind/title, with beforeKind/beforeTitle for an exact known edit.\n';
       return outbound;
     });
   }
@@ -3270,6 +3327,13 @@
     inputHistoryDraft = '';
 
     if (activeChatMode === 'storyboard') {
+      // An explicit message starts work in the open Project. Retain that
+      // destination across reloads without attaching any creative field values.
+      if (!studioAttachedStoryId()) {
+        var navigation = window.getStudioDirectorNavigation();
+        if (navigation.projectId)
+          state.studioStoryAccess = {storyId:navigation.projectId,label:navigation.projectTitle};
+      }
       state.storyGuidelineProposal = null;
       state.workshopProposal = null;
       state.studioSceneProposal = null;
@@ -3347,7 +3411,7 @@
       }).then(function (result) {
         if (activeChatMode === 'storyboard') state.lastStudioIoRaw = String(result.text || '');
         var studioResponse = activeChatMode === 'storyboard' ? parseStudioChatResponse(result.text) : null;
-        var assistantText = studioResponse ? studioResponse.reply.replace(/^\s*RECEIVED:[^\r\n]*(?:\r?\n)?/i, '').trim() : String(result.text || '');
+        var assistantText = studioResponse ? studioResponse.reply : String(result.text || '');
         if (activeChatMode === 'storyboard' && state.pendingReadAck) {
           var fieldCount = state.pendingReadAck.length;
           state.pendingReadAck = null;
@@ -3359,6 +3423,8 @@
         }
         if (studioResponse) {
           try {
+            // Conversation stays useful even when a suggested capture and visible reply differ.
+            // Every capture still requires editable human Review before Apply.
             if (!window.studioDirectorWorkbench.updateReadiness(studioResponse.readiness))
               throw new Error('Director readiness did not match the expected contract.\nRaw structured response:\n' + result.text);
             // Assessment is metadata, not another user-visible success card.
@@ -3444,6 +3510,7 @@
     }
 
     drawer.classList.toggle('hidden', !state.open);
+    el('app-frame').classList.toggle('studio-director-active', state.open && state.activeMode === 'storyboard');
     drawer.setAttribute('aria-hidden', state.open ? 'false' : 'true');
     toggle.classList.toggle('active', state.open);
     toggle.setAttribute('aria-expanded', state.open ? 'true' : 'false');
@@ -3467,7 +3534,7 @@
 
   function studioDirectorOpenIo() {
     var dialog = el('studio-director-io-dialog'), chooser = el('studio-director-io-exchange');
-    var responses = currentMessages().filter(function(m){return m.role === 'assistant' && m.rawResponse;});
+    var responses = currentMessages().filter(function(m){return m.role === 'assistant';});
     if (state.lastStudioIoError && state.lastStudioIoRaw)
       responses.push({content:'Failed response',rawResponse:state.lastStudioIoRaw});
     chooser.replaceChildren();
@@ -3480,14 +3547,14 @@
     var chosenCapture = null;
     function render() {
       var item = responses[Number(chooser.value)];
-      var raw = item ? String(item.rawResponse) : '';
+      var raw = item ? String(item.rawResponse || item.content) : '';
       chosenCapture = null;
       try { chosenCapture = JSON.parse(raw).readiness?.capture || null; }
       catch(error) { chosenCapture = null; }
       el('studio-director-io-review').classList.toggle('hidden', !chosenCapture);
       el('studio-director-io-raw').textContent = raw || 'No model response recorded yet.';
       var parsed;
-      try { parsed = raw ? JSON.stringify(JSON.parse(raw),null,2) : 'No response to parse.'; }
+      try { parsed = item && !item.rawResponse ? raw : raw ? JSON.stringify(JSON.parse(raw),null,2) : 'No response to parse.'; }
       catch(error) { parsed = 'Response could not be parsed: ' + error.message; }
       el('studio-director-io-parsed').textContent = parsed;
     }
@@ -3541,7 +3608,11 @@
       else setOpen(true, 'chat');
     };
     pin.onclick = function () { setPinned(!state.pinned); };
-    close.onclick = function () { setOpen(false); };
+    close.onclick = function () {
+      var studio = state.activeMode === 'storyboard';
+      setOpen(false);
+      if (studio) el('storyboard-open-director').focus();
+    };
     clear.onclick = newChat;
     contextRefresh.onclick = function () {
       var mode = activeContextMode();
@@ -3607,10 +3678,15 @@
     el('studio-scene-draft-close').onclick = function () { el('studio-scene-draft-review').close(); };
     el('studio-scene-draft-apply').onclick = applyStudioSceneDraft;
     el('director-chat-history-toggle').onclick = function () {
-      var button = el('director-chat-history-toggle');
-      button.setAttribute('aria-expanded', button.getAttribute('aria-expanded') === 'true' ? 'false' : 'true');
       renderSessionHistory();
+      el('director-chat-history-toggle').setAttribute('aria-expanded','true');
+      el('director-chat-history-panel').showModal();
     };
+    el('director-chat-history-close').onclick = function () {el('director-chat-history-panel').close();};
+    el('director-chat-history-panel').addEventListener('close',function () {
+      el('director-chat-history-toggle').setAttribute('aria-expanded','false');
+      el('director-chat-history-toggle').focus();
+    });
     send.onclick = sendMessage;
     el('studio-director-inspect').onclick = studioDirectorOpenIo;
     el('studio-director-io-close').onclick = function(){el('studio-director-io-dialog').close();};
@@ -3773,12 +3849,13 @@
       }
     });
     document.addEventListener('pointerdown', function (event) {
-      if (!state.open || state.pinned || document.querySelector('dialog[open]') ||
+      if (!state.open || state.activeMode === 'storyboard' || state.pinned || document.querySelector('dialog[open]') ||
           drawer.contains(event.target) || toggle.contains(event.target)) return;
       setOpen(false);
     });
     window.addEventListener('keydown', function (event) {
-      if (event.key === 'Escape' && state.open && !document.querySelector('dialog[open]')) setOpen(false);
+      if (event.key === 'Escape' && state.open && state.activeMode !== 'storyboard' &&
+          !document.querySelector('dialog[open]')) setOpen(false);
     });
 
     window.addEventListener('beforeunload', function (event) {
@@ -3797,6 +3874,7 @@
   }
 
   window.studioDirectorBridge = {
+    placeSuggestedAction: placeStudioSuggestion,
     canReview: function () {
       return state.open && state.activeMode === 'storyboard' && state.sessionReady &&
         !state.pending && !state.attachmentPending;
@@ -3806,7 +3884,7 @@
       return state.open && state.activeMode === 'storyboard' && state.sessionReady &&
         !state.pending && !state.attachmentPending && !!state.modelId;
     },
-    workingStoryId: studioAttachedStoryId,
+    workingStoryId: function () { return studioAttachedStoryId() || window.getStudioDirectorNavigation().projectId; },
     modelId: function () { return state.modelId; },
     messages: function () {
       return (state.modeMessages.storyboard || []).map(function (message) {
@@ -3961,7 +4039,8 @@
           storyId:storyId, storyTitle:story.title, expectedUpdatedAt:story.updatedAt,
           sceneOrder:(story.sceneOrder || []).slice(), scenes:story.scenes,
           title:capture.title, summary:capture.content,
-          rationale:'Director developed this Scene Intent in conversation. Select a position and review.',
+          ...(typeof capture.prompt === 'string' ? {prompt:capture.prompt} : {}),
+          rationale:'Director developed this Scene in conversation. Review the fields and position before saving.',
           placement:'end'
         };
         showStudioSceneDraftReview();

@@ -37,7 +37,7 @@ test('Read and the optional coherence utility stay separate from creative Write'
 });
 
 test('ordinary replies prioritize short exchanges rather than full assessments', () => {
-  assert.match(chat, /Keep readiness light: normally checks=\[\]/);
-  assert.match(chat, /Keep readiness light: normally checks=\[\], readHints=\[\]/);
+  assert.match(chat, /Usually checks=\[\], readHints=\[\]/);
+  assert.match(chat, /Use null for discussion, questions, outlines/);
   assert.match(backend, /normally 1-3 sentences in one short paragraph/);
 });

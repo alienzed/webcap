@@ -162,7 +162,7 @@
     if (details.open && readStory) el('studio-dw-read-preview-data').textContent =
       JSON.stringify(readPayload(readStory, keys), null, 2);
   }
-  function readSend() {
+  function readSend(instruction) {
     var id = el('studio-dw-read-project').value, keys = selectedPaths();
     if (!id || !keys.length) { status('Choose a Project and at least one field.', true); return; }
     if (!window.studioDirectorBridge.isReady()) { status(window.studioDirectorBridge.readinessMessage(), true); return; }
@@ -172,7 +172,7 @@
     loadStory(id).then(function (story) {
       var payload = readPayload(story, keys);
       el('studio-dw-read-preview-data').textContent = JSON.stringify(payload, null, 2);
-      window.studioDirectorBridge.sendRead(payload, keys);
+      window.studioDirectorBridge.sendRead(payload, keys, typeof instruction === 'string' ? instruction : undefined);
       lastReadSource = story.id;
       status('Selected fields sent. Awaiting Director’s own acknowledgment.', false);
       el('studio-dw-read-panel').classList.add('hidden');
@@ -248,7 +248,7 @@
     ].filter(Boolean).join(' ');
     var mode = !el('studio-dw-read-panel').classList.contains('hidden') ? 'Read' :
       !el('studio-dw-write-panel').classList.contains('hidden') ? 'Write' : '';
-    el('studio-dw-heading').textContent = mode ? mode + ' · Director' : 'Director actions';
+    el('studio-dw-heading').textContent = 'Advanced';
     el('studio-dw-heading').title = mode === 'Read'
       ? 'Explicit source · nothing sent until Send'
       : mode === 'Write' ? 'Reviewed destination · nothing saved until Apply'
@@ -858,13 +858,18 @@
   }
   function readRecommendedProject() {
     var id = window.studioDirectorBridge.workingStoryId() || activeTarget().storyId;
+    var requests = window.studioDirectorBridge.messages().filter(function (message) {
+      return message.role === 'user' && !message.content.includes('[WEBCAP EXPLICIT READ]') &&
+        !message.content.includes('[WEBCAP APPLIED FIELD VALUES]');
+    });
+    var instruction = requests.length ? requests[requests.length - 1].content : '';
     return refreshProjects().then(function () {
       el('studio-dw-read-project').value = id;
       return loadStory(id);
     }).then(function (story) {
       renderReadStory(story);
       selectEntireReadProject();
-      readSend();
+      readSend(instruction);
     }).catch(function (error) { status('Project Read failed: ' + error.message, true); });
   }
   function writeActionLabel() {
@@ -941,6 +946,29 @@
     });
   }
   window.studioDirectorWorkbench = {
+    sceneRead: function (story, sceneId) {
+      if (!story || !story.sceneOrder.includes(sceneId)) throw new Error('Select a saved Scene in this Project.');
+      var keys = projectFields.map(function (field) {return 'project.' + field;})
+        .concat(['title','summary','prompt','durationSeconds'].map(function (field) {return 'scene:' + sceneId + ':' + field;}));
+      return {payload:readPayload(story, keys), keys:keys,
+        label:'Scene ' + (story.sceneOrder.indexOf(sceneId) + 1) + ' · ' + (story.scenes[sceneId].title || 'Untitled')};
+    },
+    applyScenePrompt: function (story, sceneId, prompt) {
+      if (typeof prompt !== 'string' || !prompt.trim()) throw new Error('Director returned an empty Scene prompt.');
+      return window.flushStudioDirectorStoryEdits(story.id).then(function () {
+        return api('/fs/studio/director/scene-fields', {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({storyId:story.id, sceneId:sceneId,
+            expected:{prompt:story.scenes[sceneId].prompt || ''}, changes:{prompt:prompt}})
+        });
+      }).then(function (result) {
+        return window.refreshStudioDirectorStoryIfOpen(story.id).then(function () {
+          return window.studioDirectorBridge.recordApplied('scene.director.revision',result.story,{
+            sceneId:sceneId, savedFields:{prompt:result.scene.prompt}
+          });
+        });
+      });
+    },
     setStatus:status,
     markSavedFields:function(selected,story){
       if (!story || !story.id) throw new Error('Field update feedback needs the saved Project identity.');

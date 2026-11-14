@@ -10,6 +10,7 @@ from tool.server.app import app
 @pytest.fixture
 def isolated_storyboard(tmp_path, monkeypatch):
     monkeypatch.setattr(app_config, "output_root", lambda: tmp_path)
+    monkeypatch.setattr(app_config, "app_state_root", lambda: tmp_path / "app_state")
     return app.test_client()
 
 
@@ -209,7 +210,8 @@ def test_multi_scene_insert_at_start_between_and_end(isolated_storyboard):
     def apply(current, placement, relative=""):
         return client.post("/fs/studio/director/scenes-draft", json={
             "storyId": current["id"], "expectedSceneOrder": current["sceneOrder"],
-            "scenes": [{"title": "", "summary": "Proposed A"}, {"title": "B", "summary": "Proposed B"}],
+            "scenes": [{"title": "A", "summary": "Proposed A", "prompt": "Complete prompt A", "durationSeconds": 8},
+                       {"title": "B", "summary": "Proposed B", "prompt": "Complete prompt B", "durationSeconds": 10}],
             "placement": placement, "relativeSceneId": relative,
         })
     middle = apply(second, "after", original_order[0])
@@ -218,7 +220,10 @@ def test_multi_scene_insert_at_start_between_and_end(isolated_storyboard):
     middle_ids = [scene["id"] for scene in middle.json["scenes"]]
     assert middle_story["sceneOrder"] == [original_order[0], *middle_ids, original_order[1]]
     assert middle_story["scenes"][original_order[0]]["prompt"] == "Preserve me"
-    assert all(middle_story["scenes"][id]["prompt"] == "" for id in middle_ids)
+    assert [middle_story["scenes"][id]["prompt"] for id in middle_ids] == ["Complete prompt A", "Complete prompt B"]
+    assert [middle_story["scenes"][id]["durationSeconds"] for id in middle_ids] == [8, 10]
+    assert all(middle_story["scenes"][id]["takes"] == {} for id in middle_ids)
+    assert storyboard_store.load_story(story["id"])["scenes"][middle_ids[0]]["prompt"] == "Complete prompt A"
     begin = apply(middle_story, "start")
     assert begin.status_code == 200
     end = apply(begin.json["story"], "end")
@@ -261,7 +266,9 @@ def test_multi_scene_invalid_proposals_and_atomic_failure(isolated_storyboard, m
         "scenes": [{"title": "", "summary": "A"}, {"title": "", "summary": "B"}],
         "placement": "start", "relativeSceneId": "",
     }
-    for scenes in ([], [{"title": "", "summary": ""}], [{"title": "", "summary": "A", "prompt": "bad"}], data["scenes"] * 17):
+    for scenes in ([], [{"title": "", "summary": ""}], [{"title": "", "summary": "A", "prompt": ""}],
+                   [{"title": "", "summary": "A", "prompt": 7}],
+                   [{"title": "", "summary": "A", "durationSeconds": 0}], data["scenes"] * 17):
         response = client.post("/fs/studio/director/scenes-draft", json={**data, "scenes": scenes})
         assert response.status_code == 400
     def broken_writer(path, data):
@@ -289,6 +296,9 @@ def test_multi_scene_extract_schema_is_bounded(monkeypatch):
     assert schema["properties"]["scenes"]["maxItems"] == 32
     assert schema["properties"]["scenes"]["minItems"] == 1
     assert schema["additionalProperties"] is False
+    item = schema["properties"]["scenes"]["items"]
+    assert set(item["required"]) == {"title", "summary", "prompt", "durationSeconds"}
+    assert item["properties"]["prompt"]["minLength"] == 1
 
 
 def test_studio_brief_apply_is_field_scoped_and_undoable(isolated_storyboard):

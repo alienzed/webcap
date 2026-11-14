@@ -121,7 +121,7 @@ test('Read preview and outbound values use the same validated field serializer',
   assert.equal(result.fields[1].value,'Tense dialogue');
   assert.throws(()=>scope.readPayload(story,['scene:missing:summary']),/not in this Project/);
   assert.match(rail,/readPayload\(story, keys\)/);
-  assert.match(rail,/sendRead\(payload, keys\)/);
+  assert.match(rail,/sendRead\(payload, keys, typeof instruction === 'string' \? instruction : undefined\)/);
 });
 
 test('Read receipt uses delivery and response status, not model text parsing',()=>{

@@ -16,7 +16,7 @@ function part(start, end) {
   return source.slice(a, b);
 }
 
-test('Director occupies the Projects work area with an optional manual workbench', () => {
+test('Director overlays Projects as a resizable drawer with an optional manual workbench', () => {
   for (const id of [
     'director-chat-drawer', 'director-chat-messages', 'director-chat-input',
     'studio-director-workbench', 'studio-dw-read', 'studio-dw-write',
@@ -30,9 +30,10 @@ test('Director occupies the Projects work area with an optional manual workbench
   assert.match(css, /\.director-chat-drawer\.studio-director #director-studio-flow \{ display: none !important; \}/);
   assert.match(css, /studio-dw-actions/);
   assert.match(css, /font-size:16px/);
-  assert.match(css,/grid-area:workspace;position:relative;inset:auto/);
+  assert.match(css,/grid-area:2 \/ 1 \/ -1 \/ -1;position:absolute;inset:0 0 0 auto/);
   assert.match(css,/\.app-frame\.director-chat-pinned\.studio-director-active \{grid-template-columns:42px minmax\(0,1fr\)/);
-  assert.match(css,/\.studio-director-active > \.storyboard-workspace \{visibility:hidden;/);
+  assert.doesNotMatch(css,/\.studio-director-active > \.storyboard-workspace \{visibility:hidden;/);
+  assert.match(html,/aria-label="Resize Director"/);
   assert.match(html,/id="storyboard-open-director"/);
   assert.match(html,/id="studio-dw-open-tools"/);
 });
@@ -89,12 +90,12 @@ test('Studio prompting selects the current goal rather than steering every task 
   const assembled = await vm.runInContext(
     "studioDirectorChatRequestMessages([{role:'user',content:'Revise only the Scene action'}])",context);
   const system = assembled[0].content;
-  assert.match(system,/For the current author goal, suggest at most one useful next step/);
+  assert.match(system,/For a direct question, answer fully and finish without a workflow suggestion/);
   assert.match(system,/an explicit Read, an appropriately scoped reviewed Write, or an author-operated Studio action/);
   assert.doesNotMatch(system,/When choices are clear, offer to review Concept/);
   assert.match(system,/Ask one focused question only for a consequential missing decision/);
-  assert.match(system,/deliver the actual complete text in reply on this turn/);
-  assert.match(system,/use capture.field="prompt"/);
+  assert.match(system,/author its complete text in capture.content on this turn/);
+  assert.match(system,/one authored text for both chat and Review Scene/);
   assert.match(system,/"projectId":"p1","sceneOrder":\["scene-a"\]/);
   assert.match(system,/Usually checks=\[\], readHints=\[\]/);
   assert.match(system,/at most two useful checks/);
@@ -118,8 +119,8 @@ test('explicit Write guidance asks for the draft, not another conversational rec
     "studioDirectorRequestMessages([{role:'user',content:'Discuss Scene'}],false)",context);
   const writing = await vm.runInContext(
     "studioDirectorRequestMessages([{role:'user',content:'Revise Scene'}],false,true)",context);
-  assert.match(conversational[0].content,/suggest at most one useful next step/);
-  assert.doesNotMatch(writing[0].content,/suggest at most one useful next step/);
+  assert.match(conversational[0].content,/suggest at most one useful action/);
+  assert.doesNotMatch(writing[0].content,/suggest at most one useful action/);
   assert.match(writing[0].content,/EXPLICIT REVIEWED WRITE/);
   assert.match(writing[0].content,/Produce the requested complete editable proposal/);
   assert.equal(writing[1].content,'Revise Scene');
@@ -132,10 +133,11 @@ test('existing Project and Scene draft paths also use explicit Write guidance', 
     const marker = "showSentWriteContext('" + operation + "', messages)";
     const index = source.indexOf(marker);
     assert.ok(index !== -1, 'Missing draft operation: ' + operation);
-    const before = source.slice(Math.max(0, index - 850), index);
+    const before = source.slice(Math.max(0, index - 1400), index);
     const plain = "studioDirectorRequestMessages([{ role: 'user', content: JSON.stringify(input) }], false, true)";
+    const prompt = "studioDirectorRequestMessages([{ role: 'user', content: JSON.stringify(input) }], true, true)";
     const formatted = "studioDirectorRequestMessages([{ role: 'user', content: JSON.stringify(input, null, 2) }], false, true)";
-    assert.ok(before.includes(plain) || before.includes(formatted),
+    assert.ok(before.includes(plain) || before.includes(prompt) || before.includes(formatted),
       'Explicit Write guidance not used by ' + operation);
   }
 });
@@ -186,6 +188,7 @@ test('Read sends actual saved data and asks for a conversational confirmation', 
   const context = vm.createContext({
     state, Promise, String, JSON,
     el: id => {
+      if (id === 'director-chat-scene-context') return {classList:{add(){}}};
       assert.equal(id, 'director-chat-input');
       return composer;
     },
@@ -205,9 +208,15 @@ test('Read sends actual saved data and asks for a conversational confirmation', 
   assert.match(outgoing, /Please inspect this Project/);
   assert.match(outgoing, /\[WEBCAP EXPLICIT READ\]/);
   assert.match(outgoing, /A meaningful conversation/);
-  assert.match(outgoing, /Confirm the saved fields in your own words/);
-  assert.match(outgoing, /Address only any question explicitly asked above; otherwise stop after a brief confirmation/);
-  assert.equal(state.pendingReadAck.length, 2);
+  assert.match(outgoing, /Briefly acknowledge the supplied context, then fulfil the author request above/);
+  assert.match(outgoing, /For a context-only Read, stop after a brief confirmation/);
+  composer.value='';
+  context.window.studioDirectorBridge.sendRead(payload,['project.concept'],'Write Scene 1 with the agreed blink.');
+  assert.ok(outgoing.startsWith('Write Scene 1 with the agreed blink.'));
+  composer.value='Use a warmer mood instead.';
+  context.window.studioDirectorBridge.sendRead(payload,['project.concept'],'Write Scene 1 with the agreed blink.');
+  assert.ok(outgoing.startsWith('Use a warmer mood instead.'),'the current author draft takes precedence');
+  assert.equal(state.pendingReadAck.length, 1);
   assert.match(source, /Director replied to Read/);
   assert.doesNotMatch(source, /reportConsoleError\('Studio Read acknowledgement'/);
   assert.match(source, /\[WEBCAP APPLIED FIELD VALUES\]/);
@@ -352,7 +361,7 @@ test('Studio conversation receives the canonical H3 template as reference withou
 test('large explicit Read selections are sent intact, with no arbitrary client character cap', async () => {
   const start=workbench.indexOf('  function readPayload(story, keys) {');
   const middle=workbench.indexOf('  function updateReadSelection() {',start);
-  const sendStart=workbench.indexOf('  function readSend() {',middle);
+  const sendStart=workbench.indexOf('  function readSend(instruction) {',middle);
   const end=workbench.indexOf('  function showWriteContext() {',sendStart);
   assert.ok(start>=0 && middle>start && sendStart>middle && end>sendStart,
     'Read serialization and action must remain available');
@@ -417,5 +426,5 @@ test('legacy Studio field Read remains a neutral context handoff by default', ()
   assert.match(read, /Acknowledge the saved context without assessing it or suggesting next steps/);
   assert.doesNotMatch(read, /give a concise substantive assessment/);
   assert.match(source, /state\.pendingReadAck = keys\.slice\(\)/);
-  assert.match(source, /Address only any question explicitly asked above; otherwise stop after a brief confirmation/);
+  assert.match(source, /For a context-only Read, stop after a brief confirmation/);
 });

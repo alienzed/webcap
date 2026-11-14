@@ -50,6 +50,7 @@
     studioBriefUndo: null,
     studioOperations: [],
     pendingReadAck: null,
+    sceneRead: null,
     studioReadiness: {checks:[], readHints:[], writeHint:'', writeFields:[], sceneId:'', sceneNumber:0}
   };
   var STORYBOARD_WORKSHOP_PRIMER = [
@@ -296,6 +297,8 @@
   }
 
   function syncModeUi() {
+    var sceneContext = el('director-chat-scene-context');
+    sceneContext.classList.toggle('hidden', state.activeMode !== 'storyboard' || !state.sceneRead);
     var row = el('director-chat-mode-row');
     var host = el('director-chat-mode-switch');
     var description = el('director-chat-mode-description');
@@ -342,8 +345,8 @@
     drawer.setAttribute('aria-label', studio ? 'Projects Director' : 'Assistant');
     el('director-chat-title').textContent = studio ? studioWorkingStoryLabel() :
       (context ? 'Ask QA' : 'Assistant');
-    el('director-chat-close').textContent = studio ? 'Project editor' : '×';
-    el('director-chat-close').setAttribute('aria-label', studio ? 'Return to Project editor' : 'Close Assistant');
+    el('director-chat-close').textContent = studio ? 'Close' : '×';
+    el('director-chat-close').setAttribute('aria-label', studio ? 'Close Director' : 'Close Assistant');
     el('director-studio-starters').classList.toggle('hidden', !studio);
     el('director-chat-empty-title').textContent = studio ? "Let's make something" :
       (context ? 'Discuss this recommendation' : 'Your conversation');
@@ -606,7 +609,7 @@
       title = conversationTitle(messages);
     }
     state.sessionDirty[mode] = false;
-    showSessionStatus('Saving…', false);
+    showSessionStatus('Saving conversation…', false);
     state.sessionSaving = true;
     var action = state.sessionWrite.catch(function () {}).then(function () {
       var session = state.sessionByMode[mode];
@@ -631,7 +634,7 @@
       }).then(function (payload) {
         state.sessionByMode[mode] = payload.chat;
         upsertSessionSummary(payload.chat);
-        if (!state.sessionDirty[mode]) showSessionStatus('Saved', false);
+        if (!state.sessionDirty[mode]) showSessionStatus('Conversation saved', false);
         return payload.chat;
       });
     });
@@ -648,7 +651,7 @@
     var mode = state.activeMode;
     if (!persistentMode(mode) || !state.sessionReady) return;
     state.sessionDirty[mode] = true;
-    showSessionStatus('Unsaved changes', false);
+    showSessionStatus('Conversation unsaved', false);
     if (state.sessionTimer) clearTimeout(state.sessionTimer);
     state.sessionTimer = setTimeout(function () {
       state.sessionTimer = 0;
@@ -666,6 +669,7 @@
   }
 
   function restoreSession(chat) {
+    state.sceneRead = null;
     if (!chat || !persistentMode(chat.mode) || !Array.isArray(chat.messages)) {
       throw new Error('Saved Assistant conversation is invalid.');
     }
@@ -706,7 +710,7 @@
       syncModeUi();
     }
     upsertSessionSummary(chat);
-    showSessionStatus('Saved', false);
+    showSessionStatus('Conversation saved', false);
   }
 
   function loadSessionHistory() {
@@ -773,7 +777,7 @@
       state.sessionByMode[result.chat.mode] = result.chat.id === (state.sessionByMode[result.chat.mode] || {}).id
         ? result.chat : state.sessionByMode[result.chat.mode];
       upsertSessionSummary(result.chat);
-      showSessionStatus('Saved', false);
+      showSessionStatus('Conversation saved', false);
     }).catch(showSessionFailure).finally(function () {
       state.pending = false;
       syncControls();
@@ -807,7 +811,7 @@
       }
       renderSessionHistory();
       syncModeUi();
-      showSessionStatus('Deleted', false);
+      showSessionStatus('Conversation deleted', false);
     }).catch(showSessionFailure).finally(function () {
       state.pending = false;
       syncControls();
@@ -1177,7 +1181,8 @@
       var label = document.createElement('div');
       label.className = 'director-chat-message-label';
       label.textContent = message.role === 'assistant' ? 'Director' :
-        (message.content.indexOf('[WEBCAP APPLIED FIELD VALUES]') !== -1 ? 'WebCap · Reviewed Apply' :
+        (message.content.indexOf('[WEBCAP APPLIED FIELD VALUES]') !== -1
+          ? (message.content.startsWith('Director revision saved:') ? 'WebCap · Director revision' : 'WebCap · Reviewed Apply') :
          message.content.indexOf('[WEBCAP EXPLICIT READ]') !== -1 ? 'You · Read to Director' : 'You');
 
       var body = document.createElement('div');
@@ -2190,9 +2195,11 @@
         !Array.isArray(result.scenes) || result.scenes.length < 1 || result.scenes.length > 32 ||
         typeof result.rationale !== 'string' || result.scenes.some(function (item) {
           return !item || typeof item !== 'object' || Array.isArray(item) ||
-            typeof item.title !== 'string' || typeof item.summary !== 'string' || !item.summary.trim();
+            typeof item.title !== 'string' || typeof item.summary !== 'string' || !item.summary.trim() ||
+            typeof item.prompt !== 'string' || !item.prompt.trim() ||
+            !Number.isFinite(item.durationSeconds) || item.durationSeconds < 4 || item.durationSeconds > 15;
         })) {
-      throw new Error('Director must return one to 32 titled/described Scenes and a rationale.\nRaw Director response:\n' + String(raw || ''));
+      throw new Error('Director must return one to 32 Scenes with descriptions, full prompts, 4–15 second durations and a rationale.\nRaw Director response:\n' + String(raw || ''));
     }
     return result;
   }
@@ -2204,7 +2211,7 @@
     var header = document.createElement('div');
     header.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:12px;';
     var label = document.createElement('strong');
-    label.textContent = 'Tentative Scene';
+    label.textContent = 'New Scene';
     var remove = document.createElement('button');
     remove.type = 'button';
     remove.className = 'review-captions-btn';
@@ -2212,16 +2219,31 @@
     remove.onclick = function () { row.remove(); };
     header.append(label, remove);
     var title = document.createElement('input');
-    title.setAttribute('aria-label', 'Tentative Scene title');
+    title.setAttribute('aria-label', 'Scene title');
+    title.dataset.field = 'title';
     title.placeholder = 'Working title (optional)';
     title.maxLength = 240;
     title.value = item.title || '';
     var summary = document.createElement('textarea');
-    summary.setAttribute('aria-label', 'Tentative Scene description');
+    summary.setAttribute('aria-label', 'Scene description');
+    summary.dataset.field = 'summary';
     summary.placeholder = 'What happens in this one generatable clip?';
     summary.rows = 3;
     summary.value = item.summary || '';
-    row.append(header, title, summary);
+    var durationLabel = document.createElement('label');
+    durationLabel.textContent = 'Duration (s)';
+    var duration = document.createElement('input');
+    duration.type = 'number'; duration.min = '4'; duration.max = '15'; duration.step = 'any';
+    duration.dataset.field = 'durationSeconds';
+    duration.value = item.durationSeconds == null ? 6 : item.durationSeconds;
+    durationLabel.appendChild(duration);
+    var promptLabel = document.createElement('label');
+    promptLabel.textContent = 'H3 Prompt';
+    var prompt = document.createElement('textarea');
+    prompt.dataset.field = 'prompt'; prompt.rows = 8;
+    prompt.value = item.prompt || '';
+    promptLabel.appendChild(prompt);
+    row.append(header, title, summary, durationLabel, promptLabel);
     el('studio-scenes-rows').appendChild(row);
   }
 
@@ -2288,11 +2310,14 @@
       if (!story || story.id !== storyId) throw new Error('Attached Project is no longer available.');
       var order = (story.sceneOrder || []).slice();
       var input = {
-        task: 'Extract up to 32 distinct tentative Scenes from the agreed discussion. ' +
+        task: 'Write up to 32 complete new Scenes from the agreed discussion. ' +
           'Keep each Scene independently generatable and preserve the core appeal. ' +
           'Use as many Scenes as the author explicitly requested, up to 32 per review; otherwise ' +
-          'select a modest number that fits the discussion. Return title, concise specific ' +
-          'what-happens description, and brief rationale. Do not write H3 prompts or modify existing Scenes.',
+          'select a modest number that fits the discussion. For each Scene return a working title, ' +
+          'a concise what-happens description (summary), a complete usable H3 prompt, and durationSeconds. ' +
+          'Use the duration the author requested within 4–15 seconds, otherwise 6 seconds. ' +
+          'Time each full prompt to that duration, including the relevant Project Invariants. ' +
+          'Return a brief overall rationale. Existing Scenes are reference material; this request creates new Scenes only.',
         project: {
           id: story.id, title: story.title, concept: story.concept, style: story.style,
           invariants: story.invariants,
@@ -2303,7 +2328,7 @@
         },
         discussion: discussion
       };
-      return studioDirectorRequestMessages([{ role: 'user', content: JSON.stringify(input) }], false, true)
+      return studioDirectorRequestMessages([{ role: 'user', content: JSON.stringify(input) }], true, true)
         .then(function (messages) {
           window.studioDirectorWorkbench.showSentWriteContext('studio_scene_sequence_draft', messages);
           return requestJson('/fs/director/chat', {
@@ -2344,12 +2369,17 @@
     if (!proposal || state.pending) return;
     var drafts = Array.prototype.map.call(el('studio-scenes-rows').querySelectorAll('.studio-scenes-row'), function (row) {
       return {
-        title: row.querySelector('input').value.trim(),
-        summary: row.querySelector('textarea').value.trim()
+        title: row.querySelector('[data-field="title"]').value.trim(),
+        summary: row.querySelector('[data-field="summary"]').value.trim(),
+        prompt: row.querySelector('[data-field="prompt"]').value.trim(),
+        durationSeconds: Number(row.querySelector('[data-field="durationSeconds"]').value)
       };
     });
-    if (!drafts.length || drafts.length > 32 || drafts.some(function (item) { return !item.summary; })) {
-      el('studio-scenes-error').textContent = 'Review between one and 32 Scenes with descriptions.';
+    if (!drafts.length || drafts.length > 32 || drafts.some(function (item) {
+      return !item.summary || !item.prompt || !Number.isFinite(item.durationSeconds) ||
+        item.durationSeconds < 4 || item.durationSeconds > 15;
+    })) {
+      el('studio-scenes-error').textContent = 'Each Scene needs a description, a full prompt and a duration of 4–15 seconds.';
       return;
     }
     var pieces = el('studio-scenes-placement').value.split('|');
@@ -2377,12 +2407,12 @@
       applied = true;
       state.studioScenesProposal = null;
       el('studio-scenes-review').close();
-      recordStudioOperation('scenes.create', 'Created ' + payload.scenes.length + ' tentative Scenes',
+      recordStudioOperation('scenes.create', 'Created ' + payload.scenes.length + ' Scenes with prompts',
         proposal.storyId, payload.scenes.map(function (scene) { return scene.id; }));
       studioActionStatus(payload.scenes.length + ' Scenes created.', false);
       return window.studioDirectorBridge.recordApplied('scenes.create',payload.story,{
         scenes:payload.scenes.map(function (scene) {
-          return {id:scene.id,title:scene.title,summary:scene.summary};
+          return {id:scene.id,title:scene.title,summary:scene.summary,prompt:scene.prompt,durationSeconds:scene.durationSeconds};
         })
       }).then(function () {return window.refreshStudioDirectorStoryIfOpen(proposal.storyId);});
     }).catch(function (error) {
@@ -2692,6 +2722,7 @@
 
   function newChat(options) {
     if (state.pending || (persistentMode(state.activeMode) && !state.sessionReady)) return;
+    state.sceneRead = null;
     var preserveContext = !!(options && options.preserveContext);
     if (!persistentMode(state.activeMode)) {
       state.modeMessages[state.activeMode] = [];
@@ -2751,7 +2782,7 @@
       }
       el('director-chat-input').value = '';
       upsertSessionSummary(chat);
-      showSessionStatus('Saved', false);
+      showSessionStatus('Conversation saved', false);
       finishProgress(null);
       syncModeUi();
       el('director-chat-input').focus();
@@ -2853,7 +2884,8 @@
         '\nCURRENT PROJECT NAVIGATION (identity and one-based Scene positions only; creative material is supplied through explicit Read):\n' + JSON.stringify(navigation) +
         (explicitWrite
           ? '\nEXPLICIT REVIEWED WRITE: The author has already chosen to draft. Produce the requested complete editable proposal in the format specified by the current request. This is a draft for review, not a conversational suggestion. Only WebCap Apply saves changes.\n'
-          : '\nFor the current author goal, suggest at most one useful next step from the listed capabilities: ' +
+          : '\nFor a direct question, answer fully and finish without a workflow suggestion. ' +
+            'When the author is developing material or requests a next step, suggest at most one useful action: ' +
             'an explicit Read, an appropriately scoped reviewed Write, or an author-operated Studio action. ' +
             'Fulfil the author’s request in conversation, including drafting complete material when asked. ' +
             'Treat proposed work as unsaved until WebCap confirms Apply.\n') +
@@ -2875,16 +2907,20 @@
         'A Read-only request needs a brief natural acknowledgement; answer any question included with Read. ' +
         'Applied values supersede earlier snapshots.\n' +
         'REPLY: Discuss concepts in 1-3 concise sentences. Ask one focused question only for a consequential missing decision. ' +
-        'When asked to write, revise or paste a prompt, deliver the actual complete text in reply on this turn, using the H3 template and Scene duration. ' +
+        'When asked to write, revise or paste an existing Scene prompt, author its complete text in capture.content on this turn, using the H3 template and Scene duration. ' +
+        'WebCap displays that full text directly in the conversation. Use reply for a brief introduction or creative explanation. ' +
+        'For other drafting requests, include the complete requested text in reply. ' +
         'Writing a Scene means a useful title and a full H3 Prompt. An Intent alone is an outline. ' +
         'Name user actions in plain language: Read Project, Review Scene, Apply. ' +
         'Drafting is conversation; only reviewed Apply saves.\n' +
         'READINESS: Usually checks=[], readHints=[], writeHint="", writeFields=[], sceneId="", sceneNumber=0, capture=null. ' +
-        'Suggest at most one useful next action. Use new-project, project or scenes for Write. ' +
+        'For factual questions answerable from supplied context, keep readiness fields empty and finish with the answer. ' +
+        'For requested creative development, suggest at most one useful next action. Use new-project, project or scenes for Write. ' +
         'writeFields names affected fields; Scene numbers are one-based. Use bare Scene IDs from navigation.sceneOrder. ' +
         'Default to the current Project, respecting an explicit author-selected destination. Assess only supplied material, with at most two useful checks.\n' +
         'CAPTURE: Use null for discussion, questions, outlines and work still to be drafted. ' +
-        'When reply contains an authored prompt for an existing Scene, use capture.field="prompt" and its saved sceneId to offer Review Scene without another LLM call. ' +
+        'For a complete existing Scene prompt, set capture.field="prompt", capture.sceneId to its saved ID, ' +
+        'and capture.content to the full usable prompt itself. WebCap uses this one authored text for both chat and Review Scene, without another LLM call. ' +
         'For other complete fields use the matching capture schema. A new Scene uses field="scene", title and content as its Intent; ' +
         'also include prompt when a full H3 Prompt was authored in conversation. An Intent-only Scene is still a useful draft. ' +
         'For an Invariant use its kind/title, with beforeKind/beforeTitle for an exact known edit.\n';
@@ -3322,6 +3358,14 @@
       return;
     }
 
+    if (activeChatMode === 'storyboard' && state.sceneRead) {
+      content += '\n\n[WEBCAP EXPLICIT READ]\n' + JSON.stringify(state.sceneRead.payload, null, 2) +
+        '\n[END WEBCAP READ]\nUse this Scene and Project as the context for the author’s request above.';
+      state.pendingReadAck = state.sceneRead.keys;
+      state.sceneRead = null;
+      el('director-chat-scene-context').classList.add('hidden');
+    }
+
     if (!inputHistory.length || inputHistory[inputHistory.length - 1] !== content) inputHistory.push(content);
     inputHistoryIndex = inputHistory.length;
     inputHistoryDraft = '';
@@ -3423,10 +3467,13 @@
         }
         if (studioResponse) {
           try {
-            // Conversation stays useful even when a suggested capture and visible reply differ.
             // Every capture still requires editable human Review before Apply.
+            var capture = studioResponse.readiness && studioResponse.readiness.capture;
             if (!window.studioDirectorWorkbench.updateReadiness(studioResponse.readiness))
               throw new Error('Director readiness did not match the expected contract.\nRaw structured response:\n' + result.text);
+            // One authored prompt feeds the visible transcript and the existing review.
+            if (capture && capture.field === 'prompt' && !assistantText.includes(capture.content))
+              assistantText += '\n\n' + capture.content;
             // Assessment is metadata, not another user-visible success card.
           } catch (processingError) {
             requestError = processingError;
@@ -3518,7 +3565,7 @@
 
     if (state.open) {
       syncModeUi();
-      (state.modelsLoaded ? Promise.resolve() : loadModels()).then(function () {
+      return (state.modelsLoaded ? Promise.resolve() : loadModels()).then(function () {
         // An async model refresh may finish after Studio was closed or left.
         if (!state.open) return;
         if (state.activeMode === 'storyboard') {
@@ -3584,7 +3631,64 @@
     dialog.showModal();
   }
 
+  function bindStudioDrawerResize() {
+    var grip = el('studio-director-resizer'), drawer = el('director-chat-drawer');
+    var start = null, key = 'webcap.studioDirector.width';
+    function setWidth(width) {
+      var maximum = Math.max(1, el('app-frame').clientWidth - 42);
+      var minimum = Math.min(420, maximum);
+      width = Math.round(Math.max(minimum, Math.min(maximum, width)));
+      drawer.style.setProperty('--studio-director-width', width + 'px');
+      grip.setAttribute('aria-valuemin', minimum);
+      grip.setAttribute('aria-valuemax', maximum);
+      grip.setAttribute('aria-valuenow', width);
+      return width;
+    }
+    var saved = Number(localStorage.getItem(key));
+    var preferred = saved > 0 && Number.isFinite(saved) ? saved : 820;
+    drawer.style.setProperty('--studio-director-width', preferred + 'px');
+    function refreshBounds(width) {
+      var maximum = Math.max(1, el('app-frame').clientWidth - 42);
+      grip.setAttribute('aria-valuemin', Math.min(420, maximum));
+      grip.setAttribute('aria-valuemax', maximum);
+      grip.setAttribute('aria-valuenow', Number.isFinite(width)
+        ? Math.round(Math.min(maximum, Math.max(Math.min(420, maximum), width)))
+        : Math.round(drawer.getBoundingClientRect().width));
+    }
+    refreshBounds(preferred);
+    grip.addEventListener('focus', refreshBounds);
+    window.addEventListener('resize', function () {
+      if (state.open && state.activeMode === 'storyboard') refreshBounds();
+    });
+    grip.addEventListener('pointerdown', function (event) {
+      if (event.button !== 0) return;
+      event.preventDefault();
+      start = {x:event.clientX,width:drawer.getBoundingClientRect().width};
+      grip.classList.add('dragging');
+      grip.setPointerCapture(event.pointerId);
+    });
+    grip.addEventListener('pointermove', function (event) {
+      if (start) setWidth(start.width + start.x - event.clientX);
+    });
+    function finish() {
+      if (!start) return;
+      start = null;
+      grip.classList.remove('dragging');
+      localStorage.setItem(key, Math.round(drawer.getBoundingClientRect().width));
+    }
+    grip.addEventListener('pointerup', finish);
+    grip.addEventListener('pointercancel', finish);
+    grip.addEventListener('lostpointercapture', finish);
+    grip.addEventListener('keydown', function (event) {
+      if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+      event.preventDefault();
+      localStorage.setItem(key, setWidth(drawer.getBoundingClientRect().width + (event.key === 'ArrowLeft' ? 40 : -40)));
+    });
+    grip.addEventListener('dblclick', function () {localStorage.setItem(key, setWidth(820));});
+  }
+
   function bind() {
+    bindStudioDrawerResize();
     var toggle = el('director-chat-rail-btn');
     var drawer = el('director-chat-drawer');
     var pin = el('director-chat-pin');
@@ -3865,7 +3969,7 @@
         event.returnValue = '';
       }
     });
-    loadSessionHistory();
+    state.sessionLoadPromise = loadSessionHistory();
     if (state.pinned) setOpen(true);
     else {
       syncPinnedUi();
@@ -3904,13 +4008,15 @@
     sendRead: function (payload, keys, instruction) {
       if (!this.isReady()) throw new Error('Open Studio Director and select an available LLM before Read.');
       if (!Array.isArray(keys) || !keys.length) throw new Error('Select at least one field to Read.');
+      state.sceneRead = null;
+      el('director-chat-scene-context').classList.add('hidden');
       var composer = el('director-chat-input');
       var draft = String(composer.value || '').trim();
       var nl = String.fromCharCode(10);
-      composer.value = (instruction || draft || 'Read the selected saved context and acknowledge receipt.') +
+      composer.value = (draft || instruction || 'Read the selected saved context and acknowledge receipt.') +
         nl + nl + '[WEBCAP EXPLICIT READ]' + nl +
         JSON.stringify(payload, null, 2) + nl + '[END WEBCAP READ]' + nl +
-        'Confirm the saved fields in your own words. Address only any question explicitly asked above; otherwise stop after a brief confirmation.';
+        'Briefly acknowledge the supplied context, then fulfil the author request above. For a context-only Read, stop after a brief confirmation.';
       state.pendingReadAck = keys.slice();
       sendMessage();
     },
@@ -3943,6 +4049,7 @@
       if (!story || !story.id || !selected || typeof selected !== 'object') {
         throw new Error('Reviewed Apply receipt requires saved Project data.');
       }
+      var isDirectorRevision = kind === 'scene.director.revision';
       var body = {
         operation: kind, projectId: story.id, projectTitle: story.title,
         savedAt: story.updatedAt, fields: selected
@@ -3956,7 +4063,9 @@
       });
       if (Array.isArray(selected.scenes)) savedFields.push(selected.scenes.length + (selected.scenes.length === 1 ? ' Scene' : ' Scenes'));
       state.modeMessages.storyboard.push({role:'user',
-        content:'Saved: ' + (savedFields.join(' · ') || 'Scene changes') + '. Reviewed values are now authoritative.' +
+        content:(isDirectorRevision ? 'Director revision saved: ' : 'Saved: ') +
+          (savedFields.join(' · ') || 'Scene changes') +
+          (isDirectorRevision ? '. Saved values are now authoritative.' : '. Reviewed values are now authoritative.') +
           String.fromCharCode(10) + '[WEBCAP APPLIED FIELD VALUES]' +
           String.fromCharCode(10) + JSON.stringify(body, null, 2) +
           String.fromCharCode(10) + '[END WEBCAP APPLY]'});
@@ -4131,6 +4240,68 @@
     // their explicitly attached reference snapshots.
   };
   window.openStoryboardAssistant = function () { setOpen(true, 'storyboard'); };
+  window.openStudioDirectorScene = function (story, sceneId, instruction) {
+    if (state.pending || state.attachmentPending) return Promise.reject(new Error('Finish the current Director request first.'));
+    var context = window.studioDirectorWorkbench.sceneRead(story, sceneId);
+    return Promise.all([setOpen(true, 'storyboard'), state.sessionLoadPromise]).then(function () {
+      if (!state.sessionReady) throw new Error('Director conversation could not load. Check the Console.');
+      state.workshop = null;
+      state.workshopProposal = null;
+      state.lastStudioIoError = '';
+      state.lastStudioIoRaw = '';
+      window.studioDirectorBridge.selectWriteProject(story.id, story.title);
+      state.sceneRead = null;
+      var label = el('director-chat-scene-context');
+      label.classList.add('hidden');
+      if (!instruction) {
+        state.sceneRead = context;
+        label.textContent = context.label;
+        label.title = 'This Scene and its Project context will accompany your next message.';
+        label.classList.remove('hidden');
+        el('director-chat-input').focus();
+        syncModeUi();
+        return;
+      }
+      if (!window.studioDirectorBridge.isReady()) throw new Error(window.studioDirectorBridge.readinessMessage());
+      state.modeMessages.storyboard.push({role:'user', content:instruction +
+        '\n\n[WEBCAP EXPLICIT READ]\n' + JSON.stringify(context.payload, null, 2) + '\n[END WEBCAP READ]'});
+      renderMessages();
+      state.pending = true;
+      syncControls();
+      return persistSession('storyboard').then(function () {
+        state.pending = false;
+        return window.studioDirectorBridge.makeProposal(JSON.stringify({
+          task:'Revise the selected Scene’s H3 prompt according to the author instruction. Return only {"prompt":"complete revised H3 prompt"}. ' +
+            'Preserve the rest of the existing prompt, its duration, and established Project facts. For an empty prompt, author a complete prompt from the supplied Scene and Project.',
+          sceneId:sceneId, instruction:instruction, context:context.payload
+        }), 'studio_scene_field_draft', true);
+      }).then(function (raw) {
+        state.lastStudioIoRaw = raw;
+        state.pending = true;
+        syncControls();
+        var draft;
+        try { draft = JSON.parse(raw); }
+        catch (error) { throw new Error('Director returned invalid Scene JSON.\nRaw response:\n' + raw); }
+        if (!draft || Object.keys(draft).length !== 1 || typeof draft.prompt !== 'string' || !draft.prompt.trim())
+          throw new Error('Director must return one complete Scene prompt.\nRaw response:\n' + raw);
+        state.modeMessages.storyboard.push({role:'assistant', content:draft.prompt, rawResponse:raw});
+        renderMessages();
+        return persistSession('storyboard').then(function () {
+          return window.studioDirectorWorkbench.applyScenePrompt(story, sceneId, draft.prompt);
+        });
+      }).then(function () {
+        studioActionStatus(context.label + ' updated.', false);
+      }).catch(function (error) {
+        state.lastStudioIoError = String(error.message || error);
+        studioActionStatus('Scene revision failed: ' + String(error.message || error), true);
+        window.reportConsoleError('Director Scene revision', error);
+        throw error;
+      }).finally(function () {
+        state.pending = false;
+        syncControls();
+      });
+    });
+  };
   window.closeStudioDirectorOnExit = function () {
     if (state.activeMode !== 'storyboard') return;
     if (state.open) setOpen(false);

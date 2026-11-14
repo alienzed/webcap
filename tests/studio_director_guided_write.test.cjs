@@ -339,11 +339,13 @@ test('the inline Project Read targets the current destination and reuses explici
   const select={value:'old-source'};
   let rendered,selected=0,sent=0;
   const scope=vm.createContext({
-    window:{studioDirectorBridge:{workingStoryId:()=> 'current-project'}},
+    window:{studioDirectorBridge:{workingStoryId:()=> 'current-project',messages:()=>[
+      {role:'user',content:'Write Scene 1 with the agreed blink.'},
+      {role:'assistant',content:'Read the Project first.'}]}},
     activeTarget:()=>({storyId:'other-project'}),el:()=>select,
     refreshProjects:async()=>{},loadStory:async id=>{assert.equal(id,'current-project');return{id};},
     renderReadStory:story=>{rendered=story.id;},selectEntireReadProject:()=>selected++,
-    readSend:()=>sent++,status:message=>assert.fail(message)
+    readSend:instruction=>{assert.equal(instruction,'Write Scene 1 with the agreed blink.');sent++;},status:message=>assert.fail(message)
   });
   vm.runInContext(part('  function readRecommendedProject() {','  function writeActionLabel() {'),scope);
   assert.equal(sent,0,'navigation alone sends no saved material');

@@ -2393,10 +2393,12 @@ def director_chat_route():
                         "type": "array", "minItems": 1, "maxItems": 32,
                         "items": {
                             "type": "object", "additionalProperties": False,
-                            "required": ["title", "summary"],
+                            "required": ["title", "summary", "prompt", "durationSeconds"],
                             "properties": {
                                 "title": {"type": "string"},
                                 "summary": {"type": "string", "minLength": 1},
+                                "prompt": {"type": "string", "minLength": 1},
+                                "durationSeconds": {"type": "number", "minimum": 4, "maximum": 15},
                             },
                         },
                     },

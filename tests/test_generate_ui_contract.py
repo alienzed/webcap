@@ -598,7 +598,7 @@ def test_generate_job_ownership_comes_from_inference_queue_metadata():
     assert "adoptGenerateJobsFromQueue(queue);" in script
 
 
-def test_generation_mode_precedes_loras_inside_settings_inspector():
+def test_generate_sweep_mode_precedes_loras_inside_settings_inspector():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     css = (ROOT / "tool" / "css" / "generate.css").read_text(encoding="utf-8")
     script = (ROOT / "tool" / "js" / "generate.js").read_text(encoding="utf-8")

@@ -1,11 +1,8 @@
-"""Studio Scene draft extraction is bounded, reviewed and atomic on Apply."""
-
+"""Studio Scene creation uses reviewed Prompt content without requiring legacy Intent."""
 import pytest
-
 from tool.server import config as app_config
 from tool.server import storyboard_store
 from tool.server.app import app
-
 
 @pytest.fixture
 def isolated_storyboard(tmp_path, monkeypatch):
@@ -13,293 +10,131 @@ def isolated_storyboard(tmp_path, monkeypatch):
     monkeypatch.setattr(app_config, "app_state_root", lambda: tmp_path / "app_state")
     return app.test_client()
 
-
-def _scene(client, story, summary, placement="end", relative=""):
+def _scene(client, story, prompt, placement="end", relative=""):
     return client.post("/fs/studio/director/scene-draft", json={
-        "storyId": story["id"],
-        "expectedUpdatedAt": story["updatedAt"],
-        "scene": {"title": "", "summary": summary},
-        "placement": placement,
-        "relativeSceneId": relative,
+        "storyId": story["id"], "expectedUpdatedAt": story["updatedAt"],
+        "scene": {"title": "", "prompt": prompt},
+        "placement": placement, "relativeSceneId": relative,
     })
 
-
-def test_create_tentative_scene_without_prompt_or_ghosts(isolated_storyboard):
+def test_create_prompt_only_scene_and_save_legacy_empty(isolated_storyboard):
     client = isolated_storyboard
     project = storyboard_store.create_story({"title": "A simple gag"})
-    assert project["sceneOrder"] == []
-    response = _scene(client, project, "One character waits for a football to arrive.", "start")
-    assert response.status_code == 200
-    created = response.json["scene"]
-    updated = response.json["story"]
-    assert updated["sceneOrder"] == [created["id"]]
-    assert created["title"] == ""
-    assert created["summary"].startswith("One character")
-    assert created["prompt"] == ""
-    assert created["takes"] == {}
-    assert storyboard_store.load_story(project["id"])["sceneOrder"] == [created["id"]]
+    response = _scene(client, project, "A character waits for a football.", "start")
+    assert response.status_code == 200, response.json
+    scene = response.json["scene"]
+    assert scene["prompt"] == "A character waits for a football."
+    assert scene.get("summary", "") == ""
+    assert response.json["story"]["sceneOrder"] == [scene["id"]]
+    assert scene["takes"] == {}
+    assert storyboard_store.load_story(project["id"])["scenes"][scene["id"]]["prompt"] == scene["prompt"]
 
-
-def test_complete_authored_scene_saves_title_intent_and_prompt_together(isolated_storyboard):
+def test_one_scene_apply_rejects_intent_only_and_unknown_fields(isolated_storyboard):
     client = isolated_storyboard
-    project = storyboard_store.create_story({"title": "Complete scene"})
-    prompt = "integrated_multimodal_description:\n[Shot 1] A red kite arcs upward."
-    response = client.post("/fs/studio/director/scene-draft", json={
-        "storyId": project["id"],
-        "expectedUpdatedAt": project["updatedAt"],
-        "scene": {"title": "Red kite", "summary": "The kite takes flight.", "prompt": prompt},
-        "placement": "end",
-    })
-    assert response.status_code == 200
-    created = response.json["scene"]
-    assert created["title"] == "Red kite"
-    assert created["summary"] == "The kite takes flight."
-    assert created["prompt"] == prompt
-    assert created["takes"] == {}
-    saved = storyboard_store.load_story(project["id"])
-    assert saved["scenes"][created["id"]]["prompt"] == prompt
-
-
-def test_insert_before_and_after_using_stable_scene_ids(isolated_storyboard):
-    client = isolated_storyboard
-    project = storyboard_store.create_story({"title": "Placement"})
-    a = _scene(client, project, "A") .json
-    project = a["story"]
-    b = _scene(client, project, "B").json
-    project = b["story"]
-    inserted = _scene(client, project, "Between", "after", a["scene"]["id"]).json
-    assert inserted["story"]["sceneOrder"] == [
-        a["scene"]["id"], inserted["scene"]["id"], b["scene"]["id"]
-    ]
-    before = _scene(client, inserted["story"], "First", "before", a["scene"]["id"]).json
-    assert before["story"]["sceneOrder"][0] == before["scene"]["id"]
-
-
-def test_reject_stale_apply_without_partial_write(isolated_storyboard):
-    client = isolated_storyboard
-    project = storyboard_store.create_story({"title": "Revision"})
-    first = _scene(client, project, "A")
-    assert first.status_code == 200
-    stale = _scene(client, project, "B")
-    assert stale.status_code == 400
-    assert "changed during Scene review" in stale.json["error"]
-    assert len(storyboard_store.load_story(project["id"])["sceneOrder"]) == 1
-
-
-def test_reject_missing_placement_or_unexpected_fields(isolated_storyboard):
-    client = isolated_storyboard
-    project = storyboard_store.create_story({"title": "Validate"})
-    invalid = _scene(client, project, "A", "after", "scene-nonexistent")
-    assert invalid.status_code == 400
-    assert storyboard_store.load_story(project["id"])["sceneOrder"] == []
-    unexpected = client.post("/fs/studio/director/scene-draft", json={
-        "storyId": project["id"],
-        "expectedUpdatedAt": project["updatedAt"],
-        "scene": {"title": "", "summary": "A", "unexpected": "Not a Scene field"},
-        "placement": "end",
-    })
-    assert unexpected.status_code == 400
-    assert storyboard_store.load_story(project["id"])["sceneOrder"] == []
-
-
-def test_structured_scene_draft_request_has_one_scene_only(monkeypatch):
-    from tool.server import app as application
-
-    captured = {}
-
-    def fake_enqueue(client, model, contract, context, label):
-        captured.update(contract=contract, client=client, label=label)
-        return {"jobId": "queued-test", "status": "queued"}
-
-    monkeypatch.setattr(application, "enqueue_llm", fake_enqueue)
-    result = app.test_client().post("/fs/director/chat", json={
-        "model": "llm", "operation": "studio_scene_draft",
-        "messages": [{"role": "user", "content": "A football gag"}],
-    })
-    assert result.status_code == 202
-    schema = captured["contract"]["response_schema"]
-    assert schema["additionalProperties"] is False
-    assert set(schema["required"]) == {"title", "summary", "rationale"}
-    assert "scenes" not in schema["properties"]
-
-
-def test_studio_can_create_unbound_project_with_optional_first_scene(isolated_storyboard):
-    client = isolated_storyboard
-    response = client.post("/fs/studio/director/project-create", json={
-        "proposal": {
-            "title": "", "concept": "A deliberately simple sight gag. Core Appeal: anticipation.",
-            "style": "", "invariants": [{"kind": "character", "title": "Coach", "text": "Blue jacket"}],
-            "firstScene": {"title": "", "summary": "A coach waits for the ball."},
-        },
-    })
-    assert response.status_code == 201, response.json
-    story = response.json["story"]
-    assert story["title"] == ""
-    assert story["targetSceneCount"] is None
-    assert len(story["sceneOrder"]) == 1
-    scene = story["scenes"][story["sceneOrder"][0]]
-    assert scene["prompt"] == ""
-    assert scene["takeOrder"] == []
-    assert storyboard_store.load_story(story["id"]) == story
-    folder = storyboard_store.storyboard_root() / story["id"]
-    assert (folder / "takes" / scene["id"]).is_dir()
-
-
-def test_studio_project_can_start_with_no_scene_and_no_title(isolated_storyboard):
-    response = isolated_storyboard.post("/fs/studio/director/project-create", json={
-        "proposal": {"title": "", "concept": "A weather event.", "style": "", "invariants": []},
-    })
-    assert response.status_code == 201
-    assert response.json["story"]["sceneOrder"] == []
-    assert response.json["story"]["targetSceneCount"] is None
-
-
-def test_studio_project_validation_and_atomic_pre_publish_failure(isolated_storyboard, monkeypatch):
-    client = isolated_storyboard
-    before = {story["id"] for story in storyboard_store.list_stories()}
-    for invalid in (
-        {"title": "", "concept": "", "style": "", "invariants": []},
-        {"concept": "Idea", "prompt": "Not allowed"},
-        {"concept": "Idea", "firstScene": {"title": "", "summary": ""}},
+    story = storyboard_store.create_story({"title": "Only prompt"})
+    for candidate in (
+        {"title": "", "summary": "An outline without a Prompt"},
+        {"title": "", "prompt": ""},
+        {"title": "", "prompt": "Valid", "summary": "Unrequested Intent"},
+        {"title": "", "prompt": "Valid", "unexpected": "bad"},
     ):
-        response = client.post("/fs/studio/director/project-create", json={"proposal": invalid})
-        assert response.status_code == 400
-    assert {story["id"] for story in storyboard_store.list_stories()} == before
-
-    def failing_write(path, data):
-        raise OSError("simulated disk failure")
-
-    monkeypatch.setattr(storyboard_store, "_write_json_atomic", failing_write)
-    response = client.post("/fs/studio/director/project-create", json={
-        "proposal": {"concept": "A simple visual gag"}
-    })
-    assert response.status_code == 400
-    assert "simulated disk failure" in response.json["error"]
-    assert {story["id"] for story in storyboard_store.list_stories()} == before
-    assert not list(storyboard_store.storyboard_root().glob(".studio-create-*"))
-
-
-def test_studio_project_extraction_schema_is_bounded(monkeypatch):
-    from tool.server import app as application
-    captured = {}
-
-    def fake_enqueue(client, model, contract, context, label):
-        captured["contract"] = contract
-        return {"jobId": "project-job", "status": "queued"}
-
-    monkeypatch.setattr(application, "enqueue_llm", fake_enqueue)
-    result = app.test_client().post("/fs/director/chat", json={
-        "model": "local-test", "operation": "studio_project_draft",
-        "messages": [{"role": "user", "content": "A funny idea"}],
-    })
-    assert result.status_code == 202
-    schema = captured["contract"]["response_schema"]
-    assert schema["additionalProperties"] is False
-    assert set(schema["required"]) == {"title", "concept", "style", "invariants", "rationale"}
-    assert schema["properties"]["invariants"]["maxItems"] == 30
-    assert "firstScenes" in schema["properties"]
-    assert schema["properties"]["firstScenes"]["maxItems"] == 32
-
-
-def test_multi_scene_insert_at_start_between_and_end(isolated_storyboard):
-    client = isolated_storyboard
-    story = storyboard_store.create_story({"title": "Story", "concept": "A sequence"})
-    one = storyboard_store.add_scene(story["id"], {"summary": "Existing A", "prompt": "Preserve me"})[0]
-    second = storyboard_store.add_scene(story["id"], {"summary": "Existing B"})[0]
-    original_order = second["sceneOrder"][:]
-    def apply(current, placement, relative=""):
-        return client.post("/fs/studio/director/scenes-draft", json={
-            "storyId": current["id"], "expectedSceneOrder": current["sceneOrder"],
-            "scenes": [{"title": "A", "summary": "Proposed A", "prompt": "Complete prompt A", "durationSeconds": 8},
-                       {"title": "B", "summary": "Proposed B", "prompt": "Complete prompt B", "durationSeconds": 10}],
-            "placement": placement, "relativeSceneId": relative,
+        response = client.post("/fs/studio/director/scene-draft", json={
+            "storyId": story["id"], "expectedUpdatedAt": story["updatedAt"],
+            "scene": candidate, "placement": "end", "relativeSceneId": "",
         })
-    middle = apply(second, "after", original_order[0])
-    assert middle.status_code == 200, middle.json
-    middle_story = middle.json["story"]
-    middle_ids = [scene["id"] for scene in middle.json["scenes"]]
-    assert middle_story["sceneOrder"] == [original_order[0], *middle_ids, original_order[1]]
-    assert middle_story["scenes"][original_order[0]]["prompt"] == "Preserve me"
-    assert [middle_story["scenes"][id]["prompt"] for id in middle_ids] == ["Complete prompt A", "Complete prompt B"]
-    assert [middle_story["scenes"][id]["durationSeconds"] for id in middle_ids] == [8, 10]
-    assert all(middle_story["scenes"][id]["takes"] == {} for id in middle_ids)
-    assert storyboard_store.load_story(story["id"])["scenes"][middle_ids[0]]["prompt"] == "Complete prompt A"
-    begin = apply(middle_story, "start")
-    assert begin.status_code == 200
-    end = apply(begin.json["story"], "end")
-    assert end.status_code == 200
-    assert end.json["story"]["sceneOrder"][-2:] == [s["id"] for s in end.json["scenes"]]
+        assert response.status_code == 400, response.json
+    assert storyboard_store.load_story(story["id"])["sceneOrder"] == []
 
-
-def test_multi_scene_conflict_is_order_only_and_single_commit(isolated_storyboard, monkeypatch):
+def test_insert_order_and_stale_review(isolated_storyboard):
     client = isolated_storyboard
-    story = storyboard_store.create_story({"title": "Draft"})
-    old_order = story["sceneOrder"][:]
-    story = storyboard_store.update_story(story["id"], {"concept": "Unrelated concept change"})
-    writes = []
-    original_writer = storyboard_store._write_json_atomic
-    def count_writes(path, data):
-        writes.append(path)
-        return original_writer(path, data)
-    monkeypatch.setattr(storyboard_store, "_write_json_atomic", count_writes)
+    story = storyboard_store.create_story({"title": "Sequence"})
+    first = _scene(client, story, "Full H3 Prompt A")
+    assert first.status_code == 200
+    first_scene = first.json["scene"]
+    second = _scene(client, story, "Full H3 Prompt B")
+    assert second.status_code == 400
+    second = _scene(client, first.json["story"], "Full H3 Prompt B", "before", first_scene["id"])
+    assert second.status_code == 200
+    assert second.json["story"]["sceneOrder"] == [second.json["scene"]["id"], first_scene["id"]]
+
+def test_prompt_only_multi_scene_create_and_atomic_rejection(isolated_storyboard):
+    client = isolated_storyboard
+    story = storyboard_store.create_story({"title": "Batch"})
     request = {
-        "storyId": story["id"], "expectedSceneOrder": old_order,
-        "scenes": [{"title": "One", "summary": "First"}, {"title": "Two", "summary": "Second"}],
-        "placement": "end", "relativeSceneId": "",
+        "storyId": story["id"], "expectedSceneOrder": [],
+        "scenes": [
+            {"title": "One", "prompt": "Complete Prompt One", "durationSeconds": 8},
+            {"title": "Two", "prompt": "Complete Prompt Two", "durationSeconds": 10},
+        ], "placement": "start", "relativeSceneId": "",
     }
     result = client.post("/fs/studio/director/scenes-draft", json=request)
     assert result.status_code == 200, result.json
-    assert len(writes) == 1
-    assert result.json["story"]["concept"] == "Unrelated concept change"
-    conflict = client.post("/fs/studio/director/scenes-draft", json=request)
-    assert conflict.status_code == 400
-    assert "order changed" in conflict.json["error"]
-    assert len(writes) == 1
-    assert len(storyboard_store.load_story(story["id"])["sceneOrder"]) == 2
+    assert [scene["prompt"] for scene in result.json["scenes"]] == ["Complete Prompt One", "Complete Prompt Two"]
+    assert all(scene.get("summary", "") == "" for scene in result.json["scenes"])
+    assert client.post("/fs/studio/director/scenes-draft", json=request).status_code == 400
 
+    empty = storyboard_store.create_story({"title": "Invalid batch"})
+    invalid = {**request, "storyId": empty["id"], "expectedSceneOrder": []}
+    for scenes in (
+        [], [{"title": "One", "summary": "Intent only"}],
+        [{"title": "One", "prompt": ""}],
+        [{"title": "One", "prompt": "Valid", "summary": "Forbidden"}],
+        [{"title": "One", "prompt": 42}],
+        [{"title": "One", "prompt": "Valid", "durationSeconds": 0}],
+    ):
+        response = client.post("/fs/studio/director/scenes-draft", json={**invalid, "scenes": scenes})
+        assert response.status_code == 400, response.json
+    assert storyboard_store.load_story(empty["id"])["sceneOrder"] == []
 
-def test_multi_scene_invalid_proposals_and_atomic_failure(isolated_storyboard, monkeypatch):
+def test_project_can_start_without_scenes_or_with_prompt_only_scenes(isolated_storyboard):
     client = isolated_storyboard
-    story = storyboard_store.create_story({"title": "Safety"})
-    data = {
-        "storyId": story["id"], "expectedSceneOrder": [],
-        "scenes": [{"title": "", "summary": "A"}, {"title": "", "summary": "B"}],
-        "placement": "start", "relativeSceneId": "",
-    }
-    for scenes in ([], [{"title": "", "summary": ""}], [{"title": "", "summary": "A", "prompt": ""}],
-                   [{"title": "", "summary": "A", "prompt": 7}],
-                   [{"title": "", "summary": "A", "durationSeconds": 0}], data["scenes"] * 17):
-        response = client.post("/fs/studio/director/scenes-draft", json={**data, "scenes": scenes})
-        assert response.status_code == 400
-    def broken_writer(path, data):
-        raise OSError("simulated write failure")
-    monkeypatch.setattr(storyboard_store, "_write_json_atomic", broken_writer)
-    fail = client.post("/fs/studio/director/scenes-draft", json=data)
-    assert fail.status_code == 400
-    assert storyboard_store.load_story(story["id"])["sceneOrder"] == []
-    assert not list((storyboard_store.storyboard_root() / story["id"] / "takes").iterdir())
+    blank = client.post("/fs/studio/director/project-create", json={
+        "proposal": {"title": "", "concept": "An idea", "style": "", "invariants": []}
+    })
+    assert blank.status_code == 200, blank.json
+    assert not blank.json["story"]["sceneOrder"]
 
+    created = client.post("/fs/studio/director/project-create", json={
+        "proposal": {"title": "Project", "concept": "", "style": "", "invariants": [],
+                     "firstScenes": [{"title": "Opening", "prompt": "Complete first Prompt"}]}
+    })
+    assert created.status_code == 200, created.json
+    story = created.json["story"]
+    scene = story["scenes"][story["sceneOrder"][0]]
+    assert scene["prompt"] == "Complete first Prompt"
+    assert scene.get("summary", "") == ""
 
-def test_multi_scene_extract_schema_is_bounded(monkeypatch):
+    rejected = client.post("/fs/studio/director/project-create", json={
+        "proposal": {"title": "Bad", "concept": "Idea", "style": "", "invariants": [],
+                     "firstScenes": [{"title": "Opening", "summary": "Only Intent"}]}
+    })
+    assert rejected.status_code == 400
+
+def test_new_scene_response_schemas_require_prompt_not_intent(monkeypatch):
     from tool.server import app as application
     captured = {}
-    def enqueue(client, model, contract, context, label):
-        captured.update(contract=contract)
-        return {"jobId": "sequence", "status": "queued"}
-    monkeypatch.setattr(application, "enqueue_llm", enqueue)
-    result = app.test_client().post("/fs/director/chat", json={
-        "model": "local-test", "operation": "studio_scene_sequence_draft",
-        "messages": [{"role": "user", "content": "Create three Scenes"}],
-    })
-    assert result.status_code == 202
-    schema = captured["contract"]["response_schema"]
-    assert schema["properties"]["scenes"]["maxItems"] == 32
-    assert schema["properties"]["scenes"]["minItems"] == 1
-    assert schema["additionalProperties"] is False
-    item = schema["properties"]["scenes"]["items"]
-    assert set(item["required"]) == {"title", "summary", "prompt", "durationSeconds"}
-    assert item["properties"]["prompt"]["minLength"] == 1
-
+    def fake_enqueue(client, model, contract, context, label):
+        captured[contract["operation"]] = contract["response_schema"]
+        return {"jobId": "test", "status": "queued"}
+    monkeypatch.setattr(application, "enqueue_llm", fake_enqueue)
+    client = app.test_client()
+    for operation in ("studio_scene_draft", "studio_scene_sequence_draft", "studio_project_draft",
+                      "studio_scene_field_draft", "studio_scene_batch_draft"):
+        response = client.post("/fs/director/chat", json={
+            "model": "test-model", "operation": operation,
+            "messages": [{"role": "user", "content": "Write a full Scene"}],
+        })
+        assert response.status_code == 202, response.json
+    assert "prompt" in captured["studio_scene_draft"]["required"]
+    assert "summary" not in captured["studio_scene_draft"]["properties"]
+    sequence = captured["studio_scene_sequence_draft"]["properties"]["scenes"]["items"]
+    assert "prompt" in sequence["required"]
+    assert "summary" not in sequence["properties"]
+    first = captured["studio_project_draft"]["properties"]["firstScenes"]["items"]
+    assert first["required"] == ["title", "prompt"]
+    assert "summary" not in captured["studio_scene_field_draft"]["properties"]
+    revised = captured["studio_scene_batch_draft"]["properties"]["scenes"]["items"]
+    assert "summary" not in revised["properties"]
 
 def test_studio_brief_apply_is_field_scoped_and_undoable(isolated_storyboard):
     client = isolated_storyboard
@@ -431,8 +266,8 @@ def test_studio_read_access_is_explicit_and_scoped(isolated_storyboard):
     assert index.json["data"][0]["id"] == scene["id"]
     details = client.get(base + "&field=scene&sceneId=" + scene["id"])
     assert details.status_code == 200
-    assert details.json["data"]["summary"] == "A character waits"
-    assert "prompt" not in details.json["data"]
+    assert details.json["data"]["prompt"] == "Generation prompt"
+    assert "summary" not in details.json["data"]
     prompt = client.get(base + "&field=prompt&sceneId=" + scene["id"])
     assert prompt.status_code == 200
     assert prompt.json["data"]["prompt"] == "Generation prompt"

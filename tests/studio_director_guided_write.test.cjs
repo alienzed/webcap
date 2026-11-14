@@ -228,7 +228,8 @@ test('failed destination setup reports its failure without starting a proposal',
   let prepared=false;
   const scope=vm.createContext({recommendations:{writeHint:'project'},
     el:id=>id==='studio-dw-write-operation' ? {options:[{value:'project'}]} : {classList:{contains:()=>false}},
-    refreshWrite:async()=>false,writePrepare:()=>{prepared=true;},status:message=>assert.fail(message)});
+    refreshWrite:async()=>false,writePrepare:()=>{prepared=true;},status:message=>assert.fail(message),
+    window:{studioDirectorBridge:{workingStoryId:()=>''}},activeTarget:()=>({storyId:''})});
   vm.runInContext(part('  function openRecommendedWrite() {','  function captureActionLabel(capture) {'),scope);
   await scope.openRecommendedWrite();
   assert.equal(prepared,false);

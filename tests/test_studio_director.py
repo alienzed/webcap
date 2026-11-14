@@ -123,7 +123,7 @@ def test_freeform_workshop_does_not_claim_hidden_context_or_mutations():
 
 
 
-def test_five_field_contract_has_explicit_ownership_and_review_boundary():
+def test_planning_only_scene_summary_keeps_legacy_storage_and_review_boundary():
     text = guidance("minimax_h3")["system"]
     for phrase in (
         "story.concept", "story.style", "story.invariants",

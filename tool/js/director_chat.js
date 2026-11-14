@@ -1761,6 +1761,96 @@
       });
   }
 
+
+  // The reviewed Project is saved before any Scene authoring. Each approved
+  // brief uses the existing one-Scene writer schema and Studio insertion route.
+  function writeInitialProjectScenes(story, briefs) {
+    var outcome = {saved:[],failed:[],notAttempted:[]}, current = story;
+    function next(index) {
+      if (index >= briefs.length) return Promise.resolve(outcome);
+      var brief = briefs[index], label = brief.title || ('Scene ' + (index + 1));
+      recordStudioOperation('project.scene.progress',
+        'Writing initial Scene ' + (index + 1) + '/' + briefs.length + ' · ' + label,
+        story.id, []);
+      var input = {
+        task:'Author exactly ONE new Scene with one complete usable H3 prompt, title and ' +
+          'whole-second durationSeconds. Use the approved Project direction and the Scene brief. ' +
+          'Match the requested title and duration, including prompt timing. ' +
+          'Return the existing Scene sequence JSON format with exactly one Scene.',
+        instruction:brief.brief, requestedTitle:brief.title, durationSeconds:brief.durationSeconds,
+        project:{title:current.title,concept:current.concept,style:current.style,
+          invariants:current.invariants}
+      };
+      return studioDirectorRequestMessages([{role:'user',content:JSON.stringify(input)}],
+        true,true,{projectId:story.id,projectTitle:story.title,sceneOrder:current.sceneOrder})
+        .then(function (messages) {
+          window.studioDirectorWorkbench.showSentWriteContext('studio_scene_sequence_draft',messages);
+          return requestJson('/fs/director/chat', {
+            method:'POST',headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({model:state.modelId,operation:'studio_scene_sequence_draft',
+              messages:messages})
+          });
+        }).then(function (payload) {
+          if (!payload.job || !payload.job.jobId)
+            throw new Error('Initial Scene authoring did not queue a job.');
+          state.jobId = String(payload.job.jobId);
+          trackTransientLlmJob(payload.job);
+          return waitForJob(payload.job);
+        }).then(function (job) {
+          var raw = String(job.result && job.result.text || '');
+          state.lastStudioIoRaw = raw;
+          var draft = parseStudioScenesDraft(raw);
+          if (draft.scenes.length !== 1)
+            throw new Error('Initial Scene authoring must return exactly one Scene.');
+          var scene = draft.scenes[0];
+          if (!Number.isInteger(scene.durationSeconds) ||
+              scene.durationSeconds !== brief.durationSeconds)
+            throw new Error('Scene duration differs from the approved brief.');
+          if (brief.title) scene.title = brief.title;
+          return requestJson('/fs/studio/director/scenes-draft', {
+            method:'POST',headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({
+              storyId:story.id,expectedSceneOrder:current.sceneOrder.slice(),
+              scenes:[scene],placement:'end',relativeSceneId:''
+            })
+          });
+        }).then(function (result) {
+          if (!result.story || result.story.id !== story.id ||
+              !Array.isArray(result.scenes) || result.scenes.length !== 1 ||
+              !result.scenes[0].id) {
+            throw new Error('Scene creation result is incomplete; inspect the Project before retrying.');
+          }
+          current = result.story;
+          var saved = result.scenes[0];
+          outcome.saved.push(saved.id);
+          recordStudioOperation('scene.create','Saved initial Scene · ' +
+            (saved.title || saved.id),story.id,[saved.id]);
+          return window.studioDirectorBridge.recordApplied('scene.create',result.story,{
+            scenes:[{id:saved.id,title:saved.title,prompt:saved.prompt,
+              durationSeconds:saved.durationSeconds}]
+          }).catch(function (error) {
+            window.reportConsoleError('Initial Scene receipt after save',error);
+          });
+        }).catch(function (error) {
+          outcome.failed.push(label + ': ' + String(error.message || error));
+          window.reportConsoleError('Initial Scene write · ' + label,error);
+          var stopped = ['stopped','cancelled','interrupted'].includes(String(error.jobStatus || ''));
+          var shared = stopped ||
+            /Failed to fetch|No Director model is available|runtime unavailable/i.test(String(error.message || ''));
+          if (shared) {
+            outcome.notAttempted = briefs.slice(index + 1).map(function (item,offset) {
+              return item.title || ('Scene ' + (index + offset + 2));
+            });
+            return outcome;
+          }
+        }).then(function (result) {
+          state.jobId = '';
+          return result === outcome ? outcome : next(index + 1);
+        });
+    }
+    return next(0);
+  }
+
   function applyStudioProject() {
     if (!state.studioProjectProposal || state.pending) return;
     var proposal = {
@@ -1780,27 +1870,31 @@
     var firstScenes = [];
     if (el('studio-project-include-scene').checked) {
       firstScenes.push({
-        title: el('studio-project-scene-title').value.trim(),
-        prompt: el('studio-project-scene-prompt').value.trim()
+        title:el('studio-project-scene-title').value.trim(),
+        brief:el('studio-project-scene-prompt').value.trim(),
+        durationSeconds:Number(el('studio-project-scene-duration').value)
       });
     }
     el('studio-project-extra-scenes').querySelectorAll('.studio-project-extra-scene').forEach(function (row) {
       firstScenes.push({
-        title: row.querySelector('input').value.trim(),
-        prompt: row.querySelector('textarea').value.trim()
+        title:row.querySelector('input[type="text"]').value.trim(),
+        brief:row.querySelector('textarea').value.trim(),
+        durationSeconds:Number(row.querySelector('input[type="number"]').value)
       });
     });
-    if (firstScenes.some(function (scene) {return !scene.prompt;})) {
-      el('studio-project-error').textContent = 'Write a complete Prompt for every selected Scene or remove it.';
+    if (firstScenes.some(function (scene) {
+      return !scene.brief || !Number.isInteger(scene.durationSeconds) ||
+        scene.durationSeconds < 4 || scene.durationSeconds > 15;
+    })) {
+      el('studio-project-error').textContent = 'Each initial Scene needs a brief and a duration from 4 to 15 seconds.';
       return;
     }
     if (firstScenes.length > 32) {
       el('studio-project-error').textContent = 'One new Project review can include up to 32 Scenes.';
       return;
     }
-    if (firstScenes.length) proposal.firstScenes = firstScenes;
-    if (!proposal.concept && !firstScenes.length) {
-      el('studio-project-error').textContent = 'Describe the idea or include a first Scene.';
+    if (!proposal.concept || !proposal.style) {
+      el('studio-project-error').textContent = 'Complete Concept and Visual / atmosphere to create the Project.';
       return;
     }
     state.pending = true;
@@ -1827,9 +1921,8 @@
         syncModeUi();
       }
       recordStudioOperation('project.create', 'Created Project: ' + name, payload.story.id, payload.story.sceneOrder);
-      studioActionStatus(continueWithProject
-        ? 'Project created and connected: ' + name + '. You can prepare Scenes from this conversation.'
-        : 'Project created: ' + name + '. Open it from the Studio Library.', false);
+      studioActionStatus('Project saved: ' + name +
+        (firstScenes.length ? '. Writing ' + firstScenes.length + ' initial Scenes…' : '.'), false);
       var projectValues = {
         concept:payload.story.concept,style:payload.story.style,invariants:payload.story.invariants,
         scenes:(payload.story.sceneOrder || []).map(function (id) {
@@ -1838,7 +1931,18 @@
         })
       };
       return window.studioDirectorBridge.recordApplied('project.create',payload.story,projectValues)
-        .then(function () {return window.refreshStudioDirectorStoryIfOpen(payload.story.id);});
+        .catch(function (error) {window.reportConsoleError('Project receipt after save',error);})
+        .then(function () {return writeInitialProjectScenes(payload.story,firstScenes);})
+        .then(function (outcome) {
+          if (firstScenes.length) {
+            var summary = 'Project created · ' + outcome.saved.length + ' Scenes saved' +
+              (outcome.failed.length ? ' · failed: ' + outcome.failed.join(' | ') : '') +
+              (outcome.notAttempted.length ? ' · not attempted: ' + outcome.notAttempted.join(', ') : '');
+            recordStudioOperation('project.initial-scenes',summary,payload.story.id,outcome.saved);
+            studioActionStatus(summary,!!(outcome.failed.length || outcome.notAttempted.length));
+          }
+          return window.refreshStudioDirectorStoryIfOpen(payload.story.id);
+        });
     }).catch(function (error) {
       var detail = String(error.message || error);
       if (createdStory) {

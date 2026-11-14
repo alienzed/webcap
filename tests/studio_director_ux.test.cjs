@@ -140,24 +140,21 @@ test('ordinary discussion asks for concise new decisions while complete creative
   assert.match(chat,/Keep assessment metadata in readiness and conversation in reply/);
 });
 
-test('long Studio Director drafts are visible without opening a disclosure',()=>{
-  const full='Here is the prompt:\n\n'+('Complete creative details with "quotes" and line breaks.\n').repeat(40);
-  const node=()=>({children:[],className:'',scrollHeight:0,classList:{toggle(){}},
-    set innerHTML(value){this.children=[];},appendChild(item){this.children.push(item);},
-    replaceChildren(...items){this.children=items;}});
-  const host=node(), empty=node();
-  const scope=vm.createContext({state:{activeMode:'storyboard'},Object,
-    el:id=>id==='director-chat-messages'?host:empty,
-    currentMessages:()=>[{role:'assistant',content:full}],
-    currentElapsedMap:()=>({}),currentMetricsMap:()=>({}),
-    document:{createElement:node}});
-  vm.runInContext(part(chat,'  function renderMessages() {','  function renderStudioOperations() {'),scope);
-  vm.runInContext('renderMessages()',scope);
-  assert.equal(host.children[0].children[1].textContent,full);
-  assert.equal(host.children[0].children[1].children.length,0,'no automatic collapsed preview');
+test('compact Director replies keep the exact full text and leave General Chat alone',()=>{
+  const code=part(chat,"      if (state.activeMode === 'storyboard' && message.role === 'assistant' && message.content.length > 1200) {",
+    "      if (message.role === 'user' && (message.content.indexOf('[WEBCAP EXPLICIT READ]')");
+  const node=()=>({children:[],append(...children){this.children.push(...children);},replaceChildren(...children){this.children=children;}});
+  const message={role:'assistant',content:'A useful opening recommendation.\n\n'+('Complete creative details with "quotes" and line breaks.\n').repeat(40)};
+  const body=node();
+  const scope=vm.createContext({state:{activeMode:'storyboard'},message,body,document:{createElement:node}});
+  vm.runInContext(code,scope);
+  assert.equal(body.children[0].textContent,'A useful opening recommendation.');
+  assert.equal(body.children[1].children[1].textContent,message.content);
+  const general=node();
+  scope.body=general;
   scope.state.activeMode='chat';
-  vm.runInContext('renderMessages()',scope);
-  assert.equal(host.children[0].children[1].textContent,full,'General Chat is unaffected');
+  vm.runInContext(code,scope);
+  assert.equal(general.children.length,0);
 });
 
 test('Apply receipt names the actual scoped Scene fields and retains authoritative values',async()=>{

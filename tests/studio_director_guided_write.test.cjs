@@ -501,6 +501,8 @@ test('initial Scene briefs produce bounded independent saves; a failed item reta
         const payload=JSON.parse(options.body),id='created-'+(saves.length+1);
         assert.deepEqual(Array.from(payload.expectedSceneOrder),current.sceneOrder);
         assert.equal(payload.scenes.length,1);
+        assert.equal(payload.scenes[0].durationSeconds,calls.at(-1).durationSeconds,
+          'approved Project review duration wins over malformed model metadata');
         saves.push(payload.scenes[0].title);
         current={...current,sceneOrder:[...current.sceneOrder,id]};
         return {story:current,scenes:[{...payload.scenes[0],id}]};
@@ -513,7 +515,7 @@ test('initial Scene briefs produce bounded independent saves; a failed item reta
       return {result:{text:JSON.stringify({
         scenes:item.requestedTitle==='Two'?[]:[{title:item.requestedTitle,
           prompt:'Complete full H3 Prompt for '+item.instruction,
-          durationSeconds:item.durationSeconds}],rationale:''})}};
+          durationSeconds:item.requestedTitle==='Three'?'twelve':item.durationSeconds}],rationale:''})}};
     },
     parseStudioScenesDraft:raw=>{
       const value=JSON.parse(raw);

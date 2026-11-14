@@ -1803,9 +1803,10 @@
           if (draft.scenes.length !== 1)
             throw new Error('Initial Scene authoring must return exactly one Scene.');
           var scene = draft.scenes[0];
-          if (!Number.isInteger(scene.durationSeconds) ||
-              scene.durationSeconds !== brief.durationSeconds)
-            throw new Error('Scene duration differs from the approved brief.');
+          if (!scene.prompt.trim())
+            throw new Error('Director did not return a complete Prompt for this initial Scene.');
+          // The reviewed brief, not model metadata, owns the saved duration.
+          scene.durationSeconds = brief.durationSeconds;
           if (brief.title) scene.title = brief.title;
           return requestJson('/fs/studio/director/scenes-draft', {
             method:'POST',headers:{'Content-Type':'application/json'},
@@ -2355,16 +2356,24 @@
     try { result = JSON.parse(value); }
     catch (error) { throw new Error('Director returned invalid Scene sequence JSON: ' + error.message + '\nRaw Director response:\n' + String(raw || '')); }
     if (!result || typeof result !== 'object' || Array.isArray(result) ||
-        !Array.isArray(result.scenes) || result.scenes.length < 1 || result.scenes.length > 32 ||
-        typeof result.rationale !== 'string' || result.scenes.some(function (item) {
-          return !item || typeof item !== 'object' || Array.isArray(item) ||
-            typeof item.title !== 'string' ||
-            typeof item.prompt !== 'string' || !item.prompt.trim() ||
-            !Number.isFinite(item.durationSeconds) || item.durationSeconds < 4 || item.durationSeconds > 15;
-        })) {
-      throw new Error('Director must return one to 32 Scenes with full prompts, 4–15 second durations and a rationale.\nRaw Director response:\n' + String(raw || ''));
+        !Array.isArray(result.scenes) || result.scenes.length < 1 || result.scenes.length > 32) {
+      throw new Error('Director must return one to 32 Scene entries.\nRaw Director response:\n' + String(raw || ''));
     }
-    return result;
+    // One malformed field must not discard the other authored Scenes.
+    // The existing review lets the author correct or remove incomplete rows.
+    return {
+      scenes: result.scenes.map(function (entry) {
+        var item = entry && typeof entry === 'object' && !Array.isArray(entry) ? entry : {};
+        var scene = {
+          title: typeof item.title === 'string' ? item.title : '',
+          prompt: typeof item.prompt === 'string' ? item.prompt : ''
+        };
+        if (Object.prototype.hasOwnProperty.call(item, 'durationSeconds'))
+          scene.durationSeconds = item.durationSeconds;
+        return scene;
+      }),
+      rationale: typeof result.rationale === 'string' ? result.rationale : ''
+    };
   }
 
   function addStudioScenesRow(item) {
@@ -2392,14 +2401,31 @@
     var duration = document.createElement('input');
     duration.type = 'number'; duration.min = '4'; duration.max = '15'; duration.step = 'any';
     duration.dataset.field = 'durationSeconds';
-    duration.value = item.durationSeconds == null ? 6 : item.durationSeconds;
+    var suppliedDuration = (typeof item.durationSeconds === 'number' ||
+      typeof item.durationSeconds === 'string') && String(item.durationSeconds).trim() !== '';
+    var numericDuration = Number(item.durationSeconds);
+    var usableDuration = suppliedDuration && Number.isFinite(numericDuration) &&
+      numericDuration >= 4 && numericDuration <= 15;
+    duration.value = usableDuration ? numericDuration : 6;
     durationLabel.appendChild(duration);
+    if (!usableDuration) {
+      var durationNote = document.createElement('span');
+      durationNote.textContent = !suppliedDuration
+        ? 'Duration missing; using the 6s default. You can change it.'
+        : 'Duration ' + String(item.durationSeconds) + ' is not supported; using 6s. You can change it.';
+      durationLabel.appendChild(durationNote);
+    }
     var promptLabel = document.createElement('label');
     promptLabel.textContent = 'H3 Prompt';
     var prompt = document.createElement('textarea');
     prompt.dataset.field = 'prompt'; prompt.rows = 8;
     prompt.value = item.prompt || '';
     promptLabel.appendChild(prompt);
+    if (!prompt.value.trim()) {
+      var promptNote = document.createElement('span');
+      promptNote.textContent = 'No Prompt supplied. This Scene stays in review until completed; other Scenes can be saved.';
+      promptLabel.appendChild(promptNote);
+    }
     row.append(header, title, durationLabel, promptLabel);
     el('studio-scenes-rows').appendChild(row);
   }
@@ -2524,20 +2550,32 @@
   function applyStudioScenes() {
     var proposal = state.studioScenesProposal;
     if (!proposal || state.pending) return;
-    var drafts = Array.prototype.map.call(el('studio-scenes-rows').querySelectorAll('.studio-scenes-row'), function (row) {
-      return {
-        title: row.querySelector('[data-field="title"]').value.trim(),
-        prompt: row.querySelector('[data-field="prompt"]').value.trim(),
-        durationSeconds: Number(row.querySelector('[data-field="durationSeconds"]').value)
-      };
+    var rows = Array.from(el('studio-scenes-rows').querySelectorAll('.studio-scenes-row'));
+    var readyRows = [], incompleteRows = [], defaulted = 0;
+    rows.forEach(function (row) {
+      var title = row.querySelector('[data-field="title"]').value.trim();
+      var prompt = row.querySelector('[data-field="prompt"]').value.trim();
+      if (!prompt) {
+        incompleteRows.push(row);
+        return;
+      }
+      var durationInput = row.querySelector('[data-field="durationSeconds"]');
+      var supplied = String(durationInput.value || '').trim();
+      var duration = supplied ? Number(supplied) : NaN;
+      if (!Number.isFinite(duration) || duration < 4 || duration > 15) {
+        duration = 6;
+        durationInput.value = '6';
+        defaulted++;
+      }
+      readyRows.push({row:row, draft:{title:title,prompt:prompt,durationSeconds:duration}});
     });
-    if (!drafts.length || drafts.length > 32 || drafts.some(function (item) {
-      return !item.prompt || !Number.isFinite(item.durationSeconds) ||
-        item.durationSeconds < 4 || item.durationSeconds > 15;
-    })) {
-      el('studio-scenes-error').textContent = 'Each Scene needs a full prompt and a duration of 4–15 seconds.';
+    if (!readyRows.length) {
+      el('studio-scenes-error').textContent = rows.length
+        ? 'No complete H3 Prompts to save yet. Complete a Prompt or remove an empty Scene; your drafts are preserved.'
+        : 'Add a Scene with a Prompt before applying.';
       return;
     }
+    var drafts = readyRows.map(function (item) {return item.draft;});
     var pieces = el('studio-scenes-placement').value.split('|');
     var placement = pieces[0];
     var relativeSceneId = pieces[1] || '';
@@ -2545,7 +2583,7 @@
     syncControls();
     el('studio-scenes-error').textContent = '';
     var applied = false;
-    Promise.resolve().then(function () {
+    return Promise.resolve().then(function () {
       return window.flushStudioDirectorStoryEdits(proposal.storyId);
     }).then(function () {
       return requestJson('/fs/studio/director/scenes-draft', {
@@ -2561,11 +2599,33 @@
         throw new Error('Scene sequence Apply returned an incomplete result.');
       }
       applied = true;
-      state.studioScenesProposal = null;
-      el('studio-scenes-review').close();
-      recordStudioOperation('scenes.create', 'Created ' + payload.scenes.length + ' Scenes with prompts',
-        proposal.storyId, payload.scenes.map(function (scene) { return scene.id; }));
-      studioActionStatus(payload.scenes.length === 1 ? 'Scene created.' : payload.scenes.length + ' Scenes created.', false);
+      var savedCount = payload.scenes.length;
+      if (incompleteRows.length) {
+        // Leave incomplete work editable and retain a fresh order for the next Apply.
+        proposal.sceneOrder = payload.story.sceneOrder.slice();
+        proposal.scenes = payload.story.scenes;
+        proposal.drafts = incompleteRows.map(function (row) {
+          return {
+            title:row.querySelector('[data-field="title"]').value.trim(),
+            prompt:row.querySelector('[data-field="prompt"]').value,
+            durationSeconds:row.querySelector('[data-field="durationSeconds"]').value
+          };
+        });
+        readyRows.forEach(function (item) {item.row.remove();});
+        el('studio-scenes-error').textContent = savedCount + ' Scene' +
+          (savedCount === 1 ? '' : 's') + ' saved. ' + incompleteRows.length +
+          ' still need a Prompt; complete or remove them here.' +
+          (defaulted ? ' ' + defaulted + ' saved using the 6s duration default.' : '');
+      } else {
+        state.studioScenesProposal = null;
+        el('studio-scenes-review').close();
+      }
+      var durationNotice = defaulted ? ' · ' + defaulted + ' duration' +
+        (defaulted === 1 ? '' : 's') + ' defaulted to 6s' : '';
+      recordStudioOperation('scenes.create', 'Created ' + savedCount + ' Scenes with prompts' +
+        durationNotice, proposal.storyId, payload.scenes.map(function (scene) { return scene.id; }));
+      studioActionStatus((savedCount === 1 ? 'Scene created.' : savedCount + ' Scenes created.') +
+        durationNotice, false);
       return window.studioDirectorBridge.recordApplied('scenes.create',payload.story,{
         scenes:payload.scenes.map(function (scene) {
           return {id:scene.id,title:scene.title,prompt:scene.prompt,durationSeconds:scene.durationSeconds};
@@ -4435,8 +4495,8 @@
           {projectId:storyId,projectTitle:story.title,sceneOrder:order}).then(function (raw) {
           state.lastStudioIoRaw = raw;
           var draft = parseStudioScenesDraft(raw);
-          if (draft.scenes.length !== 1 || !Number.isInteger(draft.scenes[0].durationSeconds))
-            throw new Error('Director must return exactly one Scene with a whole-second duration.\nRaw response:\n' + raw);
+          if (draft.scenes.length !== 1)
+            throw new Error('Director must return exactly one Scene.\nRaw response:\n' + raw);
           state.studioScenesProposal = {
             storyId:storyId, storyTitle:story.title, sceneOrder:order,
             scenes:story.scenes, drafts:draft.scenes, rationale:draft.rationale

@@ -401,8 +401,12 @@
   justify-content: center;
 }
 
-.generate-create-view.takes-collapsed .generate-takes-heading > div,
+.generate-create-view.takes-collapsed .generate-takes-heading > div:first-child,
 .generate-create-view.takes-collapsed .generate-takes {
+  display: none;
+}
+
+.generate-create-view.takes-collapsed .generate-takes-actions > :not(#generate-takes-collapse-btn) {
   display: none;
 }
 

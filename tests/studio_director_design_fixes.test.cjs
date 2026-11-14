@@ -132,12 +132,13 @@ test('Read receipt uses delivery and response status, not model text parsing',()
   assert.doesNotMatch(chat,/director-chat-read-receipt/);
 });
 
-test('Select entire Project reuses the existing Read selection and size validation',()=>{
+test('Select entire Project reuses Read selection and shows size without rejecting it',()=>{
   assert.match(html,/id="studio-dw-read-all"/);
   assert.match(rail,/function selectEntireReadProject\(\)/);
   assert.match(rail,/toggle\.groupPaths\.forEach/);
   assert.match(rail,/updateReadSelection\(\)/);
-  assert.match(rail,/length > 48000/);
+  assert.match(rail,/bytes\.toLocaleString\(\)/);
+  assert.doesNotMatch(rail,/length > 48000/);
   assert.match(rail,/readPayload\(story, keys\)/);
 });
 

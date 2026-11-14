@@ -16,11 +16,14 @@ authoring. The remaining work is to connect and prune these paths consistently.
 | Model metadata can route a new Scene into existing-Scene review | `studio_director.py::chat_response_schema`, workbench `reviewCreativeCapture` | Bind creation/update scope and real targets in WebCap. Retire overlapping capture/readiness routing as the authority. |
 | Scene request parameters differ by entry point | Single-Scene Apply carries title/prompt; multi-Scene creation carries duration; the direct shortcut accepts prompt only | One Scene content contract, with requested title/duration changes carried through. |
 | Director authors several revisions in one response with conversation history | Workbench `prepareBatchScenes` | Use the existing bounded per-Scene execution pattern for Write Scene(s). |
-| Existing revision sequence stops on its first item error | `llm_runner.py::revise_scenes_sequence` | Isolate item failures, retain successes, continue the finite list, report exact outcomes. Preserve cancellation. |
-| Automatic context is inconsistent | `sendMessage` consumes staged `sceneRead`; other paths still ask for explicit Read | Supply the necessary context for the actual request. Simple corrections do not need whole-conversation payloads. |
+| Existing revision sequence stops on its first item error | `llm_runner.py::revise_scenes_sequence` | Continue after isolated Scene failures, but stop for shared model/runtime/Project failures. Retain successes and report saved, failed and unattempted Scenes. Preserve Stop. |
+| Automatic context is inconsistent | `sendMessage` consumes staged `sceneRead`; other paths still ask for explicit Read | Supply the fresh Scene prompt, duration, relevant Project/continuity facts and agreed decisions when needed; avoid whole-conversation payloads for simple edits. |
 | A follow-up message discards proposals/actionability | `sendMessage` clears proposal state and marks readiness stale | Retain usable authored material while answering questions; replace it when the author requests a revision. |
-| Direct save reporting can conflate persistence and refresh failure | Workbench `applyScenePrompt` and `openStudioDirectorScene` | Preserve the actual saved outcome if later refresh/receipt work fails. |
-| Recovery currently remembers prompt strings only | Storyboard `scenePromptHistory` | Basic per-field previous/next for Director-touched editable values; no LLM involvement or revision archive. |
+| Direct save reporting can conflate persistence and refresh failure | Workbench `applyScenePrompt` and `openStudioDirectorScene` | Preserve the actual saved outcome if later refresh/receipt work fails. | 
+| Generation and Scene-editor duration bounds disagree | `storyboard_generation.py::_scene_settings` accepts 4–15s; Scene inspector in `storyboard.js` uses 9–15s | Verify intended supported range and align the visible editor and all authoring paths; never silently clamp a requested duration. |
+| Full-prompt revisions cannot mechanically prove creative preservation | Complete H3 Prompt is returned for a revision | Preserve non-target fields deterministically; test prompt fidelity with the real model and provide inspection/recovery rather than a second grading call. |
+| Project creation with initial Scenes is multi-step | Project create and individual Scene save paths | Save Project before Scene calls; on later failure retain successes and report the incomplete result without implying an atomic commit. |
+| Recovery currently remembers prompt strings only | Storyboard `scenePromptHistory` | Reuse bounded session history for fields actually changed, including manual edits; no cross-reload revision archive or LLM involvement. |
 
 ## Evidence and its limits
 
@@ -55,8 +58,10 @@ point before extending it to a list.
 ### 2. Repeat that Scene write over a selected list
 
 Use the same single-Scene behavior for each selected item, applying each success.
-Add per-item failure reporting/continuation and retain existing Stop. Keep each
-request bounded; simple corrections do not need the full conversation. This is
+Add per-item failure reporting/continuation and retain existing Stop. Stop
+the list for a common dependency failure rather than repeating a predictable
+failure. Include shared continuity constraints or prior saved Scene results
+where needed; simple corrections do not need the full conversation. This is
 Write Scene(s), not another LLM capability or alternate batch authoring system.
 Do not add a generic orchestrator or routine retries.
 
@@ -64,7 +69,8 @@ Do not add a generic orchestrator or routine retries.
 
 Align new/existing Project writes around the agreed Project fields. Requested
 initial Scenes use the Scene calls. Mixed Project/Scene intentions use those same
-operations, not an all-at-once authoring schema. Prune stale model guidance,
+operations, with the Project saved first and partial Scene results reported,
+not an all-at-once authoring schema. Prune stale model guidance,
 readiness/capture requirements and duplicate active paths. Preserve compatibility
 data and working unrelated editor/production functionality.
 
@@ -109,17 +115,21 @@ are needed for Director acceptance. Restore test edits or use disposable data.
 
 1. Ask a saved Scene question: context is supplied, answer is grounded, nothing saves.
 2. Discuss a Project and launch its write: complete agreed fields, usable destination,
-   unrelated fields and existing Scenes preserved.
+   unrelated fields and existing Scenes preserved. For a new Project with initial
+   Scenes, verify accurate partial completion if a later Scene fails.
 3. Request a new Scene with a non-default duration: correct creation target, full
-   prompt, title and matching saved duration; existing Scenes preserved.
+   prompt, title and matching saved duration; existing Scenes preserved. Verify
+   the selected duration is valid and editable in both Director and Storyboard.
 4. Make a simple correction to one Scene: short per-Scene context, complete minimally
-   revised prompt, correct save; no second extraction/drafting call.
+   revised prompt, correct save; no second extraction/drafting call. Inspect
+   whether existing actions/dialogue actually survived the rewrite.
 5. Request title/duration changes alongside a prompt: all requested values survive;
    unrelated fields do not change.
 6. Apply one instruction to a selected Scene list: one bounded call per Scene,
    incremental saves and progress, no full conversation required for a simple tweak.
-7. Simulate an item failure: that Scene fails visibly, subsequent items still run,
-   successful items remain saved, final counts are honest. Stop still stops.
+7. Simulate an isolated item failure: that Scene fails visibly, subsequent items
+   still run, successful items remain saved, final counts are honest. Also test
+   a shared model/runtime failure: remaining items do not run. Stop still stops.
 8. Ask a question about an authored result: the same result remains actionable.
 9. Save successfully, then simulate refresh/receipt failure: report the saved outcome
    accurately rather than inviting a duplicate write.

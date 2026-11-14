@@ -90,7 +90,7 @@ function actualSceneRequestFixture() {
     'window.studioDirectorWorkbench={'+sceneRead+'};',scope);
   vm.runInContext(section(director,'  function studioDirectorSelectedScene() {',
     '  function syncModeUi() {')+
-    section(director,'  function studioDirectorRequestMessages(messages, includePromptContract, explicitWrite) {',
+    section(director,'  function studioDirectorRequestMessages(messages, includePromptContract, explicitWrite, navigationSnapshot) {',
       '  // The creative assessment is advisory.'),scope);
   return {scope,state,stories,requests,setNavigation:next=>{navigation=next;}};
 }
@@ -166,4 +166,20 @@ test('missing Scene and retrieval errors reject instead of sending guessed or st
   await assert.rejects(h2.scope.studioDirectorChatRequestMessages(
     [{role:'user',content:'How long is this Scene?'}],h2.scope.studioDirectorSelectedScene()),
   /Saved Project cannot be loaded/);
+});
+
+
+test('Studio request freezes navigation with the Scene target, even if navigation changes while guidance loads',async()=>{
+  const h=actualSceneRequestFixture();
+  const initialNavigation={projectId:'p1',projectTitle:'Moon crossing',sceneId:'a',sceneNumber:1,sceneOrder:['a','b']};
+  h.setNavigation(initialNavigation);
+  const selected=h.scope.studioDirectorSelectedScene(initialNavigation);
+  const pending=h.scope.studioDirectorChatRequestMessages(
+    [{role:'user',content:'What is happening in this Scene?'}],
+    selected, initialNavigation);
+  h.setNavigation({projectId:'p1',projectTitle:'Moon crossing',sceneId:'b',sceneNumber:2,sceneOrder:['a','b']});
+  const outgoing=await pending;
+  assert.match(outgoing[0].content,/"sceneId":"a","sceneNumber":1/);
+  assert.match(outgoing[0].content,/Mara walks toward the rover/);
+  assert.doesNotMatch(outgoing[0].content,/"sceneId":"b","sceneNumber":2/);
 });

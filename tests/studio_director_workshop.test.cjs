@@ -80,7 +80,7 @@ test('Studio prompting selects the current goal rather than steering every task 
       system: 'WebCap Studio Director role',
       actions: [
         {name:'context.read',status:'available',description:'Read chosen saved fields'},
-        {name:'scene.revise',status:'available',description:'Revise Scene Intent or H3 Prompt'}
+        {name:'scene.revise',status:'available',description:'Revise the full Scene H3 Prompt'}
       ],
       promptContract:'integrated_multimodal_description: [Shot 1]'
     })
@@ -148,7 +148,7 @@ test('single-Scene revision request uses its saved ID in the example, not a plac
   assert.match(batch,/ids\.length === 1/);
   assert.match(batch,/JSON\.stringify\(\{scenes:\[\{sceneId:ids\[0\],prompt:/);
   assert.doesNotMatch(batch,/ACTUAL_SELECTED_ID/);
-  assert.match(batch,/summary is available for planning/);
+  assert.match(batch,/full H3 Prompt/);
   assert.match(batch,/prompt is the authoritative description/);
   assert.match(batch,/validateSceneRevisionDraft\(result, ids, selected, raw\)/);
 });
@@ -170,7 +170,7 @@ test('Scene revision synchronizes the chosen Project destination before requesti
       selectWriteProject:(id,title)=>calls.push(['destination',id,title]),
       messages:()=>[],makeProposal:async instruction=>{
         assert.deepEqual(calls,[['destination',story.id,story.title]]);
-        assert.match(instruction,/Treat an existing H3 Prompt as authoritative/);
+        assert.match(instruction,/Author a full usable H3 Prompt/);
         assert.doesNotMatch(instruction,/Requested Write fields/);
         complete();return '{"scenes":[]}';
       }
@@ -354,7 +354,7 @@ test('Studio conversation receives the canonical H3 template as reference withou
   assert.match(result[0].content,/integrated_multimodal_description:/);
   assert.match(result[0].content,/overall_soundscape:/);
   assert.match(result[0].content,/non_diegetic_music:/);
-  assert.match(result[0].content,/not when authoring Scene Intent/);
+  assert.match(result[0].content,/not when authoring Project fields/);
   assert.equal(result[1].content,'How should an H3 prompt be structured?');
   assert.doesNotMatch(result[0].content,/\[WEBCAP EXPLICIT READ\]/);
 });

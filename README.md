@@ -86,7 +86,7 @@ This section is a task-oriented quick start, not a substitute for the in-app con
 
 **Use Weight Sweep or Batch Test.** Select **Weight Sweep** to compare chosen strength values, or **Batch Test + Ask VL** to queue multiple sessions with new seeds and optional automatic evaluation of completed previews. Inspect the batch progress and results; batch mode is not a separate scheduler.
 
-**Evaluate with Ask VL.** For a completed session, choose an evaluation method from the selector—**Ask VL — Original**, **VL Compare — Training Reference**, or **DINOv2 Compare — Training Reference**—then start the assessment. Reference-based modes require suitable reference material. Open the per-preview details, review agreements/disagreements and technical evidence, and use **Recheck** where available. Automated evaluation supplements manual visual judgment; it does not replace it.
+**Evaluate with Ask VL.** For a completed session, choose **Ask VL — Original** or **VL Compare — Training Reference** from the Evaluate menu, or **Evaluate All** to run both. Reference comparison requires suitable training reference images. Open the per-preview details, review agreements/disagreements and technical evidence, and use **Recheck** where available. Automated evaluation supplements manual visual judgment; it does not replace it.
 
 **Build varied prompts.** Use wildcard prompts or the **Wildcard Builder** to inspect and adjust controlled variations. Preview or regenerate the proposed prompt before choosing **Use as Prompt**. [Execution Queue](docs/execution_queue.md).
 

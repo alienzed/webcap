@@ -7,7 +7,7 @@
   var sceneSelectionManual = false, sceneSelectionProject = '', recommendationProject = '';
   var lastQuickAction = 'read', creativeCapture = null, preparedSceneWrite = null;
   var preparedNewSceneWrite = null, captureProjectId = '';
-  var sceneFields = ['prompt', 'title'];
+  var sceneFields = ['prompt', 'title', 'durationSeconds'];
   var projectFields = ['title', 'concept', 'style', 'invariants'];
   var labels = {title:'Title', concept:'Concept', style:'Visual / atmosphere',
     invariants:'Invariants', invariant:'Invariant', scene:'New Scene', prompt:'H3 Prompt',

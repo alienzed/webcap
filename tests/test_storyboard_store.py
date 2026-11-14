@@ -1507,3 +1507,45 @@ def test_studio_scene_fields_are_scoped_and_conflict_checked(storyboard_fs):
             project["id"], id_, {"takeOrder": []}, {"takeOrder": []},
         )
     assert storyboard_store.load_story(project["id"])["scenes"][id_]["summary"] == scene["summary"]
+
+
+def test_retired_scene_intent_preserves_populated_legacy_json_across_saves_and_copies(storyboard_fs):
+    project = storyboard_store.create_story({"title": "Legacy Scene"})
+    project, scene = storyboard_store.add_scene(project["id"], {
+        "title": "Original", "summary": "Old creative brief that must remain dormant.",
+        "prompt": "Original full production Prompt.",
+    })
+    changed, saved = storyboard_store.update_scene(project["id"], scene["id"], {
+        "title": "Renamed", "prompt": "Revised full H3 Prompt.",
+    })
+    assert saved["summary"] == "Old creative brief that must remain dormant."
+    assert changed["scenes"][scene["id"]]["summary"] == saved["summary"]
+    persisted = storyboard_store.load_story(project["id"])
+    assert persisted["scenes"][scene["id"]]["summary"] == saved["summary"]
+    duplicated, copy_scene = storyboard_store.duplicate_scene(project["id"], scene["id"])
+    assert copy_scene["summary"] == saved["summary"]
+    cloned = storyboard_store.duplicate_story(project["id"])
+    assert cloned["scenes"][cloned["sceneOrder"][0]]["summary"] == saved["summary"]
+
+
+def test_retired_scene_intent_empty_and_missing_are_compatible_with_prompt_edits(storyboard_fs):
+    import json
+    project = storyboard_store.create_story({"title": "Prompt-only Scenes"})
+    project, empty = storyboard_store.add_scene(project["id"], {
+        "title": "No Intent", "summary": "", "prompt": "Complete H3 Prompt.",
+    })
+    project, absent = storyboard_store.add_scene(project["id"], {
+        "title": "Prompt without Intent", "prompt": "A second complete H3 Prompt.",
+    })
+    path = storyboard_store._story_path(project["id"])
+    saved = json.loads(path.read_text(encoding="utf-8"))
+    saved["scenes"][absent["id"]].pop("summary", None)
+    path.write_text(json.dumps(saved), encoding="utf-8")
+    for scene in (empty, absent):
+        loaded = storyboard_store.load_story(project["id"])
+        assert loaded["scenes"][scene["id"]].get("summary", "") == ""
+        _, revised = storyboard_store.update_scene(project["id"], scene["id"], {
+            "prompt": "A complete revised production Prompt.",
+        })
+        assert revised["prompt"] == "A complete revised production Prompt."
+        assert revised.get("summary", "") == ""

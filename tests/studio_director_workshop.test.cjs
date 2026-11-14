@@ -273,7 +273,8 @@ test('General Chat has a separate request path and Studio keeps native storage I
 test('Context selects Overview and full Scenes without media fields', () => {
   assert.match(workbench, /addUnit\('Overview', overview, fields/);
   assert.match(workbench, /addUnit\('Scene ' \+ \(index \+ 1\)/);
-  assert.match(workbench, /\['title', 'summary', 'prompt', 'durationSeconds'\]/);
+  assert.match(workbench, /\['title', 'prompt', 'durationSeconds'\]/);
+  assert.match(workbench, /\['title', 'summary', 'durationSeconds'\]/);
   assert.match(workbench, /input\[data-group-select\]:checked/);
   assert.match(html, /id="studio-dw-read-selection-summary">Entire Project<\/summary>/);
   const read = workbench.split('  function renderReadStory(story) {', 2)[1].split('  function selectedPaths() {', 2)[0];

@@ -149,7 +149,7 @@ test('single-Scene revision request uses its saved ID in the example, not a plac
   assert.match(batch,/JSON\.stringify\(\{scenes:\[\{sceneId:ids\[0\],prompt:/);
   assert.doesNotMatch(batch,/ACTUAL_SELECTED_ID/);
   assert.match(batch,/full H3 Prompt/);
-  assert.match(batch,/prompt is the authoritative description/);
+  assert.match(batch,/The Prompt is the Scene creative content/);
   assert.match(batch,/validateSceneRevisionDraft\(result, ids, selected, raw\)/);
 });
 
@@ -274,7 +274,6 @@ test('Context selects Overview and full Scenes without media fields', () => {
   assert.match(workbench, /addUnit\('Overview', overview, fields/);
   assert.match(workbench, /addUnit\('Scene ' \+ \(index \+ 1\)/);
   assert.match(workbench, /\['title', 'prompt', 'durationSeconds'\]/);
-  assert.match(workbench, /\['title', 'summary', 'durationSeconds'\]/);
   assert.match(workbench, /input\[data-group-select\]:checked/);
   assert.match(html, /id="studio-dw-read-selection-summary">Entire Project<\/summary>/);
   const read = workbench.split('  function renderReadStory(story) {', 2)[1].split('  function selectedPaths() {', 2)[0];

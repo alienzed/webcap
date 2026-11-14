@@ -1,5 +1,7 @@
 # Epoch Finder — Training-aware evaluation implementation contract
 
+> **Historical implementation contract (superseded for DINOv2 in November 2026):** DINOv2 has been retired from Campaigns and Prompt Tests, its optional inference module has been removed, and new DINO assessments are rejected. Historic Campaign and Test evidence files are not migrated or deleted. Instructions below about DINO setup, execution, checkboxes, and verification are historical only; Original VL, paired reference VL (RVN), and Campaigns remain supported.
+
 Status: agreed direction, 17 October 2026. This document extends `docs/epoch_finder_vision.md`. No new scoring formula is approved.
 
 ## Locked behavior

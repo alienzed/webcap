@@ -4294,7 +4294,6 @@
             return window.studioDirectorWorkbench.applyScenePrompt(story, sceneId, proposed.prompt, extras)
               .then(function () {
                 studioActionStatus('Scene ' + (story.sceneOrder.indexOf(sceneId)+1) + ' saved.', false);
-                return persistSession('storyboard');
               });
           });
       }).catch(function (error) {

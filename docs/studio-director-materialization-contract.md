@@ -7,7 +7,7 @@
 > Current implementation/acceptance reference:
 > [studio-director-implementation.md](studio-director-implementation.md).
 
-> **Useful-functions consolidation (2026-11-03):** See [studio-director-useful-functions-consolidation.md](studio-director-useful-functions-consolidation.md) for the active three-workflow interface, current implementation boundaries and acceptance tests. Earlier capability matrices below document historical and backend capabilities, not the current Director operation menu. The explicit coherence utility remains separate from creative Write.
+> **Useful-functions consolidation (2026-11-03):** [studio-director-useful-functions-consolidation.md](studio-director-useful-functions-consolidation.md) is historical implementation context, not the active three-capability contract or acceptance plan. Use the current contract and implementation reference above. The explicit coherence utility remains separate from creative Write.
 
 > **Coherence consolidation (2026-11-03):** Historical implementation phases and acceptance gates for the explicit coherence utility and reviewed multi-Scene changes are in [studio-director-coherence-consolidation.md](studio-director-coherence-consolidation.md). The useful-functions consolidation above owns current capability scope; coherence is a separate Project utility. Legacy UI removal awaits runtime acceptance.
 

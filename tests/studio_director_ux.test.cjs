@@ -135,6 +135,7 @@ test('Context defaults to the entire Project and preserves a custom selection on
   assert.equal(elements['studio-dw-read-selection-summary'].textContent,'Entire Project');
   const second=JSON.stringify(scope.readPayload(story,scope.selectedPaths()));
   assert.ok(JSON.parse(second).fields.some(field=>field.value==='Second'));
+  assert.ok(!JSON.parse(second).fields.some(field=>field.id.endsWith(':summary')));
   toggles()[2].checked=false;toggles()[2].onchange();
   assert.equal(elements['studio-dw-read-selection-summary'].textContent,'Overview + 1 Scene');
   scope.renderReadStory(story);
@@ -274,4 +275,21 @@ test('prompted Scenes keep a legacy summary without exposing a second editor',()
     /'<input type="hidden" data-scene-field="summary" value="'/);
   assert.match(workbench,/var contextFields = String\(scene\.prompt \|\| ''\)\.trim\(\)/);
   assert.match(workbench,/var fields = String\(scene\.prompt \|\| ''\)\.trim\(\)/);
+});
+
+test('Scene Director supplies prompt over legacy summary, but reads outline-only drafts',()=>{
+  const slice=part(workbench,'    sceneRead: function (story, sceneId) {','    applyScenePrompt: function (story, sceneId, prompt) {');
+  const scope=vm.createContext({projectFields:['title','concept','style','invariants'],
+    readPayload:(_story,keys)=>({fields:keys})});
+  vm.runInContext('var bridge={'+slice+'};',scope);
+  const story={sceneOrder:['ready','draft'],scenes:{
+    ready:{title:'Full',summary:'Older idea',prompt:'Complete H3 Prompt'},
+    draft:{title:'Outline',summary:'Initial plan',prompt:''}
+  }};
+  const ready=scope.bridge.sceneRead(story,'ready').keys;
+  const draft=scope.bridge.sceneRead(story,'draft').keys;
+  assert.ok(ready.includes('scene:ready:prompt'));
+  assert.ok(!ready.includes('scene:ready:summary'));
+  assert.ok(draft.includes('scene:draft:summary'));
+  assert.ok(!draft.includes('scene:draft:prompt'));
 });

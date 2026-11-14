@@ -573,7 +573,7 @@ test('new Project Apply persists only reviewed Project fields before Scene autho
       assert.equal(briefs[0].brief,'Keep the beacon lit.');
       assert.equal(briefs[0].durationSeconds,8);
       sceneAuthoring=true;
-      return {saved:['scene-one'],failed:[],notAttempted:[]};
+      return {saved:['scene-one'],failed:[],notAttempted:[],reportingErrors:[]};
     }
   });
   vm.runInContext(projectPart('  function applyStudioProject() {',

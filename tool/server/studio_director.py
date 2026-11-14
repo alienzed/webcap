@@ -205,8 +205,7 @@ def read_story_scope(story, field, scene_id=""):
         data = {key: story.get(key) for key in ("title", "concept", "style", "invariants")}
     elif field == "index":
         data = [
-            {"id": sid, "position": position, "title": story["scenes"][sid].get("title", ""),
-             "prompt": story["scenes"][sid].get("prompt", "")}
+            {"id": sid, "position": position, "title": story["scenes"][sid].get("title", "")}
             for position, sid in enumerate(story.get("sceneOrder", []), 1)
         ]
     elif field in {"scene", "prompt", "takes"}:

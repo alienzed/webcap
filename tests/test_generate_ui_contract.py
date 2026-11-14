@@ -596,3 +596,24 @@ def test_generate_job_ownership_comes_from_inference_queue_metadata():
     assert "String(job && job.client || '') !== 'generate'" in script
     assert "String(job && job.client || '') === 'generate'" in script
     assert "adoptGenerateJobsFromQueue(queue);" in script
+
+
+def test_generation_mode_precedes_loras_inside_settings_inspector():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "generate.css").read_text(encoding="utf-8")
+    script = (ROOT / "tool" / "js" / "generate.js").read_text(encoding="utf-8")
+
+    inspector_start = html.index('<aside class="generate-inspector"')
+    inspector_end = html.index("</aside>", inspector_start)
+    inspector = html[inspector_start:inspector_end]
+    settings = inspector.index('<section class="generate-output-settings">')
+    mode = inspector.index('<div class="generate-mode-row">')
+    loras = inspector.index('<section class="generate-conditioning">')
+    sweep_panel = inspector.index('id="generate-lora-sweep-panel"')
+    assert settings < mode < loras < sweep_panel
+    assert 'id="generate-lora-selected-tab"' in inspector
+    assert 'id="generate-lora-sweep-tab"' in inspector
+    assert html.count('id="generate-lora-selected-tab"') == 1
+    assert html.count('id="generate-lora-sweep-tab"') == 1
+    assert ".generate-inspector > .generate-mode-row" in css
+    assert "function setLoraMode(mode)" in script

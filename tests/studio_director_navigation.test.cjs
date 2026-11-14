@@ -88,7 +88,7 @@ function actualSceneRequestFixture() {
   vm.runInContext(section(workbench,'  function readPayload(story, keys) {',
     '  function updateReadSelection() {')+
     'window.studioDirectorWorkbench={'+sceneRead+'};',scope);
-  vm.runInContext(section(director,'  function studioDirectorSelectedScene() {',
+  vm.runInContext(section(director,'  function studioDirectorSelectedScene(navigation) {',
     '  function syncModeUi() {')+
     section(director,'  function studioDirectorRequestMessages(messages, includePromptContract, explicitWrite, navigationSnapshot) {',
       '  // The creative assessment is advisory.'),scope);

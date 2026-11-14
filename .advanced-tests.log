@@ -1,0 +1,336 @@
+✔ changing Write operation reloads saved Scene choices after a reviewed insertion (2.6957ms)
+✔ Undo is reachable from the visible rail and delegates to existing reviewed operation (0.6126ms)
+✔ manual Read and Write remain available through the on-demand Advanced panel (0.7132ms)
+✔ Read and Write stay distinct; Read persists field choices on panel changes (0.1845ms)
+✔ operational errors reveal Advanced and preserve the shared Console detail (0.9807ms)
+✔ Advanced opens and closes the last manual panel without submitting Read or Write (1.5335ms)
+✔ Read preview and outbound values use the same validated field serializer (2.6461ms)
+✔ Read receipt uses delivery and response status, not model text parsing (0.4565ms)
+✔ Select entire Project reuses Read selection and shows size without rejecting it (0.3623ms)
+✔ Transient model discovery error preserves selected model (0.4265ms)
+✔ Readiness opens a single read-only detail and never assigns one Scene ID to multiple checks (0.4459ms)
+✔ New chat and loaded session reset stale design selections without changing saved creative data (0.1704ms)
+✔ Overview Review leads with changed parts and retains the same editable nodes for other parts (2.9441ms)
+✔ editing retained Overview text includes the edit without requiring a second checkbox action (1.1881ms)
+✔ Director is stable on outside clicks and Escape; general Assistant retains dismissal (1.4362ms)
+✔ Project review summary follows edits and selection without changing either (2.9754ms)
+✔ identical Invariants are not preselected because JSON properties arrived in another order (1.1629ms)
+✔ Context defaults to the entire Project and preserves a custom selection on return (20.1753ms)
+✔ ordinary discussion asks for concise new decisions while complete creative fields remain complete (0.1828ms)
+✔ compact Director replies keep the exact full text and leave General Chat alone (1.1239ms)
+✔ Apply receipt names the actual scoped Scene fields and retains authoritative values (1.0835ms)
+✔ editable revision comparison identifies retained, removed and added words without mutating sources (1.3202ms)
+✔ field update indicators identify the saved Project, and clear after author edits (1.0053ms)
+✔ routine operation feedback does not leave a separate status card in the chat workbench (0.7385ms)
+✔ field update indication clears when the Storyboard opens another Project (1.5878ms)
+ℹ tests 25
+ℹ suites 0
+ℹ pass 25
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 122.6777
+✔ Scene-number recommendation resolves to a saved ID; deliberate choices stay selected (3.1736ms)
+✔ suggestions name creative units regardless of advisory field hints (1.0124ms)
+✔ only one contextual action is presented, with completed capture taking priority (1.4645ms)
+✔ Scene Write receives early decisions and complete long messages from the discussion (1.509ms)
+✔ suggestion prepares the correct Scene operation, panel hidden=true, target={"sceneId":"scene-a","sceneNumber":0} (0.9567ms)
+✔ suggestion prepares the correct Scene operation, panel hidden=true, target={"sceneId":"","sceneNumber":1} (0.6254ms)
+✔ suggestion prepares the correct Scene operation, panel hidden=true, target={"sceneId":"","sceneNumber":0} (0.6337ms)
+✔ suggestion prepares the correct Scene operation, panel hidden=false, target={"sceneId":"scene-a","sceneNumber":0} (0.6571ms)
+✔ suggestion prepares the correct Scene operation, panel hidden=false, target={"sceneId":"","sceneNumber":1} (0.6796ms)
+✔ suggestion prepares the correct Scene operation, panel hidden=false, target={"sceneId":"","sceneNumber":0} (0.7057ms)
+✔ opening Write defaults to revising a numbered Scene and preserves deliberate mode choices (0.8509ms)
+✔ failed destination setup reports its failure without starting a proposal (0.7075ms)
+✔ Scene Review includes the whole unit and selects all actual changes, irrespective of field hints (1.2728ms)
+✔ automatic new-Scene Write reuses a fresh capture and preserves explicit drafting (1.0359ms)
+✔ completed new Scene with Title, Intent and H3 Prompt reviews directly without another Director request (0.8104ms)
+✔ completed Scene capture reviews the exact saved Scene without another proposal: a (0.9914ms)
+✔ completed Scene capture reviews the exact saved Scene without another proposal: scene:a (0.6308ms)
+✔ completed Scene capture reviews the exact saved Scene without another proposal: scene:a:prompt (0.6414ms)
+✔ the inline Project Read targets the current destination and reuses explicit Read (0.891ms)
+✔ unit Apply saves aligned changed parts atomically and leaves the unchanged Title outside the write (1.2376ms)
+✔ mismatched Scene targets require confirmation before any saved mutation (0.7279ms)
+✔ Director overlays Projects as a resizable drawer with an optional manual workbench (2.7204ms)
+✔ New Director conversation is passive until the author explicitly sends (0.2809ms)
+✔ Only explicitly supplied conversation content is sent; legacy snapshots are not silently re-injected (1.1226ms)
+✔ Studio prompting selects the current goal rather than steering every task to Project edits (1.8207ms)
+✔ explicit Write guidance asks for the draft, not another conversational recommendation (0.9543ms)
+✖ existing Project and Scene draft paths also use explicit Write guidance (0.684ms)
+✔ single-Scene revision request uses its saved ID in the example, not a placeholder (0.1959ms)
+✔ Scene revision synchronizes the chosen Project destination before requesting a proposal (2.0231ms)
+✖ Read sends actual saved data and asks for a conversational confirmation (1.6366ms)
+✔ Ordinary Studio conversation has no model-requested hidden Read or capture token (0.5095ms)
+✔ Readiness proposals are bounded, inspectable, read-only and do not block Write (0.5355ms)
+✔ Write preserves reviewed Apply and carries final saved content into conversation (0.4015ms)
+✔ General Chat has a separate request path and Studio keeps native storage IDs (0.6507ms)
+✖ Read offers one Project Overview and per-Scene complete selections without media fields (0.9339ms)
+✔ retired Director structural UI is absent (0.2615ms)
+✔ multi-Scene review drafts together and applies selected fields in one atomic request (0.4136ms)
+✔ Scene splitting is not a Director Write operation (0.233ms)
+✔ batch Scene revisions include duration and linked Invariants (0.1752ms)
+✔ H3 detailed authoring contract is included when Director may propose a Prompt revision (0.9273ms)
+✔ Studio conversation receives the canonical H3 template as reference without an automatic Write (1.1243ms)
+✔ large explicit Read selections are sent intact, with no arbitrary client character cap (14.8898ms)
+✔ standalone Invariant linking is not a Director Write operation (0.2859ms)
+✔ multi-Scene review preserves actual Project positions and distinguishes a saved Scene from receipt failure (0.1474ms)
+✔ legacy Studio field Read remains a neutral context handoff by default (0.2992ms)
+ℹ tests 45
+ℹ suites 0
+ℹ pass 42
+ℹ fail 3
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 120.3845
+
+✖ failing tests:
+
+test at tests\studio_director_workshop.test.cjs:130:1
+✖ existing Project and Scene draft paths also use explicit Write guidance (0.684ms)
+  AssertionError [ERR_ASSERTION]: Explicit Write guidance not used by studio_scene_sequence_draft
+      at TestContext.<anonymous> (C:\Users\mschmid\Documents\repos\webcap\tests\studio_director_workshop.test.cjs:139:12)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
+
+test at tests\studio_director_workshop.test.cjs:182:1
+✖ Read sends actual saved data and asks for a conversational confirmation (1.6366ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + 'director-chat-scene-context'
+  - 'director-chat-input'
+                   ^
+  
+      at el (C:\Users\mschmid\Documents\repos\webcap\tests\studio_director_workshop.test.cjs:190:14)
+      at Object.sendRead (evalmachine.<anonymous>:33:7)
+      at TestContext.<anonymous> (C:\Users\mschmid\Documents\repos\webcap\tests\studio_director_workshop.test.cjs:204:39)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'director-chat-scene-context',
+    expected: 'director-chat-input',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests\studio_director_workshop.test.cjs:271:1
+✖ Read offers one Project Overview and per-Scene complete selections without media fields (0.9339ms)
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /addUnit\('Project Overview', overview, fields/. Input:
+  
+  '(function () {\n' +
+    "  'use strict';\n" +
+    '  var readStory = null, writeStory = null, projects = [], proposedScene = null, proposedBatch = null;\n' +
+    "  var readiness = [], recommendations = {readHints:[],writeHint:'',writeFields:[],sceneId:''};\n" +
+    '  var readinessStale = false;\n' +
+    '  var readChoices = {}, writeOperationChosen = false, lastReadSource = null;\n' +
+    "  var sceneSelectionManual = false, sceneSelectionProject = '', recommendationProject = '';\n" +
+    "  var lastQuickAction = 'read', creativeCapture = null;\n" +
+    "  var sceneFields = ['summary', 'prompt', 'title'];\n" +
+    "  var projectFields = ['title', 'concept', 'style', 'invariants'];\n" +
+    "  var labels = {title:'Title', concept:'Concept', style:'Visual / atmosphere',\n" +
+    "    invariants:'Invariants', invariant:'Invariant', scene:'New Scene', summary:'Intent', prompt:'H3 Prompt',\n" +
+    "    references:'Reference frames', durationSeconds:'Duration',\n" +
+    "    generationSettings:'Generation settings'};\n" +
+    '  function el(id) { return document.getElementById(id); }\n' +
+    '  function api(url, options) {\n' +
+    '    return fetch(url, options || {}).then(function (response) {\n' +
+    '      return response.json().then(function (body) {\n' +
+    "        if (!response.ok || !body || !body.ok) throw new Error((body && body.error) || 'Studio request failed.');\n" +
+    '        return body;\n' +
+    '      });\n' +
+    '    });\n' +
+    '  }\n' +
+    '  function status(message, error) {\n' +
+    "    var node = el('studio-dw-status');\n" +
+    '    if (node) {\n' +
+    "      node.textContent = error ? (message || '') : '';\n" +
+    "      node.dataset.error = error ? 'true' : 'false';\n" +
+    "      node.classList.toggle('hidden', !message || !error);\n" +
+    '    }\n' +
+    '    if (error) {\n' +
+    "      el('director-chat-drawer').classList.add('studio-actions-open');\n" +
+    "      el('studio-dw-open-tools').setAttribute('aria-expanded','true');\n" +
+    "      window.reportConsoleError('Studio Director workbench', new Error(message));\n" +
+    '    }\n' +
+    "    else if (message) window.reportConsoleInfo('Studio Director workbench', message);\n" +
+    '  }\n' +
+    '  function option(select, id, name) {\n' +
+    "    var node = document.createElement('option');\n" +
+    '    node.value = id; node.textContent = name; select.appendChild(node);\n' +
+    '  }\n' +
+    '  function activeTarget() {\n' +
+    "    var route = typeof window.getStoryboardRouteTarget === 'function' ? window.getStoryboardRouteTarget() : null;\n" +
+    '    return route || {};\n' +
+    '  }\n' +
+    "  function storyName(story) { return String(story.title || story.name || story.id || 'Untitled Project'); }\n" +
+    '  function refreshProjects() {\n' +
+    "    return api('/fs/storyboard').then(function (response) {\n" +
+    '      projects = response.stories || [];\n' +
+    "      if (!Array.isArray(projects)) throw new Error('Project listing is invalid.');\n" +
+    '      var preferredRead = (readStory && readStory.id) || activeTarget().storyId ||\n' +
+    "        window.studioDirectorBridge.workingStoryId() || '';\n" +
+    "      var preferredWrite = window.studioDirectorBridge.workingStoryId() || activeTarget().storyId || '';\n" +
+    "      [['studio-dw-read-project', preferredRead], ['studio-dw-write-project', preferredWrite]]\n" +
+    '        .forEach(function (item) {\n' +
+    '          var select = el(item[0]), original = select.value;\n' +
+    '          select.replaceChildren();\n' +
+    "          option(select, '', 'Choose Project…');\n" +
+    '          projects.forEach(function (p) { option(select, p.id, storyName(p)); });\n' +
+    '          if (projects.some(function (p) { return p.id === original; })) select.value = original;\n' +
+    '          else if (projects.some(function (p) { return p.id === item[1]; })) select.value = item[1];\n' +
+    '        });\n' +
+    '      return projects;\n' +
+    '    });\n' +
+    '  }\n' +
+    '  function loadStory(id) {\n' +
+    '    if (!id) return Promise.resolve(null);\n' +
+    "    return api('/fs/storyboard?story=' + encodeURIComponent(id)).then(function (body) {\n" +
+    "      if (!body.story || body.story.id !== id) throw new Error('Project selection no longer matches saved data.');\n" +
+    '      return body.story;\n' +
+    '    });\n' +
+    '  }\n' +
+    '  // Read choices are complete Project and Scene units; the existing field IDs\n' +
+    '  // remain the wire format so the preview, receipt and chat history stay compatible.\n' +
+    '  function renderReadStory(story) {\n' +
+    '    readStory = story;\n' +
+    "    var fields = el('studio-dw-project-fields'), scenes = el('studio-dw-scene-fields');\n" +
+    '    fields.replaceChildren(); scenes.replaceChildren();\n' +
+    '    if (!story) { updateReadSelection(); return; }\n' +
+    '    var chosen = readChoices[story.id], firstSelection = !chosen;\n' +
+    '    if (firstSelection) chosen = new Set();\n' +
+    '    function addUnit(label, paths, host, suggested) {\n' +
+    '      if (firstSelection && suggested) paths.forEach(function (path) { chosen.add(path); });\n' +
+    "      var row = document.createElement('label'), toggle = document.createElement('input');\n" +
+    "      toggle.type = 'checkbox';\n" +
+    "      toggle.dataset.groupSelect = 'true';\n" +
+    '      toggle.groupPaths = paths;\n' +
+    '      toggle.checked = paths.every(function (path) {return chosen.has(path);});\n' +
+    '      row.append(toggle, document.createTextNode(label));\n' +
+    '      toggle.onchange = function () {\n' +
+    '        paths.forEach(function (path) {\n' +
+    '          if (toggle.checked) chosen.add(path);\n' +
+    '          else chosen.delete(path);\n' +
+    '        });\n' +
+    '        updateReadSelection();\n' +
+    '      };\n' +
+    '      host.appendChild(row);\n' +
+    '    }\n' +
+    "    var overview = projectFields.map(function (key) {return 'project.' + key;});\n" +
+    "    addUnit('Overview', overview, fields,\n" +
+    '      recommendations.readHints.length\n' +
+    '        ? overview.some(function (path) {return recommendations.readHints.includes(path);})\n' +
+    '        : true);\n' +
+    '    (story.sceneOrder || []).forEach(function (id, index) {\n' +
+    '      var scene = story.scenes && story.scenes[id];\n' +
+    "      if (!scene) throw new Error('Project has a Scene index with no matching Scene.');\n" +
+    "      var paths = ['title', 'summary', 'prompt', 'durationSeconds'].map(function (field) {\n" +
+    "        return 'scene:' + id + ':' + field;\n" +
+    '      });\n' +
+    '      var current = id === (recommendedSceneId(story) || activeTarget().sceneId);\n' +
+    '      var suggested = recommendations.readHints.some(function (hint) {\n' +
+    "        return paths.includes(hint) || (current && hint.startsWith('scene.current.') &&\n" +
+    "          paths.some(function (path) {return path.endsWith(':' + hint.slice(14));}));\n" +
+    '      }) || !recommendations.readHints.length;\n' +
+    "      addUnit('Scene ' + (index + 1) + ' · ' + (scene.title || 'Untitled'), paths, scenes, suggested);\n" +
+    '    });\n' +
+    '    readChoices[story.id] = chosen;\n' +
+    '    updateReadSelection();\n' +
+    '  }\n' +
+    '  function selectedPaths() {\n' +
+    "    return Array.from(el('studio-dw-read-panel').querySelectorAll('input[data-group-select]:checked'))\n" +
+    '      .flatMap(function (toggle) {return toggle.groupPaths;});\n' +
+    '  }\n' +
+    '  function selectEntireReadProject() {\n' +
+    '    if (!readStory) return;\n' +
+    "    el('studio-dw-read-panel').querySelectorAll('input[data-group-select]').forEach(function (toggle) {\n" +
+    '      toggle.checked = true;\n' +
+    '      toggle.groupPaths.forEach(function (path) { readChoices[readStory.id].add(path); });\n' +
+    '    });\n' +
+    '    updateReadSelection();\n' +
+    '  }\n' +
+    '  function readPayload(story, keys) {\n' +
+    '    return {\n' +
+    '      projectId: story.id, projectTitle: storyName(story), savedAt: story.updatedAt,\n' +
+    '      fields: keys.map(function (key) {\n' +
+    "        var parts = key.split(':'), value;\n" +
+    "        if (key.indexOf('project.') === 0) {\n" +
+    '          var field = key.slice(8);\n' +
+    "          if (projectFields.indexOf(field) === -1) throw new Error('Unknown Project field: ' + field);\n" +
+    '          value = story[field];\n' +
+    '        } else {\n' +
+    "          if (parts.length !== 3 || parts[0] !== 'scene' ||\n" +
+    "              ['title','summary','prompt','durationSeconds'].indexOf(parts[2]) === -1 ||\n" +
+    '              !story.scenes || !story.scenes[parts[1]] ||\n' +
+    '              (story.sceneOrder || []).indexOf(parts[1]) === -1)\n' +
+    "            throw new Error('Selected Scene field is not in this Project: ' + key);\n" +
+    '          value = story.scenes[parts[1]][parts[2]];\n' +
+    '        }\n' +
+    '        return {id:key, value:value === undefined ? null : value};\n' +
+    '      })\n' +
+    '    };\n' +
+    '  }\n' +
+    '  function updateReadSelection() {\n' +
+    '    var keys = selectedPaths();\n' +
+    '    var bytes = readStory ? JSON.stringify(readPayload(readStory, keys)).length : 0;\n' +
+    "    var units = el('studio-dw-read-panel').querySelectorAll('input[data-group-select]:checked').length;\n" +
+    "    var toggles = Array.from(el('studio-dw-read-panel').querySelectorAll('input[data-group-select]'));\n" +
+    "    var overview = toggles.some(function (toggle) {return toggle.checked && toggle.groupPaths[0].startsWith('project.');});\n" +
+    "    var sceneCount = toggles.filter(function (toggle) {return toggle.checked && toggle.groupPaths[0].startsWith('scene:');}).length;\n" +
+    "    el('studio-dw-read-selection-summary').textContent = units && units === toggles.length ? 'Entire Project' :\n" +
+    "      [overview ? 'Overview' : '', sceneCount ? sceneCount + (sceneCount === 1 ? ' Scene' : ' Scenes') : '']\n" +
+    "        .filter(Boolean).join(' + ') || 'Choose material';\n" +
+    "    el('studio-dw-read-count').textContent = units +\n" +
+    "      (units === 1 ? ' selection' : ' selections') + ' · ' + bytes.toLocaleString() + ' characters';\n" +
+    "    el('studio-dw-read-send').disabled = !keys.length || !el('studio-dw-read-project').value;\n" +
+    "    el('studio-dw-read-all').disabled = !readStory || !el('studio-dw-read-project').value;\n" +
+    "    var details = el('studio-dw-read-preview');\n" +
+    "    if (details.open && readStory) el('studio-dw-read-preview-data').textContent =\n" +
+    '      JSON.stringify(readPayload(readStory, keys), null, 2);\n' +
+    '  }\n' +
+    '  function readSend(instruction) {\n' +
+    "    var id = el('studio-dw-read-project').value, keys = selectedPaths();\n" +
+    "    if (!id || !keys.length) { status('Choose a Project and at least one field.', true); return; }\n" +
+    '    if (!window.studioDirectorBridge.isReady()) { status(window.studioDirectorBridge.readinessMessage(), true); return; }\n' +
+    "    el('studio-dw-read-send').disabled = true;\n" +
+    "    window.studioDirectorWorkbench.setReadStatus('working','Reading selected saved fields…');\n" +
+    '    // Same exact serializer drives the inspector and the outbound LLM message.\n' +
+    '    loadStory(id).then(function (story) {\n' +
+    '      var payload = readPayload(story, keys);\n' +
+    "      el('studio-dw-read-preview-data').textContent = JSON.stringify(payload, null, 2);\n" +
+    "      window.studioDirectorBridge.sendRead(payload, keys, typeof instruction === 'string' ? instruction : undefined);\n" +
+    '      lastReadSource = story.id;\n' +
+    "      status('Selected fields sent. Awaiting Director’s own acknowledgment.', false);\n" +
+    '      el'... 55344 more characters
+  
+      at TestContext.<anonymous> (C:\Users\mschmid\Documents\repos\webcap\tests\studio_director_workshop.test.cjs:272:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: "(function () {\n  'use strict';\n  var readStory = null, writeStory = null, projects = [], proposedScene = null, proposedBatch = null;\n  var readiness = [], recommendations = {readHints:[],writeHint:'',writeFields:[],sceneId:''};\n  var readinessStale = false;\n  var readChoices = {}, writeOperationChosen = false, lastReadSource = null;\n  var sceneSelectionManual = false, sceneSelectionProject = '', recommendationProject = '';\n  var lastQuickAction = 'read', creativeCapture = null;\n  var sceneFields = ['summary', 'prompt', 'title'];\n  var projectFields = ['title', 'concept', 'style', 'invariants'];\n  var labels = {title:'Title', concept:'Concept', style:'Visual / atmosphere',\n    invariants:'Invariants', invariant:'Invariant', scene:'New Scene', summary:'Intent', prompt:'H3 Prompt',\n    references:'Reference frames', durationSeconds:'Duration',\n    generationSettings:'Generation settings'};\n  function el(id) { return document.getElementById(id); }\n  function api(url, options) {\n    return fetch(url, options || {}).then(function (response) {\n      return response.json().then(function (body) {\n        if (!response.ok || !body || !body.ok) throw new Error((body && body.error) || 'Studio request failed.');\n        return body;\n      });\n    });\n  }\n  function status(message, error) {\n    var node = el('studio-dw-status');\n    if (node) {\n      node.textContent = error ? (message || '') : '';\n      node.dataset.error = error ? 'true' : 'false';\n      node.classList.toggle('hidden', !message || !error);\n    }\n    if (error) {\n      el('director-chat-drawer').classList.add('studio-actions-open');\n      el('studio-dw-open-tools').setAttribute('aria-expanded','true');\n      window.reportConsoleError('Studio Director workbench', new Error(message));\n    }\n    else if (message) window.reportConsoleInfo('Studio Director workbench', message);\n  }\n  function option(select, id, name) {\n    var node = document.createElement('option');\n    node.value = id; node.textContent = name; select.appendChild(node);\n  }\n  function activeTarget() {\n    var route = typeof window.getStoryboardRouteTarget === 'function' ? window.getStoryboardRouteTarget() : null;\n    return route || {};\n  }\n  function storyName(story) { return String(story.title || story.name || story.id || 'Untitled Project'); }\n  function refreshProjects() {\n    return api('/fs/storyboard').then(function (response) {\n      projects = response.stories || [];\n      if (!Array.isArray(projects)) throw new Error('Project listing is invalid.');\n      var preferredRead = (readStory && readStory.id) || activeTarget().storyId ||\n        window.studioDirectorBridge.workingStoryId() || '';\n      var preferredWrite = window.studioDirectorBridge.workingStoryId() || activeTarget().storyId || '';\n      [['studio-dw-read-project', preferredRead], ['studio-dw-write-project', preferredWrite]]\n        .forEach(function (item) {\n          var select = el(item[0]), original = select.value;\n          select.replaceChildren();\n          option(select, '', 'Choose Project…');\n          projects.forEach(function (p) { option(select, p.id, storyName(p)); });\n          if (projects.some(function (p) { return p.id === original; })) select.value = original;\n          else if (projects.some(function (p) { return p.id === item[1]; })) select.value = item[1];\n        });\n      return projects;\n    });\n  }\n  function loadStory(id) {\n    if (!id) return Promise.resolve(null);\n    return api('/fs/storyboard?story=' + encodeURIComponent(id)).then(function (body) {\n      if (!body.story || body.story.id !== id) throw new Error('Project selection no longer matches saved data.');\n      return body.story;\n    });\n  }\n  // Read choices are complete Project and Scene units; the existing field IDs\n  // remain the wire format so the preview, receipt and chat history stay compatible.\n  function renderReadStory(story) {\n    readStory = story;\n    var fields = el('studio-dw-project-fields'), scenes = el('studio-dw-scene-fields');\n    fields.replaceChildren(); scenes.replaceChildren();\n    if (!story) { updateReadSelection(); return; }\n    var chosen = readChoices[story.id], firstSelection = !chosen;\n    if (firstSelection) chosen = new Set();\n    function addUnit(label, paths, host, suggested) {\n      if (firstSelection && suggested) paths.forEach(function (path) { chosen.add(path); });\n      var row = document.createElement('label'), toggle = document.createElement('input');\n      toggle.type = 'checkbox';\n      toggle.dataset.groupSelect = 'true';\n      toggle.groupPaths = paths;\n      toggle.checked = paths.every(function (path) {return chosen.has(path);});\n      row.append(toggle, document.createTextNode(label));\n      toggle.onchange = function () {\n        paths.forEach(function (path) {\n          if (toggle.checked) chosen.add(path);\n          else chosen.delete(path);\n        });\n        updateReadSelection();\n      };\n      host.appendChild(row);\n    }\n    var overview = projectFields.map(function (key) {return 'project.' + key;});\n    addUnit('Overview', overview, fields,\n      recommendations.readHints.length\n        ? overview.some(function (path) {return recommendations.readHints.includes(path);})\n        : true);\n    (story.sceneOrder || []).forEach(function (id, index) {\n      var scene = story.scenes && story.scenes[id];\n      if (!scene) throw new Error('Project has a Scene index with no matching Scene.');\n      var paths = ['title', 'summary', 'prompt', 'durationSeconds'].map(function (field) {\n        return 'scene:' + id + ':' + field;\n      });\n      var current = id === (recommendedSceneId(story) || activeTarget().sceneId);\n      var suggested = recommendations.readHints.some(function (hint) {\n        return paths.includes(hint) || (current && hint.startsWith('scene.current.') &&\n          paths.some(function (path) {return path.endsWith(':' + hint.slice(14));}));\n      }) || !recommendations.readHints.length;\n      addUnit('Scene ' + (index + 1) + ' · ' + (scene.title || 'Untitled'), paths, scenes, suggested);\n    });\n    readChoices[story.id] = chosen;\n    updateReadSelection();\n  }\n  function selectedPaths() {\n    return Array.from(el('studio-dw-read-panel').querySelectorAll('input[data-group-select]:checked'))\n      .flatMap(function (toggle) {return toggle.groupPaths;});\n  }\n  function selectEntireReadProject() {\n    if (!readStory) return;\n    el('studio-dw-read-panel').querySelectorAll('input[data-group-select]').forEach(function (toggle) {\n      toggle.checked = true;\n      toggle.groupPaths.forEach(function (path) { readChoices[readStory.id].add(path); });\n    });\n    updateReadSelection();\n  }\n  function readPayload(story, keys) {\n    return {\n      projectId: story.id, projectTitle: storyName(story), savedAt: story.updatedAt,\n      fields: keys.map(function (key) {\n        var parts = key.split(':'), value;\n        if (key.indexOf('project.') === 0) {\n          var field = key.slice(8);\n          if (projectFields.indexOf(field) === -1) throw new Error('Unknown Project field: ' + field);\n          value = story[field];\n        } else {\n          if (parts.length !== 3 || parts[0] !== 'scene' ||\n              ['title','summary','prompt','durationSeconds'].indexOf(parts[2]) === -1 ||\n              !story.scenes || !story.scenes[parts[1]] ||\n              (story.sceneOrder || []).indexOf(parts[1]) === -1)\n            throw new Error('Selected Scene field is not in this Project: ' + key);\n          value = story.scenes[parts[1]][parts[2]];\n        }\n        return {id:key, value:value === undefined ? null : value};\n      })\n    };\n  }\n  function updateReadSelection() {\n    var keys = selectedPaths();\n    var bytes = readStory ? JSON.stringify(readPayload(readStory, keys)).length : 0;\n    var units = el('studio-dw-read-panel').querySelectorAll('input[data-group-select]:checked').length;\n    var toggles = Array.from(el('studio-dw-read-panel').querySelectorAll('input[data-group-select]'));\n    var overview = toggles.some(function (toggle) {return toggle.checked && toggle.groupPaths[0].startsWith('project.');});\n    var sceneCount = toggles.filter(function (toggle) {return toggle.checked && toggle.groupPaths[0].startsWith('scene:');}).length;\n    el('studio-dw-read-selection-summary').textContent = units && units === toggles.length ? 'Entire Project' :\n      [overview ? 'Overview' : '', sceneCount ? sceneCount + (sceneCount === 1 ? ' Scene' : ' Scenes') : '']\n        .filter(Boolean).join(' + ') || 'Choose material';\n    el('studio-dw-read-count').textContent = units +\n      (units === 1 ? ' selection' : ' selections') + ' · ' + bytes.toLocaleString() + ' characters';\n    el('studio-dw-read-send').disabled = !keys.length || !el('studio-dw-read-project').value;\n    el('studio-dw-read-all').disabled = !readStory || !el('studio-dw-read-project').value;\n    var details = el('studio-dw-read-preview');\n    if (details.open && readStory) el('studio-dw-read-preview-data').textContent =\n      JSON.stringify(readPayload(readStory, keys), null, 2);\n  }\n  function readSend(instruction) {\n    var id = el('studio-dw-read-project').value, keys = selectedPaths();\n    if (!id || !keys.length) { status('Choose a Project and at least one field.', true); return; }\n    if (!window.studioDirectorBridge.isReady()) { status(window.studioDirectorBridge.readinessMessage(), true); return; }\n    el('studio-dw-read-send').disabled = true;\n    window.studioDirectorWorkbench.setReadStatus('working','Reading selected saved fields…');\n    // Same exact serializer drives the inspector and the outbound LLM message.\n    loadStory(id).then(function (story) {\n      var payload = readPayload(story, keys);\n      el('studio-dw-read-preview-data').textContent = JSON.stringify(payload, null, 2);\n      window.studioDirectorBridge.sendRead(payload, keys, typeof instruction === 'string' ? instruction : undefined);\n      lastReadSource = story.id;\n      status('Selected fields sent. Awaiting Director’s own acknowledgment.', false);\n      el"... 55344 more characters,
+    expected: /addUnit\('Project Overview', overview, fields/,
+    operator: 'match',
+    diff: 'simple'
+  }

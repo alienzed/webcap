@@ -2184,24 +2184,22 @@
                 <section id="studio-director-workbench" class="studio-director-workbench" aria-label="Director actions and feedback">
                   <div class="studio-dw-heading"><div><strong id="studio-dw-heading">Advanced</strong></div><button id="studio-dw-close-actions" type="button" aria-label="Close Director actions">Close</button></div>
                   <div class="studio-dw-actions">
-                    <button id="studio-dw-read" type="button" aria-expanded="false" aria-controls="studio-dw-read-panel">Read…</button>
-                    <button id="studio-dw-write" type="button" aria-expanded="false" aria-controls="studio-dw-write-panel">Write…</button>
+                    <button id="studio-dw-read" type="button" aria-expanded="false" aria-controls="studio-dw-read-panel" title="Share saved material with Director">Context</button>
+                    <button id="studio-dw-write" type="button" aria-expanded="false" aria-controls="studio-dw-write-panel" title="Prepare changes for review">Draft</button>
                   </div>
                   <div id="studio-dw-status" class="studio-dw-status hidden" role="status" aria-live="polite"></div>
                   <section id="studio-dw-read-panel" class="studio-dw-panel hidden" aria-label="Read selected Project and Scenes">
-                    <h3>Saved material</h3>
                     <label>Project<select id="studio-dw-read-project"></select></label>
-                    <button id="studio-dw-read-all" type="button">Select entire Project</button>
-                    <div id="studio-dw-project-fields" class="studio-dw-field-list" aria-label="Project fields"></div>
-                    <details id="studio-dw-scenes">
-                      <summary>Scenes</summary>
+                    <details id="studio-dw-read-selection">
+                      <summary id="studio-dw-read-selection-summary">Entire Project</summary>
+                      <button id="studio-dw-read-all" type="button">Select all</button>
+                      <div id="studio-dw-project-fields" class="studio-dw-field-list" aria-label="Project fields"></div>
                       <div id="studio-dw-scene-fields" class="studio-dw-scene-list"></div>
                     </details>
-                    <details id="studio-dw-read-preview"><summary>Inspect selection</summary><pre id="studio-dw-read-preview-data"></pre></details>
-                    <div class="studio-dw-submit"><span id="studio-dw-read-count">0 selections</span><button id="studio-dw-read-send" type="button" class="studio-dw-primary">Send to Director</button></div>
+                    <details id="studio-dw-read-preview"><summary>Inspect context</summary><span id="studio-dw-read-count">0 selections</span><pre id="studio-dw-read-preview-data"></pre></details>
+                    <div class="studio-dw-submit"><button id="studio-dw-read-send" type="button" class="studio-dw-primary">Share context</button></div>
                   </section>
                   <section id="studio-dw-write-panel" class="studio-dw-panel hidden" aria-label="Write reviewed content">
-                    <h3>Proposal</h3>
                     <label>Project<select id="studio-dw-write-project"></select></label>
                     <p id="studio-dw-write-scope" class="studio-dw-scope"></p>
                     <label>Action<select id="studio-dw-write-operation">
@@ -2219,13 +2217,11 @@
                       <div id="studio-dw-batch-scenes" class="studio-dw-scene-list"></div>
                     </div>
                     <details id="studio-dw-write-context" class="studio-dw-source-preview">
-                      <summary>Context Director will use for this draft</summary>
+                      <summary>Inspect draft context</summary>
                       <pre id="studio-dw-write-context-json"></pre>
                     </details>
-                    <div class="studio-dw-submit"><button id="studio-dw-write-prepare" type="button" class="studio-dw-primary">Prepare editable review</button></div>
-                    <details class="studio-dw-source-preview"><summary>Other Project utilities</summary>
-                      <button id="studio-dw-current-brief" type="button">Revise current Project Overview</button>
-                      <button id="studio-dw-current-prompt" type="button">Revise current Scene</button>
+                    <div class="studio-dw-submit"><button id="studio-dw-write-prepare" type="button" class="studio-dw-primary">Prepare draft</button></div>
+                    <details class="studio-dw-source-preview"><summary>Project tools</summary>
                       <button id="storyboard-director-tools-btn" type="button" title="Revise the open Project's Scenes, optionally generating new Takes">Revise &amp; Generate…</button>
                       <button id="studio-dw-coherence-check" type="button">Check Project coherence</button>
                       <div id="studio-dw-undo" class="studio-dw-undo hidden"><span id="studio-dw-undo-label">Project Overview updated</span><button id="studio-dw-undo-button" type="button">Revert latest Overview update…</button></div>

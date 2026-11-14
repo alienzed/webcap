@@ -1023,7 +1023,7 @@
       var list = Array.isArray(result) ? result : result && result.checks;
       var allowed = ['Concept','Characters','Setting','Action','Dialogue','Visual / atmosphere',
         'Visual focus','Structure / formula','Variation / repetition','Production feasibility'];
-      var operations = ['', 'project','new-project','scene','scenes','scene-edit','scenes-batch','scene-move','scene-duplicate','scene-split','scene-invariants','playbook','coherence-check'];
+      var operations = ['', 'project','new-project','scene','scenes','scene-edit','scenes-batch','scene-move','scene-duplicate','scene-invariants','playbook','coherence-check'];
       if (!Array.isArray(list) || list.length > 30 ||
           list.some(function (item) {
             return !item || typeof item !== 'object' || Array.isArray(item) ||

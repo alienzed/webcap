@@ -428,3 +428,30 @@ test('legacy Studio field Read remains a neutral context handoff by default', ()
   assert.match(source, /state\.pendingReadAck = keys\.slice\(\)/);
   assert.match(source, /For a context-only Read, stop after a brief confirmation/);
 });
+
+test('legacy Workshop request context never treats stored Scene Intent as a creative brief', () => {
+  const scope = vm.createContext({
+    state: {
+      workshop: {
+        storyTitle:'Short film', concept:'Story premise', guidelines:{},
+        sceneTitle:'Arrival', sceneSummary:'PRIVATE_LEGACY_INTENT',
+        durationSeconds:8, shots:'[Shot 1] (0s-8s) A complete action.'
+      },
+      storyboardAttachments:{}, studioStoryAccess:null
+    },
+    STORYBOARD_WORKSHOP_PRIMER:'Scene Prompt is the creative content.',
+    Object, String
+  });
+  vm.runInContext(part('  function storyboardRequestMessages(messages, includePrimer) {',
+    '  function attachStoryboardContext(kind) {'),scope);
+  const outbound = vm.runInContext(
+    'storyboardRequestMessages([{role:"user",content:"Revise the shots"}], true)',scope);
+  const serialized = JSON.stringify(outbound);
+  assert.match(serialized, /timedShots/);
+  assert.match(serialized, /sceneTitle/);
+  assert.doesNotMatch(serialized, /PRIVATE_LEGACY_INTENT|sceneIntent|sceneSummary/);
+  assert.doesNotMatch(source, /Use the outline to develop Scenes that have no prompt yet/);
+  assert.match(source, /Author a complete usable H3 Prompt when writing a new Scene/);
+  const workshopDraft = part('  function prepareWorkshopRevision() {', '  function parseStoryGuidelineProposal(raw) {');
+  assert.doesNotMatch(workshopDraft, /sceneIntent|sceneSummary/);
+});

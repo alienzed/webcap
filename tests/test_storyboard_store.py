@@ -1090,7 +1090,6 @@ def test_scene_repair_applies_sparse_fields_and_restores_across_sessions(storybo
         "scenes": {
             first["id"]: {
                 "title": first["title"],
-                "summary": first["summary"],
                 "entryState": first["entryState"],
                 "exitState": first["exitState"],
                 "prompt": first["prompt"],
@@ -1100,7 +1099,6 @@ def test_scene_repair_applies_sparse_fields_and_restores_across_sessions(storybo
             },
             second["id"]: {
                 "title": second["title"],
-                "summary": second["summary"],
                 "entryState": second["entryState"],
                 "exitState": second["exitState"],
                 "prompt": second["prompt"],
@@ -1126,6 +1124,7 @@ def test_scene_repair_applies_sparse_fields_and_restores_across_sessions(storybo
 
     assert scene_count == 1
     assert field_count == 1
+    assert "summary" not in base["scenes"][first["id"]]
     assert repaired["sceneOrder"] == [first["id"], second["id"]]
     assert repaired["scenes"][first["id"]]["title"] == "Funeral"
     assert repaired["scenes"][first["id"]]["durationSeconds"] == first["durationSeconds"]
@@ -1154,7 +1153,6 @@ def test_scene_repair_refuses_to_overwrite_a_field_edited_while_director_was_run
         "scenes": {
             scene["id"]: {
                 "title": scene["title"],
-                "summary": "Original summary.",
                 "entryState": "",
                 "exitState": "",
                 "prompt": "Original prompt.",
@@ -1187,7 +1185,6 @@ def test_scene_repair_refuses_stale_whole_story_context(storyboard_fs):
         "scenes": {
             scene["id"]: {
                 "title": scene["title"],
-                "summary": scene["summary"],
                 "entryState": scene["entryState"],
                 "exitState": scene["exitState"],
                 "prompt": scene["prompt"],
@@ -1229,7 +1226,6 @@ def test_scene_repair_rejects_duplicate_scene_patch(storyboard_fs):
         "scenes": {
             scene["id"]: {
                 "title": scene["title"],
-                "summary": scene["summary"],
                 "entryState": scene["entryState"],
                 "exitState": scene["exitState"],
                 "prompt": scene["prompt"],
@@ -1269,7 +1265,6 @@ def test_scene_repair_rejects_malformed_patch_instead_of_skipping_it(storyboard_
         "scenes": {
             scene["id"]: {
                 "title": scene["title"],
-                "summary": scene["summary"],
                 "entryState": scene["entryState"],
                 "exitState": scene["exitState"],
                 "prompt": scene["prompt"],
@@ -1391,7 +1386,8 @@ def test_workshop_allows_discussion_without_shot_parser_support(storyboard_fs):
     context = storyboard_store.workshop_scene_context(story["id"], scene["id"])
     assert context["shots"] == ""
     assert "integrated_multimodal_description" in context["shotError"]
-    assert context["sceneSummary"] == "Exploring a visual idea"
+    assert "sceneSummary" not in context
+    assert storyboard_store.load_story(story["id"])["scenes"][scene["id"]]["summary"] == "Exploring a visual idea"
     with pytest.raises(ValueError, match="one unambiguous"):
         storyboard_store.apply_workshop_shots(
             story["id"], scene["id"], context["expectedPrompt"], "[Shot 1]\nAn attempt"
@@ -1549,3 +1545,23 @@ def test_retired_scene_intent_empty_and_missing_are_compatible_with_prompt_edits
         })
         assert revised["prompt"] == "A complete revised production Prompt."
         assert revised.get("summary", "") == ""
+
+def test_legacy_workshop_context_uses_saved_prompt_without_scene_intent(storyboard_fs):
+    prompt = (
+        "Subject:\nPerson\n\n"
+        "Scene Overview:\nAn approved action.\n\n"
+        "integrated_multimodal_description:\n[Shot 1] (0s-8s) Person moves."
+    )
+    story = storyboard_store.create_story({"title": "Workshop context"})
+    story, scene = storyboard_store.add_scene(story["id"], {
+        "title": "Arrival",
+        "summary": "Legacy intent must remain stored but cannot drive revision.",
+        "prompt": prompt,
+    })
+    context = storyboard_store.workshop_scene_context(story["id"], scene["id"])
+    assert "sceneSummary" not in context
+    assert context["expectedPrompt"] == prompt
+    assert context["extraSections"]["Scene Overview"] == "An approved action."
+    assert "[Shot 1]" in context["shots"]
+    persisted = storyboard_store.load_story(story["id"])["scenes"][scene["id"]]
+    assert persisted["summary"] == scene["summary"]

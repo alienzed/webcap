@@ -1216,7 +1216,7 @@ def add_tentative_scene_at(story_id, expected_updated_at, scene_draft, placement
 
 @_serialized_mutation
 def add_tentative_scenes_at(story_id, expected_scene_order, drafts, placement, relative_scene_id=""):
-    """Insert a reviewed block of up to 32 tentative Scenes with one Story commit.
+    """Insert a reviewed block of up to 32 Scenes with one Story commit.
 
     Check only the structural field being modified, so unrelated Concept or
     Scene edits do not invalidate a reviewed placement.
@@ -1239,13 +1239,16 @@ def add_tentative_scenes_at(story_id, expected_scene_order, drafts, placement, r
 
     new_scenes = []
     for item in drafts:
-        if not isinstance(item, dict) or set(item) != {"title", "summary"}:
-            raise ValueError("Each tentative Scene needs only a title and summary.")
+        if (not isinstance(item, dict) or not {"title", "summary"}.issubset(item)
+                or not set(item).issubset({"title", "summary", "prompt", "durationSeconds"})):
+            raise ValueError("Each Scene needs a title and summary, with optional prompt and duration.")
         title, summary = item["title"], item["summary"]
         if not isinstance(title, str) or not isinstance(summary, str) or not summary.strip():
             raise ValueError("Each tentative Scene needs a description.")
         if len(title) > 240 or len(summary) > 10000:
             raise ValueError("Tentative Scene text is too long.")
+        if "prompt" in item and (not isinstance(item["prompt"], str) or not item["prompt"].strip()):
+            raise ValueError("An authored Scene prompt must be nonempty text.")
         new_scenes.append(_normalize_scene(_new_id("scene"), item))
 
     updated = copy.deepcopy(story)

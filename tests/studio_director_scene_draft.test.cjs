@@ -178,13 +178,41 @@ test('Studio offers reviewed multi-Scene insert with arbitrary placement', () =>
 test('Scene sequence parser rejects invalid or overlarge batches', () => {
   const context = vm.createContext({ JSON, Array, String, Error });
   const parse = vm.runInContext('(' + part('  function parseStudioScenesDraft(raw) {', '  function addStudioScenesRow(').trim() + ')', context);
-  assert.equal(parse(JSON.stringify({scenes: [{title: '', summary: 'One'}], rationale: ''})).scenes.length, 1);
+  const complete={title:'One',summary:'One action',prompt:'A complete authored prompt',durationSeconds:8};
+  assert.equal(parse(JSON.stringify({scenes:[complete],rationale:''})).scenes[0].prompt,complete.prompt);
+  for(const invalid of [{title:'Outline',summary:'Only an outline'}, {...complete,prompt:''},
+    {...complete,durationSeconds:0}, {...complete,durationSeconds:16}])
+    assert.throws(()=>parse(JSON.stringify({scenes:[invalid],rationale:''})),/full prompts/);
   assert.throws(() => parse('bad json'), /invalid Scene sequence JSON/);
   assert.throws(() => parse(JSON.stringify({scenes: [], rationale: ''})), /one to 32/);
   assert.throws(() => parse(JSON.stringify({
     scenes: Array.from({length: 33}, (_, i) => ({title: '', summary: 'Scene ' + i})),
     rationale: ''
   })), /one to 32/);
+});
+
+test('new Scene Apply sends the edited prompt and duration and records the authoritative saved values',async()=>{
+  let payload,receipt,finish;
+  const done=new Promise(resolve=>{finish=resolve;});
+  const values={title:'Edited title',summary:'Edited description',prompt:'Edited full prompt',durationSeconds:'8'};
+  const row={querySelector:selector=>({value:values[selector.match(/data-field="([^"]+)"/)[1]]})};
+  const scope=vm.createContext({state:{pending:false,studioScenesProposal:{storyId:'p1',sceneOrder:['old']}},
+    el:id=>id==='studio-scenes-rows'?{querySelectorAll:()=>[row]}:
+      id==='studio-scenes-placement'?{value:'after|old'}:{textContent:'',close(){}},
+    syncControls(){},recordStudioOperation(){},studioActionStatus:message=>{if(message.includes('failed'))assert.fail(message);},
+    window:{flushStudioDirectorStoryEdits:async()=>{},studioDirectorBridge:{recordApplied:async(_kind,_story,fields)=>{receipt=fields;}},
+      refreshStudioDirectorStoryIfOpen:async()=>finish()},
+    requestJson:async(_url,options)=>{
+      payload=JSON.parse(options.body);
+      return{story:{id:'p1'},scenes:[{id:'new',...payload.scenes[0]}]};
+    }
+  });
+  vm.runInContext(part('  function applyStudioScenes() {','  function parseStudioSceneDraft(raw) {'),scope);
+  scope.applyStudioScenes();await done;
+  assert.deepEqual(payload,{storyId:'p1',expectedSceneOrder:['old'],placement:'after',relativeSceneId:'old',
+    scenes:[{...values,durationSeconds:8}]});
+  assert.equal(receipt.scenes[0].prompt,values.prompt);
+  assert.equal(receipt.scenes[0].durationSeconds,8);
 });
 
 

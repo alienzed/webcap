@@ -2190,9 +2190,11 @@
         !Array.isArray(result.scenes) || result.scenes.length < 1 || result.scenes.length > 32 ||
         typeof result.rationale !== 'string' || result.scenes.some(function (item) {
           return !item || typeof item !== 'object' || Array.isArray(item) ||
-            typeof item.title !== 'string' || typeof item.summary !== 'string' || !item.summary.trim();
+            typeof item.title !== 'string' || typeof item.summary !== 'string' || !item.summary.trim() ||
+            typeof item.prompt !== 'string' || !item.prompt.trim() ||
+            !Number.isFinite(item.durationSeconds) || item.durationSeconds < 4 || item.durationSeconds > 15;
         })) {
-      throw new Error('Director must return one to 32 titled/described Scenes and a rationale.\nRaw Director response:\n' + String(raw || ''));
+      throw new Error('Director must return one to 32 Scenes with descriptions, full prompts, 4–15 second durations and a rationale.\nRaw Director response:\n' + String(raw || ''));
     }
     return result;
   }
@@ -2204,7 +2206,7 @@
     var header = document.createElement('div');
     header.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:12px;';
     var label = document.createElement('strong');
-    label.textContent = 'Tentative Scene';
+    label.textContent = 'New Scene';
     var remove = document.createElement('button');
     remove.type = 'button';
     remove.className = 'review-captions-btn';
@@ -2212,16 +2214,31 @@
     remove.onclick = function () { row.remove(); };
     header.append(label, remove);
     var title = document.createElement('input');
-    title.setAttribute('aria-label', 'Tentative Scene title');
+    title.setAttribute('aria-label', 'Scene title');
+    title.dataset.field = 'title';
     title.placeholder = 'Working title (optional)';
     title.maxLength = 240;
     title.value = item.title || '';
     var summary = document.createElement('textarea');
-    summary.setAttribute('aria-label', 'Tentative Scene description');
+    summary.setAttribute('aria-label', 'Scene description');
+    summary.dataset.field = 'summary';
     summary.placeholder = 'What happens in this one generatable clip?';
     summary.rows = 3;
     summary.value = item.summary || '';
-    row.append(header, title, summary);
+    var durationLabel = document.createElement('label');
+    durationLabel.textContent = 'Duration (s)';
+    var duration = document.createElement('input');
+    duration.type = 'number'; duration.min = '4'; duration.max = '15'; duration.step = 'any';
+    duration.dataset.field = 'durationSeconds';
+    duration.value = item.durationSeconds == null ? 6 : item.durationSeconds;
+    durationLabel.appendChild(duration);
+    var promptLabel = document.createElement('label');
+    promptLabel.textContent = 'H3 Prompt';
+    var prompt = document.createElement('textarea');
+    prompt.dataset.field = 'prompt'; prompt.rows = 8;
+    prompt.value = item.prompt || '';
+    promptLabel.appendChild(prompt);
+    row.append(header, title, summary, durationLabel, promptLabel);
     el('studio-scenes-rows').appendChild(row);
   }
 
@@ -2288,11 +2305,14 @@
       if (!story || story.id !== storyId) throw new Error('Attached Project is no longer available.');
       var order = (story.sceneOrder || []).slice();
       var input = {
-        task: 'Extract up to 32 distinct tentative Scenes from the agreed discussion. ' +
+        task: 'Write up to 32 complete new Scenes from the agreed discussion. ' +
           'Keep each Scene independently generatable and preserve the core appeal. ' +
           'Use as many Scenes as the author explicitly requested, up to 32 per review; otherwise ' +
-          'select a modest number that fits the discussion. Return title, concise specific ' +
-          'what-happens description, and brief rationale. Do not write H3 prompts or modify existing Scenes.',
+          'select a modest number that fits the discussion. For each Scene return a working title, ' +
+          'a concise what-happens description (summary), a complete usable H3 prompt, and durationSeconds. ' +
+          'Use the duration the author requested within 4–15 seconds, otherwise 6 seconds. ' +
+          'Time each full prompt to that duration, including the relevant Project Invariants. ' +
+          'Return a brief overall rationale. Existing Scenes are reference material; this request creates new Scenes only.',
         project: {
           id: story.id, title: story.title, concept: story.concept, style: story.style,
           invariants: story.invariants,
@@ -2303,7 +2323,7 @@
         },
         discussion: discussion
       };
-      return studioDirectorRequestMessages([{ role: 'user', content: JSON.stringify(input) }], false, true)
+      return studioDirectorRequestMessages([{ role: 'user', content: JSON.stringify(input) }], true, true)
         .then(function (messages) {
           window.studioDirectorWorkbench.showSentWriteContext('studio_scene_sequence_draft', messages);
           return requestJson('/fs/director/chat', {
@@ -2344,12 +2364,17 @@
     if (!proposal || state.pending) return;
     var drafts = Array.prototype.map.call(el('studio-scenes-rows').querySelectorAll('.studio-scenes-row'), function (row) {
       return {
-        title: row.querySelector('input').value.trim(),
-        summary: row.querySelector('textarea').value.trim()
+        title: row.querySelector('[data-field="title"]').value.trim(),
+        summary: row.querySelector('[data-field="summary"]').value.trim(),
+        prompt: row.querySelector('[data-field="prompt"]').value.trim(),
+        durationSeconds: Number(row.querySelector('[data-field="durationSeconds"]').value)
       };
     });
-    if (!drafts.length || drafts.length > 32 || drafts.some(function (item) { return !item.summary; })) {
-      el('studio-scenes-error').textContent = 'Review between one and 32 Scenes with descriptions.';
+    if (!drafts.length || drafts.length > 32 || drafts.some(function (item) {
+      return !item.summary || !item.prompt || !Number.isFinite(item.durationSeconds) ||
+        item.durationSeconds < 4 || item.durationSeconds > 15;
+    })) {
+      el('studio-scenes-error').textContent = 'Each Scene needs a description, a full prompt and a duration of 4–15 seconds.';
       return;
     }
     var pieces = el('studio-scenes-placement').value.split('|');
@@ -2377,12 +2402,12 @@
       applied = true;
       state.studioScenesProposal = null;
       el('studio-scenes-review').close();
-      recordStudioOperation('scenes.create', 'Created ' + payload.scenes.length + ' tentative Scenes',
+      recordStudioOperation('scenes.create', 'Created ' + payload.scenes.length + ' Scenes with prompts',
         proposal.storyId, payload.scenes.map(function (scene) { return scene.id; }));
       studioActionStatus(payload.scenes.length + ' Scenes created.', false);
       return window.studioDirectorBridge.recordApplied('scenes.create',payload.story,{
         scenes:payload.scenes.map(function (scene) {
-          return {id:scene.id,title:scene.title,summary:scene.summary};
+          return {id:scene.id,title:scene.title,summary:scene.summary,prompt:scene.prompt,durationSeconds:scene.durationSeconds};
         })
       }).then(function () {return window.refreshStudioDirectorStoryIfOpen(proposal.storyId);});
     }).catch(function (error) {

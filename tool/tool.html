@@ -2258,7 +2258,7 @@
                                                     <select id="director-studio-access-field">
                                                         <option value="brief">Concept / overview, Visual / atmosphere, Invariants</option>
                                                         <option value="index">Scene index</option>
-                                                        <option value="scene">Selected Scene intent</option>
+                                                        <option value="scene">Selected Scene</option>
                                                         <option value="prompt">Selected Scene prompt</option>
                                                         <option value="takes">Selected Scene Take IDs</option>
                                                     </select>
@@ -2399,8 +2399,8 @@
                     <div id="studio-project-first-scene-fields" class="hidden">
                         <label for="studio-project-scene-title">Scene title <small>(optional)</small></label>
                         <input id="studio-project-scene-title" type="text" maxlength="240">
-                        <label for="studio-project-scene-summary">What happens</label>
-                        <textarea id="studio-project-scene-summary" rows="3"></textarea>
+                        <label for="studio-project-scene-prompt">H3 Prompt</label>
+                        <textarea id="studio-project-scene-prompt" rows="3"></textarea>
                     </div>
                     <div id="studio-project-extra-scenes" aria-label="Additional proposed Scenes"></div>
                     <button id="studio-project-add-scene" type="button" class="review-captions-btn">Add another Scene</button>
@@ -2445,11 +2445,7 @@
                     <p id="studio-scene-draft-rationale" class="studio-scene-draft-rationale"></p>
                     <label for="studio-scene-draft-title">Working title <small>(optional)</small></label>
                     <input id="studio-scene-draft-title" type="text" placeholder="Untitled Scene">
-                    <div id="studio-scene-draft-summary-row">
-                        <label for="studio-scene-draft-summary">Scene outline <small>(planning draft)</small></label>
-                        <textarea id="studio-scene-draft-summary" rows="6" placeholder="A single clear, renderable moment…"></textarea>
-                    </div>
-                    <div id="studio-scene-draft-prompt-row" class="hidden">
+                    <div id="studio-scene-draft-prompt-row">
                         <label for="studio-scene-draft-prompt">H3 Prompt <small>(editable)</small></label>
                         <textarea id="studio-scene-draft-prompt" rows="12" placeholder="Full H3 production prompt…"></textarea>
                     </div>
@@ -2459,7 +2455,7 @@
                 </div>
                 <footer class="studio-scene-draft-footer">
                     <button id="studio-scene-draft-discard" type="button" class="review-captions-btn">Back to conversation</button>
-                    <button id="studio-scene-draft-apply" type="button">Create tentative Scene</button>
+                    <button id="studio-scene-draft-apply" type="button">Create Scene</button>
                 </footer>
             </dialog>
             <dialog id="storyboard-workshop-review" class="storyboard-workshop-review" aria-labelledby="storyboard-workshop-review-title">

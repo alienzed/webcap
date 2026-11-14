@@ -1170,7 +1170,7 @@
           showDraft.textContent = 'Show draft';
           showDraft.onclick = function () {
             var fullDraft = document.createElement('div');
-            fullDraft.className = 'director-chat-captured-draft';
+            fullDraft.className = 'director-chat-message-body director-chat-captured-draft';
             fullDraft.textContent = draftText;
             showDraft.replaceWith(fullDraft);
           };

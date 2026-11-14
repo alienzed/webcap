@@ -106,7 +106,7 @@ def test_unconfigured_h3_studio_still_has_production_expertise(monkeypatch):
 
 def test_h3_runtime_reference_uses_current_studio_fields_and_conditional_legacy_guidelines():
     prompt = guidance("minimax_h3")["promptContract"]
-    assert "Use supplied Project Concept, Visual / atmosphere, relevant Invariants, and Scene Intent" in prompt
+    assert "Use supplied Project Concept, Visual / atmosphere, relevant Invariants, and the saved Scene Prompt" in prompt
     assert "legacy Story Guidelines only when explicitly supplied" in prompt
     assert "integrated_multimodal_description:" in prompt
 
@@ -123,15 +123,16 @@ def test_freeform_workshop_does_not_claim_hidden_context_or_mutations():
 
 
 
-def test_planning_only_scene_summary_keeps_legacy_storage_and_review_boundary():
+def test_scene_prompt_is_the_only_active_creative_field():
     text = guidance("minimax_h3")["system"]
     for phrase in (
         "story.concept", "story.style", "story.invariants",
-        "scene.summary", "scene.prompt", "MH3 Take generation",
+        "scene.prompt", "MH3 Take generation",
         "Legacy Directing Guidelines",
     ):
         assert phrase.casefold() in text.casefold()
     assert "not new Studio Director destinations" in text
+    assert "Older saved summaries are dormant legacy data" in text
     assert "reviewed insertion" in text
     assert "conversation alone never edits them" in text
 
@@ -175,9 +176,9 @@ def test_h3_playbook_review_uses_existing_config_and_checks_conflicts(monkeypatc
 @pytest.mark.parametrize("operation, expected_fields", [
     ("studio_brief_draft", {"title", "concept", "style", "invariants", "rationale"}),
     ("studio_project_draft", {"title", "concept", "style", "invariants", "firstScenes", "rationale"}),
-    ("studio_scene_draft", {"title", "summary", "rationale"}),
+    ("studio_scene_draft", {"title", "prompt", "rationale"}),
     ("studio_scene_sequence_draft", {"scenes", "rationale"}),
-    ("studio_scene_field_draft", {"title", "summary", "prompt"}),
+    ("studio_scene_field_draft", {"title", "prompt"}),
     ("studio_scene_batch_draft", {"scenes"}),
     ("studio_scene_split_draft", {"firstSummary", "secondTitle", "secondSummary", "rationale"}),
     ("studio_playbook_draft", {"guidance"}),
@@ -231,7 +232,7 @@ def test_studio_chat_schema_constrains_recommendations_to_the_selected_operation
             if operation == "project":
                 assert set(fields["items"]["enum"]) == {"title", "concept", "style", "invariants"}
             elif operation == "scenes":
-                assert set(fields["items"]["enum"]) == {"title", "summary", "prompt"}
+                assert set(fields["items"]["enum"]) == {"title", "prompt"}
             else:
                 assert fields["maxItems"] == 0
         assert fields["uniqueItems"] is True
@@ -258,7 +259,7 @@ def test_studio_chat_schema_requires_a_capture_decision_and_preserves_older_save
             assert set(schema["required"]) == set(schema["properties"])
             for field in schema["properties"]["field"]["enum"]:
                 capture = {"field": field, "content": "Complete developed creative material.",
-                           "sceneId": "scene-1" if field in {"summary", "prompt"} else ""}
+                           "sceneId": "scene-1" if field == "prompt" else ""}
                 if field == "scene":
                     capture["title"] = "A quiet reply"
                     if "prompt" in schema["properties"]:

@@ -32,7 +32,7 @@ test('Read and the optional coherence utility stay separate from creative Write'
   assert.match(html, /id="studio-dw-coherence-check"/);
   assert.doesNotMatch(html, /id="studio-dw-playbook-open"/);
   assert.match(rail, /el\('studio-dw-coherence-check'\)\.onclick/);
-  assert.match(backend, /\(\["scenes"\], \["title", "prompt"\]\)/);
+  assert.match(backend, /\(\["scenes"\], \["title", "prompt", "durationSeconds"\]\)/);
   assert.doesNotMatch(chat, /suggest coherence-check/);
 });
 

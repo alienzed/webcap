@@ -220,7 +220,7 @@ test('Scene review retains prompts and flags durations for author correction', (
   assert.equal(find(host.children[1],item=>item.dataset.field==='prompt').value,'Useful second Prompt');
   assert.equal(find(host.children[1],item=>item.dataset.field==='durationSeconds').value,6);
   assert.match(messages(host.children[1]),/6s default/);
-  assert.equal(find(host.children[2],item=>item.dataset.field==='durationSeconds').value,'12.5');
+  assert.equal(String(find(host.children[2],item=>item.dataset.field==='durationSeconds').value),'12.5');
   assert.match(messages(host.children[2]),/No Prompt supplied/);
   assert.doesNotMatch(messages(host.children[2]),/not supported/,'fractional seconds are not automatically invalid');
 });

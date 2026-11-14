@@ -35,7 +35,7 @@ function processResponse(text,accept=true,pendingReadAck=null,mode='storyboard')
   const code=part("        var studioResponse = activeChatMode === 'storyboard' ? parseStudioChatResponse(result.text) : null;",
     "        messages.push({ role: 'assistant', content: assistantText });");
   const run=new Function('result','activeChatMode','state','window','studioActionStatus','parseStudioChatResponse','selectedScene',
-    'var requestError=null;'+code+'\nreturn {text:assistantText,error:requestError};');
+    'var requestError=null,selectedProject=null,content="";'+code+'\nreturn {text:assistantText,error:requestError};');
   return {...run({text},mode,state,window,msg=>statuses.push(msg),parse,null),state,statuses,failures};
 }
 
@@ -125,7 +125,7 @@ test('workbench exposes freshness and only accepted assessments are stored',()=>
 });
 
 test('the first accepted assessment is current immediately, rather than labelled not assessed',()=>{
-  const start=workbench.indexOf('    updateReadiness:function (result, restoring, selectedScene) {');
+  const start=workbench.indexOf('    updateReadiness:function (result, restoring, selectedScene, selectedProject, authorRequest) {');
   const end=workbench.indexOf('\n  };\n\n  function bind()',start);
   assert.ok(start>=0 && end>start);
   const scope=vm.createContext({readiness:[],projectFields:['title','concept','style','invariants'],

@@ -268,16 +268,13 @@ test('field update indication clears when the Storyboard opens another Project',
     'Storyboard refresh must invoke the existing Studio context sync');
 });
 
-test('prompted Scenes keep a legacy summary without exposing a second editor',()=>{
-  assert.match(require('node:fs').readFileSync(require('node:path').join(__dirname,'../tool/js/storyboard.js'),'utf8'),
-    /String\(sceneValue\(scene, 'prompt', ''\)\)\.trim\(\)/);
-  assert.match(require('node:fs').readFileSync(require('node:path').join(__dirname,'../tool/js/storyboard.js'),'utf8'),
-    /'<input type="hidden" data-scene-field="summary" value="'/);
-  assert.match(workbench,/var contextFields = String\(scene\.prompt \|\| ''\)\.trim\(\)/);
-  assert.match(workbench,/var fields = String\(scene\.prompt \|\| ''\)\.trim\(\)/);
+test('Scene Intent stays in Project storage, not the active editor or save payload',()=>{
+  const storyboard=require('node:fs').readFileSync(require('node:path').join(__dirname,'../tool/js/storyboard.js'),'utf8');
+  assert.doesNotMatch(storyboard,/data-scene-field="summary"/);
+  assert.doesNotMatch(storyboard,/summary: field\('summary'\)\.value/);
+  assert.match(workbench,/var contextFields = \['title', 'prompt', 'durationSeconds'\]/);
 });
-
-test('Scene Director supplies prompt over legacy summary, but reads outline-only drafts',()=>{
+test('Director reads Prompt even when a legacy Scene has no authored Prompt',()=>{
   const slice=part(workbench,'    sceneRead: function (story, sceneId) {','    applyScenePrompt: function (story, sceneId, prompt) {');
   const scope=vm.createContext({projectFields:['title','concept','style','invariants'],
     readPayload:(_story,keys)=>({fields:keys})});
@@ -290,6 +287,7 @@ test('Scene Director supplies prompt over legacy summary, but reads outline-only
   const draft=scope.bridge.sceneRead(story,'draft').keys;
   assert.ok(ready.includes('scene:ready:prompt'));
   assert.ok(!ready.includes('scene:ready:summary'));
-  assert.ok(draft.includes('scene:draft:summary'));
-  assert.ok(!draft.includes('scene:draft:prompt'));
+  assert.ok(draft.includes('scene:draft:prompt'));
+  assert.ok(!draft.includes('scene:draft:summary'));
 });
+

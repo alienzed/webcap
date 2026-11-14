@@ -5,7 +5,7 @@
   var readinessStale = false;
   var readChoices = {}, writeOperationChosen = false, lastReadSource = null;
   var sceneSelectionManual = false, sceneSelectionProject = '', recommendationProject = '';
-  var lastQuickAction = 'read', creativeCapture = null;
+  var lastQuickAction = 'read', creativeCapture = null, preparedSceneWrite = null;
   var sceneFields = ['prompt', 'title'];
   var projectFields = ['title', 'concept', 'style', 'invariants'];
   var labels = {title:'Title', concept:'Concept', style:'Visual / atmosphere',
@@ -863,15 +863,27 @@
     actions.replaceChildren();
     assessment.replaceChildren();
     var available = [];
-    if (!readinessStale && !creativeCapture && recommendations.readHints.length &&
-        (window.studioDirectorBridge.workingStoryId() || activeTarget().storyId)) available.push({
-      kind:'read', label:'Read Project', run:readRecommendedProject
-    });
     if (!readinessStale && creativeCapture) available.push({
       kind:'capture', label:captureActionLabel(creativeCapture),
       run:function () { reviewCreativeCapture(creativeCapture); }
     });
-    if (!readinessStale && recommendations.writeHint) {
+    if (!readinessStale && !creativeCapture && preparedSceneWrite) {
+      var launch = preparedSceneWrite;
+      available.push({
+        kind:'write',
+        label:'Revise Scene ' + (launch.sceneNumber || 'selected') + ' · Save',
+        run:function () {
+          return window.studioDirectorBridge.writeSelectedScene(launch).catch(function (error) {
+            status('Scene revision failed: ' + String(error.message || error), true);
+          });
+        }
+      });
+    }
+    if (!readinessStale && !creativeCapture && !preparedSceneWrite && recommendations.readHints.length &&
+        (window.studioDirectorBridge.workingStoryId() || activeTarget().storyId)) available.push({
+      kind:'read', label:'Read Project', run:readRecommendedProject
+    });
+    if (!readinessStale && !preparedSceneWrite && recommendations.writeHint) {
       var fields = recommendedWriteFields(recommendations.writeHint);
       var captureField = creativeCapture && creativeCapture.field === 'invariant' ? 'invariants' :
         creativeCapture && creativeCapture.field;
@@ -931,20 +943,34 @@
       return {payload:readPayload(story, keys), keys:keys,
         label:'Scene ' + (story.sceneOrder.indexOf(sceneId) + 1) + ' · ' + (story.scenes[sceneId].title || 'Untitled')};
     },
-    applyScenePrompt: function (story, sceneId, prompt) {
+    applyScenePrompt: function (story, sceneId, prompt, extraChanges) {
       if (typeof prompt !== 'string' || !prompt.trim()) throw new Error('Director returned an empty Scene prompt.');
+      var scene = story && story.scenes && story.scenes[sceneId];
+      if (!scene || !story.sceneOrder.includes(sceneId)) throw new Error('The selected Scene no longer exists.');
+      var changes = {prompt:prompt}, expected = {prompt:scene.prompt || ''};
+      Object.keys(extraChanges || {}).forEach(function (key) {
+        if (!['title','durationSeconds'].includes(key)) throw new Error('Unsupported Scene change: ' + key);
+        changes[key] = extraChanges[key];
+        expected[key] = scene[key];
+      });
       return window.flushStudioDirectorStoryEdits(story.id).then(function () {
         return api('/fs/studio/director/scene-fields', {
           method:'POST', headers:{'Content-Type':'application/json'},
-          body:JSON.stringify({storyId:story.id, sceneId:sceneId,
-            expected:{prompt:story.scenes[sceneId].prompt || ''}, changes:{prompt:prompt}})
+          body:JSON.stringify({storyId:story.id, sceneId:sceneId, expected:expected, changes:changes})
         });
       }).then(function (result) {
+        if (!result || !result.story || !result.scene)
+          throw new Error('Scene save returned no authoritative saved result.');
+        var savedFields = {};
+        Object.keys(changes).forEach(function (key) {savedFields[key] = result.scene[key];});
         return window.refreshStudioDirectorStoryIfOpen(story.id).then(function () {
           return window.studioDirectorBridge.recordApplied('scene.director.revision',result.story,{
-            sceneId:sceneId, savedFields:{prompt:result.scene.prompt}
+            sceneId:sceneId, savedFields:savedFields
           });
-        });
+        }).catch(function (error) {
+          error.saved = true;
+          throw error;
+        }).then(function () {return result;});
       });
     },
     setStatus:status,
@@ -1005,6 +1031,7 @@
       sceneSelectionManual = false;
       sceneSelectionProject = '';
       recommendationProject = '';
+        preparedSceneWrite = null;
         lastReadSource = null;
       readStory = null;
       writeStory = null;
@@ -1019,7 +1046,7 @@
       updateScope();
     },
     setReadinessFreshness:setReadinessFreshness,
-    updateReadiness:function (result, restoring) {
+    updateReadiness:function (result, restoring, selectedScene) {
       var list = Array.isArray(result) ? result : result && result.checks;
       var allowed = ['Concept','Characters','Setting','Action','Dialogue','Visual / atmosphere',
         'Visual focus','Structure / formula','Variation / repetition','Production feasibility'];
@@ -1038,14 +1065,17 @@
       }
       var hints = result && result.readHints === undefined ? [] : result.readHints;
       var writeHint = result && result.writeHint === undefined ? '' : result.writeHint;
+      var writeInstruction = result && result.writeInstruction === undefined ? '' : result.writeInstruction;
       var sceneId = result && result.sceneId === undefined ? '' : result.sceneId;
       var writeFields = result && result.writeFields === undefined ? [] : result.writeFields;
       var sceneNumber = result && result.sceneNumber === undefined ? 0 : result.sceneNumber;
       var allowedWriteFields = writeHint === 'project' ? projectFields :
-        ['scenes', 'scene-edit', 'scenes-batch'].includes(writeHint) ? sceneFields : [];
+        ['scenes', 'scene-edit', 'scenes-batch'].includes(writeHint) ? sceneFields.concat(['durationSeconds']) : [];
       if (!Array.isArray(hints) || hints.length > 15 ||
           hints.some(function(key) {return typeof key !== 'string' || key.length > 120;}) ||
-          operations.indexOf(writeHint) < 0 || typeof sceneId !== 'string' || sceneId.length > 160 ||
+          operations.indexOf(writeHint) < 0 ||
+          typeof writeInstruction !== 'string' || writeInstruction.length > 3000 ||
+          typeof sceneId !== 'string' || sceneId.length > 160 ||
           !Number.isInteger(sceneNumber) || sceneNumber < 0 || sceneNumber > 10000 ||
           !Array.isArray(writeFields) || writeFields.length > 4 ||
           writeFields.some(function (field) { return typeof field !== 'string' || allowedWriteFields.indexOf(field) < 0; }) ||
@@ -1079,16 +1109,26 @@
           return false;
         }
       }
-      recommendations = {readHints:hints, writeHint:writeHint, writeFields:writeFields,
-        sceneId:sceneId, sceneNumber:sceneNumber};
+      recommendations = {readHints:hints, writeHint:writeHint, writeInstruction:writeInstruction,
+        writeFields:writeFields, sceneId:sceneId, sceneNumber:sceneNumber};
+      // Only a live selected-Scene response can authorize this direct launch.
+      // Bind WebCap's real IDs; model hints may confirm them, never replace them.
+      preparedSceneWrite = !restoring && selectedScene && writeHint === 'scenes' &&
+        writeInstruction.trim() &&
+        (!sceneId || sceneId === selectedScene.sceneId) &&
+        (!sceneNumber || sceneNumber === selectedScene.sceneNumber)
+          ? {projectId:selectedScene.projectId, sceneId:selectedScene.sceneId,
+             sceneNumber:selectedScene.sceneNumber, instruction:writeInstruction.trim(),
+             fields:writeFields.slice()}
+          : null;
       recommendationProject = window.studioDirectorBridge.workingStoryId() || activeTarget().storyId || '';
       creativeCapture = capture;
       readiness = list;
       setReadinessFreshness(!!(restoring && result && result.stale));
       renderReadiness(list);
       if (!restoring) window.studioDirectorBridge.updateReadiness({
-        checks:list,readHints:hints,writeHint:writeHint,writeFields:writeFields,
-        sceneId:sceneId,sceneNumber:sceneNumber,stale:false,
+        checks:list,readHints:hints,writeHint:writeHint,writeInstruction:writeInstruction,
+        writeFields:writeFields,sceneId:sceneId,sceneNumber:sceneNumber,stale:false,
         ...(capture ? {capture:capture} : {})
       });
       return true;

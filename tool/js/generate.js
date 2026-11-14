@@ -652,6 +652,7 @@ function sweepLoras(model, folder) {
     if (generateLoraPickerTarget === 'sweep') {
       var model = currentModel();
       var isSelected = selectedSweepLoras(model).indexOf(found) !== -1;
+      if (!noteGenerateEditorEdit(false)) return;
       var activeIndex = Number(el('generate-lora-picker-menu').dataset.activeIndex || 0);
       setSweepSelection(model, found, !isSelected);
       renderSweep();
@@ -670,6 +671,7 @@ function sweepLoras(model, folder) {
       if (existingRow) existingRow.focus();
       return;
     }
+    if (!noteGenerateEditorEdit(false)) return;
     if (index >= 0) replaceGenerateLora(index, found);
     else { selected.push({name: found, strength: 0.9}); renderLoras(); }
     var button = el('generate-lora-list').querySelector('[data-generate-lora-replace="' + (index >= 0 ? index : selected.length - 1) + '"]');
@@ -2918,11 +2920,13 @@ function sweepLoras(model, folder) {
     // on capture to avoid ever applying them to the immutable Loaded reference.
     workspace.addEventListener('click', function (event) {
       var button = event.target.closest(
-        '[data-generate-lora-option], [data-generate-lora-step], [data-generate-lora-remove], ' +
+        '[data-generate-lora-step], [data-generate-lora-remove], ' +
         '[data-generate-lora-insert-phrases], [data-generate-lora-insert-options], ' +
         '[data-generate-sweep-remove], #generate-sweep-clear, ' +
         '#generate-lora-selected-tab, #generate-lora-sweep-tab');
       if (!button) return;
+      if (button.id === 'generate-lora-selected-tab' && generateState.loraMode === 'selected') return;
+      if (button.id === 'generate-lora-sweep-tab' && generateState.loraMode === 'sweep') return;
       if (!noteGenerateEditorEdit(false)) {
         event.preventDefault();
         event.stopImmediatePropagation();
@@ -2991,6 +2995,7 @@ function sweepLoras(model, folder) {
     });
 
     function changeGenerateModel(modelId) {
+      if (modelId === generateState.modelId) return;
       if (!noteGenerateEditorEdit(false)) return;
       generateState.modelId = modelId;
       generateState.promptLibrary.activeId = '';

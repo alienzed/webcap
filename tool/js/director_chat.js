@@ -606,7 +606,7 @@
       title = conversationTitle(messages);
     }
     state.sessionDirty[mode] = false;
-    showSessionStatus('Saving…', false);
+    showSessionStatus('Saving conversation…', false);
     state.sessionSaving = true;
     var action = state.sessionWrite.catch(function () {}).then(function () {
       var session = state.sessionByMode[mode];
@@ -631,7 +631,7 @@
       }).then(function (payload) {
         state.sessionByMode[mode] = payload.chat;
         upsertSessionSummary(payload.chat);
-        if (!state.sessionDirty[mode]) showSessionStatus('Saved', false);
+        if (!state.sessionDirty[mode]) showSessionStatus('Conversation saved', false);
         return payload.chat;
       });
     });
@@ -648,7 +648,7 @@
     var mode = state.activeMode;
     if (!persistentMode(mode) || !state.sessionReady) return;
     state.sessionDirty[mode] = true;
-    showSessionStatus('Unsaved changes', false);
+    showSessionStatus('Conversation unsaved', false);
     if (state.sessionTimer) clearTimeout(state.sessionTimer);
     state.sessionTimer = setTimeout(function () {
       state.sessionTimer = 0;
@@ -706,7 +706,7 @@
       syncModeUi();
     }
     upsertSessionSummary(chat);
-    showSessionStatus('Saved', false);
+    showSessionStatus('Conversation saved', false);
   }
 
   function loadSessionHistory() {
@@ -773,7 +773,7 @@
       state.sessionByMode[result.chat.mode] = result.chat.id === (state.sessionByMode[result.chat.mode] || {}).id
         ? result.chat : state.sessionByMode[result.chat.mode];
       upsertSessionSummary(result.chat);
-      showSessionStatus('Saved', false);
+      showSessionStatus('Conversation saved', false);
     }).catch(showSessionFailure).finally(function () {
       state.pending = false;
       syncControls();
@@ -807,7 +807,7 @@
       }
       renderSessionHistory();
       syncModeUi();
-      showSessionStatus('Deleted', false);
+      showSessionStatus('Conversation deleted', false);
     }).catch(showSessionFailure).finally(function () {
       state.pending = false;
       syncControls();
@@ -2751,7 +2751,7 @@
       }
       el('director-chat-input').value = '';
       upsertSessionSummary(chat);
-      showSessionStatus('Saved', false);
+      showSessionStatus('Conversation saved', false);
       finishProgress(null);
       syncModeUi();
       el('director-chat-input').focus();
@@ -3604,13 +3604,17 @@
       return width;
     }
     var saved = Number(localStorage.getItem(key));
-    setWidth(saved > 0 && Number.isFinite(saved) ? saved : 820);
-    function refreshBounds() {
+    var preferred = saved > 0 && Number.isFinite(saved) ? saved : 820;
+    drawer.style.setProperty('--studio-director-width', preferred + 'px');
+    function refreshBounds(width) {
       var maximum = Math.max(1, el('app-frame').clientWidth - 42);
       grip.setAttribute('aria-valuemin', Math.min(420, maximum));
       grip.setAttribute('aria-valuemax', maximum);
-      grip.setAttribute('aria-valuenow', Math.round(drawer.getBoundingClientRect().width));
+      grip.setAttribute('aria-valuenow', Number.isFinite(width)
+        ? Math.round(Math.min(maximum, Math.max(Math.min(420, maximum), width)))
+        : Math.round(drawer.getBoundingClientRect().width));
     }
+    refreshBounds(preferred);
     grip.addEventListener('focus', refreshBounds);
     window.addEventListener('resize', function () {
       if (state.open && state.activeMode === 'storyboard') refreshBounds();

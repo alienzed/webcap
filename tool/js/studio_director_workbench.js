@@ -248,7 +248,7 @@
     ].filter(Boolean).join(' ');
     var mode = !el('studio-dw-read-panel').classList.contains('hidden') ? 'Read' :
       !el('studio-dw-write-panel').classList.contains('hidden') ? 'Write' : '';
-    el('studio-dw-heading').textContent = mode ? mode + ' · Director' : 'Director actions';
+    el('studio-dw-heading').textContent = 'Advanced';
     el('studio-dw-heading').title = mode === 'Read'
       ? 'Explicit source · nothing sent until Send'
       : mode === 'Write' ? 'Reviewed destination · nothing saved until Apply'

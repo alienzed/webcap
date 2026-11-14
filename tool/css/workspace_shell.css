@@ -3989,7 +3989,7 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
 .app-frame.shell-immersive.director-chat-pinned.studio-director-active {grid-template-columns:minmax(0,1fr);grid-template-areas:"workspace" "status";}
 .app-frame.studio-director-active > .director-chat-drawer.studio-director {
   grid-area:2 / 1 / -1 / -1;position:absolute;inset:0 0 0 auto;z-index:74;
-  width:min(var(--studio-director-width,820px),calc(100% - 42px));min-width:0;
+  width:min(var(--studio-director-width,820px),calc(100% - 42px));min-width:min(420px,calc(100% - 42px));
   border:0;border-left:1px solid var(--border);border-radius:0;
   box-shadow:-12px 0 32px #0004;backdrop-filter:none;background:var(--bg);
 }
@@ -4010,7 +4010,7 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
 .director-chat-drawer.studio-director #director-chat-mode-description:empty {display:none;}
 .director-chat-drawer.studio-director #director-chat-pin {display:none;}
 .director-chat-drawer.studio-director #studio-dw-open-tools {display:inline-flex;}
-.director-chat-drawer.studio-director .director-chat-header-actions {flex-wrap:wrap;gap:8px;}
+.director-chat-drawer.studio-director .director-chat-header-actions {flex-wrap:wrap;gap:8px;max-width:100%;}
 .director-chat-drawer.studio-director .director-chat-header-actions button {min-height:44px;width:auto;padding:9px 14px;font-size:16px;}
 .director-chat-drawer.studio-director #director-chat-close {font-size:16px;border:1px solid var(--border);border-radius:8px;}
 .director-chat-drawer.studio-director #studio-dw-open-tools[aria-expanded="true"] {border-color:var(--accent);background:var(--panel-soft);}

@@ -2923,7 +2923,7 @@
     var parts = [String(order.length) + ' Scene' + (order.length === 1 ? '' : 's')];
     if (selected) parts.push(String(selected) + ' selected');
     if (generating) parts.push(String(generating) + ' generating');
-    if (needsTake) parts.push(String(needsTake) + ' needs Take');
+    if (needsTake) parts.push(String(needsTake) + (needsTake === 1 ? ' needs a Take' : ' need Takes'));
     if (needsSelection) parts.push(String(needsSelection) + ' needs selection');
     if (selectedSeconds > 0) {
       var displaySeconds = Math.round(selectedSeconds * 10) / 10;

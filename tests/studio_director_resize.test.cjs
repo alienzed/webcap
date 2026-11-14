@@ -4,14 +4,14 @@ const fs=require('node:fs');
 const vm=require('node:vm');
 const path=require('node:path');
 const source=fs.readFileSync(path.join(__dirname,'../tool/js/director_chat.js'),'utf8');
-function harness(saved) {
+function harness(saved,frameWidth=1400) {
   const handlers={},windowHandlers={},attributes={},storage=new Map(saved ? [['webcap.studioDirector.width',String(saved)]] : []);
   let width;
   const drawer={style:{setProperty(key,value){assert.equal(key,'--studio-director-width');width=parseInt(value);}},
     getBoundingClientRect:()=>({width:Math.min(width,frame.clientWidth-42)})};
   const grip={classList:{add(){},remove(){}},setPointerCapture(){},
     setAttribute:(key,value)=>attributes[key]=value,addEventListener:(name,fn)=>handlers[name]=fn};
-  const frame={clientWidth:1400};
+  const frame={clientWidth:frameWidth};
   const scope=vm.createContext({el:id=>({'studio-director-resizer':grip,'director-chat-drawer':drawer,'app-frame':frame})[id],
     state:{open:true,activeMode:'storyboard'},window:{addEventListener:(name,fn)=>windowHandlers[name]=fn},
     localStorage:{getItem:key=>storage.get(key),setItem:(key,value)=>storage.set(key,String(value))}});
@@ -39,4 +39,14 @@ test('keyboard resizing and reset share the same limits, including narrow window
   assert.equal(h.width(),820,'window resizing preserves the preferred width');
   h.handlers.keydown({key:'ArrowRight',preventDefault(){}});
   assert.equal(h.width(),348);assert.equal(h.attributes['aria-valuenow'],348);
+});
+
+test('opening in a narrow window preserves the preferred width when the window grows',()=>{
+  const h=harness(820,390);
+  assert.equal(h.width(),820);
+  assert.equal(h.attributes['aria-valuenow'],348);
+  h.frame.clientWidth=1400;
+  h.windowHandlers.resize();
+  assert.equal(h.width(),820);
+  assert.equal(h.attributes['aria-valuenow'],820);
 });

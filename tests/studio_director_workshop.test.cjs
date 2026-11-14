@@ -349,10 +349,48 @@ test('Studio conversation receives the canonical H3 template as reference withou
   assert.doesNotMatch(result[0].content,/\[WEBCAP EXPLICIT READ\]/);
 });
 
-test('large explicit Read selections report their true size and refuse silent truncation', () => {
-  assert.match(workbench,/JSON\.stringify\(payload\)\.length/);
-  assert.match(workbench,/length > 48000/);
-  assert.match(workbench,/Select the Project Overview or fewer Scenes/);
+test('large explicit Read selections are sent intact, with no arbitrary client character cap', async () => {
+  const start=workbench.indexOf('  function readPayload(story, keys) {');
+  const end=workbench.indexOf('  function showWriteContext() {',start);
+  assert.ok(start>=0 && end>start,'Read serialization and action must remain available');
+  const prompt='A richly detailed scene. '.repeat(3600);
+  const story={id:'project-1',title:'Long Project',updatedAt:'saved',
+    sceneOrder:['scene-a'],scenes:{'scene-a':{prompt}}};
+  let sent=null,readStatus='',updates=0;
+  const nodes=new Map();
+  const el=id=>{
+    if(!nodes.has(id))nodes.set(id,{
+      value:id==='studio-dw-read-project'?'project-1':'',
+      textContent:'',disabled:false,
+      classList:{add(){},contains:()=>false},
+      setAttribute(){},click(){}
+    });
+    return nodes.get(id);
+  };
+  const scope=vm.createContext({
+    el,Promise,JSON,String,Array,
+    projectFields:['title','concept','style','invariants'],
+    storyName:value=>value.title,
+    selectedPaths:()=>['scene:scene-a:prompt'],
+    loadStory:async()=>story,
+    status:()=>{},
+    updateScope:()=>{},
+    updateReadSelection:()=>{updates++;},
+    window:{
+      studioDirectorBridge:{isReady:()=>true,sendRead:(payload,keys)=>{sent={payload,keys};}},
+      studioDirectorWorkbench:{setReadStatus:(_state,message)=>{readStatus=message;}}
+    }
+  });
+  vm.runInContext(workbench.slice(start,end),scope);
+  scope.readSend();
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.ok(sent,'the selected saved fields must reach Director');
+  assert.deepEqual(sent.keys,['scene:scene-a:prompt']);
+  assert.ok(JSON.stringify(sent.payload).length>48000,'this case exceeds the old cutoff');
+  assert.equal(sent.payload.fields[0].value,prompt,'no Read field is truncated');
+  assert.ok(readStatus.includes('Reading selected saved fields'));
+  assert.ok(updates>0,'existing selection UI still refreshes');
+  assert.match(workbench,/bytes.toLocaleString\(\)/,'the actual payload size stays visible');
 });
 
 test('standalone Invariant linking is not a Director Write operation', () => {

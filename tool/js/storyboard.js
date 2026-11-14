@@ -7111,9 +7111,7 @@
         key: 'scene:' + story.id + ':' + sceneId,
         label: 'Scene ' + ((story.sceneOrder || []).indexOf(sceneId) + 1),
         content: JSON.stringify({
-          title: scene.title,
-          entryState: scene.entryState, exitState: scene.exitState,
-          prompt: scene.prompt, notes: scene.notes
+          title: scene.title, prompt: scene.prompt, notes: scene.notes
         }, null, 2)
       };
     });

@@ -14,10 +14,10 @@ function part(start, end) {
   return source.slice(a, b);
 }
 
-test('Studio scene reviewer has editable intent, placement and approval controls', () => {
+test('Studio scene reviewer has editable Prompt, placement and approval controls', () => {
   for (const name of [
     'director-studio-prepare-scene', 'studio-scene-draft-review',
-    'studio-scene-draft-title', 'studio-scene-draft-summary',
+    'studio-scene-draft-title', 'studio-scene-draft-prompt',
     'studio-scene-draft-placement', 'studio-scene-draft-apply'
   ]) assert.match(html, new RegExp('id="' + name + '"'));
   assert.match(html, /Nothing is created until you approve/);
@@ -29,7 +29,7 @@ test('complete Scene capture has an editable Prompt and one reviewed Apply saves
   const prompt='integrated_multimodal_description: [Shot 1] A crimson kite rises.';
   const proposal={
     storyId:'project-1',storyTitle:'Kite Project',expectedUpdatedAt:'before',
-    sceneOrder:[],scenes:{},title:'Kite flight',summary:'The kite rises.',
+    sceneOrder:[],scenes:{},title:'Kite flight',
     prompt,rationale:'Authored together in chat.',placement:'end'
   };
   const nodes=new Map();
@@ -59,7 +59,7 @@ test('complete Scene capture has an editable Prompt and one reviewed Apply saves
     requestJson:async(url,args)=>{
       calls.push('apply');assert.equal(url,'/fs/studio/director/scene-draft');
       const payload=JSON.parse(args.body);
-      assert.deepEqual(payload.scene,{title:'Kite flight',summary:'The kite rises.',prompt});
+      assert.deepEqual(payload.scene,{title:'Kite flight',prompt});
       assert.equal(payload.expectedUpdatedAt,'before');
       return {story:{id:'project-1',sceneOrder:['scene-1']},
         scene:{id:'scene-1',...payload.scene}};
@@ -70,7 +70,6 @@ test('complete Scene capture has an editable Prompt and one reviewed Apply saves
     part('  function applyStudioSceneDraft() {','  function startStudioWorkshop() {'),scope);
   scope.showStudioSceneDraftReview();
   assert.equal(el('studio-scene-draft-prompt-row').classList.hidden,false);
-  assert.equal(el('studio-scene-draft-summary-row').classList.hidden,true);
   assert.equal(el('studio-scene-draft-prompt').value,prompt);
   assert.equal(el('studio-scene-draft-apply').textContent,'Create Scene');
   scope.applyStudioSceneDraft();
@@ -78,12 +77,6 @@ test('complete Scene capture has an editable Prompt and one reviewed Apply saves
   assert.deepEqual(calls,['flush','apply','receipt','refresh']);
   assert.equal(scope.state.studioSceneProposal,null);
 
-  // The existing Intent-only extraction still shows the smaller review.
-  scope.state.studioSceneProposal={...proposal,prompt:undefined};
-  delete scope.state.studioSceneProposal.prompt;
-  scope.showStudioSceneDraftReview();
-  assert.equal(el('studio-scene-draft-prompt-row').classList.hidden,true);
-  assert.equal(el('studio-scene-draft-summary-row').classList.hidden,false);
 });
 
 test('Only explicitly attached Story ID qualifies as a Scene target', () => {
@@ -102,12 +95,12 @@ test('Only explicitly attached Story ID qualifies as a Scene target', () => {
 test('Schema output parser rejects malformed drafts without inventing missing fields', () => {
   const context = vm.createContext({ JSON, String, Error });
   const parse = vm.runInContext('(' + part('  function parseStudioSceneDraft(raw) {', '  function showStudioSceneDraftReview() {').trim() + ')', context);
-  const draft = parse(JSON.stringify({ title: '', summary: 'One short clear action', rationale: 'Simple clip' }));
+  const draft = parse(JSON.stringify({ title: '', prompt: 'One short clear action', rationale: 'Simple clip' }));
   assert.equal(draft.title, '');
-  assert.equal(draft.summary, 'One short clear action');
-  assert.throws(() => parse('{}'), /must include a title, description and rationale/);
+  assert.equal(draft.prompt, 'One short clear action');
+  assert.throws(() => parse('{}'), /must include a title, full Prompt and rationale/);
   assert.throws(() => parse('not JSON'), /invalid Scene draft JSON/);
-  assert.throws(() => parse(JSON.stringify({ title: '', summary: '   ', rationale: '' })), /must include/);
+  assert.throws(() => parse(JSON.stringify({ title: '', prompt: '   ', rationale: '' })), /must include/);
 });
 
 test('Studio drafting is a staged proposal, not a silent Story mutation', () => {
@@ -180,15 +173,15 @@ test('Studio offers reviewed multi-Scene insert with arbitrary placement', () =>
 test('Scene sequence parser rejects invalid or overlarge batches', () => {
   const context = vm.createContext({ JSON, Array, String, Error });
   const parse = vm.runInContext('(' + part('  function parseStudioScenesDraft(raw) {', '  function addStudioScenesRow(').trim() + ')', context);
-  const complete={title:'One',summary:'One action',prompt:'A complete authored prompt',durationSeconds:8};
+  const complete={title:'One',prompt:'A complete authored prompt',durationSeconds:8};
   assert.equal(parse(JSON.stringify({scenes:[complete],rationale:''})).scenes[0].prompt,complete.prompt);
-  for(const invalid of [{title:'Outline',summary:'Only an outline'}, {...complete,prompt:''},
+  for(const invalid of [{title:'Outline'}, {...complete,prompt:''},
     {...complete,durationSeconds:0}, {...complete,durationSeconds:16}])
     assert.throws(()=>parse(JSON.stringify({scenes:[invalid],rationale:''})),/full prompts/);
   assert.throws(() => parse('bad json'), /invalid Scene sequence JSON/);
   assert.throws(() => parse(JSON.stringify({scenes: [], rationale: ''})), /one to 32/);
   assert.throws(() => parse(JSON.stringify({
-    scenes: Array.from({length: 33}, (_, i) => ({title: '', summary: 'Scene ' + i})),
+    scenes: Array.from({length: 33}, (_, i) => ({title: '', prompt: 'Scene ' + i})),
     rationale: ''
   })), /one to 32/);
 });
@@ -196,7 +189,7 @@ test('Scene sequence parser rejects invalid or overlarge batches', () => {
 test('new Scene Apply sends the edited prompt and duration and records the authoritative saved values',async()=>{
   let payload,receipt,finish;
   const done=new Promise(resolve=>{finish=resolve;});
-  const values={title:'Edited title',summary:'Edited description',prompt:'Edited full prompt',durationSeconds:'8'};
+  const values={title:'Edited title',prompt:'Edited full prompt',durationSeconds:'8'};
   const row={querySelector:selector=>({value:values[selector.match(/data-field="([^"]+)"/)[1]]})};
   const scope=vm.createContext({state:{pending:false,studioScenesProposal:{storyId:'p1',sceneOrder:['old']}},
     el:id=>id==='studio-scenes-rows'?{querySelectorAll:()=>[row]}:

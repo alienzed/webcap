@@ -57,6 +57,12 @@ test('Scene-number recommendation resolves to a saved ID; deliberate choices sta
   scope.recommendations.sceneNumber=2;
   scope.renderWriteStory(story);
   assert.deepEqual(checked(),['b'],'matching ID and number identify the same saved Scene');
+  scope.recommendations.sceneId='scene:b';
+  scope.renderWriteStory(story);
+  assert.deepEqual(checked(),['b'],'a Read identifier prefix resolves to the exact saved Scene');
+  scope.recommendations.sceneId='scene:b:prompt';
+  scope.renderWriteStory(story);
+  assert.deepEqual(checked(),['b'],'a complete Read field path resolves to the same saved Scene');
   scope.recommendations.sceneNumber=1;
   scope.recommendations.sceneId='';
   scope.recommendationProject='other-project';
@@ -103,9 +109,9 @@ test('only one contextual action is presented, with completed capture taking pri
     projectFields:['title','concept','style','invariants'],sceneFields:['title','summary','prompt'],
     el:id=>id==='studio-dw-suggestions'?actions:id==='studio-dw-suggestion-heading'?{classList:{toggle(){}}}:assessment,
     document:{createElement:node},reviewCreativeCapture(){},openRecommendedWrite(){},
-    window:{studioDirectorBridge:{placeSuggestedAction(node){assert.equal(node,actions);}}},
+    window:{studioDirectorBridge:{workingStoryId:()=> 'p1',placeSuggestedAction(node){assert.equal(node,actions);}}},
     creativeCapture:{field:'summary',content:'Complete Intent',sceneId:'a'},
-    recommendations:{writeHint:'scenes',writeFields:['summary','prompt'],sceneId:'a'}});
+    recommendations:{readHints:[],writeHint:'scenes',writeFields:['summary','prompt'],sceneId:'a'}});
   vm.runInContext(fieldsCode + part('  function captureActionLabel(capture) {','  window.studioDirectorWorkbench = {'),scope);
   const kinds=()=>{scope.renderReadiness([]);return actions.children.map(n=>n.dataset.suggestionKind);};
   assert.deepEqual(kinds(),['capture'],'Intent capture is the one focused next step');
@@ -113,7 +119,7 @@ test('only one contextual action is presented, with completed capture taking pri
   assert.deepEqual(kinds(),['capture'],'complete single-field capture avoids redundant generation');
   scope.recommendations.sceneId='b';
   assert.deepEqual(kinds(),['capture'],'a different Scene operation remains available through Write');
-  scope.recommendations={writeHint:'project',writeFields:['concept','style'],sceneId:''};
+  scope.recommendations={readHints:[],writeHint:'project',writeFields:['concept','style'],sceneId:''};
   scope.creativeCapture={field:'concept',content:'Complete Concept',sceneId:''};
   assert.deepEqual(kinds(),['capture'],'Concept capture is the next step; other fields remain in Write');
   scope.recommendations.writeFields=['concept'];
@@ -121,12 +127,16 @@ test('only one contextual action is presented, with completed capture taking pri
   scope.recommendations.writeFields=[];
   assert.deepEqual(kinds(),['capture'],'even unspecified unit scope must not create competing suggestions');
   scope.creativeCapture={field:'scene',title:'New Scene',content:'Intent',sceneId:''};
-  scope.recommendations={writeHint:'scenes',writeFields:['title','summary','prompt'],sceneId:''};
+  scope.recommendations={readHints:[],writeHint:'scenes',writeFields:['title','summary','prompt'],sceneId:''};
   assert.deepEqual(kinds(),['capture'],'new Scene capture remains the next step');
   scope.recommendations.writeFields=['title','summary'];
   assert.deepEqual(kinds(),['capture']);
   scope.creativeCapture = null;
   assert.deepEqual(kinds(),['write'],'Write suggestion remains accessible when there is no capture');
+  scope.recommendations.readHints=['project.concept'];
+  assert.deepEqual(kinds(),['read'],'requested saved context is supplied before drafting');
+  scope.creativeCapture={field:'prompt',content:'Complete prompt',sceneId:'a'};
+  assert.deepEqual(kinds(),['capture'],'completed material can be reviewed directly');
   scope.readinessStale = true;
   assert.deepEqual(kinds(),[],'outdated recommendations disappear');
 });
@@ -306,7 +316,7 @@ test('completed new Scene capture reviews directly without another Director requ
   await finished;
 });
 
-test('completed Scene capture enters the same unit Review without generating another proposal', async () => {
+for (const sceneId of ['a','scene:a','scene:a:prompt']) test('completed Scene capture reviews the exact saved Scene without another proposal: '+sceneId, async () => {
   let complete;
   const finished=new Promise(resolve=>{complete=resolve;});
   const saved={id:'p1',sceneOrder:['a'],scenes:{a:{title:'Lamp',summary:'Old intent',prompt:'Saved H3'}}};
@@ -315,13 +325,31 @@ test('completed Scene capture enters the same unit Review without generating ano
     window:{studioDirectorBridge:{canReview:()=>true},flushStudioDirectorStoryEdits:async()=>{}},
     loadStory:async()=>saved,renderBatchReview:()=>complete(),status:message=>assert.fail(message)});
   vm.runInContext(part('  function reviewCreativeCapture(capture) {','  function openWriteForCapture() {'),scope);
-  scope.reviewCreativeCapture({field:'summary',content:'New intent',sceneId:'a'});
+  scope.reviewCreativeCapture({field:'prompt',content:'New complete H3 prompt',sceneId});
   await finished;
   const entry=scope.proposedBatch.scenes[0];
   assert.equal(entry.sceneId,'a');
-  assert.equal(entry.draft.summary,'New intent');
+  assert.equal(entry.draft.prompt,'New complete H3 prompt');
   assert.equal(entry.before.title,'Lamp');
   assert.equal(entry.before.prompt,'Saved H3');
+});
+
+test('the inline Project Read targets the current destination and reuses explicit Read',async()=>{
+  const select={value:'old-source'};
+  let rendered,selected=0,sent=0;
+  const scope=vm.createContext({
+    window:{studioDirectorBridge:{workingStoryId:()=> 'current-project'}},
+    activeTarget:()=>({storyId:'other-project'}),el:()=>select,
+    refreshProjects:async()=>{},loadStory:async id=>{assert.equal(id,'current-project');return{id};},
+    renderReadStory:story=>{rendered=story.id;},selectEntireReadProject:()=>selected++,
+    readSend:()=>sent++,status:message=>assert.fail(message)
+  });
+  vm.runInContext(part('  function readRecommendedProject() {','  function writeActionLabel() {'),scope);
+  assert.equal(sent,0,'navigation alone sends no saved material');
+  await scope.readRecommendedProject();
+  assert.equal(select.value,'current-project');
+  assert.equal(rendered,'current-project');
+  assert.equal(selected,1);assert.equal(sent,1);
 });
 
 test('unit Apply saves aligned changed parts atomically and leaves the unchanged Title outside the write', async () => {

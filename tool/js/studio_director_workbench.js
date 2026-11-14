@@ -281,6 +281,12 @@
     // If both recommendations exist, they must identify the same saved Scene.
     // A conflict means no automatic destination, not a reason to guess.
     var id = recommendations.sceneId, number = recommendations.sceneNumber;
+    // Read field paths contain `scene:<saved-id>:<field>`; accept that identity
+    // only when it maps exactly to a Scene in this destination Project.
+    if (id && !story.sceneOrder.includes(id) && id.startsWith('scene:')) {
+      var readId = id.split(':')[1];
+      if (story.sceneOrder.includes(readId)) id = readId;
+    }
     if (id && !story.sceneOrder.includes(id)) return '';
     if (number) {
       if (recommendationProject !== story.id || !Number.isInteger(number) ||
@@ -444,6 +450,8 @@
       return window.flushStudioDirectorStoryEdits(id);
     }).then(function () {return loadStory(id);})
       .then(function (story) {
+        if (!story.sceneOrder.includes(sceneTarget) && sceneTarget.startsWith('scene:'))
+          sceneTarget = sceneTarget.split(':')[1];
         var scene = story.scenes && story.scenes[sceneTarget];
         if (!scene || !story.sceneOrder.includes(sceneTarget)) throw new Error('Select a saved Scene to review.');
         var draft = {sceneId:sceneTarget};
@@ -851,6 +859,17 @@
     return capture.field === 'scene' ? 'Review new Scene' :
       ['summary','prompt'].includes(capture.field) ? 'Review Scene' : 'Review Project Overview';
   }
+  function readRecommendedProject() {
+    var id = window.studioDirectorBridge.workingStoryId() || activeTarget().storyId;
+    return refreshProjects().then(function () {
+      el('studio-dw-read-project').value = id;
+      return loadStory(id);
+    }).then(function (story) {
+      renderReadStory(story);
+      selectEntireReadProject();
+      readSend();
+    }).catch(function (error) { status('Project Read failed: ' + error.message, true); });
+  }
   function writeActionLabel() {
     var hint = recommendations.writeHint;
     if (hint === 'new-project') return 'Create Project';
@@ -866,6 +885,10 @@
     actions.replaceChildren();
     assessment.replaceChildren();
     var available = [];
+    if (!readinessStale && !creativeCapture && recommendations.readHints.length &&
+        (window.studioDirectorBridge.workingStoryId() || activeTarget().storyId)) available.push({
+      kind:'read', label:'Read Project', run:readRecommendedProject
+    });
     if (!readinessStale && creativeCapture) available.push({
       kind:'capture', label:captureActionLabel(creativeCapture),
       run:function () { reviewCreativeCapture(creativeCapture); }

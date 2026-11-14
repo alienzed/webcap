@@ -140,8 +140,8 @@ test('contextual Prompt action uses the current route even when Write was aimed 
 });
 
 test('ordinary discussion asks for concise new decisions while complete creative fields remain complete',()=>{
-  assert.match(chat,/Keep readiness light: normally checks=\[\]/);
-  assert.match(chat,/Keep assessment metadata in readiness and conversation in reply/);
+  assert.match(chat,/Discuss concepts in 1-3 concise sentences/);
+  assert.match(chat,/deliver the actual complete text in reply on this turn/);
 });
 
 test('compact Director replies keep the exact full text and leave General Chat alone',()=>{

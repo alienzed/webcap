@@ -52,7 +52,7 @@ test('Only explicitly supplied conversation content is sent; legacy snapshots ar
     workshop: null
   };
   const context = vm.createContext({
-    state, Object, String, Promise,
+    state, Object, String, Promise, window:{getStudioDirectorNavigation:()=>({})},
     requestJson: async () => ({
       system: 'Authoritative expertise',
       actions: [{name: 'context.read', status: 'available',
@@ -74,7 +74,7 @@ test('Only explicitly supplied conversation content is sent; legacy snapshots ar
 test('Studio prompting selects the current goal rather than steering every task to Project edits', async () => {
   const context = vm.createContext({
     state: {studioStoryAccess:null,storyboardAttachments:{},workshop:null},
-    Object, String, Promise,
+    Object, String, Promise, window:{getStudioDirectorNavigation:()=>({projectId:'p1',sceneOrder:['scene-a']})},
     requestJson: async () => ({
       system: 'WebCap Studio Director role',
       actions: [
@@ -92,16 +92,16 @@ test('Studio prompting selects the current goal rather than steering every task 
   assert.match(system,/For the current author goal, suggest at most one useful next step/);
   assert.match(system,/an explicit Read, an appropriately scoped reviewed Write, or an author-operated Studio action/);
   assert.doesNotMatch(system,/When choices are clear, offer to review Concept/);
-  assert.match(system,/contribute a concrete visual/);
-  assert.match(system,/ask a question only when a consequential choice needs the author/);
-  assert.match(system,/When the author explicitly asks for full draft text/);
-  assert.match(system,/Keep readiness light: normally checks=\[\]/);
-  assert.match(system,/If assessment is genuinely useful, provide at most two concise checks/);
-  assert.match(system,/single new Scene is ready for review/);
-  assert.match(system,/A tentative Scene capture needs no H3 Prompt/);
+  assert.match(system,/Ask one focused question only for a consequential missing decision/);
+  assert.match(system,/deliver the actual complete text in reply on this turn/);
+  assert.match(system,/capture.content to the exact full prompt also present in reply/);
+  assert.match(system,/"projectId":"p1","sceneOrder":\["scene-a"\]/);
+  assert.match(system,/Usually checks=\[\], readHints=\[\]/);
+  assert.match(system,/at most two useful checks/);
+  assert.match(system,/A new tentative Scene uses field="scene", title and its observable Intent/);
   assert.match(system,/H3 PRODUCTION PROMPT REFERENCE/);
-  assert.match(system,/scenes writes or revises a coherent Scene, considering its Title, Intent and H3 Prompt together/);
-  assert.match(system,/writeFields describes likely changed parts as advisory metadata/);
+  assert.match(system,/Use new-project, project or scenes for Write/);
+  assert.match(system,/writeFields names affected fields/);
   assert.equal(assembled[1].content,'Revise only the Scene action');
   assert.equal(assembled.length,2, 'no extra request or hidden context event');
 });
@@ -109,7 +109,7 @@ test('Studio prompting selects the current goal rather than steering every task 
 test('explicit Write guidance asks for the draft, not another conversational recommendation', async () => {
   const context = vm.createContext({
     state:{studioStoryAccess:null,storyboardAttachments:{}},
-    Object,String,Promise,
+    Object,String,Promise,window:{getStudioDirectorNavigation:()=>({})},
     requestJson:async()=>({system:'Studio producer expertise',actions:[]})
   });
   vm.runInContext(part('  function studioDirectorRequestMessages(messages, includePromptContract, explicitWrite) {',
@@ -311,7 +311,7 @@ test('batch Scene revisions include duration and linked Invariants', () => {
 test('H3 detailed authoring contract is included when Director may propose a Prompt revision', async () => {
   const state = {studioStoryAccess:null,storyboardAttachments:{},workshop:null};
   const context = vm.createContext({
-    state,Object,String,Promise,
+    state,Object,String,Promise,window:{getStudioDirectorNavigation:()=>({})},
     requestJson:async () => ({
       system:'Small creative guidance',actions:[],
       promptContract:'[Shot 1] Full H3 authoring contract'
@@ -332,7 +332,7 @@ test('Studio conversation receives the canonical H3 template as reference withou
   const template = fs.readFileSync(path.join(__dirname, '..', 'docs/mmh3-prompt-runtime-context.txt'), 'utf8').trim();
   const state = {studioStoryAccess:null,storyboardAttachments:{},workshop:null};
   const context = vm.createContext({
-    state,Object,String,Promise,
+    state,Object,String,Promise,window:{getStudioDirectorNavigation:()=>({})},
     requestJson:async () => ({system:'Studio guidance',actions:[],promptContract:template})
   });
   vm.runInContext(part('  function studioDirectorRequestMessages(messages, includePromptContract, explicitWrite) {',

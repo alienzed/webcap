@@ -154,11 +154,13 @@ def chat_response_schema():
                             "items": {"type": "string", **({"enum": fields} if fields else {})}},
             "sceneId": {"type": "string", "maxLength": 160},
             "sceneNumber": {"type": "integer", "minimum": 0, "maximum": 10000},
-            "capture": {"anyOf": captures},
+            # Always choose between ordinary discussion and a reusable draft.
+            # An optional property was repeatedly omitted after complete prompts.
+            "capture": {"anyOf": [{"type": "null"}, *captures]},
         }
         readiness.append({
             "type": "object", "additionalProperties": False,
-            "required": ["checks", "readHints", "writeHint", "writeFields", "sceneId", "sceneNumber"],
+            "required": ["checks", "readHints", "writeHint", "writeFields", "sceneId", "sceneNumber", "capture"],
             "properties": properties,
         })
     return {

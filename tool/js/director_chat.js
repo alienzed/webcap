@@ -1510,7 +1510,7 @@
 
   function studioWorkingStoryLabel() {
     var storyId = studioAttachedStoryId();
-    if (!storyId) return 'New Project';
+    if (!storyId) return window.getStudioDirectorNavigation().projectTitle || 'New Project';
     if (state.studioStoryAccess && state.studioStoryAccess.storyId === storyId) {
       return String(state.studioStoryAccess.label || storyId);
     }
@@ -2826,8 +2826,7 @@
       var outbound = [{role:'system', content:''}].concat(messages.map(function (message) {
         return {role:message.role,content:message.content};
       })); // Persisted inspection metadata is not part of the LLM conversation.
-      // Conversation context is opt-in. The workbench state only tells Director
-      // what WebCap can review next; it is not a fresh Story or Scene attachment.
+      // Navigation and destination identity convey no saved creative material.
       var storyRefs = Object.keys(state.storyboardAttachments || {}).filter(function (key) {
         return key.indexOf('story:') === 0;
       });
@@ -2838,14 +2837,16 @@
         : storyRefs.length === 1
           ? 'A legacy historical Story snapshot exists in history (' + storyRefs[0].slice(6) + '), but it has not been automatically resent.'
           : 'No saved Project Write destination has been selected. Prior explicitly Read content may still exist in conversation history.';
+      var navigation = window.getStudioDirectorNavigation();
       outbound[0] = { role: 'system', content: payload.system +
         '\n\nCURRENT WEBCAP CAPABILITIES (available vs planned):\n' + capabilities +
         '\n\nSTUDIO WORKBENCH STATE (controls, not saved Story facts):\n' + workbench +
+        '\nCURRENT PROJECT NAVIGATION (identity and one-based Scene positions only; creative material is supplied through explicit Read):\n' + JSON.stringify(navigation) +
         (explicitWrite
           ? '\nEXPLICIT REVIEWED WRITE: The author has already chosen to draft. Produce the requested complete editable proposal in the format specified by the current request. This is a draft for review, not a conversational suggestion. Only WebCap Apply saves changes.\n'
           : '\nFor the current author goal, suggest at most one useful next step from the listed capabilities: ' +
             'an explicit Read, an appropriately scoped reviewed Write, or an author-operated Studio action. ' +
-            'Continue developing the idea when a change is not yet useful. ' +
+            'Fulfil the author’s request in conversation, including drafting complete material when asked. ' +
             'Treat proposed work as unsaved until WebCap confirms Apply.\n') +
         outbound[0].content };
       if (includePromptContract) outbound[0].content +=
@@ -2856,39 +2857,28 @@
 
   function studioDirectorChatRequestMessages(messages) {
     // Studio conversation needs the same authoritative H3 prompt template as Write.
-    // It is reference knowledge here, not permission to draft or save a Prompt.
+    // Drafting is conversation; saving still requires reviewed Apply.
     return studioDirectorRequestMessages(messages, true).then(function (outbound) {
-      outbound[0].content += '\n\nCONTEXT DELIVERY: Use only the saved fields explicitly supplied by Read. ' +
-        'When an explicit Read supplies saved fields, briefly confirm the context you received in natural language. ' +
-        'Then answer the author’s explicit question, if any; a context-only Read needs just that confirmation. ' +
-        'Applied field values supersede earlier snapshots. ' +
-        'RESPONSE CONTRACT: Return JSON matching the supplied reply/readiness schema. ' +
-        'For ordinary conversation, prefer 1-3 concise sentences; contribute a concrete visual ' +
-        'or prompting idea when useful, and ask a question only when a consequential choice needs the author. ' +
-        'When the author explicitly asks for full draft text, ' +
-        'a complete H3 Prompt, or detailed material, include the requested content in full in reply. ' +
-        'When an authored field is complete, also supply its reusable capture when possible. ' +
-        'Keep readiness light: normally checks=[], readHints=[], writeHint="", writeFields=[], sceneId="". ' +
-        'Use a readiness hint only when it provides a useful next action. ' +
-        'Recommend the creative unit: project revises the Project Overview; scenes writes or revises a coherent Scene, considering its Title, Intent and H3 Prompt together. ' +
-        'Write hints are new-project, project or scenes; writeFields describes likely changed parts as advisory metadata, not a separate creative workflow ' +
-        '(project: title/concept/style/invariants; scenes: title/summary/prompt). ' +
-        'Use the exact known saved sceneId for an existing Scene, otherwise empty. ' +
-        'Scene numbers are one-based positions in the current Project. When the discussion clearly identifies a specific existing Scene by number, set sceneNumber to it (otherwise 0); WebCap resolves it to an actual saved Scene. ' +
-        'When the selected Write scene differs from the intended Scene, recommend the intended one instead of trusting incidental UI state. ' +
-        'If assessment is genuinely useful, provide at most two concise checks with a valid name and scope. ' +
-        'For Read recommendations use only known field identifiers, such as project.concept, ' +
-        'project.style, project.invariants or scene.current.prompt. ' +
-        'OPTIONAL CREATIVE CAPTURE: When a complete agreed field has been developed in conversation, ' +
-        'include one capture matching the supplied schema, with its full content. ' +
-        'When telling the author a single new Scene is ready for review, include field=scene, a working title, ' +
-        'sceneId="", and content containing its complete observable Scene Intent. ' +
-        'A tentative Scene capture needs no H3 Prompt; WebCap can review and insert it directly. ' +
-        'When a Scene still needs synthesis or several Scenes need drafting, recommend Write as the drafting step. ' +
-        'For an existing Scene capture use its exact saved ID. ' +
-        'For an Invariant use kind/title and beforeKind/beforeTitle only for an exact known rename or edit. ' +
-        'Capture an already-complete field when the remaining unit stays appropriate; use reviewed unit Write when multiple parts need alignment. WebCap selects and validates the save target ' +
-        'and opens editable review before Apply. Keep assessment metadata in readiness and conversation in reply.\n';
+      outbound[0].content += '\n\nRESPONSE CONTRACT: Return JSON matching the reply/readiness schema.\n' +
+        'CONTEXT: Navigation supplies Project and Scene identity, not their creative content. ' +
+        'For an existing Scene revision, first use its saved text supplied by explicit Read. ' +
+        'When that text is missing, ask to Read Project and set readHints=["project.concept"], capture=null. ' +
+        'A Read-only request needs a brief natural acknowledgement; answer any question included with Read. ' +
+        'Applied values supersede earlier snapshots.\n' +
+        'REPLY: Discuss concepts in 1-3 concise sentences. Ask one focused question only for a consequential missing decision. ' +
+        'When asked to write, revise or paste a prompt, deliver the actual complete text in reply on this turn, using the H3 template and Scene duration. ' +
+        'Writing a Scene means a useful title and a full H3 Prompt. An Intent alone is an outline. ' +
+        'Name user actions in plain language: Read Project, Review Scene, Apply. ' +
+        'Drafting is conversation; only reviewed Apply saves.\n' +
+        'READINESS: Usually checks=[], readHints=[], writeHint="", writeFields=[], sceneId="", sceneNumber=0, capture=null. ' +
+        'Suggest at most one useful next action. Use new-project, project or scenes for Write. ' +
+        'writeFields names affected fields; Scene numbers are one-based. Use bare Scene IDs from navigation.sceneOrder. ' +
+        'Default to the current Project, respecting an explicit author-selected destination. Assess only supplied material, with at most two useful checks.\n' +
+        'CAPTURE: Use null for discussion, questions, outlines and work still to be drafted. ' +
+        'When reply contains a complete existing Scene prompt, set capture.field="prompt", capture.sceneId to its saved ID, ' +
+        'and capture.content to the exact full prompt also present in reply. This enables Review Scene without another LLM call. ' +
+        'For other complete fields use the matching capture schema. A new tentative Scene uses field="scene", title and its observable Intent. ' +
+        'For an Invariant use its kind/title, with beforeKind/beforeTitle for an exact known edit.\n';
       return outbound;
     });
   }
@@ -3328,6 +3318,13 @@
     inputHistoryDraft = '';
 
     if (activeChatMode === 'storyboard') {
+      // An explicit message starts work in the open Project. Retain that
+      // destination across reloads without attaching any creative field values.
+      if (!studioAttachedStoryId()) {
+        var navigation = window.getStudioDirectorNavigation();
+        if (navigation.projectId)
+          state.studioStoryAccess = {storyId:navigation.projectId,label:navigation.projectTitle};
+      }
       state.storyGuidelineProposal = null;
       state.workshopProposal = null;
       state.studioSceneProposal = null;
@@ -3417,6 +3414,10 @@
         }
         if (studioResponse) {
           try {
+            var capture = studioResponse.readiness && studioResponse.readiness.capture;
+            if (capture && capture.field === 'prompt' &&
+                (typeof capture.content !== 'string' || !assistantText.includes(capture.content)))
+              throw new Error('Director prompt review must contain the complete prompt supplied in the reply.\nRaw Director response:\n' + result.text);
             if (!window.studioDirectorWorkbench.updateReadiness(studioResponse.readiness))
               throw new Error('Director readiness did not match the expected contract.\nRaw structured response:\n' + result.text);
             // Assessment is metadata, not another user-visible success card.
@@ -3876,7 +3877,7 @@
       return state.open && state.activeMode === 'storyboard' && state.sessionReady &&
         !state.pending && !state.attachmentPending && !!state.modelId;
     },
-    workingStoryId: studioAttachedStoryId,
+    workingStoryId: function () { return studioAttachedStoryId() || window.getStudioDirectorNavigation().projectId; },
     modelId: function () { return state.modelId; },
     messages: function () {
       return (state.modeMessages.storyboard || []).map(function (message) {

@@ -293,8 +293,9 @@ test('automatic new-Scene Write reuses a fresh capture and preserves explicit dr
   assert.equal(calls[0][0],'batch','existing Scene revisions keep their reviewed workflow');
 });
 
-test('completed new Scene capture reviews directly without another Director request', async () => {
-  const capture={field:'scene',sceneId:'',title:'Sunlit crossing',content:'The subject crosses the sunlit square.'};
+test('completed new Scene with Title, Intent and H3 Prompt reviews directly without another Director request', async () => {
+  const capture={field:'scene',sceneId:'',title:'Sunlit crossing',content:'The subject crosses the sunlit square.',
+    prompt:'integrated_multimodal_description: [Shot 1] Crossing the bright square.'};
   let complete;
   const finished=new Promise(resolve=>{complete=resolve;});
   const scope=vm.createContext({

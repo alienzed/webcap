@@ -963,7 +963,7 @@
         });
       }).then(function (result) {
         return window.refreshStudioDirectorStoryIfOpen(story.id).then(function () {
-          return window.studioDirectorBridge.recordApplied('scene.update',result.story,{
+          return window.studioDirectorBridge.recordApplied('scene.director.revision',result.story,{
             sceneId:sceneId, savedFields:{prompt:result.scene.prompt}
           });
         });

@@ -247,3 +247,113 @@ test('open Director badge follows Scene 1 to Scene 2 navigation without starting
   assert.match(outbound[0].content,/scene:b:durationSeconds","value":9/);
   assert.doesNotMatch(outbound[0].content,/Mara walks toward the rover/);
 });
+
+
+function assistantRailHarness() {
+  const chat=fs.readFileSync(path.join(__dirname,'../tool/js/director_chat.js'),'utf8');
+  const bootstrap=/  if \(document\.readyState === 'loading'\) document\.addEventListener\('DOMContentLoaded', bind\);\n  else bind\(\);\n\}\)\(\);\s*$/;
+  assert.match(chat,bootstrap);
+  const instrumented=chat.replace(bootstrap,
+    '  syncModeUi = function () {};\n  syncControls = function () {};\n' +
+    '  finishProgress = function () {};\n' +
+    '  window.__assistantNav = {state:state,setMode:setMode,setOpen:setOpen};\n})();');
+  const elements={};
+  const node=()=>({
+    value:'',attrs:{},classes:{},
+    classList:{
+      toggle(name,value){this[name]=!!value;},
+      add(name){this[name]=true;},
+      remove(name){this[name]=false;}
+    },
+    setAttribute(key,value){this.attrs[key]=value;},
+    focus(){}
+  });
+  let studio=false;
+  const requests=[];
+  const ctx=vm.createContext({
+    getDirectorModelPreference:()=> '',
+    document:{
+      getElementById:id=>elements[id] ||= node(),
+      querySelector:selector=>selector==='#storyboard-workspace:not(.hidden)' && studio ? {} : null
+    },
+    window:{},
+    fetch:url=>{requests.push(url);throw new Error('Navigation must not request a model');},
+    console,Promise
+  });
+  vm.runInContext(instrumented,ctx);
+  const {state,setOpen,setMode}=ctx.window.__assistantNav;
+  state.modelsLoaded=true;
+  state.sessionReady=true;
+  state.sessionByMode.storyboard={id:'existing-studio-conversation'};
+  const begin=chat.indexOf('    toggle.onclick = function () {');
+  const end=chat.indexOf('    pin.onclick',begin);
+  assert.ok(begin>0 && end>begin);
+  vm.runInContext('var toggle=document.getElementById("director-chat-rail-btn");\n' +
+    chat.slice(begin,end),ctx);
+  return {
+    state,requests,elements,setMode,setOpen,
+    rail:()=>elements['director-chat-rail-btn'].onclick(),
+    studio:value=>{studio=value;},
+    exitStudio:()=>ctx.window.closeStudioDirectorOnExit()
+  };
+}
+
+test('Assistant rail restores the last Studio Chat or Director surface, retaining drafts and conversations', async()=>{
+  const h=assistantRailHarness();
+  h.studio(true);
+  assert.equal(h.state.lastStudioMode,'chat','first entry preserves the existing Chat default');
+  h.rail();
+  assert.equal(h.state.activeMode,'chat');
+  h.elements['director-chat-input'].value='Unsent Chat draft';
+  h.setOpen(true,'storyboard'); // Explicit Project/Scene Director entry
+  assert.equal(h.state.activeMode,'storyboard');
+  assert.equal(h.state.lastStudioMode,'storyboard');
+  assert.equal(h.state.draftByMode.chat,'Unsent Chat draft');
+  h.state.modeMessages.storyboard=[{role:'user',content:'Earlier Studio conversation'}];
+  h.elements['director-chat-input'].value='Unsent Director draft';
+  h.rail();
+  assert.equal(h.state.open,false,'rail closes Director instead of switching it to Chat');
+  h.rail();
+  assert.equal(h.state.activeMode,'storyboard');
+  assert.equal(h.state.open,true);
+
+  h.studio(false);
+  h.exitStudio();
+  assert.equal(h.state.activeMode,'chat','ordinary Assistant is Chat outside Studio');
+  assert.equal(h.state.lastStudioMode,'storyboard','Studio remembers its previous surface');
+  assert.equal(h.state.draftByMode.storyboard,'Unsent Director draft');
+  h.rail();
+  assert.equal(h.state.activeMode,'chat');
+  h.rail();
+  h.studio(true);
+  h.rail();
+  assert.equal(h.state.activeMode,'storyboard','returning to Studio restores Director');
+  assert.equal(h.elements['director-chat-input'].value,'Unsent Director draft');
+  assert.equal(h.state.modeMessages.storyboard[0].content,'Earlier Studio conversation');
+
+  h.setMode('chat'); // Select Chat while in Studio
+  assert.equal(h.state.lastStudioMode,'chat');
+  assert.equal(h.elements['director-chat-input'].value,'Unsent Chat draft');
+  h.rail();
+  h.rail();
+  assert.equal(h.state.activeMode,'chat','Studio remembers an explicit Chat choice');
+  assert.deepEqual(h.requests,[],'navigation never calls the LLM');
+});
+
+test('global Chat navigation never overwrites the Studio surface choice',()=>{
+  const h=assistantRailHarness();
+  h.studio(true);
+  h.setOpen(true,'storyboard');
+  h.studio(false);
+  h.exitStudio();
+  h.rail();
+  assert.equal(h.state.activeMode,'chat');
+  assert.equal(h.state.lastStudioMode,'storyboard');
+  h.setOpen(true,'chat');
+  assert.equal(h.state.lastStudioMode,'storyboard');
+  h.rail();
+  h.studio(true);
+  h.rail();
+  assert.equal(h.state.activeMode,'storyboard');
+  assert.deepEqual(h.requests,[]);
+});

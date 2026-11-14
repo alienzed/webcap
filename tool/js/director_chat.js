@@ -1587,20 +1587,17 @@
             typeof item.kind !== 'string' || typeof item.title !== 'string' || typeof item.text !== 'string' ||
             ['visual', 'character', 'location', 'world', 'sound', 'custom'].indexOf(item.kind) === -1;
         }) ||
-        (proposal.firstScene != null && (
-          typeof proposal.firstScene !== 'object' || Array.isArray(proposal.firstScene) ||
-          typeof proposal.firstScene.title !== 'string' || typeof proposal.firstScene.prompt !== 'string' ||
-          !proposal.firstScene.prompt.trim()
-        ))) {
-      throw new Error('Project proposal must contain Concept, Style, optional Invariants, and an optional first Scene.\nRaw Director response:\n' + String(raw || ''));
+        (proposal.initialScenes != null && (!Array.isArray(proposal.initialScenes) ||
+          proposal.initialScenes.length > 32 || proposal.initialScenes.some(function (item) {
+            return !item || typeof item.title !== 'string' || item.title.length > 240 ||
+              typeof item.brief !== 'string' || !item.brief.trim() || item.brief.length > 4000 ||
+              !Number.isInteger(item.durationSeconds) || item.durationSeconds < 4 ||
+              item.durationSeconds > 15;
+          })))) {
+      throw new Error('Director returned invalid Project fields or initial Scene briefs.\nRaw Director response:\n' + String(raw || ''));
     }
-    if (proposal.firstScenes != null && (!Array.isArray(proposal.firstScenes) ||
-        proposal.firstScenes.length > 32 || proposal.firstScenes.some(function (item) {
-          return !item || typeof item.title !== 'string' || typeof item.prompt !== 'string' ||
-            !item.prompt.trim();
-        }))) throw new Error('Project contains invalid initial Scene drafts.\nRaw Director response:\n' + String(raw || ''));
-    if (!proposal.concept.trim() && !proposal.firstScene && !(proposal.firstScenes || []).length) {
-      throw new Error('Director needs at least an idea or first Scene to prepare a Project.\nRaw Director response:\n' + String(raw || ''));
+    if (!proposal.concept.trim() || !proposal.style.trim()) {
+      throw new Error('Director must provide complete Concept and Visual / atmosphere.\nRaw Director response:\n' + String(raw || ''));
     }
     return proposal;
   }
@@ -1661,16 +1658,21 @@
     var host = el('studio-project-extra-scenes');
     var row = document.createElement('div');
     row.className = 'studio-project-extra-scene';
-    var title = document.createElement('input'), prompt = document.createElement('textarea'),
-      remove = document.createElement('button'), label = document.createElement('strong');
+    var title = document.createElement('input'), duration = document.createElement('input'),
+      prompt = document.createElement('textarea'), remove = document.createElement('button'),
+      label = document.createElement('strong');
     label.textContent = 'Additional Scene';
-    title.placeholder = 'Scene title (optional)'; title.value = scene && scene.title || '';
+    title.type = 'text'; title.placeholder = 'Scene title'; title.value = scene && scene.title || '';
     title.setAttribute('aria-label', 'Additional Scene title');
-    prompt.placeholder = 'Full H3 production prompt';prompt.value = scene && scene.prompt || '';
-    prompt.rows = 8; prompt.setAttribute('aria-label', 'Additional Scene prompt');
+    duration.type = 'number'; duration.min = 4; duration.max = 15; duration.step = 1;
+    duration.value = scene && scene.durationSeconds || 6;
+    duration.setAttribute('aria-label', 'Additional Scene duration in seconds');
+    prompt.placeholder = 'Short Scene brief for Director to author after Project creation';
+    prompt.value = scene && scene.brief || '';
+    prompt.rows = 3; prompt.setAttribute('aria-label', 'Additional Scene brief');
     remove.type = 'button'; remove.className = 'review-captions-btn';
     remove.textContent = 'Remove Scene'; remove.onclick = function () {row.remove();};
-    row.append(label, title, prompt, remove); host.appendChild(row);
+    row.append(label, title, duration, prompt, remove); host.appendChild(row);
   }
 
   function showStudioProjectReview() {
@@ -1684,7 +1686,7 @@
     el('studio-project-error').textContent = '';
     el('studio-project-invariants').replaceChildren();
     proposal.invariants.forEach(addStudioProjectInvariant);
-    var initial = proposal.firstScenes || (proposal.firstScene ? [proposal.firstScene] : []);
+    var initial = proposal.initialScenes || [];
     var first = initial[0] || null;
     el('studio-project-extra-scenes').replaceChildren();
     initial.slice(1).forEach(addStudioProjectExtraScene);
@@ -1692,13 +1694,14 @@
     el('studio-project-continue').checked = true;
     el('studio-project-first-scene-fields').classList.toggle('hidden', !first);
     el('studio-project-scene-title').value = first ? first.title : '';
-    el('studio-project-scene-prompt').value = first ? first.prompt : '';
+    el('studio-project-scene-prompt').value = first ? first.brief : '';
+    el('studio-project-scene-duration').value = first ? first.durationSeconds : 6;
     var dialog = el('studio-project-review');
     if (dialog.open) dialog.close();
     dialog.showModal();
   }
 
-  function prepareStudioProject() {
+  function prepareStudioProject(options) {
     if (state.pending || state.activeMode !== 'storyboard' || !state.sessionReady) return;
     if (state.studioProjectProposal) { showStudioProjectReview(); return; }
     if (!state.modelId) { studioActionStatus('No Director model is available. Refresh models.', true); return; }
@@ -1717,13 +1720,14 @@
     startProgress();
     syncControls();
     var input = {
-      task: 'Extract only the agreed creative direction into ONE new Studio Project. ' +
-        'Provide an editable title (may be blank), concise Concept including the core appeal, ' +
-        'optional Style, and only essential Invariants. Include firstScenes when concrete tentative ' +
-        'clips have emerged; propose as many Scenes as actually developed (up to 32), ' +
-        'and do not fabricate extra Scenes to fill a count. It is fine to have zero Scenes. ' +
-        'Do not invent a fixed Scene count. Give each included Scene a complete H3 Prompt. ' +
-        'Use a short rationale. Nothing should be created yet.',
+      task: 'Author ONE new Studio Project with a complete Concept (including core appeal), ' +
+        'complete Visual / atmosphere, a useful title and only relevant stable Invariants. ' +
+        'When the author explicitly requests initial Scenes, include one short initialScenes ' +
+        'brief per agreed Scene with title, brief and whole-second durationSeconds (4-15, default 6). ' +
+        'Those briefs will be passed to individual Scene-writing calls after this Project is saved. ' +
+        'Return an empty initialScenes array when no Scenes were requested. ' +
+        'Use a short rationale. This is a draft for the existing Project review.',
+      instruction: String(options && options.instruction || '').trim(),
       discussion: discussion
     };
     studioDirectorRequestMessages([{ role: 'user', content: JSON.stringify(input) }], false, true)
@@ -1757,6 +1761,97 @@
       });
   }
 
+
+  // The reviewed Project is saved before any Scene authoring. Each approved
+  // brief uses the existing one-Scene writer schema and Studio insertion route.
+  function writeInitialProjectScenes(story, briefs) {
+    var outcome = {saved:[],failed:[],notAttempted:[],reportingErrors:[]}, current = story;
+    function next(index) {
+      if (index >= briefs.length) return Promise.resolve(outcome);
+      var brief = briefs[index], label = brief.title || ('Scene ' + (index + 1));
+      recordStudioOperation('project.scene.progress',
+        'Writing initial Scene ' + (index + 1) + '/' + briefs.length + ' · ' + label,
+        story.id, []);
+      var input = {
+        task:'Author exactly ONE new Scene with one complete usable H3 prompt, title and ' +
+          'whole-second durationSeconds. Use the approved Project direction and the Scene brief. ' +
+          'Match the requested title and duration, including prompt timing. ' +
+          'Return the existing Scene sequence JSON format with exactly one Scene.',
+        instruction:brief.brief, requestedTitle:brief.title, durationSeconds:brief.durationSeconds,
+        project:{title:current.title,concept:current.concept,style:current.style,
+          invariants:current.invariants}
+      };
+      return studioDirectorRequestMessages([{role:'user',content:JSON.stringify(input)}],
+        true,true,{projectId:story.id,projectTitle:story.title,sceneOrder:current.sceneOrder})
+        .then(function (messages) {
+          window.studioDirectorWorkbench.showSentWriteContext('studio_scene_sequence_draft',messages);
+          return requestJson('/fs/director/chat', {
+            method:'POST',headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({model:state.modelId,operation:'studio_scene_sequence_draft',
+              messages:messages})
+          });
+        }).then(function (payload) {
+          if (!payload.job || !payload.job.jobId)
+            throw new Error('Initial Scene authoring did not queue a job.');
+          state.jobId = String(payload.job.jobId);
+          trackTransientLlmJob(payload.job);
+          return waitForJob(payload.job);
+        }).then(function (job) {
+          var raw = String(job.result && job.result.text || '');
+          state.lastStudioIoRaw = raw;
+          var draft = parseStudioScenesDraft(raw);
+          if (draft.scenes.length !== 1)
+            throw new Error('Initial Scene authoring must return exactly one Scene.');
+          var scene = draft.scenes[0];
+          if (!Number.isInteger(scene.durationSeconds) ||
+              scene.durationSeconds !== brief.durationSeconds)
+            throw new Error('Scene duration differs from the approved brief.');
+          if (brief.title) scene.title = brief.title;
+          return requestJson('/fs/studio/director/scenes-draft', {
+            method:'POST',headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({
+              storyId:story.id,expectedSceneOrder:current.sceneOrder.slice(),
+              scenes:[scene],placement:'end',relativeSceneId:''
+            })
+          });
+        }).then(function (result) {
+          if (!result.story || result.story.id !== story.id ||
+              !Array.isArray(result.scenes) || result.scenes.length !== 1 ||
+              !result.scenes[0].id) {
+            throw new Error('Scene creation result is incomplete; inspect the Project before retrying.');
+          }
+          current = result.story;
+          var saved = result.scenes[0];
+          outcome.saved.push(saved.id);
+          recordStudioOperation('scene.create','Saved initial Scene · ' +
+            (saved.title || saved.id),story.id,[saved.id]);
+          return window.studioDirectorBridge.recordApplied('scene.create',result.story,{
+            scenes:[{id:saved.id,title:saved.title,prompt:saved.prompt,
+              durationSeconds:saved.durationSeconds}]
+          }).catch(function (error) {
+            outcome.reportingErrors.push(label + ': ' + String(error.message || error));
+            window.reportConsoleError('Initial Scene receipt after save',error);
+          });
+        }).catch(function (error) {
+          outcome.failed.push(label + ': ' + String(error.message || error));
+          window.reportConsoleError('Initial Scene write · ' + label,error);
+          var stopped = ['stopped','cancelled','interrupted'].includes(String(error.jobStatus || ''));
+          var shared = stopped ||
+            /Failed to fetch|No Director model is available|runtime unavailable/i.test(String(error.message || ''));
+          if (shared) {
+            outcome.notAttempted = briefs.slice(index + 1).map(function (item,offset) {
+              return item.title || ('Scene ' + (index + offset + 2));
+            });
+            return outcome;
+          }
+        }).then(function (result) {
+          state.jobId = '';
+          return result === outcome ? outcome : next(index + 1);
+        });
+    }
+    return next(0);
+  }
+
   function applyStudioProject() {
     if (!state.studioProjectProposal || state.pending) return;
     var proposal = {
@@ -1776,33 +1871,37 @@
     var firstScenes = [];
     if (el('studio-project-include-scene').checked) {
       firstScenes.push({
-        title: el('studio-project-scene-title').value.trim(),
-        prompt: el('studio-project-scene-prompt').value.trim()
+        title:el('studio-project-scene-title').value.trim(),
+        brief:el('studio-project-scene-prompt').value.trim(),
+        durationSeconds:Number(el('studio-project-scene-duration').value)
       });
     }
     el('studio-project-extra-scenes').querySelectorAll('.studio-project-extra-scene').forEach(function (row) {
       firstScenes.push({
-        title: row.querySelector('input').value.trim(),
-        prompt: row.querySelector('textarea').value.trim()
+        title:row.querySelector('input[type="text"]').value.trim(),
+        brief:row.querySelector('textarea').value.trim(),
+        durationSeconds:Number(row.querySelector('input[type="number"]').value)
       });
     });
-    if (firstScenes.some(function (scene) {return !scene.prompt;})) {
-      el('studio-project-error').textContent = 'Write a complete Prompt for every selected Scene or remove it.';
+    if (firstScenes.some(function (scene) {
+      return !scene.brief || !Number.isInteger(scene.durationSeconds) ||
+        scene.durationSeconds < 4 || scene.durationSeconds > 15;
+    })) {
+      el('studio-project-error').textContent = 'Each initial Scene needs a brief and a duration from 4 to 15 seconds.';
       return;
     }
     if (firstScenes.length > 32) {
       el('studio-project-error').textContent = 'One new Project review can include up to 32 Scenes.';
       return;
     }
-    if (firstScenes.length) proposal.firstScenes = firstScenes;
-    if (!proposal.concept && !firstScenes.length) {
-      el('studio-project-error').textContent = 'Describe the idea or include a first Scene.';
+    if (!proposal.concept || !proposal.style) {
+      el('studio-project-error').textContent = 'Complete Concept and Visual / atmosphere to create the Project.';
       return;
     }
     state.pending = true;
     syncControls();
     el('studio-project-error').textContent = '';
-    var createdStory = null;
+    var createdStory = null, receiptError = '';
     var continueWithProject = el('studio-project-continue').checked;
     requestJson('/fs/studio/director/project-create', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -1823,9 +1922,8 @@
         syncModeUi();
       }
       recordStudioOperation('project.create', 'Created Project: ' + name, payload.story.id, payload.story.sceneOrder);
-      studioActionStatus(continueWithProject
-        ? 'Project created and connected: ' + name + '. You can prepare Scenes from this conversation.'
-        : 'Project created: ' + name + '. Open it from the Studio Library.', false);
+      studioActionStatus('Project saved: ' + name +
+        (firstScenes.length ? '. Writing ' + firstScenes.length + ' initial Scenes…' : '.'), false);
       var projectValues = {
         concept:payload.story.concept,style:payload.story.style,invariants:payload.story.invariants,
         scenes:(payload.story.sceneOrder || []).map(function (id) {
@@ -1834,7 +1932,25 @@
         })
       };
       return window.studioDirectorBridge.recordApplied('project.create',payload.story,projectValues)
-        .then(function () {return window.refreshStudioDirectorStoryIfOpen(payload.story.id);});
+        .catch(function (error) {
+          receiptError = String(error.message || error);
+          window.reportConsoleError('Project receipt after save',error);
+        })
+        .then(function () {return writeInitialProjectScenes(payload.story,firstScenes);})
+        .then(function (outcome) {
+          if (firstScenes.length || receiptError) {
+            var summary = 'Project saved' + (firstScenes.length
+              ? ' · ' + outcome.saved.length + ' Scenes saved' : '') +
+              (outcome.failed.length ? ' · failed: ' + outcome.failed.join(' | ') : '') +
+              (outcome.notAttempted.length ? ' · not attempted: ' + outcome.notAttempted.join(', ') : '') +
+              (outcome.reportingErrors.length ? ' · Scene receipts failed: ' + outcome.reportingErrors.join(' | ') : '') +
+              (receiptError ? ' · Project receipt failed: ' + receiptError : '');
+            recordStudioOperation('project.initial-scenes',summary,payload.story.id,outcome.saved);
+            studioActionStatus(summary,!!(outcome.failed.length || outcome.notAttempted.length ||
+              outcome.reportingErrors.length || receiptError));
+          }
+          return window.refreshStudioDirectorStoryIfOpen(payload.story.id);
+        });
     }).catch(function (error) {
       var detail = String(error.message || error);
       if (createdStory) {
@@ -1934,7 +2050,10 @@
     el('studio-brief-rationale').textContent = proposal.rationale;
     el('studio-brief-title-before').textContent = 'Current: ' + (proposal.expected.title || '(untitled)');
     el('studio-brief-title').value = proposal.draft.title;
-    el('studio-brief-title-selected').checked = proposal.draft.title !== proposal.expected.title;
+    var requested = Array.isArray(proposal.requestedFields) && proposal.requestedFields.length
+      ? proposal.requestedFields : null;
+    el('studio-brief-title-selected').checked = proposal.draft.title !== proposal.expected.title &&
+      (!requested || requested.includes('title'));
     el('studio-brief-concept-before').textContent = 'Current: ' + (proposal.expected.concept || '(empty)');
     el('studio-brief-style-before').textContent = 'Current: ' + (proposal.expected.style || '(empty)');
     el('studio-brief-concept').value = proposal.draft.concept;
@@ -1942,8 +2061,10 @@
     ['title','concept','style'].forEach(function(key){
       studioDirectorRenderDiff(el('studio-brief-'+key+'-diff'), proposal.expected[key], proposal.draft[key]);
     });
-    el('studio-brief-concept-selected').checked = proposal.draft.concept !== proposal.expected.concept;
-    el('studio-brief-style-selected').checked = proposal.draft.style !== proposal.expected.style;
+    el('studio-brief-concept-selected').checked = proposal.draft.concept !== proposal.expected.concept &&
+      (!requested || requested.includes('concept'));
+    el('studio-brief-style-selected').checked = proposal.draft.style !== proposal.expected.style &&
+      (!requested || requested.includes('style'));
     // A model's omission never becomes a proposed deletion by accident.
     // Match existing rows by their current composite identity; the author
     // explicitly removes a row to approve its deletion.
@@ -1965,12 +2086,12 @@
     suggested.forEach(function (item, index) {
       if (!matched.has(index)) reviewed.push({item:item, original:null});
     });
-    el('studio-brief-invariants-selected').checked = reviewed.length !== existing.length ||
-      reviewed.some(function (row, index) {
+    el('studio-brief-invariants-selected').checked = (!requested || requested.includes('invariants')) &&
+      (reviewed.length !== existing.length || reviewed.some(function (row, index) {
         return !existing[index] || ['kind','title','text'].some(function (field) {
           return row.item[field] !== existing[index][field];
         });
-      });
+      }));
     el('studio-brief-invariants').replaceChildren();
     reviewed.forEach(function (row) {
       addStudioProjectInvariant(row.item, 'studio-brief-invariants', row.original);
@@ -2021,9 +2142,14 @@
     unchanged.classList.toggle('hidden', !unchanged.querySelector('.studio-brief-field'));
   }
 
-  function prepareStudioBrief() {
+  function prepareStudioBrief(options) {
     if (state.pending || state.activeMode !== 'storyboard' || !state.sessionReady) return;
-    if (state.studioBriefProposal) { showStudioBriefReview(); return; }
+    var instruction = String(options && options.instruction || '').trim();
+    if (state.studioBriefProposal && (!instruction ||
+        instruction === state.studioBriefProposal.instruction)) {
+      showStudioBriefReview(); return;
+    }
+    if (instruction) state.studioBriefProposal = null;
     if (!state.modelId) { studioActionStatus('Select a Director model.', true); return; }
     var storyId = studioAttachedStoryId();
     if (!storyId) {
@@ -2035,6 +2161,13 @@
     }).map(function (message) {
       return {role:message.role,content:message.content};
     });
+    instruction = instruction || String((discussion.filter(function (message) {
+      return message.role === 'user' && !message.content.includes('[WEBCAP APPLIED FIELD VALUES]');
+    }).slice(-1)[0] || {}).content || '').trim();
+    var requestedFields = Array.isArray(options && options.requestedFields)
+      ? options.requestedFields.filter(function (field) {
+        return ['title','concept','style','invariants'].includes(field);
+      }) : [];
     state.pending = true;
     state.jobId = '';
     studioActionStatus('Preparing Project Overview for review…', false);
@@ -2049,12 +2182,12 @@
       if (!story || story.id !== storyId) throw new Error('Attached Project is unavailable.');
       var expected = { title: story.title, concept: story.concept, style: story.style, invariants: story.invariants };
       var input = {
-        task: 'Propose narrowly scoped creative brief changes that the author has actually discussed. ' +
-          'Return the revised Project title, Concept, Style and FULL Invariant list as reviewable suggestions. ' +
-          'Consider Concept, Visual / atmosphere and Invariants together as one Project Overview. Align the affected parts with the agreed change, preserving parts that remain appropriate and respecting explicit author limits. ' +
-          'Core Appeal stays within Concept. Preserve established details and unrelated facts. ' +
-          'Do not change Scenes or prompts. Prefer no change where ideas remain undecided. ' +
-          'Any changes must be reviewed by the author before WebCap stores them.',
+        task: 'Author complete revised Project Overview field values using the freshly saved Project ' +
+          'as the baseline. Follow the specific agreed instruction, changing only the requested fields. ' +
+          'Return the complete title, Concept, Visual / atmosphere and Invariant list, preserving all ' +
+          'unaffected text, Invariants and Scene prompts. Keep the core appeal in Concept. ' +
+          'WebCap reviews and saves only selected changes.',
+        instruction: instruction, requestedFields: requestedFields,
         project: { id: story.id, title: story.title, concept: story.concept,
           style: story.style, invariants: story.invariants },
         discussion: discussion
@@ -2077,7 +2210,7 @@
           var draft = parseStudioBriefDraft(result.text);
           state.studioBriefProposal = {
             storyId: storyId, storyTitle: story.title, expected: expected, draft: draft,
-            rationale: draft.rationale
+            instruction:instruction, requestedFields:requestedFields, rationale: draft.rationale
           };
           finishProgress(null);
           studioActionStatus('Project Overview ready for review. Nothing has changed.', false);
@@ -2930,7 +3063,9 @@
         'Writing a Scene means a useful title and a full H3 Prompt. An outline alone is a planning draft, not a second authoritative Scene description. ' +
         'Name actions in plain language. Conversation alone never saves; a launched Scene revision saves directly and reviewed Apply saves reviewed drafts.\n' +
         'READINESS: Usually checks=[], readHints=[], writeHint="", writeFields=[], sceneId="", sceneNumber=0, capture=null. ' +
-        'Always include writeInstruction: use an empty string unless proposing an existing Scene revision or one new Scene; then include the concrete agreed instruction, title and duration when specified. ' +
+        'For a requested new Project propose writeHint="new-project" with the agreed writeInstruction. ' +
+        'For an existing Project overview change propose writeHint="project", an exact writeInstruction and writeFields naming affected Project fields. ' +
+        'Always include writeInstruction: empty for ordinary discussion, or the concrete agreed Project or Scene instruction, including requested title and duration for Scenes. ' +
         'For factual questions answerable from supplied context, keep readiness fields empty and finish with the answer. ' +
         'For requested creative development, suggest at most one useful next action. Use new-project, project or scenes for Write. ' +
         'writeFields names affected fields; Scene numbers are one-based. Use bare Scene IDs from navigation.sceneOrder. ' +
@@ -2940,7 +3075,21 @@
         'and capture.content to the full usable prompt itself. WebCap uses this one authored text for both chat and Review Scene, without another LLM call. ' +
         'For other complete fields use the matching capture schema. When a complete new Scene is already authored in conversation, use field="scene", title and content as the full usable H3 Prompt and durationSeconds (requested duration or default 6). WebCap reuses that material for review. ' +
         'For an Invariant use its kind/title, with beforeKind/beforeTitle for an exact known edit.\n';
-      if (!selectedScene) return outbound;
+      if (!selectedScene) {
+        var projectId = studioAttachedStoryId() ||
+          (navigationSnapshot && navigationSnapshot.projectId) ||
+          window.getStudioDirectorNavigation().projectId;
+        if (!projectId) return outbound;
+        return requestJson('/fs/storyboard?story=' + encodeURIComponent(projectId)).then(function (result) {
+          var story = result && result.story;
+          if (!story || story.id !== projectId) throw new Error('The selected Project is no longer available.');
+          outbound[0].content += '\n\nCURRENT SAVED PROJECT OVERVIEW (WebCap supplied):\n' +
+            JSON.stringify({projectId:story.id,title:story.title,concept:story.concept,
+              style:story.style,invariants:story.invariants}) +
+            '\nSaved values supersede earlier conversational drafts.\n';
+          return outbound;
+        });
+      }
       return requestJson('/fs/storyboard?story=' + encodeURIComponent(selectedScene.projectId))
         .then(function (result) {
           var story = result && result.story;
@@ -3409,9 +3558,9 @@
       state.storyGuidelineProposal = null;
       state.workshopProposal = null;
       state.studioSceneProposal = null;
-      state.studioProjectProposal = null;
+      // A follow-up question must not discard an authored Project review.
+      // A new explicit write with a new instruction replaces the prior proposal.
       state.studioScenesProposal = null;
-      state.studioBriefProposal = null;
       el('director-chat-workshop-status').textContent = '';
     }
     // Freeze the Project destination alongside the user's instruction.
@@ -4065,14 +4214,14 @@
       scheduleSessionSave();
       syncModeUi();
     },
-    prepareWrite: function (kind, storyId, storyTitle) {
+    prepareWrite: function (kind, storyId, storyTitle, options) {
       if (!this.isReady()) throw new Error('Director must be ready before Write.');
       if (kind !== 'new-project') this.selectWriteProject(storyId,storyTitle);
       if (kind === 'new-project') {
         state.studioProjectProposal = null; // Create a fresh review from current conversation.
-        return prepareStudioProject();
+        return prepareStudioProject(options);
       }
-      if (kind === 'project') return prepareStudioBrief();
+      if (kind === 'project') return prepareStudioBrief(options);
       if (kind === 'scene') return prepareStudioSceneDraft();
       if (kind === 'scenes') return prepareStudioScenes();
       throw new Error('Unsupported reviewed Write operation: ' + kind);

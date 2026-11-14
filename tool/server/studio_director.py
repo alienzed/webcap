@@ -17,9 +17,9 @@ ACTIONS = (
     {"name": "context.read", "status": "available",
      "description": "Supply saved context for the selected Scene automatically; explicit Read is available for other chosen Project/Scene fields."},
     {"name": "project.create", "status": "available",
-     "description": "Create a reviewed Project with Concept, Visual / atmosphere, Invariants, and optional initial Scenes."},
+     "description": "Create a reviewed Project with complete Concept, Visual / atmosphere and Invariants; requested initial Scenes are authored after saving."},
     {"name": "project.revise", "status": "available",
-     "description": "Revise an existing Project's Concept, Visual / atmosphere, or Invariants in one editable review."},
+     "description": "Revise requested Project Concept, Visual / atmosphere or Invariants using fresh saved values in one editable review."},
     {"name": "scenes.write", "status": "available",
      "description": "Create or revise one or more Scenes in a chosen Project, including H3 Prompt and relevant Invariants; review before applying."},
 )
@@ -87,8 +87,8 @@ _H3_STUDIO_CORE = (
     "A Scene can have a saved Prompt without any Takes. "
     "The H3 Storyboard generation path validates 4–15 seconds per clip. "
     "Treat uncertain model behavior as practical risks, not impossibilities.\n"
-    "AVAILABLE AUTHOR-REVIEWED CREATIVE WORKFLOWS: Create Project with Concept, Visual / atmosphere, "
-    "Invariants and optional initial Scenes; Revise Project with those same fields; Write Scenes to create "
+    "AVAILABLE AUTHOR-REVIEWED CREATIVE WORKFLOWS: Create Project with complete Concept, Visual / atmosphere "
+    "and Invariants, then write requested initial Scenes separately after saving; Revise Project with those same fields; Write Scenes to create "
     "or revise one or multiple Scenes, with reviewed insertion or revision of the H3 Prompt. "
     "These are the only creative Write goals to suggest. The selected Scene is supplied automatically; explicit Read remains available for other scopes. "
     "Do not suggest Director operations for renaming, moving, duplicating, splitting Scenes, linking "

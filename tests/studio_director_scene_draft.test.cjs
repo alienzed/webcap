@@ -124,7 +124,7 @@ test('Studio project proposals remain separate from conversation and must be rev
     'studio-project-style', 'studio-project-invariants', 'studio-project-include-scene',
     'studio-project-create'
   ]) assert.match(html, new RegExp('id="' + name + '"'));
-  const prep = part('  function prepareStudioProject() {', '  function applyStudioProject() {');
+  const prep = part('  function prepareStudioProject(options) {', '  function applyStudioProject() {');
   assert.match(prep, /operation: 'studio_project_draft'/);
   assert.match(prep, /showStudioProjectReview\(\)/);
   assert.doesNotMatch(prep, /\/fs\/studio\/director\/project-create/);
@@ -139,15 +139,15 @@ test('Unbound Project parser accepts zero Scenes and refuses invented or invalid
   const context = vm.createContext({ JSON, String, Error, Array });
   const parse = vm.runInContext('(' + part('  function parseStudioProjectDraft(raw) {', '  function addStudioProjectInvariant(').trim() + ')', context);
   const project = parse(JSON.stringify({
-    title: '', concept: 'A single simple idea', style: '', rationale: '',
+    title: '', concept: 'A single simple idea', style: 'Blue twilight.', rationale: '',
     invariants: []
   }));
   assert.equal(project.firstScene, undefined);
   assert.equal(project.title, '');
-  assert.throws(() => parse('{}'), /Project proposal must contain/);
+  assert.throws(() => parse('{}'), /invalid Project fields or initial Scene briefs/);
   assert.throws(() => parse(JSON.stringify({
     title: '', concept: '', style: '', rationale: '', invariants: []
-  })), /at least an idea/);
+  })), /complete Concept and Visual/);
 });
 
 
@@ -263,6 +263,7 @@ test('Review Create Project persists explicit continuation without touching unbo
         return nodes[id];
       },
       syncControls() {}, syncModeUi() {},
+      writeInitialProjectScenes:async()=>({saved:[],failed:[],notAttempted:[]}),
       requestJson: async (url, opts) => {
         assert.equal(url, '/fs/studio/director/project-create');
         const payload = JSON.parse(opts.body);
@@ -295,7 +296,7 @@ test('Review Create Project persists explicit continuation without touching unbo
     assert.equal(receipt.kind, 'project.create');
     assert.equal(receipt.storyId, 'story-created');
     assert.equal(refreshed, 'story-created');
-    assert.match(message, /Project created/);
+    assert.match(message, /Project saved/);
     return persisted;
   }
   const attached = await create(true);

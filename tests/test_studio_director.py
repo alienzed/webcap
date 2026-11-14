@@ -36,7 +36,7 @@ def test_studio_guidance_teaches_only_focused_creative_workflows():
     actions = {entry["name"]: entry["description"] for entry in result["actions"]}
     assert set(actions) == {"context.read", "project.create", "project.revise", "scenes.write"}
     assert "selected Scene automatically" in actions["context.read"]
-    assert "optional initial Scenes" in actions["project.create"]
+    assert "requested initial Scenes" in actions["project.create"]
     assert "Invariants" in actions["project.revise"]
     assert "one or more Scenes" in actions["scenes.write"]
     assert len(result["system"]) < 6000
@@ -175,7 +175,7 @@ def test_h3_playbook_review_uses_existing_config_and_checks_conflicts(monkeypatc
 
 @pytest.mark.parametrize("operation, expected_fields", [
     ("studio_brief_draft", {"title", "concept", "style", "invariants", "rationale"}),
-    ("studio_project_draft", {"title", "concept", "style", "invariants", "firstScenes", "rationale"}),
+    ("studio_project_draft", {"title", "concept", "style", "invariants", "initialScenes", "rationale"}),
     ("studio_scene_draft", {"title", "prompt", "rationale"}),
     ("studio_scene_sequence_draft", {"scenes", "rationale"}),
     ("studio_scene_field_draft", {"title", "prompt", "durationSeconds"}),

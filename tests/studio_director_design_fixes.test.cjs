@@ -73,13 +73,15 @@ test('Read and Write stay distinct; Read persists field choices on panel changes
 test('operational errors reveal Advanced and preserve the shared Console detail',()=>{
   const nodes={},classes=new Set(),logs=[];
   const el=id=>nodes[id] ||= {dataset:{},attrs:{},classList:{toggle(){},add:x=>classes.add(x)},setAttribute(k,v){this.attrs[k]=v;}};
-  const scope=vm.createContext({el,window:{reportConsoleError:(label,error)=>logs.push(error.message)}});
-  vm.runInContext(section(rail,'  function status(message, error) {','  function option('),scope);
+  const scope=vm.createContext({el,window:{reportConsoleError:(label,error)=>logs.push(error.message),reportConsoleInfo:()=>{}}});
+  vm.runInContext(section(rail,'  function status(message, error, showSuccess) {','  function option('),scope);
   scope.status('Draft failed: exact backend error',true);
   assert.equal(classes.has('studio-actions-open'),true);
   assert.equal(el('studio-dw-open-tools').attrs['aria-expanded'],'true');
   assert.equal(el('studio-dw-status').textContent,'Draft failed: exact backend error');
   assert.deepEqual(logs,['Draft failed: exact backend error']);
+  scope.status('Saved Scene 1',false,true);
+  assert.equal(el('studio-dw-status').textContent,'Saved Scene 1');
 });
 
 test('Advanced opens and closes the last manual panel without submitting Read or Write',()=>{

@@ -7,7 +7,7 @@
   var sceneSelectionManual = false, sceneSelectionProject = '', recommendationProject = '';
   var lastQuickAction = 'read', creativeCapture = null, preparedSceneWrite = null;
   var preparedNewSceneWrite = null, captureProjectId = '';
-  var sceneFields = ['prompt', 'title'];
+  var sceneFields = ['prompt', 'title', 'durationSeconds'];
   var projectFields = ['title', 'concept', 'style', 'invariants'];
   var labels = {title:'Title', concept:'Concept', style:'Visual / atmosphere',
     invariants:'Invariants', invariant:'Invariant', scene:'New Scene', prompt:'H3 Prompt',
@@ -22,12 +22,12 @@
       });
     });
   }
-  function status(message, error) {
+  function status(message, error, showSuccess) {
     var node = el('studio-dw-status');
     if (node) {
-      node.textContent = error ? (message || '') : '';
+      node.textContent = (error || showSuccess) ? (message || '') : '';
       node.dataset.error = error ? 'true' : 'false';
-      node.classList.toggle('hidden', !message || !error);
+      node.classList.toggle('hidden', !message || (!error && !showSuccess));
     }
     if (error) {
       el('director-chat-drawer').classList.add('studio-actions-open');
@@ -274,7 +274,7 @@
     el('studio-dw-batch-controls').classList.toggle('hidden', !revise);
     el('studio-dw-write-project').disabled = operation === 'new-project';
     el('studio-dw-write-prepare').textContent = sceneWrite
-      ? (revise ? 'Draft Scene revisions' : readyNewSceneCapture() ? 'Review prepared Scene' : 'Draft new Scenes')
+      ? (revise ? 'Revise selected Scenes · Save' : readyNewSceneCapture() ? 'Review prepared Scene' : 'Draft new Scenes')
       : 'Prepare draft';
     showWriteContext();
     updateScope();
@@ -473,7 +473,7 @@
     if (el('studio-dw-write-panel').classList.contains('hidden')) el('studio-dw-write').click();
     refreshWrite();
   }
-  function writePrepare() {
+  function writePrepare(options) {
     var bridge = window.studioDirectorBridge;
     var operation = el('studio-dw-write-operation').value;
     var id = el('studio-dw-write-project').value;
@@ -494,7 +494,12 @@
       throw new Error('Unsupported Studio creative Write goal: ' + operation);
     try {
       var item = projects.find(function (p) {return p.id === id;});
-      bridge.prepareWrite(operation, id, item && storyName(item));
+      if (options && options.guided && !readinessStale && recommendations.writeHint === operation) {
+        bridge.prepareWrite(operation, id, item && storyName(item), {
+          instruction:String(recommendations.writeInstruction || '').trim(),
+          requestedFields:operation === 'project' ? recommendedWriteFields('project') : []
+        });
+      } else bridge.prepareWrite(operation, id, item && storyName(item));
       status('Preparing a reviewed proposal. No saved fields have changed.', false);
     } catch (error) {status('Write failed: ' + error.message, true);}
   }
@@ -592,71 +597,82 @@
   }
   function prepareBatchScenes(storyId) {
     var ids = Array.from(el('studio-dw-batch-scenes').querySelectorAll('input:checked'))
-      .map(function (node) {return node.value;});
+      .map(function (node) { return node.value; });
     if (!ids.length || ids.length > 32) {
       status('Choose one to 32 Scenes to revise.', true);
-      return;
+      return Promise.resolve();
     }
+    var guided = !readinessStale && ['scenes','scene-edit','scenes-batch'].includes(recommendations.writeHint);
+    var messages = window.studioDirectorBridge.messages().filter(function (message) {
+      return message.role === 'user' && !String(message.content || '').includes('[WEBCAP APPLIED FIELD VALUES]');
+    });
+    var instruction = guided && String(recommendations.writeInstruction || '').trim() ||
+      String(messages.length && messages[messages.length - 1].content || '').trim();
+    if (!instruction) {
+      status('Discuss the Scene change first, then write the selected Scenes.', true);
+      return Promise.resolve();
+    }
+    var fields = guided ? recommendedWriteFields('scenes') : [];
     var button = el('studio-dw-write-prepare');
     button.disabled = true;
-    status('Director is developing the selected Scenes together…', false);
-    Promise.resolve().then(function () {
-      return window.flushStudioDirectorStoryEdits(storyId);
-    }).then(function () {return loadStory(storyId);})
-      .then(function (story) {
-        window.studioDirectorBridge.selectWriteProject(story.id, storyName(story));
-        var selected = ids.map(function (id) {
-          var scene = story.scenes && story.scenes[id];
-          if (!scene || (story.sceneOrder || []).indexOf(id) === -1)
-            throw new Error('A selected Scene no longer exists.');
-          return {sceneId:id, position:(story.sceneOrder || []).indexOf(id) + 1,
-            title:scene.title, prompt:scene.prompt,
-            durationSeconds:scene.durationSeconds, invariantRefs:scene.invariantRefs};
-        });
-        var suggested = recommendedSceneId(story);
-        var targetWarning = suggested && !ids.includes(suggested)
-          ? 'Director suggested Scene ' + (story.sceneOrder.indexOf(suggested) + 1) + ' · ' +
-            (story.scenes[suggested].title || 'Untitled') +
-            ', but Write targets ' + ids.map(function (id) {
-              return 'Scene ' + (story.sceneOrder.indexOf(id) + 1);
-            }).join(', ') + '. Confirm that this is intentional.' : '';
-        var history = window.studioDirectorBridge.messages().filter(function (message) {
-          return message && (message.role === 'user' || message.role === 'assistant');
-        }).map(function (message) {
-          return {role:message.role, text:String(message.content || '')};
-        });
-        var request = [
-          ids.length === 1
-            ? 'Revise the one selected existing Scene (' + ids[0] + ') according to the agreed creative discussion.'
-            : 'Revise the selected existing Scenes according to the agreed creative discussion.',
-          'Return ONLY a JSON object with a scenes array, with one entry per selected Scene ID in the same order.',
-          'Each entry includes its saved sceneId and complete replacement text for changed fields: title and/or full H3 Prompt. The Prompt is the Scene creative content.',
-          'Align the selected Scene as one creative unit. Author a full usable H3 Prompt when writing a Scene, including one that has no Prompt yet. Preserve unrelated material and respect explicit author limits.',
-          ids.length === 1
-            ? 'Example of a prompt-only revision for this Scene: ' + JSON.stringify({scenes:[{sceneId:ids[0],prompt:'complete revised H3 Prompt'}]}) 
-            : 'For each selected Scene, return only the relevant changed fields. Every entry must use its corresponding saved sceneId.',
-          'Use the saved Scene values as the baseline. Return complete replacement text for changed fields; omit unchanged fields. If no changes are needed, return only sceneId.',
-          'Preserve unrelated creative content and untouched Scene fields.',
-          'Project context: '+JSON.stringify({id:story.id,concept:story.concept,style:story.style,invariants:story.invariants}),
-          'Selected Scenes: '+JSON.stringify(selected),
-          'Creative discussion: '+JSON.stringify(history),
-          'For H3 Prompt revisions, time each Scene to its durationSeconds and preserve linked Character/Location Invariants. Duration and links remain read-only context.'
-        ].join('\n');
-        return window.studioDirectorBridge.makeProposal(request, 'studio_scene_batch_draft', true)
-          .then(function (raw) {
-            var result = parseProposal(raw);
-            proposedBatch = {storyId:storyId, targetWarning:targetWarning,
-              scenes:validateSceneRevisionDraft(result, ids, selected, raw)};
-            if (!proposedBatch.scenes.length) {
-              proposedBatch = null;
-              status('Director proposed no changes to the selected Scenes.', false);
-              return;
-            }
-            renderBatchReview();
-          });
+    var outcome = {saved:[],unchanged:[],failed:[],notAttempted:[],reportingErrors:[]};
+    var current = 0, story;
+    status('Writing ' + ids.length + ' selected Scenes · saves occur after each Scene.',false,true);
+    function run() {
+      if (current >= ids.length) return Promise.resolve(outcome);
+      var id = ids[current++], position = story.sceneOrder.indexOf(id) + 1;
+      var label = 'Scene ' + position + ' · ' + (story.scenes[id].title || id);
+      status('Writing ' + label + ' (' + current + '/' + ids.length + ') · Save on completion',false,true);
+      return window.studioDirectorBridge.writeSelectedScene({
+        projectId:storyId,sceneId:id,instruction:instruction,fields:fields.slice()
+      }).then(function (result) {
+        if (result === null) outcome.unchanged.push(label);
+        else outcome.saved.push(label);
       }).catch(function (error) {
-        status('Scene revision draft failed: ' + String(error.message || error), true);
-      }).finally(function () {button.disabled = false;});
+        if (error.saved) {
+          outcome.saved.push(label);
+          outcome.reportingErrors.push(label);
+        } else {
+          outcome.failed.push(label + ': ' + String(error.message || error));
+        }
+        // Cancellation or a common dependency failure stops the remaining list.
+        var stopped = ['stopped','cancelled','interrupted'].includes(String(error.jobStatus || ''));
+        var shared = stopped || /Failed to fetch|No Director model is available|Director must be ready|runtime unavailable|Project is no longer available/i.test(String(error.message || ''));
+        if (shared) {
+          outcome.notAttempted = ids.slice(current).map(function (nextId) {
+            return 'Scene ' + (story.sceneOrder.indexOf(nextId) + 1) + ' · ' +
+              (story.scenes[nextId].title || nextId);
+          });
+          current = ids.length;
+        }
+      }).then(run);
+    }
+    return window.flushStudioDirectorStoryEdits(storyId).then(function () {
+      return loadStory(storyId);
+    }).then(function (loaded) {
+      story = loaded;
+      if (!story || !Array.isArray(story.sceneOrder) || ids.some(function (id) {
+        return !story.sceneOrder.includes(id) || !story.scenes[id];
+      })) throw new Error('One or more selected Scenes are no longer in the destination Project.');
+      window.studioDirectorBridge.selectWriteProject(story.id,storyName(story));
+      return run();
+    }).then(function () {
+      var summary = 'Saved ' + outcome.saved.length +
+        (outcome.saved.length ? ': ' + outcome.saved.join(', ') : '') +
+        ' · Unchanged ' + outcome.unchanged.length +
+        (outcome.unchanged.length ? ': ' + outcome.unchanged.join(', ') : '') +
+        ' · Failed ' + outcome.failed.length +
+        (outcome.failed.length ? ': ' + outcome.failed.join(' | ') : '') +
+        ' · Not attempted ' + outcome.notAttempted.length +
+        (outcome.notAttempted.length ? ': ' + outcome.notAttempted.join(', ') : '');
+      if (outcome.reportingErrors.length) summary +=
+        ' · Saved but follow-up reporting failed: ' + outcome.reportingErrors.join(', ');
+      status(summary,!!(outcome.failed.length || outcome.notAttempted.length || outcome.reportingErrors.length),true);
+      return outcome;
+    }).catch(function (error) {
+      status('Selected Scene write could not start: ' + String(error.message || error),true);
+      throw error;
+    }).finally(function () { button.disabled = false; });
   }
   function renderBatchReview() {
     if (!proposedBatch) throw new Error('No multi-Scene proposal is available.');
@@ -820,13 +836,19 @@
       return;
     }
     select.value = operation;
+    if (operation === 'project') {
+      var destination = window.studioDirectorBridge.workingStoryId() || activeTarget().storyId;
+      if (destination) el('studio-dw-write-project').value = destination;
+    }
     if (operation === 'scene-write') el('studio-dw-scene-mode').value =
       (recommendations.sceneId || recommendations.sceneNumber || hint === 'scene-edit' || hint === 'scenes-batch') ? 'revise' : 'create';
     writeOperationChosen = true;
     sceneSelectionManual = false; // Explicitly follow Director's proposed Write target.
     var setup = el('studio-dw-write-panel').classList.contains('hidden') ? toggle('write') : refreshWrite();
     return setup.then(function (ready) {
-      if (ready) writePrepare();
+      if (!ready) return;
+      if (operation === 'project' || operation === 'new-project') return writePrepare({guided:true});
+      return writePrepare();
     });
   }
   function captureActionLabel(capture) {

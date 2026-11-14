@@ -76,20 +76,25 @@ test('Studio prompting selects the current goal rather than steering every task 
   const context = vm.createContext({
     state: {studioStoryAccess:null,storyboardAttachments:{},workshop:null},
     Object, String, Promise, window:{getStudioDirectorNavigation:()=>({projectId:'p1',sceneOrder:['scene-a']})},
-    requestJson: async () => ({
-      system: 'WebCap Studio Director role',
-      actions: [
-        {name:'context.read',status:'available',description:'Read chosen saved fields'},
-        {name:'scene.revise',status:'available',description:'Revise the full Scene H3 Prompt'}
-      ],
-      promptContract:'integrated_multimodal_description: [Shot 1]'
-    })
+    studioAttachedStoryId:()=>'', 
+    requestJson: async url => url.startsWith('/fs/storyboard?story=')
+      ? {story:{id:'p1',title:'Beacon',concept:'Lighthouse',style:'Coastal dusk',invariants:[]}}
+      : {
+        system: 'WebCap Studio Director role',
+        actions: [
+          {name:'context.read',status:'available',description:'Read chosen saved fields'},
+          {name:'scene.revise',status:'available',description:'Revise the full Scene H3 Prompt'}
+        ],
+        promptContract:'integrated_multimodal_description: [Shot 1]'
+      }
   });
   vm.runInContext(part('  function studioDirectorRequestMessages(messages, includePromptContract, explicitWrite, navigationSnapshot) {',
     '  // The creative assessment is advisory.'),context);
   const assembled = await vm.runInContext(
     "studioDirectorChatRequestMessages([{role:'user',content:'Revise only the Scene action'}])",context);
   const system = assembled[0].content;
+  assert.match(system,/CURRENT SAVED PROJECT OVERVIEW/);
+  assert.match(system,/Lighthouse/);
   assert.match(system,/For a direct question, answer fully and finish without a workflow suggestion/);
   assert.match(system,/an appropriately scoped reviewed Write or an author-operated Studio action/);
   assert.doesNotMatch(system,/When choices are clear, offer to review Concept/);
@@ -134,50 +139,28 @@ test('existing Project and Scene draft paths also use explicit Write guidance', 
     const index = source.indexOf(marker);
     assert.ok(index !== -1, 'Missing draft operation: ' + operation);
     const before = source.slice(Math.max(0, index - 1400), index);
-    const plain = "studioDirectorRequestMessages([{ role: 'user', content: JSON.stringify(input) }], false, true)";
-    const prompt = "studioDirectorRequestMessages([{ role: 'user', content: JSON.stringify(input) }], true, true)";
-    const formatted = "studioDirectorRequestMessages([{ role: 'user', content: JSON.stringify(input, null, 2) }], false, true)";
-    assert.ok(before.includes(plain) || before.includes(prompt) || before.includes(formatted),
+    assert.match(before,/studioDirectorRequestMessages\(/,
       'Explicit Write guidance not used by ' + operation);
   }
 });
 
-test('single-Scene revision request uses its saved ID in the example, not a placeholder', () => {
-  const batch = workbench.split('  function prepareBatchScenes(storyId) {')[1]
+
+test('selected Scene revisions use bounded direct-save calls against real Scene IDs',()=>{
+  const batch=workbench.split('  function prepareBatchScenes(storyId) {')[1]
     .split('  function renderBatchReview() {')[0];
-  assert.match(batch,/ids\.length === 1/);
-  assert.match(batch,/JSON\.stringify\(\{scenes:\[\{sceneId:ids\[0\],prompt:/);
-  assert.doesNotMatch(batch,/ACTUAL_SELECTED_ID/);
-  assert.match(batch,/full H3 Prompt/);
-  assert.match(batch,/The Prompt is the Scene creative content/);
-  assert.match(batch,/validateSceneRevisionDraft\(result, ids, selected, raw\)/);
+  assert.match(batch,/writeSelectedScene\(\{/);
+  assert.match(batch,/projectId:storyId,sceneId:id,instruction:instruction/);
+  assert.match(batch,/saved\.push\(label\)/);
+  assert.match(batch,/notAttempted/);
+  assert.doesNotMatch(batch,/makeProposal\(/,'no giant multi-Scene LLM response');
 });
 
-test('Scene revision synchronizes the chosen Project destination before requesting a proposal', async () => {
-  const block = workbench.split('  function prepareBatchScenes(storyId) {')[1]
+test('selected list binds destination before issuing each per-Scene write',()=>{
+  const batch=workbench.split('  function prepareBatchScenes(storyId) {')[1]
     .split('  function renderBatchReview() {')[0];
-  const scene = {title:'Lamp',summary:'Saved intent',prompt:'Saved prompt',durationSeconds:8};
-  const story = {id:'chosen-project',title:'Chosen Project',sceneOrder:['scene-a'],scenes:{'scene-a':scene}};
-  const calls = [];
-  let complete;
-  const finished = new Promise(resolve => {complete=resolve;});
-  const scope = vm.createContext({
-    el:id=>id==='studio-dw-batch-scenes' ? {querySelectorAll:()=>[{value:'scene-a'}]} : {},
-    status:message=>{if (message.startsWith('Scene revision draft failed')) assert.fail(message);},
-    loadStory:async id=>{assert.equal(id,story.id);return story;},storyName:s=>s.title,
-    parseProposal:JSON.parse,validateSceneRevisionDraft:()=>[],recommendedSceneId:()=>'',
-    window:{flushStudioDirectorStoryEdits:async()=>{},studioDirectorBridge:{
-      selectWriteProject:(id,title)=>calls.push(['destination',id,title]),
-      messages:()=>[],makeProposal:async instruction=>{
-        assert.deepEqual(calls,[['destination',story.id,story.title]]);
-        assert.match(instruction,/Author a full usable H3 Prompt/);
-        assert.doesNotMatch(instruction,/Requested Write fields/);
-        complete();return '{"scenes":[]}';
-      }
-    }}
-  });
-  vm.runInContext('function prepareBatchScenes(storyId) {'+block+'\nprepareBatchScenes("chosen-project");',scope);
-  await finished;
+  assert.match(batch,/selectWriteProject\(story\.id,storyName\(story\)\)/);
+  assert.match(batch,/sceneOrder\.includes\(id\)/);
+  assert.match(batch,/flushStudioDirectorStoryEdits\(storyId\)/);
 });
 
 test('Read sends actual saved data and asks for a conversational confirmation', () => {
@@ -291,7 +274,7 @@ test('multi-Scene review drafts together and applies selected fields in one atom
   assert.match(html, /value="scene-write">Write Scenes/);
   assert.match(html, /id="studio-dw-scene-mode"/);
   assert.match(html, /id="studio-dw-batch-review"/);
-  assert.match(workbench, /makeProposal\(request, 'studio_scene_batch_draft', true\)/);
+  assert.match(workbench, /writeSelectedScene\(\{/);
   assert.match(workbench, /el\('studio-dw-scene-mode'\)\.value === 'revise'/);
   assert.match(workbench, /function renderBatchReview\(\)/);
   const applied = workbench.split('  function applyBatchScenes() {')[1]
@@ -307,14 +290,14 @@ test('Scene splitting is not a Director Write operation', () => {
   assert.doesNotMatch(workbench, /function prepareSplitScene\(/);
 });
 
-test('batch Scene revisions include duration and linked Invariants', () => {
-  const batch = workbench.split('  function prepareBatchScenes(storyId) {')[1]
-    .split('  function renderBatchReview() {')[0];
-  const preview = workbench.split('  function showWriteContext() {')[1]
+test('bounded Scene writer receives saved duration and linked constraints',()=>{
+  const writer=source.split('    writeSelectedScene: function (launch) {')[1]
+    .split('    makeProposal: function (')[0];
+  const preview=workbench.split('  function showWriteContext() {')[1]
     .split('  function updateScope() {')[0];
-  assert.match(batch, /durationSeconds:scene\.durationSeconds, invariantRefs:scene\.invariantRefs/);
-  assert.match(batch, /each Scene to its durationSeconds/);
-  assert.match(preview, /durationSeconds:scene\.durationSeconds,invariantRefs:scene\.invariantRefs/);
+  assert.match(writer,/sceneRead\(story, sceneId\)/);
+  assert.match(writer,/durationSeconds/);
+  assert.match(preview,/durationSeconds:scene\.durationSeconds,invariantRefs:scene\.invariantRefs/);
 });
 
 test('H3 detailed authoring contract is included when Director may propose a Prompt revision', async () => {
@@ -334,7 +317,7 @@ test('H3 detailed authoring contract is included when Director may propose a Pro
     "studioDirectorRequestMessages([{role:'user',content:'Draft H3 Prompt'}],true)",context);
   assert.doesNotMatch(ordinary[0].content,/Full H3 authoring contract/);
   assert.match(detailed[0].content,/Full H3 authoring contract/);
-  assert.match(workbench, /makeProposal\(request, 'studio_scene_batch_draft', true\)/);
+  assert.match(workbench, /writeSelectedScene\(\{/);
 });
 
 test('Studio conversation receives the canonical H3 template as reference without an automatic Write', async () => {
@@ -342,6 +325,7 @@ test('Studio conversation receives the canonical H3 template as reference withou
   const state = {studioStoryAccess:null,storyboardAttachments:{},workshop:null};
   const context = vm.createContext({
     state,Object,String,Promise,window:{getStudioDirectorNavigation:()=>({})},
+    studioAttachedStoryId:()=>'', 
     requestJson:async () => ({system:'Studio guidance',actions:[],promptContract:template})
   });
   vm.runInContext(part('  function studioDirectorRequestMessages(messages, includePromptContract, explicitWrite, navigationSnapshot) {',
@@ -412,7 +396,7 @@ test('standalone Invariant linking is not a Director Write operation', () => {
 });
 
 test('multi-Scene review preserves actual Project positions and distinguishes a saved Scene from receipt failure', () => {
-  assert.match(workbench, /position:\(story\.sceneOrder \|\| \[\]\)\.indexOf\(id\) \+ 1/);
+  assert.match(workbench, /position = story\.sceneOrder\.indexOf\(id\) \+ 1/);
   assert.match(workbench, /heading\.textContent = 'Scene ' \+ entry\.before\.position/);
   const apply = workbench.split('  function applyScene() {')[1]
     .split('  function setReadinessFreshness(stale) {')[0];

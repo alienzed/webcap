@@ -130,8 +130,9 @@ def test_new_scene_response_schemas_require_prompt_not_intent(monkeypatch):
     sequence = captured["studio_scene_sequence_draft"]["properties"]["scenes"]["items"]
     assert "prompt" in sequence["required"]
     assert "summary" not in sequence["properties"]
-    first = captured["studio_project_draft"]["properties"]["firstScenes"]["items"]
-    assert first["required"] == ["title", "prompt"]
+    initial = captured["studio_project_draft"]["properties"]["initialScenes"]["items"]
+    assert initial["required"] == ["title", "brief", "durationSeconds"]
+    assert "prompt" not in initial["properties"]
     assert "summary" not in captured["studio_scene_field_draft"]["properties"]
     revised = captured["studio_scene_batch_draft"]["properties"]["scenes"]["items"]
     assert "summary" not in revised["properties"]
@@ -359,8 +360,9 @@ def test_studio_project_extraction_schema_is_bounded(monkeypatch):
     assert schema["additionalProperties"] is False
     assert set(schema["required"]) == {"title", "concept", "style", "invariants", "rationale"}
     assert schema["properties"]["invariants"]["maxItems"] == 30
-    assert "firstScenes" in schema["properties"]
-    assert schema["properties"]["firstScenes"]["maxItems"] == 32
+    assert "initialScenes" in schema["properties"]
+    assert schema["properties"]["initialScenes"]["maxItems"] == 32
+    assert "firstScenes" not in schema["properties"]
 
 
 def test_multi_scene_insert_at_start_between_and_end(isolated_storyboard):

@@ -2583,7 +2583,7 @@
     syncControls();
     el('studio-scenes-error').textContent = '';
     var applied = false;
-    Promise.resolve().then(function () {
+    return Promise.resolve().then(function () {
       return window.flushStudioDirectorStoryEdits(proposal.storyId);
     }).then(function () {
       return requestJson('/fs/studio/director/scenes-draft', {

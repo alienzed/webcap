@@ -266,3 +266,12 @@ test('field update indication clears when the Storyboard opens another Project',
     /window\.studioDirectorWorkbench\.updateContext\(\)/,
     'Storyboard refresh must invoke the existing Studio context sync');
 });
+
+test('prompted Scenes keep a legacy summary without exposing a second editor',()=>{
+  assert.match(require('node:fs').readFileSync(require('node:path').join(__dirname,'../tool/js/storyboard.js'),'utf8'),
+    /String\(sceneValue\(scene, 'prompt', ''\)\)\.trim\(\)/);
+  assert.match(require('node:fs').readFileSync(require('node:path').join(__dirname,'../tool/js/storyboard.js'),'utf8'),
+    /'<input type="hidden" data-scene-field="summary" value="'/);
+  assert.match(workbench,/var contextFields = String\(scene\.prompt \|\| ''\)\.trim\(\)/);
+  assert.match(workbench,/var fields = String\(scene\.prompt \|\| ''\)\.trim\(\)/);
+});

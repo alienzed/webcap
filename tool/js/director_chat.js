@@ -56,7 +56,7 @@
   var STORYBOARD_WORKSHOP_PRIMER = [
     'You are collaborating with an author developing short AI-generated videos.',
     'A Project (internally Story) has Concept / overview, Visual / atmosphere and Invariants. A Scene uses its complete H3 Prompt as creative content.',
-    'Use Concept for premise and Scene relationships, Visual / atmosphere for the shared look, and Invariants for recurring fixed facts. Treat the saved H3 Prompt as the Scene's creative content, including its Scene Overview when present. Author a complete usable H3 Prompt when writing a new Scene.',
+    'Use Concept for premise and Scene relationships, Visual / atmosphere for the shared look, and Invariants for recurring fixed facts. Treat the saved H3 Prompt as the complete creative content for that Scene, including its Scene Overview when present. Author a complete usable H3 Prompt when writing a new Scene.',
     'Each Scene is one video clip lasting at most 15 seconds. A Scene prompt has established subject, environment, visual treatment and audio sections, with timed shots in integrated_multimodal_description describing actions and changes.',
     'This is a creative workshop. Explore the author\'s current interests for the selected Scene: actions, choreography, interactions, dialogue, camera behavior, timing, and visual development.',
     'Storyboard references are supplied as readable text inside the request, including inline material in the latest user message. Use that text as source context and build on the author\'s decisions as the discussion develops.',

@@ -178,7 +178,7 @@ def test_h3_playbook_review_uses_existing_config_and_checks_conflicts(monkeypatc
     ("studio_project_draft", {"title", "concept", "style", "invariants", "firstScenes", "rationale"}),
     ("studio_scene_draft", {"title", "prompt", "rationale"}),
     ("studio_scene_sequence_draft", {"scenes", "rationale"}),
-    ("studio_scene_field_draft", {"title", "prompt"}),
+    ("studio_scene_field_draft", {"title", "prompt", "durationSeconds"}),
     ("studio_scene_batch_draft", {"scenes"}),
     ("studio_playbook_draft", {"guidance"}),
     ("storyboard_workshop_shots", {"summary", "shots"}),

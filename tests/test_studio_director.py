@@ -52,8 +52,9 @@ def test_director_role_combines_webcap_workflow_expertise_with_creative_judgment
     assert "Acknowledge only the exact saved fields actually supplied" in system
     assert "Conversation never edits Project records" in system
     assert "Project Overview (Concept, Visual / atmosphere, Invariants)" in system
-    assert "Scene (Title, Intent, H3 Prompt)" in system
-    assert "as a coherent unit. Align affected parts, preserve others" in system
+    assert "Scene (Title, H3 Prompt)" in system
+    assert "the authoritative Scene description" in system
+    assert "preserving unaffected authored material" in system
     assert len(system) < 6000
 
 

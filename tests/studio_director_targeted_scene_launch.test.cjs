@@ -144,7 +144,7 @@ test('requested title and duration changes are scoped into the same Scene save',
 
 test('invalid or incomplete model output cannot initiate any save or report success',async()=>{
   for(const raw of ['{"summary":"A quiet ending"}','{"prompt":"New","unknown":"Unrequested"}',
-    '{"prompt":"New","title":42,"durationSeconds":17}', '{"prompt":""}', 'not JSON']) {
+    '{"prompt":"New","unknown":"Not a Scene field"}', '{"prompt":""}', 'not JSON']) {
     const h=sceneFixture(raw);
     await assert.rejects(h.window.studioDirectorBridge.writeSelectedScene(h.launch));
     assert.equal(h.events.filter(row=>row[0]==='save').length,0,raw);

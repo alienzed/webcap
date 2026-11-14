@@ -102,6 +102,8 @@ function setup() {
       handleAction: handleGenerationJobAction
     };
   `);
+  // The standalone renderer fixture does not initialize the full form/dropzones.
+  source = source.replace('  resetGeneratePromptScratch();', '');
   vm.createContext(env);
   vm.runInContext(source, env, { filename: 'generate.js' });
   return { env, nodes, calls, errors, api: env.window.takeTestApi };

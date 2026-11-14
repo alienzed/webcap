@@ -143,12 +143,12 @@ test('only one contextual action is presented, with completed capture taking pri
 
 
 test('selected Scene list uses one bounded call per Scene, preserving successes after failures', async () => {
-  const ids=['a','b','c'],calls=[];
+  const ids=['a','b','c'],calls=[],statuses=[];
   const scope=vm.createContext({
     readinessStale:false,recommendations:{writeHint:'scenes',writeInstruction:'Keep the lamp unlit.',writeFields:['prompt']},
     recommendedWriteFields:()=>['prompt'],
     el:id=>id==='studio-dw-batch-scenes'?{querySelectorAll:()=>ids.map(value=>({value}))}:{disabled:false},
-    status:()=>{},window:{flushStudioDirectorStoryEdits:async()=>{},studioDirectorBridge:{
+    status:(...args)=>statuses.push(args),window:{flushStudioDirectorStoryEdits:async()=>{},studioDirectorBridge:{
       messages:()=>[{role:'user',content:'Agreed early: retain the red scarf.'}],selectWriteProject:()=>{},
       writeSelectedScene:async launch=>{
         calls.push(launch);
@@ -168,6 +168,11 @@ test('selected Scene list uses one bounded call per Scene, preserving successes 
   assert.equal(outcome.failed.length,1);
   assert.equal(outcome.unchanged.length,1);
   assert.equal(outcome.notAttempted.length,0);
+  const final = statuses.at(-1);
+  assert.equal(final[2],true,'successful per-Scene outcomes must remain visible');
+  assert.match(final[0],/Saved 1: Scene 1 · First/);
+  assert.match(final[0],/Unchanged 1: Scene 3 · Third/);
+  assert.match(final[0],/Failed 1: Scene 2 · Second/);
 });
 
 test('selected Scene list stops on a shared runtime failure',async()=>{

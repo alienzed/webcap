@@ -20,6 +20,7 @@ on:
       - 'tool/css/workspace_shell.css'
       - 'tests/studio_director_design_fixes.test.cjs'
       - 'tests/studio_director_readiness.test.cjs'
+      - 'tests/studio_director_model_readiness.test.cjs'
       - 'tests/test_studio_director.py'
       - 'tests/test_director_chat_history.py'
       - 'tests/test_storyboard_store.py'
@@ -45,6 +46,7 @@ jobs:
       - name: JavaScript syntax
         run: |
           node --check tool/js/director_chat.js
+          node --test tests/studio_director_model_readiness.test.cjs
           node --check tool/js/studio_blocks.js
           node --test tests/studio_blocks_slash.test.cjs
           node --check tool/js/storyboard.js

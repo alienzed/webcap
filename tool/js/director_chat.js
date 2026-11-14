@@ -1666,7 +1666,7 @@
   function prepareStudioProject() {
     if (state.pending || state.activeMode !== 'storyboard' || !state.sessionReady) return;
     if (state.studioProjectProposal) { showStudioProjectReview(); return; }
-    if (!state.modelId) { studioActionStatus('Choose a Director model first.', true); return; }
+    if (!state.modelId) { studioActionStatus('No Director model is available. Refresh models.', true); return; }
     var discussion = (state.modeMessages.storyboard || []).filter(function (message) {
       return message && (message.role === 'assistant' || message.role === 'user');
     }).map(function (message) {
@@ -3880,9 +3880,19 @@
         !state.pending && !state.attachmentPending;
     },
     isStudioMode: function () {return state.open && state.activeMode === 'storyboard';},
-    isReady: function () {
-      return state.open && state.activeMode === 'storyboard' && state.sessionReady &&
-        !state.pending && !state.attachmentPending && !!state.modelId;
+    isReady: function () { return !this.readinessMessage(); },
+    // A model is selected automatically when discovery returns available models.
+    // Being closed, loading conversation state, or busy is not a missing model.
+    readinessMessage: function () {
+      if (!state.open || state.activeMode !== 'storyboard') return 'Open Studio Director to continue.';
+      if (!state.sessionReady) return state.sessionError
+        ? 'Director conversation is unavailable. Check the Console.'
+        : 'Director conversation is loading.';
+      if (state.pending || state.attachmentPending) return 'Finish the current Director request first.';
+      if (!state.modelId) return state.modelsLoaded
+        ? 'No Director model is available. Refresh models.'
+        : 'Director models are loading.';
+      return '';
     },
     workingStoryId: function () { return studioAttachedStoryId() || window.getStudioDirectorNavigation().projectId; },
     modelId: function () { return state.modelId; },

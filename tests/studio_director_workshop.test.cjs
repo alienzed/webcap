@@ -61,7 +61,7 @@ test('Only explicitly supplied conversation content is sent; legacy snapshots ar
     })
   });
   vm.runInContext(part('  function studioDirectorRequestMessages(messages, includePromptContract, explicitWrite, navigationSnapshot) {',
-    '  function studioDirectorChatRequestMessages(messages, selectedScene) {'), context);
+    '  function studioDirectorChatRequestMessages(messages, selectedScene, navigationSnapshot) {'), context);
   const result = await vm.runInContext(
     'studioDirectorRequestMessages([{role:"user",content:"Develop the idea"}])', context);
   assert.equal(result.length, 2);
@@ -114,7 +114,7 @@ test('explicit Write guidance asks for the draft, not another conversational rec
     requestJson:async()=>({system:'Studio producer expertise',actions:[]})
   });
   vm.runInContext(part('  function studioDirectorRequestMessages(messages, includePromptContract, explicitWrite, navigationSnapshot) {',
-    '  function studioDirectorChatRequestMessages(messages, selectedScene) {'),context);
+    '  function studioDirectorChatRequestMessages(messages, selectedScene, navigationSnapshot) {'),context);
   const conversational = await vm.runInContext(
     "studioDirectorRequestMessages([{role:'user',content:'Discuss Scene'}],false)",context);
   const writing = await vm.runInContext(
@@ -327,7 +327,7 @@ test('H3 detailed authoring contract is included when Director may propose a Pro
     })
   });
   vm.runInContext(part('  function studioDirectorRequestMessages(messages, includePromptContract, explicitWrite, navigationSnapshot) {',
-    '  function studioDirectorChatRequestMessages(messages, selectedScene) {'),context);
+    '  function studioDirectorChatRequestMessages(messages, selectedScene, navigationSnapshot) {'),context);
   const ordinary = await vm.runInContext(
     "studioDirectorRequestMessages([{role:'user',content:'Discuss scene'}])",context);
   const detailed = await vm.runInContext(

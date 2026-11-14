@@ -14,8 +14,9 @@ complete answer or complete authored field values. Three capabilities suffice:
 
 **WebCap ↔ author:** resolve destinations, offer the appropriate launch action,
 run work, display results, save, provide basic recovery, and explain actual failures.
-Review can be useful, but is not a compulsory step for every write. Its presence
-must not change the material the LLM is asked to return.
+Review can be useful, but is not compulsory for every write. The launch action
+must make clear whether the result will save directly or await review. Either
+policy asks the LLM for the same complete material.
 
 The LLM does not manage UI controls, permissions, save policy, real IDs, queues,
 readiness scores or recovery. WebCap does not act as a creative-quality judge.
@@ -41,15 +42,18 @@ Asking about or revising a Project/Scene authorizes relevant saved context to be
 supplied automatically. No redundant Read permission or acknowledgement-only call
 is required. WebCap identifies the supplied scope without protocol clutter.
 
-A Scene correction such as "make it night" normally needs the current prompt and
-the correction, not the whole conversation or Project Overview. New Scene authoring
-can need agreed Project direction. Project-wide discussion can need the Project's
-material. Supply that context when it serves the task; do not attach everything
-by default. The model must distinguish supplied facts from creative suggestions
-and must not claim to have read material that was not supplied.
+A Scene correction such as "make it night" normally needs the current prompt,
+duration, instruction and applicable Project/continuity constraints, not the
+whole conversation or unrelated Project fields. Include prior agreed decisions
+when they actually affect the requested edit. New Scene authoring can need
+agreed Project direction; Project-wide questions can need broader saved material.
+Supply what serves the task, without defaulting to everything. Identify the
+supplied scope and do not claim to have read missing material.
 
-Use fresh saved values where current state matters. Ordinary questions and
-brainstorming do not change saved records or discard an available authored result.
+Use fresh saved values where current state matters. If current saved material
+contradicts an older conversational assumption, do not silently draft against
+the stale copy. Ordinary questions and brainstorming do not change saved records
+or discard an available authored result.
 
 ### Write Project
 
@@ -57,27 +61,34 @@ Create or update the requested Project fields. Preserve unrelated values. Comple
 field values must be returned, rather than promises or instructions for a later
 draft. The author can review the small Project Overview where useful.
 
-When the author requests a new Project with initial Scenes, use the same Scene
-writing capability for those Scenes. Do not force all their full prompts into the
-Project-writing response. A shared direction or short per-Scene brief is sufficient
-input to the Scene calls. There is no stored outline/Intent authoring layer.
+When the author requests a new Project with initial Scenes, save the Project
+before writing its Scenes. Use the same Scene capability for each; a shared
+direction or short per-Scene brief is request input, not a stored Intent layer.
+Do not require all full Scene prompts in the Project-writing response. If a
+later Scene fails, retain the created Project and successfully saved Scenes and
+report what remains unfinished. The combined request is not atomic.
 
-A Project field edit does not implicitly rewrite Scene prompts. If the author asks
-for both Project and Scene changes, WebCap performs the needed Project work and
-Scene calls in a sensible order, using the agreed direction. Phase 1 does not need
-a giant combined review or a new compound LLM capability.
+A Project field edit does not implicitly rewrite existing Scene prompts. For
+requested Project-and-Scene changes, perform the Project write first, then the
+Scene calls against the resulting saved Project. Report partial completion
+honestly; phase 1 needs neither a giant combined review nor a compound LLM
+capability.
 
 ### Write Scene(s)
 
-A selection of Scenes is a call list for this same capability. Use one bounded
-Scene-authoring call per Scene, following the stable revision-sequence pattern.
-A common instruction can be reused across the list. There is no mandatory extra
-planning call when the author's instruction already suffices.
+A selection of Scenes is a finite call list for this same capability. Use one
+bounded authoring call per Scene, reusing the stable revision-sequence pattern
+where it fits. Carry the common instruction and only relevant context for each
+Scene; connected Scenes may need shared constraints or prior saved results to
+maintain continuity. Do not attach the full conversation to every call or add a
+planning call when the instruction already suffices.
 
 - New Scenes receive full usable H3 prompts, useful titles and requested durations,
   or the existing WebCap default when no duration was specified.
-- Revisions preserve unrelated authored content. Existing titles and durations
-  remain unchanged unless the author requests a change.
+- Preserve unrelated saved fields deterministically. For full-prompt revisions,
+  instruct the model to retain unaffected details, but do not treat schema
+  validity as proof of semantic preservation. Keep the result inspectable and
+  recoverable. Existing titles and durations remain unchanged unless requested.
 - Requested title/duration changes must survive the entire path to saving. Prompt
   timing and the saved duration must agree.
 - Title-only changes do not require rewriting the prompt. WebCap can perform a
@@ -100,6 +111,7 @@ obvious. New material can be drafted before choosing/creating its destination;
 an existing revision requires its actual source material before authoring.
 
 Once launched, Scene writes normally save each successful result as it finishes.
+Make that direct-save behavior visible before launch and report each actual save.
 The explicit Scene Revise shortcut is a direct launch of the same capability.
 New/existing and one/many should not multiply the model-facing contracts.
 WebCap may use review where it genuinely helps the operation; do not add universal
@@ -112,19 +124,23 @@ actual authoring. The author should not need to repeat the instruction or resolv
 the same destination again.
 
 Each Scene's write is one coherent save of its requested changed fields. A call
-list is not an all-or-nothing transaction: apply successes as they finish, continue
-after individual failures, and report the actual saved/failed counts and targets.
-A failed Scene is not a successful one; failures must be visible and diagnosable.
-Cancellation stops remaining work and must not be represented as undoing saves
-that already completed. Do not build retry/resume machinery as a prerequisite.
+list is not an all-or-nothing transaction: apply successes as they finish and
+continue after isolated, item-specific failures. Stop remaining work when a
+shared dependency makes further attempts invalid (for example, a missing
+Project, unavailable model/runtime, or cancellation). Report saved, failed and
+not-attempted targets accurately. Cancellation does not undo earlier saves or
+guarantee interruption of an already-running call. Do not build general
+retry/resume machinery as a prerequisite.
 
 WebCap preserves unrelated fields, uses existing conflict/persistence safeguards,
 and distinguishes a failed save from a later refresh or conversation-receipt failure.
 Navigation must not change an already launched operation's targets.
 
-Recovery is basic, bounded, in-memory previous/next state per editable field,
-including fields changed by Director. It is WebCap functionality, not another
-model task, an infinite revision archive, or a compulsory diff/review workflow.
+Recovery is bounded, session-only previous/next history for fields actually
+edited, including manual and Director changes. Reuse existing editor/history
+mechanics where possible; do not silently overwrite newer conflicting edits.
+History clears on reload. This is WebCap functionality, not another model task,
+durable archive, or compulsory diff/review workflow.
 
 ## 4. Scope and limits
 
@@ -142,10 +158,12 @@ supported limits and save integrity. It does not certify creative quality. Runti
 and output failures must be visible; do not silently truncate or drop required
 material. Do not add a creative grading call or routine repair loop.
 
-The desired 99% first-pass reliability must be measured against the selected real
-model. Tests of JSON shape and save plumbing do not establish that rate. Clear
-bounded requests should work without repair rounds; genuine consequential ambiguity
-can be clarified. Fill routine creative details without pestering the author.
+The desired 99% first-pass reliability is an empirical quality target, not a
+phase-1 statistical release claim. Test deterministic correctness (targets,
+fields and saves) separately from model-dependent creative adherence with the
+selected real model. A small acceptance suite finds regressions but cannot
+establish a percentage. Clear bounded requests should work without repair
+rounds; clarify consequential ambiguity without pestering the author.
 
 Reuse the current classic-script architecture, routes, persistence and stable Scene
 revision machinery. Consolidation means consistent behavior and contracts, not a

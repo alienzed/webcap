@@ -1181,7 +1181,8 @@
       var label = document.createElement('div');
       label.className = 'director-chat-message-label';
       label.textContent = message.role === 'assistant' ? 'Director' :
-        (message.content.indexOf('[WEBCAP APPLIED FIELD VALUES]') !== -1 ? 'WebCap · Reviewed Apply' :
+        (message.content.indexOf('[WEBCAP APPLIED FIELD VALUES]') !== -1
+          ? (message.content.startsWith('Director revision saved:') ? 'WebCap · Director revision' : 'WebCap · Reviewed Apply') :
          message.content.indexOf('[WEBCAP EXPLICIT READ]') !== -1 ? 'You · Read to Director' : 'You');
 
       var body = document.createElement('div');
@@ -2883,7 +2884,8 @@
         '\nCURRENT PROJECT NAVIGATION (identity and one-based Scene positions only; creative material is supplied through explicit Read):\n' + JSON.stringify(navigation) +
         (explicitWrite
           ? '\nEXPLICIT REVIEWED WRITE: The author has already chosen to draft. Produce the requested complete editable proposal in the format specified by the current request. This is a draft for review, not a conversational suggestion. Only WebCap Apply saves changes.\n'
-          : '\nFor the current author goal, suggest at most one useful next step from the listed capabilities: ' +
+          : '\nFor a direct question, answer fully and finish without a workflow suggestion. ' +
+            'When the author is developing material or requests a next step, suggest at most one useful action: ' +
             'an explicit Read, an appropriately scoped reviewed Write, or an author-operated Studio action. ' +
             'Fulfil the author’s request in conversation, including drafting complete material when asked. ' +
             'Treat proposed work as unsaved until WebCap confirms Apply.\n') +
@@ -2912,7 +2914,8 @@
         'Name user actions in plain language: Read Project, Review Scene, Apply. ' +
         'Drafting is conversation; only reviewed Apply saves.\n' +
         'READINESS: Usually checks=[], readHints=[], writeHint="", writeFields=[], sceneId="", sceneNumber=0, capture=null. ' +
-        'Suggest at most one useful next action. Use new-project, project or scenes for Write. ' +
+        'For factual questions answerable from supplied context, keep readiness fields empty and finish with the answer. ' +
+        'For requested creative development, suggest at most one useful next action. Use new-project, project or scenes for Write. ' +
         'writeFields names affected fields; Scene numbers are one-based. Use bare Scene IDs from navigation.sceneOrder. ' +
         'Default to the current Project, respecting an explicit author-selected destination. Assess only supplied material, with at most two useful checks.\n' +
         'CAPTURE: Use null for discussion, questions, outlines and work still to be drafted. ' +
@@ -4046,6 +4049,7 @@
       if (!story || !story.id || !selected || typeof selected !== 'object') {
         throw new Error('Reviewed Apply receipt requires saved Project data.');
       }
+      var isDirectorRevision = kind === 'scene.director.revision';
       var body = {
         operation: kind, projectId: story.id, projectTitle: story.title,
         savedAt: story.updatedAt, fields: selected
@@ -4059,7 +4063,9 @@
       });
       if (Array.isArray(selected.scenes)) savedFields.push(selected.scenes.length + (selected.scenes.length === 1 ? ' Scene' : ' Scenes'));
       state.modeMessages.storyboard.push({role:'user',
-        content:'Saved: ' + (savedFields.join(' · ') || 'Scene changes') + '. Reviewed values are now authoritative.' +
+        content:(isDirectorRevision ? 'Director revision saved: ' : 'Saved: ') +
+          (savedFields.join(' · ') || 'Scene changes') +
+          (isDirectorRevision ? '. Saved values are now authoritative.' : '. Reviewed values are now authoritative.') +
           String.fromCharCode(10) + '[WEBCAP APPLIED FIELD VALUES]' +
           String.fromCharCode(10) + JSON.stringify(body, null, 2) +
           String.fromCharCode(10) + '[END WEBCAP APPLY]'});

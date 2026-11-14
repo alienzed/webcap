@@ -171,9 +171,6 @@
     // Same exact serializer drives the inspector and the outbound LLM message.
     loadStory(id).then(function (story) {
       var payload = readPayload(story, keys);
-      var length = JSON.stringify(payload).length;
-      if (length > 48000) throw new Error('Selected Read is ' + length.toLocaleString() +
-        ' characters. Select the Project Overview or fewer Scenes.');
       el('studio-dw-read-preview-data').textContent = JSON.stringify(payload, null, 2);
       window.studioDirectorBridge.sendRead(payload, keys);
       lastReadSource = story.id;

@@ -22,12 +22,12 @@
       });
     });
   }
-  function status(message, error) {
+  function status(message, error, showSuccess) {
     var node = el('studio-dw-status');
     if (node) {
-      node.textContent = error ? (message || '') : '';
+      node.textContent = (error || showSuccess) ? (message || '') : '';
       node.dataset.error = error ? 'true' : 'false';
-      node.classList.toggle('hidden', !message || !error);
+      node.classList.toggle('hidden', !message || (!error && !showSuccess));
     }
     if (error) {
       el('director-chat-drawer').classList.add('studio-actions-open');
@@ -617,12 +617,12 @@
     button.disabled = true;
     var outcome = {saved:[],unchanged:[],failed:[],notAttempted:[],reportingErrors:[]};
     var current = 0, story;
-    status('Writing ' + ids.length + ' selected Scenes · saves occur after each Scene.',false);
+    status('Writing ' + ids.length + ' selected Scenes · saves occur after each Scene.',false,true);
     function run() {
       if (current >= ids.length) return Promise.resolve(outcome);
       var id = ids[current++], position = story.sceneOrder.indexOf(id) + 1;
       var label = 'Scene ' + position + ' · ' + (story.scenes[id].title || id);
-      status('Writing ' + label + ' (' + current + '/' + ids.length + ') · Save on completion',false);
+      status('Writing ' + label + ' (' + current + '/' + ids.length + ') · Save on completion',false,true);
       return window.studioDirectorBridge.writeSelectedScene({
         projectId:storyId,sceneId:id,instruction:instruction,fields:fields.slice()
       }).then(function (result) {
@@ -637,7 +637,7 @@
         }
         // Cancellation or a common dependency failure stops the remaining list.
         var stopped = ['stopped','cancelled','interrupted'].includes(String(error.jobStatus || ''));
-        var shared = stopped || /Failed to fetch|No Director model is available|Director must be ready|runtime unavailable/i.test(String(error.message || ''));
+        var shared = stopped || /Failed to fetch|No Director model is available|Director must be ready|runtime unavailable|Project is no longer available/i.test(String(error.message || ''));
         if (shared) {
           outcome.notAttempted = ids.slice(current).map(function (nextId) {
             return 'Scene ' + (story.sceneOrder.indexOf(nextId) + 1) + ' · ' +
@@ -657,13 +657,17 @@
       window.studioDirectorBridge.selectWriteProject(story.id,storyName(story));
       return run();
     }).then(function () {
-      var summary = 'Saved ' + outcome.saved.length + ', unchanged ' + outcome.unchanged.length +
-        ', failed ' + outcome.failed.length + ', not attempted ' + outcome.notAttempted.length;
-      if (outcome.failed.length) summary += ' · ' + outcome.failed.join(' | ');
-      if (outcome.notAttempted.length) summary += ' · Not attempted: ' + outcome.notAttempted.join(', ');
+      var summary = 'Saved ' + outcome.saved.length +
+        (outcome.saved.length ? ': ' + outcome.saved.join(', ') : '') +
+        ' · Unchanged ' + outcome.unchanged.length +
+        (outcome.unchanged.length ? ': ' + outcome.unchanged.join(', ') : '') +
+        ' · Failed ' + outcome.failed.length +
+        (outcome.failed.length ? ': ' + outcome.failed.join(' | ') : '') +
+        ' · Not attempted ' + outcome.notAttempted.length +
+        (outcome.notAttempted.length ? ': ' + outcome.notAttempted.join(', ') : '');
       if (outcome.reportingErrors.length) summary +=
         ' · Saved but follow-up reporting failed: ' + outcome.reportingErrors.join(', ');
-      status(summary,!!(outcome.failed.length || outcome.notAttempted.length || outcome.reportingErrors.length));
+      status(summary,!!(outcome.failed.length || outcome.notAttempted.length || outcome.reportingErrors.length),true);
       return outcome;
     }).catch(function (error) {
       status('Selected Scene write could not start: ' + String(error.message || error),true);

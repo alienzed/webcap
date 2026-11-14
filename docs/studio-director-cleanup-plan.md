@@ -3,8 +3,10 @@
 > **Current requirements (2026-11-14):** Follow
 > [studio-director-contract.md](studio-director-contract.md). This plan is historical
 > where its capability, context or output rules conflict with that contract.
+> Current implementation work and acceptance are tracked in
+> [studio-director-implementation.md](studio-director-implementation.md), not below.
 
-Status: phases 1–3 implemented on PR #859; Studio-specific automated checks passed on the completed code run. Phase 4 awaits real-model/browser parity acceptance before the transitional Director Tools modal is removed. No changes have been merged into main. See `AGENTS.md` (especially How To Make Changes, Mutation Safety, LLM Guidance, and UX Guidance).
+Historical checkpoint (2026-11-03): phases 1–3 implemented on PR #859; Studio-specific automated checks passed on the completed code run. Phase 4 still required real-model/browser parity acceptance before any removal of the transitional Director Tools modal. The original checkpoint predated integration into main. See `AGENTS.md` (especially How To Make Changes, Mutation Safety, LLM Guidance, and UX Guidance).
 
 ## Ownership and safe boundaries
 

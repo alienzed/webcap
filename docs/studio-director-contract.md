@@ -1,172 +1,150 @@
-# Studio Director functional contract
+# Studio Director functional contract — phase 1
 
-Agreed with the author on 2026-11-14. This is the authoritative target contract
-for active Studio Director behavior. Earlier Director audits and plans are
-historical where they conflict with it. This document defines requirements;
-it does not claim the current implementation satisfies them.
+Agreed with the author on 2026-11-14. This is the authoritative target behavior,
+not a claim that the implementation is complete. Use
+[studio-director-implementation.md](studio-director-implementation.md) for the
+current gaps, implementation sequence and acceptance checks. Older Director plans
+are historical wherever they conflict with these two documents.
 
-## Purpose and ownership
+## 1. Keep two contracts separate
 
-Studio Director is a Project workspace for creative discussion and authoring.
-It has three operations: **Read**, **Write Project**, and **Write Scene(s)**.
-Discussion is ordinary conversational behavior, not another mutation capability.
-New/existing, one/many, and revision are parameters, not additional operations.
+**WebCap ↔ LLM:** provide a bounded task and its necessary material; receive a
+complete answer or complete authored field values. Three capabilities suffice:
+**Read**, **Write Project**, **Write Scene(s)**.
 
-The LLM understands the creative request and returns complete material. WebCap
-resolves real destinations, supplies context, validates results, prepares review
-or directly applies as authorized, persists changes, and reports actual outcomes.
-The LLM neither saves nor decides the execution policy. The same complete material
-is returned whether WebCap will review it or save it directly.
+**WebCap ↔ author:** resolve destinations, offer the appropriate launch action,
+run work, display results, save, provide basic recovery, and explain actual failures.
+Review can be useful, but is not a compulsory step for every write. Its presence
+must not change the material the LLM is asked to return.
 
-The author establishes creative intent and controls consequential choices. Director
-fills routine creative details without pestering the author. It asks a focused
-question when ambiguity materially affects the result, including an unresolved
-target or conflicting instructions.
+The LLM does not manage UI controls, permissions, save policy, real IDs, queues,
+readiness scores or recovery. WebCap does not act as a creative-quality judge.
+It checks the mechanical requirements needed to execute the operation correctly.
 
-## Shared request rules
+## 2. The three capabilities
 
-Every authoring request must establish:
+| Capability | Input to the LLM | Output from the LLM |
+|---|---|---|
+| Read | Question or discussion request, plus relevant supplied material | Grounded answer, creative discussion, a useful brief, or one consequential clarification |
+| Write Project | Instruction, relevant agreed direction, and current Project values when revising | Complete values for the Project fields being authored: title, concept, visual/atmosphere and/or invariants |
+| Write Scene(s) | Instruction and the current Scene prompt when revising, plus only the constraints/context needed for that task | Complete usable H3 prompt when creating or revising creative content, with a useful new title or requested title/duration changes |
 
-- Operation and create/update scope.
-- Real Project/Scene targets, or explicit creation slots, bound by WebCap.
-- The author instruction and relevant conversation/agreed decisions.
-- Relevant saved baseline and creative constraints.
-- Fields allowed to change, including any requested title/duration changes.
-- Required complete outputs and applicable clip constraints.
+New/existing and one/many are parameters, not more capabilities. WebCap owns source
+and destination bindings. The model authors the material it was given and asked
+for; it need not know which editor or drawer is open or invent application IDs.
 
-WebCap may use a bounded model suggestion to interpret natural-language intent;
-it must resolve and validate targets against actual state. Opening Scene 6 makes
-Scene 6 the normal contextual target. Explicit named/numbered targets take
-precedence; an explicit new-Scene request must not become an existing-Scene edit.
-The LLM must never invent application IDs. Unresolved consequential targeting
-requires clarification rather than a guess.
+### Read and context
 
-Asking about or revising the current Project/Scene authorizes WebCap to read the
-relevant saved material as part of that request. No separate Read confirmation
-or acknowledgement-only model call is required. WebCap visibly identifies the
-context supplied, and supplies the actual content rather than IDs alone.
-Project-wide questions may need the whole Project. Scope is driven by the request,
-not by mandatory field picking. Missing context must not be represented as read.
+Asking about or revising a Project/Scene authorizes relevant saved context to be
+supplied automatically. No redundant Read permission or acknowledgement-only call
+is required. WebCap identifies the supplied scope without protocol clutter.
 
-Context and results must retain required information end to end. Unsupported
-requests, insufficient context, and runtime limits must be explicit; never silently
-truncate, substitute, clamp a requested value, or drop an output.
+A Scene correction such as "make it night" normally needs the current prompt and
+the correction, not the whole conversation or Project Overview. New Scene authoring
+can need agreed Project direction. Project-wide discussion can need the Project's
+material. Supply that context when it serves the task; do not attach everything
+by default. The model must distinguish supplied facts from creative suggestions
+and must not claim to have read material that was not supplied.
 
-## Read
+Use fresh saved values where current state matters. Ordinary questions and
+brainstorming do not change saved records or discard an available authored result.
 
-**Input:** question or discussion request, relevant conversation, and relevant
-saved Project/Scene material where needed.
+### Write Project
 
-**Output:** a grounded answer, creative discussion, or a consequential clarification.
-Questions receive answers; a factual answer does not need a drafting suggestion.
-Read itself does not mutate saved records. The response must distinguish supplied
-facts, proposed creative additions, and uncertainty.
+Create or update the requested Project fields. Preserve unrelated values. Complete
+field values must be returned, rather than promises or instructions for a later
+draft. The author can review the small Project Overview where useful.
 
-## Write Project
+When the author requests a new Project with initial Scenes, use the same Scene
+writing capability for those Scenes. Do not force all their full prompts into the
+Project-writing response. A shared direction or short per-Scene brief is sufficient
+input to the Scene calls. There is no stored outline/Intent authoring layer.
 
-**Input:** new/existing scope, agreed creative direction or requested changes,
-relevant context, and current Project fields for an update.
+A Project field edit does not implicitly rewrite Scene prompts. If the author asks
+for both Project and Scene changes, WebCap performs the needed Project work and
+Scene calls in a sensible order, using the agreed direction. Phase 1 does not need
+a giant combined review or a new compound LLM capability.
 
-**Output:** complete values for the requested Project fields: title, concept,
-visual/atmosphere, and/or invariants. Omitted fields remain unchanged. A requested
-field contains its full replacement material, not instructions for a later draft.
+### Write Scene(s)
 
-When requested, creation may also include complete initial Scenes. These use the
-same Scene content contract as Write Scene(s). No separate outline-only format,
-invented extra Scenes, or alternate Scene-save contract is needed.
+A selection of Scenes is a call list for this same capability. Prefer one bounded
+Scene-authoring call per Scene, following the stable revision-sequence pattern.
+A common instruction can be reused across the list. There is no mandatory extra
+planning call when the author's instruction already suffices.
 
-## Write Scene(s)
+- New Scenes receive full usable H3 prompts, useful titles and requested durations,
+  or the existing WebCap default when no duration was specified.
+- Revisions preserve unrelated authored content. Existing titles and durations
+  remain unchanged unless the author requests a change.
+- Requested title/duration changes must survive the entire path to saving. Prompt
+  timing and the saved duration must agree.
+- Title-only changes do not require rewriting the prompt. WebCap can perform a
+  literal field change without an unnecessary creative LLM call.
+- Use one proposed version per Scene. Alternatives can be discussed; phase 1 does
+  not include multiple complete-version management.
+- A no-change result is stated honestly. An outline, empty response or promise to
+  draft is not a successful creative Scene write.
 
-**Input:** new/existing scope, one or multiple bound targets/creation slots,
-instructions, relevant Project direction/invariants, current prompts for revisions,
-and durations/other applicable clip constraints.
+Intent/summary remains dormant legacy data in JSON. Preserve it without migration,
+deletion or copying into Prompt. It is not an active brief, output, validation
+requirement or review destination. Old Projects continue to load and save.
 
-**Output:** a full usable H3 prompt for every Scene being written or revised, with
-new titles or requested title changes and the agreed duration carried through.
-All required subjects, actions, visual treatment, timing and sound instructions
-must be present in the prompt according to the supported H3 authoring contract.
-An outline, promise to draft, or list of titles is not a complete Scene output.
+## 3. WebCap execution and interaction
 
-- Existing titles and durations remain unchanged unless requested or clearly agreed.
-- New Scenes receive useful titles and the requested duration, or the existing
-  WebCap default when no duration was specified. Prompt timing must match it.
-- Requested title/duration changes are supported parameters; they must not be lost
-  because one entry point carries fewer fields than another.
-- Relevant established Project facts and unrelated authored material are preserved.
-- Multi-Scene outputs cover the complete requested set and retain their bindings.
-- A genuine no-change result is explicit, not an empty or incomplete draft labeled
-  successful. Unsupported changes are reported rather than silently omitted.
+Ordinary Director chat does not save. A conversational request to write/revise
+produces an appropriate targeted launch action before execution. WebCap establishes
+the destination and selected scope; ask the author to choose only when it is not
+obvious. New material can be drafted before choosing/creating its destination;
+an existing revision requires its actual source material before authoring.
 
-Intent/summary is dormant legacy data. It is not a brief, required input, output,
-capture destination, review field, or success criterion. Preserve old values in JSON
-without migration, deletion, or copying them into Prompt. Missing/empty legacy
-Intent must not prevent any supported active workflow.
+Once launched, Scene writes normally save each successful result as it finishes.
+The explicit Scene Revise shortcut is a direct launch of the same capability.
+New/existing and one/many should not multiply the model-facing contracts.
+WebCap may use review where it genuinely helps the operation; do not add universal
+review gates, readiness gates or model approval rituals.
 
-## Discussion to execution
+If complete material has already been authored in the conversation, WebCap reuses
+it for display, review or saving. It does not ask the LLM to regenerate/extract it
+just to make it actionable. If only a brief exists, the launch action performs the
+actual authoring. The author should not need to repeat the instruction or resolve
+the same destination again.
 
-1. The author discusses or requests work in Director or uses an existing shortcut.
-2. WebCap resolves scope and supplies the relevant context and operation contract.
-3. The LLM returns the complete requested material in that call.
-4. WebCap validates it and uses that exact material for display, review and saving.
-5. WebCap reports the actual saved result, or the specific failure.
+Each Scene's write is one coherent save of its requested changed fields. A call
+list is not an all-or-nothing transaction: apply successes as they finish, continue
+after individual failures, and report the actual saved/failed counts and targets.
+A failed Scene is not a successful one; failures must be visible and diagnosable.
+Cancellation stops remaining work and must not be represented as undoing saves
+that already completed. Do not build retry/resume machinery as a prerequisite.
 
-Complete material must remain accessible in the conversation and inspection UI.
-Review must not trigger another drafting/extraction call for already authored work.
-The author must not repeat an instruction or reselect an already resolved target.
+WebCap preserves unrelated fields, uses existing conflict/persistence safeguards,
+and distinguishes a failed save from a later refresh or conversation-receipt failure.
+Navigation must not change an already launched operation's targets.
 
-Execution policies remain WebCap-owned:
+Recovery is basic, bounded, in-memory previous/next state per editable field,
+including fields changed by Director. It is WebCap functionality, not another
+model task, an infinite revision archive, or a compulsory diff/review workflow.
 
-- Conversational authoring prepares an editable review; Apply saves the approved
-  material, including author edits made in review.
-- The explicit Scene Revise shortcut applies its complete result directly with
-  recent-edit recovery. This is an operation policy, not a different LLM authoring
-  capability or permission decision delegated to the model.
-- Context-only discussion does not save. No path reports a successful save before
-  persistence succeeds. A later receipt/refresh failure is distinguished from a
-  failed save so the author is not encouraged to repeat a successful mutation.
+## 4. Scope and limits
 
-WebCap preserves unrelated fields and detects conflicting changes at the operation's
-appropriate scope. Requested multi-item commits must not silently apply an
-incomplete subset. Reuse existing atomic persistence and conflict handling.
+Revise & Generate and Check Coherence may remain separate utilities. Director can
+produce an ordinary revision brief for them; copy/paste is acceptable for that
+handoff. External LLM buttons can remain outside Director. This contract does not
+add Take generation, media inspection, queue controls or other model capabilities.
 
-## Finite scope and implementation boundaries
+The no-retyping/no-extraction requirement applies to core Project/Scene authoring,
+not every useful conversational output. Keep phase 1 to ordinary clear workflows;
+unsupported elaborate requests can be stated as such instead of adding exceptions.
 
-Check Coherence and Revise & Generate remain separate utilities. External LLM
-buttons may remain outside Director for now. Takes, queueing, media inspection,
-undo/redo and ordinary editor mechanics are WebCap features, not more Director
-LLM capabilities. No automatic Take generation is added by this contract.
+Mechanical validation covers real target bindings, required outputs, field types,
+supported limits and save integrity. It does not certify creative quality. Runtime
+and output failures must be visible; do not silently truncate or drop required
+material. Do not add a creative grading call or routine repair loop.
 
-The model should not need readiness assessments, duplicate target identities,
-capture variants, or UI bookkeeping to return usable material. WebCap can derive
-controls from the operation, bound scope and validated result. Response formats
-should be specific to the current request rather than one giant all-purpose schema.
+The desired 99% first-pass reliability must be measured against the selected real
+model. Tests of JSON shape and save plumbing do not establish that rate. Clear
+bounded requests should work without repair rounds; genuine consequential ambiguity
+can be clarified. Fill routine creative details without pestering the author.
 
-Reuse the existing classic-script architecture, routes and save paths where they
-fit. Three operations do not require a generic tool framework or three new backend
-services. Retain legacy compatibility without advertising or routing active work
-through retired authoring features.
-
-## Acceptance and reliability
-
-First-pass success means: correct operation and target, complete requested output,
-requested count/duration/field scope preserved, usable H3 material, coherent visible
-next action, and correct save behavior. A normal human approval/review is not a
-repair round. Clarifying a consequential unresolved choice before drafting is valid.
-
-Routine manual copying, repeated destination selection, missing-field repair,
-invented IDs, or two/three drafting rounds to perform a clear bounded request count
-as failures. They are not the expected workflow. Invalid results fail visibly before
-mutation; diagnostic detail remains available in WebCap's shared Console and I/O.
-
-The desired 99% first-pass reliability is an acceptance target, not an established
-model guarantee. Verify it against the selected real model on representative flows;
-schema/unit tests alone cannot establish creative adherence or a success rate.
-
-The acceptance set must cover: grounded Read without mutation; new and existing
-Projects; Project creation with requested initial Scenes; new single/multiple
-Scenes with non-default durations; targeted and multi-Scene revision; combined
-prompt/title/duration requests; exact authored-output reuse; unrelated-data
-preservation; legacy Intent compatibility; ambiguity, conflict, malformed output
-and runtime-limit failures. Audit the active guidance, schemas, routes, JS dispatch,
-review UI and saves against this same set. Product expansion waits until these core
-journeys are stable.
+Reuse the current classic-script architecture, routes, persistence and stable Scene
+revision machinery. Consolidation means consistent behavior and contracts, not a
+new generic agent framework or a requirement to rename every internal function.

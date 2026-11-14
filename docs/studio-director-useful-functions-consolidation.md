@@ -3,8 +3,11 @@
 > **Current requirements (2026-11-14):**
 > [studio-director-contract.md](studio-director-contract.md) supersedes this dated
 > plan where their scope, context, execution or response-format rules differ.
+> Current implementation/acceptance reference:
+> [studio-director-implementation.md](studio-director-implementation.md).
 
-Status: phased implementation against PR #859, following AGENTS.md and the authoritative Studio materialization contract.
+Historical status (2026-11-03): phased implementation against PR #859. This is not
+the current implementation plan or functional contract.
 
 ## Goal
 One explicit Read path; three creative Write goals: Create Project, Revise Project, Write Scenes. Keep reviewed changes, scoped field comparisons, stable identifiers, atomic saved writes, history and H3 expertise. Preserve author-operated Studio mechanics. Converge guidance, readiness and visible UI without creating an LLM tools executor.

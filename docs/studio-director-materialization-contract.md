@@ -4,6 +4,8 @@
 > [studio-director-contract.md](studio-director-contract.md) is the authoritative
 > agreed target behavior. This document retains historical audits and implementation
 > notes; its older scope, explicit-Read and response-format rules are not current requirements.
+> Current implementation/acceptance reference:
+> [studio-director-implementation.md](studio-director-implementation.md).
 
 > **Useful-functions consolidation (2026-11-03):** See [studio-director-useful-functions-consolidation.md](studio-director-useful-functions-consolidation.md) for the active three-workflow interface, current implementation boundaries and acceptance tests. Earlier capability matrices below document historical and backend capabilities, not the current Director operation menu. The explicit coherence utility remains separate from creative Write.
 

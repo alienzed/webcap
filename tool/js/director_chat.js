@@ -55,7 +55,7 @@
   };
   var STORYBOARD_WORKSHOP_PRIMER = [
     'You are collaborating with an author developing short AI-generated videos.',
-    'A Project (internally Story) has Concept / overview, Visual / atmosphere and Invariants. A Scene has a full H3 Prompt and may retain an earlier planning outline (summary).',
+    'A Project (internally Story) has Concept / overview, Visual / atmosphere and Invariants. A Scene's creative content is its complete H3 Prompt.',
     'Use Concept for premise and Scene relationships, Visual / atmosphere for the shared look, and Invariants for recurring fixed facts. For a Scene with a complete H3 Prompt, treat that prompt as authoritative, including its Scene overview when present. Use the outline to develop Scenes that have no prompt yet.',
     'Each Scene is one video clip lasting at most 15 seconds. A Scene prompt has established subject, environment, visual treatment and audio sections, with timed shots in integrated_multimodal_description describing actions and changes.',
     'This is a creative workshop. Explore the author\'s current interests for the selected Scene: actions, choreography, interactions, dialogue, camera behavior, timing, and visual development.',
@@ -1559,15 +1559,15 @@
         }) ||
         (proposal.firstScene != null && (
           typeof proposal.firstScene !== 'object' || Array.isArray(proposal.firstScene) ||
-          typeof proposal.firstScene.title !== 'string' || typeof proposal.firstScene.summary !== 'string' ||
-          !proposal.firstScene.summary.trim()
+          typeof proposal.firstScene.title !== 'string' || typeof proposal.firstScene.prompt !== 'string' ||
+          !proposal.firstScene.prompt.trim()
         ))) {
       throw new Error('Project proposal must contain Concept, Style, optional Invariants, and an optional first Scene.\nRaw Director response:\n' + String(raw || ''));
     }
     if (proposal.firstScenes != null && (!Array.isArray(proposal.firstScenes) ||
         proposal.firstScenes.length > 32 || proposal.firstScenes.some(function (item) {
-          return !item || typeof item.title !== 'string' || typeof item.summary !== 'string' ||
-            !item.summary.trim();
+          return !item || typeof item.title !== 'string' || typeof item.prompt !== 'string' ||
+            !item.prompt.trim();
         }))) throw new Error('Project contains invalid initial Scene drafts.\nRaw Director response:\n' + String(raw || ''));
     if (!proposal.concept.trim() && !proposal.firstScene && !(proposal.firstScenes || []).length) {
       throw new Error('Director needs at least an idea or first Scene to prepare a Project.\nRaw Director response:\n' + String(raw || ''));
@@ -1631,16 +1631,16 @@
     var host = el('studio-project-extra-scenes');
     var row = document.createElement('div');
     row.className = 'studio-project-extra-scene';
-    var title = document.createElement('input'), summary = document.createElement('textarea'),
+    var title = document.createElement('input'), prompt = document.createElement('textarea'),
       remove = document.createElement('button'), label = document.createElement('strong');
     label.textContent = 'Additional Scene';
     title.placeholder = 'Scene title (optional)'; title.value = scene && scene.title || '';
     title.setAttribute('aria-label', 'Additional Scene title');
-    summary.placeholder = 'What happens';summary.value = scene && scene.summary || '';
-    summary.rows = 3; summary.setAttribute('aria-label', 'Additional Scene intent');
+    prompt.placeholder = 'Full H3 production prompt';prompt.value = scene && scene.prompt || '';
+    prompt.rows = 8; prompt.setAttribute('aria-label', 'Additional Scene prompt');
     remove.type = 'button'; remove.className = 'review-captions-btn';
     remove.textContent = 'Remove Scene'; remove.onclick = function () {row.remove();};
-    row.append(label, title, summary, remove); host.appendChild(row);
+    row.append(label, title, prompt, remove); host.appendChild(row);
   }
 
   function showStudioProjectReview() {
@@ -1662,7 +1662,7 @@
     el('studio-project-continue').checked = true;
     el('studio-project-first-scene-fields').classList.toggle('hidden', !first);
     el('studio-project-scene-title').value = first ? first.title : '';
-    el('studio-project-scene-summary').value = first ? first.summary : '';
+    el('studio-project-scene-prompt').value = first ? first.prompt : '';
     var dialog = el('studio-project-review');
     if (dialog.open) dialog.close();
     dialog.showModal();
@@ -1692,7 +1692,7 @@
         'optional Style, and only essential Invariants. Include firstScenes when concrete tentative ' +
         'clips have emerged; propose as many Scenes as actually developed (up to 32), ' +
         'and do not fabricate extra Scenes to fill a count. It is fine to have zero Scenes. ' +
-        'Do not invent a fixed Scene count or prepare a generation prompt. ' +
+        'Do not invent a fixed Scene count. Give each included Scene a complete H3 Prompt. ' +
         'Use a short rationale. Nothing should be created yet.',
       discussion: discussion
     };
@@ -1747,17 +1747,17 @@
     if (el('studio-project-include-scene').checked) {
       firstScenes.push({
         title: el('studio-project-scene-title').value.trim(),
-        summary: el('studio-project-scene-summary').value.trim()
+        prompt: el('studio-project-scene-prompt').value.trim()
       });
     }
     el('studio-project-extra-scenes').querySelectorAll('.studio-project-extra-scene').forEach(function (row) {
       firstScenes.push({
         title: row.querySelector('input').value.trim(),
-        summary: row.querySelector('textarea').value.trim()
+        prompt: row.querySelector('textarea').value.trim()
       });
     });
-    if (firstScenes.some(function (scene) {return !scene.summary;})) {
-      el('studio-project-error').textContent = 'Describe every selected Scene or remove the empty one.';
+    if (firstScenes.some(function (scene) {return !scene.prompt;})) {
+      el('studio-project-error').textContent = 'Write a complete Prompt for every selected Scene or remove it.';
       return;
     }
     if (firstScenes.length > 32) {
@@ -1800,7 +1800,7 @@
         concept:payload.story.concept,style:payload.story.style,invariants:payload.story.invariants,
         scenes:(payload.story.sceneOrder || []).map(function (id) {
           var scene=payload.story.scenes[id];
-          return {id:id,title:scene.title,summary:scene.summary};
+          return {id:id,title:scene.title,prompt:scene.prompt};
         })
       };
       return window.studioDirectorBridge.recordApplied('project.create',payload.story,projectValues)
@@ -2195,11 +2195,11 @@
         !Array.isArray(result.scenes) || result.scenes.length < 1 || result.scenes.length > 32 ||
         typeof result.rationale !== 'string' || result.scenes.some(function (item) {
           return !item || typeof item !== 'object' || Array.isArray(item) ||
-            typeof item.title !== 'string' || typeof item.summary !== 'string' || !item.summary.trim() ||
+            typeof item.title !== 'string' ||
             typeof item.prompt !== 'string' || !item.prompt.trim() ||
             !Number.isFinite(item.durationSeconds) || item.durationSeconds < 4 || item.durationSeconds > 15;
         })) {
-      throw new Error('Director must return one to 32 Scenes with descriptions, full prompts, 4–15 second durations and a rationale.\nRaw Director response:\n' + String(raw || ''));
+      throw new Error('Director must return one to 32 Scenes with full prompts, 4–15 second durations and a rationale.\nRaw Director response:\n' + String(raw || ''));
     }
     return result;
   }
@@ -2224,14 +2224,6 @@
     title.placeholder = 'Working title (optional)';
     title.maxLength = 240;
     title.value = item.title || '';
-    // Keep the stored outline for older Project workflows, but don't make it a
-    // second editable description when the Director already supplied a prompt.
-    var summary = document.createElement(item.prompt ? 'input' : 'textarea');
-    summary.setAttribute('aria-label', 'Scene outline');
-    summary.dataset.field = 'summary';
-    if (item.prompt) summary.type = 'hidden';
-    else { summary.placeholder = 'What happens in this one generatable clip?'; summary.rows = 3; }
-    summary.value = item.summary || '';
     var durationLabel = document.createElement('label');
     durationLabel.textContent = 'Duration (s)';
     var duration = document.createElement('input');
@@ -2245,7 +2237,7 @@
     prompt.dataset.field = 'prompt'; prompt.rows = 8;
     prompt.value = item.prompt || '';
     promptLabel.appendChild(prompt);
-    row.append(header, title, summary, durationLabel, promptLabel);
+    row.append(header, title, durationLabel, promptLabel);
     el('studio-scenes-rows').appendChild(row);
   }
 
@@ -2316,7 +2308,7 @@
           'Keep each Scene independently generatable and preserve the core appeal. ' +
           'Use as many Scenes as the author explicitly requested, up to 32 per review; otherwise ' +
           'select a modest number that fits the discussion. For each Scene return a working title, ' +
-          'a concise what-happens description (summary), a complete usable H3 prompt, and durationSeconds. ' +
+          'a complete usable H3 prompt, and durationSeconds. ' +
           'Use the duration the author requested within 4–15 seconds, otherwise 6 seconds. ' +
           'Time each full prompt to that duration, including the relevant Project Invariants. ' +
           'Return a brief overall rationale. Existing Scenes are reference material; this request creates new Scenes only.',
@@ -2325,7 +2317,7 @@
           invariants: story.invariants,
           currentScenes: order.map(function (id, index) {
             var scene = story.scenes[id];
-            return { id: id, position: index + 1, title: scene.title, summary: scene.summary };
+            return { id: id, position: index + 1, title: scene.title, prompt: scene.prompt };
           })
         },
         discussion: discussion
@@ -2372,16 +2364,15 @@
     var drafts = Array.prototype.map.call(el('studio-scenes-rows').querySelectorAll('.studio-scenes-row'), function (row) {
       return {
         title: row.querySelector('[data-field="title"]').value.trim(),
-        summary: row.querySelector('[data-field="summary"]').value.trim(),
         prompt: row.querySelector('[data-field="prompt"]').value.trim(),
         durationSeconds: Number(row.querySelector('[data-field="durationSeconds"]').value)
       };
     });
     if (!drafts.length || drafts.length > 32 || drafts.some(function (item) {
-      return !item.summary || !item.prompt || !Number.isFinite(item.durationSeconds) ||
+      return !item.prompt || !Number.isFinite(item.durationSeconds) ||
         item.durationSeconds < 4 || item.durationSeconds > 15;
     })) {
-      el('studio-scenes-error').textContent = 'Each Scene needs a description, a full prompt and a duration of 4–15 seconds.';
+      el('studio-scenes-error').textContent = 'Each Scene needs a full prompt and a duration of 4–15 seconds.';
       return;
     }
     var pieces = el('studio-scenes-placement').value.split('|');
@@ -2414,7 +2405,7 @@
       studioActionStatus(payload.scenes.length + ' Scenes created.', false);
       return window.studioDirectorBridge.recordApplied('scenes.create',payload.story,{
         scenes:payload.scenes.map(function (scene) {
-          return {id:scene.id,title:scene.title,summary:scene.summary,prompt:scene.prompt,durationSeconds:scene.durationSeconds};
+          return {id:scene.id,title:scene.title,prompt:scene.prompt,durationSeconds:scene.durationSeconds};
         })
       }).then(function () {return window.refreshStudioDirectorStoryIfOpen(proposal.storyId);});
     }).catch(function (error) {
@@ -2444,13 +2435,13 @@
     try { draft = JSON.parse(value); }
     catch (error) { throw new Error('Director returned invalid Scene draft JSON: ' + error.message); }
     if (!draft || typeof draft !== 'object' || Array.isArray(draft) ||
-        typeof draft.title !== 'string' || typeof draft.summary !== 'string' ||
-        typeof draft.rationale !== 'string' || !draft.summary.trim()) {
-      throw new Error('Scene draft must include a title, description and rationale.');
+        typeof draft.title !== 'string' || typeof draft.prompt !== 'string' ||
+        typeof draft.rationale !== 'string' || !draft.prompt.trim()) {
+      throw new Error('Scene draft must include a title, full Prompt and rationale.');
     }
     return {
       title: draft.title.trim(),
-      summary: draft.summary.trim(),
+      prompt: draft.prompt.trim(),
       rationale: draft.rationale.trim()
     };
   }
@@ -2463,12 +2454,7 @@
     el('studio-scene-draft-rationale').textContent = proposal.rationale ||
       'A tentative Scene. No prompt, Takes or generation job will be created.';
     el('studio-scene-draft-title').value = proposal.title;
-    el('studio-scene-draft-summary').value = proposal.summary;
-    var includesPrompt = Object.prototype.hasOwnProperty.call(proposal, 'prompt');
-    el('studio-scene-draft-summary-row').classList.toggle('hidden', includesPrompt);
-    el('studio-scene-draft-prompt-row').classList.toggle('hidden', !includesPrompt);
-    el('studio-scene-draft-prompt').value = includesPrompt ? proposal.prompt : '';
-    el('studio-scene-draft-apply').textContent = includesPrompt ? 'Create Scene' : 'Create tentative Scene';
+    el('studio-scene-draft-prompt').value = proposal.prompt;
     el('studio-scene-draft-error').textContent = '';
     var placement = el('studio-scene-draft-placement');
     placement.replaceChildren();
@@ -2532,15 +2518,14 @@
       var input = {
         task: 'Draft exactly ONE tentative, feasible Scene from this creative discussion. ' +
           'Select the strongest agreed direction. Keep the core appeal. ' +
-          'Return a short working title (it may be blank), a concrete description of what ' +
-          'happens and why it matters, and a brief production rationale. ' +
-          'No generation prompt, new project or existing Scene edits yet.',
+          'Return a short working title (it may be blank), a complete H3 generation prompt ' +
+          'and a brief production rationale. No new project or existing Scene edits yet.',
         project: {
           id: story.id, title: story.title, concept: story.concept,
           style: story.style, invariants: story.invariants,
           currentScenes: order.map(function (id, index) {
             var scene = story.scenes[id];
-            return { id: id, position: index + 1, title: scene.title, intent: scene.summary };
+            return { id: id, position: index + 1, title: scene.title, prompt: scene.prompt };
           })
         },
         discussion: discussion.slice(-60)
@@ -2570,7 +2555,7 @@
             sceneOrder: order.slice(),
             scenes: story.scenes,
             title: draft.title,
-            summary: draft.summary,
+            prompt: draft.prompt,
             rationale: draft.rationale,
             placement: 'end'
           };
@@ -2594,15 +2579,13 @@
     var proposal = state.studioSceneProposal;
     if (!proposal || state.pending) return;
     var title = el('studio-scene-draft-title').value.trim();
-    var summary = el('studio-scene-draft-summary').value.trim();
-    var reviewedScene = {title: title, summary: summary};
-    if (Object.prototype.hasOwnProperty.call(proposal, 'prompt'))
-      reviewedScene.prompt = el('studio-scene-draft-prompt').value;
+    var prompt = el('studio-scene-draft-prompt').value.trim();
+    var reviewedScene = {title: title, prompt: prompt};
     var placementValue = el('studio-scene-draft-placement').value.split('|');
     var placement = placementValue[0];
     var relativeSceneId = placementValue[1] || '';
-    if (!summary) {
-      el('studio-scene-draft-error').textContent = 'Describe what happens before creating this Scene.';
+    if (!prompt) {
+      el('studio-scene-draft-error').textContent = 'Write a full Prompt before creating this Scene.';
       return;
     }
     var apply = el('studio-scene-draft-apply');
@@ -2634,13 +2617,11 @@
       var index = payload.story.sceneOrder.indexOf(created.id) + 1;
       var receipt = 'Created Scene ' + index + (title ? ' · ' + title : '') +
         ' in ' + (proposal.storyTitle || proposal.storyId) +
-        (created.prompt ? '. Intent and H3 Prompt saved; Takes remain empty.'
-          : '. Intent saved; the H3 Prompt and Takes remain empty.');
+        '. H3 Prompt saved; Takes remain empty.';
       recordStudioOperation('scene.create', receipt, proposal.storyId, [created.id]);
       studioActionStatus(receipt, false);
       return window.studioDirectorBridge.recordApplied('scene.create',payload.story,{
-        scenes:[{id:created.id,title:created.title,summary:created.summary,
-          ...(created.prompt ? {prompt:created.prompt} : {})}]
+        scenes:[{id:created.id,title:created.title,prompt:created.prompt}]
       }).catch(function (error) {
         studioActionStatus(receipt + ' Conversation receipt could not be saved: ' + String(error.message || error), true);
       }).then(function () {
@@ -2894,7 +2875,7 @@
             'Treat proposed work as unsaved until WebCap confirms Apply.\n') +
         outbound[0].content };
       if (includePromptContract) outbound[0].content +=
-        '\n\nH3 PRODUCTION PROMPT REFERENCE (know this template when discussing H3; apply it only when drafting an H3 Prompt field, not when authoring Scene Intent or Project fields):\n' + payload.promptContract;
+        '\n\nH3 PRODUCTION PROMPT REFERENCE (know this template when discussing H3; apply it only when drafting an H3 Prompt field, not when authoring Project fields):\n' + payload.promptContract;
       return outbound;
     });
   }
@@ -2924,8 +2905,7 @@
         'CAPTURE: Use null for discussion, questions, outlines and work still to be drafted. ' +
         'For a complete existing Scene prompt, set capture.field="prompt", capture.sceneId to its saved ID, ' +
         'and capture.content to the full usable prompt itself. WebCap uses this one authored text for both chat and Review Scene, without another LLM call. ' +
-        'For other complete fields use the matching capture schema. A new Scene uses field="scene", title and content as an initial outline; ' +
-        'also include prompt when a full H3 Prompt was authored in conversation. An outline-only Scene is still a useful planning draft. ' +
+        'For other complete fields use the matching capture schema. A new Scene uses field="scene", title and content as the full usable H3 Prompt. ' +
         'For an Invariant use its kind/title, with beforeKind/beforeTitle for an exact known edit.\n';
       return outbound;
     });
@@ -3747,7 +3727,7 @@
         el('studio-project-error').textContent = 'At most 32 initial Scenes.';
         return;
       }
-      addStudioProjectExtraScene({title:'',summary:''});
+      addStudioProjectExtraScene({title:'',prompt:''});
     };
     el('studio-brief-close').onclick = function () { el('studio-brief-review').close(); };
     el('studio-brief-discard').onclick = function () { el('studio-brief-review').close(); };
@@ -3772,7 +3752,7 @@
         el('studio-scenes-error').textContent = 'Review up to 32 Scenes at a time.';
         return;
       }
-      addStudioScenesRow({ title: '', summary: '' });
+      addStudioScenesRow({ title: '', prompt: '' });
     };
     el('studio-project-close').onclick = function () { el('studio-project-review').close(); };
     el('studio-project-discard').onclick = function () { el('studio-project-review').close(); };
@@ -4059,7 +4039,7 @@
       };
       markStudioReadinessOutdated();
       window.studioDirectorWorkbench.markSavedFields(selected,story);
-      var names = {title:'Title',concept:'Concept',style:'Visual / atmosphere',invariants:'Invariants',summary:'Intent',prompt:'H3 Prompt'};
+      var names = {title:'Title',concept:'Concept',style:'Visual / atmosphere',invariants:'Invariants',prompt:'H3 Prompt'};
       var values = selected.savedFields || selected.fields || selected;
       var savedFields = Object.keys(values).filter(function(key){return names[key];}).map(function(key){
         return names[key] + (key === 'invariants' ? ' (' + values[key].length + ')' : '');
@@ -4142,7 +4122,7 @@
       if (!storyId || !capture || capture.field !== 'scene' ||
           typeof capture.content !== 'string' || !capture.content.trim() ||
           typeof capture.title !== 'string') {
-        return Promise.reject(new Error('Choose a Project and a complete tentative Scene Intent.'));
+        return Promise.reject(new Error('Choose a Project and a complete Scene Prompt.'));
       }
       if (state.studioSceneProposal) {
         return Promise.reject(new Error('An unfinished Scene draft exists. Finish or discard it first.'));
@@ -4160,8 +4140,7 @@
         state.studioSceneProposal = {
           storyId:storyId, storyTitle:story.title, expectedUpdatedAt:story.updatedAt,
           sceneOrder:(story.sceneOrder || []).slice(), scenes:story.scenes,
-          title:capture.title, summary:capture.content,
-          ...(typeof capture.prompt === 'string' ? {prompt:capture.prompt} : {}),
+          title:capture.title, prompt:capture.content,
           rationale:'Director developed this Scene in conversation. Review the fields and position before saving.',
           placement:'end'
         };

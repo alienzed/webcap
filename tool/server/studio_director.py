@@ -19,7 +19,7 @@ ACTIONS = (
     {"name": "project.create", "status": "available",
      "description": "Create a reviewed Project with complete Concept, Visual / atmosphere and Invariants; requested initial Scenes are authored after saving."},
     {"name": "project.revise", "status": "available",
-     "description": "Revise specific Project overview fields using fresh saved values in one editable review."},
+     "description": "Revise requested Project Concept, Visual / atmosphere or Invariants using fresh saved values in one editable review."},
     {"name": "scenes.write", "status": "available",
      "description": "Create or revise one or more Scenes in a chosen Project, including H3 Prompt and relevant Invariants; review before applying."},
 )

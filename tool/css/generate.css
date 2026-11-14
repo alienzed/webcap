@@ -1365,8 +1365,8 @@
 .generate-lora-row input[data-generate-lora-strength] { width: 72px; min-width: 0; padding: 5px; }
 .generate-lora-row.generate-lora-inactive .generate-lora-name,
 .generate-lora-list.generate-loras-bypassed .generate-lora-name { color: var(--muted); }
-.generate-create-controls > .generate-mode-row { padding: 10px 6px 0; }
-.generate-create-controls > .generate-mode-row::before { content: "Mode"; font-size: 13px; font-weight: 650; color: var(--muted); }
+.generate-inspector > .generate-mode-row { padding: 2px 0 0; }
+.generate-inspector > .generate-mode-row::before { content: "Mode"; font-size: 13px; font-weight: 650; color: var(--muted); }
 @container (max-width: 450px) {
   .generate-lora-row { grid-template-columns: 16px minmax(0, 1fr) 48px 25px 64px 24px; gap: 4px; }
   .generate-lora-arrows button { width: 23px; }

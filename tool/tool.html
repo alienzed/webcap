@@ -1766,6 +1766,12 @@
                                 <label id="generate-field-seed" class="generate-field" title="Seed (-1 for random)"><span>Seed</span><input id="generate-seed" type="number" min="-1" step="1" value="-1"></label>
                             </div>
                             </section>
+                            <div class="generate-mode-row">
+                                <div class="generate-lora-tabs" role="group" aria-label="Generation mode">
+                                    <button id="generate-lora-selected-tab" type="button" class="review-captions-btn active" aria-pressed="true">Single</button>
+                                    <button id="generate-lora-sweep-tab" type="button" class="review-captions-btn" aria-pressed="false" aria-controls="generate-lora-sweep-panel">LoRA Sweep</button>
+                                </div>
+                            </div>
                             <section class="generate-conditioning">
                             <div class="generate-conditioning-heading"><label class="generate-lora-master" title="Temporarily enable or disable all fixed LoRAs"><input id="generate-lora-master-enabled" type="checkbox" checked><strong>LoRAs <span id="generate-lora-count">(0)</span></strong></label><div class="generate-lora-heading-actions"><button id="generate-lora-library-open" type="button" class="review-captions-btn" title="View and edit LoRA profiles; does not change selected LoRAs">Profiles</button><button id="generate-lora-refresh" type="button" class="review-captions-btn" title="Rescan available LoRAs from ComfyUI" aria-label="Refresh available LoRAs">↻</button></div></div>
                             <div id="generate-lora-selected-panel" class="generate-lora-mode-panel">
@@ -1818,12 +1824,6 @@
                             </div>
                             </details>
                             </aside>
-                            <div class="generate-mode-row">
-                                <div class="generate-lora-tabs" role="group" aria-label="Generation mode">
-                                    <button id="generate-lora-selected-tab" type="button" class="review-captions-btn active" aria-pressed="true">Single</button>
-                                    <button id="generate-lora-sweep-tab" type="button" class="review-captions-btn" aria-pressed="false" aria-controls="generate-lora-sweep-panel">LoRA Sweep</button>
-                                </div>
-                            </div>
                             <div class="generate-run-row">
                             <button id="generate-run-btn" type="button" class="storyboard-primary-btn generate-run-btn">Generate</button>
                             </div>

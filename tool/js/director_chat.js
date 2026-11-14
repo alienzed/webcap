@@ -1765,7 +1765,7 @@
   // The reviewed Project is saved before any Scene authoring. Each approved
   // brief uses the existing one-Scene writer schema and Studio insertion route.
   function writeInitialProjectScenes(story, briefs) {
-    var outcome = {saved:[],failed:[],notAttempted:[]}, current = story;
+    var outcome = {saved:[],failed:[],notAttempted:[],reportingErrors:[]}, current = story;
     function next(index) {
       if (index >= briefs.length) return Promise.resolve(outcome);
       var brief = briefs[index], label = brief.title || ('Scene ' + (index + 1));
@@ -1829,6 +1829,7 @@
             scenes:[{id:saved.id,title:saved.title,prompt:saved.prompt,
               durationSeconds:saved.durationSeconds}]
           }).catch(function (error) {
+            outcome.reportingErrors.push(label + ': ' + String(error.message || error));
             window.reportConsoleError('Initial Scene receipt after save',error);
           });
         }).catch(function (error) {
@@ -1900,7 +1901,7 @@
     state.pending = true;
     syncControls();
     el('studio-project-error').textContent = '';
-    var createdStory = null;
+    var createdStory = null, receiptError = '';
     var continueWithProject = el('studio-project-continue').checked;
     requestJson('/fs/studio/director/project-create', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -1931,15 +1932,22 @@
         })
       };
       return window.studioDirectorBridge.recordApplied('project.create',payload.story,projectValues)
-        .catch(function (error) {window.reportConsoleError('Project receipt after save',error);})
+        .catch(function (error) {
+          receiptError = String(error.message || error);
+          window.reportConsoleError('Project receipt after save',error);
+        })
         .then(function () {return writeInitialProjectScenes(payload.story,firstScenes);})
         .then(function (outcome) {
-          if (firstScenes.length) {
-            var summary = 'Project created · ' + outcome.saved.length + ' Scenes saved' +
+          if (firstScenes.length || receiptError) {
+            var summary = 'Project saved' + (firstScenes.length
+              ? ' · ' + outcome.saved.length + ' Scenes saved' : '') +
               (outcome.failed.length ? ' · failed: ' + outcome.failed.join(' | ') : '') +
-              (outcome.notAttempted.length ? ' · not attempted: ' + outcome.notAttempted.join(', ') : '');
+              (outcome.notAttempted.length ? ' · not attempted: ' + outcome.notAttempted.join(', ') : '') +
+              (outcome.reportingErrors.length ? ' · Scene receipts failed: ' + outcome.reportingErrors.join(' | ') : '') +
+              (receiptError ? ' · Project receipt failed: ' + receiptError : '');
             recordStudioOperation('project.initial-scenes',summary,payload.story.id,outcome.saved);
-            studioActionStatus(summary,!!(outcome.failed.length || outcome.notAttempted.length));
+            studioActionStatus(summary,!!(outcome.failed.length || outcome.notAttempted.length ||
+              outcome.reportingErrors.length || receiptError));
           }
           return window.refreshStudioDirectorStoryIfOpen(payload.story.id);
         });

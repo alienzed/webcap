@@ -170,7 +170,7 @@ def _validate_readiness(value):
     write_fields = value.get("writeFields", [])
     allowed_fields = (
         {"title", "concept", "style", "invariants"} if value["writeHint"] == "project"
-        else {"title", "summary", "prompt", "durationSeconds"} if value["writeHint"] in {"scenes", "scene-edit", "scenes-batch"}
+        else {"title", "summary", "prompt", "durationSeconds"} if value["writeHint"] in {"scene", "scenes", "scene-edit", "scenes-batch"}
         else set()
     )
     if (not isinstance(write_fields, list) or len(write_fields) > 4
@@ -185,7 +185,10 @@ def _validate_readiness(value):
             raise ValueError("Studio creative capture is invalid.")
         if capture.get("field") == "scene":
             if (set(capture) not in ({"field", "content", "sceneId", "title"},
-                                     {"field", "content", "sceneId", "title", "prompt"})
+                                     {"field", "content", "sceneId", "title", "prompt"},
+                                     {"field", "content", "sceneId", "title", "durationSeconds"})
+                    or ("durationSeconds" in capture and (type(capture["durationSeconds"]) is not int
+                            or not 4 <= capture["durationSeconds"] <= 15))
                     or not isinstance(capture["title"], str) or len(capture["title"]) > 240
                     or ("prompt" in capture and (not isinstance(capture["prompt"], str)
                                                   or len(capture["prompt"]) > 20000))

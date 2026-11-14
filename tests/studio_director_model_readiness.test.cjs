@@ -17,10 +17,11 @@ function directorFixture() {
       createElement: () => ({})
     }
   };
-  const startup = '  bind();\n})();';
-  assert.ok(source.includes(startup), 'expected Director bootstrap');
-  const instrumented = source.replace(startup, [
-    '  // Isolate model readiness from unrelated full-window wiring.',
+  // Both immediate and DOMContentLoaded binding are valid bootstrap strategies.
+  // Isolate the bridge without depending on which startup order Studio uses.
+  const bootstrap = /  (?:bind\(\);|if \(document\.readyState === 'loading'\) document\.addEventListener\('DOMContentLoaded', bind\);\n  else bind\(\);)\n\}\)\(\);\s*$/;
+  assert.match(source, bootstrap, 'expected Director bootstrap');
+  const instrumented = source.replace(bootstrap, [
     '  syncControls = function () {};',
     '  window.__directorTest = { state: state, loadModels: loadModels };',
     '})();'
@@ -54,6 +55,7 @@ test('a missing conversation or async model list is not misdiagnosed as a missin
   assert.match(bridge.readinessMessage(), /conversation is loading/);
   state.sessionReady = true;
   state.modelsLoaded = false;
+  state.modelId = '';
   assert.match(bridge.readinessMessage(), /models are loading/);
   state.modelsLoaded = true;
   state.modelId = '';

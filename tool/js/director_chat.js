@@ -1698,7 +1698,7 @@
     dialog.showModal();
   }
 
-  function prepareStudioProject() {
+  function prepareStudioProject(options) {
     if (state.pending || state.activeMode !== 'storyboard' || !state.sessionReady) return;
     if (state.studioProjectProposal) { showStudioProjectReview(); return; }
     if (!state.modelId) { studioActionStatus('No Director model is available. Refresh models.', true); return; }
@@ -1724,6 +1724,7 @@
         'and do not fabricate extra Scenes to fill a count. It is fine to have zero Scenes. ' +
         'Do not invent a fixed Scene count. Give each included Scene a complete H3 Prompt. ' +
         'Use a short rationale. Nothing should be created yet.',
+      instruction: String(options && options.instruction || '').trim(),
       discussion: discussion
     };
     studioDirectorRequestMessages([{ role: 'user', content: JSON.stringify(input) }], false, true)
@@ -1934,7 +1935,10 @@
     el('studio-brief-rationale').textContent = proposal.rationale;
     el('studio-brief-title-before').textContent = 'Current: ' + (proposal.expected.title || '(untitled)');
     el('studio-brief-title').value = proposal.draft.title;
-    el('studio-brief-title-selected').checked = proposal.draft.title !== proposal.expected.title;
+    var requested = Array.isArray(proposal.requestedFields) && proposal.requestedFields.length
+      ? proposal.requestedFields : null;
+    el('studio-brief-title-selected').checked = proposal.draft.title !== proposal.expected.title &&
+      (!requested || requested.includes('title'));
     el('studio-brief-concept-before').textContent = 'Current: ' + (proposal.expected.concept || '(empty)');
     el('studio-brief-style-before').textContent = 'Current: ' + (proposal.expected.style || '(empty)');
     el('studio-brief-concept').value = proposal.draft.concept;
@@ -1942,8 +1946,10 @@
     ['title','concept','style'].forEach(function(key){
       studioDirectorRenderDiff(el('studio-brief-'+key+'-diff'), proposal.expected[key], proposal.draft[key]);
     });
-    el('studio-brief-concept-selected').checked = proposal.draft.concept !== proposal.expected.concept;
-    el('studio-brief-style-selected').checked = proposal.draft.style !== proposal.expected.style;
+    el('studio-brief-concept-selected').checked = proposal.draft.concept !== proposal.expected.concept &&
+      (!requested || requested.includes('concept'));
+    el('studio-brief-style-selected').checked = proposal.draft.style !== proposal.expected.style &&
+      (!requested || requested.includes('style'));
     // A model's omission never becomes a proposed deletion by accident.
     // Match existing rows by their current composite identity; the author
     // explicitly removes a row to approve its deletion.
@@ -1965,12 +1971,12 @@
     suggested.forEach(function (item, index) {
       if (!matched.has(index)) reviewed.push({item:item, original:null});
     });
-    el('studio-brief-invariants-selected').checked = reviewed.length !== existing.length ||
-      reviewed.some(function (row, index) {
+    el('studio-brief-invariants-selected').checked = (!requested || requested.includes('invariants')) &&
+      (reviewed.length !== existing.length || reviewed.some(function (row, index) {
         return !existing[index] || ['kind','title','text'].some(function (field) {
           return row.item[field] !== existing[index][field];
         });
-      });
+      }));
     el('studio-brief-invariants').replaceChildren();
     reviewed.forEach(function (row) {
       addStudioProjectInvariant(row.item, 'studio-brief-invariants', row.original);
@@ -2021,9 +2027,14 @@
     unchanged.classList.toggle('hidden', !unchanged.querySelector('.studio-brief-field'));
   }
 
-  function prepareStudioBrief() {
+  function prepareStudioBrief(options) {
     if (state.pending || state.activeMode !== 'storyboard' || !state.sessionReady) return;
-    if (state.studioBriefProposal) { showStudioBriefReview(); return; }
+    var instruction = String(options && options.instruction || '').trim();
+    if (state.studioBriefProposal && (!instruction ||
+        instruction === state.studioBriefProposal.instruction)) {
+      showStudioBriefReview(); return;
+    }
+    if (instruction) state.studioBriefProposal = null;
     if (!state.modelId) { studioActionStatus('Select a Director model.', true); return; }
     var storyId = studioAttachedStoryId();
     if (!storyId) {
@@ -2035,6 +2046,13 @@
     }).map(function (message) {
       return {role:message.role,content:message.content};
     });
+    instruction = instruction || String((discussion.filter(function (message) {
+      return message.role === 'user' && !message.content.includes('[WEBCAP APPLIED FIELD VALUES]');
+    }).slice(-1)[0] || {}).content || '').trim();
+    var requestedFields = Array.isArray(options && options.requestedFields)
+      ? options.requestedFields.filter(function (field) {
+        return ['title','concept','style','invariants'].includes(field);
+      }) : [];
     state.pending = true;
     state.jobId = '';
     studioActionStatus('Preparing Project Overview for review…', false);
@@ -2049,12 +2067,12 @@
       if (!story || story.id !== storyId) throw new Error('Attached Project is unavailable.');
       var expected = { title: story.title, concept: story.concept, style: story.style, invariants: story.invariants };
       var input = {
-        task: 'Propose narrowly scoped creative brief changes that the author has actually discussed. ' +
-          'Return the revised Project title, Concept, Style and FULL Invariant list as reviewable suggestions. ' +
-          'Consider Concept, Visual / atmosphere and Invariants together as one Project Overview. Align the affected parts with the agreed change, preserving parts that remain appropriate and respecting explicit author limits. ' +
-          'Core Appeal stays within Concept. Preserve established details and unrelated facts. ' +
-          'Do not change Scenes or prompts. Prefer no change where ideas remain undecided. ' +
-          'Any changes must be reviewed by the author before WebCap stores them.',
+        task: 'Author complete revised Project Overview field values using the freshly saved Project ' +
+          'as the baseline. Follow the specific agreed instruction, changing only the requested fields. ' +
+          'Return the complete title, Concept, Visual / atmosphere and Invariant list, preserving all ' +
+          'unaffected text, Invariants and Scene prompts. Keep the core appeal in Concept. ' +
+          'WebCap reviews and saves only selected changes.',
+        instruction: instruction, requestedFields: requestedFields,
         project: { id: story.id, title: story.title, concept: story.concept,
           style: story.style, invariants: story.invariants },
         discussion: discussion
@@ -2077,7 +2095,7 @@
           var draft = parseStudioBriefDraft(result.text);
           state.studioBriefProposal = {
             storyId: storyId, storyTitle: story.title, expected: expected, draft: draft,
-            rationale: draft.rationale
+            instruction:instruction, requestedFields:requestedFields, rationale: draft.rationale
           };
           finishProgress(null);
           studioActionStatus('Project Overview ready for review. Nothing has changed.', false);
@@ -2930,7 +2948,9 @@
         'Writing a Scene means a useful title and a full H3 Prompt. An outline alone is a planning draft, not a second authoritative Scene description. ' +
         'Name actions in plain language. Conversation alone never saves; a launched Scene revision saves directly and reviewed Apply saves reviewed drafts.\n' +
         'READINESS: Usually checks=[], readHints=[], writeHint="", writeFields=[], sceneId="", sceneNumber=0, capture=null. ' +
-        'Always include writeInstruction: use an empty string unless proposing an existing Scene revision or one new Scene; then include the concrete agreed instruction, title and duration when specified. ' +
+        'For a requested new Project propose writeHint="new-project" with the agreed writeInstruction. ' +
+        'For an existing Project overview change propose writeHint="project", an exact writeInstruction and writeFields naming affected Project fields. ' +
+        'Always include writeInstruction: empty for ordinary discussion, or the concrete agreed Project or Scene instruction, including requested title and duration for Scenes. ' +
         'For factual questions answerable from supplied context, keep readiness fields empty and finish with the answer. ' +
         'For requested creative development, suggest at most one useful next action. Use new-project, project or scenes for Write. ' +
         'writeFields names affected fields; Scene numbers are one-based. Use bare Scene IDs from navigation.sceneOrder. ' +
@@ -2940,7 +2960,19 @@
         'and capture.content to the full usable prompt itself. WebCap uses this one authored text for both chat and Review Scene, without another LLM call. ' +
         'For other complete fields use the matching capture schema. When a complete new Scene is already authored in conversation, use field="scene", title and content as the full usable H3 Prompt and durationSeconds (requested duration or default 6). WebCap reuses that material for review. ' +
         'For an Invariant use its kind/title, with beforeKind/beforeTitle for an exact known edit.\n';
-      if (!selectedScene) return outbound;
+      if (!selectedScene) {
+        var projectId = studioAttachedStoryId() || (navigationSnapshot && navigationSnapshot.projectId);
+        if (!projectId) return outbound;
+        return requestJson('/fs/storyboard?story=' + encodeURIComponent(projectId)).then(function (result) {
+          var story = result && result.story;
+          if (!story || story.id !== projectId) throw new Error('The selected Project is no longer available.');
+          outbound[0].content += '\n\nCURRENT SAVED PROJECT OVERVIEW (WebCap supplied):\n' +
+            JSON.stringify({projectId:story.id,title:story.title,concept:story.concept,
+              style:story.style,invariants:story.invariants}) +
+            '\nSaved values supersede earlier conversational drafts.\n';
+          return outbound;
+        });
+      }
       return requestJson('/fs/storyboard?story=' + encodeURIComponent(selectedScene.projectId))
         .then(function (result) {
           var story = result && result.story;
@@ -3409,9 +3441,9 @@
       state.storyGuidelineProposal = null;
       state.workshopProposal = null;
       state.studioSceneProposal = null;
-      state.studioProjectProposal = null;
+      // A follow-up question must not discard an authored Project review.
+      // A new explicit write with a new instruction replaces the prior proposal.
       state.studioScenesProposal = null;
-      state.studioBriefProposal = null;
       el('director-chat-workshop-status').textContent = '';
     }
     // Freeze the Project destination alongside the user's instruction.
@@ -4065,14 +4097,14 @@
       scheduleSessionSave();
       syncModeUi();
     },
-    prepareWrite: function (kind, storyId, storyTitle) {
+    prepareWrite: function (kind, storyId, storyTitle, options) {
       if (!this.isReady()) throw new Error('Director must be ready before Write.');
       if (kind !== 'new-project') this.selectWriteProject(storyId,storyTitle);
       if (kind === 'new-project') {
         state.studioProjectProposal = null; // Create a fresh review from current conversation.
-        return prepareStudioProject();
+        return prepareStudioProject(options);
       }
-      if (kind === 'project') return prepareStudioBrief();
+      if (kind === 'project') return prepareStudioBrief(options);
       if (kind === 'scene') return prepareStudioSceneDraft();
       if (kind === 'scenes') return prepareStudioScenes();
       throw new Error('Unsupported reviewed Write operation: ' + kind);

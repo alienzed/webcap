@@ -2401,17 +2401,18 @@
     var duration = document.createElement('input');
     duration.type = 'number'; duration.min = '4'; duration.max = '15'; duration.step = 'any';
     duration.dataset.field = 'durationSeconds';
-    duration.value = item.durationSeconds === undefined ? 6 :
-      item.durationSeconds == null ? '' : String(item.durationSeconds);
-    durationLabel.appendChild(duration);
-    var suppliedDuration = item.durationSeconds != null && String(item.durationSeconds).trim() !== '';
+    var suppliedDuration = (typeof item.durationSeconds === 'number' ||
+      typeof item.durationSeconds === 'string') && String(item.durationSeconds).trim() !== '';
     var numericDuration = Number(item.durationSeconds);
-    if (!suppliedDuration || !Number.isFinite(numericDuration) ||
-        numericDuration < 4 || numericDuration > 15) {
+    var usableDuration = suppliedDuration && Number.isFinite(numericDuration) &&
+      numericDuration >= 4 && numericDuration <= 15;
+    duration.value = usableDuration ? numericDuration : 6;
+    durationLabel.appendChild(duration);
+    if (!usableDuration) {
       var durationNote = document.createElement('span');
-      durationNote.textContent = item.durationSeconds === undefined
-        ? 'Director omitted duration; 6s default shown. Check before Apply.'
-        : 'Director returned duration ' + String(item.durationSeconds) + '; correct it before Apply.';
+      durationNote.textContent = !suppliedDuration
+        ? 'Duration missing; using the 6s default. You can change it.'
+        : 'Duration ' + String(item.durationSeconds) + ' is not supported; using 6s. You can change it.';
       durationLabel.appendChild(durationNote);
     }
     var promptLabel = document.createElement('label');
@@ -2422,7 +2423,7 @@
     promptLabel.appendChild(prompt);
     if (!prompt.value.trim()) {
       var promptNote = document.createElement('span');
-      promptNote.textContent = 'Complete this Prompt or remove this Scene before Apply.';
+      promptNote.textContent = 'No Prompt supplied. This Scene stays in review until completed; other Scenes can be saved.';
       promptLabel.appendChild(promptNote);
     }
     row.append(header, title, durationLabel, promptLabel);
@@ -2549,21 +2550,32 @@
   function applyStudioScenes() {
     var proposal = state.studioScenesProposal;
     if (!proposal || state.pending) return;
-    var drafts = Array.prototype.map.call(el('studio-scenes-rows').querySelectorAll('.studio-scenes-row'), function (row) {
-      return {
-        title: row.querySelector('[data-field="title"]').value.trim(),
-        prompt: row.querySelector('[data-field="prompt"]').value.trim(),
-        durationSeconds: Number(row.querySelector('[data-field="durationSeconds"]').value)
-      };
+    var rows = Array.from(el('studio-scenes-rows').querySelectorAll('.studio-scenes-row'));
+    var readyRows = [], incompleteRows = [], defaulted = 0;
+    rows.forEach(function (row) {
+      var title = row.querySelector('[data-field="title"]').value.trim();
+      var prompt = row.querySelector('[data-field="prompt"]').value.trim();
+      if (!prompt) {
+        incompleteRows.push(row);
+        return;
+      }
+      var durationInput = row.querySelector('[data-field="durationSeconds"]');
+      var supplied = String(durationInput.value || '').trim();
+      var duration = supplied ? Number(supplied) : NaN;
+      if (!Number.isFinite(duration) || duration < 4 || duration > 15) {
+        duration = 6;
+        durationInput.value = '6';
+        defaulted++;
+      }
+      readyRows.push({row:row, draft:{title:title,prompt:prompt,durationSeconds:duration}});
     });
-    if (!drafts.length || drafts.length > 32 || drafts.some(function (item) {
-      return !item.prompt || !Number.isFinite(item.durationSeconds) ||
-        item.durationSeconds < 4 || item.durationSeconds > 15;
-    })) {
-      el('studio-scenes-error').textContent =
-        'Complete or remove any Scene with a missing Prompt or duration outside 4–15 seconds. Your drafts remain available.';
+    if (!readyRows.length) {
+      el('studio-scenes-error').textContent = rows.length
+        ? 'No complete H3 Prompts to save yet. Complete a Prompt or remove an empty Scene; your drafts are preserved.'
+        : 'Add a Scene with a Prompt before applying.';
       return;
     }
+    var drafts = readyRows.map(function (item) {return item.draft;});
     var pieces = el('studio-scenes-placement').value.split('|');
     var placement = pieces[0];
     var relativeSceneId = pieces[1] || '';
@@ -2587,11 +2599,30 @@
         throw new Error('Scene sequence Apply returned an incomplete result.');
       }
       applied = true;
-      state.studioScenesProposal = null;
-      el('studio-scenes-review').close();
-      recordStudioOperation('scenes.create', 'Created ' + payload.scenes.length + ' Scenes with prompts',
+      var savedCount = payload.scenes.length;
+      if (incompleteRows.length) {
+        // Leave incomplete work editable and retain a fresh order for the next Apply.
+        proposal.sceneOrder = payload.story.sceneOrder.slice();
+        proposal.scenes = payload.story.scenes;
+        proposal.drafts = incompleteRows.map(function (row) {
+          return {
+            title:row.querySelector('[data-field="title"]').value.trim(),
+            prompt:row.querySelector('[data-field="prompt"]').value,
+            durationSeconds:row.querySelector('[data-field="durationSeconds"]').value
+          };
+        });
+        readyRows.forEach(function (item) {item.row.remove();});
+        el('studio-scenes-error').textContent = savedCount + ' Scene' +
+          (savedCount === 1 ? '' : 's') + ' saved. ' + incompleteRows.length +
+          ' still need a Prompt; complete or remove them here.' +
+          (defaulted ? ' ' + defaulted + ' saved using the 6s duration default.' : '');
+      } else {
+        state.studioScenesProposal = null;
+        el('studio-scenes-review').close();
+      }
+      recordStudioOperation('scenes.create', 'Created ' + savedCount + ' Scenes with prompts',
         proposal.storyId, payload.scenes.map(function (scene) { return scene.id; }));
-      studioActionStatus(payload.scenes.length === 1 ? 'Scene created.' : payload.scenes.length + ' Scenes created.', false);
+      studioActionStatus(savedCount === 1 ? 'Scene created.' : savedCount + ' Scenes created.', false);
       return window.studioDirectorBridge.recordApplied('scenes.create',payload.story,{
         scenes:payload.scenes.map(function (scene) {
           return {id:scene.id,title:scene.title,prompt:scene.prompt,durationSeconds:scene.durationSeconds};

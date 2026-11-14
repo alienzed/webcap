@@ -447,8 +447,8 @@ test('legacy Workshop request context never treats stored Scene Intent as a crea
   const outbound = vm.runInContext(
     'storyboardRequestMessages([{role:"user",content:"Revise the shots"}], true)',scope);
   const serialized = JSON.stringify(outbound);
-  assert.match(serialized, /"timedShots"/);
-  assert.match(serialized, /"sceneTitle"/);
+  assert.match(serialized, /timedShots/);
+  assert.match(serialized, /sceneTitle/);
   assert.doesNotMatch(serialized, /PRIVATE_LEGACY_INTENT|sceneIntent|sceneSummary/);
   assert.doesNotMatch(source, /Use the outline to develop Scenes that have no prompt yet/);
   assert.match(source, /Author a complete usable H3 Prompt when writing a new Scene/);

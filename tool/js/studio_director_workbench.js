@@ -165,7 +165,7 @@
   function readSend() {
     var id = el('studio-dw-read-project').value, keys = selectedPaths();
     if (!id || !keys.length) { status('Choose a Project and at least one field.', true); return; }
-    if (!window.studioDirectorBridge.isReady()) { status('Open Director and choose a model first.', true); return; }
+    if (!window.studioDirectorBridge.isReady()) { status(window.studioDirectorBridge.readinessMessage(), true); return; }
     el('studio-dw-read-send').disabled = true;
     window.studioDirectorWorkbench.setReadStatus('working','Reading selected saved fields…');
     // Same exact serializer drives the inspector and the outbound LLM message.
@@ -469,7 +469,7 @@
   }
   function prepareCurrentWrite(operation) {
     var target = activeTarget();
-    if (!window.studioDirectorBridge.isReady()) { status('Finish the current request and choose a Director model before drafting.', false); return; }
+    if (!window.studioDirectorBridge.isReady()) { status(window.studioDirectorBridge.readinessMessage(), false); return; }
     el('studio-dw-current-brief').disabled = true;
     el('studio-dw-current-prompt').disabled = true;
     return refreshProjects().then(function () {
@@ -500,7 +500,7 @@
     var bridge = window.studioDirectorBridge;
     var operation = el('studio-dw-write-operation').value;
     var id = el('studio-dw-write-project').value;
-    if (!bridge.isReady()) {status('Choose a Director model first.',true);return;}
+    if (!bridge.isReady()) {status(bridge.readinessMessage(),true);return;}
     if (operation !== 'new-project' && !id) {status('Choose a destination Project.',true);return;}
     if (operation === 'scene-write') {
       if (el('studio-dw-scene-mode').value === 'revise') return prepareBatchScenes(id);
@@ -1115,7 +1115,7 @@
     el('studio-dw-coherence-check').onclick=function () {
       var id = el('studio-dw-write-project').value;
       if (!id) {status('Choose a Project to check.',true);return;}
-      if (!window.studioDirectorBridge.isReady()) {status('Choose a Director model first.',true);return;}
+      if (!window.studioDirectorBridge.isReady()) {status(window.studioDirectorBridge.readinessMessage(),true);return;}
       prepareProjectCoherence(id);
     };
     el('studio-dw-read-preview').ontoggle = function () {

@@ -1132,18 +1132,7 @@
 
       var body = document.createElement('div');
       body.className = 'director-chat-message-body';
-      var visibleContent = message.content;
-      if (state.activeMode === 'storyboard' && message.role === 'assistant' && message.rawResponse) {
-        // Recover draft text hidden by older saved conversations without a new model call.
-        try {
-          var storedResponse = JSON.parse(message.rawResponse);
-          if (storedResponse && storedResponse.readiness && storedResponse.readiness.capture)
-            visibleContent = studioDirectorVisibleReply({reply:visibleContent,readiness:storedResponse.readiness});
-        } catch (error) {
-          // Older diagnostic captures may not contain structured Studio JSON.
-        }
-      }
-      body.textContent = visibleContent;
+      body.textContent = message.content;
       // Studio creative text stays visible, including long explicitly requested drafts.
       if (message.role === 'user' && (message.content.indexOf('[WEBCAP EXPLICIT READ]') !== -1 ||
           message.content.indexOf('[WEBCAP APPLIED FIELD VALUES]') !== -1)) {
@@ -1163,6 +1152,31 @@
 
       row.appendChild(label);
       row.appendChild(body);
+      if (state.activeMode === 'storyboard' && message.role === 'assistant' && message.rawResponse) {
+        var captured = null;
+        try {
+          var original = JSON.parse(message.rawResponse);
+          captured = original && original.readiness && original.readiness.capture;
+        } catch (error) {
+          // Older diagnostic replies may not contain structured capture data.
+        }
+        var draftText = captured && typeof captured.content === 'string' ? captured.content.trim() : '';
+        if (draftText && !message.content.includes(draftText)) {
+          // Captured material supports reviewed Write behind the scenes.
+          // Only the author's explicit action reveals it in the conversation.
+          var showDraft = document.createElement('button');
+          showDraft.type = 'button';
+          showDraft.className = 'director-chat-review-draft';
+          showDraft.textContent = 'Show draft';
+          showDraft.onclick = function () {
+            var fullDraft = document.createElement('div');
+            fullDraft.className = 'director-chat-captured-draft';
+            fullDraft.textContent = draftText;
+            showDraft.replaceWith(fullDraft);
+          };
+          row.appendChild(showDraft);
+        }
+      }
       var elapsedMap = currentElapsedMap();
       var metricsMap = currentMetricsMap();
       if (message.role === 'assistant' && Object.prototype.hasOwnProperty.call(elapsedMap, index)) {
@@ -2857,12 +2871,9 @@
   }
 
   function studioDirectorVisibleReply(value) {
-    var reply = value.reply.replace(/^\s*RECEIVED:[^\r\n]*(?:\r?\n)?/i, '').trim();
-    var capture = value.readiness && value.readiness.capture;
-    var drafted = capture && typeof capture.content === 'string' ? capture.content.trim() : '';
-    // A complete creative draft belongs in the conversation, not only in I/O.
-    // Avoid displaying it twice when the model already included it in reply.
-    return drafted && !reply.includes(drafted) ? (reply ? reply + '\n\n' : '') + drafted : reply;
+    // The authored capture is for WebCap's review workflow; conversation shows
+    // the model's reply only, unless the author explicitly reveals a draft.
+    return value.reply.replace(/^\s*RECEIVED:[^\r\n]*(?:\r?\n)?/i, '').trim();
   }
 
   function storyboardRequestMessages(messages, includePrimer) {

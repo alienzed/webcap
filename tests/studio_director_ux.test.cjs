@@ -114,29 +114,35 @@ test('identical Invariants are not preselected because JSON properties arrived i
   assert.equal(checkbox.checked,true);
 });
 
-test('contextual Prompt action uses the current route even when Write was aimed at another Project',async()=>{
+test('Context defaults to the entire Project and preserves a custom selection on return',()=>{
+  const node=()=>({children:[],dataset:{},value:'',checked:false,open:false,
+    append(...children){this.children.push(...children);},appendChild(child){this.children.push(child);},
+    replaceChildren(){this.children=[];}});
   const elements={};
-  const node=()=>({value:'',classList:{add(){},remove(){}},setAttribute(){}});
-  for(const id of ['current-brief','current-prompt','write-project','write-operation','write-scene','read-panel','read','write-panel','write']) elements['studio-dw-'+id]=node();
-  elements['studio-dw-write-project'].value='unrelated-project';
-  elements['studio-dw-scene-mode']=node();
-  const scenes=[{value:'current-scene',checked:false},{value:'other-scene',checked:true}];
-  elements['studio-dw-batch-scenes']={querySelectorAll:()=>scenes};
-  let prepared=false;
-  const saved={id:'current-project'};
-  const scope=vm.createContext({
-    window:{studioDirectorBridge:{isReady:()=>true}},activeTarget:()=>({storyId:saved.id,sceneId:'current-scene'}),
-    el:id=>elements[id],refreshProjects:async()=>{},loadStory:async id=>{assert.equal(id,saved.id);return saved;},
-    renderWriteStory:story=>assert.equal(story,saved),setOperation(){},updateScope(){},status:message=>assert.fail(message),
-    writePrepare:()=>{prepared=true;},writeOperationChosen:false,writeFieldsManuallyChanged:false
-  });
-  vm.runInContext(part(workbench,'  function prepareCurrentWrite(operation) {','  function writePrepare() {'),scope);
-  await scope.prepareCurrentWrite('scene-write');
-  assert.equal(elements['studio-dw-write-project'].value,saved.id);
-  assert.equal(elements['studio-dw-scene-mode'].value,'revise');
-  assert.equal(elements['studio-dw-batch-scenes'].querySelectorAll()[0].checked,true);
-  assert.equal(elements['studio-dw-batch-scenes'].querySelectorAll()[1].checked,false);
-  assert.equal(prepared,true);
+  for(const id of ['project-fields','scene-fields','read-count','read-selection-summary','read-send','read-all','read-project','read-preview','read-preview-data'])
+    elements['studio-dw-'+id]=node();
+  elements['studio-dw-read-project'].value='p';
+  const toggles=()=>['project-fields','scene-fields'].flatMap(id=>elements['studio-dw-'+id].children.map(row=>row.children[0]));
+  elements['studio-dw-read-panel']={querySelectorAll:selector=>toggles().filter(n=>!selector.includes(':checked')||n.checked)};
+  const story={id:'p',sceneOrder:['a','b'],scenes:{a:{title:'A',prompt:'First'},b:{title:'B',prompt:'Second'}}};
+  const scope=vm.createContext({document:{createElement:node,createTextNode:text=>({text})},
+    el:id=>elements[id],readChoices:{},projectFields:['title','concept','style','invariants'],
+    recommendations:{readHints:[]},recommendedSceneId:()=>'',activeTarget:()=>({sceneId:'a'}),
+    storyName:()=> 'Project',readStory:null});
+  vm.runInContext(part(workbench,'  function renderReadStory(story) {','  function readSend(instruction) {'),scope);
+  scope.renderReadStory(story);
+  assert.ok(toggles().every(n=>n.checked));
+  assert.equal(elements['studio-dw-read-selection-summary'].textContent,'Entire Project');
+  const second=JSON.stringify(scope.readPayload(story,scope.selectedPaths()));
+  assert.ok(JSON.parse(second).fields.some(field=>field.value==='Second'));
+  toggles()[2].checked=false;toggles()[2].onchange();
+  assert.equal(elements['studio-dw-read-selection-summary'].textContent,'Overview + 1 Scene');
+  scope.renderReadStory(story);
+  assert.equal(toggles()[2].checked,false);
+  assert.ok(!scope.readPayload(story,scope.selectedPaths()).fields.some(field=>field.value==='Second'));
+  scope.recommendations.readHints=['scene:b:prompt'];
+  scope.renderReadStory({...story,id:'another'});
+  assert.deepEqual(toggles().map(n=>n.checked),[false,false,true]);
 });
 
 test('ordinary discussion asks for concise new decisions while complete creative fields remain complete',()=>{

@@ -82,13 +82,14 @@ test('slash never fetches Blocks in ordinary Chat mode',async()=>{
   assert.deepEqual(calls,[]);
 });
 
-test('Studio Blocks sits beside Chat without duplicating Director production actions', () => {
+test('Blocks belongs to the Projects pane; Director belongs to Project actions', () => {
   const html = fs.readFileSync(path.join(__dirname, '../tool/tool.html'), 'utf8');
   const scenes = html.split('class="storyboard-scenes-heading-actions"')[1].split('</div>')[0];
-  const library = html.split('class="storyboard-library-header-actions"')[1].split('</div>')[0];
-  assert.match(scenes, /id="studio-blocks-open"/);
-  assert.ok(scenes.indexOf('openStoryboardAssistant()') < scenes.indexOf('id="studio-blocks-open"'));
-  assert.doesNotMatch(library, /id="studio-blocks-open"/);
+  const footer = html.split('class="storyboard-library-footer"')[1].split('</footer>')[0];
+  const project = html.split('class="storyboard-story-heading-actions"')[1].split('</div>')[0];
+  assert.match(footer, /id="studio-blocks-open"/);
+  assert.match(project, /id="storyboard-open-director"/);
+  assert.doesNotMatch(scenes, /studio-blocks-open|storyboard-open-director/);
   assert.equal((html.match(/id="studio-blocks-open"/g) || []).length, 1);
   assert.match(html, /id="storyboard-director-tools-btn"[^>]*>Revise &amp; Generate/);
 });

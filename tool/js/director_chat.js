@@ -333,7 +333,7 @@
     el('director-chat-save-status').classList.toggle('hidden', contextual);
     if (contextual) {
       el('director-chat-history-toggle').setAttribute('aria-expanded', 'false');
-      el('director-chat-history-panel').classList.add('hidden');
+      if (el('director-chat-history-panel').open) el('director-chat-history-panel').close();
     }
     el('director-chat-clear').textContent = context ? 'New QA chat' : studio ? 'New conversation' : 'New chat';
     var drawer = el('director-chat-drawer');
@@ -476,9 +476,29 @@
     }
   }
 
+  function conversationTitle(messages) {
+    for (var message of messages) {
+      if (message.role !== 'user' || message.content.includes('[WEBCAP APPLIED FIELD VALUES]')) continue;
+      var text = message.content.split('[WEBCAP EXPLICIT READ]')[0].trim();
+      if (!text || text === 'Read the selected saved context and acknowledge receipt.') continue;
+      return text.replace(/\s+/g, ' ').slice(0,72);
+    }
+    return 'New chat';
+  }
+
+  function historyDisplayTitle(chat) {
+    // Older auto-titles captured the protocol instead of the author's subject.
+    // Keep stored titles intact, including deliberate renames.
+    if (/^Read the selected saved context and acknowledge receipt\./.test(chat.title))
+      return chat.projectTitle ? chat.projectTitle + ' · context' : 'Project context';
+    if (chat.title === 'New chat') return 'New conversation';
+    return chat.title;
+  }
+
   function upsertSessionSummary(chat) {
     var summary = {
       id: chat.id, mode: chat.mode, title: chat.title,
+      projectTitle: chat.storyAccess ? chat.storyAccess.label : '',
       createdAt: chat.createdAt, updatedAt: chat.updatedAt, revision: chat.revision
     };
     state.sessionList = state.sessionList.filter(function (item) { return item.id !== chat.id; });
@@ -492,8 +512,6 @@
     var button = el('director-chat-history-toggle');
     var panel = el('director-chat-history-panel');
     if (!list || !button || !panel) return;
-    var expanded = button.getAttribute('aria-expanded') === 'true';
-    panel.classList.toggle('hidden', !expanded);
     list.replaceChildren();
     if (!state.sessionList.length) {
       var empty = document.createElement('p');
@@ -509,14 +527,20 @@
       var open = document.createElement('button');
       open.type = 'button';
       open.className = 'review-captions-btn';
-      open.textContent = (chat.mode === 'storyboard' ? 'Storyboard · ' : '') + chat.title;
-      open.title = chat.title + ' · ' + new Date(chat.updatedAt).toLocaleString();
+      var title = document.createElement('strong');
+      title.textContent = historyDisplayTitle(chat);
+      var meta = document.createElement('span');
+      meta.className = 'director-chat-history-meta';
+      meta.textContent = [chat.projectTitle || (chat.mode === 'storyboard' ? 'Projects' : 'Chat'),
+        new Date(chat.updatedAt).toLocaleString()].join(' · ');
+      open.append(title,meta);
+      open.title = historyDisplayTitle(chat);
       open.onclick = function () { selectSession(chat.id); };
       item.appendChild(open);
 
       var rename = document.createElement('button');
       rename.type = 'button';
-      rename.className = 'review-captions-btn';
+      rename.className = 'review-captions-btn director-chat-history-secondary';
       rename.textContent = 'Rename';
       rename.title = 'Rename conversation';
       rename.onclick = function () {
@@ -548,7 +572,7 @@
 
       var remove = document.createElement('button');
       remove.type = 'button';
-      remove.className = 'review-captions-btn';
+      remove.className = 'review-captions-btn director-chat-history-secondary';
       remove.textContent = 'Delete';
       remove.title = 'Permanently delete this saved conversation';
       remove.onclick = function () { deleteSession(chat.id); };
@@ -579,8 +603,7 @@
     var readiness = mode === 'storyboard' ? state.studioReadiness : null;
     var title = state.sessionByMode[mode] ? state.sessionByMode[mode].title : 'New chat';
     if (title === 'New chat') {
-      var first = messages.find(function (message) { return message.role === 'user' && message.content.trim(); });
-      if (first) title = first.content.replace(/\s+/g, ' ').trim().slice(0, 72);
+      title = conversationTitle(messages);
     }
     state.sessionDirty[mode] = false;
     showSessionStatus('Saving…', false);
@@ -715,6 +738,7 @@
     }).then(function (result) {
       state.activeMode = result.chat.mode;
       restoreSession(result.chat);
+      if (el('director-chat-history-panel').open) el('director-chat-history-panel').close();
       finishProgress(null);
       syncModeUi();
     }).catch(showSessionFailure).finally(function () {
@@ -1112,6 +1136,10 @@
     setProgressVisible(false);
   }
 
+  function studioReplyText(content) {
+    return String(content || '').replace(/^\s*RECEIVED:\s*(?:project\.\w+|scene:[\w-]+:\w+)(?:[ \t]*,[ \t]*(?:project\.\w+|scene:[\w-]+:\w+))*[ \t]*[.;]?[ \t]*(?:\r?\n)?/i, '').trim();
+  }
+
   function placeStudioSuggestion(node) {
     node.classList.add('hidden');
     var messages = currentMessages(), latest = messages[messages.length - 1];
@@ -1136,7 +1164,12 @@
     empty.classList.toggle('hidden', currentMessages().length > 0);
 
     currentMessages().forEach(function (message, index) {
-      if (state.activeMode === 'storyboard' && message.role === 'assistant' && !String(message.content || '').trim())
+      var studioReply = state.activeMode === 'storyboard' && message.role === 'assistant';
+      var previous = currentMessages()[index-1];
+      var readReceipt = studioReply && previous && previous.role === 'user' &&
+        previous.content.includes('[WEBCAP EXPLICIT READ]');
+      var visibleText = studioReply ? studioReplyText(message.content) : message.content;
+      if (studioReply && !visibleText.trim() && !readReceipt)
         return;
       var row = document.createElement('div');
       row.className = 'director-chat-message director-chat-message-' + message.role;
@@ -1149,17 +1182,17 @@
 
       var body = document.createElement('div');
       body.className = 'director-chat-message-body';
-      body.textContent = message.content;
-      if (state.activeMode === 'storyboard' && message.role === 'assistant' && message.content.length > 1200) {
+      body.textContent = visibleText;
+      if (studioReply && visibleText.length > 1200) {
         var preview = document.createElement('div');
         preview.className = 'director-chat-reply-preview';
-        var opening = message.content.split(/\n\s*\n/)[0];
+        var opening = visibleText.split(/\n\s*\n/)[0];
         preview.textContent = opening.length > 480 ? opening.slice(0,480).replace(/\s+\S*$/, '') + '…' : opening;
         var fullReply = document.createElement('details'), fullHeading = document.createElement('summary'),
           fullText = document.createElement('div');
         fullReply.className = 'director-chat-long-reply';
         fullHeading.textContent = 'Full Director reply';
-        fullText.textContent = message.content;
+        fullText.textContent = visibleText;
         fullReply.append(fullHeading,fullText);
         body.replaceChildren(preview,fullReply);
       }
@@ -1180,7 +1213,14 @@
       }
 
       row.appendChild(label);
-      row.appendChild(body);
+      if (readReceipt) {
+        var receipt = document.createElement('span');
+        receipt.className = 'director-chat-context-receipt';
+        receipt.textContent = '✓ Context supplied';
+        receipt.title = 'Saved Project material supplied with this request. Full response is available in I/O.';
+        row.appendChild(receipt);
+      }
+      if (body.textContent || body.children.length) row.appendChild(body);
       var elapsedMap = currentElapsedMap();
       var metricsMap = currentMetricsMap();
       if (message.role === 'assistant' && Object.prototype.hasOwnProperty.call(elapsedMap, index)) {
@@ -3365,7 +3405,7 @@
       }).then(function (result) {
         if (activeChatMode === 'storyboard') state.lastStudioIoRaw = String(result.text || '');
         var studioResponse = activeChatMode === 'storyboard' ? parseStudioChatResponse(result.text) : null;
-        var assistantText = studioResponse ? studioResponse.reply.replace(/^\s*RECEIVED:[^\r\n]*(?:\r?\n)?/i, '').trim() : String(result.text || '');
+        var assistantText = studioResponse ? studioResponse.reply : String(result.text || '');
         if (activeChatMode === 'storyboard' && state.pendingReadAck) {
           var fieldCount = state.pendingReadAck.length;
           state.pendingReadAck = null;
@@ -3486,7 +3526,7 @@
 
   function studioDirectorOpenIo() {
     var dialog = el('studio-director-io-dialog'), chooser = el('studio-director-io-exchange');
-    var responses = currentMessages().filter(function(m){return m.role === 'assistant' && m.rawResponse;});
+    var responses = currentMessages().filter(function(m){return m.role === 'assistant';});
     if (state.lastStudioIoError && state.lastStudioIoRaw)
       responses.push({content:'Failed response',rawResponse:state.lastStudioIoRaw});
     chooser.replaceChildren();
@@ -3499,14 +3539,14 @@
     var chosenCapture = null;
     function render() {
       var item = responses[Number(chooser.value)];
-      var raw = item ? String(item.rawResponse) : '';
+      var raw = item ? String(item.rawResponse || item.content) : '';
       chosenCapture = null;
       try { chosenCapture = JSON.parse(raw).readiness?.capture || null; }
       catch(error) { chosenCapture = null; }
       el('studio-director-io-review').classList.toggle('hidden', !chosenCapture);
       el('studio-director-io-raw').textContent = raw || 'No model response recorded yet.';
       var parsed;
-      try { parsed = raw ? JSON.stringify(JSON.parse(raw),null,2) : 'No response to parse.'; }
+      try { parsed = item && !item.rawResponse ? raw : raw ? JSON.stringify(JSON.parse(raw),null,2) : 'No response to parse.'; }
       catch(error) { parsed = 'Response could not be parsed: ' + error.message; }
       el('studio-director-io-parsed').textContent = parsed;
     }
@@ -3630,10 +3670,15 @@
     el('studio-scene-draft-close').onclick = function () { el('studio-scene-draft-review').close(); };
     el('studio-scene-draft-apply').onclick = applyStudioSceneDraft;
     el('director-chat-history-toggle').onclick = function () {
-      var button = el('director-chat-history-toggle');
-      button.setAttribute('aria-expanded', button.getAttribute('aria-expanded') === 'true' ? 'false' : 'true');
       renderSessionHistory();
+      el('director-chat-history-toggle').setAttribute('aria-expanded','true');
+      el('director-chat-history-panel').showModal();
     };
+    el('director-chat-history-close').onclick = function () {el('director-chat-history-panel').close();};
+    el('director-chat-history-panel').addEventListener('close',function () {
+      el('director-chat-history-toggle').setAttribute('aria-expanded','false');
+      el('director-chat-history-toggle').focus();
+    });
     send.onclick = sendMessage;
     el('studio-director-inspect').onclick = studioDirectorOpenIo;
     el('studio-director-io-close').onclick = function(){el('studio-director-io-dialog').close();};

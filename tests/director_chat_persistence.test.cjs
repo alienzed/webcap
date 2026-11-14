@@ -65,6 +65,7 @@ test('Saving serializes message snapshots and increments revisions before infere
       } };
     }
   });
+  vm.runInContext(block('  function conversationTitle(messages) {','  function upsertSessionSummary(chat) {'),context);
   const persist = vm.runInContext('(' + block('  function persistSession(mode) {', '  function scheduleSessionSave() {').trim() + ')', context);
   const first = persist('chat');
   state.messages.push({ role: 'assistant', content: 'Done.' });

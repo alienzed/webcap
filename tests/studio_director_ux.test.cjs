@@ -145,18 +145,18 @@ test('ordinary discussion asks for concise new decisions while complete creative
 });
 
 test('compact Director replies keep the exact full text and leave General Chat alone',()=>{
-  const code=part(chat,"      if (state.activeMode === 'storyboard' && message.role === 'assistant' && message.content.length > 1200) {",
+  const code=part(chat,"      if (studioReply && visibleText.length > 1200) {",
     "      if (message.role === 'user' && (message.content.indexOf('[WEBCAP EXPLICIT READ]')");
   const node=()=>({children:[],append(...children){this.children.push(...children);},replaceChildren(...children){this.children=children;}});
   const message={role:'assistant',content:'A useful opening recommendation.\n\n'+('Complete creative details with "quotes" and line breaks.\n').repeat(40)};
   const body=node();
-  const scope=vm.createContext({state:{activeMode:'storyboard'},message,body,document:{createElement:node}});
+  const scope=vm.createContext({studioReply:true,visibleText:message.content,message,body,document:{createElement:node}});
   vm.runInContext(code,scope);
   assert.equal(body.children[0].textContent,'A useful opening recommendation.');
   assert.equal(body.children[1].children[1].textContent,message.content);
   const general=node();
   scope.body=general;
-  scope.state.activeMode='chat';
+  scope.studioReply=false;
   vm.runInContext(code,scope);
   assert.equal(general.children.length,0);
 });

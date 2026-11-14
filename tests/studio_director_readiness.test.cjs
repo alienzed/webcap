@@ -234,7 +234,7 @@ test('complete Studio model output is inspectable and its original capture reope
     window:{studioDirectorWorkbench:{reviewGeneratedCapture:result=>calls.push(result)}},
     Object,JSON,String
   });
-  vm.runInContext(part('  function placeStudioSuggestion(node) {','  function renderStudioOperations() {'),context);
+  vm.runInContext(part('  function studioReplyText(content) {','  function renderStudioOperations() {'),context);
   vm.runInContext('renderMessages()',context);
   const details=created.find(n=>n.className==='director-chat-full-response');
   const action=created.find(n=>n.className==='director-chat-review-draft');

@@ -7,6 +7,17 @@ import pytest
 from tool.server import config, director_chat_history as history
 
 
+def test_history_summary_exposes_project_label_without_saved_creative_material():
+    chat = {"id": "chat-one", "mode": "storyboard", "title": "A deliberate title",
+            "createdAt": "then", "updatedAt": "now", "revision": 1,
+            "storyAccess": {"storyId": "project-one", "label": "Last Light"},
+            "messages": [{"role": "user", "content": "Creative material"}]}
+    summary = history._summary(chat)
+    assert summary["projectTitle"] == "Last Light"
+    assert summary["title"] == "A deliberate title"
+    assert "messages" not in summary
+
+
 @pytest.fixture
 def sessions(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "app_state_root", lambda: tmp_path / "app-data" / "state")

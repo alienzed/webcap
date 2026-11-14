@@ -1881,6 +1881,9 @@
                         </div>
                     </header>
                     <div id="storyboard-library-list" class="storyboard-library-list"></div>
+                    <footer class="storyboard-library-footer">
+                        <button id="studio-blocks-open" type="button" class="review-captions-btn" title="Reusable Studio Ideas and Guidance" aria-label="Open Blocks"><span aria-hidden="true">▧</span><span class="storyboard-blocks-label">Blocks</span></button>
+                    </footer>
                 </aside>
                 <section class="storyboard-editor" aria-label="Project editor">
                     <aside id="storyboard-director-activity" class="storyboard-director-activity hidden" aria-live="polite">
@@ -1910,6 +1913,7 @@
                                 <div class="storyboard-story-panel-heading">
                                     <strong>Project Overview</strong>
                                     <div class="storyboard-story-heading-actions">
+                                        <button id="storyboard-open-director" type="button" class="review-captions-btn" onclick="openStoryboardAssistant()" title="Open the Projects Director work surface">Director</button>
                                         <div class="storyboard-story-action-wrap">
                                             <button id="storyboard-first-cut-btn" type="button" class="storyboard-primary-btn storyboard-director-action" title="Take this Project from its current concept through Director refinement and queue one first Take per Scene.">First Cut</button>
                                         <div id="storyboard-story-action-card" class="storyboard-story-action-card hidden" aria-live="polite">
@@ -2069,8 +2073,6 @@
                                 <div class="storyboard-scenes-heading-actions">
                                     <button id="storyboard-scenes-focus-btn" type="button" class="review-captions-btn hidden">← Scenes</button>
                                     <button id="storyboard-scenes-sequence-btn" type="button" class="review-captions-btn">Sequence</button>
-                                    <button id="storyboard-open-director" type="button" class="review-captions-btn" onclick="openStoryboardAssistant()" title="Open the Projects Director work surface">Director</button>
-                                    <button id="studio-blocks-open" type="button" class="review-captions-btn" title="Manage reusable Studio Ideas and Guidance">Blocks</button>
 
                                 </div>
                             </div>
@@ -2103,10 +2105,10 @@
                         <button id="director-chat-close" type="button" class="director-chat-close" aria-label="Close Assistant">×</button>
                     </div>
                 </header>
-                <section id="director-chat-history-panel" class="director-chat-history-panel hidden" aria-label="Saved Assistant conversations">
-                    <div class="director-chat-history-heading">Saved conversations</div>
+                <dialog id="director-chat-history-panel" class="director-chat-history-panel" aria-labelledby="director-chat-history-title">
+                    <header class="director-chat-history-heading"><h2 id="director-chat-history-title">Conversations</h2><button id="director-chat-history-close" type="button" class="review-captions-btn">Close</button></header>
                     <div id="director-chat-history-list" class="director-chat-history-list"></div>
-                </section>
+                </dialog>
                 <div class="director-chat-layout">
                     <div class="director-chat-conversation">
                 <div id="director-chat-mode-row" class="director-chat-mode-row hidden" aria-label="Assistant mode">

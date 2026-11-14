@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const path = require('node:path');
 const source = fs.readFileSync(path.join(__dirname,'../tool/js/director_chat.js'),'utf8');
-const start = source.indexOf('  function placeStudioSuggestion(node) {');
+const start = source.indexOf('  function studioReplyText(content) {');
 const end = source.indexOf('  function renderStudioOperations() {',start);
 
 function harness() {
@@ -55,4 +55,20 @@ test('stale actions and General Chat do not show a review button',()=>{
   assert.equal(h.suggestion.classList.contains('hidden'),true);
   h.suggestion.children=[h.button];h.scope.state.activeMode='chat';h.scope.renderMessages();
   assert.equal(h.suggestion.classList.contains('hidden'),true);
+});
+
+test('Read receipts become a factual badge without changing stored replies or creative text',()=>{
+  const h=harness();
+  const raw='RECEIVED: project.title, scene:scene-a:prompt\n\nKeep the full creative answer.';
+  h.scope.messages=[{role:'user',content:'Read the selected saved context and acknowledge receipt.\n[WEBCAP EXPLICIT READ]\n{}\n[END WEBCAP READ]'},
+    {role:'assistant',content:raw}];
+  h.scope.renderMessages();
+  const row=h.host.lastElementChild;
+  const badge=row.children.find(n=>n.className==='director-chat-context-receipt');
+  const body=row.children.find(n=>n.className==='director-chat-message-body');
+  assert.equal(badge.textContent,'✓ Context supplied');
+  assert.equal(body.textContent,'Keep the full creative answer.');
+  assert.equal(h.scope.messages[1].content,raw,'original content remains intact');
+  assert.equal(h.scope.studioReplyText('RECEIVED: project.title. Keep this same-line answer.'),'Keep this same-line answer.');
+  assert.equal(h.scope.studioReplyText('Received: a letter from Mara.'),'Received: a letter from Mara.');
 });

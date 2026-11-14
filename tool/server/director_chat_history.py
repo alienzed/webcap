@@ -243,7 +243,8 @@ def _validate_workshop(workshop):
 
 
 def _summary(chat):
-    return {key: chat[key] for key in ("id", "mode", "title", "createdAt", "updatedAt", "revision")}
+    return {**{key: chat[key] for key in ("id", "mode", "title", "createdAt", "updatedAt", "revision")},
+            "projectTitle": (chat.get("storyAccess") or {}).get("label", "")}
 
 
 def list_chats():

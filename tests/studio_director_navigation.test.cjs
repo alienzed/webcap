@@ -111,8 +111,8 @@ test('Studio chat supplies the selected saved Scene in the actual model request,
   assert.match(outgoing[0].content,/scene:a:durationSeconds","value":12/);
   assert.doesNotMatch(outgoing[0].content,/Dormant old Intent/);
   assert.deepEqual(h.requests,[
-    '/fs/studio/director/guidance?targetModel=minimax_h3',
-    '/fs/storyboard?story=p1'
+    '/fs/storyboard?story=p1',
+    '/fs/studio/director/guidance?targetModel=minimax_h3'
   ]);
   assert.equal(h.stories.p1.scenes.a.prompt,'Mara walks toward the rover.',
     'context lookup must not mutate saved Scene data');
@@ -366,4 +366,167 @@ test('global Chat navigation never overwrites the Studio surface choice',()=>{
   h.rail();
   assert.equal(h.state.activeMode,'storyboard');
   assert.deepEqual(h.requests,[]);
+});
+
+
+test('Project Apply continuation owns subsequent context despite older shell Scene',async()=>{
+  const code=fs.readFileSync(path.join(__dirname,'../tool/js/director_chat.js'),'utf8');
+  const part=(a,b)=>{
+    const i=code.indexOf(a),j=code.indexOf(b,i+a.length);
+    assert.ok(i>=0&&j>i,'Missing Director function '+a);
+    return code.slice(i,j);
+  };
+  const h=actualSceneRequestFixture(),a=h.stories.p1;
+  const b={id:'p2',title:'Rainy Bookshop',
+    concept:'The bookseller leaves a warm window glowing.',style:'Blue rain and amber light.',
+    invariants:[{kind:'character',title:'Bookseller',text:'Burgundy cardigan'},
+      {kind:'location',title:'Bookshop',text:'Green front door'}],
+    sceneOrder:[],scenes:{}};
+  h.state.studioStoryAccess={storyId:a.id,label:a.title};
+  h.state.sceneRead={projectId:a.id,sceneId:'a',sceneNumber:1,label:'Scene 1'};
+  h.state.studioProjectProposal={title:b.title};
+  h.state.pending=false;h.state.activeMode='storyboard';
+  const badge={hidden:false,textContent:'',title:'',classList:{
+    toggle(name,hidden){if(name==='hidden')badge.hidden=hidden;}}};
+  const nodes={
+    'studio-project-title':{value:b.title},
+    'studio-project-concept':{value:b.concept},
+    'studio-project-style':{value:b.style},
+    'studio-project-invariants':{querySelectorAll:()=>[]},
+    'studio-project-extra-scenes':{querySelectorAll:()=>[]},
+    'studio-project-include-scene':{checked:false},
+    'studio-project-continue':{checked:true},
+    'studio-project-error':{textContent:''},
+    'studio-project-review':{close(){}},
+    'director-studio-access-status':{textContent:''},
+    'director-studio-access-data':{classList:{add(){}}},
+    'director-chat-scene-context':badge
+  };
+  h.scope.el=id=>{assert.ok(nodes[id],'Unexpected UI element '+id);return nodes[id];};
+  let creates=0,unexpectedPosts=0,done;
+  const refreshed=new Promise(resolve=>{done=resolve;});
+  h.scope.requestJson=async(url,options)=>{
+    h.requests.push(url);
+    if(url==='/fs/studio/director/project-create'){
+      creates++;
+      assert.equal(options.method,'POST');
+      assert.equal(JSON.parse(options.body).proposal.title,b.title);
+      h.stories[b.id]=b;
+      return {story:b};
+    }
+    if(options&&options.method==='POST')unexpectedPosts++;
+    if(url.startsWith('/fs/studio/director/guidance'))
+      return {system:'Director guidance',actions:[],promptContract:'H3'};
+    if(url.startsWith('/fs/storyboard?story='))
+      return {story:h.stories[decodeURIComponent(url.split('=')[1])]};
+    throw new Error('Unexpected request '+url);
+  };
+  h.scope.syncControls=()=>{};
+  h.scope.syncModeUi=()=>{};
+  h.scope.recordStudioOperation=()=>{};
+  h.scope.studioActionStatus=()=>{};
+  h.scope.writeInitialProjectScenes=async(_story,briefs)=>{
+    assert.equal(_story.id,b.id);assert.equal(briefs.length,0);
+    return {saved:[],failed:[],notAttempted:[],reportingErrors:[]};
+  };
+  h.scope.window.studioDirectorBridge={recordApplied:async()=>{}};
+  h.scope.window.reportConsoleError=(_label,error)=>assert.fail(error.message);
+  h.scope.window.refreshStudioDirectorStoryIfOpen=async id=>{
+    assert.equal(id,b.id);done();
+  };
+  vm.runInContext(part('  function applyStudioProject() {',
+    '  function parseStudioBriefDraft(raw) {'),h.scope);
+  h.scope.applyStudioProject();
+  await refreshed;
+  assert.equal(creates,1);
+  assert.equal(h.state.studioStoryAccess.storyId,b.id);
+  assert.equal(h.state.sceneRead,null);
+  assert.equal(h.scope.window.getStudioDirectorNavigation().projectId,a.id);
+  assert.equal(h.scope.studioDirectorSelectedScene(),null);
+
+  // Run the actual Scene badge selection code without unrelated drawer UI.
+  vm.runInContext(part('  function syncModeUi() {',
+    "    var row = el('director-chat-mode-row');")+'  }',h.scope);
+  h.scope.syncModeUi();
+  assert.equal(badge.hidden,true);
+  const message=[{role:'user',content:'What are this Project’s saved concept and invariants?'}];
+  const ask=()=>h.scope.studioDirectorChatRequestMessages(
+    message,h.scope.studioDirectorSelectedScene(),
+    h.scope.window.getStudioDirectorNavigation());
+  const outgoing=await ask(),system=outgoing[0].content;
+  assert.equal(outgoing[1].content,message[0].content);
+  assert.ok(system.includes('CURRENT SAVED PROJECT OVERVIEW'));
+  assert.ok(system.includes('"projectId":"p2","projectTitle":"Rainy Bookshop","sceneId":"","sceneNumber":0,"sceneOrder":[]'));
+  assert.ok(system.includes(b.concept)&&system.includes('Burgundy cardigan')&&system.includes('Green front door'));
+  assert.ok(!system.includes('CURRENT SAVED SCENE'));
+  assert.ok(!system.includes('Mara walks toward the rover'));
+  assert.ok(!system.includes('Moon crossing'));
+  b.concept='The bookseller greets a late visitor.';
+  const updated=await ask();
+  assert.ok(updated[0].content.includes(b.concept));
+  assert.ok(!updated[0].content.includes('leaves a warm window glowing'));
+  assert.equal(creates,1);assert.equal(unexpectedPosts,0);
+
+  // Project writes without an explicit target snapshot use B, not shell A.
+  const prepared=await h.scope.studioDirectorRequestMessages(
+    [{role:'user',content:'Revise this Project.'}],false,true);
+  assert.ok(prepared[0].content.includes('"projectId":"p2","projectTitle":"Rainy Bookshop"'));
+  assert.ok(!prepared[0].content.includes('"sceneId":"a"'));
+  // A launched Scene write may still supply its frozen A destination explicitly.
+  const aNavigation=h.scope.window.getStudioDirectorNavigation();
+  const explicit=await h.scope.studioDirectorRequestMessages(
+    [{role:'user',content:'Revise Scene 1 in A.'}],true,true,aNavigation);
+  assert.ok(explicit[0].content.includes('"projectId":"p1"'));
+
+  // The explicit Scene entry point uses the existing Project destination method.
+  h.scope.scheduleSessionSave=()=>{};
+  const entry=part('    selectWriteProject: function (storyId, storyTitle) {',
+    '    prepareWrite: function (kind, storyId, storyTitle, options) {')
+    .trim().replace(/,$/,'');
+  vm.runInContext('window.studioDirectorBridge={'+entry+'};',h.scope);
+  h.scope.window.studioDirectorBridge.selectWriteProject(a.id,a.title);
+  h.state.sceneRead={projectId:a.id,sceneId:'a',sceneNumber:1,label:'Scene 1'};
+  h.scope.syncModeUi();
+  assert.equal(badge.hidden,false);
+  const scene=h.scope.studioDirectorSelectedScene();
+  assert.equal(scene.sceneId,'a');
+  const back=await h.scope.studioDirectorChatRequestMessages(message,scene,aNavigation);
+  assert.ok(back[0].content.includes('CURRENT SAVED SCENE'));
+  assert.ok(back[0].content.includes('Mara walks toward the rover'));
+  assert.ok(!back[0].content.includes('Burgundy cardigan'));
+  assert.equal(creates,1);assert.equal(unexpectedPosts,0);
+});
+
+test('Project creation label is truthful for zero Scenes',()=>{
+  const html=fs.readFileSync(path.join(__dirname,'../tool/tool.html'),'utf8');
+  assert.ok(html.includes('id="studio-project-create" type="button">Create Project</button>'));
+});
+
+
+test('ordinary Director conversation preserves prepared Scene reviews without mutating saved Projects',()=>{
+  const chat=fs.readFileSync(path.join(__dirname,'../tool/js/director_chat.js'),'utf8');
+  const start=chat.indexOf("    if (activeChatMode === 'storyboard') {\n      // An explicit message starts work");
+  const end=chat.indexOf('    // Freeze the Project destination alongside the user',start);
+  assert.ok(start>=0&&end>start,'Director conversation transition section exists');
+  const scene={storyId:'p1',prompt:'Complete existing prompt'};
+  const scenes={storyId:'p1',drafts:[{title:'First',prompt:'Complete first prompt'}]};
+  const project={storyId:'p1',draft:{concept:'A complete concept'}};
+  const state={studioStoryAccess:{storyId:'p1',label:'Moon crossing'},
+    storyboardAttachments:{},sceneRead:{projectId:'p1',sceneId:'a'},
+    studioSceneProposal:scene,studioScenesProposal:scenes,studioBriefProposal:project,
+    storyGuidelineProposal:{text:'Temporary'},workshopProposal:{text:'Temporary'}};
+  const status={textContent:'prior message'};
+  const ctx=vm.createContext({state,activeChatMode:'storyboard',
+    studioAttachedStoryId:()=>state.studioStoryAccess.storyId,
+    window:{getStudioDirectorNavigation:()=>({projectId:'p1',projectTitle:'Moon crossing'})},
+    el:()=>status});
+  vm.runInContext(chat.slice(start,end),ctx);
+  assert.strictEqual(state.studioSceneProposal,scene);
+  assert.strictEqual(state.studioScenesProposal,scenes);
+  assert.strictEqual(state.studioBriefProposal,project);
+  assert.equal(state.storyGuidelineProposal,null);
+  assert.equal(state.workshopProposal,null);
+  assert.equal(status.textContent,'');
+  assert.equal(state.sceneRead.sceneId,'a');
+  assert.equal(state.studioStoryAccess.storyId,'p1');
 });

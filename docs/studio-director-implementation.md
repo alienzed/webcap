@@ -1,8 +1,14 @@
 # Studio Director — implementation and acceptance
 
-Current code audit: `747a8ce9`, 2026-11-14. Requirements live in
-[studio-director-contract.md](studio-director-contract.md). This file records the
-implementation work and evidence; it does not add capabilities or override policy.
+Original gap audit: `747a8ce9`, 2026-11-14. Requirements live in
+[studio-director-contract.md](studio-director-contract.md). This file records
+historical implementation gaps and acceptance evidence; it does not override the
+contract or describe every item below as outstanding.
+
+Current phase: focused code completion integrated through the bounded Scene
+write and reviewed Project paths. The Director context fix and retained draft
+reviews are prepared for separate browser/model acceptance. Passing code tests
+does not prove model behavior or UX acceptance.
 
 ## Current position
 

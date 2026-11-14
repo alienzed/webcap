@@ -128,6 +128,18 @@ test('writer ignores unrequested optional title and duration fields without chan
   assert.deepEqual(Object.keys(h.events.find(row=>row[0]==='save')[1].changes),['prompt']);
 });
 
+test('writer saves a complete prompt while ignoring unrequested model metadata and invented IDs',async()=>{
+  const h=sceneFixture('{"prompt":"The ending is quiet.","rationale":"Preserves the arc","sceneId":"invented"}');
+  await h.window.studioDirectorBridge.writeSelectedScene(h.launch);
+  const saved=h.events.find(row=>row[0]==='save')[1];
+  assert.equal(saved.storyId,'p1');
+  assert.equal(saved.sceneId,'s1');
+  assert.deepEqual(Object.keys(saved.changes),['prompt']);
+  assert.equal(h.saved.scenes.s1.prompt,'The ending is quiet.');
+  assert.ok(h.state.lastStudioIoRaw.includes('invented'),'full response remains inspectable');
+  assert.deepEqual(h.errors,[]);
+});
+
 test('requested title and duration changes are scoped into the same Scene save',async()=>{
   const h=sceneFixture('{"prompt":"The last line is whispered.","title":"Quiet ending","durationSeconds":14}');
   await h.window.studioDirectorBridge.writeSelectedScene({
@@ -143,8 +155,7 @@ test('requested title and duration changes are scoped into the same Scene save',
 });
 
 test('invalid or incomplete model output cannot initiate any save or report success',async()=>{
-  for(const raw of ['{"summary":"A quiet ending"}','{"prompt":"New","unknown":"Unrequested"}',
-    '{"prompt":"New","unknown":"Not a Scene field"}', '{"prompt":""}', 'not JSON']) {
+  for(const raw of ['{"summary":"A quiet ending"}', '{"prompt":""}', 'not JSON']) {
     const h=sceneFixture(raw);
     await assert.rejects(h.window.studioDirectorBridge.writeSelectedScene(h.launch));
     assert.equal(h.events.filter(row=>row[0]==='save').length,0,raw);

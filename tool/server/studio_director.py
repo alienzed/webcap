@@ -57,14 +57,12 @@ _H3_STUDIO_CORE = (
     "overall structure and how Scenes relate. Project Visual / atmosphere (story.style) "
     "sets the shared look, mood and camera language. Project Invariants (story.invariants) "
     "record only fixed identities or facts that must survive across relevant Scenes. "
-    "Scene summary (scene.summary) is a planning outline until an H3 Prompt exists. "
-    "Once an H3 Prompt (scene.prompt) is authored, that complete saved prompt is the "
-    "authoritative Scene description, including its Scene Overview when present. "
-    "Treat older saved summaries as historical outlines, not competing instructions. "
+    "A Scene's full H3 Prompt (scene.prompt) is its creative content; its Title identifies it, "
+    "and duration is a generation setting. Older saved summaries are dormant legacy data. "
     "MH3 Take generation uses the saved H3 Prompt directly. "
     "Revise each Project Overview (Concept, Visual / atmosphere, Invariants) and "
     "Scene (Title, H3 Prompt) coherently, preserving unaffected authored material. "
-    "For planning-only Scenes, develop the outline before authoring the prompt. "
+    "When writing a Scene, author its complete usable H3 Prompt. "
     "Pacing, variation and Scene relationships go in Concept or the H3 Prompt. "
     "FIELD DEVELOPMENT: Based on discussed or explicitly Read material, fill consequential gaps: "
     "distinctive stable character traits, recognizable location layouts, and purposeful Scene "
@@ -115,7 +113,7 @@ def chat_response_schema():
     captures = []
     for fields in (
         {"field": {"type": "string", "enum": ["title", "concept", "style"]}},
-        {"field": {"type": "string", "enum": ["summary", "prompt"]},
+        {"field": {"type": "string", "enum": ["prompt"]},
          "sceneId": {"type": "string", "minLength": 1, "maxLength": 160}},
         {"field": {"type": "string", "enum": ["scene"]},
          "title": {"type": "string", "maxLength": 240}},
@@ -134,7 +132,7 @@ def chat_response_schema():
     readiness = []
     for operations, fields in (
         (["project"], ["title", "concept", "style", "invariants"]),
-        (["scenes"], ["title", "summary", "prompt"]),
+        (["scenes"], ["title", "prompt"]),
         (["", "new-project"], []),
     ):
         properties = {
@@ -211,7 +209,7 @@ def read_story_scope(story, field, scene_id=""):
     elif field == "index":
         data = [
             {"id": sid, "position": position, "title": story["scenes"][sid].get("title", ""),
-             "summary": story["scenes"][sid].get("summary", "")}
+             "prompt": story["scenes"][sid].get("prompt", "")}
             for position, sid in enumerate(story.get("sceneOrder", []), 1)
         ]
     elif field in {"scene", "prompt", "takes"}:
@@ -219,7 +217,7 @@ def read_story_scope(story, field, scene_id=""):
             raise ValueError("Select an existing Scene in the granted Story.")
         scene = story["scenes"][scene_id]
         if field == "scene":
-            data = {key: scene.get(key) for key in ("id", "title", "summary", "entryState", "exitState", "notes")}
+            data = {key: scene.get(key) for key in ("id", "title", "prompt", "entryState", "exitState", "notes")}
         elif field == "prompt":
             data = {"id": scene_id, "prompt": scene.get("prompt", ""), "durationSeconds": scene.get("durationSeconds")}
         else:

@@ -308,6 +308,62 @@ test('editor input and LoRA actions fork on actual changes, not search or assist
   assert.equal(stopped,true,'cancel stops handlers that would edit the frozen Take');
 });
 
+test('forked Working prompt survives capability refresh when returning to Generations', async()=>{
+  const f=fixture(),{api,state,element,context}=f;
+  api.loadGenerateTakeIntoEditor(take());
+  element('generate-prompt').value='A lasting Working edit';
+  api.noteGenerateEditorEdit(false);
+  state.formInitialized=true;
+  const begin=source.indexOf('  function refreshCapabilities() {');
+  const end=source.indexOf('  function resetGeneratePromptScratch() {',begin);
+  assert.ok(begin>0 && end>begin);
+  context.requestJson=async()=>({models:state.models,unavailableModels:[],available:true});
+  context.populateModelSelector=()=>{
+    element('generate-prompt').value='Model default after re-entry';
+    element('generate-duration').value='3';
+  };
+  context.applyGenerateEditorSnapshot=api.applyGenerateEditorSnapshot;
+  context.setStatus=()=>{};
+  context.reportError=error=>{throw error;};
+  vm.runInContext(source.slice(begin,end)+'\nthis.refreshCapabilities = refreshCapabilities;',context);
+  await context.refreshCapabilities();
+  assert.equal(state.editorMode,'working');
+  assert.equal(element('generate-prompt').value,'A lasting Working edit');
+  assert.equal(element('generate-seed').value,'-1');
+  assert.equal(state.workingDraftDirty,true);
+  api.switchGenerateEditorMode('loaded');
+  assert.equal(element('generate-prompt').value,'Loaded prompt a');
+  assert.equal(element('generate-seed').value,'101');
+});
+
+test('a successfully queued Working generation clears the replacement warning',async()=>{
+  const f=fixture(),{api,state,element,context,confirmations}=f;
+  element('generate-prompt').value='Queued Working draft';
+  api.noteGenerateEditorEdit(false);
+  const begin=source.indexOf('  function runGenerate() {');
+  const end=source.indexOf('  function frozenSweepSettings()',begin);
+  context.uploadReferenceFiles=async()=>({});
+  context.postJson=async()=>({job:{jobId:'queued',status:'queued'}});
+  context.captureReferenceFiles=()=>({});
+  context.enabledFixedLoras=id=>state.lorasByModel[id] || [];
+  context.collectSettings=()=>({seed:element('generate-seed').value});
+  context.syncPromptAssistantDependencies=()=>{};
+  context.trackGenerateJob=()=>{};
+  context.syncGenerationPreviewCard=()=>{};
+  context.reportConsoleInfo=()=>{};
+  context.reportError=error=>{throw error;};
+  context.setStatus=()=>{};
+  vm.runInContext(source.slice(begin,end)+'\nthis.runGenerate = runGenerate;',context);
+  await context.runGenerate();
+  assert.equal(state.workingDraftDirty,false);
+  api.loadGenerateTakeIntoEditor(take());
+  element('generate-duration').value='6';
+  api.noteGenerateEditorEdit(false);
+  assert.equal(confirmations.length,0);
+  assert.equal(state.editorMode,'working');
+  assert.equal(element('generate-duration').value,'6');
+});
+
 test('Loaded is unavailable until a Take is selected and mode changes are explicit',()=>{
   const f=fixture(),{api,element}=f;
   assert.equal(element('generate-editor-loaded').disabled,true);

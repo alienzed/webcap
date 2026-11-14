@@ -57,7 +57,7 @@ _H3_STUDIO_CORE = (
     "overall structure and how Scenes relate. Project Visual / atmosphere (story.style) "
     "sets the shared look, mood and camera language. Project Invariants (story.invariants) "
     "record only fixed identities or facts that must survive across relevant Scenes. "
-    "Scene summary is a planning outline used before a complete generation prompt exists. "
+    "Scene summary (scene.summary) is a planning outline used before a complete generation prompt exists. "
     "Once an H3 Prompt (scene.prompt) is authored, that complete saved prompt is the "
     "authoritative Scene description, including its Scene Overview when present. "
     "Treat older saved summaries as historical outlines, not competing instructions. "

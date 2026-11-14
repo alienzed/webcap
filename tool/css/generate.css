@@ -25,12 +25,11 @@
 
 .generate-toolbar {
   grid-column: 1 / -1;
-  min-height: 70px;
+  min-height: 40px;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   align-items: center;
-  gap: 16px;
-  padding: 8px 16px;
+  padding: 5px 16px;
   border-bottom: 1px solid var(--border);
   background: var(--panel);
 }
@@ -51,6 +50,8 @@
   border-radius: 8px;
   background: var(--panel-soft);
 }
+
+.generate-view-toggle.hidden { display: none; }
 
 .generate-view-toggle .review-captions-btn {
   width: auto;
@@ -368,15 +369,17 @@
 
 .generate-takes-heading .review-captions-btn {
   width: auto;
-  min-height: 26px;
-  padding: 3px 7px;
-  font-size: 12px;
+  min-height: 30px;
+  padding: 4px 7px;
+  font-size: 14px;
   white-space: nowrap;
 }
 
 .generate-takes-actions {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
   gap: 6px;
 }
 
@@ -1299,6 +1302,7 @@
 .generate-editor-tabs button {font:inherit;font-size:15px;min-height:36px;padding:6px 12px;border:0;border-radius:6px;background:transparent;color:var(--muted);cursor:pointer}
 .generate-editor-tabs button.active {background:var(--accent);color:var(--bg);font-weight:700}
 .generate-editor-tabs button:disabled {opacity:.4;cursor:default}
+.generate-reset-working { min-height: 33px; width: auto; padding: 5px 9px; font-size: 14px; white-space: nowrap; }
 #generate-editor-use-working {min-height:36px;font-size:14px;white-space:nowrap}
 .generate-editor-loaded-caption {margin:0 6px 12px;color:var(--muted);font-size:13px;line-height:1.4;overflow-wrap:anywhere}
 

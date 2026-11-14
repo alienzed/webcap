@@ -2432,6 +2432,10 @@
       'A tentative Scene. No prompt, Takes or generation job will be created.';
     el('studio-scene-draft-title').value = proposal.title;
     el('studio-scene-draft-summary').value = proposal.summary;
+    var includesPrompt = Object.prototype.hasOwnProperty.call(proposal, 'prompt');
+    el('studio-scene-draft-prompt-row').classList.toggle('hidden', !includesPrompt);
+    el('studio-scene-draft-prompt').value = includesPrompt ? proposal.prompt : '';
+    el('studio-scene-draft-apply').textContent = includesPrompt ? 'Create Scene' : 'Create tentative Scene';
     el('studio-scene-draft-error').textContent = '';
     var placement = el('studio-scene-draft-placement');
     placement.replaceChildren();
@@ -2558,6 +2562,9 @@
     if (!proposal || state.pending) return;
     var title = el('studio-scene-draft-title').value.trim();
     var summary = el('studio-scene-draft-summary').value.trim();
+    var reviewedScene = {title: title, summary: summary};
+    if (Object.prototype.hasOwnProperty.call(proposal, 'prompt'))
+      reviewedScene.prompt = el('studio-scene-draft-prompt').value;
     var placementValue = el('studio-scene-draft-placement').value.split('|');
     var placement = placementValue[0];
     var relativeSceneId = placementValue[1] || '';
@@ -2579,7 +2586,7 @@
         body: JSON.stringify({
           storyId: proposal.storyId,
           expectedUpdatedAt: proposal.expectedUpdatedAt,
-          scene: { title: title, summary: summary },
+          scene: reviewedScene,
           placement: placement,
           relativeSceneId: relativeSceneId
         })
@@ -2592,13 +2599,15 @@
       state.studioSceneProposal = null;
       el('studio-scene-draft-review').close();
       var index = payload.story.sceneOrder.indexOf(created.id) + 1;
-      var receipt = 'Created tentative Scene ' + index + (title ? ' · ' + title : '') +
+      var receipt = 'Created Scene ' + index + (title ? ' · ' + title : '') +
         ' in ' + (proposal.storyTitle || proposal.storyId) +
-        '. Its intent is saved; the production prompt and Takes remain empty.';
+        (created.prompt ? '. Intent and H3 Prompt saved; Takes remain empty.'
+          : '. Intent saved; the H3 Prompt and Takes remain empty.');
       recordStudioOperation('scene.create', receipt, proposal.storyId, [created.id]);
       studioActionStatus(receipt, false);
       return window.studioDirectorBridge.recordApplied('scene.create',payload.story,{
-        scenes:[{id:created.id,title:created.title,summary:created.summary}]
+        scenes:[{id:created.id,title:created.title,summary:created.summary,
+          ...(created.prompt ? {prompt:created.prompt} : {})}]
       }).catch(function (error) {
         studioActionStatus(receipt + ' Conversation receipt could not be saved: ' + String(error.message || error), true);
       }).then(function () {
@@ -2875,9 +2884,9 @@
         'writeFields names affected fields; Scene numbers are one-based. Use bare Scene IDs from navigation.sceneOrder. ' +
         'Default to the current Project, respecting an explicit author-selected destination. Assess only supplied material, with at most two useful checks.\n' +
         'CAPTURE: Use null for discussion, questions, outlines and work still to be drafted. ' +
-        'When reply contains a complete existing Scene prompt, set capture.field="prompt", capture.sceneId to its saved ID, ' +
-        'and capture.content to the exact full prompt also present in reply. This enables Review Scene without another LLM call. ' +
-        'For other complete fields use the matching capture schema. A new tentative Scene uses field="scene", title and its observable Intent. ' +
+        'When reply contains an authored prompt for an existing Scene, use capture.field="prompt" and its saved sceneId to offer Review Scene without another LLM call. ' +
+        'For other complete fields use the matching capture schema. A new Scene uses field="scene", title and content as its Intent; ' +
+        'also include prompt when a full H3 Prompt was authored in conversation. An Intent-only Scene is still a useful draft. ' +
         'For an Invariant use its kind/title, with beforeKind/beforeTitle for an exact known edit.\n';
       return outbound;
     });
@@ -3414,10 +3423,8 @@
         }
         if (studioResponse) {
           try {
-            var capture = studioResponse.readiness && studioResponse.readiness.capture;
-            if (capture && capture.field === 'prompt' &&
-                (typeof capture.content !== 'string' || !assistantText.includes(capture.content)))
-              throw new Error('Director prompt review must contain the complete prompt supplied in the reply.\nRaw Director response:\n' + result.text);
+            // Conversation stays useful even when a suggested capture and visible reply differ.
+            // Every capture still requires editable human Review before Apply.
             if (!window.studioDirectorWorkbench.updateReadiness(studioResponse.readiness))
               throw new Error('Director readiness did not match the expected contract.\nRaw structured response:\n' + result.text);
             // Assessment is metadata, not another user-visible success card.
@@ -4032,7 +4039,8 @@
           storyId:storyId, storyTitle:story.title, expectedUpdatedAt:story.updatedAt,
           sceneOrder:(story.sceneOrder || []).slice(), scenes:story.scenes,
           title:capture.title, summary:capture.content,
-          rationale:'Director developed this Scene Intent in conversation. Select a position and review.',
+          ...(typeof capture.prompt === 'string' ? {prompt:capture.prompt} : {}),
+          rationale:'Director developed this Scene in conversation. Review the fields and position before saving.',
           placement:'end'
         };
         showStudioSceneDraftReview();

@@ -118,7 +118,7 @@ test('new-scene suggestion is a review launch, not a direct save', () => {
     writeActionLabel:()=>'',openRecommendedWrite(){},
     status(){},activeTarget:()=>({storyId:'p1'})
   });
-  const part=slice(workbench,'  function renderReadiness(list) {','  function setReadinessFreshness(stale) {');
+  const part=slice(workbench,'  function renderReadiness(list) {','  window.studioDirectorWorkbench = {');
   // Only the suggestion rendering portion is relevant; no DOM review UI needed.
   const body=part.slice(0,part.indexOf('    window.studioDirectorBridge.placeSuggestedAction(actions);'));
   vm.runInContext(body+'  }\n',scope);

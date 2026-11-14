@@ -34,3 +34,13 @@ test('the first explicit Studio message retains the Project destination without 
     assert.deepEqual(Object.keys(state.studioStoryAccess).sort(),['label','storyId']);
   }
 });
+
+test('Director binds only after classic scripts have registered Studio navigation',()=>{
+  const html=fs.readFileSync(path.join(__dirname,'../tool/tool.html'),'utf8');
+  const chat=fs.readFileSync(path.join(__dirname,'../tool/js/director_chat.js'),'utf8');
+  assert.ok(html.indexOf('/static/js/director_chat.js') < html.indexOf('/static/js/storyboard.js'),
+    'Director currently loads before the Studio navigation owner');
+  assert.match(chat,/if \(document\.readyState === 'loading'\) document\.addEventListener\('DOMContentLoaded', bind\)/);
+  assert.match(chat,/else bind\(\)/);
+  assert.match(source,/window\.getStudioDirectorNavigation = getStudioDirectorNavigation;/);
+});

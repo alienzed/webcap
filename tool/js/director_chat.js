@@ -4175,5 +4175,8 @@
     if (target && target.jobId) state.jobId = String(target.jobId);
     setOpen(true);
   };
-  bind();
+  // Studio's navigation API is exported by storyboard.js later in tool.html.
+  // Bind after classic scripts finish loading, keeping missing APIs loud errors.
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bind);
+  else bind();
 })();

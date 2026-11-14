@@ -225,7 +225,7 @@ def test_studio_chat_schema_constrains_recommendations_to_the_selected_operation
     variants = schema["properties"]["readiness"]["anyOf"]
     for variant in variants:
         assert variant["additionalProperties"] is False
-        assert set(variant["required"]) == {"checks", "readHints", "writeHint", "writeFields", "sceneId", "sceneNumber", "capture"}
+        assert set(variant["required"]) == {"checks", "readHints", "writeHint", "writeInstruction", "writeFields", "sceneId", "sceneNumber", "capture"}
         fields = variant["properties"]["writeFields"]
         for operation in variant["properties"]["writeHint"]["enum"]:
             if operation == "project":
@@ -281,7 +281,7 @@ def test_scene_write_instruction_is_structured_and_survives_conversation_storage
         field = variant["properties"]["writeInstruction"]
         assert field["type"] == "string"
         assert field["maxLength"] == 3000
-        assert "writeInstruction" not in variant["required"]
+        assert "writeInstruction" in variant["required"]
 
     original = {"checks": [], "readHints": [], "writeHint": "scenes",
                 "writeFields": ["prompt"], "sceneId": "real-scene", "sceneNumber": 1,

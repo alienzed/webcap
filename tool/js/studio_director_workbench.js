@@ -1085,7 +1085,7 @@
       var writeFields = result && result.writeFields === undefined ? [] : result.writeFields;
       var sceneNumber = result && result.sceneNumber === undefined ? 0 : result.sceneNumber;
       var allowedWriteFields = writeHint === 'project' ? projectFields :
-        ['scenes', 'scene-edit', 'scenes-batch'].includes(writeHint) ? sceneFields.concat(['durationSeconds']) : [];
+        ['scene', 'scenes', 'scene-edit', 'scenes-batch'].includes(writeHint) ? sceneFields.concat(['durationSeconds']) : [];
       if (!Array.isArray(hints) || hints.length > 15 ||
           hints.some(function(key) {return typeof key !== 'string' || key.length > 120;}) ||
           operations.indexOf(writeHint) < 0 ||

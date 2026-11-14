@@ -73,7 +73,7 @@ test('quick Apply changes only prompt, retaining the original prompt as its conf
     api:async(url,options)=>{sent={url,body:JSON.parse(options.body)};return {story:{id:'p'},scene:{prompt:'After'}};}});
   const method=section(workbench,'    applyScenePrompt: function','    setStatus:status,').trim().replace(/,$/,'');
   vm.runInContext('window.studioDirectorWorkbench={'+method+'};',scope);
-  await scope.window.studioDirectorWorkbench.applyScenePrompt({id:'p',scenes:{s:{prompt:'Before'}}},'s','After');
+  await scope.window.studioDirectorWorkbench.applyScenePrompt({id:'p',sceneOrder:['s'],scenes:{s:{prompt:'Before'}}},'s','After');
   assert.deepEqual(sent,{url:'/fs/studio/director/scene-fields',body:{storyId:'p',sceneId:'s',
     expected:{prompt:'Before'},changes:{prompt:'After'}}});
   assert.equal(receiptKind,'scene.director.revision');

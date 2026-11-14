@@ -65,13 +65,28 @@ test('an incomplete revision is visible in I/O and cannot change the Scene',asyn
   assert.match(h.state.lastStudioIoRaw,/Outline only/);assert.equal(h.state.pending,false);
 });
 test('quick Apply changes only prompt, retaining the original prompt as its conflict check',async()=>{
-  let sent;
+  let sent, receiptKind;
   const scope=vm.createContext({window:{studioDirectorWorkbench:{},flushStudioDirectorStoryEdits:async()=>{},
-    refreshStudioDirectorStoryIfOpen:async()=>{},studioDirectorBridge:{recordApplied:async()=>{}}},
+    refreshStudioDirectorStoryIfOpen:async()=>{},studioDirectorBridge:{recordApplied:async(kind)=>{receiptKind=kind;}}},
     api:async(url,options)=>{sent={url,body:JSON.parse(options.body)};return {story:{id:'p'},scene:{prompt:'After'}};}});
   const method=section(workbench,'    applyScenePrompt: function','    setStatus:status,').trim().replace(/,$/,'');
   vm.runInContext('window.studioDirectorWorkbench={'+method+'};',scope);
   await scope.window.studioDirectorWorkbench.applyScenePrompt({id:'p',scenes:{s:{prompt:'Before'}}},'s','After');
   assert.deepEqual(sent,{url:'/fs/studio/director/scene-fields',body:{storyId:'p',sceneId:'s',
     expected:{prompt:'Before'},changes:{prompt:'After'}}});
+  assert.equal(receiptKind,'scene.director.revision');
+});
+
+test('automatic Director revisions get a distinct persisted receipt; reviewed Apply stays reviewed', async()=>{
+  const state={modeMessages:{storyboard:[]},sessionDirty:{storyboard:false}};
+  const scope=vm.createContext({state,window:{studioDirectorWorkbench:{markSavedFields(){}}},
+    markStudioReadinessOutdated(){},renderMessages(){},persistSession:async()=>{}});
+  const method=section(director,'    recordApplied: function','    undoBrief: function').trim().replace(/,$/,'');
+  vm.runInContext('var recorder={'+method+'};',scope);
+  const story={id:'p',title:'Project'},fields={sceneId:'s',savedFields:{prompt:'After'}};
+  await scope.recorder.recordApplied('scene.director.revision',story,fields);
+  await scope.recorder.recordApplied('scene.update',story,fields);
+  assert.match(state.modeMessages.storyboard[0].content,/^Director revision saved: H3 Prompt/);
+  assert.match(state.modeMessages.storyboard[1].content,/^Saved: H3 Prompt.*Reviewed values/);
+  assert.match(director,/WebCap · Director revision/);
 });

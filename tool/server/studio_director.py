@@ -85,7 +85,7 @@ _H3_STUDIO_CORE = (
     "Generate a Take, inspect it, then refine, compare or select; WebCap owns generation, Take provenance, "
     "queueing, LoRAs, seeds, sampling, dimensions and reference-frame settings. "
     "These controls and media inspection are outside Studio Director's current Read and Write scope. "
-    "A Scene can be tentative without a production prompt or Takes. "
+    "A Scene can have a saved Prompt without any Takes. "
     "The H3 Storyboard generation path validates 4–15 seconds per clip. "
     "Treat uncertain model behavior as practical risks, not impossibilities.\n"
     "AVAILABLE AUTHOR-REVIEWED CREATIVE WORKFLOWS: Create Project with Concept, Visual / atmosphere, "

@@ -1505,6 +1505,40 @@ def test_studio_scene_fields_are_scoped_and_conflict_checked(storyboard_fs):
     assert storyboard_store.load_story(project["id"])["scenes"][id_]["summary"] == scene["summary"]
 
 
+def test_single_scene_prompt_title_and_duration_commit_atomically(storyboard_fs):
+    story = storyboard_store.create_story({"title": "Quiet end"})
+    story, scene = storyboard_store.add_scene(story["id"], {
+        "title": "Loud", "summary": "Legacy Intent stays untouched.",
+        "prompt": "A loud finale.", "durationSeconds": 12,
+    })
+    sid = scene["id"]
+    expected = {"prompt": "A loud finale.", "title": "Loud", "durationSeconds": 12}
+    changes = {"prompt": "The ending fades into silence.", "title": "Quiet",
+               "durationSeconds": 14}
+    saved, updated = storyboard_store.apply_studio_scene_fields(story["id"], sid, expected, changes)
+    assert updated["prompt"] == changes["prompt"]
+    assert updated["title"] == "Quiet"
+    assert updated["durationSeconds"] == 14
+    assert updated["summary"] == "Legacy Intent stays untouched."
+    assert updated["takeOrder"] == scene["takeOrder"]
+    assert saved["scenes"][sid]["summary"] == scene["summary"]
+    before = storyboard_store.load_story(story["id"])["scenes"][sid].copy()
+    for invalid in (
+        {"prompt": "Should not save", "durationSeconds": 19},
+        {"prompt": "Should not save", "durationSeconds": 7.5},
+        {"prompt": "Should not save", "durationSeconds": "14"},
+    ):
+        old = {"prompt": updated["prompt"], "durationSeconds": updated["durationSeconds"]}
+        with pytest.raises(ValueError, match="duration"):
+            storyboard_store.apply_studio_scene_fields(story["id"], sid, old, invalid)
+        assert storyboard_store.load_story(story["id"])["scenes"][sid] == before
+    with pytest.raises(RuntimeError, match="changed since review"):
+        storyboard_store.apply_studio_scene_fields(story["id"], sid,
+            {"prompt": expected["prompt"], "durationSeconds": 12},
+            {"prompt": "Not applied", "durationSeconds": 13})
+    assert storyboard_store.load_story(story["id"])["scenes"][sid] == before
+
+
 def test_retired_scene_intent_preserves_populated_legacy_json_across_saves_and_copies(storyboard_fs):
     project = storyboard_store.create_story({"title": "Legacy Scene"})
     project, scene = storyboard_store.add_scene(project["id"], {

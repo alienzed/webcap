@@ -1054,7 +1054,10 @@
       if (capture) {
         var isInvariant = capture.field === 'invariant';
         var expectedKeys = isInvariant ? 'beforeKind,beforeTitle,content,field,kind,sceneId,title' :
-          capture.field === 'scene' ? 'content,field,sceneId,title' : 'content,field,sceneId';
+          capture.field === 'scene'
+            ? (Object.prototype.hasOwnProperty.call(capture, 'prompt')
+                ? 'content,field,prompt,sceneId,title' : 'content,field,sceneId,title')
+            : 'content,field,sceneId';
         if (typeof capture !== 'object' || Array.isArray(capture) ||
             Object.keys(capture).sort().join(',') !== expectedKeys ||
             ['title','concept','style','summary','prompt','invariant','scene'].indexOf(capture.field) === -1 ||
@@ -1062,7 +1065,9 @@
             typeof capture.sceneId !== 'string' || capture.sceneId.length > 160 ||
             (['title','concept','style','invariant','scene'].indexOf(capture.field) !== -1 && capture.sceneId) ||
             (['summary','prompt'].indexOf(capture.field) !== -1 && !capture.sceneId) ||
-            (capture.field === 'scene' && (typeof capture.title !== 'string' || capture.title.length > 240)) ||
+            (capture.field === 'scene' && (typeof capture.title !== 'string' || capture.title.length > 240 ||
+              (Object.prototype.hasOwnProperty.call(capture, 'prompt') &&
+                (typeof capture.prompt !== 'string' || capture.prompt.length > 20000)))) ||
             (isInvariant && (
               ['character','location','visual','world','sound','custom'].indexOf(capture.kind) === -1 ||
               typeof capture.title !== 'string' || !capture.title.trim() || capture.title.length > 240 ||

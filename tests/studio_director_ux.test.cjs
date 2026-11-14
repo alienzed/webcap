@@ -148,7 +148,7 @@ test('Context defaults to the entire Project and preserves a custom selection on
 
 test('ordinary discussion asks for concise new decisions while complete creative fields remain complete',()=>{
   assert.match(chat,/Discuss concepts in 1-3 concise sentences/);
-  assert.match(chat,/WebCap displays that full text directly in the conversation/);
+  assert.match(chat,/WebCap reuses this draft for Review/);
 });
 
 test('compact Director replies keep the exact full text and leave General Chat alone',()=>{
@@ -275,7 +275,7 @@ test('Scene Intent stays in Project storage, not the active editor or save paylo
   assert.match(workbench,/var contextFields = \['title', 'prompt', 'durationSeconds'\]/);
 });
 test('Director reads Prompt even when a legacy Scene has no authored Prompt',()=>{
-  const slice=part(workbench,'    sceneRead: function (story, sceneId) {','    applyScenePrompt: function (story, sceneId, prompt) {');
+  const slice=part(workbench,'    sceneRead: function (story, sceneId) {','    applyScenePrompt: function (story, sceneId, prompt, extraChanges) {');
   const scope=vm.createContext({projectFields:['title','concept','style','invariants'],
     readPayload:(_story,keys)=>({fields:keys})});
   vm.runInContext('var bridge={'+slice+'};',scope);

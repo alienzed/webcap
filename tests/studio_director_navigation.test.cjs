@@ -107,7 +107,7 @@ test('Studio chat supplies the selected saved Scene in the actual model request,
   assert.match(outgoing[0].content,/"sceneId":"a"/);
   assert.match(outgoing[0].content,/"sceneNumber":1/);
   assert.match(outgoing[0].content,/Mara walks toward the rover/);
-  assert.match(outgoing[0].content,/"durationSeconds","value":12/);
+  assert.match(outgoing[0].content,/scene:a:durationSeconds","value":12/);
   assert.doesNotMatch(outgoing[0].content,/Dormant old Intent/);
   assert.deepEqual(h.requests,[
     '/fs/studio/director/guidance?targetModel=minimax_h3',
@@ -130,7 +130,7 @@ test('each subsequent message fetches fresh saved Scene values without an acknow
   h.stories.p1.scenes.a.durationSeconds=15;
   const fresh=await h.scope.studioDirectorChatRequestMessages(history,h.scope.studioDirectorSelectedScene());
   assert.match(fresh[0].content,/Mara now rides the rover/);
-  assert.match(fresh[0].content,/"durationSeconds","value":15/);
+  assert.match(fresh[0].content,/scene:a:durationSeconds","value":15/);
   assert.doesNotMatch(fresh[0].content,/Mara walks toward the rover/);
   assert.equal(h.requests.filter(url=>url.startsWith('/fs/storyboard?story=')).length,2);
   assert.equal(h.requests.filter(url=>url.includes('/fs/director/chat')).length,0);

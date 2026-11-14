@@ -298,8 +298,8 @@
 
   // Navigation is authoritative in Scene focus; a Scene toolbar entry also
   // binds its Scene when the Storyboard is in the overview/list view.
-  function studioDirectorSelectedScene() {
-    var navigation = window.getStudioDirectorNavigation();
+  function studioDirectorSelectedScene(navigation) {
+    navigation = navigation || window.getStudioDirectorNavigation();
     if (!navigation.projectId) return null;
     if (navigation.sceneId) return {
       projectId: navigation.projectId, sceneId: navigation.sceneId,
@@ -2857,7 +2857,7 @@
     });
   }
 
-  function studioDirectorRequestMessages(messages, includePromptContract, explicitWrite) {
+  function studioDirectorRequestMessages(messages, includePromptContract, explicitWrite, navigationSnapshot) {
     return requestJson('/fs/studio/director/guidance?targetModel=minimax_h3').then(function (payload) {
       if (!payload.system || typeof payload.system !== 'string') {
         throw new Error('Studio Director production guidance is missing.');
@@ -2882,7 +2882,7 @@
         : storyRefs.length === 1
           ? 'A legacy historical Story snapshot exists in history (' + storyRefs[0].slice(6) + '), but it has not been automatically resent.'
           : 'No saved Project Write destination has been selected. Prior explicitly Read content may still exist in conversation history.';
-      var navigation = window.getStudioDirectorNavigation();
+      var navigation = navigationSnapshot || window.getStudioDirectorNavigation();
       outbound[0] = { role: 'system', content: payload.system +
         '\n\nCURRENT WEBCAP CAPABILITIES (available vs planned):\n' + capabilities +
         '\n\nSTUDIO WORKBENCH STATE (controls, not saved Story facts):\n' + workbench +
@@ -2901,10 +2901,10 @@
     });
   }
 
-  function studioDirectorChatRequestMessages(messages, selectedScene) {
+  function studioDirectorChatRequestMessages(messages, selectedScene, navigationSnapshot) {
     // Studio conversation uses the normal request shape; saved Scene fields
     // are transient request context, never a mutation or persisted user message.
-    return studioDirectorRequestMessages(messages, true).then(function (outbound) {
+    return studioDirectorRequestMessages(messages, true, false, navigationSnapshot).then(function (outbound) {
       outbound[0].content += '\n\nRESPONSE CONTRACT: Return JSON matching the reply/readiness schema.\n' +
         'CONTEXT: WebCap supplies the current selected Scene’s saved fields below when a Scene is selected. ' +
         'Answer questions about those fields directly; use them as the baseline for requested revisions. ' +
@@ -3380,7 +3380,8 @@
 
     // Freeze the selected Scene before conversation persistence or network work.
     // Fetch its latest saved fields later, when building the actual LLM request.
-    var selectedScene = activeChatMode === 'storyboard' ? studioDirectorSelectedScene() : null;
+    var selectedNavigation = activeChatMode === 'storyboard' ? window.getStudioDirectorNavigation() : null;
+    var selectedScene = selectedNavigation ? studioDirectorSelectedScene(selectedNavigation) : null;
 
     if (!inputHistory.length || inputHistory[inputHistory.length - 1] !== content) inputHistory.push(content);
     inputHistoryIndex = inputHistory.length;
@@ -3446,7 +3447,7 @@
         });
       }
       return (activeChatMode === 'storyboard'
-        ? studioDirectorChatRequestMessages(messages, selectedScene)
+        ? studioDirectorChatRequestMessages(messages, selectedScene, selectedNavigation)
         : Promise.resolve(messages)).then(function (outboundMessages) {
         return requestJson('/fs/director/chat', {
           method: 'POST',

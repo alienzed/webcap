@@ -125,7 +125,7 @@ test('workbench exposes freshness and only accepted assessments are stored',()=>
 });
 
 test('the first accepted assessment is current immediately, rather than labelled not assessed',()=>{
-  const start=workbench.indexOf('    updateReadiness:function (result, restoring) {');
+  const start=workbench.indexOf('    updateReadiness:function (result, restoring, selectedScene) {');
   const end=workbench.indexOf('\n  };\n\n  function bind()',start);
   assert.ok(start>=0 && end>start);
   const scope=vm.createContext({readiness:[],projectFields:['title','concept','style','invariants'],

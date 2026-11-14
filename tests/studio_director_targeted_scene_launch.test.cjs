@@ -119,6 +119,15 @@ test('second revision reads updated saved prompt, not the earlier conversation b
   assert.equal(h.saved.scenes.s1.prompt,'The rover stops; the silence hangs.');
 });
 
+test('writer ignores unrequested optional title and duration fields without changing them',async()=>{
+  const h=sceneFixture('{"prompt":"The ending is quieter.","title":"Unexpected title","durationSeconds":14}');
+  await h.window.studioDirectorBridge.writeSelectedScene(h.launch);
+  assert.equal(h.saved.scenes.s1.prompt,'The ending is quieter.');
+  assert.equal(h.saved.scenes.s1.title,'Opening');
+  assert.equal(h.saved.scenes.s1.durationSeconds,12);
+  assert.deepEqual(Object.keys(h.events.find(row=>row[0]==='save')[1].changes),['prompt']);
+});
+
 test('requested title and duration changes are scoped into the same Scene save',async()=>{
   const h=sceneFixture('{"prompt":"The last line is whispered.","title":"Quiet ending","durationSeconds":14}');
   await h.window.studioDirectorBridge.writeSelectedScene({
@@ -134,8 +143,8 @@ test('requested title and duration changes are scoped into the same Scene save',
 });
 
 test('invalid or incomplete model output cannot initiate any save or report success',async()=>{
-  for(const raw of ['{"summary":"A quiet ending"}','{"prompt":"New","title":"Unrequested"}',
-    '{"prompt":"New","durationSeconds":17}', '{"prompt":""}', 'not JSON']) {
+  for(const raw of ['{"summary":"A quiet ending"}','{"prompt":"New","unknown":"Unrequested"}',
+    '{"prompt":"New","title":42,"durationSeconds":17}', '{"prompt":""}', 'not JSON']) {
     const h=sceneFixture(raw);
     await assert.rejects(h.window.studioDirectorBridge.writeSelectedScene(h.launch));
     assert.equal(h.events.filter(row=>row[0]==='save').length,0,raw);

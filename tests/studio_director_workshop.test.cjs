@@ -121,7 +121,7 @@ test('explicit Write guidance asks for the draft, not another conversational rec
     "studioDirectorRequestMessages([{role:'user',content:'Revise Scene'}],false,true)",context);
   assert.match(conversational[0].content,/suggest at most one useful action/);
   assert.doesNotMatch(writing[0].content,/suggest at most one useful action/);
-  assert.match(writing[0].content,/EXPLICIT REVIEWED WRITE/);
+  assert.match(writing[0].content,/EXPLICIT WRITE/);
   assert.match(writing[0].content,/Produce the requested complete editable proposal/);
   assert.equal(writing[1].content,'Revise Scene');
   assert.match(source,/studioDirectorRequestMessages\(\[\{role:'user',content:instruction\}\], includePromptContract, true, navigationSnapshot\)/);

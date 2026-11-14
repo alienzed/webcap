@@ -6,6 +6,7 @@
   var readChoices = {}, writeOperationChosen = false, lastReadSource = null;
   var sceneSelectionManual = false, sceneSelectionProject = '', recommendationProject = '';
   var lastQuickAction = 'read', creativeCapture = null, preparedSceneWrite = null;
+  var preparedNewSceneWrite = null, captureProjectId = '';
   var sceneFields = ['prompt', 'title'];
   var projectFields = ['title', 'concept', 'style', 'invariants'];
   var labels = {title:'Title', concept:'Concept', style:'Visual / atmosphere',
@@ -424,7 +425,7 @@
     if (!window.studioDirectorBridge.canReview())
       throw new Error('Open the Studio conversation before reviewing this change.');
     var projectSelect = el('studio-dw-write-project');
-    var id = projectSelect.value || window.studioDirectorBridge.workingStoryId();
+    var id = (capture.field === 'scene' && captureProjectId) || projectSelect.value || window.studioDirectorBridge.workingStoryId();
     if (!id) {
       status('Choose a destination Project in Write, then review this suggestion.', false);
       openWriteForCapture();
@@ -867,6 +868,17 @@
       kind:'capture', label:captureActionLabel(creativeCapture),
       run:function () { reviewCreativeCapture(creativeCapture); }
     });
+    if (!readinessStale && !creativeCapture && preparedNewSceneWrite) {
+      var newLaunch = preparedNewSceneWrite;
+      available.push({
+        kind:'write', label:'Draft new Scene · Review',
+        run:function () {
+          return window.studioDirectorBridge.writeNewScene(newLaunch).catch(function (error) {
+            status('New Scene draft failed: ' + String(error.message || error), true);
+          });
+        }
+      });
+    }
     if (!readinessStale && !creativeCapture && preparedSceneWrite) {
       var launch = preparedSceneWrite;
       available.push({
@@ -880,11 +892,11 @@
         }
       });
     }
-    if (!readinessStale && !creativeCapture && !preparedSceneWrite && recommendations.readHints.length &&
+    if (!readinessStale && !creativeCapture && !preparedSceneWrite && !preparedNewSceneWrite && recommendations.readHints.length &&
         (window.studioDirectorBridge.workingStoryId() || activeTarget().storyId)) available.push({
       kind:'read', label:'Read Project', run:readRecommendedProject
     });
-    if (!readinessStale && !preparedSceneWrite && recommendations.writeHint) {
+    if (!readinessStale && !preparedSceneWrite && !preparedNewSceneWrite && recommendations.writeHint) {
       var fields = recommendedWriteFields(recommendations.writeHint);
       var captureField = creativeCapture && creativeCapture.field === 'invariant' ? 'invariants' :
         creativeCapture && creativeCapture.field;
@@ -1032,8 +1044,10 @@
       sceneSelectionManual = false;
       sceneSelectionProject = '';
       recommendationProject = '';
-        preparedSceneWrite = null;
-        lastReadSource = null;
+      preparedSceneWrite = null;
+      preparedNewSceneWrite = null;
+      captureProjectId = '';
+      lastReadSource = null;
       readStory = null;
       writeStory = null;
       creativeCapture = null;
@@ -1047,7 +1061,7 @@
       updateScope();
     },
     setReadinessFreshness:setReadinessFreshness,
-    updateReadiness:function (result, restoring, selectedScene) {
+    updateReadiness:function (result, restoring, selectedScene, selectedProject, authorRequest) {
       var list = Array.isArray(result) ? result : result && result.checks;
       var allowed = ['Concept','Characters','Setting','Action','Dialogue','Visual / atmosphere',
         'Visual focus','Structure / formula','Variation / repetition','Production feasibility'];
@@ -1089,7 +1103,8 @@
         var isInvariant = capture.field === 'invariant';
         var expectedKeys = isInvariant ? 'beforeKind,beforeTitle,content,field,kind,sceneId,title' :
           capture.field === 'scene'
-            ? 'content,field,sceneId,title'
+            ? (Object.prototype.hasOwnProperty.call(capture,'durationSeconds')
+                ? 'content,durationSeconds,field,sceneId,title' : 'content,field,sceneId,title')
             : 'content,field,sceneId';
         if (typeof capture !== 'object' || Array.isArray(capture) ||
             Object.keys(capture).sort().join(',') !== expectedKeys ||
@@ -1098,7 +1113,9 @@
             typeof capture.sceneId !== 'string' || capture.sceneId.length > 160 ||
             (['title','concept','style','invariant','scene'].indexOf(capture.field) !== -1 && capture.sceneId) ||
             (capture.field === 'prompt' && !capture.sceneId) ||
-            (capture.field === 'scene' && (typeof capture.title !== 'string' || capture.title.length > 240)) ||
+            (capture.field === 'scene' && (typeof capture.title !== 'string' || capture.title.length > 240 ||
+              (Object.prototype.hasOwnProperty.call(capture,'durationSeconds') &&
+                (!Number.isInteger(capture.durationSeconds) || capture.durationSeconds < 4 || capture.durationSeconds > 15)))) ||
             (isInvariant && (
               ['character','location','visual','world','sound','custom'].indexOf(capture.kind) === -1 ||
               typeof capture.title !== 'string' || !capture.title.trim() || capture.title.length > 240 ||
@@ -1122,7 +1139,13 @@
              sceneNumber:selectedScene.sceneNumber, instruction:writeInstruction.trim(),
              fields:writeFields.slice()}
           : null;
+      preparedNewSceneWrite = !restoring && selectedProject && selectedProject.projectId &&
+        writeHint === 'scene' && !sceneId && !sceneNumber && writeInstruction.trim() && !capture
+          ? {projectId:selectedProject.projectId, instruction:writeInstruction.trim(),
+              authorRequest:String(authorRequest || '').trim()}
+          : null;
       recommendationProject = window.studioDirectorBridge.workingStoryId() || activeTarget().storyId || '';
+      captureProjectId = !restoring && selectedProject ? selectedProject.projectId : '';
       creativeCapture = capture;
       readiness = list;
       setReadinessFreshness(!!(restoring && result && result.stale));

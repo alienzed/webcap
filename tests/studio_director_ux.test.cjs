@@ -24,7 +24,7 @@ test('Overview Review leads with changed parts and retains the same editable nod
   }
   const scope=vm.createContext({el:id=>id==='studio-brief-parts'?parts:id==='studio-brief-unchanged'?other:
     {closest:()=>sections[id.replace('studio-brief-','').replace('-state','')]}});
-  vm.runInContext(part(chat,'  function groupStudioBriefReviewParts() {','  function prepareStudioBrief() {'),scope);
+  vm.runInContext(part(chat,'  function groupStudioBriefReviewParts() {','  function prepareStudioBrief(options) {'),scope);
   scope.groupStudioBriefReviewParts();
   assert.deepEqual(parts.children,[sections.concept,sections.style,other]);
   assert.deepEqual(other.children,[sections.title,sections.invariants]);
@@ -89,7 +89,7 @@ test('Project review summary follows edits and selection without changing either
   elements['studio-brief-summary']={};
   const scope=vm.createContext({state:{studioBriefProposal:{expected:before}},el:id=>elements[id],
     studioDirectorRenderDiff:()=>{}});
-  vm.runInContext(part(chat,'  function updateStudioBriefReviewSummary() {','  function prepareStudioBrief() {'),scope);
+  vm.runInContext(part(chat,'  function updateStudioBriefReviewSummary() {','  function prepareStudioBrief(options) {'),scope);
   scope.updateStudioBriefReviewSummary();
   assert.match(elements['studio-brief-concept-state'].textContent,/Changed · selected/);
   assert.match(elements['studio-brief-title-state'].textContent,/Unchanged · not selected/);
@@ -105,8 +105,8 @@ test('identical Invariants are not preselected because JSON properties arrived i
   const checkbox={checked:true};
   const existing=[{kind:'character',text:'Keeper',title:'Mara'}];
   const reviewed=[{item:{kind:'character',title:'Mara',text:'Keeper'}}];
-  const scope=vm.createContext({el:()=>checkbox,existing,reviewed});
-  const code=part(chat,"    el('studio-brief-invariants-selected').checked = reviewed.length","    el('studio-brief-invariants').replaceChildren();");
+  const scope=vm.createContext({el:()=>checkbox,existing,reviewed,requested:null});
+  const code=part(chat,"    el('studio-brief-invariants-selected').checked = (!requested","    el('studio-brief-invariants').replaceChildren();");
   vm.runInContext(code,scope);
   assert.equal(checkbox.checked,false);
   reviewed[0].item.text='An older keeper.';

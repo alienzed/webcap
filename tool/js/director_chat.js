@@ -4580,9 +4580,7 @@
             try {proposed = JSON.parse(raw);}
             catch (error) {throw new Error('Director returned invalid Scene JSON.\nRaw response:\n' + raw);}
             if (!proposed || typeof proposed !== 'object' || Array.isArray(proposed) ||
-                Object.keys(proposed).some(function (key) {
-                  return !['prompt','title','durationSeconds'].includes(key);
-                }) || typeof proposed.prompt !== 'string' || !proposed.prompt.trim() ||
+                typeof proposed.prompt !== 'string' || !proposed.prompt.trim() ||
                 proposed.prompt.length > 60000 ||
                 (wantsTitle && (typeof proposed.title !== 'string' || !proposed.title.trim() ||
                   proposed.title.length > 240)) ||
@@ -4707,9 +4705,7 @@
         try { draft = JSON.parse(raw); }
         catch (error) { throw new Error('Director returned invalid Scene JSON.\nRaw response:\n' + raw); }
         if (!draft || typeof draft !== 'object' || Array.isArray(draft) ||
-            Object.keys(draft).some(function (key) {
-              return !['prompt','title','durationSeconds'].includes(key);
-            }) || typeof draft.prompt !== 'string' || !draft.prompt.trim())
+            typeof draft.prompt !== 'string' || !draft.prompt.trim())
           throw new Error('Director must return one complete Scene prompt.\nRaw response:\n' + raw);
         state.modeMessages.storyboard.push({role:'assistant', content:draft.prompt, rawResponse:raw});
         renderMessages();

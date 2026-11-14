@@ -61,7 +61,7 @@ test('a revision uses one existing model operation, shows the full result, and a
   assert.equal(h.state.pending,false);
 });
 test('direct Scene Revise accepts a complete prompt and ignores unrequested optional metadata',async()=>{
-  const h=directorHarness('{"prompt":"Quieter full prompt","title":"Not requested","durationSeconds":14}');
+  const h=directorHarness('{"prompt":"Quieter full prompt","title":"Not requested","durationSeconds":14,"rationale":"Extra model note","sceneId":"invented"}');
   await h.scope.window.openStudioDirectorScene({id:'p',title:'Project'},'s','Quieter ending');
   assert.deepEqual(h.calls.find(c=>c[0]==='apply').slice(2),['s','Quieter full prompt']);
 });

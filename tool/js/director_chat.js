@@ -55,8 +55,8 @@
   };
   var STORYBOARD_WORKSHOP_PRIMER = [
     'You are collaborating with an author developing short AI-generated videos.',
-    'A Project (internally Story) has Concept / overview, Visual / atmosphere and Invariants. A Scene has its own Intent (summary) and separate saved H3 Prompt.',
-    'Use Concept for premise and Scene relationships, Visual / atmosphere for the shared look, and Invariants for recurring fixed facts. Scene Intent describes what happens; the Prompt is the reviewed production instruction.',
+    'A Project (internally Story) has Concept / overview, Visual / atmosphere and Invariants. A Scene has a full H3 Prompt and may retain an earlier planning outline (summary).',
+    'Use Concept for premise and Scene relationships, Visual / atmosphere for the shared look, and Invariants for recurring fixed facts. For a Scene with a complete H3 Prompt, treat that prompt as authoritative, including its Scene overview when present. Use the outline to develop Scenes that have no prompt yet.',
     'Each Scene is one video clip lasting at most 15 seconds. A Scene prompt has established subject, environment, visual treatment and audio sections, with timed shots in integrated_multimodal_description describing actions and changes.',
     'This is a creative workshop. Explore the author\'s current interests for the selected Scene: actions, choreography, interactions, dialogue, camera behavior, timing, and visual development.',
     'Storyboard references are supplied as readable text inside the request, including inline material in the latest user message. Use that text as source context and build on the author\'s decisions as the discussion develops.',
@@ -2224,11 +2224,13 @@
     title.placeholder = 'Working title (optional)';
     title.maxLength = 240;
     title.value = item.title || '';
-    var summary = document.createElement('textarea');
-    summary.setAttribute('aria-label', 'Scene description');
+    // Keep the stored outline for older Project workflows, but don't make it a
+    // second editable description when the Director already supplied a prompt.
+    var summary = document.createElement(item.prompt ? 'input' : 'textarea');
+    summary.setAttribute('aria-label', 'Scene outline');
     summary.dataset.field = 'summary';
-    summary.placeholder = 'What happens in this one generatable clip?';
-    summary.rows = 3;
+    if (item.prompt) summary.type = 'hidden';
+    else { summary.placeholder = 'What happens in this one generatable clip?'; summary.rows = 3; }
     summary.value = item.summary || '';
     var durationLabel = document.createElement('label');
     durationLabel.textContent = 'Duration (s)';
@@ -2463,6 +2465,7 @@
     el('studio-scene-draft-title').value = proposal.title;
     el('studio-scene-draft-summary').value = proposal.summary;
     var includesPrompt = Object.prototype.hasOwnProperty.call(proposal, 'prompt');
+    el('studio-scene-draft-summary-row').classList.toggle('hidden', includesPrompt);
     el('studio-scene-draft-prompt-row').classList.toggle('hidden', !includesPrompt);
     el('studio-scene-draft-prompt').value = includesPrompt ? proposal.prompt : '';
     el('studio-scene-draft-apply').textContent = includesPrompt ? 'Create Scene' : 'Create tentative Scene';
@@ -2910,7 +2913,7 @@
         'When asked to write, revise or paste an existing Scene prompt, author its complete text in capture.content on this turn, using the H3 template and Scene duration. ' +
         'WebCap displays that full text directly in the conversation. Use reply for a brief introduction or creative explanation. ' +
         'For other drafting requests, include the complete requested text in reply. ' +
-        'Writing a Scene means a useful title and a full H3 Prompt. An Intent alone is an outline. ' +
+        'Writing a Scene means a useful title and a full H3 Prompt. An outline alone is a planning draft, not a second authoritative Scene description. ' +
         'Name user actions in plain language: Read Project, Review Scene, Apply. ' +
         'Drafting is conversation; only reviewed Apply saves.\n' +
         'READINESS: Usually checks=[], readHints=[], writeHint="", writeFields=[], sceneId="", sceneNumber=0, capture=null. ' +
@@ -2921,8 +2924,8 @@
         'CAPTURE: Use null for discussion, questions, outlines and work still to be drafted. ' +
         'For a complete existing Scene prompt, set capture.field="prompt", capture.sceneId to its saved ID, ' +
         'and capture.content to the full usable prompt itself. WebCap uses this one authored text for both chat and Review Scene, without another LLM call. ' +
-        'For other complete fields use the matching capture schema. A new Scene uses field="scene", title and content as its Intent; ' +
-        'also include prompt when a full H3 Prompt was authored in conversation. An Intent-only Scene is still a useful draft. ' +
+        'For other complete fields use the matching capture schema. A new Scene uses field="scene", title and content as an initial outline; ' +
+        'also include prompt when a full H3 Prompt was authored in conversation. An outline-only Scene is still a useful planning draft. ' +
         'For an Invariant use its kind/title, with beforeKind/beforeTitle for an exact known edit.\n';
       return outbound;
     });

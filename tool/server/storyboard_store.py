@@ -1807,7 +1807,6 @@ def apply_director_prompt(
         "previousPrompt": str(current.get("prompt") or ""),
         "previousRevision": (
             {
-                "summary": str(current.get("summary") or ""),
                 "entryState": str(current.get("entryState") or ""),
                 "exitState": str(current.get("exitState") or ""),
                 "prompt": str(current.get("prompt") or ""),
@@ -2069,14 +2068,13 @@ def restore_previous_prompt(story_id, scene_id):
     previous_revision = current.get("previousRevision")
     if isinstance(previous_revision, dict):
         current_revision = {
-            "summary": str(current.get("summary") or ""),
             "entryState": str(current.get("entryState") or ""),
             "exitState": str(current.get("exitState") or ""),
             "prompt": str(current.get("prompt") or ""),
             "durationSeconds": current.get("durationSeconds"),
         }
         scene = _normalize_scene(scene_id, {
-            **previous_revision,
+            **{key: value for key, value in previous_revision.items() if key != "summary"},
             "previousPrompt": str(current.get("prompt") or ""),
             "previousRevision": current_revision,
             "promptDirectorModel": "",

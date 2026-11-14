@@ -297,7 +297,7 @@ def test_director_scene_index_is_lightweight_and_selected_scene_reads_full_promp
     from tool.server.studio_director import read_story_scope
 
     long_prompt = "A" * 20000
-    story = {"sceneOrder": ["scene-a", "scene-b"], "scenes": {
+    story = {"id": "project-1", "sceneOrder": ["scene-a", "scene-b"], "scenes": {
         "scene-a": {"title": "Arrival", "prompt": long_prompt, "summary": "Legacy Intent"},
         "scene-b": {"title": "Departure", "prompt": long_prompt, "summary": ""},
     }}

@@ -103,7 +103,9 @@ function setup() {
     };
   `);
   // The standalone renderer fixture does not initialize the full form/dropzones.
-  source = source.replace('  resetGeneratePromptScratch();', '');
+  const startupCall = source.lastIndexOf('  resetGeneratePromptScratch();');
+  assert.ok(startupCall > 0, 'expected Generations form initialization at startup');
+  source = source.slice(0, startupCall) + source.slice(startupCall + '  resetGeneratePromptScratch();'.length);
   vm.createContext(env);
   vm.runInContext(source, env, { filename: 'generate.js' });
   return { env, nodes, calls, errors, api: env.window.takeTestApi };

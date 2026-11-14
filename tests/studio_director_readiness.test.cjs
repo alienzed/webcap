@@ -265,7 +265,7 @@ test('structured inspection metadata is not sent back with later Studio prompts'
     Object,String,Promise,window:{getStudioDirectorNavigation:()=>({})},
     requestJson:async()=>({system:'Studio Director',actions:[]})
   });
-  vm.runInContext(part('  function studioDirectorRequestMessages(messages, includePromptContract, explicitWrite) {',
+  vm.runInContext(part('  function studioDirectorRequestMessages(messages, includePromptContract, explicitWrite, navigationSnapshot) {',
     '  function studioDirectorChatRequestMessages(messages, selectedScene) {'),context);
   const outgoing=await vm.runInContext(
     'studioDirectorRequestMessages([{role:"assistant",content:"Ready.",rawResponse:"PRIVATE CAPTURE"}],false)',context);

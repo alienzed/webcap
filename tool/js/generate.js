@@ -41,6 +41,7 @@
     navigationVersion: 0,
     activePendingJobId: '',
     pendingJobsById: {},
+    pendingJobActions: {},
     freshDraft: false,
     editorMode: 'working',
     workingSnapshot: null,
@@ -1441,6 +1442,48 @@ function sweepLoras(model, folder) {
     host.appendChild(caption);
   }
 
+  function syncGenerationJobAction(button, job) {
+    var status = String(job.status || '');
+    var jobId = String(job.jobId || '');
+    var operation = ['queued', 'backlog'].indexOf(status) !== -1 ? 'cancel'
+      : ['starting', 'running'].indexOf(status) !== -1 ? 'stop' : '';
+    var requested = generateState.pendingJobActions[jobId] || '';
+    button.dataset.generateJobAction = operation;
+    button.dataset.jobId = jobId;
+    button.textContent = status === 'stopping' ? 'Stopping…'
+      : requested ? (requested === 'cancel' ? 'Cancelling…' : 'Stopping…')
+      : operation === 'cancel' ? 'Cancel' : operation === 'stop' ? 'Stop' : '';
+    button.disabled = !operation || !!requested;
+    button.classList.toggle('hidden', !operation && status !== 'stopping');
+    button.title = status === 'stopping' ? 'Take is stopping'
+      : operation === 'cancel' ? 'Cancel this queued Take' : 'Stop this running Take';
+    button.setAttribute('aria-label', button.title);
+  }
+
+  function requestGenerationJobAction(operation, jobId) {
+    if (generateState.pendingJobActions[jobId]) return Promise.resolve();
+    generateState.pendingJobActions[jobId] = operation;
+    var current = generateState.pendingJobsById[jobId];
+    if (current) syncGenerationPreviewCard(current);
+    return postJson('/fs/inference', { operation: operation, jobId: jobId }).then(function (payload) {
+      if (payload.job) syncGenerationPreviewCard(payload.job);
+      return window.refreshInferenceQueue();
+    }).catch(function (err) {
+      reportError(err, operation === 'cancel' ? 'Could not cancel Take' : 'Could not stop Take');
+    }).then(function () {
+      delete generateState.pendingJobActions[jobId];
+      var remaining = generateState.pendingJobsById[jobId];
+      if (remaining) syncGenerationPreviewCard(remaining);
+    });
+  }
+
+  function handleGenerationJobAction(event) {
+    var button = event.target.closest('[data-generate-job-action]');
+    if (!button) return false;
+    requestGenerationJobAction(button.dataset.generateJobAction, button.dataset.jobId);
+    return true;
+  }
+
   function renderPendingStage(job) {
     var host = el('generate-active-preview');
     var summary = el('generate-stage-summary');
@@ -1460,10 +1503,18 @@ function sweepLoras(model, folder) {
       var pending = document.createElement('div');
       pending.className = 'generate-stage-pending';
       pending.innerHTML = '<div class="generate-result-pending-indicator" aria-hidden="true"></div><strong data-generation-stage-status></strong><span>Your Take will appear here when it is ready.</span>';
+      var action = document.createElement('button');
+      action.type = 'button';
+      action.className = 'review-captions-btn generate-stage-job-action';
+      action.dataset.generateJobAction = '';
+      pending.appendChild(action);
       host.appendChild(pending);
     }
     var statusNode = host.querySelector('[data-generation-stage-status]');
     if (statusNode) statusNode.textContent = generationPreviewStatus(job);
+    var actionButton = host.querySelector('[data-generate-job-action]');
+    if (!actionButton) throw new Error('Generations preview Take action is missing.');
+    syncGenerationJobAction(actionButton, job);
   }
 
   function renderStageEmpty() {
@@ -1544,8 +1595,8 @@ function sweepLoras(model, folder) {
       if (!desired[String(card.dataset.generateTakeKey || '')]) card.remove();
     });
 
-    var pendingCards = host.querySelectorAll('.generate-take-card.is-pending');
-    var anchor = pendingCards.length ? pendingCards[pendingCards.length - 1].nextSibling : host.firstChild;
+    var pendingEntries = host.querySelectorAll('.generate-take-pending-entry');
+    var anchor = pendingEntries.length ? pendingEntries[pendingEntries.length - 1].nextSibling : host.firstChild;
     items.forEach(function (result) {
       var key = resultKey(result);
       if (!key) return;
@@ -1584,16 +1635,16 @@ function sweepLoras(model, folder) {
     var host = el('generate-takes');
     if (!host) throw new Error('Generations Takes markup is missing.');
     var wanted = String(jobId || '');
-    var cards = host.querySelectorAll('.generate-take-card.is-pending[data-generation-job-id]');
-    for (var index = 0; index < cards.length; index += 1) {
-      if (String(cards[index].dataset.generationJobId || '') === wanted) return cards[index];
+    var entries = host.querySelectorAll('.generate-take-pending-entry[data-generation-job-id]');
+    for (var index = 0; index < entries.length; index += 1) {
+      if (String(entries[index].dataset.generationJobId || '') === wanted) return entries[index];
     }
     return null;
   }
 
   function removeGenerationPreviewCard(jobId, completed) {
-    var card = generationPreviewCard(jobId);
-    if (card) card.remove();
+    var entry = generationPreviewCard(jobId);
+    if (entry) entry.remove();
     delete generateState.pendingJobsById[String(jobId || '')];
     if (String(generateState.activePendingJobId || '') === String(jobId || '') && !completed) {
       generateState.activePendingJobId = '';
@@ -1616,9 +1667,12 @@ function sweepLoras(model, folder) {
     }
     generateState.pendingJobsById[jobId] = job;
   
-    var card = generationPreviewCard(jobId);
-    if (!card) {
-      card = document.createElement('button');
+    var entry = generationPreviewCard(jobId);
+    if (!entry) {
+      entry = document.createElement('div');
+      entry.className = 'generate-take-entry generate-take-pending-entry';
+      entry.dataset.generationJobId = jobId;
+      var card = document.createElement('button');
       card.type = 'button';
       card.className = 'generate-take-card is-pending';
       card.dataset.generationJobId = jobId;
@@ -1641,9 +1695,19 @@ function sweepLoras(model, folder) {
   
       card.appendChild(mediaHost);
       card.appendChild(copy);
-      host.insertBefore(card, host.firstChild);
+      entry.appendChild(card);
+      var action = document.createElement('button');
+      action.type = 'button';
+      action.className = 'review-captions-btn generate-take-job-action';
+      action.dataset.generateJobAction = '';
+      entry.appendChild(action);
+      host.insertBefore(entry, host.firstChild);
     }
-  
+
+    var card = entry.querySelector('.generate-take-card');
+    var actionButton = entry.querySelector('[data-generate-job-action]');
+    if (!card || !actionButton) throw new Error('Generations pending Take controls are missing.');
+    syncGenerationJobAction(actionButton, job);
     var statusNode = card.querySelector('[data-generation-preview-status]');
     var modelNode = card.querySelector('[data-generation-preview-model]');
     if (statusNode) statusNode.textContent = generationPreviewStatus(job);
@@ -2819,7 +2883,11 @@ function sweepLoras(model, folder) {
     el('generate-takes-collapse-btn').onclick = function () {
       setTakesCollapsed(!generateState.takesCollapsed);
     };
+    el('generate-active-preview').addEventListener('click', function (event) {
+      handleGenerationJobAction(event);
+    });
     el('generate-takes').addEventListener('click', function (event) {
+      if (handleGenerationJobAction(event)) return;
       var deleteButton = event.target.closest('[data-generate-delete-storage-id]');
       if (deleteButton) {
         deleteGenerationResult(String(deleteButton.dataset.generateDeleteStorageId || '').trim(), deleteButton);

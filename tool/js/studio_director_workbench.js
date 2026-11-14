@@ -978,9 +978,9 @@
     markSavedFields:function(selected,story){
       if (!story || !story.id) throw new Error('Field update feedback needs the saved Project identity.');
       var values=selected.savedFields || selected.fields || selected;
-      var keys=Object.keys(values).filter(function(key){return ['title','concept','style','invariants','prompt'].includes(key);});
+      var keys=Object.keys(values).filter(function(key){return ['title','concept','style','invariants','prompt','durationSeconds'].includes(key);});
       if (selected.scenes && typeof selected.scenes==='object') keys.push('Scene revisions');
-      var descriptions={title:'Title',concept:'Concept',style:'Visual / atmosphere',invariants:'Invariants',prompt:'H3 Prompt'};
+      var descriptions={title:'Title',concept:'Concept',style:'Visual / atmosphere',invariants:'Invariants',prompt:'H3 Prompt',durationSeconds:'Duration'};
       var label=keys.map(function(key){return descriptions[key] || key;}).join(', ');
       var button=el('studio-dw-write');
       button.dataset.result='success';

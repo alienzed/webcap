@@ -2620,9 +2620,12 @@
         state.studioScenesProposal = null;
         el('studio-scenes-review').close();
       }
-      recordStudioOperation('scenes.create', 'Created ' + savedCount + ' Scenes with prompts',
-        proposal.storyId, payload.scenes.map(function (scene) { return scene.id; }));
-      studioActionStatus(savedCount === 1 ? 'Scene created.' : savedCount + ' Scenes created.', false);
+      var durationNotice = defaulted ? ' · ' + defaulted + ' duration' +
+        (defaulted === 1 ? '' : 's') + ' defaulted to 6s' : '';
+      recordStudioOperation('scenes.create', 'Created ' + savedCount + ' Scenes with prompts' +
+        durationNotice, proposal.storyId, payload.scenes.map(function (scene) { return scene.id; }));
+      studioActionStatus((savedCount === 1 ? 'Scene created.' : savedCount + ' Scenes created.') +
+        durationNotice, false);
       return window.studioDirectorBridge.recordApplied('scenes.create',payload.story,{
         scenes:payload.scenes.map(function (scene) {
           return {id:scene.id,title:scene.title,prompt:scene.prompt,durationSeconds:scene.durationSeconds};

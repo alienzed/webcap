@@ -1,11 +1,7 @@
-"""Reviewed multi-Scene creative edits are scoped, atomic and Take-preserving."""
-
+"""Reviewed Prompt revisions preserve legacy summary and unrelated Scene state."""
 import copy
-
 import pytest
-
 from tool.server import storyboard_store
-
 
 @pytest.fixture
 def story(tmp_path, monkeypatch):
@@ -13,51 +9,50 @@ def story(tmp_path, monkeypatch):
     result = storyboard_store.create_story({"title": "Multiple Scenes", "concept": "Unchanged Project"})
     for label in ("A", "B", "C"):
         result, _ = storyboard_store.add_scene(result["id"], {
-            "title": label, "summary": label + " original", "prompt": label + " prompt",
-            "entryState": "Legacy entry", "exitState": "Legacy exit",
+            "title": label, "summary": label + " legacy outline",
+            "prompt": label + " prompt", "entryState": "Legacy entry", "exitState": "Legacy exit",
         })
     return result
 
-
-def test_atomic_two_scene_revision_preserves_unselected_scene_and_prompts(story):
+def test_atomic_prompt_revisions_preserve_legacy_summary_and_other_scenes(story):
     ids = story["sceneOrder"]
     revisions = [
-        {"sceneId": ids[0], "expected": {"summary": "A original"}, "changes": {"summary": "A revised"}},
-        {"sceneId": ids[1], "expected": {"summary": "B original"}, "changes": {"summary": "B revised"}},
+        {"sceneId": ids[0], "expected": {"prompt": "A prompt"}, "changes": {"prompt": "A revised"}},
+        {"sceneId": ids[1], "expected": {"prompt": "B prompt"}, "changes": {"prompt": "B revised"}},
     ]
     changed, saved = storyboard_store.apply_studio_scene_fields_batch(story["id"], revisions)
-    assert saved == {ids[0]: {"summary": "A revised"}, ids[1]: {"summary": "B revised"}}
-    assert changed["scenes"][ids[0]]["summary"] == "A revised"
-    assert changed["scenes"][ids[1]]["summary"] == "B revised"
+    assert saved == {ids[0]: {"prompt": "A revised"}, ids[1]: {"prompt": "B revised"}}
+    assert changed["scenes"][ids[0]]["prompt"] == "A revised"
+    assert changed["scenes"][ids[1]]["prompt"] == "B revised"
     assert changed["scenes"][ids[2]] == story["scenes"][ids[2]]
-    for scene_id in ids:
-        assert changed["scenes"][scene_id]["prompt"] == story["scenes"][scene_id]["prompt"]
-        assert changed["scenes"][scene_id]["entryState"] == "Legacy entry"
-        assert changed["scenes"][scene_id]["exitState"] == "Legacy exit"
-        assert changed["scenes"][scene_id]["takes"] == story["scenes"][scene_id]["takes"]
+    for sid in ids:
+        assert changed["scenes"][sid]["summary"] == story["scenes"][sid]["summary"]
+        assert changed["scenes"][sid]["entryState"] == "Legacy entry"
+        assert changed["scenes"][sid]["exitState"] == "Legacy exit"
+        assert changed["scenes"][sid]["takes"] == story["scenes"][sid]["takes"]
     assert changed["concept"] == story["concept"]
     assert changed["sceneOrder"] == ids
 
-
-def test_stale_or_invalid_second_scene_does_not_modify_first(story):
+def test_conflict_does_not_partially_write(story):
     ids = story["sceneOrder"]
     before = copy.deepcopy(story)
     revisions = [
-        {"sceneId": ids[0], "expected": {"summary": "A original"}, "changes": {"summary": "A revised"}},
-        {"sceneId": ids[1], "expected": {"summary": "stale"}, "changes": {"summary": "B revised"}},
+        {"sceneId": ids[0], "expected": {"prompt": "A prompt"}, "changes": {"prompt": "A revised"}},
+        {"sceneId": ids[1], "expected": {"prompt": "stale"}, "changes": {"prompt": "B revised"}},
     ]
     with pytest.raises(RuntimeError, match="changed since review"):
         storyboard_store.apply_studio_scene_fields_batch(story["id"], revisions)
     assert storyboard_store.load_story(story["id"]) == before
 
+def test_intent_only_revision_is_rejected(story):
+    sid = story["sceneOrder"][0]
+    entry = {"sceneId": sid, "expected": {"summary": "A legacy outline"}, "changes": {"summary": "New Intent"}}
+    with pytest.raises(ValueError, match="supported"):
+        storyboard_store.apply_studio_scene_fields_batch(story["id"], [entry])
+    assert storyboard_store.load_story(story["id"])["scenes"][sid]["summary"] == "A legacy outline"
 
-def test_reject_duplicate_scene_targets_and_unsupported_fields(story):
-    scene_id = story["sceneOrder"][0]
-    entry = {"sceneId":scene_id,"expected":{"summary":"A original"},"changes":{"summary":"A new"}}
+def test_duplicate_targets_are_rejected(story):
+    sid = story["sceneOrder"][0]
+    entry = {"sceneId": sid, "expected": {"prompt": "A prompt"}, "changes": {"prompt": "New"}}
     with pytest.raises(ValueError, match="only once"):
         storyboard_store.apply_studio_scene_fields_batch(story["id"], [entry, entry])
-    with pytest.raises(ValueError, match="supported"):
-        storyboard_store.apply_studio_scene_fields_batch(story["id"], [{
-            "sceneId":scene_id,"expected":{"entryState":"Legacy entry"},"changes":{"entryState":"Legacy"},
-        }])
-    assert storyboard_store.load_story(story["id"])["scenes"][scene_id]["summary"] == "A original"

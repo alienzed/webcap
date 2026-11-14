@@ -1,5 +1,7 @@
 # Epoch Finder — Working Vision
 
+> **Historical design note (November 2026):** DINOv2 evaluation has been retired. The October 17 DINO proposal below is retained as design history, not current implementation guidance. Campaigns, Original VL, and paired-image reference VL remain available; saved DINO records are left untouched.
+
 *WebCap / Test Generations · Discussion draft · 16 October 2026*
 
 ## Why it exists

@@ -302,7 +302,9 @@
   // binds its Scene when the Storyboard is in the overview/list view.
   function studioDirectorSelectedScene(navigation) {
     navigation = navigation || window.getStudioDirectorNavigation();
-    if (!navigation.projectId) return null;
+    if (!navigation.projectId ||
+        (state.studioStoryAccess && state.studioStoryAccess.storyId !== navigation.projectId))
+      return null;
     if (navigation.sceneId) return {
       projectId: navigation.projectId, sceneId: navigation.sceneId,
       sceneNumber:navigation.sceneNumber,
@@ -1917,6 +1919,8 @@
         // The author explicitly approved this read grant in the Create review.
         // Conversation history stays independent of which Project is open in Studio.
         state.studioStoryAccess = {storyId: payload.story.id, label: name};
+        // The Scene from the previous Project cannot follow this explicit continuation.
+        state.sceneRead = null;
         state.studioAccessIndex = null;
         el('director-studio-access-status').textContent = 'Connected to ' + name + '. No fields read yet.';
         el('director-studio-access-data').classList.add('hidden');
@@ -3060,7 +3064,21 @@
   }
 
   function studioDirectorRequestMessages(messages, includePromptContract, explicitWrite, navigationSnapshot) {
-    return requestJson('/fs/studio/director/guidance?targetModel=minimax_h3').then(function (payload) {
+    var navigation = navigationSnapshot || window.getStudioDirectorNavigation();
+    var connected = state.studioStoryAccess && state.studioStoryAccess.storyId;
+    // An explicitly launched write keeps its frozen navigation. Other Director
+    // work uses the connected Project rather than an unrelated Studio shell.
+    var ready = !navigationSnapshot && connected && connected !== navigation.projectId
+      ? requestJson('/fs/storyboard?story=' + encodeURIComponent(connected)).then(function (result) {
+          var story = result && result.story;
+          if (!story || story.id !== connected)
+            throw new Error('The connected Director Project is no longer available.');
+          return {projectId:story.id,projectTitle:story.title,sceneId:'',sceneNumber:0,
+            sceneOrder:story.sceneOrder.slice()};
+        })
+      : Promise.resolve(navigation);
+    return ready.then(function (navigation) {
+      return requestJson('/fs/studio/director/guidance?targetModel=minimax_h3').then(function (payload) {
       if (!payload.system || typeof payload.system !== 'string') {
         throw new Error('Studio Director production guidance is missing.');
       }
@@ -3084,7 +3102,6 @@
         : storyRefs.length === 1
           ? 'A legacy historical Story snapshot exists in history (' + storyRefs[0].slice(6) + '), but it has not been automatically resent.'
           : 'No saved Project Write destination has been selected. Prior explicitly Read content may still exist in conversation history.';
-      var navigation = navigationSnapshot || window.getStudioDirectorNavigation();
       outbound[0] = { role: 'system', content: payload.system +
         '\n\nCURRENT WEBCAP CAPABILITIES (available vs planned):\n' + capabilities +
         '\n\nSTUDIO WORKBENCH STATE (controls, not saved Story facts):\n' + workbench +
@@ -3100,13 +3117,29 @@
       if (includePromptContract) outbound[0].content +=
         '\n\nH3 PRODUCTION PROMPT REFERENCE (know this template when discussing H3; apply it only when drafting an H3 Prompt field, not when authoring Project fields):\n' + payload.promptContract;
       return outbound;
+      });
     });
   }
 
   function studioDirectorChatRequestMessages(messages, selectedScene, navigationSnapshot) {
-    // Studio conversation uses the normal request shape; saved Scene fields
-    // are transient request context, never a mutation or persisted user message.
-    return studioDirectorRequestMessages(messages, true, false, navigationSnapshot).then(function (outbound) {
+    // The existing Director connection owns its subject independently of Studio.
+    // Read that Project once, then supply one consistent navigation and context.
+    var navigation = navigationSnapshot || window.getStudioDirectorNavigation();
+    var connected = state.studioStoryAccess && state.studioStoryAccess.storyId;
+    if (connected && connected !== navigation.projectId) selectedScene = null;
+    var projectId = selectedScene ? selectedScene.projectId :
+      (connected || studioAttachedStoryId() || navigation.projectId);
+    return (projectId
+      ? requestJson('/fs/storyboard?story=' + encodeURIComponent(projectId))
+      : Promise.resolve(null)).then(function (result) {
+      var story = result && result.story;
+      if (projectId && (!story || story.id !== projectId))
+        throw new Error('The selected Director Project is no longer available.');
+      if (story && connected && connected !== navigation.projectId) {
+        navigation = {projectId:story.id,projectTitle:story.title,sceneId:'',sceneNumber:0,
+          sceneOrder:story.sceneOrder.slice()};
+      }
+      return studioDirectorRequestMessages(messages, true, false, navigation).then(function (outbound) {
       outbound[0].content += '\n\nRESPONSE CONTRACT: Return JSON matching the reply/readiness schema.\n' +
         'CONTEXT: WebCap supplies the current selected Scene’s saved fields below when a Scene is selected. ' +
         'Answer questions about those fields directly; use them as the baseline for requested revisions. ' +
@@ -3136,37 +3169,27 @@
         'For other complete fields use the matching capture schema. When a complete new Scene is already authored in conversation, use field="scene", title and content as the full usable H3 Prompt and durationSeconds (requested duration or default 6). WebCap reuses that material for review. ' +
         'For an Invariant use its kind/title, with beforeKind/beforeTitle for an exact known edit.\n';
       if (!selectedScene) {
-        var projectId = studioAttachedStoryId() ||
-          (navigationSnapshot && navigationSnapshot.projectId) ||
-          window.getStudioDirectorNavigation().projectId;
-        if (!projectId) return outbound;
-        return requestJson('/fs/storyboard?story=' + encodeURIComponent(projectId)).then(function (result) {
-          var story = result && result.story;
-          if (!story || story.id !== projectId) throw new Error('The selected Project is no longer available.');
-          outbound[0].content += '\n\nCURRENT SAVED PROJECT OVERVIEW (WebCap supplied):\n' +
-            JSON.stringify({projectId:story.id,title:story.title,concept:story.concept,
-              style:story.style,invariants:story.invariants}) +
-            '\nSaved values supersede earlier conversational drafts.\n';
-          return outbound;
-        });
+        if (!story) return outbound;
+        outbound[0].content += '\n\nCURRENT SAVED PROJECT OVERVIEW (WebCap supplied):\n' +
+          JSON.stringify({projectId:story.id,title:story.title,concept:story.concept,
+            style:story.style,invariants:story.invariants}) +
+          '\nSaved values supersede earlier conversational drafts.\n';
+        return outbound;
       }
-      return requestJson('/fs/storyboard?story=' + encodeURIComponent(selectedScene.projectId))
-        .then(function (result) {
-          var story = result && result.story;
-          if (!story || story.id !== selectedScene.projectId ||
-              !Array.isArray(story.sceneOrder) || !story.sceneOrder.includes(selectedScene.sceneId) ||
-              !story.scenes || !story.scenes[selectedScene.sceneId])
-            throw new Error('The selected Scene is no longer available in its saved Project.');
-          var context = window.studioDirectorWorkbench.sceneRead(story, selectedScene.sceneId);
-          outbound[0].content += '\n\nCURRENT SAVED SCENE (WebCap supplied, not an unsaved conversational proposal):\n' +
-            JSON.stringify({
-              sceneId: selectedScene.sceneId,
-              sceneNumber: story.sceneOrder.indexOf(selectedScene.sceneId) + 1,
-              ...context.payload
-            }) +
-            '\nAnswer using these saved values. Other conversation drafts remain unsaved until applied.\n';
-          return outbound;
-        });
+      if (!story || !Array.isArray(story.sceneOrder) ||
+          !story.sceneOrder.includes(selectedScene.sceneId) ||
+          !story.scenes || !story.scenes[selectedScene.sceneId])
+        throw new Error('The selected Scene is no longer available in its saved Project.');
+      var context = window.studioDirectorWorkbench.sceneRead(story, selectedScene.sceneId);
+      outbound[0].content += '\n\nCURRENT SAVED SCENE (WebCap supplied, not an unsaved conversational proposal):\n' +
+        JSON.stringify({
+          sceneId:selectedScene.sceneId,
+          sceneNumber:story.sceneOrder.indexOf(selectedScene.sceneId) + 1,
+          ...context.payload
+        }) +
+        '\nAnswer using these saved values. Other conversation drafts remain unsaved until applied.\n';
+      return outbound;
+      });
     });
   }
 

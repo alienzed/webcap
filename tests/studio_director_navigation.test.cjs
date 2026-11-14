@@ -183,3 +183,67 @@ test('Studio request freezes navigation with the Scene target, even if navigatio
   assert.match(outgoing[0].content,/Mara walks toward the rover/);
   assert.doesNotMatch(outgoing[0].content,/"sceneId":"b","sceneNumber":2/);
 });
+
+test('open Director badge follows Scene 1 to Scene 2 navigation without starting a new conversation', async()=>{
+  const director=fs.readFileSync(path.join(__dirname,'../tool/js/director_chat.js'),'utf8');
+  function section(code,start,end) {
+    const i=code.indexOf(start),j=code.indexOf(end,i+start.length);
+    assert.ok(i>=0 && j>i,'missing source section: '+start);
+    return code.slice(i,j);
+  }
+  const h=actualSceneRequestFixture();
+  const messages=[{role:'user',content:'Continue discussing this Scene.'}];
+  h.state.modeMessages={storyboard:messages};
+  h.state.open=true;
+  h.state.activeMode='storyboard';
+  // Scene toolbar origin remains available as fallback, but focus navigation wins.
+  h.state.sceneRead={projectId:'p1',sceneId:'a',label:'Scene 1 · Arrival'};
+  const badge={textContent:'',title:'',hidden:true,classList:{
+    toggle(name,hidden) {if(name==='hidden')badge.hidden=hidden;}
+  }};
+  h.scope.el=id=>{
+    assert.equal(id,'director-chat-scene-context');
+    return badge;
+  };
+  // Exercise the actual badge block of syncModeUi without unrelated drawer DOM.
+  vm.runInContext(section(director,'  function syncModeUi() {',
+    "    var row = el('director-chat-mode-row');")+'  }',h.scope);
+  h.scope.window.refreshAssistantModes=()=>h.scope.syncModeUi();
+
+  const storyState={story:h.stories.p1,sceneViewMode:'focus',activeSceneId:'a'};
+  const navigation=vm.createContext({
+    storyState,Promise,window:h.scope.window,
+    flushPendingSaves:()=>Promise.resolve(),
+    clearSceneNewTakeCount(){},clearSceneDirectorCompletion(){},inspectSceneRefinement(){},
+    renderScenes(){},renderSequencePreview(){},
+    document:{querySelector:()=>null},
+    reportError(error){throw error;}
+  });
+  vm.runInContext(section(source,'  function ensureActiveScene(order) {',
+    '  function followRevisionProgress(job) {')+
+    section(source,'  function setSceneViewMode(mode, sceneId) {',
+      '  function takeMediaUrl(storyId, sceneId, take)')+
+    section(source,'  function getStoryboardRouteTarget() {',
+      '  function openStoryboardActivity(target) {'),navigation);
+  h.scope.window.getStudioDirectorNavigation=()=>navigation.getStudioDirectorNavigation();
+  h.scope.window.refreshAssistantModes();
+  assert.equal(badge.textContent,'Scene 1');
+  assert.equal(badge.hidden,false);
+
+  await navigation.setSceneViewMode('focus','b');
+  assert.equal(storyState.activeSceneId,'b');
+  assert.equal(badge.textContent,'Scene 2');
+  assert.equal(badge.hidden,false);
+  assert.strictEqual(h.state.modeMessages.storyboard,messages,'navigation cannot reset conversation');
+  assert.deepEqual(h.requests,[],'navigation must not issue an LLM request');
+
+  const resolved=h.scope.studioDirectorSelectedScene();
+  assert.equal(resolved.sceneId,'b');
+  assert.equal(resolved.label,badge.textContent,'badge and request share target resolver');
+  const outbound=await h.scope.studioDirectorChatRequestMessages(
+    messages,resolved,h.scope.window.getStudioDirectorNavigation());
+  assert.match(outbound[0].content,/"sceneId":"b","sceneNumber":2/);
+  assert.match(outbound[0].content,/The rover drives into a crater/);
+  assert.match(outbound[0].content,/scene:b:durationSeconds","value":9/);
+  assert.doesNotMatch(outbound[0].content,/Mara walks toward the rover/);
+});

@@ -4,7 +4,6 @@ Keeps reference evidence separate from the existing test_vision scores.
 Only validated exact-tag Set references and saved session result media may be used.
 """
 import threading
-import time
 from pathlib import Path
 
 from . import epoch_test_bench as bench
@@ -36,7 +35,7 @@ def read(folder_path, session):
 def prepare(folder_path, criteria):
     from .epoch_finder import _folder_key
     mode = str(criteria.get("method") or "")
-    if mode not in {"rvn", "dino"}:
+    if mode != "rvn":
         raise ValueError("Unknown reference evaluator.")
     session = str(criteria.get("session") or "")
     media = bench.resolve_result_media(folder_path, session, criteria.get("media"))
@@ -60,14 +59,6 @@ def prepare(folder_path, criteria):
             generated = frame
         else:
             generated = media
-        if mode == "dino":
-            from .epoch_dino import compare_images
-            cache = _location(folder_path, session).parent / "reference-embeddings"
-            score = compare_images(reference, generated, cache)
-            assessment = {"method": mode, "group": group, "option": term, "jobId": job_id,
-                          "reference": ref_name, "similarity": score, "at": time.time()}
-            save(folder_path, session, media.name, assessment)
-            return {"assessment": assessment}
         question = reference_comparison_feature(group, term, choices, criteria.get("groupAlias"))
         messages = build_reference_comparison_messages(
             question, vision_resized_image_data_url(reference),
@@ -78,7 +69,7 @@ def prepare(folder_path, criteria):
 
 def save(folder_path, session, media_name, assessment):
     media = bench.resolve_result_media(folder_path, session, media_name)
-    if not isinstance(assessment, dict) or assessment.get("method") not in {"rvn", "dino"}:
+    if not isinstance(assessment, dict) or assessment.get("method") != "rvn":
         raise ValueError("Invalid reference assessment.")
     from .epoch_finder import _folder_key
     verified_reference(_folder_key(folder_path), assessment.get("group"),

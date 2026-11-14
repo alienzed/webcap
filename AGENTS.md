@@ -167,9 +167,22 @@ Keep the UI efficient and calm.
 - **16px is the default body/control size in new or meaningfully revised workflows**, with **18px or more for important labels and actions**, and roughly 24–30px for the current task's primary heading when space permits. **12px is a hard floor for truly incidental metadata only**, not a normal target; aim for 14px+ even for supporting details. Do not trade readability for density: wrap/truncate filenames, allow scrolling, or show fewer cards instead of shrinking text.
 - **The user's active subject or decision owns the dominant heading** of its workspace. In a tag-reference gallery, for example, `BB Shape · ring connectors` is the main heading; generic labels like `Matching images`, counts, and instructions are subordinate. Don't give a container label more visual weight than the actual thing being inspected.
 - Respect hierarchy through font size, weight, spacing, and placement; distinguish a primary heading, supporting labels, actionable controls, and tertiary metadata. Verify real rendered hierarchy at normal browser zoom and representative viewport sizes, rather than assuming the DOM heading tag or existing styling makes it prominent.
-- Make work feel rewarding through **truthful, immediately visible advancement**: show a current goal, clear next action, actual completion/coverage, and distinct selected/done states where that workflow has them. Gamify useful progress, not decoration, fake scores, badges everywhere, confetti, or competing dashboard chrome. Prefer one strong focal point to a wall of uniformly weighted facts.
+- Make work feel rewarding through **truthful, immediately visible advancement**. Show a current goal, clear next action, actual completion/coverage, and distinct selected/done states where useful. Prefer one strong focal point to a wall of equally weighted indicators; see Rewarding, Game-Like UX below.
 - If a screenshot looks too small, inspect the app's actual CSS and layout before attributing it to browser zoom or display scaling. Browser zoom is a hypothesis, not a substitute for correcting undersized in-app typography.
 - These are default requirements for **new and meaningfully revised UI**, and when correcting a reported readability problem; do not redesign unrelated screens just to apply the rules.
+
+### Rewarding, Game-Like UX
+
+WebCap is a creative, iterative tool. Make meaningful work feel engaging, satisfying, and forward-moving. Treat gamification as a design lens for multi-step workflows, not a separate scorekeeping system.
+
+- **Make the next win obvious.** Give the user a concrete goal and a prominent action that advances it. Prefer "Review 8 remaining captions" over a generic status or instructional paragraph.
+- **Show real momentum.** Reflect progress at both the current-item and workflow level when useful: reviewed/remaining counts, completed dimensions, QA coverage, prepared Sets, and actual run milestones. Distinguish required completion from optional improvements.
+- **Make each action feel consequential.** Immediately acknowledge a completed review, accepted change, or finished step; transition naturally to the next useful item. Use clear done/selected states and avoid making the user re-open a dashboard to see what changed.
+- **Celebrate meaningful milestones.** A little motion, color, warmth, or a brief completion moment can be delightful when a Set becomes ready or a review pass finishes. Keep it contextual, brief, non-blocking, and accessible, including reduced-motion preferences.
+- **Reward outcomes, not busywork.** Use authentic progress and quality signals rather than arbitrary XP, click counts, vanity badges, punitive streaks, or fabricated percentages. Gamification should improve decisions and motivation, not incentivize tool usage for its own sake.
+- **Protect speed and agency.** Keep navigation, backtracking, partial completion, and expert shortcuts easy. Use existing workspace surfaces rather than adding nested cards, persistent celebration chrome, or extra confirmation steps.
+
+For any multi-step UX, ask: **What did I accomplish? How much is left? What's the best next action?** If the answers are hard to see, improve the flow before adding decoration.
 
 ## Visible, Rewarding Progress
 

@@ -1552,9 +1552,9 @@ def test_retired_scene_intent_empty_and_missing_are_compatible_with_prompt_edits
 
 def test_legacy_workshop_context_uses_saved_prompt_without_scene_intent(storyboard_fs):
     prompt = (
-        "Subject:\\nPerson\\n\\n"
-        "Scene Overview:\\nAn approved action.\\n\\n"
-        "integrated_multimodal_description:\\n[Shot 1] (0s-8s) Person moves."
+        "Subject:\nPerson\n\n"
+        "Scene Overview:\nAn approved action.\n\n"
+        "integrated_multimodal_description:\n[Shot 1] (0s-8s) Person moves."
     )
     story = storyboard_store.create_story({"title": "Workshop context"})
     story, scene = storyboard_store.add_scene(story["id"], {

@@ -93,6 +93,21 @@ const take=(name='a')=>({
   loras:[{name:'take.safetensors',strength:.75}],references:{first_frame:'some/saved/reference.png'}
 });
 
+test('loading a Take defaults to a fresh seed while preserving explicit seed edits',()=>{
+  const f=fixture(), {api,element}=f;
+  const saved=take();
+  api.loadGenerateTakeIntoEditor(saved);
+  assert.equal(saved.settings.seed,101,'the recorded Take seed stays available for reproduction');
+  assert.equal(element('generate-seed').value,'-1','a loaded Take should not repeat its prior noise by default');
+  element('generate-seed').value='4567';
+  api.switchGenerateEditorMode('working');
+  assert.equal(element('generate-seed').value,'-1','Working retains its independent seed');
+  api.switchGenerateEditorMode('loaded');
+  assert.equal(element('generate-seed').value,'4567','explicit seed survives tab switches');
+  api.loadGenerateTakeIntoEditor(take('another'));
+  assert.equal(element('generate-seed').value,'-1','loading another Take resets the seed again');
+});
+
 test('loading a completed Take isolates all Working fields, LoRAs and File references',()=>{
   const f=fixture(), {api,state,element}=f;
   api.loadGenerateTakeIntoEditor(take());
@@ -247,6 +262,7 @@ test('generating from Loaded freezes its recipe even if reference upload overlap
   assert.equal(sent.length,1);
   assert.equal(sent[0].prompt,'Loaded prompt a');
   assert.equal(sent[0].settings.duration,'3');
+  assert.equal(sent[0].settings.seed,'-1','generating from a loaded Take requests a fresh seed');
   assert.equal(sent[0].loras[0].name,'take.safetensors');
   assert.equal(sent[0].loras[0].strength,.75);
   assert.equal(sent[0].references.first_frame,'submitted-ref.png');

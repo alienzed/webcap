@@ -2381,14 +2381,15 @@ def director_chat_route():
                             },
                         },
                     },
-                    "firstScenes": {
+                    "initialScenes": {
                         "type": "array", "maxItems": 32,
                         "items": {
                             "type": "object", "additionalProperties": False,
-                            "required": ["title", "prompt"],
+                            "required": ["title", "brief", "durationSeconds"],
                             "properties": {
-                                "title": {"type": "string"},
-                                "prompt": {"type": "string", "minLength": 1},
+                                "title": {"type": "string", "maxLength": 240},
+                                "brief": {"type": "string", "minLength": 1, "maxLength": 4000},
+                                "durationSeconds": {"type": "integer", "minimum": 4, "maximum": 15},
                             },
                         },
                     },

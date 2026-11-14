@@ -1841,7 +1841,6 @@ def apply_scene_repairs(story_id, payload, repair_base, model_id="", job_id=""):
             raise RuntimeError("A Scene changed structurally while Check & Repair was running. Run Check & Repair again.")
         current_context = {
             "title": str(current.get("title") or ""),
-            "summary": str(current.get("summary") or ""),
             "entryState": str(current.get("entryState") or ""),
             "exitState": str(current.get("exitState") or ""),
             "prompt": str(current.get("prompt") or ""),

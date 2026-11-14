@@ -40,6 +40,8 @@ on:
       - 'tests/caption_assist_opening_sight.test.cjs'
       - 'tests/caption_assist_tag_mismatch.test.cjs'
       - 'tool/js/generate.js'
+      - 'tool/css/generate.css'
+      - 'tests/generations_preview_fit.test.cjs'
       - 'tests/generations_form_preservation.test.cjs'
       - 'tests/generations_editor_tabs.test.cjs'
       - 'tool/js/sight_group_suggestions.js'
@@ -187,6 +189,7 @@ jobs:
           node --check tool/js/caption_enrichment.js
           node --test tests/caption_enrichment.test.cjs
           node --check tool/js/generate.js
+          node --test tests/generations_preview_fit.test.cjs
           node --test tests/generations_form_preservation.test.cjs
           node --test tests/generate_sweep_selection.test.cjs
           node --test tests/generations_editor_tabs.test.cjs

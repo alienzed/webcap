@@ -1386,7 +1386,8 @@ def test_workshop_allows_discussion_without_shot_parser_support(storyboard_fs):
     context = storyboard_store.workshop_scene_context(story["id"], scene["id"])
     assert context["shots"] == ""
     assert "integrated_multimodal_description" in context["shotError"]
-    assert context["sceneSummary"] == "Exploring a visual idea"
+    assert "sceneSummary" not in context
+    assert storyboard_store.load_story(story["id"])["scenes"][scene["id"]]["summary"] == "Exploring a visual idea"
     with pytest.raises(ValueError, match="one unambiguous"):
         storyboard_store.apply_workshop_shots(
             story["id"], scene["id"], context["expectedPrompt"], "[Shot 1]\nAn attempt"

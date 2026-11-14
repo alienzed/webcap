@@ -503,6 +503,8 @@ def create_campaign(folder_path, criteria):
     evaluation = criteria.get("referenceEvaluation")
     if not isinstance(evaluation, dict) or type(evaluation.get("rvn")) is not bool:
         raise ValueError("Select reference evaluation mechanisms explicitly.")
+    if evaluation.get("dino") is True:
+        raise ValueError("DINOv2 evaluation has been retired.")
     scoped = reference_vocabulary(folder, None) if approved else []
     reference_groups = {
         (attribute, option): {group["group"] for group in scoped

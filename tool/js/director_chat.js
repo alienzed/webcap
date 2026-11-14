@@ -3873,20 +3873,6 @@
     }
   }
 
-  // A Director model is selected automatically when discovery returns models.
-  // Readiness also depends on the Studio conversation and active requests; these
-  // states must not be misreported as a missing model selection.
-  function studioDirectorReadinessIssue() {
-    if (!state.open || state.activeMode !== 'storyboard') return 'Open Studio Director to continue.';
-    if (!state.sessionReady) return state.sessionError
-      ? 'Director conversation is unavailable. Check the Console.'
-      : 'Director conversation is loading.';
-    if (state.pending || state.attachmentPending) return 'Finish the current Director request first.';
-    if (!state.modelsLoaded) return 'Director models are loading.';
-    if (!state.modelId) return 'No Director model is available. Refresh models.';
-    return '';
-  }
-
   window.studioDirectorBridge = {
     placeSuggestedAction: placeStudioSuggestion,
     canReview: function () {
@@ -3894,8 +3880,20 @@
         !state.pending && !state.attachmentPending;
     },
     isStudioMode: function () {return state.open && state.activeMode === 'storyboard';},
-    isReady: function () { return !studioDirectorReadinessIssue(); },
-    readinessMessage: studioDirectorReadinessIssue,
+    isReady: function () { return !this.readinessMessage(); },
+    // A model is selected automatically when discovery returns available models.
+    // Being closed, loading conversation state, or busy is not a missing model.
+    readinessMessage: function () {
+      if (!state.open || state.activeMode !== 'storyboard') return 'Open Studio Director to continue.';
+      if (!state.sessionReady) return state.sessionError
+        ? 'Director conversation is unavailable. Check the Console.'
+        : 'Director conversation is loading.';
+      if (state.pending || state.attachmentPending) return 'Finish the current Director request first.';
+      if (!state.modelId) return state.modelsLoaded
+        ? 'No Director model is available. Refresh models.'
+        : 'Director models are loading.';
+      return '';
+    },
     workingStoryId: function () { return studioAttachedStoryId() || window.getStudioDirectorNavigation().projectId; },
     modelId: function () { return state.modelId; },
     messages: function () {

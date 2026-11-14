@@ -6,6 +6,8 @@
     modelsLoaded: false,
     modelId: getDirectorModelPreference('webcap.directorChat.model'),
     activeMode: 'chat',
+    // Same Assistant state owns the last surface selected inside Studio.
+    lastStudioMode: 'chat',
     messages: [],
     storyboardAttachments: {},
     studioStoryAccess: null,
@@ -447,7 +449,10 @@
       var mode = contextualModes[modeId];
       if (!mode || !modeAvailable(mode)) modeId = 'chat';
     }
-    if (state.pending || state.activeMode === modeId) return;
+    if (state.pending) return;
+    if (studioWorkspaceVisible() && (modeId === 'chat' || modeId === 'storyboard'))
+      state.lastStudioMode = modeId;
+    if (state.activeMode === modeId) return;
     var input = el('director-chat-input');
     state.draftByMode[state.activeMode] = input.value;
     if (persistentMode(state.activeMode) && state.sessionReady && state.sessionDirty[state.activeMode]) {
@@ -764,6 +769,8 @@
       return requestJson('/fs/director/chats/' + encodeURIComponent(chatId));
     }).then(function (result) {
       state.activeMode = result.chat.mode;
+      if (studioWorkspaceVisible() && (result.chat.mode === 'chat' || result.chat.mode === 'storyboard'))
+        state.lastStudioMode = result.chat.mode;
       restoreSession(result.chat);
       if (el('director-chat-history-panel').open) el('director-chat-history-panel').close();
       finishProgress(null);
@@ -3733,8 +3740,8 @@
     }
 
     toggle.onclick = function () {
-      if (state.open && state.activeMode === 'chat') setOpen(false);
-      else setOpen(true, 'chat');
+      if (state.open) setOpen(false);
+      else setOpen(true, studioWorkspaceVisible() ? state.lastStudioMode : 'chat');
     };
     pin.onclick = function () { setPinned(!state.pinned); };
     close.onclick = function () {

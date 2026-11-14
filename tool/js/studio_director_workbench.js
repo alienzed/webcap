@@ -631,10 +631,10 @@
             ? 'Revise the one selected existing Scene (' + ids[0] + ') according to the agreed creative discussion.'
             : 'Revise the selected existing Scenes according to the agreed creative discussion.',
           'Return ONLY a JSON object with a scenes array, with one entry per selected Scene ID in the same order.',
-          'Each entry includes its exact saved sceneId and the complete final text of whichever fields need changing: title, summary (Scene Intent), and/or prompt (H3 Prompt). Omit unchanged fields.',
-          'Consider Title, Intent and H3 Prompt together as one Scene. Align the affected parts with the agreed change, preserving parts that remain appropriate and respecting any explicit limits from the author.',
+          'Each entry includes its saved sceneId and complete replacement text for changed fields. For Scenes with an H3 Prompt, revise title and/or prompt; that prompt is the authoritative description. For outline-only Scenes, summary is available for planning.',
+          'Align the selected Scene as one creative unit. Treat an existing H3 Prompt as authoritative over an older saved summary. Preserve unrelated material and respect explicit author limits.',
           ids.length === 1
-            ? 'Example of an Intent-only revision for this Scene: ' + JSON.stringify({scenes:[{sceneId:ids[0],summary:'complete revised Scene Intent'}]}) + '. For a prompt-only revision, use prompt instead of summary.'
+            ? 'Example of a prompt-only revision for this Scene: ' + JSON.stringify({scenes:[{sceneId:ids[0],prompt:'complete revised H3 Prompt'}]}) + '. Use summary only if this Scene has no H3 Prompt yet.'
             : 'For each selected Scene, return only the relevant changed fields. Every entry must use its corresponding saved sceneId.',
           'Use the saved Scene values as the baseline. Return complete replacement text for changed fields; omit unchanged fields. If no changes are needed, return only sceneId.',
           'Preserve unrelated creative content and untouched Scene fields.',

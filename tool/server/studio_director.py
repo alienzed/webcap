@@ -147,8 +147,8 @@ def chat_response_schema():
             "readHints": {"type": "array", "maxItems": 5,
                           "items": {"type": "string", "maxLength": 120}},
             "writeHint": {"type": "string", "enum": operations},
-            # Optional single-Scene launch instruction, authored from the discussion.
-            # Existing readiness records without this field remain valid.
+            # Structured single-Scene launch instruction, authored from discussion.
+            # Older persisted readiness records remain valid without this field.
             "writeInstruction": {"type": "string", "maxLength": 3000},
             "writeFields": {"type": "array", "maxItems": 4 if fields else 0,
                             "uniqueItems": True,
@@ -161,7 +161,7 @@ def chat_response_schema():
         }
         readiness.append({
             "type": "object", "additionalProperties": False,
-            "required": ["checks", "readHints", "writeHint", "writeFields", "sceneId", "sceneNumber", "capture"],
+            "required": ["checks", "readHints", "writeHint", "writeInstruction", "writeFields", "sceneId", "sceneNumber", "capture"],
             "properties": properties,
         })
     return {

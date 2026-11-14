@@ -82,7 +82,7 @@ def test_storyboard_phase_one_is_manual_first_and_provider_independent():
     assert "/fs/storyboard/generation/capabilities" in storyboard
     assert "/fs/storyboard/generation" in storyboard
     assert "Generation prompt" in storyboard
-    assert "Scene intent" in storyboard
+    assert 'data-scene-field="summary"' not in storyboard
     assert "Entry state" in storyboard
     assert "Exit state" in storyboard
     assert "Notes" in storyboard
@@ -288,7 +288,7 @@ def test_storyboard_revise_scenes_lives_in_director_tools_and_keeps_sparse_scene
 
     scene_payload = storyboard.split("function scenePayloadFromUi(sceneId)", 1)[1].split("\n  function ", 1)[0]
     assert "directorTargetPending({ kind: 'repair'" in scene_payload
-    assert "delete payload.summary;" in scene_payload
+    assert 'summary: field(\'summary\')' not in scene_payload
     assert "delete payload.prompt;" in scene_payload
     assert 'llm_storyboard_target_busy(story_id, "repair")' in app
 
@@ -807,7 +807,7 @@ def test_storyboard_scene_title_lives_in_main_form_and_story_switch_reopens_cont
     assert "'<header class=\"storyboard-scene-header\">'" not in storyboard
     assert 'storyboard-scene-title-field' in scene_main
     assert '<span>Title</span><input data-scene-field="title"' in scene_main
-    assert '<span>Scene intent</span>' in scene_main
+    assert 'data-scene-field="summary"' not in scene_main
     assert "var previousStoryId = storyState.story && storyState.story.id;" in storyboard
     assert "if (previousStoryId !== payload.story.id && storyState.storyCollapsed) setStoryCollapsed(false);" in storyboard
     assert "if (storyState.storyCollapsed) setStoryCollapsed(false);" in storyboard

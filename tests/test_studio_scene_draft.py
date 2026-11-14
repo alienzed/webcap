@@ -91,14 +91,14 @@ def test_project_can_start_without_scenes_or_with_prompt_only_scenes(isolated_st
     blank = client.post("/fs/studio/director/project-create", json={
         "proposal": {"title": "", "concept": "An idea", "style": "", "invariants": []}
     })
-    assert blank.status_code == 200, blank.json
+    assert blank.status_code == 201, blank.json
     assert not blank.json["story"]["sceneOrder"]
 
     created = client.post("/fs/studio/director/project-create", json={
         "proposal": {"title": "Project", "concept": "", "style": "", "invariants": [],
                      "firstScenes": [{"title": "Opening", "prompt": "Complete first Prompt"}]}
     })
-    assert created.status_code == 200, created.json
+    assert created.status_code == 201, created.json
     story = created.json["story"]
     scene = story["scenes"][story["sceneOrder"][0]]
     assert scene["prompt"] == "Complete first Prompt"

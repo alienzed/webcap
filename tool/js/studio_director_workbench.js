@@ -6,10 +6,10 @@
   var readChoices = {}, writeOperationChosen = false, lastReadSource = null;
   var sceneSelectionManual = false, sceneSelectionProject = '', recommendationProject = '';
   var lastQuickAction = 'read', creativeCapture = null;
-  var sceneFields = ['summary', 'prompt', 'title'];
+  var sceneFields = ['prompt', 'title'];
   var projectFields = ['title', 'concept', 'style', 'invariants'];
   var labels = {title:'Title', concept:'Concept', style:'Visual / atmosphere',
-    invariants:'Invariants', invariant:'Invariant', scene:'New Scene', summary:'Intent', prompt:'H3 Prompt',
+    invariants:'Invariants', invariant:'Invariant', scene:'New Scene', prompt:'H3 Prompt',
     references:'Reference frames', durationSeconds:'Duration',
     generationSettings:'Generation settings'};
   function el(id) { return document.getElementById(id); }
@@ -105,9 +105,7 @@
       var scene = story.scenes && story.scenes[id];
       if (!scene) throw new Error('Project has a Scene index with no matching Scene.');
       // Once authored, the complete H3 Prompt replaces the separate outline in Director context.
-      var contextFields = String(scene.prompt || '').trim()
-        ? ['title', 'prompt', 'durationSeconds']
-        : ['title', 'summary', 'durationSeconds'];
+      var contextFields = ['title', 'prompt', 'durationSeconds'];
       var paths = contextFields.map(function (field) {
         return 'scene:' + id + ':' + field;
       });
@@ -144,7 +142,7 @@
           value = story[field];
         } else {
           if (parts.length !== 3 || parts[0] !== 'scene' ||
-              ['title','summary','prompt','durationSeconds'].indexOf(parts[2]) === -1 ||
+              ['title','prompt','durationSeconds'].indexOf(parts[2]) === -1 ||
               !story.scenes || !story.scenes[parts[1]] ||
               (story.sceneOrder || []).indexOf(parts[1]) === -1)
             throw new Error('Selected Scene field is not in this Project: ' + key);
@@ -210,14 +208,14 @@
       if (writingNewScenes) {
         data.currentScenes=(p.sceneOrder||[]).map(function (id,index) {
           var scene=p.scenes[id];
-          return {id:id,position:index+1,title:scene.title,intent:scene.summary};
+          return {id:id,position:index+1,title:scene.title,prompt:scene.prompt};
         });
       }
       if (revisingScenes) {
         data.selectedScenes = Array.from(el('studio-dw-batch-scenes').querySelectorAll('input:checked'))
           .map(function (check) {return p.scenes && p.scenes[check.value];})
           .filter(Boolean).map(function (scene) {
-            return {id:scene.id,title:scene.title,intent:scene.summary,prompt:scene.prompt,
+            return {id:scene.id,title:scene.title,prompt:scene.prompt,
               durationSeconds:scene.durationSeconds,invariantRefs:scene.invariantRefs};
           });
       }
@@ -386,7 +384,7 @@
     if (!scene || (story.sceneOrder || []).indexOf(sceneId) === -1)
       throw new Error('Select a saved Scene to review.');
     fields.forEach(function (key) {
-      if (['title','summary','prompt'].indexOf(key) === -1 || typeof candidate[key] !== 'string')
+      if (['title','prompt'].indexOf(key) === -1 || typeof candidate[key] !== 'string')
         throw new Error('Director did not supply complete ' + key + ' material.');
     });
       proposedScene = {storyId:story.id,sceneId:sceneId,expected:{},fields:fields};
@@ -421,7 +419,7 @@
   }
 
   function reviewCreativeCapture(capture) {
-    if (!capture || !capture.content || !['title','concept','style','summary','prompt','invariant','scene'].includes(capture.field))
+    if (!capture || !capture.content || !['title','concept','style','prompt','invariant','scene'].includes(capture.field))
       throw new Error('No valid authored material is ready for review.');
     if (!window.studioDirectorBridge.canReview())
       throw new Error('Open the Studio conversation before reviewing this change.');
@@ -461,7 +459,7 @@
         var draft = {sceneId:sceneTarget};
         draft[capture.field] = capture.content;
         proposedBatch = {storyId:story.id,scenes:[{sceneId:sceneTarget,
-          before:{position:story.sceneOrder.indexOf(sceneTarget)+1,title:scene.title,summary:scene.summary,prompt:scene.prompt},
+          before:{position:story.sceneOrder.indexOf(sceneTarget)+1,title:scene.title,prompt:scene.prompt},
           draft:draft}]};
         renderBatchReview();
       }).catch(function (error) {
@@ -545,7 +543,7 @@
             return {
               sceneId:entry.sceneId,
               before:{sceneId:entry.sceneId,position:ids.indexOf(entry.sceneId)+1,
-                title:scene.title,summary:scene.summary,prompt:scene.prompt},
+                title:scene.title,prompt:scene.prompt},
               draft:{sceneId:entry.sceneId,prompt:entry.prompt}
             };
           })
@@ -577,7 +575,7 @@
         if (!sceneFields.includes(key) || typeof candidate[key] !== 'string' ||
             !candidate[key].trim())
           throw new Error('Director returned invalid Scene field "' + key +
-            '" for Scene ' + candidate.sceneId + ' (allowed: title, summary, prompt; nonempty strings).\nRaw Director response:\n' + raw);
+            '" for Scene ' + candidate.sceneId + ' (allowed: title, prompt; nonempty strings).\nRaw Director response:\n' + raw);
       });
     });
     return ids.map(function (id) {
@@ -611,7 +609,7 @@
           if (!scene || (story.sceneOrder || []).indexOf(id) === -1)
             throw new Error('A selected Scene no longer exists.');
           return {sceneId:id, position:(story.sceneOrder || []).indexOf(id) + 1,
-            title:scene.title, summary:scene.summary, prompt:scene.prompt,
+            title:scene.title, prompt:scene.prompt,
             durationSeconds:scene.durationSeconds, invariantRefs:scene.invariantRefs};
         });
         var suggested = recommendedSceneId(story);
@@ -631,10 +629,10 @@
             ? 'Revise the one selected existing Scene (' + ids[0] + ') according to the agreed creative discussion.'
             : 'Revise the selected existing Scenes according to the agreed creative discussion.',
           'Return ONLY a JSON object with a scenes array, with one entry per selected Scene ID in the same order.',
-          'Each entry includes its saved sceneId and complete replacement text for changed fields. For Scenes with an H3 Prompt, revise title and/or prompt; that prompt is the authoritative description. For outline-only Scenes, summary is available for planning.',
-          'Align the selected Scene as one creative unit. Treat an existing H3 Prompt as authoritative over an older saved summary. Preserve unrelated material and respect explicit author limits.',
+          'Each entry includes its saved sceneId and complete replacement text for changed fields: title and/or full H3 Prompt. The Prompt is the Scene creative content.',
+          'Align the selected Scene as one creative unit. Author a full usable H3 Prompt when writing a Scene, including one that has no Prompt yet. Preserve unrelated material and respect explicit author limits.',
           ids.length === 1
-            ? 'Example of a prompt-only revision for this Scene: ' + JSON.stringify({scenes:[{sceneId:ids[0],prompt:'complete revised H3 Prompt'}]}) + '. Use summary only if this Scene has no H3 Prompt yet.'
+            ? 'Example of a prompt-only revision for this Scene: ' + JSON.stringify({scenes:[{sceneId:ids[0],prompt:'complete revised H3 Prompt'}]}) 
             : 'For each selected Scene, return only the relevant changed fields. Every entry must use its corresponding saved sceneId.',
           'Use the saved Scene values as the baseline. Return complete replacement text for changed fields; omit unchanged fields. If no changes are needed, return only sceneId.',
           'Preserve unrelated creative content and untouched Scene fields.',
@@ -672,7 +670,7 @@
       unchangedTitle.textContent = 'Other parts';
       unchangedTitle.title = 'Parts retained by Director; expand to inspect or edit.';
       unchanged.appendChild(unchangedTitle);
-      ['title','summary','prompt'].forEach(function (field) {
+      ['title','prompt'].forEach(function (field) {
         var row = document.createElement('div'), selection = document.createElement('label'), checkbox = document.createElement('input'),
           editor = document.createElement('textarea'), old = entry.before[field] || '';
         var value = Object.prototype.hasOwnProperty.call(entry.draft, field) ? entry.draft[field] : old;
@@ -832,7 +830,7 @@
   }
   function captureActionLabel(capture) {
     return capture.field === 'scene' ? 'Review new Scene' :
-      ['summary','prompt'].includes(capture.field) ? 'Review Scene' : 'Review Project Overview';
+      capture.field === 'prompt' ? 'Review Scene' : 'Review Project Overview';
   }
   function readRecommendedProject() {
     var id = window.studioDirectorBridge.workingStoryId() || activeTarget().storyId;
@@ -882,7 +880,7 @@
         ? recommendations.sceneId === creativeCapture.sceneId
         : recommendations.writeHint === 'project' && projectFields.includes(captureField));
       var duplicatesCapture = sameTarget && fields.length > 0 && fields.every(function (field) {
-        return field === captureField || (creativeCapture.field === 'scene' && ['title','summary'].includes(field));
+        return field === captureField || (creativeCapture.field === 'scene' && ['title','prompt'].includes(field));
       });
       var label = writeActionLabel();
       if (label && !duplicatesCapture) available.push({
@@ -927,9 +925,7 @@
     sceneRead: function (story, sceneId) {
       if (!story || !story.sceneOrder.includes(sceneId)) throw new Error('Select a saved Scene in this Project.');
       var scene = story.scenes[sceneId];
-      var fields = String(scene.prompt || '').trim()
-        ? ['title','prompt','durationSeconds']
-        : ['title','summary','durationSeconds'];
+      var fields = ['title','prompt','durationSeconds'];
       var keys = projectFields.map(function (field) {return 'project.' + field;})
         .concat(fields.map(function (field) {return 'scene:' + sceneId + ':' + field;}));
       return {payload:readPayload(story, keys), keys:keys,
@@ -955,9 +951,9 @@
     markSavedFields:function(selected,story){
       if (!story || !story.id) throw new Error('Field update feedback needs the saved Project identity.');
       var values=selected.savedFields || selected.fields || selected;
-      var keys=Object.keys(values).filter(function(key){return ['title','concept','style','invariants','summary','prompt'].includes(key);});
+      var keys=Object.keys(values).filter(function(key){return ['title','concept','style','invariants','prompt'].includes(key);});
       if (selected.scenes && typeof selected.scenes==='object') keys.push('Scene revisions');
-      var descriptions={title:'Title',concept:'Concept',style:'Visual / atmosphere',invariants:'Invariants',summary:'Scene Intent',prompt:'H3 Prompt'};
+      var descriptions={title:'Title',concept:'Concept',style:'Visual / atmosphere',invariants:'Invariants',prompt:'H3 Prompt'};
       var label=keys.map(function(key){return descriptions[key] || key;}).join(', ');
       var button=el('studio-dw-write');
       button.dataset.result='success';
@@ -1062,19 +1058,16 @@
         var isInvariant = capture.field === 'invariant';
         var expectedKeys = isInvariant ? 'beforeKind,beforeTitle,content,field,kind,sceneId,title' :
           capture.field === 'scene'
-            ? (Object.prototype.hasOwnProperty.call(capture, 'prompt')
-                ? 'content,field,prompt,sceneId,title' : 'content,field,sceneId,title')
+            ? 'content,field,sceneId,title'
             : 'content,field,sceneId';
         if (typeof capture !== 'object' || Array.isArray(capture) ||
             Object.keys(capture).sort().join(',') !== expectedKeys ||
-            ['title','concept','style','summary','prompt','invariant','scene'].indexOf(capture.field) === -1 ||
+            ['title','concept','style','prompt','invariant','scene'].indexOf(capture.field) === -1 ||
             typeof capture.content !== 'string' || !capture.content.trim() || capture.content.length > 20000 ||
             typeof capture.sceneId !== 'string' || capture.sceneId.length > 160 ||
             (['title','concept','style','invariant','scene'].indexOf(capture.field) !== -1 && capture.sceneId) ||
-            (['summary','prompt'].indexOf(capture.field) !== -1 && !capture.sceneId) ||
-            (capture.field === 'scene' && (typeof capture.title !== 'string' || capture.title.length > 240 ||
-              (Object.prototype.hasOwnProperty.call(capture, 'prompt') &&
-                (typeof capture.prompt !== 'string' || capture.prompt.length > 20000)))) ||
+            (capture.field === 'prompt' && !capture.sceneId) ||
+            (capture.field === 'scene' && (typeof capture.title !== 'string' || capture.title.length > 240)) ||
             (isInvariant && (
               ['character','location','visual','world','sound','custom'].indexOf(capture.kind) === -1 ||
               typeof capture.title !== 'string' || !capture.title.trim() || capture.title.length > 240 ||

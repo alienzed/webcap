@@ -2354,7 +2354,6 @@ def director_chat_route():
                 "type": "object", "additionalProperties": False,
                 "properties": {
                     "title": {"type": "string"},
-                    "summary": {"type": "string"},
                     "prompt": {"type": "string"},
                 },
             }
@@ -2379,7 +2378,6 @@ def director_chat_route():
                                         "properties": {
                                             "sceneId": {"type": "string"},
                                             "title": {"type": "string"},
-                                            "summary": {"type": "string"},
                                             "prompt": {"type": "string"},
                                         }}}
                 },
@@ -2393,10 +2391,9 @@ def director_chat_route():
                         "type": "array", "minItems": 1, "maxItems": 32,
                         "items": {
                             "type": "object", "additionalProperties": False,
-                            "required": ["title", "summary", "prompt", "durationSeconds"],
+                            "required": ["title", "prompt", "durationSeconds"],
                             "properties": {
                                 "title": {"type": "string"},
-                                "summary": {"type": "string", "minLength": 1},
                                 "prompt": {"type": "string", "minLength": 1},
                                 "durationSeconds": {"type": "number", "minimum": 4, "maximum": 15},
                             },
@@ -2429,10 +2426,10 @@ def director_chat_route():
                         "type": "array", "maxItems": 32,
                         "items": {
                             "type": "object", "additionalProperties": False,
-                            "required": ["title", "summary"],
+                            "required": ["title", "prompt"],
                             "properties": {
                                 "title": {"type": "string"},
-                                "summary": {"type": "string", "minLength": 1},
+                                "prompt": {"type": "string", "minLength": 1},
                             },
                         },
                     },
@@ -2443,10 +2440,10 @@ def director_chat_route():
             contract["response_schema"] = {
                 "type": "object",
                 "additionalProperties": False,
-                "required": ["title", "summary", "rationale"],
+                "required": ["title", "prompt", "rationale"],
                 "properties": {
                     "title": {"type": "string"},
-                    "summary": {"type": "string", "minLength": 1},
+                    "prompt": {"type": "string", "minLength": 1},
                     "rationale": {"type": "string"},
                 },
             }
@@ -2659,7 +2656,6 @@ def storyboard_director_route():
                 "scenes": {
                     scene_id: {
                         "title": str((scenes.get(scene_id) or {}).get("title") or ""),
-                        "summary": str((scenes.get(scene_id) or {}).get("summary") or ""),
                         "entryState": str((scenes.get(scene_id) or {}).get("entryState") or ""),
                         "exitState": str((scenes.get(scene_id) or {}).get("exitState") or ""),
                         "prompt": str((scenes.get(scene_id) or {}).get("prompt") or ""),

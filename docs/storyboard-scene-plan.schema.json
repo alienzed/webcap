@@ -16,7 +16,6 @@
         "additionalProperties": false,
         "required": [
           "title",
-          "summary",
           "prompt",
           "suggestedDurationSeconds"
         ],
@@ -24,11 +23,6 @@
           "title": {
             "type": "string",
             "minLength": 1
-          },
-          "summary": {
-            "type": "string",
-            "minLength": 1,
-            "description": "Short Scene overview / intent."
           },
           "entryState": {
             "type": "string",

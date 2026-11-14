@@ -129,7 +129,7 @@ test('the first accepted assessment is current immediately, rather than labelled
   const end=workbench.indexOf('\n  };\n\n  function bind()',start);
   assert.ok(start>=0 && end>start);
   const scope=vm.createContext({readiness:[],projectFields:['title','concept','style','invariants'],
-    sceneFields:['title','summary','prompt'],status:message=>assert.fail(message),
+    sceneFields:['title','prompt'],status:message=>assert.fail(message),
     renderReadiness:list=>assert.equal(list.length,1),
     setReadinessFreshness:stale=>{
       assert.equal(stale,false);
@@ -168,7 +168,7 @@ test('Invariant capture uses explicit saved identity rather than treating rename
   assert.match(workbench, /creativeCapture = capture/);
 });
 
-test('a complete Scene Intent can open existing placement review with no duplicate LLM call', () => {
+test('a complete Scene Prompt can open existing placement review with no duplicate LLM call', () => {
   const capture = {field:'scene',title:'Opening chase',content:'The actor reaches the gate.',sceneId:''};
   assert.deepEqual(parse(envelope({...valid,capture})).readiness.capture,capture);
   assert.match(director, /reviewSceneCapture: function \(capture, storyId\)/);
@@ -209,7 +209,7 @@ test('Director guidance presents at most one contextual action and keeps assessm
 test('Scene revisions select saved Scenes, leaving changed fields to Director', () => {
   assert.match(workbench, /function recommendedSceneId\(story\)/);
   assert.match(workbench, /story\.sceneOrder\.includes\(id\)/);
-  assert.match(workbench, /For Scenes with an H3 Prompt, revise title and\/or prompt/);
+  assert.match(workbench, /The Prompt is the Scene creative content/);
   assert.match(workbench, /validateSceneRevisionDraft\(result, ids, selected, raw\)/);
   assert.doesNotMatch(workbench, /applySuggestedWriteFields/);
   assert.doesNotMatch(html, /id="studio-dw-batch-fields"/);

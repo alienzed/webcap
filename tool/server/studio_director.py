@@ -57,14 +57,12 @@ _H3_STUDIO_CORE = (
     "overall structure and how Scenes relate. Project Visual / atmosphere (story.style) "
     "sets the shared look, mood and camera language. Project Invariants (story.invariants) "
     "record only fixed identities or facts that must survive across relevant Scenes. "
-    "Scene summary (scene.summary) is a planning outline until an H3 Prompt exists. "
-    "Once an H3 Prompt (scene.prompt) is authored, that complete saved prompt is the "
-    "authoritative Scene description, including its Scene Overview when present. "
-    "Treat older saved summaries as historical outlines, not competing instructions. "
+    "A Scene's full H3 Prompt (scene.prompt) is its creative content; its Title identifies it, "
+    "and duration is a generation setting. Older saved summaries are dormant legacy data. "
     "MH3 Take generation uses the saved H3 Prompt directly. "
     "Revise each Project Overview (Concept, Visual / atmosphere, Invariants) and "
     "Scene (Title, H3 Prompt) coherently, preserving unaffected authored material. "
-    "For planning-only Scenes, develop the outline before authoring the prompt. "
+    "When writing a Scene, author its complete usable H3 Prompt. "
     "Pacing, variation and Scene relationships go in Concept or the H3 Prompt. "
     "FIELD DEVELOPMENT: Based on discussed or explicitly Read material, fill consequential gaps: "
     "distinctive stable character traits, recognizable location layouts, and purposeful Scene "
@@ -87,7 +85,7 @@ _H3_STUDIO_CORE = (
     "Generate a Take, inspect it, then refine, compare or select; WebCap owns generation, Take provenance, "
     "queueing, LoRAs, seeds, sampling, dimensions and reference-frame settings. "
     "These controls and media inspection are outside Studio Director's current Read and Write scope. "
-    "A Scene can be tentative without a production prompt or Takes. "
+    "A Scene can have a saved Prompt without any Takes. "
     "The H3 Storyboard generation path validates 4–15 seconds per clip. "
     "Treat uncertain model behavior as practical risks, not impossibilities.\n"
     "AVAILABLE AUTHOR-REVIEWED CREATIVE WORKFLOWS: Create Project with Concept, Visual / atmosphere, "
@@ -115,13 +113,10 @@ def chat_response_schema():
     captures = []
     for fields in (
         {"field": {"type": "string", "enum": ["title", "concept", "style"]}},
-        {"field": {"type": "string", "enum": ["summary", "prompt"]},
+        {"field": {"type": "string", "enum": ["prompt"]},
          "sceneId": {"type": "string", "minLength": 1, "maxLength": 160}},
         {"field": {"type": "string", "enum": ["scene"]},
          "title": {"type": "string", "maxLength": 240}},
-        {"field": {"type": "string", "enum": ["scene"]},
-         "title": {"type": "string", "maxLength": 240},
-         "prompt": {"type": "string", "maxLength": 20000}},
         {"field": {"type": "string", "enum": ["invariant"]},
          "kind": {"type": "string", "enum": ["character", "location", "visual", "world", "sound", "custom"]},
          "title": {"type": "string", "minLength": 1, "maxLength": 240},
@@ -134,7 +129,7 @@ def chat_response_schema():
     readiness = []
     for operations, fields in (
         (["project"], ["title", "concept", "style", "invariants"]),
-        (["scenes"], ["title", "summary", "prompt"]),
+        (["scenes"], ["title", "prompt"]),
         (["", "new-project"], []),
     ):
         properties = {
@@ -210,8 +205,7 @@ def read_story_scope(story, field, scene_id=""):
         data = {key: story.get(key) for key in ("title", "concept", "style", "invariants")}
     elif field == "index":
         data = [
-            {"id": sid, "position": position, "title": story["scenes"][sid].get("title", ""),
-             "summary": story["scenes"][sid].get("summary", "")}
+            {"id": sid, "position": position, "title": story["scenes"][sid].get("title", "")}
             for position, sid in enumerate(story.get("sceneOrder", []), 1)
         ]
     elif field in {"scene", "prompt", "takes"}:
@@ -219,7 +213,7 @@ def read_story_scope(story, field, scene_id=""):
             raise ValueError("Select an existing Scene in the granted Story.")
         scene = story["scenes"][scene_id]
         if field == "scene":
-            data = {key: scene.get(key) for key in ("id", "title", "summary", "entryState", "exitState", "notes")}
+            data = {key: scene.get(key) for key in ("id", "title", "prompt", "entryState", "exitState", "notes")}
         elif field == "prompt":
             data = {"id": scene_id, "prompt": scene.get("prompt", ""), "durationSeconds": scene.get("durationSeconds")}
         else:

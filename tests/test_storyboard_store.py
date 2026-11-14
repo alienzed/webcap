@@ -1116,7 +1116,6 @@ def test_scene_repair_applies_sparse_fields_and_restores_across_sessions(storybo
         {"changes": [{
             "sceneNumber": 1,
             "fields": {
-                "summary": "Elena remains small in frame while the funeral activity carries the beat.",
                 "prompt": "NEW PROMPT",
             },
         }]},
@@ -1126,11 +1125,11 @@ def test_scene_repair_applies_sparse_fields_and_restores_across_sessions(storybo
     )
 
     assert scene_count == 1
-    assert field_count == 2
+    assert field_count == 1
     assert repaired["sceneOrder"] == [first["id"], second["id"]]
     assert repaired["scenes"][first["id"]]["title"] == "Funeral"
     assert repaired["scenes"][first["id"]]["durationSeconds"] == first["durationSeconds"]
-    assert repaired["scenes"][first["id"]]["summary"].startswith("Elena remains small")
+    assert repaired["scenes"][first["id"]]["summary"] == "Elena stands at the grave."
     assert repaired["scenes"][first["id"]]["prompt"] == "NEW PROMPT"
     assert repaired["scenes"][first["id"]]["previousPrompt"] == "OLD PROMPT"
     assert repaired["scenes"][second["id"]]["prompt"] == "UNCHANGED PROMPT"
@@ -1165,18 +1164,18 @@ def test_scene_repair_refuses_to_overwrite_a_field_edited_while_director_was_run
             }
         },
     }
-    storyboard_store.update_scene(story["id"], scene["id"], {"summary": "User edited this while Director ran."})
+    storyboard_store.update_scene(story["id"], scene["id"], {"prompt": "User edited this while Director ran."})
 
     with pytest.raises(RuntimeError, match="newer edits are preserved"):
         storyboard_store.apply_scene_repairs(
             story["id"],
-            {"changes": [{"sceneNumber": 1, "fields": {"summary": "Director repair."}}]},
+            {"changes": [{"sceneNumber": 1, "fields": {"prompt": "Director repair."}}]},
             base,
             model_id="director",
         )
 
     loaded = storyboard_store.load_story(story["id"])
-    assert loaded["scenes"][scene["id"]]["summary"] == "User edited this while Director ran."
+    assert loaded["scenes"][scene["id"]]["prompt"] == "User edited this while Director ran."
 
 
 def test_scene_repair_refuses_stale_whole_story_context(storyboard_fs):
@@ -1203,7 +1202,7 @@ def test_scene_repair_refuses_stale_whole_story_context(storyboard_fs):
     with pytest.raises(RuntimeError, match="Story context changed"):
         storyboard_store.apply_scene_repairs(
             story["id"],
-            {"changes": [{"sceneNumber": 1, "fields": {"summary": "Director repair."}}]},
+            {"changes": [{"sceneNumber": 1, "fields": {"prompt": "Director repair."}}]},
             base,
             model_id="director",
         )
@@ -1245,8 +1244,8 @@ def test_scene_repair_rejects_duplicate_scene_patch(storyboard_fs):
         storyboard_store.apply_scene_repairs(
             story["id"],
             {"changes": [
-                {"sceneNumber": 1, "fields": {"summary": "First."}},
-                {"sceneNumber": 1, "fields": {"summary": "Second."}},
+                {"sceneNumber": 1, "fields": {"prompt": "First."}},
+                {"sceneNumber": 1, "fields": {"prompt": "Second."}},
             ]},
             base,
         )
@@ -1324,17 +1323,15 @@ def test_scene_refine_completion_is_persisted_only_for_successful_refine(storybo
         job_id="job-refine-fields",
         operation="refine_prompt",
         scene_fields={
-            "summary": "Revised Scene intent.",
             "entryState": "Revised entry.",
             "exitState": "Revised exit.",
         },
     )
-    assert refined_scene_fields["summary"] == "Revised Scene intent."
+    assert refined_scene_fields["summary"] == ""
     assert refined_scene_fields["entryState"] == "Revised entry."
     assert refined_scene_fields["exitState"] == "Revised exit."
     assert refined_scene_fields["prompt"] == "Scene-aware refined prompt."
     assert refined_scene_fields["previousRevision"] == {
-        "summary": "",
         "entryState": "",
         "exitState": "",
         "prompt": "Longer refined prompt.",
@@ -1347,7 +1344,6 @@ def test_scene_refine_completion_is_persisted_only_for_successful_refine(storybo
     assert restored_scene_fields["exitState"] == ""
     assert restored_scene_fields["prompt"] == "Longer refined prompt."
     assert restored_scene_fields["durationSeconds"] == 12
-    assert restored_scene_fields["previousRevision"]["summary"] == "Revised Scene intent."
 
     with pytest.raises(ValueError, match="between 6 and 15"):
         storyboard_store.apply_director_prompt(
@@ -1465,8 +1461,8 @@ def test_studio_project_creates_multiple_initial_scenes_atomically(storyboard_fs
         "title": "The lessons", "concept": "A teacher meets two very different students.",
         "style": "Natural warm light.", "invariants": [],
         "firstScenes": [
-            {"title": "First", "summary": "A nervous student plays the opening notes."},
-            {"title": "Second", "summary": "The second student surprises the teacher."},
+            {"title": "First", "prompt": "A nervous student plays the opening notes."},
+            {"title": "Second", "prompt": "The second student surprises the teacher."},
         ],
     }
     project = storyboard_store.create_studio_project(proposal)
@@ -1478,7 +1474,7 @@ def test_studio_project_creates_multiple_initial_scenes_atomically(storyboard_fs
     before = {p.name for p in (storyboard_fs / "output" / "storyboards").iterdir()}
     with pytest.raises(ValueError, match="initial Scene"):
         storyboard_store.create_studio_project({
-            **proposal, "firstScenes": [{"title": "Empty", "summary": ""}],
+            **proposal, "firstScenes": [{"title": "Empty", "prompt": ""}],
         })
     after = {p.name for p in (storyboard_fs / "output" / "storyboards").iterdir()}
     assert after == before
@@ -1494,20 +1490,62 @@ def test_studio_scene_fields_are_scoped_and_conflict_checked(storyboard_fs):
     unchanged_settings = storyboard_store.load_story(project["id"])["scenes"][id_]
     original_prompt = unchanged_settings["prompt"]
     saved, result = storyboard_store.apply_studio_scene_fields(
-        project["id"], id_, {"summary": scene["summary"]},
-        {"summary": "The interview begins with an incriminating answer."},
+        project["id"], id_, {"prompt": scene["prompt"]},
+        {"prompt": "The interview begins with an incriminating answer."},
     )
-    assert result["summary"] == "The interview begins with an incriminating answer."
-    assert result["prompt"] == original_prompt
+    assert result["summary"] == scene["summary"]
+    assert result["prompt"] == "The interview begins with an incriminating answer."
     assert result["takeOrder"] == unchanged_settings["takeOrder"]
     assert result["durationSeconds"] == unchanged_settings["durationSeconds"]
     with pytest.raises(RuntimeError, match="changed since review"):
         storyboard_store.apply_studio_scene_fields(
-            project["id"], id_, {"summary": scene["summary"]},
-            {"summary": "A stale replacement."},
+            project["id"], id_, {"prompt": scene["prompt"]},
+            {"prompt": "A stale replacement."},
         )
     with pytest.raises(ValueError, match="supported originals"):
         storyboard_store.apply_studio_scene_fields(
             project["id"], id_, {"takeOrder": []}, {"takeOrder": []},
         )
-    assert storyboard_store.load_story(project["id"])["scenes"][id_]["summary"] == result["summary"]
+    assert storyboard_store.load_story(project["id"])["scenes"][id_]["summary"] == scene["summary"]
+
+
+def test_retired_scene_intent_preserves_populated_legacy_json_across_saves_and_copies(storyboard_fs):
+    project = storyboard_store.create_story({"title": "Legacy Scene"})
+    project, scene = storyboard_store.add_scene(project["id"], {
+        "title": "Original", "summary": "Old creative brief that must remain dormant.",
+        "prompt": "Original full production Prompt.",
+    })
+    changed, saved = storyboard_store.update_scene(project["id"], scene["id"], {
+        "title": "Renamed", "prompt": "Revised full H3 Prompt.",
+    })
+    assert saved["summary"] == "Old creative brief that must remain dormant."
+    assert changed["scenes"][scene["id"]]["summary"] == saved["summary"]
+    persisted = storyboard_store.load_story(project["id"])
+    assert persisted["scenes"][scene["id"]]["summary"] == saved["summary"]
+    duplicated, copy_scene = storyboard_store.duplicate_scene(project["id"], scene["id"])
+    assert copy_scene["summary"] == saved["summary"]
+    cloned = storyboard_store.duplicate_story(project["id"])
+    assert cloned["scenes"][cloned["sceneOrder"][0]]["summary"] == saved["summary"]
+
+
+def test_retired_scene_intent_empty_and_missing_are_compatible_with_prompt_edits(storyboard_fs):
+    import json
+    project = storyboard_store.create_story({"title": "Prompt-only Scenes"})
+    project, empty = storyboard_store.add_scene(project["id"], {
+        "title": "No Intent", "summary": "", "prompt": "Complete H3 Prompt.",
+    })
+    project, absent = storyboard_store.add_scene(project["id"], {
+        "title": "Prompt without Intent", "prompt": "A second complete H3 Prompt.",
+    })
+    path = storyboard_store._story_path(project["id"])
+    saved = json.loads(path.read_text(encoding="utf-8"))
+    saved["scenes"][absent["id"]].pop("summary", None)
+    path.write_text(json.dumps(saved), encoding="utf-8")
+    for scene in (empty, absent):
+        loaded = storyboard_store.load_story(project["id"])
+        assert loaded["scenes"][scene["id"]].get("summary", "") == ""
+        _, revised = storyboard_store.update_scene(project["id"], scene["id"], {
+            "prompt": "A complete revised production Prompt.",
+        })
+        assert revised["prompt"] == "A complete revised production Prompt."
+        assert revised.get("summary", "") == ""

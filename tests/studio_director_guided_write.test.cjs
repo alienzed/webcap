@@ -79,9 +79,9 @@ test('Scene-number recommendation resolves to a saved ID; deliberate choices sta
 
 test('suggestions name creative units regardless of advisory field hints', () => {
   const scope = vm.createContext({readinessStale:false,
-    projectFields:['title','concept','style','invariants'],sceneFields:['title','summary','prompt'],
-    labels:{summary:'Intent',prompt:'H3 Prompt',title:'Title',style:'Visual / atmosphere',invariants:'Invariants'},
-    recommendations:{writeHint:'scenes',writeFields:['summary'],sceneId:'scene-a'}});
+    projectFields:['title','concept','style','invariants'],sceneFields:['title','prompt'],
+    labels:{prompt:'H3 Prompt',title:'Title',style:'Visual / atmosphere',invariants:'Invariants'},
+    recommendations:{writeHint:'scenes',writeFields:['prompt'],sceneId:'scene-a'}});
   vm.runInContext(fieldsCode + labelCode,scope);
   for (const hint of ['scenes','scene-edit','scenes-batch']) {
     scope.recommendations.writeHint = hint;
@@ -93,10 +93,10 @@ test('suggestions name creative units regardless of advisory field hints', () =>
   assert.equal(scope.writeActionLabel(),'Draft Scene 1');
   scope.recommendations={writeHint:'project',writeFields:['concept'],sceneId:''};
   assert.equal(scope.writeActionLabel(),'Revise Project Overview');
-  scope.recommendations={writeHint:'scenes',writeFields:['title','summary'],sceneId:''};
+  scope.recommendations={writeHint:'scenes',writeFields:['title','prompt'],sceneId:''};
   assert.equal(scope.writeActionLabel(),'Draft Scenes');
   vm.runInContext(part('  function captureActionLabel(capture) {','  function writeActionLabel() {'),scope);
-  assert.equal(scope.captureActionLabel({field:'summary'}),'Review Scene');
+  assert.equal(scope.captureActionLabel({field:'prompt'}),'Review Scene');
   assert.equal(scope.captureActionLabel({field:'style'}),'Review Project Overview');
   scope.readinessStale=true;
   assert.deepEqual(Array.from(scope.recommendedWriteFields('project')),[]);
@@ -106,16 +106,16 @@ test('only one contextual action is presented, with completed capture taking pri
   const node=()=>({children:[],dataset:{},replaceChildren(){this.children=[];},appendChild(n){this.children.push(n);}});
   const actions=node(), assessment=node();
   const scope=vm.createContext({readinessStale:false,
-    projectFields:['title','concept','style','invariants'],sceneFields:['title','summary','prompt'],
+    projectFields:['title','concept','style','invariants'],sceneFields:['title','prompt'],
     el:id=>id==='studio-dw-suggestions'?actions:id==='studio-dw-suggestion-heading'?{classList:{toggle(){}}}:assessment,
     document:{createElement:node},reviewCreativeCapture(){},openRecommendedWrite(){},
     window:{studioDirectorBridge:{workingStoryId:()=> 'p1',placeSuggestedAction(node){assert.equal(node,actions);}}},
-    creativeCapture:{field:'summary',content:'Complete Intent',sceneId:'a'},
-    recommendations:{readHints:[],writeHint:'scenes',writeFields:['summary','prompt'],sceneId:'a'}});
+    creativeCapture:{field:'prompt',content:'Complete Prompt',sceneId:'a'},
+    recommendations:{readHints:[],writeHint:'scenes',writeFields:['prompt'],sceneId:'a'}});
   vm.runInContext(fieldsCode + part('  function captureActionLabel(capture) {','  window.studioDirectorWorkbench = {'),scope);
   const kinds=()=>{scope.renderReadiness([]);return actions.children.map(n=>n.dataset.suggestionKind);};
-  assert.deepEqual(kinds(),['capture'],'Intent capture is the one focused next step');
-  scope.recommendations.writeFields=['summary'];
+  assert.deepEqual(kinds(),['capture'],'Prompt capture is the one focused next step');
+  scope.recommendations.writeFields=['prompt'];
   assert.deepEqual(kinds(),['capture'],'complete single-field capture avoids redundant generation');
   scope.recommendations.sceneId='b';
   assert.deepEqual(kinds(),['capture'],'a different Scene operation remains available through Write');
@@ -126,10 +126,10 @@ test('only one contextual action is presented, with completed capture taking pri
   assert.deepEqual(kinds(),['capture']);
   scope.recommendations.writeFields=[];
   assert.deepEqual(kinds(),['capture'],'even unspecified unit scope must not create competing suggestions');
-  scope.creativeCapture={field:'scene',title:'New Scene',content:'Intent',sceneId:''};
-  scope.recommendations={readHints:[],writeHint:'scenes',writeFields:['title','summary','prompt'],sceneId:''};
+  scope.creativeCapture={field:'scene',title:'New Scene',content:'Full H3 Prompt',sceneId:''};
+  scope.recommendations={readHints:[],writeHint:'scenes',writeFields:['title','prompt'],sceneId:''};
   assert.deepEqual(kinds(),['capture'],'new Scene capture remains the next step');
-  scope.recommendations.writeFields=['title','summary'];
+  scope.recommendations.writeFields=['title','prompt'];
   assert.deepEqual(kinds(),['capture']);
   scope.creativeCapture = null;
   assert.deepEqual(kinds(),['write'],'Write suggestion remains accessible when there is no capture');
@@ -216,19 +216,19 @@ test('Scene Review includes the whole unit and selects all actual changes, irres
   const created=[];
   const node=()=>({dataset:{},children:[],setAttribute(){},appendChild(child){this.children.push(child);},
     append(...children){this.children.push(...children);},addEventListener(event,fn){this[event]=fn;}});
-  const scope=vm.createContext({proposedBatch:{fields:['summary'],scenes:[{sceneId:'scene-a',
-    before:{position:1,title:'Lamp',summary:'Old intent',prompt:'Old prompt'},
-    draft:{sceneId:'scene-a',summary:'New intent',prompt:'Extra prompt proposal'}}]},
+  const scope=vm.createContext({proposedBatch:{fields:['prompt'],scenes:[{sceneId:'scene-a',
+    before:{position:1,title:'Lamp',prompt:'Old prompt'},
+    draft:{sceneId:'scene-a',prompt:'Extra prompt proposal'}}]},
     document:{createElement:()=>{const n=node();created.push(n);return n;}},
     el:id=>id==='studio-dw-batch-editors' ? {...node(),replaceChildren(){}} : {showModal(){}},
-    labels:{title:'Title',summary:'Intent',prompt:'H3 Prompt'},status(){},
+    labels:{title:'Title',prompt:'H3 Prompt'},status(){},
     window:{studioDirectorRenderDiff:()=>{}}});
   vm.runInContext(part('  function renderBatchReview() {','  function applyBatchScenes() {'),scope);
   scope.renderBatchReview();
   const checks=created.filter(n=>n.type==='checkbox');
-  assert.deepEqual(checks.map(n=>n.checked),[false,true,true]);
+  assert.deepEqual(checks.map(n=>n.checked),[false,true]);
   const editors=created.filter(n=>n.dataset.field);
-  assert.deepEqual(editors.map(n=>n.value),['Lamp','New intent','Extra prompt proposal']);
+  assert.deepEqual(editors.map(n=>n.value),['Lamp','Extra prompt proposal']);
   const unchanged=created.find(n=>n.children.some(child=>child.textContent==='Other parts'));
   assert.equal(unchanged.children.length,2,'unchanged Title remains available within the Scene');
   editors[0].input();
@@ -243,7 +243,7 @@ test('automatic new-Scene Write reuses a fresh capture and preserves explicit dr
   const project={value:'p1'};
   const scope=vm.createContext({
     readinessStale:false,writeOperationChosen:false,creativeCapture:capture,
-    recommendations:{writeHint:'scenes',writeFields:['title','summary'],sceneId:''},
+    recommendations:{writeHint:'scenes',writeFields:['title','prompt'],sceneId:''},
     projects:[{id:'p1',title:'Project One'}],
     el:id=>({
       'studio-dw-write-operation':select,
@@ -293,9 +293,8 @@ test('automatic new-Scene Write reuses a fresh capture and preserves explicit dr
   assert.equal(calls[0][0],'batch','existing Scene revisions keep their reviewed workflow');
 });
 
-test('completed new Scene with Title, Intent and H3 Prompt reviews directly without another Director request', async () => {
-  const capture={field:'scene',sceneId:'',title:'Sunlit crossing',content:'The subject crosses the sunlit square.',
-    prompt:'integrated_multimodal_description: [Shot 1] Crossing the bright square.'};
+test('completed new Scene with Title and H3 Prompt reviews directly without another Director request', async () => {
+  const capture={field:'scene',sceneId:'',title:'Sunlit crossing',content:'integrated_multimodal_description: [Shot 1] Crossing the bright square.'};
   let complete;
   const finished=new Promise(resolve=>{complete=resolve;});
   const scope=vm.createContext({
@@ -358,12 +357,12 @@ test('the inline Project Read targets the current destination and reuses explici
 test('unit Apply saves aligned changed parts atomically and leaves the unchanged Title outside the write', async () => {
   let payload,complete;
   const finished=new Promise(resolve=>{complete=resolve;});
-  const values={summary:'New intent',prompt:'Aligned H3'};
+  const values={prompt:'Aligned H3'};
   const section={dataset:{sceneId:'a'},
     querySelectorAll:()=>Object.keys(values).map(field=>({dataset:{selectField:field}})),
-    querySelector:selector=>({value:values[selector.includes('summary')?'summary':'prompt']})};
+    querySelector:selector=>({value:values.prompt})};
   const scope=vm.createContext({proposedBatch:{storyId:'p1',scenes:[{
-    sceneId:'a',before:{title:'Same title',summary:'Old intent',prompt:'Old H3'}}]},
+    sceneId:'a',before:{title:'Same title',prompt:'Old H3'}}]},
     el:id=>id==='studio-dw-batch-editors' ? {querySelectorAll:()=>[section]} : {close(){}},
     api:async(url,options)=>{payload=JSON.parse(options.body);return {story:{id:'p1'},savedFieldsByScene:{}};},
     window:{flushStudioDirectorStoryEdits:async()=>{},studioDirectorBridge:{recordApplied:async()=>complete()}},
@@ -372,14 +371,14 @@ test('unit Apply saves aligned changed parts atomically and leaves the unchanged
   scope.applyBatchScenes();
   await finished;
   assert.deepEqual(payload,{storyId:'p1',revisions:[{sceneId:'a',
-    expected:{summary:'Old intent',prompt:'Old H3'},changes:{summary:'New intent',prompt:'Aligned H3'}}]});
+    expected:{prompt:'Old H3'},changes:{prompt:'Aligned H3'}}]});
 });
 
 test('mismatched Scene targets require confirmation before any saved mutation', () => {
   let called=0, confirmed=0;
   const section={dataset:{sceneId:'a'},
-    querySelectorAll:()=>[{dataset:{selectField:'summary'}}],
-    querySelector:()=>({value:'New intent'})};
+    querySelectorAll:()=>[{dataset:{selectField:'prompt'}}],
+    querySelector:()=>({value:'New prompt'})};
   const scope=vm.createContext({proposedBatch:{storyId:'p1',
     targetWarning:'Director suggested Scene 5, but Write targets Scene 1.',
     scenes:[{sceneId:'a',before:{title:'A',summary:'Old intent',prompt:'Old prompt'}}]},

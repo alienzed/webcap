@@ -726,12 +726,12 @@ def create_studio_project(proposal):
     if not isinstance(initial, list) or len(initial) > 32:
         raise ValueError("Project creation supports at most 32 reviewed initial Scenes.")
     for item in initial:
-        if not isinstance(item, dict) or set(item) != {"title", "summary"}:
-            raise ValueError("Each initial Scene needs only title and summary.")
-        if not isinstance(item["title"], str) or not isinstance(item["summary"], str):
+        if not isinstance(item, dict) or set(item) != {"title", "prompt"}:
+            raise ValueError("Each initial Scene needs only title and prompt.")
+        if not isinstance(item["title"], str) or not isinstance(item["prompt"], str):
             raise ValueError("Initial Scene title and description must be text.")
-        if not item["summary"].strip() or len(item["summary"]) > 10000 or len(item["title"]) > 240:
-            raise ValueError("Each initial Scene needs a short description.")
+        if not item["prompt"].strip() or len(item["prompt"]) > 60000 or len(item["title"]) > 240:
+            raise ValueError("Each initial Scene needs a complete prompt.")
     if not concept.strip() and not initial:
         raise ValueError("Describe the idea or an initial Scene before creating a project.")
 
@@ -1178,20 +1178,19 @@ def add_tentative_scene_at(story_id, expected_updated_at, scene_draft, placement
     """Atomically create one reviewed Scene with an optional authored prompt.
 
     Placement and content come from a human-reviewed proposal, not a new
-    generation. Intent-only callers continue to create prompt-free Scenes.
+    generation. The reviewed prompt is the Scene's creative content.
     """
     story = load_story(story_id)
     if str(story.get("updatedAt") or "") != str(expected_updated_at or ""):
         raise RuntimeError("Studio project changed during Scene review. Refresh the proposal before applying.")
     if (not isinstance(scene_draft, dict) or
-            not {"title", "summary"}.issubset(scene_draft) or
-            not set(scene_draft).issubset({"title", "summary", "prompt"})):
-        raise ValueError("Reviewed Scene needs title and summary, with optional prompt.")
-    title, summary = scene_draft["title"], scene_draft["summary"]
-    if (not isinstance(title, str) or not isinstance(summary, str) or
-            not summary.strip() or
-            ("prompt" in scene_draft and not isinstance(scene_draft["prompt"], str))):
-        raise ValueError("Reviewed Scene needs a description and a text prompt if supplied.")
+            not {"title", "prompt"}.issubset(scene_draft) or
+            not set(scene_draft).issubset({"title", "prompt"})):
+        raise ValueError("Reviewed Scene needs title and a complete prompt.")
+    title, prompt = scene_draft["title"], scene_draft["prompt"]
+    if (not isinstance(title, str) or not isinstance(prompt, str) or
+            not prompt.strip() or len(title) > 240 or len(prompt) > 60000):
+        raise ValueError("Reviewed Scene needs a complete text prompt.")
     if placement not in {"start", "end", "before", "after"}:
         raise ValueError("Choose start, end, before or after for the new Scene.")
     order = list(story.get("sceneOrder") or [])
@@ -1239,16 +1238,14 @@ def add_tentative_scenes_at(story_id, expected_scene_order, drafts, placement, r
 
     new_scenes = []
     for item in drafts:
-        if (not isinstance(item, dict) or not {"title", "summary"}.issubset(item)
-                or not set(item).issubset({"title", "summary", "prompt", "durationSeconds"})):
-            raise ValueError("Each Scene needs a title and summary, with optional prompt and duration.")
-        title, summary = item["title"], item["summary"]
-        if not isinstance(title, str) or not isinstance(summary, str) or not summary.strip():
-            raise ValueError("Each tentative Scene needs a description.")
-        if len(title) > 240 or len(summary) > 10000:
-            raise ValueError("Tentative Scene text is too long.")
-        if "prompt" in item and (not isinstance(item["prompt"], str) or not item["prompt"].strip()):
-            raise ValueError("An authored Scene prompt must be nonempty text.")
+        if (not isinstance(item, dict) or not {"title", "prompt"}.issubset(item)
+                or not set(item).issubset({"title", "prompt", "durationSeconds"})):
+            raise ValueError("Each Scene needs a title and prompt, with optional duration.")
+        title, prompt = item["title"], item["prompt"]
+        if not isinstance(title, str) or not isinstance(prompt, str) or not prompt.strip():
+            raise ValueError("Each Scene needs a complete prompt.")
+        if len(title) > 240 or len(prompt) > 60000:
+            raise ValueError("Scene text is too long.")
         new_scenes.append(_normalize_scene(_new_id("scene"), item))
 
     updated = copy.deepcopy(story)
@@ -1389,12 +1386,9 @@ def _validate_developed_plan(plan, target_scene_count=None, story_invariants=Non
             raise ValueError("Developed Story Scene " + str(index) + " must be an object.")
 
         title = item.get("title")
-        summary = item.get("summary")
         prompt = item.get("prompt")
         if not isinstance(title, str) or not title.strip():
             raise ValueError("Developed Story Scene " + str(index) + " has invalid title.")
-        if not isinstance(summary, str) or not summary.strip():
-            raise ValueError("Developed Story Scene " + str(index) + " has invalid summary.")
         if not isinstance(prompt, str) or not prompt.strip():
             raise ValueError("Developed Story Scene " + str(index) + " has invalid prompt.")
 
@@ -1414,7 +1408,6 @@ def _validate_developed_plan(plan, target_scene_count=None, story_invariants=Non
 
         normalized.append({
             "title": title.strip(),
-            "summary": summary.strip(),
             "entryState": entry_state.strip(),
             "exitState": exit_state.strip(),
             "prompt": prompt.strip(),
@@ -1537,7 +1530,7 @@ def extend_director_story(story_id, plan, model_id=""):
     return story, added_ids
 
 
-STUDIO_SCENE_FIELDS = {"title", "summary", "prompt"}
+STUDIO_SCENE_FIELDS = {"title", "prompt"}
 
 
 @_serialized_mutation
@@ -1814,7 +1807,6 @@ def apply_director_prompt(
         "previousPrompt": str(current.get("prompt") or ""),
         "previousRevision": (
             {
-                "summary": str(current.get("summary") or ""),
                 "entryState": str(current.get("entryState") or ""),
                 "exitState": str(current.get("exitState") or ""),
                 "prompt": str(current.get("prompt") or ""),
@@ -1832,14 +1824,12 @@ def apply_director_prompt(
             raise ValueError("Only Scene refinement may revise Scene authoring fields.")
         if not isinstance(scene_fields, dict):
             raise ValueError("Refined Scene fields must be an object.")
-        for key in ("summary", "entryState", "exitState"):
+        for key in ("entryState", "exitState"):
             if key not in scene_fields:
                 continue
             value = scene_fields[key]
             if not isinstance(value, str):
                 raise ValueError("Refined Scene " + key + " must be text.")
-            if key == "summary" and not value.strip():
-                raise ValueError("Refined Scene summary must not be empty.")
             scene_patch[key] = value
 
     if duration_override is not None:
@@ -1916,7 +1906,7 @@ def apply_scene_repairs(story_id, payload, repair_base, model_id="", job_id=""):
                 "Scene context changed while Check & Repair was running. Run Check & Repair again so newer edits are preserved."
             )
 
-    allowed_fields = ("summary", "entryState", "exitState", "prompt")
+    allowed_fields = ("entryState", "exitState", "prompt")
     prepared = []
     seen_numbers = set()
 
@@ -1950,7 +1940,7 @@ def apply_scene_repairs(story_id, payload, repair_base, model_id="", job_id=""):
         for key, value in fields.items():
             if not isinstance(value, str):
                 raise ValueError("Storyboard Scene repair " + key + " must be text.")
-            if key in {"summary", "prompt"} and not value.strip():
+            if key == "prompt" and not value.strip():
                 raise ValueError("Storyboard Scene repair " + key + " must not be empty.")
             current_value = str(current.get(key) or "")
             base_value = str(base_scene.get(key) or "")
@@ -2078,14 +2068,13 @@ def restore_previous_prompt(story_id, scene_id):
     previous_revision = current.get("previousRevision")
     if isinstance(previous_revision, dict):
         current_revision = {
-            "summary": str(current.get("summary") or ""),
             "entryState": str(current.get("entryState") or ""),
             "exitState": str(current.get("exitState") or ""),
             "prompt": str(current.get("prompt") or ""),
             "durationSeconds": current.get("durationSeconds"),
         }
         scene = _normalize_scene(scene_id, {
-            **previous_revision,
+            **{key: value for key, value in previous_revision.items() if key != "summary"},
             "previousPrompt": str(current.get("prompt") or ""),
             "previousRevision": current_revision,
             "promptDirectorModel": "",

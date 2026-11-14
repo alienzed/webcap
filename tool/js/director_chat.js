@@ -4233,6 +4233,10 @@
       var wantsTitle = fields.includes('title'), wantsDuration = fields.includes('durationSeconds');
       state.lastStudioIoRaw = '';
       state.lastStudioIoError = '';
+      // Lock the launch while flushing/fetching; makeProposal takes over the
+      // busy state synchronously once the fresh Scene has been loaded.
+      state.pending = true;
+      syncControls();
       return window.flushStudioDirectorStoryEdits(storyId).then(function () {
         return requestJson('/fs/storyboard?story=' + encodeURIComponent(storyId));
       }).then(function (payload) {
@@ -4254,6 +4258,7 @@
             wantsDuration ? {durationSeconds:12} : {}),
           savedContext:context
         });
+        state.pending = false;
         return window.studioDirectorBridge.makeProposal(instruction, 'studio_scene_field_draft', true,
           {projectId:storyId,projectTitle:story.title,sceneId:sceneId,
             sceneNumber:story.sceneOrder.indexOf(sceneId)+1,sceneOrder:story.sceneOrder.slice()})

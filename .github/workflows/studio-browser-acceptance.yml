@@ -3,6 +3,8 @@ on:
   pull_request:
     paths:
       - 'tests/browser/**'
+      - 'tests/live/**'
+      - 'playwright.live.config.cjs'
       - 'playwright.config.cjs'
       - '.github/workflows/studio-browser-acceptance.yml'
       - 'tool/**'
@@ -26,6 +28,10 @@ jobs:
         run: |
           npm install --no-save @playwright/test
           npx playwright install --with-deps chromium
+      - name: Validate opt-in live test syntax (no model calls)
+        run: |
+          node --check playwright.live.config.cjs
+          for file in tests/live/*.cjs; do node --check "$file"; done
       - name: Real-app browser acceptance
         run: npx playwright test --config=playwright.config.cjs
       - name: Browser evidence and backend diagnostics

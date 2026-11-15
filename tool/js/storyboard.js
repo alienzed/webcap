@@ -2766,8 +2766,7 @@
         '<div class="storyboard-add-scene-menu">' +
           '<button type="button" data-scene-add="blank">Add blank Scene</button>' +
           (order.length ? '<button type="button" data-scene-add="extend">Extend Story with Director…</button>' : '') +
-        '</div></details>' +
-      '<button id="storyboard-scenes-sequence-btn" type="button" class="review-captions-btn">Sequence</button>';
+        '</div></details>';
   }
 
   function syncSceneViewControls(order) {
@@ -6289,6 +6288,7 @@
     el('storyboard-story-toggle').onclick = function () { setStoryCollapsed(true); };
     el('storyboard-story-show').onclick = function () { setStoryCollapsed(false); };
     el('storyboard-scenes-focus-btn').onclick = function () { setSceneViewMode('focus'); };
+    el('storyboard-scenes-sequence-btn').onclick = function () { setSceneViewMode('sequence'); };
     el('storyboard-generate-scenes-btn').onclick = generateScenes;
     el('storyboard-cancel-takes-btn').onclick = cancelStoryTakes;
     el('storyboard-director-tools-btn').onclick = openDirectorTools;
@@ -6387,9 +6387,6 @@
         if (addChoice.dataset.sceneAdd === 'blank') addScene();
         else openSceneCreation('extend');
         return;
-      }
-      if (event.target.closest('#storyboard-scenes-sequence-btn')) {
-        setSceneViewMode('sequence');
       }
     });
     sceneProgression.addEventListener('contextmenu', function (event) {

@@ -481,14 +481,19 @@
     if (operation !== 'new-project' && !id) {status('Choose a destination Project.',true);return;}
     if (operation === 'scene-write') {
       if (el('studio-dw-scene-mode').value === 'revise') return prepareBatchScenes(id);
-      var capturedScene = readyNewSceneCapture();
-      if (capturedScene) return reviewCreativeCapture(capturedScene);
-      try {
-        var selected = projects.find(function (p) {return p.id === id;});
-        bridge.prepareWrite('scenes', id, selected && storyName(selected));
-        status('Preparing new Scenes for reviewed insertion.', false);
-      } catch (error) {status('Write Scenes failed: ' + error.message, true);}
-      return;
+      var userMessages = bridge.messages().filter(function (message) {
+        return message.role === 'user' &&
+          !String(message.content || '').includes('[WEBCAP APPLIED FIELD VALUES]');
+      });
+      var instruction = String(userMessages.length &&
+        userMessages[userMessages.length - 1].content || '').trim();
+      if (!instruction) {
+        status('Describe the Scene you want to create in the conversation first.', true);
+        return;
+      }
+      return bridge.writeNewScene({
+        projectId:id, instruction:instruction, authorRequest:instruction
+      });
     }
     if (operation !== 'new-project' && operation !== 'project')
       throw new Error('Unsupported Studio creative Write goal: ' + operation);

@@ -309,3 +309,35 @@ test('conversation persistence includes frozen Write targets without extra autho
   assert.match(chat,/messages\[messages\.length - 1\]\.writeAction = window\.studioDirectorWorkbench\.presentAction/);
   assert.ok(chat.includes('completeWriteAction(kind, story, selected)'));
 });
+
+test('prepared Write derives exact target and fields deterministically from existing draft', () => {
+  const state={studioWorkingDraft:{
+    scenes:{'scene-2':{prompt:'Complete H3 prompt',durationSeconds:10}},
+    projects:{'project-1':{style:'Warm and dim'}},
+    newScene:{prompt:'New Scene prompt'},
+    newProject:{concept:'New Project',style:'Soft light'},sourceRequest:''
+  }};
+  let target={projectId:'project-1',sceneId:'scene-2'};
+  const context=vm.createContext({state,window:{
+    getStudioDirectorNavigation:()=>target
+  },studioAttachedStoryId:()=>''});
+  const source=section(chat,'    preparedWrite: function () {',
+    '    preparedSceneFields: function (sceneId) {');
+  const prepared=vm.runInContext('({'+source+'})',context).preparedWrite;
+  let result=prepared();
+  assert.equal(result.kind,'scene');
+  assert.equal(result.sceneId,'scene-2');
+  assert.deepEqual(Array.from(result.fields),['prompt','durationSeconds']);
+  target={projectId:'project-1',sceneId:''};
+  result=prepared();
+  assert.equal(result.kind,'project');
+  assert.deepEqual(Array.from(result.fields),['style']);
+  delete state.studioWorkingDraft.projects['project-1'];
+  result=prepared();
+  assert.equal(result.kind,'new-scene');
+  delete state.studioWorkingDraft.newScene.prompt;
+  result=prepared();
+  assert.equal(result.kind,'new-project');
+  state.studioWorkingDraft.newProject.style='';
+  assert.equal(prepared(),null);
+});

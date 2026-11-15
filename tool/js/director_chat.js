@@ -15,7 +15,6 @@
     attachmentPending: false,
     workshop: null,
     workshopProposal: null,
-    storyGuidelineProposal: null,
     modeMessages: {},
     studioActionIndex: -1,
     studioWorkingDraft: {projects:{},scenes:{},newProject:{},newScene:{},sourceRequest:''},
@@ -112,12 +111,6 @@
     return Object.keys(contextualModes).map(function (id) {
       return contextualModes[id];
     }).filter(modeAvailable);
-  }
-
-  function guidelineStoryId() {
-    if (state.workshop) return state.workshop.storyId;
-    var attached = Object.keys(state.storyboardAttachments).filter(function (key) { return key.indexOf('story:') === 0; });
-    return attached.length === 1 ? attached[0].slice(6) : '';
   }
 
   function storyboardContextPresets() {
@@ -447,9 +440,6 @@
     }
     var prepare = el('director-chat-workshop-prepare');
     if (prepare) prepare.classList.toggle('hidden', state.activeMode !== 'storyboard' || !state.workshop);
-    var storyPrepare = el('director-chat-story-prepare');
-    // Legacy guideline proposals are retired; saved values remain editable in Studio.
-    storyPrepare.classList.add('hidden');
     renderStoryboardAttachmentViewer();
     renderStudioStoryAccess();
     renderStudioOperations();
@@ -755,7 +745,6 @@
       state.studioScenesProposal = null;
       state.studioBriefProposal = null;
       state.workshopProposal = null;
-      state.storyGuidelineProposal = null;
     }
     state.draftByMode[chat.mode] = chat.draft || '';
     state.sessionDirty[chat.mode] = false;
@@ -1517,9 +1506,6 @@
       prepare.disabled = state.pending || !state.modelId || !!(state.workshop && state.workshop.shotError) || !currentMessages().some(function (message) { return message.role === 'user'; });
       prepare.textContent = state.workshopProposal ? 'Review Proposal' : 'Prepare Revision';
     }
-    var storyPrepare = el('director-chat-story-prepare');
-    storyPrepare.disabled = state.pending || !state.modelId || !guidelineStoryId() || !currentMessages().some(function (message) { return message.role === 'user'; });
-    storyPrepare.textContent = state.storyGuidelineProposal ? 'Review Story Changes' : 'Propose Story Changes';
   }
 
   function loadModels() {
@@ -3088,7 +3074,6 @@
         state.studioProjectProposal = null;
         state.studioScenesProposal = null;
         state.studioBriefProposal = null;
-        state.storyGuidelineProposal = null;
         el('director-chat-workshop-status').textContent = '';
       }
       el('director-chat-input').value = '';
@@ -3511,7 +3496,6 @@
       }
       state.storyboardAttachments[item.key] = item;
       if (kind === 'story') state.studioSceneProposal = null;
-      state.storyGuidelineProposal = null;
       scheduleSessionSave();
       el('director-chat-attachments-toggle').setAttribute('aria-expanded', 'true');
       syncModeUi();
@@ -3689,131 +3673,6 @@
     });
   }
 
-  function parseStoryGuidelineProposal(raw) {
-    var value = String(raw || '').trim();
-    var fence = String.fromCharCode(96).repeat(3);
-    if (value.startsWith(fence) && value.endsWith(fence)) {
-      var firstLine = value.indexOf('\n');
-      if (firstLine >= 0) value = value.slice(firstLine + 1, -3).trim();
-    }
-    var parsed;
-    try { parsed = JSON.parse(value); }
-    catch (err) { throw new Error('Director returned invalid guideline JSON: ' + err.message); }
-    if (!parsed || typeof parsed.summary !== 'string' || !parsed.guidelines ||
-        typeof parsed.guidelines !== 'object' || Array.isArray(parsed.guidelines)) {
-      throw new Error('Director guideline proposal must contain summary and named guideline fields.');
-    }
-    var allowed = ['visualFocus', 'creativeDirection', 'variation', 'pacing', 'sceneRelationships'];
-    Object.keys(parsed.guidelines).forEach(function (key) {
-      if (allowed.indexOf(key) < 0 || typeof parsed.guidelines[key] !== 'string') {
-        throw new Error('Director returned an unsupported Story guideline field: ' + key);
-      }
-    });
-    return parsed;
-  }
-
-  function reviewStoryChanges() {
-    var proposal = state.storyGuidelineProposal;
-    if (!proposal) throw new Error('Prepare Story changes before reviewing.');
-    if (typeof window.openStoryboardGuidelineReview !== 'function') throw new Error('Storyboard guideline review is unavailable.');
-    window.openStoryboardGuidelineReview({
-      storyId: proposal.storyId,
-      title: 'Review Story Changes',
-      summary: proposal.summary || 'Suggested by Storyboard Chat',
-      expectedGuidelines: proposal.expectedGuidelines,
-      changes: proposal.changes,
-      onApplied: function (story) {
-        state.storyGuidelineProposal = null;
-        var attachedKey = 'story:' + proposal.storyId;
-        if (state.storyboardAttachments[attachedKey]) {
-          // The Story provider now returns a Promise after flushing saves.
-          // Reuse the normal attach path so no Promise is stored as reference data.
-          attachStoryboardContext('story');
-        }
-        if (state.workshop && state.workshop.storyId === proposal.storyId) {
-          state.workshop.guidelines = Object.assign({}, story.guidelines || {});
-        }
-        el('director-chat-workshop-status').textContent = 'Story guidelines updated';
-        syncControls();
-      }
-    });
-  }
-
-  function prepareStoryChanges() {
-    if (state.activeMode !== 'storyboard' || !guidelineStoryId()) throw new Error('Attach a Story or open its Scene Workshop first.');
-    if (state.pending || !state.modelId) return;
-    if (state.storyGuidelineProposal) { reviewStoryChanges(); return; }
-    var discussion = currentMessages().filter(function (message) {
-      return message && (message.role === 'assistant' || message.role === 'user');
-    }).map(function (message) {
-      return {role:message.role,content:message.content};
-    });
-    if (!discussion.some(function (message) { return message.role === 'user'; })) {
-      throw new Error('Discuss the desired Story direction before preparing changes.');
-    }
-    if (typeof window.getStoryboardGuidelineSnapshot !== 'function') throw new Error('Storyboard guideline context is unavailable.');
-    var storyId = guidelineStoryId();
-    state.pending = true;
-    state.jobId = '';
-    el('director-chat-workshop-status').textContent = 'Preparing Story guideline proposal…';
-    startProgress();
-    syncControls();
-    Promise.resolve().then(function () {
-      return window.getStoryboardGuidelineSnapshot(storyId);
-    }).then(function (story) {
-      var messages = [
-        { role: 'system', content: [
-          'Review this Storyboard creative discussion for explicitly agreed changes to the five Story Directing Guideline fields.',
-          'The fields are visualFocus, creativeDirection, variation, pacing, and sceneRelationships. Preserve the author\'s meaning.',
-          'Propose only fields that need a change based on the discussion, keeping existing detail not contradicted by those decisions.',
-          'Use a brief summary and a guidelines object containing only changed field values. Return an empty guidelines object when no edit is warranted.',
-          'All proposals require separate human review before any Story data changes.'
-        ].join('\n') },
-        { role: 'user', content: JSON.stringify({ story: story, workshopDiscussion: discussion }, null, 2) }
-      ];
-      return requestJson('/fs/director/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model: state.modelId, operation: 'storyboard_story_guidelines', messages: messages })
-      }).then(function (payload) {
-        if (!payload.job || !payload.job.jobId) throw new Error('Story guideline proposal job was not queued.');
-        state.jobId = String(payload.job.jobId);
-        state.requestDiagnostic = payload.job.request || null;
-        trackTransientLlmJob(payload.job);
-        return waitForJob(payload.job);
-      }).then(function (job) {
-        var result = job.result && typeof job.result === 'object' ? job.result : {};
-        var proposed = parseStoryGuidelineProposal(result.text);
-        var changes = {};
-        Object.keys(proposed.guidelines).forEach(function (key) {
-          var suggested = proposed.guidelines[key].trim();
-          if (suggested !== String((story.guidelines || {})[key] || '').trim()) changes[key] = suggested;
-        });
-        if (!Object.keys(changes).length) {
-          el('director-chat-workshop-status').textContent = 'No Story guideline changes suggested';
-          return;
-        }
-        state.storyGuidelineProposal = {
-          storyId: storyId,
-          expectedGuidelines: story.guidelines,
-          changes: changes,
-          summary: proposed.summary
-        };
-        el('director-chat-workshop-status').textContent = 'Story changes ready for review';
-        reviewStoryChanges();
-      });
-    }).catch(function (error) {
-      el('director-chat-workshop-status').textContent = 'Story proposal failed: ' + String(error.message || error);
-      if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Storyboard Story proposal', error);
-      else throw error;
-    }).finally(function () {
-      state.pending = false;
-      state.jobId = '';
-      finishProgress(null);
-      syncControls();
-    });
-  }
-
   function applyWorkshopRevision() {
     if (!state.workshopProposal || !state.workshop) throw new Error('A prepared Scene revision is required.');
     var proposal = state.workshopProposal;
@@ -3880,7 +3739,6 @@
         if (navigation.projectId)
           state.studioStoryAccess = {storyId:navigation.projectId,label:navigation.projectTitle};
       }
-      state.storyGuidelineProposal = null;
       state.workshopProposal = null;
       // Keep authored Scene and Project reviews available across questions.
       // Explicit new Write actions own replacement of existing drafts.
@@ -4319,17 +4177,8 @@
     el('director-chat-attachments-clear').onclick = function () {
       if (state.pending || state.attachmentPending) return;
       state.storyboardAttachments = {};
-      state.storyGuidelineProposal = null;
       scheduleSessionSave();
       syncModeUi();
-    };
-    el('director-chat-story-prepare').onclick = function () {
-      try { prepareStoryChanges(); }
-      catch (error) {
-        el('director-chat-workshop-status').textContent = String(error.message || error);
-        if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Storyboard Story proposal', error);
-        else throw error;
-      }
     };
     el('director-chat-workshop-prepare').onclick = function () {
       try { prepareWorkshopRevision(); }
@@ -4362,7 +4211,6 @@
         if (preset.exitWorkshop) {
           state.workshop = null;
           state.workshopProposal = null;
-          state.storyGuidelineProposal = null;
           // Exiting a Workshop must never destroy the conversation.
           scheduleSessionSave();
           el('director-chat-workshop-status').textContent = '';
@@ -4378,7 +4226,6 @@
           scheduleSessionSave();
           syncModeUi();
         } else if (preset.clearContext) {
-          state.storyGuidelineProposal = null;
           state.storyboardAttachments = {};
           scheduleSessionSave();
           syncModeUi();
@@ -5149,7 +4996,6 @@
       // Opening another Workshop changes the current working excerpt but does
       // not delete the conversation or its previously attached references.
       state.workshopProposal = null;
-      state.storyGuidelineProposal = null;
       el('director-chat-workshop-status').textContent = '';
     }
     state.workshop = context;

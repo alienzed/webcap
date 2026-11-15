@@ -764,7 +764,9 @@
   // Write reflects an explicit conversational proposal, not a standalone operation picker.
   function showConversationWrite() {
     var action = pendingCreativeAction;
-    var prepared = action ? null : window.studioDirectorBridge.preparedWrite();
+    var selectedDraft = window.studioDirectorBridge.preparedWrite();
+    var prepared = action && !(action.reviewReady && selectedDraft && selectedDraft.kind === 'scene')
+      ? null : selectedDraft;
     var ready = !!(action || prepared);
     var awaitingProject = !!(action && action.awaitingProject);
     var awaitingScenes = !!(action && action.awaitingScenes);
@@ -938,6 +940,10 @@
                 (failed.length ? ': ' + failed.join(' | ') : '') +
                 (reportingErrors.length ? ' · Saved, but reporting failed for ' +
                   reportingErrors.join(', ') : ''),failed.length > 0 || notAttempted.length > 0 || reportingErrors.length > 0,true);
+              if (review.length) {
+                frozen.reviewReady = true;
+                showConversationWrite();
+              }
               if (!failed.length && !notAttempted.length && !review.length) finishSceneAction();
               return;
             }
@@ -1154,8 +1160,9 @@
       el('studio-dw-close-actions').focus();
     }
     el('studio-dw-write-ready-launch').onclick=function () {
-      if (!pendingCreativeAction) {
-        var draft = window.studioDirectorBridge.preparedWrite();
+      var reviewDraft = window.studioDirectorBridge.preparedWrite();
+      if (!pendingCreativeAction || (pendingCreativeAction.reviewReady && reviewDraft && reviewDraft.kind === 'scene')) {
+        var draft = reviewDraft;
         if (!draft) {showConversationWrite();return;}
         if (draft.kind === 'scene') {
           return window.flushStudioDirectorStoryEdits(draft.projectId)

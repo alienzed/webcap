@@ -1,6 +1,7 @@
 'use strict';
 const {test,expect}=require('./test.cjs');
 const {resetModel,queueModel,observedModels,openDirector,say,story,seedProject,seedScene,openProject}=require('./helpers.cjs');
+const {ensureAttachedProject}=require('./helpers.cjs');
 
 test('Flow 3 — reviewed Overview revision changes only intended persisted fields',async({page,request})=>{
   await resetModel(request);
@@ -12,7 +13,7 @@ test('Flow 3 — reviewed Overview revision changes only intended persisted fiel
   });
   await openDirector(page);
   await openProject(page,original.id);
-  await page.locator('#director-studio-attach-current').click();
+  await ensureAttachedProject(page,original.title);
   await queueModel(request,{
     reply:'I can warm the Project atmosphere.',
     changes:{project:{style:'Soft amber light.'}},
@@ -43,7 +44,7 @@ test('Flow 3 batch — partial Scene save followed by model failure reports and 
   const second=await seedScene(page,project.id,{title:'Second',prompt:'Second saved prompt.',durationSeconds:8});
   await openDirector(page);
   await openProject(page,project.id);
-  await page.locator('#director-studio-attach-current').click();
+  await ensureAttachedProject(page,project.title);
   await queueModel(request,{
     reply:'I can revise both Scene prompts.',
     action:{kind:'write_scenes',instruction:'Revise both Scene prompts.',fields:['prompt']}

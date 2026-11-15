@@ -765,7 +765,8 @@
   // Write reflects an explicit conversational proposal, not a standalone operation picker.
   function showConversationWrite() {
     var action = pendingCreativeAction;
-    var selectedDraft = window.studioDirectorBridge.preparedWrite();
+    var selectedDraft = !action || action.reviewReady
+      ? window.studioDirectorBridge.preparedWrite() : null;
     var prepared = action && !(action.reviewReady && selectedDraft && selectedDraft.kind === 'scene')
       ? null : selectedDraft;
     var ready = !!(action || prepared);
@@ -845,7 +846,8 @@
         (frozen.draftReady || (frozen.scenes && frozen.scenes.length));
       if (reviewingScenes ? !window.studioDirectorBridge.canReview() :
           !window.studioDirectorBridge.isReady()) {
-        status(window.studioDirectorBridge.readinessMessage(),true);
+        status(reviewingScenes ? 'Open an available Studio conversation to review Scenes.' :
+          window.studioDirectorBridge.readinessMessage(),true);
         return;
       }
       button.disabled = true;
@@ -1163,7 +1165,8 @@
       el('studio-dw-close-actions').focus();
     }
     el('studio-dw-write-ready-launch').onclick=function () {
-      var reviewDraft = window.studioDirectorBridge.preparedWrite();
+      var reviewDraft = !pendingCreativeAction || pendingCreativeAction.reviewReady
+        ? window.studioDirectorBridge.preparedWrite() : null;
       if (!pendingCreativeAction || (pendingCreativeAction.reviewReady && reviewDraft && reviewDraft.kind === 'scene')) {
         var draft = reviewDraft;
         if (!draft) {showConversationWrite();return;}

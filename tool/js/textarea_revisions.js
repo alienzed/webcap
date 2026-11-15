@@ -81,6 +81,7 @@
     var h = histories.get(active.key);
     if (active.field.isConnected && identity(active.field) === active.key && h &&
         active.field.value === h.versions[h.index]) active.field.value = active.live;
+    if (h) h.index = h.versions.length - 1;
     showingPreview = false;
   }
 

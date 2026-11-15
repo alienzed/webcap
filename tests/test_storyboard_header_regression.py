@@ -38,3 +38,18 @@ def test_storyboard_director_scene_progress_uses_single_column_grid():
     assert 'grid-template-columns: minmax(0, 1fr);' in compact
     assert 'grid-template-areas: "label" "phase" "detail" "scene-progress" "action" "stop";' in compact
     assert ".storyboard-director-scene-progress {grid-area:scene-progress;" in css
+
+
+def test_scene_card_strip_and_focus_editor_do_not_add_redundant_frames():
+    css = (ROOT / "tool/css/storyboard.css").read_text(encoding="utf-8")
+
+    def rule(selector):
+        return css.split(selector + " {", 1)[1].split("}", 1)[0]
+
+    assert "border-bottom:" not in rule(".storyboard-scenes-heading")
+    assert "border-bottom:" not in rule(".storyboard-scene-progression")
+    focus = rule(".storyboard-scenes-list.is-focus .storyboard-scene")
+    assert "border: 0;" in focus
+    assert "background: transparent;" in focus
+    assert "padding: 12px 0 16px;" in rule(".storyboard-scenes-list.is-focus .storyboard-scene-body")
+    assert "border: 1px solid var(--border);" in rule(".storyboard-scene-progress-card")

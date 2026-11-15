@@ -3867,6 +3867,7 @@
       var minimum = Math.min(420, maximum);
       width = Math.round(Math.max(minimum, Math.min(maximum, width)));
       drawer.style.setProperty('--studio-director-width', width + 'px');
+      el('app-frame').style.setProperty('--studio-director-width', width + 'px');
       grip.setAttribute('aria-valuemin', minimum);
       grip.setAttribute('aria-valuemax', maximum);
       grip.setAttribute('aria-valuenow', width);
@@ -3875,6 +3876,7 @@
     var saved = Number(localStorage.getItem(key));
     var preferred = saved > 0 && Number.isFinite(saved) ? saved : 820;
     drawer.style.setProperty('--studio-director-width', preferred + 'px');
+    el('app-frame').style.setProperty('--studio-director-width', preferred + 'px');
     function refreshBounds(width) {
       var maximum = Math.max(1, el('app-frame').clientWidth - 42);
       grip.setAttribute('aria-valuemin', Math.min(420, maximum));

@@ -4772,7 +4772,7 @@
           throw new Error('The selected Project is no longer available.');
         var order = story.sceneOrder.slice();
         var instruction = JSON.stringify({
-          task:'Author exactly ONE new Scene in this existing Project. Return the established Scene sequence JSON shape with exactly one entry in scenes, a complete usable H3 prompt, a title and durationSeconds. ' +
+          task:'Author exactly ONE new Scene in this existing Project. Return one JSON object containing a complete usable H3 prompt and useful title, plus durationSeconds when specified. ' +
             'Use the author-requested title and duration exactly; use 6 seconds only when no duration was requested. ' +
             'Keep the Scene independently generatable, align the full prompt with its duration and the saved Project visual direction. ' +
             'The existing Scenes are retained and are not revision destinations.',
@@ -4805,18 +4805,27 @@
             String(launch.authorRequest || launch.instruction) || applyExisting);
         if (!reuse) state.pending = false;
         var proposal = reuse ?
-          Promise.resolve(JSON.stringify({scenes:[Object.assign({
+          Promise.resolve(JSON.stringify(Object.assign({
             title:'Scene ' + (order.length+1),
             durationSeconds:6
-          },workingScene)]})) :
+          },workingScene))) :
           window.studioDirectorBridge.makeProposal(instruction,
-            'studio_scene_sequence_draft', true,
+            'studio_scene_field_draft', true,
             {projectId:storyId,projectTitle:story.title,sceneOrder:order});
         return proposal.then(function (raw) {
           state.lastStudioIoRaw = raw;
-          var draft = parseStudioScenesDraft(raw);
-          if (draft.scenes.length !== 1)
-            throw new Error('Director must return exactly one Scene.\nRaw response:\n' + raw);
+          var fields;
+          try { fields = JSON.parse(raw); }
+          catch (error) { throw new Error('Director returned invalid Scene JSON.\nRaw response:\n' + raw); }
+          if (!fields || typeof fields !== 'object' || Array.isArray(fields) ||
+              typeof fields.prompt !== 'string' || !fields.prompt.trim())
+            throw new Error('Director returned no usable Scene Prompt.\nRaw response:\n' + raw);
+          var draft = {scenes:[{
+            title:typeof fields.title === 'string' ? fields.title : '',
+            prompt:fields.prompt,
+            durationSeconds:Object.prototype.hasOwnProperty.call(fields,'durationSeconds')
+              ? fields.durationSeconds : undefined
+          }],rationale:''};
           // The author's explicit duration is a WebCap request parameter,
           // not optional model metadata that may silently default to six.
           var authorDuration = studioMentionedDuration(launch.authorRequest || launch.instruction);

@@ -182,7 +182,7 @@ def test_h3_playbook_review_uses_existing_config_and_checks_conflicts(monkeypatc
     ("storyboard_workshop_shots", {"summary", "shots"}),
     ("storyboard_story_guidelines", {"summary", "guidelines"}),
     ("freeform_chat", None),
-    ("studio_chat", {"reply", "action"}),
+    ("studio_chat", {"reply", "action", "changes"}),
 ])
 def test_director_chat_route_preserves_all_structured_schemas(monkeypatch, operation, expected_fields):
     import importlib

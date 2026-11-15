@@ -15,8 +15,6 @@ function part(start, end) {
   assert.ok(a >= 0 && b > a);
   return source.slice(a, b);
 }
-const fieldsCode = part('  function recommendedWriteFields(operation) {', '  function refreshRead() {');
-const labelCode = part('  function writeActionLabel() {', '  function renderReadiness(list) {');
 
 test('selected Scene list uses one bounded call per Scene, preserving successes after failures', async () => {
   const ids=['a','b','c'],calls=[],statuses=[];

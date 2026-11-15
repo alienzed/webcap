@@ -117,18 +117,19 @@ test('queued, backlogged and running Takes expose the correct independent action
   const takes = nodes['generate-takes'];
   const queuedEntry = takes.querySelector('.generate-take-pending-entry[data-generation-job-id]');
   const queuedButton = queuedEntry.querySelector('[data-generate-job-action]');
-  assert.equal(queuedButton.textContent, 'Cancel');
+  assert.equal(queuedButton.textContent, '×');
+  assert.equal(queuedButton.getAttribute?.('aria-label') || queuedButton.attributes['aria-label'], 'Cancel this queued Take');
   assert.equal(queuedButton.dataset.generateJobAction, 'cancel');
 
   api.syncPreview({ jobId: 'backlog', modelId: 'h3', status: 'backlog' });
   const backlogEntry = takes.children[0];
-  assert.equal(backlogEntry.querySelector('[data-generate-job-action]').textContent, 'Cancel');
+  assert.equal(backlogEntry.querySelector('[data-generate-job-action]').textContent, '×');
 
   api.syncPreview({ jobId: 'running', modelId: 'h3', status: 'running' }, true);
   const runningEntry = takes.children[0];
   const runningButton = runningEntry.querySelector('[data-generate-job-action]');
   const stageButton = nodes['generate-active-preview'].querySelector('[data-generate-job-action]');
-  assert.equal(runningButton.textContent, 'Stop');
+  assert.equal(runningButton.textContent, '■');
   assert.equal(stageButton.textContent, 'Stop');
   assert.equal(stageButton.dataset.jobId, 'running');
   assert.equal(runningEntry.children[0].tagName, 'button');
@@ -147,7 +148,7 @@ test('queued, backlogged and running Takes expose the correct independent action
   await stopRequest;
   assert.deepEqual(calls[1], { url: '/fs/inference', operation: 'stop', jobId: 'running' });
   assert.equal(takes.children[0], runningEntry, 'polling and status changes preserve the Take DOM');
-  assert.equal(runningButton.textContent, 'Stopping…');
+  assert.equal(runningButton.textContent, '…');
   assert.equal(runningButton.disabled, true);
   assert.equal(stageButton.textContent, 'Stopping…');
 
@@ -170,18 +171,20 @@ test('a failed stop remains visible and its controls recover', async () => {
     'operational failure should reach the global console');
 });
 
-test('Generate Cancel and Stop controls occupy their own status-space, not the thumbnail', () => {
+test('Queued and running Take actions share the completed Take delete corner', () => {
   const css = fs.readFileSync(path.join(__dirname, '..', 'tool/css/generate.css'), 'utf8');
   const stage = css.match(/\.generate-stage-pending \.generate-stage-job-action\s*\{([^}]*)\}/);
   assert.ok(stage, 'preview action must have a placement rule');
   assert.match(stage[1], /position:\s*absolute/);
   assert.match(stage[1], /top:\s*12px/);
   assert.match(stage[1], /right:\s*12px/);
-  const copy = css.match(/\.generate-take-pending-entry \.generate-take-copy\s*\{([^}]*)\}/);
-  assert.ok(copy, 'pending Take status must reserve room for its action');
-  assert.match(copy[1], /padding-right:\s*92px/);
-  const action = css.match(/\.generate-take-job-action\s*\{([^}]*)\}/);
-  assert.ok(action);
-  assert.match(action[1], /bottom:\s*10px/);
-  assert.doesNotMatch(action[1], /top:/);
+  const shared = css.match(/\.generate-take-delete,\s*\.generate-take-job-action\s*\{([^}]*)\}/);
+  assert.ok(shared, 'pending and completed Take controls should share positioning');
+  assert.match(shared[1], /top:\s*10px/);
+  assert.match(shared[1], /right:\s*10px/);
+  assert.match(shared[1], /width:\s*28px/);
+  assert.match(shared[1], /height:\s*28px/);
+  assert.doesNotMatch(css, /\.generate-take-pending-entry \.generate-take-copy\s*\{/);
+  const generateSource = fs.readFileSync(path.join(__dirname, '..', 'tool/js/generate.js'), 'utf8');
+  assert.match(generateSource, /action\.className = 'generate-take-job-action'/);
 });

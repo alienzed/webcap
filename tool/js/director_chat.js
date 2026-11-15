@@ -4553,10 +4553,13 @@
           throw new Error('The selected Project is no longer available.');
         var order = story.sceneOrder.slice();
         var instruction = JSON.stringify({
-          task:'Author exactly ONE new Scene in this existing Project. Return one JSON object containing a complete usable H3 prompt and useful title, plus durationSeconds when specified. ' +
-            'Use the author-requested title and duration exactly; use 6 seconds only when no duration was requested. ' +
-            'Keep the Scene independently generatable, align the full prompt with its duration and the saved Project visual direction. ' +
-            'The existing Scenes are retained and are not revision destinations.',
+          task:'Author the new Scenes requested for this existing Project in one response. ' +
+            'Return JSON with scenes: an array of authored Scene records, each with a complete usable H3 prompt, ' +
+            'a useful title, and durationSeconds when supplied. Return the Scenes you can actually author; ' +
+            'a partial sequence is useful and does not require filler or replacement requests. ' +
+            'Use the author-requested durations and titles when clear; use 6 seconds when no duration was requested. ' +
+            'Keep every Scene independently generatable, coherent with the saved Project and distinct when appropriate. ' +
+            'Existing Scenes are retained and are not revision destinations.',
           instruction:launch.instruction,
           authorRequest:launch.authorRequest || launch.instruction,
           requestedDurationSeconds:studioRequestedDuration(launch.authorRequest || launch.instruction),
@@ -4600,32 +4603,45 @@
           catch (error) { throw new Error('Director returned invalid Scene JSON.\nRaw response:\n' + raw); }
           if (!fields || typeof fields !== 'object' || Array.isArray(fields))
             throw new Error('Director returned no usable Scene fields.\\nRaw response:\\n' + raw);
-          var partialScene = studioWorkingFieldChanges(fields,
-            ['title','prompt','durationSeconds']);
-          if (!Object.keys(partialScene).length)
+          // Accept both the current multi-Scene response and legacy single-Scene
+          // objects. The number of records returned is the only authored count.
+          var records = Array.isArray(fields.scenes) ? fields.scenes : [fields];
+          var drafts = records.filter(function (item) {
+            return item && typeof item === 'object' && !Array.isArray(item);
+          }).map(function (item) {
+            return {
+              title:typeof item.title === 'string' ? item.title : '',
+              prompt:typeof item.prompt === 'string' ? item.prompt : '',
+              durationSeconds:Object.prototype.hasOwnProperty.call(item,'durationSeconds')
+                ? item.durationSeconds : undefined
+            };
+          }).filter(function (item) {
+            return item.title.trim() || item.prompt.trim() ||
+              item.durationSeconds !== undefined;
+          });
+          if (!drafts.length)
             throw new Error('Director returned no usable Scene fields.\\nRaw response:\\n' + raw);
-          var missingPrompt = !partialScene.prompt;
-          var draft = {scenes:[{
-            title:typeof fields.title === 'string' ? fields.title : '',
-            prompt:typeof fields.prompt === 'string' ? fields.prompt : '',
-            durationSeconds:Object.prototype.hasOwnProperty.call(fields,'durationSeconds')
-              ? fields.durationSeconds : undefined
-          }],rationale:''};
+          var missingPrompt = drafts.some(function (item) {return !item.prompt.trim();});
+          var draft = {scenes:drafts,rationale:typeof fields.rationale === 'string' ? fields.rationale : ''};
           // The author's explicit duration is a WebCap request parameter,
           // not optional model metadata that may silently default to six.
           var authorDuration = studioMentionedDuration(launch.authorRequest || launch.instruction);
           var requestedDuration = studioRequestedDuration(launch.authorRequest || launch.instruction);
           if (requestedDuration !== null)
-            draft.scenes[0].durationSeconds = requestedDuration;
-          state.studioWorkingDraft.newScene = Object.assign({},
-            state.studioWorkingDraft.newScene,
-            studioWorkingFieldChanges(draft.scenes[0],['title','prompt','durationSeconds']));
-          state.studioWorkingDraft.sourceRequest =
-            String(launch.authorRequest || launch.instruction);
-          scheduleSessionSave();
+            draft.scenes.forEach(function (item) {item.durationSeconds = requestedDuration;});
+          // Preserve the existing one-Scene working draft contract. Multi-Scene
+          // records belong to the multi-Scene review, not a singleton cache.
+          if (drafts.length === 1) {
+            state.studioWorkingDraft.newScene = Object.assign({},
+              state.studioWorkingDraft.newScene,
+              studioWorkingFieldChanges(drafts[0],['title','prompt','durationSeconds']));
+            state.studioWorkingDraft.sourceRequest =
+              String(launch.authorRequest || launch.instruction);
+            scheduleSessionSave();
+          }
           // A missing Prompt retains an editable partial draft without
           // attempting to persist an empty Scene.
-          if (missingPrompt || !launch.directSave ||
+          if (drafts.length !== 1 || missingPrompt || !launch.directSave ||
               (authorDuration !== null && requestedDuration === null)) {
             state.studioScenesProposal = {
               storyId:storyId, storyTitle:story.title, sceneOrder:order,
@@ -4636,7 +4652,7 @@
               ? 'Scene fields retained. Complete the missing H3 Prompt in Review before saving.'
               : authorDuration !== null && requestedDuration === null
                 ? 'Requested ' + authorDuration + 's is outside the supported 4–15s range. Draft retained for review; nothing saved.'
-                : 'One new Scene is ready for review. Nothing has been saved.',
+                : drafts.length + ' authored Scene' + (drafts.length === 1 ? '' : 's') + ' ready for review. Nothing has been saved.',
               authorDuration !== null && requestedDuration === null);
             return {review:true};
           }

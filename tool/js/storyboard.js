@@ -6302,19 +6302,18 @@
       menu.style.top = Math.min(rect.bottom + 5, window.innerHeight - 235) + 'px';
       menu.style.left = Math.max(8, Math.min(rect.right - 232, window.innerWidth - 240)) + 'px';
     });
-    el('storyboard-project-tools').addEventListener('click', function (event) {
+    el('storyboard-project-tool-bar').addEventListener('click', function (event) {
       var button = event.target.closest('[data-project-tool]');
       if (!button) return;
       el('storyboard-project-tools').open = false;
-      if (button.dataset.projectTool === 'director') window.openStoryboardAssistant();
-      else if (button.dataset.projectTool === 'revise') return; // Existing button listener owns this action.
-      else if (button.dataset.projectTool === 'replace') openProjectReplace();
-      else {
-        openDirectorTools();
-        var preset = el('storyboard-director-tools-preset');
-        preset.value = button.dataset.projectTool === 'continuity' ? 'continuity' : 'coherence';
-        preset.dispatchEvent(new Event('change'));
+      if (button.dataset.projectTool === 'replace') {
+        openProjectReplace();
+        return;
       }
+      openDirectorTools();
+      var preset = el('storyboard-director-tools-preset');
+      preset.value = button.dataset.projectTool === 'continuity' ? 'continuity' : 'coherence';
+      preset.dispatchEvent(new Event('change'));
     });
     el('storyboard-find-replace-find').addEventListener('input', previewProjectReplacement);
     el('storyboard-find-replace-with').addEventListener('input', previewProjectReplacement);

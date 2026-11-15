@@ -47,6 +47,7 @@
     draftByMode: { chat: '', storyboard: '' },
     studioIntroPending: false,
     studioSceneProposal: null,
+    studioScenesReviewsByResponse: {},
     studioProjectProposal: null,
     studioScenesProposal: null,
     studioBriefProposal: null,
@@ -2556,7 +2557,7 @@
     remove.type = 'button';
     remove.className = 'review-captions-btn';
     remove.textContent = 'Remove';
-    remove.onclick = function () { row.remove(); };
+    remove.onclick = function () { row.remove(); rememberStudioScenesReview(); };
     header.append(label, remove);
     var title = document.createElement('input');
     title.setAttribute('aria-label', 'Scene title');
@@ -2598,7 +2599,24 @@
     el('studio-scenes-rows').appendChild(row);
   }
 
+  // Keep edits in the existing Scene review when the author closes or switches
+  // responses. A Project match alone does not make two drafts interchangeable.
+  function rememberStudioScenesReview() {
+    var proposal = state.studioScenesProposal;
+    if (!proposal || !el('studio-scenes-review').open) return;
+    proposal.drafts = Array.from(el('studio-scenes-rows').querySelectorAll('.studio-scenes-row'))
+      .map(function (row) {
+        return {
+          title:row.querySelector('[data-field="title"]').value,
+          prompt:row.querySelector('[data-field="prompt"]').value,
+          durationSeconds:row.querySelector('[data-field="durationSeconds"]').value
+        };
+      });
+    proposal.placement = el('studio-scenes-placement').value;
+  }
+
   function showStudioScenesReview() {
+    if (el('studio-scenes-review').open) rememberStudioScenesReview();
     var proposal = state.studioScenesProposal;
     if (!proposal) throw new Error('Prepare Scenes before reviewing them.');
     el('studio-scenes-target').textContent = 'Project: ' + (proposal.storyTitle || proposal.storyId);
@@ -2623,7 +2641,7 @@
       option('before|' + id, 'Before ' + text);
       option('after|' + id, 'After ' + text);
     });
-    placement.value = 'end';
+    placement.value = proposal.placement || 'end';
     var dialog = el('studio-scenes-review');
     if (dialog.open) dialog.close();
     dialog.showModal();
@@ -4017,15 +4035,18 @@
       addStudioProjectInvariant(null, 'studio-brief-invariants');
       el('studio-brief-invariants-selected').checked = true;
     };
-    el('studio-scenes-close').onclick = function () { el('studio-scenes-review').close(); };
-    el('studio-scenes-discard').onclick = function () { el('studio-scenes-review').close(); };
+    el('studio-scenes-close').onclick = function () { rememberStudioScenesReview(); el('studio-scenes-review').close(); };
+    el('studio-scenes-discard').onclick = function () { rememberStudioScenesReview(); el('studio-scenes-review').close(); };
     el('studio-scenes-apply').onclick = applyStudioScenes;
+    el('studio-scenes-rows').addEventListener('input',rememberStudioScenesReview);
+    el('studio-scenes-placement').onchange = rememberStudioScenesReview;
     el('studio-scenes-add').onclick = function () {
       if (el('studio-scenes-rows').children.length >= 32) {
         el('studio-scenes-error').textContent = 'Review up to 32 Scenes at a time.';
         return;
       }
       addStudioScenesRow({ title: '', prompt: '' });
+      rememberStudioScenesReview();
     };
     el('studio-project-close').onclick = function () { el('studio-project-review').close(); };
     el('studio-project-discard').onclick = function () { el('studio-project-review').close(); };
@@ -4555,20 +4576,15 @@
         syncControls();
       });
     },
-    reviewPendingScenes: function (projectId) {
+    reviewPendingScenes: function (projectId, sourceMessageIndex) {
       var proposal = state.studioScenesProposal;
-      if (!proposal || proposal.storyId !== projectId)
-        return Promise.reject(new Error('The authored Scene review is no longer available.'));
+      if (!proposal || proposal.storyId !== projectId ||
+          proposal.sourceMessageIndex !== sourceMessageIndex)
+        return Promise.reject(new Error('This response\'s authored Scene review is no longer active. The other draft remains available.'));
       showStudioScenesReview();
       return Promise.resolve({review:true,count:proposal.drafts.length});
     },
     reviewAuthoredScenes: function (launch) {
-      if (state.studioScenesProposal) {
-        if (state.studioScenesProposal.storyId !== (launch && launch.projectId))
-          return Promise.reject(new Error('Finish the existing Scene review before opening another Project.'));
-        showStudioScenesReview();
-        return Promise.resolve({review:true,count:state.studioScenesProposal.drafts.length});
-      }
       if (!launch || !launch.projectId || !Array.isArray(launch.scenes))
         return Promise.reject(new Error('Select a saved Project and authored Scene records.'));
       var drafts = launch.scenes.filter(function (item) {
@@ -4584,16 +4600,46 @@
       });
       if (!drafts.length)
         return Promise.reject(new Error('No usable Scene fields were authored.'));
+      var responseIndex = launch.sourceMessageIndex;
+      var hasResponse = Number.isInteger(responseIndex) && responseIndex >= 0;
+      var signature = JSON.stringify(drafts);
+      var existing = state.studioScenesProposal;
+      if (existing && existing.storyId === launch.projectId &&
+          hasResponse && existing.sourceMessageIndex === responseIndex &&
+          existing.sourceScenesSignature === signature) {
+        showStudioScenesReview();
+        return Promise.resolve({review:true,count:existing.drafts.length});
+      }
+      if (existing && !Number.isInteger(existing.sourceMessageIndex))
+        return Promise.reject(new Error('An independent Scene review is still open. Finish it before reviewing this response.'));
+      var saved = hasResponse && state.studioScenesReviewsByResponse[responseIndex];
+      if (saved && (saved.storyId !== launch.projectId || saved.sourceScenesSignature !== signature))
+        return Promise.reject(new Error('The saved review does not match this response\'s authored Scene records.'));
+      if (saved) {
+        if (existing && existing !== saved) {
+          rememberStudioScenesReview();
+          state.studioScenesReviewsByResponse[existing.sourceMessageIndex] = existing;
+        }
+        state.studioScenesProposal = saved;
+        showStudioScenesReview();
+        return Promise.resolve({review:true,count:saved.drafts.length});
+      }
       return window.flushStudioDirectorStoryEdits(launch.projectId).then(function () {
         return requestJson('/fs/storyboard?story=' + encodeURIComponent(launch.projectId));
       }).then(function (payload) {
         var story = payload && payload.story;
         if (!story || story.id !== launch.projectId)
           throw new Error('The Project is no longer available.');
+        if (existing) {
+          rememberStudioScenesReview();
+          state.studioScenesReviewsByResponse[existing.sourceMessageIndex] = existing;
+        }
         state.studioScenesProposal = {
           storyId:story.id,storyTitle:story.title,
           sceneOrder:story.sceneOrder.slice(),scenes:story.scenes,
-          drafts:drafts,rationale:launch.rationale || ''
+          drafts:drafts,rationale:launch.rationale || '',
+          sourceMessageIndex:hasResponse ? responseIndex : null,
+          sourceScenesSignature:signature
         };
         showStudioScenesReview();
         studioActionStatus(drafts.length + ' authored Scene' +

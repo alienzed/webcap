@@ -56,12 +56,50 @@ test('authored review belongs to the clicked reply even within the same Project'
   await assert.rejects(pending('project',999), /no longer available/);
 });
 
-test('different Project and independent review do not overwrite existing work', async () => {
+test('independent Scene review cannot be displaced by a conversation reply', async () => {
   const {state,review} = authoredFixture();
   state.studioScenesProposal = {storyId:'project',drafts:[{title:'Unrelated',prompt:'Keep me'}]};
   await assert.rejects(review({projectId:'project',sourceMessageIndex:10,
     scenes:[{prompt:'New reply'}]}), /independent Scene review/);
   assert.equal(state.studioScenesProposal.drafts[0].prompt,'Keep me');
+});
+
+test('another Project never reuses a same-response Scene review', async () => {
+  const {state,review} = authoredFixture();
+  await review({projectId:'project',sourceMessageIndex:10,scenes:[{prompt:'Project A'}]});
+  await assert.rejects(review({projectId:'different',sourceMessageIndex:10,
+    scenes:[{prompt:'Project B'}]}), /no longer matches/);
+  assert.equal(state.studioScenesProposal.storyId,'project');
+  assert.equal(state.studioScenesProposal.drafts[0].prompt,'Project A');
+});
+
+test('modal edits and selected placement stay with the displayed review', () => {
+  const from = director.indexOf('  var displayedStudioScenesProposal = null;');
+  const to = director.indexOf('\n  function showStudioScenesReview()',from);
+  assert.ok(from >= 0 && to > from);
+  const source = director.slice(from,to);
+  const first = {drafts:[{title:'Original',prompt:'Original',durationSeconds:6}]};
+  const second = {drafts:[{title:'Other',prompt:'Other',durationSeconds:6}]};
+  const fields = {
+    title:{value:'Edited title'},
+    prompt:{value:'Edited prompt'},
+    durationSeconds:{value:'9'}
+  };
+  const row = {querySelector:selector => fields[selector.match(/data-field="([^"]+)"/)[1]]};
+  const elements = {
+    'studio-scenes-review':{open:true},
+    'studio-scenes-rows':{querySelectorAll:()=>[row]},
+    'studio-scenes-placement':{value:'start'}
+  };
+  const state = {studioScenesProposal:second};
+  // Set the displayed review independently of the target for a subsequent click.
+  const hooks = new Function('el','state','first',source +
+    '\ndisplayedStudioScenesProposal = first; return rememberStudioScenesReview;')(
+      id=>elements[id],state,first);
+  hooks();
+  assert.deepEqual(first.drafts,[{title:'Edited title',prompt:'Edited prompt',durationSeconds:'9'}]);
+  assert.equal(first.placement,'start');
+  assert.equal(second.drafts[0].prompt,'Other');
 });
 
 test('saved field cleanup preserves unmatched unsaved fields', () => {

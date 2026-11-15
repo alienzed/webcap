@@ -446,6 +446,7 @@
     renderStoryboardAttachmentViewer();
     renderStudioStoryAccess();
     renderStudioOperations();
+    if (studio) window.studioDirectorWorkbench.updateWorkingWrite();
     renderMessages();
     syncControls();
   }
@@ -3598,8 +3599,10 @@
         var targetProject = resolvedTarget.projectId ? {projectId:resolvedTarget.projectId} : selectedProject;
         var nextAction = studioResponse && studioResponse.action ||
           (activeChatMode === 'storyboard' ? studioActionFromExplicitRequest(content, targetScene) : null);
-        if (activeChatMode === 'storyboard' && studioResponse && studioResponse.changes)
+        if (activeChatMode === 'storyboard' && studioResponse && studioResponse.changes) {
           studioMergeWorkingChanges(studioResponse.changes, resolvedTarget, nextAction, content);
+          window.studioDirectorWorkbench.updateWorkingWrite();
+        }
         if (nextAction && (!Array.isArray(nextAction.fields) || !nextAction.fields.length) &&
             studioResponse && studioResponse.changes) {
           nextAction = Object.assign({},nextAction,{fields:Object.keys(
@@ -4155,6 +4158,9 @@
         return {kind:'new-project',fields:Object.keys(working.newProject)};
       return null;
     },
+    preparedSceneFields: function (sceneId) {
+      return Object.assign({}, state.studioWorkingDraft.scenes[sceneId] || {});
+    },
     reviewPreparedWrite: function (draft) {
       if (!this.canReview()) throw new Error('Open the Studio conversation to review its prepared material.');
       if (draft.kind === 'project') {
@@ -4241,6 +4247,7 @@
         fieldNames:Object.keys(values).filter(function (key) {return !!names[key];})
       };
       markStudioReadinessOutdated();
+      window.studioDirectorWorkbench.updateWorkingWrite();
       window.studioDirectorWorkbench.markSavedFields(selected,story);
       var savedFields = Object.keys(values).filter(function(key){return names[key];}).map(function(key){
         return names[key] + (key === 'invariants' ? ' (' + values[key].length + ')' : '');

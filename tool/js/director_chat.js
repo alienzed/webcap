@@ -4210,7 +4210,7 @@
       var savedTarget = selected.sceneId && story.scenes && story.scenes[selected.sceneId]
         ? 'Scene ' + ((story.sceneOrder || []).indexOf(selected.sceneId) + 1) + ' · ' + (story.scenes[selected.sceneId].title || selected.sceneId)
         : story.title || story.id;
-      window.studioDirectorWorkbench.clearWriteAction();
+      window.studioDirectorWorkbench.completeWriteAction(kind, story, selected);
       state.modeMessages.storyboard.push({role:'user',
         content:'Saved ' + savedTarget + ': ' + (savedFields.join(' · ') || 'Scene changes') +
           String.fromCharCode(10) + '[WEBCAP APPLIED FIELD VALUES]' +

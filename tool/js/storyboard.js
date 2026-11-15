@@ -2013,7 +2013,7 @@
     });
   }
 
-  function reviseScenes(instruction, modelId, generateFreshTakes, continuityContext) {
+  function reviseScenes(instruction, modelId, generateFreshTakes, continuityContext, sourceInput) {
     if (!storyState.story) return Promise.reject(new Error('Choose a Story first.'));
     var storyId = storyState.story.id;
     var directorTarget = { kind: 'repair', storyId: storyId };
@@ -2031,7 +2031,7 @@
     instruction = String(instruction || '').trim();
     if (!instruction) return Promise.reject(new Error('Enter what should be revised across these Scenes.'));
 
-    sceneRevisionHistory.remember(instruction, el('storyboard-director-tools-instruction'));
+    sceneRevisionHistory.remember(instruction, sourceInput || el('storyboard-director-tools-instruction'));
     storyState.story.repairInstruction = instruction;
     storyState.story.repairComplete = false;
 
@@ -6174,6 +6174,19 @@
   }
 
 
+  // The Studio composer supplies inputs; Storyboard owns revision execution,
+  // activity, incremental saves, take generation and coherence review.
+  window.storyboardRevisionPreset = function (key) {
+    return DIRECTOR_PASS_PRESETS[key] && DIRECTOR_PASS_PRESETS[key].instruction || '';
+  };
+  window.startStudioRevision = function (options) {
+    if (!options || !options.modelId) return Promise.reject(new Error('Choose a Director model.'));
+    if (options.preset === 'coherence') return runDirectorToolsCoherence(options.modelId, true);
+    return reviseScenes(options.instruction, options.modelId,
+      options.generateFreshTakes === true, options.preset === 'continuity',
+      el('director-studio-revision-input'));
+  };
+
   function projectReplaceText(text, find, replacement, caseSensitive) {
     if (!find) return {text:text, count:0};
     var source = caseSensitive ? text : text.toLocaleLowerCase();
@@ -6291,6 +6304,7 @@
     sceneRevisionHistory = createSessionPromptHistory();
     sceneCreationHistory = createSessionPromptHistory();
     sceneRevisionHistory.bind(el('storyboard-director-tools-instruction'));
+    sceneRevisionHistory.bind(el('director-studio-revision-input'));
     sceneCreationHistory.bind(el('storyboard-scene-creation-instruction'));
 
     el('storyboard-library-compact-toggle').onclick = function () {
@@ -6304,7 +6318,9 @@
     el('storyboard-scenes-sequence-btn').onclick = function () { setSceneViewMode('sequence'); };
     el('storyboard-generate-scenes-btn').onclick = generateScenes;
     el('storyboard-cancel-takes-btn').onclick = cancelStoryTakes;
-    el('storyboard-director-tools-btn').onclick = openDirectorTools;
+    el('storyboard-director-tools-btn').onclick = function () {
+      window.openStudioDirectorRevision();
+    };
     el('storyboard-project-tools').addEventListener('toggle', function () {
       if (!this.open) return;
       var rect = this.querySelector('summary').getBoundingClientRect();
@@ -6320,10 +6336,8 @@
         openProjectReplace();
         return;
       }
-      openDirectorTools();
-      var preset = el('storyboard-director-tools-preset');
-      preset.value = button.dataset.projectTool === 'continuity' ? 'continuity' : 'coherence';
-      preset.dispatchEvent(new Event('change'));
+      window.openStudioDirectorRevision(
+        button.dataset.projectTool === 'continuity' ? 'continuity' : 'coherence');
     });
     el('storyboard-find-replace-find').addEventListener('input', previewProjectReplacement);
     el('storyboard-find-replace-with').addEventListener('input', previewProjectReplacement);

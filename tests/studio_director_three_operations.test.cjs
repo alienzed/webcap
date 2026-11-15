@@ -130,11 +130,45 @@ test('new Scene and Project actions use existing writers with frozen destination
   await flush();
   assert.equal(h.requests[0][0],'new-scene');
   assert.equal(h.requests[0][1].projectId,'p1');
-  assert.equal(h.requests[0][1].durationRequested,true);
+  assert.equal(h.requests[0][1].directSave,true);
   h.functions.presentAction({kind:'create_project',instruction:'Create a bookshop Project.'},
     null,null,'Create a Project');
   h.suggestions.children[0].onclick();
   await flush();
   assert.equal(h.requests[1][0],'project');
   assert.equal(h.requests[1][1],'new-project');
+});
+
+test('new multiple Scenes run one canonical writer per item with independently saved results',async()=>{
+  const h=harness();
+  h.bridge.writeNewScene=async launch=>{
+    h.requests.push(['new-scene',launch]);
+    return {scenes:[{id:'created-'+h.requests.length}]};
+  };
+  h.functions.presentAction({kind:'create_scene',instruction:'Create three different bookshop Scenes.'},
+    null,{projectId:'p1'},'Create 3 Scenes');
+  h.suggestions.children[0].onclick();
+  await flush();
+  assert.equal(h.requests.length,3);
+  assert.equal(h.requests[0][1].projectId,'p1');
+  assert.ok(h.requests.every(item=>item[1].directSave===true));
+  assert.match(h.requests[1][1].instruction,/Scene 2 of 3/);
+  assert.ok(h.statuses.some(row=>/Saved 3 · Failed 0/.test(row[0])));
+});
+
+test('new multiple Scenes retain successes when one item fails',async()=>{
+  const h=harness();
+  let index=0;
+  h.bridge.writeNewScene=async launch=>{
+    h.requests.push(['new-scene',launch]);
+    index++;
+    if(index===2) throw new Error('Scene two could not be authored.');
+    return {scenes:[{id:'created-'+index}]};
+  };
+  h.functions.presentAction({kind:'create_scene',instruction:'Create three different bookshop Scenes.'},
+    null,{projectId:'p1'},'Create 3 Scenes');
+  h.suggestions.children[0].onclick();
+  await flush();
+  assert.equal(h.requests.length,3);
+  assert.ok(h.statuses.some(row=>/Saved 2 · Failed 1/.test(row[0])));
 });

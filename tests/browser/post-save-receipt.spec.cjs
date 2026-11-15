@@ -8,6 +8,7 @@ const {ensureAttachedProject}=require('./helpers.cjs');
 // An actual filesystem permission failure AFTER Scene persistence. This does
 // not intercept/mimic WebCap routes, fabricate a save receipt or mock app code.
 test('Flow 7 variation — Scene persists when subsequent conversation receipt cannot be saved',async({page,request})=>{
+  test.skip(process.platform==='win32','POSIX chmod fault injection is unavailable on Windows; this acceptance condition remains unverified there.');
   await resetModel(request);
   const project=await seedProject(page,'Post-save receipt fault '+Date.now());
   await openDirector(page);
@@ -34,8 +35,6 @@ test('Flow 7 variation — Scene persists when subsequent conversation receipt c
   }).toBeTruthy();
   const chatDirectory=path.join(root,'data','state','director_chats',chatId);
   await expect.poll(()=>fs.existsSync(chatDirectory)).toBeTruthy();
-  if(process.platform==='win32')
-    throw new Error('This real filesystem permission fault requires POSIX and is not verified on Windows.');
 
   try{
     fs.chmodSync(chatDirectory,0o500);

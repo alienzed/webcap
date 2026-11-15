@@ -270,7 +270,13 @@
       var label = document.createElement('label'), input = document.createElement('input');
       input.type = 'checkbox'; input.value = id;
       input.checked = sceneSelectionManual ? checked.has(id) : id === suggestedScene;
-      input.onchange = function () { sceneSelectionManual = true; };
+      input.onchange = function () {
+        sceneSelectionManual = true;
+        if (pendingCreativeAction && pendingCreativeAction.awaitingScenes)
+          pendingCreativeAction.chosenSceneIds = Array.from(
+            el('studio-dw-batch-scenes').querySelectorAll('input:checked')
+          ).map(function (node) {return node.value;});
+      };
       label.append(input, document.createTextNode('Scene ' + (index+1) + ' · ' + (story.scenes[id].title || 'Untitled')));
       batchHost.appendChild(label);
     });
@@ -732,6 +738,7 @@
     var found = [];
     var single = /\bscene\s*(\d+)\b/gi, match;
     while ((match = single.exec(instruction))) found.push(Number(match[1]));
+    // Handle normal enumerations: "Scenes 1, 2 and 3" or "Scenes 1 & 3".
     var plural = /\bscenes\s+(\d+(?:\s*(?:,|and|&)\s*\d+)*)/i.exec(instruction);
     if (plural) plural[1].match(/\d+/g).forEach(function (n) {found.push(Number(n));});
     if (found.length) {
@@ -768,9 +775,10 @@
     button.textContent = ({
       create_project:'Create Project · Review',
       write_project:'Revise Project · Review',
-      create_scene:'Create Scene · Review',
+      create_scene:'Create Scene(s) · Save',
       write_scenes:'Revise Scene(s) · Save'
     })[frozen.kind];
+    button.title = frozen.instruction;
     button.onclick = function () {
       if (pendingCreativeAction !== frozen) return;
       if (!window.studioDirectorBridge.isReady()) {
@@ -791,15 +799,17 @@
             frozen.request.toLowerCase().includes(title.toLowerCase());
         });
         var projectId = mentioned.length === 1 ? mentioned[0].id :
-          mentioned.length > 1 ? '' : frozen.projectId;
+          mentioned.length > 1 ? '' : (frozen.chosenProjectId || frozen.projectId);
         if (!projectId) {
-          status('Unclear target: select a Project in Write.',true);
+          frozen.awaitingProject = true;
+          status('Select the Project in Write, then click this action again.',true);
           openWriteForCapture();
           return;
         }
         var item = items.find(function (p) {return p.id === projectId;});
         if (!item) {
-          status('The requested Project is not available. Select a Project in Write.',true);
+          frozen.awaitingProject = true;
+          status('Select an available Project in Write, then click this action again.',true);
           openWriteForCapture();
           return;
         }
@@ -811,11 +821,12 @@
         }
         if (frozen.kind === 'create_scene') {
           var count = 1;
-          var number = /\b(\d+|one|two|three|four|five|six|seven|eight|nine|ten)\s+(?:new\s+)?scenes?\b/i.exec(frozen.request);
+          var number = /\b(\d+|one|two|three|four|five|six|seven|eight|nine|ten)\s+(?:new\s+)?scenes?\b/i.exec(
+            frozen.request + ' ' + frozen.instruction);
           if (number) {
             var words = {one:1,two:2,three:3,four:4,five:5,six:6,seven:7,eight:8,nine:9,ten:10};
             count = words[number[1].toLowerCase()] || Number(number[1]);
-          } else if (/\bscenes\b/i.test(frozen.request)) {
+          } else if (/\bscenes\b/i.test(frozen.request + ' ' + frozen.instruction)) {
             status('How many new Scenes? Specify a number before launching.',true);
             return;
           }
@@ -861,8 +872,11 @@
         }
         return loadStory(projectId).then(function (story) {
           var ids = sceneIdsFromRequest(frozen.request,story,frozen.scene);
+          if (frozen.chosenSceneIds && frozen.chosenSceneIds.length)
+            ids = frozen.chosenSceneIds.filter(function (id) {return story.sceneOrder.includes(id);});
           if (!ids.length) {
-            status('Unclear target: select Project and Scene(s) in Write.',true);
+            frozen.awaitingScenes = true;
+            status('Select the Scene(s) in Write, then click this action again.',true);
             el('studio-dw-write-project').value = projectId;
             el('studio-dw-write-operation').value = 'scene-write';
             el('studio-dw-scene-mode').value = 'revise';
@@ -887,7 +901,7 @@
             }
             return window.studioDirectorBridge.writeSelectedScene({
               projectId:projectId,sceneId:ids[i],instruction:frozen.instruction,
-              fields:fields.slice()
+              authorRequest:frozen.request,fields:fields.slice()
             }).then(function () {
               completed.push(ids[i]);
               return next(i + 1);
@@ -1043,6 +1057,8 @@
       loadStory(this.value).then(renderReadStory).catch(function(e) { status(e.message,true); });
     };
     el('studio-dw-write-project').onchange=function () {
+      if (pendingCreativeAction && pendingCreativeAction.awaitingProject)
+        pendingCreativeAction.chosenProjectId = this.value;
       loadStory(this.value).then(renderWriteStory).catch(function(e) { status(e.message,true); });
     };
     el('studio-dw-write-operation').onchange=function () {

@@ -172,3 +172,45 @@ test('new multiple Scenes retain successes when one item fails',async()=>{
   assert.equal(h.requests.length,3);
   assert.ok(h.statuses.some(row=>/Saved 2 · Failed 1/.test(row[0])));
 });
+
+test('structured Director changes merge by complete field, without overwriting unrelated drafts', () => {
+  const state={studioWorkingDraft:{projects:{},scenes:{},newProject:{},newScene:{},sourceRequest:''},
+    sessionDirty:{storyboard:false}};
+  const source=part(chat,'  // A Studio conversation owns unsaved sparse field replacements.',
+    '  function parseStudioChatResponse(raw) {');
+  const merge=new Function('state',source+'return studioMergeWorkingChanges;')(state);
+  assert.equal(merge({project:{concept:'First concept',style:'Warm light'}},
+    {projectId:'p1'}, {kind:'write_project'},'Describe the Project'),true);
+  assert.equal(merge({project:{concept:'Second concept'}},
+    {projectId:'p1'}, {kind:'write_project'},'Change the premise'),true);
+  assert.deepEqual(state.studioWorkingDraft.projects.p1,
+    {concept:'Second concept',style:'Warm light'});
+  assert.equal(merge({scene:{title:'Quiet Ending',prompt:'Complete H3 Prompt'}},
+    {projectId:'p1',sceneId:'s2'}, {kind:'write_scenes'},'Revise Scene 2'),true);
+  assert.equal(merge({scene:{durationSeconds:12}},
+    {projectId:'p1',sceneId:'s2'}, {kind:'write_scenes'},'Make it twelve seconds'),true);
+  assert.deepEqual(state.studioWorkingDraft.scenes.s2,
+    {title:'Quiet Ending',prompt:'Complete H3 Prompt',durationSeconds:12});
+  assert.equal(state.studioWorkingDraft.projects.p1.style,'Warm light');
+  assert.equal(state.studioWorkingDraft.sourceRequest,'Make it twelve seconds');
+  assert.equal(state.sessionDirty.storyboard,true);
+});
+
+test('an incomplete optional field does not erase valid authored material', () => {
+  const state={studioWorkingDraft:{projects:{},scenes:{},newProject:{},newScene:{},sourceRequest:''},
+    sessionDirty:{storyboard:false}};
+  const source=part(chat,'  // A Studio conversation owns unsaved sparse field replacements.',
+    '  function parseStudioChatResponse(raw) {');
+  const merge=new Function('state',source+'return studioMergeWorkingChanges;')(state);
+  const response=parse(JSON.stringify({
+    reply:'I revised the Scene.',
+    changes:{scene:{prompt:'Complete H3 Prompt',title:null,durationSeconds:'invalid'}},
+    action:{kind:'write_scenes',instruction:'Quiet ending'}
+  }));
+  assert.equal(response.reply,'I revised the Scene.');
+  assert.equal(merge(response.changes,{projectId:'p1',sceneId:'s1'},response.action,
+    'Quiet ending'),true);
+  assert.deepEqual(state.studioWorkingDraft.scenes.s1,{prompt:'Complete H3 Prompt'});
+  assert.equal(merge({scene:{title:null}},{projectId:'p1',sceneId:'s1'},response.action,'Again'),false);
+  assert.equal(state.studioWorkingDraft.scenes.s1.prompt,'Complete H3 Prompt');
+});

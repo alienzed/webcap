@@ -14,7 +14,16 @@ async function observedModels(request) {
   expect(response.ok()).toBeTruthy();
   return response.json();
 }
+async function freshDirectorSession(page) {
+  // Real session-store API fixture: each test needs an independent conversation.
+  // Creating test data via WebCap routes avoids claiming the header's responsive
+  // New conversation control is the user-facing operation under test.
+  const response=await page.request.post('/fs/director/chats',{data:{mode:'storyboard'}});
+  expect(response.ok()).toBeTruthy();
+  expect((await response.json()).chat?.id).toBeTruthy();
+}
 async function openDirector(page) {
+  await freshDirectorSession(page);
   await page.goto('/');
   await page.locator('#activity-storyboard-btn').click();
   await page.locator('#director-chat-rail-btn').click();
@@ -63,17 +72,9 @@ async function openProject(page, projectId) {
   await row.locator('[data-story-open]').click();
 }
 async function ensureAttachedProject(page,expectedTitle) {
-  // Conversations persist across browser tests on one isolated backend. Start
-  // a fresh real conversation when an earlier test left another Project bound.
-  const mode=page.locator('#director-studio-composer-mode-select');
-  if(await mode.isVisible() && await mode.inputValue()==='revision')
-    await mode.selectOption('conversation');
   const label=page.locator('#director-chat-title');
-  if(!(await label.textContent() || '').includes(expectedTitle)) {
-    await page.locator('#director-chat-clear').click();
-  }
   const attach=page.locator('#director-studio-attach-current');
   if(await attach.isVisible()) await attach.click();
   await expect(label).toContainText(expectedTitle);
 }
-module.exports={ensureAttachedProject,resetModel,queueModel,observedModels,openDirector,say,stories,story,seedProject,seedScene,openProject};
+module.exports={freshDirectorSession,ensureAttachedProject,resetModel,queueModel,observedModels,openDirector,say,stories,story,seedProject,seedScene,openProject};

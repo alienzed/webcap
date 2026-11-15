@@ -426,6 +426,7 @@ test('Project Apply continuation owns subsequent context despite older shell Sce
   };
   h.scope.syncControls=()=>{};
   h.scope.syncModeUi=()=>{};
+  h.scope.scheduleSessionSave=()=>{};
   h.scope.recordStudioOperation=()=>{};
   h.scope.studioActionStatus=()=>{};
   h.scope.writeInitialProjectScenes=async(_story,briefs)=>{

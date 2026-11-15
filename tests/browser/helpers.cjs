@@ -62,4 +62,9 @@ async function openProject(page, projectId) {
   await expect(row).toBeVisible();
   await row.locator('[data-story-open]').click();
 }
-module.exports={resetModel,queueModel,observedModels,openDirector,say,stories,story,seedProject,seedScene,openProject};
+async function ensureAttachedProject(page,expectedTitle) {
+  const attach=page.locator('#director-studio-attach-current');
+  if(await attach.isVisible()) await attach.click();
+  await expect(page.locator('#director-chat-title')).toContainText(expectedTitle);
+}
+module.exports={ensureAttachedProject,resetModel,queueModel,observedModels,openDirector,say,stories,story,seedProject,seedScene,openProject};

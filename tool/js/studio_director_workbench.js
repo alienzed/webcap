@@ -845,7 +845,8 @@
           return window.studioDirectorBridge.prepareWrite('new-project','', '',{
             instruction:frozen.instruction,authorRequest:frozen.request
           });
-        var projectId = frozen.chosenProjectId || frozen.projectId;
+        var projectId = Object.prototype.hasOwnProperty.call(frozen, 'chosenProjectId')
+          ? frozen.chosenProjectId : frozen.projectId;
         if (!projectId) {
           frozen.awaitingProject = true;
           showConversationWrite();

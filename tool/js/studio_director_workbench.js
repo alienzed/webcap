@@ -985,10 +985,10 @@
 
   function sceneIdsFromRequest(instruction, story, selectedScene) {
     var found = [];
-    var single = /\\bscene\\s*(\\d+)\\b/gi, match;
+    var single = /\bscene\s*(\d+)\b/gi, match;
     while ((match = single.exec(instruction))) found.push(Number(match[1]));
-    var plural = /\\bscenes\\s+(\\d+(?:\\s*(?:,|and|&)\\s*\\d+)*)/i.exec(instruction);
-    if (plural) plural[1].match(/\\d+/g).forEach(function (n) {found.push(Number(n));});
+    var plural = /\bscenes\s+(\d+(?:\s*(?:,|and|&)\s*\d+)*)/i.exec(instruction);
+    if (plural) plural[1].match(/\d+/g).forEach(function (n) {found.push(Number(n));});
     if (found.length) {
       var numbers = Array.from(new Set(found));
       if (numbers.some(function (n) {return n < 1 || n > story.sceneOrder.length;}))
@@ -996,7 +996,7 @@
       return numbers.map(function (n) {return story.sceneOrder[n - 1];});
     }
     // A plural request with no explicit scene list requires an author selection.
-    if (/\\bscenes\\b/i.test(instruction)) return [];
+    if (/\bscenes\b/i.test(instruction)) return [];
     return selectedScene && selectedScene.projectId === story.id &&
       story.sceneOrder.includes(selectedScene.sceneId) ? [selectedScene.sceneId] : [];
   }
@@ -1067,7 +1067,7 @@
         if (frozen.kind === 'create_scene') {
           return window.studioDirectorBridge.writeNewScene({
             projectId:projectId,instruction:frozen.instruction,authorRequest:frozen.request,
-            durationRequested:/\\b\\d+\\s*(?:s|sec|seconds)\\b/i.test(frozen.request)
+            durationRequested:/\b\d+\s*(?:s|sec|seconds)\b/i.test(frozen.request)
           });
         }
         return loadStory(projectId).then(function (story) {
@@ -1084,9 +1084,9 @@
             return ['title','prompt','durationSeconds'].includes(name);
           });
           if (!fields.length) fields = ['prompt'];
-          if (/\\b(?:duration|\\d+\\s*(?:seconds|sec|s)\\b)/i.test(frozen.request) &&
+          if (/\b(?:duration|\d+\s*(?:seconds|sec|s)\b)/i.test(frozen.request) &&
               !fields.includes('durationSeconds')) fields.push('durationSeconds');
-          if (/\\b(?:rename|title)\\b/i.test(frozen.request) &&
+          if (/\b(?:rename|title)\b/i.test(frozen.request) &&
               !fields.includes('title')) fields.push('title');
           var completed = [], failed = [], notAttempted = [];
           function next(i) {

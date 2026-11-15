@@ -66,7 +66,7 @@ function actualSceneRequestFixture() {
   };
   let navigation={projectId:'p1',projectTitle:'Moon crossing',sceneId:'a',sceneNumber:1,sceneOrder:['a','b']};
   const requests=[];
-  const state={studioStoryAccess:null,storyboardAttachments:{},sceneRead:null};
+  const state={studioStoryAccess:null,storyboardAttachments:{},sceneRead:null,studioWorkingDraft:{projects:{},scenes:{},newProject:{},newScene:{}}};
   const window={getStudioDirectorNavigation:()=>navigation};
   const scope=vm.createContext({
     state, window, Promise, JSON, String, Object, encodeURIComponent,
@@ -90,7 +90,7 @@ function actualSceneRequestFixture() {
   vm.runInContext(section(workbench,'  function readPayload(story, keys) {',
     '  function updateReadSelection() {')+
     'window.studioDirectorWorkbench={'+sceneRead+'};',scope);
-  vm.runInContext(section(director,'  function studioDirectorSelectedScene(navigation, authorRequest) {',
+  vm.runInContext(section(director,'  function studioDirectorSelectedScene(navigation, authorRequest, explicitProject) {',
     '  function syncModeUi() {')+
     section(director,'  function studioDirectorRequestMessages(messages, includePromptContract, explicitWrite, navigationSnapshot) {',
       '  // Retain available conversational work across ordinary follow-up questions.'),scope);

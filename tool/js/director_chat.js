@@ -4806,6 +4806,11 @@
           // attempting to persist an empty Scene.
           if (drafts.length !== 1 || missingPrompt || invalidDuration || !launch.directSave ||
               (authorDuration !== null && requestedDuration === null)) {
+            var priorReview = state.studioScenesProposal;
+            if (priorReview && Number.isInteger(priorReview.sourceMessageIndex)) {
+              rememberStudioScenesReview();
+              state.studioScenesReviewsByResponse[priorReview.sourceMessageIndex] = priorReview;
+            }
             state.studioScenesProposal = {
               storyId:storyId, storyTitle:story.title, sceneOrder:order,
               scenes:story.scenes, drafts:draft.scenes, rationale:draft.rationale,

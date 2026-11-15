@@ -9,6 +9,22 @@
   var originalPadding = '';
   var showingPreview = false;
 
+  // Fallback for unnamed editors created from templates. Stable while their
+  // surrounding row structure remains the same; semantic data keys win above.
+  function structuralKey(field) {
+    var parts = [], node = field;
+    while (node && node.tagName && parts.length < 10) {
+      if (node.id) {parts.unshift('#' + node.id);break;}
+      var parent = node.parentElement;
+      var sameTag = parent ? Array.from(parent.children).filter(function (item) {
+        return item.tagName === node.tagName;
+      }) : [node];
+      parts.unshift(node.tagName.toLowerCase() + ':' + sameTag.indexOf(node));
+      node = parent;
+    }
+    return parts.join('/');
+  }
+
   function identity(field) {
     if (field.dataset.revisionKey) return field.dataset.revisionKey;
     if (field.id === 'editor' && typeof getAutosaveTargetAndPayload === 'function') {
@@ -27,12 +43,8 @@
       (field.dataset.sceneField ? 'scene-field:' + field.dataset.sceneField :
        field.dataset.storyGuideline ? 'story-guideline:' + field.dataset.storyGuideline :
        field.getAttribute('aria-label') || 'textarea');
-    var parent = field.parentElement;
-    var siblings = parent ? Array.from(parent.querySelectorAll('textarea')).filter(function (item) {
-      return !item.id && !item.name && !item.dataset.sceneField && !item.dataset.storyGuideline;
-    }) : [];
-    if (!field.id && !field.name && !field.dataset.sceneField && !field.dataset.storyGuideline)
-      marker += ':' + siblings.indexOf(field);
+    if (!field.id && !field.dataset.sceneField && !field.dataset.storyGuideline)
+      marker += ':' + structuralKey(field);
     var scope = field.closest('[data-item-id],[data-file-name],[data-media-id],[data-set-id],[data-scene-id]');
     var scoped = scope && Array.from(scope.attributes).filter(function (a) {
       return /^(data-item-id|data-file-name|data-media-id|data-set-id|data-scene-id)$/.test(a.name);
@@ -118,6 +130,7 @@
 
   function step(direction) {
     if (!active) return;
+    if (identity(active.field) !== active.key) attach(active.field);
     clearTimeout(timers.get(active.key));
     timers.delete(active.key);
     if (!showingPreview) {
@@ -163,6 +176,7 @@
     },true);
     document.addEventListener('input',function (event) {
       if (!active || event.target !== active.field) return;
+      if (identity(event.target) !== active.key) attach(event.target);
       showingPreview = false;
       active.live = active.field.value;
       schedule(active.key,active.live);

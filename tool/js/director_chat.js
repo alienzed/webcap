@@ -3728,17 +3728,13 @@
         }
         var authoredScenes = studioResponse && studioResponse.scenes;
         if (activeChatMode === 'storyboard' && authoredScenes && authoredScenes.length) {
-          // Material is already authored: review it as-is. There is no second
-          // LLM call and no guessed number of missing Scenes to generate.
-          window.studioDirectorBridge.reviewAuthoredScenes({
-            projectId:targetProject && targetProject.projectId,
-            scenes:authoredScenes,rationale:'Authored in Director conversation.'
-          }).catch(function (error) {
-            window.reportConsoleError('Studio Scene review',error);
-            studioActionStatus('Authored Scenes could not open in Review: ' +
-              String(error.message || error),true);
-          });
-        } else if (nextAction) {
+          // These are the actual unsaved records, not an action promise.
+          // Keep the review action with its material for conversation recovery.
+          nextAction = Object.assign({},nextAction || {
+            kind:'create_scene',instruction:content,fields:[]
+          },{kind:'create_scene',scenes:authoredScenes});
+        }
+        if (nextAction) {
           try {
             messages[messages.length - 1].writeAction = window.studioDirectorWorkbench.presentAction(
               nextAction, targetScene, targetProject, content);
@@ -4404,7 +4400,8 @@
       var savedTarget = selected.sceneId && story.scenes && story.scenes[selected.sceneId]
         ? 'Scene ' + ((story.sceneOrder || []).indexOf(selected.sceneId) + 1) + ' · ' + (story.scenes[selected.sceneId].title || selected.sceneId)
         : story.title || story.id;
-      if (window.studioDirectorWorkbench.completeWriteAction(kind, story, selected)) {
+      if ((kind !== 'scenes.create' || !state.studioScenesProposal) &&
+          window.studioDirectorWorkbench.completeWriteAction(kind, story, selected)) {
         var sourceMessage = state.modeMessages.storyboard[state.studioActionIndex];
         if (sourceMessage && sourceMessage.writeAction)
           sourceMessage.writeAction.completed = true;
@@ -4553,6 +4550,12 @@
       });
     },
     reviewAuthoredScenes: function (launch) {
+      if (state.studioScenesProposal) {
+        if (state.studioScenesProposal.storyId !== (launch && launch.projectId))
+          return Promise.reject(new Error('Finish the existing Scene review before opening another Project.'));
+        showStudioScenesReview();
+        return Promise.resolve({review:true,count:state.studioScenesProposal.drafts.length});
+      }
       if (!launch || !launch.projectId || !Array.isArray(launch.scenes))
         return Promise.reject(new Error('Select a saved Project and authored Scene records.'));
       var drafts = launch.scenes.filter(function (item) {

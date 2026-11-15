@@ -1,6 +1,6 @@
 'use strict';
 const {test,expect}=require('../browser/test.cjs');
-const {openLiveDirector,attachProject,sendLive,addEvidence,latestSceneReview,
+const {waitForLiveJob,openLiveDirector,attachProject,sendLive,addEvidence,latestSceneReview,
        story,stories,seedProject,seedScene,openProject}=require('./helpers.cjs');
 
 test('Live Flow 1 — real Director authors a reviewed Project and persisted Overview',async({page},testInfo)=>{
@@ -86,14 +86,14 @@ test('Live Flow 4 — explicitly selected saved Project and Scene data are share
   await expect(page.locator('#director-studio-access')).toBeVisible();
   await details.locator('summary').click();
   await page.locator('#director-studio-access-field').selectOption('brief');
-  await page.locator('#director-studio-access-read').click();
+  await waitForLiveJob(page,()=>page.locator('#director-studio-access-read').click());
   await expect(page.locator('#director-studio-access-data')).toContainText('silver gate');
   await expect(page.locator('#director-chat-messages')).toContainText('silver gate',{timeout:180000});
   const before=await page.locator('#director-chat-messages').innerText();
   await page.locator('#director-studio-access-field').selectOption('prompt');
   await expect(page.locator('#director-studio-access-scene')).toBeVisible();
   await page.locator('#director-studio-access-scene').selectOption(scene.id);
-  await page.locator('#director-studio-access-read').click();
+  await waitForLiveJob(page,()=>page.locator('#director-studio-access-read').click());
   await expect(page.locator('#director-studio-access-data')).toContainText('A visitor opens a silver gate.');
   await expect.poll(async()=> (await page.locator('#director-chat-messages').innerText()).length,
     {timeout:180000}).toBeGreaterThan(before.length);

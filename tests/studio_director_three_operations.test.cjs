@@ -56,6 +56,19 @@ test('Only a small, optional action accompanies conversation', () => {
     '  function storyboardRequestMessages('), /readiness|capture/i);
 });
 
+test('plain Read questions with editing words do not invent a write action', () => {
+  const action = new Function(part(chat,
+    '  function studioActionFromExplicitRequest(request, selectedScene) {',
+    '  function storyboardRequestMessages(') + 'return studioActionFromExplicitRequest;')();
+  const selected = {projectId:'p1',sceneId:'one'};
+  assert.equal(action('What is the saved title and duration? Answer briefly; make no changes.', selected), null);
+  assert.equal(action('Explain how you would revise this Scene.', selected), null);
+  assert.equal(action('Can you describe the Project? Leave it unchanged.', selected), null);
+  assert.equal(action('Make the ending quieter.', selected).kind, 'write_scenes');
+  assert.equal(action('Please revise this Project overview.', selected).kind, 'write_project');
+  assert.equal(action("Let's add a new Scene.", selected).kind, 'create_scene');
+});
+
 test('WebCap resolves finite saved Scene IDs, with explicit numbers ahead of selection', () => {
   const story = {id:'p1',sceneOrder:['one','two','three']};
   const selected = {projectId:'p1',sceneId:'two'};

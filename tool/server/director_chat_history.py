@@ -156,7 +156,8 @@ def _validate_operations(operations):
     """Small author-visible receipts, never a copy of LLM extraction or Story data."""
     if not isinstance(operations, list) or len(operations) > 25:
         raise ValueError("Studio operation history must contain at most 25 receipts.")
-    allowed = {"project.create", "scene.create", "scenes.create", "brief.apply", "brief.undo"}
+    allowed = {"project.create", "project.scene.progress", "project.initial-scenes",
+               "scene.create", "scenes.create", "brief.apply", "brief.undo"}
     result = []
     for item in operations:
         if not isinstance(item, dict) or set(item) != {"kind", "label", "storyId", "sceneIds", "at"}:

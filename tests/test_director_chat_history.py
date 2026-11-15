@@ -207,6 +207,31 @@ def test_studio_operations_are_separate_from_dialogue_and_bounded(sessions):
     assert history.open_chat(chat["id"])["operations"] == [receipt]
 
 
+def test_project_initial_scene_progress_and_completion_receipts_survive_reopen(sessions):
+    chat = history.create_chat("storyboard")
+    receipts = []
+    for kind, scene_ids in (
+        ("project.create", []),
+        ("project.scene.progress", []),
+        ("scene.create", ["scene-one"]),
+        ("project.scene.progress", ["scene-one"]),
+        ("scene.create", ["scene-two"]),
+        ("project.initial-scenes", ["scene-one", "scene-two"]),
+    ):
+        receipts.append({
+            "kind": kind, "label": "Initial Scene work",
+            "storyId": "story-one", "sceneIds": scene_ids,
+            "at": "2026-11-14T20:00:00Z",
+        })
+        saved = history.save_chat(chat["id"], {
+            "expectedRevision": len(receipts) - 1, "title": "New Project",
+            "draft": "", "messages": [], "attachments": {},
+            "operations": receipts,
+        })
+        assert saved["operations"] == receipts
+        assert history.open_chat(chat["id"])["operations"] == receipts
+
+
 def test_studio_receipts_reject_full_scene_or_extra_payload(sessions):
     chat = history.create_chat("storyboard")
     with pytest.raises(ValueError, match="invalid fields"):

@@ -3441,15 +3441,18 @@
     // author instruction. An action is only an offer, never an automatic save.
     request = String(request || '').trim();
     if (!request || /[?]\s*$/.test(request)) return null;
+    // A command starts with the requested operation. Mentioning an editing
+    // verb inside a factual question ("make no changes") is not a write.
+    var command = request.replace(/^(?:please|let['’]s)\s+/i, '');
     var kind = '';
-    if (/\b(?:create|start|add|draft|make|write)\b[\s\S]{0,45}\b(?:new\s+)?project\b/i.test(request))
+    if (/^(?:create|start|add|draft|make|write)\b[\s\S]{0,45}\b(?:new\s+)?project\b/i.test(command))
       kind = 'create_project';
-    else if (/\b(?:create|add|draft|write|make)\b[\s\S]{0,45}\b(?:new\s+)?scenes?\b/i.test(request) &&
+    else if (/^(?:create|add|draft|write|make)\b[\s\S]{0,45}\b(?:new\s+)?scenes?\b/i.test(command) &&
         /\b(?:new|create|add|draft)\b/i.test(request))
       kind = 'create_scene';
-    else if (/\b(?:revise|rewrite|update|edit|change|improve|adjust|rename|save|apply|use)\b[\s\S]{0,65}\b(?:project|concept|overview|invariants|atmosphere|visuals)\b/i.test(request))
+    else if (/^(?:revise|rewrite|update|edit|change|improve|adjust|rename|save|apply|use)\b[\s\S]{0,65}\b(?:project|concept|overview|invariants|atmosphere|visuals)\b/i.test(command))
       kind = 'write_project';
-    else if (/\b(?:revise|rewrite|update|edit|change|improve|adjust|rename|make|quiet|shorten|extend|fix|save|apply|use)\b/i.test(request) &&
+    else if (/^(?:revise|rewrite|update|edit|change|improve|adjust|rename|make|quiet|shorten|extend|fix|save|apply|use)\b/i.test(command) &&
         (selectedScene || /\bscenes?\s*\d+\b/i.test(request)))
       kind = 'write_scenes';
     if (!kind) return null;

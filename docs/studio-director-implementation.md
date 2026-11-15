@@ -40,6 +40,39 @@ Log selected model, source commit, request/response, persisted effects and any c
 
 ## Evidence and ownership
 
+### Browser acceptance follow-up (2026-11-14)
+
+Validated against the code through `a920111d` plus the focused acceptance fixes,
+using `remote-1::mo-shakib/gemma4-e4b-uncensored:q4_k_m`:
+
+- The local development environment had two WebCap processes listening on port
+  4200. Replaced them with one current backend and verified its live capability
+  catalog before running further model calls. Earlier mixed-version results do
+  not establish failures of the cutover.
+- Read returned current saved Project/Scene facts and accepted prose. Corrected
+  the plain-response action fallback so a factual question ending with "make no
+  changes" does not offer an unrelated Scene write.
+- Created `Window Light` with a full prompt spanning twelve seconds and verified
+  its saved title and twelve-second duration in the editor.
+- Created `Acceptance — Night Tram` through Project review, followed by two
+  separate initial Scene writes. Both complete prompts saved with the reviewed
+  titles and eight-second durations. This exposed missing progress/completion
+  receipt kinds in conversation persistence; the validator now accepts those
+  app-generated receipts. Confirmed the complete conversation saves and restores.
+- Revised both saved Scenes sequentially to remove music. Observed the first
+  save before the second; both titles, durations and other creative details
+  remained intact. Undo/Redo restored the expected prompt values.
+- Reviewed and applied a Project-style-only revision; checked the saved title,
+  Concept and current Scene prompt were unchanged.
+- Closing/reopening Director and visiting Prep then returning retained the
+  conversation and unsent draft. A complete saved prompt requested in chat was
+  available verbatim through the full-response expansion.
+
+Focused regressions passed: 20 Node three-operation checks and three Python
+conversation receipt/persistence checks. This normal-flow pass does not cover
+injected item/runtime failures, cancellation, concurrent edit conflicts or
+post-save refresh failures, and is not a statistical model-reliability claim.
+
 - Prior browser acceptance found a correct plain-text Read rejected by a mandatory response wrapper, and non-default duration lost on a Scene. These failures motivated #949 and the #950 cutover.
 - #950's focused tests cover plain-text Read, optional malformed action, correct target binding, sparse working-draft fields, persisted draft reuse, worded duration, incremental Scene results and save receipts. The missing optional `reply` case also has a focused regression.
 - The #950 head was checked against GitHub Actions before merging; all seven reported workflows passed at `997e263f4c0b08fbe261d4e052e0a530d12a3944`. Documentation-only commits came afterward and require their own check status.

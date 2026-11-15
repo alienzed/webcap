@@ -2090,7 +2090,7 @@
                         <span id="director-chat-save-status" aria-live="polite"></span>
                     </div>
                     <div class="director-chat-header-actions">
-                        <button id="studio-dw-open-tools" type="button" class="review-captions-btn" aria-controls="director-chat-sidebar" aria-expanded="false">Advanced</button>
+                        <button id="studio-dw-open-tools" type="button" class="review-captions-btn" aria-controls="director-chat-sidebar" aria-expanded="false">Write</button>
                         <button id="director-chat-pin" type="button" class="director-chat-pin" title="Pin Assistant" aria-label="Pin Assistant" aria-pressed="false">
                             <svg viewBox="0 0 24 24" aria-hidden="true">
                                 <path d="M9 4h6"></path>
@@ -2182,9 +2182,9 @@
                     </div>
                     <div id="director-chat-sidebar" class="director-chat-sidebar">
                 <section id="studio-director-workbench" class="studio-director-workbench" aria-label="Director actions and feedback">
-                  <div class="studio-dw-heading"><div><strong id="studio-dw-heading">Advanced</strong></div><button id="studio-dw-close-actions" type="button" aria-label="Close Director actions">Close</button></div>
+                  <div class="studio-dw-heading"><div><strong id="studio-dw-heading">Write</strong></div><button id="studio-dw-close-actions" type="button" aria-label="Close Director actions">Close</button></div>
                   <div class="studio-dw-actions">
-                    <button id="studio-dw-read" type="button" aria-expanded="false" aria-controls="studio-dw-read-panel" title="Share saved material with Director">Context</button>
+                    <button id="studio-dw-read" class="hidden" type="button" aria-expanded="false" aria-controls="studio-dw-read-panel" title="Share saved material with Director">Context</button>
                     <button id="studio-dw-write" type="button" aria-expanded="false" aria-controls="studio-dw-write-panel" title="Prepare changes for review">Draft</button>
                   </div>
                   <div id="studio-dw-status" class="studio-dw-status hidden" role="status" aria-live="polite"></div>
@@ -2227,7 +2227,7 @@
                       <div id="studio-dw-undo" class="studio-dw-undo hidden"><span id="studio-dw-undo-label">Project Overview updated</span><button id="studio-dw-undo-button" type="button">Revert latest Overview update…</button></div>
                     </details>
                   </section>
-                  <section class="studio-dw-readiness" aria-label="Director assessment">
+                  <section class="studio-dw-readiness hidden" aria-label="Director assessment">
                     <details class="studio-dw-assessment-details">
                       <summary>Assessment</summary>
                       <small id="studio-dw-readiness-freshness" role="status" aria-live="polite">No assessment</small>
@@ -2274,7 +2274,7 @@
                                             <summary id="director-studio-operation-summary">Studio changes</summary>
                                             <div id="director-studio-operation-list" class="director-studio-operation-list"></div>
                                         </details>
-                        <details id="director-studio-more">
+                        <details id="director-studio-more" class="hidden">
                             <summary>Scenes</summary>
                             <div id="director-studio-starters" class="director-studio-starters" aria-label="Scene preparation actions">
                                 <button id="director-studio-prepare-scenes" type="button" title="Review multiple tentative Scenes and their placement">Prepare Scenes</button>

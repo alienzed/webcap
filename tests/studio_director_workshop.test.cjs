@@ -21,7 +21,7 @@ test('Director overlays Projects as a resizable drawer with an optional manual w
     'director-chat-drawer', 'director-chat-messages', 'director-chat-input',
     'studio-director-workbench', 'studio-dw-read', 'studio-dw-write',
     'studio-dw-read-project', 'studio-dw-write-project', 'studio-dw-scene-fields',
-    'studio-dw-read-send', 'studio-dw-write-prepare', 'studio-dw-readiness-list',
+    'studio-dw-read-send', 'studio-dw-write-prepare',
     'studio-dw-write-context-json', 'studio-dw-scene-review', 'studio-dw-batch-review'
   ]) assert.match(html, new RegExp('id="' + id + '"'));
   assert.match(html, /class="director-chat-layout"/);

@@ -89,7 +89,7 @@ test('Studio prompting selects the current goal rather than steering every task 
       }
   });
   vm.runInContext(part('  function studioDirectorRequestMessages(messages, includePromptContract, explicitWrite, navigationSnapshot) {',
-    '  // The creative assessment is advisory.'),context);
+    '  // Retain available conversational work across ordinary follow-up questions.'),context);
   const assembled = await vm.runInContext(
     "studioDirectorChatRequestMessages([{role:'user',content:'Revise only the Scene action'}])",context);
   const system = assembled[0].content;

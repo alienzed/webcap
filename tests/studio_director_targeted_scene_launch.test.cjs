@@ -278,5 +278,6 @@ test('a subsequent Scene rewrite sees the unsaved working prompt, not just the o
   assert.ok(call,'the distinct new change should still author once');
   const input=JSON.parse(call[1]);
   assert.equal(input.unsavedWorkingFields.prompt,'The previous unsaved quiet H3 draft.');
-  assert.equal(input.savedContext['scene:s1:prompt'].value,'Mara shouts at the rover.');
+  assert.equal(input.savedContext.fields.find(field=>field.id==='scene:s1:prompt').value,
+    'Mara shouts at the rover.');
 });

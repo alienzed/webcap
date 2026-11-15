@@ -6227,7 +6227,7 @@
     var status = el('storyboard-find-replace-count');
     apply.disabled = true;
     status.textContent = 'Replacing…';
-    var applied = 0;
+    var applied = 0, failed = false;
     flushPendingSaves().then(function () {
       return request(null,'story=' + encodeURIComponent(storyId));
     }).then(function (fresh) {
@@ -6252,6 +6252,7 @@
       closeProjectReplace();
       return refreshLibrary();
     }).catch(function (err) {
+      failed = true;
       status.textContent = 'Updated ' + applied + ' Scene' + (applied === 1 ? '' : 's') +
         '; operation stopped: ' + String(err.message || err);
       // Earlier Scene saves are real even when a later save fails.
@@ -6264,7 +6265,7 @@
       reportError(err);
     }).finally(function () {
       apply.disabled = false;
-      previewProjectReplacement();
+      if (!failed) previewProjectReplacement();
     });
   }
 

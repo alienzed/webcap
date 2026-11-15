@@ -2936,6 +2936,11 @@
                         <label for="keep-lora-filename">Filename</label>
                         <input id="keep-lora-filename" type="text" spellcheck="false" autocomplete="off">
                     </div>
+                    <div class="keep-lora-field">
+                        <label>LoRA capabilities</label>
+                        <div class="keep-lora-source">Select trained variations this epoch handled well in Evaluations. Suggestions are not proof of capability.</div>
+                        <div id="keep-lora-capabilities" class="keep-lora-capabilities" aria-label="LoRA capability groups">Loading training groups…</div>
+                    </div>
                     <div id="keep-lora-status" class="keep-lora-status" aria-live="polite"></div>
                 </div>
                 <footer class="keep-lora-footer">

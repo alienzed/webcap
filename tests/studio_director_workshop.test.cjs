@@ -261,7 +261,7 @@ test('retired Director structural UI is absent', () => {
 });
 
 test('multi-Scene review drafts together and applies selected fields in one atomic request', () => {
-  assert.match(html, /value="scene-write">Write Scenes/);
+  assert.match(html, /value="scene-write">Scenes/);
   assert.match(html, /id="studio-dw-scene-mode"/);
   assert.match(html, /id="studio-dw-batch-review"/);
   assert.match(workbench, /writeSelectedScene\(\{/);

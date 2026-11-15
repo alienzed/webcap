@@ -60,8 +60,11 @@ function sceneFixture(raw = '{"prompt":"Mara finishes quietly under a still came
     '    setStatus:status,').trim().replace(/,$/,'');
   vm.runInContext(readPayload+
     'window.studioDirectorWorkbench={'+sceneRead+','+applyScenePrompt+'};',context);
-  vm.runInContext(section(director,'  function studioRequestedDuration(instruction) {',
+  vm.runInContext(section(director,'  function studioRequestAppliesPreparedMaterial(request) {',
+    '  function studioWorkingFieldChanges(source, names) {')+
+    section(director,'  function studioRequestedDuration(instruction) {',
     '  window.studioDirectorBridge = {'),context);
+  context.scheduleSessionSave=()=>{events.push(['draft-scheduled']);};
   const method=section(director,'    writeSelectedScene: function (launch) {',
     '    makeProposal: function').trim().replace(/,$/,'');
   vm.runInContext('window.studioDirectorBridge={'+method+',isReady:()=>true,'+
@@ -223,7 +226,9 @@ test('unsupported explicit duration preserves a complete Scene draft without sav
   assert.equal(result.review,true);
   assert.equal(h.events.filter(row=>row[0]==='save').length,0);
   assert.equal(h.saved.scenes.s1.prompt,'Mara shouts at the rover.');
-  assert.equal(h.state.modeMessages.storyboard.at(-1).content,'Twenty-second complete scene');
+  assert.equal(h.state.studioWorkingDraft.scenes.s1.prompt,'Twenty-second complete scene');
+  assert.equal(h.state.modeMessages.storyboard.length,0,
+    'complete writer prompts belong to the structured draft, not another chat turn');
   assert.ok(h.events.some(row=>row[0]==='status' && /nothing saved/.test(row[1])));
 });
 

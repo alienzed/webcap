@@ -1,5 +1,5 @@
 'use strict';
-const {test,expect}=require('@playwright/test');
+const {test,expect}=require('./test.cjs');
 const {resetModel,queueModel,observedModels,openDirector,say,story,seedProject,seedScene,openProject}=require('./helpers.cjs');
 
 test('Flow 3 — reviewed Overview revision changes only intended persisted fields',async({page,request})=>{

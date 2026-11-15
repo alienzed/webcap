@@ -308,7 +308,7 @@ test('Scene creation presents authored results rather than scheduling from prose
   assert.match(action,/writeNewScene\(/);
   assert.match(action,/directSave:false/);
   assert.doesNotMatch(action,/How many new Scenes|sequenceCount|sequenceIndex|function create\(index\)/);
-  assert.match(chat,/reviewAuthoredScenes\(\{/);
+  assert.match(workbench,/studioDirectorBridge\.reviewAuthoredScenes\(\{/);
   assert.match(chat,/\x27studio_scenes_draft\x27, true/);
   assert.doesNotMatch(chat,/draft\.scenes\[0\]\.durationSeconds = requestedDuration/);
 });

@@ -3,7 +3,7 @@ const {defineConfig} = require('@playwright/test');
 module.exports=defineConfig({
   testDir:'./tests/browser',
   testMatch:'*.spec.cjs',
-  timeout:60_000,
+  timeout:45_000,
   expect:{timeout:10_000},
   workers:1,
   retries:0,
@@ -11,6 +11,8 @@ module.exports=defineConfig({
   outputDir:'test-results/studio-artifacts',
   use:{
     baseURL:'http://127.0.0.1:4200',
+    actionTimeout:10_000,
+    navigationTimeout:15_000,
     browserName:'chromium',
     screenshot:'only-on-failure',
     trace:'retain-on-failure',

@@ -220,8 +220,12 @@ test('Studio Director: live LLM with production guidance and saved effects', {
     });
   } finally {
     if (process.env.WEBCAP_LIVE_REPORT) {
-      fs.writeFileSync(process.env.WEBCAP_LIVE_REPORT,
-        JSON.stringify({model,origin,report},null,2)+'\n','utf8');
+      try {
+        fs.writeFileSync(process.env.WEBCAP_LIVE_REPORT,
+          JSON.stringify({model,origin,report},null,2)+'\n','utf8');
+      } catch (error) {
+        t.diagnostic('Could not write optional live report: '+error.message);
+      }
     }
     for(const id of created.reverse()) {
       try {

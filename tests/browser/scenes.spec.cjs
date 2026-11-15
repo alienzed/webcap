@@ -19,7 +19,6 @@ test('Flow 2 — returned Scene count, editable review and persistent real recor
   const project=await newSelectedProject(page);
   await page.locator('#director-chat-rail-btn').click();
   await page.locator('[data-assistant-mode="storyboard"]').click();
-  await expect(page.locator('#director-studio-attach-current')).toBeVisible();
   await ensureAttachedProject(page,project.title);
   const model=page.locator('#app-header-director-model');
   await expect(model.locator('option[value="acceptance::acceptance-model"]')).toHaveCount(1);

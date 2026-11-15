@@ -2286,7 +2286,7 @@ def director_chat_route():
         if not isinstance(messages, list) or not messages:
             raise ValueError("Director Chat messages are required.")
         operation = str(data.get("operation") or "freeform_chat").strip()
-        if operation not in {"freeform_chat", "studio_chat", "storyboard_workshop_shots", "studio_scene_draft", "studio_project_draft", "studio_scene_sequence_draft", "studio_brief_draft", "studio_scene_field_draft", "studio_scene_batch_draft", "studio_playbook_draft"}:
+        if operation not in {"freeform_chat", "studio_chat", "storyboard_workshop_shots", "studio_project_draft", "studio_brief_draft", "studio_scene_field_draft"}:
             raise ValueError("Unsupported Director Chat operation.")
         contract = {"operation": operation, "messages": messages}
         if operation == "studio_chat":
@@ -2312,11 +2312,6 @@ def director_chat_route():
                     "rationale": {"type": "string"},
                 },
             }
-        if operation == "studio_playbook_draft":
-            contract["response_schema"] = {
-                "type": "object", "additionalProperties": False, "required": ["guidance"],
-                "properties": {"guidance": {"type": "string", "maxLength": 20000}},
-            }
         if operation == "studio_scene_field_draft":
             contract["response_schema"] = {
                 "type": "object", "additionalProperties": False,
@@ -2325,40 +2320,6 @@ def director_chat_route():
                     "title": {"type": "string"},
                     "prompt": {"type": "string", "minLength": 1},
                     "durationSeconds": {"type": "integer", "minimum": 4, "maximum": 15},
-                },
-            }
-        if operation == "studio_scene_batch_draft":
-            contract["response_schema"] = {
-                "type": "object", "additionalProperties": False,
-                "required": ["scenes"], "properties": {
-                    "scenes": {"type": "array", "minItems": 1, "maxItems": 32,
-                              "items": {"type": "object", "additionalProperties": False,
-                                        "required": ["sceneId"],
-                                        "properties": {
-                                            "sceneId": {"type": "string"},
-                                            "title": {"type": "string"},
-                                            "prompt": {"type": "string"},
-                                        }}}
-                },
-            }
-        if operation == "studio_scene_sequence_draft":
-            contract["response_schema"] = {
-                "type": "object", "additionalProperties": False,
-                "required": ["scenes", "rationale"],
-                "properties": {
-                    "scenes": {
-                        "type": "array", "minItems": 1, "maxItems": 32,
-                        "items": {
-                            "type": "object", "additionalProperties": False,
-                            "required": ["title", "prompt", "durationSeconds"],
-                            "properties": {
-                                "title": {"type": "string"},
-                                "prompt": {"type": "string", "minLength": 1},
-                                "durationSeconds": {"type": "number", "minimum": 4, "maximum": 15},
-                            },
-                        },
-                    },
-                    "rationale": {"type": "string"},
                 },
             }
         if operation == "studio_project_draft":
@@ -2396,17 +2357,6 @@ def director_chat_route():
                     "rationale": {"type": "string"},
                 },
             }
-        if operation == "studio_scene_draft":
-            contract["response_schema"] = {
-                "type": "object",
-                "additionalProperties": False,
-                "required": ["title", "prompt", "rationale"],
-                "properties": {
-                    "title": {"type": "string"},
-                    "prompt": {"type": "string", "minLength": 1},
-                    "rationale": {"type": "string"},
-                },
-            }
         if operation == "storyboard_workshop_shots":
             contract["response_schema"] = {
                 "type": "object",
@@ -2422,7 +2372,7 @@ def director_chat_route():
             str(data.get("model") or "").strip(),
             contract,
             context={},
-            label={"storyboard_workshop_shots": "Storyboard Shot Proposal","studio_scene_draft": "Studio: Draft a Scene", "studio_project_draft": "Studio: Prepare Project", "studio_scene_sequence_draft": "Studio: Prepare Scenes", "studio_brief_draft": "Studio: Propose Brief"}.get(operation, "Director Chat"),
+            label={"storyboard_workshop_shots": "Storyboard Shot Proposal", "studio_project_draft": "Studio: Prepare Project": "Studio: Prepare Scenes", "studio_brief_draft": "Studio: Propose Brief"}.get(operation, "Director Chat"),
         )
         return jsonify({"ok": True, "job": job}), 202
     except Exception as exc:

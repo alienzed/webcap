@@ -40,4 +40,26 @@ async function story(page,id) {
   expect(response.ok()).toBeTruthy();
   return (await response.json()).story;
 }
-module.exports={resetModel,queueModel,observedModels,openDirector,say,stories,story};
+async function seedProject(page, name, overrides={}) {
+  const response=await page.request.post('/fs/storyboard',{data:{
+    operation:'create_story',story:{
+      title:name,concept:'A night in a bookshop.',style:'Warm lamp light.',
+      invariants:[],status:'active',targetSceneCount:4,...overrides
+    }
+  }});
+  expect(response.ok()).toBeTruthy();
+  return (await response.json()).story;
+}
+async function seedScene(page, projectId, scene) {
+  const response=await page.request.post('/fs/storyboard',{data:{
+    operation:'add_scene',storyId:projectId,scene
+  }});
+  expect(response.ok()).toBeTruthy();
+  return (await response.json()).scene;
+}
+async function openProject(page, projectId) {
+  const row=page.locator('#storyboard-library-list [data-story-id="'+projectId+'"]');
+  await expect(row).toBeVisible();
+  await row.locator('[data-story-open]').click();
+}
+module.exports={resetModel,queueModel,observedModels,openDirector,say,stories,story,seedProject,seedScene,openProject};

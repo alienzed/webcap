@@ -3534,14 +3534,24 @@
 
   function positionLoraPickerMenu(picker, menu) {
     var pickerRect = picker.getBoundingClientRect();
-    var viewportHeight = window.innerHeight || document.documentElement.clientHeight;
-    var below = Math.max(0, viewportHeight - pickerRect.bottom - 8);
-    var above = Math.max(0, pickerRect.top - 8);
+    var visibleTop = 0;
+    var visibleBottom = window.innerHeight || document.documentElement.clientHeight;
+    // The Scene Defaults drawer scrolls independently of the window. Its edges
+    // (and those of any other clipping ancestor) bound the popup as well.
+    for (var parent = picker.parentElement; parent; parent = parent.parentElement) {
+      var style = window.getComputedStyle(parent);
+      if (!/(auto|scroll|hidden|clip)/.test(style.overflowY)) continue;
+      var rect = parent.getBoundingClientRect();
+      visibleTop = Math.max(visibleTop, rect.top);
+      visibleBottom = Math.min(visibleBottom, rect.bottom);
+    }
+    var below = Math.max(0, visibleBottom - pickerRect.bottom - 8);
+    var above = Math.max(0, pickerRect.top - visibleTop - 8);
     var opensUp = below < 180 && above > below;
     var available = opensUp ? above : below;
 
     menu.classList.toggle('opens-up', opensUp);
-    menu.style.maxHeight = String(Math.max(40, Math.min(220, Math.floor(available - 4)))) + 'px';
+    menu.style.maxHeight = String(Math.max(1, Math.min(220, Math.floor(available - 4)))) + 'px';
   }
 
   function renderLoraPickerMenu(picker) {

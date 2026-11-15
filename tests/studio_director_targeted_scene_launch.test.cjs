@@ -265,3 +265,18 @@ test('unsupported duration never saves a working prompt with contradictory timin
   assert.equal(h.events.filter(row=>row[0]==='save').length,0);
   assert.equal(h.saved.scenes.s1.prompt,'Mara shouts at the rover.');
 });
+
+test('a subsequent Scene rewrite sees the unsaved working prompt, not just the older saved prompt',async()=>{
+  const h=sceneFixture();
+  h.state.studioWorkingDraft.scenes.s1={prompt:'The previous unsaved quiet H3 draft.'};
+  h.state.studioWorkingDraft.sourceRequest='First quieter draft';
+  await h.window.studioDirectorBridge.writeSelectedScene({
+    ...h.launch,instruction:'Make it even quieter.',
+    authorRequest:'Make it even quieter.',fields:['prompt']
+  });
+  const call=h.events.find(event=>event[0]==='model');
+  assert.ok(call,'the distinct new change should still author once');
+  const input=JSON.parse(call[1]);
+  assert.equal(input.unsavedWorkingFields.prompt,'The previous unsaved quiet H3 draft.');
+  assert.equal(input.savedContext['scene:s1:prompt'].value,'Mara shouts at the rover.');
+});

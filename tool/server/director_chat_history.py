@@ -113,6 +113,7 @@ def _validate_messages(messages):
                     "projectId": str(action.get("projectId") or ""),
                     "scene": {key: scene[key] for key in ("projectId", "sceneId", "sceneNumber")
                               if key in scene} if scene else None,
+                    "completed": action.get("completed") is True,
                 }
         result.append(message)
     return result

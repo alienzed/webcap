@@ -3264,9 +3264,9 @@
     else if (/\b(?:create|add|draft|write|make)\b[\s\S]{0,45}\b(?:new\s+)?scenes?\b/i.test(request) &&
         /\b(?:new|create|add|draft)\b/i.test(request))
       kind = 'create_scene';
-    else if (/\b(?:revise|rewrite|update|edit|change|improve|adjust|rename)\b[\s\S]{0,65}\b(?:project|concept|overview|invariants|atmosphere|visuals)\b/i.test(request))
+    else if (/\b(?:revise|rewrite|update|edit|change|improve|adjust|rename|save|apply|use)\b[\s\S]{0,65}\b(?:project|concept|overview|invariants|atmosphere|visuals)\b/i.test(request))
       kind = 'write_project';
-    else if (/\b(?:revise|rewrite|update|edit|change|improve|adjust|rename|make|quiet|shorten|extend|fix)\b/i.test(request) &&
+    else if (/\b(?:revise|rewrite|update|edit|change|improve|adjust|rename|make|quiet|shorten|extend|fix|save|apply|use)\b/i.test(request) &&
         (selectedScene || /\bscenes?\s*\d+\b/i.test(request)))
       kind = 'write_scenes';
     if (!kind) return null;
@@ -4292,6 +4292,36 @@
     }
   }
 
+  function reuseScenePromptFromConversation(instruction) {
+    if (!/\b(?:save|apply|use|store|put)\b/i.test(instruction) ||
+        !/\b(?:that|this|above|previous|last)\b/i.test(instruction) ||
+        !/\bprompt\b/i.test(instruction)) return null;
+    // The author specifically asked for material already shown. Do not ask
+    // the model to re-author it or mine an arbitrary conversational reply.
+    var messages = state.modeMessages.storyboard || [];
+    var requestAt = messages.findLastIndex(function (item) {
+      return item.role === 'user' && item.content === instruction;
+    });
+    var end = requestAt < 0 ? messages.length : requestAt;
+    for (var i = end - 1;i >= 0;i--) {
+      var message = messages[i];
+      if (message.role !== 'assistant') continue;
+      var content = String(message.content || '').trim();
+      var heading = /(?:^|\n)\s*integrated_multimodal_description\s*:/i.exec(content);
+      if (heading) {
+        var prompt = content.slice(heading.index + heading[0].length -
+          'integrated_multimodal_description:'.length).trim();
+        return prompt || null;
+      }
+      try {
+        var json = JSON.parse(content);
+        if (json && typeof json.prompt === 'string' && json.prompt.trim())
+          return json.prompt.trim();
+      } catch (_) { /* Ordinary prose is not a stored Prompt. */ }
+    }
+    return null;
+  }
+
   function studioRequestedDuration(instruction) {
     var seconds = studioMentionedDuration(instruction);
     return Number.isInteger(seconds) && seconds >= 4 && seconds <= 15 ? seconds : null;
@@ -4691,6 +4721,25 @@
             .then(function (result) {
               studioActionStatus('Scene ' + (story.sceneOrder.indexOf(sceneId)+1) +
                 ' title saved.',false);
+              return result;
+            });
+        }
+        var authorRequest = String(launch.authorRequest || launch.instruction);
+        var askingToReuse = /\b(?:save|apply|use|store|put)\b/i.test(authorRequest) &&
+          /\b(?:that|this|above|previous|last)\b/i.test(authorRequest) &&
+          /\bprompt\b/i.test(authorRequest);
+        if (askingToReuse && !wantsTitle && !wantsDuration) {
+          var fullPrompt = reuseScenePromptFromConversation(authorRequest);
+          if (!fullPrompt)
+            throw new Error('No complete earlier H3 Prompt was found in this conversation to save.');
+          if (fullPrompt.trim() === String(original.prompt || '').trim()) {
+            studioActionStatus('Scene prompt is unchanged.',false);
+            return null;
+          }
+          return window.studioDirectorWorkbench.applyScenePrompt(story,sceneId,fullPrompt)
+            .then(function (result) {
+              studioActionStatus('Scene ' + (story.sceneOrder.indexOf(sceneId)+1) +
+                ' saved from the existing Director prompt.',false);
               return result;
             });
         }

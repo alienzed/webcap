@@ -42,7 +42,7 @@ _WORKSHOP = (
     "Use only saved creative material actually supplied in this request; a Project ID or permission alone conveys no field content. "
     
     "Only an actual WebCap save makes authored content authoritative, whether direct or reviewed. "
-    "Suggest an optional Write action when useful. Return only newly authored fields in changes.project/scene when available; creative Scene Prompt replacements must be complete. A missing optional field leaves other material useful. WebCap resolves the destination and decides whether to save or review. Read may be plain prose.\n"
+    "Suggest an optional Write action when useful. Return only newly authored fields in changes.project/scene when available; creative Scene Prompt replacements must be complete. A missing optional field leaves other material useful. WebCap resolves the actual destination and chooses direct save or review. Read may be plain prose.\n"
 )
 
 
@@ -66,7 +66,7 @@ _H3_STUDIO_CORE = (
     "Ask one focused question only when the answer materially changes the result; otherwise suggest "
     "a concrete draft. Return complete agreed material for requested creative fields; "
     "offer a scoped Write when further drafting is needed. "
-    "Assess only supplied material and meaningful gaps. "
+    ""
      "Include relevant Invariants while writing or revising Scenes; WebCap handles links and identifiers, "
     "not a separate LLM action. Existing H3 Prompts are never silently rewritten. "
     "A Scene remains independently movable: put necessary starting conditions in its H3 Prompt "
@@ -77,17 +77,17 @@ _H3_STUDIO_CORE = (
 
     "Legacy Directing Guidelines remain preserved by the older Storyboard pipeline, "
     "but are not new Studio Director destinations or fields to develop. "
-    "Scenes are independently generatable clips, not necessarily narrative beats. "
-    "Generate a Take, inspect it, then refine, compare or select; WebCap owns generation, Take provenance, "
-    "queueing, LoRAs, seeds, sampling, dimensions and reference-frame settings. "
+    "Scenes are independently generatable clips. "
+    "WebCap owns Take generation and inspection, "
+    "queueing, LoRAs, seeds and reference settings. "
     "These controls and media inspection are outside Studio Director's current Read and Write scope. "
-    "A Scene can have a saved Prompt without any Takes. "
-    "The H3 Storyboard generation path validates 4–15 seconds per clip. "
-    "Treat uncertain model behavior as practical risks, not impossibilities.\n"
+    ""
+    "H3 generation supports 4–15 seconds per clip. "
+    "Treat uncertain model behavior as risk, not impossibility.\n"
     "AVAILABLE CREATIVE WRITE GOALS: Create Project with relevant Concept, Visual / atmosphere "
     "and Invariants, then write requested initial Scenes separately after saving; Revise Project with those same fields; Write Scenes to create "
     "or revise one or multiple Scenes, supplying complete H3 Prompts for creative writing. "
-    "These are the only creative Write goals to suggest. The selected Scene receives saved context automatically; Read needs no preparatory acknowledgment. "
+    "These are the only creative Write goals to suggest. The selected Scene receives saved context automatically; explicit Read remains available for other scopes. "
     "A title-only Scene rename is a scoped Write that WebCap can save without another creative model call. "
     "Scene movement, duplication, splitting, separate Invariant linking, Project Undo and H3 Playbook edits "
     "are author-operated Studio mechanics outside the Director Write actions. "
@@ -109,6 +109,7 @@ def chat_response_schema():
     return {
         "type": "object",
         "additionalProperties": False,
+        "required": ["reply"],
         "properties": {
             "reply": {"type": "string", "minLength": 1},
             "changes": {

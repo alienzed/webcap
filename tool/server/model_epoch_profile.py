@@ -124,6 +124,10 @@ def training_suggestions(folder, job_id):
     Derived results are ephemeral: only explicitly approved enrichment is saved.
     """
     from .epoch_reference import reference_vocabulary
+    from .caption_ops import _resolve_folder
+    from .folder_state_store import read_folder_state
+    state = read_folder_state(_resolve_folder(folder) / ".webcap_state.json")
+    required_phrase = str((state.get("stats") or {}).get("requiredPhrase") or "").strip()
     groups = reference_vocabulary(folder, job_id)
     options = {}
     for group in groups:
@@ -147,7 +151,7 @@ def training_suggestions(folder, job_id):
             captions.append(value[:600])
         if len(captions) >= 40:
             break
-    return {"promptOptions": options, "trainedWords": [],
+    return {"promptOptions": options, "trainedWords": [required_phrase] if required_phrase else [],
             "captionSamples": captions,
             "source": "captured_membership_current_annotations",
             "evidenceLevel": "training_membership_only_not_validated"}
@@ -165,6 +169,7 @@ def director_enrichment_request(checkpoint_profile, suggestions):
         "externalDescription": (sources.get("sidecar") or {}).get("description") or (sources.get("civitai") or {}).get("description") or "",
         "externalTrainedWords": (sources.get("civitai") or {}).get("trainedWords") or [],
         "capturedVocabulary": (suggestions or {}).get("promptOptions") or {},
+        "setKeyPhrase": ((suggestions or {}).get("trainedWords") or [""])[0],
         "currentCaptionSamples": (suggestions or {}).get("captionSamples") or [],
     }
     schema = {
@@ -185,8 +190,9 @@ def director_enrichment_request(checkpoint_profile, suggestions):
             "Suggest human-reviewable LoRA profile metadata from the supplied evidence. "
             "Use only observed training terminology and imported facts. "
             "Do not claim quality, reliable generation, or supported generalization "
-            "from tags alone. Do not infer trigger words as proven unless explicitly "
-            "supplied. Preserve the user's existing wording when appropriate. "
+            "from tags alone. The setKeyPhrase is a user-authored trigger candidate; "
+            "retain it in trainedWords when present, without claiming its effectiveness. "
+            "Preserve the user's existing wording when appropriate. "
             "Return concise description, key phrases, named variation groups, "
             "and optional generation guidance as JSON. Nothing is automatically saved.\\n"
             + json.dumps(compact, ensure_ascii=False)[:18000]

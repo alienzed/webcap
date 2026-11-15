@@ -323,6 +323,10 @@ test('Studio conversation receives the canonical H3 template as reference withou
   assert.match(result[0].content,/not when authoring Project fields/);
   assert.equal(result[1].content,'How should an H3 prompt be structured?');
   assert.doesNotMatch(result[0].content,/\[WEBCAP EXPLICIT READ\]/);
+  const ordinary=await vm.runInContext(
+    "studioDirectorChatRequestMessages([{role:'user',content:'What is the saved title?'}])",context);
+  assert.doesNotMatch(ordinary[0].content,/H3 PRODUCTION PROMPT REFERENCE/,
+    'ordinary Read should not pay for an entire H3 authoring template');
 });
 
 test('large explicit Read selections are sent intact, with no arbitrary client character cap', async () => {

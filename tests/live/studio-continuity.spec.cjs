@@ -1,6 +1,6 @@
 'use strict';
 const {test,expect}=require('../browser/test.cjs');
-const {openLiveDirector,attachProject,sendLive,addEvidence,latestSceneReview,
+const {waitForLiveJob,openLiveDirector,attachProject,sendLive,addEvidence,latestSceneReview,
        story,stories,seedProject,openProject}=require('./helpers.cjs');
 
 test('Live Flow 5 — Director Project attachment survives opening another Project',async({page},testInfo)=>{
@@ -120,7 +120,7 @@ test('Live Flow 8 — slash-inserted Studio Block reaches the real Director mode
   const sent=await composer.inputValue();
   expect(sent).toContain('One amber lamp illuminates a stone doorway.');
   expect(sent).toContain('and mention how to frame the shot.');
-  await page.locator('#director-chat-send').click();
+  await waitForLiveJob(page,()=>page.locator('#director-chat-send').click());
   await expect.poll(async()=> (await page.locator('#director-chat-messages').innerText()).length,
     {timeout:180000}).toBeGreaterThan(sent.length);
   expect((await stories(page)).map(x=>x.id).sort()).toEqual(before.sort());

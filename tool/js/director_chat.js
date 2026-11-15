@@ -4227,6 +4227,14 @@
     }
   }
 
+  function studioRequestedDuration(instruction) {
+    var match = /\b(\d+(?:\.\d+)?)\s*(?:-|\s)?\s*(?:seconds?|secs?|s)\b/i.exec(
+      String(instruction || ''));
+    if (!match) return null;
+    var seconds = Number(match[1]);
+    return Number.isInteger(seconds) && seconds >= 4 && seconds <= 15 ? seconds : null;
+  }
+
   window.studioDirectorBridge = {
     placeSuggestedAction: placeStudioSuggestion,
     canReview: function () {
@@ -4506,6 +4514,11 @@
           var draft = parseStudioScenesDraft(raw);
           if (draft.scenes.length !== 1)
             throw new Error('Director must return exactly one Scene.\nRaw response:\n' + raw);
+          // The author's explicit duration is a WebCap request parameter,
+          // not optional model metadata that may silently default to six.
+          var requestedDuration = studioRequestedDuration(launch.authorRequest || launch.instruction);
+          if (requestedDuration !== null)
+            draft.scenes[0].durationSeconds = requestedDuration;
           state.studioScenesProposal = {
             storyId:storyId, storyTitle:story.title, sceneOrder:order,
             scenes:story.scenes, drafts:draft.scenes, rationale:draft.rationale
@@ -4568,21 +4581,26 @@
             try {proposed = JSON.parse(raw);}
             catch (error) {throw new Error('Director returned invalid Scene JSON.\nRaw response:\n' + raw);}
             if (!proposed || typeof proposed !== 'object' || Array.isArray(proposed) ||
-                typeof proposed.prompt !== 'string' || !proposed.prompt.trim() ||
-                proposed.prompt.length > 60000 ||
-                (wantsTitle && (typeof proposed.title !== 'string' || !proposed.title.trim() ||
-                  proposed.title.length > 240)) ||
-                (wantsDuration && (typeof proposed.durationSeconds !== 'number' ||
-                  !Number.isInteger(proposed.durationSeconds) ||
-                  proposed.durationSeconds < 4 || proposed.durationSeconds > 15))) {
-              throw new Error('Director did not return a complete supported Scene revision.\nRaw response:\n' + raw);
+                typeof proposed.prompt !== 'string' || !proposed.prompt.trim()) {
+              throw new Error('Director did not return a usable Scene prompt.\nRaw response:\n' + raw);
             }
-            var extras = {};
-            if (wantsTitle) extras.title = proposed.title;
-            if (wantsDuration) extras.durationSeconds = proposed.durationSeconds;
+            var extras = {}, missing = [];
+            var duration = studioRequestedDuration(launch.instruction);
+            if (wantsTitle) {
+              if (typeof proposed.title === 'string' && proposed.title.trim())
+                extras.title = proposed.title.trim();
+              else missing.push('title');
+            }
+            if (wantsDuration) {
+              if (duration !== null) extras.durationSeconds = duration;
+              else if (Number.isInteger(proposed.durationSeconds) &&
+                  proposed.durationSeconds >= 4 && proposed.durationSeconds <= 15)
+                extras.durationSeconds = proposed.durationSeconds;
+              else missing.push('duration');
+            }
             if (proposed.prompt.trim() === String(original.prompt || '').trim() &&
-                (!wantsTitle || proposed.title.trim() === String(original.title || '').trim()) &&
-                (!wantsDuration || proposed.durationSeconds === original.durationSeconds)) {
+                (!Object.hasOwn(extras,'title') || extras.title === String(original.title || '').trim()) &&
+                (!Object.hasOwn(extras,'durationSeconds') || extras.durationSeconds === original.durationSeconds)) {
               studioActionStatus('Director returned no Scene changes.', false);
               return null;
             }
@@ -4595,7 +4613,8 @@
             syncControls();
             return window.studioDirectorWorkbench.applyScenePrompt(story, sceneId, proposed.prompt, extras)
               .then(function () {
-                studioActionStatus('Scene ' + (story.sceneOrder.indexOf(sceneId)+1) + ' saved.', false);
+                studioActionStatus('Scene ' + (story.sceneOrder.indexOf(sceneId)+1) + ' saved.' +
+                   (missing.length ? ' Requested ' + missing.join(' and ') + ' not updated; inspect the saved Scene.' : ''),!!missing.length);
               });
           });
       }).catch(function (error) {

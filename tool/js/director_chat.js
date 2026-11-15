@@ -875,6 +875,7 @@
       state.studioSceneProposal = null;
       state.studioProjectProposal = null;
       state.studioScenesProposal = null;
+      state.studioScenesReviewsByResponse = {};
       state.studioBriefProposal = null;
       state.workshopProposal = null;
     }
@@ -2601,8 +2602,9 @@
 
   // Keep edits in the existing Scene review when the author closes or switches
   // responses. A Project match alone does not make two drafts interchangeable.
+  var displayedStudioScenesProposal = null;
   function rememberStudioScenesReview() {
-    var proposal = state.studioScenesProposal;
+    var proposal = displayedStudioScenesProposal;
     if (!proposal || !el('studio-scenes-review').open) return;
     proposal.drafts = Array.from(el('studio-scenes-rows').querySelectorAll('.studio-scenes-row'))
       .map(function (row) {
@@ -2619,6 +2621,7 @@
     if (el('studio-scenes-review').open) rememberStudioScenesReview();
     var proposal = state.studioScenesProposal;
     if (!proposal) throw new Error('Prepare Scenes before reviewing them.');
+    displayedStudioScenesProposal = proposal;
     el('studio-scenes-target').textContent = 'Project: ' + (proposal.storyTitle || proposal.storyId);
     el('studio-scenes-rationale').textContent = proposal.rationale;
     el('studio-scenes-error').textContent = '';
@@ -2721,6 +2724,8 @@
           (defaulted ? ' ' + defaulted + ' saved using the 6s duration default.' : '');
       } else {
         state.studioScenesProposal = null;
+        if (Number.isInteger(proposal.sourceMessageIndex))
+          delete state.studioScenesReviewsByResponse[proposal.sourceMessageIndex];
         el('studio-scenes-review').close();
       }
       var durationNotice = defaulted ? ' · ' + defaulted + ' duration' +
@@ -2966,6 +2971,7 @@
         state.studioSceneProposal = null;
         state.studioProjectProposal = null;
         state.studioScenesProposal = null;
+        state.studioScenesReviewsByResponse = {};
         state.studioBriefProposal = null;
         el('director-chat-workshop-status').textContent = '';
       }
@@ -4765,7 +4771,8 @@
               (authorDuration !== null && requestedDuration === null)) {
             state.studioScenesProposal = {
               storyId:storyId, storyTitle:story.title, sceneOrder:order,
-              scenes:story.scenes, drafts:draft.scenes, rationale:draft.rationale
+              scenes:story.scenes, drafts:draft.scenes, rationale:draft.rationale,
+              sourceMessageIndex:launch.sourceMessageIndex
             };
             showStudioScenesReview();
             studioActionStatus(missingPrompt

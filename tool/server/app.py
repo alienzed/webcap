@@ -2365,6 +2365,7 @@ def director_chat_route():
             contract["response_schema"] = {
                 "type": "object",
                 "additionalProperties": False,
+                "required": ["title", "concept", "style", "invariants", "rationale"],
                 "properties": {
                     "title": {"type": "string"},
                     "concept": {"type": "string"},

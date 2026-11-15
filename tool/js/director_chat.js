@@ -4671,6 +4671,11 @@
           if (!drafts.length)
             throw new Error('Director returned no usable Scene fields.\\nRaw response:\\n' + raw);
           var missingPrompt = drafts.some(function (item) {return !item.prompt.trim();});
+          var invalidDuration = drafts.some(function (item) {
+            return item.durationSeconds !== undefined &&
+              (!Number.isFinite(Number(item.durationSeconds)) ||
+              Number(item.durationSeconds) < 4 || Number(item.durationSeconds) > 15);
+          });
           var draft = {scenes:drafts,rationale:typeof fields.rationale === 'string' ? fields.rationale : ''};
           // The author's explicit duration is a WebCap request parameter,
           // not optional model metadata that may silently default to six.
@@ -4690,7 +4695,7 @@
           }
           // A missing Prompt retains an editable partial draft without
           // attempting to persist an empty Scene.
-          if (drafts.length !== 1 || missingPrompt || !launch.directSave ||
+          if (drafts.length !== 1 || missingPrompt || invalidDuration || !launch.directSave ||
               (authorDuration !== null && requestedDuration === null)) {
             state.studioScenesProposal = {
               storyId:storyId, storyTitle:story.title, sceneOrder:order,
@@ -4699,9 +4704,11 @@
             showStudioScenesReview();
             studioActionStatus(missingPrompt
               ? 'Scene fields retained. Complete the missing H3 Prompt in Review before saving.'
-              : authorDuration !== null && requestedDuration === null
-                ? 'Requested ' + authorDuration + 's is outside the supported 4–15s range. Draft retained for review; nothing saved.'
-                : drafts.length + ' authored Scene' + (drafts.length === 1 ? '' : 's') + ' ready for review. Nothing has been saved.',
+              : invalidDuration
+                ? 'Scene duration needs review. Authored fields retained; nothing saved.'
+                : authorDuration !== null && requestedDuration === null
+                  ? 'Requested ' + authorDuration + 's is outside the supported 4–15s range. Draft retained for review; nothing saved.'
+                  : drafts.length + ' authored Scene' + (drafts.length === 1 ? '' : 's') + ' ready for review. Nothing has been saved.',
               authorDuration !== null && requestedDuration === null);
             return {review:true};
           }
@@ -4711,7 +4718,7 @@
           var validDuration = Number(scene.durationSeconds);
           // No explicit duration: the existing six-second WebCap default is
           // valid. Explicit unsupported durations never reach this save.
-          if (!Number.isInteger(validDuration) || validDuration < 4 || validDuration > 15)
+          if (!Number.isFinite(validDuration) || validDuration < 4 || validDuration > 15)
             validDuration = 6;
           var creation = {
             title:String(scene.title || '').trim() || 'Scene ' + (order.length + 1),

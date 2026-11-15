@@ -1798,6 +1798,13 @@
       }).then(function (job) {
         var result = job.result && typeof job.result === 'object' ? job.result : {};
         state.studioProjectProposal = parseStudioProjectDraft(result.text);
+        state.studioWorkingDraft.newProject = Object.assign({},
+          state.studioWorkingDraft.newProject,
+          studioWorkingFieldChanges(state.studioProjectProposal,
+            ['title','concept','style','invariants']));
+        state.studioWorkingDraft.sourceRequest =
+          String(options && options.authorRequest || options && options.instruction || '');
+        scheduleSessionSave();
         finishProgress(null);
         studioActionStatus('Project ready for review. Nothing has been created.', false);
         showStudioProjectReview();
@@ -2289,6 +2296,11 @@
         }).then(function (job) {
           var result = job.result && typeof job.result === 'object' ? job.result : {};
           var changes = parseStudioBriefDraft(result.text);
+          state.studioWorkingDraft.projects[storyId] = Object.assign({},
+            state.studioWorkingDraft.projects[storyId],
+            studioWorkingFieldChanges(changes,['title','concept','style','invariants']));
+          state.studioWorkingDraft.sourceRequest = authorRequest;
+          scheduleSessionSave();
           var draft = Object.assign({},expected,changes);
           state.studioBriefProposal = {
             storyId: storyId, storyTitle: story.title, expected: expected, draft: draft,
@@ -4811,6 +4823,12 @@
           var requestedDuration = studioRequestedDuration(launch.authorRequest || launch.instruction);
           if (requestedDuration !== null)
             draft.scenes[0].durationSeconds = requestedDuration;
+          state.studioWorkingDraft.newScene = Object.assign({},
+            state.studioWorkingDraft.newScene,
+            studioWorkingFieldChanges(draft.scenes[0],['title','prompt','durationSeconds']));
+          state.studioWorkingDraft.sourceRequest =
+            String(launch.authorRequest || launch.instruction);
+          scheduleSessionSave();
           if (!launch.directSave || (authorDuration !== null && requestedDuration === null)) {
             state.studioScenesProposal = {
               storyId:storyId, storyTitle:story.title, sceneOrder:order,

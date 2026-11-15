@@ -4677,6 +4677,23 @@
             !story.sceneOrder.includes(sceneId) || !story.scenes || !story.scenes[sceneId])
           throw new Error('Selected Scene is no longer available in its saved Project.');
         var original = story.scenes[sceneId];
+        // A literal title-only edit is a saved field change, not a creative
+        // prompting task. Use the same scoped/conflict-checked Scene save.
+        var literal = /\b(?:rename|set|change)\b[^\n]{0,80}\b(?:to|as)\s+["'“]([^"'”]+)["'”]\s*[.!]?\s*$/i.exec(
+          String(launch.authorRequest || launch.instruction));
+        if (fields.length === 1 && wantsTitle && literal) {
+          var title = literal[1].trim();
+          if (title === String(original.title || '').trim()) {
+            studioActionStatus('Scene title is unchanged.',false);
+            return null;
+          }
+          return window.studioDirectorWorkbench.applyScenePrompt(story,sceneId,null,{title:title})
+            .then(function (result) {
+              studioActionStatus('Scene ' + (story.sceneOrder.indexOf(sceneId)+1) +
+                ' title saved.',false);
+              return result;
+            });
+        }
         var context = window.studioDirectorWorkbench.sceneRead(story, sceneId).payload;
         var instruction = JSON.stringify({
           task:'Revise this one existing Scene using the agreed creative instruction. ' +

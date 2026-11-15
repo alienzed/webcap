@@ -432,7 +432,9 @@
       return;
     }
     if (capture.field === 'scene') {
-      window.studioDirectorBridge.reviewSceneCapture(capture,id).catch(function (error) {
+      window.studioDirectorBridge.reviewSceneCapture(capture,id,{
+        durationRequested:recommendations.writeFields.includes('durationSeconds')
+      }).catch(function (error) {
         status('Creative Scene creation review failed: ' + String(error.message || error),true);
       });
       return;
@@ -1135,9 +1137,8 @@
             typeof capture.sceneId !== 'string' || capture.sceneId.length > 160 ||
             (['title','concept','style','invariant','scene'].indexOf(capture.field) !== -1 && capture.sceneId) ||
             (capture.field === 'prompt' && !capture.sceneId) ||
-            (capture.field === 'scene' && (typeof capture.title !== 'string' || capture.title.length > 240 ||
-              (Object.prototype.hasOwnProperty.call(capture,'durationSeconds') &&
-                (!Number.isInteger(capture.durationSeconds) || capture.durationSeconds < 4 || capture.durationSeconds > 15)))) ||
+            (capture.field === 'scene' && (typeof capture.title !== 'string' ||
+              capture.title.length > 240)) ||
             (isInvariant && (
               ['character','location','visual','world','sound','custom'].indexOf(capture.kind) === -1 ||
               typeof capture.title !== 'string' || !capture.title.trim() || capture.title.length > 240 ||
@@ -1164,7 +1165,8 @@
       preparedNewSceneWrite = !restoring && selectedProject && selectedProject.projectId &&
         writeHint === 'scene' && !sceneId && !sceneNumber && writeInstruction.trim() && !capture
           ? {projectId:selectedProject.projectId, instruction:writeInstruction.trim(),
-              authorRequest:String(authorRequest || '').trim()}
+              authorRequest:String(authorRequest || '').trim(),
+              durationRequested:writeFields.includes('durationSeconds')}
           : null;
       recommendationProject = window.studioDirectorBridge.workingStoryId() || activeTarget().storyId || '';
       captureProjectId = !restoring && selectedProject ? selectedProject.projectId : '';

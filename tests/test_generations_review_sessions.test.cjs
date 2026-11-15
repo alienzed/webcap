@@ -70,7 +70,7 @@ test('a failed session load stays visible and does not silently skip a session',
   h.ctx.resetReviewSessionQueue();
   h.ctx.advanceReviewSession();
   h.reject(new Error('unavailable'));
-  await Promise.resolve();
+  await new Promise(resolve => setImmediate(resolve));
   assert.equal(h.ctx.reviewSessionLoadFailed,true);
   assert.match(h.nodes['test-generations-review-status'].textContent,/Could not open Second: unavailable/);
   assert.equal(h.ctx.advanceReviewSession(),false);

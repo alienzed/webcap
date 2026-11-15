@@ -1070,10 +1070,54 @@
           });
         }
         if (frozen.kind === 'create_scene') {
-          return window.studioDirectorBridge.writeNewScene({
-            projectId:projectId,instruction:frozen.instruction,authorRequest:frozen.request,
-            durationRequested:/\b\d+\s*(?:-\s*|\s+)?(?:seconds?|secs?|s)\b/i.test(frozen.request)
-          });
+          var count = 1;
+          var number = /\b(\d+|one|two|three|four|five|six|seven|eight|nine|ten)\s+(?:new\s+)?scenes?\b/i.exec(frozen.request);
+          if (number) {
+            var words = {one:1,two:2,three:3,four:4,five:5,six:6,seven:7,eight:8,nine:9,ten:10};
+            count = words[number[1].toLowerCase()] || Number(number[1]);
+          } else if (/\bscenes\b/i.test(frozen.request)) {
+            status('How many new Scenes? Specify a number before launching.',true);
+            return;
+          }
+          if (!Number.isInteger(count) || count < 1 || count > 32) {
+            status('Choose between one and 32 new Scenes.',true);
+            return;
+          }
+          var saved = [], failed = [], notAttempted = [];
+          function create(index) {
+            if (index >= count) {
+              status('Saved ' + saved.length + ' · Failed ' + failed.length +
+                ' · Not attempted ' + notAttempted.length +
+                (failed.length ? ': ' + failed.join(' | ') : ''),!!failed.length,true);
+              return Promise.resolve();
+            }
+            var direction = count === 1 ? frozen.instruction :
+              'Create Scene ' + (index + 1) + ' of ' + count +
+              ' in this sequence. Make this Scene distinct while following the agreed direction: ' +
+              frozen.instruction;
+            status('Creating Scene ' + (index + 1) + ' of ' + count + '…',false,true);
+            return window.studioDirectorBridge.writeNewScene({
+              projectId:projectId,instruction:direction,authorRequest:frozen.request,
+              directSave:true
+            }).then(function (result) {
+              saved.push(result && result.scenes && result.scenes[0] &&
+                result.scenes[0].id || 'Scene ' + (index + 1));
+              return create(index + 1);
+            }).catch(function (error) {
+              if (error.saved) saved.push('Scene ' + (index + 1));
+              else failed.push('Scene ' + (index + 1) + ': ' + String(error.message || error));
+              var shared = ['stopped','cancelled','interrupted'].includes(String(error.jobStatus || '')) ||
+                /Failed to fetch|No Director model is available|runtime unavailable|Project is no longer available/i.test(String(error.message || ''));
+              if (shared) {
+                for (var i = index + 1;i < count;i++) notAttempted.push('Scene ' + (i + 1));
+                status('Saved ' + saved.length + ' · Failed ' + failed.length +
+                  ' · Not attempted ' + notAttempted.length,true,true);
+                return;
+              }
+              return create(index + 1);
+            });
+          }
+          return create(0);
         }
         return loadStory(projectId).then(function (story) {
           var ids = sceneIdsFromRequest(frozen.request,story,frozen.scene);

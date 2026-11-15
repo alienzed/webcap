@@ -5898,11 +5898,9 @@
   }
 
   function reviseSceneWithDirector(sceneId) {
-    var root = sceneElement(sceneId);
-    var instruction = root.querySelector('[data-director-correction]').value.trim();
-    if (!instruction) { openSceneDirector(sceneId); return; }
-    sceneRefineHistory.remember(instruction, root.querySelector('[data-director-correction]'));
-    openSceneDirector(sceneId, instruction);
+    // The inline Scene editor owns this one-Scene action and its saved result.
+    // The existing refine_prompt operation already supplies progress and history.
+    runDirector(sceneId, 'refine_prompt');
   }
 
   function handleSceneAction(event) {

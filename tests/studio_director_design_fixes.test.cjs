@@ -170,3 +170,48 @@ test('New chat and loaded session reset stale design selections without changing
   assert.match(rail,/writeOperationChosen = false/);
   assert.doesNotMatch(rail,/localStorage/);
 });
+
+
+test('Write availability follows a conversational proposal without inventing a manual task', () => {
+  const nodes = new Map();
+  function el(id) {
+    if (!nodes.has(id)) {
+      const classes = new Set();
+      nodes.set(id, {textContent:'',classList:{
+        contains:name=>classes.has(name),
+        toggle(name,on){ if (on) classes.add(name); else classes.delete(name); }
+      }});
+    }
+    return nodes.get(id);
+  }
+  const scope = vm.createContext({el});
+  vm.runInContext(section(rail,'  var pendingCreativeAction = null;',
+    '  function sceneIdsFromRequest('),scope);
+  scope.showConversationWrite();
+  assert.equal(el('studio-dw-write-empty').classList.contains('hidden'),false);
+  assert.equal(el('studio-dw-write-panel').classList.contains('hidden'),true);
+  assert.equal(el('studio-dw-write-ready').classList.contains('hidden'),true);
+  scope.pendingCreativeAction = {kind:'write_scenes',instruction:'Make the ending quieter.'};
+  scope.showConversationWrite();
+  assert.equal(el('studio-dw-write-empty').classList.contains('hidden'),true);
+  assert.equal(el('studio-dw-write-ready').classList.contains('hidden'),false);
+  assert.equal(el('studio-dw-write-ready-title').textContent,'Revise Scenes');
+  assert.equal(el('studio-dw-write-ready-direction').textContent,'Make the ending quieter.');
+  assert.equal(el('studio-dw-write-panel').classList.contains('hidden'),true);
+  scope.pendingCreativeAction.awaitingScenes = true;
+  scope.showConversationWrite();
+  assert.equal(el('studio-dw-write-panel').classList.contains('hidden'),false);
+  assert.equal(el('studio-dw-write-panel').classList.contains('studio-dw-awaiting-scenes'),true);
+  scope.pendingCreativeAction = null;
+  scope.showConversationWrite();
+  assert.equal(el('studio-dw-write-ready').classList.contains('hidden'),true);
+});
+
+test('Studio header uses accessible compact history and new-conversation icons', () => {
+  assert.match(html,/id="director-chat-history-toggle"[^>]*aria-label="Conversation history"/);
+  assert.match(html,/id="director-chat-clear"[^>]*aria-label="New conversation"/);
+  assert.match(css,/studio-director \.studio-director-breadcrumb \{display:none;/);
+  assert.match(rail,/function showConversationWrite\(\)/);
+  assert.doesNotMatch(section(rail,'  function toggle(which) {','  function parseProposal(raw) {'),
+    /seedManualSceneInstruction\(\)/);
+});

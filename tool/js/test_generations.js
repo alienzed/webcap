@@ -6373,9 +6373,24 @@
           });
           menu.appendChild(action);
         }
+        function epochOrderedCandidates() {
+          // Epoch metadata is authoritative for numeric order; preserve staged order for ties
+          // and candidates without an epoch, rather than deriving epoch numbers from filenames.
+          var metadata = prepared.candidateMetadata || {};
+          return prepared.files.map(function (file, index) {
+            var raw = metadata[file] && metadata[file].epoch;
+            var epoch = raw !== undefined && raw !== null && String(raw).trim() !== '' ? Number(raw) : NaN;
+            return { file: file, index: index, epoch: epoch };
+          }).sort(function (a, b) {
+            var aKnown = Number.isFinite(a.epoch), bKnown = Number.isFinite(b.epoch);
+            if (aKnown && bKnown && a.epoch !== b.epoch) return a.epoch - b.epoch;
+            if (aKnown !== bKnown) return aKnown ? -1 : 1;
+            return a.index - b.index;
+          }).map(function (item) { return item.file; });
+        }
         function selectFirst(percent) {
-          var files = prepared.files;
-          // Select a prefix of the server's staged order, independent of the visual sort.
+          var files = epochOrderedCandidates();
+          // Replace selection with earliest epochs; independent of visible Rating/VL sort.
           var count = Math.ceil(files.length * percent / 100);
           selectedCandidates = new Set(files.slice(0, count));
         }
@@ -6384,7 +6399,7 @@
         });
         addAction('Select all', function () { selectedCandidates = new Set(prepared.files); });
         addAction('Select next 20%', function () {
-          var files = prepared.files;
+          var files = epochOrderedCandidates();
           var count = Math.ceil(files.length * 0.2);
           var added = 0;
           files.forEach(function (file) {

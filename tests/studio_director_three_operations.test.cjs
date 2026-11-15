@@ -287,3 +287,10 @@ test('Studio request sends bounded discussion, current full words, and no saved-
   assert.ok(result.some(x=>x.content.includes('[Earlier long message abbreviated]')),
     'historical huge turns should not be re-sent verbatim');
 });
+
+test('WebCap respects written-out timing and does not silently default unsupported timing',()=>{
+  assert.equal(requestedDuration('Create a twelve-second Scene'),12);
+  assert.equal(requestedDuration('Make it fourteen seconds'),14);
+  assert.equal(requestedDuration('Create a 9-second Scene'),9);
+  assert.equal(requestedDuration('Create a twenty-second Scene'),null);
+});

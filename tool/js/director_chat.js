@@ -4138,6 +4138,36 @@
       return '';
     },
     workingStoryId: function () { return studioAttachedStoryId() || window.getStudioDirectorNavigation().projectId; },
+    preparedWrite: function () {
+      var working = state.studioWorkingDraft;
+      var navigation = window.getStudioDirectorNavigation();
+      var projectId = navigation.projectId || studioAttachedStoryId();
+      var sceneId = navigation.sceneId;
+      var fields = sceneId && working.scenes[sceneId];
+      if (projectId && fields && Object.keys(fields).length)
+        return {kind:'scene',projectId:projectId,sceneId:sceneId,fields:Object.keys(fields)};
+      fields = projectId && working.projects[projectId];
+      if (fields && Object.keys(fields).length)
+        return {kind:'project',projectId:projectId,fields:Object.keys(fields)};
+      if (projectId && working.newScene && working.newScene.prompt)
+        return {kind:'new-scene',projectId:projectId,fields:Object.keys(working.newScene)};
+      if (working.newProject && working.newProject.concept && working.newProject.style)
+        return {kind:'new-project',fields:Object.keys(working.newProject)};
+      return null;
+    },
+    reviewPreparedWrite: function (draft) {
+      if (!this.canReview()) throw new Error('Open the Studio conversation to review its prepared material.');
+      if (draft.kind === 'project') {
+        this.selectWriteProject(draft.projectId);
+        return prepareStudioBrief({requestedFields:draft.fields});
+      }
+      if (draft.kind === 'new-project') return prepareStudioProject({});
+      if (draft.kind === 'new-scene') return this.writeNewScene({
+        projectId:draft.projectId,instruction:'Review prepared new Scene material.',
+        authorRequest:'Save that prompt'
+      });
+      throw new Error('Scene drafts are reviewed by the Scene workbench.');
+    },
     modelId: function () { return state.modelId; },
     messages: function () {
       return (state.modeMessages.storyboard || []).map(function (message) {

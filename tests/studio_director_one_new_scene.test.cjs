@@ -27,7 +27,7 @@ test('one new Scene keeps the selected Project and complete brief through a sing
     sceneOrder:['s1'],scenes:{s1:{title:'Old opening',prompt:'Existing saved text'}}};
   const brief='Add a twelve-second Scene titled Closing the Logbook. Mara calmly closes the lighthouse logbook at the oak desk, using this Project’s visual direction.';
   let requested = 0, authored = 0, reviewed = 0, saved = 0;
-  const state={pending:false,jobId:'',studioScenesProposal:null};
+  const state={pending:false,jobId:'',studioScenesProposal:null,studioWorkingDraft:{projects:{},scenes:{},newProject:{},newScene:{},sourceRequest:''}};
   const launch={projectId:'lighthouse',instruction:brief,authorRequest:brief};
   const scope=vm.createContext({
     state, studioRequestedDuration, studioMentionedDuration, syncControls(){}, studioActionStatus(){}, showStudioScenesReview(){reviewed++;},
@@ -76,7 +76,7 @@ test('one new Scene keeps the selected Project and complete brief through a sing
 });
 
 test('a malformed duration from Director leaves the full new Scene available for review', async () => {
-  const state={pending:false,jobId:'',studioScenesProposal:null};
+  const state={pending:false,jobId:'',studioScenesProposal:null,studioWorkingDraft:{projects:{},scenes:{},newProject:{},newScene:{},sourceRequest:''}};
   let reviewed=0;
   const scope=vm.createContext({
     state,studioRequestedDuration,studioMentionedDuration,syncControls(){},studioActionStatus(){},
@@ -105,7 +105,7 @@ test('a malformed duration from Director leaves the full new Scene available for
 });
 
 test('invalid output prevents review or mutation and reports failure', async () => {
-  const state={pending:false,jobId:'',studioScenesProposal:null};
+  const state={pending:false,jobId:'',studioScenesProposal:null,studioWorkingDraft:{projects:{},scenes:{},newProject:{},newScene:{},sourceRequest:''}};
   const failures=[];
   let reviewed=0;
   const scope=vm.createContext({
@@ -140,7 +140,7 @@ test('launched Scene creation saves through the existing insertion route, with a
     invariants:[],sceneOrder:['old'],scenes:{old:{title:'Opening',prompt:'Original'} }};
   const requests=[],receipts=[],refreshes=[];
   let reviewed=0;
-  const state={pending:false,jobId:'',studioScenesProposal:null};
+  const state={pending:false,jobId:'',studioScenesProposal:null,studioWorkingDraft:{projects:{},scenes:{},newProject:{},newScene:{},sourceRequest:''}};
   const scope=vm.createContext({
     state,studioRequestedDuration,studioMentionedDuration,syncControls(){},studioActionStatus(){},
     showStudioScenesReview(){reviewed++;},

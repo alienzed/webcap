@@ -1758,7 +1758,7 @@
       document.querySelectorAll(
         '#storyboard-story-authoring button, #storyboard-story-authoring input, #storyboard-story-authoring select, #storyboard-story-authoring textarea, ' +
         '#storyboard-scenes-list button, #storyboard-scenes-list input, #storyboard-scenes-list select, #storyboard-scenes-list textarea, ' +
-        '#storyboard-scene-progression [data-scene-action], #storyboard-scene-progression [data-scene-progress-add], ' +
+        '#storyboard-scene-progression [data-scene-action], #storyboard-scene-progression [data-scene-add], ' +
         '#storyboard-sequence-preview button, #storyboard-generate-scenes-btn, #storyboard-director-model'
       ).forEach(function (control) {
         if (control.matches('[data-story-action-cancel]')) return;
@@ -2761,8 +2761,13 @@
         '</details>' +
       '</div>';
     }).join('') +
-      '<button type="button" class="storyboard-scene-progress-add" data-scene-progress-add title="Add blank Scene" aria-label="Add blank Scene">+</button>' +
-      (order.length ? '<button type="button" class="review-captions-btn storyboard-extend-story" data-extend-story>Extend Story…</button>' : '');
+      '<details class="storyboard-add-scene">' +
+        '<summary title="Add or extend Scenes" aria-label="Add or extend Scenes">+</summary>' +
+        '<div class="storyboard-add-scene-menu">' +
+          '<button type="button" data-scene-add="blank">Add blank Scene</button>' +
+          (order.length ? '<button type="button" data-scene-add="extend">Extend Story with Director…</button>' : '') +
+        '</div></details>' +
+      '<button id="storyboard-scenes-sequence-btn" type="button" class="review-captions-btn">Sequence</button>';
   }
 
   function syncSceneViewControls(order) {
@@ -6157,6 +6162,113 @@
     });
   }
 
+
+  function projectReplaceText(text, find, replacement, caseSensitive) {
+    if (!find) return {text:text, count:0};
+    var source = caseSensitive ? text : text.toLocaleLowerCase();
+    var needle = caseSensitive ? find : find.toLocaleLowerCase();
+    var count = 0, from = 0, result = '', pos;
+    while ((pos = source.indexOf(needle, from)) !== -1) {
+      result += text.slice(from, pos) + replacement;
+      from = pos + find.length;
+      count++;
+    }
+    return {text:result + text.slice(from), count:count};
+  }
+
+  function projectReplacementPlan(story, find, replacement, caseSensitive) {
+    var scenes = [], matches = 0;
+    (story.sceneOrder || []).forEach(function (sceneId) {
+      var current = String(story.scenes[sceneId].prompt || '');
+      var result = projectReplaceText(current, find, replacement, caseSensitive);
+      if (!result.count) return;
+      matches += result.count;
+      scenes.push({sceneId:sceneId, before:current, after:result.text, matches:result.count});
+    });
+    return {scenes:scenes, matches:matches};
+  }
+
+  function previewProjectReplacement() {
+    var find = el('storyboard-find-replace-find').value;
+    var replacement = el('storyboard-find-replace-with').value;
+    var story = storyState.story;
+    var plan = story && find ? projectReplacementPlan(story, find, replacement,
+      el('storyboard-find-replace-case').checked) : {scenes:[], matches:0};
+    el('storyboard-find-replace-count').textContent = !find ? 'Enter a word or phrase.' :
+      plan.matches + ' match' + (plan.matches === 1 ? '' : 'es') + ' in ' +
+      plan.scenes.length + ' Scene' + (plan.scenes.length === 1 ? '' : 's') + '.';
+    el('storyboard-find-replace-apply').disabled = !plan.matches;
+  }
+
+  function openProjectReplace() {
+    if (!storyState.story) return;
+    el('storyboard-find-replace-find').value = '';
+    el('storyboard-find-replace-with').value = '';
+    el('storyboard-find-replace-case').checked = false;
+    el('storyboard-find-replace-modal').classList.remove('hidden');
+    el('storyboard-find-replace-modal').setAttribute('aria-hidden','false');
+    previewProjectReplacement();
+    el('storyboard-find-replace-find').focus();
+  }
+
+  function closeProjectReplace() {
+    el('storyboard-find-replace-modal').classList.add('hidden');
+    el('storyboard-find-replace-modal').setAttribute('aria-hidden','true');
+  }
+
+  function applyProjectReplacement() {
+    var story = storyState.story;
+    if (!story) return;
+    var storyId = story.id;
+    var find = el('storyboard-find-replace-find').value;
+    var replacement = el('storyboard-find-replace-with').value;
+    var sensitive = el('storyboard-find-replace-case').checked;
+    if (!find) return;
+    var apply = el('storyboard-find-replace-apply');
+    var status = el('storyboard-find-replace-count');
+    apply.disabled = true;
+    status.textContent = 'Replacing…';
+    var applied = 0;
+    flushPendingSaves().then(function () {
+      return request(null,'story=' + encodeURIComponent(storyId));
+    }).then(function (fresh) {
+      // Recalculate against saved values rather than an obsolete modal preview.
+      var plan = projectReplacementPlan(fresh.story, find, replacement, sensitive);
+      if (!plan.matches) return fresh;
+      return plan.scenes.reduce(function (pending, change) {
+        return pending.then(function () {
+          return request({operation:'update_scene',storyId:storyId,sceneId:change.sceneId,
+            scene:{prompt:change.after}}).then(function (payload) {
+            applied += 1;
+            return payload;
+          });
+        });
+      }, Promise.resolve(fresh));
+    }).then(function (saved) {
+      if (storyState.story && storyState.story.id === storyId) {
+        storyState.story = saved.story;
+        renderStory();
+        setSaveState('Saved');
+      }
+      closeProjectReplace();
+      return refreshLibrary();
+    }).catch(function (err) {
+      status.textContent = 'Updated ' + applied + ' Scene' + (applied === 1 ? '' : 's') +
+        '; operation stopped: ' + String(err.message || err);
+      // Earlier Scene saves are real even when a later save fails.
+      request(null,'story=' + encodeURIComponent(storyId)).then(function (fresh) {
+        if (storyState.story && storyState.story.id === storyId) {
+          storyState.story = fresh.story;
+          renderStory();
+        }
+      }).catch(reportError);
+      reportError(err);
+    }).finally(function () {
+      apply.disabled = false;
+      previewProjectReplacement();
+    });
+  }
+
   function bindUi() {
     var workspace = el('storyboard-workspace');
     if (!workspace) throw new Error('Storyboard workspace markup is missing.');
@@ -6177,10 +6289,29 @@
     el('storyboard-story-toggle').onclick = function () { setStoryCollapsed(true); };
     el('storyboard-story-show').onclick = function () { setStoryCollapsed(false); };
     el('storyboard-scenes-focus-btn').onclick = function () { setSceneViewMode('focus'); };
-    el('storyboard-scenes-sequence-btn').onclick = function () { setSceneViewMode('sequence'); };
     el('storyboard-generate-scenes-btn').onclick = generateScenes;
     el('storyboard-cancel-takes-btn').onclick = cancelStoryTakes;
     el('storyboard-director-tools-btn').onclick = openDirectorTools;
+    el('storyboard-project-tools').addEventListener('click', function (event) {
+      var button = event.target.closest('[data-project-tool]');
+      if (!button) return;
+      el('storyboard-project-tools').open = false;
+      if (button.dataset.projectTool === 'director') window.openStoryboardAssistant();
+      else if (button.dataset.projectTool === 'revise') return; // Existing button listener owns this action.
+      else if (button.dataset.projectTool === 'replace') openProjectReplace();
+      else {
+        openDirectorTools();
+        var preset = el('storyboard-director-tools-preset');
+        preset.value = button.dataset.projectTool === 'continuity' ? 'continuity' : 'coherence';
+        preset.dispatchEvent(new Event('change'));
+      }
+    });
+    el('storyboard-find-replace-find').addEventListener('input', previewProjectReplacement);
+    el('storyboard-find-replace-with').addEventListener('input', previewProjectReplacement);
+    el('storyboard-find-replace-case').addEventListener('change', previewProjectReplacement);
+    el('storyboard-find-replace-apply').onclick = applyProjectReplacement;
+    el('storyboard-find-replace-close').onclick = closeProjectReplace;
+    el('storyboard-find-replace-cancel').onclick = closeProjectReplace;
     el('storyboard-scene-creation-close').onclick = closeSceneCreation;
     el('storyboard-scene-creation-cancel').onclick = closeSceneCreation;
     el('storyboard-scene-creation-run').onclick = runSceneCreation;
@@ -6242,8 +6373,24 @@
         setSceneViewMode('focus', sceneButton.dataset.sceneProgress);
         return;
       }
-      if (event.target.closest('[data-scene-progress-add]')) addScene();
-      if (event.target.closest('[data-extend-story]')) openSceneCreation('extend');
+      var addMenu = event.target.closest('.storyboard-add-scene > summary');
+      if (addMenu) {
+        var pop = addMenu.parentElement.querySelector('.storyboard-add-scene-menu');
+        var rect = addMenu.getBoundingClientRect();
+        pop.style.top = Math.min(rect.bottom + 5, window.innerHeight - 112) + 'px';
+        pop.style.left = Math.max(8, Math.min(rect.left, window.innerWidth - 205)) + 'px';
+        return;
+      }
+      var addChoice = event.target.closest('[data-scene-add]');
+      if (addChoice) {
+        addChoice.closest('details').open = false;
+        if (addChoice.dataset.sceneAdd === 'blank') addScene();
+        else openSceneCreation('extend');
+        return;
+      }
+      if (event.target.closest('#storyboard-scenes-sequence-btn')) {
+        setSceneViewMode('sequence');
+      }
     });
     sceneProgression.addEventListener('contextmenu', function (event) {
       var card = event.target.closest('.storyboard-scene-progress-card[data-scene-id]');

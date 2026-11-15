@@ -3,7 +3,7 @@
   'use strict';
   var histories = new Map();
   var active = null;
-  var timer = 0;
+  var timers = new Map();
   var idleMs = 10000;
   var toolbar = null;
   var originalPadding = '';
@@ -53,9 +53,13 @@
     draw();
   }
 
-  function schedule() {
-    clearTimeout(timer);
-    timer = setTimeout(function () {timer = 0; checkpoint();},idleMs);
+  function schedule(key, value) {
+    clearTimeout(timers.get(key));
+    timers.set(key, setTimeout(function () {
+      timers.delete(key);
+      capture(key, value);
+      if (active && active.key === key && !showingPreview) draw();
+    }, idleMs));
   }
 
   function restorePreview() {
@@ -66,6 +70,7 @@
 
   function position() {
     if (!active || !toolbar) return;
+    if (!active.field.isConnected) {detach();return;}
     var rect = active.field.getBoundingClientRect();
     toolbar.style.display = rect.width < 135 || rect.bottom < 0 || rect.top > innerHeight
       ? 'none' : 'flex';
@@ -84,8 +89,6 @@
   }
 
   function detach() {
-    clearTimeout(timer);
-    timer = 0;
     if (!active) return;
     restorePreview();
     active.field.style.paddingRight = originalPadding;
@@ -102,13 +105,13 @@
     active = {field:field,key:key,live:field.value};
     originalPadding = field.style.paddingRight;
     field.style.paddingRight = '120px';
-    schedule();
     draw();
   }
 
   function step(direction) {
     if (!active) return;
-    clearTimeout(timer); timer = 0;
+    clearTimeout(timers.get(active.key));
+    timers.delete(active.key);
     if (!showingPreview) {
       capture(active.key,active.field.value);
       active.live = active.field.value;
@@ -140,6 +143,7 @@
     });
     document.addEventListener('focusin',function (event) {
       if (event.target.matches && event.target.matches('textarea')) attach(event.target);
+      else if (!toolbar.contains(event.target)) detach();
     });
     document.addEventListener('focusout',function (event) {
       if (!active || event.target !== active.field) return;
@@ -150,7 +154,7 @@
       if (!active || event.target !== active.field) return;
       showingPreview = false;
       active.live = active.field.value;
-      schedule();
+      schedule(active.key,active.live);
     },true);
     window.addEventListener('scroll',position,true);
     window.addEventListener('resize',position);

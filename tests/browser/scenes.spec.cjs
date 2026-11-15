@@ -1,0 +1,107 @@
+'use strict';
+const {test,expect}=require('@playwright/test');
+const {resetModel,queueModel,observedModels,openDirector,say,stories,story}=require('./helpers.cjs');
+
+async function newSelectedProject(page) {
+  await page.locator('#storyboard-new-btn').click();
+  await expect.poll(async()=> (await stories(page)).length).toBe(1);
+  const candidate=(await stories(page))[0];
+  await expect(page.locator('#storyboard-library-list [data-story-id="'+candidate.id+'"]')).toBeVisible();
+  return candidate;
+}
+
+test('Flow 2 — returned Scene count, editable review and persistent real records',async({page,request})=>{
+  await resetModel(request);
+  await page.goto('/');
+  await page.locator('#activity-storyboard-btn').click();
+  const project=await newSelectedProject(page);
+  await page.locator('#director-chat-rail-btn').click();
+  await page.locator('[data-assistant-mode="storyboard"]').click();
+  await expect(page.locator('#director-studio-attach-current')).toBeVisible();
+  await page.locator('#director-studio-attach-current').click();
+  const model=page.locator('#director-chat-model');
+  await expect(model.locator('option[value="acceptance::acceptance-model"]')).toHaveCount(1);
+  await model.selectOption('acceptance::acceptance-model');
+  const authored=[
+    {title:'Approach',prompt:'A woman approaches an old bookshop beneath amber lamps.',durationSeconds:8},
+    {title:'Entering',prompt:'She enters the bookshop through a wooden door.',durationSeconds:12}
+  ];
+  await queueModel(request,{
+    reply:'I drafted the Scenes for review.',
+    scenes:authored,
+    action:{kind:'create_scene',instruction:'Create three Scenes.'}
+  });
+  await say(page,'Create three Scenes with different durations.');
+  const action=page.locator('#studio-dw-suggestions .studio-dw-suggestion-action');
+  await expect(action).toContainText('Review authored Scene');
+  await action.click();
+  await expect(page.locator('#studio-scenes-review')).toBeVisible();
+  const rows=page.locator('#studio-scenes-rows .studio-scenes-row');
+  await expect(rows).toHaveCount(2); // Actual results, not the requested three.
+  await expect(rows.nth(0).locator('[data-field="prompt"]')).toHaveValue(authored[0].prompt);
+  await expect(rows.nth(1).locator('[data-field="durationSeconds"]')).toHaveValue('12');
+  await rows.nth(1).locator('[data-field="prompt"]').fill(authored[1].prompt+' Interior is warmly lit.');
+  const callsBefore=await observedModels(request);
+  expect(callsBefore.calls).toHaveLength(1);
+  await page.locator('#studio-scenes-apply').click();
+  await expect.poll(async()=> (await story(page,project.id)).sceneOrder.length).toBe(2);
+  const saved=await story(page,project.id);
+  const actual=saved.sceneOrder.map(id=>saved.scenes[id]);
+  expect(actual.map(x=>x.title)).toEqual(['Approach','Entering']);
+  expect(actual.map(x=>x.durationSeconds)).toEqual([8,12]);
+  expect(actual.map(x=>x.prompt)).toEqual([authored[0].prompt,authored[1].prompt+' Interior is warmly lit.']);
+  expect((await observedModels(request)).calls).toHaveLength(1);
+  await page.reload();
+  const persisted=await story(page,project.id);
+  expect(persisted.sceneOrder).toEqual(saved.sceneOrder);
+  expect(persisted.scenes[persisted.sceneOrder[1]].prompt).toBe(actual[1].prompt);
+});
+
+test('Flow 6 — each conversation reply owns its own editable Scene review',async({page,request})=>{
+  await resetModel(request);
+  await page.goto('/');
+  await page.locator('#activity-storyboard-btn').click();
+  const project=await newSelectedProject(page);
+  await page.locator('#director-chat-rail-btn').click();
+  await page.locator('[data-assistant-mode="storyboard"]').click();
+  await page.locator('#director-studio-attach-current').click();
+  const model=page.locator('#director-chat-model');
+  await expect(model.locator('option[value="acceptance::acceptance-model"]')).toHaveCount(1);
+  await model.selectOption('acceptance::acceptance-model');
+  await queueModel(request,{
+    reply:'First Scene is ready.',
+    scenes:[{title:'First',prompt:'First unique scene prompt.',durationSeconds:8}],
+    action:{kind:'create_scene',instruction:'Create a first Scene.'}
+  });
+  await say(page,'Create a first Scene');
+  let action=page.locator('#studio-dw-suggestions .studio-dw-suggestion-action');
+  await expect(action).toBeVisible();
+  await action.click();
+  await expect(page.locator('#studio-scenes-review')).toBeVisible();
+  const row=page.locator('#studio-scenes-rows .studio-scenes-row');
+  await row.locator('[data-field="prompt"]').fill('First edited and unsaved.');
+  await page.locator('#studio-scenes-close').click();
+
+  await queueModel(request,{
+    reply:'Second Scene is ready.',
+    scenes:[{title:'Second',prompt:'Second unique scene prompt.',durationSeconds:10}],
+    action:{kind:'create_scene',instruction:'Create a second Scene.'}
+  });
+  await say(page,'Create a second Scene');
+  action=page.locator('#studio-dw-suggestions .studio-dw-suggestion-action');
+  await expect(action).toBeVisible();
+  await action.click();
+  await expect(page.locator('#studio-scenes-review')).toBeVisible();
+  await expect(row.locator('[data-field="prompt"]')).toHaveValue('Second unique scene prompt.');
+  await page.locator('#studio-scenes-close').click();
+
+  // Reopen the first reply's action using the actual conversation UI.
+  const earlier=page.locator('#director-chat-messages .studio-dw-suggestion-action').first();
+  await expect(earlier).toBeVisible();
+  await earlier.click();
+  await expect(page.locator('#studio-scenes-review')).toBeVisible();
+  await expect(row.locator('[data-field="prompt"]')).toHaveValue('First edited and unsaved.');
+  await page.locator('#studio-scenes-close').click();
+  expect((await story(page,project.id)).sceneOrder).toHaveLength(0);
+  expect((await observedModels(request)).calls).toHaveLength(2);
+});

@@ -147,8 +147,8 @@ test('Context defaults to the entire Project and preserves a custom selection on
 });
 
 test('ordinary discussion asks for concise new decisions while complete creative fields remain complete',()=>{
-  assert.match(chat,/Discuss concepts in 1-3 concise sentences/);
-  assert.match(chat,/WebCap reuses this draft for Review/);
+  assert.match(chat,/For ordinary discussion answer briefly, normally 1-3 sentences/);
+  assert.match(chat,/WebCap owns exact Project\/Scene IDs/);
 });
 
 test('compact Director replies keep the exact full text and leave General Chat alone',()=>{

@@ -4332,7 +4332,7 @@
   }
 
   function renderReview(status) {
-    if (!reviewDialogOpen() || reviewCatalogPending || reviewSessionLoading) return;
+    if (!reviewDialogOpen() || reviewCatalogPending || reviewSessionLoading || reviewSessionLoadFailed) return;
     var dialog = el('test-generations-review');
     var host = el('test-generations-review-card');
     var position = el('test-generations-review-position');

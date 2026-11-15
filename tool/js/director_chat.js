@@ -4518,14 +4518,31 @@
         throw new Error('Reviewed Apply receipt requires saved Project data.');
       }
       var isDirectorRevision = kind === 'scene.director.revision';
+      var names = {title:'Title',concept:'Concept',style:'Visual / atmosphere',invariants:'Invariants',prompt:'H3 Prompt',durationSeconds:'Duration'};
+      var values = selected.savedFields || selected.fields || selected;
+      var working = state.studioWorkingDraft;
+      if (kind === 'project.create') working.newProject = {};
+      if (Array.isArray(selected.scenes)) working.newScene = {};
+      // A successful receipt clears only fields that actually match saved data.
+      var target = selected.sceneId ? working.scenes[selected.sceneId] :
+        working.projects[story.id];
+      if (target) {
+        Object.keys(values).forEach(function (field) {
+          if (Object.prototype.hasOwnProperty.call(target,field) &&
+              JSON.stringify(target[field]) === JSON.stringify(values[field]))
+            delete target[field];
+        });
+        if (!Object.keys(target).length) {
+          if (selected.sceneId) delete working.scenes[selected.sceneId];
+          else delete working.projects[story.id];
+        }
+      }
       var body = {
-        operation: kind, projectId: story.id, projectTitle: story.title,
-        savedAt: story.updatedAt, fields: selected
+        operation:kind, projectId:story.id, savedAt:story.updatedAt,
+        fieldNames:Object.keys(values).filter(function (key) {return !!names[key];})
       };
       markStudioReadinessOutdated();
       window.studioDirectorWorkbench.markSavedFields(selected,story);
-      var names = {title:'Title',concept:'Concept',style:'Visual / atmosphere',invariants:'Invariants',prompt:'H3 Prompt',durationSeconds:'Duration'};
-      var values = selected.savedFields || selected.fields || selected;
       var savedFields = Object.keys(values).filter(function(key){return names[key];}).map(function(key){
         return names[key] + (key === 'invariants' ? ' (' + values[key].length + ')' : '');
       });

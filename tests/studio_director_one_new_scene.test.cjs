@@ -24,6 +24,10 @@ const studioRequestAppliesPreparedMaterial = new Function(slice(director,
   '  function studioRequestAppliesPreparedMaterial(request) {',
   '  function studioWorkingFieldChanges(source, names) {')+
   'return studioRequestAppliesPreparedMaterial;')();
+const studioWorkingFieldChanges = new Function(slice(director,
+  '  function studioWorkingFieldChanges(source, names) {',
+  '  function studioMergeWorkingChanges(changes, target, action, request) {')+
+  'return studioWorkingFieldChanges;')();
 
 test('one new Scene keeps the selected Project and complete brief through a single authoring call, then REVIEW only', async () => {
   const story = {id:'lighthouse',title:'Last Light',concept:'A final watch',
@@ -34,7 +38,7 @@ test('one new Scene keeps the selected Project and complete brief through a sing
   const state={pending:false,jobId:'',studioScenesProposal:null,studioWorkingDraft:{projects:{},scenes:{},newProject:{},newScene:{},sourceRequest:''}};
   const launch={projectId:'lighthouse',instruction:brief,authorRequest:brief};
   const scope=vm.createContext({
-    state, studioRequestedDuration, studioMentionedDuration, studioRequestAppliesPreparedMaterial, syncControls(){},scheduleSessionSave(){}, studioActionStatus(){}, showStudioScenesReview(){reviewed++;},
+    state, studioRequestedDuration, studioMentionedDuration, studioRequestAppliesPreparedMaterial, studioWorkingFieldChanges, syncControls(){},scheduleSessionSave(){}, studioActionStatus(){}, showStudioScenesReview(){reviewed++;},
     window:{
       flushStudioDirectorStoryEdits:async id=>{assert.equal(id,'lighthouse');},
       reportConsoleError:()=>{assert.fail('No error expected')},
@@ -83,7 +87,7 @@ test('a malformed duration from Director leaves the full new Scene available for
   const state={pending:false,jobId:'',studioScenesProposal:null,studioWorkingDraft:{projects:{},scenes:{},newProject:{},newScene:{},sourceRequest:''}};
   let reviewed=0;
   const scope=vm.createContext({
-    state,studioRequestedDuration,studioMentionedDuration,studioRequestAppliesPreparedMaterial,syncControls(){},scheduleSessionSave(){},studioActionStatus(){},
+    state,studioRequestedDuration,studioMentionedDuration,studioRequestAppliesPreparedMaterial,studioWorkingFieldChanges,syncControls(){},scheduleSessionSave(){},studioActionStatus(){},
     showStudioScenesReview(){reviewed++;},
     window:{
       flushStudioDirectorStoryEdits:async()=>{},
@@ -113,7 +117,7 @@ test('invalid output prevents review or mutation and reports failure', async () 
   const failures=[];
   let reviewed=0;
   const scope=vm.createContext({
-    state,studioRequestedDuration,studioMentionedDuration,studioRequestAppliesPreparedMaterial,syncControls(){},scheduleSessionSave(){},studioActionStatus:(m,error)=>{if(error)failures.push(m);},
+    state,studioRequestedDuration,studioMentionedDuration,studioRequestAppliesPreparedMaterial,studioWorkingFieldChanges,syncControls(){},scheduleSessionSave(){},studioActionStatus:(m,error)=>{if(error)failures.push(m);},
     showStudioScenesReview(){reviewed++;},
     window:{
       flushStudioDirectorStoryEdits:async()=>{},
@@ -146,7 +150,7 @@ test('launched Scene creation saves through the existing insertion route, with a
   let reviewed=0;
   const state={pending:false,jobId:'',studioScenesProposal:null,studioWorkingDraft:{projects:{},scenes:{},newProject:{},newScene:{},sourceRequest:''}};
   const scope=vm.createContext({
-    state,studioRequestedDuration,studioMentionedDuration,studioRequestAppliesPreparedMaterial,syncControls(){},scheduleSessionSave(){},studioActionStatus(){},
+    state,studioRequestedDuration,studioMentionedDuration,studioRequestAppliesPreparedMaterial,studioWorkingFieldChanges,syncControls(){},scheduleSessionSave(){},studioActionStatus(){},
     showStudioScenesReview(){reviewed++;},
     window:{
       flushStudioDirectorStoryEdits:async()=>{},

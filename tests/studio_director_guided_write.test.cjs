@@ -164,7 +164,11 @@ test('initial Scene briefs produce bounded independent saves; a failed item reta
       return messages;
     },
     requestJson:async (url,options)=>{
-      if(url==='/fs/director/chat')return {job:{jobId:'job-'+calls.length}};
+      if(url==='/fs/director/chat'){
+        assert.equal(JSON.parse(options.body).operation,'studio_scene_field_draft',
+          'initial Project Scenes reuse the same single-Scene model contract');
+        return {job:{jobId:'job-'+calls.length}};
+      }
       if(url==='/fs/studio/director/scenes-draft') {
         const payload=JSON.parse(options.body),id='created-'+(saves.length+1);
         assert.deepEqual(Array.from(payload.expectedSceneOrder),current.sceneOrder);
@@ -180,10 +184,10 @@ test('initial Scene briefs produce bounded independent saves; a failed item reta
     trackTransientLlmJob:()=>{},
     waitForJob:async()=>{
       const item=calls.at(-1);
-      return {result:{text:JSON.stringify({
-        scenes:item.requestedTitle==='Two'?[]:[{title:item.requestedTitle,
+      return {result:{text:JSON.stringify(item.requestedTitle==='Two'
+        ? {title:'Two'} : {title:item.requestedTitle,
           prompt:'Complete full H3 Prompt for '+item.instruction,
-          durationSeconds:item.requestedTitle==='Three'?'twelve':item.durationSeconds}],rationale:''})}};
+          durationSeconds:item.requestedTitle==='Three'?'twelve':item.durationSeconds})}};
     },
     parseStudioScenesDraft:raw=>{
       const value=JSON.parse(raw);

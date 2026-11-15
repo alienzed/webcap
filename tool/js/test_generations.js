@@ -6319,6 +6319,82 @@
       syncMatrixCandidateSelection();
       syncGridCandidateSelection();
     });
+    // Candidate bulk actions live on the existing header; ordinary clicks retain select-all.
+    (function () {
+      var master = el('test-generations-master-select');
+      var heading = master && master.closest('.test-generations-library-heading-primary');
+      if (!heading) return;
+      heading.title = 'Right-click for candidate bulk actions';
+      heading.tabIndex = 0;
+      heading.setAttribute('aria-label', 'Candidates. Right-click or press Shift+F10 for bulk actions');
+      function openCandidateBulkMenu(event) {
+        if (!prepared || !Array.isArray(prepared.files) || !prepared.files.length) return;
+        event.preventDefault();
+        var previous = document.getElementById('test-candidate-bulk-menu');
+        if (previous && typeof previous._closeBulkMenu === 'function') previous._closeBulkMenu();
+        else if (previous) previous.remove();
+        var menu = document.createElement('div');
+        menu.id = 'test-candidate-bulk-menu';
+        menu.setAttribute('role', 'menu');
+        menu.setAttribute('aria-label', 'Candidate bulk actions');
+        menu.style.cssText = 'position:fixed;z-index:100000;min-width:220px;padding:5px;background:var(--panel-bg,#222936);color:inherit;border:1px solid var(--border-color,#526071);border-radius:7px;box-shadow:0 8px 25px #0006;';
+        var close = function () {
+          menu.remove();
+          document.removeEventListener('pointerdown', outside, true);
+          document.removeEventListener('keydown', keydown, true);
+        };
+        menu._closeBulkMenu = close;
+        var outside = function (e) { if (!menu.contains(e.target)) close(); };
+        var keydown = function (e) { if (e.key === 'Escape') { close(); heading.focus(); } };
+        [25, 50, 75].forEach(function (percent) {
+          var action = document.createElement('button');
+          action.type = 'button';
+          action.setAttribute('role', 'menuitem');
+          action.textContent = 'Disable bottom ' + percent + '% by rating';
+          action.style.cssText = 'display:block;width:100%;text-align:left;padding:8px 10px;border:0;background:transparent;color:inherit;cursor:pointer;';
+          action.addEventListener('click', function () {
+            var files = prepared.files.filter(function (file) { return selectedCandidates instanceof Set && selectedCandidates.has(file); });
+            var scores = prepared.candidateScores || {};
+            var original = new Map(prepared.files.map(function (file, index) { return [file, index]; }));
+            // Unrated candidates sort below rated ones, matching the Rating sort.
+            files.sort(function (a, b) {
+              var aa = scores[a], bb = scores[b];
+              var ac = Number(aa && aa.count || 0), bc = Number(bb && bb.count || 0);
+              if (!ac || !bc) {
+                if (ac !== bc) return bc - ac;
+              } else {
+                var delta = Number(bb.average) - Number(aa.average);
+                if (delta) return delta;
+                if (ac !== bc) return bc - ac;
+              }
+              return original.get(a) - original.get(b);
+            });
+            var removeCount = Math.floor(files.length * percent / 100);
+            files.slice(files.length - removeCount).forEach(function (file) { selectedCandidates.delete(file); });
+            if (removeCount) {
+              renderStagedFiles(prepared);
+              syncSweepControls();
+              saveTestBenchState();
+              syncActiveRunControls(currentStatus);
+              syncMatrixCandidateSelection();
+              syncGridCandidateSelection();
+            }
+            close();
+          });
+          menu.appendChild(action);
+        });
+        document.body.appendChild(menu);
+        menu.style.left = Math.max(4, Math.min(event.clientX, window.innerWidth - menu.offsetWidth - 4)) + 'px';
+        menu.style.top = Math.max(4, Math.min(event.clientY, window.innerHeight - menu.offsetHeight - 4)) + 'px';
+        document.addEventListener('pointerdown', outside, true);
+        document.addEventListener('keydown', keydown, true);
+        menu.querySelector('button').focus();
+      }
+      heading.addEventListener('contextmenu', openCandidateBulkMenu);
+      heading.addEventListener('keydown', function (event) {
+        if (event.key === 'F10' && event.shiftKey) openCandidateBulkMenu(event);
+      });
+    })();
     el('test-generations-master-select').addEventListener('change', function () {
       var files = prepared && Array.isArray(prepared.files) ? prepared.files : [];
       var allSelected = !!files.length && files.every(function (fileName) {

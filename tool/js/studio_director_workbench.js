@@ -286,7 +286,7 @@
       input.checked = sceneSelectionManual ? checked.has(id) : id === suggestedScene;
       input.onchange = function () {
         sceneSelectionManual = true;
-        if (pendingCreativeAction && pendingCreativeAction.awaitingScenes)
+        if (pendingCreativeAction && pendingCreativeAction.kind === 'write_scenes')
           pendingCreativeAction.chosenSceneIds = Array.from(
             el('studio-dw-batch-scenes').querySelectorAll('input:checked')
           ).map(function (node) {return node.value;});
@@ -301,7 +301,7 @@
     var inputs = Array.from(el('studio-dw-batch-scenes').querySelectorAll('input[type="checkbox"]'));
     inputs.forEach(function (input) { input.checked = checked; });
     sceneSelectionManual = true;
-    if (pendingCreativeAction && pendingCreativeAction.awaitingScenes)
+    if (pendingCreativeAction && pendingCreativeAction.kind === 'write_scenes')
       pendingCreativeAction.chosenSceneIds = checked ? inputs.map(function (input) { return input.value; }) : [];
     showWriteContext();
   }
@@ -1097,7 +1097,7 @@
       loadStory(this.value).then(renderReadStory).catch(function(e) { status(e.message,true); });
     };
     el('studio-dw-write-project').onchange=function () {
-      if (pendingCreativeAction && pendingCreativeAction.awaitingProject)
+      if (pendingCreativeAction && pendingCreativeAction.kind !== 'create_project')
         pendingCreativeAction.chosenProjectId = this.value;
       loadStory(this.value).then(renderWriteStory).catch(function(e) { status(e.message,true); });
     };

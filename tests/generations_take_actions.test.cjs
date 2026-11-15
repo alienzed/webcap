@@ -185,5 +185,6 @@ test('Queued and running Take actions share the completed Take delete corner', (
   assert.match(shared[1], /width:\s*28px/);
   assert.match(shared[1], /height:\s*28px/);
   assert.doesNotMatch(css, /\.generate-take-pending-entry \.generate-take-copy\s*\{/);
-  assert.match(source, /action\.className = 'generate-take-job-action'/);
+  const generateSource = fs.readFileSync(path.join(__dirname, '..', 'tool/js/generate.js'), 'utf8');
+  assert.match(generateSource, /action\.className = 'generate-take-job-action'/);
 });

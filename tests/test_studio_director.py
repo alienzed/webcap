@@ -19,10 +19,10 @@ def test_writer_workshop_uses_existing_h3_prompt_contract_and_user_playbook(monk
     assert "ask one focused question; otherwise offer a specific idea" in text
     assert "4–15 seconds" in text
     assert "FIELD DEVELOPMENT" in text
-    assert "Capture complete agreed material for immediate review" in text
+    assert "Return complete agreed material for requested creative fields" in text
     assert "Entry and exit state fields are retired" in text
     assert "These controls and media inspection are outside Studio Director" in text
-    assert "Write Scenes" in text and "reviewed" in text.lower()
+    assert "Write Scenes" in text and "directly" in text.lower()
     assert "Keep risky hand-to-hand interactions simple." in text
     assert "Conversation alone does not create" in text or "Conversation never edits Project records" in text
     assert "integrated_multimodal_description" in result["promptContract"]
@@ -55,6 +55,10 @@ def test_director_role_combines_webcap_workflow_expertise_with_creative_judgment
     assert "Scene (Title, H3 Prompt)" in system
     assert "scene.prompt) is its creative content" in system
     assert "preserving unaffected authored material" in system
+    assert "Only an actual WebCap save makes authored content authoritative" in system
+    assert "Scene writes may save directly" in system
+    assert "A title-only Scene rename is a scoped Write" in system
+    assert "After the author approves the review" not in system
     assert len(system) < 6000
 
 
@@ -131,7 +135,7 @@ def test_scene_prompt_is_the_only_active_creative_field():
         assert phrase.casefold() in text.casefold()
     assert "not new Studio Director destinations" in text
     assert "Older saved summaries are dormant legacy data" in text
-    assert "reviewed insertion" in text
+    assert "complete H3 Prompts for creative writing" in text
     assert "conversation alone never edits them" in text
 
 
@@ -213,6 +217,8 @@ def test_director_chat_route_preserves_all_structured_schemas(monkeypatch, opera
             assert captured["schema"]["properties"]["prompt"]["minLength"] == 1
             assert "title" not in captured["schema"]["required"]
             assert "durationSeconds" not in captured["schema"]["required"]
+        if operation == "studio_project_draft":
+            assert captured["schema"]["required"] == ["title", "concept", "style", "invariants", "rationale"]
         if operation == "studio_brief_draft":
             assert "required" not in captured["schema"], "Unchanged Project fields are not model outputs"
             assert captured["schema"]["properties"]["invariants"]["items"]["required"] == ["kind", "title", "text"]

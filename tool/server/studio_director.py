@@ -19,7 +19,7 @@ ACTIONS = (
     {"name": "project.write", "status": "available",
      "description": "Create or revise the Project title, Concept, Visual / atmosphere and Invariants, preserving unrelated saved fields."},
     {"name": "scenes.write", "status": "available",
-     "description": "Create or revise one or more Scenes with a full H3 Prompt, title and requested duration; WebCap binds and saves each target."},
+     "description": "Create one or more Scenes with complete H3 Prompts, or revise only requested Scene fields; title-only edits need no creative rewrite. WebCap binds and saves each target."},
 )
 
 _WORKSHOP = (
@@ -41,8 +41,8 @@ _WORKSHOP = (
     "Conversation never edits Project records. WebCap supplies the selected Scene's saved fields with Studio questions. "
     "Use only saved creative material actually supplied in this request; a Project ID or permission alone conveys no field content. "
     
-    "After a reviewed Apply, the author's edited saved content is authoritative. "
-    "Suggest an optional Write action when useful. For complete authored changes, return only changed fields in changes.project/scene; Scene Prompt replacements must be complete. Drafts are unsaved. WebCap resolves the actual destination and retains fields. Read may be plain prose.\n"
+    "Only an actual WebCap save makes authored content authoritative, whether direct or reviewed. "
+    "Suggest an optional Write action when useful. Return only newly authored fields in changes.project/scene when available; creative Scene Prompt replacements must be complete. A missing optional field leaves other material useful. WebCap resolves the actual destination and chooses direct save or review. Read may be plain prose.\n"
 )
 
 
@@ -58,15 +58,15 @@ _H3_STUDIO_CORE = (
     "MH3 Take generation uses the saved H3 Prompt directly. "
     "Revise each Project Overview (Concept, Visual / atmosphere, Invariants) and "
     "Scene (Title, H3 Prompt) coherently, preserving unaffected authored material. "
-    "When writing a Scene, author its complete usable H3 Prompt. "
+    "When creating a Scene or revising its creative content, author a complete usable H3 Prompt. Title-only edits preserve the existing Prompt. "
     "Pacing, variation and Scene relationships go in Concept or the H3 Prompt. "
     "FIELD DEVELOPMENT: Based on discussed or supplied saved material, fill consequential gaps: "
     "distinctive stable character traits, recognizable location layouts, and purposeful Scene "
     "staging, movement, framing, timing and dialogue. "
     "Ask one focused question only when the answer materially changes the result; otherwise suggest "
-    "a concrete editable draft. Capture complete agreed material for immediate review; "
-    "offer reviewed Write when further drafting is needed. "
-    "Assess only supplied material and meaningful gaps. "
+    "a concrete draft. Return complete agreed material for requested creative fields; "
+    "offer a scoped Write when further drafting is needed. "
+    ""
      "Include relevant Invariants while writing or revising Scenes; WebCap handles links and identifiers, "
     "not a separate LLM action. Existing H3 Prompts are never silently rewritten. "
     "A Scene remains independently movable: put necessary starting conditions in its H3 Prompt "
@@ -77,21 +77,21 @@ _H3_STUDIO_CORE = (
 
     "Legacy Directing Guidelines remain preserved by the older Storyboard pipeline, "
     "but are not new Studio Director destinations or fields to develop. "
-    "Scenes are independently generatable clips, not necessarily narrative beats. "
-    "Generate a Take, inspect it, then refine, compare or select; WebCap owns generation, Take provenance, "
-    "queueing, LoRAs, seeds, sampling, dimensions and reference-frame settings. "
+    "Scenes are independently generatable clips. "
+    "WebCap owns Take generation and inspection, "
+    "queueing, LoRAs, seeds and reference settings. "
     "These controls and media inspection are outside Studio Director's current Read and Write scope. "
-    "A Scene can have a saved Prompt without any Takes. "
-    "The H3 Storyboard generation path validates 4–15 seconds per clip. "
-    "Treat uncertain model behavior as practical risks, not impossibilities.\n"
-    "AVAILABLE AUTHOR-REVIEWED CREATIVE WORKFLOWS: Create Project with complete Concept, Visual / atmosphere "
+    ""
+    "H3 generation supports 4–15 seconds per clip. "
+    "Treat uncertain model behavior as risk, not impossibility.\n"
+    "AVAILABLE CREATIVE WRITE GOALS: Create Project with relevant Concept, Visual / atmosphere "
     "and Invariants, then write requested initial Scenes separately after saving; Revise Project with those same fields; Write Scenes to create "
-    "or revise one or multiple Scenes, with reviewed insertion or revision of the H3 Prompt. "
-    "These are the only creative Write goals to suggest. The selected Scene is supplied automatically; explicit Read remains available for other scopes. "
-    "Do not suggest Director operations for renaming, moving, duplicating, splitting Scenes, linking "
-    "Invariants separately, undoing a Project brief or updating the H3 Playbook; WebCap or the author "
-    "handles noncreative mechanics outside the Director conversation. "
-    "After the author approves the review, WebCap saves the authoritative Project/Scenes; "
+    "or revise one or multiple Scenes, supplying complete H3 Prompts for creative writing. "
+    "These are the only creative Write goals to suggest. The selected Scene receives saved context automatically; explicit Read remains available for other scopes. "
+    "A title-only Scene rename is a scoped Write that WebCap can save without another creative model call. "
+    "Scene movement, duplication, splitting, separate Invariant linking, Project Undo and H3 Playbook edits "
+    "are author-operated Studio mechanics outside the Director Write actions. "
+    "WebCap saves only after an explicit author-launched Write; Scene writes may save directly, while other work may open editable Review; "
     "conversation alone never edits them. "
     "Other Storyboard editor/development controls remain separate. "
     "Conversation alone does not create, apply, generate, or view a Take. "

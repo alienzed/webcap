@@ -1,7 +1,9 @@
 'use strict';
 const {test,expect}=require('@playwright/test');
+const {resetModel,queueModel,observedModels}=require('./helpers.cjs');
 
-test('Flow 8 — Studio Block is saved, restored and explicitly inserted into a Director draft', async ({page}) => {
+test('Flow 8 — Studio Block is saved, restored and explicitly inserted into a Director draft', async ({page,request}) => {
+  await resetModel(request);
   const browserErrors=[];
   page.on('pageerror',error=>browserErrors.push(error.message));
   await page.goto('/');
@@ -35,5 +37,15 @@ test('Flow 8 — Studio Block is saved, restored and explicitly inserted into a 
   await page.locator('#studio-blocks-slash').getByRole('option',{name:/Rainy Library Detail/}).click();
   await expect(composer).toHaveValue('Before Amber light reflects on wet cobblestones. After');
   await expect(page.locator('#studio-blocks-slash')).toBeHidden();
+  const model=page.locator('#app-header-director-model');
+  await expect(model.locator('option[value="acceptance::acceptance-model"]')).toHaveCount(1);
+  await model.selectOption('acceptance::acceptance-model');
+  await queueModel(request,'I have read the inserted instruction.');
+  await page.locator('#director-chat-send').click();
+  await expect(page.locator('#director-chat-messages')).toContainText('I have read the inserted instruction.');
+  const calls=(await observedModels(request)).calls;
+  expect(calls).toHaveLength(1);
+  expect(calls[0].messages.some(item=>item.role==='user' &&
+    String(item.content).includes('Before Amber light reflects on wet cobblestones. After'))).toBeTruthy();
   expect(browserErrors).toEqual([]);
 });

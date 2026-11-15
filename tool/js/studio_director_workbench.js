@@ -1021,7 +1021,6 @@
       button.dataset.result=state;
       button.title=detail || 'Read selected Project fields';
     },
-    reviewGeneratedCapture:function () { status('Use the current Write action for historical drafts.',true); },
     updateContext:updateScope,
     showSentWriteContext: function(operation, messages) {
       var preview = el('studio-dw-write-context-json');
@@ -1126,7 +1125,6 @@
       if (window.confirm('Revert the latest reviewed Project Overview update? The saved Concept, Visual / atmosphere and/or Invariants changed by that update will be restored to their previous values.'))
         window.studioDirectorBridge.undoBrief();
     };
-    el('studio-dw-assessment-close').onclick=function(){el('studio-dw-assessment-dialog').close();};
     el('studio-dw-read-send').onclick=readSend;
     el('studio-dw-read-all').onclick=selectEntireReadProject;
     el('studio-dw-write-prepare').onclick=writePrepare;

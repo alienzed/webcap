@@ -1,5 +1,6 @@
 .studio-blocks-slash{display:flex;flex-direction:column;gap:3px;max-height:230px;overflow-y:auto;padding:7px;margin:4px 0;border:1px solid var(--border,#555);border-radius:9px;background:var(--panel,#202124);color:var(--text,#eee)}
 .studio-blocks-slash.hidden{display:none}
+.studio-blocks-slash-floating{position:fixed;z-index:1200;box-sizing:border-box;max-width:calc(100vw - 16px);box-shadow:0 8px 26px rgba(0,0,0,.24)}
 .studio-blocks-slash-item{display:flex;flex-direction:column;text-align:left;gap:3px;padding:9px 11px;background:transparent;border:1px solid transparent;border-radius:6px;color:inherit;cursor:pointer;font:inherit;font-size:16px}
 .studio-blocks-slash-item.active,.studio-blocks-slash-item:hover{background:rgba(130,145,180,.17);border-color:#707b91}
 .studio-blocks-slash-item small{font-size:13px;opacity:.78}

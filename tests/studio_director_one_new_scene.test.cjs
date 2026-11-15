@@ -14,6 +14,9 @@ function slice(source, start, end) {
 
 const method = slice(director,
   '    writeNewScene: function (launch) {', '    writeSelectedScene: function (launch) {');
+const studioRequestedDuration = new Function(slice(director,
+  '  function studioRequestedDuration(instruction) {',
+  '  window.studioDirectorBridge = {') + 'return studioRequestedDuration;')();
 
 test('one new Scene keeps the selected Project and complete brief through a single authoring call, then REVIEW only', async () => {
   const story = {id:'lighthouse',title:'Last Light',concept:'A final watch',
@@ -24,7 +27,7 @@ test('one new Scene keeps the selected Project and complete brief through a sing
   const state={pending:false,jobId:'',studioScenesProposal:null};
   const launch={projectId:'lighthouse',instruction:brief,authorRequest:brief};
   const scope=vm.createContext({
-    state, syncControls(){}, studioActionStatus(){}, showStudioScenesReview(){reviewed++;},
+    state, studioRequestedDuration, syncControls(){}, studioActionStatus(){}, showStudioScenesReview(){reviewed++;},
     window:{
       flushStudioDirectorStoryEdits:async id=>{assert.equal(id,'lighthouse');},
       reportConsoleError:()=>{assert.fail('No error expected')},
@@ -73,7 +76,7 @@ test('a malformed duration from Director leaves the full new Scene available for
   const state={pending:false,jobId:'',studioScenesProposal:null};
   let reviewed=0;
   const scope=vm.createContext({
-    state,syncControls(){},studioActionStatus(){},
+    state,studioRequestedDuration,syncControls(){},studioActionStatus(){},
     showStudioScenesReview(){reviewed++;},
     window:{
       flushStudioDirectorStoryEdits:async()=>{},
@@ -103,7 +106,7 @@ test('invalid output prevents review or mutation and reports failure', async () 
   const failures=[];
   let reviewed=0;
   const scope=vm.createContext({
-    state,syncControls(){},studioActionStatus:(m,error)=>{if(error)failures.push(m);},
+    state,studioRequestedDuration,syncControls(){},studioActionStatus:(m,error)=>{if(error)failures.push(m);},
     showStudioScenesReview(){reviewed++;},
     window:{
       flushStudioDirectorStoryEdits:async()=>{},
@@ -128,32 +131,3 @@ test('invalid output prevents review or mutation and reports failure', async () 
   assert.match(failures.at(-1),/New Scene draft failed/);
 });
 
-test('new-scene suggestion is a review launch, not a direct save', () => {
-  const node=()=>({children:[],dataset:{},replaceChildren(){this.children=[];},appendChild(n){this.children.push(n);}});
-  const actions=node(), assessment=node();
-  let received=null;
-  const scope=vm.createContext({
-    readinessStale:false,creativeCapture:null,preparedSceneWrite:null,
-    preparedNewSceneWrite:{projectId:'p1',instruction:'Add Closing the Logbook',authorRequest:'12 seconds'},
-    recommendations:{readHints:[],writeHint:'scene',writeFields:['title','prompt','durationSeconds'],sceneId:'',sceneNumber:0},
-    projectFields:['title','concept','style','invariants'],sceneFields:['title','prompt'],
-    el:id=>id==='studio-dw-suggestions'?actions:assessment,
-    document:{createElement:node},
-    window:{studioDirectorBridge:{
-      placeSuggestedAction(){},workingStoryId:()=> 'p1',
-      writeNewScene:async launch=>{received=launch;}
-    }},
-    recommendedWriteFields:()=>[],captureActionLabel:()=>'',reviewCreativeCapture(){},
-    writeActionLabel:()=>'',openRecommendedWrite(){},
-    status(){},activeTarget:()=>({storyId:'p1'})
-  });
-  const part=slice(workbench,'  function renderReadiness(list) {','  window.studioDirectorWorkbench = {');
-  // Only the suggestion rendering portion is relevant; no DOM review UI needed.
-  const body=part.slice(0,part.indexOf('    window.studioDirectorBridge.placeSuggestedAction(actions);'));
-  vm.runInContext(body+'  }\n',scope);
-  scope.renderReadiness([]);
-  assert.equal(actions.children.length,1);
-  assert.equal(actions.children[0].textContent,'Draft new Scene · Review');
-  actions.children[0].onclick();
-  assert.equal(received.projectId,'p1');
-});

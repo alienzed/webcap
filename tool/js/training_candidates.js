@@ -939,6 +939,7 @@ function openEpochProfile(epoch) {
       option.textContent = String(model.label || model.name || model.id || '');
       if (option.value) picker.appendChild(option);
     });
+    if (picker.options.length > 1) picker.selectedIndex = 1;
   }).catch(function (err) {
     status.textContent = 'Director model discovery failed: ' + String(err.message || err);
   });

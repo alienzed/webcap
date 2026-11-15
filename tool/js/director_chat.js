@@ -3149,7 +3149,7 @@
         'Applied values supersede earlier snapshots.\n' +
         'REPLY: Discuss concepts in 1-3 concise sentences. Ask one focused question only for a consequential missing decision. ' +
         'For an agreed concrete change to the selected existing Scene, propose a targeted Write instead of drafting the entire replacement in discussion. ' +
-        'For existing-Scene revisions set writeHint="scenes", capture=null, writeInstruction to the agreed change, writeFields to the requested fields, and sceneId/sceneNumber to the supplied target. For one new Scene set writeHint="scene", capture=null, sceneId="", sceneNumber=0, writeFields=["title","prompt","durationSeconds"], and writeInstruction to the agreed brief including requested title and duration. WebCap will draft it for review in the selected Project. ' +
+        'For existing-Scene revisions set writeHint="scenes", capture=null, writeInstruction to the agreed change, writeFields to the requested fields, and sceneId/sceneNumber to the supplied target. For one new Scene set writeHint="scene", capture=null, sceneId="", sceneNumber=0, and writeInstruction to the agreed brief. Set writeFields for the explicitly requested fields; include durationSeconds when the author specified a duration. WebCap will draft it for review in the selected Project. ' +
         'If the author explicitly wants the complete Prompt shown in chat now, author it in capture.content with the H3 template and Scene duration; WebCap reuses this draft for Review without another authoring call. ' +
         'Use reply for a brief introduction or creative explanation. ' +
         'For other drafting requests, include the complete requested text in reply. ' +
@@ -3166,7 +3166,7 @@
         'CAPTURE: Use null for discussion, questions, outlines and work still to be drafted. ' +
         'For a complete existing Scene prompt, set capture.field="prompt", capture.sceneId to its saved ID, ' +
         'and capture.content to the full usable prompt itself. WebCap uses this one authored text for both chat and Review Scene, without another LLM call. ' +
-        'For other complete fields use the matching capture schema. When a complete new Scene is already authored in conversation, use field="scene", title and content as the full usable H3 Prompt and durationSeconds (requested duration or default 6). WebCap reuses that material for review. ' +
+        'For other complete fields use the matching capture schema. When a complete new Scene is already authored in conversation, use field="scene", title and content as the full usable H3 Prompt and numeric durationSeconds (requested duration or default 6). WebCap reuses that material for review. ' +
         'For an Invariant use its kind/title, with beforeKind/beforeTitle for an exact known edit.\n';
       if (!selectedScene) {
         if (!story) return outbound;
@@ -4403,7 +4403,7 @@
         syncControls();
       });
     },
-    reviewSceneCapture: function (capture, storyId) {
+    reviewSceneCapture: function (capture, storyId, options) {
       if (!this.canReview()) return Promise.reject(new Error('Open an available Studio conversation before reviewing.'));
       if (!storyId || !capture || capture.field !== 'scene' ||
           typeof capture.content !== 'string' || !capture.content.trim() ||
@@ -4423,26 +4423,20 @@
         var story = payload.story;
         if (!story || story.id !== storyId) throw new Error('Selected Project is unavailable.');
         state.studioStoryAccess = {storyId:storyId,label:story.title || storyId};
-        if (Number.isInteger(capture.durationSeconds)) {
-          // Reuse complete authored material with its duration in the existing review.
-          state.studioScenesProposal = {
-            storyId:storyId, storyTitle:story.title, sceneOrder:(story.sceneOrder || []).slice(),
-            scenes:story.scenes, drafts:[{title:capture.title,prompt:capture.content,
-              durationSeconds:capture.durationSeconds}],
-            rationale:'Director developed this Scene in conversation. Review before saving.'
-          };
-          showStudioScenesReview();
-        } else {
-          // Old captures did not carry a duration; retain their original review.
-          state.studioSceneProposal = {
-            storyId:storyId, storyTitle:story.title, expectedUpdatedAt:story.updatedAt,
-            sceneOrder:(story.sceneOrder || []).slice(), scenes:story.scenes,
-            title:capture.title, prompt:capture.content,
-            rationale:'Director developed this Scene in conversation. Review before saving.',
-            placement:'end'
-          };
-          showStudioSceneDraftReview();
-        }
+        // Reuse complete authored material in the existing duration-aware review.
+        // Missing requested timing needs a review choice, not a silent default.
+        var validDuration = Number.isFinite(capture.durationSeconds) &&
+          capture.durationSeconds >= 4 && capture.durationSeconds <= 15;
+        var needsDuration = !validDuration && (!!(options && options.durationRequested) ||
+          Object.prototype.hasOwnProperty.call(capture,'durationSeconds'));
+        state.studioScenesProposal = {
+          storyId:storyId, storyTitle:story.title, sceneOrder:(story.sceneOrder || []).slice(),
+          scenes:story.scenes, drafts:[{title:capture.title,prompt:capture.content,
+            durationSeconds:validDuration ? capture.durationSeconds : undefined,
+            requiresDurationSelection:needsDuration}],
+          rationale:'Director developed this Scene in conversation. Review before saving.'
+        };
+        showStudioScenesReview();
         studioActionStatus('Review the developed Scene without another model request.',false);
       }).finally(function () {
         state.pending = false;
@@ -4527,7 +4521,13 @@
             throw new Error('Director must return exactly one Scene.\nRaw response:\n' + raw);
           state.studioScenesProposal = {
             storyId:storyId, storyTitle:story.title, sceneOrder:order,
-            scenes:story.scenes, drafts:draft.scenes, rationale:draft.rationale
+            scenes:story.scenes, drafts:draft.scenes.map(function (scene) {
+              return Object.assign({}, scene, {
+                requiresDurationSelection:!!launch.durationRequested &&
+                  !(Number.isFinite(scene.durationSeconds) &&
+                    scene.durationSeconds >= 4 && scene.durationSeconds <= 15)
+              });
+            }), rationale:draft.rationale
           };
           showStudioScenesReview();
           studioActionStatus('One new Scene is ready for review. Nothing has been saved.', false);

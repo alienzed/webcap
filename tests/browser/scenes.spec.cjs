@@ -35,6 +35,7 @@ test('Flow 2 — returned Scene count, editable review and persistent real recor
   await say(page,'Create three Scenes with different durations.');
   const action=page.locator('#studio-dw-suggestions .studio-dw-suggestion-action');
   await expect(action).toContainText('Review authored Scene');
+  await expect(page.locator('#director-chat-send')).toBeEnabled();
   await action.click();
   await expect(page.locator('#studio-scenes-review')).toBeVisible();
   const rows=page.locator('#studio-scenes-rows .studio-scenes-row');
@@ -77,6 +78,7 @@ test('Flow 6 — each conversation reply owns its own editable Scene review',asy
   await say(page,'Create a first Scene');
   let action=page.locator('#studio-dw-suggestions .studio-dw-suggestion-action');
   await expect(action).toBeVisible();
+  await expect(page.locator('#director-chat-send')).toBeEnabled();
   await action.click();
   await expect(page.locator('#studio-scenes-review')).toBeVisible();
   const row=page.locator('#studio-scenes-rows .studio-scenes-row');
@@ -91,6 +93,7 @@ test('Flow 6 — each conversation reply owns its own editable Scene review',asy
   await say(page,'Create a second Scene');
   action=page.locator('#studio-dw-suggestions .studio-dw-suggestion-action');
   await expect(action).toBeVisible();
+  await expect(page.locator('#director-chat-send')).toBeEnabled();
   await action.click();
   await expect(page.locator('#studio-scenes-review')).toBeVisible();
   await expect(row.locator('[data-field="prompt"]')).toHaveValue('Second unique scene prompt.');
@@ -129,6 +132,7 @@ test('Flow 2 variation — useful partial Scene survives invalid sibling metadat
   await say(page,'Create three Scenes with different durations');
   const action=page.locator('#studio-dw-suggestions .studio-dw-suggestion-action');
   await expect(action).toContainText('Review authored Scene');
+  await expect(page.locator('#director-chat-send')).toBeEnabled();
   await action.click();
   const dialog=page.locator('#studio-scenes-review');
   await expect(dialog).toBeVisible();

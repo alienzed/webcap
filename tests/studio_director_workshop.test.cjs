@@ -419,6 +419,6 @@ test('legacy Workshop request context never treats stored Scene Intent as a crea
   assert.doesNotMatch(serialized, /PRIVATE_LEGACY_INTENT|sceneIntent|sceneSummary/);
   assert.doesNotMatch(source, /Use the outline to develop Scenes that have no prompt yet/);
   assert.match(source, /Author a complete usable H3 Prompt when writing a new Scene/);
-  const workshopDraft = part('  function prepareWorkshopRevision() {', '  function parseStoryGuidelineProposal(raw) {');
+  const workshopDraft = part('  function prepareWorkshopRevision() {', '  function applyWorkshopRevision() {');
   assert.doesNotMatch(workshopDraft, /sceneIntent|sceneSummary/);
 });

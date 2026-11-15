@@ -395,3 +395,14 @@ test('Studio Revise Scenes launcher uses the common Director composer', () => {
   assert.match(html,/id="director-studio-composer-mode-select"/);
   assert.match(html,/id="director-studio-revision-fresh"/);
 });
+
+test('Studio operation mode hides conversation without deleting history, and pin remains available',()=>{
+  const header=html.split('<div class="director-chat-header-actions">')[1].split('</header>',1)[0];
+  assert.match(header,/id="director-studio-composer-mode-select"/);
+  assert.match(header,/id="director-chat-pin"/);
+  assert.match(css,/\.director-chat-drawer\.studio-director\.studio-revision-mode \.director-chat-messages/);
+  assert.match(css,/\.app-frame\.director-chat-pinned\.studio-director-active > \.director-chat-drawer\.studio-director/);
+  assert.match(chat,/drawer\.classList\.toggle\('studio-revision-mode', revision\)/);
+  assert.match(html,/id="storyboard-open-director"[^>]*class="review-captions-btn hidden"/);
+  assert.match(chat,/if \(studio\) toggle\.focus\(\)/);
+});

@@ -919,6 +919,7 @@ def snapshot(include_terminal=False):
         "paused": bool(current.get("paused")),
         "pauseReason": str(current.get("pauseReason") or ""),
         "activeJobId": str(current.get("activeJobId") or ""),
+        "failedJobId": str(current.get("failedJobId") or ""),
         "backlogCount": sum(1 for job in jobs if str(job.get("status") or "") == "backlog"),
         "waitReason": wait_reason,
         "jobs": [_job_view(legacy.get(str(job.get("id") or ""), job)) for job in jobs],

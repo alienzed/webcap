@@ -27,6 +27,7 @@ on:
       - 'tests/test_evaluation_rating_dimensions.py'
       - 'tests/test_epoch_collection_focused_review.py'
       - 'tests/test_generations_review_unrated.test.cjs'
+      - 'tests/test_generations_review_sessions.test.cjs'
       - 'tool/server/epoch_finder.py'
       - 'tests/test_epoch_finder.py'
       - 'tool/server/llm_runner.py'
@@ -64,7 +65,7 @@ jobs:
           node --check tool/js/test_references.js
           node --check tool/js/run_analytics.js
           node --check tool/js/inference_queue.js
-          node --test tests/inference_error_passthrough.test.cjs tests/test_generations_review_unrated.test.cjs
+          node --test tests/inference_error_passthrough.test.cjs tests/test_generations_review_unrated.test.cjs tests/test_generations_review_sessions.test.cjs
       - name: Install tests
         run: python -m pip install pytest "Flask>=3,<4" "Pillow>=10,<12" opencv-python-headless imageio websocket-client
       - name: Staged LoRA resolution for Test Evaluations

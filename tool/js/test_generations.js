@@ -33,6 +33,10 @@
   var reviewBrowseCompleted = false;
   var reviewDimensionId = 'overall';
   var reviewDimensions = [];
+  var reviewSessionQueue = [];
+  var reviewSessionCursor = -1;
+  var reviewSessionLoading = false;
+  var reviewSessionLoadFailed = false;
   var reviewScope = null;
   var reviewDialogHome = null;
   var matrixRatingPending = new Set();
@@ -4183,6 +4187,56 @@
     });
   }
 
+  // The visible session order is already owned by Test Generations. Start at the
+  // selected session and wrap once; the modal needs no separate scope picker.
+  function resetReviewSessionQueue() {
+    var rows = Array.prototype.slice.call(
+      el('test-generations-sessions-list').querySelectorAll('[data-session-name]')
+    );
+    var sessions = rows.map(function (row) {
+      return {
+        session: String(row.dataset.sessionName || ''),
+        label: String(row.querySelector('[data-session-row-title]').textContent || '').trim()
+      };
+    }).filter(function (item) { return !!item.session; });
+    var selected = String(currentStatus && currentStatus.session || '');
+    var start = sessions.findIndex(function (item) { return item.session === selected; });
+    if (selected && start < 0) sessions.unshift({session:selected,label:sessionLabel(selected)});
+    else if (start > 0) sessions = sessions.slice(start).concat(sessions.slice(0, start));
+    reviewSessionQueue = sessions;
+    reviewSessionCursor = selected ? 0 : -1;
+    reviewSessionLoading = false;
+    reviewSessionLoadFailed = false;
+  }
+
+  function advanceReviewSession() {
+    if (reviewScope || reviewSessionLoading || reviewSessionLoadFailed) return false;
+    var next = reviewSessionCursor + 1;
+    if (next >= reviewSessionQueue.length) return false;
+    var target = reviewSessionQueue[next];
+    var folder = String(launchFolder || '');
+    var serial = reviewCatalogRequest;
+    reviewSessionLoading = true;
+    el('test-generations-review-position').textContent = 'Opening ' + target.label + '…';
+    el('test-generations-review-status').textContent = '';
+    el('test-generations-review-card').replaceChildren();
+    request('test_open_session', {session:target.session}).then(function (status) {
+      if (!reviewDialogOpen() || reviewCatalogRequest !== serial ||
+          reviewScope || folder !== String(launchFolder || '')) return;
+      reviewSessionCursor = next;
+      reviewSessionLoading = false;
+      selectSessionStatus(status);
+    }).catch(function (error) {
+      if (!reviewDialogOpen() || reviewCatalogRequest !== serial || reviewScope) return;
+      reviewSessionLoading = false;
+      reviewSessionLoadFailed = true;
+      el('test-generations-review-status').textContent =
+        'Could not open ' + target.label + ': ' + String(error.message || error);
+      showError(error);
+    });
+    return true;
+  }
+
   function reviewDimensionLabel() {
     var selected = reviewDimensions.find(function (item) { return item.id === reviewDimensionId; });
     return selected ? selected.label : 'Overall';
@@ -4278,14 +4332,19 @@
   }
 
   function renderReview(status) {
-    if (!reviewDialogOpen() || reviewCatalogPending) return;
+    if (!reviewDialogOpen() || reviewCatalogPending || reviewSessionLoading || reviewSessionLoadFailed) return;
     var dialog = el('test-generations-review');
     var host = el('test-generations-review-card');
     var position = el('test-generations-review-position');
     var all = reviewResults(status);
     var pending = reviewPendingResults(status);
+    if (!reviewScope && !reviewBrowseCompleted && !reviewRevisiting &&
+        !pending.length && advanceReviewSession()) return;
+    var selectedSession = String(status && status.session || '');
+    var sessionInfo = reviewSessionQueue.find(function (item) { return item.session === selectedSession; });
     el('test-generations-review-title').textContent = reviewScope
-      ? 'Epoch ' + reviewScope.epoch + ' · ' + reviewDimensionLabel() : reviewDimensionLabel();
+      ? 'Epoch ' + reviewScope.epoch + ' · ' + reviewDimensionLabel()
+      : (sessionInfo ? sessionInfo.label + ' · ' : '') + reviewDimensionLabel();
     var session = String(status && status.session || '');
     if (reviewSession !== session) {
       reviewSession = session;
@@ -4330,9 +4389,11 @@
     var statusNode = el('test-generations-review-status');
     statusNode.textContent = !all.length ? (reviewScope
       ? 'No rateable Test renders in this epoch. Campaign frames remain in the collection.'
-      : 'Generate a Test session to begin.') :
+      : (reviewSessionQueue.length ? 'No pending results across sessions.' : 'Generate a Test session to begin.')) :
       reviewBrowseCompleted ? 'Revisiting saved ' + reviewDimensionLabel() + ' ratings.' :
-      !pending.length && !reviewRevisiting ? reviewDimensionLabel() + ' complete. Switch dimensions or close.' :
+      !pending.length && !reviewRevisiting ? (reviewScope
+        ? reviewDimensionLabel() + ' complete. Switch dimensions or close.'
+        : 'All sessions complete for ' + reviewDimensionLabel() + '.') :
       reviewRevisiting ? 'Revisiting a saved rating. Choose a new score to update it.' : '';
     var key = session + '|' + reviewDimensionId + '|' + (reviewBrowseCompleted ? 'completed' : 'pending') + '|' + reviewKey;
     if (host.dataset.reviewKey === key && host.firstElementChild) {
@@ -4380,7 +4441,7 @@
   }
 
   function rateCurrentReview(value) {
-    if (reviewRatingPending) return;
+    if (reviewRatingPending || reviewSessionLoading) return;
     var card = el('test-generations-review-card').querySelector('.test-generations-review-item');
     var star = card && card.querySelector('[data-test-rating="' + value + '"]');
     if (!star) return;
@@ -4432,6 +4493,7 @@
     var dialog = el('test-generations-review');
     if (dialog.open) return;
     reviewScope = null;
+    resetReviewSessionQueue();
     reviewKey = '';
     reviewHistory = [];
     reviewRevisiting = false;
@@ -6116,7 +6178,7 @@
       if (reviewScope && reviewRatingPending) event.preventDefault();
     });
     el('test-generations-review-completed').onclick = function () {
-      if (reviewRatingPending || reviewCatalogPending) return;
+      if (reviewRatingPending || reviewCatalogPending || reviewSessionLoading) return;
       if (reviewBrowseCompleted && !reviewPendingResults(reviewStatus()).length) {
         el('test-generations-review').close();
         return;
@@ -6131,6 +6193,8 @@
       ++reviewCatalogRequest;
       ++reviewSaveSerial;
       reviewRatingPending = false;
+      reviewSessionLoading = false;
+      reviewSessionQueue = [];
       reviewCatalogPending = false;
       var video = this.querySelector('video');
       if (video) video.pause();
@@ -6148,8 +6212,9 @@
       }
     });
     el('test-generations-review-dimension').onchange = function () {
-      if (reviewRatingPending || reviewCatalogPending) { this.value = reviewDimensionId; return; }
+      if (reviewRatingPending || reviewCatalogPending || reviewSessionLoading) { this.value = reviewDimensionId; return; }
       reviewDimensionId = this.value;
+      if (!reviewScope) resetReviewSessionQueue();
       reviewHistory = [];
       reviewRevisiting = false;
       reviewBrowseCompleted = false;
@@ -6172,6 +6237,7 @@
         var created = catalog.dimensions.find(function (item) { return item.label.toLowerCase() === name.toLowerCase(); });
         if (!created) throw new Error('Saved rating dimension is missing from the returned catalog.');
         reviewDimensionId = created.id;
+        if (!reviewScope) resetReviewSessionQueue();
         setReviewDimensions(catalog);
         reviewHistory = [];
         reviewRevisiting = false;

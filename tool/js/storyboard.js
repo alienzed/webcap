@@ -6185,6 +6185,8 @@
   };
   window.startStudioRevision = function (options) {
     if (!options || !options.modelId) return Promise.reject(new Error('Choose a Director model.'));
+    if (!storyState.story || storyState.story.id !== options.projectId)
+      return Promise.reject(new Error('Revision destination changed. Reopen Revise Scenes.'));
     if (options.preset === 'coherence') return runDirectorToolsCoherence(options.modelId, true);
     return reviseScenes(options.instruction, options.modelId,
       options.generateFreshTakes === true, options.preset === 'continuity',

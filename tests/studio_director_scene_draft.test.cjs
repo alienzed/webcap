@@ -156,10 +156,10 @@ test('Scene review retains prompts and flags durations for author correction', (
   const messages=item=>[item.textContent,...item.children.flatMap(messages)].filter(Boolean).join(' ');
   assert.equal(host.children.length,3);
   assert.equal(find(host.children[0],item=>item.dataset.field==='prompt').value,'Useful first Prompt');
-  assert.equal(find(host.children[0],item=>item.dataset.field==='durationSeconds').value,6);
-  assert.match(messages(host.children[0]),/using 6s/);
+  assert.equal(find(host.children[0],item=>item.dataset.field==='durationSeconds').value,'twelve');
+  assert.match(messages(host.children[0]),/needs correction before this Scene can be saved/);
   assert.equal(find(host.children[1],item=>item.dataset.field==='prompt').value,'Useful second Prompt');
-  assert.equal(find(host.children[1],item=>item.dataset.field==='durationSeconds').value,6);
+  assert.equal(find(host.children[1],item=>item.dataset.field==='durationSeconds').value,'6');
   assert.match(messages(host.children[1]),/6s default/);
   assert.equal(String(find(host.children[2],item=>item.dataset.field==='durationSeconds').value),'12.5');
   assert.match(messages(host.children[2]),/No Prompt supplied/);
@@ -198,7 +198,7 @@ test('Apply saves usable Scenes and retains incomplete rows for later Apply', as
     querySelector(selector){return this.fields[selector.match(/data-field="([^"]+)"/)[1]];},
     remove(){this.removed=true;}
   });
-  const first=node('Opening','Complete H3 Prompt A','twelve');
+  const first=node('Opening','Complete H3 Prompt A','');
   const incomplete=node('Unfinished','','10');
   const last=node('Ending','Complete H3 Prompt C','12.5');
   const rows=[first,incomplete,last], requests=[], receipts=[], errors=[], statuses=[];
@@ -261,6 +261,52 @@ test('Apply saves usable Scenes and retains incomplete rows for later Apply', as
   assert.equal(receipts.length,2);
 });
 
+test('invalid duration cannot be silently replaced; other usable Scenes still save',async()=>{
+  const makeRow=(title,prompt,duration)=>({
+    fields:{title:{value:title},prompt:{value:prompt},durationSeconds:{value:duration}},
+    removed:false,
+    querySelector(selector){return this.fields[selector.match(/data-field="([^"]+)"/)[1]];},
+    remove(){this.removed=true;}
+  });
+  const invalid=makeRow('First','A complete H3 Prompt','twelve');
+  const valid=makeRow('Second','Another complete H3 Prompt','8');
+  const rows=[invalid,valid], requests=[], errors=[];
+  const story={id:'p1',sceneOrder:['prior'],scenes:{}};
+  const proposal={storyId:'p1',sceneOrder:['prior'],scenes:story.scenes,
+    drafts:[{title:'First',prompt:'A complete H3 Prompt'},
+      {title:'Second',prompt:'Another complete H3 Prompt'}]};
+  const state={pending:false,studioScenesProposal:proposal};
+  const scope=vm.createContext({state,Number,String,Array,Promise,JSON,
+    el:id=>id==='studio-scenes-rows'?{querySelectorAll:()=>rows.filter(row=>!row.removed)}:
+      id==='studio-scenes-placement'?{value:'end'}:
+      id==='studio-scenes-review'?{close(){}}:{textContent:''},
+    syncControls(){},recordStudioOperation(){},studioActionStatus(){},
+    window:{flushStudioDirectorStoryEdits:async()=>{},
+      studioDirectorBridge:{recordApplied:async()=>{}},
+      refreshStudioDirectorStoryIfOpen:async()=>{},
+      reportConsoleError:(_label,error)=>errors.push(error)},
+    requestJson:async(_url,options)=>{
+      const body=JSON.parse(options.body);requests.push(body);
+      const created=body.scenes.map((scene,i)=>({...scene,id:'new-'+i}));
+      return {story:{...story,sceneOrder:['prior',...created.map(x=>x.id)]},
+        scenes:created};
+    }
+  });
+  vm.runInContext(part('  function applyStudioScenes() {',
+    '  function showStudioSceneDraftReview() {'),scope);
+  await scope.applyStudioScenes();
+  assert.deepEqual(errors,[]);
+  assert.equal(requests.length,1);
+  assert.equal(requests[0].scenes.length,1);
+  assert.equal(requests[0].scenes[0].title,'Second');
+  assert.equal(requests[0].scenes[0].durationSeconds,8);
+  assert.equal(invalid.removed,false);
+  assert.equal(invalid.fields.durationSeconds.value,'twelve');
+  assert.equal(valid.removed,true);
+  assert.equal(proposal.drafts.length,1);
+  assert.equal(proposal.drafts[0].durationSeconds,'twelve');
+});
+
 test('Apply with only empty prompts leaves the review intact without a save request', () => {
   const row={querySelector:selector=>({value:selector.includes('prompt')?'':'Incomplete'})};
   const status={textContent:''},proposal={storyId:'p1',sceneOrder:[]};
@@ -272,7 +318,7 @@ test('Apply with only empty prompts leaves the review intact without a save requ
   vm.runInContext(part('  function applyStudioScenes() {',
     '  function showStudioSceneDraftReview() {'),scope);
   scope.applyStudioScenes();
-  assert.match(status.textContent,/No complete H3 Prompts to save/);
+  assert.match(status.textContent,/No Scenes are ready to save/);
 });
 
 test('Studio brief review limits Apply to explicitly checked Story fields', () => {

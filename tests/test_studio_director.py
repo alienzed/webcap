@@ -196,9 +196,10 @@ def test_retired_director_model_operations_are_not_queued(monkeypatch, operation
     ("studio_brief_draft", {"title", "concept", "style", "invariants", "rationale"}),
     ("studio_project_draft", {"title", "concept", "style", "invariants", "initialScenes", "rationale"}),
     ("studio_scene_field_draft", {"title", "prompt", "durationSeconds"}),
+    ("studio_scenes_draft", {"scenes", "rationale"}),
     ("storyboard_workshop_shots", {"summary", "shots"}),
     ("freeform_chat", None),
-    ("studio_chat", {"reply", "action", "changes"}),
+    ("studio_chat", {"reply", "action", "changes", "scenes"}),
 ])
 def test_director_chat_route_preserves_all_structured_schemas(monkeypatch, operation, expected_fields):
     import importlib
@@ -230,6 +231,10 @@ def test_director_chat_route_preserves_all_structured_schemas(monkeypatch, opera
             assert captured["schema"]["properties"]["prompt"]["minLength"] == 1
             assert "title" not in captured["schema"]["required"]
             assert "durationSeconds" not in captured["schema"]["required"]
+        if operation == "studio_scenes_draft":
+            assert captured["schema"]["required"] == ["scenes"]
+            assert "prompt" not in captured["schema"]["properties"]
+            assert captured["schema"]["properties"]["scenes"]["items"]["properties"]["prompt"]["type"] == "string"
         if operation == "studio_project_draft":
             assert captured["schema"]["required"] == ["title", "concept", "style", "invariants", "rationale"]
         if operation == "studio_brief_draft":
@@ -243,6 +248,8 @@ def test_studio_chat_schema_accepts_read_and_one_optional_authoring_action():
     schema = chat_response_schema()
     assert schema["required"] == ["reply"], "A useful Read must not require action metadata"
     assert schema["properties"]["reply"]["minLength"] == 1
+    assert schema["properties"]["scenes"]["type"] == "array"
+    assert "scenes" not in schema["required"], "Discussion still allows plain answers"
     nullable, suggestion = schema["properties"]["action"]["anyOf"]
     assert nullable == {"type": "null"}
     assert suggestion["additionalProperties"] is False

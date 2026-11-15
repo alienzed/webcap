@@ -2286,7 +2286,7 @@ def director_chat_route():
         if not isinstance(messages, list) or not messages:
             raise ValueError("Director Chat messages are required.")
         operation = str(data.get("operation") or "freeform_chat").strip()
-        if operation not in {"freeform_chat", "studio_chat", "storyboard_workshop_shots", "studio_project_draft", "studio_brief_draft", "studio_scene_field_draft"}:
+        if operation not in {"freeform_chat", "studio_chat", "storyboard_workshop_shots", "studio_project_draft", "studio_brief_draft", "studio_scene_field_draft", "studio_scenes_draft"}:
             raise ValueError("Unsupported Director Chat operation.")
         contract = {"operation": operation, "messages": messages}
         if operation == "studio_chat":
@@ -2320,6 +2320,29 @@ def director_chat_route():
                     "title": {"type": "string"},
                     "prompt": {"type": "string", "minLength": 1},
                     "durationSeconds": {"type": "integer", "minimum": 4, "maximum": 15},
+                },
+            }
+        if operation == "studio_scenes_draft":
+            # New-Scene authoring is a sequence of *material*, not an action
+            # promise or a requirement to match a guessed requested count.
+            # Keep individual fields optional so incomplete useful drafts reach
+            # the editable review rather than being rejected by the schema.
+            contract["response_schema"] = {
+                "type": "object", "additionalProperties": False,
+                "required": ["scenes"],
+                "properties": {
+                    "scenes": {
+                        "type": "array", "maxItems": 32,
+                        "items": {
+                            "type": "object", "additionalProperties": False,
+                            "properties": {
+                                "title": {"type": "string"},
+                                "prompt": {"type": "string"},
+                                "durationSeconds": {"type": "number"},
+                            },
+                        },
+                    },
+                    "rationale": {"type": "string"},
                 },
             }
         if operation == "studio_project_draft":

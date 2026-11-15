@@ -134,6 +134,18 @@ def chat_response_schema():
                     },
                 },
             },
+            "scenes": {
+                "type": "array", "maxItems": 32,
+                "description": "Actually authored, unsaved Scene records for review; no implied completion count.",
+                "items": {
+                    "type": "object", "additionalProperties": False,
+                    "properties": {
+                        "title": {"type": "string"},
+                        "prompt": {"type": "string"},
+                        "durationSeconds": {"type": "number"},
+                    },
+                },
+            },
             "action": {
                 "anyOf": [
                     {"type": "null"},

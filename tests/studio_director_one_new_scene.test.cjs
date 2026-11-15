@@ -46,7 +46,7 @@ test('one new Scene keeps the selected Project and complete brief through a sing
         isReady:()=>true,readinessMessage:()=> '',
         makeProposal:async (instruction,operation,includePromptContract)=>{
           authored++;
-          assert.equal(operation,'studio_scene_field_draft');
+          assert.equal(operation,'studio_scenes_draft');
           assert.equal(includePromptContract,true);
           const payload=JSON.parse(instruction);
           assert.equal(payload.instruction,brief);
@@ -83,7 +83,7 @@ test('one new Scene keeps the selected Project and complete brief through a sing
   assert.equal(story.scenes.s1.prompt,'Existing saved text');
 });
 
-test('a written-out author duration survives malformed optional model duration', async () => {
+test('malformed model duration remains visible in review instead of becoming invented metadata', async () => {
   const state={pending:false,jobId:'',studioScenesProposal:null,studioWorkingDraft:{projects:{},scenes:{},newProject:{},newScene:{},sourceRequest:''}};
   let reviewed=0;
   const scope=vm.createContext({
@@ -109,8 +109,8 @@ test('a written-out author duration survives malformed optional model duration',
     {projectId:'p1',instruction:'Add a twelve-second closing Scene'});
   assert.equal(reviewed,1);
   assert.equal(state.studioScenesProposal.drafts[0].prompt,'Complete H3 prompt for a quiet ending');
-  assert.equal(state.studioScenesProposal.drafts[0].durationSeconds,12,
-    'WebCap carries the author\'s twelve seconds through a malformed model field');
+  assert.equal(state.studioScenesProposal.drafts[0].durationSeconds,'twelve',
+    'review preserves the actual model field; the author can correct it');
 });
 
 test('later new Scene sees prior saved Scene for continuity, not leftover working draft', async () => {
@@ -201,7 +201,7 @@ test('missing Prompt retains title and duration as editable draft even on direct
   assert.equal(statuses.at(-1).error,false);
 });
 
-test('invalid output prevents review or mutation and reports failure', async () => {
+test('actual multi-Scene output is retained even when the request mentioned one', async () => {
   const state={pending:false,jobId:'',studioScenesProposal:null,studioWorkingDraft:{projects:{},scenes:{},newProject:{},newScene:{},sourceRequest:''}};
   const failures=[];
   let reviewed=0;
@@ -224,15 +224,16 @@ test('invalid output prevents review or mutation and reports failure', async () 
     Promise, JSON, Number, String, Error, encodeURIComponent
   });
   const writer=vm.runInContext('({' + method + '})',scope).writeNewScene;
-  await assert.rejects(writer.call(scope.window.studioDirectorBridge,
-    {projectId:'p1',instruction:'Add exactly one Scene'}),/no usable Scene fields/);
-  assert.equal(state.studioScenesProposal,null);
-  assert.equal(reviewed,0);
-  assert.match(failures.at(-1),/New Scene draft failed/);
+  const result=await writer.call(scope.window.studioDirectorBridge,
+    {projectId:'p1',instruction:'Add exactly one Scene'});
+  assert.equal(result.review,true);
+  assert.equal(state.studioScenesProposal.drafts.length,2);
+  assert.equal(reviewed,1);
+  assert.equal(failures.length,0);
 });
 
 
-test('launched Scene creation saves through the existing insertion route, with a truthful receipt',async()=>{
+test('invalid returned duration retains review and does not invent a successful save',async()=>{
   const story={id:'p1',title:'Bookshop',concept:'Evening rain',style:'Warm lamps',
     invariants:[],sceneOrder:['old'],scenes:{old:{title:'Opening',prompt:'Original'} }};
   const requests=[],receipts=[],refreshes=[];
@@ -277,12 +278,53 @@ test('launched Scene creation saves through the existing insertion route, with a
     projectId:'p1',instruction:'Create a closing Scene lasting 12 seconds',
     authorRequest:'Create a 12-second closing Scene',directSave:true
   });
-  assert.deepEqual(requests,['/fs/storyboard?story=p1','/fs/studio/director/scenes-draft']);
-  assert.equal(result.scenes[0].id,'new-id');
-  assert.equal(result.scenes[0].durationSeconds,12);
-  assert.deepEqual(refreshes,['p1']);
-  assert.equal(receipts[0].kind,'scene.create');
-  assert.equal(reviewed,0);
-  assert.equal(state.studioScenesProposal,null);
+  assert.deepEqual(requests,['/fs/storyboard?story=p1']);
+  assert.equal(result.review,true);
+  assert.equal(reviewed,1);
+  assert.equal(state.studioScenesProposal.drafts[0].durationSeconds,'garbled');
+  assert.equal(receipts.length,0,'no save receipt without an actual save');
+  assert.equal(refreshes.length,0,'no refresh claim without a save');
   assert.equal(story.scenes.old.prompt,'Original');
+});
+
+test('two eight-second Scenes request retains one actually authored Scene without a replacement call',async()=>{
+  const story={id:'p1',title:'Project',concept:'A quiet evening',style:'Amber light',
+    invariants:[],sceneOrder:[],scenes:{}};
+  const state={pending:false,jobId:'',studioScenesProposal:null,
+    studioWorkingDraft:{projects:{},scenes:{},newProject:{},newScene:{},sourceRequest:''}};
+  let calls=0,reviews=0,saves=0;
+  const scope=vm.createContext({
+    state,studioRequestedDuration,studioMentionedDuration,
+    studioRequestAppliesPreparedMaterial,studioWorkingFieldChanges,
+    syncControls(){},scheduleSessionSave(){},studioActionStatus(){},
+    showStudioScenesReview(){reviews++;},
+    window:{
+      flushStudioDirectorStoryEdits:async()=>{},
+      reportConsoleError:()=>assert.fail('Partial quantity is not an operation failure'),
+      studioDirectorBridge:{
+        isReady:()=>true,readinessMessage:()=>'',makeProposal:async()=>{
+          calls++;
+          return JSON.stringify({scenes:[{
+            title:'One useful Scene',prompt:'Complete H3 prompt',durationSeconds:8
+          }]});
+        }
+      }
+    },
+    requestJson:async url=>{
+      if(url!=='/fs/storyboard?story=p1') saves++;
+      return {story};
+    },
+    Promise,JSON,Number,String,Error,encodeURIComponent
+  });
+  const writer=vm.runInContext('({' + method + '})',scope).writeNewScene;
+  const result=await writer.call(scope.window.studioDirectorBridge,{
+    projectId:'p1',instruction:'Create two eight-second Scenes',
+    authorRequest:'Create two eight-second Scenes',directSave:false
+  });
+  assert.equal(calls,1);
+  assert.equal(reviews,1);
+  assert.equal(saves,0);
+  assert.equal(result.review,true);
+  assert.equal(state.studioScenesProposal.drafts.length,1);
+  assert.equal(state.studioScenesProposal.drafts[0].durationSeconds,8);
 });

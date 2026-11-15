@@ -857,6 +857,14 @@
           if (!entry.writeAction) continue;
           var proposal = entry.writeAction;
           if (proposal.completed) break;
+          // The saved response, not a duplicated action promise, owns authored
+          // material. History preserves rawResponse but intentionally retains
+          // only minimal action metadata.
+          if (proposal.kind === 'create_scene' && entry.rawResponse) {
+            var restored = parseStudioChatResponse(entry.rawResponse);
+            if (restored.scenes && restored.scenes.length)
+              proposal = Object.assign({},proposal,{scenes:restored.scenes});
+          }
           window.studioDirectorWorkbench.presentAction(proposal, proposal.scene,
             {projectId:proposal.projectId}, proposal.request, actionIndex);
           break;
@@ -2559,20 +2567,20 @@
     var durationLabel = document.createElement('label');
     durationLabel.textContent = 'Duration (s)';
     var duration = document.createElement('input');
-    duration.type = 'number'; duration.min = '4'; duration.max = '15'; duration.step = 'any';
+    duration.type = 'text'; duration.inputMode = 'decimal'; duration.placeholder = '6';
     duration.dataset.field = 'durationSeconds';
     var suppliedDuration = (typeof item.durationSeconds === 'number' ||
       typeof item.durationSeconds === 'string') && String(item.durationSeconds).trim() !== '';
     var numericDuration = Number(item.durationSeconds);
     var usableDuration = suppliedDuration && Number.isFinite(numericDuration) &&
       numericDuration >= 4 && numericDuration <= 15;
-    duration.value = usableDuration ? numericDuration : 6;
+    duration.value = suppliedDuration ? String(item.durationSeconds) : '6';
     durationLabel.appendChild(duration);
     if (!usableDuration) {
       var durationNote = document.createElement('span');
       durationNote.textContent = !suppliedDuration
         ? 'Duration missing; using the 6s default. You can change it.'
-        : 'Duration ' + String(item.durationSeconds) + ' is not supported; using 6s. You can change it.';
+        : 'Duration ' + String(item.durationSeconds) + ' needs correction before this Scene can be saved.';
       durationLabel.appendChild(durationNote);
     }
     var promptLabel = document.createElement('label');
@@ -2635,9 +2643,12 @@
       }
       var durationInput = row.querySelector('[data-field="durationSeconds"]');
       var supplied = String(durationInput.value || '').trim();
-      var duration = supplied ? Number(supplied) : NaN;
-      if (!Number.isFinite(duration) || duration < 4 || duration > 15) {
-        duration = 6;
+      var duration = supplied ? Number(supplied) : 6;
+      if (supplied && (!Number.isFinite(duration) || duration < 4 || duration > 15)) {
+        incompleteRows.push(row);
+        return;
+      }
+      if (!supplied) {
         durationInput.value = '6';
         defaulted++;
       }
@@ -2645,7 +2656,7 @@
     });
     if (!readyRows.length) {
       el('studio-scenes-error').textContent = rows.length
-        ? 'No complete H3 Prompts to save yet. Complete a Prompt or remove an empty Scene; your drafts are preserved.'
+        ? 'No Scenes are ready to save. Complete a Prompt or correct an unsupported duration; your drafts are preserved.'
         : 'Add a Scene with a Prompt before applying.';
       return;
     }
@@ -2688,7 +2699,7 @@
         readyRows.forEach(function (item) {item.row.remove();});
         el('studio-scenes-error').textContent = savedCount + ' Scene' +
           (savedCount === 1 ? '' : 's') + ' saved. ' + incompleteRows.length +
-          ' still need a Prompt; complete or remove them here.' +
+          ' still need a Prompt or duration correction; edit or remove them here.' +
           (defaulted ? ' ' + defaulted + ' saved using the 6s duration default.' : '');
       } else {
         state.studioScenesProposal = null;
@@ -3135,15 +3146,18 @@
       return studioDirectorRequestMessages(messages, needsPromptReference, false, navigation).then(function (outbound) {
       outbound[0].content += '\n\nCONVERSATION: Reply naturally and answer direct questions from supplied material. ' +
         'A plain-text answer is acceptable. For ordinary discussion answer briefly, normally 1-3 sentences. ' +
-        'When the author asks to create/revise saved material, propose one action in JSON with reply and ' +
-        'action:{kind,instruction,fields}; kind is create_project, write_project, create_scene, or write_scenes. ' +
+        'When the author requests Project edits or revisions to existing Scenes, propose an optional action ' +
+        'in JSON with reply and action:{kind,instruction,fields}; supported kinds are create_project, ' +
+        'write_project, create_scene and write_scenes. ' +
         'Action is optional for ordinary Read/discussion; it is never an authorization to save. ' +
         'Instruction carries the concrete agreed creative change and any requested title/duration. ' +
         'Fields lists only requested changed fields: Project title/concept/style/invariants or Scene title/prompt/durationSeconds. ' +
         'WebCap owns exact Project/Scene IDs, navigation, execution and saving. Do not invent saved IDs, readiness checks, ' +
         'permission metadata, capture fields or assessments. For an existing Scene revision propose write_scenes; ' +
-        'for a new Scene propose create_scene. Provide complete authored material in conversation only when ' +
-        'the author explicitly asks to see it there.\n';
+        'for a new Scene, author the actual material in scenes:[{title,prompt,durationSeconds}] in the same response. ' +
+        'Return the useful Scene records you can produce, even if fewer than requested; do not promise or simulate additional Scenes. ' +
+        'The scenes array represents unsaved editable drafts, not a completed save. ' +
+        'For other creative changes, offer a review action; provide full revised prose only when requested.\n';
       if (!selectedScene) {
         if (!story) {
           var availableNew = state.studioWorkingDraft.newProject;
@@ -3281,7 +3295,8 @@
         !['create_project','write_project','create_scene','write_scenes'].includes(action.kind) ||
         typeof action.instruction !== 'string' || !action.instruction.trim())
       action = null;
-    return {reply:reply,action:action,changes:value.changes || null};
+    return {reply:reply,action:action,changes:value.changes || null,
+      scenes:Array.isArray(value.scenes) ? value.scenes : null};
   }
 
   function studioActionFromExplicitRequest(request, selectedScene) {
@@ -3716,6 +3731,14 @@
               studioWorkingFieldChanges(studioResponse.changes.scene,
                 ['title','prompt','durationSeconds'])
           )});
+        }
+        var authoredScenes = studioResponse && studioResponse.scenes;
+        if (activeChatMode === 'storyboard' && authoredScenes && authoredScenes.length) {
+          // These are the actual unsaved records, not an action promise.
+          // Keep the review action with its material for conversation recovery.
+          nextAction = Object.assign({},nextAction || {
+            kind:'create_scene',instruction:content,fields:[]
+          },{kind:'create_scene',scenes:authoredScenes});
         }
         if (nextAction) {
           try {
@@ -4383,7 +4406,8 @@
       var savedTarget = selected.sceneId && story.scenes && story.scenes[selected.sceneId]
         ? 'Scene ' + ((story.sceneOrder || []).indexOf(selected.sceneId) + 1) + ' · ' + (story.scenes[selected.sceneId].title || selected.sceneId)
         : story.title || story.id;
-      if (window.studioDirectorWorkbench.completeWriteAction(kind, story, selected)) {
+      if ((kind !== 'scenes.create' || !state.studioScenesProposal) &&
+          window.studioDirectorWorkbench.completeWriteAction(kind, story, selected)) {
         var sourceMessage = state.modeMessages.storyboard[state.studioActionIndex];
         if (sourceMessage && sourceMessage.writeAction)
           sourceMessage.writeAction.completed = true;
@@ -4531,6 +4555,52 @@
         syncControls();
       });
     },
+    reviewPendingScenes: function (projectId) {
+      var proposal = state.studioScenesProposal;
+      if (!proposal || proposal.storyId !== projectId)
+        return Promise.reject(new Error('The authored Scene review is no longer available.'));
+      showStudioScenesReview();
+      return Promise.resolve({review:true,count:proposal.drafts.length});
+    },
+    reviewAuthoredScenes: function (launch) {
+      if (state.studioScenesProposal) {
+        if (state.studioScenesProposal.storyId !== (launch && launch.projectId))
+          return Promise.reject(new Error('Finish the existing Scene review before opening another Project.'));
+        showStudioScenesReview();
+        return Promise.resolve({review:true,count:state.studioScenesProposal.drafts.length});
+      }
+      if (!launch || !launch.projectId || !Array.isArray(launch.scenes))
+        return Promise.reject(new Error('Select a saved Project and authored Scene records.'));
+      var drafts = launch.scenes.filter(function (item) {
+        return item && typeof item === 'object' && !Array.isArray(item);
+      }).map(function (item) {
+        return {
+          title:typeof item.title === 'string' ? item.title : '',
+          prompt:typeof item.prompt === 'string' ? item.prompt : '',
+          durationSeconds:item.durationSeconds
+        };
+      }).filter(function (item) {
+        return item.title.trim() || item.prompt.trim() || item.durationSeconds !== undefined;
+      });
+      if (!drafts.length)
+        return Promise.reject(new Error('No usable Scene fields were authored.'));
+      return window.flushStudioDirectorStoryEdits(launch.projectId).then(function () {
+        return requestJson('/fs/storyboard?story=' + encodeURIComponent(launch.projectId));
+      }).then(function (payload) {
+        var story = payload && payload.story;
+        if (!story || story.id !== launch.projectId)
+          throw new Error('The Project is no longer available.');
+        state.studioScenesProposal = {
+          storyId:story.id,storyTitle:story.title,
+          sceneOrder:story.sceneOrder.slice(),scenes:story.scenes,
+          drafts:drafts,rationale:launch.rationale || ''
+        };
+        showStudioScenesReview();
+        studioActionStatus(drafts.length + ' authored Scene' +
+          (drafts.length === 1 ? '' : 's') + ' ready for review. Nothing saved.',false);
+        return {review:true,count:drafts.length};
+      });
+    },
     writeNewScene: function (launch) {
       var prepared = launch && state.studioWorkingDraft.newScene &&
         typeof state.studioWorkingDraft.newScene.prompt === 'string' &&
@@ -4553,10 +4623,13 @@
           throw new Error('The selected Project is no longer available.');
         var order = story.sceneOrder.slice();
         var instruction = JSON.stringify({
-          task:'Author exactly ONE new Scene in this existing Project. Return one JSON object containing a complete usable H3 prompt and useful title, plus durationSeconds when specified. ' +
-            'Use the author-requested title and duration exactly; use 6 seconds only when no duration was requested. ' +
-            'Keep the Scene independently generatable, align the full prompt with its duration and the saved Project visual direction. ' +
-            'The existing Scenes are retained and are not revision destinations.',
+          task:'Author the new Scenes requested for this existing Project in one response. ' +
+            'Return JSON with scenes: an array of authored Scene records, each with a complete usable H3 prompt, ' +
+            'a useful title, and durationSeconds when supplied. Return the Scenes you can actually author; ' +
+            'a partial sequence is useful and does not require filler or replacement requests. ' +
+            'Use the author-requested durations and titles when clear; use 6 seconds when no duration was requested. ' +
+            'Keep every Scene independently generatable, coherent with the saved Project and distinct when appropriate. ' +
+            'Existing Scenes are retained and are not revision destinations.',
           instruction:launch.instruction,
           authorRequest:launch.authorRequest || launch.instruction,
           requestedDurationSeconds:studioRequestedDuration(launch.authorRequest || launch.instruction),
@@ -4567,11 +4640,13 @@
               var scene = story.scenes[id];
               return scene && scene.title || '';
             }),
-            previousScene:launch.sequenceIndex > 0 && order.length ? (function () {
-              var prior = story.scenes[order[order.length-1]];
+            previousScene:order.length ? (function () {
+              var prior = story.scenes[order[order.length - 1]];
               return {title:prior.title,prompt:prior.prompt,durationSeconds:prior.durationSeconds};
             })() : null,
-            unsavedWorkingFields:launch.sequenceIndex > 0 ? {} : (state.studioWorkingDraft.newScene || {})
+            unsavedWorkingFields:studioRequestAppliesPreparedMaterial(
+              launch.authorRequest || launch.instruction) ?
+              (state.studioWorkingDraft.newScene || {}) : {}
           }
         });
         // Reuse complete structured Scene fields already authored in the
@@ -4579,11 +4654,8 @@
         var workingScene = state.studioWorkingDraft.newScene;
         var applyExisting = studioRequestAppliesPreparedMaterial(
           launch.authorRequest || launch.instruction);
-        var reuse = launch.sequenceIndex !== undefined && launch.sequenceIndex > 0 ?
-          false : workingScene && typeof workingScene.prompt === 'string' &&
-          !!workingScene.prompt.trim() &&
-          (state.studioWorkingDraft.sourceRequest ===
-            String(launch.authorRequest || launch.instruction) || applyExisting);
+        var reuse = !!(applyExisting && workingScene &&
+          typeof workingScene.prompt === 'string' && workingScene.prompt.trim());
         if (!reuse) state.pending = false;
         var proposal = reuse ?
           Promise.resolve(JSON.stringify(Object.assign({
@@ -4591,7 +4663,7 @@
             durationSeconds:6
           },workingScene))) :
           window.studioDirectorBridge.makeProposal(instruction,
-            'studio_scene_field_draft', true,
+            'studio_scenes_draft', true,
             {projectId:storyId,projectTitle:story.title,sceneOrder:order});
         return proposal.then(function (raw) {
           state.lastStudioIoRaw = raw;
@@ -4600,32 +4672,50 @@
           catch (error) { throw new Error('Director returned invalid Scene JSON.\nRaw response:\n' + raw); }
           if (!fields || typeof fields !== 'object' || Array.isArray(fields))
             throw new Error('Director returned no usable Scene fields.\\nRaw response:\\n' + raw);
-          var partialScene = studioWorkingFieldChanges(fields,
-            ['title','prompt','durationSeconds']);
-          if (!Object.keys(partialScene).length)
+          // Accept both the current multi-Scene response and legacy single-Scene
+          // objects. The number of records returned is the only authored count.
+          var records = Array.isArray(fields.scenes) ? fields.scenes : [fields];
+          var drafts = records.filter(function (item) {
+            return item && typeof item === 'object' && !Array.isArray(item);
+          }).map(function (item) {
+            return {
+              title:typeof item.title === 'string' ? item.title : '',
+              prompt:typeof item.prompt === 'string' ? item.prompt : '',
+              durationSeconds:Object.prototype.hasOwnProperty.call(item,'durationSeconds')
+                ? item.durationSeconds : undefined
+            };
+          }).filter(function (item) {
+            return item.title.trim() || item.prompt.trim() ||
+              item.durationSeconds !== undefined;
+          });
+          if (!drafts.length)
             throw new Error('Director returned no usable Scene fields.\\nRaw response:\\n' + raw);
-          var missingPrompt = !partialScene.prompt;
-          var draft = {scenes:[{
-            title:typeof fields.title === 'string' ? fields.title : '',
-            prompt:typeof fields.prompt === 'string' ? fields.prompt : '',
-            durationSeconds:Object.prototype.hasOwnProperty.call(fields,'durationSeconds')
-              ? fields.durationSeconds : undefined
-          }],rationale:''};
+          var missingPrompt = drafts.some(function (item) {return !item.prompt.trim();});
+          var invalidDuration = drafts.some(function (item) {
+            return item.durationSeconds !== undefined &&
+              (!Number.isFinite(Number(item.durationSeconds)) ||
+              Number(item.durationSeconds) < 4 || Number(item.durationSeconds) > 15);
+          });
+          var draft = {scenes:drafts,rationale:typeof fields.rationale === 'string' ? fields.rationale : ''};
           // The author's explicit duration is a WebCap request parameter,
           // not optional model metadata that may silently default to six.
           var authorDuration = studioMentionedDuration(launch.authorRequest || launch.instruction);
           var requestedDuration = studioRequestedDuration(launch.authorRequest || launch.instruction);
-          if (requestedDuration !== null)
-            draft.scenes[0].durationSeconds = requestedDuration;
-          state.studioWorkingDraft.newScene = Object.assign({},
-            state.studioWorkingDraft.newScene,
-            studioWorkingFieldChanges(draft.scenes[0],['title','prompt','durationSeconds']));
-          state.studioWorkingDraft.sourceRequest =
-            String(launch.authorRequest || launch.instruction);
-          scheduleSessionSave();
+          // Requested duration guides authoring; the editable draft preserves
+          // what the model actually returned instead of fabricating metadata.
+          // Preserve the existing one-Scene working draft contract. Multi-Scene
+          // records belong to the multi-Scene review, not a singleton cache.
+          if (drafts.length === 1) {
+            state.studioWorkingDraft.newScene = Object.assign({},
+              state.studioWorkingDraft.newScene,
+              studioWorkingFieldChanges(drafts[0],['title','prompt','durationSeconds']));
+            state.studioWorkingDraft.sourceRequest =
+              String(launch.authorRequest || launch.instruction);
+            scheduleSessionSave();
+          }
           // A missing Prompt retains an editable partial draft without
           // attempting to persist an empty Scene.
-          if (missingPrompt || !launch.directSave ||
+          if (drafts.length !== 1 || missingPrompt || invalidDuration || !launch.directSave ||
               (authorDuration !== null && requestedDuration === null)) {
             state.studioScenesProposal = {
               storyId:storyId, storyTitle:story.title, sceneOrder:order,
@@ -4634,9 +4724,11 @@
             showStudioScenesReview();
             studioActionStatus(missingPrompt
               ? 'Scene fields retained. Complete the missing H3 Prompt in Review before saving.'
-              : authorDuration !== null && requestedDuration === null
-                ? 'Requested ' + authorDuration + 's is outside the supported 4–15s range. Draft retained for review; nothing saved.'
-                : 'One new Scene is ready for review. Nothing has been saved.',
+              : invalidDuration
+                ? 'Scene duration needs review. Authored fields retained; nothing saved.'
+                : authorDuration !== null && requestedDuration === null
+                  ? 'Requested ' + authorDuration + 's is outside the supported 4–15s range. Draft retained for review; nothing saved.'
+                  : drafts.length + ' authored Scene' + (drafts.length === 1 ? '' : 's') + ' ready for review. Nothing has been saved.',
               authorDuration !== null && requestedDuration === null);
             return {review:true};
           }
@@ -4646,7 +4738,7 @@
           var validDuration = Number(scene.durationSeconds);
           // No explicit duration: the existing six-second WebCap default is
           // valid. Explicit unsupported durations never reach this save.
-          if (!Number.isInteger(validDuration) || validDuration < 4 || validDuration > 15)
+          if (!Number.isFinite(validDuration) || validDuration < 4 || validDuration > 15)
             validDuration = 6;
           var creation = {
             title:String(scene.title || '').trim() || 'Scene ' + (order.length + 1),

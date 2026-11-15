@@ -4577,6 +4577,24 @@
     return payload;
   }
 
+  function adoptAutosavedStory(savedStory) {
+    if (!storyState.story || String(storyState.story.id || '') !== String(savedStory.id || '')) return;
+    var previousOrder = storyState.story.sceneOrder || [];
+    var nextOrder = savedStory.sceneOrder || [];
+    var structureChanged = previousOrder.length !== nextOrder.length ||
+      previousOrder.some(function (sceneId, index) { return sceneId !== nextOrder[index]; });
+    storyState.story = savedStory;
+    // Ordinary autosaves should not discard editor focus, drafts, or video playback.
+    // If another completed operation added/removed Scenes, rebuild navigation once.
+    if (structureChanged) {
+      renderScenes();
+      renderStoryReadiness();
+      renderStoryAction();
+    } else {
+      nextOrder.forEach(syncSceneProgressionCard);
+    }
+  }
+
   function saveStoryNow(target) {
     if (!target) {
       if (!storyState.story) return Promise.resolve();
@@ -4597,7 +4615,7 @@
       });
     }).then(function (payload) {
       if (storyState.story && String(storyState.story.id || '') === String(storyId)) {
-        storyState.story = payload.story;
+        adoptAutosavedStory(payload.story);
         setSaveState('Saved');
       }
       if (storyState.storySavePromise === promise) storyState.storySaveError = null;
@@ -4721,7 +4739,7 @@
       });
     }).then(function (payload) {
       if (storyState.story && String(storyState.story.id || '') === String(storyId)) {
-        storyState.story = payload.story;
+        adoptAutosavedStory(payload.story);
         setSaveState('Saved');
       }
       if (storyState.sceneSavePromises[saveKey] === promise) delete storyState.sceneSaveErrors[saveKey];
@@ -5420,6 +5438,8 @@
 
   function syncSceneTakeDom(sceneId) {
     if (!storyState.story || !storyState.story.scenes) return;
+    syncSceneProgressionCard(sceneId);
+    renderStoryReadiness();
     var root = sceneElement(sceneId);
     if (!root) return;
     var grid = root.querySelector('.storyboard-takes-grid');
@@ -5666,6 +5686,7 @@
         reconcileGenerationReceipt(storyId, jobId);
       });
       syncStoryboardGenerationActivity();
+      jobs.forEach(function (job) { syncSceneTakeDom(job.sceneId); });
       syncPlanReplacementControls();
       return payload.queue;
     });
@@ -5724,6 +5745,7 @@
         storyState.generationJobs[job.jobId] = job;
       });
       syncStoryboardGenerationActivity();
+      (storyState.story.sceneOrder || []).forEach(syncSceneTakeDom);
       syncPlanReplacementControls();
       return window.refreshInferenceQueue().then(function () {
         return payload;

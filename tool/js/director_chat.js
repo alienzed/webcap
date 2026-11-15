@@ -1743,7 +1743,7 @@
     var workingProject = state.studioWorkingDraft.newProject;
     var authorRequest = String(options && options.authorRequest || options && options.instruction || '');
     var sameWork = state.studioWorkingDraft.sourceRequest === authorRequest ||
-      /\b(?:save|apply|use)\b/i.test(authorRequest);
+      studioRequestAppliesPreparedMaterial(authorRequest);
     if (sameWork && workingProject && workingProject.concept && workingProject.style &&
         !/\bscenes\b/i.test(authorRequest)) {
       state.studioProjectProposal = parseStudioProjectDraft(JSON.stringify(Object.assign({
@@ -2246,7 +2246,7 @@
       var workingProject = state.studioWorkingDraft.projects[storyId] || {};
       var authorRequest = String(options && options.authorRequest || instruction);
       var sameWork = state.studioWorkingDraft.sourceRequest === authorRequest ||
-        /\b(?:save|apply|use)\b/i.test(authorRequest);
+        studioRequestAppliesPreparedMaterial(authorRequest);
       var required = requestedFields.length ? requestedFields : Object.keys(workingProject);
       if (sameWork && required.length && required.every(function (field) {
         return Object.prototype.hasOwnProperty.call(workingProject,field);
@@ -3320,6 +3320,14 @@
 
   // A Studio conversation owns unsaved sparse field replacements. Saved
   // Project/Scene records stay authoritative until a deliberate Write.
+  function studioRequestAppliesPreparedMaterial(request) {
+    // "Save that prompt" can reuse a known complete draft. "Use warmer
+    // lighting" is a *new creative request*, not permission to save old work.
+    request = String(request || '');
+    return /\\b(?:save|apply|use|store)\\s+(?:(?:the|a|my)\\s+)?(?:this|that|it|previous|latest|current|prepared|existing|above|draft|prompt|proposal|material|concept)\\b/i.test(request) &&
+      !/\\b(?:change|modify|revise|rewrite|make|adjust|remove|replace|shorten|lengthen|extend|improve|darken|lighten|instead)\\b/i.test(request);
+  }
+
   function studioWorkingFieldChanges(source, names) {
     if (!source || typeof source !== 'object' || Array.isArray(source)) return {};
     var result = {};
@@ -4762,8 +4770,8 @@
         // Reuse complete structured Scene fields already authored in the
         // conversation; never ask the model to rewrite the same work.
         var workingScene = state.studioWorkingDraft.newScene;
-        var applyExisting = /\b(?:save|apply|use|store)\b/i.test(
-          String(launch.authorRequest || launch.instruction));
+        var applyExisting = studioRequestAppliesPreparedMaterial(
+          launch.authorRequest || launch.instruction);
         var reuse = launch.sequenceIndex !== undefined && launch.sequenceIndex > 0 ?
           false : workingScene && typeof workingScene.prompt === 'string' &&
           !!workingScene.prompt.trim() &&
@@ -4881,8 +4889,8 @@
           throw new Error('Selected Scene is no longer available in its saved Project.');
         var original = story.scenes[sceneId];
         var workingScene = state.studioWorkingDraft.scenes[sceneId];
-        var applyExisting = /\b(?:save|apply|use|store)\b/i.test(
-          String(launch.authorRequest || launch.instruction));
+        var applyExisting = studioRequestAppliesPreparedMaterial(
+          launch.authorRequest || launch.instruction);
         if (workingScene && (state.studioWorkingDraft.sourceRequest ===
             String(launch.authorRequest || launch.instruction) || applyExisting)) {
           var pendingChanges = {};

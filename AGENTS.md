@@ -15,6 +15,43 @@ Core product values:
 - visible state and visible failures
 - practical workflow value over architectural purity
 
+## Reality, User Intent, and Useful Work
+
+WebCap must be strict about its own correctness and optimistic about useful
+external results. Reality is determined by material actually received,
+authoritative state actually observed, and operations actually completed—not
+by expectations, cached assumptions, or model claims.
+
+- **Preserve useful work.** Accept and retain every independently usable result.
+  Missing fields, malformed portions, formatting differences, and unexpected
+  quantities must not invalidate unrelated useful material.
+- **Request what we mean.** Give models clear instructions and schemas that
+  express the author's actual intent. Do not make requested content optional
+  without reason, then compensate for omissions with restrictive parsing or
+  additional orchestration. Inspect WebCap's request and schema first when
+  expected fields are repeatedly absent.
+- **Treat model output as material, not authority.** Count actual returned
+  records, use actual field values, and determine completion from actual
+  operations. Requested quantities and model descriptions do not establish
+  what was produced.
+- **Prefer useful partial success.** Nine Scenes instead of ten, eleven instead
+  of ten, or one useful Scene are all usable outcomes. Preserve the results and
+  show unmet intent without blocking their use.
+- **Reuse what already exists.** Display, edit, review, and save received
+  material directly. Additional model calls should perform genuinely needed
+  authoring, not certify, reformat, or repair work the application can use.
+- **Keep failures local and visible.** A failed operation must report its actual
+  failure without invalidating independent successes. Distinguish model
+  failures from application failures; expose repeated model unreliability
+  rather than hiding it behind compensating machinery.
+- **Keep WebCap itself strict.** Broken required wiring, violated application
+  invariants, and actual operation failures must fail visibly. Optimism about
+  external material is not permission to hide broken application code.
+- **Remove unnecessary obstruction.** Before adding a guard, parser
+  restriction, early return, retry, or recovery mechanism, identify the
+  concrete failure it prevents. If supported work remains possible, preserve
+  that path rather than blocking it.
+
 ## Architecture Is Intentional
 
 Do not treat the current structure as accidental.
@@ -146,27 +183,24 @@ Destructive or lossy mutations of source Set media and user-authored Set state m
 
 ## Fallible Model Output and Cheap Recovery
 
-LLM suggestions and generated content are best-effort material, not authoritative
-application state or proof of correctness. Design for useful partial work and
-inexpensive recovery instead of trying to make the model infallible.
+Model results are best-effort material. The principle above governs their
+acceptance; recovery should be inexpensive and should not conceal repeated
+model failures.
 
-- Accept ordinary prose for discussion and Read. Optional metadata, action hints,
-  rationales and assessments must not invalidate a useful answer.
-- For structured creative output, preserve independently usable fields and
-  already completed items when optional fields are missing or malformed. Do not
-  replace saved values with invalid or missing values.
-- Validate at the operation boundary: real destination identity, requested
-  mutation, supported runtime parameters, concurrency and persistence. An
-  unsupported parameter may prevent that specific execution or save, but must
-  not erase an otherwise useful editable draft.
-- Prefer an editable result, explicit correction, existing Undo/Redo or a normal
-  retry over automatic repair calls, speculative restrictions, quarantine or new
-  fallback machinery.
-- Keep actual failures visible. A rejected optional suggestion is not a failed
-  Read; a failed save is not a failed model response; a successful save remains
-  successful even if later refresh or receipt work fails.
-- Before adding a guard, identify the concrete loss or invalid state it
-  prevents. If a normal WebCap operation can still use the result, let it.
+- Accept ordinary prose for discussion and Read. Missing action hints,
+  rationales, assessments, or other supplementary metadata must not invalidate
+  a useful answer.
+- For structured creative output, keep usable records and fields without
+  replacing saved values with invalid or missing values. Distinguish an absent
+  schema field from an unmet explicit request; report the latter without
+  discarding the former.
+- Check only the concrete inputs required by the operation being attempted:
+  destination identity, mutation, supported runtime parameters, concurrency,
+  and persistence. An unsupported parameter may prevent that particular
+  execution or save, not erase the editable draft or unrelated results.
+- Prefer direct editing, existing Undo/Redo, explicit correction, or a normal
+  user-initiated retry over automatic repair, speculative restrictions,
+  quarantine, or new fallback machinery.
 
 ## LLM Guidance
 

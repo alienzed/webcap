@@ -4,6 +4,12 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const source = fs.readFileSync(path.join(__dirname, '../tool/js/studio_director_workbench.js'), 'utf8');
+const projectSource = fs.readFileSync(path.join(__dirname, '../tool/js/director_chat.js'), 'utf8');
+function projectPart(start, end) {
+  const first=projectSource.indexOf(start),last=projectSource.indexOf(end,first+start.length);
+  assert.ok(first>=0 && last>first,'Missing Project writer source: '+start);
+  return projectSource.slice(first,last);
+}
 function part(start, end) {
   const a = source.indexOf(start), b = source.indexOf(end, a + start.length);
   assert.ok(a >= 0 && b > a);

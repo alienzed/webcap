@@ -31,9 +31,11 @@ test('Live Flow 1 — real Director authors a reviewed Project and persisted Ove
   const actual=await story(page,created.id);
   expect(actual.concept).toBe(editedConcept);
   expect(actual.style).toBe(style);
+  expect(actual.invariants.length,'Real model Project output should include a reusable invariant').toBeGreaterThan(0);
   await page.reload();
   const restored=await story(page,created.id);
   expect(restored.concept).toBe(editedConcept);
+  expect(restored.invariants).toEqual(actual.invariants);
   await addEvidence(testInfo,page,model,instruction,{projectId:created.id,title,concept,style,persisted:restored});
 });
 

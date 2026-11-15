@@ -3201,12 +3201,12 @@
         '\n\nSTUDIO WORKBENCH STATE (controls, not saved Story facts):\n' + workbench +
         '\nCURRENT PROJECT NAVIGATION (identity and one-based Scene positions; saved content is supplied separately when available):\n' + JSON.stringify(navigation) +
         (explicitWrite
-          ? '\nEXPLICIT WRITE: The author has chosen to draft. Produce the requested complete editable proposal in the specified format. WebCap handles validation and the selected review or direct-save policy.\n'
+          ? '\nEXPLICIT WRITE: The author has chosen to draft. Produce the requested creative material in the specified format. WebCap handles destination, editing and the selected direct-save or review policy.\n'
           : '\nFor a direct question, answer fully and finish without a workflow suggestion. ' +
             'When the author is developing material or requests a next step, suggest at most one useful action: ' +
             'an appropriately scoped reviewed Write or an author-operated Studio action. ' +
             'Fulfil the author’s request in conversation, including drafting complete material when asked. ' +
-            'Treat proposed work as unsaved until WebCap confirms Apply.\n') +
+            'Treat proposed work as unsaved until WebCap confirms an actual save, either directly or after review.\n') +
         outbound[0].content };
       if (includePromptContract) outbound[0].content +=
         '\n\nH3 PRODUCTION PROMPT REFERENCE (know this template when discussing H3; apply it only when drafting an H3 Prompt field, not when authoring Project fields):\n' + payload.promptContract;
@@ -4630,7 +4630,7 @@
               var prior = story.scenes[order[order.length-1]];
               return {title:prior.title,prompt:prior.prompt,durationSeconds:prior.durationSeconds};
             })() : null,
-            unsavedWorkingFields:state.studioWorkingDraft.newScene || {}
+            unsavedWorkingFields:launch.sequenceIndex > 0 ? {} : (state.studioWorkingDraft.newScene || {})
           }
         });
         // Reuse complete structured Scene fields already authored in the

@@ -958,7 +958,9 @@ function openEpochProfile(epoch) {
     var activation = String(imported['activation text'] || '').trim();
     var importedWords = activation ? activation.split(',').map(function (term) { return term.trim(); }).filter(Boolean) : [];
     var words = enrichment.trainedWords || (importedWords.length ? importedWords : civitai.trainedWords || []);
-    document.getElementById('epoch-profile-words').value = Array.isArray(words) ? words.join('\n') : String(words || '');
+    if (!Array.isArray(words)) words = String(words || '').split(/\r?\n/);
+    if (!words.length && epochProfileSuggestions) words = epochProfileSuggestions.trainedWords || [];
+    document.getElementById('epoch-profile-words').value = words.join('\n');
     document.getElementById('epoch-profile-options').value =
       JSON.stringify(enrichment.promptOptions || {}, null, 2);
     document.getElementById('epoch-profile-guidance').value = String(enrichment.guidance || '');
@@ -1000,7 +1002,9 @@ function enrichEpochProfile() {
             var suggestion = (current.result || {}).analysis;
             if (!suggestion || typeof suggestion !== 'object') throw new Error('Director returned no profile suggestions.');
             document.getElementById('epoch-profile-description').value = String(suggestion.description || '');
-            document.getElementById('epoch-profile-words').value = (suggestion.trainedWords || []).join('\n');
+            var existingWords = document.getElementById('epoch-profile-words').value.split(/\r?\n/).map(function (word) { return word.trim(); }).filter(Boolean);
+            var suggestedWords = Array.isArray(suggestion.trainedWords) ? suggestion.trainedWords : [];
+            document.getElementById('epoch-profile-words').value = Array.from(new Set(existingWords.concat(suggestedWords))).join('\n');
             document.getElementById('epoch-profile-options').value = JSON.stringify(suggestion.promptOptions || {}, null, 2);
             document.getElementById('epoch-profile-guidance').value = String(suggestion.guidance || '');
             status.textContent = 'Director suggestions loaded for review. Save Profile to keep them.';

@@ -24,6 +24,7 @@ test('Chat and Director mode initialization use controls present in the app shel
     el:id=>nodes.get(id) || null,
     state:{activeMode:'chat',open:false,storyboardAttachments:{},workshop:null},
     document:{querySelector:()=>nodes.get('storyboard-workspace')},
+    window:{studioDirectorWorkbench:{updateWorkingWrite(){}}},
     studioDirectorSelectedScene:()=>null,
     availableModes:()=>[],activeContextMode:()=>null,modeAvailable:()=>true,
     persistentMode:()=>true,studioWorkingStoryLabel:()=>'Test Project',

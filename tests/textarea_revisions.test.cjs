@@ -9,11 +9,11 @@ const source = fs.readFileSync(path.join(__dirname, '../tool/js/textarea_revisio
 function editor(value, sceneId) {
   return {
     id: '', name: '', dataset: {sceneField:'prompt'}, value,
-    disabled:false, readOnly:false, isConnected:true, style:{paddingRight:'',paddingTop:''},
+    disabled:false, readOnly:false, isConnected:true, style:{paddingRight:'',paddingTop:'',paddingBottom:''},
     parentElement:null,
     matches: s => s === 'textarea',
     getAttribute:()=>null,
-    getBoundingClientRect:()=>({top:100,right:600,bottom:250,width:500}),
+    getBoundingClientRect:()=>({top:100,left:100,right:600,bottom:250,width:500}),
     closest:s => {
       if (s === '[data-scene-id]') return {dataset:{sceneId}};
       if (s.includes('[data-item-id]')) return {attributes:[{name:'data-scene-id',value:sceneId}]};
@@ -48,7 +48,7 @@ function harness() {
   };
   vm.runInNewContext(source,{document,window,innerHeight:1000,
     getAutosaveTargetAndPayload:()=>({key:captionKey}),
-    getComputedStyle:()=>({paddingTop:'8px'}),
+    getComputedStyle:()=>({paddingBottom:'8px'}),
     setTimeout:(fn,ms)=>{assert.equal(ms,10000);pending.set(++timerId,fn);return timerId;},
     clearTimeout:id=>pending.delete(id),
     Map,Array,String,Object});
@@ -147,55 +147,56 @@ test('repeated unnamed rows use structural selectors rather than sharing one key
   assert.equal(b,h.window.webcapTextareaRevisions.identity(recreated));
 });
 
-test('History controls occupy only the top inset, preserving full text width',()=>{
+test('History footer is centered at the bottom without changing text top or width',()=>{
   const h=harness(), field=editor('Long editable text','scene-compact');
   field.style.paddingRight='11px';
   field.style.paddingTop='8px';
+  field.style.paddingBottom='8px';
   h.focus(field);
-  assert.equal(field.style.paddingRight,'11px','right-side text width is unchanged');
-  assert.equal(field.style.paddingTop,'31px','only the toolbar row is reserved');
-  assert.equal(h.toolbar.style.left,'511px','toolbar is positioned at the top right');
+  assert.equal(field.style.paddingRight,'11px','text width is unchanged');
+  assert.equal(field.style.paddingTop,'8px','text starts in its usual position');
+  assert.equal(field.style.paddingBottom,'34px','footer clears the last text line');
+  assert.equal(h.toolbar.style.left,'102px');
+  assert.equal(h.toolbar.style.top,'221px');
+  assert.equal(h.toolbar.style.width,'496px');
   h.blur(field);
-  assert.equal(field.style.paddingTop,'8px','original top inset restored on blur');
-  assert.equal(field.style.paddingRight,'11px','original right padding remains untouched');
+  assert.equal(field.style.paddingBottom,'8px','original bottom padding is restored');
 });
 
-test('narrow textarea keeps its original padding',()=>{
+test('narrow textarea does not acquire footer padding',()=>{
   const h=harness(), field=editor('Small','scene-small');
-  field.getBoundingClientRect=()=>({top:100,right:200,bottom:180,width:120});
+  field.getBoundingClientRect=()=>({top:100,left:100,right:190,bottom:180,width:90});
   h.focus(field);
-  assert.equal(field.style.paddingTop,'');
+  assert.equal(field.style.paddingBottom,'');
   assert.equal(h.toolbar.style.display,'none');
 });
 
-test('Scene Prompt History sits before Director in the existing heading without textarea padding',()=>{
+test('Scene Prompt uses the same bottom footer, never a toolbar in its heading',()=>{
   const h=harness(), field=editor('Subject:','scene-header');
-  const actions={
-    firstChild:{},
-    insertBefore(node,firstChild){
-      assert.equal(firstChild,this.firstChild);
-      node.parentNode=this;
-      this.inserted=node;
-    }
-  };
-  const promptBlock={querySelector:selector=>{
-    assert.equal(selector,'.storyboard-prompt-actions');
-    return actions;
-  }};
+  const actions={insertBefore(){throw Error('History should not enter heading');}};
+  const promptBlock={querySelector:()=>actions};
   const originalClosest=field.closest;
   field.matches=selector=>selector==='textarea' ||
     selector==='.storyboard-prompt-textarea[data-scene-field="prompt"]';
   field.closest=selector=>selector==='.storyboard-prompt-block'
     ? promptBlock : originalClosest(selector);
   h.focus(field);
-  assert.equal(actions.inserted,h.toolbar,'History toolbar shares the existing header');
-  assert.equal(h.toolbar.style.position,'static','History does not cover the prompt');
-  assert.equal(h.toolbar.style.display,'flex');
-  assert.equal(field.style.paddingTop,'','no extra row within the textarea');
-  assert.equal(field.style.paddingRight,'','no lost text width');
+  assert.equal(h.toolbar.style.top,'221px');
+  assert.equal(h.toolbar.style.width,'496px');
+  assert.equal(field.style.paddingTop,'');
   field.value='Subject: revised';h.input(field);h.idle();
   h.click('[data-rev-prev]');
-  assert.equal(field.value,'Subject:','existing revision browsing still works');
+  assert.equal(field.value,'Subject:');
   h.blur(field);
-  assert.equal(field.value,'Subject: revised','leaving a preview restores editable content');
+  assert.equal(field.value,'Subject: revised','preview is restored on blur');
+});
+
+test('Chat and Studio Director conversation composer does not attach History',()=>{
+  const h=harness(), field=editor('A question','unused');
+  field.id='director-chat-input';
+  h.focus(field);
+  assert.equal(field.style.paddingBottom,'');
+  assert.equal(h.toolbar.style.display,undefined);
+  assert.equal(h.window.webcapTextareaRevisions.history(
+    h.window.webcapTextareaRevisions.identity(field)),undefined);
 });

@@ -65,3 +65,35 @@ CI launches actual Chromium against actual isolated WebCap. Failures in the suit
 - [Run 43773671802](https://github.com/alienzed/webcap/actions/runs/43773671802) executed **13 real-browser checkpoints**: **3 passed / 10 failed**. The passing checkpoints were Studio Blocks including actual Send, plain-text Director Read, and reviewed Project save/reload. Failures occurred before the intended assertions: most tests unconditionally clicked **Use open Project** even when Director was already attached and the button was intentionally hidden; the specialist setup lacked selected-Scene focus; and the explicit Read test incorrectly targeted a retired hidden panel. These are harness mistakes, **not proven product defects**.
 - Corrections now use the current Project-access explicit Read UI, conditionally attach only when offered (verifying the displayed Project label), and focus the Scene before invoking specialist controls; all acceptance expectations of real returned/persisted values remain intact. **Rerun on the corrected head is pending; do not transfer earlier passes to whole-flow completion.**
 - An unrelated browser console error `ReferenceError: workspaceState is not defined` in `group_workbench.js` appeared in traces; product code was deliberately left unchanged. It merits separate investigation rather than hiding the diagnostic in the tests.
+
+## Local real-model acceptance (opt-in)
+
+The same real browser/Flask/isolation harness now supports **your actual configured Director**, not the controlled-response endpoint. Run from the repository root:
+
+```sh
+npm install --no-save @playwright/test
+npx playwright install chromium
+npx playwright test --config=playwright.live.config.cjs
+```
+
+The **last line is the repeatable command**. It reads `tool/config.json` from this checkout, uses the configured `director_model` and `storyboard.director` settings (including local llama.cpp model discovery or enabled remote endpoints), and runs actual inference; **no endpoint or model ID has to be provided manually**. To use a different config, set `WEBCAP_TEST_CONFIG` to its full path; `WEBCAP_TEST_DIRECTOR_MODEL` can optionally select a specific discovered model ID. The test fails visibly if the configured model is missing.
+
+This mode runs in its **own disposable working copy of WebCap**. It reads, but does not modify, the original config or model files. It copies only inference-related config values, and forcibly assigns temporary roots for Sets/Projects, output, and application data. The cloned backend uses port 4200, so stop any other instance on that port before starting; it will refuse to bind over it. The remote/local inference runtime may use your GPU, which is the intention of this explicit opt-in run.
+
+**Live suite assertions and limits (not claims of passing):**
+
+| Flow | Actual-model browser test | Evidence being checked |
+| --- | --- | --- |
+| 1 | `tests/live/studio-authoring.spec.cjs` | Model-authored Project reaches editable review; user edit and actual save survive reload |
+| 2 | `tests/live/studio-authoring.spec.cjs` | Authored Scene records reach review; accepts actual returned count; edited prompts are saved/reloaded |
+| 3 | `tests/live/studio-authoring.spec.cjs` | Model-suggested Overview revision reviewed/saved; unrelated Scene preserved; batch revision is still controlled-suite only |
+| 4 | `tests/live/studio-authoring.spec.cjs`, `director-live.spec.cjs` | Explicit Project and selected Scene Read to real Director, visible material, response and no unintended saves |
+| 5 | `tests/live/studio-continuity.spec.cjs` | Attached Project A while editor shows B, followed by reviewed save and destination check |
+| 6 | `tests/live/studio-continuity.spec.cjs` | Two real authored replies, separate unsaved review drafts, first one recoverable |
+| 7 | `tests/live/studio-continuity.spec.cjs` | Real Scene draft edited, navigation away/back, save and reload |
+| 8 | `tests/live/studio-continuity.spec.cjs` | Studio Block slash insertion and actual sent text with real model response |
+| 9 (optional) | `tests/live/studio-specialist.spec.cjs` | Real Coherence analysis is displayed in a review dialog; discarding does not save changes or queue Takes |
+
+The live assertions target **actual returned data, selected destination, editable material, save and persistence**, not exact generated wording, the requested number of Scene records, or a subjective creativity score. Missing usable material, wrong destination, incomplete persistence or nonactionable responses are **real failing checks**. Do not substitute a controlled-response pass for model capability. We do not automatically repair, regenerate or retry model responses.
+
+**Not yet proven:** These new live tests have been authored and syntax-checked, but have **not been executed against your configured models** in this workspace, which does not have your local `tool/config.json`, model files or GPU endpoint. Running `npx playwright test --config=playwright.live.config.cjs` on your Windows checkout is required for runtime evidence; their existence is not passing coverage. The separate repeatable no-GPU CI suite remains `npx playwright test --config=playwright.config.cjs`. Some documented variations, full batch revision, failure injection, and Take-generating specialist execution are only partially covered; visual hierarchy still needs human judgment. Record and investigate any failures rather than changing the user-flow contract.

@@ -807,6 +807,7 @@
       scenes:action.kind === 'create_scene' && Array.isArray(action.scenes)
         ? action.scenes.slice() : null,
       request:String(authorRequest || ''),
+      sourceMessageIndex:messageIndex,
       projectId:String(selectedProject && selectedProject.projectId || ''),
       scene:selectedScene && {projectId:selectedScene.projectId,sceneId:selectedScene.sceneId,
         sceneNumber:selectedScene.sceneNumber}
@@ -880,15 +881,17 @@
           // Authored records are reviewed directly, without a second model call.
           // Otherwise authorize one authoring call, and retain its review action.
           var operation = frozen.draftReady ?
-            window.studioDirectorBridge.reviewPendingScenes(projectId) :
+            window.studioDirectorBridge.reviewPendingScenes(projectId,frozen.sourceMessageIndex) :
             frozen.scenes && frozen.scenes.length ?
             window.studioDirectorBridge.reviewAuthoredScenes({
               projectId:projectId,scenes:frozen.scenes,
+              sourceMessageIndex:frozen.sourceMessageIndex,
               rationale:'Authored in Studio Director conversation.'
             }) :
             window.studioDirectorBridge.writeNewScene({
               projectId:projectId,instruction:frozen.instruction,
-              authorRequest:frozen.request,directSave:false
+              authorRequest:frozen.request,directSave:false,
+              sourceMessageIndex:frozen.sourceMessageIndex
             });
           return operation.then(function (result) {
             if (result && result.review) {
@@ -921,13 +924,21 @@
               !fields.includes('durationSeconds')) fields.push('durationSeconds');
           if (/\b(?:rename|title)\b/i.test(frozen.request) &&
               !fields.includes('title')) fields.push('title');
-          var completed = [], unchanged = [], failed = [], notAttempted = [];
+          var completed = [], unchanged = [], review = [], failed = [], notAttempted = [], reportingErrors = [];
           function next(i) {
             if (i >= ids.length) {
+              var reviewLabels = review.map(function (id) {
+                return 'Scene ' + (story.sceneOrder.indexOf(id) + 1);
+              });
               status('Saved ' + completed.length + ' · Unchanged ' + unchanged.length +
+                ' · Drafts needing review ' + review.length +
+                (review.length ? ' (' + reviewLabels.join(', ') +
+                  '): select each Scene in Studio and use Write to review' : '') +
                 ' · Failed ' + failed.length + ' · Not attempted ' + notAttempted.length +
-                (failed.length ? ': ' + failed.join(' | ') : ''),failed.length > 0,true);
-              if (!failed.length && !notAttempted.length) finishSceneAction();
+                (failed.length ? ': ' + failed.join(' | ') : '') +
+                (reportingErrors.length ? ' · Saved, but reporting failed for ' +
+                  reportingErrors.join(', ') : ''),failed.length > 0 || notAttempted.length > 0 || reportingErrors.length > 0,true);
+              if (!failed.length && !notAttempted.length && !review.length) finishSceneAction();
               return;
             }
             return window.studioDirectorBridge.writeSelectedScene({
@@ -935,12 +946,14 @@
               authorRequest:frozen.request,fields:fields.slice()
             }).then(function (result) {
               if (result === null) unchanged.push(ids[i]);
-              else if (result && result.review) failed.push(ids[i] + ': draft retained for review, not saved');
+              else if (result && result.review) review.push(ids[i]);
               else completed.push(ids[i]);
               return next(i + 1);
             }).catch(function (error) {
-              if (error.saved) completed.push(ids[i]);
-              else failed.push(ids[i] + ': ' + String(error.message || error));
+              if (error.saved) {
+                completed.push(ids[i]);
+                reportingErrors.push('Scene ' + (story.sceneOrder.indexOf(ids[i]) + 1));
+              } else failed.push(ids[i] + ': ' + String(error.message || error));
               var shared = ['stopped','cancelled','interrupted'].includes(String(error.jobStatus || '')) ||
                 /Failed to fetch|No Director model is available|runtime unavailable|Project is no longer available/i.test(String(error.message || ''));
               if (shared) {

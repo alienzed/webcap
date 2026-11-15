@@ -251,3 +251,39 @@ test('an unbound Scene revision never becomes a new-Scene creation draft', () =>
   assert.deepEqual(state.studioWorkingDraft.newScene,{});
   assert.equal(state.sessionDirty.storyboard,false);
 });
+
+test('prepared material is reused only for an explicit apply, not a fresh creative instruction',()=>{
+  const apply=new Function(part(chat,
+    '  function studioRequestAppliesPreparedMaterial(request) {',
+    '  function studioWorkingFieldChanges(source, names) {')+
+    'return studioRequestAppliesPreparedMaterial;')();
+  assert.equal(apply('Save that prompt to Scene 2.'),true);
+  assert.equal(apply('Apply this Project draft.'),true);
+  assert.equal(apply('Use the previous concept.'),true);
+  assert.equal(apply('Use warmer lighting in Scene 2.'),false);
+  assert.equal(apply('Apply new blue lighting to Scene 2.'),false);
+  assert.equal(apply('Save this prompt but make it darker.'),false);
+});
+
+test('Studio request sends bounded discussion, current full words, and no saved-field receipts',async()=>{
+  const request=new Function('state','window','requestJson',part(chat,
+    '  function studioDirectorRequestMessages(messages, includePromptContract, explicitWrite, navigationSnapshot) {',
+    '  function studioDirectorChatRequestMessages(')+
+    'return studioDirectorRequestMessages;')(
+      {studioStoryAccess:null,storyboardAttachments:{}},
+      {getStudioDirectorNavigation:()=>({projectId:'p1',projectTitle:'A Project',sceneOrder:[]})},
+      async()=>({system:'Small Director guidance',actions:[],promptContract:'H3'}));
+  const fullUser='Please revise the Story with these details: '+('Z'.repeat(3900));
+  const discussion=Array.from({length:12},(_,i)=>({
+    role:i%2?'assistant':'user',content:i===10?'A'.repeat(4500):'Turn '+i
+  }));
+  discussion.push({role:'user',content:'[WEBCAP APPLIED FIELD VALUES] large saved receipt'});
+  discussion.push({role:'user',content:fullUser});
+  const result=await request(discussion,false,false,
+    {projectId:'p1',projectTitle:'A Project',sceneOrder:[]});
+  assert.ok(result.length<=9,'only a short tail is model discussion');
+  assert.equal(result.at(-1).content,fullUser,'never truncate the active request');
+  assert.doesNotMatch(JSON.stringify(result),/large saved receipt/);
+  assert.ok(result.some(x=>x.content.includes('[Earlier long message abbreviated]')),
+    'historical huge turns should not be re-sent verbatim');
+});

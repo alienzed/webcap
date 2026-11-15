@@ -2320,9 +2320,10 @@ def director_chat_route():
         if operation == "studio_scene_field_draft":
             contract["response_schema"] = {
                 "type": "object", "additionalProperties": False,
+                "required": ["prompt"],
                 "properties": {
                     "title": {"type": "string"},
-                    "prompt": {"type": "string"},
+                    "prompt": {"type": "string", "minLength": 1},
                     "durationSeconds": {"type": "integer", "minimum": 4, "maximum": 15},
                 },
             }

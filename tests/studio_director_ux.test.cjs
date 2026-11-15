@@ -52,7 +52,7 @@ test('editing retained Overview text includes the edit without requiring a secon
   assert.equal(elements['studio-brief-title-selected'].checked,false,'author can exclude the change explicitly');
 });
 
-test('Director is stable on outside clicks and Escape; general Assistant retains dismissal',()=>{
+test('Unpinned Studio Director auto-dismisses; pinned Director remains open',()=>{
   const handlers={};
   let modal={},closes=0;
   const scope=vm.createContext({state:{open:true,pinned:false},
@@ -70,7 +70,11 @@ test('Director is stable on outside clicks and Escape; general Assistant retains
   scope.state.activeMode='storyboard';
   handlers.pointerdown({target:{}});
   handlers.keydown({key:'Escape'});
-  assert.equal(closes,2,'a Projects work surface stays open until explicit navigation');
+  assert.equal(closes,4,'unpinned Studio behaves like the floating Assistant');
+  scope.state.pinned=true;
+  handlers.pointerdown({target:{}});
+  handlers.keydown({key:'Escape'});
+  assert.equal(closes,4,'pinning keeps Studio Director open');
 });
 
 test('Project review summary follows edits and selection without changing either',()=>{

@@ -4275,10 +4275,11 @@ html[data-theme="dark"] .storyboard-prompt-take-status {
 .storyboard-header-menu-items button:hover, .storyboard-add-scene-menu button:hover {
   background:var(--hover);
 }
-.storyboard-scene-progression > #storyboard-scenes-sequence-btn {
-  flex:0 0 auto; align-self:center; margin-left:2px;
-  min-height:34px; white-space:nowrap; position:sticky; right:0;
-  z-index:2; background:var(--panel);
+.storyboard-scene-strip { display:flex; min-width:0; align-items:center; gap:10px; }
+.storyboard-scene-strip .storyboard-scene-progression { flex:1 1 auto; min-width:0; }
+.storyboard-scene-strip > #storyboard-scenes-sequence-btn {
+  flex:0 0 auto; min-height:34px; white-space:nowrap; width:auto;
+  padding:4px 11px; align-self:center;
 }
 .storyboard-add-scene { position:relative; flex:0 0 auto; align-self:center; z-index:4; }
 .storyboard-add-scene > summary {

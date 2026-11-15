@@ -196,17 +196,13 @@ test('Ordinary Studio conversation has no model-requested hidden Read or capture
   assert.doesNotMatch(send, /pendingCapture/);
 });
 
-test('Readiness proposals are bounded, inspectable, read-only and do not block Write', () => {
-  assert.match(source, /parseStudioChatResponse\(result.text\)/);
-  assert.match(source, /operation: activeChatMode === 'storyboard' \? 'studio_chat' : 'freeform_chat'/);
-  assert.doesNotMatch(source,/WEBCAP_READINESS/);
-  assert.match(source, /window\.studioDirectorWorkbench\.updateReadiness/);
-  assert.match(workbench, /studio-dw-assessment-item/);
-  assert.match(workbench, /button\.type = 'button'/);
-  assert.match(workbench, /studio-dw-assessment-content'\)\.textContent = item\.content/);
-  assert.match(workbench, /recommendations\.readHints/);
-  assert.match(workbench, /recommendations\.writeHint/);
-  assert.match(html, /id="studio-dw-readiness-list"/);
+test('Studio conversation no longer routes through model readiness or capture',()=>{
+  assert.match(source,/parseStudioChatResponse\(result.text\)/);
+  assert.match(source,/studioDirectorWorkbench\.presentAction/);
+  assert.doesNotMatch(source,/studioDirectorWorkbench\.updateReadiness\(studioResponse/);
+  assert.doesNotMatch(workbench,/recommendations\.writeHint|recommendations\.readHints/);
+  assert.doesNotMatch(workbench,/studio-dw-assessment-item/);
+  assert.match(workbench,/function sceneIdsFromRequest/);
 });
 
 test('Write preserves reviewed Apply and carries final saved content into conversation', () => {

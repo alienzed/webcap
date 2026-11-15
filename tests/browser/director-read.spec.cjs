@@ -9,7 +9,7 @@ test('Flow 4 checkpoint — Director displays a plain-text Read response through
   await page.locator('#activity-storyboard-btn').click();
   await page.locator('#director-chat-rail-btn').click();
   await page.locator('[data-assistant-mode="storyboard"]').click();
-  const model=page.locator('#director-chat-model');
+  const model=page.locator('#app-header-director-model');
   await expect(model.locator('option[value="acceptance::acceptance-model"]')).toHaveCount(1);
   await model.selectOption('acceptance::acceptance-model');
   await page.locator('#director-chat-input').fill('What color are the windows? Answer briefly, make no changes.');

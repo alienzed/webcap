@@ -302,10 +302,11 @@
 
   // Navigation is authoritative in Scene focus; a Scene toolbar entry also
   // binds its Scene when the Storyboard is in the overview/list view.
-  function studioDirectorSelectedScene(navigation, authorRequest) {
+  function studioDirectorSelectedScene(navigation, authorRequest, explicitProject) {
     navigation = navigation || window.getStudioDirectorNavigation();
     if (!navigation.projectId ||
-        (state.studioStoryAccess && state.studioStoryAccess.storyId !== navigation.projectId))
+        (!explicitProject && state.studioStoryAccess &&
+          state.studioStoryAccess.storyId !== navigation.projectId))
       return null;
     var references = [], match, pattern = /\bscene\s*(\d+)\b/gi;
     while ((match = pattern.exec(String(authorRequest || ''))))
@@ -3122,7 +3123,14 @@
       var capabilities = payload.actions.map(function (action) {
         return action.name + ' (' + action.status + '): ' + action.description;
       }).join(String.fromCharCode(10));
-      var outbound = [{role:'system', content:''}].concat(messages.map(function (message) {
+      // Saved field receipts and obsolete explicit-Read payloads stay in chat
+      // history but never re-enter the model context. Keep only recent discussion;
+      // the current authoritative fields and working draft travel separately.
+      var recent = messages.filter(function (message) {
+        return !/\[WEBCAP APPLIED FIELD VALUES\]|\[WEBCAP EXPLICIT READ\]/.test(
+          String(message.content || ''));
+      }).slice(-10);
+      var outbound = [{role:'system', content:''}].concat(recent.map(function (message) {
         return {role:message.role,content:message.content};
       })); // Persisted inspection metadata is not part of the LLM conversation.
       // Navigation and destination identity alone convey no saved creative material.
@@ -3152,7 +3160,7 @@
     });
   }
 
-  function studioDirectorChatRequestMessages(messages, selectedScene, navigationSnapshot) {
+  function studioDirectorChatRequestMessages(messages, selectedScene, navigationSnapshot, boundTarget) {
     // The existing Director connection owns its subject independently of Studio.
     // Read that Project once, then supply one consistent navigation and context.
     var navigation = navigationSnapshot || window.getStudioDirectorNavigation();
@@ -3169,7 +3177,7 @@
       navigation = {projectId:mentioned.id,
         projectTitle:mentioned.title || mentioned.name || '',
         sceneId:'',sceneNumber:0,sceneOrder:(mentioned.sceneOrder || []).slice()};
-      selectedScene = studioDirectorSelectedScene(navigation, requestText);
+      selectedScene = studioDirectorSelectedScene(navigation, requestText, true);
     }
     var connected = mentioned && mentioned.id || (state.studioStoryAccess && state.studioStoryAccess.storyId);
     if (connected && connected !== navigation.projectId) selectedScene = null;
@@ -3185,11 +3193,18 @@
         // The listing may not carry the Scene index. Resolve its ordinal from
         // the authoritative Project instead of inventing or trusting model IDs.
         navigation.sceneOrder = story.sceneOrder.slice();
-        selectedScene = studioDirectorSelectedScene(navigation, requestText);
+        selectedScene = studioDirectorSelectedScene(navigation, requestText, true);
       }
       if (story && connected && connected !== navigation.projectId) {
         navigation = {projectId:story.id,projectTitle:story.title,sceneId:'',sceneNumber:0,
           sceneOrder:story.sceneOrder.slice()};
+      }
+      if (boundTarget) {
+        boundTarget.projectId = story ? story.id : '';
+        boundTarget.sceneId = selectedScene && selectedScene.projectId === (story && story.id) ?
+          selectedScene.sceneId : '';
+        boundTarget.sceneNumber = boundTarget.sceneId ?
+          story.sceneOrder.indexOf(boundTarget.sceneId) + 1 : 0;
       }
       // Read questions do not need the full H3 production contract by default.
       // Explicit questions about H3 prompting still receive the authoring reference.
@@ -3207,11 +3222,23 @@
         'for a new Scene propose create_scene. Provide complete authored material in conversation only when ' +
         'the author explicitly asks to see it there.\n';
       if (!selectedScene) {
-        if (!story) return outbound;
+        if (!story) {
+          var availableNew = state.studioWorkingDraft.newProject;
+          if (Object.keys(availableNew).length)
+            outbound[0].content += '\nUNSAVED WORKING PROJECT FIELDS:\n' + JSON.stringify(availableNew);
+          return outbound;
+        }
         outbound[0].content += '\n\nCURRENT SAVED PROJECT OVERVIEW (WebCap supplied):\n' +
           JSON.stringify({projectId:story.id,title:story.title,concept:story.concept,
             style:story.style,invariants:story.invariants}) +
           '\nSaved values supersede earlier conversational drafts.\n';
+        var pendingProject = state.studioWorkingDraft.projects[story.id];
+        if (pendingProject && Object.keys(pendingProject).length)
+          outbound[0].content += '\nUNSAVED WORKING PROJECT FIELD REPLACEMENTS (not applied):\n' +
+            JSON.stringify(pendingProject);
+        if (Object.keys(state.studioWorkingDraft.newScene).length)
+          outbound[0].content += '\nUNSAVED NEW SCENE FIELDS (not inserted):\n' +
+            JSON.stringify(state.studioWorkingDraft.newScene);
         return outbound;
       }
       if (!story || !Array.isArray(story.sceneOrder) ||
@@ -3226,6 +3253,10 @@
           ...context.payload
         }) +
         '\nAnswer using these saved values. Other conversation drafts remain unsaved until applied.\n';
+      var pendingScene = state.studioWorkingDraft.scenes[selectedScene.sceneId];
+      if (pendingScene && Object.keys(pendingScene).length)
+        outbound[0].content += '\nUNSAVED WORKING SCENE FIELD REPLACEMENTS (not applied):\n' +
+          JSON.stringify(pendingScene);
       return outbound;
       });
     });
@@ -3763,6 +3794,7 @@
     var selectedProjectId = activeChatMode === 'storyboard' ?
       (studioAttachedStoryId() || (selectedNavigation && selectedNavigation.projectId) || '') : '';
     var selectedProject = selectedProjectId ? {projectId:selectedProjectId} : null;
+    var resolvedTarget = {};
     var messages = currentMessages();
     var elapsedMap = currentElapsedMap();
     var metricsMap = currentMetricsMap();
@@ -3807,7 +3839,7 @@
         });
       }
       return (activeChatMode === 'storyboard'
-        ? studioDirectorChatRequestMessages(messages, selectedScene, selectedNavigation)
+        ? studioDirectorChatRequestMessages(messages, selectedScene, selectedNavigation, resolvedTarget)
         : Promise.resolve(messages)).then(function (outboundMessages) {
         return requestJson('/fs/director/chat', {
           method: 'POST',
@@ -3843,12 +3875,19 @@
           studioActionStatus(feedback, false);
         }
         messages.push({ role: 'assistant', content: assistantText });
+        var targetScene = resolvedTarget.sceneId ? {
+          projectId:resolvedTarget.projectId,sceneId:resolvedTarget.sceneId,
+          sceneNumber:resolvedTarget.sceneNumber
+        } : selectedScene;
+        var targetProject = resolvedTarget.projectId ? {projectId:resolvedTarget.projectId} : selectedProject;
         var nextAction = studioResponse && studioResponse.action ||
-          (activeChatMode === 'storyboard' ? studioActionFromExplicitRequest(content, selectedScene) : null);
+          (activeChatMode === 'storyboard' ? studioActionFromExplicitRequest(content, targetScene) : null);
+        if (activeChatMode === 'storyboard' && studioResponse && studioResponse.changes)
+          studioMergeWorkingChanges(studioResponse.changes, resolvedTarget, nextAction, content);
         if (nextAction) {
           try {
             window.studioDirectorWorkbench.presentAction(
-              nextAction, selectedScene, selectedProject, content);
+              nextAction, targetScene, targetProject, content);
           } catch (processingError) {
             // Optional action presentation must never invalidate a useful answer.
             window.reportConsoleError('Studio action suggestion', processingError);

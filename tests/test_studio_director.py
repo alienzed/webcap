@@ -209,6 +209,11 @@ def test_director_chat_route_preserves_all_structured_schemas(monkeypatch, opera
         assert captured["schema"]["type"] == "object"
         assert set(captured["schema"]["properties"]) == expected_fields
         assert captured["schema"]["additionalProperties"] is False
+        if operation == "studio_scene_field_draft":
+            assert captured["schema"]["required"] == ["prompt"]
+            assert captured["schema"]["properties"]["prompt"]["minLength"] == 1
+            assert "title" not in captured["schema"]["required"]
+            assert "durationSeconds" not in captured["schema"]["required"]
         if operation == "studio_brief_draft":
             assert "required" not in captured["schema"], "Unchanged Project fields are not model outputs"
             assert captured["schema"]["properties"]["invariants"]["items"]["required"] == ["kind", "title", "text"]

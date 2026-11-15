@@ -2064,17 +2064,28 @@
                                             <strong id="storyboard-workspace-mode-title">Scenes</strong>
                                             <button id="storyboard-generate-scenes-btn" type="button" class="review-captions-btn" title="Queue one new Take for every Scene in this Project.">Generate</button>
                                             <button id="storyboard-cancel-takes-btn" type="button" class="review-captions-btn hidden" title="Cancel this Story's queued Take generation. The current Take will finish.">Cancel Takes</button>
+                                            <details id="storyboard-project-tools" class="storyboard-header-menu">
+                                                <summary class="review-captions-btn" aria-label="Project Tools">Project Tools</summary>
+                                                <div class="storyboard-header-menu-items">
+                                                    <button type="button" data-project-tool="director">Studio Director</button>
+                                                    <button id="storyboard-director-tools-btn" type="button" data-project-tool="revise">Revise &amp; Generate</button>
+                                                    <button type="button" data-project-tool="continuity">Continuity pass</button>
+                                                    <button type="button" data-project-tool="coherence">Check Coherence</button>
+                                                    <button type="button" data-project-tool="replace">Find &amp; Replace</button>
+                                                </div>
+                                            </details>
                                         </div>
                                         <span id="storyboard-progress-summary" class="storyboard-progress-summary"></span>
                                     </div>
                                 </div>
                                 <div class="storyboard-scenes-heading-actions">
                                     <button id="storyboard-scenes-focus-btn" type="button" class="review-captions-btn hidden">← Scenes</button>
-                                    <button id="storyboard-scenes-sequence-btn" type="button" class="review-captions-btn">Sequence</button>
-
                                 </div>
                             </div>
-                            <div id="storyboard-scene-progression" class="storyboard-scene-progression" aria-label="Scene progression"></div>
+                            <div class="storyboard-scene-strip">
+                                <div id="storyboard-scene-progression" class="storyboard-scene-progression" aria-label="Scene progression"></div>
+                                <button id="storyboard-scenes-sequence-btn" type="button" class="review-captions-btn">Sequence</button>
+                            </div>
                             <section id="storyboard-sequence-preview" class="storyboard-sequence-preview hidden" aria-label="Selected sequence"></section>
                             <div id="storyboard-scenes-list" class="storyboard-scenes-list"></div>
                         </div>
@@ -2224,7 +2235,6 @@
                     </details>
                     <div class="studio-dw-submit"><button id="studio-dw-write-prepare" type="button" class="studio-dw-primary">Prepare draft</button></div>
                     <details class="studio-dw-source-preview"><summary>Project tools</summary>
-                      <button id="storyboard-director-tools-btn" type="button" title="Revise the open Project's Scenes, optionally generating new Takes">Revise &amp; Generate…</button>
                       <button id="studio-dw-coherence-check" type="button">Check Project coherence</button>
 
                     </details>
@@ -2778,6 +2788,24 @@
                 <footer class="keep-lora-footer">
                     <button id="storyboard-scene-creation-cancel" type="button" class="review-captions-btn">Cancel</button>
                     <button id="storyboard-scene-creation-run" type="button" class="training-btn">Insert Scene</button>
+                </footer>
+            </section>
+        </div>
+        <div id="storyboard-find-replace-modal" class="keep-lora-modal hidden" aria-hidden="true" data-escape-close-id="storyboard-find-replace-close">
+            <section class="keep-lora-dialog storyboard-find-replace-dialog" role="dialog" aria-modal="true" aria-labelledby="storyboard-find-replace-title">
+                <header class="keep-lora-header">
+                    <h2 id="storyboard-find-replace-title">Find &amp; Replace</h2>
+                    <button id="storyboard-find-replace-close" type="button" class="training-review-modal-close" aria-label="Close Find and Replace">&times;</button>
+                </header>
+                <div class="keep-lora-content">
+                    <label class="keep-lora-field">Find<input id="storyboard-find-replace-find" type="text" autocomplete="off"></label>
+                    <label class="keep-lora-field">Replace with<input id="storyboard-find-replace-with" type="text" autocomplete="off"></label>
+                    <label class="storyboard-find-replace-case"><input id="storyboard-find-replace-case" type="checkbox"> Match case</label>
+                    <p id="storyboard-find-replace-count" role="status">Enter a word or phrase.</p>
+                </div>
+                <footer class="keep-lora-footer">
+                    <button id="storyboard-find-replace-cancel" type="button" class="review-captions-btn">Cancel</button>
+                    <button id="storyboard-find-replace-apply" type="button" class="training-btn" disabled>Replace All</button>
                 </footer>
             </section>
         </div>

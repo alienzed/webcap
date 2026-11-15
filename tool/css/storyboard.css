@@ -4250,3 +4250,52 @@ html[data-theme="dark"] .storyboard-prompt-take-status {
 #storyboard-collapsed-director {min-height:36px;width:auto;font-size:16px;}
 /* Allow the Scene region's existing scroll pane to expose inspector controls. */
 .storyboard-scene-workspace {min-width:0;overflow-x:auto;}
+
+
+/* Scene strip owns the view switch; Project Tools owns scoped operations. */
+.storyboard-scenes-heading .storyboard-scenes-heading-left { flex: 1 1 auto; }
+.storyboard-header-menu { position:relative; flex:0 0 auto; z-index:20; }
+.storyboard-header-menu > summary {
+  list-style:none; cursor:pointer; display:flex; align-items:center;
+  min-height:30px; width:auto; padding:4px 11px; white-space:nowrap;
+}
+.storyboard-header-menu > summary::-webkit-details-marker { display:none; }
+.storyboard-header-menu > summary::after { content:'⌄'; margin-left:7px; }
+.storyboard-header-menu[open] > summary { border-color:var(--accent); }
+.storyboard-header-menu-items {
+  position:fixed; min-width:224px; z-index:10000;
+  padding:6px; display:flex; flex-direction:column; gap:2px;
+  background:var(--panel); color:var(--text); border:1px solid var(--border);
+  border-radius:8px; box-shadow:0 8px 24px #0003;
+}
+.storyboard-header-menu-items button, .storyboard-add-scene-menu button {
+  width:100%; padding:9px 11px; text-align:left; border:0; border-radius:5px;
+  background:transparent; color:var(--text); font-size:14px; cursor:pointer;
+}
+.storyboard-header-menu-items button:hover, .storyboard-add-scene-menu button:hover {
+  background:var(--hover);
+}
+.storyboard-scene-strip { display:flex; min-width:0; align-items:center; gap:10px; }
+.storyboard-scene-strip .storyboard-scene-progression { flex:1 1 auto; min-width:0; }
+.storyboard-scene-strip > #storyboard-scenes-sequence-btn {
+  flex:0 0 auto; min-height:34px; white-space:nowrap; width:auto;
+  padding:4px 11px; align-self:center;
+}
+.storyboard-add-scene { position:relative; flex:0 0 auto; align-self:center; z-index:4; }
+.storyboard-add-scene > summary {
+  list-style:none; display:flex; align-items:center; justify-content:center;
+  min-width:42px; min-height:42px; cursor:pointer;
+  border:1px dashed var(--border); border-radius:8px;
+  color:var(--accent); font-size:23px; background:var(--panel);
+}
+.storyboard-add-scene > summary::-webkit-details-marker { display:none; }
+.storyboard-add-scene-menu {
+  position:fixed; min-width:188px; padding:5px; z-index:1000;
+  background:var(--panel); border:1px solid var(--border);
+  border-radius:8px; box-shadow:0 8px 24px #0003;
+}
+.storyboard-find-replace-dialog { width:min(460px,calc(100vw - 36px)); }
+.storyboard-find-replace-dialog .keep-lora-field input[type="text"] { width:100%; box-sizing:border-box; }
+.storyboard-find-replace-case { display:flex; align-items:center; gap:8px; font-size:14px; }
+.storyboard-find-replace-case input { margin:0; }
+#storyboard-find-replace-count { font-size:14px; color:var(--muted); }

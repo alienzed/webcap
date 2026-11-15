@@ -145,7 +145,7 @@ test('Apply receipt names the actual scoped Scene fields and retains authoritati
   await bridge.recordApplied('scene.update',{id:'project-1',title:'Project',updatedAt:'now'},
     {sceneId:'scene-1',savedFields:{prompt:'The reviewed prompt.'}});
   const message=state.modeMessages.storyboard[0].content;
-  assert.match(message,/^Saved: H3 Prompt\./);
+  assert.match(message,/^Saved Project: H3 Prompt/);
   const saved=JSON.parse(message.split('[WEBCAP APPLIED FIELD VALUES]')[1].split('[END WEBCAP APPLY]')[0]);
   assert.deepEqual(Array.from(saved.fieldNames),['prompt']);
   assert.doesNotMatch(message,/The reviewed prompt\./);

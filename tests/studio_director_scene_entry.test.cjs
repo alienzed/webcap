@@ -71,7 +71,9 @@ test('automatic Director revisions get a distinct persisted receipt; reviewed Ap
   const story={id:'p',title:'Project'},fields={sceneId:'s',savedFields:{prompt:'After'}};
   await scope.recorder.recordApplied('scene.director.revision',story,fields);
   await scope.recorder.recordApplied('scene.update',story,fields);
-  assert.match(state.modeMessages.storyboard[0].content,/^Director revision saved: H3 Prompt/);
-  assert.match(state.modeMessages.storyboard[1].content,/^Saved: H3 Prompt.*Reviewed values/);
+  assert.match(state.modeMessages.storyboard[0].content,/^Saved Project: H3 Prompt/);
+  assert.match(state.modeMessages.storyboard[0].content,/"operation": "scene.director.revision"/);
+  assert.match(state.modeMessages.storyboard[1].content,/^Saved Project: H3 Prompt/);
+  assert.match(state.modeMessages.storyboard[1].content,/"operation": "scene.update"/);
   assert.match(director,/WebCap · Director revision/);
 });

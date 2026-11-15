@@ -116,3 +116,14 @@ Safe phases:
 4. **Regression audit:** Exercise repeated edits, stable keys through rerender, distinct Scene and caption targets, idle capture, navigation without persistence and editing an older version. Run focused Studio/UI tests and the repository CI suites. Check actual browser layout separately where a modal/top-layer or unusually small textarea changes positioning.
 
 The new history is intentionally best-effort. Programmatic rewrites do not trigger explicit pre-replacement checkpoints; a previous value is available only if it has already been observed. Existing application autosave remains the authority for persistence.
+
+## Scene header / Project Tools cutover (2026-11-15)
+
+This is a localized Storyboard UX change, not a new Director operation or model contract.
+
+1. **Inventory and ownership:** Keep context-specific Concept, Atmosphere, Invariants, Scene Revise, generation, LoRA and First Cut actions in place. The existing `storyboard-director-tools-modal` remains the owner of batch Revise & Generate/Continuity/Coherence. Director chat remains independently available.
+2. **Rehome navigation:** Place Project Tools beside Generate/Cancel Takes in the Scene header, move Sequence to the trailing end of the Scene strip and combine its plus/Extend Story into one menu choosing Add Blank Scene or Extend Story with Director. Keep Scene card context actions and Sequence readiness/state logic intact.
+3. **Add scoped deterministic editing:** The Project Tools menu opens Find & Replace of saved Scene Prompt text. Count matches against the current Project; after user-authorized Replace All, flush saved edits, reload authoritative Project state, then reuse normal `update_scene` operations per changed Scene. No LLM calls, regex mode, additional conversation or server endpoint. Preserve completed Scene saves if a later request fails and visibly report partial completion.
+4. **Validate and audit:** Focused UI contract and pure matching tests plus existing Scene/Director regressions and CI. Browser layout/overlay acceptance remains separate. Do not merge before correcting actual test failures.
+
+The pre-existing Studio Director workbench coherence path remains for restored/advanced conversation compatibility; the new Project Tools entry intentionally opens the independent Storyboard coherence workflow. A separate review can consolidate that duplicate later.

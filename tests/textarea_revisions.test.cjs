@@ -24,7 +24,7 @@ function editor(value, sceneId) {
 
 function harness() {
   const docHandlers={}, controls={}, toolbarHandlers={}, pending=new Map();
-  let timerId=0;
+  let timerId=0,captionKey='caption:set/item-a';
   for (const name of ['[data-rev-prev]','[data-rev-next]','[data-rev-count]']) {
     controls[name]={disabled:false,textContent:''};
   }
@@ -47,11 +47,13 @@ function harness() {
     addEventListener(){}
   };
   vm.runInNewContext(source,{document,window,innerHeight:1000,
+    getAutosaveTargetAndPayload:()=>({key:captionKey}),
     setTimeout:(fn,ms)=>{assert.equal(ms,10000);pending.set(++timerId,fn);return timerId;},
     clearTimeout:id=>pending.delete(id),
     Map,Array,String,Object});
   docHandlers.DOMContentLoaded();
   return {document,window,controls,toolbarHandlers,
+    captionTarget(key){captionKey=key;},
     focus(field){docHandlers.focusin({target:field});},
     input(field){docHandlers.input({target:field});},
     blur(field){docHandlers.focusout({target:field,relatedTarget:null});},
@@ -106,19 +108,37 @@ test('recreated Scene textareas reuse the same key, other Scenes stay isolated',
   assert.equal(again.value,'First','reattachment does not overwrite current source data');
 });
 
-test('caption editor identity follows its saved media target, not shared editor ID',()=>{
-  const h=harness();let current='caption:set/item-a';
-  // The normal caption editor supplies its existing autosave identity.
-  const field={id:'editor',dataset:{},getAttribute:()=>null,
-    closest:()=>null};
-  const sourceForIdentity=source.replace('typeof getAutosaveTargetAndPayload === \'function\'',
-    'typeof getAutosaveTargetAndPayload === \'function\'');
-  // Two targets must never share one caption history.
-  const context={window:{},document:{readyState:'loading',addEventListener(){}},
-    getAutosaveTargetAndPayload:()=>({key:current}),Map,Array,String,Object};
-  vm.runInNewContext(sourceForIdentity,context);
-  const keyA=context.window.webcapTextareaRevisions.identity(field);
-  current='caption:set/item-b';
-  const keyB=context.window.webcapTextareaRevisions.identity(field);
-  assert.notEqual(keyA,keyB);
+test('the same caption textarea switches histories when WebCap changes its media target',()=>{
+  const h=harness(),field=editor('Caption A','unused');
+  field.id='editor';
+  h.focus(field);
+  const first=h.window.webcapTextareaRevisions.identity(field);
+  field.value='Caption A edited';h.input(field);h.idle();
+  h.captionTarget('caption:set/item-b');
+  field.value='Caption B edited';
+  h.input(field);h.idle();
+  const second=h.window.webcapTextareaRevisions.identity(field);
+  assert.notEqual(first,second);
+  assert.equal(h.window.webcapTextareaRevisions.history(first).versions.at(-1),'Caption A edited');
+  assert.equal(h.window.webcapTextareaRevisions.history(second).versions.at(-1),'Caption B edited');
+});
+
+test('repeated unnamed rows use structural selectors rather than sharing one key',()=>{
+  const h=harness();
+  const parent={id:'list',tagName:'DIV',parentElement:null,children:[]};
+  function row() {
+    const host={id:'',tagName:'SECTION',parentElement:parent,children:[]};
+    const field={id:'',name:'',tagName:'TEXTAREA',dataset:{},parentElement:host,
+      getAttribute:()=>null,closest:()=>null};
+    host.children=[field];parent.children.push(host);
+    return field;
+  }
+  const first=row(),second=row();
+  const a=h.window.webcapTextareaRevisions.identity(first);
+  const b=h.window.webcapTextareaRevisions.identity(second);
+  assert.notEqual(a,b);
+  const recreated=row();
+  parent.children.pop();parent.children[0]=first.parentElement;
+  parent.children[1]=recreated.parentElement;
+  assert.equal(b,h.window.webcapTextareaRevisions.identity(recreated));
 });

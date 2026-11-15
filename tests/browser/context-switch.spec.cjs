@@ -1,6 +1,7 @@
 'use strict';
 const {test,expect}=require('./test.cjs');
 const {resetModel,queueModel,openDirector,say,story,seedProject,openProject}=require('./helpers.cjs');
+const {ensureAttachedProject}=require('./helpers.cjs');
 
 test('Flow 5 — moving the Studio editor does not change a conversation-bound Project write',async({page,request})=>{
   await resetModel(request);
@@ -8,7 +9,7 @@ test('Flow 5 — moving the Studio editor does not change a conversation-bound P
   const b=await seedProject(page,'Project B '+Date.now(),{style:'Distant red neon.'});
   await openDirector(page);
   await openProject(page,a.id);
-  await page.locator('#director-studio-attach-current').click();
+  await ensureAttachedProject(page,a.title);
   await expect(page.locator('#director-chat-title')).toContainText('Project A');
   await openProject(page,b.id);
   // The open editor is now B, while Director's attached conversation is A.

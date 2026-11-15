@@ -3757,9 +3757,9 @@ def training_candidates_open_epoch_route():
 @app.route("/fs/training_candidates/save", methods=["POST"])
 def training_candidates_save_route():
     data = request.get_json(silent=True) or {}
-    allowed = {"folder", "jobId", "epoch", "destination", "filename", "stage", "stagedFileName"}
+    allowed = {"folder", "jobId", "epoch", "destination", "filename", "stage", "stagedFileName", "profileOptions"}
     if not isinstance(data, dict) or set(data) - allowed:
-        return jsonify({"ok": False, "error": "Save accepts only folder, jobId, epoch, destination, filename, stage, and stagedFileName."}), 400
+        return jsonify({"ok": False, "error": "Save accepts folder, jobId, epoch, destination, filename, stage, stagedFileName and optional profileOptions."}), 400
     payload, status = training_runner_save_candidate_epoch_response(
         data.get("folder", ""),
         data.get("jobId", ""),
@@ -3768,6 +3768,7 @@ def training_candidates_save_route():
         data.get("filename", ""),
         data.get("stage", ""),
         data.get("stagedFileName", ""),
+        data.get("profileOptions"),
     )
     return jsonify(payload), status
 

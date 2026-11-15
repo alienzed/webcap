@@ -4136,7 +4136,7 @@
       return '<section class="storyboard-scene" data-scene-id="' + escapeHtml(sceneId) + '">' +
         '<div class="storyboard-scene-body">' +
           '<div class="storyboard-scene-main">' +
-            '<label class="storyboard-field storyboard-scene-title-field"><span>Scene title</span><input data-scene-field="title" value="' + escapeHtml(sceneValue(scene, 'title', '')) + '" placeholder="Scene title"></label>' +
+            '<label class="storyboard-field storyboard-scene-title-field"><input data-scene-field="title" aria-label="Scene title" value="' + escapeHtml(sceneValue(scene, 'title', '')) + '" placeholder="Scene title"></label>' +
             '<div class="storyboard-prompt-block">' +
               '<div class="storyboard-prompt-heading">' +
                 '<span class="storyboard-prompt-label">' +

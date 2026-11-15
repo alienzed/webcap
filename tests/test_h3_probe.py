@@ -460,7 +460,10 @@ def test_hardware_mismatch_and_malformed_persistent_state_fail_loudly(tmp_path):
     path = tmp_path / "config.json"
     hardware = {"total_ram_mib": 64, "gpu_model": "GPU", "total_vram_mib": 32}
     path.write_text(json.dumps({"training": {"h3_calibration": {"hardware": hardware, "results": {"bad": {"status": "completed"}}}}}), encoding="utf-8")
-    with pytest.raises(ValueError, match="hardware differs"):
+    _config, ram_compatible = probe.load_persistent_calibration(path, {**hardware, "total_ram_mib": 63})
+    assert ram_compatible["hardware"]["total_ram_mib"] == 63
+    assert "bad" in ram_compatible["results"]
+    with pytest.raises(ValueError, match="GPU differs"):
         probe.load_persistent_calibration(path, {**hardware, "total_vram_mib": 33})
     with pytest.raises(ValueError, match="unknown candidate"):
         config_module._validate_h3_calibration(json.loads(path.read_text(encoding="utf-8"))["training"]["h3_calibration"])

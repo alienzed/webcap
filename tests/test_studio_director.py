@@ -218,7 +218,7 @@ def test_director_chat_route_preserves_all_structured_schemas(monkeypatch, opera
             assert "title" not in captured["schema"]["required"]
             assert "durationSeconds" not in captured["schema"]["required"]
         if operation == "studio_project_draft":
-            assert "required" not in captured["schema"], "Partial new Project drafts remain editable"
+            assert captured["schema"]["required"] == ["title", "concept", "style", "invariants", "rationale"]
         if operation == "studio_brief_draft":
             assert "required" not in captured["schema"], "Unchanged Project fields are not model outputs"
             assert captured["schema"]["properties"]["invariants"]["items"]["required"] == ["kind", "title", "text"]

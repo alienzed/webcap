@@ -286,3 +286,45 @@ test('invalid returned duration retains review and does not invent a successful 
   assert.equal(refreshes.length,0,'no refresh claim without a save');
   assert.equal(story.scenes.old.prompt,'Original');
 });
+
+test('two eight-second Scenes request retains one actually authored Scene without a replacement call',async()=>{
+  const story={id:'p1',title:'Project',concept:'A quiet evening',style:'Amber light',
+    invariants:[],sceneOrder:[],scenes:{}};
+  const state={pending:false,jobId:'',studioScenesProposal:null,
+    studioWorkingDraft:{projects:{},scenes:{},newProject:{},newScene:{},sourceRequest:''}};
+  let calls=0,reviews=0,saves=0;
+  const scope=vm.createContext({
+    state,studioRequestedDuration,studioMentionedDuration,
+    studioRequestAppliesPreparedMaterial,studioWorkingFieldChanges,
+    syncControls(){},scheduleSessionSave(){},studioActionStatus(){},
+    showStudioScenesReview(){reviews++;},
+    window:{
+      flushStudioDirectorStoryEdits:async()=>{},
+      reportConsoleError:()=>assert.fail('Partial quantity is not an operation failure'),
+      studioDirectorBridge:{
+        isReady:()=>true,readinessMessage:()=>'',makeProposal:async()=>{
+          calls++;
+          return JSON.stringify({scenes:[{
+            title:'One useful Scene',prompt:'Complete H3 prompt',durationSeconds:8
+          }]});
+        }
+      }
+    },
+    requestJson:async url=>{
+      if(url!=='/fs/storyboard?story=p1') saves++;
+      return {story};
+    },
+    Promise,JSON,Number,String,Error,encodeURIComponent
+  });
+  const writer=vm.runInContext('({' + method + '})',scope).writeNewScene;
+  const result=await writer.call(scope.window.studioDirectorBridge,{
+    projectId:'p1',instruction:'Create two eight-second Scenes',
+    authorRequest:'Create two eight-second Scenes',directSave:false
+  });
+  assert.equal(calls,1);
+  assert.equal(reviews,1);
+  assert.equal(saves,0);
+  assert.equal(result.review,true);
+  assert.equal(state.studioScenesProposal.drafts.length,1);
+  assert.equal(state.studioScenesProposal.drafts[0].durationSeconds,8);
+});

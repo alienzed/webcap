@@ -4826,12 +4826,16 @@
           var fields;
           try { fields = JSON.parse(raw); }
           catch (error) { throw new Error('Director returned invalid Scene JSON.\nRaw response:\n' + raw); }
-          if (!fields || typeof fields !== 'object' || Array.isArray(fields) ||
-              typeof fields.prompt !== 'string' || !fields.prompt.trim())
-            throw new Error('Director returned no usable Scene Prompt.\nRaw response:\n' + raw);
+          if (!fields || typeof fields !== 'object' || Array.isArray(fields))
+            throw new Error('Director returned no usable Scene fields.\\nRaw response:\\n' + raw);
+          var partialScene = studioWorkingFieldChanges(fields,
+            ['title','prompt','durationSeconds']);
+          if (!Object.keys(partialScene).length)
+            throw new Error('Director returned no usable Scene fields.\\nRaw response:\\n' + raw);
+          var missingPrompt = !partialScene.prompt;
           var draft = {scenes:[{
             title:typeof fields.title === 'string' ? fields.title : '',
-            prompt:fields.prompt,
+            prompt:typeof fields.prompt === 'string' ? fields.prompt : '',
             durationSeconds:Object.prototype.hasOwnProperty.call(fields,'durationSeconds')
               ? fields.durationSeconds : undefined
           }],rationale:''};
@@ -4847,15 +4851,20 @@
           state.studioWorkingDraft.sourceRequest =
             String(launch.authorRequest || launch.instruction);
           scheduleSessionSave();
-          if (!launch.directSave || (authorDuration !== null && requestedDuration === null)) {
+          // A missing Prompt retains an editable partial draft without
+          // attempting to persist an empty Scene.
+          if (missingPrompt || !launch.directSave ||
+              (authorDuration !== null && requestedDuration === null)) {
             state.studioScenesProposal = {
               storyId:storyId, storyTitle:story.title, sceneOrder:order,
               scenes:story.scenes, drafts:draft.scenes, rationale:draft.rationale
             };
             showStudioScenesReview();
-            studioActionStatus(authorDuration !== null && requestedDuration === null
-              ? 'Requested ' + authorDuration + 's is outside the supported 4–15s range. Draft retained for review; nothing saved.'
-              : 'One new Scene is ready for review. Nothing has been saved.',
+            studioActionStatus(missingPrompt
+              ? 'Scene fields retained. Complete the missing H3 Prompt in Review before saving.'
+              : authorDuration !== null && requestedDuration === null
+                ? 'Requested ' + authorDuration + 's is outside the supported 4–15s range. Draft retained for review; nothing saved.'
+                : 'One new Scene is ready for review. Nothing has been saved.',
               authorDuration !== null && requestedDuration === null);
             return {review:true};
           }

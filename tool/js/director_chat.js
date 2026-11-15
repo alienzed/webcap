@@ -3238,13 +3238,9 @@
     var navigation = navigationSnapshot || window.getStudioDirectorNavigation();
     var lastUser = messages.filter(function (m) {return m.role === 'user';}).slice(-1)[0];
     var requestText = String(lastUser && lastUser.content || '');
-    // The selected/connected Project already has an authoritative ID. Only
-    // look across all Projects when the author might be naming a different one.
-    // Scene-only discussion must not enumerate the entire Project repository.
-    var namesAnotherProject = /\b(?:project|story|named|called|titled)\b|["“][^"”]+["”]/i.test(requestText);
-    var projects = namesAnotherProject
-      ? requestJson('/fs/storyboard') : Promise.resolve({stories:[]});
-    return projects.then(function (listing) {
+    // Match explicit saved Project titles regardless of phrasing; a cheap
+    // local lookup is preferable to silently binding the wrong Project.
+    return requestJson('/fs/storyboard').then(function (listing) {
       var matches = (listing.stories || []).filter(function (item) {
         var title = String(item.title || item.name || '').trim();
         return title.length > 2 && requestText.toLowerCase().includes(title.toLowerCase());

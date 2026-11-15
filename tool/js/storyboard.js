@@ -2031,7 +2031,7 @@
     instruction = String(instruction || '').trim();
     if (!instruction) return Promise.reject(new Error('Enter what should be revised across these Scenes.'));
 
-    sceneRevisionHistory.remember(instruction, el('storyboard-director-tools-instruction'));
+    sceneRevisionHistory.remember(instruction, sourceInput || el('storyboard-director-tools-instruction'));
     storyState.story.repairInstruction = instruction;
     storyState.story.repairComplete = false;
 
@@ -6139,7 +6139,7 @@
 
   function runDirectorToolsRevision() {
     if (el('storyboard-director-tools-preset').value === 'coherence') {
-      runDirectorToolsCoherence();
+      runDirectorToolsCoherence().catch(reportError);
       return;
     }
     var input = el('storyboard-director-tools-instruction');
@@ -6291,6 +6291,7 @@
     sceneRevisionHistory = createSessionPromptHistory();
     sceneCreationHistory = createSessionPromptHistory();
     sceneRevisionHistory.bind(el('storyboard-director-tools-instruction'));
+    sceneRevisionHistory.bind(el('director-studio-revision-input'));
     sceneCreationHistory.bind(el('storyboard-scene-creation-instruction'));
 
     el('storyboard-library-compact-toggle').onclick = function () {

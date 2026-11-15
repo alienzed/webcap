@@ -40,12 +40,12 @@ _WORKSHOP = (
     "make meaningful events visible without defaulting to empty setup. "
     "Give practical H3 advice without promising deterministic rendering. "
     "Answer supplied-context questions directly; suggest a scoped Write or author-operated Studio step when useful. "
-    "Readiness is advisory, never a gate to creative work. "
+    ""
     "Conversation never edits Project records. WebCap supplies the selected Scene's saved fields with Studio questions. "
     "Use only saved creative material actually supplied in this request; a Project ID or permission alone conveys no field content. "
     "Treat selected Write fields as context; suggest the intended Scene when different. "
     "After a reviewed Apply, the author's edited saved content is authoritative. "
-    "Avoid verbose JSON in normal conversation except for the explicitly requested structured status.\n"
+    "For a requested write, suggest one optional action with its kind and creative instruction. WebCap resolves the actual destination and authorizes saving. Answer ordinary questions directly; plain prose is valid.\n"
 )
 
 
@@ -104,72 +104,35 @@ _H3_STUDIO_CORE = (
 
 
 def chat_response_schema():
-    """One schema-constrained conversational reply and its advisory Studio metadata."""
-    capture_base = {
-        "content": {"type": "string", "minLength": 1, "maxLength": 20000},
-        "sceneId": {"type": "string", "enum": [""]},
-    }
-    captures = []
-    for fields in (
-        {"field": {"type": "string", "enum": ["title", "concept", "style"]}},
-        {"field": {"type": "string", "enum": ["prompt"]},
-         "sceneId": {"type": "string", "minLength": 1, "maxLength": 160}},
-        {"field": {"type": "string", "enum": ["scene"]},
-         "title": {"type": "string", "maxLength": 240},
-         "durationSeconds": {"type": "integer", "minimum": 4, "maximum": 15}},
-        {"field": {"type": "string", "enum": ["invariant"]},
-         "kind": {"type": "string", "enum": ["character", "location", "visual", "world", "sound", "custom"]},
-         "title": {"type": "string", "minLength": 1, "maxLength": 240},
-         "beforeKind": {"type": "string", "enum": ["", "character", "location", "visual", "world", "sound", "custom"]},
-         "beforeTitle": {"type": "string", "maxLength": 240}},
-    ):
-        properties = {**capture_base, **fields}
-        captures.append({"type": "object", "additionalProperties": False,
-                         "properties": properties, "required": list(properties)})
-    readiness = []
-    for operations, fields in (
-        (["project"], ["title", "concept", "style", "invariants"]),
-        (["scene", "scenes"], ["title", "prompt", "durationSeconds"]),
-        (["", "new-project"], []),
-    ):
-        properties = {
-            "checks": {"type": "array", "maxItems": 10, "items": {
-                "type": "object", "additionalProperties": False,
-                "required": ["name", "scope", "ready", "content"],
-                "properties": {
-                    "name": {"type": "string", "enum": [
-                        "Concept", "Characters", "Setting", "Action", "Dialogue", "Visual / atmosphere",
-                        "Visual focus", "Structure / formula", "Variation / repetition", "Production feasibility"]},
-                    "scope": {"type": "string", "enum": ["project", "scene"]},
-                    "ready": {"type": "boolean"},
-                    "content": {"type": "string", "maxLength": 8000},
-                },
-            }},
-            "readHints": {"type": "array", "maxItems": 5,
-                          "items": {"type": "string", "maxLength": 120}},
-            "writeHint": {"type": "string", "enum": operations},
-            # Structured single-Scene launch instruction, authored from discussion.
-            # Older persisted readiness records remain valid without this field.
-            "writeInstruction": {"type": "string", "maxLength": 3000},
-            "writeFields": {"type": "array", "maxItems": 4 if fields else 0,
-                            "uniqueItems": True,
-                            "items": {"type": "string", **({"enum": fields} if fields else {})}},
-            "sceneId": {"type": "string", "maxLength": 160},
-            "sceneNumber": {"type": "integer", "minimum": 0, "maximum": 10000},
-            # Always choose between ordinary discussion and a reusable draft.
-            # An optional property was repeatedly omitted after complete prompts.
-            "capture": {"anyOf": [{"type": "null"}, *captures]},
-        }
-        readiness.append({
-            "type": "object", "additionalProperties": False,
-            "required": ["checks", "readHints", "writeHint", "writeInstruction", "writeFields", "sceneId", "sceneNumber", "capture"],
-            "properties": properties,
-        })
+    """A conversational answer with, optionally, one proposed creative action.
+
+    Read is equally valid as plain prose; the UI treats this schema as advisory.
+    The model supplies no saved IDs or target authority.
+    """
     return {
-        "type": "object", "additionalProperties": False,
-        "required": ["reply", "readiness"],
-        "properties": {"reply": {"type": "string", "minLength": 1},
-                       "readiness": {"anyOf": readiness}},
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["reply"],
+        "properties": {
+            "reply": {"type": "string", "minLength": 1},
+            "action": {
+                "anyOf": [
+                    {"type": "null"},
+                    {
+                        "type": "object",
+                        "additionalProperties": False,
+                        "required": ["kind", "instruction"],
+                        "properties": {
+                            "kind": {"type": "string", "enum": [
+                                "create_project", "write_project",
+                                "create_scene", "write_scenes",
+                            ]},
+                            "instruction": {"type": "string", "minLength": 1},
+                        },
+                    },
+                ],
+            },
+        },
     }
 
 

@@ -294,3 +294,36 @@ test('WebCap respects written-out timing and does not silently default unsupport
   assert.equal(requestedDuration('Create a 9-second Scene'),9);
   assert.equal(requestedDuration('Create a twenty-second Scene'),null);
 });
+
+test('manual Project review reuses durable authored fields without a model request',()=>{
+  const projectFields=new Function(part(chat,
+    '  function studioWorkingFieldChanges(source, names) {',
+    '  function studioMergeWorkingChanges(changes, target, action, request) {')+
+    'return studioWorkingFieldChanges;')();
+  const parseProject=new Function(part(chat,
+    '  function parseStudioProjectDraft(raw) {',
+    '  function addStudioProjectInvariant(')+
+    'return parseStudioProjectDraft;')();
+  const applies=new Function(part(chat,
+    '  function studioRequestAppliesPreparedMaterial(request) {',
+    '  function studioWorkingFieldChanges(source, names) {')+
+    'return studioRequestAppliesPreparedMaterial;')();
+  const state={pending:false,activeMode:'storyboard',sessionReady:true,
+    modelId:'',studioProjectProposal:null,
+    studioWorkingDraft:{projects:{},scenes:{},
+      newProject:{title:'Rainy Bookshop',concept:'Late-night reading',
+        style:'Amber lamps',invariants:[]},newScene:{},sourceRequest:'Describe it'}};
+  let reviewed=0;
+  const prepare=new Function('state','studioRequestAppliesPreparedMaterial',
+    'parseStudioProjectDraft','showStudioProjectReview','studioActionStatus',
+    'studioWorkingFieldChanges',part(chat,
+    '  function prepareStudioProject(options) {',
+    '  // The reviewed Project is saved before any Scene authoring.')+
+    'return prepareStudioProject;')(
+    state,applies,parseProject,()=>{reviewed++;},()=>{},projectFields);
+  prepare();
+  assert.equal(reviewed,1);
+  assert.equal(state.studioProjectProposal.title,'Rainy Bookshop');
+  assert.equal(state.studioProjectProposal.concept,'Late-night reading');
+  assert.equal(state.pending,false);
+});

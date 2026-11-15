@@ -19,7 +19,7 @@ ACTIONS = (
     {"name": "project.write", "status": "available",
      "description": "Create or revise the Project title, Concept, Visual / atmosphere and Invariants, preserving unrelated saved fields."},
     {"name": "scenes.write", "status": "available",
-     "description": "Create or revise one or more Scenes with a full H3 Prompt, title and requested duration; WebCap binds and saves each target."},
+     "description": "Create Scenes with complete H3 Prompts, or revise only the requested Scene fields; title-only changes need no creative rewrite. WebCap binds and saves each target."},
 )
 
 _WORKSHOP = (
@@ -58,7 +58,7 @@ _H3_STUDIO_CORE = (
     "MH3 Take generation uses the saved H3 Prompt directly. "
     "Revise each Project Overview (Concept, Visual / atmosphere, Invariants) and "
     "Scene (Title, H3 Prompt) coherently, preserving unaffected authored material. "
-    "When writing a Scene, author its complete usable H3 Prompt. "
+    "When creating a Scene or revising its creative content, author a complete usable H3 Prompt. Title-only edits preserve the existing Prompt. "
     "Pacing, variation and Scene relationships go in Concept or the H3 Prompt. "
     "FIELD DEVELOPMENT: Based on discussed or supplied saved material, fill consequential gaps: "
     "distinctive stable character traits, recognizable location layouts, and purposeful Scene "

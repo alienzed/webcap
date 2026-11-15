@@ -175,14 +175,27 @@ def test_h3_playbook_review_uses_existing_config_and_checks_conflicts(monkeypatc
     assert len(writes) == 1
 
 
+@pytest.mark.parametrize("operation", [
+    "studio_scene_draft", "studio_scene_sequence_draft",
+    "studio_scene_batch_draft", "studio_playbook_draft",
+])
+def test_retired_director_model_operations_are_not_queued(monkeypatch, operation):
+    from tool.server import app as server
+    def fail_enqueue(*args, **kwargs):
+        raise AssertionError("A retired Studio operation must not launch a model call")
+    monkeypatch.setattr(server, "enqueue_llm", fail_enqueue)
+    response = server.app.test_client().post("/fs/director/chat", json={
+        "model": "test", "operation": operation,
+        "messages": [{"role": "user", "content": "Create a Scene"}],
+    })
+    assert response.status_code == 400
+    assert "Unsupported Director Chat operation" in response.get_json()["error"]
+
+
 @pytest.mark.parametrize("operation, expected_fields", [
     ("studio_brief_draft", {"title", "concept", "style", "invariants", "rationale"}),
     ("studio_project_draft", {"title", "concept", "style", "invariants", "initialScenes", "rationale"}),
-    ("studio_scene_draft", {"title", "prompt", "rationale"}),
-    ("studio_scene_sequence_draft", {"scenes", "rationale"}),
     ("studio_scene_field_draft", {"title", "prompt", "durationSeconds"}),
-    ("studio_scene_batch_draft", {"scenes"}),
-    ("studio_playbook_draft", {"guidance"}),
     ("storyboard_workshop_shots", {"summary", "shots"}),
     ("freeform_chat", None),
     ("studio_chat", {"reply", "action", "changes"}),

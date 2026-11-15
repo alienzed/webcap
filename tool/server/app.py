@@ -2372,7 +2372,7 @@ def director_chat_route():
             str(data.get("model") or "").strip(),
             contract,
             context={},
-            label={"storyboard_workshop_shots": "Storyboard Shot Proposal", "studio_project_draft": "Studio: Prepare Project": "Studio: Prepare Scenes", "studio_brief_draft": "Studio: Propose Brief"}.get(operation, "Director Chat"),
+            label={"storyboard_workshop_shots": "Storyboard Shot Proposal", "studio_project_draft": "Studio: Prepare Project", "studio_brief_draft": "Studio: Propose Brief"}.get(operation, "Director Chat"),
         )
         return jsonify({"ok": True, "job": job}), 202
     except Exception as exc:

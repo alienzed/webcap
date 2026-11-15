@@ -23,7 +23,7 @@ function sceneFixture(raw = '{"prompt":"Mara finishes quietly under a still came
     }}
   };
   const state={pending:false,jobId:'',lastStudioIoRaw:'',lastStudioIoError:'',
-    modeMessages:{storyboard:[]},sessionDirty:{storyboard:false}};
+    modeMessages:{storyboard:[]},sessionDirty:{storyboard:false},studioWorkingDraft:{projects:{},scenes:{},newProject:{},newScene:{},sourceRequest:''}};
   const window={
     flushStudioDirectorStoryEdits:async()=>{events.push(['flush']);},
     refreshStudioDirectorStoryIfOpen:async()=>{events.push(['refresh']);},

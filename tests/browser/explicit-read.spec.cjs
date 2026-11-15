@@ -1,5 +1,5 @@
 'use strict';
-const {test,expect}=require('@playwright/test');
+const {test,expect}=require('./test.cjs');
 const {openDirector,story}=require('./helpers.cjs');
 
 test('Flow 4 — explicit Read chooses and shows actual saved Project/Scene scope before sharing',async({page})=>{

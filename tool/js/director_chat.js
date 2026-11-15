@@ -4553,12 +4553,52 @@
           var requestedDuration = studioRequestedDuration(launch.authorRequest || launch.instruction);
           if (requestedDuration !== null)
             draft.scenes[0].durationSeconds = requestedDuration;
-          state.studioScenesProposal = {
-            storyId:storyId, storyTitle:story.title, sceneOrder:order,
-            scenes:story.scenes, drafts:draft.scenes, rationale:draft.rationale
+          if (!launch.directSave) {
+            state.studioScenesProposal = {
+              storyId:storyId, storyTitle:story.title, sceneOrder:order,
+              scenes:story.scenes, drafts:draft.scenes, rationale:draft.rationale
+            };
+            showStudioScenesReview();
+            studioActionStatus('One new Scene is ready for review. Nothing has been saved.', false);
+            return {review:true};
+          }
+          var scene = draft.scenes[0];
+          if (!scene || typeof scene.prompt !== 'string' || !scene.prompt.trim())
+            throw new Error('Director returned no usable Scene Prompt.');
+          var validDuration = Number(scene.durationSeconds);
+          if (!Number.isInteger(validDuration) || validDuration < 4 || validDuration > 15)
+            validDuration = 6;
+          var creation = {
+            title:String(scene.title || '').trim() || 'Scene ' + (order.length + 1),
+            prompt:scene.prompt, durationSeconds:validDuration
           };
-          showStudioScenesReview();
-          studioActionStatus('One new Scene is ready for review. Nothing has been saved.', false);
+          state.pending = true;
+          syncControls();
+          return requestJson('/fs/studio/director/scenes-draft', {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({
+              storyId:storyId, expectedSceneOrder:order, scenes:[creation],
+              placement:'end', relativeSceneId:''
+            })
+          }).then(function (result) {
+            if (!result || !result.story || result.story.id !== storyId ||
+                !Array.isArray(result.scenes) || result.scenes.length !== 1 ||
+                !result.scenes[0].id)
+              throw new Error('Scene creation returned no confirmed saved result.');
+            var saved = result.scenes[0];
+            return window.refreshStudioDirectorStoryIfOpen(storyId).then(function () {
+              return window.studioDirectorBridge.recordApplied('scene.create',result.story,{
+                scenes:[{id:saved.id,title:saved.title,prompt:saved.prompt,
+                  durationSeconds:saved.durationSeconds}]
+              });
+            }).catch(function (error) {
+              error.saved = true;
+              throw error;
+            }).then(function () {
+              studioActionStatus('Scene created and saved: ' + saved.title, false);
+              return result;
+            });
+          });
         });
       }).catch(function (error) {
         state.lastStudioIoError = String(error.message || error);

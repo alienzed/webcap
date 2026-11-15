@@ -126,7 +126,7 @@ test('Rapid rating unlocks on save without waiting for earlier summary refresh',
   const star = {dataset: {testRating: '4'}};
   const card = {querySelector: () => star};
   const ctx = {
-    reviewRatingPending: false, reviewSaveSerial: 0,
+    reviewRatingPending: false, reviewSessionLoading: false, reviewSaveSerial: 0,
     reviewKey: 'a.mp4', reviewDimensionId: 'motion',
     currentStatus: {session: 'session-1'}, reviewScope: null, advanced: 0, rendered: 0,
     reviewStatus: () => ctx.currentStatus,

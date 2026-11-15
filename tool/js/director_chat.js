@@ -4585,8 +4585,19 @@
     reviewPendingScenes: function (projectId, sourceMessageIndex) {
       var proposal = state.studioScenesProposal;
       if (!proposal || proposal.storyId !== projectId ||
-          proposal.sourceMessageIndex !== sourceMessageIndex)
-        return Promise.reject(new Error('This response\'s authored Scene review is no longer active. The other draft remains available.'));
+          proposal.sourceMessageIndex !== sourceMessageIndex) {
+        var saved = state.studioScenesReviewsByResponse[sourceMessageIndex];
+        if (!saved || saved.storyId !== projectId)
+          return Promise.reject(new Error('This response\'s authored Scene review is no longer available.'));
+        if (proposal) {
+          if (!Number.isInteger(proposal.sourceMessageIndex))
+            return Promise.reject(new Error('Finish the independent Scene review before switching.'));
+          rememberStudioScenesReview();
+          state.studioScenesReviewsByResponse[proposal.sourceMessageIndex] = proposal;
+        }
+        state.studioScenesProposal = saved;
+        proposal = saved;
+      }
       showStudioScenesReview();
       return Promise.resolve({review:true,count:proposal.drafts.length});
     },
@@ -4610,6 +4621,9 @@
       var hasResponse = Number.isInteger(responseIndex) && responseIndex >= 0;
       var signature = JSON.stringify(drafts);
       var existing = state.studioScenesProposal;
+      if (existing && hasResponse && existing.sourceMessageIndex === responseIndex &&
+          (existing.storyId !== launch.projectId || existing.sourceScenesSignature !== signature))
+        return Promise.reject(new Error('This response\'s authored Scene material no longer matches the active review.'));
       if (existing && existing.storyId === launch.projectId &&
           hasResponse && existing.sourceMessageIndex === responseIndex &&
           existing.sourceScenesSignature === signature) {
@@ -4654,6 +4668,8 @@
       });
     },
     writeNewScene: function (launch) {
+      if (state.studioScenesProposal && !Number.isInteger(state.studioScenesProposal.sourceMessageIndex))
+        return Promise.reject(new Error('Finish the independent Scene review before authoring another.'));
       var prepared = launch && state.studioWorkingDraft.newScene &&
         typeof state.studioWorkingDraft.newScene.prompt === 'string' &&
         !!state.studioWorkingDraft.newScene.prompt.trim() &&

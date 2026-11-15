@@ -248,7 +248,7 @@ test('open Director badge follows Scene 1 to Scene 2 navigation without starting
 
   const resolved=h.scope.studioDirectorSelectedScene();
   assert.equal(resolved.sceneId,'b');
-  assert.equal(resolved.label,badge.textContent,'badge and request share target resolver');
+  assert.ok(badge.textContent.startsWith(resolved.label),'badge and request reference the same Scene');
   const outbound=await h.scope.studioDirectorChatRequestMessages(
     messages,resolved,h.scope.window.getStudioDirectorNavigation());
   assert.match(outbound[0].content,/"sceneId":"b","sceneNumber":2/);

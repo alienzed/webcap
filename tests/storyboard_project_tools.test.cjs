@@ -92,7 +92,7 @@ test('Scene title stays compact and wide Takes aligns with Generation without an
   const focus=fs.readFileSync('tool/css/storyboard.css','utf8');
   assert.match(focus,/\.storyboard-scenes-list\.is-focus \.storyboard-scene-title-field input \{\s*font-size: 16px;/);
   const takes=focus.split('.storyboard-scenes-list.is-focus .storyboard-scene:has(> .storyboard-takes[open]) > .storyboard-takes {')[1].split('}',1)[0];
-  assert.match(takes,/margin-top: 12px/);
+  assert.match(takes,/margin-top: 0/);
   assert.match(takes,/border: 0/);
   assert.match(takes,/background: transparent/);
   assert.match(focus,/\.storyboard-scenes-list\.is-focus \.storyboard-scene:has\(> \.storyboard-takes\[open\]\) \.storyboard-takes-summary \{\s*padding: 0;/);
@@ -107,4 +107,12 @@ test('Scenes toolbar uses fixed icon actions without visible overlapping labels'
   assert.match(buttons,/padding:\s*0/);
   for(const id of ['storyboard-generate-scenes-btn','storyboard-director-tools-btn','storyboard-find-replace-btn'])
     assert.match(html,new RegExp('id="'+id+'"[^>]*aria-label="[^"]+"'));
+});
+
+test('Wide Takes heading aligns with Generation and retains left inset',()=>{
+  const takesSummary=css.split('.storyboard-scenes-list.is-focus .storyboard-scene:has(> .storyboard-takes[open]) .storyboard-takes-summary {')[1].split('}',1)[0];
+  const takesContent=css.split('.storyboard-scenes-list.is-focus .storyboard-scene:has(> .storyboard-takes[open]) .storyboard-takes-content {')[1].split('}',1)[0];
+  assert.match(takesSummary,/min-height:\s*0/);
+  assert.match(takesSummary,/padding:\s*28px 14px 12px/);
+  assert.match(takesContent,/padding:\s*0 14px 14px/);
 });

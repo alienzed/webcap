@@ -83,7 +83,7 @@ test('one new Scene keeps the selected Project and complete brief through a sing
   assert.equal(story.scenes.s1.prompt,'Existing saved text');
 });
 
-test('a malformed duration from Director leaves the full new Scene available for review', async () => {
+test('a written-out author duration survives malformed optional model duration', async () => {
   const state={pending:false,jobId:'',studioScenesProposal:null,studioWorkingDraft:{projects:{},scenes:{},newProject:{},newScene:{},sourceRequest:''}};
   let reviewed=0;
   const scope=vm.createContext({
@@ -109,7 +109,8 @@ test('a malformed duration from Director leaves the full new Scene available for
     {projectId:'p1',instruction:'Add a twelve-second closing Scene'});
   assert.equal(reviewed,1);
   assert.equal(state.studioScenesProposal.drafts[0].prompt,'Complete H3 prompt for a quiet ending');
-  assert.equal(state.studioScenesProposal.drafts[0].durationSeconds,'twelve');
+  assert.equal(state.studioScenesProposal.drafts[0].durationSeconds,12,
+    'WebCap carries the author\'s twelve seconds through a malformed model field');
 });
 
 test('invalid output prevents review or mutation and reports failure', async () => {

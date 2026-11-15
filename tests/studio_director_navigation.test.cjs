@@ -112,10 +112,9 @@ test('Studio chat supplies the selected saved Scene in the actual model request,
   assert.match(outgoing[0].content,/scene:a:durationSeconds","value":12/);
   assert.doesNotMatch(outgoing[0].content,/Dormant old Intent/);
   assert.deepEqual(h.requests,[
-    '/fs/storyboard',
     '/fs/storyboard?story=p1',
     '/fs/studio/director/guidance?targetModel=minimax_h3'
-  ]);
+  ],'Scene-only Read loads its selected Project without enumerating every Project');
   assert.equal(h.stories.p1.scenes.a.prompt,'Mara walks toward the rover.',
     'context lookup must not mutate saved Scene data');
 });
@@ -533,4 +532,22 @@ test('ordinary Director conversation preserves prepared Scene reviews without mu
   assert.equal(status.textContent,'');
   assert.equal(state.sceneRead.sceneId,'a');
   assert.equal(state.studioStoryAccess.storyId,'p1');
+});
+
+test('explicitly named other Project still resolves by saved title while scene-only followups skip Project enumeration',async()=>{
+  const h=actualSceneRequestFixture();
+  h.stories.p2={id:'p2',title:'Rainy Bookshop',concept:'Quiet late evening',
+    style:'Blue rain',invariants:[],sceneOrder:[],scenes:{}};
+  const other=await h.scope.studioDirectorChatRequestMessages([
+    {role:'user',content:'What is the Concept in Project Rainy Bookshop?'}
+  ],null);
+  assert.match(other[0].content,/Quiet late evening/);
+  assert.ok(h.requests.includes('/fs/storyboard'),
+    'a named other Project must still be resolved from the saved list');
+  const count=h.requests.filter(url=>url==='/fs/storyboard').length;
+  await h.scope.studioDirectorChatRequestMessages([
+    {role:'user',content:'What does the selected Scene do next?'}
+  ],h.scope.studioDirectorSelectedScene());
+  assert.equal(h.requests.filter(url=>url==='/fs/storyboard').length,count,
+    'ordinary Scene questions should not reload all Projects');
 });

@@ -24,15 +24,17 @@ process.once('SIGTERM', () => cleanup(0));
 process.once('SIGINT', () => cleanup(130));
 process.once('exit', () => {if (!cleaning) fs.rmSync(temp,{recursive:true,force:true});});
 
-function portAvailable() {
+function portAvailableOn(port) {
   return new Promise((resolve, reject) => {
     const server = net.createServer();
-    server.once('error', reject);
-    server.listen(4200, '127.0.0.1', () => server.close(resolve));
+    server.once('error', error=>reject(new Error('Acceptance port '+port+' is unavailable: '+error.message)));
+    server.listen(port, '127.0.0.1', () => server.close(resolve));
   });
 }
+function portAvailable() { return portAvailableOn(4200); }
 (async () => {
   await portAvailable(); // Refuse to reuse a running WebCap process on port 4200.
+  if (!process.env.WEBCAP_TEST_REMOTE_ENDPOINT) await portAvailableOn(4211);
   for (const name of ['tool','docs','scripts']) {
     if (!fs.existsSync(path.join(root,name))) continue;
     fs.cpSync(path.join(root,name),path.join(temp,name),{

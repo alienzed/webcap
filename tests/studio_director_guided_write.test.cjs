@@ -484,6 +484,17 @@ test('new Project writer accepts complete overview and brief-only initial Scenes
   assert.throws(()=>scope.parseStudioProjectDraft('{}'),/no usable Project material/);
 });
 
+test('Director Scene draft keeps full prompt when rationale and title are omitted',()=>{
+  const scope=vm.createContext({});
+  vm.runInContext(projectPart('  function parseStudioSceneDraft(raw) {',
+    '  function showStudioSceneDraftReview() {'),scope);
+  const result=scope.parseStudioSceneDraft(JSON.stringify({prompt:'A complete H3 prompt'}));
+  assert.equal(result.prompt,'A complete H3 prompt');
+  assert.equal(result.title,'');
+  assert.equal(result.rationale,'');
+  assert.throws(()=>scope.parseStudioSceneDraft('{}'),/complete Prompt/);
+});
+
 test('initial Scene briefs produce bounded independent saves; a failed item retains successes',async()=>{
   const calls=[],saves=[],errors=[],briefs=[
     {title:'One',brief:'First action',durationSeconds:8},

@@ -175,6 +175,7 @@ test('Studio Director: live LLM with production guidance and saved effects', {
         assert.fail('Project draft failed the production parser: '+error.message.slice(0,500));
       }
       assert.ok(parsed && typeof parsed.concept==='string' && parsed.concept.trim(),'Missing authored Concept');
+      assert.match(parsed.title,/moonlit bakery/i,'Project title did not match the author request');
       assert.ok(typeof parsed.style==='string' && parsed.style.trim(),'Missing authored atmosphere');
       assert.match(parsed.concept,/bak|bread/i,'Project Concept did not reflect the author request');
       assert.match(parsed.style,/blue|dawn|cool/i,'Project atmosphere did not reflect the author request');
@@ -204,6 +205,8 @@ test('Studio Director: live LLM with production guidance and saved effects', {
       assert.match(draft.prompt,/burgundy/i,'Scene lost invariant clothing');
       assert.match(draft.prompt,/green/i,'Scene lost invariant door');
       assert.match(draft.prompt,/quiet|silent|soft|hush|gentle|slow|calm/i,'Scene ending was not made quieter');
+      assert.match(draft.prompt,/(?:12|twelve)\s*(?:seconds?|secs?|s)\b|\b\d+\s*[-–]\s*12\b/i,
+        'Prompt timing did not reflect the requested twelve seconds');
       const saved = await api('/fs/studio/director/scene-fields',{
         storyId:fresh.id,sceneId:seededScene.id,
         expected:{prompt:scene.prompt,durationSeconds:scene.durationSeconds},

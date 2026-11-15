@@ -739,6 +739,7 @@
     });}).then(function (result) {
       if (!result.scene || !result.story) throw new Error('Scene Apply returned no saved Scene.');
       applied = true;
+      window.studioDirectorBridge.forgetSavedSceneDraft(result.story.id,proposedScene.sceneId,result.scene);
       var selected = {};
       proposedScene.fields.forEach(function (field) {selected[field] = result.scene[field];});
       var sceneId = proposedScene.sceneId;
@@ -940,11 +941,12 @@
                 (failed.length ? ': ' + failed.join(' | ') : '') +
                 (reportingErrors.length ? ' · Saved, but reporting failed for ' +
                   reportingErrors.join(', ') : ''),failed.length > 0 || notAttempted.length > 0 || reportingErrors.length > 0,true);
-              if (review.length) {
+              if (review.length && !failed.length && !notAttempted.length)
+                finishSceneAction(false);
+              else if (review.length) {
                 frozen.reviewReady = true;
                 showConversationWrite();
-              }
-              if (!failed.length && !notAttempted.length && !review.length) finishSceneAction();
+              } else if (!failed.length && !notAttempted.length) finishSceneAction();
               return;
             }
             return window.studioDirectorBridge.writeSelectedScene({
@@ -1041,6 +1043,7 @@
           });
         }).catch(function (error) {
           error.saved = true;
+          error.savedScene = result.scene;
           throw error;
         }).then(function () {return result;});
       });

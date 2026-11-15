@@ -286,7 +286,7 @@
       input.checked = sceneSelectionManual ? checked.has(id) : id === suggestedScene;
       input.onchange = function () {
         sceneSelectionManual = true;
-        if (pendingCreativeAction && pendingCreativeAction.awaitingScenes)
+        if (pendingCreativeAction && pendingCreativeAction.kind === 'write_scenes')
           pendingCreativeAction.chosenSceneIds = Array.from(
             el('studio-dw-batch-scenes').querySelectorAll('input:checked')
           ).map(function (node) {return node.value;});
@@ -301,7 +301,7 @@
     var inputs = Array.from(el('studio-dw-batch-scenes').querySelectorAll('input[type="checkbox"]'));
     inputs.forEach(function (input) { input.checked = checked; });
     sceneSelectionManual = true;
-    if (pendingCreativeAction && pendingCreativeAction.awaitingScenes)
+    if (pendingCreativeAction && pendingCreativeAction.kind === 'write_scenes')
       pendingCreativeAction.chosenSceneIds = checked ? inputs.map(function (input) { return input.value; }) : [];
     showWriteContext();
   }
@@ -788,21 +788,9 @@
       ? 'Continue with selected target' : title;
   }
 
-  function sceneIdsFromRequest(instruction, story, selectedScene) {
-    var found = [];
-    var single = /\bscene\s*(\d+)\b/gi, match;
-    while ((match = single.exec(instruction))) found.push(Number(match[1]));
-    // Handle normal enumerations: "Scenes 1, 2 and 3" or "Scenes 1 & 3".
-    var plural = /\bscenes\s+(\d+(?:\s*(?:,|and|&)\s*\d+)*)/i.exec(instruction);
-    if (plural) plural[1].match(/\d+/g).forEach(function (n) {found.push(Number(n));});
-    if (found.length) {
-      var numbers = Array.from(new Set(found));
-      if (numbers.some(function (n) {return n < 1 || n > story.sceneOrder.length;}))
-        return [];
-      return numbers.map(function (n) {return story.sceneOrder[n - 1];});
-    }
-    // A plural request with no explicit scene list requires an author selection.
-    if (/\bscenes\b/i.test(instruction)) return [];
+  // Scene targets belong to the selected Studio context or the explicit Write
+  // checkboxes, never to a scene number guessed from conversational text.
+  function selectedSceneIds(story, selectedScene) {
     return selectedScene && selectedScene.projectId === story.id &&
       story.sceneOrder.includes(selectedScene.sceneId) ? [selectedScene.sceneId] : [];
   }
@@ -851,20 +839,14 @@
         return;
       }
       button.disabled = true;
-      // Explicit Project title references override editor selection only after
-      // verifying against the current saved Project list.
+      // Resolve destination only from the attached Project or an explicit Write selection.
       refreshProjects().then(function (items) {
         if (frozen.kind === 'create_project')
           return window.studioDirectorBridge.prepareWrite('new-project','', '',{
             instruction:frozen.instruction,authorRequest:frozen.request
           });
-        var mentioned = items.filter(function (p) {
-          var title = storyName(p).trim();
-          return title.length > 2 &&
-            frozen.request.toLowerCase().includes(title.toLowerCase());
-        });
-        var projectId = mentioned.length === 1 ? mentioned[0].id :
-          mentioned.length > 1 ? '' : (frozen.chosenProjectId || frozen.projectId);
+        var projectId = Object.prototype.hasOwnProperty.call(frozen, 'chosenProjectId')
+          ? frozen.chosenProjectId : frozen.projectId;
         if (!projectId) {
           frozen.awaitingProject = true;
           showConversationWrite();
@@ -911,7 +893,7 @@
           });
         }
         return loadStory(projectId).then(function (story) {
-          var ids = sceneIdsFromRequest(frozen.request,story,frozen.scene);
+          var ids = selectedSceneIds(story,frozen.scene);
           if (Array.isArray(frozen.chosenSceneIds))
             ids = frozen.chosenSceneIds.filter(function (id) {return story.sceneOrder.includes(id);});
           if (!ids.length) {
@@ -1116,7 +1098,7 @@
       loadStory(this.value).then(renderReadStory).catch(function(e) { status(e.message,true); });
     };
     el('studio-dw-write-project').onchange=function () {
-      if (pendingCreativeAction && pendingCreativeAction.awaitingProject)
+      if (pendingCreativeAction && pendingCreativeAction.kind !== 'create_project')
         pendingCreativeAction.chosenProjectId = this.value;
       loadStory(this.value).then(renderWriteStory).catch(function(e) { status(e.message,true); });
     };

@@ -4873,6 +4873,15 @@ iframe {
 .keep-lora-status.is-error { color: #ffb4b4; }
 .keep-lora-footer { border-top: 1px solid var(--border-color, #3d4452); border-bottom: 0; justify-content: flex-end; }
 .keep-lora-save { font-weight: 650; }
+#epoch-profile-modal .keep-lora-dialog { display: flex; flex-direction: column; }
+#epoch-profile-modal .keep-lora-content { min-height: 0; overflow-y: auto; }
+#epoch-profile-modal .keep-lora-footer { flex-wrap: wrap; justify-content: space-between; }
+.epoch-profile-advanced { display: grid; gap: 10px; }
+.epoch-profile-advanced > summary { cursor: pointer; font-weight: 650; }
+.epoch-profile-advanced[open] > .keep-lora-field { margin: 12px 0; }
+.epoch-profile-footer-primary { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 8px; }
+.epoch-profile-footer-primary select { max-width: 180px; min-width: 115px; }
+
 .training-candidates-modal {
   position: fixed;
   inset: 0;

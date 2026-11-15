@@ -167,3 +167,35 @@ def test_storyboard_profile_context_uses_verified_comfy_selection(monkeypatch):
     assert "\n" in text
     assert "dual-ring connectors" in text
     assert "not a request to change the scene" in text
+
+
+def test_training_profile_suggests_saved_set_key_phrase_and_member_captions(monkeypatch, tmp_path):
+    from tool.server import model_epoch_profile, epoch_reference, caption_ops, folder_state_store
+
+    monkeypatch.setattr(epoch_reference, "reference_vocabulary",
+                        lambda folder, job: [{"group": "Clothing", "terms": [{"term": "blue jacket"}]}])
+    monkeypatch.setattr(epoch_reference, "training_wildcard_members",
+                        lambda folder, job: {"used.png"})
+    monkeypatch.setattr(caption_ops, "_resolve_folder", lambda folder: tmp_path)
+    monkeypatch.setattr(folder_state_store, "read_folder_state",
+                        lambda path: {"stats": {"requiredPhrase": "subject_xyz"}})
+    monkeypatch.setattr(caption_ops, "list_media_files", lambda folder: ["used.png", "unused.png"])
+    monkeypatch.setattr(caption_ops, "load_caption_text",
+                        lambda folder, name: {"caption": "subject_xyz in a blue jacket"})
+
+    result = model_epoch_profile.training_suggestions("set", "run")
+    assert result["trainedWords"] == ["subject_xyz"]
+    assert result["captionSamples"] == ["subject_xyz in a blue jacket"]
+    assert result["promptOptions"]["Clothing"] == ["blue jacket"]
+    assert result["evidenceLevel"] == "training_membership_only_not_validated"
+
+
+def test_director_profile_contract_preserves_explicit_key_phrase():
+    from tool.server.model_epoch_profile import director_enrichment_request
+
+    contract = director_enrichment_request(
+        {"checkpoint": "epoch90.safetensors", "sources": {}},
+        {"trainedWords": ["subject_xyz"], "captionSamples": ["subject_xyz walking"]},
+    )
+    assert '"setKeyPhrase": "subject_xyz"' in contract["prompt"]
+    assert "retain it in trainedWords" in contract["prompt"]

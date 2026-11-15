@@ -281,13 +281,18 @@ test('restoring a conversation recovers its last unsaved Write proposal with fro
   assert.equal(scope.state.studioWorkingDraft.scenes['scene-2'].prompt,'Already prepared');
   restored.length=0;
   scope.restoreSession({id:'chat-2',mode:'storyboard',messages:messages.concat([
-    {role:'user',content:'Saved Scene 2: H3 Prompt\\n[WEBCAP APPLIED FIELD VALUES]'}
+    {role:'user',content:'Saved unrelated Project: Visual atmosphere [WEBCAP APPLIED FIELD VALUES]'}
   ]),draft:''});
-  assert.equal(restored.length,1,'saved receipt stops restoration of obsolete action');
+  assert.equal(restored.length,2,'unrelated saved receipt must preserve pending Write');
+  restored.length=0;
+  scope.restoreSession({id:'chat-3',mode:'storyboard',messages:messages.map(message=>
+    message.writeAction ? {...message,writeAction:{...message.writeAction,completed:true}} : message
+  ),draft:''});
+  assert.equal(restored.length,1,'completed action is not offered again');
 });
 
 test('conversation persistence includes frozen Write targets without extra authoring calls', () => {
-  assert.match(chat,/stored\\.writeAction = message\\.writeAction/);
-  assert.match(chat,/messages\\[messages\\.length - 1\\]\\.writeAction = window\\.studioDirectorWorkbench\\.presentAction/);
+  assert.match(chat,/stored\.writeAction = message\.writeAction/);
+  assert.match(chat,/messages\[messages\.length - 1\]\.writeAction = window\.studioDirectorWorkbench\.presentAction/);
   assert.match(chat,/completeWriteAction\\(kind, story, selected\\)/);
 });

@@ -115,7 +115,8 @@
   }
 
   function attach(field) {
-    if (field.disabled || field.readOnly || field.dataset.noRevisionHistory === 'true') return;
+    if (field.disabled || field.readOnly || field.id === 'director-chat-input' ||
+        field.dataset.noRevisionHistory === 'true') return;
     var key = identity(field);
     if (active && active.field === field && active.key === key) return;
     detach();

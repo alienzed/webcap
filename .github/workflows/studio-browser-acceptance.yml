@@ -1,0 +1,40 @@
+name: Studio Director browser acceptance
+on:
+  pull_request:
+    paths:
+      - 'tests/browser/**'
+      - 'playwright.config.cjs'
+      - '.github/workflows/studio-browser-acceptance.yml'
+      - 'tool/**'
+      - 'docs/studio-user-flows.md'
+  workflow_dispatch:
+jobs:
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install backend requirements needed for startup
+        run: python -m pip install Flask Pillow imageio websocket-client opencv-python-headless Send2Trash pytest
+      - name: Install Playwright
+        run: |
+          npm install --no-save @playwright/test
+          npx playwright install --with-deps chromium
+      - name: Real-app browser acceptance
+        run: npx playwright test --config=playwright.config.cjs
+      - name: Browser evidence and backend diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: studio-browser-evidence
+          path: |
+            test-results/studio-artifacts/
+            test-results/studio-html/
+            test-results/studio-backend.log
+          if-no-files-found: warn

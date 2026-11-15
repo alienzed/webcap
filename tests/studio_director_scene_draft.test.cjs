@@ -279,21 +279,20 @@ test('Studio brief review limits Apply to explicitly checked Story fields', () =
   for (const id of [
     'director-studio-capture', 'studio-brief-review',
     'studio-brief-concept-selected', 'studio-brief-style-selected',
-    'studio-brief-invariants-selected', 'studio-brief-apply',
-    'studio-dw-undo-button'
+    'studio-brief-invariants-selected', 'studio-brief-apply'
   ]) assert.match(html, new RegExp('id="' + id + '"'));
   const prep = part('  function prepareStudioBrief(', '  function applyStudioBrief() {');
   assert.match(prep, /studioAttachedStoryId\(\)/);
   assert.match(prep, /window\.flushStudioDirectorStoryEdits\(storyId\)/);
   assert.match(prep, /operation: 'studio_brief_draft'/);
   assert.doesNotMatch(prep, /\/fs\/studio\/director\/brief'/);
-  const apply = part('  function applyStudioBrief() {', '  function undoStudioBrief() {');
+  const apply = part('  function applyStudioBrief() {', '  function addStudioScenesRow(item) {');
   assert.match(apply, /studio-brief-concept-selected/);
   assert.match(apply, /studio-brief-style-selected/);
   assert.match(apply, /studio-brief-invariants-selected/);
   assert.match(apply, /expected: expected, changes: changes/);
   assert.match(apply, /\/fs\/studio\/director\/brief'/);
-  assert.match(source, /\/fs\/studio\/director\/brief\/undo/);
+  assert.doesNotMatch(html, /id="studio-dw-undo-button"/);
   assert.doesNotMatch(html, /id="director-studio-undo-brief"/,
     'legacy direct Undo shortcut must not bypass reviewed confirmation');
 });

@@ -1,6 +1,7 @@
 'use strict';
 const {test,expect}=require('./test.cjs');
 const {resetModel,queueModel,observedModels,openDirector,openProject,say,seedProject,story}=require('./helpers.cjs');
+const {ensureAttachedProject}=require('./helpers.cjs');
 
 test('Flow 7 — unsaved Scene work survives navigating away and back, then saves exactly once',async({page,request})=>{
   await resetModel(request);
@@ -8,7 +9,7 @@ test('Flow 7 — unsaved Scene work survives navigating away and back, then save
   const other=await seedProject(page,'Unrelated Project '+Date.now());
   await openDirector(page);
   await openProject(page,project.id);
-  await page.locator('#director-studio-attach-current').click();
+  await ensureAttachedProject(page,project.title);
   await queueModel(request,{
     reply:'A Scene has been authored.',
     scenes:[{title:'Original Scene',prompt:'The door opens slowly.',durationSeconds:8}],
@@ -43,7 +44,7 @@ test('Flow 7 failure checkpoint — external inference failure remains visible w
   const project=await seedProject(page,'Visible failure '+Date.now());
   await openDirector(page);
   await openProject(page,project.id);
-  await page.locator('#director-studio-attach-current').click();
+  await ensureAttachedProject(page,project.title);
   const queued=await request.post('http://127.0.0.1:4211/__acceptance/queue',{
     data:{httpError:503,message:'Controlled remote inference outage'}
   });

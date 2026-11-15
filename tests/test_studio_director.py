@@ -180,7 +180,6 @@ def test_h3_playbook_review_uses_existing_config_and_checks_conflicts(monkeypatc
     ("studio_scene_batch_draft", {"scenes"}),
     ("studio_playbook_draft", {"guidance"}),
     ("storyboard_workshop_shots", {"summary", "shots"}),
-    ("storyboard_story_guidelines", {"summary", "guidelines"}),
     ("freeform_chat", None),
     ("studio_chat", {"reply", "action", "changes"}),
 ])

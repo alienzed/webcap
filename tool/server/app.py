@@ -2286,7 +2286,7 @@ def director_chat_route():
         if not isinstance(messages, list) or not messages:
             raise ValueError("Director Chat messages are required.")
         operation = str(data.get("operation") or "freeform_chat").strip()
-        if operation not in {"freeform_chat", "studio_chat", "storyboard_workshop_shots", "storyboard_story_guidelines", "studio_scene_draft", "studio_project_draft", "studio_scene_sequence_draft", "studio_brief_draft", "studio_scene_field_draft", "studio_scene_batch_draft", "studio_playbook_draft"}:
+        if operation not in {"freeform_chat", "studio_chat", "storyboard_workshop_shots", "studio_scene_draft", "studio_project_draft", "studio_scene_sequence_draft", "studio_brief_draft", "studio_scene_field_draft", "studio_scene_batch_draft", "studio_playbook_draft"}:
             raise ValueError("Unsupported Director Chat operation.")
         contract = {"operation": operation, "messages": messages}
         if operation == "studio_chat":
@@ -2417,29 +2417,12 @@ def director_chat_route():
                     "shots": {"type": "string"},
                 },
             }
-        if operation == "storyboard_story_guidelines":
-            contract["response_schema"] = {
-                "type": "object",
-                "required": ["summary", "guidelines"],
-                "additionalProperties": False,
-                "properties": {
-                    "summary": {"type": "string"},
-                    "guidelines": {
-                        "type": "object",
-                        "additionalProperties": False,
-                        "properties": {
-                            key: {"type": "string"}
-                            for key in ("visualFocus", "creativeDirection", "variation", "pacing", "sceneRelationships")
-                        },
-                    },
-                },
-            }
         job = enqueue_llm(
             "chat",
             str(data.get("model") or "").strip(),
             contract,
             context={},
-            label={"storyboard_workshop_shots": "Storyboard Shot Proposal", "storyboard_story_guidelines": "Storyboard Guideline Proposal","studio_scene_draft": "Studio: Draft a Scene", "studio_project_draft": "Studio: Prepare Project", "studio_scene_sequence_draft": "Studio: Prepare Scenes", "studio_brief_draft": "Studio: Propose Brief"}.get(operation, "Director Chat"),
+            label={"storyboard_workshop_shots": "Storyboard Shot Proposal","studio_scene_draft": "Studio: Draft a Scene", "studio_project_draft": "Studio: Prepare Project", "studio_scene_sequence_draft": "Studio: Prepare Scenes", "studio_brief_draft": "Studio: Propose Brief"}.get(operation, "Director Chat"),
         )
         return jsonify({"ok": True, "job": job}), 202
     except Exception as exc:

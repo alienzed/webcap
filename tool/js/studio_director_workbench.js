@@ -849,8 +849,15 @@
             status('Creating Scene ' + (index + 1) + ' of ' + count + '…',false,true);
             return window.studioDirectorBridge.writeNewScene({
               projectId:projectId,instruction:direction,authorRequest:frozen.request,
-              directSave:true
+              sequenceIndex:index,sequenceCount:count,directSave:true
             }).then(function (result) {
+              if (result && result.review) {
+                failed.push('Scene ' + (index + 1) + ': draft awaiting review; not saved');
+                for (var j=index+1;j<count;j++) notAttempted.push('Scene ' + (j + 1));
+                status('Saved ' + saved.length + ' · Draft awaiting review 1 · Not attempted ' +
+                  notAttempted.length,true,true);
+                return;
+              }
               saved.push(result && result.scenes && result.scenes[0] &&
                 result.scenes[0].id || 'Scene ' + (index + 1));
               return create(index + 1);
@@ -886,24 +893,27 @@
           var fields = frozen.fields.filter(function (name) {
             return ['title','prompt','durationSeconds'].includes(name);
           });
-          if (!fields.length) fields = ['prompt'];
+          var literalTitleOnly = /\b(?:rename|set|change)\b[^\n]{0,80}\b(?:to|as)\s+["'“]([^"'”]+)["'”]\s*[.!]?\s*$/i.test(frozen.request);
+          if (!fields.length) fields = literalTitleOnly ? ['title'] : ['prompt'];
           if (/\b(?:duration|\d+\s*(?:-\s*|\s+)?(?:seconds?|secs?|s)\b)/i.test(frozen.request) &&
               !fields.includes('durationSeconds')) fields.push('durationSeconds');
           if (/\b(?:rename|title)\b/i.test(frozen.request) &&
               !fields.includes('title')) fields.push('title');
-          var completed = [], failed = [], notAttempted = [];
+          var completed = [], unchanged = [], failed = [], notAttempted = [];
           function next(i) {
             if (i >= ids.length) {
-              status('Saved ' + completed.length + ' · Failed ' + failed.length +
-                ' · Not attempted ' + notAttempted.length +
+              status('Saved ' + completed.length + ' · Unchanged ' + unchanged.length +
+                ' · Failed ' + failed.length + ' · Not attempted ' + notAttempted.length +
                 (failed.length ? ': ' + failed.join(' | ') : ''),failed.length > 0,true);
               return;
             }
             return window.studioDirectorBridge.writeSelectedScene({
               projectId:projectId,sceneId:ids[i],instruction:frozen.instruction,
               authorRequest:frozen.request,fields:fields.slice()
-            }).then(function () {
-              completed.push(ids[i]);
+            }).then(function (result) {
+              if (result === null) unchanged.push(ids[i]);
+              else if (result && result.review) failed.push(ids[i] + ': draft retained for review, not saved');
+              else completed.push(ids[i]);
               return next(i + 1);
             }).catch(function (error) {
               if (error.saved) completed.push(ids[i]);
@@ -941,15 +951,21 @@
         label:'Scene ' + (story.sceneOrder.indexOf(sceneId) + 1) + ' · ' + (story.scenes[sceneId].title || 'Untitled')};
     },
     applyScenePrompt: function (story, sceneId, prompt, extraChanges) {
-      if (typeof prompt !== 'string' || !prompt.trim()) throw new Error('Director returned an empty Scene prompt.');
+      if (prompt !== null && (typeof prompt !== 'string' || !prompt.trim()))
+        throw new Error('Director returned an empty Scene prompt.');
       var scene = story && story.scenes && story.scenes[sceneId];
       if (!scene || !story.sceneOrder.includes(sceneId)) throw new Error('The selected Scene no longer exists.');
-      var changes = {prompt:prompt}, expected = {prompt:scene.prompt || ''};
+      var changes = {}, expected = {};
+      if (prompt !== null) {
+        changes.prompt = prompt;
+        expected.prompt = scene.prompt || '';
+      }
       Object.keys(extraChanges || {}).forEach(function (key) {
         if (!['title','durationSeconds'].includes(key)) throw new Error('Unsupported Scene change: ' + key);
         changes[key] = extraChanges[key];
         expected[key] = scene[key];
       });
+      if (!Object.keys(changes).length) throw new Error('No Scene fields were selected for saving.');
       return window.flushStudioDirectorStoryEdits(story.id).then(function () {
         return api('/fs/studio/director/scene-fields', {
           method:'POST', headers:{'Content-Type':'application/json'},

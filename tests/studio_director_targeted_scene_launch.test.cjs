@@ -105,7 +105,10 @@ test('one click runs one Scene writer with fresh saved context, saves a full pro
   assert.deepEqual(h.saved.scenes.s1.takeOrder,['take1']);
   assert.ok(h.events.some(row=>row[0]==='refresh'));
   assert.ok(h.events.some(row=>row[0]==='receipt'));
-  assert.ok(h.state.modeMessages.storyboard.at(-1).rawResponse.includes('prompt'));
+  assert.equal(h.state.modeMessages.storyboard.length,0,
+    'Writer results remain in structured state, not duplicated chat history');
+  assert.equal(h.state.studioWorkingDraft.scenes.s1.prompt,
+    'Mara finishes quietly under a still camera.');
   assert.deepEqual(h.errors,[]);
 });
 

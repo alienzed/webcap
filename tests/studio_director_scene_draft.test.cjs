@@ -16,12 +16,12 @@ function part(start, end) {
 
 test('Studio scene reviewer has editable Prompt, placement and approval controls', () => {
   for (const name of [
-    'director-studio-prepare-scene', 'studio-scene-draft-review',
+    'studio-scene-draft-review',
     'studio-scene-draft-title', 'studio-scene-draft-prompt',
     'studio-scene-draft-placement', 'studio-scene-draft-apply'
   ]) assert.match(html, new RegExp('id="' + name + '"'));
   assert.match(html, /Nothing is created until you approve/);
-  assert.match(source, /operation: 'studio_scene_draft'/);
+  assert.doesNotMatch(source, /operation: 'studio_scene_draft'/);
   assert.match(source, /\/fs\/studio\/director\/scene-draft/);
 });
 
@@ -66,7 +66,7 @@ test('complete Scene capture has an editable Prompt and one reviewed Apply saves
     },
   });
   vm.runInContext(
-    part('  function showStudioSceneDraftReview() {','  function prepareStudioSceneDraft() {')+
+    part('  function showStudioSceneDraftReview() {','  function applyStudioSceneDraft() {')+
     part('  function applyStudioSceneDraft() {','  function startStudioWorkshop() {'),scope);
   scope.showStudioSceneDraftReview();
   assert.equal(el('studio-scene-draft-prompt-row').classList.hidden,false);
@@ -91,36 +91,6 @@ test('Only explicitly attached Story ID qualifies as a Scene target', () => {
   assert.equal(target(), '');
 });
 
-test('Scene draft parser keeps a usable prompt without optional explanation', () => {
-  const context = vm.createContext({ JSON, String, Error });
-  const parse = vm.runInContext('(' + part('  function parseStudioSceneDraft(raw) {', '  function showStudioSceneDraftReview() {').trim() + ')', context);
-  const draft = parse(JSON.stringify({ title: '', prompt: 'One short clear action', rationale: 'Simple clip' }));
-  assert.equal(draft.title, '');
-  assert.equal(draft.prompt, 'One short clear action');
-  const withoutExplanation = parse(JSON.stringify({prompt:'Full scene prompt'}));
-  assert.equal(withoutExplanation.title,'');
-  assert.equal(withoutExplanation.rationale,'');
-  assert.throws(() => parse('{}'), /complete Prompt/);
-  assert.throws(() => parse('not JSON'), /invalid Scene draft JSON/);
-  assert.throws(() => parse(JSON.stringify({ title: '', prompt: '   ', rationale: '' })), /must include/);
-});
-
-test('Studio drafting is a staged proposal, not a silent Story mutation', () => {
-  const prepare = part('  function prepareStudioSceneDraft() {', '  function applyStudioSceneDraft() {');
-  assert.match(prepare, /studioAttachedStoryId\(\)/);
-  assert.match(prepare, /window\.flushStudioDirectorStoryEdits\(storyId\)/);
-  assert.match(prepare, /state\.studioSceneProposal =/);
-  assert.match(prepare, /showStudioSceneDraftReview\(\)/);
-  assert.doesNotMatch(prepare, /\/fs\/studio\/director\/scene-draft/);
-  const apply = part('  function applyStudioSceneDraft() {', '  function startStudioWorkshop() {');
-  assert.match(apply, /expectedUpdatedAt: proposal\.expectedUpdatedAt/);
-  assert.match(apply, /placement: placement/);
-  assert.match(apply, /relativeSceneId: relativeSceneId/);
-  assert.match(apply, /studioDirectorBridge\.recordApplied\(/);
-  assert.match(apply, /refreshStudioDirectorStoryIfOpen\(proposal\.storyId\)/);
-});
-
-
 test('Studio project proposals remain separate from conversation and must be reviewed', () => {
   for (const name of [
     'director-studio-capture', 'studio-project-review', 'studio-project-concept',
@@ -131,7 +101,7 @@ test('Studio project proposals remain separate from conversation and must be rev
   assert.match(prep, /operation: 'studio_project_draft'/);
   assert.match(prep, /showStudioProjectReview\(\)/);
   assert.doesNotMatch(prep, /\/fs\/studio\/director\/project-create/);
-  const apply = part('  function applyStudioProject() {', '  function parseStudioSceneDraft(raw) {');
+  const apply = part('  function applyStudioProject() {', '  function parseStudioBriefDraft(raw) {');
   assert.match(apply, /\/fs\/studio\/director\/project-create/);
   assert.match(apply, /studioDirectorBridge\.recordApplied\(/);
   assert.match(apply, /refreshStudioDirectorStoryIfOpen/);
@@ -154,50 +124,18 @@ test('Unbound Project parser accepts zero Scenes and refuses invented or invalid
 });
 
 
-test('Studio offers reviewed multi-Scene insert with arbitrary placement', () => {
+test('Retained multi-Scene review supports arbitrary placement without legacy model authoring', () => {
   for (const id of [
-    'director-studio-prepare-scenes', 'studio-scenes-review', 'studio-scenes-rows',
+    'studio-scenes-review', 'studio-scenes-rows',
     'studio-scenes-placement', 'studio-scenes-apply', 'studio-scenes-add'
   ]) assert.match(html, new RegExp('id="' + id + '"'));
-  const prep = part('  function prepareStudioScenes() {', '  function applyStudioScenes() {');
-  assert.match(prep, /operation: 'studio_scene_sequence_draft'/);
-  assert.match(prep, /studioAttachedStoryId\(\)/);
-  assert.match(prep, /window\.flushStudioDirectorStoryEdits\(storyId\)/);
-  assert.doesNotMatch(prep, /\/fs\/studio\/director\/scenes-draft/);
-  const apply = part('  function applyStudioScenes() {', '  function parseStudioSceneDraft(raw) {');
+  assert.doesNotMatch(source, /function prepareStudioScenes\(\)|studio_scene_sequence_draft/);
+  const apply = part('  function applyStudioScenes() {', '  function showStudioSceneDraftReview() {');
   assert.match(apply, /expectedSceneOrder: proposal\.sceneOrder/);
   assert.match(apply, /\/fs\/studio\/director\/scenes-draft/);
   assert.match(apply, /studioDirectorBridge\.recordApplied\(/);
   assert.match(source, /option\('before\|' \+ id/);
   assert.match(source, /option\('after\|' \+ id/);
-});
-
-test('Scene sequence parser preserves useful material when a field is missing or malformed', () => {
-  const context=vm.createContext({JSON,Array,String,Error,Object});
-  const parse=vm.runInContext('(' + part('  function parseStudioScenesDraft(raw) {',
-    '  function addStudioScenesRow(').trim() + ')',context);
-  const complete={title:'One',prompt:'Full H3 Prompt',durationSeconds:8};
-  const drafts=parse(JSON.stringify({scenes:[
-    complete,
-    {title:'Two',prompt:'A complete Prompt',durationSeconds:'twelve'},
-    {title:'Three',prompt:'Another complete Prompt',durationSeconds:16},
-    {title:'Outline only'},
-    {title:'Five',prompt:'Valid Prompt without duration'},
-    null
-  ]}));
-  assert.equal(drafts.scenes.length,6);
-  assert.equal(drafts.scenes[0].prompt,'Full H3 Prompt');
-  assert.equal(drafts.scenes[1].prompt,'A complete Prompt');
-  assert.equal(drafts.scenes[1].durationSeconds,'twelve');
-  assert.equal(drafts.scenes[2].durationSeconds,16);
-  assert.equal(drafts.scenes[3].prompt,'','missing content stays editable instead of discarding other Scenes');
-  assert.equal(drafts.scenes[4].prompt,'Valid Prompt without duration');
-  assert.equal(drafts.scenes[4].durationSeconds,undefined);
-  assert.equal(drafts.scenes[5].prompt,'');
-  assert.equal(drafts.rationale,'','missing rationale is not a blocker');
-  assert.throws(()=>parse('bad json'),/invalid Scene sequence JSON/);
-  assert.throws(()=>parse(JSON.stringify({scenes:[],rationale:''})),/one to 32/);
-  assert.throws(()=>parse(JSON.stringify({scenes:Array.from({length:33},()=>complete)})),/one to 32/);
 });
 
 test('Scene review retains prompts and flags durations for author correction', () => {
@@ -244,7 +182,7 @@ test('new Scene Apply sends the edited prompt and duration and records the autho
       return{story:{id:'p1'},scenes:[{id:'new',...payload.scenes[0]}]};
     }
   });
-  vm.runInContext(part('  function applyStudioScenes() {','  function parseStudioSceneDraft(raw) {'),scope);
+  vm.runInContext(part('  function applyStudioScenes() {','  function showStudioSceneDraftReview() {'),scope);
   scope.applyStudioScenes();await done;
   assert.deepEqual(payload,{storyId:'p1',expectedSceneOrder:['old'],placement:'after',relativeSceneId:'old',
     scenes:[{...values,durationSeconds:8}]});
@@ -294,7 +232,7 @@ test('Apply saves usable Scenes and retains incomplete rows for later Apply', as
     }
   });
   vm.runInContext(part('  function applyStudioScenes() {',
-    '  function parseStudioSceneDraft(raw) {'),scope);
+    '  function showStudioSceneDraftReview() {'),scope);
   const run=()=>scope.applyStudioScenes();
   await run();
   assert.deepEqual(errors,[]);
@@ -332,7 +270,7 @@ test('Apply with only empty prompts leaves the review intact without a save requ
     requestJson:()=>assert.fail('No write is possible without a Prompt')
   });
   vm.runInContext(part('  function applyStudioScenes() {',
-    '  function parseStudioSceneDraft(raw) {'),scope);
+    '  function showStudioSceneDraftReview() {'),scope);
   scope.applyStudioScenes();
   assert.match(status.textContent,/No complete H3 Prompts to save/);
 });

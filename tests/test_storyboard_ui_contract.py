@@ -261,16 +261,19 @@ def test_storyboard_director_configuration_is_first_class_app_setting():
 
 
 
-def test_storyboard_revise_scenes_lives_in_director_tools_and_keeps_sparse_scene_healing():
+def test_storyboard_revise_scenes_uses_studio_composer_and_keeps_sparse_scene_healing():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
     app = (ROOT / "tool" / "server" / "app.py").read_text(encoding="utf-8")
 
 
-    assert "function reviseScenes(instruction, modelId, generateFreshTakes, continuityContext)" in storyboard
+    assert "function reviseScenes(instruction, modelId, generateFreshTakes, continuityContext, sourceInput)" in storyboard
     assert 'id="storyboard-director-tools-btn"' in html
-    assert 'id="storyboard-director-tools-modal"' in html
-    assert 'id="storyboard-director-tools-instruction"' in html
+    assert 'id="director-studio-composer-mode-select"' in html
+    assert 'id="director-studio-revision-input"' in html
+    assert 'id="director-studio-revision-fresh"' in html
+    assert "window.openStudioDirectorRevision()" in storyboard
+    assert "window.startStudioRevision = function (options)" in storyboard
     assert '<option value="continuity">Continuity pass</option>' in html
     assert "DIRECTOR_PASS_PRESETS.continuity.instruction" in storyboard
     assert "function runDirectorToolsRevision()" in storyboard

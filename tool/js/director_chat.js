@@ -351,11 +351,13 @@
     input.readOnly = preset === 'coherence';
     el('director-chat-composer-hint').textContent = revision
       ? 'Ctrl+Enter to run' : 'Enter to send · Shift+Enter for newline';
-    var scope = window.getStudioDirectorNavigation();
     var target = el('director-studio-revision-target');
     target.classList.toggle('hidden', !revision);
-    if (revision) target.textContent = (scope.projectTitle || 'Current Project') +
+    if (revision) {
+      var scope = window.getStudioDirectorNavigation();
+      target.textContent = (scope.projectTitle || 'Current Project') +
       ' · all ' + (scope.sceneOrder || []).length + ' Scenes';
+    }
   }
   function setStudioComposerMode(mode, preset) {
     studioComposerMode = mode === 'revision' ? 'revision' : 'conversation';
@@ -387,12 +389,11 @@
     studioRevisionRunning = true;
     status.textContent = 'Starting ' + (preset === 'coherence' ? 'coherence review' : 'revision') + '…';
     syncControls();
-    Promise.resolve().then(function () {
-      return window.startStudioRevision({
-        instruction:instruction,preset:preset,modelId:state.modelId,
-        generateFreshTakes:el('director-studio-revision-fresh').checked
-      });
-    }).then(function () {
+    Promise.resolve(window.startStudioRevision({
+      instruction:instruction,preset:preset,modelId:state.modelId,
+      projectId:scope.projectId,
+      generateFreshTakes:el('director-studio-revision-fresh').checked
+    })).then(function () {
       status.textContent = preset === 'coherence'
         ? 'Coherence review completed.' : 'Scene revision completed.';
     }).catch(function (error) {

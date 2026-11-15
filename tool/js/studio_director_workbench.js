@@ -792,7 +792,7 @@
       story.sceneOrder.includes(selectedScene.sceneId) ? [selectedScene.sceneId] : [];
   }
 
-  function presentAction(action, selectedScene, selectedProject, authorRequest) {
+  function presentAction(action, selectedScene, selectedProject, authorRequest, messageIndex) {
     if (!action || !['create_project','write_project','create_scene','write_scenes'].includes(action.kind) ||
         !String(action.instruction || '').trim()) return;
     var frozen = {
@@ -978,12 +978,18 @@
       }).finally(function () {button.disabled = false;});
     };
     host.appendChild(button);
-    window.studioDirectorBridge.placeSuggestedAction(host);
+    window.studioDirectorBridge.placeSuggestedAction(host, messageIndex);
     showConversationWrite();
+    return frozen;
   }
 
   window.studioDirectorWorkbench = {
     presentAction:presentAction,
+    clearWriteAction:function () {
+      pendingCreativeAction = null;
+      el('studio-dw-suggestions').replaceChildren();
+      showConversationWrite();
+    },
     sceneRead: function (story, sceneId) {
       if (!story || !story.sceneOrder.includes(sceneId)) throw new Error('Select a saved Scene in this Project.');
       var scene = story.scenes[sceneId];

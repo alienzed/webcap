@@ -857,6 +857,14 @@
           if (!entry.writeAction) continue;
           var proposal = entry.writeAction;
           if (proposal.completed) break;
+          // The saved response, not a duplicated action promise, owns authored
+          // material. History preserves rawResponse but intentionally retains
+          // only minimal action metadata.
+          if (proposal.kind === 'create_scene' && entry.rawResponse) {
+            var restored = parseStudioChatResponse(entry.rawResponse);
+            if (restored.scenes && restored.scenes.length)
+              proposal = Object.assign({},proposal,{scenes:restored.scenes});
+          }
           window.studioDirectorWorkbench.presentAction(proposal, proposal.scene,
             {projectId:proposal.projectId}, proposal.request, actionIndex);
           break;

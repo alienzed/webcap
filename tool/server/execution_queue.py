@@ -47,6 +47,7 @@ def _default_lane():
         "paused": False,
         "pauseReason": "",
         "activeJobId": "",
+        "failedJobId": "",
         "jobs": [],
         "recent": [],
         "guards": {},
@@ -164,6 +165,7 @@ def _lane(state, lane_name, create=True):
     lane.setdefault("paused", False)
     lane.setdefault("pauseReason", "")
     lane.setdefault("activeJobId", "")
+    lane.setdefault("failedJobId", "")
     return lane
 
 
@@ -828,6 +830,7 @@ def lane_snapshot(lane_name, include_terminal=True):
             "paused": bool(lane.get("paused")),
             "pauseReason": str(lane.get("pauseReason") or ""),
             "activeJobId": str(lane.get("activeJobId") or ""),
+            "failedJobId": str(lane.get("failedJobId") or ""),
             "jobs": [_public_job(job) for job in jobs],
         }
 
@@ -838,6 +841,7 @@ def pause_lane(lane_name, reason="Queue paused by the user."):
         lane = _lane(state, lane_name)
         lane["paused"] = True
         lane["pauseReason"] = str(reason or "Queue paused.")
+        lane["failedJobId"] = ""
         _write_state(state)
         return lane_snapshot(lane_name)
 
@@ -848,6 +852,7 @@ def resume_lane(lane_name):
         lane = _lane(state, lane_name)
         lane["paused"] = False
         lane["pauseReason"] = ""
+        lane["failedJobId"] = ""
         _write_state(state)
         return lane_snapshot(lane_name)
 
@@ -953,6 +958,7 @@ def requeue_active_and_pause(job_id, reason):
         lane["activeJobId"] = ""
         lane["paused"] = True
         lane["pauseReason"] = str(reason or "Queue paused after an execution error.")
+        lane["failedJobId"] = job["id"]
         _refresh_positions(lane)
         _write_state(state)
         return _public_job(job)

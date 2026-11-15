@@ -88,3 +88,55 @@ test('ComfyUI error heading retains room for title beside compact Copy Error con
   assert.match(button[1], /width:\s*auto/);
   assert.match(button[1], /white-space:\s*nowrap/);
 });
+
+
+test('failed inference banner links only the recorded failed job, not a guessed first queued job', () => {
+  const html = fs.readFileSync('tool/tool.html', 'utf8');
+  assert.match(html, /id="inference-queue-error-source"/);
+  const widgets = {};
+  for (const id of ['inference-queue-error', 'inference-queue-error-message',
+    'inference-queue-error-traceback', 'inference-queue-error-source']) {
+    const hidden = new Set(['hidden']);
+    widgets[id] = {
+      classList: {
+        toggle(name, yes) { if (yes) hidden.add(name); else hidden.delete(name); },
+        contains(name) { return hidden.has(name); }
+      },
+      dataset: {},
+      textContent: ''
+    };
+  }
+  const state = {queue: {
+    paused: true,
+    pauseReason: 'Inference paused after an execution error: no lora found',
+    failedJobId: 'specific-job',
+    jobs: [
+      {jobId: 'other-job', client: 'generate'},
+      {jobId: 'specific-job', client: 'storyboard', sceneId: 'scene-3'}
+    ]
+  }};
+  const first = source.indexOf('  function jobClientLabel(job) {');
+  const firstEnd = source.indexOf('  function testCandidateTitle(job)', first);
+  const begin = source.indexOf('  function formatExecutionFailure(reason) {');
+  const end = source.indexOf('  function renderToggle(jobs) {', begin);
+  assert.ok(first >= 0 && firstEnd > first && begin > firstEnd && end > begin);
+  const sandbox = {state, el(id) { return widgets[id]; }};
+  vm.runInNewContext(source.slice(first, firstEnd) + source.slice(begin, end) +
+    '\nthis.render = renderFailureDetails;', sandbox);
+  sandbox.render();
+  assert.equal(widgets['inference-queue-error-source'].dataset.jobId, 'specific-job');
+  assert.equal(widgets['inference-queue-error-source'].textContent, 'Open Storyboard source');
+  assert.equal(widgets['inference-queue-error-source'].classList.contains('hidden'), false);
+  assert.equal(widgets['inference-queue-error-message'].textContent, 'no lora found');
+
+  state.queue.failedJobId = 'unknown-job';
+  sandbox.render();
+  assert.equal(widgets['inference-queue-error-source'].classList.contains('hidden'), true);
+  assert.equal(widgets['inference-queue-error-source'].dataset.jobId, '');
+
+  state.queue.failedJobId = 'specific-job';
+  state.queue.paused = false;
+  sandbox.render();
+  assert.equal(widgets['inference-queue-error-source'].classList.contains('hidden'), true);
+  assert.equal(widgets['inference-queue-error'].classList.contains('hidden'), true);
+});

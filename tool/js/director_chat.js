@@ -2028,27 +2028,30 @@
 
 
   function parseStudioBriefDraft(raw) {
-    var value = String(raw || '').trim();
-    var fence = String.fromCharCode(96).repeat(3);
+    var value = String(raw || '').trim(), fence = String.fromCharCode(96).repeat(3);
     if (value.startsWith(fence) && value.endsWith(fence)) {
       var newline = value.indexOf('\n');
       if (newline >= 0) value = value.slice(newline + 1, -3).trim();
     }
     var result;
     try { result = JSON.parse(value); }
-    catch (error) { throw new Error('Director returned invalid Concept / Style / Invariants JSON: ' + error.message + '\nRaw Director response:\n' + String(raw || '')); }
-    if (!result || typeof result !== 'object' || Array.isArray(result) ||
-        typeof result.title !== 'string' || typeof result.concept !== 'string' || typeof result.style !== 'string' ||
-        typeof result.rationale !== 'string' || !Array.isArray(result.invariants) ||
-        result.invariants.length > 30 || result.invariants.some(function (item) {
-          return !item || typeof item !== 'object' || Array.isArray(item) ||
-            typeof item.kind !== 'string' || typeof item.title !== 'string' ||
-            typeof item.text !== 'string' ||
-            ['character', 'location', 'visual', 'world', 'sound', 'custom'].indexOf(item.kind) === -1;
-        })) {
-      throw new Error('The proposal must contain Concept, Style, Invariants and a rationale.\nRaw Director response:\n' + String(raw || ''));
+    catch (error) { throw new Error('Director returned invalid Project JSON: ' + error.message +
+      '\nRaw Director response:\n' + String(raw || '')); }
+    if (!result || typeof result !== 'object' || Array.isArray(result))
+      throw new Error('Director returned no Project field replacements.');
+    var fields = studioWorkingFieldChanges(result,['title','concept','style','invariants']);
+    if (Array.isArray(fields.invariants)) {
+      var kinds = ['character','location','visual','world','sound','custom'];
+      if (fields.invariants.length > 30 || fields.invariants.some(function (item) {
+        return !item || typeof item !== 'object' || Array.isArray(item) ||
+          !kinds.includes(item.kind) || typeof item.title !== 'string' ||
+          typeof item.text !== 'string';
+      })) delete fields.invariants; // Keep the original list; other fields survive.
     }
-    return result;
+    if (!Object.keys(fields).length)
+      throw new Error('Director returned no usable Project field values.\nRaw response:\n' + String(raw || ''));
+    fields.rationale = typeof result.rationale === 'string' ? result.rationale : '';
+    return fields;
   }
 
   // A bounded, editable-review-only word comparison. No source text is rewritten.
@@ -2260,11 +2263,11 @@
         return;
       }
       var input = {
-        task: 'Author complete revised Project Overview field values using the freshly saved Project ' +
-          'as the baseline. Follow the specific agreed instruction, changing only the requested fields. ' +
-          'Return the complete title, Concept, Visual / atmosphere and Invariant list, preserving all ' +
-          'unaffected text, Invariants and Scene prompts. Keep the core appeal in Concept. ' +
-          'WebCap reviews and saves only selected changes.',
+        task: 'Revise the specified Project fields using the saved Project as baseline. ' +
+          'Return only fields that need a complete replacement value: title, concept, style and/or ' +
+          'the complete invariants list. Omit unchanged fields rather than rewriting them. ' +
+          'Preserve unrelated Project details and all Scenes. Keep the core appeal in Concept. ' +
+          'WebCap merges requested fields and offers reviewed saving.',
         instruction: instruction, requestedFields: requestedFields,
         project: { id: story.id, title: story.title, concept: story.concept,
           style: story.style, invariants: story.invariants },
@@ -2285,10 +2288,16 @@
           return waitForJob(result.job);
         }).then(function (job) {
           var result = job.result && typeof job.result === 'object' ? job.result : {};
-          var draft = parseStudioBriefDraft(result.text);
+          var changes = parseStudioBriefDraft(result.text);
+          var draft = Object.assign({},expected,changes);
           state.studioBriefProposal = {
             storyId: storyId, storyTitle: story.title, expected: expected, draft: draft,
-            instruction:instruction, requestedFields:requestedFields, rationale: draft.rationale
+            instruction:instruction,
+            requestedFields:requestedFields.length ? requestedFields :
+              Object.keys(changes).filter(function (key) {
+                return ['title','concept','style','invariants'].includes(key);
+              }),
+            rationale: changes.rationale
           };
           finishProgress(null);
           studioActionStatus('Project Overview ready for review. Nothing has changed.', false);

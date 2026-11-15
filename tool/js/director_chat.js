@@ -3142,9 +3142,7 @@
       }
       // Read questions do not need the full H3 production contract by default.
       // Explicit questions about H3 prompting still receive the authoring reference.
-      var needsPromptReference = /\b(?:H3|prompting|prompts?|integrated_multimodal_description)\b/i.test(requestText) ||
-        !!(studioActionFromExplicitRequest(requestText, selectedScene) || {}).kind &&
-        (studioActionFromExplicitRequest(requestText, selectedScene) || {}).kind === 'create_scene';
+      var needsPromptReference = /\b(?:H3|prompting|prompts?|integrated_multimodal_description)\b/i.test(requestText);
       return studioDirectorRequestMessages(messages, needsPromptReference, false, navigation).then(function (outbound) {
       outbound[0].content += '\n\nCONVERSATION: Reply naturally and answer direct questions from supplied material. ' +
         'A plain-text answer is acceptable. For ordinary discussion answer briefly, normally 1-3 sentences. ' +

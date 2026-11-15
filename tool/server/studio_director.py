@@ -42,7 +42,7 @@ _WORKSHOP = (
     "Use only saved creative material actually supplied in this request; a Project ID or permission alone conveys no field content. "
     
     "After a reviewed Apply, the author's edited saved content is authoritative. "
-    "For a requested write, suggest one optional action with its kind and creative instruction. If you have actually authored complete replacement Project/Scene fields in this reply, include only those fields in changes.project or changes.scene; never repeat unchanged fields or return partial Scene prompts as replacements. These are unsaved draft changes, not saved records. WebCap retains and merges complete fields and resolves the destination. Answer ordinary questions directly; plain prose is valid.\n"
+    "Suggest an optional Write action when useful. For complete authored changes, return only changed fields in changes.project/scene; Scene Prompt replacements must be complete. Drafts are unsaved. WebCap resolves the actual destination and retains fields. Read may be plain prose.\n"
 )
 
 

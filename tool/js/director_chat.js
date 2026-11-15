@@ -378,7 +378,11 @@
       el('director-chat-history-toggle').setAttribute('aria-expanded', 'false');
       if (el('director-chat-history-panel').open) el('director-chat-history-panel').close();
     }
-    el('director-chat-clear').textContent = context ? 'New QA chat' : studio ? 'New conversation' : 'New chat';
+    var newChat = el('director-chat-clear');
+    var newChatLabel = context ? 'New QA chat' : studio ? 'New conversation' : 'New chat';
+    newChat.setAttribute('aria-label', newChatLabel);
+    newChat.title = newChatLabel;
+    newChat.textContent = studio ? '＋' : newChatLabel;
     var drawer = el('director-chat-drawer');
     drawer.classList.toggle('studio-director', studio);
     el('app-frame').classList.toggle('studio-director-active', studio && state.open);

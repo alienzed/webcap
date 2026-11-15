@@ -17,6 +17,7 @@ function cleanup(code) {
   if (modelProcess && modelProcess.exitCode === null) modelProcess.kill('SIGTERM');
   // A file-backed application must not leak acceptance Projects into the real app.
   fs.rmSync(temp, {recursive:true, force:true});
+  fs.rmSync(path.join(root,'test-results','studio-temp-root.txt'),{force:true});
   process.exit(code);
 }
 process.once('SIGTERM', () => cleanup(0));
@@ -64,6 +65,7 @@ function portAvailable() {
   };
   fs.writeFileSync(path.join(temp,'tool/config.json'),JSON.stringify(cfg,null,2));
   fs.mkdirSync(path.dirname(logFile),{recursive:true});
+  fs.writeFileSync(path.join(root,'test-results','studio-temp-root.txt'),temp);
   const logs = fs.openSync(logFile,'w');
   if (!liveEndpoint) {
     modelProcess=spawn(process.execPath,[path.join(root,'tests/browser/model-boundary.cjs')],{

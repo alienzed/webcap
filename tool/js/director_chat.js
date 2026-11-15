@@ -4287,6 +4287,26 @@
     return value >= 0 ? value : match[1].toLowerCase() === 'thirty' ? 30 : Number(match[1]);
   }
 
+  // Only actual persisted field values clear a retained draft. Keep unrelated
+  // fields available if the save applied only part of the author's material.
+  function forgetSavedStudioSceneFields(storyId, sceneId, savedScene) {
+    if (!storyId || !sceneId || !savedScene || typeof savedScene !== 'object') return;
+    var draft = state.studioWorkingDraft.scenes[sceneId];
+    if (!draft) return;
+    var changed = false;
+    Object.keys(draft).forEach(function (field) {
+      if (Object.prototype.hasOwnProperty.call(savedScene,field) &&
+          JSON.stringify(draft[field]) === JSON.stringify(savedScene[field])) {
+        delete draft[field];
+        changed = true;
+      }
+    });
+    if (changed) {
+      if (!Object.keys(draft).length) delete state.studioWorkingDraft.scenes[sceneId];
+      scheduleSessionSave();
+    }
+  }
+
   window.studioDirectorBridge = {
     placeSuggestedAction: placeStudioSuggestion,
     finishWriteAction:function (action) {
@@ -4338,6 +4358,7 @@
     preparedSceneFields: function (sceneId) {
       return Object.assign({}, state.studioWorkingDraft.scenes[sceneId] || {});
     },
+    forgetSavedSceneDraft: forgetSavedStudioSceneFields,
     reviewPreparedWrite: function (draft) {
       if (!this.canReview()) throw new Error('Open the Studio conversation to review its prepared material.');
       if (draft.kind === 'project') {
@@ -5000,12 +5021,19 @@
             state.pending = true;
             syncControls();
             return window.studioDirectorWorkbench.applyScenePrompt(story, sceneId, proposed.prompt, extras)
-              .then(function () {
+              .then(function (savedResult) {
                 studioActionStatus('Scene ' + (story.sceneOrder.indexOf(sceneId)+1) + ' saved.' +
                    (missing.length ? ' Requested ' + missing.join(' and ') + ' not updated; inspect the saved Scene.' : ''),!!missing.length);
+                return savedResult;
               });
           });
+      }).then(function (result) {
+        if (result && result.story && result.story.id === storyId && result.scene)
+          forgetSavedStudioSceneFields(storyId,sceneId,result.scene);
+        return result;
       }).catch(function (error) {
+        if (error.saved && error.savedScene)
+          forgetSavedStudioSceneFields(storyId,sceneId,error.savedScene);
         state.lastStudioIoError = String(error.message || error);
         studioActionStatus(error.saved
           ? 'Scene saved, but refreshing or recording it failed: ' + state.lastStudioIoError

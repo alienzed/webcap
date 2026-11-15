@@ -791,7 +791,7 @@
       refreshProjects().then(function (items) {
         if (frozen.kind === 'create_project')
           return window.studioDirectorBridge.prepareWrite('new-project','', '',{
-            instruction:frozen.instruction
+            instruction:frozen.instruction,authorRequest:frozen.request
           });
         var mentioned = items.filter(function (p) {
           var title = storyName(p).trim();
@@ -816,7 +816,7 @@
         if (frozen.kind === 'write_project') {
           var fields = frozen.fields.filter(function (name) {return projectFields.includes(name);});
           return window.studioDirectorBridge.prepareWrite('project',projectId,storyName(item),{
-            instruction:frozen.instruction,requestedFields:fields
+            instruction:frozen.instruction,authorRequest:frozen.request,requestedFields:fields
           });
         }
         if (frozen.kind === 'create_scene') {

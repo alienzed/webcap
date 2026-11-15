@@ -113,6 +113,6 @@ test('Wide Takes heading aligns with Generation and retains left inset',()=>{
   const takesSummary=css.split('.storyboard-scenes-list.is-focus .storyboard-scene:has(> .storyboard-takes[open]) .storyboard-takes-summary {')[1].split('}',1)[0];
   const takesContent=css.split('.storyboard-scenes-list.is-focus .storyboard-scene:has(> .storyboard-takes[open]) .storyboard-takes-content {')[1].split('}',1)[0];
   assert.match(takesSummary,/min-height:\s*0/);
-  assert.match(takesSummary,/padding:\s*28px 14px 12px/);
+  assert.match(takesSummary,/padding:\s*16px 14px 12px/);
   assert.match(takesContent,/padding:\s*0 14px 14px/);
 });

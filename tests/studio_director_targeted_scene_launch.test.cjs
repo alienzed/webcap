@@ -226,3 +226,34 @@ test('unsupported explicit duration preserves a complete Scene draft without sav
   assert.equal(h.state.modeMessages.storyboard.at(-1).content,'Twenty-second complete scene');
   assert.ok(h.events.some(row=>row[0]==='status' && /nothing saved/.test(row[1])));
 });
+
+test('already authored structured Scene prompt applies with exact requested duration, no repeat model call',async()=>{
+  const h=sceneFixture();
+  const request='Make Scene 1 last 14 seconds with a quieter ending.';
+  h.state.studioWorkingDraft.scenes.s1={prompt:'Complete quiet H3 replacement'};
+  h.state.studioWorkingDraft.sourceRequest=request;
+  await h.window.studioDirectorBridge.writeSelectedScene({
+    ...h.launch,authorRequest:request,instruction:'Quieter ending',
+    fields:['prompt','durationSeconds']
+  });
+  assert.equal(h.events.filter(row=>row[0]==='model').length,0);
+  const save=h.events.find(row=>row[0]==='save')[1];
+  assert.equal(save.changes.prompt,'Complete quiet H3 replacement');
+  assert.equal(save.changes.durationSeconds,14);
+  assert.equal(h.saved.scenes.s1.durationSeconds,14);
+});
+
+test('unsupported duration never saves a working prompt with contradictory timing',async()=>{
+  const h=sceneFixture();
+  const request='Make Scene 1 last 20 seconds.';
+  h.state.studioWorkingDraft.scenes.s1={prompt:'Complete twenty-second H3 replacement'};
+  h.state.studioWorkingDraft.sourceRequest=request;
+  const result=await h.window.studioDirectorBridge.writeSelectedScene({
+    ...h.launch,authorRequest:request,instruction:'Longer ending',
+    fields:['prompt','durationSeconds']
+  });
+  assert.equal(result.review,true);
+  assert.equal(h.events.filter(row=>row[0]==='model').length,0);
+  assert.equal(h.events.filter(row=>row[0]==='save').length,0);
+  assert.equal(h.saved.scenes.s1.prompt,'Mara shouts at the rover.');
+});

@@ -985,7 +985,20 @@
 
   window.studioDirectorWorkbench = {
     presentAction:presentAction,
-    clearWriteAction:function () {
+    completeWriteAction:function (kind, story, selected) {
+      var action = pendingCreativeAction;
+      if (!action) return;
+      var projectId = action.chosenProjectId || action.projectId;
+      var matches =
+        (action.kind === 'create_project' && kind === 'project.create') ||
+        (projectId === story.id &&
+          ((action.kind === 'write_project' && kind === 'brief.apply') ||
+           (action.kind === 'create_scene' && kind === 'scene.create') ||
+           (action.kind === 'write_scenes' && kind === 'scene.director.revision' &&
+            (!action.scene || !action.scene.sceneId ||
+             action.scene.sceneId === selected.sceneId ||
+             (Array.isArray(action.chosenSceneIds) && action.chosenSceneIds.includes(selected.sceneId))))));
+      if (!matches) return;
       pendingCreativeAction = null;
       el('studio-dw-suggestions').replaceChildren();
       showConversationWrite();

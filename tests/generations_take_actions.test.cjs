@@ -169,3 +169,19 @@ test('a failed stop remains visible and its controls recover', async () => {
   assert.ok(errors.some(args => String(args[1]).includes('provider temporarily unreachable')),
     'operational failure should reach the global console');
 });
+
+test('Generate Cancel and Stop controls occupy their own status-space, not the thumbnail', () => {
+  const css = fs.readFileSync(path.join(__dirname, '..', 'tool/css/generate.css'), 'utf8');
+  const stage = css.match(/\.generate-stage-pending \.generate-stage-job-action\s*\{([^}]*)\}/);
+  assert.ok(stage, 'preview action must have a placement rule');
+  assert.match(stage[1], /position:\s*absolute/);
+  assert.match(stage[1], /top:\s*12px/);
+  assert.match(stage[1], /right:\s*12px/);
+  const copy = css.match(/\.generate-take-pending-entry \.generate-take-copy\s*\{([^}]*)\}/);
+  assert.ok(copy, 'pending Take status must reserve room for its action');
+  assert.match(copy[1], /padding-right:\s*92px/);
+  const action = css.match(/\.generate-take-job-action\s*\{([^}]*)\}/);
+  assert.ok(action);
+  assert.match(action[1], /bottom:\s*10px/);
+  assert.doesNotMatch(action[1], /top:/);
+});

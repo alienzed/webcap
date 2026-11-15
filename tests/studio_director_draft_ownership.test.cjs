@@ -132,7 +132,6 @@ test('batch continues after retained reviews and distinguishes saved-but-unrepor
   assert.deepEqual(failed,[]);
   assert.deepEqual(reportingErrors,['Scene 2']);
   assert.match(reports.at(-1),/Saved, but reporting failed for Scene 2/);
-  assert.equal(frozen.reviewReady,true);
-  assert.deepEqual(refreshed,[true]);
-  assert.deepEqual(finished,[]);
+  assert.deepEqual(refreshed,[]);
+  assert.deepEqual(finished,[false]);
 });

@@ -4496,9 +4496,14 @@
   }
 
   function studioMentionedDuration(instruction) {
-    var match = /\b(\d+(?:\.\d+)?)\s*(?:-|\s)?\s*(?:seconds?|secs?|s)\b/i.exec(
+    var match = /\b(\d+(?:\.\d+)?|zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty)\s*(?:-|\s)?\s*(?:seconds?|secs?|s)\b/i.exec(
       String(instruction || ''));
-    return match ? Number(match[1]) : null;
+    if (!match) return null;
+    var words = ['zero','one','two','three','four','five','six','seven','eight','nine',
+      'ten','eleven','twelve','thirteen','fourteen','fifteen','sixteen','seventeen',
+      'eighteen','nineteen','twenty'];
+    var value = words.indexOf(match[1].toLowerCase());
+    return value >= 0 ? value : match[1].toLowerCase() === 'thirty' ? 30 : Number(match[1]);
   }
 
   window.studioDirectorBridge = {

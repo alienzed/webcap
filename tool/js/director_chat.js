@@ -3723,8 +3723,7 @@
           )});
         }
         var authoredScenes = studioResponse && studioResponse.scenes;
-        if (activeChatMode === 'storyboard' && nextAction &&
-            nextAction.kind === 'create_scene' && authoredScenes && authoredScenes.length) {
+        if (activeChatMode === 'storyboard' && authoredScenes && authoredScenes.length) {
           // Material is already authored: review it as-is. There is no second
           // LLM call and no guessed number of missing Scenes to generate.
           window.studioDirectorBridge.reviewAuthoredScenes({

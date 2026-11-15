@@ -40,7 +40,7 @@ test('Scene strip combines Add and Extend into one action menu and owns Sequence
 test('literal replacement counts all matches and respects case without regex or LLM',()=>{
   const scope=vm.createContext({});
   vm.runInContext(section('  function projectReplaceText(', '  function previewProjectReplacement() {'),scope);
-  const insensitive=scope.projectReplaceText('Red red RED redwood','blue','x',false);
+  const insensitive=scope.projectReplaceText('Red red RED redwood','red','x',false);
   assert.equal(insensitive.count,4);
   assert.equal(insensitive.text,'x x x xwood');
   const sensitive=scope.projectReplaceText('Red red RED','red','blue',true);

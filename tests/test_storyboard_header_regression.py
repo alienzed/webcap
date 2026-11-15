@@ -48,7 +48,7 @@ def test_scene_card_strip_and_focus_editor_do_not_add_redundant_frames():
 
     assert "border-bottom:" not in rule(".storyboard-scenes-heading")
     assert "border-bottom:" not in rule(".storyboard-scene-progression")
-    focus = rule(".storyboard-scenes-list.is-focus .storyboard-scene")
+    focus = css.split(".storyboard-scenes-list.is-focus .storyboard-scene {", 2)[2].split("}", 1)[0]
     assert "border: 0;" in focus
     assert "background: transparent;" in focus
     assert "padding: 12px 0 16px;" in rule(".storyboard-scenes-list.is-focus .storyboard-scene-body")

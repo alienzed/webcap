@@ -654,6 +654,8 @@
       var stored = { role: message.role, content: message.content };
       if (mode === 'storyboard' && message.role === 'assistant' && message.rawResponse)
         stored.rawResponse = message.rawResponse;
+      if (mode === 'storyboard' && message.role === 'assistant' && message.writeAction)
+        stored.writeAction = message.writeAction;
       return stored;
     });
     var draft = state.draftByMode[mode] || '';
@@ -755,7 +757,20 @@
       state.studioAccessIndex = null;
       state.workshop = chat.workshop || null;
       state.studioOperations = Array.isArray(chat.operations) ? chat.operations.slice() : [];
-      if (window.studioDirectorWorkbench) window.studioDirectorWorkbench.resetConversation();
+      if (window.studioDirectorWorkbench) {
+        window.studioDirectorWorkbench.resetConversation();
+        // Recover the last unsaved proposal with its original bound target.
+        // A saved receipt closes that task, while ordinary follow-ups need not.
+        for (var actionIndex = chat.messages.length - 1; actionIndex >= 0; actionIndex--) {
+          var entry = chat.messages[actionIndex];
+          if (String(entry.content || '').includes('[WEBCAP APPLIED FIELD VALUES]')) break;
+          if (!entry.writeAction) continue;
+          var proposal = entry.writeAction;
+          window.studioDirectorWorkbench.presentAction(proposal, proposal.scene,
+            {projectId:proposal.projectId}, proposal.request, actionIndex);
+          break;
+        }
+      }
       state.studioReadiness = chat.readiness || {checks:[],readHints:[],writeHint:'',writeFields:[],sceneId:''};
       state.studioSceneProposal = null;
       state.studioProjectProposal = null;
@@ -1206,11 +1221,11 @@
     return String(content || '').replace(/^\s*RECEIVED:\s*(?:project\.\w+|scene:[\w-]+:\w+)(?:[ \t]*,[ \t]*(?:project\.\w+|scene:[\w-]+:\w+))*[ \t]*[.;]?[ \t]*(?:\r?\n)?/i, '').trim();
   }
 
-  function placeStudioSuggestion(node) {
+  function placeStudioSuggestion(node, messageIndex) {
     // Keep this action attached to the answer which proposed it. A later Read
     // or follow-up must neither move it under a different reply nor discard it.
-    if (state.activeMode === 'storyboard')
-      state.studioActionIndex = currentMessages().length - 1;
+    if (state.activeMode === 'storyboard' || Number.isInteger(messageIndex))
+      state.studioActionIndex = Number.isInteger(messageIndex) ? messageIndex : currentMessages().length - 1;
     node.classList.add('hidden');
   }
 
@@ -3597,7 +3612,7 @@
         }
         if (nextAction) {
           try {
-            window.studioDirectorWorkbench.presentAction(
+            messages[messages.length - 1].writeAction = window.studioDirectorWorkbench.presentAction(
               nextAction, targetScene, targetProject, content);
           } catch (processingError) {
             // Optional action presentation must never invalidate a useful answer.
@@ -4195,6 +4210,7 @@
       var savedTarget = selected.sceneId && story.scenes && story.scenes[selected.sceneId]
         ? 'Scene ' + ((story.sceneOrder || []).indexOf(selected.sceneId) + 1) + ' · ' + (story.scenes[selected.sceneId].title || selected.sceneId)
         : story.title || story.id;
+      window.studioDirectorWorkbench.clearWriteAction();
       state.modeMessages.storyboard.push({role:'user',
         content:'Saved ' + savedTarget + ': ' + (savedFields.join(' · ') || 'Scene changes') +
           String.fromCharCode(10) + '[WEBCAP APPLIED FIELD VALUES]' +

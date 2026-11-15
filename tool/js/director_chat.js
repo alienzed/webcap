@@ -17,6 +17,7 @@
     workshopProposal: null,
     storyGuidelineProposal: null,
     modeMessages: {},
+    studioActionIndex: -1,
     modeContextKeys: {},
     elapsedByAssistantIndex: {},
     modeElapsedByAssistantIndex: {},
@@ -731,6 +732,7 @@
       state.metricsByAssistantIndex = {};
     } else {
       state.modeMessages.storyboard = chat.messages.slice();
+      state.studioActionIndex = -1;
       state.modeElapsedByAssistantIndex.storyboard = {};
       state.modeMetricsByAssistantIndex.storyboard = {};
       state.storyboardAttachments = Object.assign({}, chat.attachments || {});
@@ -1193,14 +1195,11 @@
   }
 
   function placeStudioSuggestion(node) {
+    // Keep this action attached to the answer which proposed it. A later Read
+    // or follow-up must neither move it under a different reply nor discard it.
+    if (state.activeMode === 'storyboard')
+      state.studioActionIndex = currentMessages().length - 1;
     node.classList.add('hidden');
-    var messages = currentMessages(), latest = messages[messages.length - 1];
-    var row = el('director-chat-messages').lastElementChild;
-    if (state.activeMode === 'storyboard' && latest && latest.role === 'assistant' &&
-        row && node.children.length) {
-      row.appendChild(node);
-      node.classList.remove('hidden');
-    }
   }
 
   function renderMessages() {
@@ -1215,6 +1214,7 @@
     host.innerHTML = '';
     empty.classList.toggle('hidden', currentMessages().length > 0);
 
+    var suggestionRow = null;
     currentMessages().forEach(function (message, index) {
       var studioReply = state.activeMode === 'storyboard' && message.role === 'assistant';
       var previous = currentMessages()[index-1];
@@ -1283,9 +1283,13 @@
         row.appendChild(meta);
       }
       host.appendChild(row);
+      if (studioReply && index === state.studioActionIndex) suggestionRow = row;
     });
 
-    placeStudioSuggestion(suggestion);
+    if (state.activeMode === 'storyboard' && suggestionRow && suggestion.children.length) {
+      suggestionRow.appendChild(suggestion);
+      suggestion.classList.remove('hidden');
+    }
     host.scrollTop = host.scrollHeight;
   }
 
@@ -2993,6 +2997,7 @@
         state.metricsByAssistantIndex = {};
       } else {
         state.modeMessages.storyboard = [];
+        state.studioActionIndex = -1;
         state.studioOperations = [];
         state.studioBriefUndo = null;
         if (window.studioDirectorWorkbench) window.studioDirectorWorkbench.resetConversation();
@@ -3245,6 +3250,27 @@
         typeof action.instruction !== 'string' || !action.instruction.trim())
       action = null;
     return {reply:value.reply,action:action};
+  }
+
+  function studioActionFromExplicitRequest(request, selectedScene) {
+    // Plain-text remote models can answer correctly without returning the
+    // optional action JSON. Do not make a second LLM call to classify a clear
+    // author instruction. An action is only an offer, never an automatic save.
+    request = String(request || '').trim();
+    if (!request || /[?]\s*$/.test(request)) return null;
+    var kind = '';
+    if (/\b(?:create|start|add|draft|make|write)\b[\s\S]{0,45}\b(?:new\s+)?project\b/i.test(request))
+      kind = 'create_project';
+    else if (/\b(?:create|add|draft|write|make)\b[\s\S]{0,45}\b(?:new\s+)?scenes?\b/i.test(request) &&
+        /\b(?:new|create|add|draft)\b/i.test(request))
+      kind = 'create_scene';
+    else if (/\b(?:revise|rewrite|update|edit|change|improve|adjust|rename)\b[\s\S]{0,65}\b(?:project|concept|overview|invariants|atmosphere|visuals)\b/i.test(request))
+      kind = 'write_project';
+    else if (/\b(?:revise|rewrite|update|edit|change|improve|adjust|rename|make|quiet|shorten|extend|fix)\b/i.test(request) &&
+        (selectedScene || /\bscenes?\s*\d+\b/i.test(request)))
+      kind = 'write_scenes';
+    if (!kind) return null;
+    return {kind:kind,instruction:request,fields:[]};
   }
 
   function storyboardRequestMessages(messages, includePrimer) {
@@ -3760,16 +3786,18 @@
           window.studioDirectorWorkbench.setReadStatus('success', feedback);
           studioActionStatus(feedback, false);
         }
-        if (studioResponse && studioResponse.action) {
+        messages.push({ role: 'assistant', content: assistantText });
+        var nextAction = studioResponse && studioResponse.action ||
+          (activeChatMode === 'storyboard' ? studioActionFromExplicitRequest(content, selectedScene) : null);
+        if (nextAction) {
           try {
             window.studioDirectorWorkbench.presentAction(
-              studioResponse.action, selectedScene, selectedProject, content);
+              nextAction, selectedScene, selectedProject, content);
           } catch (processingError) {
-            // Bad optional action metadata cannot erase a useful answer.
+            // Optional action presentation must never invalidate a useful answer.
             window.reportConsoleError('Studio action suggestion', processingError);
           }
         }
-        messages.push({ role: 'assistant', content: assistantText });
         if (studioResponse) messages[messages.length - 1].rawResponse = String(result.text || '');
         if (activeChatMode === 'storyboard' && studioResponse) el('studio-director-inspect').dataset.newResult = 'true';
         var assistantIndex = messages.length - 1;

@@ -334,8 +334,10 @@
     var selectedScene = state.activeMode === 'storyboard' ? studioDirectorSelectedScene() : null;
     sceneContext.classList.toggle('hidden', !selectedScene);
     if (selectedScene) {
-      sceneContext.textContent = selectedScene.label;
-      sceneContext.title = 'Saved Scene context is supplied with each Director message.';
+      var navigation = window.getStudioDirectorNavigation();
+      var sceneTitle = selectedScene.sceneId === navigation.sceneId ? navigation.sceneTitle : '';
+      sceneContext.textContent = selectedScene.label + (sceneTitle ? ' · ' + sceneTitle : '');
+      sceneContext.title = sceneContext.textContent + ' · Saved Scene context is supplied with each Director message.';
     }
     var row = el('director-chat-mode-row');
     var host = el('director-chat-mode-switch');
@@ -559,7 +561,11 @@
       empty.textContent = 'No saved conversations yet.';
       list.appendChild(empty);
     }
-    state.sessionList.forEach(function (chat) {
+    var filter = (el('director-chat-history-search').value || '').toLowerCase().trim();
+    var matches = state.sessionList.filter(function (chat) {
+      return !filter || [historyDisplayTitle(chat), chat.projectTitle, chat.mode].join(' ').toLowerCase().includes(filter);
+    });
+    matches.forEach(function (chat) {
       var item = document.createElement('div');
       item.className = 'director-chat-history-item';
       if (state.sessionByMode[state.activeMode] &&
@@ -609,7 +615,13 @@
           if (event.key === 'Escape') renderSessionHistory();
         };
       };
-      item.appendChild(rename);
+      var menu = document.createElement('details');
+      menu.className = 'director-chat-history-menu';
+      var summary = document.createElement('summary');
+      summary.textContent = 'More';
+      summary.setAttribute('aria-label', 'Conversation actions for ' + historyDisplayTitle(chat));
+      menu.appendChild(summary);
+      menu.appendChild(rename);
 
       var remove = document.createElement('button');
       remove.type = 'button';
@@ -617,9 +629,15 @@
       remove.textContent = 'Delete';
       remove.title = 'Permanently delete this saved conversation';
       remove.onclick = function () { deleteSession(chat.id); };
-      item.appendChild(remove);
+      menu.appendChild(remove);
+      item.appendChild(menu);
       list.appendChild(item);
     });
+    if (!matches.length && state.sessionList.length) {
+      var noMatches = document.createElement('p');
+      noMatches.textContent = 'No matching conversations.';
+      list.appendChild(noMatches);
+    }
   }
 
   function showSessionFailure(error) {
@@ -1240,6 +1258,10 @@
         fullText.textContent = visibleText;
         fullReply.append(fullHeading,fullText);
         body.replaceChildren(preview,fullReply);
+      }
+      if (message.role === 'user' && message.content.indexOf('[WEBCAP APPLIED FIELD VALUES]') !== -1) {
+        row.classList.add('director-chat-save-receipt');
+        label.textContent = '✓ Saved';
       }
       if (message.role === 'user' && (message.content.indexOf('[WEBCAP EXPLICIT READ]') !== -1 ||
           message.content.indexOf('[WEBCAP APPLIED FIELD VALUES]') !== -1)) {
@@ -3872,6 +3894,7 @@
       el('director-chat-history-panel').showModal();
     };
     el('director-chat-history-close').onclick = function () {el('director-chat-history-panel').close();};
+    el('director-chat-history-search').oninput = renderSessionHistory;
     el('director-chat-history-panel').addEventListener('close',function () {
       el('director-chat-history-toggle').setAttribute('aria-expanded','false');
       el('director-chat-history-toggle').focus();
@@ -4167,10 +4190,11 @@
         return names[key] + (key === 'invariants' ? ' (' + values[key].length + ')' : '');
       });
       if (Array.isArray(selected.scenes)) savedFields.push(selected.scenes.length + (selected.scenes.length === 1 ? ' Scene' : ' Scenes'));
+      var savedTarget = selected.sceneId && story.scenes && story.scenes[selected.sceneId]
+        ? 'Scene ' + ((story.sceneOrder || []).indexOf(selected.sceneId) + 1) + ' · ' + (story.scenes[selected.sceneId].title || selected.sceneId)
+        : story.title || story.id;
       state.modeMessages.storyboard.push({role:'user',
-        content:(isDirectorRevision ? 'Director revision saved: ' : 'Saved: ') +
-          (savedFields.join(' · ') || 'Scene changes') +
-          (isDirectorRevision ? '. Saved values are now authoritative.' : '. Reviewed values are now authoritative.') +
+        content:'Saved ' + savedTarget + ': ' + (savedFields.join(' · ') || 'Scene changes') +
           String.fromCharCode(10) + '[WEBCAP APPLIED FIELD VALUES]' +
           String.fromCharCode(10) + JSON.stringify(body, null, 2) +
           String.fromCharCode(10) + '[END WEBCAP APPLY]'});

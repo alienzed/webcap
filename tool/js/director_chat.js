@@ -3131,7 +3131,9 @@
       }
       // Read questions do not need the full H3 production contract by default.
       // Explicit questions about H3 prompting still receive the authoring reference.
-      var needsPromptReference = /\b(?:H3|prompting|prompts?|integrated_multimodal_description)\b/i.test(requestText);
+      var needsPromptReference = /\b(?:H3|prompting|prompts?|integrated_multimodal_description)\b/i.test(requestText) ||
+        !!(studioActionFromExplicitRequest(requestText, selectedScene) || {}).kind &&
+        (studioActionFromExplicitRequest(requestText, selectedScene) || {}).kind === 'create_scene';
       return studioDirectorRequestMessages(messages, needsPromptReference, false, navigation).then(function (outbound) {
       outbound[0].content += '\n\nCONVERSATION: Reply naturally and answer direct questions from supplied material. ' +
         'A plain-text answer is acceptable. For ordinary discussion answer briefly, normally 1-3 sentences. ' +
@@ -3142,8 +3144,10 @@
         'Fields lists only requested changed fields: Project title/concept/style/invariants or Scene title/prompt/durationSeconds. ' +
         'WebCap owns exact Project/Scene IDs, navigation, execution and saving. Do not invent saved IDs, readiness checks, ' +
         'permission metadata, capture fields or assessments. For an existing Scene revision propose write_scenes; ' +
-        'for a new Scene propose create_scene. Provide complete authored material in conversation only when ' +
-        'the author explicitly asks to see it there.\n';
+        'for a new Scene, author the actual material in scenes:[{title,prompt,durationSeconds}] in the same response. ' +
+        'Return the useful Scene records you can produce, even if fewer than requested; do not promise or simulate additional Scenes. ' +
+        'The scenes array represents unsaved editable drafts, not a completed save. ' +
+        'For other creative changes, offer a review action; provide full revised prose only when requested.\n';
       if (!selectedScene) {
         if (!story) {
           var availableNew = state.studioWorkingDraft.newProject;
@@ -3281,7 +3285,8 @@
         !['create_project','write_project','create_scene','write_scenes'].includes(action.kind) ||
         typeof action.instruction !== 'string' || !action.instruction.trim())
       action = null;
-    return {reply:reply,action:action,changes:value.changes || null};
+    return {reply:reply,action:action,changes:value.changes || null,
+      scenes:Array.isArray(value.scenes) ? value.scenes : null};
   }
 
   function studioActionFromExplicitRequest(request, selectedScene) {
@@ -3717,7 +3722,20 @@
                 ['title','prompt','durationSeconds'])
           )});
         }
-        if (nextAction) {
+        var authoredScenes = studioResponse && studioResponse.scenes;
+        if (activeChatMode === 'storyboard' && nextAction &&
+            nextAction.kind === 'create_scene' && authoredScenes && authoredScenes.length) {
+          // Material is already authored: review it as-is. There is no second
+          // LLM call and no guessed number of missing Scenes to generate.
+          window.studioDirectorBridge.reviewAuthoredScenes({
+            projectId:targetProject && targetProject.projectId,
+            scenes:authoredScenes,rationale:'Authored in Director conversation.'
+          }).catch(function (error) {
+            window.reportConsoleError('Studio Scene review',error);
+            studioActionStatus('Authored Scenes could not open in Review: ' +
+              String(error.message || error),true);
+          });
+        } else if (nextAction) {
           try {
             messages[messages.length - 1].writeAction = window.studioDirectorWorkbench.presentAction(
               nextAction, targetScene, targetProject, content);
@@ -4531,6 +4549,39 @@
         syncControls();
       });
     },
+    reviewAuthoredScenes: function (launch) {
+      if (!launch || !launch.projectId || !Array.isArray(launch.scenes))
+        return Promise.reject(new Error('Select a saved Project and authored Scene records.'));
+      var drafts = launch.scenes.filter(function (item) {
+        return item && typeof item === 'object' && !Array.isArray(item);
+      }).map(function (item) {
+        return {
+          title:typeof item.title === 'string' ? item.title : '',
+          prompt:typeof item.prompt === 'string' ? item.prompt : '',
+          durationSeconds:item.durationSeconds
+        };
+      }).filter(function (item) {
+        return item.title.trim() || item.prompt.trim() || item.durationSeconds !== undefined;
+      });
+      if (!drafts.length)
+        return Promise.reject(new Error('No usable Scene fields were authored.'));
+      return window.flushStudioDirectorStoryEdits(launch.projectId).then(function () {
+        return requestJson('/fs/storyboard?story=' + encodeURIComponent(launch.projectId));
+      }).then(function (payload) {
+        var story = payload && payload.story;
+        if (!story || story.id !== launch.projectId)
+          throw new Error('The Project is no longer available.');
+        state.studioScenesProposal = {
+          storyId:story.id,storyTitle:story.title,
+          sceneOrder:story.sceneOrder.slice(),scenes:story.scenes,
+          drafts:drafts,rationale:launch.rationale || ''
+        };
+        showStudioScenesReview();
+        studioActionStatus(drafts.length + ' authored Scene' +
+          (drafts.length === 1 ? '' : 's') + ' ready for review. Nothing saved.',false);
+        return {review:true,count:drafts.length};
+      });
+    },
     writeNewScene: function (launch) {
       var prepared = launch && state.studioWorkingDraft.newScene &&
         typeof state.studioWorkingDraft.newScene.prompt === 'string' &&
@@ -4594,7 +4645,7 @@
             durationSeconds:6
           },workingScene))) :
           window.studioDirectorBridge.makeProposal(instruction,
-            'studio_scene_field_draft', true,
+            'studio_scenes_draft', true,
             {projectId:storyId,projectTitle:story.title,sceneOrder:order});
         return proposal.then(function (raw) {
           state.lastStudioIoRaw = raw;

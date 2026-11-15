@@ -3118,13 +3118,10 @@
       var storyRefs = Object.keys(state.storyboardAttachments || {}).filter(function (key) {
         return key.indexOf('story:') === 0;
       });
-      var workbench = state.studioStoryAccess
-        ? 'The author selected Story ' + state.studioStoryAccess.storyId + ' as the current Write destination' +
-          '. Grant alone supplies no field values; only fields explicitly present in a particular ' +
-          'request may be used. Never claim to have inspected other data.'
-        : storyRefs.length === 1
-          ? 'A legacy historical Story snapshot exists in history (' + storyRefs[0].slice(6) + '), but it has not been automatically resent.'
-          : 'No saved Project Write destination has been selected. Prior explicitly Read content may still exist in conversation history.';
+      var workbench = navigation.projectId
+        ? 'WebCap resolved Project ' + navigation.projectId +
+          '. Only saved content supplied in this request is authoritative.'
+        : 'No Project is selected. A Project or Scene Write will need a destination.';
       outbound[0] = { role: 'system', content: payload.system +
         '\n\nCURRENT WEBCAP CAPABILITIES (available vs planned):\n' + capabilities +
         '\n\nSTUDIO WORKBENCH STATE (controls, not saved Story facts):\n' + workbench +
@@ -3163,7 +3160,7 @@
         sceneId:'',sceneNumber:0,sceneOrder:(mentioned.sceneOrder || []).slice()};
       selectedScene = studioDirectorSelectedScene(navigation, requestText);
     }
-    var connected = state.studioStoryAccess && state.studioStoryAccess.storyId;
+    var connected = mentioned && mentioned.id || (state.studioStoryAccess && state.studioStoryAccess.storyId);
     if (connected && connected !== navigation.projectId) selectedScene = null;
     var projectId = selectedScene ? selectedScene.projectId :
       (connected || studioAttachedStoryId() || navigation.projectId);
@@ -3173,6 +3170,12 @@
       var story = result && result.story;
       if (projectId && (!story || story.id !== projectId))
         throw new Error('The selected Director Project is no longer available.');
+      if (mentioned && story) {
+        // The listing may not carry the Scene index. Resolve its ordinal from
+        // the authoritative Project instead of inventing or trusting model IDs.
+        navigation.sceneOrder = story.sceneOrder.slice();
+        selectedScene = studioDirectorSelectedScene(navigation, requestText);
+      }
       if (story && connected && connected !== navigation.projectId) {
         navigation = {projectId:story.id,projectTitle:story.title,sceneId:'',sceneNumber:0,
           sceneOrder:story.sceneOrder.slice()};
@@ -3215,8 +3218,7 @@
     });
   }
 
-  // The creative assessment is advisory. Preserve the last accepted content
-  // across an unassessed exchange, including a reload of saved chat history.
+  // Retain available conversational work across ordinary follow-up questions.
   function markStudioReadinessOutdated() {
     // Kept only for old conversation metadata; it never invalidates a useful
     // current action or a completed draft.

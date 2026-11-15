@@ -128,6 +128,11 @@ def chat_response_schema():
                                 "create_scene", "write_scenes",
                             ]},
                             "instruction": {"type": "string", "minLength": 1},
+                            "fields": {"type": "array", "maxItems": 4,
+                                       "items": {"type": "string", "enum": [
+                                           "title", "concept", "style", "invariants",
+                                           "prompt", "durationSeconds",
+                                       ]}},
                         },
                     },
                 ],

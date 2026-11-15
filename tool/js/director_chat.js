@@ -4405,7 +4405,12 @@
       });
     },
     writeNewScene: function (launch) {
-      if (!this.isReady()) return Promise.reject(new Error(this.readinessMessage()));
+      var prepared = launch && state.studioWorkingDraft.newScene &&
+        typeof state.studioWorkingDraft.newScene.prompt === 'string' &&
+        !!state.studioWorkingDraft.newScene.prompt.trim() &&
+        studioRequestAppliesPreparedMaterial(launch.authorRequest || launch.instruction);
+      if (!this.isReady() && !(prepared && this.canReview()))
+        return Promise.reject(new Error(this.readinessMessage()));
       if (!launch || !launch.projectId || !String(launch.instruction || '').trim())
         return Promise.reject(new Error('A saved Project and agreed new-Scene brief are required.'));
       var storyId = launch.projectId;

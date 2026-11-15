@@ -88,3 +88,12 @@ test('ComfyUI error heading retains room for title beside compact Copy Error con
   assert.match(button[1], /width:\s*auto/);
   assert.match(button[1], /white-space:\s*nowrap/);
 });
+
+
+test('failed inference banner links only the recorded failed job, not a guessed first queued job', () => {
+  assert.match(source, /state\.queue\.failedJobId/);
+  assert.match(source, /source\.dataset\.jobId = failedJob/);
+  assert.match(source, /openJobScreen\(failureSource\.dataset\.jobId\)/);
+  const html = fs.readFileSync('tool/tool.html', 'utf8');
+  assert.match(html, /id="inference-queue-error-source"/);
+});

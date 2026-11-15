@@ -4184,8 +4184,8 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
 
 /* Studio Director: one-line identity and compact navigation; Write remains a conversational action shelf. */
 .director-chat-drawer.studio-director .director-chat-header-actions #studio-dw-open-tools {width:auto;padding:5px 11px;font-size:14px;}
-.director-chat-drawer.studio-director .director-header-button-label {display:none;}
-.director-chat-drawer.studio-director .studio-header-icon {display:block;width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}
+.director-chat-drawer.studio-director .director-header-button-label {display:inline;}
+.director-chat-drawer.studio-director .studio-header-icon {display:none;}
 .director-chat-drawer:not(.studio-director) .studio-header-icon {display:none;}
 .director-chat-drawer.studio-director .studio-dw-write-availability {display:block;}
 .director-chat-drawer.studio-director .studio-dw-write-availability p {margin:0;color:var(--muted);line-height:1.45;}

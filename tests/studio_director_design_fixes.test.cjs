@@ -242,3 +242,52 @@ test('conversation Scene targets support Select all and Deselect all without gue
   assert.equal([a,b,c].some(x=>x.checked),false);
   assert.equal(scope.sceneSelectionManual,true);
 });
+
+test('restoring a conversation recovers its last unsaved Write proposal with frozen target', () => {
+  const restored = [], nodes = new Map();
+  const el = id => {
+    if (!nodes.has(id)) nodes.set(id,{dataset:{},value:''});
+    return nodes.get(id);
+  };
+  const scope=vm.createContext({
+    state:{
+      activeMode:'storyboard',sessionByMode:{},sessionActiveByMode:{},
+      modeMessages:{},modeElapsedByAssistantIndex:{},modeMetricsByAssistantIndex:{},
+      storyboardAttachments:{},sessionDirty:{},sessionError:false
+    },
+    el, persistentMode:()=>true,upsertSessionSummary(){},showSessionStatus(){},
+    syncModeUi(){},window:{studioDirectorWorkbench:{
+      resetConversation(){restored.push(['reset']);},
+      presentAction:(...args)=>restored.push(args)
+    }}
+  });
+  vm.runInContext(section(chat,'  function restoreSession(chat) {',
+    '  function loadSessionHistory() {'),scope);
+  const action={kind:'write_scenes',instruction:'Make the ending quieter.',
+    request:'Revise Scene 2',fields:['prompt'],projectId:'project-1',
+    scene:{projectId:'project-1',sceneId:'scene-2',sceneNumber:2}};
+  const messages=[
+    {role:'user',content:'Revise Scene 2'},
+    {role:'assistant',content:'I can revise that.',writeAction:action},
+    {role:'user',content:'Why does that work?'},
+    {role:'assistant',content:'It reduces movement.'}
+  ];
+  scope.restoreSession({id:'chat-1',mode:'storyboard',messages,draft:'',
+    workingDraft:{scenes:{'scene-2':{prompt:'Already prepared'}}}});
+  assert.equal(restored.length,2);
+  assert.equal(restored[1][0].instruction,'Make the ending quieter.');
+  assert.equal(restored[1][1].sceneId,'scene-2');
+  assert.equal(restored[1][4],1,'original answer index is preserved');
+  assert.equal(scope.state.studioWorkingDraft.scenes['scene-2'].prompt,'Already prepared');
+  restored.length=0;
+  scope.restoreSession({id:'chat-2',mode:'storyboard',messages:messages.concat([
+    {role:'user',content:'Saved Scene 2: H3 Prompt\\n[WEBCAP APPLIED FIELD VALUES]'}
+  ]),draft:''});
+  assert.equal(restored.length,1,'saved receipt stops restoration of obsolete action');
+});
+
+test('conversation persistence includes frozen Write targets without extra authoring calls', () => {
+  assert.match(chat,/stored\\.writeAction = message\\.writeAction/);
+  assert.match(chat,/messages\\[messages\\.length - 1\\]\\.writeAction = window\\.studioDirectorWorkbench\\.presentAction/);
+  assert.match(chat,/completeWriteAction\\(kind, story, selected\\)/);
+});

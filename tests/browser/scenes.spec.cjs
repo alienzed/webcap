@@ -106,3 +106,49 @@ test('Flow 6 — each conversation reply owns its own editable Scene review',asy
   expect((await story(page,project.id)).sceneOrder).toHaveLength(0);
   expect((await observedModels(request)).calls).toHaveLength(2);
 });
+
+test('Flow 2 variation — useful partial Scene survives invalid sibling metadata and can be saved first',async({page,request})=>{
+  await resetModel(request);
+  await page.goto('/');
+  await page.locator('#activity-storyboard-btn').click();
+  const project=await newSelectedProject(page);
+  await page.locator('#director-chat-rail-btn').click();
+  await page.locator('[data-assistant-mode="storyboard"]').click();
+  await page.locator('#director-studio-attach-current').click();
+  const model=page.locator('#app-header-director-model');
+  await expect(model.locator('option[value="acceptance::acceptance-model"]')).toHaveCount(1);
+  await model.selectOption('acceptance::acceptance-model');
+  await queueModel(request,{
+    reply:'Here are the available Scenes.',
+    scenes:[
+      {title:'Complete',prompt:'A complete usable scene by the window.',durationSeconds:8},
+      {title:'Incomplete',prompt:'',durationSeconds:99}
+    ],
+    action:{kind:'create_scene',instruction:'Create three Scenes.'}
+  });
+  await say(page,'Create three Scenes with different durations');
+  const action=page.locator('#studio-dw-suggestions .studio-dw-suggestion-action');
+  await expect(action).toContainText('Review authored Scene');
+  await action.click();
+  const dialog=page.locator('#studio-scenes-review');
+  await expect(dialog).toBeVisible();
+  const rows=dialog.locator('.studio-scenes-row');
+  await expect(rows).toHaveCount(2);
+  await expect(rows.nth(1).locator('[data-field="durationSeconds"]')).toHaveValue('99');
+  await page.locator('#studio-scenes-apply').click();
+  await expect(dialog).toBeVisible();
+  await expect(rows).toHaveCount(1);
+  await expect(page.locator('#studio-scenes-error')).toContainText('1 still need');
+  const savedOnce=await story(page,project.id);
+  expect(savedOnce.sceneOrder).toHaveLength(1);
+  expect(savedOnce.scenes[savedOnce.sceneOrder[0]].title).toBe('Complete');
+  await rows.first().locator('[data-field="prompt"]').fill('The second usable scene opens the door.');
+  await rows.first().locator('[data-field="durationSeconds"]').fill('10');
+  await page.locator('#studio-scenes-apply').click();
+  await expect(dialog).toBeHidden();
+  await expect.poll(async()=> (await story(page,project.id)).sceneOrder.length).toBe(2);
+  const completed=await story(page,project.id);
+  expect(completed.scenes[completed.sceneOrder[1]].prompt).toBe('The second usable scene opens the door.');
+  expect(completed.scenes[completed.sceneOrder[1]].durationSeconds).toBe(10);
+  expect((await observedModels(request)).calls).toHaveLength(1);
+});

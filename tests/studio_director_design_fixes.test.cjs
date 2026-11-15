@@ -184,7 +184,9 @@ test('Write availability follows a conversational proposal without inventing a m
     }
     return nodes.get(id);
   }
-  const scope = vm.createContext({el});
+  let prepared = null;
+  const scope = vm.createContext({el,labels:{prompt:'H3 Prompt',title:'Title'},
+    window:{studioDirectorBridge:{preparedWrite:()=>prepared}}});
   vm.runInContext(section(rail,'  var pendingCreativeAction = null;',
     '  function sceneIdsFromRequest('),scope);
   scope.showConversationWrite();
@@ -205,6 +207,17 @@ test('Write availability follows a conversational proposal without inventing a m
   scope.pendingCreativeAction = null;
   scope.showConversationWrite();
   assert.equal(el('studio-dw-write-ready').classList.contains('hidden'),true);
+  prepared = {kind:'scene',projectId:'project-a',sceneId:'scene-2',fields:['prompt','title']};
+  scope.showConversationWrite();
+  assert.equal(el('studio-dw-write-ready').classList.contains('hidden'),false);
+  assert.equal(el('studio-dw-write-ready-title').textContent,'Scene draft prepared');
+  assert.equal(el('studio-dw-write-ready-direction').textContent,'H3 Prompt · Title');
+  assert.equal(el('studio-dw-write-ready-launch').textContent,'Review Scene');
+  assert.equal(el('studio-dw-write-panel').classList.contains('hidden'),true);
+  scope.pendingCreativeAction={kind:'write_scenes',instruction:'New instruction'};
+  scope.showConversationWrite();
+  assert.equal(el('studio-dw-write-ready-direction').textContent,'New instruction',
+    'explicit action takes precedence over an already structured draft');
 });
 
 test('Studio header uses accessible compact history and new-conversation icons', () => {

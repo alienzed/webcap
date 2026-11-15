@@ -1742,7 +1742,9 @@
     if (state.studioProjectProposal) { showStudioProjectReview(); return; }
     var workingProject = state.studioWorkingDraft.newProject;
     var authorRequest = String(options && options.authorRequest || options && options.instruction || '');
-    var sameWork = state.studioWorkingDraft.sourceRequest === authorRequest ||
+    var manualReview = !String(options && options.instruction || '').trim();
+    var sameWork = manualReview ||
+      state.studioWorkingDraft.sourceRequest === authorRequest ||
       studioRequestAppliesPreparedMaterial(authorRequest);
     if (sameWork && workingProject && workingProject.concept && workingProject.style &&
         !/\bscenes\b/i.test(authorRequest)) {
@@ -2212,12 +2214,12 @@
   function prepareStudioBrief(options) {
     if (state.pending || state.activeMode !== 'storyboard' || !state.sessionReady) return;
     var instruction = String(options && options.instruction || '').trim();
+    var manualReview = !instruction;
     if (state.studioBriefProposal && (!instruction ||
         instruction === state.studioBriefProposal.instruction)) {
       showStudioBriefReview(); return;
     }
     if (instruction) state.studioBriefProposal = null;
-    if (!state.modelId) { studioActionStatus('Select a Director model.', true); return; }
     var storyId = studioAttachedStoryId();
     if (!storyId) {
       studioActionStatus('Attach a Project explicitly before updating Concept, Style or Invariants.', true);
@@ -2252,7 +2254,8 @@
       var expected = { title: story.title, concept: story.concept, style: story.style, invariants: story.invariants };
       var workingProject = state.studioWorkingDraft.projects[storyId] || {};
       var authorRequest = String(options && options.authorRequest || instruction);
-      var sameWork = state.studioWorkingDraft.sourceRequest === authorRequest ||
+      var sameWork = manualReview ||
+        state.studioWorkingDraft.sourceRequest === authorRequest ||
         studioRequestAppliesPreparedMaterial(authorRequest);
       var required = requestedFields.length ? requestedFields : Object.keys(workingProject);
       if (sameWork && required.length && required.every(function (field) {
@@ -2269,6 +2272,8 @@
         showStudioBriefReview();
         return;
       }
+      if (!state.modelId)
+        throw new Error('No Director model is available to author new Project fields.');
       var input = {
         task: 'Revise the specified Project fields using the saved Project as baseline. ' +
           'Return only fields that need a complete replacement value: title, concept, style and/or ' +

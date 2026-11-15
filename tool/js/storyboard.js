@@ -6305,26 +6305,7 @@
     el('storyboard-generate-scenes-btn').onclick = generateScenes;
     el('storyboard-cancel-takes-btn').onclick = cancelStoryTakes;
     el('storyboard-director-tools-btn').onclick = openDirectorTools;
-    el('storyboard-project-tools').addEventListener('toggle', function () {
-      if (!this.open) return;
-      var rect = this.querySelector('summary').getBoundingClientRect();
-      var menu = this.querySelector('.storyboard-header-menu-items');
-      menu.style.top = Math.min(rect.bottom + 5, window.innerHeight - 235) + 'px';
-      menu.style.left = Math.max(8, Math.min(rect.right - 232, window.innerWidth - 240)) + 'px';
-    });
-    el('storyboard-project-tool-bar').addEventListener('click', function (event) {
-      var button = event.target.closest('[data-project-tool]');
-      if (!button) return;
-      el('storyboard-project-tools').open = false;
-      if (button.dataset.projectTool === 'replace') {
-        openProjectReplace();
-        return;
-      }
-      openDirectorTools();
-      var preset = el('storyboard-director-tools-preset');
-      preset.value = button.dataset.projectTool === 'continuity' ? 'continuity' : 'coherence';
-      preset.dispatchEvent(new Event('change'));
-    });
+    el('storyboard-find-replace-btn').onclick = openProjectReplace;
     el('storyboard-find-replace-find').addEventListener('input', previewProjectReplacement);
     el('storyboard-find-replace-with').addEventListener('input', previewProjectReplacement);
     el('storyboard-find-replace-case').addEventListener('change', previewProjectReplacement);

@@ -137,7 +137,8 @@ test('compact Director replies keep the exact full text and leave General Chat a
 });
 
 test('Apply receipt names the actual scoped Scene fields and retains authoritative values',async()=>{
-  const state={modeMessages:{storyboard:[]},sessionDirty:{}};
+  const state={modeMessages:{storyboard:[]},sessionDirty:{},
+    studioWorkingDraft:{projects:{},scenes:{},newProject:{},newScene:{},sourceRequest:''}};
   const scope=vm.createContext({state,markStudioReadinessOutdated(){},renderMessages(){},persistSession:async()=>{},
     window:{studioDirectorWorkbench:{markSavedFields(){}}}});
   const bridge=vm.runInContext('({'+part(chat,'    recordApplied: function (kind, story, selected) {','    undoBrief: function () {')+'})',scope);
@@ -146,7 +147,8 @@ test('Apply receipt names the actual scoped Scene fields and retains authoritati
   const message=state.modeMessages.storyboard[0].content;
   assert.match(message,/^Saved: H3 Prompt\./);
   const saved=JSON.parse(message.split('[WEBCAP APPLIED FIELD VALUES]')[1].split('[END WEBCAP APPLY]')[0]);
-  assert.equal(saved.fields.savedFields.prompt,'The reviewed prompt.');
+  assert.deepEqual(Array.from(saved.fieldNames),['prompt']);
+  assert.doesNotMatch(message,/The reviewed prompt\./);
 });
 
 test('editable revision comparison identifies retained, removed and added words without mutating sources',()=>{

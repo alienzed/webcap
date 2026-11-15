@@ -117,13 +117,14 @@ function harness() {
     return controls.get(id);
   }
   const document = {createElement() {return {type:'',dataset:{},textContent:'',disabled:false};}};
-  const requests = [],statuses = [];
+  const requests = [],statuses = [],finishes = [];
   const story = {id:'p1', title:'Rainy Bookshop',
     sceneOrder:['one','two','three'], scenes:{
       one:{title:'Opening'},two:{title:'Middle'},three:{title:'Ending'}
     }};
   const bridge = {
     isReady:()=>true, readinessMessage:()=>'',placeSuggestedAction:()=>{},
+    finishWriteAction:action=>finishes.push(action),
     prepareWrite:(...args)=>{requests.push(['project',...args]);return Promise.resolve();},
     writeSelectedScene:async action=>{requests.push(['scene',action]);return {};},
     writeNewScene:async action=>{requests.push(['new-scene',action]);return {};},
@@ -132,7 +133,7 @@ function harness() {
   const source = part(workbench, '  function sceneIdsFromRequest(instruction, story, selectedScene) {',
     '  window.studioDirectorWorkbench = {');
   const creator = new Function('el','document','window','refreshProjects','loadStory',
-    'storyName','projectFields','status','openWriteForCapture',
+    'storyName','projectFields','status','openWriteForCapture','showConversationWrite',
     source + 'return {presentAction,sceneIdsFromRequest};');
   let opened = 0;
   const functions = creator(el,document,window,
@@ -140,8 +141,8 @@ function harness() {
       assert.equal(id,'p1');return story;
     },
     value=>value.title, ['title','concept','style','invariants'],
-    (...args)=>statuses.push(args),()=>{opened++;});
-  return {functions,bridge,requests,statuses,suggestions,story,opened:()=>opened};
+    (...args)=>statuses.push(args),()=>{opened++;},()=>{});
+  return {functions,bridge,requests,statuses,finishes,suggestions,story,opened:()=>opened};
 }
 async function flush() {
   for (let i=0;i<5;i++) await new Promise(setImmediate);
@@ -157,6 +158,7 @@ test('a suggested multi-Scene revision runs one existing writer per real Scene',
   await flush();
   assert.deepEqual(h.requests.map(row=>row[1].sceneId),['one','three']);
   assert.ok(h.statuses.some(row=>/Saved 2/.test(row[0])));
+  assert.equal(h.finishes.length,1,'completion occurs after both Scene attempts');
 });
 
 test('the selected Scene is used when no explicit number overrides it', async () => {
@@ -216,6 +218,7 @@ test('new Scene partial draft is pending review rather than a failed write',asyn
   assert.ok(h.statuses.some(row=>/Draft awaiting review 1/.test(row[0]) &&
     row[1]===false));
   assert.ok(!h.statuses.some(row=>/Failed 1/.test(row[0])));
+  assert.equal(h.finishes.length,0,'a Scene draft awaiting review remains actionable');
 });
 
 test('new multiple Scenes retain successes when one item fails',async()=>{
@@ -233,6 +236,7 @@ test('new multiple Scenes retain successes when one item fails',async()=>{
   await flush();
   assert.equal(h.requests.length,3);
   assert.ok(h.statuses.some(row=>/Saved 2 · Failed 1/.test(row[0])));
+  assert.equal(h.finishes.length,0,'failed Scenes leave the proposal pending');
 });
 
 test('structured Director changes merge by complete field, without overwriting unrelated drafts', () => {

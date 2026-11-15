@@ -378,14 +378,17 @@
       el('director-chat-history-toggle').setAttribute('aria-expanded', 'false');
       if (el('director-chat-history-panel').open) el('director-chat-history-panel').close();
     }
-    el('director-chat-clear').textContent = context ? 'New QA chat' : studio ? 'New conversation' : 'New chat';
+    var newConversationLabel = context ? 'New QA chat' : studio ? 'New conversation' : 'New chat';
+    el('director-chat-clear').querySelector('.director-header-button-label').textContent = newConversationLabel;
+    el('director-chat-clear').setAttribute('aria-label', newConversationLabel);
+    el('director-chat-clear').title = newConversationLabel;
     var drawer = el('director-chat-drawer');
     drawer.classList.toggle('studio-director', studio);
     el('app-frame').classList.toggle('studio-director-active', studio && state.open);
     drawer.setAttribute('aria-label', studio ? 'Projects Director' : 'Assistant');
     el('director-chat-title').textContent = studio ? studioWorkingStoryLabel() :
       (context ? 'Ask QA' : 'Assistant');
-    el('director-chat-close').textContent = studio ? 'Close' : '×';
+    el('director-chat-close').textContent = '×';
     el('director-chat-close').setAttribute('aria-label', studio ? 'Close Director' : 'Close Assistant');
     el('director-chat-empty-title').textContent = studio ? "Let's make something" :
       (context ? 'Discuss this recommendation' : 'Your conversation');
@@ -651,6 +654,8 @@
       var stored = { role: message.role, content: message.content };
       if (mode === 'storyboard' && message.role === 'assistant' && message.rawResponse)
         stored.rawResponse = message.rawResponse;
+      if (mode === 'storyboard' && message.role === 'assistant' && message.writeAction)
+        stored.writeAction = message.writeAction;
       return stored;
     });
     var draft = state.draftByMode[mode] || '';
@@ -752,7 +757,20 @@
       state.studioAccessIndex = null;
       state.workshop = chat.workshop || null;
       state.studioOperations = Array.isArray(chat.operations) ? chat.operations.slice() : [];
-      if (window.studioDirectorWorkbench) window.studioDirectorWorkbench.resetConversation();
+      if (window.studioDirectorWorkbench) {
+        window.studioDirectorWorkbench.resetConversation();
+        // Recover the last unsaved proposal with its original bound target.
+        // A saved receipt closes that task, while ordinary follow-ups need not.
+        for (var actionIndex = chat.messages.length - 1; actionIndex >= 0; actionIndex--) {
+          var entry = chat.messages[actionIndex];
+          if (!entry.writeAction) continue;
+          var proposal = entry.writeAction;
+          if (proposal.completed) break;
+          window.studioDirectorWorkbench.presentAction(proposal, proposal.scene,
+            {projectId:proposal.projectId}, proposal.request, actionIndex);
+          break;
+        }
+      }
       state.studioReadiness = chat.readiness || {checks:[],readHints:[],writeHint:'',writeFields:[],sceneId:''};
       state.studioSceneProposal = null;
       state.studioProjectProposal = null;
@@ -1203,11 +1221,11 @@
     return String(content || '').replace(/^\s*RECEIVED:\s*(?:project\.\w+|scene:[\w-]+:\w+)(?:[ \t]*,[ \t]*(?:project\.\w+|scene:[\w-]+:\w+))*[ \t]*[.;]?[ \t]*(?:\r?\n)?/i, '').trim();
   }
 
-  function placeStudioSuggestion(node) {
+  function placeStudioSuggestion(node, messageIndex) {
     // Keep this action attached to the answer which proposed it. A later Read
     // or follow-up must neither move it under a different reply nor discard it.
-    if (state.activeMode === 'storyboard')
-      state.studioActionIndex = currentMessages().length - 1;
+    if (state.activeMode === 'storyboard' || Number.isInteger(messageIndex))
+      state.studioActionIndex = Number.isInteger(messageIndex) ? messageIndex : currentMessages().length - 1;
     node.classList.add('hidden');
   }
 
@@ -3594,7 +3612,7 @@
         }
         if (nextAction) {
           try {
-            window.studioDirectorWorkbench.presentAction(
+            messages[messages.length - 1].writeAction = window.studioDirectorWorkbench.presentAction(
               nextAction, targetScene, targetProject, content);
           } catch (processingError) {
             // Optional action presentation must never invalidate a useful answer.
@@ -4091,6 +4109,15 @@
 
   window.studioDirectorBridge = {
     placeSuggestedAction: placeStudioSuggestion,
+    finishWriteAction:function (action) {
+      var entry = state.modeMessages.storyboard[state.studioActionIndex];
+      if (!entry || !entry.writeAction ||
+          entry.writeAction.kind !== action.kind ||
+          entry.writeAction.instruction !== action.instruction)
+        throw new Error('Completed Write action no longer matches its conversation proposal.');
+      entry.writeAction.completed = true;
+      scheduleSessionSave();
+    },
     canReview: function () {
       return state.open && state.activeMode === 'storyboard' && state.sessionReady &&
         !state.pending && !state.attachmentPending;
@@ -4192,6 +4219,11 @@
       var savedTarget = selected.sceneId && story.scenes && story.scenes[selected.sceneId]
         ? 'Scene ' + ((story.sceneOrder || []).indexOf(selected.sceneId) + 1) + ' · ' + (story.scenes[selected.sceneId].title || selected.sceneId)
         : story.title || story.id;
+      if (window.studioDirectorWorkbench.completeWriteAction(kind, story, selected)) {
+        var sourceMessage = state.modeMessages.storyboard[state.studioActionIndex];
+        if (sourceMessage && sourceMessage.writeAction)
+          sourceMessage.writeAction.completed = true;
+      }
       state.modeMessages.storyboard.push({role:'user',
         content:'Saved ' + savedTarget + ': ' + (savedFields.join(' · ') || 'Scene changes') +
           String.fromCharCode(10) + '[WEBCAP APPLIED FIELD VALUES]' +

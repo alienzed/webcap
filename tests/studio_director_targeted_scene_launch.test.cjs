@@ -184,3 +184,45 @@ test('save failure never produces a saved receipt; post-save refresh failure rep
   assert.ok(after.events.some(row=>row[0]==='status' && /Scene saved, but/.test(row[1])));
 });
 
+
+test('a quoted title-only revision saves the title without another model call or prompt overwrite',async()=>{
+  const h=sceneFixture();
+  const result=await h.window.studioDirectorBridge.writeSelectedScene({
+    ...h.launch, instruction:'Rename Scene 1 to "Quiet Ending".',
+    authorRequest:'Rename Scene 1 to "Quiet Ending".', fields:['title']
+  });
+  assert.equal(h.events.filter(row=>row[0]==='model').length,0);
+  const save=h.events.find(row=>row[0]==='save')[1];
+  assert.deepEqual(JSON.parse(JSON.stringify(save.changes)),{title:'Quiet Ending'});
+  assert.deepEqual(JSON.parse(JSON.stringify(save.expected)),{title:'Opening'});
+  assert.equal(h.saved.scenes.s1.title,'Quiet Ending');
+  assert.equal(h.saved.scenes.s1.prompt,'Mara shouts at the rover.');
+  assert.ok(result.story);
+});
+
+test('requested duration is taken from author words even when optional model action omits it',async()=>{
+  const h=sceneFixture('{"prompt":"Twelve seconds of the keeper closing the book","durationSeconds":6}');
+  await h.window.studioDirectorBridge.writeSelectedScene({
+    ...h.launch, instruction:'Quieter ending',authorRequest:'Make this Scene 14 seconds, with a quieter ending.',
+    fields:['prompt','durationSeconds']
+  });
+  const saved=h.events.find(row=>row[0]==='save')[1];
+  assert.equal(saved.changes.durationSeconds,14);
+  assert.equal(h.saved.scenes.s1.durationSeconds,14);
+  const request=JSON.parse(h.events.find(row=>row[0]==='model')[1]);
+  assert.equal(request.requestedDurationSeconds,14);
+  assert.match(request.authorRequest,/14 seconds/);
+});
+
+test('unsupported explicit duration preserves a complete Scene draft without saving a mismatch',async()=>{
+  const h=sceneFixture('{"prompt":"Twenty-second complete scene","durationSeconds":12}');
+  const result=await h.window.studioDirectorBridge.writeSelectedScene({
+    ...h.launch,instruction:'Quiet scene',authorRequest:'Make it 20 seconds.',
+    fields:['prompt','durationSeconds']
+  });
+  assert.equal(result.review,true);
+  assert.equal(h.events.filter(row=>row[0]==='save').length,0);
+  assert.equal(h.saved.scenes.s1.prompt,'Mara shouts at the rover.');
+  assert.equal(h.state.modeMessages.storyboard.at(-1).content,'Twenty-second complete scene');
+  assert.ok(h.events.some(row=>row[0]==='status' && /nothing saved/.test(row[1])));
+});

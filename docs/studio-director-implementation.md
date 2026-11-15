@@ -144,3 +144,27 @@ are needed for Director acceptance. Restore test edits or use disposable data.
 
 Passing this small set is a release gate for the core journeys, not statistical
 proof of 99% reliability. Expand testing only for demonstrated failures or changes.
+
+## Three-operation replacement cutover (2026-11-14)
+
+This section supersedes the incremental-routing instructions above. Keep the functional contract authoritative; do not perpetuate a separate Director architecture to accommodate historical states. This is a cutover, not an optional parallel Director implementation.
+
+### Ownership and one execution path
+
+- **Read:** WebCap loads fresh saved Project/Scene context from its selected or explicitly named target, sends the user's question and relevant saved fields, and displays the model's answer verbatim. A plain-text answer is valid. No readiness response, permission ceremony, explicit acknowledgment call, review, or mutation.
+- **Write Project:** WebCap binds an existing Project or an explicit new-Project destination before writing. The model returns complete authored values for requested title, Concept, Visual/atmosphere, and Invariants. Preserve all unaffected fields and existing Scenes. The same Project writer serves creation and revision; review is useful for Project creation or broad field edits, not a universal gate.
+- **Write Scene(s):** WebCap binds the destination Project and the exact existing Scene IDs, or an insertion destination for new Scenes. The model sees the existing prompt for revisions, the requested change, current duration, and pertinent Project constraints; it returns complete prompt/title/requested duration values. The same Scene writer serves new/existing and one/many; repeat a bounded call per Scene. Save successful Scenes incrementally, show exact outcomes, and stop remaining items only for cancellation or a genuine shared dependency error.
+
+The model may suggest a **kind of next operation and a concise creative instruction** in the conversation. That suggestion is not an authorization or a target binding. Only WebCap resolves and validates actual IDs against its saved Project and Scene list. Explicit, verifiable user references take precedence over an incidental editor selection. A real ambiguity produces one visible 'Unclear target: select Project and Scene(s)' action; never invent IDs or silently target a different Scene. A launch freezes the bound IDs, instruction, and write policy before the asynchronous model call.
+
+Ordinary chat and Read accept prose. A small optional action suggestion may accompany a conversational reply, but absence, invalidity, or failure to parse an optional action cannot invalidate a useful answer. Structured creative output is required only for fields being authored. Invariant entries have their existing saved identity shape; avoid a second readiness/capture schema. A complete usable draft already supplied in conversation is retained as an actionable result without an extraction/repair call. Do not silently substitute a default duration when a different duration was explicitly requested; keep the useful prompt and request the specific missing value instead.
+
+### Phased cutover and deletions
+
+1. **Replace Read and conversation handoff:** remove model-generated readiness/checks/capture as the conversation gate; accept direct replies; retain chat persistence, I/O diagnostics, model selection, and Stop. Verify Read against a real Project and real model.
+2. **Replace authoring routing:** one Project writer and one per-Scene writer exposed through simple user-triggered actions. Bind targets in WebCap; reuse the existing Project/Scene mutation routes and accurate receipts. Verify new Project, revision, new Scene with nondefault duration, and one Scene correction before proceeding.
+3. **Repeat and simplify:** multiple Scenes use the single-Scene writer sequentially. Isolated failures continue; shared failures/Stop halt the rest. Verify saved/failed/not-attempted counts and preserve already saved results. Eliminate redundant Director-only draft/review paths after the last active caller moves.
+4. **Cut over and delete:** remove Advanced Read permission/ack paths, readiness/assessment UI and model schema, duplicate Scene creation/extraction, unused timed-shot Workshop/Guidelines entry points, orphaned reviews and dead test fixtures. Retain independent Revise & Generate and Check Coherence tools; remove only their overlapping ordinary Scene-revision entry. Old chat data and dormant Scene Intent remain readable but never determine execution.
+5. **Acceptance and merge:** inspect code on the stable branch, run focused JS/Python tests and verify every operation in a real browser against the selected real LLM; distinguish automated coverage from browser acceptance. Merge only after the replacement paths are verified. Keep main unchanged until that point. No new generic dispatcher, retries, creative quality gates, or model calls for action parsing.
+
+**Concrete release criteria:** Read works in one model call and never saves; Project writes hit the selected Project and preserve unrelated fields; Scene create/revise writes save correct title/prompt/duration and preserve unrelated Scenes; ambiguous targets request selection; partial successes survive and receipts remain accurate; conversation follow-ups retain useful material; Undo/Redo and independent Studio utilities are unaffected. Inspect actual saved data for each acceptance, not just button or status behavior.

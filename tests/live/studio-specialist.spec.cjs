@@ -22,6 +22,7 @@ test('Live optional Flow 9 — real Coherence review proposes changes without si
   const results=page.getByRole('dialog',{name:'Check Coherence results'});
   await expect(results).toBeVisible({timeout:180000});
   await expect(results).toContainText(/Scenes reviewed/);
+  expect(await results.locator('textarea').count(),'Coherence must expose at least one actual reviewed Scene').toBeGreaterThan(0);
   const beforeApply=await story(page,project.id);
   expect(beforeApply.scenes[first.id].prompt).toBe('An explorer approaches a library at dawn.');
   expect(beforeApply.scenes[second.id].prompt).toBe('The same explorer walks through the library at dusk.');

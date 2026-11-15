@@ -782,7 +782,6 @@
   min-height: 52px;
   margin: 0;
   padding: 5px 0;
-  border-bottom: 1px solid var(--border);
 }
 
 .storyboard-scenes-heading-title strong {
@@ -1926,7 +1925,6 @@ html[data-theme="dark"] .storyboard-prompt-take-status {
   gap: 10px;
   overflow-x: auto;
   padding: 10px 0 12px;
-  border-bottom: 1px solid var(--border);
 }
 
 .storyboard-scene-progress-card {
@@ -2086,7 +2084,8 @@ html[data-theme="dark"] .storyboard-prompt-take-status {
     "takes";
   overflow: visible;
   background: transparent;
-  border-color: var(--border-soft);
+  border: 0;
+  border-radius: 0;
 }
 
 .storyboard-scenes-list.is-focus .storyboard-scene-body {
@@ -2096,7 +2095,7 @@ html[data-theme="dark"] .storyboard-prompt-take-status {
   align-items: start;
   gap: 24px;
   overflow: visible;
-  padding: 18px 20px 22px;
+  padding: 12px 0 16px;
 }
 
 .storyboard-scenes-list.is-focus .storyboard-scene-main {

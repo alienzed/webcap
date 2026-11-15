@@ -5,6 +5,7 @@ test('Flow 4 checkpoint — Director displays a plain-text Read response through
   const reset=await request.post(modelUrl+'/__acceptance/reset');expect(reset.ok()).toBeTruthy();
   const queued=await request.post(modelUrl+'/__acceptance/queue',{data:{value:'The test answer is: amber windows.'}});
   expect(queued.ok()).toBeTruthy();
+  const before=await page.request.get('/fs/storyboard').then(r=>r.json()).then(r=>r.stories);
   await page.goto('/');
   await page.locator('#activity-storyboard-btn').click();
   await page.locator('#director-chat-rail-btn').click();
@@ -20,5 +21,6 @@ test('Flow 4 checkpoint — Director displays a plain-text Read response through
   expect(calls).toHaveLength(1);
   expect(remaining).toBe(0);
   expect(calls[0].messages.some(item=>item.role==='user' && String(item.content).includes('What color are the windows?'))).toBeTruthy();
-  expect(await page.request.get('/fs/storyboard').then(r=>r.json()).then(r=>r.stories||[])).toHaveLength(0);
+  const after=await page.request.get('/fs/storyboard').then(r=>r.json()).then(r=>r.stories);
+  expect(after.map(x=>x.id).sort()).toEqual(before.map(x=>x.id).sort());
 });

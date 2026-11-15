@@ -21,7 +21,7 @@ async function openDirector(page) {
   const studio=page.locator('[data-assistant-mode="storyboard"]');
   if(await studio.isVisible()) await studio.click();
   await expect(page.locator('#director-chat-input')).toBeVisible();
-  const model=page.locator('#director-chat-model');
+  const model=page.locator('#app-header-director-model');
   await expect(model.locator('option[value="acceptance::acceptance-model"]')).toHaveCount(1);
   await model.selectOption('acceptance::acceptance-model');
 }

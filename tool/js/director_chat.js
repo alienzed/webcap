@@ -4109,6 +4109,15 @@
 
   window.studioDirectorBridge = {
     placeSuggestedAction: placeStudioSuggestion,
+    finishWriteAction:function (action) {
+      var entry = state.modeMessages.storyboard[state.studioActionIndex];
+      if (!entry || !entry.writeAction ||
+          entry.writeAction.kind !== action.kind ||
+          entry.writeAction.instruction !== action.instruction)
+        throw new Error('Completed Write action no longer matches its conversation proposal.');
+      entry.writeAction.completed = true;
+      scheduleSessionSave();
+    },
     canReview: function () {
       return state.open && state.activeMode === 'storyboard' && state.sessionReady &&
         !state.pending && !state.attachmentPending;

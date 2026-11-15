@@ -4549,6 +4549,13 @@
         syncControls();
       });
     },
+    reviewPendingScenes: function (projectId) {
+      var proposal = state.studioScenesProposal;
+      if (!proposal || proposal.storyId !== projectId)
+        return Promise.reject(new Error('The authored Scene review is no longer available.'));
+      showStudioScenesReview();
+      return Promise.resolve({review:true,count:proposal.drafts.length});
+    },
     reviewAuthoredScenes: function (launch) {
       if (state.studioScenesProposal) {
         if (state.studioScenesProposal.storyId !== (launch && launch.projectId))

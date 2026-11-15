@@ -6346,6 +6346,58 @@
         menu._closeBulkMenu = close;
         var outside = function (e) { if (!menu.contains(e.target)) close(); };
         var keydown = function (e) { if (e.key === 'Escape') { close(); heading.focus(); } };
+        function syncBulkSelection() {
+          var available = prepared.files;
+          // Reuse existing candidate selection; avoid recreating all staged rows.
+          var host = el('test-generations-files');
+          host.querySelectorAll('[data-candidate-select]').forEach(function (checkbox) {
+            checkbox.checked = selectedCandidates.has(String(checkbox.dataset.candidateSelect || ''));
+          });
+          syncCandidateMasterSelect(available);
+          syncSweepControls();
+          saveTestBenchState();
+          syncActiveRunControls(currentStatus);
+          syncMatrixCandidateSelection();
+          syncGridCandidateSelection();
+        }
+        function addAction(label, run) {
+          var action = document.createElement('button');
+          action.type = 'button';
+          action.setAttribute('role', 'menuitem');
+          action.textContent = label;
+          action.style.cssText = 'display:block;width:100%;text-align:left;padding:8px 10px;border:0;background:transparent;color:inherit;cursor:pointer;';
+          action.addEventListener('click', function () {
+            run();
+            syncBulkSelection();
+            close();
+          });
+          menu.appendChild(action);
+        }
+        function selectFirst(percent) {
+          var files = prepared.files;
+          // Select a prefix of the server's staged order, independent of the visual sort.
+          var count = Math.ceil(files.length * percent / 100);
+          selectedCandidates = new Set(files.slice(0, count));
+        }
+        [25, 50, 60, 75].forEach(function (percent) {
+          addAction('Select first ' + percent + '%', function () { selectFirst(percent); });
+        });
+        addAction('Select all', function () { selectedCandidates = new Set(prepared.files); });
+        addAction('Select next 20%', function () {
+          var files = prepared.files;
+          var count = Math.ceil(files.length * 0.2);
+          var added = 0;
+          files.forEach(function (file) {
+            if (added < count && !selectedCandidates.has(file)) {
+              selectedCandidates.add(file);
+              added += 1;
+            }
+          });
+        });
+        var separator = document.createElement('div');
+        separator.setAttribute('role', 'separator');
+        separator.style.cssText = 'height:1px;margin:5px 2px;background:var(--border-color,#526071);';
+        menu.appendChild(separator);
         [25, 50, 75].forEach(function (percent) {
           var action = document.createElement('button');
           action.type = 'button';
@@ -6372,12 +6424,7 @@
             var removeCount = Math.floor(files.length * percent / 100);
             files.slice(files.length - removeCount).forEach(function (file) { selectedCandidates.delete(file); });
             if (removeCount) {
-              renderStagedFiles(prepared);
-              syncSweepControls();
-              saveTestBenchState();
-              syncActiveRunControls(currentStatus);
-              syncMatrixCandidateSelection();
-              syncGridCandidateSelection();
+              syncBulkSelection();
             }
             close();
           });

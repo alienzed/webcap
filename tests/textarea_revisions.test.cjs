@@ -89,8 +89,11 @@ test('browsing is non-destructive; editing an earlier version appends after the 
   assert.equal(h.window.webcapTextareaRevisions.history(key).versions.length,2);
   h.blur(field);
   assert.equal(field.value,'New','browsing does not change the real field on blur');
+  assert.equal(h.window.webcapTextareaRevisions.history(key).index,1,
+    'leaving history returns the cursor to the latest version');
   h.focus(field);
   h.click('[data-rev-prev]');
+  assert.equal(field.value,'Original','browsing works again after reattachment');
   field.value='Original but changed';
   h.input(field);h.idle();
   assert.equal(h.window.webcapTextareaRevisions.history(key).versions.join('|'),

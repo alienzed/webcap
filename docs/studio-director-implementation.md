@@ -103,3 +103,16 @@ The authoritative behavior remains [the three-operation contract](studio-directo
 4. **Tests and audit:** Verify the exact active Draft routes, the lack of hidden entry points and retired operation names, and the retained canonical model schema/review/Apply controls. Run the existing Studio, Storyboard and persistence checks. Real-model/browser acceptance remains a separate check, particularly for restored conversations and incomplete Scene results.
 
 **Retained on purpose:** legacy Read/explicit story inspection and Workshop still have independent state and stored-conversation compatibility; their removal needs a separate migration and acceptance check. The old single-Scene review dialog and draft state also remain for historical capture compatibility. The absence of app callers for an API operation does not establish that no external script has ever used it; retire only the explicitly unadvertised compatibility operations, with visible 400 responses for unsupported direct calls. No new permissions, LLM calls, repair loops or save gates are introduced.
+
+## Browser-only textarea revisions (2026-11-14)
+
+**Scope:** One generic revision navigator for editable WebCap textareas, not a second Studio-specific Undo/Redo stack. No server storage, chat persistence, model calls, diffing, branching, similarity scoring or retention cap.
+
+Safe phases:
+
+1. **Identify ownership and context:** Existing static textareas use their IDs; Scene fields incorporate the current Project and Scene ID; caption/config editor reuses its existing autosave target key. Generated editor rows use their available data identity and field selector. DOM re-creation reattaches to the same browser-memory `Map` without restoring stale content into the field.
+2. **Shared capture and interaction:** Capture an initial value, then a new distinct value after **10 seconds of inactivity**. The tiny previous/count/next control is positioned inside the focused textarea with padding for text clearance. Browsing changes the displayed value but never emits an input/save event; leaving an unedited preview restores the actual value. Editing an older value makes it the next newest snapshot after inactivity; all intervening versions remain.
+3. **Retire competing Studio history UI:** Remove Storyboard's per-Scene server-writing Undo/Redo buttons and client stack, and the Director Project Overview Undo button, bridge and local receipt. The existing browser-native text editing shortcuts and separate submitted-instruction recall stay intact. Leave the obsolete backend Project Undo API untouched in this narrow pass to avoid breaking external clients; it is no longer invoked by Studio UI.
+4. **Regression audit:** Exercise repeated edits, stable keys through rerender, distinct Scene and caption targets, idle capture, navigation without persistence and editing an older version. Run focused Studio/UI tests and the repository CI suites. Check actual browser layout separately where a modal/top-layer or unusually small textarea changes positioning.
+
+The new history is intentionally best-effort. Programmatic rewrites do not trigger explicit pre-replacement checkpoints; a previous value is available only if it has already been observed. Existing application autosave remains the authority for persistence.

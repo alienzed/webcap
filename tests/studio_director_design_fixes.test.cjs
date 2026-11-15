@@ -39,13 +39,12 @@ test('changing Write operation reloads saved Scene choices after a reviewed inse
   assert.equal(scope.writeOperationChosen,true);
 });
 
-test('Undo is reachable from the visible rail and delegates to existing reviewed operation', () => {
-  for(const id of ['studio-dw-undo','studio-dw-undo-label','studio-dw-undo-button'])
-    assert.match(html,new RegExp('id="'+id+'"'));
-  assert.match(chat,/window\.studioDirectorWorkbench\.setUndo\(state\.studioBriefUndo\)/);
-  assert.match(chat,/undoBrief: function \(\)/);
-  assert.match(rail,/studioDirectorBridge\.undoBrief\(\)/);
-  assert.match(rail,/resetConversation: function \(\)/);
+test('Studio-specific Undo controls have been replaced by the shared textarea navigator', () => {
+  assert.doesNotMatch(html,/id="studio-dw-undo"|id="studio-dw-undo-button"/);
+  assert.doesNotMatch(rail,/studioDirectorBridge\.undoBrief\(\)|setUndo: function/);
+  assert.doesNotMatch(chat,/undoBrief: function|studioBriefUndo/);
+  assert.match(html,/\/static\/js\/textarea_revisions\.js/);
+  assert.match(rail,/resetConversation: function/);
 });
 
 test('manual Read and Write remain available through the on-demand Advanced panel', () => {

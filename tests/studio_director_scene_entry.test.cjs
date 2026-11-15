@@ -7,23 +7,9 @@ const director = fs.readFileSync('tool/js/director_chat.js','utf8');
 const workbench = fs.readFileSync('tool/js/studio_director_workbench.js','utf8');
 function section(source,start,end) {return source.slice(source.indexOf(start),source.indexOf(end,source.indexOf(start)));}
 
-test('prompt recovery is bounded, supports redo and branches after a new edit', async()=>{
-  const scope=vm.createContext({scenePromptHistory:{},storyState:{story:{id:'p',scenes:{s:{prompt:'v12'}}}},
-    flushPendingSaves:async()=>{},syncScenePromptHistory(){},renderStory(){},setSaveState(){},
-    reportError:error=>{throw error;},request:async body=>({story:{id:'p',scenes:{s:{prompt:body.scene.prompt}}}})});
-  vm.runInContext(section(scene,'  function rememberScenePrompt(','  function syncScenePromptHistory(')+
-    section(scene,'  function moveScenePromptHistory(','  var storyboardGuidelineReview'),scope);
-  for(let i=1;i<=12;i++) scope.rememberScenePrompt('p','s','v'+(i-1),'v'+i);
-  let h=scope.scenePromptHistory['p:s'];
-  assert.equal(h.versions.length,11);assert.equal(h.versions[0],'v2');
-  scope.moveScenePromptHistory('s',-1);await new Promise(setImmediate);
-  assert.equal(scope.storyState.story.scenes.s.prompt,'v11');
-  scope.moveScenePromptHistory('s',1);await new Promise(setImmediate);
-  assert.equal(scope.storyState.story.scenes.s.prompt,'v12');
-  scope.moveScenePromptHistory('s',-1);await new Promise(setImmediate);
-  scope.rememberScenePrompt('p','s','v11','new direction');
-  assert.equal(h.versions.at(-1),'new direction');assert.ok(!h.versions.includes('v12'));
-  assert.equal(scope.scenePromptHistory['another:s'],undefined);
+test('Scene Prompt no longer has separate mutating Undo/Redo controls',()=>{
+  assert.doesNotMatch(scene,/data-prompt-undo|data-prompt-redo|moveScenePromptHistory|rememberScenePrompt/);
+  assert.match(scene,/data-scene-field="prompt"/);
 });
 
 function directorHarness(raw='{"prompt":"Revised full prompt"}') {
@@ -80,7 +66,7 @@ test('automatic Director revisions get a distinct persisted receipt; reviewed Ap
   const state={modeMessages:{storyboard:[]},sessionDirty:{storyboard:false},studioWorkingDraft:{projects:{},scenes:{},newProject:{},newScene:{},sourceRequest:''}};
   const scope=vm.createContext({state,window:{studioDirectorWorkbench:{markSavedFields(){}}},
     markStudioReadinessOutdated(){},renderMessages(){},persistSession:async()=>{}});
-  const method=section(director,'    recordApplied: function','    undoBrief: function').trim().replace(/,$/,'');
+  const method=section(director,'    recordApplied: function','    reviewCapture: function').trim().replace(/,$/,'');
   vm.runInContext('var recorder={'+method+'};',scope);
   const story={id:'p',title:'Project'},fields={sceneId:'s',savedFields:{prompt:'After'}};
   await scope.recorder.recordApplied('scene.director.revision',story,fields);

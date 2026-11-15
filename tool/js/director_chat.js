@@ -50,7 +50,6 @@
     studioProjectProposal: null,
     studioScenesProposal: null,
     studioBriefProposal: null,
-    studioBriefUndo: null,
     studioOperations: [],
     pendingReadAck: null,
     sceneRead: null,
@@ -736,7 +735,6 @@
       state.studioAccessIndex = null;
       state.workshop = chat.workshop || null;
       state.studioOperations = Array.isArray(chat.operations) ? chat.operations.slice() : [];
-      state.studioBriefUndo = null;
       if (window.studioDirectorWorkbench) window.studioDirectorWorkbench.resetConversation();
       state.studioReadiness = chat.readiness || {checks:[],readHints:[],writeHint:'',writeFields:[],sceneId:''};
       state.studioSceneProposal = null;
@@ -1492,9 +1490,7 @@
     if (history) history.disabled = state.pending || !state.sessionReady;
     syncStudioFlow();
     if (state.activeMode === 'storyboard' && window.studioDirectorWorkbench) {
-      window.studioDirectorWorkbench.setUndo(state.studioBriefUndo);
       window.studioDirectorWorkbench.updateContext();
-      el('studio-dw-undo-button').disabled = state.pending || !state.studioBriefUndo;
     }
     var prepare = el('director-chat-workshop-prepare');
     if (prepare) {
@@ -2371,12 +2367,11 @@
     }).then(function (result) {
       if (!result.story || !result.revisionId) throw new Error('Brief Apply did not return its revision ID.');
       applied = true;
-      state.studioBriefUndo = {storyId: proposal.storyId, revisionId: result.revisionId};
       state.studioBriefProposal = null;
       el('studio-brief-review').close();
       recordStudioOperation('brief.apply', 'Updated ' + Object.keys(changes).join(', '),
         proposal.storyId, []);
-      studioActionStatus('Project brief saved. Undo is available.', false);
+      studioActionStatus('Project brief saved.', false);
       var saved = {};
       Object.keys(changes).forEach(function (key) {saved[key === 'invariantOps' ? 'invariants' : key] = result.story[key === 'invariantOps' ? 'invariants' : key];});
       return window.studioDirectorBridge.recordApplied('brief.apply',result.story,saved)
@@ -2390,38 +2385,6 @@
           String(error.message || error) + '. Refresh the current Project if the connection was lost.';
       }
       if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Studio Brief Apply', error);
-      else throw error;
-    }).finally(function () {
-      state.pending = false;
-      syncControls();
-    });
-  }
-
-  function undoStudioBrief() {
-    var receipt = state.studioBriefUndo;
-    if (!receipt || state.pending) return;
-    state.pending = true;
-    syncControls();
-    Promise.resolve().then(function () {
-      return window.flushStudioDirectorStoryEdits(receipt.storyId);
-    }).then(function () {
-      return requestJson('/fs/studio/director/brief/undo', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(receipt)
-      });
-    }).then(function (payload) {
-      if (!payload.story || payload.story.id !== receipt.storyId) {
-        throw new Error('Concept / Style / Invariants Undo returned an unexpected Project.');
-      }
-      state.studioBriefUndo = null;
-      recordStudioOperation('brief.undo', 'Reverted last Concept / Style / Invariants change', receipt.storyId, []);
-      studioActionStatus('Last Concept / Style / Invariants change undone.', false);
-      return window.studioDirectorBridge.recordApplied('brief.undo',payload.story,{
-        concept:payload.story.concept,style:payload.story.style,invariants:payload.story.invariants
-      }).then(function () {return window.refreshStudioDirectorStoryIfOpen(receipt.storyId);});
-    }).catch(function (error) {
-      studioActionStatus('Concept / Style / Invariants Undo failed: ' + String(error.message || error), true);
-      if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Studio Brief Undo', error);
       else throw error;
     }).finally(function () {
       state.pending = false;
@@ -2816,7 +2779,6 @@
         state.studioActionIndex = -1;
         state.studioWorkingDraft = {projects:{},scenes:{},newProject:{},newScene:{},sourceRequest:''};
         state.studioOperations = [];
-        state.studioBriefUndo = null;
         if (window.studioDirectorWorkbench) window.studioDirectorWorkbench.resetConversation();
         state.studioReadiness = {checks:[],readHints:[],writeHint:'',writeFields:[],sceneId:''};
           state.modeElapsedByAssistantIndex.storyboard = {};
@@ -4215,10 +4177,6 @@
       renderMessages();
       state.sessionDirty.storyboard = true;
       return persistSession('storyboard');
-    },
-    undoBrief: function () {
-      if (!state.studioBriefUndo) throw new Error('No reversible Project brief change exists.');
-      undoStudioBrief();
     },
     reviewCapture: function (capture, storyId) {
       if (!this.canReview()) return Promise.reject(new Error('Open an available Studio conversation before reviewing.'));

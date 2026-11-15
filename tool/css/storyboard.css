@@ -4327,6 +4327,7 @@ html[data-theme="dark"] .storyboard-prompt-take-status {
 .storyboard-progress-summary {
   flex: 0 1 auto;
   min-width: 0;
+  max-width: none;
 }
 .storyboard-scenes-heading-actions {
   flex: 0 0 auto;

@@ -530,7 +530,7 @@ def test_conversational_write_action_roundtrips_without_becoming_project_state(s
         "draft": "",
     })
     restored = history.open_chat(created["id"])
-    assert restored["messages"][1]["writeAction"] == action
+    assert restored["messages"][1]["writeAction"] == {**action, "completed": False}
     assert "writeAction" not in restored["workingDraft"]
     assert "writeAction" not in history._summary(saved)
 

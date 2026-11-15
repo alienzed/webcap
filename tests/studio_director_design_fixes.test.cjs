@@ -18,7 +18,7 @@ function section(text,start,end) {
 test('Chat and Director mode initialization use controls present in the app shell', () => {
   const nodes = new Map(Array.from(html.matchAll(/\bid="([^"]+)"/g), match => [match[1], {
     classList:{toggle(){},add(){},remove(){}},
-    setAttribute(){},querySelector(){return null;},textContent:''
+    setAttribute(){},querySelector(){return {textContent:''};},textContent:''
   }]));
   const scope = vm.createContext({
     el:id=>nodes.get(id) || null,
@@ -97,22 +97,23 @@ test('operational errors reveal Advanced and preserve the shared Console detail'
   assert.equal(el('studio-dw-status').textContent,'Saved Scene 1');
 });
 
-test('Advanced opens and closes the last manual panel without submitting Read or Write',()=>{
+test('Write opens without preparing a manual operation or starting a request',()=>{
   const nodes={};
   function node(id) {
     const classes=new Set();
     return nodes[id] ||= {attrs:{},classList:{add:x=>classes.add(x),remove:x=>classes.delete(x),contains:x=>classes.has(x),toggle(x,on){if(on)classes.add(x);else classes.delete(x);}},
       setAttribute(k,v){this.attrs[k]=v;},focus(){this.focused=true;},click(){this.onclick();}};
   }
-  let selected=0;
+  let selected=0, availability=0;
   node('studio-dw-write-panel').classList.add('hidden');
   const a=rail.indexOf('    function openDirectAction(which) {');
   const b=rail.indexOf("    rail.addEventListener('keydown'",a);
-  const scope=vm.createContext({el:node,lastQuickAction:'write',updateScope(){},seedManualSceneInstruction(){},refreshWrite:async()=>{selected++;}});
+  const scope=vm.createContext({el:node,lastQuickAction:'write',updateScope(){},showConversationWrite(){availability++;},refreshWrite:async()=>{selected++;}});
   vm.runInContext(section(rail,'  function toggle(which) {','  function parseProposal(raw) {')+rail.slice(a,b),scope);
   node('studio-dw-write').onclick=()=>scope.toggle('write');
   node('studio-dw-open-tools').click();
-  assert.equal(selected,1);
+  assert.equal(selected,0,'opening Write must not prepare a manual operation');
+  assert.equal(availability,1);
   assert.equal(node('studio-dw-open-tools').attrs['aria-expanded'],'true');
   assert.equal(node('director-chat-drawer').classList.contains('studio-actions-open'),true);
   node('studio-dw-open-tools').click();
@@ -120,7 +121,7 @@ test('Advanced opens and closes the last manual panel without submitting Read or
   assert.equal(node('director-chat-drawer').classList.contains('studio-actions-open'),false);
   assert.equal(node('studio-dw-open-tools').focused,true);
   node('studio-dw-open-tools').click();
-  assert.equal(selected,1,'opening again preserves the panel and its current choices');
+  assert.equal(selected,0,'reopening Write remains passive');
 });
 
 test('Read preview and outbound values use the same validated field serializer', () => {

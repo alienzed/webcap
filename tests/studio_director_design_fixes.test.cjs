@@ -360,7 +360,7 @@ test('Studio Revision mode dispatches the existing Storyboard revision operation
       startStudioRevision:async options=>{calls.push(options);},
       storyboardRevisionPreset:key=>key==='continuity'?'Keep continuity':'',
       reportConsoleError:error=>{throw error;}
-    },syncControls(){}
+    },syncControls(){},setOpen(){}
   });
   vm.runInContext(section(chat,'  var studioComposerMode = \'conversation\';',
     '  function syncModeUi() {'),scope);

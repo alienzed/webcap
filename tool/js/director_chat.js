@@ -4293,11 +4293,14 @@
   }
 
   function studioRequestedDuration(instruction) {
+    var seconds = studioMentionedDuration(instruction);
+    return Number.isInteger(seconds) && seconds >= 4 && seconds <= 15 ? seconds : null;
+  }
+
+  function studioMentionedDuration(instruction) {
     var match = /\b(\d+(?:\.\d+)?)\s*(?:-|\s)?\s*(?:seconds?|secs?|s)\b/i.exec(
       String(instruction || ''));
-    if (!match) return null;
-    var seconds = Number(match[1]);
-    return Number.isInteger(seconds) && seconds >= 4 && seconds <= 15 ? seconds : null;
+    return match ? Number(match[1]) : null;
   }
 
   window.studioDirectorBridge = {
@@ -4561,13 +4564,18 @@
             'The existing Scenes are retained and are not revision destinations.',
           instruction:launch.instruction,
           authorRequest:launch.authorRequest || launch.instruction,
+          requestedDurationSeconds:studioRequestedDuration(launch.authorRequest || launch.instruction),
           project:{
             title:story.title,concept:story.concept,style:story.style,
             invariants:story.invariants,
             existingSceneTitles:order.map(function (id) {
               var scene = story.scenes[id];
               return scene && scene.title || '';
-            })
+            }),
+            previousScene:launch.sequenceIndex > 0 && order.length ? (function () {
+              var prior = story.scenes[order[order.length-1]];
+              return {title:prior.title,prompt:prior.prompt,durationSeconds:prior.durationSeconds};
+            })() : null
           }
         });
         // Reuse the existing Scene writer and reviewed insertion/Apply.
@@ -4581,22 +4589,28 @@
             throw new Error('Director must return exactly one Scene.\nRaw response:\n' + raw);
           // The author's explicit duration is a WebCap request parameter,
           // not optional model metadata that may silently default to six.
+          var authorDuration = studioMentionedDuration(launch.authorRequest || launch.instruction);
           var requestedDuration = studioRequestedDuration(launch.authorRequest || launch.instruction);
           if (requestedDuration !== null)
             draft.scenes[0].durationSeconds = requestedDuration;
-          if (!launch.directSave) {
+          if (!launch.directSave || (authorDuration !== null && requestedDuration === null)) {
             state.studioScenesProposal = {
               storyId:storyId, storyTitle:story.title, sceneOrder:order,
               scenes:story.scenes, drafts:draft.scenes, rationale:draft.rationale
             };
             showStudioScenesReview();
-            studioActionStatus('One new Scene is ready for review. Nothing has been saved.', false);
+            studioActionStatus(authorDuration !== null && requestedDuration === null
+              ? 'Requested ' + authorDuration + 's is outside the supported 4–15s range. Draft retained for review; nothing saved.'
+              : 'One new Scene is ready for review. Nothing has been saved.',
+              authorDuration !== null && requestedDuration === null);
             return {review:true};
           }
           var scene = draft.scenes[0];
           if (!scene || typeof scene.prompt !== 'string' || !scene.prompt.trim())
             throw new Error('Director returned no usable Scene Prompt.');
           var validDuration = Number(scene.durationSeconds);
+          // No explicit duration: the existing six-second WebCap default is
+          // valid. Explicit unsupported durations never reach this save.
           if (!Number.isInteger(validDuration) || validDuration < 4 || validDuration > 15)
             validDuration = 6;
           var creation = {
@@ -4670,6 +4684,8 @@
             'Also return title and/or durationSeconds only when requested below. ' +
             'Preserve unaffected details, align prompt timing with the saved/requested duration, and keep other Scene fields unchanged.',
           sceneId:sceneId, instruction:launch.instruction,
+          authorRequest:launch.authorRequest || launch.instruction,
+          requestedDurationSeconds:studioRequestedDuration(launch.authorRequest || launch.instruction),
           requestedFields:['prompt'].concat(wantsTitle ? ['title'] : [], wantsDuration ? ['durationSeconds'] : []),
           responseExample:Object.assign({prompt:'complete replacement H3 prompt'},
             wantsTitle ? {title:'complete new title'} : {},
@@ -4690,7 +4706,7 @@
               throw new Error('Director did not return a usable Scene prompt.\nRaw response:\n' + raw);
             }
             var extras = {}, missing = [];
-            var duration = studioRequestedDuration(launch.instruction);
+            var duration = studioRequestedDuration(launch.authorRequest || launch.instruction);
             if (wantsTitle) {
               if (typeof proposed.title === 'string' && proposed.title.trim())
                 extras.title = proposed.title.trim();
@@ -4714,6 +4730,12 @@
             });
             state.sessionDirty.storyboard = true;
             renderMessages();
+            var authorDuration = studioMentionedDuration(launch.authorRequest || launch.instruction);
+            if (wantsDuration && authorDuration !== null && duration === null) {
+              studioActionStatus('Requested ' + authorDuration +
+                's is outside the supported 4–15s range. Full prompt retained; nothing saved.',true);
+              return {review:true};
+            }
             state.pending = true;
             syncControls();
             return window.studioDirectorWorkbench.applyScenePrompt(story, sceneId, proposed.prompt, extras)

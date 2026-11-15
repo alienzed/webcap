@@ -89,11 +89,12 @@
     if (!active || !toolbar) return;
     if (!active.field.isConnected) {detach();return;}
     var rect = active.field.getBoundingClientRect();
-    toolbar.style.display = rect.width < 100 || rect.bottom <= 0 || rect.top >= innerHeight
-      ? 'none' : 'flex';
-    toolbar.style.top = (rect.bottom - 29) + 'px';
-    toolbar.style.left = (rect.left == null ? rect.right - rect.width : rect.left) + 2 + 'px';
-    toolbar.style.width = Math.max(0,rect.width - 4) + 'px';
+    toolbar.style.display = rect.width < 100 || rect.bottom <= 0 || rect.top >= innerHeight ||
+      rect.bottom > innerHeight + 1 ? 'none' : 'flex';
+    // Center a compact overlay *inside* the textarea rather than painting
+    // a separate full-width footer across its bottom edge.
+    toolbar.style.top = (rect.bottom - 34) + 'px';
+    toolbar.style.left = ((rect.left == null ? rect.right - rect.width : rect.left) + rect.width / 2) + 'px';
   }
 
   function draw() {
@@ -125,7 +126,7 @@
     originalPaddingBottom = field.style.paddingBottom;
     if (field.getBoundingClientRect().width >= 100) {
       var bottomPadding = parseFloat(getComputedStyle(field).paddingBottom) || 0;
-      field.style.paddingBottom = Math.max(bottomPadding, 34) + 'px';
+      field.style.paddingBottom = Math.max(bottomPadding, 40) + 'px';
     }
     var host = field.closest('dialog[open]') || document.body;
     if (toolbar.parentNode !== host) host.appendChild(toolbar);
@@ -155,7 +156,7 @@
 
   function initialize() {
     var style = document.createElement('style');
-    style.textContent = '.webcap-revision-tools{position:fixed;box-sizing:border-box;display:none;align-items:center;justify-content:center;gap:2px;z-index:99999;height:27px;padding:1px;pointer-events:none;background:var(--panel, Canvas);color:var(--text, CanvasText);border-top:1px solid var(--border, #888);border-radius:0 0 5px 5px;font:13px sans-serif}.webcap-revision-tools button{border:0;background:transparent;color:inherit;cursor:pointer;pointer-events:auto;min-width:21px;min-height:22px;padding:1px}.webcap-revision-tools button:disabled{opacity:.3;cursor:default}.webcap-revision-tools span{min-width:32px;text-align:center;font-variant-numeric:tabular-nums}';
+    style.textContent = '.webcap-revision-tools{position:fixed;box-sizing:border-box;display:none;align-items:center;justify-content:center;gap:2px;z-index:99999;height:28px;padding:2px 6px;pointer-events:none;transform:translateX(-50%);background:var(--panel, Canvas);color:var(--text, CanvasText);border:1px solid var(--border, #888);border-radius:7px;box-shadow:0 1px 5px #0002;font:13px sans-serif}.webcap-revision-tools button{border:0;background:transparent;color:inherit;cursor:pointer;pointer-events:auto;min-width:21px;min-height:22px;padding:1px}.webcap-revision-tools button:disabled{opacity:.3;cursor:default}.webcap-revision-tools span{min-width:32px;text-align:center;font-variant-numeric:tabular-nums}';
     document.head.appendChild(style);
     toolbar = document.createElement('div');
     toolbar.className = 'webcap-revision-tools';

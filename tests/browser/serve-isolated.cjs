@@ -9,11 +9,12 @@ const {spawn} = require('node:child_process');
 const root = path.resolve(__dirname, '../..');
 const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'webcap-browser-'));
 const logFile = path.join(root, 'test-results', 'studio-backend.log');
-let child, cleaning = false;
+let child, modelProcess, cleaning = false;
 function cleanup(code) {
   if (cleaning) return;
   cleaning = true;
   if (child && child.exitCode === null) child.kill('SIGTERM');
+  if (modelProcess && modelProcess.exitCode === null) modelProcess.kill('SIGTERM');
   // A file-backed application must not leak acceptance Projects into the real app.
   fs.rmSync(temp, {recursive:true, force:true});
   process.exit(code);
@@ -46,10 +47,19 @@ function portAvailable() {
   cfg.filesystem.output_root = path.join(temp,'output');
   cfg.filesystem.app_data_root = path.join(temp,'data');
   cfg.filesystem.models = path.join(temp,'models');
-  cfg.director_model = '';
+  cfg.director_model = 'acceptance::acceptance-model';
+  cfg.storyboard = cfg.storyboard || {};
+  cfg.storyboard.director = {
+    ...(cfg.storyboard.director || {}),
+    mode:'remote',
+    remote_endpoints:[{id:'acceptance',name:'Acceptance',endpoint:'http://127.0.0.1:4211',enabled:true}]
+  };
   fs.writeFileSync(path.join(temp,'tool/config.json'),JSON.stringify(cfg,null,2));
   fs.mkdirSync(path.dirname(logFile),{recursive:true});
   const logs = fs.openSync(logFile,'w');
+  modelProcess=spawn(process.execPath,[path.join(root,'tests/browser/model-boundary.cjs')],{
+    cwd:root,stdio:['ignore',logs,logs]
+  });
   const python = process.env.WEBCAP_TEST_PYTHON || (process.platform === 'win32' ? 'python' : 'python3');
   child=spawn(python,['-m','tool.server.app'],{
     cwd:temp,env:{...process.env,PYTHONPATH:temp,PYTHONUNBUFFERED:'1'},

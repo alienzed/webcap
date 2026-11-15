@@ -32,6 +32,19 @@ test('Read is plain prose; an absent or malformed optional action does not disca
   assert.throws(() => parse('  '), /no answer/);
 });
 
+test('Structured Studio fields survive a missing optional conversational reply', () => {
+  const changes = {scene:{prompt:'Complete replacement prompt',durationSeconds:12}};
+  const response = parse(JSON.stringify({changes}));
+  assert.equal(response.reply, JSON.stringify({changes}));
+  assert.deepEqual(response.changes,changes);
+  assert.equal(response.action,null);
+  const mixed = parse(JSON.stringify({reply:'Useful answer.',changes,
+    action:{kind:'unsupported_operation',instruction:'Change things'}}));
+  assert.equal(mixed.reply,'Useful answer.');
+  assert.deepEqual(mixed.changes,changes);
+  assert.equal(mixed.action,null);
+});
+
 test('Only a small, optional action accompanies conversation', () => {
   const result = parse(JSON.stringify({reply:'I can make that quieter.', action:{
     kind:'write_scenes', instruction:'Make the ending quieter.', fields:['prompt']

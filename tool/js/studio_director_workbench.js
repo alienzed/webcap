@@ -739,6 +739,7 @@
     });}).then(function (result) {
       if (!result.scene || !result.story) throw new Error('Scene Apply returned no saved Scene.');
       applied = true;
+      window.studioDirectorBridge.forgetSavedSceneDraft(result.story.id,proposedScene.sceneId,result.scene);
       var selected = {};
       proposedScene.fields.forEach(function (field) {selected[field] = result.scene[field];});
       var sceneId = proposedScene.sceneId;
@@ -764,7 +765,10 @@
   // Write reflects an explicit conversational proposal, not a standalone operation picker.
   function showConversationWrite() {
     var action = pendingCreativeAction;
-    var prepared = action ? null : window.studioDirectorBridge.preparedWrite();
+    var selectedDraft = !action || action.reviewReady
+      ? window.studioDirectorBridge.preparedWrite() : null;
+    var prepared = action && !(action.reviewReady && selectedDraft && selectedDraft.kind === 'scene')
+      ? null : selectedDraft;
     var ready = !!(action || prepared);
     var awaitingProject = !!(action && action.awaitingProject);
     var awaitingScenes = !!(action && action.awaitingScenes);
@@ -807,6 +811,7 @@
       scenes:action.kind === 'create_scene' && Array.isArray(action.scenes)
         ? action.scenes.slice() : null,
       request:String(authorRequest || ''),
+      sourceMessageIndex:messageIndex,
       projectId:String(selectedProject && selectedProject.projectId || ''),
       scene:selectedScene && {projectId:selectedScene.projectId,sceneId:selectedScene.sceneId,
         sceneNumber:selectedScene.sceneNumber}
@@ -841,7 +846,8 @@
         (frozen.draftReady || (frozen.scenes && frozen.scenes.length));
       if (reviewingScenes ? !window.studioDirectorBridge.canReview() :
           !window.studioDirectorBridge.isReady()) {
-        status(window.studioDirectorBridge.readinessMessage(),true);
+        status(reviewingScenes ? 'Open an available Studio conversation to review Scenes.' :
+          window.studioDirectorBridge.readinessMessage(),true);
         return;
       }
       button.disabled = true;
@@ -880,15 +886,17 @@
           // Authored records are reviewed directly, without a second model call.
           // Otherwise authorize one authoring call, and retain its review action.
           var operation = frozen.draftReady ?
-            window.studioDirectorBridge.reviewPendingScenes(projectId) :
+            window.studioDirectorBridge.reviewPendingScenes(projectId,frozen.sourceMessageIndex) :
             frozen.scenes && frozen.scenes.length ?
             window.studioDirectorBridge.reviewAuthoredScenes({
               projectId:projectId,scenes:frozen.scenes,
+              sourceMessageIndex:frozen.sourceMessageIndex,
               rationale:'Authored in Studio Director conversation.'
             }) :
             window.studioDirectorBridge.writeNewScene({
               projectId:projectId,instruction:frozen.instruction,
-              authorRequest:frozen.request,directSave:false
+              authorRequest:frozen.request,directSave:false,
+              sourceMessageIndex:frozen.sourceMessageIndex
             });
           return operation.then(function (result) {
             if (result && result.review) {
@@ -921,13 +929,26 @@
               !fields.includes('durationSeconds')) fields.push('durationSeconds');
           if (/\b(?:rename|title)\b/i.test(frozen.request) &&
               !fields.includes('title')) fields.push('title');
-          var completed = [], unchanged = [], failed = [], notAttempted = [];
+          var completed = [], unchanged = [], review = [], failed = [], notAttempted = [], reportingErrors = [];
           function next(i) {
             if (i >= ids.length) {
+              var reviewLabels = review.map(function (id) {
+                return 'Scene ' + (story.sceneOrder.indexOf(id) + 1);
+              });
               status('Saved ' + completed.length + ' · Unchanged ' + unchanged.length +
+                ' · Drafts needing review ' + review.length +
+                (review.length ? ' (' + reviewLabels.join(', ') +
+                  '): select each Scene in Studio and use Write to review' : '') +
                 ' · Failed ' + failed.length + ' · Not attempted ' + notAttempted.length +
-                (failed.length ? ': ' + failed.join(' | ') : ''),failed.length > 0,true);
-              if (!failed.length && !notAttempted.length) finishSceneAction();
+                (failed.length ? ': ' + failed.join(' | ') : '') +
+                (reportingErrors.length ? ' · Saved, but reporting failed for ' +
+                  reportingErrors.join(', ') : ''),failed.length > 0 || notAttempted.length > 0 || reportingErrors.length > 0,true);
+              if (review.length && !failed.length && !notAttempted.length)
+                finishSceneAction(false);
+              else if (review.length) {
+                frozen.reviewReady = true;
+                showConversationWrite();
+              } else if (!failed.length && !notAttempted.length) finishSceneAction();
               return;
             }
             return window.studioDirectorBridge.writeSelectedScene({
@@ -935,12 +956,14 @@
               authorRequest:frozen.request,fields:fields.slice()
             }).then(function (result) {
               if (result === null) unchanged.push(ids[i]);
-              else if (result && result.review) failed.push(ids[i] + ': draft retained for review, not saved');
+              else if (result && result.review) review.push(ids[i]);
               else completed.push(ids[i]);
               return next(i + 1);
             }).catch(function (error) {
-              if (error.saved) completed.push(ids[i]);
-              else failed.push(ids[i] + ': ' + String(error.message || error));
+              if (error.saved) {
+                completed.push(ids[i]);
+                reportingErrors.push('Scene ' + (story.sceneOrder.indexOf(ids[i]) + 1));
+              } else failed.push(ids[i] + ': ' + String(error.message || error));
               var shared = ['stopped','cancelled','interrupted'].includes(String(error.jobStatus || '')) ||
                 /Failed to fetch|No Director model is available|runtime unavailable|Project is no longer available/i.test(String(error.message || ''));
               if (shared) {
@@ -1022,6 +1045,7 @@
           });
         }).catch(function (error) {
           error.saved = true;
+          error.savedScene = result.scene;
           throw error;
         }).then(function () {return result;});
       });
@@ -1141,8 +1165,10 @@
       el('studio-dw-close-actions').focus();
     }
     el('studio-dw-write-ready-launch').onclick=function () {
-      if (!pendingCreativeAction) {
-        var draft = window.studioDirectorBridge.preparedWrite();
+      var reviewDraft = !pendingCreativeAction || pendingCreativeAction.reviewReady
+        ? window.studioDirectorBridge.preparedWrite() : null;
+      if (!pendingCreativeAction || (pendingCreativeAction.reviewReady && reviewDraft && reviewDraft.kind === 'scene')) {
+        var draft = reviewDraft;
         if (!draft) {showConversationWrite();return;}
         if (draft.kind === 'scene') {
           return window.flushStudioDirectorStoryEdits(draft.projectId)

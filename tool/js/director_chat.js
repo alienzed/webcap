@@ -4980,11 +4980,16 @@
               studioActionStatus('Director returned no Scene changes.', false);
               return null;
             }
-            state.modeMessages.storyboard.push({
-              role:'assistant', content:proposed.prompt, rawResponse:raw
-            });
-            state.sessionDirty.storyboard = true;
-            renderMessages();
+            // The full prompt is an unsaved structured result, not a new
+            // conversational turn. Keep it durable and available for retry,
+            // but never echo it into the next model request or chat transcript.
+            state.studioWorkingDraft.scenes[sceneId] = Object.assign(
+              {},state.studioWorkingDraft.scenes[sceneId] || {},{
+                prompt:proposed.prompt
+              },extras);
+            state.studioWorkingDraft.sourceRequest =
+              String(launch.authorRequest || launch.instruction);
+            scheduleSessionSave();
             var authorDuration = studioMentionedDuration(launch.authorRequest || launch.instruction);
             if (wantsDuration && authorDuration !== null && duration === null) {
               studioActionStatus('Requested ' + authorDuration +

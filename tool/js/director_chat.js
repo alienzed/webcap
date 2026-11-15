@@ -3137,8 +3137,9 @@
       return studioDirectorRequestMessages(messages, needsPromptReference, false, navigation).then(function (outbound) {
       outbound[0].content += '\n\nCONVERSATION: Reply naturally and answer direct questions from supplied material. ' +
         'A plain-text answer is acceptable. For ordinary discussion answer briefly, normally 1-3 sentences. ' +
-        'When the author asks to create/revise saved material, propose one action in JSON with reply and ' +
-        'action:{kind,instruction,fields}; kind is create_project, write_project, create_scene, or write_scenes. ' +
+        'When the author requests Project edits or revisions to existing Scenes, propose an optional action ' +
+        'in JSON with reply and action:{kind,instruction,fields}; supported kinds are create_project, ' +
+        'write_project, create_scene and write_scenes. ' +
         'Action is optional for ordinary Read/discussion; it is never an authorization to save. ' +
         'Instruction carries the concrete agreed creative change and any requested title/duration. ' +
         'Fields lists only requested changed fields: Project title/concept/style/invariants or Scene title/prompt/durationSeconds. ' +

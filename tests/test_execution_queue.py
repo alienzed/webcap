@@ -772,3 +772,21 @@ def test_batch_snapshot_reads_state_once_and_preserves_requested_identity(queue_
     assert len(jobs) == len(added)
     assert "missing" not in jobs
     assert all(job["status"] == "queued" for job in jobs.values())
+
+
+def test_requeued_inference_failure_retains_exact_source_until_resume(queue_root):
+    first = execution_queue.enqueue("inference", {"request": {"prompt": "first"}}, metadata={"client": "storyboard", "sceneId": "scene-one"})
+    second = execution_queue.enqueue("inference", {"request": {"prompt": "second"}}, metadata={"client": "test"})
+    execution_queue.claim_next("inference", expected_job_id=first["id"])
+    execution_queue.mark_running(first["id"])
+
+    execution_queue.requeue_active_and_pause(first["id"], "Inference paused after an execution error: no lora found")
+    snapshot = execution_queue.lane_snapshot("inference", include_terminal=False)
+    assert snapshot["paused"] is True
+    assert snapshot["activeJobId"] == ""
+    assert snapshot["failedJobId"] == first["id"]
+    assert [job["id"] for job in snapshot["jobs"]] == [first["id"], second["id"]]
+    assert snapshot["jobs"][0]["metadata"]["sceneId"] == "scene-one"
+
+    execution_queue.resume_lane("inference")
+    assert execution_queue.lane_snapshot("inference")["failedJobId"] == ""

@@ -3945,7 +3945,7 @@
     close.onclick = function () {
       var studio = state.activeMode === 'storyboard';
       setOpen(false);
-      if (studio) el('storyboard-open-director').focus();
+      if (studio) toggle.focus();
     };
     clear.onclick = newChat;
     contextRefresh.onclick = function () {

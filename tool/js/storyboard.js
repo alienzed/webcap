@@ -5246,9 +5246,6 @@
     var generationBlocked = storyHasPendingGeneration(storyId);
     var queuedGeneration = storyHasQueuedGeneration(storyId);
     var queuedFirstCut = !!queuedFirstCutForStory(storyId);
-    var cancelTakesButton = el('storyboard-cancel-takes-btn');
-    if (!cancelTakesButton) throw new Error('Storyboard Cancel Takes control is missing.');
-    cancelTakesButton.classList.toggle('hidden', !queuedGeneration);
     var developBlocked = generationBlocked || directorTargetBlocked({ kind: 'scenes', storyId: storyId });
     var firstCutBlocked = generationBlocked || directorTargetBlocked({ kind: 'story-action', storyId: storyId });
     var developButton = el('storyboard-develop-btn');
@@ -5295,6 +5292,33 @@
         }
       }
     });
+    // The batch control represents one next action. Cancellation affects queued
+    // Takes only; an already executing Take finishes through the existing route.
+    var batch = el('storyboard-generate-scenes-btn');
+    if (!batch) throw new Error('Studio Generate Takes control is missing.');
+    var busy = String(batch.dataset.takesBusy || '');
+    var label = busy === 'cancel' ? 'Cancelling…' :
+      busy === 'generate' ? 'Queueing…' :
+      queuedGeneration ? 'Cancel Takes' :
+      generationBlocked ? 'Take Running…' : 'Generate Takes';
+    var action = !busy && queuedGeneration ? 'cancel' :
+      !busy && !generationBlocked ? 'generate' : '';
+    batch.dataset.takesAction = action;
+    batch.setAttribute('aria-label', label);
+    batch.querySelector('.storyboard-tool-label').textContent = label;
+    batch.querySelector('.storyboard-tool-glyph').textContent =
+      busy ? '…' : queuedGeneration ? '×' : generationBlocked ? '◷' : '▶';
+    batch.title = busy ? label :
+      queuedGeneration ? 'Cancel queued Takes for this Project. The running Take will finish.' :
+      generationBlocked ? 'An existing Take is running; wait for it to finish before generating another batch.' :
+      queuedFirstCut ? 'Remove this Project from the First Cut queue before generating Takes.' :
+      'Queue one new Take per Scene';
+    // Keep the original First Cut availability logic for generation. Cancelling
+    // this Project's own queued Takes must remain available.
+    var activeFirstCut = storyState.storyAction && storyState.storyAction.active &&
+      String(storyState.storyAction.storyId || '') === storyId;
+    batch.disabled = !!busy || (generationBlocked && !queuedGeneration) ||
+      (!queuedGeneration && (queuedFirstCut || activeFirstCut));
   }
 
   function storyboardInferenceJob(job) {
@@ -5727,10 +5751,9 @@
   function cancelStoryTakes() {
     if (!storyState.story) return;
     var storyId = String(storyState.story.id || '');
-    var button = el('storyboard-cancel-takes-btn');
-    if (!button) throw new Error('Storyboard Cancel Takes control is missing.');
-    button.disabled = true;
-    button.textContent = 'Cancelling...';
+    var button = el('storyboard-generate-scenes-btn');
+    button.dataset.takesBusy = 'cancel';
+    syncPlanReplacementControls();
     return generationRequest({
       operation: 'cancel_story',
       storyId: storyId
@@ -5751,8 +5774,7 @@
         return payload;
       });
     }).catch(reportError).finally(function () {
-      button.disabled = false;
-      button.textContent = 'Cancel Takes';
+      delete button.dataset.takesBusy;
       syncPlanReplacementControls();
     });
   }
@@ -5795,8 +5817,11 @@
     var sceneIds = Array.isArray(storyState.story.sceneOrder)
       ? storyState.story.sceneOrder.slice()
       : [];
+    var button = el('storyboard-generate-scenes-btn');
+    button.dataset.takesBusy = 'generate';
+    syncPlanReplacementControls();
     setSaveState('Saving...');
-    flushPendingSaves().then(function () {
+    return flushPendingSaves().then(function () {
       return sceneIds.reduce(function (promise, sceneId) {
         return promise.then(function () {
           return enqueueSceneGeneration(storyId, sceneId).catch(reportError);
@@ -5804,7 +5829,18 @@
       }, Promise.resolve());
     }).then(function () {
       setSaveState('Saved');
-    }).catch(reportError);
+    }).catch(reportError).finally(function () {
+      delete button.dataset.takesBusy;
+      syncPlanReplacementControls();
+    });
+  }
+
+  function handleStoryTakesAction() {
+    if (!storyState.story) return;
+    var button = el('storyboard-generate-scenes-btn');
+    if (button.disabled || button.dataset.takesBusy) return;
+    if (storyHasQueuedGeneration(storyState.story.id)) return cancelStoryTakes();
+    if (!storyHasPendingGeneration(storyState.story.id)) return generateScenes();
   }
 
   function handleSceneInput(event) {
@@ -6344,8 +6380,7 @@
     el('storyboard-story-show').onclick = function () { setStoryCollapsed(false); };
     el('storyboard-scenes-focus-btn').onclick = function () { setSceneViewMode('focus'); };
     el('storyboard-scenes-sequence-btn').onclick = function () { setSceneViewMode('sequence'); };
-    el('storyboard-generate-scenes-btn').onclick = generateScenes;
-    el('storyboard-cancel-takes-btn').onclick = cancelStoryTakes;
+    el('storyboard-generate-scenes-btn').onclick = handleStoryTakesAction;
     el('storyboard-director-tools-btn').onclick = function () {
       window.openStudioDirectorRevision();
     };

@@ -4349,10 +4349,9 @@ html[data-theme="dark"] .storyboard-prompt-take-status {
   font-weight: 600;
   line-height: 1.2;
 }
-@container (max-width: 980px) {
-  .storyboard-tool-label { display: none; }
-  #storyboard-project-tool-bar > .storyboard-tool-icon,
-  #storyboard-project-tool-bar .storyboard-header-menu > .storyboard-tool-icon {
+@container (max-width: 760px) {
+  #storyboard-project-tool-bar .storyboard-tool-label { display: none; }
+  #storyboard-project-tool-bar > .storyboard-tool-icon {
     width: 36px;
     padding: 0;
   }

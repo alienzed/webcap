@@ -1,12 +1,9 @@
 (function () {
   'use strict';
   var readStory = null, writeStory = null, projects = [], proposedScene = null, proposedBatch = null;
-  var readiness = [], recommendations = {readHints:[],writeHint:'',writeFields:[],sceneId:''};
-  var readinessStale = false;
   var readChoices = {}, writeOperationChosen = false, lastReadSource = null;
-  var sceneSelectionManual = false, sceneSelectionProject = '', recommendationProject = '';
-  var lastQuickAction = 'read', creativeCapture = null, preparedSceneWrite = null;
-  var preparedNewSceneWrite = null, captureProjectId = '';
+  var sceneSelectionManual = false, sceneSelectionProject = '';
+  var lastQuickAction = 'write';
   var sceneFields = ['prompt', 'title', 'durationSeconds'];
   var projectFields = ['title', 'concept', 'style', 'invariants'];
   var labels = {title:'Title', concept:'Concept', style:'Visual / atmosphere',
@@ -98,10 +95,7 @@
       host.appendChild(row);
     }
     var overview = projectFields.map(function (key) {return 'project.' + key;});
-    addUnit('Overview', overview, fields,
-      recommendations.readHints.length
-        ? overview.some(function (path) {return recommendations.readHints.includes(path);})
-        : true);
+    addUnit('Overview', overview, fields, true);
     (story.sceneOrder || []).forEach(function (id, index) {
       var scene = story.scenes && story.scenes[id];
       if (!scene) throw new Error('Project has a Scene index with no matching Scene.');
@@ -110,11 +104,7 @@
       var paths = contextFields.map(function (field) {
         return 'scene:' + id + ':' + field;
       });
-      var current = id === (recommendedSceneId(story) || activeTarget().sceneId);
-      var suggested = recommendations.readHints.some(function (hint) {
-        return paths.includes(hint) || (current && hint.startsWith('scene.current.') &&
-          paths.some(function (path) {return path.endsWith(':' + hint.slice(14));}));
-      }) || !recommendations.readHints.length;
+      var suggested = true;
       addUnit('Scene ' + (index + 1) + ' · ' + (scene.title || 'Untitled'), paths, scenes, suggested);
     });
     readChoices[story.id] = chosen;
@@ -242,16 +232,6 @@
         if (field.title.startsWith('Updated by Studio Director')) field.title = '';
       }
     });
-    var writeId = el('studio-dw-write-project').value;
-    var op = el('studio-dw-write-operation').value;
-    var unresolvedScene = op === 'scene-write' && el('studio-dw-scene-mode').value === 'revise' && writeStory && writeStory.id === writeId &&
-      !readinessStale && (recommendations.sceneId || recommendations.sceneNumber) &&
-      !recommendedSceneId(writeStory);
-    el('studio-dw-write-scope').textContent = [
-      op !== 'new-project' && lastReadSource && writeId && lastReadSource !== writeId
-        ? 'Destination differs from the last Read source.' : '',
-      unresolvedScene ? 'Scene target unresolved. Select a Scene.' : ''
-    ].filter(Boolean).join(' ');
     var mode = !el('studio-dw-read-panel').classList.contains('hidden') ? 'Read' :
       !el('studio-dw-write-panel').classList.contains('hidden') ? 'Write' : '';
     el('studio-dw-heading').textContent = 'Write';
@@ -259,12 +239,6 @@
       ? 'Explicit source · nothing sent until Send'
       : mode === 'Write' ? 'Reviewed destination · nothing saved until Apply'
       : 'Conversation is independent of Studio navigation';
-  }
-  // An already-developed single Scene can enter the existing review without another Director call.
-  // A deliberate manual Write choice still uses the full one-or-many drafting workflow.
-  function readyNewSceneCapture() {
-    return !readinessStale && !writeOperationChosen && creativeCapture &&
-      creativeCapture.field === 'scene' && !creativeCapture.sceneId ? creativeCapture : null;
   }
   function setOperation() {
     var operation = el('studio-dw-write-operation').value;
@@ -274,30 +248,10 @@
     el('studio-dw-batch-controls').classList.toggle('hidden', !revise);
     el('studio-dw-write-project').disabled = operation === 'new-project';
     el('studio-dw-write-prepare').textContent = sceneWrite
-      ? (revise ? 'Revise selected Scenes · Save' : readyNewSceneCapture() ? 'Review prepared Scene' : 'Draft new Scenes')
+      ? (revise ? 'Revise selected Scenes · Save' : 'Create Scene · Review')
       : 'Prepare draft';
     showWriteContext();
     updateScope();
-  }
-  function recommendedSceneId(story) {
-    if (readinessStale || !story || !Array.isArray(story.sceneOrder)) return '';
-    // If both recommendations exist, they must identify the same saved Scene.
-    // A conflict means no automatic destination, not a reason to guess.
-    var id = recommendations.sceneId, number = recommendations.sceneNumber;
-    // Read field paths contain `scene:<saved-id>:<field>`; accept that identity
-    // only when it maps exactly to a Scene in this destination Project.
-    if (id && !story.sceneOrder.includes(id) && id.startsWith('scene:')) {
-      var readId = id.split(':')[1];
-      if (story.sceneOrder.includes(readId)) id = readId;
-    }
-    if (id && !story.sceneOrder.includes(id)) return '';
-    if (number) {
-      if (recommendationProject !== story.id || !Number.isInteger(number) ||
-          number < 1 || number > story.sceneOrder.length) return '';
-      var numberedId = story.sceneOrder[number - 1];
-      return id && id !== numberedId ? '' : numberedId;
-    }
-    return id || '';
   }
   function renderWriteStory(story) {
     writeStory = story;
@@ -309,10 +263,8 @@
     }
     var checked = new Set(Array.from(batchHost.querySelectorAll('input:checked'))
       .map(function (input) {return input.value;}));
-    var suggestedScene = recommendedSceneId(story);
-    var hasUnresolvedHint = !readinessStale &&
-      !!(recommendations.sceneId || recommendations.sceneNumber);
-    if (!suggestedScene && !hasUnresolvedHint) suggestedScene = activeTarget().sceneId;
+    var route = activeTarget();
+    var suggestedScene = route.storyId === story.id ? route.sceneId : '';
     batchHost.replaceChildren();
     (story.sceneOrder || []).forEach(function (id, index) {
       var label = document.createElement('label'), input = document.createElement('input');
@@ -325,12 +277,6 @@
     showWriteContext();
     updateScope();
   }
-  function recommendedWriteFields(operation) {
-    if (readinessStale) return [];
-    var allowed = operation === 'project' ? projectFields :
-      ['scene-write','scene','scenes','scene-edit','scenes-batch'].includes(operation) ? sceneFields : [];
-    return recommendations.writeFields.filter(function (field) { return allowed.indexOf(field) !== -1; });
-  }
   function refreshRead() {
     return refreshProjects().then(function () {return loadStory(el('studio-dw-read-project').value);})
       .then(renderReadStory).catch(function (e) { status('Read setup failed: ' + e.message, true); });
@@ -339,14 +285,12 @@
     return refreshProjects().then(function () {return loadStory(el('studio-dw-write-project').value);})
       .then(renderWriteStory).then(function () {
         if (!writeOperationChosen) {
-          var hint = recommendations.writeHint;
-          if (hint === 'new-project' || hint === 'project') {
-            el('studio-dw-write-operation').value = hint;
-          } else if (['scene', 'scenes', 'scene-edit', 'scenes-batch'].includes(hint)) {
+          var route = activeTarget();
+          if (!projects.length) el('studio-dw-write-operation').value = 'new-project';
+          else if (writeStory && route.storyId === writeStory.id && route.sceneId) {
             el('studio-dw-write-operation').value = 'scene-write';
-            el('studio-dw-scene-mode').value =
-              (recommendations.sceneId || recommendations.sceneNumber || hint === 'scene-edit' || hint === 'scenes-batch') ? 'revise' : 'create';
-          } else if (!projects.length) el('studio-dw-write-operation').value = 'new-project';
+            el('studio-dw-scene-mode').value = 'revise';
+          } else el('studio-dw-write-operation').value = 'project';
         }
         setOperation();
         return true;
@@ -419,54 +363,6 @@
     return Promise.resolve();
   }
 
-  function reviewCreativeCapture(capture) {
-    if (!capture || !capture.content || !['title','concept','style','prompt','invariant','scene'].includes(capture.field))
-      throw new Error('No valid authored material is ready for review.');
-    if (!window.studioDirectorBridge.canReview())
-      throw new Error('Open the Studio conversation before reviewing this change.');
-    var projectSelect = el('studio-dw-write-project');
-    var id = (capture.field === 'scene' && captureProjectId) || projectSelect.value || window.studioDirectorBridge.workingStoryId();
-    if (!id) {
-      status('Choose a destination Project in Write, then review this suggestion.', false);
-      openWriteForCapture();
-      return;
-    }
-    if (capture.field === 'scene') {
-      window.studioDirectorBridge.reviewSceneCapture(capture,id).catch(function (error) {
-        status('Creative Scene creation review failed: ' + String(error.message || error),true);
-      });
-      return;
-    }
-    if (['title','concept','style','invariant'].indexOf(capture.field) !== -1) {
-      window.studioDirectorBridge.reviewCapture(capture, id).catch(function (e) {
-        status('Creative review failed: ' + String(e.message || e), true);
-      });
-      return;
-    }
-    if (!capture.sceneId) {
-      status('Choose a specific saved Scene before reviewing this suggestion.', true);
-      return;
-    }
-    var sceneTarget = capture.sceneId;
-    el('studio-dw-write-prepare').disabled = true;
-    Promise.resolve().then(function () {
-      return window.flushStudioDirectorStoryEdits(id);
-    }).then(function () {return loadStory(id);})
-      .then(function (story) {
-        if (!story.sceneOrder.includes(sceneTarget) && sceneTarget.startsWith('scene:'))
-          sceneTarget = sceneTarget.split(':')[1];
-        var scene = story.scenes && story.scenes[sceneTarget];
-        if (!scene || !story.sceneOrder.includes(sceneTarget)) throw new Error('Select a saved Scene to review.');
-        var draft = {sceneId:sceneTarget};
-        draft[capture.field] = capture.content;
-        proposedBatch = {storyId:story.id,scenes:[{sceneId:sceneTarget,
-          before:{position:story.sceneOrder.indexOf(sceneTarget)+1,title:scene.title,prompt:scene.prompt},
-          draft:draft}]};
-        renderBatchReview();
-      }).catch(function (error) {
-        status('Creative Scene review failed: ' + String(error.message || error), true);
-      }).finally(function () {el('studio-dw-write-prepare').disabled = false;});
-  }
   function openWriteForCapture() {
     el('director-chat-drawer').classList.add('studio-actions-open');
     el('studio-dw-open-tools').setAttribute('aria-expanded','true');
@@ -499,12 +395,7 @@
       throw new Error('Unsupported Studio creative Write goal: ' + operation);
     try {
       var item = projects.find(function (p) {return p.id === id;});
-      if (options && options.guided && !readinessStale && recommendations.writeHint === operation) {
-        bridge.prepareWrite(operation, id, item && storyName(item), {
-          instruction:String(recommendations.writeInstruction || '').trim(),
-          requestedFields:operation === 'project' ? recommendedWriteFields('project') : []
-        });
-      } else bridge.prepareWrite(operation, id, item && storyName(item));
+      bridge.prepareWrite(operation, id, item && storyName(item));
       status('Preparing a reviewed proposal. No saved fields have changed.', false);
     } catch (error) {status('Write failed: ' + error.message, true);}
   }
@@ -618,17 +509,18 @@
       status('Choose one to 32 Scenes to revise.', true);
       return Promise.resolve();
     }
-    var guided = !readinessStale && ['scenes','scene-edit','scenes-batch'].includes(recommendations.writeHint);
     var messages = window.studioDirectorBridge.messages().filter(function (message) {
       return message.role === 'user' && !String(message.content || '').includes('[WEBCAP APPLIED FIELD VALUES]');
     });
-    var instruction = guided && String(recommendations.writeInstruction || '').trim() ||
-      String(messages.length && messages[messages.length - 1].content || '').trim();
+    var instruction = String(messages.length && messages[messages.length - 1].content || '').trim();
     if (!instruction) {
       status('Discuss the Scene change first, then write the selected Scenes.', true);
       return Promise.resolve();
     }
-    var fields = guided ? recommendedWriteFields('scenes') : [];
+    var fields = ['prompt'];
+    if (/\b(?:rename|title)\b/i.test(instruction)) fields.push('title');
+    if (/\b(?:duration|\d+\s*(?:-\s*|\s+)?(?:seconds?|secs?|s)\b)/i.test(instruction))
+      fields.push('durationSeconds');
     var button = el('studio-dw-write-prepare');
     button.disabled = true;
     var outcome = {saved:[],unchanged:[],failed:[],notAttempted:[],reportingErrors:[]};
@@ -831,158 +723,6 @@
         : 'Apply was not confirmed: ' + message;
       status('Scene Apply: ' + message,true);
     }).finally(function () {button.disabled=false;});
-  }
-  function setReadinessFreshness(stale) {
-    readinessStale = !!stale;
-    renderReadiness(readiness);
-    if (!el('studio-dw-write-panel').classList.contains('hidden')) setOperation();
-    var label = el('studio-dw-readiness-freshness');
-    label.textContent = readinessStale ? 'Outdated' : readiness.length ? 'Current' : 'No assessment';
-    var empty = el('studio-dw-readiness-list').querySelector('p');
-    if (empty) empty.textContent = readinessStale ? 'No current assessment.' : 'Not assessed yet';
-  }
-  function openRecommendedWrite() {
-    var hint = recommendations.writeHint;
-    if (!hint) return;
-    var operation = ['scene', 'scenes', 'scene-edit', 'scenes-batch'].includes(hint)
-      ? 'scene-write' : hint;
-    var select = el('studio-dw-write-operation');
-    if (!Array.from(select.options).some(function (item) {return item.value === operation;})) {
-      status('The recommended Studio operation is not available.', true);
-      return;
-    }
-    select.value = operation;
-    if (operation === 'project') {
-      var destination = window.studioDirectorBridge.workingStoryId() || activeTarget().storyId;
-      if (destination) el('studio-dw-write-project').value = destination;
-    }
-    if (operation === 'scene-write') el('studio-dw-scene-mode').value =
-      (recommendations.sceneId || recommendations.sceneNumber || hint === 'scene-edit' || hint === 'scenes-batch') ? 'revise' : 'create';
-    writeOperationChosen = true;
-    sceneSelectionManual = false; // Explicitly follow Director's proposed Write target.
-    var setup = el('studio-dw-write-panel').classList.contains('hidden') ? toggle('write') : refreshWrite();
-    return setup.then(function (ready) {
-      if (!ready) return;
-      if (operation === 'project' || operation === 'new-project') return writePrepare({guided:true});
-      return writePrepare();
-    });
-  }
-  function captureActionLabel(capture) {
-    return capture.field === 'scene' ? 'Review new Scene' :
-      capture.field === 'prompt' ? 'Review Scene' : 'Review Project Overview';
-  }
-  function readRecommendedProject() {
-    var id = window.studioDirectorBridge.workingStoryId() || activeTarget().storyId;
-    var requests = window.studioDirectorBridge.messages().filter(function (message) {
-      return message.role === 'user' && !message.content.includes('[WEBCAP EXPLICIT READ]') &&
-        !message.content.includes('[WEBCAP APPLIED FIELD VALUES]');
-    });
-    var instruction = requests.length ? requests[requests.length - 1].content : '';
-    return refreshProjects().then(function () {
-      el('studio-dw-read-project').value = id;
-      return loadStory(id);
-    }).then(function (story) {
-      renderReadStory(story);
-      selectEntireReadProject();
-      readSend(instruction);
-    }).catch(function (error) { status('Project Read failed: ' + error.message, true); });
-  }
-  function writeActionLabel() {
-    var hint = recommendations.writeHint;
-    if (hint === 'new-project') return 'Create Project';
-    if (hint === 'project') return 'Revise Project Overview';
-    if (['scene', 'scenes', 'scene-edit', 'scenes-batch'].includes(hint))
-      return recommendations.sceneNumber ? 'Draft Scene ' + recommendations.sceneNumber :
-        recommendations.sceneId ? 'Draft Scene revisions' : 'Draft Scenes';
-    return '';
-  }
-  function renderReadiness(list) {
-    var actions = el('studio-dw-suggestions');
-    var assessment = el('studio-dw-readiness-list');
-    actions.replaceChildren();
-    assessment.replaceChildren();
-    var available = [];
-    if (!readinessStale && creativeCapture) available.push({
-      kind:'capture', label:captureActionLabel(creativeCapture),
-      run:function () { reviewCreativeCapture(creativeCapture); }
-    });
-    if (!readinessStale && !creativeCapture && preparedNewSceneWrite) {
-      var newLaunch = preparedNewSceneWrite;
-      available.push({
-        kind:'write', label:'Draft new Scene · Review',
-        run:function () {
-          return window.studioDirectorBridge.writeNewScene(newLaunch).catch(function (error) {
-            status('New Scene draft failed: ' + String(error.message || error), true);
-          });
-        }
-      });
-    }
-    if (!readinessStale && !creativeCapture && preparedSceneWrite) {
-      var launch = preparedSceneWrite;
-      available.push({
-        kind:'write',
-        label:'Revise Scene ' + (launch.sceneNumber || 'selected') + ' · Save',
-        run:function () {
-          return window.studioDirectorBridge.writeSelectedScene(launch).catch(function (error) {
-            status((error.saved ? 'Scene saved, but follow-up reporting failed: ' :
-              'Scene revision failed: ') + String(error.message || error), true);
-          });
-        }
-      });
-    }
-    if (!readinessStale && !creativeCapture && !preparedSceneWrite && !preparedNewSceneWrite && recommendations.readHints.length &&
-        (window.studioDirectorBridge.workingStoryId() || activeTarget().storyId)) available.push({
-      kind:'read', label:'Read Project', run:readRecommendedProject
-    });
-    if (!readinessStale && !preparedSceneWrite && !preparedNewSceneWrite && recommendations.writeHint) {
-      var fields = recommendedWriteFields(recommendations.writeHint);
-      var captureField = creativeCapture && creativeCapture.field === 'invariant' ? 'invariants' :
-        creativeCapture && creativeCapture.field;
-      var sceneHint = ['scene', 'scenes', 'scene-edit', 'scenes-batch'].includes(recommendations.writeHint);
-      var sameTarget = creativeCapture && (sceneHint
-        ? recommendations.sceneId === creativeCapture.sceneId
-        : recommendations.writeHint === 'project' && projectFields.includes(captureField));
-      var duplicatesCapture = sameTarget && fields.length > 0 && fields.every(function (field) {
-        return field === captureField || (creativeCapture.field === 'scene' && ['title','prompt'].includes(field));
-      });
-      var label = writeActionLabel();
-      if (label && !duplicatesCapture) available.push({
-        kind:'write', label:label, run:openRecommendedWrite
-      });
-    }
-    available.slice(0,1).forEach(function (action) {
-      var button = document.createElement('button');
-      button.type = 'button';
-      button.className = 'studio-dw-suggestion-action';
-      button.dataset.suggestionKind = action.kind;
-      if (action.kind === 'capture') button.dataset.captureAction = 'true';
-      if (action.kind === 'write') button.dataset.guidedWrite = 'true';
-      button.textContent = action.label;
-      button.onclick = action.run;
-      actions.appendChild(button);
-    });
-    window.studioDirectorBridge.placeSuggestedAction(actions);
-    if (!list.length) {
-      var empty = document.createElement('p');
-      empty.textContent = readinessStale ? 'No current assessment.' : 'No assessment details yet.';
-      assessment.appendChild(empty);
-      return;
-    }
-    list.forEach(function (item) {
-      var button = document.createElement('button');
-      button.type = 'button';
-      button.className = 'studio-dw-assessment-item';
-      var subject = item.scope === 'project' ? 'Project' : 'Scene (current discussion)';
-      button.textContent = (item.ready ? '✓ ' : '○ ') + subject + ' · ' + item.name;
-      button.title = 'Inspect Director assessment details';
-      button.onclick = function () {
-        el('studio-dw-assessment-title').textContent = subject + ' · ' + item.name +
-          (item.ready ? ' · developed' : ' · needs development');
-        el('studio-dw-assessment-content').textContent = item.content;
-        el('studio-dw-assessment-dialog').showModal();
-      };
-      assessment.appendChild(button);
-    });
   }
   // The only conversational Director handoff: an optional authoring proposal.
   // WebCap binds actual Projects/Scenes; the model supplies no persisted IDs.
@@ -1252,7 +992,7 @@
       button.dataset.result=state;
       button.title=detail || 'Read selected Project fields';
     },
-    reviewGeneratedCapture:reviewCreativeCapture,
+    reviewGeneratedCapture:function () { status('Use the current Write action for historical drafts.',true); },
     updateContext:updateScope,
     showSentWriteContext: function(operation, messages) {
       var preview = el('studio-dw-write-context-json');
@@ -1275,14 +1015,9 @@
       writeOperationChosen = false;
       sceneSelectionManual = false;
       sceneSelectionProject = '';
-      recommendationProject = '';
-      preparedSceneWrite = null;
-      preparedNewSceneWrite = null;
-      captureProjectId = '';
       lastReadSource = null;
       readStory = null;
       writeStory = null;
-      creativeCapture = null;
       el('studio-dw-read-panel').classList.add('hidden');
       el('studio-dw-write-panel').classList.add('hidden');
       el('studio-dw-read').setAttribute('aria-expanded','false');
@@ -1292,7 +1027,7 @@
       status('', false);
       updateScope();
     },
-    setReadinessFreshness:setReadinessFreshness,
+    setReadinessFreshness:function () {},
     updateReadiness:function () {
       // Historical readiness metadata may still be present in saved chats.
       // It is no longer actionable and cannot override WebCap's target choice.
@@ -1372,8 +1107,6 @@
     ['studio-dw-scene-close','studio-dw-scene-cancel'].forEach(function (id) {
       el(id).onclick=function () {el('studio-dw-scene-review').close();};
     });
-    renderReadiness(readiness);
-    setReadinessFreshness(false);
     updateScope();
   }
   if (document.readyState==='loading') document.addEventListener('DOMContentLoaded',bind);

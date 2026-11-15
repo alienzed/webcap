@@ -155,7 +155,7 @@
 
   function initialize() {
     var style = document.createElement('style');
-    style.textContent = '.webcap-revision-tools{position:fixed;box-sizing:border-box;display:none;align-items:center;justify-content:center;gap:2px;z-index:99999;height:27px;padding:1px;background:var(--panel, Canvas);color:var(--text, CanvasText);border-top:1px solid var(--border, #888);border-radius:0 0 5px 5px;font:13px sans-serif}.webcap-revision-tools button{border:0;background:transparent;color:inherit;cursor:pointer;min-width:21px;min-height:22px;padding:1px}.webcap-revision-tools button:disabled{opacity:.3;cursor:default}.webcap-revision-tools span{min-width:32px;text-align:center;font-variant-numeric:tabular-nums}';
+    style.textContent = '.webcap-revision-tools{position:fixed;box-sizing:border-box;display:none;align-items:center;justify-content:center;gap:2px;z-index:99999;height:27px;padding:1px;pointer-events:none;background:var(--panel, Canvas);color:var(--text, CanvasText);border-top:1px solid var(--border, #888);border-radius:0 0 5px 5px;font:13px sans-serif}.webcap-revision-tools button{border:0;background:transparent;color:inherit;cursor:pointer;pointer-events:auto;min-width:21px;min-height:22px;padding:1px}.webcap-revision-tools button:disabled{opacity:.3;cursor:default}.webcap-revision-tools span{min-width:32px;text-align:center;font-variant-numeric:tabular-nums}';
     document.head.appendChild(style);
     toolbar = document.createElement('div');
     toolbar.className = 'webcap-revision-tools';

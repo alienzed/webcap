@@ -35,7 +35,8 @@ function harness() {
     querySelector:s=>controls[s],
     contains:()=>false
   };
-  const head={appendChild(){}};
+  let injectedCss='';
+  const head={appendChild(node){injectedCss=node.textContent;}};
   const body={appendChild(node){node.parentNode=this;}};
   const document={
     readyState:'loading',head,body,
@@ -54,6 +55,7 @@ function harness() {
     Map,Array,String,Object});
   docHandlers.DOMContentLoaded();
   return {document,window,controls,toolbarHandlers,toolbar,
+    css:()=>injectedCss,
     captionTarget(key){captionKey=key;},
     focus(field){docHandlers.focusin({target:field});},
     input(field){docHandlers.input({target:field});},
@@ -155,10 +157,12 @@ test('History footer is centered at the bottom without changing text top or widt
   h.focus(field);
   assert.equal(field.style.paddingRight,'11px','text width is unchanged');
   assert.equal(field.style.paddingTop,'8px','text starts in its usual position');
-  assert.equal(field.style.paddingBottom,'34px','footer clears the last text line');
-  assert.equal(h.toolbar.style.left,'102px');
-  assert.equal(h.toolbar.style.top,'221px');
-  assert.equal(h.toolbar.style.width,'496px');
+  assert.equal(field.style.paddingBottom,'40px','floating controls reserve the last text line');
+  assert.equal(h.toolbar.style.left,'350px');
+  assert.equal(h.toolbar.style.top,'216px');
+  assert.equal(h.toolbar.style.width,undefined,'history should not span the textarea width');
+  assert.match(h.css(),/transform:translateX\(-50%\)/);
+  assert.match(h.css(),/border-radius:7px/);
   h.blur(field);
   assert.equal(field.style.paddingBottom,'8px','original bottom padding is restored');
 });
@@ -181,8 +185,8 @@ test('Scene Prompt uses the same bottom footer, never a toolbar in its heading',
   field.closest=selector=>selector==='.storyboard-prompt-block'
     ? promptBlock : originalClosest(selector);
   h.focus(field);
-  assert.equal(h.toolbar.style.top,'221px');
-  assert.equal(h.toolbar.style.width,'496px');
+  assert.equal(h.toolbar.style.top,'216px');
+  assert.equal(h.toolbar.style.left,'350px');
   assert.equal(field.style.paddingTop,'');
   field.value='Subject: revised';h.input(field);h.idle();
   h.click('[data-rev-prev]');

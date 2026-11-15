@@ -95,6 +95,25 @@ def _validate_messages(messages):
                     or not item["rawResponse"].strip()):
                 raise ValueError("Only assistant messages can store a complete model response.")
             message["rawResponse"] = item["rawResponse"]
+        if "writeAction" in item and item["role"] == "assistant":
+            action = item["writeAction"]
+            # Conversation-owned suggestion, not authorization or a saved Story field.
+            if (isinstance(action, dict) and action.get("kind") in
+                    {"create_project", "write_project", "create_scene", "write_scenes"}
+                    and isinstance(action.get("instruction"), str) and action["instruction"].strip()):
+                scene = action.get("scene")
+                if not isinstance(scene, dict):
+                    scene = None
+                fields = action.get("fields")
+                message["writeAction"] = {
+                    "kind": action["kind"], "instruction": action["instruction"],
+                    "fields": [field for field in (fields if isinstance(fields, list) else [])
+                               if isinstance(field, str)],
+                    "request": str(action.get("request") or ""),
+                    "projectId": str(action.get("projectId") or ""),
+                    "scene": {key: scene[key] for key in ("projectId", "sceneId", "sceneNumber")
+                              if key in scene} if scene else None,
+                }
         result.append(message)
     return result
 

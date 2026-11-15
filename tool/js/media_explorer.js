@@ -231,7 +231,7 @@
     if (explorerMode === 'grid') { stage.dataset.id = ''; stage.replaceChildren(); stage.appendChild(gallery); renderSideList(); }
     else { galleryHome.appendChild(gallery); renderMainPreview(); }
   }
-  var explorerMode = 'list', externalPath = '', externalDiscoveryTimer = null, externalMetadataTimer = null;
+  var explorerMode = 'grid', externalPath = '', externalDiscoveryTimer = null, externalMetadataTimer = null;
   var recentFolderRequest = 0;
   function showRecentFolders(folders) {
     var select = el('media-explorer-saved-folders');
@@ -1162,7 +1162,7 @@
 
       if (isExternal()) {
         requestRecentFolders();
-        explorerMode = 'list'; externalDirectory = ''; externalFolders = [];
+        externalDirectory = ''; externalFolders = [];
         ['model', 'folder', 'rating'].forEach(function (id) { el('media-explorer-' + id).value = ''; });
         if (el('media-explorer-sort').value === 'rating') el('media-explorer-sort').value = 'newest';
       }

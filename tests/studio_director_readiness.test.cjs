@@ -53,11 +53,23 @@ test('assessment without a reply fails loudly instead of inventing conversation'
   assert.throws(()=>parse(envelope(valid,' ')),/requires a conversational reply/);
 });
 
-test('malformed JSON exposes the exact response without repair or delimiter fallback',()=>{
-  const fence=String.fromCharCode(96).repeat(3);
-  for(const raw of ['{"reply":"unfinished',fence+'json\n'+envelope()+'\n'+fence,
-    '{"reply":"Hi",}','Hi\n[[WEBCAP_READINESS]]{}[[END_WEBCAP_READINESS]]'])
+test('malformed JSON-shaped replies fail visibly rather than becoming authored actions',()=>{
+  for(const raw of ['{"reply":"unfinished','{"reply":"Hi",}', '[{"reply":"Hi"}'])
     assert.throws(()=>parse(raw),error=>error.message.includes('Raw Director response:\n'+raw));
+});
+
+test('remote plain-text Read reaches the transcript with no action metadata or mutation',()=>{
+  const reply='The saved Project is Rainy Bookshop. Its bookseller wears a burgundy cardigan and the shop has a green front door.';
+  assert.equal(parse(reply),null);
+  const response=processResponse(reply,true,['project.concept','project.invariants']);
+  assert.equal(response.text,reply);
+  assert.equal(response.error,null);
+  assert.equal(response.state.studioReadiness.stale,true,'old actions remain stale');
+  assert.equal(response.state.pendingReadAck,null);
+  assert.deepEqual(response.failures,[]);
+  assert.ok(response.statuses.includes('Director replied to Read · 2 saved fields supplied.'));
+  assert.equal(parse('A plain answer with literal [[WEBCAP_READINESS]] text.'),null,
+    'prose is never parsed for action delimiters');
 });
 
 test('unsupported readiness preserves the reply and marks the exchange failed',()=>{
@@ -104,8 +116,8 @@ test('Read success is based on completed response, not exact model-produced fiel
   }
 });
 
-test('Read still fails on malformed model response instead of inventing success',()=>{
-  assert.throws(()=>processResponse('not a valid structured response',true,['project.concept']),
+test('Read still fails on malformed structured JSON rather than inventing success',()=>{
+  assert.throws(()=>processResponse('{"reply":"unfinished',true,['project.concept']),
     /Raw Director response/);
 });
 
@@ -171,13 +183,13 @@ test('Invariant capture uses explicit saved identity rather than treating rename
 test('a complete Scene Prompt can open existing placement review with no duplicate LLM call', () => {
   const capture = {field:'scene',title:'Opening chase',content:'The actor reaches the gate.',sceneId:''};
   assert.deepEqual(parse(envelope({...valid,capture})).readiness.capture,capture);
-  assert.match(director, /reviewSceneCapture: function \(capture, storyId\)/);
-  const review = director.split('    reviewSceneCapture: function (capture, storyId) {')[1]
+  assert.match(director, /reviewSceneCapture: function \(capture, storyId, options\)/);
+  const review = director.split('    reviewSceneCapture: function (capture, storyId, options) {')[1]
     .split('    updateReadiness: function (value) {')[0];
-  assert.match(review, /showStudioSceneDraftReview\(\)/);
-  assert.match(review, /expectedUpdatedAt:story.updatedAt/);
-  assert.doesNotMatch(review, /studioDirectorRequestMessages|makeProposal|\/fs\/director\/chat/);
-  assert.match(workbench, /reviewSceneCapture\(capture,id\)/);
+  assert.match(review, /showStudioScenesReview\(\)/);
+  assert.match(review, /requiresDurationSelection:needsDuration/);
+  assert.doesNotMatch(review, /showStudioSceneDraftReview|studioDirectorRequestMessages|makeProposal|\/fs\/director\/chat/);
+  assert.match(workbench, /reviewSceneCapture\(capture,id,\{/);
 });
 
 test('Scene suggestions route to one focused Write Scenes workflow', () => {

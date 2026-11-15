@@ -1021,7 +1021,6 @@
       button.dataset.result=state;
       button.title=detail || 'Read selected Project fields';
     },
-    reviewGeneratedCapture:function () { status('Use the current Write action for historical drafts.',true); },
     updateContext:updateScope,
     showSentWriteContext: function(operation, messages) {
       var preview = el('studio-dw-write-context-json');
@@ -1055,12 +1054,6 @@
       el('director-chat-drawer').classList.remove('studio-actions-open');
       status('', false);
       updateScope();
-    },
-    setReadinessFreshness:function () {},
-    updateReadiness:function () {
-      // Historical readiness metadata may still be present in saved chats.
-      // It is no longer actionable and cannot override WebCap's target choice.
-      return true;
     }
   };
 
@@ -1126,7 +1119,6 @@
       if (window.confirm('Revert the latest reviewed Project Overview update? The saved Concept, Visual / atmosphere and/or Invariants changed by that update will be restored to their previous values.'))
         window.studioDirectorBridge.undoBrief();
     };
-    el('studio-dw-assessment-close').onclick=function(){el('studio-dw-assessment-dialog').close();};
     el('studio-dw-read-send').onclick=readSend;
     el('studio-dw-read-all').onclick=selectEntireReadProject;
     el('studio-dw-write-prepare').onclick=writePrepare;

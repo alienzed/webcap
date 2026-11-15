@@ -23,7 +23,7 @@ test('Director navigation supplies identity and Scene order without saved creati
 test('the first explicit Studio message retains the Project destination without a Read',()=>{
   const chat=fs.readFileSync(path.join(__dirname,'../tool/js/director_chat.js'),'utf8');
   const start=chat.indexOf('      // An explicit message starts work in the open Project.');
-  const code=chat.slice(start,chat.indexOf('      state.storyGuidelineProposal = null;',start));
+  const code=chat.slice(start,chat.indexOf('      state.workshopProposal = null;',start));
   for (const existing of ['', 'chosen-project']) {
     const state={studioStoryAccess:existing ? {storyId:existing,label:'Chosen'} : null};
     const scope=vm.createContext({state,studioAttachedStoryId:()=>existing,
@@ -518,7 +518,7 @@ test('ordinary Director conversation preserves prepared Scene reviews without mu
   const state={studioStoryAccess:{storyId:'p1',label:'Moon crossing'},
     storyboardAttachments:{},sceneRead:{projectId:'p1',sceneId:'a'},
     studioSceneProposal:scene,studioScenesProposal:scenes,studioBriefProposal:project,
-    storyGuidelineProposal:{text:'Temporary'},workshopProposal:{text:'Temporary'}};
+    workshopProposal:{text:'Temporary'}};
   const status={textContent:'prior message'};
   const ctx=vm.createContext({state,activeChatMode:'storyboard',
     studioAttachedStoryId:()=>state.studioStoryAccess.storyId,
@@ -528,7 +528,6 @@ test('ordinary Director conversation preserves prepared Scene reviews without mu
   assert.strictEqual(state.studioSceneProposal,scene);
   assert.strictEqual(state.studioScenesProposal,scenes);
   assert.strictEqual(state.studioBriefProposal,project);
-  assert.equal(state.storyGuidelineProposal,null);
   assert.equal(state.workshopProposal,null);
   assert.equal(status.textContent,'');
   assert.equal(state.sceneRead.sceneId,'a');

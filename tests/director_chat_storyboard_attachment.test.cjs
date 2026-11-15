@@ -42,7 +42,7 @@ test('Story attachment is inline in the current user request, not only in the sy
 test('Attach is visibly pending and completes only when the Story snapshot is available', async () => {
   let complete;
   const deferred = new Promise(resolve => { complete = resolve; });
-  const state = { pending: false, attachmentPending: false, storyboardAttachments: {}, storyGuidelineProposal: {} };
+  const state = { pending: false, attachmentPending: false, storyboardAttachments: {} };
   let refreshes = 0;
   const window = { getStoryboardAssistantContext: () => deferred };
   const context = vm.createContext({
@@ -60,7 +60,6 @@ test('Attach is visibly pending and completes only when the Story snapshot is av
   await pending;
   assert.equal(state.attachmentPending, false);
   assert.equal(state.storyboardAttachments['story:story-1'].label, 'Story: Escape');
-  assert.equal(state.storyGuidelineProposal, null);
   assert.ok(refreshes >= 2);
 });
 
@@ -235,14 +234,14 @@ test('Attachment copy failure stays visible and reaches the Console', async () =
   assert.equal(errors[0][0], 'Storyboard context copy');
 });
 
-test('Attachment inspection controls exist and reviewed Story updates use the async attachment path', () => {
+test('Attachment inspection controls remain without the retired guideline review handler', () => {
   const html = fs.readFileSync(path.join(__dirname, '..', 'tool', 'tool.html'), 'utf8');
   const css = fs.readFileSync(path.join(__dirname, '..', 'tool', 'css', 'workspace_shell.css'), 'utf8');
   assert.match(html, /id="director-chat-attachments-toggle"/);
   assert.match(html, /id="director-chat-attachments-copy-all"/);
   assert.match(html, /id="director-chat-attachments-list"/);
   assert.match(chat, /renderStoryboardAttachmentViewer\(\);/);
-  assert.match(chat, /attachStoryboardContext\('story'\);/);
+  assert.match(chat, /function attachStoryboardContext\(kind\) \{/);
   assert.doesNotMatch(chat, /state\.storyboardAttachments\[attachedKey\] = window\.getStoryboardAssistantContext/);
   assert.match(css, /width: min\(760px, calc\(100% - 60px\)\)/);
 });

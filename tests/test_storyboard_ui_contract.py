@@ -1572,23 +1572,19 @@ def test_story_guidelines_use_reviewed_chat_and_define_from_concept_changes():
     story = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
     chat = (ROOT / "tool" / "js" / "director_chat.js").read_text(encoding="utf-8")
     app = (ROOT / "tool" / "server" / "app.py").read_text(encoding="utf-8")
-    llm = (ROOT / "tool" / "server" / "llm_runner.py").read_text(encoding="utf-8")
 
+    # Keep independent reviewed guideline editing, but no hidden Director sub-workflow.
     assert 'id="storyboard-guidelines-review"' in html
     assert 'id="storyboard-guidelines-review-fields"' in html
-    assert 'id="director-chat-story-prepare"' in html
-    assert 'window.confirm(\'Add these suggested Story guidelines' not in story
-    assert 'showReviewedGuidelines({' in story
+    assert 'id="director-chat-story-prepare"' not in html
+    assert "showReviewedGuidelines({" in story
     assert "function applyReviewedGuidelines()" in story
     assert "operation: 'apply_reviewed_guidelines'" in story
     assert "window.getStoryboardGuidelineSnapshot = function (storyId)" in story
-    assert "function prepareStoryChanges()" in chat
-    assert "function parseStoryGuidelineProposal(raw)" in chat
-    assert "operation: 'storyboard_story_guidelines'" in chat
-    assert "window.openStoryboardGuidelineReview({" in chat
-    assert '"storyboard_story_guidelines"' in app
-    # Chat schemas are forwarded from the server contract for every structured operation.
-    assert 'contract.get("response_schema") is not None' in llm
+    assert "function prepareStoryChanges()" not in chat
+    assert "function parseStoryGuidelineProposal(raw)" not in chat
+    assert "window.openStoryboardGuidelineReview({" not in chat
+    assert '"storyboard_story_guidelines"' not in app
 
 
 def test_define_invariants_does_not_generate_new_guidelines_and_preserves_legacy_editor():

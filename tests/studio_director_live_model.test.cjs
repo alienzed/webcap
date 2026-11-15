@@ -87,6 +87,9 @@ function productionComposer(story, selectedSceneId='') {
     '  function studioDirectorRequestMessages(messages, includePromptContract, explicitWrite, navigationSnapshot) {',
     '  // Retain available conversational work across ordinary follow-up questions.'),scope);
   vm.runInContext(part(chat,
+    '  function parseStudioProjectDraft(raw) {',
+    '  function addStudioProjectInvariant('),scope);
+  vm.runInContext(part(chat,
     '  function parseStudioChatResponse(raw) {',
     '  function studioActionFromExplicitRequest(request, selectedScene) {'),scope);
   vm.runInContext(part(chat,
@@ -168,12 +171,14 @@ test('Studio Director: live LLM with production guidance and saved effects', {
         {projectId:'',projectTitle:'',sceneId:'',sceneNumber:0,sceneOrder:[]});
       const raw = await askModel('studio_project_draft',messages,report);
       let parsed;
-      try {parsed=JSON.parse(raw);} catch {assert.fail('Project model output was not JSON: '+raw.slice(0,500));}
+      try {parsed=scope.parseStudioProjectDraft(raw);} catch (error) {
+        assert.fail('Project draft failed the production parser: '+error.message.slice(0,500));
+      }
       assert.ok(parsed && typeof parsed.concept==='string' && parsed.concept.trim(),'Missing authored Concept');
       assert.ok(typeof parsed.style==='string' && parsed.style.trim(),'Missing authored atmosphere');
       assert.match(parsed.concept,/bak|bread/i,'Project Concept did not reflect the author request');
       assert.match(parsed.style,/blue|dawn|cool/i,'Project atmosphere did not reflect the author request');
-      const proposal = {title:String(parsed.title||'Moonlit Bakery'),concept:parsed.concept,
+      const proposal = {title:parsed.title,concept:parsed.concept,
         style:parsed.style,invariants:Array.isArray(parsed.invariants)?parsed.invariants:[]};
       const saved = (await api('/fs/studio/director/project-create',{proposal})).story;
       created.push(saved.id);

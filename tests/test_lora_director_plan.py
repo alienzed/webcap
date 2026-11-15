@@ -66,3 +66,16 @@ def test_catalogue_codes_are_request_local(monkeypatch):
 def test_malformed_director_proposal_rejected_cleanly(options, proposal):
     with pytest.raises(ValueError):
         lora_director_plan.validate_plan(proposal, options, [{"id": "s1"}])
+
+
+def test_capability_group_names_are_searchable(monkeypatch):
+    monkeypatch.setattr(lora_director_plan, "catalogue", lambda: [
+        {"stage": "h3", "name": "pose.safetensors", "enriched": True,
+         "enrichment": {"promptOptions": {"Hand gestures": ["open palm", "pointing"]}}},
+        {"stage": "h3", "name": "other.safetensors", "enriched": True,
+         "enrichment": {"description": "unrelated " * 100,
+                        "promptOptions": {"Clothing": ["red jacket"]}}},
+    ])
+    choices = lora_director_plan.shortlist("h3", "hand gestures", max_chars=350)
+    assert [choice["name"] for choice in choices] == ["pose.safetensors"]
+    assert choices[0]["promptOptions"]["Hand gestures"] == ["open palm", "pointing"]

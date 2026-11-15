@@ -1120,7 +1120,7 @@ def _staged_candidate_save_source(folder, epoch, stage, staged_file_name):
     return source, provenance
 
 
-def save_candidate_epoch(folder, job_id, epoch, destination, filename, stage="", staged_file_name=""):
+def save_candidate_epoch(folder, job_id, epoch, destination, filename, stage="", staged_file_name="", profile_options=None):
     """Save one tested epoch and preserve durable selection when its run is still indexed."""
     raw_run_path = ""
     run_dir = None
@@ -1196,8 +1196,23 @@ def save_candidate_epoch(folder, job_id, epoch, destination, filename, stage="",
                 pass
         raise
 
-    # Portable metadata is optional: failure must not reverse successful Save & Select.
+    # Capability choices are user-approved profile knowledge, never inferred from
+    # training frequency. Keep profile failures independent of successful selection.
     profile_warning = ""
+    if profile_options is not None:
+        try:
+            from .model_epoch_profile import _read_object, save_enrichment
+            current = _read_object(source.with_suffix(".webcap.json"))
+            enrichment = ((current.get("modelProfile") or {}).get("enrichment") or {}).copy()
+            if enrichment or profile_options:
+                enrichment["promptOptions"] = profile_options
+                # The existing copy path below writes the exported sidecar.
+                # Avoid writing that destination twice (its copy uses exclusive creation).
+                save_enrichment(source, enrichment)
+        except (OSError, ValueError, UnicodeError, json.JSONDecodeError) as exc:
+            profile_warning = "LoRA saved and selected, but capability profile was not fully saved: " + str(exc)
+            _logger.warning("%s", profile_warning)
+    
     sidecar = destination_path.with_suffix(".webcap.json")
     temporary = sidecar.with_name("." + sidecar.name + "." + uuid.uuid4().hex + ".tmp")
     try:
@@ -1212,7 +1227,7 @@ def save_candidate_epoch(folder, job_id, epoch, destination, filename, stage="",
                 os.fsync(profile_handle.fileno())
             os.replace(temporary, sidecar)
     except (OSError, ValueError, UnicodeError, json.JSONDecodeError) as exc:
-        profile_warning = "LoRA saved and selected, but profile metadata was not copied: " + str(exc)
+        profile_warning = (profile_warning + " · " if profile_warning else "") + "LoRA saved and selected, but profile metadata was not copied: " + str(exc)
         _logger.warning("%s", profile_warning)
     finally:
         temporary.unlink(missing_ok=True)
@@ -1228,7 +1243,7 @@ def save_candidate_epoch(folder, job_id, epoch, destination, filename, stage="",
     }
 
 
-def save_candidate_epoch_response(folder, job_id, epoch, destination, filename, stage="", staged_file_name=""):
+def save_candidate_epoch_response(folder, job_id, epoch, destination, filename, stage="", staged_file_name="", profile_options=None):
     try:
         return {
             "ok": True,
@@ -1240,6 +1255,7 @@ def save_candidate_epoch_response(folder, job_id, epoch, destination, filename, 
                 filename,
                 stage=stage,
                 staged_file_name=staged_file_name,
+                profile_options=profile_options,
             ),
         }, 200
     except FileExistsError as exc:

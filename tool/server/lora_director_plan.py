@@ -42,6 +42,7 @@ def shortlist(stage, intent, scenes=None, existing=None, max_chars=14000):
         profile = validate_enrichment(entry["enrichment"])
         searchable = " ".join([profile.get("description", ""), profile.get("guidance", "")] +
                              profile.get("trainedWords", []) +
+                             list(profile.get("promptOptions", {})) +
                              [term for group in profile.get("promptOptions", {}).values() for term in group])
         score = len(query & _terms(searchable))
         candidates.append((entry, profile, score))

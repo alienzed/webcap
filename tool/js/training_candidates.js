@@ -910,6 +910,86 @@ function trainingCandidatesAvailableArtifact(epoch, data) {
 var epochProfileEditState = null;
 var epochProfileSuggestions = null;
 
+function keepLoraCapabilityOptions() {
+  var groups = {};
+  document.querySelectorAll('#keep-lora-capabilities [data-keep-lora-group]').forEach(function (group) {
+    var choices = Array.from(group.querySelectorAll('[data-keep-lora-option]:checked')).map(function (input) {
+      return input.value;
+    });
+    if (choices.length) groups[group.dataset.keepLoraGroup] = choices;
+  });
+  return groups;
+}
+
+function keepLoraRenderCapabilities(existing, suggestions) {
+  var host = document.getElementById('keep-lora-capabilities');
+  host.replaceChildren();
+  var named = Object.assign({}, suggestions || {}, existing || {});
+  var names = Object.keys(named);
+  if (!names.length) {
+    host.textContent = 'No captured annotation groups available. You can still select this epoch and edit its profile later.';
+    return;
+  }
+  names.forEach(function (name) {
+    var saved = Array.isArray((existing || {})[name]) ? existing[name] : [];
+    var available = Array.from(new Set([].concat((suggestions || {})[name] || [], saved)));
+    if (!available.length) return;
+    var details = document.createElement('details');
+    details.dataset.keepLoraGroup = name;
+    var summary = document.createElement('summary');
+    var toggle = document.createElement('input');
+    toggle.type = 'checkbox';
+    toggle.checked = saved.length > 0;
+    toggle.setAttribute('aria-label', 'Select all ' + name + ' options');
+    toggle.addEventListener('click', function (event) { event.stopPropagation(); });
+    toggle.addEventListener('change', function () {
+      details.querySelectorAll('[data-keep-lora-option]').forEach(function (option) { option.checked = toggle.checked; });
+    });
+    summary.append(toggle, document.createTextNode(' ' + name + ' (' + available.length + ')'));
+    details.appendChild(summary);
+    available.forEach(function (value) {
+      var label = document.createElement('label');
+      label.className = 'keep-lora-capability-option';
+      var checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.value = value;
+      checkbox.dataset.keepLoraOption = '';
+      checkbox.checked = saved.includes(value);
+      checkbox.addEventListener('change', function () {
+        var options = Array.from(details.querySelectorAll('[data-keep-lora-option]'));
+        toggle.checked = options.every(function (item) { return item.checked; });
+        toggle.indeterminate = options.some(function (item) { return item.checked; }) && !toggle.checked;
+      });
+      label.append(checkbox, document.createTextNode(' ' + value));
+      details.appendChild(label);
+    });
+    var options = Array.from(details.querySelectorAll('[data-keep-lora-option]'));
+    toggle.checked = options.every(function (item) { return item.checked; });
+    toggle.indeterminate = options.some(function (item) { return item.checked; }) && !toggle.checked;
+    host.appendChild(details);
+  });
+}
+
+function keepLoraLoadCapabilities() {
+  var state = keepLoraState;
+  var host = document.getElementById('keep-lora-capabilities');
+  host.textContent = 'Loading captured training groups…';
+  state.capabilitiesReady = false;
+  trainingRunnerRequest('/fs/training_candidates/profile', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({folder: state.runFolder, jobId: state.jobId, epoch: state.epoch})
+  }).then(function (payload) {
+    if (!state.open || keepLoraState !== state) return;
+    var saved = ((((payload.sources || {}).webcap || {}).modelProfile || {}).enrichment || {}).promptOptions || {};
+    var suggested = ((payload.suggestions || {}).promptOptions || {});
+    keepLoraRenderCapabilities(saved, suggested);
+    state.capabilitiesReady = !!(Object.keys(saved).length || Object.keys(suggested).length);
+  }).catch(function (error) {
+    if (!state.open || keepLoraState !== state) return;
+    host.textContent = 'Could not load groups: ' + String(error.message || error) + '. Epoch selection remains available.';
+  });
+}
+
 function closeEpochProfile() {
   var modal = document.getElementById('epoch-profile-modal');
   modal.classList.add('hidden');
@@ -1437,6 +1517,7 @@ function openEpochSaveModal(context) {
   els.filename.value = '';
   els.save.disabled = true;
   keepLoraSetStatus('Loading destination folders…', false);
+  keepLoraLoadCapabilities();
   els.modal.classList.remove('hidden');
   els.modal.setAttribute('aria-hidden', 'false');
 
@@ -1494,6 +1575,8 @@ function saveKeepLora() {
     }, keepLoraState.stagedFileName ? {
       stage: keepLoraState.stage,
       stagedFileName: keepLoraState.stagedFileName
+    } : {}, keepLoraState.capabilitiesReady ? {
+      profileOptions: keepLoraCapabilityOptions()
     } : {}))
   }).then(function (payload) {
     var analysisPayload = ((trainingWorkspaceState.candidatePayload || {}).analysis || {});

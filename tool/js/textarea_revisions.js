@@ -104,7 +104,11 @@
     if (!histories.has(key)) capture(key,field.value);
     active = {field:field,key:key,live:field.value};
     originalPadding = field.style.paddingRight;
-    field.style.paddingRight = '120px';
+    if (field.getBoundingClientRect().width >= 135) field.style.paddingRight = '120px';
+    var host = field.closest('dialog[open]') || document.body;
+    if (toolbar.parentNode !== host) host.appendChild(toolbar);
+    var h = histories.get(key);
+    if (h && h.versions[h.versions.length - 1] !== field.value) schedule(key,field.value);
     draw();
   }
 

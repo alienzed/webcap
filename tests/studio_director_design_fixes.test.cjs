@@ -15,6 +15,30 @@ function section(text,start,end) {
   return text.slice(a,b);
 }
 
+test('Chat and Director mode initialization use controls present in the app shell', () => {
+  const nodes = new Map(Array.from(html.matchAll(/\bid="([^"]+)"/g), match => [match[1], {
+    classList:{toggle(){},add(){},remove(){}},
+    setAttribute(){},querySelector(){return null;},textContent:''
+  }]));
+  const scope = vm.createContext({
+    el:id=>nodes.get(id) || null,
+    state:{activeMode:'chat',open:false,storyboardAttachments:{},workshop:null},
+    document:{querySelector:()=>nodes.get('storyboard-workspace')},
+    studioDirectorSelectedScene:()=>null,
+    availableModes:()=>[],activeContextMode:()=>null,modeAvailable:()=>true,
+    persistentMode:()=>true,studioWorkingStoryLabel:()=>'Test Project',
+    storyboardContextPresets:()=>[],renderStoryboardAttachmentViewer(){},
+    renderStudioStoryAccess(){},renderStudioOperations(){},renderMessages(){},syncControls(){}
+  });
+  vm.runInContext(section(chat,'  function syncModeUi() {',
+    '  function studioWorkspaceVisible() {'),scope);
+  for (const [mode, title] of [['chat','Assistant'],['storyboard','Test Project']]) {
+    scope.state.activeMode = mode;
+    scope.syncModeUi();
+    assert.equal(nodes.get('director-chat-title').textContent,title);
+  }
+});
+
 test('changing Write operation reloads saved Scene choices after a reviewed insertion', async () => {
   const handler = section(rail,"    el('studio-dw-write-operation').onchange=function () {",
     "    el('studio-dw-scene-mode').onchange=function () {");

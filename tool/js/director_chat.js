@@ -385,7 +385,6 @@
       (context ? 'Ask QA' : 'Assistant');
     el('director-chat-close').textContent = studio ? 'Close' : '×';
     el('director-chat-close').setAttribute('aria-label', studio ? 'Close Director' : 'Close Assistant');
-    el('director-studio-starters').classList.toggle('hidden', !studio);
     el('director-chat-empty-title').textContent = studio ? "Let's make something" :
       (context ? 'Discuss this recommendation' : 'Your conversation');
     el('director-chat-empty-description').textContent = studio

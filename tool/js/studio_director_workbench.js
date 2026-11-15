@@ -553,7 +553,7 @@
       fields.push('durationSeconds');
     var button = el('studio-dw-write-prepare');
     button.disabled = true;
-    var outcome = {saved:[],unchanged:[],failed:[],notAttempted:[],reportingErrors:[]};
+    var outcome = {saved:[],unchanged:[],review:[],failed:[],notAttempted:[],reportingErrors:[]};
     var current = 0, story;
     status('Writing ' + ids.length + ' selected Scenes · saves occur after each Scene.',false,true);
     function run() {
@@ -565,6 +565,7 @@
         projectId:storyId,sceneId:id,instruction:instruction,fields:fields.slice()
       }).then(function (result) {
         if (result === null) outcome.unchanged.push(label);
+        else if (result && result.review) outcome.review.push(label);
         else outcome.saved.push(label);
       }).catch(function (error) {
         if (error.saved) {
@@ -599,6 +600,8 @@
         (outcome.saved.length ? ': ' + outcome.saved.join(', ') : '') +
         ' · Unchanged ' + outcome.unchanged.length +
         (outcome.unchanged.length ? ': ' + outcome.unchanged.join(', ') : '') +
+        ' · Needs review ' + outcome.review.length +
+        (outcome.review.length ? ': ' + outcome.review.join(', ') : '') +
         ' · Failed ' + outcome.failed.length +
         (outcome.failed.length ? ': ' + outcome.failed.join(' | ') : '') +
         ' · Not attempted ' + outcome.notAttempted.length +
@@ -834,7 +837,10 @@
     button.title = frozen.instruction;
     button.onclick = function () {
       if (pendingCreativeAction !== frozen) return;
-      if (!window.studioDirectorBridge.isReady()) {
+      var reviewingScenes = frozen.kind === 'create_scene' &&
+        (frozen.draftReady || (frozen.scenes && frozen.scenes.length));
+      if (reviewingScenes ? !window.studioDirectorBridge.canReview() :
+          !window.studioDirectorBridge.isReady()) {
         status(window.studioDirectorBridge.readinessMessage(),true);
         return;
       }

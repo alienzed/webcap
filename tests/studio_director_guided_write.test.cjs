@@ -17,7 +17,7 @@ function part(start, end) {
 }
 
 test('selected Scene list uses one bounded call per Scene, preserving successes after failures', async () => {
-  const ids=['a','b','c'],calls=[],statuses=[];
+  const ids=['a','b','c','d'],calls=[],statuses=[];
   const scope=vm.createContext({
     readinessStale:false,recommendations:{writeHint:'scenes',writeInstruction:'Keep the lamp unlit.',writeFields:['prompt']},
     recommendedWriteFields:()=>['prompt'],manualSceneInstruction:()=> 'Keep the lamp unlit.',
@@ -28,10 +28,11 @@ test('selected Scene list uses one bounded call per Scene, preserving successes 
         calls.push(launch);
         if(launch.sceneId==='b') throw new Error('Invalid Scene-specific model output');
         if(launch.sceneId==='c') return null;
+        if(launch.sceneId==='d') return {review:true};
       }
     }},
     loadStory:async()=>({id:'p1',title:'Beacon',sceneOrder:ids,
-      scenes:{a:{title:'First'},b:{title:'Second'},c:{title:'Third'}}}),storyName:x=>x.title
+      scenes:{a:{title:'First'},b:{title:'Second'},c:{title:'Third'},d:{title:'Fourth'}}}),storyName:x=>x.title
   });
   vm.runInContext(part('  function prepareBatchScenes(storyId) {','  function renderBatchReview() {'),scope);
   const outcome=await scope.prepareBatchScenes('p1');
@@ -41,12 +42,14 @@ test('selected Scene list uses one bounded call per Scene, preserving successes 
   assert.equal(outcome.saved.length,1);
   assert.equal(outcome.failed.length,1);
   assert.equal(outcome.unchanged.length,1);
+  assert.equal(outcome.review.length,1);
   assert.equal(outcome.notAttempted.length,0);
   const final = statuses.at(-1);
   assert.equal(final[2],true,'successful per-Scene outcomes must remain visible');
   assert.match(final[0],/Saved 1: Scene 1 · First/);
   assert.match(final[0],/Unchanged 1: Scene 3 · Third/);
   assert.match(final[0],/Failed 1: Scene 2 · Second/);
+  assert.match(final[0],/Needs review 1: Scene 4 · Fourth/);
 });
 
 test('selected Scene list stops on a shared runtime failure',async()=>{

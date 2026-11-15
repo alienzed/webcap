@@ -18,7 +18,7 @@
   height: 100%;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   background: var(--bg);
   overflow: hidden;
 }
@@ -131,6 +131,13 @@
   border-right: 1px solid var(--border);
   background: var(--panel);
   container-type: inline-size;
+}
+
+.generate-pane-title {
+  margin: 0 6px 12px;
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.3;
 }
 
 .generate-model-row {

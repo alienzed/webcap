@@ -3327,7 +3327,12 @@
       if (!Object.prototype.hasOwnProperty.call(source,name)) return;
       var value = source[name];
       if (name === 'invariants') {
-        if (Array.isArray(value)) result[name] = value;
+        // A malformed optional entry must not replace a valid saved list.
+        if (Array.isArray(value) && value.every(function (item) {
+          return item && typeof item === 'object' && !Array.isArray(item) &&
+            ['character','location','visual','world','sound','custom'].includes(item.kind) &&
+            typeof item.title === 'string' && typeof item.text === 'string';
+        })) result[name] = value;
       } else if (name === 'durationSeconds') {
         if (Number.isInteger(value) && value >= 4 && value <= 15) result[name] = value;
       } else if (typeof value === 'string' && value.trim()) {
@@ -4886,15 +4891,25 @@
               pendingChanges[field] = workingScene[field];
           });
           if (Object.keys(pendingChanges).length) {
+            var originalDuration = studioMentionedDuration(launch.authorRequest || launch.instruction);
+            var requestedDuration = studioRequestedDuration(launch.authorRequest || launch.instruction);
+            if (wantsDuration && originalDuration !== null && requestedDuration === null) {
+              studioActionStatus('Requested ' + originalDuration +
+                's is outside the supported 4–15s range. Draft retained; nothing saved.',true);
+              return {review:true};
+            }
+            if (wantsDuration && requestedDuration !== null)
+              pendingChanges.durationSeconds = requestedDuration;
             var prompt = Object.prototype.hasOwnProperty.call(pendingChanges,'prompt') ?
               pendingChanges.prompt : null;
             delete pendingChanges.prompt;
             if (prompt === null && !Object.keys(pendingChanges).length)
               return null;
+            var missing = wantsTitle && !pendingChanges.title ? ' Requested title was not updated.' : '';
             return window.studioDirectorWorkbench.applyScenePrompt(story,sceneId,
               prompt,pendingChanges).then(function (result) {
                 studioActionStatus('Scene ' + (story.sceneOrder.indexOf(sceneId) + 1) +
-                  ' saved from existing structured draft.',false);
+                  ' saved from existing structured draft.' + missing,!!missing);
                 return result;
               });
           }

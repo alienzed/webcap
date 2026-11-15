@@ -4620,6 +4620,10 @@
               var scene = story.scenes[id];
               return scene && scene.title || '';
             }),
+            previousScene:order.length ? (function () {
+              var prior = story.scenes[order[order.length - 1]];
+              return {title:prior.title,prompt:prior.prompt,durationSeconds:prior.durationSeconds};
+            })() : null,
             unsavedWorkingFields:studioRequestAppliesPreparedMaterial(
               launch.authorRequest || launch.instruction) ?
               (state.studioWorkingDraft.newScene || {}) : {}

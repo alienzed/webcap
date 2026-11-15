@@ -6325,11 +6325,14 @@
       var heading = master && master.closest('.test-generations-library-heading-primary');
       if (!heading) return;
       heading.title = 'Right-click for candidate bulk actions';
-      heading.addEventListener('contextmenu', function (event) {
+      heading.tabIndex = 0;
+      heading.setAttribute('aria-label', 'Candidates. Right-click or press Shift+F10 for bulk actions');
+      function openCandidateBulkMenu(event) {
         if (!prepared || !Array.isArray(prepared.files) || !prepared.files.length) return;
         event.preventDefault();
         var previous = document.getElementById('test-candidate-bulk-menu');
-        if (previous) previous.remove();
+        if (previous && typeof previous._closeBulkMenu === 'function') previous._closeBulkMenu();
+        else if (previous) previous.remove();
         var menu = document.createElement('div');
         menu.id = 'test-candidate-bulk-menu';
         menu.setAttribute('role', 'menu');
@@ -6340,8 +6343,9 @@
           document.removeEventListener('pointerdown', outside, true);
           document.removeEventListener('keydown', keydown, true);
         };
+        menu._closeBulkMenu = close;
         var outside = function (e) { if (!menu.contains(e.target)) close(); };
-        var keydown = function (e) { if (e.key === 'Escape') close(); };
+        var keydown = function (e) { if (e.key === 'Escape') { close(); heading.focus(); } };
         [25, 50, 75].forEach(function (percent) {
           var action = document.createElement('button');
           action.type = 'button';
@@ -6385,6 +6389,10 @@
         document.addEventListener('pointerdown', outside, true);
         document.addEventListener('keydown', keydown, true);
         menu.querySelector('button').focus();
+      }
+      heading.addEventListener('contextmenu', openCandidateBulkMenu);
+      heading.addEventListener('keydown', function (event) {
+        if (event.key === 'F10' && event.shiftKey) openCandidateBulkMenu(event);
       });
     })();
     el('test-generations-master-select').addEventListener('change', function () {

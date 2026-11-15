@@ -14,6 +14,20 @@ function slice(source, start, end) {
 
 const method = slice(director,
   '    writeNewScene: function (launch) {', '    writeSelectedScene: function (launch) {');
+const studioRequestedDuration = new Function(slice(director,
+  '  function studioRequestedDuration(instruction) {',
+  '  window.studioDirectorBridge = {') + 'return studioRequestedDuration;')();
+const studioMentionedDuration = new Function(slice(director,
+  '  function studioRequestedDuration(instruction) {',
+  '  window.studioDirectorBridge = {') + 'return studioMentionedDuration;')();
+const studioRequestAppliesPreparedMaterial = new Function(slice(director,
+  '  function studioRequestAppliesPreparedMaterial(request) {',
+  '  function studioWorkingFieldChanges(source, names) {')+
+  'return studioRequestAppliesPreparedMaterial;')();
+const studioWorkingFieldChanges = new Function(slice(director,
+  '  function studioWorkingFieldChanges(source, names) {',
+  '  function studioMergeWorkingChanges(changes, target, action, request) {')+
+  'return studioWorkingFieldChanges;')();
 
 test('one new Scene keeps the selected Project and complete brief through a single authoring call, then REVIEW only', async () => {
   const story = {id:'lighthouse',title:'Last Light',concept:'A final watch',
@@ -21,10 +35,10 @@ test('one new Scene keeps the selected Project and complete brief through a sing
     sceneOrder:['s1'],scenes:{s1:{title:'Old opening',prompt:'Existing saved text'}}};
   const brief='Add a twelve-second Scene titled Closing the Logbook. Mara calmly closes the lighthouse logbook at the oak desk, using this Project’s visual direction.';
   let requested = 0, authored = 0, reviewed = 0, saved = 0;
-  const state={pending:false,jobId:'',studioScenesProposal:null};
+  const state={pending:false,jobId:'',studioScenesProposal:null,studioWorkingDraft:{projects:{},scenes:{},newProject:{},newScene:{},sourceRequest:''}};
   const launch={projectId:'lighthouse',instruction:brief,authorRequest:brief};
   const scope=vm.createContext({
-    state, syncControls(){}, studioActionStatus(){}, showStudioScenesReview(){reviewed++;},
+    state, studioRequestedDuration, studioMentionedDuration, studioRequestAppliesPreparedMaterial, studioWorkingFieldChanges, syncControls(){},scheduleSessionSave(){}, studioActionStatus(){}, showStudioScenesReview(){reviewed++;},
     window:{
       flushStudioDirectorStoryEdits:async id=>{assert.equal(id,'lighthouse');},
       reportConsoleError:()=>{assert.fail('No error expected')},
@@ -32,7 +46,7 @@ test('one new Scene keeps the selected Project and complete brief through a sing
         isReady:()=>true,readinessMessage:()=> '',
         makeProposal:async (instruction,operation,includePromptContract)=>{
           authored++;
-          assert.equal(operation,'studio_scene_sequence_draft');
+          assert.equal(operation,'studio_scene_field_draft');
           assert.equal(includePromptContract,true);
           const payload=JSON.parse(instruction);
           assert.equal(payload.instruction,brief);
@@ -40,10 +54,10 @@ test('one new Scene keeps the selected Project and complete brief through a sing
           assert.equal(payload.project.style,story.style);
           assert.equal(payload.project.existingSceneTitles[0],'Old opening');
           assert.doesNotMatch(instruction,/["']summary["']|["']intent["']/i);
-          return JSON.stringify({scenes:[{
+          return JSON.stringify({
             title:'Closing the Logbook',durationSeconds:12,
             prompt:'integrated_multimodal_description: [Shot 1] Mara calmly closes the logbook at the oak desk.'
-          }],rationale:'Quiet conclusion'});
+          });
         }
       }
     },
@@ -69,21 +83,21 @@ test('one new Scene keeps the selected Project and complete brief through a sing
   assert.equal(story.scenes.s1.prompt,'Existing saved text');
 });
 
-test('a malformed duration from Director leaves the full new Scene available for review', async () => {
-  const state={pending:false,jobId:'',studioScenesProposal:null};
+test('a written-out author duration survives malformed optional model duration', async () => {
+  const state={pending:false,jobId:'',studioScenesProposal:null,studioWorkingDraft:{projects:{},scenes:{},newProject:{},newScene:{},sourceRequest:''}};
   let reviewed=0;
   const scope=vm.createContext({
-    state,syncControls(){},studioActionStatus(){},
+    state,studioRequestedDuration,studioMentionedDuration,studioRequestAppliesPreparedMaterial,studioWorkingFieldChanges,syncControls(){},scheduleSessionSave(){},studioActionStatus(){},
     showStudioScenesReview(){reviewed++;},
     window:{
       flushStudioDirectorStoryEdits:async()=>{},
       reportConsoleError:()=>{assert.fail('An editable duration is not a writer failure');},
       studioDirectorBridge:{
         isReady:()=>true,readinessMessage:()=> '',
-        makeProposal:async()=>JSON.stringify({scenes:[{
+        makeProposal:async()=>JSON.stringify({
           title:'Closing the Logbook',prompt:'Complete H3 prompt for a quiet ending',
           durationSeconds:'twelve'
-        }],rationale:'Quiet ending'})
+        })
       }
     },
     requestJson:async()=>({story:{id:'p1',title:'Project',sceneOrder:[],scenes:{}}}),
@@ -95,15 +109,16 @@ test('a malformed duration from Director leaves the full new Scene available for
     {projectId:'p1',instruction:'Add a twelve-second closing Scene'});
   assert.equal(reviewed,1);
   assert.equal(state.studioScenesProposal.drafts[0].prompt,'Complete H3 prompt for a quiet ending');
-  assert.equal(state.studioScenesProposal.drafts[0].durationSeconds,'twelve');
+  assert.equal(state.studioScenesProposal.drafts[0].durationSeconds,12,
+    'WebCap carries the author\'s twelve seconds through a malformed model field');
 });
 
 test('invalid output prevents review or mutation and reports failure', async () => {
-  const state={pending:false,jobId:'',studioScenesProposal:null};
+  const state={pending:false,jobId:'',studioScenesProposal:null,studioWorkingDraft:{projects:{},scenes:{},newProject:{},newScene:{},sourceRequest:''}};
   const failures=[];
   let reviewed=0;
   const scope=vm.createContext({
-    state,syncControls(){},studioActionStatus:(m,error)=>{if(error)failures.push(m);},
+    state,studioRequestedDuration,studioMentionedDuration,studioRequestAppliesPreparedMaterial,studioWorkingFieldChanges,syncControls(){},scheduleSessionSave(){},studioActionStatus:(m,error)=>{if(error)failures.push(m);},
     showStudioScenesReview(){reviewed++;},
     window:{
       flushStudioDirectorStoryEdits:async()=>{},
@@ -113,7 +128,7 @@ test('invalid output prevents review or mutation and reports failure', async () 
         makeProposal:async()=>JSON.stringify({scenes:[
           {title:'One',durationSeconds:12,prompt:'A'},
           {title:'Two',durationSeconds:12,prompt:'B'}
-        ],rationale:'Wrong count'})
+        ]})
       }
     },
     requestJson:async()=>({story:{id:'p1',title:'P',sceneOrder:[],scenes:{}}}),
@@ -122,38 +137,64 @@ test('invalid output prevents review or mutation and reports failure', async () 
   });
   const writer=vm.runInContext('({' + method + '})',scope).writeNewScene;
   await assert.rejects(writer.call(scope.window.studioDirectorBridge,
-    {projectId:'p1',instruction:'Add exactly one Scene'}),/exactly one Scene/);
+    {projectId:'p1',instruction:'Add exactly one Scene'}),/no usable Scene Prompt/);
   assert.equal(state.studioScenesProposal,null);
   assert.equal(reviewed,0);
   assert.match(failures.at(-1),/New Scene draft failed/);
 });
 
-test('new-scene suggestion is a review launch, not a direct save', () => {
-  const node=()=>({children:[],dataset:{},replaceChildren(){this.children=[];},appendChild(n){this.children.push(n);}});
-  const actions=node(), assessment=node();
-  let received=null;
+
+test('launched Scene creation saves through the existing insertion route, with a truthful receipt',async()=>{
+  const story={id:'p1',title:'Bookshop',concept:'Evening rain',style:'Warm lamps',
+    invariants:[],sceneOrder:['old'],scenes:{old:{title:'Opening',prompt:'Original'} }};
+  const requests=[],receipts=[],refreshes=[];
+  let reviewed=0;
+  const state={pending:false,jobId:'',studioScenesProposal:null,studioWorkingDraft:{projects:{},scenes:{},newProject:{},newScene:{},sourceRequest:''}};
   const scope=vm.createContext({
-    readinessStale:false,creativeCapture:null,preparedSceneWrite:null,
-    preparedNewSceneWrite:{projectId:'p1',instruction:'Add Closing the Logbook',authorRequest:'12 seconds'},
-    recommendations:{readHints:[],writeHint:'scene',writeFields:['title','prompt','durationSeconds'],sceneId:'',sceneNumber:0},
-    projectFields:['title','concept','style','invariants'],sceneFields:['title','prompt'],
-    el:id=>id==='studio-dw-suggestions'?actions:assessment,
-    document:{createElement:node},
-    window:{studioDirectorBridge:{
-      placeSuggestedAction(){},workingStoryId:()=> 'p1',
-      writeNewScene:async launch=>{received=launch;}
-    }},
-    recommendedWriteFields:()=>[],captureActionLabel:()=>'',reviewCreativeCapture(){},
-    writeActionLabel:()=>'',openRecommendedWrite(){},
-    status(){},activeTarget:()=>({storyId:'p1'})
+    state,studioRequestedDuration,studioMentionedDuration,studioRequestAppliesPreparedMaterial,studioWorkingFieldChanges,syncControls(){},scheduleSessionSave(){},studioActionStatus(){},
+    showStudioScenesReview(){reviewed++;},
+    window:{
+      flushStudioDirectorStoryEdits:async()=>{},
+      refreshStudioDirectorStoryIfOpen:async id=>{refreshes.push(id);},
+      reportConsoleError:(_label,err)=>assert.fail(err.message),
+      studioDirectorBridge:{
+        isReady:()=>true,readinessMessage:()=>'',recordApplied:async(kind,_story,fields)=>{
+          receipts.push({kind,fields});
+        },
+        makeProposal:async()=>{
+          return JSON.stringify({title:'Closing',prompt:'Full H3 prompt for 12s',
+            durationSeconds:'garbled'});
+        }
+      }
+    },
+    requestJson:async(url,options)=>{
+      requests.push(url);
+      if(url==='/fs/storyboard?story=p1')return {story};
+      assert.equal(url,'/fs/studio/director/scenes-draft');
+      const data=JSON.parse(options.body);
+      assert.equal(data.storyId,'p1');
+      assert.deepEqual(Array.from(data.expectedSceneOrder),['old']);
+      assert.equal(data.scenes.length,1);
+      assert.equal(data.scenes[0].durationSeconds,12);
+      assert.equal(data.scenes[0].prompt,'Full H3 prompt for 12s');
+      const created={id:'new-id',...data.scenes[0]};
+      story.sceneOrder.push(created.id);
+      story.scenes[created.id]=created;
+      return {story,scenes:[created]};
+    },
+    parseStudioScenesDraft:raw=>JSON.parse(raw),Promise,JSON,String,Number,Error,encodeURIComponent
   });
-  const part=slice(workbench,'  function renderReadiness(list) {','  window.studioDirectorWorkbench = {');
-  // Only the suggestion rendering portion is relevant; no DOM review UI needed.
-  const body=part.slice(0,part.indexOf('    window.studioDirectorBridge.placeSuggestedAction(actions);'));
-  vm.runInContext(body+'  }\n',scope);
-  scope.renderReadiness([]);
-  assert.equal(actions.children.length,1);
-  assert.equal(actions.children[0].textContent,'Draft new Scene · Review');
-  actions.children[0].onclick();
-  assert.equal(received.projectId,'p1');
+  const writer=vm.runInContext('({' + method + '})',scope).writeNewScene;
+  const result=await writer.call(scope.window.studioDirectorBridge,{
+    projectId:'p1',instruction:'Create a closing Scene lasting 12 seconds',
+    authorRequest:'Create a 12-second closing Scene',directSave:true
+  });
+  assert.deepEqual(requests,['/fs/storyboard?story=p1','/fs/studio/director/scenes-draft']);
+  assert.equal(result.scenes[0].id,'new-id');
+  assert.equal(result.scenes[0].durationSeconds,12);
+  assert.deepEqual(refreshes,['p1']);
+  assert.equal(receipts[0].kind,'scene.create');
+  assert.equal(reviewed,0);
+  assert.equal(state.studioScenesProposal,null);
+  assert.equal(story.scenes.old.prompt,'Original');
 });

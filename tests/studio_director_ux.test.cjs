@@ -114,41 +114,9 @@ test('identical Invariants are not preselected because JSON properties arrived i
   assert.equal(checkbox.checked,true);
 });
 
-test('Context defaults to the entire Project and preserves a custom selection on return',()=>{
-  const node=()=>({children:[],dataset:{},value:'',checked:false,open:false,
-    append(...children){this.children.push(...children);},appendChild(child){this.children.push(child);},
-    replaceChildren(){this.children=[];}});
-  const elements={};
-  for(const id of ['project-fields','scene-fields','read-count','read-selection-summary','read-send','read-all','read-project','read-preview','read-preview-data'])
-    elements['studio-dw-'+id]=node();
-  elements['studio-dw-read-project'].value='p';
-  const toggles=()=>['project-fields','scene-fields'].flatMap(id=>elements['studio-dw-'+id].children.map(row=>row.children[0]));
-  elements['studio-dw-read-panel']={querySelectorAll:selector=>toggles().filter(n=>!selector.includes(':checked')||n.checked)};
-  const story={id:'p',sceneOrder:['a','b'],scenes:{a:{title:'A',prompt:'First'},b:{title:'B',prompt:'Second'}}};
-  const scope=vm.createContext({document:{createElement:node,createTextNode:text=>({text})},
-    el:id=>elements[id],readChoices:{},projectFields:['title','concept','style','invariants'],
-    recommendations:{readHints:[]},recommendedSceneId:()=>'',activeTarget:()=>({sceneId:'a'}),
-    storyName:()=> 'Project',readStory:null});
-  vm.runInContext(part(workbench,'  function renderReadStory(story) {','  function readSend(instruction) {'),scope);
-  scope.renderReadStory(story);
-  assert.ok(toggles().every(n=>n.checked));
-  assert.equal(elements['studio-dw-read-selection-summary'].textContent,'Entire Project');
-  const second=JSON.stringify(scope.readPayload(story,scope.selectedPaths()));
-  assert.ok(JSON.parse(second).fields.some(field=>field.value==='Second'));
-  assert.ok(!JSON.parse(second).fields.some(field=>field.id.endsWith(':summary')));
-  toggles()[2].checked=false;toggles()[2].onchange();
-  assert.equal(elements['studio-dw-read-selection-summary'].textContent,'Overview + 1 Scene');
-  scope.renderReadStory(story);
-  assert.equal(toggles()[2].checked,false);
-  assert.ok(!scope.readPayload(story,scope.selectedPaths()).fields.some(field=>field.value==='Second'));
-  scope.recommendations.readHints=['scene:b:prompt'];
-  scope.renderReadStory({...story,id:'another'});
-  assert.deepEqual(toggles().map(n=>n.checked),[false,false,true]);
-});
-
 test('ordinary discussion asks for concise new decisions while complete creative fields remain complete',()=>{
-  assert.match(chat,/Discuss concepts in 1-3 concise sentences/);
-  assert.match(chat,/WebCap reuses this draft for Review/);
+  assert.match(chat,/For ordinary discussion answer briefly, normally 1-3 sentences/);
+  assert.match(chat,/WebCap owns exact Project\/Scene IDs/);
 });
 
 test('compact Director replies keep the exact full text and leave General Chat alone',()=>{
@@ -169,7 +137,8 @@ test('compact Director replies keep the exact full text and leave General Chat a
 });
 
 test('Apply receipt names the actual scoped Scene fields and retains authoritative values',async()=>{
-  const state={modeMessages:{storyboard:[]},sessionDirty:{}};
+  const state={modeMessages:{storyboard:[]},sessionDirty:{},
+    studioWorkingDraft:{projects:{},scenes:{},newProject:{},newScene:{},sourceRequest:''}};
   const scope=vm.createContext({state,markStudioReadinessOutdated(){},renderMessages(){},persistSession:async()=>{},
     window:{studioDirectorWorkbench:{markSavedFields(){}}}});
   const bridge=vm.runInContext('({'+part(chat,'    recordApplied: function (kind, story, selected) {','    undoBrief: function () {')+'})',scope);
@@ -178,7 +147,8 @@ test('Apply receipt names the actual scoped Scene fields and retains authoritati
   const message=state.modeMessages.storyboard[0].content;
   assert.match(message,/^Saved: H3 Prompt\./);
   const saved=JSON.parse(message.split('[WEBCAP APPLIED FIELD VALUES]')[1].split('[END WEBCAP APPLY]')[0]);
-  assert.equal(saved.fields.savedFields.prompt,'The reviewed prompt.');
+  assert.deepEqual(Array.from(saved.fieldNames),['prompt']);
+  assert.doesNotMatch(message,/The reviewed prompt\./);
 });
 
 test('editable revision comparison identifies retained, removed and added words without mutating sources',()=>{

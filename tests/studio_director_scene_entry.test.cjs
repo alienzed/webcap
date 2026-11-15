@@ -31,7 +31,7 @@ function directorHarness(raw='{"prompt":"Revised full prompt"}') {
   const state={pending:false,attachmentPending:false,sessionReady:true,modelsLoaded:true,
     modeMessages:{storyboard:[]},sessionLoadPromise:Promise.resolve()};
   const bridge={selectWriteProject:(...args)=>calls.push(['target',...args]),isReady:()=>true,
-    makeProposal:async(...args)=>{calls.push(['model',...args]);return raw;}};
+    writeSelectedScene:async args=>{calls.push(['writeScene',args]);}};
   const scope=vm.createContext({state,Promise,JSON,Object,Error,
     el:id=>elements[id] ||= {value:'Unsent conversation draft',classList:{add(){},remove(){}},focus(){}},
     setOpen:async()=>{},syncModeUi(){},syncControls(){},renderMessages(){},
@@ -51,26 +51,17 @@ test('opening Scene Director stages context without a model request or overwriti
   assert.equal(h.elements['director-chat-input'].value,'Unsent conversation draft');
   assert.equal(h.calls.filter(c=>c[0]==='model'||c[0]==='apply').length,0);
 });
-test('a revision uses one existing model operation, shows the full result, and applies to the exact Scene',async()=>{
-  const h=directorHarness();await h.scope.window.openStudioDirectorScene({id:'p',title:'Project'},'s','Quieter ending');
-  const model=h.calls.filter(c=>c[0]==='model');assert.equal(model.length,1);
-  assert.equal(model[0][2],'studio_scene_field_draft');assert.equal(model[0][3],true);
-  assert.equal(JSON.parse(model[0][1]).instruction,'Quieter ending');
-  assert.deepEqual(h.calls.find(c=>c[0]==='apply').slice(2),['s','Revised full prompt']);
-  assert.equal(h.state.modeMessages.storyboard.at(-1).content,'Revised full prompt');
-  assert.equal(h.state.pending,false);
-});
-test('direct Scene Revise accepts a complete prompt and ignores unrequested optional metadata',async()=>{
-  const h=directorHarness('{"prompt":"Quieter full prompt","title":"Not requested","durationSeconds":14,"rationale":"Extra model note","sceneId":"invented"}');
-  await h.scope.window.openStudioDirectorScene({id:'p',title:'Project'},'s','Quieter ending');
-  assert.deepEqual(h.calls.find(c=>c[0]==='apply').slice(2),['s','Quieter full prompt']);
-});
-
-test('an incomplete revision is visible in I/O and cannot change the Scene',async()=>{
-  const h=directorHarness('{"summary":"Outline only"}');
-  await assert.rejects(h.scope.window.openStudioDirectorScene({id:'p'},'s','Quieter ending'),/complete Scene prompt/);
-  assert.equal(h.calls.filter(c=>c[0]==='apply').length,0);
-  assert.match(h.state.lastStudioIoRaw,/Outline only/);assert.equal(h.state.pending,false);
+test('direct Scene Revise delegates to the one selected-Scene writer',async()=>{
+  const h=directorHarness();
+  await h.scope.window.openStudioDirectorScene(
+    {id:'p',title:'Project',sceneOrder:['s']},'s','Quieter ending');
+  const writes=h.calls.filter(c=>c[0]==='writeScene');
+  assert.equal(writes.length,1);
+  assert.deepEqual(JSON.parse(JSON.stringify(writes[0][1])),{
+    projectId:'p',sceneId:'s',instruction:'Quieter ending',fields:['prompt']
+  });
+  assert.equal(h.calls.filter(c=>c[0]==='model'||c[0]==='apply').length,0,
+    'the shortcut contains no competing authoring or save implementation');
 });
 test('quick Apply changes only prompt, retaining the original prompt as its conflict check',async()=>{
   let sent, receiptKind;
@@ -86,7 +77,7 @@ test('quick Apply changes only prompt, retaining the original prompt as its conf
 });
 
 test('automatic Director revisions get a distinct persisted receipt; reviewed Apply stays reviewed', async()=>{
-  const state={modeMessages:{storyboard:[]},sessionDirty:{storyboard:false}};
+  const state={modeMessages:{storyboard:[]},sessionDirty:{storyboard:false},studioWorkingDraft:{projects:{},scenes:{},newProject:{},newScene:{},sourceRequest:''}};
   const scope=vm.createContext({state,window:{studioDirectorWorkbench:{markSavedFields(){}}},
     markStudioReadinessOutdated(){},renderMessages(){},persistSession:async()=>{}});
   const method=section(director,'    recordApplied: function','    undoBrief: function').trim().replace(/,$/,'');

@@ -1,146 +1,48 @@
 # Studio Director — implementation and acceptance
 
-Original gap audit: `747a8ce9`, 2026-11-14. Requirements live in
-[studio-director-contract.md](studio-director-contract.md). This file records
-historical implementation gaps and acceptance evidence; it does not override the
-contract or describe every item below as outstanding.
+[Functional contract](studio-director-contract.md) is authoritative. This file tracks the three-operation implementation and evidence; it does not define a competing architecture. The earlier incremental plans and audits from November 14 were superseded by the three-operation cutover in PR #950. Consult the PR history for original gap analyses.
 
-Current phase: focused code completion integrated through the bounded Scene
-write and reviewed Project paths. The Director context fix and retained draft
-reviews are prepared for separate browser/model acceptance. Passing code tests
-does not prove model behavior or UX acceptance.
+## Implementation at the #950 handoff (2026-11-14)
 
-## Current position
+Branch: `codex/studio-director-three-operations`. The implementation is code-complete for its scoped flow and has passed the focused GitHub Actions checks; real-browser/selected-model acceptance is **not recorded as passed**. Do not infer production reliability from mocked regression tests.
 
-The useful foundation already exists: real Project/Scene storage, H3 authoring,
-per-Scene revision execution and saves, scoped field updates, reviews, progress,
-conversation persistence and visible errors. Intent has been retired from active
-authoring. The remaining work is to connect and prune these paths consistently.
+| Operation or boundary | Code state | Verification still useful |
+| --- | --- | --- |
+| **Read / conversation** | Fresh selected or explicitly resolved saved Project/Scene fields accompany a bounded conversation. Plain prose works, even without optional action metadata. No acknowledgment-only model call or automatic mutation. | Real model answers a saved Project/Scene question without cross-Project leakage |
+| **Write Project** | One Project writer uses saved state, structured working fields, and existing reviewed/conflict-aware save routes. Unmentioned fields persist. | Create and revise; inspect persisted fields and unaffected Scenes |
+| **Write Scene(s)** | One per-Scene writer serves creation, revision, and new Project initial Scenes. Targets are WebCap-bound; request carries full relevant Prompt plus requested changes. Title-only updates need no creative call. | New and revised Scenes with specified title/duration, including written-out durations |
+| **Multiple Scenes** | Sequential bounded writes retain earlier saves on isolated failure, report saved/failed/not-attempted, and stop for cancellation or shared dependency errors. | Inject an isolated failure, then verify the next target and exact receipts |
+| **Working drafts and context economy** | Structured complete fields persist separately from chat and survive ordinary follow-ups/session restoration. Bounded discussion and relevant saved/working fields replace whole-transcript replay and duplicated prompt receipts. | Follow up, reload, then apply already authored material without a redundant model call |
+| **Recovery and integrity** | Real IDs, explicit destinations, optimistic save conflicts, existing Undo/Redo, and distinct post-save reporting errors are retained. Invalid optional data cannot erase usable independent results. | Conflict, failed save vs. failed refresh, and recovery in real UI |
 
-| Gap | Current path/evidence | Correction |
-|---|---|---|
-| Model metadata can route a new Scene into existing-Scene review | `studio_director.py::chat_response_schema`, workbench `reviewCreativeCapture` | Bind creation/update scope and real targets in WebCap. Retire overlapping capture/readiness routing as the authority. |
-| Scene request parameters differ by entry point | Single-Scene Apply carries title/prompt; multi-Scene creation carries duration; the direct shortcut accepts prompt only | One Scene content contract, with requested title/duration changes carried through. |
-| Director authors several revisions in one response with conversation history | Workbench `prepareBatchScenes` | Use the existing bounded per-Scene execution pattern for Write Scene(s). |
-| Existing revision sequence stops on its first item error | `llm_runner.py::revise_scenes_sequence` | Continue after isolated Scene failures, but stop for shared model/runtime/Project failures. Retain successes and report saved, failed and unattempted Scenes. Preserve Stop. |
-| Automatic context is inconsistent | `sendMessage` consumes staged `sceneRead`; other paths still ask for explicit Read | Supply the fresh Scene prompt, duration, relevant Project/continuity facts and agreed decisions when needed; avoid whole-conversation payloads for simple edits. |
-| A follow-up message discards proposals/actionability | `sendMessage` clears proposal state and marks readiness stale | Retain usable authored material while answering questions; replace it when the author requests a revision. |
-| Direct save reporting can conflate persistence and refresh failure | Workbench `applyScenePrompt` and `openStudioDirectorScene` | Preserve the actual saved outcome if later refresh/receipt work fails. | 
-| Generation and Scene-editor duration bounds disagree | `storyboard_generation.py::_scene_settings` accepts 4–15s; Scene inspector in `storyboard.js` uses 9–15s | Verify intended supported range and align the visible editor and all authoring paths; never silently clamp a requested duration. |
-| Full-prompt revisions cannot mechanically prove creative preservation | Complete H3 Prompt is returned for a revision | Preserve non-target fields deterministically; test prompt fidelity with the real model and provide inspection/recovery rather than a second grading call. |
-| Project creation with initial Scenes is multi-step | Project create and individual Scene save paths | Save Project before Scene calls; on later failure retain successes and report the incomplete result without implying an atomic commit. |
-| Recovery currently remembers prompt strings only | Storyboard `scenePromptHistory` | Reuse bounded session history for fields actually changed, including manual edits; no cross-reload revision archive or LLM involvement. |
+### Best effort is not all-or-nothing
 
-## Evidence and its limits
+LLM output can be useful even when its wrapper, action hint, rationale, title or duration metadata is wrong or absent. Preserve valid fields, prose, editable drafts and previously saved Scenes. Validate only what the specific operation needs to save or execute. If a requested duration cannot run, retain its Prompt for correction rather than silently substituting an unrelated value. Do not add a grading model, repair loop, speculative guard or alternative writer system. Refer to `AGENTS.md` for repository-wide guidance.
 
-- Browser/model: a clear NEW twelve-second Scene request returned complete text
-  but an invented `scene-new-logbook` saved ID; Review failed with "Select a saved
-  Scene to review." Nothing was applied.
-- Isolated store check: the single-Scene path saved a twelve-second prompt with
-  the default six-second setting because duration was absent from the contract.
-- Earlier browser/model checks: supplied-context questions worked; a targeted
-  prompt revision and prompt-text recovery worked. These do not prove every
-  entry point or model-dependent preservation requirement.
-- Source: existing `revise_scenes_sequence` already loads a Scene, makes a bounded
-  call and saves it before proceeding. It is the execution foundation to reuse.
-- Existing automated tests cover many schema, routing and persistence cases.
-  They do not establish real-model first-pass reliability.
+### Remaining boundaries, not release claims
 
-## Safe implementation sequence
+- Historical Workshop, advanced Read, readiness/capture, and other legacy helpers still exist in places. Their **active caller status must be checked** before deleting them. Their presence does not mean they remain the authoritative Studio Director path.
+- Independent Revise & Generate and Check Coherence utilities remain separate; their distinct functions should not be removed as Director cleanup.
+- Model adherence, UI correctness, and complete end-to-end creative preservation require real-browser/selected-model checks. Passing CI is evidence for deterministic logic, not a guarantee about model behavior.
+- README describes the intended merged behavior after #950; older releases still expose their older workflow.
 
-### 1. Write one Scene reliably
+## Focused acceptance checklist
 
-Align the supported Scene fields and their validation/save handling first. Cover
-creation, revision and requested title/duration changes without requiring Intent.
-Reuse existing per-Scene authoring and persistence behavior. Preserve the separate
-Revise & Generate utility and its optional production handoff; do not introduce
-automatic Take generation into Director writes.
+1. **Read:** Ask for exact saved Project title and selected Scene constraints. Confirm the current Project/Scene is used, answer is visible, no write occurs and one conversation model call is made.
+2. **Write Project:** Create then revise Project fields. Inspect actual persisted values, unrelated fields and existing Scenes.
+3. **Write Scenes:** Create a Scene with a nondefault duration, revise a different selected Scene, and verify full Prompt, title, duration and target. Confirm unsupported duration preserves the draft for correction.
+4. **Working draft:** Request material, ask a follow-up, restore the conversation, then apply previously completed structured material without regenerating it.
+5. **Partial work:** Fail one Scene in a multi-Scene request; verify earlier success, later attempts where safe, cancellation and truthful saved/failed/not-attempted reporting.
+6. **Recovery:** Exercise explicit target ambiguity, concurrent edit conflict, Undo/Redo, and a successful save followed by a refresh or receipt failure.
+7. **Model variations:** Verify a plain-text Read response, malformed optional action/metadata, and a partial structured draft still leave all usable output available.
 
-Prove creation and revision end to end: correct target, required context, complete
-output, requested title/duration preserved through saving, accurate outcome and
-basic field recovery. Establish the consistent Scene result used by each entry
-point before extending it to a list.
+Log selected model, source commit, request/response, persisted effects and any concrete failure. Fix demonstrated failures locally; do not invent additional gates to handle hypothetical mistakes.
 
-### 2. Repeat that Scene write over a selected list
+## Evidence and ownership
 
-Use the same single-Scene behavior for each selected item, applying each success.
-Add per-item failure reporting/continuation and retain existing Stop. Stop
-the list for a common dependency failure rather than repeating a predictable
-failure. Include shared continuity constraints or prior saved Scene results
-where needed; simple corrections do not need the full conversation. This is
-Write Scene(s), not another LLM capability or alternate batch authoring system.
-Do not add a generic orchestrator or routine retries.
+- Prior browser acceptance found a correct plain-text Read rejected by a mandatory response wrapper, and non-default duration lost on a Scene. These failures motivated #949 and the #950 cutover.
+- #950's focused tests cover plain-text Read, optional malformed action, correct target binding, sparse working-draft fields, persisted draft reuse, worded duration, incremental Scene results and save receipts. The missing optional `reply` case also has a focused regression.
+- The #950 head was checked against GitHub Actions before merging; all seven reported workflows passed at `997e263f4c0b08fbe261d4e052e0a530d12a3944`. Documentation-only commits came afterward and require their own check status.
+- No real-browser/model acceptance was executed in this session. Record it separately rather than rewriting this file as though it happened.
 
-### 3. Finish Project writing, automatic context and the conversation handoff
-
-Align new/existing Project writes around the agreed Project fields. Requested
-initial Scenes use the Scene calls. Mixed Project/Scene intentions use those same
-operations, with the Project saved first and partial Scene results reported,
-not an all-at-once authoring schema. Prune stale model guidance,
-readiness/capture requirements and duplicate active paths. Preserve compatibility
-data and working unrelated editor/production functionality.
-
-WebCap resolves destinations and supplies required baselines/constraints. Give the
-model the narrow authoring task, not UI state management. Eliminate redundant
-explicit Read/acknowledgement handoffs for authorized questions and revisions.
-Use the targeted launch action for conversational write requests; retain direct
-launch shortcuts. Reuse already authored complete material rather than drafting it
-again. Replace competing active schemas/dispatch paths as their consumers migrate.
-
-Retain authored results through follow-up questions. Reflect actual saved values
-in conversation and distinguish subsequent reporting failures. Provide the basic
-per-field recovery controls. Keep status legible and contextual; do not add
-assessment dashboards or permanent explanatory paragraphs.
-Outcomes and recovery are part of each phase's acceptance, not a final polish pass.
-
-## Ownership and stable handoffs
-
-- **Implementation owner (ChatGPT):** owns product code, guidance/schema alignment,
-  focused regression checks and fixes. Complete one bounded phase and hand over a
-  stable commit. Passing automated checks is not browser/model acceptance.
-- **Acceptance owner (Codex/browser agent):** tests the handed-over commit with the
-  real browser and selected model. Report concrete reproductions, expected/actual
-  behavior, saved effects and evidence. Do not edit product code concurrently;
-  the implementation owner fixes findings unless ownership is explicitly handed over.
-- **Author:** resolves material product-scope or control decisions. Ordinary
-  implementation choices and hypothetical edge cases are not escalated routinely.
-
-Do not test against a tree being edited or an unresolved merge. Each handoff names
-the commit, changed behavior, checks run, known limitations and cases to verify.
-The running app must serve that code, with backend changes loaded and the intended
-model available. The acceptance report identifies the same commit/model and
-separates real-browser/model evidence from automated coverage. Fix and recheck
-failures within the phase before expanding scope.
-
-## Small acceptance set
-
-Use focused automated checks for deterministic behavior, followed by simple real
-browser/model flows. Record model, exact task, context scope, number of authoring
-calls, returned material, bound targets, saved values and actual failures. No Takes
-are needed for Director acceptance. Restore test edits or use disposable data.
-
-1. Ask a saved Scene question: context is supplied, answer is grounded, nothing saves.
-2. Discuss a Project and launch its write: complete agreed fields, usable destination,
-   unrelated fields and existing Scenes preserved. For a new Project with initial
-   Scenes, verify accurate partial completion if a later Scene fails.
-3. Request a new Scene with a non-default duration: correct creation target, full
-   prompt, title and matching saved duration; existing Scenes preserved. Verify
-   the selected duration is valid and editable in both Director and Storyboard.
-4. Make a simple correction to one Scene: short per-Scene context, complete minimally
-   revised prompt, correct save; no second extraction/drafting call. Inspect
-   whether existing actions/dialogue actually survived the rewrite.
-5. Request title/duration changes alongside a prompt: all requested values survive;
-   unrelated fields do not change.
-6. Apply one instruction to a selected Scene list: one bounded call per Scene,
-   incremental saves and progress, no full conversation required for a simple tweak.
-7. Simulate an isolated item failure: that Scene fails visibly, subsequent items
-   still run, successful items remain saved, final counts are honest. Also test
-   a shared model/runtime failure: remaining items do not run. Stop still stops.
-8. Ask a question about an authored result: the same result remains actionable.
-9. Save successfully, then simulate refresh/receipt failure: report the saved outcome
-   accurately rather than inviting a duplicate write.
-10. Recover recent field values through previous/next. Legacy Intent data survives
-    ordinary saves without entering the active authoring contract.
-
-Passing this small set is a release gate for the core journeys, not statistical
-proof of 99% reliability. Expand testing only for demonstrated failures or changes.
+The stable source of truth is the actual saved Project/Scene state and execution receipts, not chat claims, readiness scoring or the model's creative self-assessment.

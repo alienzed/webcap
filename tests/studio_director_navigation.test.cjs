@@ -66,7 +66,7 @@ function actualSceneRequestFixture() {
   };
   let navigation={projectId:'p1',projectTitle:'Moon crossing',sceneId:'a',sceneNumber:1,sceneOrder:['a','b']};
   const requests=[];
-  const state={studioStoryAccess:null,storyboardAttachments:{},sceneRead:null};
+  const state={studioStoryAccess:null,storyboardAttachments:{},sceneRead:null,studioWorkingDraft:{projects:{},scenes:{},newProject:{},newScene:{}}};
   const window={getStudioDirectorNavigation:()=>navigation};
   const scope=vm.createContext({
     state, window, Promise, JSON, String, Object, encodeURIComponent,
@@ -77,6 +77,7 @@ function actualSceneRequestFixture() {
       requests.push(url);
       if(url.startsWith('/fs/studio/director/guidance'))
         return {system:'Director guidance',actions:[],promptContract:'H3 prompt format'};
+      if(url==='/fs/storyboard') return {stories:Object.values(stories)};
       if(url.startsWith('/fs/storyboard?story=')) {
         const id=decodeURIComponent(url.split('=')[1]);
         return {story:stories[id]};
@@ -89,10 +90,10 @@ function actualSceneRequestFixture() {
   vm.runInContext(section(workbench,'  function readPayload(story, keys) {',
     '  function updateReadSelection() {')+
     'window.studioDirectorWorkbench={'+sceneRead+'};',scope);
-  vm.runInContext(section(director,'  function studioDirectorSelectedScene(navigation) {',
+  vm.runInContext(section(director,'  function studioDirectorSelectedScene(navigation, authorRequest, explicitProject) {',
     '  function syncModeUi() {')+
     section(director,'  function studioDirectorRequestMessages(messages, includePromptContract, explicitWrite, navigationSnapshot) {',
-      '  // The creative assessment is advisory.'),scope);
+      '  // Retain available conversational work across ordinary follow-up questions.'),scope);
   return {scope,state,stories,requests,setNavigation:next=>{navigation=next;}};
 }
 
@@ -111,9 +112,10 @@ test('Studio chat supplies the selected saved Scene in the actual model request,
   assert.match(outgoing[0].content,/scene:a:durationSeconds","value":12/);
   assert.doesNotMatch(outgoing[0].content,/Dormant old Intent/);
   assert.deepEqual(h.requests,[
+    '/fs/storyboard',
     '/fs/storyboard?story=p1',
     '/fs/studio/director/guidance?targetModel=minimax_h3'
-  ]);
+  ],'Read resolves saved Project titles without guessing from a stale editor target');
   assert.equal(h.stories.p1.scenes.a.prompt,'Mara walks toward the rover.',
     'context lookup must not mutate saved Scene data');
 });
@@ -415,6 +417,7 @@ test('Project Apply continuation owns subsequent context despite older shell Sce
       return {story:b};
     }
     if(options&&options.method==='POST')unexpectedPosts++;
+    if(url==='/fs/storyboard') return {stories:Object.values(h.stories)};
     if(url.startsWith('/fs/studio/director/guidance'))
       return {system:'Director guidance',actions:[],promptContract:'H3'};
     if(url.startsWith('/fs/storyboard?story='))
@@ -423,6 +426,7 @@ test('Project Apply continuation owns subsequent context despite older shell Sce
   };
   h.scope.syncControls=()=>{};
   h.scope.syncModeUi=()=>{};
+  h.scope.scheduleSessionSave=()=>{};
   h.scope.recordStudioOperation=()=>{};
   h.scope.studioActionStatus=()=>{};
   h.scope.writeInitialProjectScenes=async(_story,briefs)=>{
@@ -529,4 +533,16 @@ test('ordinary Director conversation preserves prepared Scene reviews without mu
   assert.equal(status.textContent,'');
   assert.equal(state.sceneRead.sceneId,'a');
   assert.equal(state.studioStoryAccess.storyId,'p1');
+});
+
+test('a named Project without the word Project still overrides an unrelated selected Scene',async()=>{
+  const h=actualSceneRequestFixture();
+  h.stories.p2={id:'p2',title:'Rainy Bookshop',concept:'Quiet late evening',
+    style:'Blue rain',invariants:[],sceneOrder:[],scenes:{}};
+  const response=await h.scope.studioDirectorChatRequestMessages([
+    {role:'user',content:'Tell me about Rainy Bookshop.'}
+  ],h.scope.studioDirectorSelectedScene());
+  assert.match(response[0].content,/Quiet late evening/);
+  assert.doesNotMatch(response[0].content,/Mara walks toward the rover/);
+  assert.ok(h.requests.includes('/fs/storyboard'));
 });

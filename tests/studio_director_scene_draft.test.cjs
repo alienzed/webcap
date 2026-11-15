@@ -368,6 +368,7 @@ test('Review Create Project persists explicit continuation without touching unbo
     const state = {
       studioProjectProposal: {concept: 'A comic train station scene'},
       studioStoryAccess: null, studioAccessIndex: [],
+      studioWorkingDraft:{projects:{},scenes:{},newProject:{},newScene:{},sourceRequest:''},
       pending: false,
     };
     const nodes = {
@@ -389,7 +390,7 @@ test('Review Create Project persists explicit continuation without touching unbo
         if (!nodes[id]) throw Error('Unexpected Studio control: ' + id);
         return nodes[id];
       },
-      syncControls() {}, syncModeUi() {},
+      syncControls() {}, syncModeUi() {}, scheduleSessionSave() {},
       writeInitialProjectScenes:async()=>({saved:[],failed:[],notAttempted:[]}),
       requestJson: async (url, opts) => {
         assert.equal(url, '/fs/studio/director/project-create');

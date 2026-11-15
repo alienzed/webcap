@@ -18,6 +18,8 @@ Review can be useful, but is not compulsory for every write. The launch action
 must make clear whether the result will save directly or await review. Either
 policy asks the LLM for the same complete material.
 
+Model output is best-effort creative material, not authoritative application state. Preserve useful prose, independently valid fields, completed Scene results, and editable drafts when optional action hints or metadata are malformed. A malformed or unsupported operation-specific value can prevent that particular save or execution, but should not discard unrelated useful work. Prefer author edits, retry and existing recovery over model repair calls or extra readiness gates.
+
 The LLM does not manage UI controls, permissions, save policy, real IDs, queues,
 readiness scores or recovery. WebCap does not act as a creative-quality judge.
 It checks the mechanical requirements needed to execute the operation correctly.

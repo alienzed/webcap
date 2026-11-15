@@ -112,6 +112,46 @@ def _validate_attachments(attachments):
     return result
 
 
+def _validate_working_draft(value):
+    """Sparse unsaved field replacements; saved Stories remain authoritative."""
+    if value is None:
+        value = {}
+    if not isinstance(value, dict):
+        raise ValueError("Studio working draft must be an object.")
+
+    def fields(raw, allowed):
+        if not isinstance(raw, dict):
+            raise ValueError("Studio working draft fields must be an object.")
+        result = {}
+        for name, item in raw.items():
+            if name not in allowed:
+                continue
+            if name == "invariants":
+                if not isinstance(item, list):
+                    continue
+            elif name == "durationSeconds":
+                if isinstance(item, bool) or not isinstance(item, int):
+                    continue
+            elif not isinstance(item, str):
+                continue
+            result[name] = item
+        return result
+
+    projects = value.get("projects") or {}
+    scenes = value.get("scenes") or {}
+    if not isinstance(projects, dict) or not isinstance(scenes, dict):
+        raise ValueError("Studio working draft targets must be objects.")
+    return {
+        "projects": {key: fields(item, {"title", "concept", "style", "invariants"})
+                     for key, item in projects.items() if isinstance(key, str) and isinstance(item, dict)},
+        "scenes": {key: fields(item, {"title", "prompt", "durationSeconds"})
+                   for key, item in scenes.items() if isinstance(key, str) and isinstance(item, dict)},
+        "newProject": fields(value.get("newProject") or {}, {"title", "concept", "style", "invariants"}),
+        "newScene": fields(value.get("newScene") or {}, {"title", "prompt", "durationSeconds"}),
+        "sourceRequest": str(value.get("sourceRequest") or ""),
+    }
+
+
 def _validate_operations(operations):
     """Small author-visible receipts, never a copy of LLM extraction or Story data."""
     if not isinstance(operations, list) or len(operations) > 25:
@@ -279,7 +319,7 @@ def create_chat(mode):
         chat_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ") + "-" + uuid.uuid4().hex[:8]
         now = _now()
         chat = {"id": chat_id, "mode": mode, "title": "New chat", "createdAt": now,
-                "updatedAt": now, "revision": 0, "messages": [], "draft": "", "attachments": {}, "workshop": None, "operations": [], "storyAccess": None, "readiness": _validate_readiness(None)}
+                "updatedAt": now, "revision": 0, "messages": [], "draft": "", "attachments": {}, "workshop": None, "operations": [], "storyAccess": None, "readiness": _validate_readiness(None), "workingDraft": _validate_working_draft(None)}
         _write(_path(chat_id), chat)
         _set_active(mode, chat_id)
         return chat
@@ -313,6 +353,7 @@ def save_chat(chat_id, payload):
                     operations=_validate_operations(payload.get("operations", chat.get("operations", []))),
                     storyAccess=_validate_story_access(payload.get("storyAccess", chat.get("storyAccess"))),
                     readiness=_validate_readiness(payload.get("readiness", chat.get("readiness"))),
+                    workingDraft=_validate_working_draft(payload.get("workingDraft", chat.get("workingDraft"))),
                     revision=chat["revision"] + 1, updatedAt=_now())
         _write(path, chat)
         return chat

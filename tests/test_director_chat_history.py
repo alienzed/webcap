@@ -444,3 +444,43 @@ def test_scene_invariant_association_is_valid_guided_write_hint(sessions):
                       "writeHint": "scene-invariants", "sceneId": ""},
     })
     assert saved["readiness"]["writeHint"] == "scene-invariants"
+
+
+def test_structured_studio_draft_survives_followup_and_reload_without_saving_story(sessions):
+    created = history.create_chat("storyboard")
+    first = history.save_chat(created["id"], {
+        "expectedRevision": 0, "title": "Rainy Bookshop", "draft": "",
+        "messages": [
+            {"role": "user", "content": "Make the ending quieter"},
+            {"role": "assistant", "content": "Quieter ending ready."},
+        ],
+        "workingDraft": {
+            "projects": {"project-1": {"concept": "Nighttime bookshop", "style": "Soft warm light"}},
+            "scenes": {"scene-3": {"title": "Last Page", "prompt": "Full H3 replacement",
+                                   "durationSeconds": 12}},
+            "newProject": {}, "newScene": {},
+            "sourceRequest": "Make the ending quieter",
+        },
+    })
+    assert first["workingDraft"]["scenes"]["scene-3"]["prompt"] == "Full H3 replacement"
+    second = history.save_chat(created["id"], {
+        "expectedRevision": first["revision"],
+        "title": "Rainy Bookshop", "draft": "",
+        "messages": first["messages"] + [
+            {"role": "user", "content": "Can we discuss the lighting first?"},
+            {"role": "assistant", "content": "Keep it warm."},
+        ],
+    })
+    assert second["workingDraft"]["projects"]["project-1"]["style"] == "Soft warm light"
+    assert second["workingDraft"]["scenes"]["scene-3"]["durationSeconds"] == 12
+    assert history.open_chat(created["id"])["workingDraft"] == second["workingDraft"]
+    assert "workingDraft" not in history._summary(second)
+
+
+def test_invalid_optional_draft_fields_do_not_discard_good_fields():
+    fields = history._validate_working_draft({
+        "scenes": {"scene-1": {"prompt": "Full replacement", "durationSeconds": "twelve",
+                                "unknown": "optional"}},
+        "projects": {},
+    })
+    assert fields["scenes"]["scene-1"] == {"prompt": "Full replacement"}

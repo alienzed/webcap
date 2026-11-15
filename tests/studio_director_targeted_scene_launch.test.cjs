@@ -23,7 +23,7 @@ function sceneFixture(raw = '{"prompt":"Mara finishes quietly under a still came
     }}
   };
   const state={pending:false,jobId:'',lastStudioIoRaw:'',lastStudioIoError:'',
-    modeMessages:{storyboard:[]},sessionDirty:{storyboard:false}};
+    modeMessages:{storyboard:[]},sessionDirty:{storyboard:false},studioWorkingDraft:{projects:{},scenes:{},newProject:{},newScene:{},sourceRequest:''}};
   const window={
     flushStudioDirectorStoryEdits:async()=>{events.push(['flush']);},
     refreshStudioDirectorStoryIfOpen:async()=>{events.push(['refresh']);},
@@ -60,6 +60,11 @@ function sceneFixture(raw = '{"prompt":"Mara finishes quietly under a still came
     '    setStatus:status,').trim().replace(/,$/,'');
   vm.runInContext(readPayload+
     'window.studioDirectorWorkbench={'+sceneRead+','+applyScenePrompt+'};',context);
+  vm.runInContext(section(director,'  function studioRequestAppliesPreparedMaterial(request) {',
+    '  function studioWorkingFieldChanges(source, names) {')+
+    section(director,'  function studioRequestedDuration(instruction) {',
+    '  window.studioDirectorBridge = {'),context);
+  context.scheduleSessionSave=()=>{events.push(['draft-scheduled']);};
   const method=section(director,'    writeSelectedScene: function (launch) {',
     '    makeProposal: function').trim().replace(/,$/,'');
   vm.runInContext('window.studioDirectorBridge={'+method+',isReady:()=>true,'+
@@ -100,7 +105,10 @@ test('one click runs one Scene writer with fresh saved context, saves a full pro
   assert.deepEqual(h.saved.scenes.s1.takeOrder,['take1']);
   assert.ok(h.events.some(row=>row[0]==='refresh'));
   assert.ok(h.events.some(row=>row[0]==='receipt'));
-  assert.ok(h.state.modeMessages.storyboard.at(-1).rawResponse.includes('prompt'));
+  assert.equal(h.state.modeMessages.storyboard.length,0,
+    'Writer results remain in structured state, not duplicated chat history');
+  assert.equal(h.state.studioWorkingDraft.scenes.s1.prompt,
+    'Mara finishes quietly under a still camera.');
   assert.deepEqual(h.errors,[]);
 });
 
@@ -182,47 +190,94 @@ test('save failure never produces a saved receipt; post-save refresh failure rep
   assert.ok(after.events.some(row=>row[0]==='status' && /Scene saved, but/.test(row[1])));
 });
 
-test('structured Scene suggestion binds the actual selected ID and instruction to one direct action',async()=>{
-  const actions={children:[],replaceChildren(){this.children=[];},appendChild(n){this.children.push(n);}};
-  const assessment={children:[],replaceChildren(){this.children=[];},appendChild(n){this.children.push(n);}};
-  const executed=[];
-  const createElement=()=>({dataset:{},children:[],appendChild(n){this.children.push(n);},
-    set textContent(v){this._text=v;},get textContent(){return this._text;}});
-  const scope=vm.createContext({
-    window:{studioDirectorBridge:{workingStoryId:()=> 'p1',placeSuggestedAction(){},
-      updateReadiness(){},writeSelectedScene:async launch=>executed.push(launch)}},
-    document:{createElement},readiness:[],recommendations:{},readinessStale:false,
-    creativeCapture:null,preparedSceneWrite:null,
-    projectFields:['title','concept','style','invariants'],sceneFields:['title','prompt'],
-    recommendationProject:'',status:(msg)=>assert.fail(msg),
-    el:id=>id==='studio-dw-suggestions'?actions:
-      id==='studio-dw-readiness-list'?assessment:
-      id==='studio-dw-suggestion-heading'?{classList:{toggle(){}}}:assessment,
-    activeTarget:()=>({storyId:'p1'}),setReadinessFreshness(stale){
-      scope.readinessStale=stale;scope.renderReadiness(scope.readiness);
-    },
-    recommendedWriteFields:()=>[],writeActionLabel:()=> 'Draft Scene revisions',
-    captureActionLabel:()=> 'Review Scene',reviewCreativeCapture(){},
-    openRecommendedWrite(){},readRecommendedProject(){},
+
+test('a quoted title-only revision saves the title without another model call or prompt overwrite',async()=>{
+  const h=sceneFixture();
+  const result=await h.window.studioDirectorBridge.writeSelectedScene({
+    ...h.launch, instruction:'Rename Scene 1 to "Quiet Ending".',
+    authorRequest:'Rename Scene 1 to "Quiet Ending".', fields:['title']
   });
-  vm.runInContext(section(workbench,'  function renderReadiness(list) {',
-    '  window.studioDirectorWorkbench = {'),scope);
-  const begin=workbench.indexOf('    updateReadiness:function (result, restoring, selectedScene, selectedProject, authorRequest) {');
-  const end=workbench.indexOf('\n  };\n\n  function bind()',begin);
-  assert.ok(begin>0 && end>begin);
-  const receiver=vm.runInContext('({'+workbench.slice(begin,end)+'})',scope);
-  const proposal={checks:[],readHints:[],writeHint:'scenes',writeInstruction:'Make the ending quieter.',
-    writeFields:['prompt'],sceneId:'s1',sceneNumber:1,capture:null};
-  assert.equal(receiver.updateReadiness(proposal,false,
-    {projectId:'p1',sceneId:'s1',sceneNumber:1}),true);
-  assert.equal(actions.children.length,1);
-  assert.equal(actions.children[0].textContent,'Revise Scene 1 · Save');
-  await actions.children[0].onclick();
-  assert.deepEqual(JSON.parse(JSON.stringify(executed)),[{
-    projectId:'p1',sceneId:'s1',sceneNumber:1,instruction:'Make the ending quieter.',fields:['prompt']
-  }]);
-  assert.equal(receiver.updateReadiness({...proposal,sceneId:'invented'},false,
-    {projectId:'p1',sceneId:'s1',sceneNumber:1}),true);
-  assert.notEqual(actions.children[0].textContent,'Revise Scene 1 · Save',
-    'mismatched model ID cannot authorize direct saving');
+  assert.equal(h.events.filter(row=>row[0]==='model').length,0);
+  const save=h.events.find(row=>row[0]==='save')[1];
+  assert.deepEqual(JSON.parse(JSON.stringify(save.changes)),{title:'Quiet Ending'});
+  assert.deepEqual(JSON.parse(JSON.stringify(save.expected)),{title:'Opening'});
+  assert.equal(h.saved.scenes.s1.title,'Quiet Ending');
+  assert.equal(h.saved.scenes.s1.prompt,'Mara shouts at the rover.');
+  assert.ok(result.story);
+});
+
+test('requested duration is taken from author words even when optional model action omits it',async()=>{
+  const h=sceneFixture('{"prompt":"Twelve seconds of the keeper closing the book","durationSeconds":6}');
+  await h.window.studioDirectorBridge.writeSelectedScene({
+    ...h.launch, instruction:'Quieter ending',authorRequest:'Make this Scene 14 seconds, with a quieter ending.',
+    fields:['prompt','durationSeconds']
+  });
+  const saved=h.events.find(row=>row[0]==='save')[1];
+  assert.equal(saved.changes.durationSeconds,14);
+  assert.equal(h.saved.scenes.s1.durationSeconds,14);
+  const request=JSON.parse(h.events.find(row=>row[0]==='model')[1]);
+  assert.equal(request.requestedDurationSeconds,14);
+  assert.match(request.authorRequest,/14 seconds/);
+});
+
+test('unsupported explicit duration preserves a complete Scene draft without saving a mismatch',async()=>{
+  const h=sceneFixture('{"prompt":"Twenty-second complete scene","durationSeconds":12}');
+  const result=await h.window.studioDirectorBridge.writeSelectedScene({
+    ...h.launch,instruction:'Quiet scene',authorRequest:'Make it 20 seconds.',
+    fields:['prompt','durationSeconds']
+  });
+  assert.equal(result.review,true);
+  assert.equal(h.events.filter(row=>row[0]==='save').length,0);
+  assert.equal(h.saved.scenes.s1.prompt,'Mara shouts at the rover.');
+  assert.equal(h.state.studioWorkingDraft.scenes.s1.prompt,'Twenty-second complete scene');
+  assert.equal(h.state.modeMessages.storyboard.length,0,
+    'complete writer prompts belong to the structured draft, not another chat turn');
+  assert.ok(h.events.some(row=>row[0]==='status' && /nothing saved/.test(row[1])));
+});
+
+test('already authored structured Scene prompt applies with exact requested duration, no repeat model call',async()=>{
+  const h=sceneFixture();
+  const request='Make Scene 1 last 14 seconds with a quieter ending.';
+  h.state.studioWorkingDraft.scenes.s1={prompt:'Complete quiet H3 replacement'};
+  h.state.studioWorkingDraft.sourceRequest=request;
+  await h.window.studioDirectorBridge.writeSelectedScene({
+    ...h.launch,authorRequest:request,instruction:'Quieter ending',
+    fields:['prompt','durationSeconds']
+  });
+  assert.equal(h.events.filter(row=>row[0]==='model').length,0);
+  const save=h.events.find(row=>row[0]==='save')[1];
+  assert.equal(save.changes.prompt,'Complete quiet H3 replacement');
+  assert.equal(save.changes.durationSeconds,14);
+  assert.equal(h.saved.scenes.s1.durationSeconds,14);
+});
+
+test('unsupported duration never saves a working prompt with contradictory timing',async()=>{
+  const h=sceneFixture();
+  const request='Make Scene 1 last 20 seconds.';
+  h.state.studioWorkingDraft.scenes.s1={prompt:'Complete twenty-second H3 replacement'};
+  h.state.studioWorkingDraft.sourceRequest=request;
+  const result=await h.window.studioDirectorBridge.writeSelectedScene({
+    ...h.launch,authorRequest:request,instruction:'Longer ending',
+    fields:['prompt','durationSeconds']
+  });
+  assert.equal(result.review,true);
+  assert.equal(h.events.filter(row=>row[0]==='model').length,0);
+  assert.equal(h.events.filter(row=>row[0]==='save').length,0);
+  assert.equal(h.saved.scenes.s1.prompt,'Mara shouts at the rover.');
+});
+
+test('a subsequent Scene rewrite sees the unsaved working prompt, not just the older saved prompt',async()=>{
+  const h=sceneFixture();
+  h.state.studioWorkingDraft.scenes.s1={prompt:'The previous unsaved quiet H3 draft.'};
+  h.state.studioWorkingDraft.sourceRequest='First quieter draft';
+  await h.window.studioDirectorBridge.writeSelectedScene({
+    ...h.launch,instruction:'Make it even quieter.',
+    authorRequest:'Make it even quieter.',fields:['prompt']
+  });
+  const call=h.events.find(event=>event[0]==='model');
+  assert.ok(call,'the distinct new change should still author once');
+  const input=JSON.parse(call[1]);
+  assert.equal(input.unsavedWorkingFields.prompt,'The previous unsaved quiet H3 draft.');
+  assert.equal(input.savedContext.fields.find(field=>field.id==='scene:s1:prompt').value,
+    'Mara shouts at the rover.');
 });

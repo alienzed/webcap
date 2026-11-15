@@ -297,6 +297,14 @@
     showWriteContext();
     updateScope();
   }
+  function selectWriteScenes(checked) {
+    var inputs = Array.from(el('studio-dw-batch-scenes').querySelectorAll('input[type="checkbox"]'));
+    inputs.forEach(function (input) { input.checked = checked; });
+    sceneSelectionManual = true;
+    if (pendingCreativeAction && pendingCreativeAction.awaitingScenes)
+      pendingCreativeAction.chosenSceneIds = checked ? inputs.map(function (input) { return input.value; }) : [];
+    showWriteContext();
+  }
   function refreshRead() {
     return refreshProjects().then(function () {return loadStory(el('studio-dw-read-project').value);})
       .then(renderReadStory).catch(function (e) { status('Read setup failed: ' + e.message, true); });
@@ -1157,6 +1165,8 @@
     });
     el('studio-dw-read-send').onclick=readSend;
     el('studio-dw-read-all').onclick=selectEntireReadProject;
+    el('studio-dw-scenes-select-all').onclick=function () {selectWriteScenes(true);};
+    el('studio-dw-scenes-select-none').onclick=function () {selectWriteScenes(false);};
     el('studio-dw-write-prepare').onclick=writePrepare;
     el('studio-dw-scene-apply').onclick=applyScene;
     el('studio-dw-batch-apply').onclick=applyBatchScenes;

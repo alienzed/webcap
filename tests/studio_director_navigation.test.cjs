@@ -417,6 +417,7 @@ test('Project Apply continuation owns subsequent context despite older shell Sce
       return {story:b};
     }
     if(options&&options.method==='POST')unexpectedPosts++;
+    if(url==='/fs/storyboard') return {stories:Object.values(h.stories)};
     if(url.startsWith('/fs/studio/director/guidance'))
       return {system:'Director guidance',actions:[],promptContract:'H3'};
     if(url.startsWith('/fs/storyboard?story='))

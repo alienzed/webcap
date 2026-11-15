@@ -4085,3 +4085,33 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
 #storyboard-story-style[data-director-updated="true"],
 #storyboard-story-title[data-director-updated="true"] { border-left: 3px solid var(--accent); }
 #studio-dw-write[data-result="success"] { border-color: var(--accent); }
+
+
+/* Studio Write stays beside conversation at ordinary drawer widths, not over it. */
+.director-chat-drawer.studio-director.studio-actions-open .director-chat-layout {
+  grid-template-columns:minmax(0,1fr) minmax(260px,36%);
+}
+.director-chat-drawer.studio-director .studio-dw-actions:has(#studio-dw-read.hidden) {grid-template-columns:1fr;}
+.director-chat-drawer.studio-director #studio-dw-write-instruction {width:100%;min-height:104px;font-size:16px;line-height:1.45;resize:vertical;}
+.director-chat-drawer.studio-director #studio-dw-batch-scenes {max-height:180px;overflow-y:auto;}
+#director-chat-scene-context {max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.director-chat-history-filter {padding:14px 24px 0;}
+.director-chat-history-filter input {width:100%;min-height:40px;font-size:16px;}
+.director-chat-history-item > button:first-child {min-height:62px;}
+.director-chat-history-item > button:first-child strong {display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;max-width:100%;}
+.director-chat-history-menu {position:relative;flex:0 0 auto;align-self:center;}
+.director-chat-history-menu summary {cursor:pointer;padding:10px;border:1px solid var(--border);border-radius:7px;font-size:14px;min-width:62px;text-align:center;}
+.director-chat-history-menu[open] {z-index:3;}
+.director-chat-history-menu > button {display:block;width:100%;min-width:100px;margin-top:4px;text-align:left;}
+.director-chat-save-receipt {display:flex;align-items:center;gap:9px;max-width:100%;margin:4px 0;padding:5px 10px;border-left:3px solid var(--accent);border-radius:0;background:var(--panel-soft);font-size:14px;}
+.director-chat-save-receipt .director-chat-message-label {font-size:13px;white-space:nowrap;margin:0;}
+.director-chat-save-receipt .director-chat-message-body {font-size:14px!important;line-height:1.4!important;padding:0;background:transparent;border:0;box-shadow:none;overflow-wrap:anywhere;}
+@container (max-width:1000px) {
+  .director-chat-drawer.studio-director.studio-actions-open .director-chat-layout {grid-template-columns:minmax(0,1fr) minmax(240px,36%);}
+  .director-chat-drawer.studio-director.studio-actions-open .director-chat-sidebar {position:relative;inset:auto;width:auto;max-height:none;box-shadow:none;border-left:1px solid var(--border);}
+}
+@container (max-width:630px) {
+  .director-chat-drawer.studio-director.studio-actions-open .director-chat-layout {grid-template-columns:minmax(0,1fr);}
+  .director-chat-drawer.studio-director.studio-actions-open .director-chat-sidebar {position:relative;inset:auto;width:100%;max-height:48dvh;border-left:0;border-top:1px solid var(--border);}
+  .director-chat-drawer.studio-director.studio-actions-open .director-chat-layout {grid-template-rows:minmax(200px,1fr) minmax(0,auto);}
+}

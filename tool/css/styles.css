@@ -4869,6 +4869,11 @@ iframe {
 }
 .keep-lora-folder:hover { border-color: var(--accent); background: rgba(98, 188, 140, .08); }
 .keep-lora-field input { box-sizing: border-box; width: 100%; min-height: 34px; }
+.keep-lora-capabilities { display: grid; gap: 7px; max-height: 230px; overflow: auto; }
+.keep-lora-capabilities details { border: 1px solid var(--border-color, #3d4452); border-radius: 6px; padding: 7px 10px; }
+.keep-lora-capabilities summary { cursor: pointer; font-weight: 600; font-size: 13px; }
+.keep-lora-capabilities input[type="checkbox"] { width: auto; min-height: 0; margin-right: 6px; }
+.keep-lora-capability-option { display: block; margin: 7px 0 0 20px; font-size: 13px; font-weight: 400; }
 .keep-lora-status { min-height: 20px; color: var(--muted-text, #a3adba); overflow-wrap: anywhere; }
 .keep-lora-status.is-error { color: #ffb4b4; }
 .keep-lora-footer { border-top: 1px solid var(--border-color, #3d4452); border-bottom: 0; justify-content: flex-end; }

@@ -40,12 +40,25 @@ async function attachProject(page,project){
   await expect(page.locator('#director-chat-title')).toContainText(project.title);
 }
 async function sendLive(page,instruction){
-  await page.locator('#director-chat-input').fill(instruction);
+  const composer=page.locator('#director-chat-input');
+  await composer.fill(instruction);
   await expect(page.locator('#director-chat-send')).toBeEnabled();
+  // Follow the real WebCap inference job, not an assumed elapsed time, model
+  // prose, or a suggestion left over from an earlier reply.
+  const terminal=page.waitForResponse(async response=>{
+    if(!response.url().includes('/fs/director/job?')) return false;
+    try {
+      const payload=await response.json();
+      return ['completed','failed','cancelled','stopped','interrupted']
+        .includes(String(payload.job?.status||''));
+    } catch { return false; }
+  },{timeout:300000});
   await page.locator('#director-chat-send').click();
-  // Completion is authoritative browser evidence; don't depend on generated
-  // wording or an arbitrary number of elapsed seconds.
-  await expect(page.locator('#director-chat-progress')).toBeHidden({timeout:180000});
+  const response=await terminal;
+  const payload=await response.json();
+  if(payload.job.status!=='completed')
+    throw new Error('Real Director job '+payload.job.status+': '+String(payload.job.error||'No diagnostic provided'));
+  await expect(page.locator('#director-chat-progress')).toBeHidden({timeout:20000});
 }
 async function actualReply(page){
   const texts=await page.locator('#director-chat-messages').textContent();

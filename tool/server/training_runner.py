@@ -1204,10 +1204,11 @@ def save_candidate_epoch(folder, job_id, epoch, destination, filename, stage="",
             from .model_epoch_profile import _read_object, save_enrichment
             current = _read_object(source.with_suffix(".webcap.json"))
             enrichment = ((current.get("modelProfile") or {}).get("enrichment") or {}).copy()
-            enrichment["promptOptions"] = profile_options
-            # The existing copy path below writes the exported sidecar.
-            # Avoid writing that destination twice (its copy uses exclusive creation).
-            save_enrichment(source, enrichment)
+            if enrichment or profile_options:
+                enrichment["promptOptions"] = profile_options
+                # The existing copy path below writes the exported sidecar.
+                # Avoid writing that destination twice (its copy uses exclusive creation).
+                save_enrichment(source, enrichment)
         except (OSError, ValueError, UnicodeError, json.JSONDecodeError) as exc:
             profile_warning = "LoRA saved and selected, but capability profile was not fully saved: " + str(exc)
             _logger.warning("%s", profile_warning)

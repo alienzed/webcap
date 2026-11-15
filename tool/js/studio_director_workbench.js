@@ -862,6 +862,8 @@
           openWriteForCapture();
           return;
         }
+        // Record WebCap's resolved destination for the matching save receipt.
+        frozen.chosenProjectId = projectId;
         if (frozen.kind === 'write_project') {
           var fields = frozen.fields.filter(function (name) {return projectFields.includes(name);});
           return window.studioDirectorBridge.prepareWrite('project',projectId,storyName(item),{

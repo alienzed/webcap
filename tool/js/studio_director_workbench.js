@@ -325,7 +325,6 @@
     el('studio-dw-' + other + '-panel').classList.add('hidden');
     el('studio-dw-' + other).setAttribute('aria-expanded', 'false');
     updateScope();
-    if (show && which === 'write') seedManualSceneInstruction();
     if (show) return which === 'read' ? refreshRead() : refreshWrite();
   }
   function parseProposal(raw) {
@@ -387,8 +386,8 @@
   function openWriteForCapture() {
     el('director-chat-drawer').classList.add('studio-actions-open');
     el('studio-dw-open-tools').setAttribute('aria-expanded','true');
-    if (el('studio-dw-write-panel').classList.contains('hidden')) el('studio-dw-write').click();
-    refreshWrite();
+    showConversationWrite();
+    return refreshWrite().then(showConversationWrite);
   }
   function writePrepare(options) {
     var bridge = window.studioDirectorBridge;
@@ -740,6 +739,25 @@
   // The only conversational Director handoff: an optional authoring proposal.
   // WebCap binds actual Projects/Scenes; the model supplies no persisted IDs.
   var pendingCreativeAction = null;
+  // Write reflects an explicit conversational proposal, not a standalone operation picker.
+  function showConversationWrite() {
+    var action = pendingCreativeAction;
+    var ready = !!action;
+    var awaitingProject = ready && !!action.awaitingProject;
+    var awaitingScenes = ready && !!action.awaitingScenes;
+    el('studio-dw-write-empty').classList.toggle('hidden', ready);
+    el('studio-dw-write-ready').classList.toggle('hidden', !ready);
+    el('studio-dw-write-panel').classList.toggle('hidden', !(awaitingProject || awaitingScenes));
+    el('studio-dw-write-panel').classList.toggle('studio-dw-awaiting-project', awaitingProject);
+    el('studio-dw-write-panel').classList.toggle('studio-dw-awaiting-scenes', awaitingScenes);
+    if (!ready) return;
+    var title = ({create_project:'Create Project',write_project:'Revise Project',
+      create_scene:'Create Scenes',write_scenes:'Revise Scenes'})[action.kind];
+    el('studio-dw-write-ready-title').textContent = title;
+    el('studio-dw-write-ready-direction').textContent = action.instruction;
+    el('studio-dw-write-ready-launch').textContent = awaitingProject || awaitingScenes
+      ? 'Continue with selected target' : title;
+  }
 
   function sceneIdsFromRequest(instruction, story, selectedScene) {
     var found = [];
@@ -772,6 +790,7 @@
         sceneNumber:selectedScene.sceneNumber}
     };
     pendingCreativeAction = frozen;
+    showConversationWrite();
     var host = el('studio-dw-suggestions');
     host.replaceChildren();
     var button = document.createElement('button');
@@ -809,6 +828,7 @@
           mentioned.length > 1 ? '' : (frozen.chosenProjectId || frozen.projectId);
         if (!projectId) {
           frozen.awaitingProject = true;
+          showConversationWrite();
           status('Select the Project in Write, then click this action again.',true);
           openWriteForCapture();
           return;
@@ -816,6 +836,7 @@
         var item = items.find(function (p) {return p.id === projectId;});
         if (!item) {
           frozen.awaitingProject = true;
+          showConversationWrite();
           status('Select an available Project in Write, then click this action again.',true);
           openWriteForCapture();
           return;
@@ -889,6 +910,7 @@
             ids = frozen.chosenSceneIds.filter(function (id) {return story.sceneOrder.includes(id);});
           if (!ids.length) {
             frozen.awaitingScenes = true;
+            showConversationWrite();
             status('Select the Scene(s) in Write, then click this action again.',true);
             el('studio-dw-write-project').value = projectId;
             el('studio-dw-write-operation').value = 'scene-write';
@@ -943,6 +965,7 @@
     };
     host.appendChild(button);
     window.studioDirectorBridge.placeSuggestedAction(host);
+    showConversationWrite();
   }
 
   window.studioDirectorWorkbench = {
@@ -1043,6 +1066,7 @@
       delete instruction.dataset.instructionSeeded;
       pendingCreativeAction = null;
       el('studio-dw-suggestions').replaceChildren();
+      showConversationWrite();
       readChoices = {};
       writeOperationChosen = false;
       sceneSelectionManual = false;
@@ -1099,11 +1123,17 @@
     function openDirectAction(which) {
       lastQuickAction = which;
       el('director-chat-drawer').classList.add('studio-actions-open');
-      if (el('studio-dw-' + which + '-panel').classList.contains('hidden'))
+      if (which === 'write') showConversationWrite();
+      else if (el('studio-dw-' + which + '-panel').classList.contains('hidden'))
         el('studio-dw-' + which).click();
       el('studio-dw-open-tools').setAttribute('aria-expanded','true');
       el('studio-dw-close-actions').focus();
     }
+    el('studio-dw-write-ready-launch').onclick=function () {
+      var proposed = el('studio-dw-suggestions').querySelector('[data-guided-write]');
+      if (!proposed) throw new Error('The proposed Director action is no longer available.');
+      proposed.click();
+    };
     el('studio-dw-open-tools').onclick=function () {
       if (el('director-chat-drawer').classList.contains('studio-actions-open')) el('studio-dw-close-actions').click();
       else openDirectAction(lastQuickAction);
@@ -1131,6 +1161,7 @@
       el(id).onclick=function () {el('studio-dw-scene-review').close();};
     });
     updateScope();
+    showConversationWrite();
   }
   if (document.readyState==='loading') document.addEventListener('DOMContentLoaded',bind);
   else bind();

@@ -763,9 +763,9 @@
         // A saved receipt closes that task, while ordinary follow-ups need not.
         for (var actionIndex = chat.messages.length - 1; actionIndex >= 0; actionIndex--) {
           var entry = chat.messages[actionIndex];
-          if (String(entry.content || '').includes('[WEBCAP APPLIED FIELD VALUES]')) break;
           if (!entry.writeAction) continue;
           var proposal = entry.writeAction;
+          if (proposal.completed) break;
           window.studioDirectorWorkbench.presentAction(proposal, proposal.scene,
             {projectId:proposal.projectId}, proposal.request, actionIndex);
           break;
@@ -4210,7 +4210,11 @@
       var savedTarget = selected.sceneId && story.scenes && story.scenes[selected.sceneId]
         ? 'Scene ' + ((story.sceneOrder || []).indexOf(selected.sceneId) + 1) + ' · ' + (story.scenes[selected.sceneId].title || selected.sceneId)
         : story.title || story.id;
-      window.studioDirectorWorkbench.completeWriteAction(kind, story, selected);
+      if (window.studioDirectorWorkbench.completeWriteAction(kind, story, selected)) {
+        var sourceMessage = state.modeMessages.storyboard[state.studioActionIndex];
+        if (sourceMessage && sourceMessage.writeAction)
+          sourceMessage.writeAction.completed = true;
+      }
       state.modeMessages.storyboard.push({role:'user',
         content:'Saved ' + savedTarget + ': ' + (savedFields.join(' · ') || 'Scene changes') +
           String.fromCharCode(10) + '[WEBCAP APPLIED FIELD VALUES]' +

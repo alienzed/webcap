@@ -65,6 +65,9 @@ async function openProject(page, projectId) {
 async function ensureAttachedProject(page,expectedTitle) {
   // Conversations persist across browser tests on one isolated backend. Start
   // a fresh real conversation when an earlier test left another Project bound.
+  const mode=page.locator('#director-studio-composer-mode-select');
+  if(await mode.isVisible() && await mode.inputValue()==='revision')
+    await mode.selectOption('conversation');
   const label=page.locator('#director-chat-title');
   if(!(await label.textContent() || '').includes(expectedTitle)) {
     await page.locator('#director-chat-clear').click();

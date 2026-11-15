@@ -121,8 +121,9 @@
     function position() {
       if (host !== invariantHost || !input) return;
       var rect = input.getBoundingClientRect();
-      host.style.left = Math.max(8, rect.left) + 'px';
-      host.style.width = Math.min(Math.max(260, rect.width), window.innerWidth - 16) + 'px';
+      var width = Math.min(Math.max(260, rect.width), window.innerWidth - 16);
+      host.style.left = Math.min(Math.max(8, rect.left), window.innerWidth - width - 8) + 'px';
+      host.style.width = width + 'px';
       var roomBelow = window.innerHeight - rect.bottom;
       if (roomBelow >= 180 || roomBelow >= rect.top) {
         host.style.top = Math.min(window.innerHeight - 16, rect.bottom + 4) + 'px';

@@ -15,13 +15,11 @@ _H3_RUNTIME = Path(__file__).resolve().parents[2] / "docs" / "mmh3-prompt-runtim
 # they are not direct LLM tools or promises of automatic mutation.
 ACTIONS = (
     {"name": "context.read", "status": "available",
-     "description": "Supply saved context for the selected Scene automatically; explicit Read is available for other chosen Project/Scene fields."},
-    {"name": "project.create", "status": "available",
-     "description": "Create a reviewed Project with complete Concept, Visual / atmosphere and Invariants; requested initial Scenes are authored after saving."},
-    {"name": "project.revise", "status": "available",
-     "description": "Revise requested Project Concept, Visual / atmosphere or Invariants using fresh saved values in one editable review."},
+     "description": "WebCap automatically supplies the relevant saved Project and Scene material; answer directly, with no save."},
+    {"name": "project.write", "status": "available",
+     "description": "Create or revise the Project title, Concept, Visual / atmosphere and Invariants, preserving unrelated saved fields."},
     {"name": "scenes.write", "status": "available",
-     "description": "Create or revise one or more Scenes in a chosen Project, including H3 Prompt and relevant Invariants; review before applying."},
+     "description": "Create or revise one or more Scenes with a full H3 Prompt, title and requested duration; WebCap binds and saves each target."},
 )
 
 _WORKSHOP = (
@@ -40,10 +38,9 @@ _WORKSHOP = (
     "make meaningful events visible without defaulting to empty setup. "
     "Give practical H3 advice without promising deterministic rendering. "
     "Answer supplied-context questions directly; suggest a scoped Write or author-operated Studio step when useful. "
-    ""
     "Conversation never edits Project records. WebCap supplies the selected Scene's saved fields with Studio questions. "
     "Use only saved creative material actually supplied in this request; a Project ID or permission alone conveys no field content. "
-    "Treat selected Write fields as context; suggest the intended Scene when different. "
+    
     "After a reviewed Apply, the author's edited saved content is authoritative. "
     "For a requested write, suggest one optional action with its kind and creative instruction. WebCap resolves the actual destination and authorizes saving. Answer ordinary questions directly; plain prose is valid.\n"
 )

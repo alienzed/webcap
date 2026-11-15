@@ -60,6 +60,8 @@ function sceneFixture(raw = '{"prompt":"Mara finishes quietly under a still came
     '    setStatus:status,').trim().replace(/,$/,'');
   vm.runInContext(readPayload+
     'window.studioDirectorWorkbench={'+sceneRead+','+applyScenePrompt+'};',context);
+  vm.runInContext(section(director,'  function studioRequestedDuration(instruction) {',
+    '  window.studioDirectorBridge = {'),context);
   const method=section(director,'    writeSelectedScene: function (launch) {',
     '    makeProposal: function').trim().replace(/,$/,'');
   vm.runInContext('window.studioDirectorBridge={'+method+',isReady:()=>true,'+

@@ -1,7 +1,7 @@
 'use strict';
 const {test,expect}=require('./test.cjs');
 const {resetModel,queueModel,observedModels,openDirector,say,stories,story}=require('./helpers.cjs');
-const {ensureAttachedProject}=require('./helpers.cjs');
+const {ensureAttachedProject,freshDirectorSession}=require('./helpers.cjs');
 
 async function newSelectedProject(page) {
   const previous=new Set((await stories(page)).map(item=>item.id));
@@ -14,6 +14,7 @@ async function newSelectedProject(page) {
 
 test('Flow 2 — returned Scene count, editable review and persistent real records',async({page,request})=>{
   await resetModel(request);
+  await freshDirectorSession(page);
   await page.goto('/');
   await page.locator('#activity-storyboard-btn').click();
   const project=await newSelectedProject(page);
@@ -35,7 +36,7 @@ test('Flow 2 — returned Scene count, editable review and persistent real recor
   await say(page,'Create three Scenes with different durations.');
   const action=page.locator('#studio-dw-suggestions .studio-dw-suggestion-action');
   await expect(action).toContainText('Review authored Scene');
-  await expect(page.locator('#director-chat-send')).toBeEnabled();
+  await expect(page.locator('#director-chat-progress')).toBeHidden();
   await action.click();
   await expect(page.locator('#studio-scenes-review')).toBeVisible();
   const rows=page.locator('#studio-scenes-rows .studio-scenes-row');
@@ -61,6 +62,7 @@ test('Flow 2 — returned Scene count, editable review and persistent real recor
 
 test('Flow 6 — each conversation reply owns its own editable Scene review',async({page,request})=>{
   await resetModel(request);
+  await freshDirectorSession(page);
   await page.goto('/');
   await page.locator('#activity-storyboard-btn').click();
   const project=await newSelectedProject(page);
@@ -78,7 +80,7 @@ test('Flow 6 — each conversation reply owns its own editable Scene review',asy
   await say(page,'Create a first Scene');
   let action=page.locator('#studio-dw-suggestions .studio-dw-suggestion-action');
   await expect(action).toBeVisible();
-  await expect(page.locator('#director-chat-send')).toBeEnabled();
+  await expect(page.locator('#director-chat-progress')).toBeHidden();
   await action.click();
   await expect(page.locator('#studio-scenes-review')).toBeVisible();
   const row=page.locator('#studio-scenes-rows .studio-scenes-row');
@@ -93,7 +95,7 @@ test('Flow 6 — each conversation reply owns its own editable Scene review',asy
   await say(page,'Create a second Scene');
   action=page.locator('#studio-dw-suggestions .studio-dw-suggestion-action');
   await expect(action).toBeVisible();
-  await expect(page.locator('#director-chat-send')).toBeEnabled();
+  await expect(page.locator('#director-chat-progress')).toBeHidden();
   await action.click();
   await expect(page.locator('#studio-scenes-review')).toBeVisible();
   await expect(row.locator('[data-field="prompt"]')).toHaveValue('Second unique scene prompt.');
@@ -112,6 +114,7 @@ test('Flow 6 — each conversation reply owns its own editable Scene review',asy
 
 test('Flow 2 variation — useful partial Scene survives invalid sibling metadata and can be saved first',async({page,request})=>{
   await resetModel(request);
+  await freshDirectorSession(page);
   await page.goto('/');
   await page.locator('#activity-storyboard-btn').click();
   const project=await newSelectedProject(page);
@@ -132,7 +135,7 @@ test('Flow 2 variation — useful partial Scene survives invalid sibling metadat
   await say(page,'Create three Scenes with different durations');
   const action=page.locator('#studio-dw-suggestions .studio-dw-suggestion-action');
   await expect(action).toContainText('Review authored Scene');
-  await expect(page.locator('#director-chat-send')).toBeEnabled();
+  await expect(page.locator('#director-chat-progress')).toBeHidden();
   await action.click();
   const dialog=page.locator('#studio-scenes-review');
   await expect(dialog).toBeVisible();

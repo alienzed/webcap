@@ -1780,7 +1780,7 @@
         'Return an empty initialScenes array when no Scenes were requested. ' +
         'Use a short rationale. This is a draft for the existing Project review.',
       instruction: String(options && options.instruction || '').trim(),
-      discussion: discussion
+      unsavedWorkingFields:workingProject || {},discussion: discussion
     };
     studioDirectorRequestMessages([{ role: 'user', content: JSON.stringify(input) }], false, true)
       .then(function (messages) {
@@ -2271,7 +2271,7 @@
         instruction: instruction, requestedFields: requestedFields,
         project: { id: story.id, title: story.title, concept: story.concept,
           style: story.style, invariants: story.invariants },
-        discussion: discussion
+        unsavedWorkingFields:workingProject,discussion: discussion
       };
       return studioDirectorRequestMessages([{ role: 'user', content: JSON.stringify(input) }], false, true)
         .then(function (messages) {
@@ -4777,7 +4777,8 @@
             previousScene:launch.sequenceIndex > 0 && order.length ? (function () {
               var prior = story.scenes[order[order.length-1]];
               return {title:prior.title,prompt:prior.prompt,durationSeconds:prior.durationSeconds};
-            })() : null
+            })() : null,
+            unsavedWorkingFields:state.studioWorkingDraft.newScene || {}
           }
         });
         // Reuse complete structured Scene fields already authored in the
@@ -4966,7 +4967,8 @@
           responseExample:Object.assign({prompt:'complete replacement H3 prompt'},
             wantsTitle ? {title:'complete new title'} : {},
             wantsDuration ? {durationSeconds:12} : {}),
-          savedContext:context
+          savedContext:context,
+          unsavedWorkingFields:workingScene || {}
         });
         state.pending = false;
         return window.studioDirectorBridge.makeProposal(instruction, 'studio_scene_field_draft', true,

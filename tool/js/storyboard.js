@@ -6108,31 +6108,35 @@
     dialog.showModal();
   }
 
-  function runDirectorToolsCoherence() {
-    var storyId = storyState.story.id;
-    var modelId = storyState.director.modelId;
-    if (!modelId) {
-      reportError(new Error('Choose a Director model first.'));
-      return;
-    }
-    var run = el('storyboard-director-tools-run');
-    var status = el('storyboard-director-tools-status');
+  function runDirectorToolsCoherence(modelOverride, fromComposer) {
+    var storyId = storyState.story && storyState.story.id;
+    var modelId = modelOverride || storyState.director.modelId;
     var target = {kind: 'repair', storyId: storyId};
+    if (!storyId) return Promise.reject(new Error('Choose a Project first.'));
+    if (!modelId) return Promise.reject(new Error('Choose a Director model first.'));
+    if (directorTargetBlocked(target))
+      return Promise.reject(new Error('This Project already has Director work pending.'));
+    var run = el(fromComposer ? 'director-chat-send' : 'storyboard-director-tools-run');
+    var status = el(fromComposer ? 'director-studio-revision-status' : 'storyboard-director-tools-status');
     run.disabled = true;
-    status.textContent = 'Starting Story coherence review…';
-    flushPendingSaves().then(function () {
+    status.textContent = 'Starting Project coherence review…';
+    return flushPendingSaves().then(function () {
       setDirectorPending(target, true);
       startDirectorActivity();
-      closeDirectorTools();
+      if (!fromComposer) closeDirectorTools();
       return directorRequest({
         storyId: storyId, operation: 'check_coherence_sequence', model: modelId
       });
     }).then(function (result) {
       showCoherenceReview(storyId, result.scenes || [], modelId);
       return consumeDirectorJob(result.jobId);
-    }).catch(reportError).finally(function () {
+    }).catch(function (error) {
+      reportError(error);
+      if (fromComposer) throw error;
+    }).finally(function () {
       setDirectorPending(target, false);
       finishDirectorActivity();
+      run.disabled = false;
       syncDirectorToolsUi();
     });
   }

@@ -852,10 +852,9 @@
               sequenceIndex:index,sequenceCount:count,directSave:true
             }).then(function (result) {
               if (result && result.review) {
-                failed.push('Scene ' + (index + 1) + ': draft awaiting review; not saved');
                 for (var j=index+1;j<count;j++) notAttempted.push('Scene ' + (j + 1));
                 status('Saved ' + saved.length + ' · Draft awaiting review 1 · Not attempted ' +
-                  notAttempted.length,true,true);
+                  notAttempted.length,false,true);
                 return;
               }
               saved.push(result && result.scenes && result.scenes[0] &&

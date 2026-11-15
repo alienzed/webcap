@@ -169,6 +169,22 @@ test('new multiple Scenes run one canonical writer per item with independently s
   assert.ok(h.statuses.some(row=>/Saved 3 · Failed 0/.test(row[0])));
 });
 
+test('new Scene partial draft is pending review rather than a failed write',async()=>{
+  const h=harness();
+  h.bridge.writeNewScene=async launch=>{
+    h.requests.push(['new-scene',launch]);
+    return {review:true};
+  };
+  h.functions.presentAction({kind:'create_scene',instruction:'Create a 12-second closing Scene.'},
+    null,{projectId:'p1'},'Create a 12-second closing Scene.');
+  h.suggestions.children[0].onclick();
+  await flush();
+  assert.equal(h.requests.length,1);
+  assert.ok(h.statuses.some(row=>/Draft awaiting review 1/.test(row[0]) &&
+    row[1]===false));
+  assert.ok(!h.statuses.some(row=>/Failed 1/.test(row[0])));
+});
+
 test('new multiple Scenes retain successes when one item fails',async()=>{
   const h=harness();
   let index=0;

@@ -113,6 +113,53 @@ test('a written-out author duration survives malformed optional model duration',
     'WebCap carries the author\'s twelve seconds through a malformed model field');
 });
 
+test('missing Prompt retains title and duration as editable draft even on direct save', async () => {
+  const state={pending:false,jobId:'',studioScenesProposal:null,
+    studioWorkingDraft:{projects:{},scenes:{},newProject:{},newScene:{},sourceRequest:''}};
+  const brief='Create a 12-second closing Scene';
+  let authored=0,reviewed=0,saves=0,sessionSaves=0;
+  const statuses=[];
+  const scope=vm.createContext({
+    state,studioRequestedDuration,studioMentionedDuration,
+    studioRequestAppliesPreparedMaterial,studioWorkingFieldChanges,syncControls(){},
+    scheduleSessionSave(){sessionSaves++;},
+    studioActionStatus:(message,error)=>statuses.push({message,error}),
+    showStudioScenesReview(){reviewed++;},
+    window:{
+      flushStudioDirectorStoryEdits:async()=>{},
+      reportConsoleError:()=>assert.fail('Partial Scene is not a writer error'),
+      studioDirectorBridge:{
+        isReady:()=>true,readinessMessage:()=> '',
+        makeProposal:async()=>{
+          authored++;
+          return JSON.stringify({title:'Closing the Logbook',durationSeconds:12});
+        }
+      }
+    },
+    requestJson:async url=>{
+      if (url!=='/fs/storyboard?story=p1') saves++;
+      return {story:{id:'p1',title:'Project',sceneOrder:[],scenes:{}}};
+    },
+    Promise,JSON,Number,String,Error,encodeURIComponent
+  });
+  const writer=vm.runInContext('({' + method + '})',scope).writeNewScene;
+  const result=await writer.call(scope.window.studioDirectorBridge,{
+    projectId:'p1',instruction:brief,authorRequest:brief,directSave:true
+  });
+  assert.equal(result.review,true);
+  assert.equal(authored,1,'no repair LLM call');
+  assert.equal(saves,0,'missing Prompt cannot silently save an empty Scene');
+  assert.equal(reviewed,1);
+  assert.equal(state.studioScenesProposal.drafts[0].title,'Closing the Logbook');
+  assert.equal(state.studioScenesProposal.drafts[0].durationSeconds,12);
+  assert.equal(state.studioScenesProposal.drafts[0].prompt,'');
+  assert.equal(state.studioWorkingDraft.newScene.title,'Closing the Logbook');
+  assert.equal(state.studioWorkingDraft.newScene.durationSeconds,12);
+  assert.ok(sessionSaves>0,'retain partial values across conversation restoration');
+  assert.match(statuses.at(-1).message,/Complete the missing H3 Prompt/);
+  assert.equal(statuses.at(-1).error,false);
+});
+
 test('invalid output prevents review or mutation and reports failure', async () => {
   const state={pending:false,jobId:'',studioScenesProposal:null,studioWorkingDraft:{projects:{},scenes:{},newProject:{},newScene:{},sourceRequest:''}};
   const failures=[];
@@ -137,7 +184,7 @@ test('invalid output prevents review or mutation and reports failure', async () 
   });
   const writer=vm.runInContext('({' + method + '})',scope).writeNewScene;
   await assert.rejects(writer.call(scope.window.studioDirectorBridge,
-    {projectId:'p1',instruction:'Add exactly one Scene'}),/no usable Scene Prompt/);
+    {projectId:'p1',instruction:'Add exactly one Scene'}),/no usable Scene fields/);
   assert.equal(state.studioScenesProposal,null);
   assert.equal(reviewed,0);
   assert.match(failures.at(-1),/New Scene draft failed/);

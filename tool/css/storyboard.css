@@ -3305,7 +3305,7 @@ html[data-theme="dark"] .storyboard-prompt-take-status {
 
 @media (max-width: 1700px) {
   .storyboard-editor-scroll {
-    grid-template-columns: minmax(500px, 560px) minmax(0, 1fr);
+    grid-template-columns: minmax(340px, 440px) minmax(0, 1fr);
   }
 }
 
@@ -4245,3 +4245,8 @@ html[data-theme="dark"] .storyboard-prompt-take-status {
 #studio-director-io-dialog .studio-scene-draft-content { display: grid; gap: 12px; }
 #studio-director-io-dialog .studio-scene-draft-content > details { border: 1px solid var(--border); border-radius: 8px; padding: 10px; }
 #studio-director-io-dialog .studio-scene-draft-content > details > summary { cursor: pointer; font-size: 16px; }
+
+/* Collapsed Overview keeps a Project-level Director entry alongside Show. */
+#storyboard-collapsed-director {min-height:36px;width:auto;font-size:16px;}
+/* Allow the Scene region's existing scroll pane to expose inspector controls. */
+.storyboard-scene-workspace {min-width:0;overflow-x:auto;}

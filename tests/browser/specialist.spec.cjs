@@ -1,5 +1,5 @@
 'use strict';
-const {test,expect}=require('@playwright/test');
+const {test,expect}=require('./test.cjs');
 const {seedProject,seedScene,story,openProject}=require('./helpers.cjs');
 
 test('Flow 9 optional checkpoint — discover Coherence / Revise & Generate without changing or generating',async({page})=>{

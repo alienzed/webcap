@@ -63,8 +63,14 @@ async function openProject(page, projectId) {
   await row.locator('[data-story-open]').click();
 }
 async function ensureAttachedProject(page,expectedTitle) {
+  // Conversations persist across browser tests on one isolated backend. Start
+  // a fresh real conversation when an earlier test left another Project bound.
+  const label=page.locator('#director-chat-title');
+  if(!(await label.textContent() || '').includes(expectedTitle)) {
+    await page.locator('#director-chat-clear').click();
+  }
   const attach=page.locator('#director-studio-attach-current');
   if(await attach.isVisible()) await attach.click();
-  await expect(page.locator('#director-chat-title')).toContainText(expectedTitle);
+  await expect(label).toContainText(expectedTitle);
 }
 module.exports={ensureAttachedProject,resetModel,queueModel,observedModels,openDirector,say,stories,story,seedProject,seedScene,openProject};

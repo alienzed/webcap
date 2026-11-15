@@ -1072,7 +1072,7 @@
         if (frozen.kind === 'create_scene') {
           return window.studioDirectorBridge.writeNewScene({
             projectId:projectId,instruction:frozen.instruction,authorRequest:frozen.request,
-            durationRequested:/\b\d+\s*(?:s|sec|seconds)\b/i.test(frozen.request)
+            durationRequested:/\b\d+\s*(?:-\s*|\s+)?(?:seconds?|secs?|s)\b/i.test(frozen.request)
           });
         }
         return loadStory(projectId).then(function (story) {
@@ -1089,7 +1089,7 @@
             return ['title','prompt','durationSeconds'].includes(name);
           });
           if (!fields.length) fields = ['prompt'];
-          if (/\b(?:duration|\d+\s*(?:seconds|sec|s)\b)/i.test(frozen.request) &&
+          if (/\b(?:duration|\d+\s*(?:-\s*|\s+)?(?:seconds?|secs?|s)\b)/i.test(frozen.request) &&
               !fields.includes('durationSeconds')) fields.push('durationSeconds');
           if (/\b(?:rename|title)\b/i.test(frozen.request) &&
               !fields.includes('title')) fields.push('title');

@@ -329,6 +329,80 @@
     return null;
   }
 
+  var studioComposerMode = 'conversation';
+  var studioRevisionRunning = false;
+  function studioRevisionActive() {
+    return state.activeMode === 'storyboard' && studioComposerMode === 'revision';
+  }
+  function syncStudioRevisionUi() {
+    var studio = state.activeMode === 'storyboard';
+    var revision = studioRevisionActive();
+    var mode = el('director-studio-composer-mode');
+    mode.classList.toggle('hidden', !studio);
+    el('director-studio-composer-mode-select').value = studioComposerMode;
+    el('director-studio-revision-controls').classList.toggle('hidden', !revision);
+    el('director-chat-input').classList.toggle('hidden', revision);
+    el('director-chat-scene-context').classList.toggle('hidden', revision ||
+      !studioDirectorSelectedScene());
+    el('studio-director-inspect').classList.toggle('hidden', revision || !studio);
+    var preset = el('director-studio-revision-preset').value;
+    el('director-studio-revision-fresh-label').classList.toggle('hidden', !revision || preset === 'coherence');
+    var input = el('director-studio-revision-input');
+    input.readOnly = preset === 'coherence';
+    el('director-chat-composer-hint').textContent = revision
+      ? 'Ctrl+Enter to run' : 'Enter to send · Shift+Enter for newline';
+    var scope = window.getStudioDirectorNavigation();
+    var target = el('director-studio-revision-target');
+    target.classList.toggle('hidden', !revision);
+    if (revision) target.textContent = (scope.projectTitle || 'Current Project') +
+      ' · all ' + (scope.sceneOrder || []).length + ' Scenes';
+  }
+  function setStudioComposerMode(mode, preset) {
+    studioComposerMode = mode === 'revision' ? 'revision' : 'conversation';
+    if (preset !== undefined) {
+      var chooser = el('director-studio-revision-preset');
+      chooser.value = preset;
+      chooser.dispatchEvent(new Event('change'));
+    }
+    syncStudioRevisionUi();
+    syncControls();
+    (studioRevisionActive() ? el('director-studio-revision-input') : el('director-chat-input')).focus();
+  }
+  function runStudioRevision() {
+    if (!studioRevisionActive() || studioRevisionRunning) return;
+    var preset = el('director-studio-revision-preset').value;
+    var input = el('director-studio-revision-input');
+    var instruction = input.value.trim();
+    var status = el('director-studio-revision-status');
+    if (!instruction && preset !== 'coherence') {
+      status.textContent = 'Enter a revision instruction or choose a preset.';
+      input.focus();
+      return;
+    }
+    var scope = window.getStudioDirectorNavigation();
+    if (!scope.projectId || !(scope.sceneOrder || []).length) {
+      status.textContent = 'Choose a Project with Scenes first.';
+      return;
+    }
+    studioRevisionRunning = true;
+    status.textContent = 'Starting ' + (preset === 'coherence' ? 'coherence review' : 'revision') + '…';
+    syncControls();
+    Promise.resolve().then(function () {
+      return window.startStudioRevision({
+        instruction:instruction,preset:preset,modelId:state.modelId,
+        generateFreshTakes:el('director-studio-revision-fresh').checked
+      });
+    }).then(function () {
+      status.textContent = preset === 'coherence'
+        ? 'Coherence review completed.' : 'Scene revision completed.';
+    }).catch(function (error) {
+      status.textContent = 'Revision: ' + String(error.message || error);
+      window.reportConsoleError('Studio revision', error);
+    }).finally(function () {
+      studioRevisionRunning = false;
+      syncControls();
+    });
+  }
   function syncModeUi() {
     var sceneContext = el('director-chat-scene-context');
     var selectedScene = state.activeMode === 'storyboard' ? studioDirectorSelectedScene() : null;
@@ -447,6 +521,7 @@
     renderStudioStoryAccess();
     renderStudioOperations();
     if (studio) window.studioDirectorWorkbench.updateWorkingWrite();
+    syncStudioRevisionUi();
     renderMessages();
     syncControls();
   }
@@ -1519,9 +1594,22 @@
     var model = el('director-chat-model');
     var refresh = el('director-chat-model-refresh');
     var clear = el('director-chat-clear');
-    if (send) send.disabled = state.pending || state.attachmentPending ||
-      (persistentMode(state.activeMode) && !state.sessionReady) || !state.modelId ||
-      !String(input && input.value || '').trim();
+    var revising = studioRevisionActive();
+    var revisionInput = el('director-studio-revision-input');
+    var revisionPreset = el('director-studio-revision-preset');
+    if (send) {
+      send.disabled = revising
+        ? studioRevisionRunning || !state.modelId ||
+          (!String(revisionInput.value || '').trim() && revisionPreset.value !== 'coherence')
+        : state.pending || state.attachmentPending ||
+          (persistentMode(state.activeMode) && !state.sessionReady) || !state.modelId ||
+          !String(input && input.value || '').trim();
+      send.textContent = revising
+        ? (revisionPreset.value === 'coherence' ? 'Check Coherence' :
+          el('director-studio-revision-fresh').checked ? 'Revise & Generate' : 'Revise Scenes')
+        : 'Send';
+    }
+    revisionInput.disabled = studioRevisionRunning;
     if (input) input.disabled = state.pending || (persistentMode(state.activeMode) && !state.sessionReady);
     if (model) model.disabled = state.pending || !state.modelsLoaded;
     if (refresh) refresh.disabled = state.pending;
@@ -3919,7 +4007,28 @@
       el('director-chat-history-toggle').setAttribute('aria-expanded','false');
       el('director-chat-history-toggle').focus();
     });
-    send.onclick = sendMessage;
+    send.onclick = function () {
+      if (studioRevisionActive()) runStudioRevision();
+      else sendMessage();
+    };
+    el('director-studio-composer-mode-select').onchange = function () {
+      setStudioComposerMode(this.value);
+    };
+    el('director-studio-revision-preset').onchange = function () {
+      var preset = this.value;
+      if (preset) el('director-studio-revision-input').value = window.storyboardRevisionPreset(preset);
+      el('director-studio-revision-status').textContent = '';
+      syncStudioRevisionUi();
+      syncControls();
+    };
+    el('director-studio-revision-input').oninput = syncControls;
+    el('director-studio-revision-fresh').onchange = syncControls;
+    el('director-studio-revision-input').addEventListener('keydown', function (event) {
+      if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
+        event.preventDefault();
+        runStudioRevision();
+      }
+    });
     el('studio-director-inspect').onclick = studioDirectorOpenIo;
     el('studio-director-io-close').onclick = function(){el('studio-director-io-dialog').close();};
     el('studio-director-io-request').onclick = function(){
@@ -4766,6 +4875,11 @@
     // their explicitly attached reference snapshots.
   };
   window.openStoryboardAssistant = function () { setOpen(true, 'storyboard'); };
+  window.openStudioDirectorRevision = function (preset) {
+    return Promise.resolve(setOpen(true, 'storyboard')).then(function () {
+      setStudioComposerMode('revision', preset === undefined ? undefined : preset);
+    });
+  };
   window.openStudioDirectorScene = function (story, sceneId, instruction) {
     if (state.pending || state.attachmentPending)
       return Promise.reject(new Error('Finish the current Director request first.'));

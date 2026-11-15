@@ -253,7 +253,7 @@ test('restoring a conversation recovers its last unsaved Write proposal with fro
     state:{
       activeMode:'storyboard',sessionByMode:{},sessionActiveByMode:{},
       modeMessages:{},modeElapsedByAssistantIndex:{},modeMetricsByAssistantIndex:{},
-      storyboardAttachments:{},sessionDirty:{},sessionError:false
+      storyboardAttachments:{},draftByMode:{},sessionDirty:{},sessionError:false
     },
     el, persistentMode:()=>true,upsertSessionSummary(){},showSessionStatus(){},
     syncModeUi(){},window:{studioDirectorWorkbench:{
@@ -294,5 +294,5 @@ test('restoring a conversation recovers its last unsaved Write proposal with fro
 test('conversation persistence includes frozen Write targets without extra authoring calls', () => {
   assert.match(chat,/stored\.writeAction = message\.writeAction/);
   assert.match(chat,/messages\[messages\.length - 1\]\.writeAction = window\.studioDirectorWorkbench\.presentAction/);
-  assert.match(chat,/completeWriteAction\\(kind, story, selected\\)/);
+  assert.ok(chat.includes('completeWriteAction(kind, story, selected)'));
 });

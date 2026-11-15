@@ -2106,8 +2106,8 @@
                                 <path d="M12 14v6"></path>
                             </svg>
                         </button>
-                        <button id="director-chat-history-toggle" type="button" class="review-captions-btn" aria-expanded="false" aria-controls="director-chat-history-panel">History</button>
-                        <button id="director-chat-clear" type="button" class="review-captions-btn">New chat</button>
+                        <button id="director-chat-history-toggle" type="button" class="review-captions-btn" title="Conversation history" aria-label="Conversation history" aria-expanded="false" aria-controls="director-chat-history-panel"><svg class="studio-header-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 1 3 6.7M3 16v-4h4M12 7v5l3 2"></path></svg><span class="director-header-button-label">History</span></button>
+                        <button id="director-chat-clear" type="button" class="review-captions-btn" title="New conversation" aria-label="New conversation"><svg class="studio-header-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h10M16 4l4 4M9 15l-1 4 4-1L21 9a2 2 0 0 0-3-3z"></path></svg><span class="director-header-button-label">New chat</span></button>
                         <button id="director-chat-close" type="button" class="director-chat-close" aria-label="Close Assistant">×</button>
                     </div>
                 </header>
@@ -2191,6 +2191,14 @@
                     <div id="director-chat-sidebar" class="director-chat-sidebar">
                 <section id="studio-director-workbench" class="studio-director-workbench" aria-label="Director actions and feedback">
                   <div class="studio-dw-heading"><div><strong id="studio-dw-heading">Write</strong></div><button id="studio-dw-close-actions" type="button" aria-label="Close Director actions">Close</button></div>
+                  <div id="studio-dw-write-availability" class="studio-dw-write-availability" aria-live="polite">
+                    <p id="studio-dw-write-empty">Nothing ready to write. Discuss a change with Director to prepare an action.</p>
+                    <div id="studio-dw-write-ready" class="hidden">
+                      <strong id="studio-dw-write-ready-title"></strong>
+                      <p id="studio-dw-write-ready-direction"></p>
+                      <button id="studio-dw-write-ready-launch" type="button" class="studio-dw-primary">Continue</button>
+                    </div>
+                  </div>
                   <div class="studio-dw-actions">
                     <button id="studio-dw-read" class="hidden" type="button" aria-expanded="false" aria-controls="studio-dw-read-panel" title="Share saved material with Director">Context</button>
                     <button id="studio-dw-write" type="button" aria-expanded="false" aria-controls="studio-dw-write-panel" title="Configure a Studio Write">Write options</button>

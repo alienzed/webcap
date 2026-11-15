@@ -48,7 +48,7 @@ def test_director_role_combines_webcap_workflow_expertise_with_creative_judgment
     system = guidance("minimax_h3")["system"]
     assert "MiniMax H3 production expert, and WebCap Studio workflow guide" in system
     assert "Answer supplied-context questions directly" in system
-    assert "Readiness is advisory, never a gate" in system
+    assert "WebCap resolves the actual destination" in system
     assert "Use only saved creative material actually supplied" in system
     assert "Conversation never edits Project records" in system
     assert "Project Overview (Concept, Visual / atmosphere, Invariants)" in system
@@ -70,10 +70,8 @@ def test_action_catalog_excludes_low_value_studio_director_operations():
 def test_project_coherence_remains_explicit_but_not_advertised_as_creative_action():
     from tool.server.studio_director import chat_response_schema
     assert "project.coherence.check" not in {action["name"] for action in ACTIONS}
-    variants = chat_response_schema()["properties"]["readiness"]["anyOf"]
-    coherence = [variant for variant in variants
-                 if "coherence-check" in variant["properties"]["writeHint"]["enum"]]
-    assert coherence == [], "Coherence is an explicit utility, not a conversational Write suggestion"
+    kinds = chat_response_schema()["properties"]["action"]["anyOf"][1]["properties"]["kind"]["enum"]
+    assert "coherence-check" not in kinds, "Coherence remains a separate utility"
 
 
 def test_studio_guidance_api_is_read_only():
@@ -184,7 +182,7 @@ def test_h3_playbook_review_uses_existing_config_and_checks_conflicts(monkeypatc
     ("storyboard_workshop_shots", {"summary", "shots"}),
     ("storyboard_story_guidelines", {"summary", "guidelines"}),
     ("freeform_chat", None),
-    ("studio_chat", {"reply", "readiness"}),
+    ("studio_chat", {"reply", "action"}),
 ])
 def test_director_chat_route_preserves_all_structured_schemas(monkeypatch, operation, expected_fields):
     import importlib
@@ -216,103 +214,44 @@ def test_director_chat_route_preserves_all_structured_schemas(monkeypatch, opera
             assert captured["schema"]["properties"]["invariants"]["items"]["required"] == ["kind", "title", "text"]
 
 
-def test_studio_chat_schema_constrains_recommendations_to_the_selected_operation():
+def test_studio_chat_schema_accepts_read_and_one_optional_authoring_action():
     from tool.server.studio_director import chat_response_schema
 
     schema = chat_response_schema()
-    assert schema["required"] == ["reply", "readiness"]
+    assert schema["required"] == ["reply"], "A useful Read must not require action metadata"
     assert schema["properties"]["reply"]["minLength"] == 1
-    variants = schema["properties"]["readiness"]["anyOf"]
-    for variant in variants:
-        assert variant["additionalProperties"] is False
-        assert set(variant["required"]) == {"checks", "readHints", "writeHint", "writeInstruction", "writeFields", "sceneId", "sceneNumber", "capture"}
-        fields = variant["properties"]["writeFields"]
-        for operation in variant["properties"]["writeHint"]["enum"]:
-            if operation == "project":
-                assert set(fields["items"]["enum"]) == {"title", "concept", "style", "invariants"}
-            elif operation in {"scene", "scenes"}:
-                assert set(fields["items"]["enum"]) == {"title", "prompt", "durationSeconds"}
-            else:
-                assert fields["maxItems"] == 0
-        assert fields["uniqueItems"] is True
-        assert "project, style, invariants" not in variant["properties"]["writeHint"]["enum"]
-        assert set(variant["properties"]["writeHint"]["enum"]).issubset(
-            {"", "new-project", "project", "scene", "scenes"})
-        check = variant["properties"]["checks"]["items"]
-        assert check["additionalProperties"] is False
-        assert set(check["required"]) == {"name", "scope", "ready", "content"}
+    nullable, suggestion = schema["properties"]["action"]["anyOf"]
+    assert nullable == {"type": "null"}
+    assert suggestion["additionalProperties"] is False
+    assert set(suggestion["required"]) == {"kind", "instruction"}
+    assert set(suggestion["properties"]["kind"]["enum"]) == {
+        "create_project", "write_project", "create_scene", "write_scenes"
+    }
+    assert "sceneId" not in suggestion["properties"]
+    assert "sceneNumber" not in suggestion["properties"]
+    assert "checks" not in schema["properties"]
+    assert "capture" not in schema["properties"]
+    assert set(suggestion["properties"]["fields"]["items"]["enum"]) == {
+        "title", "concept", "style", "invariants", "prompt", "durationSeconds"
+    }
 
 
-def test_studio_chat_schema_requires_a_capture_decision_and_preserves_older_saved_readiness():
-    from tool.server.studio_director import chat_response_schema
+def test_historical_readiness_records_are_accepted_as_inert_saved_chat_data():
     from tool.server.director_chat_history import _validate_readiness
 
-    for variant in chat_response_schema()["properties"]["readiness"]["anyOf"]:
-        assert "capture" in variant["required"]
-        captures = variant["properties"]["capture"]["anyOf"]
-        assert {"type": "null"} in captures
-        for schema in captures:
-            if schema == {"type": "null"}:
-                continue
-            assert schema["additionalProperties"] is False
-            assert set(schema["required"]) == set(schema["properties"])
-            for field in schema["properties"]["field"]["enum"]:
-                capture = {"field": field, "content": "Complete developed creative material.",
-                           "sceneId": "scene-1" if field == "prompt" else ""}
-                if field == "scene":
-                    capture["title"] = "A quiet reply"
-                    if "durationSeconds" in schema["properties"]:
-                        capture["durationSeconds"] = 12
-                    if "prompt" in schema["properties"]:
-                        capture["prompt"] = "integrated_multimodal_description: [Shot 1] A quiet reply."
-                if field == "invariant":
-                    capture.update(kind="character", title="Mara", beforeKind="", beforeTitle="")
-                readiness = {"checks": [], "readHints": [], "writeHint": "", "writeFields": [],
-                             "sceneId": "", "capture": capture}
-                assert _validate_readiness(readiness)["capture"] == capture
     legacy = {"checks": [], "readHints": [], "writeHint": "", "sceneId": ""}
-    assert "capture" not in _validate_readiness(legacy)
-    assert "capture" not in _validate_readiness({**legacy, "capture": None})
-
-
-def test_scene_write_instruction_is_structured_and_survives_conversation_storage():
-    from tool.server.studio_director import chat_response_schema
-    from tool.server.director_chat_history import _validate_readiness
-
-    for variant in chat_response_schema()["properties"]["readiness"]["anyOf"]:
-        field = variant["properties"]["writeInstruction"]
-        assert field["type"] == "string"
-        assert field["maxLength"] == 3000
-        assert "writeInstruction" in variant["required"]
-
-    original = {"checks": [], "readHints": [], "writeHint": "scenes",
-                "writeFields": ["prompt"], "sceneId": "real-scene", "sceneNumber": 1,
+    assert _validate_readiness(legacy)["writeHint"] == ""
+    capture = {"field": "scene", "content": "Complete old prompt",
+               "sceneId": "", "title": "Old Scene", "durationSeconds": 12}
+    assert _validate_readiness({**legacy, "capture": capture})["capture"] == capture
+    original = {**legacy, "writeHint": "scenes", "writeFields": ["prompt"],
+                "sceneId": "saved-scene", "sceneNumber": 1,
                 "writeInstruction": "Make the ending quieter."}
     assert _validate_readiness(original)["writeInstruction"] == "Make the ending quieter."
-    assert "writeInstruction" not in _validate_readiness(
-        {key: value for key, value in original.items() if key != "writeInstruction"})
-    for invalid in (None, 3, "x" * 3001):
-        with pytest.raises(ValueError, match="write instruction"):
-            _validate_readiness({**original, "writeInstruction": invalid})
-
-
-def test_studio_chat_scene_numbers_are_advisory_and_persist_with_older_sessions():
-    from tool.server.studio_director import chat_response_schema
-    from tool.server.director_chat_history import _validate_readiness
-
-    for variant in chat_response_schema()["properties"]["readiness"]["anyOf"]:
-        number = variant["properties"]["sceneNumber"]
-        assert number["type"] == "integer"
-        assert number["minimum"] == 0
-        assert number["maximum"] == 10000
-
-    existing = {"checks": [], "readHints": [], "writeHint": "scenes",
-                "writeFields": [], "sceneId": ""}
-    assert "sceneNumber" not in _validate_readiness(existing)
-    assert _validate_readiness({**existing, "sceneNumber": 5})["sceneNumber"] == 5
+    assert _validate_readiness({**original, "sceneNumber": 5})["sceneNumber"] == 5
     for invalid in (True, -1, 10001, 1.5, "5"):
         with pytest.raises(ValueError, match="Scene number"):
-            _validate_readiness({**existing, "sceneNumber": invalid})
+            _validate_readiness({**original, "sceneNumber": invalid})
 
 
 def test_director_scene_index_is_lightweight_and_selected_scene_reads_full_prompt():

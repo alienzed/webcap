@@ -6,7 +6,7 @@
   var timers = new Map();
   var idleMs = 10000;
   var toolbar = null;
-  var originalPaddingTop = '';
+  var originalPaddingBottom = '';
   var showingPreview = false;
 
   // Fallback for unnamed editors created from templates. Stable while their
@@ -88,17 +88,12 @@
   function position() {
     if (!active || !toolbar) return;
     if (!active.field.isConnected) {detach();return;}
-    if (active.inlineHost) {
-      toolbar.style.display = 'flex';
-      toolbar.style.top = '';
-      toolbar.style.left = '';
-      return;
-    }
     var rect = active.field.getBoundingClientRect();
-    toolbar.style.display = rect.width < 135 || rect.bottom < 0 || rect.top > innerHeight
+    toolbar.style.display = rect.width < 100 || rect.bottom <= 0 || rect.top >= innerHeight
       ? 'none' : 'flex';
-    toolbar.style.top = Math.max(0,rect.top + 5) + 'px';
-    toolbar.style.left = Math.max(0,rect.right - (toolbar.offsetWidth || 84) - 5) + 'px';
+    toolbar.style.top = (rect.bottom - 29) + 'px';
+    toolbar.style.left = (rect.left == null ? rect.right - rect.width : rect.left) + 2 + 'px';
+    toolbar.style.width = Math.max(0,rect.width - 4) + 'px';
   }
 
   function draw() {
@@ -114,7 +109,7 @@
   function detach() {
     if (!active) return;
     restorePreview();
-    active.field.style.paddingTop = originalPaddingTop;
+    active.field.style.paddingBottom = originalPaddingBottom;
     active = null;
     if (toolbar) toolbar.style.display = 'none';
   }
@@ -125,19 +120,14 @@
     if (active && active.field === field && active.key === key) return;
     detach();
     if (!histories.has(key)) capture(key,field.value);
-    var promptBlock = field.matches('.storyboard-prompt-textarea[data-scene-field="prompt"]')
-      ? field.closest('.storyboard-prompt-block') : null;
-    var inlineHost = promptBlock ? promptBlock.querySelector('.storyboard-prompt-actions') : null;
-    active = {field:field,key:key,live:field.value,inlineHost:inlineHost};
-    originalPaddingTop = field.style.paddingTop;
-    if (!inlineHost && field.getBoundingClientRect().width >= 135) {
-      var topPadding = parseFloat(getComputedStyle(field).paddingTop) || 0;
-      field.style.paddingTop = Math.max(topPadding, 31) + 'px';
+    active = {field:field,key:key,live:field.value};
+    originalPaddingBottom = field.style.paddingBottom;
+    if (field.getBoundingClientRect().width >= 100) {
+      var bottomPadding = parseFloat(getComputedStyle(field).paddingBottom) || 0;
+      field.style.paddingBottom = Math.max(bottomPadding, 34) + 'px';
     }
-    var host = inlineHost || field.closest('dialog[open]') || document.body;
-    if (inlineHost) host.insertBefore(toolbar,host.firstChild);
-    else if (toolbar.parentNode !== host) host.appendChild(toolbar);
-    toolbar.style.position = inlineHost ? 'static' : 'fixed';
+    var host = field.closest('dialog[open]') || document.body;
+    if (toolbar.parentNode !== host) host.appendChild(toolbar);
     var h = histories.get(key);
     if (h && h.versions[h.versions.length - 1] !== field.value) schedule(key,field.value);
     draw();
@@ -164,7 +154,7 @@
 
   function initialize() {
     var style = document.createElement('style');
-    style.textContent = '.webcap-revision-tools{position:fixed;display:none;align-items:center;gap:2px;z-index:99999;padding:2px;background:var(--panel, Canvas);color:var(--text, CanvasText);border:1px solid var(--border, #888);border-radius:7px;font:13px sans-serif;box-shadow:0 1px 4px #0003}.webcap-revision-tools button{border:0;background:transparent;color:inherit;cursor:pointer;min-width:21px;min-height:22px;padding:1px}.webcap-revision-tools button:disabled{opacity:.3;cursor:default}.webcap-revision-tools span{min-width:32px;text-align:center;font-variant-numeric:tabular-nums}';
+    style.textContent = '.webcap-revision-tools{position:fixed;box-sizing:border-box;display:none;align-items:center;justify-content:center;gap:2px;z-index:99999;height:27px;padding:1px;background:var(--panel, Canvas);color:var(--text, CanvasText);border-top:1px solid var(--border, #888);border-radius:0 0 5px 5px;font:13px sans-serif}.webcap-revision-tools button{border:0;background:transparent;color:inherit;cursor:pointer;min-width:21px;min-height:22px;padding:1px}.webcap-revision-tools button:disabled{opacity:.3;cursor:default}.webcap-revision-tools span{min-width:32px;text-align:center;font-variant-numeric:tabular-nums}';
     document.head.appendChild(style);
     toolbar = document.createElement('div');
     toolbar.className = 'webcap-revision-tools';

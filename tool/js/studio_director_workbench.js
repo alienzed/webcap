@@ -1002,6 +1002,7 @@
       pendingCreativeAction = null;
       el('studio-dw-suggestions').replaceChildren();
       showConversationWrite();
+      return true;
     },
     sceneRead: function (story, sceneId) {
       if (!story || !story.sceneOrder.includes(sceneId)) throw new Error('Select a saved Scene in this Project.');

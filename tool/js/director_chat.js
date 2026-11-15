@@ -2410,13 +2410,17 @@
     var numericDuration = Number(item.durationSeconds);
     var usableDuration = suppliedDuration && Number.isFinite(numericDuration) &&
       numericDuration >= 4 && numericDuration <= 15;
-    duration.value = usableDuration ? numericDuration : 6;
+    var durationRequired = !!item.requiresDurationSelection && !usableDuration;
+    row.dataset.durationRequired = durationRequired ? 'true' : 'false';
+    duration.value = durationRequired ? '' : usableDuration ? numericDuration : 6;
     durationLabel.appendChild(duration);
     if (!usableDuration) {
       var durationNote = document.createElement('span');
-      durationNote.textContent = !suppliedDuration
-        ? 'Duration missing; using the 6s default. You can change it.'
-        : 'Duration ' + String(item.durationSeconds) + ' is not supported; using 6s. You can change it.';
+      durationNote.textContent = durationRequired
+        ? 'Requested duration missing from the draft. Choose seconds to match the prompt before saving.'
+        : !suppliedDuration
+          ? 'No duration requested; using the 6s default. You can change it.'
+          : 'Duration ' + String(item.durationSeconds) + ' is not supported; using 6s. You can change it.';
       durationLabel.appendChild(durationNote);
     }
     var promptLabel = document.createElement('label');
@@ -2555,7 +2559,7 @@
     var proposal = state.studioScenesProposal;
     if (!proposal || state.pending) return;
     var rows = Array.from(el('studio-scenes-rows').querySelectorAll('.studio-scenes-row'));
-    var readyRows = [], incompleteRows = [], defaulted = 0;
+    var readyRows = [], incompleteRows = [], defaulted = 0, missingRequestedDurations = 0;
     rows.forEach(function (row) {
       var title = row.querySelector('[data-field="title"]').value.trim();
       var prompt = row.querySelector('[data-field="prompt"]').value.trim();
@@ -2566,6 +2570,12 @@
       var durationInput = row.querySelector('[data-field="durationSeconds"]');
       var supplied = String(durationInput.value || '').trim();
       var duration = supplied ? Number(supplied) : NaN;
+      if (row.dataset && row.dataset.durationRequired === 'true' &&
+          (!Number.isFinite(duration) || duration < 4 || duration > 15)) {
+        incompleteRows.push(row);
+        missingRequestedDurations++;
+        return;
+      }
       if (!Number.isFinite(duration) || duration < 4 || duration > 15) {
         duration = 6;
         durationInput.value = '6';
@@ -2574,9 +2584,11 @@
       readyRows.push({row:row, draft:{title:title,prompt:prompt,durationSeconds:duration}});
     });
     if (!readyRows.length) {
-      el('studio-scenes-error').textContent = rows.length
-        ? 'No complete H3 Prompts to save yet. Complete a Prompt or remove an empty Scene; your drafts are preserved.'
-        : 'Add a Scene with a Prompt before applying.';
+      el('studio-scenes-error').textContent = missingRequestedDurations
+        ? 'Choose the requested duration (4–15 seconds) before creating this Scene; its complete Prompt is preserved.'
+        : rows.length
+          ? 'No complete H3 Prompts to save yet. Complete a Prompt or remove an empty Scene; your drafts are preserved.'
+          : 'Add a Scene with a Prompt before applying.';
       return;
     }
     var drafts = readyRows.map(function (item) {return item.draft;});
@@ -2612,13 +2624,14 @@
           return {
             title:row.querySelector('[data-field="title"]').value.trim(),
             prompt:row.querySelector('[data-field="prompt"]').value,
-            durationSeconds:row.querySelector('[data-field="durationSeconds"]').value
+            durationSeconds:row.querySelector('[data-field="durationSeconds"]').value,
+            requiresDurationSelection:row.dataset && row.dataset.durationRequired === 'true'
           };
         });
         readyRows.forEach(function (item) {item.row.remove();});
         el('studio-scenes-error').textContent = savedCount + ' Scene' +
           (savedCount === 1 ? '' : 's') + ' saved. ' + incompleteRows.length +
-          ' still need a Prompt; complete or remove them here.' +
+          ' still need a Prompt or requested duration; complete or remove them here.' +
           (defaulted ? ' ' + defaulted + ' saved using the 6s duration default.' : '');
       } else {
         state.studioScenesProposal = null;

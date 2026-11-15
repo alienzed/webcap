@@ -820,12 +820,12 @@
     };
     pendingCreativeAction = frozen;
     showConversationWrite();
-    function finishSceneAction() {
+    function finishSceneAction(saved) {
       if (pendingCreativeAction !== frozen) return;
       pendingCreativeAction = null;
       el('studio-dw-suggestions').replaceChildren();
       showConversationWrite();
-      window.studioDirectorBridge.finishWriteAction(frozen);
+      if (saved !== false) window.studioDirectorBridge.finishWriteAction(frozen);
     }
     var host = el('studio-dw-suggestions');
     host.replaceChildren();
@@ -895,7 +895,8 @@
           }).then(function (result) {
             if (result && result.review) {
               status('Review the authored Scenes and save the useful drafts.',false,true);
-              finishSceneAction();
+              // An editable review is not evidence that anything was saved.
+              finishSceneAction(false);
             }
           });
         }

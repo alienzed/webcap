@@ -190,7 +190,7 @@ test('Read sends actual saved data and asks for a conversational confirmation', 
 
 test('Ordinary Studio conversation has no model-requested hidden Read or capture token', () => {
   const send = part('  function sendMessage() {', '  function syncPinnedUi() {');
-  assert.match(send, /studioDirectorChatRequestMessages\(messages, selectedScene, selectedNavigation\)/);
+  assert.match(send, /studioDirectorChatRequestMessages\(messages, selectedScene, selectedNavigation, resolvedTarget\)/);
   assert.match(send, /: Promise\.resolve\(messages\)/);
   assert.doesNotMatch(source, /parseStudioReadRequest|resumeStudioAfterRead|parseStudioCaptureRequest/);
   assert.doesNotMatch(send, /pendingCapture/);
@@ -223,7 +223,7 @@ test('Write preserves reviewed Apply and carries final saved content into conver
 
 test('General Chat has a separate request path and Studio keeps native storage IDs', () => {
   const send = part('  function sendMessage() {', '  function syncPinnedUi() {');
-  assert.match(send, /activeChatMode === 'storyboard'\s*\? studioDirectorChatRequestMessages\(messages, selectedScene, selectedNavigation\)/);
+  assert.match(send, /activeChatMode === 'storyboard'\s*\? studioDirectorChatRequestMessages\(messages, selectedScene, selectedNavigation, resolvedTarget\)/);
   assert.match(send, /: Promise\.resolve\(messages\)/);
   const shell = fs.readFileSync(path.join(__dirname, '..', 'tool/js/workspace_shell.js'), 'utf8');
   assert.match(shell, /workspaceTitle\.textContent = 'Studio'/);

@@ -184,7 +184,7 @@ test('invalid output prevents review or mutation and reports failure', async () 
   });
   const writer=vm.runInContext('({' + method + '})',scope).writeNewScene;
   await assert.rejects(writer.call(scope.window.studioDirectorBridge,
-    {projectId:'p1',instruction:'Add exactly one Scene'}),/no usable Scene Prompt/);
+    {projectId:'p1',instruction:'Add exactly one Scene'}),/no usable Scene fields/);
   assert.equal(state.studioScenesProposal,null);
   assert.equal(reviewed,0);
   assert.match(failures.at(-1),/New Scene draft failed/);

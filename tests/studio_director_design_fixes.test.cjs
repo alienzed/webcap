@@ -108,7 +108,7 @@ test('Advanced opens and closes the last manual panel without submitting Read or
   node('studio-dw-write-panel').classList.add('hidden');
   const a=rail.indexOf('    function openDirectAction(which) {');
   const b=rail.indexOf("    rail.addEventListener('keydown'",a);
-  const scope=vm.createContext({el:node,lastQuickAction:'write',updateScope(){},refreshWrite:async()=>{selected++;}});
+  const scope=vm.createContext({el:node,lastQuickAction:'write',updateScope(){},seedManualSceneInstruction(){},refreshWrite:async()=>{selected++;}});
   vm.runInContext(section(rail,'  function toggle(which) {','  function parseProposal(raw) {')+rail.slice(a,b),scope);
   node('studio-dw-write').onclick=()=>scope.toggle('write');
   node('studio-dw-open-tools').click();

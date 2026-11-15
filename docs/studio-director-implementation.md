@@ -195,3 +195,17 @@ Ordinary chat and Read accept prose. A small optional action suggestion may acco
 - **Failure/recovery:** ambiguous target selection, isolated failure followed by further work, cancellation, unchanged result, conflict handling, successful save with later refresh/receipt failure, Undo/Redo.
 
 **Priority order:** first persistent structured working state and the Read/write handoff; next the minimal scoped request context and singular writer paths; finally delete displaced UI/schema helpers and obsolete tests. Do not build generalized patch engines, state machines, model classification calls, or speculative blockers. Real-model browser acceptance is still required before calling this finished.
+
+
+## Three-operation efficiency audit and targeted fixes (2026-11-14)
+
+Reviewed the actual Read, Project Write, Scene Write and Project-with-initial-Scenes execution paths against the authoritative three-operation contract. These are **reductions to the existing paths**, not a new controller or proposal system:
+
+- **Conversation payloads:** send the latest user instruction intact, bounded recent discussion only, and the relevant fresh saved fields plus separately retained unsaved working fields. Omit saved-field receipts and full authored Scene prompt echoes from future model context. The complete writer output remains in the structured working draft and I/O diagnostics, not as an invented conversational turn.
+- **Reusing model work:** completed Project and Scene writer outputs enter the conversation's durable, structured working draft before review/save. Later writes reuse matching complete fields without an extraction call. An explicit `save/apply that draft` is not confused with `use brighter lighting`, which is new work. Manual Project review can reuse durable fields after reopening a conversation.
+- **One active Scene result contract:** new Scene, revised Scene and initial Scenes created alongside a new Project each ask for the same single Scene field JSON object (`prompt`, optional `title` and `durationSeconds`). The Project's initial-Scene save loop remains incremental; legacy multi-Scene/Workshop helpers are not replaced until last-caller verification.
+- **Saved-baseline ownership:** the model receives unsaved working fields for creative continuity, while WebCap fetches the actual saved Scene/Project for binding, optimistic concurrency and save. Worded durations such as “twelve seconds” are interpreted by WebCap, not left to fallible optional metadata.
+- **Correctness beats cosmetic request savings:** author-supplied saved Project names must resolve even without the word “Project”. Keep the lightweight current Project-list lookup rather than heuristically skipping it and risking edits to an unrelated selected Project. Avoid caches, permission gates, repair-model calls and speculative strict output rejection.
+- **Remaining limitations:** real-browser/model acceptance is still required; inactive historical Read/Workshop/sequence and review code remains subject to caller verification before removal. Do not merge solely because mocked/model-free CI passes.
+
+Additional focused regressions cover bounded context, literal Project-name targeting, draft reuse versus creative instructions, one-Scene schemas across entry points, durable draft follow-ups, written-out duration, saved-field receipts and partial Scene successes.

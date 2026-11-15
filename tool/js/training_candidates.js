@@ -960,8 +960,10 @@ function openEpochProfile(epoch) {
     var importedWords = activation ? activation.split(',').map(function (term) { return term.trim(); }).filter(Boolean) : [];
     var words = enrichment.trainedWords || (importedWords.length ? importedWords : civitai.trainedWords || []);
     if (!Array.isArray(words)) words = String(words || '').split(/\r?\n/);
-    if (!words.length && epochProfileSuggestions) words = epochProfileSuggestions.trainedWords || [];
-    document.getElementById('epoch-profile-words').value = words.join('\n');
+    if (!enrichment.trainedWords && epochProfileSuggestions) {
+      words = words.concat(epochProfileSuggestions.trainedWords || []);
+    }
+    document.getElementById('epoch-profile-words').value = Array.from(new Set(words.map(function (word) { return String(word).trim(); }).filter(Boolean))).join('\n');
     document.getElementById('epoch-profile-options').value =
       JSON.stringify(enrichment.promptOptions || {}, null, 2);
     document.getElementById('epoch-profile-guidance').value = String(enrichment.guidance || '');

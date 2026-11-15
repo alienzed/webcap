@@ -1030,12 +1030,6 @@
         operation:operation,model:window.studioDirectorBridge.modelId(),messages:messages
       }, null, 2);
     },
-    setUndo: function (receipt) {
-      var host = el('studio-dw-undo');
-      host.classList.toggle('hidden', !receipt);
-      if (receipt) el('studio-dw-undo-label').textContent =
-        'Project brief updated · ' + (receipt.label || receipt.storyId);
-    },
     resetConversation: function () {
       pendingCreativeAction = null;
       el('studio-dw-suggestions').replaceChildren();
@@ -1115,10 +1109,6 @@
         el('studio-dw-close-actions').click();
       }
     });
-    el('studio-dw-undo-button').onclick=function () {
-      if (window.confirm('Revert the latest reviewed Project Overview update? The saved Concept, Visual / atmosphere and/or Invariants changed by that update will be restored to their previous values.'))
-        window.studioDirectorBridge.undoBrief();
-    };
     el('studio-dw-read-send').onclick=readSend;
     el('studio-dw-read-all').onclick=selectEntireReadProject;
     el('studio-dw-write-prepare').onclick=writePrepare;

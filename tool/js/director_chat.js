@@ -340,7 +340,11 @@
     var mode = el('director-studio-composer-mode');
     var drawer = el('director-chat-drawer');
     drawer.classList.toggle('studio-revision-mode', revision);
-    if (revision) el('director-chat-title').textContent = 'Revise Scenes';
+    if (revision) {
+      drawer.classList.remove('studio-actions-open');
+      el('studio-dw-open-tools').setAttribute('aria-expanded','false');
+      el('director-chat-title').textContent = 'Revise Scenes';
+    }
     el('director-chat-history-toggle').classList.toggle('hidden', revision);
     el('director-chat-clear').classList.toggle('hidden', revision);
     el('studio-dw-open-tools').classList.toggle('hidden', revision);
@@ -1621,6 +1625,7 @@
         : 'Send';
     }
     revisionInput.disabled = studioRevisionRunning;
+    el('director-studio-composer-mode-select').disabled = studioRevisionRunning;
     if (input) input.disabled = state.pending || (persistentMode(state.activeMode) && !state.sessionReady);
     if (model) model.disabled = state.pending || !state.modelsLoaded;
     if (refresh) refresh.disabled = state.pending;
@@ -4893,6 +4898,7 @@
   };
   window.openStudioDirectorRevision = function (preset) {
     studioComposerMode = 'revision';
+    el('director-studio-revision-status').textContent = '';
     return Promise.resolve(setOpen(true, 'storyboard')).then(function () {
       setStudioComposerMode('revision', preset === undefined ? undefined : preset);
     });

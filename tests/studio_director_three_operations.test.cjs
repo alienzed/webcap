@@ -236,7 +236,7 @@ test('new multiple Scenes retain successes when one item fails',async()=>{
   await flush();
   assert.equal(h.requests.length,3);
   assert.ok(h.statuses.some(row=>/Saved 2 · Failed 1/.test(row[0])));
-  assert.equal(h.finishes.length,1,'partial completion is recorded only after the sequence');
+  assert.equal(h.finishes.length,0,'failed Scenes leave the proposal pending');
 });
 
 test('structured Director changes merge by complete field, without overwriting unrelated drafts', () => {

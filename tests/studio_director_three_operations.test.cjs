@@ -31,6 +31,13 @@ test('retired Director assessment and guideline artifacts are absent without los
   assert.match(html,/id="studio-scenes-review"/);
 });
 
+test('shared Studio guidance treats review as optional and saved state as WebCap-owned', () => {
+  const request = part(chat,'  function studioDirectorRequestMessages(', '  function studioDirectorChatRequestMessages(');
+  assert.match(request,/direct-save or review policy/);
+  assert.match(request,/WebCap confirms an actual save/);
+  assert.doesNotMatch(request,/WebCap confirms Apply|scoped reviewed Write/);
+});
+
 test('Read is plain prose; an absent or malformed optional action does not discard its reply', () => {
   assert.deepEqual(parse('The saved title is Rainy Bookshop.'), {
     reply: 'The saved title is Rainy Bookshop.', action: null, changes: null

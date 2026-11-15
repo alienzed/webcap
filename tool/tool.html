@@ -2176,12 +2176,31 @@
                     <button id="director-studio-retry" type="button" class="review-captions-btn hidden">Start Writer's Workshop</button>
                 </div>
                 <div class="director-chat-composer">
+                    <div id="director-studio-composer-mode" class="director-studio-composer-mode hidden">
+                        <label for="director-studio-composer-mode-select">Mode</label>
+                        <select id="director-studio-composer-mode-select" aria-label="Studio Director mode">
+                            <option value="conversation">Conversation</option>
+                            <option value="revision">Revise Scenes</option>
+                        </select>
+                        <span id="director-studio-revision-target" class="hidden"></span>
+                    </div>
                     <div id="director-chat-scene-context" class="hidden" role="status"></div>
+                    <div id="director-studio-revision-controls" class="director-studio-revision-controls hidden">
+                        <label for="director-studio-revision-preset">Preset</label>
+                        <select id="director-studio-revision-preset">
+                            <option value="">Custom revision</option>
+                            <option value="continuity">Continuity pass</option>
+                            <option value="coherence">Check Project coherence</option>
+                        </select>
+                        <label id="director-studio-revision-fresh-label" title="Queues new Takes after revision; existing Takes remain."><input id="director-studio-revision-fresh" type="checkbox"> Generate fresh Takes</label>
+                        <textarea id="director-studio-revision-input" rows="6" placeholder="Describe what should be revised across these Scenes."></textarea>
+                        <p id="director-studio-revision-status" role="status" aria-live="polite"></p>
+                    </div>
                     <textarea id="director-chat-input" rows="4" placeholder="Ask the model anything…"></textarea>
                     <div id="studio-blocks-slash" class="studio-blocks-slash hidden" role="listbox" aria-label="Insert reusable Studio Block"></div>
 
                     <div class="director-chat-composer-footer">
-                        <span class="director-chat-composer-hint">Enter to send · Shift+Enter for newline</span>
+                        <span id="director-chat-composer-hint" class="director-chat-composer-hint">Enter to send · Shift+Enter for newline</span>
                         <div class="director-chat-composer-actions">
                             <button id="studio-director-inspect" type="button" class="review-captions-btn hidden" title="Inspect the latest Director request and response">I/O</button>
                             <button id="director-chat-send" type="button" class="review-captions-btn">Send</button>

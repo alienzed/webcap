@@ -4107,14 +4107,9 @@
       option.textContent='Response ' + (index+1) + ' · ' + String(message.content || '').slice(0,55);
       chooser.appendChild(option);
     });
-    var chosenCapture = null;
     function render() {
       var item = responses[Number(chooser.value)];
       var raw = item ? String(item.rawResponse || item.content) : '';
-      chosenCapture = null;
-      try { chosenCapture = JSON.parse(raw).readiness?.capture || null; }
-      catch(error) { chosenCapture = null; }
-      el('studio-director-io-review').classList.toggle('hidden', !chosenCapture);
       el('studio-director-io-raw').textContent = raw || 'No model response recorded yet.';
       var parsed;
       try { parsed = item && !item.rawResponse ? raw : raw ? JSON.stringify(JSON.parse(raw),null,2) : 'No response to parse.'; }
@@ -4122,11 +4117,6 @@
       el('studio-director-io-parsed').textContent = parsed;
     }
     chooser.onchange=render;
-    el('studio-director-io-review').onclick=function(){
-      if (!chosenCapture) throw new Error('Selected model response has no complete draft to review.');
-      dialog.close();
-      window.studioDirectorWorkbench.reviewGeneratedCapture(chosenCapture);
-    };
     if (responses.length) chooser.value=String(responses.length-1);
     render();
     var recorded = currentMessages().filter(function(message){

@@ -442,7 +442,8 @@
   position: relative;
   min-width: 0;
 }
-.generate-take-delete {
+.generate-take-delete,
+.generate-take-job-action {
   position: absolute;
   top: 10px;
   right: 10px;
@@ -456,24 +457,21 @@
   cursor: pointer;
 }
 .generate-take-delete:hover,
-.generate-take-delete:focus-visible {
+.generate-take-delete:focus-visible,
+.generate-take-job-action:hover:not(:disabled),
+.generate-take-job-action:focus-visible {
   color: var(--danger, #e55);
   border-color: currentColor;
 }
-/* Pending Take actions live beside the status copy, not over the preview. */
-.generate-take-pending-entry .generate-take-copy {
-  min-height: 34px;
-  padding-right: 92px;
-}
+/* Pending Take Cancel/Stop occupies the same corner as completed Take ×. */
 .generate-take-job-action {
-  position: absolute;
-  bottom: 10px;
-  right: 10px;
-  z-index: 1;
-  min-height: 30px;
-  padding: 4px 10px;
-  background: var(--panel);
-  font-size: 13px;
+  font: inherit;
+  font-size: 16px;
+  line-height: 1;
+}
+.generate-take-job-action:disabled {
+  opacity: .6;
+  cursor: default;
 }
 .generate-take-card {
   width: 100%;

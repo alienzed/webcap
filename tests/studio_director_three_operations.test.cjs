@@ -20,7 +20,7 @@ const sceneTargets = new Function(part(workbench, '  function sceneIdsFromReques
 
 test('Read is plain prose; an absent or malformed optional action does not discard its reply', () => {
   assert.deepEqual(parse('The saved title is Rainy Bookshop.'), {
-    reply: 'The saved title is Rainy Bookshop.', action: null
+    reply: 'The saved title is Rainy Bookshop.', action: null, changes: null
   });
   const structured = parse(JSON.stringify({reply: 'Saved details are consistent.', action: null}));
   assert.equal(structured.reply, 'Saved details are consistent.');

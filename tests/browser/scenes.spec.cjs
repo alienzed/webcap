@@ -1,5 +1,5 @@
 'use strict';
-const {test,expect}=require('@playwright/test');
+const {test,expect}=require('./test.cjs');
 const {resetModel,queueModel,observedModels,openDirector,say,stories,story}=require('./helpers.cjs');
 
 async function newSelectedProject(page) {

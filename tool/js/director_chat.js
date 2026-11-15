@@ -18,6 +18,7 @@
     storyGuidelineProposal: null,
     modeMessages: {},
     studioActionIndex: -1,
+    studioWorkingDraft: {projects:{},scenes:{},newProject:{},newScene:{},sourceRequest:''},
     modeContextKeys: {},
     elapsedByAssistantIndex: {},
     modeElapsedByAssistantIndex: {},
@@ -651,6 +652,7 @@
     var operations = mode === 'storyboard' ? state.studioOperations.slice() : [];
     var storyAccess = mode === 'storyboard' ? state.studioStoryAccess : null;
     var readiness = mode === 'storyboard' ? state.studioReadiness : null;
+    var workingDraft = mode === 'storyboard' ? JSON.parse(JSON.stringify(state.studioWorkingDraft)) : null;
     var title = state.sessionByMode[mode] ? state.sessionByMode[mode].title : 'New chat';
     if (title === 'New chat') {
       title = conversationTitle(messages);
@@ -675,7 +677,7 @@
           body: JSON.stringify({
             expectedRevision: current.revision, title: title,
             messages: messages, draft: draft, attachments: attachments, workshop: workshop,
-            operations: operations, storyAccess: storyAccess, readiness: readiness
+            operations: operations, storyAccess: storyAccess, readiness: readiness, workingDraft: workingDraft
           })
         });
       }).then(function (payload) {
@@ -733,6 +735,9 @@
     } else {
       state.modeMessages.storyboard = chat.messages.slice();
       state.studioActionIndex = -1;
+      state.studioWorkingDraft = Object.assign({
+        projects:{},scenes:{},newProject:{},newScene:{},sourceRequest:''
+      }, chat.workingDraft || {});
       state.modeElapsedByAssistantIndex.storyboard = {};
       state.modeMetricsByAssistantIndex.storyboard = {};
       state.storyboardAttachments = Object.assign({}, chat.attachments || {});
@@ -2998,6 +3003,7 @@
       } else {
         state.modeMessages.storyboard = [];
         state.studioActionIndex = -1;
+        state.studioWorkingDraft = {projects:{},scenes:{},newProject:{},newScene:{},sourceRequest:''};
         state.studioOperations = [];
         state.studioBriefUndo = null;
         if (window.studioDirectorWorkbench) window.studioDirectorWorkbench.resetConversation();
@@ -3233,23 +3239,73 @@
     state.sessionDirty.storyboard = true;
   }
 
+  // A Studio conversation owns unsaved sparse field replacements. Saved
+  // Project/Scene records stay authoritative until a deliberate Write.
+  function studioWorkingFieldChanges(source, names) {
+    if (!source || typeof source !== 'object' || Array.isArray(source)) return {};
+    var result = {};
+    names.forEach(function (name) {
+      if (!Object.prototype.hasOwnProperty.call(source,name)) return;
+      var value = source[name];
+      if (name === 'invariants') {
+        if (Array.isArray(value)) result[name] = value;
+      } else if (name === 'durationSeconds') {
+        if (Number.isInteger(value) && value >= 4 && value <= 15) result[name] = value;
+      } else if (typeof value === 'string' && value.trim()) {
+        result[name] = value;
+      }
+    });
+    return result;
+  }
+
+  function studioMergeWorkingChanges(changes, target, action, request) {
+    if (!changes || typeof changes !== 'object' || Array.isArray(changes)) return false;
+    var working = state.studioWorkingDraft;
+    var changed = false;
+    var project = studioWorkingFieldChanges(changes.project,
+      ['title','concept','style','invariants']);
+    var scene = studioWorkingFieldChanges(changes.scene,
+      ['title','prompt','durationSeconds']);
+    if (Object.keys(project).length) {
+      var projectKey = action && action.kind === 'create_project' ? '' :
+        String(target && target.projectId || '');
+      if (projectKey) {
+        working.projects[projectKey] = Object.assign({},working.projects[projectKey],project);
+      } else working.newProject = Object.assign({},working.newProject,project);
+      changed = true;
+    }
+    if (Object.keys(scene).length) {
+      var sceneKey = action && action.kind === 'create_scene' ? '' :
+        String(target && target.sceneId || '');
+      if (sceneKey) {
+        working.scenes[sceneKey] = Object.assign({},working.scenes[sceneKey],scene);
+      } else working.newScene = Object.assign({},working.newScene,scene);
+      changed = true;
+    }
+    if (changed) {
+      working.sourceRequest = String(request || '');
+      state.sessionDirty.storyboard = true;
+    }
+    return changed;
+  }
+
   function parseStudioChatResponse(raw) {
     var text = String(raw || '').trim();
     if (!text) throw new Error('Director returned no answer.');
     var value;
     try { value = JSON.parse(text); }
-    catch (_) { return {reply:text,action:null}; }
+    catch (_) { return {reply:text,action:null,changes:null}; }
     // Accept structured action metadata when supplied, without making it a
     // prerequisite for a useful conversational answer.
     if (!value || typeof value !== 'object' || Array.isArray(value) ||
         typeof value.reply !== 'string' || !value.reply.trim())
-      return {reply:text,action:null};
+      return {reply:text,action:null,changes:null};
     var action = value.action;
     if (!action || typeof action !== 'object' || Array.isArray(action) ||
         !['create_project','write_project','create_scene','write_scenes'].includes(action.kind) ||
         typeof action.instruction !== 'string' || !action.instruction.trim())
       action = null;
-    return {reply:value.reply,action:action};
+    return {reply:value.reply,action:action,changes:value.changes || null};
   }
 
   function studioActionFromExplicitRequest(request, selectedScene) {

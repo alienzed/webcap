@@ -7282,6 +7282,12 @@
     });
   };
 
+  // The slash picker reads the current author's live Invariant edits; it does
+  // not create references, change Project persistence, or depend on the editor DOM.
+  window.getStoryboardSlashInvariants = function () {
+    return storyState.story ? storyInvariantsFromUi() : [];
+  };
+
   window.openStoryboardActivity = openStoryboardActivity;
   window.getStoryboardRouteTarget = getStoryboardRouteTarget;
   window.getStudioDirectorNavigation = getStudioDirectorNavigation;

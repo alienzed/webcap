@@ -4128,7 +4128,7 @@
                 '<span class="storyboard-prompt-label">' +
                   '<span' +
                     (promptDirectorModel ? ' title="Last populated by Director model ' + escapeHtml(promptDirectorModel) + '"' : '') +
-                  '>H3 Prompt</span>' +
+                  '>Prompt</span>' +
                   '<span class="storyboard-prompt-take-status hidden" data-prompt-take-status title="The current prompt differs from the selected Take&#39;s original prompt.">' +
                     '<span aria-hidden="true">✧</span><span data-prompt-take-status-label></span>' +
                   '</span>' +

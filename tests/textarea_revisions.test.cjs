@@ -167,3 +167,35 @@ test('narrow textarea keeps its original padding',()=>{
   assert.equal(field.style.paddingTop,'');
   assert.equal(h.toolbar.style.display,'none');
 });
+
+test('Scene Prompt History sits before Director in the existing heading without textarea padding',()=>{
+  const h=harness(), field=editor('Subject:','scene-header');
+  const actions={
+    firstChild:{},
+    insertBefore(node,firstChild){
+      assert.equal(firstChild,this.firstChild);
+      node.parentNode=this;
+      this.inserted=node;
+    }
+  };
+  const promptBlock={querySelector:selector=>{
+    assert.equal(selector,'.storyboard-prompt-actions');
+    return actions;
+  }};
+  const originalClosest=field.closest;
+  field.matches=selector=>selector==='textarea' ||
+    selector==='.storyboard-prompt-textarea[data-scene-field="prompt"]';
+  field.closest=selector=>selector==='.storyboard-prompt-block'
+    ? promptBlock : originalClosest(selector);
+  h.focus(field);
+  assert.equal(actions.inserted,h.toolbar,'History toolbar shares the existing header');
+  assert.equal(h.toolbar.style.position,'static','History does not cover the prompt');
+  assert.equal(h.toolbar.style.display,'flex');
+  assert.equal(field.style.paddingTop,'','no extra row within the textarea');
+  assert.equal(field.style.paddingRight,'','no lost text width');
+  field.value='Subject: revised';h.input(field);h.idle();
+  h.click('[data-rev-prev]');
+  assert.equal(field.value,'Subject:','existing revision browsing still works');
+  h.blur(field);
+  assert.equal(field.value,'Subject: revised','leaving a preview restores editable content');
+});

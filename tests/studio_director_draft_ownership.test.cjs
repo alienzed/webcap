@@ -104,3 +104,35 @@ test('batch revisions distinguish saved, unsaved, unchanged and reporting failur
   assert.match(reports.at(-1),/Drafts needing review 1 \(Scene 2\)/);
   assert.deepEqual(finished,[false]);
 });
+
+
+test('batch continues after retained reviews and distinguishes saved-but-unreported results', async () => {
+  const from = workbench.indexOf('          function next(i) {',workbench.indexOf('function presentAction('));
+  const to = workbench.indexOf('\n          return next(0);',from);
+  const code = workbench.slice(from,to) + '\nreturn next;';
+  const ids = ['one','two','three'];
+  const saved = [],unchanged = [],review = [],failed = [],notAttempted = [],reportingErrors = [];
+  const reports = [],finished = [],refreshed = [];
+  const frozen = {instruction:'Revise',request:'Revise'};
+  const savedError = Object.assign(new Error('Conversation receipt failed'),{saved:true});
+  const values = [{review:true},savedError,null];
+  const next = new Function('window','ids','story','frozen','fields','projectId',
+    'completed','unchanged','review','failed','notAttempted','reportingErrors',
+    'status','showConversationWrite','finishSceneAction',code)(
+    {studioDirectorBridge:{writeSelectedScene:()=> {
+      const value = values.shift();
+      return value instanceof Error ? Promise.reject(value) : Promise.resolve(value);
+    }}},ids,{id:'project',sceneOrder:ids},frozen,['prompt'],'project',
+    saved,unchanged,review,failed,notAttempted,reportingErrors,
+    message=>reports.push(message),()=>refreshed.push(true),value=>finished.push(value));
+  await next(0);
+  assert.deepEqual(saved,['two']);
+  assert.deepEqual(review,['one']);
+  assert.deepEqual(unchanged,['three']);
+  assert.deepEqual(failed,[]);
+  assert.deepEqual(reportingErrors,['Scene 2']);
+  assert.match(reports.at(-1),/Saved, but reporting failed for Scene 2/);
+  assert.equal(frozen.reviewReady,true);
+  assert.deepEqual(refreshed,[true]);
+  assert.deepEqual(finished,[]);
+});

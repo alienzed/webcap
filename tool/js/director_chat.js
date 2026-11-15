@@ -300,11 +300,27 @@
 
   // Navigation is authoritative in Scene focus; a Scene toolbar entry also
   // binds its Scene when the Storyboard is in the overview/list view.
-  function studioDirectorSelectedScene(navigation) {
+  function studioDirectorSelectedScene(navigation, authorRequest) {
     navigation = navigation || window.getStudioDirectorNavigation();
     if (!navigation.projectId ||
         (state.studioStoryAccess && state.studioStoryAccess.storyId !== navigation.projectId))
       return null;
+    var references = [], match, pattern = /\bscene\s*(\d+)\b/gi;
+    while ((match = pattern.exec(String(authorRequest || ''))))
+      references.push(Number(match[1]));
+    var group = /\bscenes\s+(\d+(?:\s*(?:,|and|&)\s*\d+)*)/i.exec(
+      String(authorRequest || ''));
+    if (group) group[1].match(/\d+/g).forEach(function (value) {
+      references.push(Number(value));
+    });
+    if (references.length) {
+      var distinct = Array.from(new Set(references));
+      if (distinct.length !== 1 || !navigation.sceneOrder ||
+          distinct[0] < 1 || distinct[0] > navigation.sceneOrder.length) return null;
+      return {projectId:navigation.projectId,
+        sceneId:navigation.sceneOrder[distinct[0] - 1],
+        sceneNumber:distinct[0],label:'Scene ' + distinct[0]};
+    }
     if (navigation.sceneId) return {
       projectId: navigation.projectId, sceneId: navigation.sceneId,
       sceneNumber:navigation.sceneNumber,
@@ -3132,6 +3148,21 @@
     // The existing Director connection owns its subject independently of Studio.
     // Read that Project once, then supply one consistent navigation and context.
     var navigation = navigationSnapshot || window.getStudioDirectorNavigation();
+    var lastUser = messages.filter(function (m) {return m.role === 'user';}).slice(-1)[0];
+    var requestText = String(lastUser && lastUser.content || '');
+    return requestJson('/fs/storyboard').then(function (listing) {
+      var matches = (listing.stories || []).filter(function (item) {
+        var title = String(item.title || item.name || '').trim();
+        return title.length > 2 && requestText.toLowerCase().includes(title.toLowerCase());
+      });
+      return matches.length === 1 ? matches[0] : null;
+    }).then(function (mentioned) {
+    if (mentioned && mentioned.id) {
+      navigation = {projectId:mentioned.id,
+        projectTitle:mentioned.title || mentioned.name || '',
+        sceneId:'',sceneNumber:0,sceneOrder:(mentioned.sceneOrder || []).slice()};
+      selectedScene = studioDirectorSelectedScene(navigation, requestText);
+    }
     var connected = state.studioStoryAccess && state.studioStoryAccess.storyId;
     if (connected && connected !== navigation.projectId) selectedScene = null;
     var projectId = selectedScene ? selectedScene.projectId :
@@ -3180,6 +3211,7 @@
         '\nAnswer using these saved values. Other conversation drafts remain unsaved until applied.\n';
       return outbound;
       });
+    });
     });
   }
 
@@ -3620,7 +3652,7 @@
     // Freeze the selected Scene before conversation persistence or network work.
     // Fetch its latest saved fields later, when building the actual LLM request.
     var selectedNavigation = activeChatMode === 'storyboard' ? window.getStudioDirectorNavigation() : null;
-    var selectedScene = selectedNavigation ? studioDirectorSelectedScene(selectedNavigation) : null;
+    var selectedScene = selectedNavigation ? studioDirectorSelectedScene(selectedNavigation, content) : null;
 
     if (!inputHistory.length || inputHistory[inputHistory.length - 1] !== content) inputHistory.push(content);
     inputHistoryIndex = inputHistory.length;

@@ -115,9 +115,8 @@ test('explicit Write guidance asks for the draft, not another conversational rec
   assert.match(source,/studioDirectorRequestMessages\(\[\{role:'user',content:instruction\}\], includePromptContract, true, navigationSnapshot\)/);
 });
 
-test('existing Project and Scene draft paths also use explicit Write guidance', () => {
-  for (const operation of ['studio_project_draft', 'studio_brief_draft',
-      'studio_scene_sequence_draft', 'studio_scene_draft']) {
+test('active Project draft paths use explicit Write guidance', () => {
+  for (const operation of ['studio_project_draft', 'studio_brief_draft']) {
     const marker = "showSentWriteContext('" + operation + "', messages)";
     const index = source.indexOf(marker);
     assert.ok(index !== -1, 'Missing draft operation: ' + operation);
@@ -127,6 +126,18 @@ test('existing Project and Scene draft paths also use explicit Write guidance', 
   }
 });
 
+
+test('old single and sequence authoring machinery is disconnected; current Draft panel uses canonical writers',()=>{
+  assert.doesNotMatch(source,/function prepareStudioScenes\(|function prepareStudioSceneDraft\(|studio_scene_sequence_draft|studio_scene_draft/);
+  assert.doesNotMatch(source,/director-studio-prepare-scenes|director-studio-prepare-scene/);
+  assert.doesNotMatch(html,/id="director-studio-prepare-scenes"|id="director-studio-prepare-scene"|id="director-studio-more"/);
+  assert.match(workbench,/writeNewScene\(\{/);
+  assert.match(workbench,/function prepareBatchScenes\(storyId\)/);
+  assert.match(workbench,/writeSelectedScene\(\{/);
+  assert.match(source,/writeNewScene: function \(launch\)/);
+  assert.match(source,/writeSelectedScene: function \(launch\)/);
+  assert.match(html,/id="studio-scenes-review"/);
+});
 
 test('selected Scene revisions use bounded direct-save calls against real Scene IDs',()=>{
   const batch=workbench.split('  function prepareBatchScenes(storyId) {')[1]

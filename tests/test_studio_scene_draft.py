@@ -118,24 +118,18 @@ def test_new_scene_response_schemas_require_prompt_not_intent(monkeypatch):
         return {"jobId": "test", "status": "queued"}
     monkeypatch.setattr(application, "enqueue_llm", fake_enqueue)
     client = app.test_client()
-    for operation in ("studio_scene_draft", "studio_scene_sequence_draft", "studio_project_draft",
-                      "studio_scene_field_draft", "studio_scene_batch_draft"):
+    for operation in ("studio_project_draft", "studio_scene_field_draft"):
         response = client.post("/fs/director/chat", json={
             "model": "test-model", "operation": operation,
             "messages": [{"role": "user", "content": "Write a full Scene"}],
         })
         assert response.status_code == 202, response.json
-    assert "prompt" in captured["studio_scene_draft"]["required"]
-    assert "summary" not in captured["studio_scene_draft"]["properties"]
-    sequence = captured["studio_scene_sequence_draft"]["properties"]["scenes"]["items"]
-    assert "prompt" in sequence["required"]
-    assert "summary" not in sequence["properties"]
+    assert captured["studio_scene_field_draft"]["required"] == ["prompt"]
+    assert captured["studio_scene_field_draft"]["properties"]["prompt"]["minLength"] == 1
     initial = captured["studio_project_draft"]["properties"]["initialScenes"]["items"]
     assert initial["required"] == ["title", "brief", "durationSeconds"]
     assert "prompt" not in initial["properties"]
     assert "summary" not in captured["studio_scene_field_draft"]["properties"]
-    revised = captured["studio_scene_batch_draft"]["properties"]["scenes"]["items"]
-    assert "summary" not in revised["properties"]
 
 def test_studio_brief_apply_is_field_scoped_and_undoable(isolated_storyboard):
     client = isolated_storyboard
@@ -444,22 +438,15 @@ def test_multi_scene_invalid_proposals_and_atomic_failure(isolated_storyboard, m
     assert not list((storyboard_store.storyboard_root() / story["id"] / "takes").iterdir())
 
 
-def test_multi_scene_extract_schema_is_bounded(monkeypatch):
+def test_old_bulk_scene_extractor_is_not_an_active_director_operation(monkeypatch):
     from tool.server import app as application
-    captured = {}
-    def enqueue(client, model, contract, context, label):
-        captured.update(contract=contract)
-        return {"jobId": "sequence", "status": "queued"}
-    monkeypatch.setattr(application, "enqueue_llm", enqueue)
+    def fail_enqueue(*args, **kwargs):
+        raise AssertionError("Retired sequence writer should not queue a model")
+    monkeypatch.setattr(application, "enqueue_llm", fail_enqueue)
     result = app.test_client().post("/fs/director/chat", json={
         "model": "local-test", "operation": "studio_scene_sequence_draft",
         "messages": [{"role": "user", "content": "Create three Scenes"}],
     })
-    assert result.status_code == 202
-    schema = captured["contract"]["response_schema"]
-    assert schema["properties"]["scenes"]["maxItems"] == 32
-    assert schema["properties"]["scenes"]["minItems"] == 1
-    assert schema["additionalProperties"] is False
-    item = schema["properties"]["scenes"]["items"]
-    assert set(item["required"]) == {"title", "prompt", "durationSeconds"}
-    assert item["properties"]["prompt"]["minLength"] == 1
+    assert result.status_code == 400
+    assert "Unsupported Director Chat operation" in result.get_json()["error"]
+

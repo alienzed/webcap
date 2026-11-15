@@ -18,13 +18,15 @@ test('Write exposes exactly three creative workflows', () => {
   assert.doesNotMatch(choices, /scene-split|scene-move|scene-duplicate|scene-invariants|playbook/);
 });
 
-test('one Scenes entrypoint delegates to existing reviewed one-or-many operations', () => {
+test('one visible Scenes entrypoint delegates to the canonical one-or-many writers', () => {
   assert.match(rail, /if \(operation === 'scene-write'\) \{/);
   assert.match(rail, /el\('studio-dw-scene-mode'\)\.value === 'revise'\) return prepareBatchScenes\(id\)/);
   assert.match(rail, /bridge\.writeNewScene\(\{/);
   assert.match(rail, /function prepareBatchScenes\(storyId\)/);
   assert.match(rail, /function applyBatchScenes\(\)/);
-  assert.match(chat, /if \(kind === 'scenes'\) return prepareStudioScenes\(\)/);
+  assert.doesNotMatch(chat, /if \(kind === 'scenes'\) return prepareStudioScenes\(\)/);
+  assert.match(chat, /writeNewScene: function \(launch\)/);
+  assert.match(chat, /writeSelectedScene: function \(launch\)/);
 });
 
 test('Read and the optional coherence utility stay separate from creative Write', () => {

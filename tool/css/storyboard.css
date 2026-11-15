@@ -4355,9 +4355,23 @@ html[data-theme="dark"] .storyboard-prompt-take-status {
 }
 .storyboard-tool-glyph { flex: 0 0 auto; }
 .storyboard-tool-label {
-  font-size: 13px;
-  font-weight: 600;
-  line-height: 1.2;
+  display: none;
+}
+#storyboard-project-tool-bar > .storyboard-tool-icon {
+  width: 36px;
+  min-width: 36px;
+  max-width: 36px;
+  padding: 0;
+  overflow: hidden;
+}
+#storyboard-project-tool-bar {
+  flex: 0 0 auto;
+  gap: 6px;
+}
+#storyboard-cancel-takes-btn {
+  flex: 0 0 auto;
+  width: auto;
+  white-space: nowrap;
 }
 @container (max-width: 760px) {
   #storyboard-project-tool-bar .storyboard-tool-label { display: none; }

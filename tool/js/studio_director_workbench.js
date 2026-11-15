@@ -1106,7 +1106,7 @@
       button.dataset.result=state;
       button.title=detail || 'Read selected Project fields';
     },
-    updateContext:updateScope,
+    updateContext:function () {updateScope(); showConversationWrite();},
     showSentWriteContext: function(operation, messages) {
       var preview = el('studio-dw-write-context-json');
       var details = el('studio-dw-write-context');

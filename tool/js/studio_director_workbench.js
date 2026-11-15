@@ -1054,12 +1054,6 @@
       el('director-chat-drawer').classList.remove('studio-actions-open');
       status('', false);
       updateScope();
-    },
-    setReadinessFreshness:function () {},
-    updateReadiness:function () {
-      // Historical readiness metadata may still be present in saved chats.
-      // It is no longer actionable and cannot override WebCap's target choice.
-      return true;
     }
   };
 

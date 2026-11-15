@@ -1302,7 +1302,8 @@ def test_storyboard_cancel_takes_is_contextual_and_story_scoped():
     generate_index = html.index('id="storyboard-generate-scenes-btn"')
     cancel_index = html.index('id="storyboard-cancel-takes-btn"')
     director_tools_index = html.index('id="storyboard-director-tools-btn"')
-    assert generate_index < cancel_index < director_tools_index
+    replace_index = html.index('id="storyboard-find-replace-btn"')
+    assert generate_index < director_tools_index < replace_index < cancel_index
     assert "function cancelStoryTakes()" in storyboard
     assert "operation: 'cancel_story'" in storyboard
     assert "storyId: storyId" in storyboard

@@ -6143,7 +6143,7 @@
 
   function runDirectorToolsRevision() {
     if (el('storyboard-director-tools-preset').value === 'coherence') {
-      runDirectorToolsCoherence();
+      runDirectorToolsCoherence().catch(reportError);
       return;
     }
     var input = el('storyboard-director-tools-instruction');

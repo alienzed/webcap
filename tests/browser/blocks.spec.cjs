@@ -25,6 +25,7 @@ test('Flow 8 — Studio Block is saved, restored and explicitly inserted into a 
   ]));
   await page.locator('#studio-blocks-close').click();
   await page.locator('#director-chat-rail-btn').click();
+  await page.locator('[data-assistant-mode="storyboard"]').click();
   const composer=page.locator('#director-chat-input');
   await expect(composer).toBeVisible();
   await composer.fill('Before /Rainy After');

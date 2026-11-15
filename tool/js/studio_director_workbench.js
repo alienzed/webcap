@@ -386,6 +386,12 @@
   function openWriteForCapture() {
     el('director-chat-drawer').classList.add('studio-actions-open');
     el('studio-dw-open-tools').setAttribute('aria-expanded','true');
+    // Keep the existing Scene checklist when a conversational action needs targets.
+    if (pendingCreativeAction && pendingCreativeAction.awaitingScenes) {
+      writeOperationChosen = true;
+      el('studio-dw-write-operation').value = 'scene-write';
+      el('studio-dw-scene-mode').value = 'revise';
+    }
     showConversationWrite();
     return refreshWrite().then(showConversationWrite);
   }

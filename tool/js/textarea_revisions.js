@@ -88,6 +88,12 @@
   function position() {
     if (!active || !toolbar) return;
     if (!active.field.isConnected) {detach();return;}
+    if (active.inlineHost) {
+      toolbar.style.display = 'flex';
+      toolbar.style.top = '';
+      toolbar.style.left = '';
+      return;
+    }
     var rect = active.field.getBoundingClientRect();
     toolbar.style.display = rect.width < 135 || rect.bottom < 0 || rect.top > innerHeight
       ? 'none' : 'flex';
@@ -119,14 +125,19 @@
     if (active && active.field === field && active.key === key) return;
     detach();
     if (!histories.has(key)) capture(key,field.value);
-    active = {field:field,key:key,live:field.value};
+    var promptBlock = field.matches('.storyboard-prompt-textarea[data-scene-field="prompt"]')
+      ? field.closest('.storyboard-prompt-block') : null;
+    var inlineHost = promptBlock ? promptBlock.querySelector('.storyboard-prompt-actions') : null;
+    active = {field:field,key:key,live:field.value,inlineHost:inlineHost};
     originalPaddingTop = field.style.paddingTop;
-    if (field.getBoundingClientRect().width >= 135) {
+    if (!inlineHost && field.getBoundingClientRect().width >= 135) {
       var topPadding = parseFloat(getComputedStyle(field).paddingTop) || 0;
       field.style.paddingTop = Math.max(topPadding, 31) + 'px';
     }
-    var host = field.closest('dialog[open]') || document.body;
-    if (toolbar.parentNode !== host) host.appendChild(toolbar);
+    var host = inlineHost || field.closest('dialog[open]') || document.body;
+    if (inlineHost) host.insertBefore(toolbar,host.firstChild);
+    else if (toolbar.parentNode !== host) host.appendChild(toolbar);
+    toolbar.style.position = inlineHost ? 'static' : 'fixed';
     var h = histories.get(key);
     if (h && h.versions[h.versions.length - 1] !== field.value) schedule(key,field.value);
     draw();

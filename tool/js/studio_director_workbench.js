@@ -756,15 +756,25 @@
   // Write reflects an explicit conversational proposal, not a standalone operation picker.
   function showConversationWrite() {
     var action = pendingCreativeAction;
-    var ready = !!action;
-    var awaitingProject = ready && !!action.awaitingProject;
-    var awaitingScenes = ready && !!action.awaitingScenes;
+    var prepared = action ? null : window.studioDirectorBridge.preparedWrite();
+    var ready = !!(action || prepared);
+    var awaitingProject = !!(action && action.awaitingProject);
+    var awaitingScenes = !!(action && action.awaitingScenes);
     el('studio-dw-write-empty').classList.toggle('hidden', ready);
     el('studio-dw-write-ready').classList.toggle('hidden', !ready);
     el('studio-dw-write-panel').classList.toggle('hidden', !(awaitingProject || awaitingScenes));
     el('studio-dw-write-panel').classList.toggle('studio-dw-awaiting-project', awaitingProject);
     el('studio-dw-write-panel').classList.toggle('studio-dw-awaiting-scenes', awaitingScenes);
     if (!ready) return;
+    if (prepared) {
+      var fieldLabels = prepared.fields.map(function (field) {return labels[field] || field;});
+      var scope = ({scene:'Scene',project:'Project', 'new-project':'New Project',
+        'new-scene':'New Scene'})[prepared.kind];
+      el('studio-dw-write-ready-title').textContent = scope + ' draft prepared';
+      el('studio-dw-write-ready-direction').textContent = fieldLabels.join(' · ');
+      el('studio-dw-write-ready-launch').textContent = 'Review ' + scope;
+      return;
+    }
     var title = ({create_project:'Create Project',write_project:'Revise Project',
       create_scene:'Create Scenes',write_scenes:'Revise Scenes'})[action.kind];
     el('studio-dw-write-ready-title').textContent = title;
@@ -996,6 +1006,7 @@
 
   window.studioDirectorWorkbench = {
     presentAction:presentAction,
+    updateWorkingWrite:showConversationWrite,
     completeWriteAction:function (kind, story, selected) {
       var action = pendingCreativeAction;
       if (!action) return;
@@ -1169,6 +1180,27 @@
       el('studio-dw-close-actions').focus();
     }
     el('studio-dw-write-ready-launch').onclick=function () {
+      if (!pendingCreativeAction) {
+        var draft = window.studioDirectorBridge.preparedWrite();
+        if (!draft) {showConversationWrite();return;}
+        if (draft.kind === 'scene') {
+          return window.flushStudioDirectorStoryEdits(draft.projectId)
+            .then(function () {return loadStory(draft.projectId);})
+            .then(function (story) {
+              var changes = window.studioDirectorBridge.preparedWrite();
+              if (!changes || changes.kind !== 'scene' ||
+                  changes.projectId !== draft.projectId || changes.sceneId !== draft.sceneId)
+                throw new Error('Prepared Scene target changed. Reopen Write.');
+              var candidate = window.studioDirectorBridge.preparedSceneFields(draft.sceneId);
+              var changed = changes.fields.filter(function (field) {
+                return JSON.stringify(candidate[field]) !== JSON.stringify(story.scenes[draft.sceneId][field]);
+              });
+              if (!changed.length) {status('These Scene fields already match the saved values.',false,true);return;}
+              showSceneReview(story,draft.sceneId,changed,candidate);
+            }).catch(function (error) {status('Prepared Scene review failed: '+error.message,true);});
+        }
+        return window.studioDirectorBridge.reviewPreparedWrite(draft);
+      }
       var proposed = el('studio-dw-suggestions').querySelector('[data-guided-write]');
       if (!proposed) throw new Error('The proposed Director action is no longer available.');
       proposed.click();

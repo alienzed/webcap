@@ -4621,11 +4621,9 @@
               var scene = story.scenes[id];
               return scene && scene.title || '';
             }),
-            previousScene:launch.sequenceIndex > 0 && order.length ? (function () {
-              var prior = story.scenes[order[order.length-1]];
-              return {title:prior.title,prompt:prior.prompt,durationSeconds:prior.durationSeconds};
-            })() : null,
-            unsavedWorkingFields:launch.sequenceIndex > 0 ? {} : (state.studioWorkingDraft.newScene || {})
+            unsavedWorkingFields:studioRequestAppliesPreparedMaterial(
+              launch.authorRequest || launch.instruction) ?
+              (state.studioWorkingDraft.newScene || {}) : {}
           }
         });
         // Reuse complete structured Scene fields already authored in the
@@ -4633,11 +4631,8 @@
         var workingScene = state.studioWorkingDraft.newScene;
         var applyExisting = studioRequestAppliesPreparedMaterial(
           launch.authorRequest || launch.instruction);
-        var reuse = launch.sequenceIndex !== undefined && launch.sequenceIndex > 0 ?
-          false : workingScene && typeof workingScene.prompt === 'string' &&
-          !!workingScene.prompt.trim() &&
-          (state.studioWorkingDraft.sourceRequest ===
-            String(launch.authorRequest || launch.instruction) || applyExisting);
+        var reuse = !!(applyExisting && workingScene &&
+          typeof workingScene.prompt === 'string' && workingScene.prompt.trim());
         if (!reuse) state.pending = false;
         var proposal = reuse ?
           Promise.resolve(JSON.stringify(Object.assign({
@@ -4678,8 +4673,8 @@
           // not optional model metadata that may silently default to six.
           var authorDuration = studioMentionedDuration(launch.authorRequest || launch.instruction);
           var requestedDuration = studioRequestedDuration(launch.authorRequest || launch.instruction);
-          if (requestedDuration !== null)
-            draft.scenes.forEach(function (item) {item.durationSeconds = requestedDuration;});
+          // Requested duration guides authoring; the editable draft preserves
+          // what the model actually returned instead of fabricating metadata.
           // Preserve the existing one-Scene working draft contract. Multi-Scene
           // records belong to the multi-Scene review, not a singleton cache.
           if (drafts.length === 1) {

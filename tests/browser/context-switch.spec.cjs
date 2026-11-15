@@ -13,7 +13,7 @@ test('Flow 5 — moving the Studio editor does not change a conversation-bound P
   await expect(page.locator('#director-chat-title')).toContainText('Project A');
   await openProject(page,b.id);
   // The open editor is now B, while Director's attached conversation is A.
-  await expect(page.locator('#storyboard-library-list [data-story-id="'+b.id+'"]')).toHaveClass(/active/);
+  await expect(page.locator('#storyboard-story-title')).toHaveValue(b.title);
   await expect(page.locator('#director-chat-title')).toContainText('Project A');
   await queueModel(request,{
     reply:'I can adjust Project A atmosphere.',

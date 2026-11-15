@@ -105,7 +105,7 @@ test('Explicit duration is a WebCap parameter, not optional LLM metadata', () =>
   assert.equal(requestedDuration('Use 14s'), 14);
   assert.equal(requestedDuration('No duration mentioned'), null);
   assert.equal(requestedDuration('Use 30 seconds'), null);
-  assert.match(chat, /draft\.scenes\[0\]\.durationSeconds = requestedDuration/);
+  assert.doesNotMatch(chat, /draft\.scenes\[0\]\.durationSeconds = requestedDuration/);
 });
 
 function harness() {
@@ -178,7 +178,7 @@ test('new Scene and Project actions use existing writers with frozen destination
   await flush();
   assert.equal(h.requests[0][0],'new-scene');
   assert.equal(h.requests[0][1].projectId,'p1');
-  assert.equal(h.requests[0][1].directSave,true);
+  assert.equal(h.requests[0][1].directSave,false);
   h.functions.presentAction({kind:'create_project',instruction:'Create a bookshop Project.'},
     null,null,'Create a Project');
   h.suggestions.children[0].onclick();
@@ -187,56 +187,51 @@ test('new Scene and Project actions use existing writers with frozen destination
   assert.equal(h.requests[1][1],'new-project');
 });
 
-test('new multiple Scenes run one canonical writer per item with independently saved results',async()=>{
+test('new multiple Scenes use one authoring call and review actual returned records',async()=>{
   const h=harness();
   h.bridge.writeNewScene=async launch=>{
     h.requests.push(['new-scene',launch]);
-    return {scenes:[{id:'created-'+h.requests.length}]};
+    return {review:true,count:2};
   };
   h.functions.presentAction({kind:'create_scene',instruction:'Create three different bookshop Scenes.'},
     null,{projectId:'p1'},'Create 3 Scenes');
   h.suggestions.children[0].onclick();
   await flush();
-  assert.equal(h.requests.length,3);
+  assert.equal(h.requests.length,1,'one request, irrespective of requested count');
   assert.equal(h.requests[0][1].projectId,'p1');
-  assert.ok(h.requests.every(item=>item[1].directSave===true));
-  assert.match(h.requests[1][1].instruction,/Scene 2 of 3/);
-  assert.ok(h.statuses.some(row=>/Saved 3 · Failed 0/.test(row[0])));
+  assert.equal(h.requests[0][1].directSave,false);
+  assert.ok(h.statuses.some(row=>/Review the authored Scenes/.test(row[0])));
+  assert.equal(h.finishes.length,0,'review is not evidence of a save');
 });
 
-test('new Scene partial draft is pending review rather than a failed write',async()=>{
+test('partial Scene results remain available for review without a failed-save claim',async()=>{
   const h=harness();
   h.bridge.writeNewScene=async launch=>{
     h.requests.push(['new-scene',launch]);
-    return {review:true};
+    return {review:true,count:1};
   };
   h.functions.presentAction({kind:'create_scene',instruction:'Create a 12-second closing Scene.'},
     null,{projectId:'p1'},'Create a 12-second closing Scene.');
   h.suggestions.children[0].onclick();
   await flush();
   assert.equal(h.requests.length,1);
-  assert.ok(h.statuses.some(row=>/Draft awaiting review 1/.test(row[0]) &&
-    row[1]===false));
   assert.ok(!h.statuses.some(row=>/Failed 1/.test(row[0])));
-  assert.equal(h.finishes.length,0,'a Scene draft awaiting review remains actionable');
+  assert.equal(h.finishes.length,0);
 });
 
-test('new multiple Scenes retain successes when one item fails',async()=>{
+test('a Scene authoring failure remains visible at its single failed operation',async()=>{
   const h=harness();
-  let index=0;
   h.bridge.writeNewScene=async launch=>{
     h.requests.push(['new-scene',launch]);
-    index++;
-    if(index===2) throw new Error('Scene two could not be authored.');
-    return {scenes:[{id:'created-'+index}]};
+    throw new Error('Model authoring failed');
   };
   h.functions.presentAction({kind:'create_scene',instruction:'Create three different bookshop Scenes.'},
     null,{projectId:'p1'},'Create 3 Scenes');
   h.suggestions.children[0].onclick();
   await flush();
-  assert.equal(h.requests.length,3);
-  assert.ok(h.statuses.some(row=>/Saved 2 · Failed 1/.test(row[0])));
-  assert.equal(h.finishes.length,0,'failed Scenes leave the proposal pending');
+  assert.equal(h.requests.length,1,'no invented replacement attempts');
+  assert.ok(h.statuses.some(row=>/Director action failed: Model authoring failed/.test(row[0])));
+  assert.equal(h.finishes.length,0);
 });
 
 test('structured Director changes merge by complete field, without overwriting unrelated drafts', () => {

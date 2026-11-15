@@ -3,49 +3,6 @@
 
   // Session-only submitted instructions, independent of saved Story/Scene prompts.
   var sceneRefineHistory, sceneRevisionHistory, sceneCreationHistory;
-  var scenePromptHistory = Object.create(null);
-
-  function rememberScenePrompt(storyId, sceneId, before, after) {
-    if (before === after) return;
-    var key = storyId + ':' + sceneId;
-    var history = scenePromptHistory[key] || {versions:[before], index:0};
-    history.versions = history.versions.slice(0, history.index + 1);
-    history.versions.push(after);
-    if (history.versions.length > 11) history.versions.shift();
-    history.index = history.versions.length - 1;
-    scenePromptHistory[key] = history;
-  }
-
-  function syncScenePromptHistory(sceneId) {
-    var root = sceneElement(sceneId);
-    if (!root) return;
-    var history = scenePromptHistory[storyState.story.id + ':' + sceneId];
-    root.querySelector('[data-prompt-undo]').disabled = !history || history.busy || history.index === 0;
-    root.querySelector('[data-prompt-redo]').disabled = !history || history.busy || history.index === history.versions.length - 1;
-  }
-
-  function moveScenePromptHistory(sceneId, direction) {
-    var storyId = storyState.story.id;
-    flushPendingSaves().then(function () {
-      var history = scenePromptHistory[storyId + ':' + sceneId];
-      var index = history.index + direction;
-      if (history.busy || index < 0 || index >= history.versions.length) return;
-      history.busy = true;
-      syncScenePromptHistory(sceneId);
-      return request({operation:'update_scene', storyId:storyId, sceneId:sceneId,
-        scene:{prompt:history.versions[index]}}).then(function (payload) {
-        history.index = index;
-        if (storyState.story && storyState.story.id === storyId) {
-          storyState.story = payload.story;
-          renderStory();
-          setSaveState('Saved');
-        }
-      }).finally(function () {
-        history.busy = false;
-        if (storyState.story && storyState.story.id === storyId) syncScenePromptHistory(sceneId);
-      });
-    }).catch(reportError);
-  }
   var storyboardGuidelineReview = null;
   var storyboardDefineGuidelineDrafts = Object.create(null);
   var STORY_GUIDELINE_LABELS = {
@@ -592,7 +549,6 @@
         if (savedScene && currentScene) {
           currentScene.entryState = savedScene.entryState;
           currentScene.exitState = savedScene.exitState;
-          rememberScenePrompt(storyId, sceneId, currentScene.prompt || '', savedScene.prompt || '');
           currentScene.prompt = savedScene.prompt;
           currentScene.previousPrompt = savedScene.previousPrompt;
           currentScene.previousRevision = savedScene.previousRevision || null;
@@ -617,7 +573,6 @@
           syncSceneDirectorRestore(sceneId);
           syncPromptTakeStatus(sceneId);
           syncSceneRefineState(sceneId);
-          syncScenePromptHistory(sceneId);
           updateSceneDirectorStatus(sceneId, 'Director completed.');
         }
       } else if (operation === 'insert_scene' || operation === 'extend_story') {
@@ -1540,7 +1495,7 @@
     var label = button.querySelector('[data-director-refine-label]');
     if (!label) throw new Error('Scene Refine button label is missing.');
     label.textContent = 'Revise';
-    button.title = 'Revise this prompt with Director and apply the result. Undo restores recent changes.';
+    button.title = 'Revise this prompt with Director and apply the result.';
   }
 
   function restoreSceneDirectorPrompt(sceneId) {
@@ -4179,8 +4134,6 @@
                 '</span>' +
                 '<div class="storyboard-prompt-actions">' +
                   '<button type="button" class="review-captions-btn" data-scene-director title="Open Director with this Scene and its Project context.">Director</button>' +
-                  '<button type="button" class="review-captions-btn" data-prompt-undo disabled title="Undo a recent prompt change from this browser session.">Undo</button>' +
-                  '<button type="button" class="review-captions-btn" data-prompt-redo disabled title="Redo a prompt change from this browser session.">Redo</button>' +
                   '<button type="button" class="review-captions-btn' +
                     (typeof scene.previousPrompt === 'string' ? '' : ' hidden') +
                     '" data-storyboard-last-diff title="Inspect differences from the previous Scene prompt.">View Changes</button>' +
@@ -4190,7 +4143,7 @@
               '<div class="storyboard-director-actions">' +
                 '<input type="text" data-director-correction placeholder="Tell the Director what to change in this prompt...">' +
                 '<button type="button" class="review-captions-btn storyboard-director-action" data-director-refine title="' +
-                  'Revise this prompt with Director and apply the result. Undo restores recent changes.' +
+                  'Revise this prompt with Director and apply the result.' +
                   '"><span class="storyboard-director-wand" aria-hidden="true">✦</span><span data-director-refine-label>Revise</span></button>' +
                 '<span class="storyboard-save-state" data-director-status></span>' +
               '</div>' +
@@ -4284,7 +4237,6 @@
     if (!activeHtml) activeHtml = '<div class="storyboard-library-empty">No Scenes yet. Add the first generatable scene.</div>';
 
     host.innerHTML = activeHtml + removedScenesHtml(removedScenes);
-    order.forEach(syncScenePromptHistory);
     if (focusedSceneId) syncPromptTakeStatus(focusedSceneId);
     syncDirectorPendingControls();
     if (storyState.director.busy && storyState.director.activityTarget) positionDirectorActivity();
@@ -4754,9 +4706,7 @@
       });
     }).then(function (payload) {
       if (storyState.story && String(storyState.story.id || '') === String(storyId)) {
-        rememberScenePrompt(storyId, sceneId, storyState.story.scenes[sceneId].prompt || '', payload.story.scenes[sceneId].prompt || '');
         storyState.story = payload.story;
-        syncScenePromptHistory(sceneId);
         setSaveState('Saved');
       }
       if (storyState.sceneSavePromises[saveKey] === promise) delete storyState.sceneSaveErrors[saveKey];
@@ -6731,12 +6681,6 @@
         openSceneDirector(sceneDirector.closest('.storyboard-scene[data-scene-id]').dataset.sceneId);
         return;
       }
-      var historyButton = event.target.closest('[data-prompt-undo], [data-prompt-redo]');
-      if (historyButton) {
-        moveScenePromptHistory(historyButton.closest('.storyboard-scene[data-scene-id]').dataset.sceneId,
-          historyButton.hasAttribute('data-prompt-undo') ? -1 : 1);
-        return;
-      }
       var lastDiff = event.target.closest('[data-storyboard-last-diff]');
       if (lastDiff) {
         var lastDiffRoot = lastDiff.closest('.storyboard-scene[data-scene-id]');
@@ -7055,7 +6999,6 @@
         if (storyState.story && storyState.story.id === storyId) {
           (payload.story.sceneOrder || []).forEach(function (id) {
             var before = storyState.story.scenes[id];
-            if (before) rememberScenePrompt(storyId, id, before.prompt || '', payload.story.scenes[id].prompt || '');
           });
           storyState.story = payload.story;
           renderStory();

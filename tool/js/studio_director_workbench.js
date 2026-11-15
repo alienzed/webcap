@@ -891,7 +891,7 @@
               status('Saved ' + saved.length + ' · Failed ' + failed.length +
                 ' · Not attempted ' + notAttempted.length +
                 (failed.length ? ': ' + failed.join(' | ') : ''),!!failed.length,true);
-              finishSceneAction();
+              if (!failed.length && !notAttempted.length) finishSceneAction();
               return Promise.resolve();
             }
             var direction = count === 1 ? frozen.instruction :
@@ -921,7 +921,6 @@
                 for (var i = index + 1;i < count;i++) notAttempted.push('Scene ' + (i + 1));
                 status('Saved ' + saved.length + ' · Failed ' + failed.length +
                   ' · Not attempted ' + notAttempted.length,true,true);
-                finishSceneAction();
                 return;
               }
               return create(index + 1);
@@ -958,7 +957,7 @@
               status('Saved ' + completed.length + ' · Unchanged ' + unchanged.length +
                 ' · Failed ' + failed.length + ' · Not attempted ' + notAttempted.length +
                 (failed.length ? ': ' + failed.join(' | ') : ''),failed.length > 0,true);
-              finishSceneAction();
+              if (!failed.length && !notAttempted.length) finishSceneAction();
               return;
             }
             return window.studioDirectorBridge.writeSelectedScene({
@@ -978,7 +977,6 @@
                 notAttempted = ids.slice(i + 1);
                 status('Saved ' + completed.length + ' · Failed ' + failed.length +
                   ' · Not attempted ' + notAttempted.length,true,true);
-                finishSceneAction();
                 return;
               }
               return next(i + 1);

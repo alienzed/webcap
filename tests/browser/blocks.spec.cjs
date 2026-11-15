@@ -1,5 +1,5 @@
 'use strict';
-const {test,expect}=require('@playwright/test');
+const {test,expect}=require('./test.cjs');
 const {resetModel,queueModel,observedModels}=require('./helpers.cjs');
 
 test('Flow 8 — Studio Block is saved, restored and explicitly inserted into a Director draft', async ({page,request}) => {

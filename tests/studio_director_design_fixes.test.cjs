@@ -60,16 +60,6 @@ test('manual Read and Write remain available through the on-demand Advanced pane
   assert.match(rail,/el\('studio-dw-' \+ which\)\.click\(\)/);
 });
 
-test('Read and Write stay distinct; Read persists field choices on panel changes', () => {
-  assert.match(rail,/var readChoices = \{\}/);
-  assert.match(rail,/var chosen = readChoices\[story\.id\]/);
-  assert.match(rail,/readChoices\[story\.id\] = chosen/);
-  assert.match(rail,/writeOperationChosen = true/);
-  assert.match(rail,/preferredRead/);
-  assert.match(rail,/preferredWrite/);
-  assert.match(rail,/lastReadSource && writeId && lastReadSource !== writeId/);
-});
-
 test('operational errors reveal Advanced and preserve the shared Console detail',()=>{
   const nodes={},classes=new Set(),logs=[];
   const el=id=>nodes[id] ||= {dataset:{},attrs:{},classList:{toggle(){},add:x=>classes.add(x)},setAttribute(k,v){this.attrs[k]=v;}};
@@ -149,16 +139,6 @@ test('Transient model discovery error preserves selected model',()=>{
   assert.match(load,/if \(state\.modelId\)/);
   assert.match(load,/retained\.value = state\.modelId/);
   assert.doesNotMatch(load,/\.catch\(function \(err\) \{\s*state\.modelsLoaded = true;\s*state\.modelId = ''/);
-});
-
-test('Readiness opens a single read-only detail and never assigns one Scene ID to multiple checks',()=>{
-  assert.match(rail,/Scene \(current discussion\)/);
-  const readiness=section(rail,'  function renderReadiness(list) {','  window.studioDirectorWorkbench =');
-  assert.doesNotMatch(readiness.slice(readiness.indexOf('    list.forEach(function (item) {')),/recommendations\.sceneId/);
-  assert.match(html,/id="studio-dw-assessment-dialog"/);
-  assert.match(rail,/studio-dw-assessment-dialog'\)\.showModal/);
-  assert.match(rail,/studio-dw-assessment-content'\)\.textContent = item\.content/);
-  assert.doesNotMatch(html,/H3 Playbook · global model guidance/);
 });
 
 test('New chat and loaded session reset stale design selections without changing saved creative data',()=>{

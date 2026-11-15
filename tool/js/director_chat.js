@@ -378,14 +378,17 @@
       el('director-chat-history-toggle').setAttribute('aria-expanded', 'false');
       if (el('director-chat-history-panel').open) el('director-chat-history-panel').close();
     }
-    el('director-chat-clear').textContent = context ? 'New QA chat' : studio ? 'New conversation' : 'New chat';
+    var newConversationLabel = context ? 'New QA chat' : studio ? 'New conversation' : 'New chat';
+    el('director-chat-clear').querySelector('.director-header-button-label').textContent = newConversationLabel;
+    el('director-chat-clear').setAttribute('aria-label', newConversationLabel);
+    el('director-chat-clear').title = newConversationLabel;
     var drawer = el('director-chat-drawer');
     drawer.classList.toggle('studio-director', studio);
     el('app-frame').classList.toggle('studio-director-active', studio && state.open);
     drawer.setAttribute('aria-label', studio ? 'Projects Director' : 'Assistant');
     el('director-chat-title').textContent = studio ? studioWorkingStoryLabel() :
       (context ? 'Ask QA' : 'Assistant');
-    el('director-chat-close').textContent = studio ? 'Close' : '×';
+    el('director-chat-close').textContent = '×';
     el('director-chat-close').setAttribute('aria-label', studio ? 'Close Director' : 'Close Assistant');
     el('director-chat-empty-title').textContent = studio ? "Let's make something" :
       (context ? 'Discuss this recommendation' : 'Your conversation');

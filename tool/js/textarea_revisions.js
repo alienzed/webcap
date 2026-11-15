@@ -6,7 +6,7 @@
   var timers = new Map();
   var idleMs = 10000;
   var toolbar = null;
-  var originalPadding = '';
+  var originalPaddingTop = '';
   var showingPreview = false;
 
   // Fallback for unnamed editors created from templates. Stable while their
@@ -92,7 +92,7 @@
     toolbar.style.display = rect.width < 135 || rect.bottom < 0 || rect.top > innerHeight
       ? 'none' : 'flex';
     toolbar.style.top = Math.max(0,rect.top + 5) + 'px';
-    toolbar.style.left = Math.max(0,rect.right - 113) + 'px';
+    toolbar.style.left = Math.max(0,rect.right - (toolbar.offsetWidth || 84) - 5) + 'px';
   }
 
   function draw() {
@@ -108,7 +108,7 @@
   function detach() {
     if (!active) return;
     restorePreview();
-    active.field.style.paddingRight = originalPadding;
+    active.field.style.paddingTop = originalPaddingTop;
     active = null;
     if (toolbar) toolbar.style.display = 'none';
   }
@@ -120,8 +120,11 @@
     detach();
     if (!histories.has(key)) capture(key,field.value);
     active = {field:field,key:key,live:field.value};
-    originalPadding = field.style.paddingRight;
-    if (field.getBoundingClientRect().width >= 135) field.style.paddingRight = '120px';
+    originalPaddingTop = field.style.paddingTop;
+    if (field.getBoundingClientRect().width >= 135) {
+      var topPadding = parseFloat(getComputedStyle(field).paddingTop) || 0;
+      field.style.paddingTop = Math.max(topPadding, 31) + 'px';
+    }
     var host = field.closest('dialog[open]') || document.body;
     if (toolbar.parentNode !== host) host.appendChild(toolbar);
     var h = histories.get(key);
@@ -150,7 +153,7 @@
 
   function initialize() {
     var style = document.createElement('style');
-    style.textContent = '.webcap-revision-tools{position:fixed;display:none;align-items:center;gap:2px;z-index:99999;padding:2px;background:var(--panel, Canvas);color:var(--text, CanvasText);border:1px solid var(--border, #888);border-radius:7px;font:12px sans-serif;box-shadow:0 1px 4px #0003}.webcap-revision-tools button{border:0;background:transparent;color:inherit;cursor:pointer;min-width:24px;min-height:25px;padding:2px}.webcap-revision-tools button:disabled{opacity:.3;cursor:default}.webcap-revision-tools span{min-width:39px;text-align:center;font-variant-numeric:tabular-nums}';
+    style.textContent = '.webcap-revision-tools{position:fixed;display:none;align-items:center;gap:2px;z-index:99999;padding:2px;background:var(--panel, Canvas);color:var(--text, CanvasText);border:1px solid var(--border, #888);border-radius:7px;font:13px sans-serif;box-shadow:0 1px 4px #0003}.webcap-revision-tools button{border:0;background:transparent;color:inherit;cursor:pointer;min-width:21px;min-height:22px;padding:1px}.webcap-revision-tools button:disabled{opacity:.3;cursor:default}.webcap-revision-tools span{min-width:32px;text-align:center;font-variant-numeric:tabular-nums}';
     document.head.appendChild(style);
     toolbar = document.createElement('div');
     toolbar.className = 'webcap-revision-tools';

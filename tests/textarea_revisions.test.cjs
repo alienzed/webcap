@@ -9,7 +9,7 @@ const source = fs.readFileSync(path.join(__dirname, '../tool/js/textarea_revisio
 function editor(value, sceneId) {
   return {
     id: '', name: '', dataset: {sceneField:'prompt'}, value,
-    disabled:false, readOnly:false, isConnected:true, style:{paddingRight:''},
+    disabled:false, readOnly:false, isConnected:true, style:{paddingRight:'',paddingTop:''},
     parentElement:null,
     matches: s => s === 'textarea',
     getAttribute:()=>null,
@@ -48,11 +48,12 @@ function harness() {
   };
   vm.runInNewContext(source,{document,window,innerHeight:1000,
     getAutosaveTargetAndPayload:()=>({key:captionKey}),
+    getComputedStyle:()=>({paddingTop:'8px'}),
     setTimeout:(fn,ms)=>{assert.equal(ms,10000);pending.set(++timerId,fn);return timerId;},
     clearTimeout:id=>pending.delete(id),
     Map,Array,String,Object});
   docHandlers.DOMContentLoaded();
-  return {document,window,controls,toolbarHandlers,
+  return {document,window,controls,toolbarHandlers,toolbar,
     captionTarget(key){captionKey=key;},
     focus(field){docHandlers.focusin({target:field});},
     input(field){docHandlers.input({target:field});},
@@ -144,4 +145,25 @@ test('repeated unnamed rows use structural selectors rather than sharing one key
   parent.children.pop();parent.children[0]=first.parentElement;
   parent.children[1]=recreated.parentElement;
   assert.equal(b,h.window.webcapTextareaRevisions.identity(recreated));
+});
+
+test('History controls occupy only the top inset, preserving full text width',()=>{
+  const h=harness(), field=editor('Long editable text','scene-compact');
+  field.style.paddingRight='11px';
+  field.style.paddingTop='8px';
+  h.focus(field);
+  assert.equal(field.style.paddingRight,'11px','right-side text width is unchanged');
+  assert.equal(field.style.paddingTop,'31px','only the toolbar row is reserved');
+  assert.equal(h.toolbar.style.left,'511px','toolbar is positioned at the top right');
+  h.blur(field);
+  assert.equal(field.style.paddingTop,'8px','original top inset restored on blur');
+  assert.equal(field.style.paddingRight,'11px','original right padding remains untouched');
+});
+
+test('narrow textarea keeps its original padding',()=>{
+  const h=harness(), field=editor('Small','scene-small');
+  field.getBoundingClientRect=()=>({top:100,right:200,bottom:180,width:120});
+  h.focus(field);
+  assert.equal(field.style.paddingTop,'');
+  assert.equal(h.toolbar.style.display,'none');
 });

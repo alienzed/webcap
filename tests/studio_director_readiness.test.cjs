@@ -298,3 +298,57 @@ test('structured inspection metadata is not sent back with later Studio prompts'
   assert.equal(outgoing[1].content,'Ready.');
   assert.equal(Object.hasOwn(outgoing[1],'rawResponse'),false);
 });
+
+
+test('plain Read completes the real send/persist path with one chat call and no mutation',async()=>{
+  const reply='The saved title is Rainy Bookshop. Fixed details: burgundy cardigan and green door.';
+  const state={activeMode:'storyboard',pending:false,attachmentPending:false,sessionReady:true,
+    modelId:'remote-model',modeMessages:{storyboard:[]},sessionDirty:{storyboard:false},
+    draftByMode:{storyboard:''},sessionTimer:0,jobId:'',pendingReadAck:null};
+  const input={value:'What are the saved title and fixed details?',focus(){}};
+  const calls=[],snapshots=[],errors=[],seen=[];
+  let complete;
+  const done=new Promise(resolve=>{complete=resolve;});
+  const el=id=>id==='director-chat-input'?input:{textContent:'',dataset:{newResult:'false'}};
+  const ctx=vm.createContext({
+    state,el,Promise,Object,String,JSON,Array,performance:{now:()=>1},
+    inputHistory:[],inputHistoryIndex:0,inputHistoryDraft:'',
+    persistentMode:mode=>mode==='storyboard',
+    studioAttachedStoryId:()=> 'p1',
+    studioDirectorSelectedScene:()=>null,
+    currentMessages:()=>state.modeMessages.storyboard,
+    currentElapsedMap:()=>({}),currentMetricsMap:()=>({}),
+    activeContextMode:()=>null,markStudioReadinessOutdated:()=>{state.stale=true;},
+    syncControls(){},startProgress(){},renderProgress(){},finishProgress(){},
+    renderMessages(){seen.push(state.modeMessages.storyboard.map(m=>m.content));},
+    completedResponseMetrics:()=>({}),trackTransientLlmJob(){},
+    studioDirectorChatRequestMessages:async messages=>[
+      {role:'system',content:'CURRENT SAVED PROJECT OVERVIEW: Rainy Bookshop'},...messages],
+    requestJson:async (url,options)=>{
+      calls.push({url,body:options&&options.body&&JSON.parse(options.body)});
+      assert.equal(url,'/fs/director/chat','Read is never a Project or Scene save');
+      assert.equal(calls[0].body.operation,'studio_chat');
+      return{job:{jobId:'read-job',status:'queued',modelId:'remote-model'}};
+    },
+    waitForJob:async()=>({result:{text:reply}}),
+    persistSession:async()=>{
+      snapshots.push(JSON.parse(JSON.stringify(state.modeMessages.storyboard)));
+      if(state.modeMessages.storyboard.at(-1)?.role==='assistant')complete();
+    },
+    studioActionStatus(){},
+    window:{getStudioDirectorNavigation:()=>({projectId:'p1',projectTitle:'Rainy Bookshop',sceneOrder:[]}),
+      reportConsoleError:(_label,error)=>errors.push(error)}
+  });
+  vm.runInContext(part('  function sendMessage() {','  function syncPinnedUi() {'),ctx);
+  ctx.sendMessage();
+  await done;
+  await new Promise(setImmediate);
+  assert.equal(calls.length,1);
+  assert.equal(calls[0].body.messages[0].content.includes('Rainy Bookshop'),true);
+  assert.deepEqual(state.modeMessages.storyboard.map(m=>m.role),['user','assistant']);
+  assert.equal(state.modeMessages.storyboard[1].content,reply);
+  assert.equal(snapshots.at(-1)[1].content,reply);
+  assert.ok(seen.some(lines=>lines.includes(reply)));
+  assert.deepEqual(errors,[]);
+  assert.equal(state.pending,false);
+});

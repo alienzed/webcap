@@ -10,6 +10,7 @@ test('Flow 9 optional checkpoint — discover Coherence / Revise & Generate with
   await page.goto('/');
   await page.locator('#activity-storyboard-btn').click();
   await openProject(page,project.id);
+  await page.locator('#storyboard-scene-progression [data-scene-id="'+scene.id+'"]').click();
   await expect(page.locator('#storyboard-director-tools-btn')).toBeVisible();
   await page.locator('#storyboard-director-tools-btn').click();
   await expect(page.locator('#storyboard-director-tools-modal')).toBeVisible();

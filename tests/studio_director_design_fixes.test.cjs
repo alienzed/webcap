@@ -215,3 +215,30 @@ test('Studio header uses accessible compact history and new-conversation icons',
   assert.doesNotMatch(section(rail,'  function toggle(which) {','  function parseProposal(raw) {'),
     /seedManualSceneInstruction\(\)/);
 });
+
+
+test('conversation Scene targets support Select all and Deselect all without guessing', () => {
+  assert.match(html,/id="studio-dw-scenes-select-all"/);
+  assert.match(html,/id="studio-dw-scenes-select-none"/);
+  assert.match(rail,/if \(Array\.isArray\(frozen\.chosenSceneIds\)\)/);
+  const nodes = {
+    'studio-dw-batch-scenes': {
+      querySelectorAll:()=>[a,b,c]
+    }
+  };
+  const a={value:'scene-a',checked:false};
+  const b={value:'scene-b',checked:false};
+  const c={value:'scene-c',checked:false};
+  const scope=vm.createContext({el:id=>nodes[id],sceneSelectionManual:false,
+    pendingCreativeAction:{awaitingScenes:true},showWriteContext(){}});
+  vm.runInContext(section(rail,'  function selectWriteScenes(checked) {',
+    '  function refreshRead() {'),scope);
+  scope.selectWriteScenes(true);
+  assert.deepEqual(Array.from(scope.pendingCreativeAction.chosenSceneIds),
+    ['scene-a','scene-b','scene-c']);
+  assert.equal([a,b,c].every(x=>x.checked),true);
+  scope.selectWriteScenes(false);
+  assert.deepEqual(Array.from(scope.pendingCreativeAction.chosenSceneIds),[]);
+  assert.equal([a,b,c].some(x=>x.checked),false);
+  assert.equal(scope.sceneSelectionManual,true);
+});

@@ -19,7 +19,7 @@ ACTIONS = (
     {"name": "project.write", "status": "available",
      "description": "Create or revise the Project title, Concept, Visual / atmosphere and Invariants, preserving unrelated saved fields."},
     {"name": "scenes.write", "status": "available",
-     "description": "Create Scenes with complete H3 Prompts, or revise only the requested Scene fields; title-only changes need no creative rewrite. WebCap binds and saves each target."},
+     "description": "Create one or more Scenes with complete H3 Prompts, or revise only requested Scene fields; title-only edits need no creative rewrite. WebCap binds and saves each target."},
 )
 
 _WORKSHOP = (

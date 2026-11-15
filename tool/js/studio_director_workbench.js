@@ -813,6 +813,8 @@
     var frozen = {
       kind:action.kind, instruction:String(action.instruction).trim(),
       fields:Array.isArray(action.fields) ? action.fields.slice() : [],
+      scenes:action.kind === 'create_scene' && Array.isArray(action.scenes)
+        ? action.scenes.slice() : null,
       request:String(authorRequest || ''),
       projectId:String(selectedProject && selectedProject.projectId || ''),
       scene:selectedScene && {projectId:selectedScene.projectId,sceneId:selectedScene.sceneId,
@@ -837,7 +839,8 @@
     button.textContent = ({
       create_project:'Create Project · Review',
       write_project:'Revise Project · Review',
-      create_scene:'Create Scene(s) · Review',
+      create_scene:frozen.scenes && frozen.scenes.length
+        ? 'Review authored Scene(s)' : 'Create Scene(s) · Review',
       write_scenes:'Revise Scene(s) · Save'
     })[frozen.kind];
     button.title = frozen.instruction;
@@ -886,17 +889,22 @@
           });
         }
         if (frozen.kind === 'create_scene') {
-          // Author once. The returned Scene records, not a count extracted from
-          // the request, determine how much material is available to review.
-          status('Authoring new Scene drafts…',false,true);
-          return window.studioDirectorBridge.writeNewScene({
-            projectId:projectId,instruction:frozen.instruction,
-            authorRequest:frozen.request,directSave:false
-          }).then(function (result) {
+          // Authored records are reviewed directly, without a second model call.
+          // Otherwise authorize one authoring call, and retain its review action.
+          var operation = frozen.scenes && frozen.scenes.length ?
+            window.studioDirectorBridge.reviewAuthoredScenes({
+              projectId:projectId,scenes:frozen.scenes,
+              rationale:'Authored in Studio Director conversation.'
+            }) :
+            window.studioDirectorBridge.writeNewScene({
+              projectId:projectId,instruction:frozen.instruction,
+              authorRequest:frozen.request,directSave:false
+            });
+          return operation.then(function (result) {
             if (result && result.review) {
               status('Review the authored Scenes and save the useful drafts.',false,true);
-              // An editable review is not evidence that anything was saved.
-              finishSceneAction(false);
+              frozen.draftReady = true;
+              button.textContent = 'Review authored Scene(s)';
             }
           });
         }
@@ -975,7 +983,8 @@
       var projectId = action.chosenProjectId || action.projectId;
       var matches =
         (action.kind === 'create_project' && kind === 'project.create') ||
-        (projectId === story.id && action.kind === 'write_project' && kind === 'brief.apply');
+        (projectId === story.id && action.kind === 'write_project' && kind === 'brief.apply') ||
+        (projectId === story.id && action.kind === 'create_scene' && kind === 'scenes.create');
       if (!matches) return;
       pendingCreativeAction = null;
       el('studio-dw-suggestions').replaceChildren();

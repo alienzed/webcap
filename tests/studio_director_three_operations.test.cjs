@@ -132,7 +132,7 @@ function harness() {
   const source = part(workbench, '  function sceneIdsFromRequest(instruction, story, selectedScene) {',
     '  window.studioDirectorWorkbench = {');
   const creator = new Function('el','document','window','refreshProjects','loadStory',
-    'storyName','projectFields','status','openWriteForCapture',
+    'storyName','projectFields','status','openWriteForCapture','showConversationWrite',
     source + 'return {presentAction,sceneIdsFromRequest};');
   let opened = 0;
   const functions = creator(el,document,window,
@@ -140,7 +140,7 @@ function harness() {
       assert.equal(id,'p1');return story;
     },
     value=>value.title, ['title','concept','style','invariants'],
-    (...args)=>statuses.push(args),()=>{opened++;});
+    (...args)=>statuses.push(args),()=>{opened++;},()=>{});
   return {functions,bridge,requests,statuses,suggestions,story,opened:()=>opened};
 }
 async function flush() {

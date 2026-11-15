@@ -920,7 +920,7 @@
         }
         return loadStory(projectId).then(function (story) {
           var ids = sceneIdsFromRequest(frozen.request,story,frozen.scene);
-          if (frozen.chosenSceneIds && frozen.chosenSceneIds.length)
+          if (Array.isArray(frozen.chosenSceneIds))
             ids = frozen.chosenSceneIds.filter(function (id) {return story.sceneOrder.includes(id);});
           if (!ids.length) {
             frozen.awaitingScenes = true;

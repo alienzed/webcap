@@ -240,16 +240,29 @@
       : mode === 'Write' ? 'Reviewed destination · nothing saved until Apply'
       : 'Conversation is independent of Studio navigation';
   }
+  function manualSceneInstruction() {
+    return el('studio-dw-write-instruction').value.trim();
+  }
+  function seedManualSceneInstruction() {
+    var input = el('studio-dw-write-instruction');
+    if (input.value.trim()) return;
+    var messages = window.studioDirectorBridge.messages().filter(function (message) {
+      return message.role === 'user' &&
+        !String(message.content || '').includes('[WEBCAP APPLIED FIELD VALUES]');
+    });
+    input.value = String(messages.length && messages[messages.length - 1].content || '').trim();
+  }
   function setOperation() {
     var operation = el('studio-dw-write-operation').value;
     var sceneWrite = operation === 'scene-write';
     var revise = sceneWrite && el('studio-dw-scene-mode').value === 'revise';
     el('studio-dw-scene-mode-row').classList.toggle('hidden', !sceneWrite);
+    el('studio-dw-write-instruction-row').classList.toggle('hidden', !sceneWrite);
     el('studio-dw-batch-controls').classList.toggle('hidden', !revise);
     el('studio-dw-write-project').disabled = operation === 'new-project';
     el('studio-dw-write-prepare').textContent = sceneWrite
       ? (revise ? 'Revise selected Scenes · Save' : 'Create Scene · Review')
-      : 'Prepare draft';
+      : (operation === 'new-project' ? 'Create Project · Review' : 'Revise Overview · Review');
     showWriteContext();
     updateScope();
   }
@@ -311,6 +324,7 @@
     el('studio-dw-' + other + '-panel').classList.add('hidden');
     el('studio-dw-' + other).setAttribute('aria-expanded', 'false');
     updateScope();
+    if (show && which === 'write') seedManualSceneInstruction();
     if (show) return which === 'read' ? refreshRead() : refreshWrite();
   }
   function parseProposal(raw) {
@@ -383,14 +397,9 @@
     if (operation !== 'new-project' && !id) {status('Choose a destination Project.',true);return;}
     if (operation === 'scene-write') {
       if (el('studio-dw-scene-mode').value === 'revise') return prepareBatchScenes(id);
-      var userMessages = bridge.messages().filter(function (message) {
-        return message.role === 'user' &&
-          !String(message.content || '').includes('[WEBCAP APPLIED FIELD VALUES]');
-      });
-      var instruction = String(userMessages.length &&
-        userMessages[userMessages.length - 1].content || '').trim();
+      var instruction = manualSceneInstruction();
       if (!instruction) {
-        status('Describe the Scene you want to create in the conversation first.', true);
+        status('Enter an instruction for the new Scene before launch.', true);
         return;
       }
       return bridge.writeNewScene({
@@ -515,12 +524,9 @@
       status('Choose one to 32 Scenes to revise.', true);
       return Promise.resolve();
     }
-    var messages = window.studioDirectorBridge.messages().filter(function (message) {
-      return message.role === 'user' && !String(message.content || '').includes('[WEBCAP APPLIED FIELD VALUES]');
-    });
-    var instruction = String(messages.length && messages[messages.length - 1].content || '').trim();
+    var instruction = manualSceneInstruction();
     if (!instruction) {
-      status('Discuss the Scene change first, then write the selected Scenes.', true);
+      status('Enter a revision instruction before launch.', true);
       return Promise.resolve();
     }
     var fields = ['prompt'];

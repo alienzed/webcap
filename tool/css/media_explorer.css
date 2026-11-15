@@ -789,3 +789,98 @@
 .media-explorer-technical-filters { padding-top: 8px; border-top: 1px solid var(--border); }
 .media-explorer-technical-filters > summary { color: var(--muted); font-size: 12px; cursor: pointer; }
 .media-explorer-filter-chips { margin: 0 0 4px; }
+
+/* Compact Explorer IA: a single working toolbar rather than title/search/filter/sort rows.
+   Existing controls retain their DOM ownership, event handlers and responsive wrapping. */
+.media-explorer-workspace .media-explorer-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  align-items: center;
+  column-gap: 10px;
+  row-gap: 6px;
+  padding: 7px 12px;
+  max-height: min(42vh, 390px);
+}
+.media-explorer-workspace .media-explorer-header,
+.media-explorer-workspace .media-explorer-gallery-toolbar {
+  display: contents;
+}
+.media-explorer-workspace .media-explorer-header h2 { display: none; }
+.media-explorer-workspace .media-explorer-searchbar {
+  order: 1;
+  flex: 1 1 280px;
+  min-width: 200px;
+  max-width: 520px;
+  margin: 0;
+}
+.media-explorer-workspace .media-explorer-search-field {
+  min-height: 32px;
+}
+.media-explorer-workspace .media-explorer-search-field input {
+  padding: 5px 0;
+  font-size: 15px;
+}
+.media-explorer-workspace .media-explorer-filter-panel {
+  order: 2;
+  flex: 0 0 auto;
+  margin: 0;
+}
+.media-explorer-workspace .media-explorer-filter-panel[open] {
+  flex-basis: 100%;
+  order: 9;
+}
+.media-explorer-workspace .media-explorer-sort-controls {
+  order: 3;
+  flex: 0 1 auto;
+}
+.media-explorer-workspace .media-explorer-sort-controls select {
+  width: 150px;
+  min-height: 32px;
+}
+.media-explorer-workspace .media-explorer-count-group {
+  order: 4;
+  flex: 0 1 auto;
+}
+.media-explorer-workspace .media-explorer-view-controls {
+  order: 5;
+  flex: 0 0 auto;
+  margin-left: auto;
+}
+.media-explorer-workspace .media-explorer-header-actions {
+  order: 6;
+  flex: 0 0 auto;
+  margin: 0;
+  gap: 5px;
+}
+.media-explorer-workspace .media-explorer-header-actions .review-captions-btn {
+  padding: 5px 7px;
+  font-weight: 500;
+}
+.media-explorer-workspace .media-explorer-filter-chips {
+  order: 10;
+  flex-basis: 100%;
+  margin: 0;
+}
+.media-explorer-workspace .media-explorer-filter-chips:empty { display: none; }
+.media-explorer-workspace .media-explorer-external-path-bar,
+.media-explorer-workspace .media-explorer-metadata-progress {
+  order: 0;
+  flex-basis: 100%;
+}
+.media-explorer-workspace .media-explorer-selection {
+  order: 11;
+  flex-basis: 100%;
+}
+@media (max-width: 1100px) {
+  .media-explorer-workspace .media-explorer-searchbar { max-width: none; }
+  .media-explorer-workspace .media-explorer-view-controls { margin-left: 0; }
+}
+@media (max-width: 760px) {
+  .media-explorer-workspace .media-explorer-toolbar { padding: 7px 9px; }
+  .media-explorer-workspace .media-explorer-searchbar {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+  .media-explorer-workspace .media-explorer-header-actions { margin-left: 0; }
+}

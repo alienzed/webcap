@@ -2058,24 +2058,24 @@
                                             <button id="storyboard-story-show" type="button" class="review-captions-btn hidden" aria-expanded="false" aria-controls="storyboard-story-authoring">Show Project Overview</button>
                                             <button id="storyboard-collapsed-director" type="button" class="review-captions-btn hidden" onclick="openStoryboardAssistant()" title="Open Studio Director for this Project">Director</button>
                                             <strong id="storyboard-workspace-mode-title">Scenes</strong>
-                                            <div id="storyboard-project-tool-bar" class="storyboard-project-tool-bar" role="group" aria-label="Project Tools">
-                                                <button id="storyboard-generate-scenes-btn" type="button" class="review-captions-btn storyboard-tool-icon" aria-label="Generate Takes" title="Generate Takes — queue one new Take per Scene">▶</button>
-                                                <button id="storyboard-director-tools-btn" type="button" class="review-captions-btn storyboard-tool-icon" aria-label="Revise &amp; Generate" title="Revise &amp; Generate — revise Project Scenes, optionally generating Takes">✦</button>
-                                                <button type="button" data-project-tool="coherence" class="review-captions-btn storyboard-tool-icon" aria-label="Check Coherence" title="Check Coherence — review consistency across Scenes">◎</button>
-                                                <button id="storyboard-cancel-takes-btn" type="button" class="review-captions-btn hidden" title="Cancel this Project's queued Take generation. The current Take will finish.">Cancel Takes</button>
-                                                <details id="storyboard-project-tools" class="storyboard-header-menu">
-                                                    <summary class="review-captions-btn storyboard-tool-icon" aria-label="More Project Tools" title="More Project Tools">⋯</summary>
-                                                    <div class="storyboard-header-menu-items">
-                                                        <button type="button" data-project-tool="continuity">Continuity pass</button>
-                                                        <button type="button" data-project-tool="replace">Find &amp; Replace</button>
-                                                    </div>
-                                                </details>
-                                            </div>
                                         </div>
                                         <span id="storyboard-progress-summary" class="storyboard-progress-summary"></span>
                                     </div>
                                 </div>
                                 <div class="storyboard-scenes-heading-actions">
+                                    <div id="storyboard-project-tool-bar" class="storyboard-project-tool-bar" role="group" aria-label="Project Tools">
+                                        <button id="storyboard-generate-scenes-btn" type="button" class="review-captions-btn storyboard-tool-icon" aria-label="Generate Takes" title="Generate Takes — queue one new Take per Scene"><span class="storyboard-tool-glyph" aria-hidden="true">▶</span><span class="storyboard-tool-label" aria-hidden="true">Generate Takes</span></button>
+                                        <button id="storyboard-director-tools-btn" type="button" class="review-captions-btn storyboard-tool-icon" aria-label="Revise &amp; Generate" title="Revise &amp; Generate — revise Project Scenes, optionally generating Takes"><span class="storyboard-tool-glyph" aria-hidden="true">✦</span><span class="storyboard-tool-label" aria-hidden="true">Revise &amp; Generate</span></button>
+                                        <button type="button" data-project-tool="coherence" class="review-captions-btn storyboard-tool-icon" aria-label="Check Coherence" title="Check Coherence — review consistency across Scenes"><span class="storyboard-tool-glyph" aria-hidden="true">◎</span><span class="storyboard-tool-label" aria-hidden="true">Check Coherence</span></button>
+                                        <button id="storyboard-cancel-takes-btn" type="button" class="review-captions-btn hidden" title="Cancel this Project's queued Take generation. The current Take will finish.">Cancel Takes</button>
+                                        <details id="storyboard-project-tools" class="storyboard-header-menu">
+                                            <summary class="review-captions-btn storyboard-tool-icon" aria-label="More Project Tools" title="More Project Tools"><span aria-hidden="true">⋯</span></summary>
+                                            <div class="storyboard-header-menu-items">
+                                                <button type="button" data-project-tool="continuity">Continuity pass</button>
+                                                <button type="button" data-project-tool="replace">Find &amp; Replace</button>
+                                            </div>
+                                        </details>
+                                    </div>
                                     <button id="storyboard-scenes-focus-btn" type="button" class="review-captions-btn hidden">← Scenes</button>
                                 </div>
                             </div>

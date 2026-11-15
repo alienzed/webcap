@@ -2577,7 +2577,7 @@ html[data-theme="dark"] .storyboard-prompt-take-status {
   }
 
   .storyboard-scenes-list.is-focus .storyboard-scene:has(> .storyboard-takes[open]) > .storyboard-takes {
-    margin-top: 12px;
+    margin-top: 0;
     margin-right: 0;
     border: 0;
     border-radius: 0;
@@ -2586,11 +2586,12 @@ html[data-theme="dark"] .storyboard-prompt-take-status {
   }
 
   .storyboard-scenes-list.is-focus .storyboard-scene:has(> .storyboard-takes[open]) .storyboard-takes-summary {
-    padding: 0;
+    min-height: 0;
+    padding: 28px 14px 12px;
   }
 
   .storyboard-scenes-list.is-focus .storyboard-scene:has(> .storyboard-takes[open]) .storyboard-takes-content {
-    padding: 0 0 14px;
+    padding: 0 14px 14px;
   }
 
   .storyboard-scenes-list.is-focus .storyboard-scene:has(> .storyboard-takes[open]) .storyboard-takes-grid {

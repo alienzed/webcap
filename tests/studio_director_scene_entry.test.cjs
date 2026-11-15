@@ -77,7 +77,7 @@ test('quick Apply changes only prompt, retaining the original prompt as its conf
 });
 
 test('automatic Director revisions get a distinct persisted receipt; reviewed Apply stays reviewed', async()=>{
-  const state={modeMessages:{storyboard:[]},sessionDirty:{storyboard:false}};
+  const state={modeMessages:{storyboard:[]},sessionDirty:{storyboard:false},studioWorkingDraft:{projects:{},scenes:{},newProject:{},newScene:{},sourceRequest:''}};
   const scope=vm.createContext({state,window:{studioDirectorWorkbench:{markSavedFields(){}}},
     markStudioReadinessOutdated(){},renderMessages(){},persistSession:async()=>{}});
   const method=section(director,'    recordApplied: function','    undoBrief: function').trim().replace(/,$/,'');

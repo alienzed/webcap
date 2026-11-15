@@ -1,0 +1,24 @@
+'use strict';
+const {test,expect}=require('@playwright/test');
+const modelUrl='http://127.0.0.1:4211';
+test('Flow 4 checkpoint — Director displays a plain-text Read response through the real queue',async({page,request})=>{
+  const reset=await request.post(modelUrl+'/__acceptance/reset');expect(reset.ok()).toBeTruthy();
+  const queued=await request.post(modelUrl+'/__acceptance/queue',{data:{value:'The test answer is: amber windows.'}});
+  expect(queued.ok()).toBeTruthy();
+  await page.goto('/');
+  await page.locator('#activity-storyboard-btn').click();
+  await page.locator('#director-chat-rail-btn').click();
+  await page.locator('[data-assistant-mode="storyboard"]').click();
+  const model=page.locator('#director-chat-model');
+  await expect(model.locator('option[value="acceptance::acceptance-model"]')).toHaveCount(1);
+  await model.selectOption('acceptance::acceptance-model');
+  await page.locator('#director-chat-input').fill('What color are the windows? Answer briefly, make no changes.');
+  await page.locator('#director-chat-send').click();
+  await expect(page.locator('#director-chat-messages')).toContainText('The test answer is: amber windows.');
+  const observed=await request.get(modelUrl+'/__acceptance/calls');
+  const {calls,remaining}=await observed.json();
+  expect(calls).toHaveLength(1);
+  expect(remaining).toBe(0);
+  expect(calls[0].messages.some(item=>item.role==='user' && String(item.content).includes('What color are the windows?'))).toBeTruthy();
+  expect(await page.request.get('/fs/storyboard').then(r=>r.json()).then(r=>r.stories||[])).toHaveLength(0);
+});

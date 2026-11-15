@@ -422,12 +422,13 @@ Do not hash the compatibility record.
 When Run/Continue begins:
 
 - no existing calibration block: record current hardware and start normally;
-- existing results with matching hardware: reuse them;
-- existing calibration with different hardware: fail loudly and require explicit Reset before running a calibration on the new hardware.
+- existing results with matching GPU model and total VRAM: reuse them;
+- changed WSL-visible RAM on the same GPU: log the difference and update the recorded RAM value without discarding results;
+- different GPU model or total VRAM: explain the actual saved/current values and require explicit Reset rather than reusing GPU-specific measurements.
 
-A mismatch never silently deletes old evidence.
+A GPU mismatch never silently deletes old evidence. Visible RAM remains diagnostic and must not independently block reuse.
 
-When calibrated `safe_shapes` are used for H3 generation, they are valid only for matching current calibration hardware. Do not silently apply calibrated ceilings on a hardware mismatch. If the required hardware identity cannot be read or does not match, fail visibly rather than pretending the old calibration is valid.
+When calibrated `safe_shapes` are used for H3 generation, they apply on a matching GPU and total VRAM regardless of RAM reporting differences. If GPU identity cannot be read or does not match, use conservative uncalibrated buckets instead of blocking Training Review; log known mismatches so the reason stays visible.
 
 Do not add multiple hardware profiles in this pass.
 
@@ -930,8 +931,8 @@ Add tests that prove:
 
 Add tests that prove:
 
-- equal total RAM + GPU model + total VRAM reuses results;
-- any one of those three changing prevents reuse;
+- equal GPU model + total VRAM reuses results even if WSL-visible RAM differs;
+- different GPU model or VRAM prevents reuse without an explicit Reset;
 - software/trainer/config/version changes are not compatibility fields;
 - hardware mismatch does not delete old calibration state;
 - calibrated H3 generation does not silently use incompatible `safe_shapes`.
@@ -1011,7 +1012,7 @@ The pass is complete when:
 
 1. A stopped/crashed H3 calibration can be started again and all compatible conclusive candidate results already saved in Settings are skipped.
 2. The current candidate is rerun after interruption if it never produced conclusive persistent evidence.
-3. Hardware compatibility consists only of total RAM, GPU model, and total VRAM.
+3. GPU model and total VRAM determine compatibility; visible total RAM is retained for diagnostics without blocking reuse.
 4. Environment/config/trainer failures remain loud failures rather than entering a recovery workflow.
 5. The single-shape H3 classifier and fixed 90-shape plan remain unchanged.
 6. Mixed Quality validation is removed and is not replaced by another matrix experiment.

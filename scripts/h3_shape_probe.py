@@ -651,8 +651,23 @@ def load_persistent_calibration(config_path, hardware):
     calibration = training.get("h3_calibration")
     if calibration is None:
         return config, {"hardware": hardware, "results": {}}
-    if not isinstance(calibration, dict) or calibration.get("hardware") != hardware or not isinstance(calibration.get("results"), dict):
-        raise ValueError("H3 calibration hardware differs from Settings; Reset calibration before running on this hardware.")
+    if not isinstance(calibration, dict) or not isinstance(calibration.get("hardware"), dict) or not isinstance(calibration.get("results"), dict):
+        raise ValueError("Saved H3 calibration is malformed; inspect training.h3_calibration in Settings.")
+    saved_hardware = calibration["hardware"]
+    if any(saved_hardware.get(field) != hardware[field] for field in ("gpu_model", "total_vram_mib")):
+        raise ValueError(
+            "H3 calibration GPU differs from Settings (saved: "
+            + str(saved_hardware) + ", current: " + str(hardware)
+            + "). Previous results are unchanged; Reset calibration only to start on a different GPU."
+        )
+    if saved_hardware.get("total_ram_mib") != hardware["total_ram_mib"]:
+        print(
+            "[h3-probe] Visible RAM changed from "
+            + str(saved_hardware.get("total_ram_mib")) + " to " + str(hardware["total_ram_mib"])
+            + " MiB; reusing GPU-compatible calibration results.",
+            flush=True,
+        )
+        calibration["hardware"] = hardware
     return config, calibration
 
 

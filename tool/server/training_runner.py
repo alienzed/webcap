@@ -129,8 +129,6 @@ def launch_h3_probe_runtime(launch_callback):
         jobs = state.get("jobs") if isinstance(state.get("jobs"), list) else []
         if _reconcile_training_gpu_owner_from_runtime(jobs) is not None:
             raise RuntimeError("H3 calibration is waiting for the Training GPU.")
-        if not state.get("queuePaused") and any(job.get("status") in QUEUE_STATUSES for job in jobs):
-            raise RuntimeError("H3 calibration is waiting for queued Training work.")
         if execution_resource_owner():
             raise RuntimeError("H3 calibration is waiting for the shared GPU.")
         if not reserve_execution_resource(TRAINING_RESOURCE_OWNER):

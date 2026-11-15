@@ -515,30 +515,33 @@
     }).then(function (story) {
       var ids = story.sceneOrder || [];
       if (!ids.length) throw new Error('This Project has no Scenes to check.');
-      if (ids.some(function (id) {
-        return !story.scenes || !story.scenes[id] || !String(story.scenes[id].prompt || '').trim();
-      })) throw new Error('Check Coherence requires a saved H3 Prompt in every Scene.');
       originalStory = story;
       return window.studioDirectorBridge.checkProjectCoherence(storyId);
     }).then(function (result) {
       return loadStory(storyId).then(function (fresh) {
         if (fresh.updatedAt !== originalStory.updatedAt)
           throw new Error('The Project changed during coherence analysis. Run the check again before reviewing changes.');
-        var ids = originalStory.sceneOrder || [], seen = new Set();
-        if (result.scenes.length !== ids.length)
-          throw new Error('Coherence analysis did not return every Scene.');
-        var changed = result.scenes.filter(function (entry) {
+        var ids = originalStory.sceneOrder || [], seen = new Set(), failures = [];
+        (result.errors || []).forEach(function (item) {
+          failures.push('Scene ' + (ids.indexOf(item.sceneId) + 1) + ': ' + item.error);
+        });
+        var changed = [];
+        (result.scenes || []).forEach(function (entry) {
           if (!entry || !ids.includes(entry.sceneId) || seen.has(entry.sceneId) ||
               typeof entry.originalPrompt !== 'string' || typeof entry.prompt !== 'string' ||
               !entry.prompt.trim() || entry.originalPrompt !== originalStory.scenes[entry.sceneId].prompt) {
-            throw new Error('Coherence analysis returned mismatched Scene prompts.');
+            failures.push('An invalid or outdated Scene proposal was excluded.');
+            return;
           }
           seen.add(entry.sceneId);
-          return entry.prompt !== entry.originalPrompt;
+          if (entry.prompt !== entry.originalPrompt) changed.push(entry);
         });
-        if (seen.size !== ids.length) throw new Error('Coherence analysis omitted a Scene.');
+        if (failures.length && typeof window.reportConsoleError === 'function')
+          window.reportConsoleError('Studio Coherence incomplete', failures.join(' | '));
+        var summary = 'Checked ' + seen.size + ' of ' + ids.length + ' Scenes' +
+          (failures.length ? ' · ' + failures.length + ' skipped/failed: ' + failures.join(' | ') : '');
         if (!changed.length) {
-          status('Checked ' + ids.length + ' Scenes; no H3 Prompt changes proposed.', false);
+          status(summary + ' · No H3 Prompt changes proposed.', !!failures.length);
           return;
         }
         proposedBatch = {
@@ -555,8 +558,7 @@
           })
         };
         renderBatchReview();
-        status('Coherence check proposed H3 Prompt changes for ' + changed.length +
-          ' of ' + ids.length + ' Scenes. Review before applying.', false);
+        status(summary + ' · Review ' + changed.length + ' proposed Prompt changes before applying.', !!failures.length);
       });
     }).catch(function (error) {
       status('Project coherence check failed: ' + String(error.message || error), true);
@@ -565,35 +567,44 @@
   // Validate model-produced revisions before presenting them for review. The saved
   // Scene identity and untouched fields remain authoritative.
   function validateSceneRevisionDraft(result, ids, selected, raw) {
-    if (!Array.isArray(result.scenes) || result.scenes.length !== ids.length)
-      throw new Error('Director returned ' + (Array.isArray(result.scenes) ? result.scenes.length : 'no') +
-        ' Scenes; expected ' + ids.length + '.\nRaw Director response:\n' + raw);
-    var seen = new Set();
+    if (!result || !Array.isArray(result.scenes))
+      throw new Error('Director returned no Scene revisions.\nRaw Director response:\n' + raw);
+    var seen = new Set(), warnings = [];
+    var revisions = [];
     result.scenes.forEach(function (candidate, index) {
-      if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate))
-        throw new Error('Director Scene ' + (index + 1) + ' is not an object.\nRaw Director response:\n' + raw);
-      if (!ids.includes(candidate.sceneId) || seen.has(candidate.sceneId))
-        throw new Error('Director returned a missing, duplicate, or unknown Scene ID at record ' +
-          (index + 1) + ': ' + String(candidate.sceneId) + '.\nRaw Director response:\n' + raw);
+      if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate) ||
+          !ids.includes(candidate.sceneId) || seen.has(candidate.sceneId)) {
+        warnings.push('Scene record ' + (index + 1) + ' has no unique selected Scene identity.');
+        return;
+      }
       seen.add(candidate.sceneId);
-      Object.keys(candidate).forEach(function (key) {
-        if (key === 'sceneId') return;
-        if (!sceneFields.includes(key) || typeof candidate[key] !== 'string' ||
-            !candidate[key].trim())
-          throw new Error('Director returned invalid Scene field "' + key +
-            '" for Scene ' + candidate.sceneId + ' (allowed: title, prompt; nonempty strings).\nRaw Director response:\n' + raw);
-      });
-    });
-    return ids.map(function (id) {
-      var before = selected.find(function (row) {return row.sceneId === id;});
-      var response = result.scenes.find(function (row) {return row.sceneId === id;});
-      var changed = {sceneId:id};
+      var before = selected.find(function (row) {return row.sceneId === candidate.sceneId;});
+      if (!before) {
+        warnings.push('Scene record ' + (index + 1) + ' has no saved baseline.');
+        return;
+      }
+      var changed = {sceneId:candidate.sceneId};
       sceneFields.forEach(function (field) {
-        if (Object.prototype.hasOwnProperty.call(response, field) &&
-            response[field] !== String(before[field] || '')) changed[field] = response[field];
+        if (!Object.prototype.hasOwnProperty.call(candidate, field)) return;
+        if (typeof candidate[field] !== 'string' || !candidate[field].trim()) {
+          warnings.push('Scene ' + candidate.sceneId + ' has an invalid ' + field + ' (ignored).');
+        } else if (candidate[field] !== String(before[field] || '')) {
+          changed[field] = candidate[field];
+        }
       });
-      return {sceneId:id, before:before, draft:changed};
-    }).filter(function (entry) {return Object.keys(entry.draft).length > 1;});
+      Object.keys(candidate).forEach(function (key) {
+        if (key !== 'sceneId' && !sceneFields.includes(key))
+          warnings.push('Scene ' + candidate.sceneId + ' has an unsupported ' + key + ' (ignored).');
+      });
+      if (Object.keys(changed).length > 1)
+        revisions.push({sceneId:candidate.sceneId, before:before, draft:changed});
+    });
+    ids.forEach(function (id) {
+      if (!seen.has(id)) warnings.push('No usable revision for Scene ' + id + '.');
+    });
+    if (warnings.length && typeof window.reportConsoleError === 'function')
+      window.reportConsoleError('Studio Scene revision incomplete', warnings.join(' | '));
+    return revisions;
   }
   function prepareBatchScenes(storyId) {
     var ids = Array.from(el('studio-dw-batch-scenes').querySelectorAll('input:checked'))

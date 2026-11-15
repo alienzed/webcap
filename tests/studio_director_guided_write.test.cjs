@@ -471,13 +471,28 @@ test('new Project writer accepts complete overview and brief-only initial Scenes
   }));
   assert.equal(accepted.initialScenes[0].durationSeconds,12);
   assert.equal(accepted.invariants[0].title,'Tower');
-  assert.throws(()=>scope.parseStudioProjectDraft(JSON.stringify({
-    title:'Beacon',concept:'A watchful keeper',style:'',rationale:'',
-    invariants:[],initialScenes:[]})),/complete Concept and Visual/);
-  assert.throws(()=>scope.parseStudioProjectDraft(JSON.stringify({
-    title:'Beacon',concept:'A watchful keeper',style:'Coastal dusk',rationale:'',
+  const incomplete=scope.parseStudioProjectDraft(JSON.stringify({
+    title:'Beacon',concept:'A watchful keeper',style:'',
     invariants:[],initialScenes:[{title:'A',brief:'Scene brief',durationSeconds:16}]
-  })),/invalid Project/);
+  }));
+  assert.equal(incomplete.style,'','review can fill in missing creative context');
+  assert.equal(incomplete.rationale,'','optional explanation is not a rejection reason');
+  assert.equal(incomplete.initialScenes[0].durationSeconds,16,'review exposes the unsupported duration for correction');
+  assert.equal(scope.parseStudioProjectDraft(JSON.stringify({
+    concept:'Rainy bookshop',style:'Warm light',invariants:[{kind:'unknown',title:'Green door',text:'Keep'}]
+  })).invariants[0].kind,'custom');
+  assert.throws(()=>scope.parseStudioProjectDraft('{}'),/no usable Project material/);
+});
+
+test('Director Scene draft keeps full prompt when rationale and title are omitted',()=>{
+  const scope=vm.createContext({});
+  vm.runInContext(projectPart('  function parseStudioSceneDraft(raw) {',
+    '  function showStudioSceneDraftReview() {'),scope);
+  const result=scope.parseStudioSceneDraft(JSON.stringify({prompt:'A complete H3 prompt'}));
+  assert.equal(result.prompt,'A complete H3 prompt');
+  assert.equal(result.title,'');
+  assert.equal(result.rationale,'');
+  assert.throws(()=>scope.parseStudioSceneDraft('{}'),/complete Prompt/);
 });
 
 test('initial Scene briefs produce bounded independent saves; a failed item retains successes',async()=>{

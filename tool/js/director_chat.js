@@ -1580,27 +1580,35 @@
     var proposal;
     try { proposal = JSON.parse(value); }
     catch (error) { throw new Error('Director returned invalid Project JSON: ' + error.message + '\nRaw Director response:\n' + String(raw || '')); }
-    if (!proposal || Array.isArray(proposal) || typeof proposal !== 'object' ||
-        ['title', 'concept', 'style', 'rationale'].some(function (field) { return typeof proposal[field] !== 'string'; }) ||
-        !Array.isArray(proposal.invariants) ||
-        proposal.invariants.length > 30 ||
-        proposal.invariants.some(function (item) {
-          return !item || typeof item !== 'object' || Array.isArray(item) ||
-            typeof item.kind !== 'string' || typeof item.title !== 'string' || typeof item.text !== 'string' ||
-            ['visual', 'character', 'location', 'world', 'sound', 'custom'].indexOf(item.kind) === -1;
-        }) ||
-        (proposal.initialScenes != null && (!Array.isArray(proposal.initialScenes) ||
-          proposal.initialScenes.length > 32 || proposal.initialScenes.some(function (item) {
-            return !item || typeof item.title !== 'string' || item.title.length > 240 ||
-              typeof item.brief !== 'string' || !item.brief.trim() || item.brief.length > 4000 ||
-              !Number.isInteger(item.durationSeconds) || item.durationSeconds < 4 ||
-              item.durationSeconds > 15;
-          })))) {
-      throw new Error('Director returned invalid Project fields or initial Scene briefs.\nRaw Director response:\n' + String(raw || ''));
-    }
-    if (!proposal.concept.trim() || !proposal.style.trim()) {
-      throw new Error('Director must provide complete Concept and Visual / atmosphere.\nRaw Director response:\n' + String(raw || ''));
-    }
+    if (!proposal || Array.isArray(proposal) || typeof proposal !== 'object')
+      throw new Error('Director returned no Project proposal.\nRaw Director response:\n' + String(raw || ''));
+    // The review owns completeness: missing explanatory fields or one imperfect
+    // initial Scene must not erase the usable Project proposal.
+    proposal.title = typeof proposal.title === 'string' ? proposal.title : '';
+    proposal.concept = typeof proposal.concept === 'string' ? proposal.concept : '';
+    proposal.style = typeof proposal.style === 'string' ? proposal.style : '';
+    proposal.rationale = typeof proposal.rationale === 'string' ? proposal.rationale : '';
+    proposal.invariants = Array.isArray(proposal.invariants) ? proposal.invariants.map(function (item) {
+      var row = item && typeof item === 'object' && !Array.isArray(item) ? item : {};
+      var kinds = ['visual', 'character', 'location', 'world', 'sound', 'custom'];
+      return {
+        kind: kinds.includes(row.kind) ? row.kind : 'custom',
+        title: typeof row.title === 'string' ? row.title : '',
+        text: typeof row.text === 'string' ? row.text : ''
+      };
+    }) : [];
+    proposal.initialScenes = Array.isArray(proposal.initialScenes) ? proposal.initialScenes.map(function (item) {
+      var row = item && typeof item === 'object' && !Array.isArray(item) ? item : {};
+      return {
+        title: typeof row.title === 'string' ? row.title : '',
+        brief: typeof row.brief === 'string' ? row.brief : '',
+        // Preserve an unsupported value for explicit correction in Review.
+        durationSeconds: row.durationSeconds == null ? 6 : row.durationSeconds
+      };
+    }) : [];
+    if (!proposal.title.trim() && !proposal.concept.trim() && !proposal.style.trim() &&
+        !proposal.invariants.length && !proposal.initialScenes.length)
+      throw new Error('Director returned no usable Project material.\nRaw Director response:\n' + String(raw || ''));
     return proposal;
   }
 
@@ -2662,14 +2670,13 @@
     try { draft = JSON.parse(value); }
     catch (error) { throw new Error('Director returned invalid Scene draft JSON: ' + error.message); }
     if (!draft || typeof draft !== 'object' || Array.isArray(draft) ||
-        typeof draft.title !== 'string' || typeof draft.prompt !== 'string' ||
-        typeof draft.rationale !== 'string' || !draft.prompt.trim()) {
-      throw new Error('Scene draft must include a title, full Prompt and rationale.');
+        typeof draft.prompt !== 'string' || !draft.prompt.trim()) {
+      throw new Error('Scene draft must include a complete Prompt.');
     }
     return {
-      title: draft.title.trim(),
+      title: typeof draft.title === 'string' ? draft.title.trim() : '',
       prompt: draft.prompt.trim(),
-      rationale: draft.rationale.trim()
+      rationale: typeof draft.rationale === 'string' ? draft.rationale.trim() : ''
     };
   }
 

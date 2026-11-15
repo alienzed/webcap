@@ -29,7 +29,9 @@ test('coherence results enter existing batch review and atomic saved-field Apply
   const code = section(workbench, '  function prepareProjectCoherence(storyId) {', '  function prepareBatchScenes(storyId) {');
   assert.match(code, /window.flushStudioDirectorStoryEdits\(storyId\)/);
   assert.match(code, /fresh.updatedAt !== originalStory.updatedAt/);
-  assert.match(code, /result.scenes.length !== ids.length/);
+  assert.match(code, /\(result\.errors \|\| \[\]\)\.forEach/);
+  assert.match(code, /\(result\.scenes \|\| \[\]\)\.forEach/);
+  assert.doesNotMatch(code, /result.scenes.length !== ids.length/);
   assert.match(code, /entry.originalPrompt !== originalStory.scenes\[entry.sceneId\].prompt/);
   assert.match(code, /fields:\['prompt'\]/);
   assert.match(code, /renderBatchReview\(\)/);

@@ -223,7 +223,4 @@ def read_story_scope(story, field, scene_id=""):
             data = {"id": scene_id, "takeIds": list(scene.get("takeOrder") or [])}
     else:
         raise ValueError("Unsupported Studio Story read scope.")
-    import json
-    if len(json.dumps(data, ensure_ascii=False)) > 32000:
-        raise ValueError("Story field selection is too large. Select a narrower field or Scene.")
     return data

@@ -38,15 +38,23 @@ test('unchanged values produce no proposal',()=>{
   assert.deepEqual(draft([{sceneId:'scene-1',prompt:'Old prompt'}]),[]);
   assert.deepEqual(draft([{sceneId:'scene-1'}]),[]);
 });
-test('Intent-only model output is rejected, never reported as a successful revision',()=>{
-  assert.throws(()=>draft([{sceneId:'scene-1',summary:'An updated outline'}]),/invalid Scene field "summary"/);
-  assert.throws(()=>draft([{sceneId:'scene-1',intent:'An updated intent'}]),/invalid Scene field "intent"/);
+test('unsupported fields never become applied changes',()=>{
+  assert.deepEqual(draft([{sceneId:'scene-1',summary:'An updated outline'}]),[]);
+  assert.deepEqual(draft([{sceneId:'scene-1',intent:'An updated intent'}]),[]);
 });
-test('invalid prompts and Scene identities fail with raw model diagnostics',()=>{
+test('invalid fields do not discard independent valid Scene changes',()=>{
   for(const value of [null,12,'','  '])
-    assert.throws(()=>draft([{sceneId:'scene-1',prompt:value}]),/invalid Scene field "prompt"/);
-  assert.throws(()=>draft([]),/expected 1/);
-  assert.throws(()=>draft([{sceneId:'unknown'}]),/unknown Scene ID/);
-  assert.throws(()=>draft([{sceneId:'scene-1'},{sceneId:'scene-1'}],['scene-1','scene-2'],two),/duplicate, or unknown Scene ID/);
-  assert.throws(()=>draft([null]),/not an object/);
+    assert.deepEqual(draft([{sceneId:'scene-1',prompt:value}]),[]);
+  assert.deepEqual(draft([]),[]);
+  assert.deepEqual(draft([{sceneId:'unknown'}]),[]);
+  assert.deepEqual(draft([{sceneId:'scene-1'},{sceneId:'scene-1'}],['scene-1','scene-2'],two),[]);
+  assert.deepEqual(draft([null]),[]);
+  const rows=draft([
+    {sceneId:'scene-1',prompt:'A complete new prompt',intent:'unsupported'},
+    {sceneId:'scene-2',title:'Next',prompt:''},
+    {sceneId:'unknown',prompt:'Ignored'},
+    null
+  ],['scene-1','scene-2'],two);
+  assert.deepEqual(rows.map(x=>x.draft),[{sceneId:'scene-1',prompt:'A complete new prompt'}]);
+  assert.throws(()=>validate({},['scene-1'],one,'raw'),/no Scene revisions/);
 });

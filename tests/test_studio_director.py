@@ -318,7 +318,7 @@ def test_studio_chat_scene_numbers_are_advisory_and_persist_with_older_sessions(
 def test_director_scene_index_is_lightweight_and_selected_scene_reads_full_prompt():
     from tool.server.studio_director import read_story_scope
 
-    long_prompt = "A" * 20000
+    long_prompt = "A" * 50000  # A saved field must not fail on the old arbitrary 32 KB cutoff.
     story = {"id": "project-1", "sceneOrder": ["scene-a", "scene-b"], "scenes": {
         "scene-a": {"title": "Arrival", "prompt": long_prompt, "summary": "Legacy Intent"},
         "scene-b": {"title": "Departure", "prompt": long_prompt, "summary": ""},

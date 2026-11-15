@@ -805,6 +805,13 @@
     };
     pendingCreativeAction = frozen;
     showConversationWrite();
+    function finishSceneAction() {
+      if (pendingCreativeAction !== frozen) return;
+      pendingCreativeAction = null;
+      el('studio-dw-suggestions').replaceChildren();
+      showConversationWrite();
+      window.studioDirectorBridge.finishWriteAction(frozen);
+    }
     var host = el('studio-dw-suggestions');
     host.replaceChildren();
     var button = document.createElement('button');
@@ -882,6 +889,7 @@
               status('Saved ' + saved.length + ' · Failed ' + failed.length +
                 ' · Not attempted ' + notAttempted.length +
                 (failed.length ? ': ' + failed.join(' | ') : ''),!!failed.length,true);
+              finishSceneAction();
               return Promise.resolve();
             }
             var direction = count === 1 ? frozen.instruction :
@@ -911,6 +919,7 @@
                 for (var i = index + 1;i < count;i++) notAttempted.push('Scene ' + (i + 1));
                 status('Saved ' + saved.length + ' · Failed ' + failed.length +
                   ' · Not attempted ' + notAttempted.length,true,true);
+                finishSceneAction();
                 return;
               }
               return create(index + 1);
@@ -947,6 +956,7 @@
               status('Saved ' + completed.length + ' · Unchanged ' + unchanged.length +
                 ' · Failed ' + failed.length + ' · Not attempted ' + notAttempted.length +
                 (failed.length ? ': ' + failed.join(' | ') : ''),failed.length > 0,true);
+              finishSceneAction();
               return;
             }
             return window.studioDirectorBridge.writeSelectedScene({
@@ -966,6 +976,7 @@
                 notAttempted = ids.slice(i + 1);
                 status('Saved ' + completed.length + ' · Failed ' + failed.length +
                   ' · Not attempted ' + notAttempted.length,true,true);
+                finishSceneAction();
                 return;
               }
               return next(i + 1);
@@ -991,13 +1002,7 @@
       var projectId = action.chosenProjectId || action.projectId;
       var matches =
         (action.kind === 'create_project' && kind === 'project.create') ||
-        (projectId === story.id &&
-          ((action.kind === 'write_project' && kind === 'brief.apply') ||
-           (action.kind === 'create_scene' && kind === 'scene.create') ||
-           (action.kind === 'write_scenes' && kind === 'scene.director.revision' &&
-            (!action.scene || !action.scene.sceneId ||
-             action.scene.sceneId === selected.sceneId ||
-             (Array.isArray(action.chosenSceneIds) && action.chosenSceneIds.includes(selected.sceneId))))));
+        (projectId === story.id && action.kind === 'write_project' && kind === 'brief.apply');
       if (!matches) return;
       pendingCreativeAction = null;
       el('studio-dw-suggestions').replaceChildren();

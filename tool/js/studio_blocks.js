@@ -91,114 +91,174 @@
     return found ? {start:caret - found[2].length - 1, end:caret,
       query:found[2].toLocaleLowerCase()} : null;
   }
+  // A single text-insertion picker serves Studio chat and Project Invariant
+  // descriptions. Neither source becomes a stored reference or hidden context.
   function setupSlash() {
-    var input = el('director-chat-input'), host = el('studio-blocks-slash');
-    var available = [], filtered = [], active = 0, opened = false, loading = false, error = '';
-    var selection = null, requestId = 0;
-    function isStudio() { return window.studioDirectorBridge.isStudioMode(); }
+    var chat = el('director-chat-input');
+    var chatHost = el('studio-blocks-slash');
+    var invariantHost = document.createElement('div');
+    invariantHost.className = 'studio-blocks-slash studio-blocks-slash-floating hidden';
+    invariantHost.setAttribute('role', 'listbox');
+    invariantHost.setAttribute('aria-label', 'Insert Studio Block');
+    invariantHost.id = 'studio-blocks-invariant-slash';
+    document.body.appendChild(invariantHost);
+
+    var input = null, host = null, match = null, available = [], filtered = [];
+    var active = 0, requestId = 0, loading = false, error = '';
+    function isInvariant(element) {
+      return !!element && element.matches('[data-story-invariant-text]');
+    }
+    function isSupported(element) {
+      return element === chat ? window.studioDirectorBridge.isStudioMode() : isInvariant(element);
+    }
     function close() {
-      opened = false; selection = null; filtered = []; available = [];
       requestId++;
-      host.replaceChildren();
-      host.classList.add('hidden');
-      input.setAttribute('aria-expanded', 'false');
+      if (input) input.setAttribute('aria-expanded', 'false');
+      if (host) { host.replaceChildren(); host.classList.add('hidden'); }
+      input = null; host = null; match = null; filtered = []; available = [];
+      loading = false; error = '';
+    }
+    function position() {
+      if (host !== invariantHost || !input) return;
+      var rect = input.getBoundingClientRect();
+      host.style.left = Math.max(8, rect.left) + 'px';
+      host.style.width = Math.min(Math.max(260, rect.width), window.innerWidth - 16) + 'px';
+      var roomBelow = window.innerHeight - rect.bottom;
+      if (roomBelow >= 180 || roomBelow >= rect.top) {
+        host.style.top = Math.min(window.innerHeight - 16, rect.bottom + 4) + 'px';
+        host.style.bottom = 'auto';
+      } else {
+        host.style.top = 'auto';
+        host.style.bottom = (window.innerHeight - rect.top + 4) + 'px';
+      }
     }
     function render() {
-      if (!opened || !selection) return;
+      if (!input || !match) return;
       host.classList.remove('hidden');
       input.setAttribute('aria-expanded', 'true');
+      position();
       host.replaceChildren();
-      filtered = available.filter(function (block) {
-        return (block.title + ' ' + block.type + ' ' + block.content)
-          .toLocaleLowerCase().includes(selection.query);
+      filtered = available.filter(function (item) {
+        return (item.title + ' ' + item.kind + ' ' + item.text)
+          .toLocaleLowerCase().includes(match.query);
       }).slice(0, 8);
       if (active >= filtered.length) active = 0;
       if (!filtered.length) {
         var note = document.createElement('p');
         note.className = 'studio-blocks-slash-empty';
         note.textContent = loading ? 'Loading Blocks…' : error ||
-          'No matching Blocks. Create Ideas or Guidance with the Blocks button.';
+          (isInvariant(input) ? 'No matching Blocks.' : 'No matching Blocks or Invariants.');
         host.appendChild(note);
         return;
       }
-      filtered.forEach(function (block, index) {
-        var button = document.createElement('button'),
-          title = document.createElement('strong'), detail = document.createElement('small');
+      filtered.forEach(function (item, index) {
+        var button = document.createElement('button');
+        var title = document.createElement('strong'), detail = document.createElement('small');
         button.type = 'button';
         button.tabIndex = -1;
         button.className = 'studio-blocks-slash-item' + (index === active ? ' active' : '');
         button.setAttribute('role', 'option');
         button.setAttribute('aria-selected', index === active ? 'true' : 'false');
-        title.textContent = block.title;
-        detail.textContent = (block.type === 'guidance' ? 'Guidance' : 'Idea') +
-          ' · ' + block.content.replace(/\s+/g, ' ').slice(0, 100);
+        title.textContent = item.title;
+        detail.textContent = item.kind + ' · ' + item.text.replace(/\s+/g, ' ').slice(0, 100);
         button.append(title, detail);
-        button.onpointerdown = function (event) {event.preventDefault();};
-        button.onclick = function () {insert(block);};
+        button.onpointerdown = function (event) { event.preventDefault(); };
+        button.onclick = function () { insert(item); };
         host.appendChild(button);
       });
     }
-    function insert(block) {
-      // The exact visible slash span, never unrelated composer text, is replaced.
-      var match = slashMatch(input.value, input.selectionStart);
-      if (!match || !isStudio()) {close();return;}
-      var before = input.value.slice(0, match.start), after = input.value.slice(match.end);
-      var replacement = block.content + (/\s$/.test(block.content) || /^\s/.test(after) ? '' : ' ');
-      input.value = before + replacement + after;
+    function insert(item) {
+      if (!input || !isSupported(input)) { close(); return; }
+      var current = slashMatch(input.value, input.selectionStart);
+      if (!current) { close(); return; }
+      var target = input, before = target.value.slice(0, current.start);
+      var after = target.value.slice(current.end);
+      var replacement = item.text + (/\s$/.test(item.text) || /^\s/.test(after) ? '' : ' ');
+      target.value = before + replacement + after;
       var caret = before.length + replacement.length;
       close();
-      input.focus();
-      input.setSelectionRange(caret, caret);
-      input.dispatchEvent(new Event('input', {bubbles:true}));
+      target.focus();
+      target.setSelectionRange(caret, caret);
+      target.dispatchEvent(new Event('input', {bubbles:true}));
     }
-    function update() {
-      var match = isStudio() ? slashMatch(input.value, input.selectionStart) : null;
-      if (!match) {if (opened) close();return;}
-      selection = match;
-      if (!opened) {
-        opened = true;
-        active = 0;
-        loading = true;
-        error = '';
+    function update(target) {
+      var current = target && isSupported(target)
+        ? slashMatch(target.value, target.selectionStart) : null;
+      if (!current) {
+        if (target === input) close();
+        return;
+      }
+      var switched = input !== target;
+      if (switched) close();
+      input = target;
+      host = isInvariant(target) ? invariantHost : chatHost;
+      match = current;
+      active = 0;
+      if (!switched) {
+        // Project Invariants are read from the live editor, not an old saved copy.
+        if (host === chatHost) available = available.filter(function (item) { return item.source !== 'invariant'; })
+          .concat(invariants());
         render();
-        var id = ++requestId;
-        api('').then(function (result) {
-          if (id !== requestId || !opened) return;
-          available = result.blocks;
-          loading = false;
-          render();
-        }).catch(function (failure) {
-          if (id !== requestId || !opened) return;
-          loading = false;
-          error = 'Could not load Blocks; check the Console.';
-          report(failure);
-          render();
-        });
-      } else {active = 0;render();}
+        return;
+      }
+      target.setAttribute('aria-controls', host.id);
+      loading = true;
+      available = host === chatHost ? invariants() : [];
+      render();
+      var id = ++requestId;
+      api('').then(function (result) {
+        if (id !== requestId || target !== input) return;
+        available = (result.blocks || []).map(function (block) {
+          return {source:'block', title:block.title, kind:block.type === 'guidance' ? 'Guidance Block' : 'Idea Block',
+            text:block.content};
+        }).concat(host === chatHost ? invariants() : []);
+        loading = false;
+        render();
+      }).catch(function (failure) {
+        if (id !== requestId || target !== input) return;
+        loading = false;
+        error = 'Could not load Blocks; check the Console.';
+        report(failure);
+        render();
+      });
     }
-    input.setAttribute('aria-controls', 'studio-blocks-slash');
-    input.setAttribute('aria-expanded', 'false');
-    input.addEventListener('input', update);
-    input.addEventListener('click', update);
-    // Capture before Director's Enter-to-send and arrow-history handlers.
-    input.addEventListener('keydown', function (event) {
-      if (!opened || !isStudio()) return;
+    function invariants() {
+      return window.getStoryboardSlashInvariants().map(function (item) {
+        return {source:'invariant', title:item.title || 'Untitled Invariant',
+          kind:(item.kind || 'Project') + ' Invariant', text:item.text};
+      });
+    }
+    chat.setAttribute('aria-controls', chatHost.id);
+    chat.setAttribute('aria-expanded', 'false');
+    document.addEventListener('input', function (event) {
+      if (event.target === chat || isInvariant(event.target)) update(event.target);
+    });
+    document.addEventListener('click', function (event) {
+      if (event.target === chat || isInvariant(event.target)) update(event.target);
+      else if (input && !event.target.closest('.studio-blocks-slash')) close();
+    });
+    // Capture before Director's Enter-to-send/history handlers.
+    document.addEventListener('keydown', function (event) {
+      if (!input || event.target !== input || !isSupported(input)) return;
       if (event.key === 'Escape') {
-        event.preventDefault();event.stopImmediatePropagation();close();return;
+        event.preventDefault(); event.stopImmediatePropagation(); close(); return;
       }
       if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-        event.preventDefault();event.stopImmediatePropagation();
+        event.preventDefault(); event.stopImmediatePropagation();
         if (filtered.length) active = (active + (event.key === 'ArrowDown' ? 1 : -1) +
           filtered.length) % filtered.length;
-        render();return;
+        render(); return;
       }
-      if (event.key === 'Enter' || event.key === 'Tab') {
-        if (!filtered.length) return;
-        event.preventDefault();event.stopImmediatePropagation();
-        insert(filtered[active]);return;
+      if ((event.key === 'Enter' || event.key === 'Tab') && filtered.length) {
+        event.preventDefault(); event.stopImmediatePropagation();
+        insert(filtered[active]);
       }
     }, true);
-    input.addEventListener('blur', close);
+    document.addEventListener('focusout', function (event) {
+      if (event.target === input) close();
+    });
+    window.addEventListener('resize', position);
+    window.addEventListener('scroll', position, true);
   }
   function bind() {
     el('studio-blocks-open').onclick = open;

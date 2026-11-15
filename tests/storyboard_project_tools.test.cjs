@@ -84,3 +84,16 @@ test('Project Replace All uses saved Scene updates, not an LLM operation',()=>{
   assert.match(apply,/scene:\{prompt:change.after\}/);
   assert.doesNotMatch(apply,/directorRequest|enqueue_llm|\/fs\/director\/chat/);
 });
+
+
+test('Scene title stays compact and wide Takes aligns with Generation without an outer frame',()=>{
+  assert.match(source,/storyboard-scene-title-field"><input data-scene-field="title" aria-label="Scene title"/);
+  assert.doesNotMatch(source,/storyboard-scene-title-field"><span>Scene title<\/span>/);
+  const focus=fs.readFileSync('tool/css/storyboard.css','utf8');
+  assert.match(focus,/\.storyboard-scenes-list\.is-focus \.storyboard-scene-title-field input \{\s*font-size: 16px;/);
+  const takes=focus.split('.storyboard-scenes-list.is-focus .storyboard-scene:has(> .storyboard-takes[open]) > .storyboard-takes {')[1].split('}',1)[0];
+  assert.match(takes,/margin-top: 12px/);
+  assert.match(takes,/border: 0/);
+  assert.match(takes,/background: transparent/);
+  assert.match(focus,/\.storyboard-scenes-list\.is-focus \.storyboard-scene:has\(> \.storyboard-takes\[open\]\) \.storyboard-takes-summary \{\s*padding: 0;/);
+});

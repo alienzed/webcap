@@ -91,13 +91,16 @@ test('Only explicitly attached Story ID qualifies as a Scene target', () => {
   assert.equal(target(), '');
 });
 
-test('Schema output parser rejects malformed drafts without inventing missing fields', () => {
+test('Scene draft parser keeps a usable prompt without optional explanation', () => {
   const context = vm.createContext({ JSON, String, Error });
   const parse = vm.runInContext('(' + part('  function parseStudioSceneDraft(raw) {', '  function showStudioSceneDraftReview() {').trim() + ')', context);
   const draft = parse(JSON.stringify({ title: '', prompt: 'One short clear action', rationale: 'Simple clip' }));
   assert.equal(draft.title, '');
   assert.equal(draft.prompt, 'One short clear action');
-  assert.throws(() => parse('{}'), /must include a title, full Prompt and rationale/);
+  const withoutExplanation = parse(JSON.stringify({prompt:'Full scene prompt'}));
+  assert.equal(withoutExplanation.title,'');
+  assert.equal(withoutExplanation.rationale,'');
+  assert.throws(() => parse('{}'), /complete Prompt/);
   assert.throws(() => parse('not JSON'), /invalid Scene draft JSON/);
   assert.throws(() => parse(JSON.stringify({ title: '', prompt: '   ', rationale: '' })), /must include/);
 });
@@ -144,10 +147,10 @@ test('Unbound Project parser accepts zero Scenes and refuses invented or invalid
   }));
   assert.equal(project.firstScene, undefined);
   assert.equal(project.title, '');
-  assert.throws(() => parse('{}'), /invalid Project fields or initial Scene briefs/);
+  assert.throws(() => parse('{}'), /no usable Project material/);
   assert.throws(() => parse(JSON.stringify({
     title: '', concept: '', style: '', rationale: '', invariants: []
-  })), /complete Concept and Visual/);
+  })), /no usable Project material/);
 });
 
 

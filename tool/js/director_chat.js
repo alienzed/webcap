@@ -3201,7 +3201,7 @@
         '\n\nSTUDIO WORKBENCH STATE (controls, not saved Story facts):\n' + workbench +
         '\nCURRENT PROJECT NAVIGATION (identity and one-based Scene positions; saved content is supplied separately when available):\n' + JSON.stringify(navigation) +
         (explicitWrite
-          ? '\nEXPLICIT WRITE: The author has chosen to draft. Produce the requested creative material in the specified format. WebCap handles destination, editing and the selected direct-save or review policy.\n'
+          ? '\nEXPLICIT WRITE: The author has chosen to draft. Produce the requested complete editable proposal in the specified format. WebCap handles destination, editing and the selected direct-save or review policy.\n'
           : '\nFor a direct question, answer fully and finish without a workflow suggestion. ' +
             'When the author is developing material or requests a next step, suggest at most one useful action: ' +
             'an appropriately scoped Write or an author-operated Studio action. ' +

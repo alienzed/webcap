@@ -97,3 +97,14 @@ test('Scene title stays compact and wide Takes aligns with Generation without an
   assert.match(takes,/background: transparent/);
   assert.match(focus,/\.storyboard-scenes-list\.is-focus \.storyboard-scene:has\(> \.storyboard-takes\[open\]\) \.storyboard-takes-summary \{\s*padding: 0;/);
 });
+
+test('Scenes toolbar uses fixed icon actions without visible overlapping labels',()=>{
+  const rule=css.split('.storyboard-tool-label {').at(-1).split('}',1)[0];
+  assert.match(rule,/display:\s*none/);
+  const buttons=css.split('#storyboard-project-tool-bar > .storyboard-tool-icon {').at(-1).split('}',1)[0];
+  assert.match(buttons,/width:\s*36px/);
+  assert.match(buttons,/max-width:\s*36px/);
+  assert.match(buttons,/padding:\s*0/);
+  for(const id of ['storyboard-generate-scenes-btn','storyboard-director-tools-btn','storyboard-find-replace-btn'])
+    assert.match(html,new RegExp('id="'+id+'"[^>]*aria-label="[^"]+"'));
+});

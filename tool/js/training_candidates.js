@@ -983,7 +983,7 @@ function keepLoraLoadCapabilities() {
     var saved = ((((payload.sources || {}).webcap || {}).modelProfile || {}).enrichment || {}).promptOptions || {};
     var suggested = ((payload.suggestions || {}).promptOptions || {});
     keepLoraRenderCapabilities(saved, suggested);
-    state.capabilitiesReady = true;
+    state.capabilitiesReady = !!(Object.keys(saved).length || Object.keys(suggested).length);
   }).catch(function (error) {
     if (!state.open || keepLoraState !== state) return;
     host.textContent = 'Could not load groups: ' + String(error.message || error) + '. Epoch selection remains available.';

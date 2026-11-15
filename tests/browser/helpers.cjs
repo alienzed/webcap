@@ -72,6 +72,11 @@ async function openProject(page, projectId) {
   await row.locator('[data-story-open]').click();
 }
 async function ensureAttachedProject(page,expectedTitle) {
+  // Opening a Scene can launch Director's contextual Revision mode. These
+  // cases explicitly test conversation/Read and must choose that visible mode.
+  const composerMode=page.locator('#director-studio-composer-mode-select');
+  if(await composerMode.isVisible() && await composerMode.inputValue()!=='conversation')
+    await composerMode.selectOption('conversation');
   const label=page.locator('#director-chat-title');
   const attach=page.locator('#director-studio-attach-current');
   if(await attach.isVisible()) await attach.click();

@@ -131,3 +131,58 @@ test('invalid output prevents review or mutation and reports failure', async () 
   assert.match(failures.at(-1),/New Scene draft failed/);
 });
 
+
+test('launched Scene creation saves through the existing insertion route, with a truthful receipt',async()=>{
+  const story={id:'p1',title:'Bookshop',concept:'Evening rain',style:'Warm lamps',
+    invariants:[],sceneOrder:['old'],scenes:{old:{title:'Opening',prompt:'Original'} }};
+  const requests=[],receipts=[],refreshes=[];
+  let reviewed=0;
+  const state={pending:false,jobId:'',studioScenesProposal:null};
+  const scope=vm.createContext({
+    state,studioRequestedDuration,syncControls(){},studioActionStatus(){},
+    showStudioScenesReview(){reviewed++;},
+    window:{
+      flushStudioDirectorStoryEdits:async()=>{},
+      refreshStudioDirectorStoryIfOpen:async id=>{refreshes.push(id);},
+      reportConsoleError:(_label,err)=>assert.fail(err.message),
+      studioDirectorBridge:{
+        isReady:()=>true,readinessMessage:()=>'',recordApplied:async(kind,_story,fields)=>{
+          receipts.push({kind,fields});
+        },
+        makeProposal:async()=>{
+          return JSON.stringify({scenes:[{title:'Closing',prompt:'Full H3 prompt for 12s',
+            durationSeconds:'garbled'}]});
+        }
+      }
+    },
+    requestJson:async(url,options)=>{
+      requests.push(url);
+      if(url==='/fs/storyboard?story=p1')return {story};
+      assert.equal(url,'/fs/studio/director/scenes-draft');
+      const data=JSON.parse(options.body);
+      assert.equal(data.storyId,'p1');
+      assert.deepEqual(Array.from(data.expectedSceneOrder),['old']);
+      assert.equal(data.scenes.length,1);
+      assert.equal(data.scenes[0].durationSeconds,12);
+      assert.equal(data.scenes[0].prompt,'Full H3 prompt for 12s');
+      const created={id:'new-id',...data.scenes[0]};
+      story.sceneOrder.push(created.id);
+      story.scenes[created.id]=created;
+      return {story,scenes:[created]};
+    },
+    parseStudioScenesDraft:raw=>JSON.parse(raw),Promise,JSON,String,Number,Error,encodeURIComponent
+  });
+  const writer=vm.runInContext('({' + method + '})',scope).writeNewScene;
+  const result=await writer.call(scope.window.studioDirectorBridge,{
+    projectId:'p1',instruction:'Create a closing Scene lasting 12 seconds',
+    authorRequest:'Create a 12-second closing Scene',directSave:true
+  });
+  assert.deepEqual(requests,['/fs/storyboard?story=p1','/fs/studio/director/scenes-draft']);
+  assert.equal(result.scenes[0].id,'new-id');
+  assert.equal(result.scenes[0].durationSeconds,12);
+  assert.deepEqual(refreshes,['p1']);
+  assert.equal(receipts[0].kind,'scene.create');
+  assert.equal(reviewed,0);
+  assert.equal(state.studioScenesProposal,null);
+  assert.equal(story.scenes.old.prompt,'Original');
+});

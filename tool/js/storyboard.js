@@ -5315,8 +5315,10 @@
       'Queue one new Take per Scene';
     // Keep the original First Cut availability logic for generation. Cancelling
     // this Project's own queued Takes must remain available.
-    if (busy || (generationBlocked && !queuedGeneration)) batch.disabled = true;
-    else if (queuedGeneration) batch.disabled = false;
+    var activeFirstCut = storyState.storyAction && storyState.storyAction.active &&
+      String(storyState.storyAction.storyId || '') === storyId;
+    batch.disabled = !!busy || (generationBlocked && !queuedGeneration) ||
+      (!queuedGeneration && (queuedFirstCut || activeFirstCut));
   }
 
   function storyboardInferenceJob(job) {

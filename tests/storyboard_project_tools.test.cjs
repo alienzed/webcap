@@ -12,35 +12,33 @@ function section(start,end) {
   return source.slice(from,to);
 }
 
-test('Project Tools shares Generate, Revise and Coherence in one compact heading group',()=>{
+test('Scenes header keeps context left and three responsive actions right',()=>{
   const heading=html.slice(html.indexOf('<div class="storyboard-scenes-heading">'),
     html.indexOf('id="storyboard-scene-progression"'));
   assert.match(heading,/id="storyboard-project-tool-bar"[^>]+role="group"/);
-  assert.match(heading,/id="storyboard-generate-scenes-btn"[^>]+aria-label="Generate Takes"/);
-  assert.match(heading,/id="storyboard-director-tools-btn"[^>]+aria-label="Revise &amp; Generate"/);
-  assert.match(heading,/data-project-tool="coherence"[^>]+aria-label="Check Coherence"/);
-  assert.match(heading,/id="storyboard-project-tools"/);
-  for(const key of ['continuity','replace'])
-    assert.match(heading,new RegExp('data-project-tool="'+key+'"'));
-  assert.doesNotMatch(heading,/data-project-tool="director"|data-project-tool="revise"/);
+  const generate=heading.indexOf('id="storyboard-generate-scenes-btn"');
+  const revise=heading.indexOf('id="storyboard-director-tools-btn"');
+  const replace=heading.indexOf('id="storyboard-find-replace-btn"');
+  assert.ok(generate > 0 && generate < revise && revise < replace);
+  assert.ok(heading.indexOf('id="storyboard-progress-summary"') < generate);
+  assert.match(heading,/aria-label="Scene Revision"/);
+  assert.match(heading,/aria-label="Find &amp; Replace"/);
+  assert.doesNotMatch(heading,/id="storyboard-project-tools"|data-project-tool="coherence"/);
   assert.doesNotMatch(heading,/id="storyboard-scenes-sequence-btn"/);
-  for(const id of ['storyboard-generate-scenes-btn','storyboard-director-tools-btn','storyboard-cancel-takes-btn'])
+  for(const id of ['storyboard-generate-scenes-btn','storyboard-director-tools-btn','storyboard-find-replace-btn','storyboard-cancel-takes-btn'])
     assert.equal((html.match(new RegExp('id="'+id+'"','g'))||[]).length,1);
-  assert.match(css,/storyboard-project-tool-bar/);
-  assert.match(css,/storyboard-scene-strip > #storyboard-scenes-sequence-btn/);
+  assert.match(css,/@container \(max-width: 760px\)/);
+  assert.match(css,/#storyboard-project-tool-bar \.storyboard-tool-label \{ display: none; \}/);
   assert.match(html,/<button id="storyboard-scenes-sequence-btn"/);
 });
 
-test('Project Tools preserve the established generation, revision and preset launch paths',()=>{
+test('Header preserves generation, revision presets and direct Find & Replace',()=>{
   assert.match(source,/el\('storyboard-generate-scenes-btn'\)\.onclick = generateScenes/);
   assert.match(source,/el\('storyboard-director-tools-btn'\)\.onclick = openDirectorTools/);
+  assert.match(source,/el\('storyboard-find-replace-btn'\)\.onclick = openProjectReplace/);
   assert.match(source,/el\('storyboard-cancel-takes-btn'\)\.onclick = cancelStoryTakes/);
-  const binding=section("el('storyboard-project-tool-bar').addEventListener('click'",
-    "el('storyboard-find-replace-find').addEventListener");
-  assert.match(binding,/button\.dataset\.projectTool === 'replace'/);
-  assert.match(binding,/openDirectorTools\(\)/);
-  assert.match(binding,/button\.dataset\.projectTool === 'continuity' \? 'continuity' : 'coherence'/);
-  assert.match(binding,/preset\.dispatchEvent\(new Event\('change'\)\)/);
+  assert.match(source,/this\.value === 'continuity'/);
+  assert.match(source,/this\.value === 'coherence'/);
   assert.match(source,/el\('storyboard-generate-scenes-btn'\)\.classList\.toggle\('hidden', sequenceMode\)/);
   assert.match(html,/id="studio-dw-coherence-check"/);
 });

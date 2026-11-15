@@ -4310,3 +4310,54 @@ html[data-theme="dark"] .storyboard-prompt-take-status {
 .storyboard-find-replace-case { display:flex; align-items:center; gap:8px; font-size:14px; }
 .storyboard-find-replace-case input { margin:0; }
 #storyboard-find-replace-count { font-size:14px; color:var(--muted); }
+
+/* Scene heading: context stays left, scoped actions use the available right edge. */
+.storyboard-scenes-heading {
+  flex-wrap: nowrap;
+  gap: 12px;
+}
+.storyboard-scenes-heading-left {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.storyboard-scenes-heading-title {
+  flex-wrap: wrap;
+  gap: 6px 10px;
+}
+.storyboard-progress-summary {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: none;
+}
+.storyboard-scenes-heading-actions {
+  flex: 0 0 auto;
+  margin-left: auto;
+}
+.storyboard-project-tool-bar {
+  flex-wrap: nowrap;
+}
+#storyboard-project-tool-bar > .storyboard-tool-icon,
+#storyboard-project-tool-bar .storyboard-header-menu > .storyboard-tool-icon {
+  width: auto;
+  min-width: 36px;
+  gap: 7px;
+  padding: 0 10px;
+  white-space: nowrap;
+}
+.storyboard-tool-glyph { flex: 0 0 auto; }
+.storyboard-tool-label {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+@container (max-width: 760px) {
+  #storyboard-project-tool-bar .storyboard-tool-label { display: none; }
+  #storyboard-project-tool-bar > .storyboard-tool-icon {
+    width: 36px;
+    padding: 0;
+  }
+}
+@container (max-width: 540px) {
+  .storyboard-scenes-heading { flex-wrap: wrap; }
+  .storyboard-scenes-heading-actions { flex: 0 0 auto; }
+}

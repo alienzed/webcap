@@ -92,7 +92,7 @@ test('Blocks belongs to the Projects pane; Director belongs to Project actions',
   assert.doesNotMatch(scenes, /studio-blocks-open|storyboard-open-director/);
   assert.equal((html.match(/id="studio-blocks-open"/g) || []).length, 1);
   assert.match(html, /id="storyboard-project-tool-bar"[^>]*role="group" aria-label="Project Tools"/);
-  assert.match(html, /id="storyboard-director-tools-btn"[^>]*aria-label="Revise &amp; Generate"/);
+  assert.match(html, /id="storyboard-director-tools-btn"[^>]*aria-label="Scene Revision"/);
 });
 
 test('Project Overview independently scrolls on desktop, stacked layout stays shared', () => {

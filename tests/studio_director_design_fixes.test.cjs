@@ -342,3 +342,55 @@ test('prepared Write derives exact target and fields deterministically from exis
   state.studioWorkingDraft.newProject.style='';
   assert.equal(prepared(),null);
 });
+
+test('Studio Revision mode dispatches the existing Storyboard revision operation with explicit scope', async () => {
+  const nodes=new Map();
+  const el=id=>{
+    if (!nodes.has(id)) nodes.set(id,{
+      value:'',checked:false,focus(){},classList:{toggle(){}},textContent:'',
+      dispatchEvent(){},readOnly:false
+    });
+    return nodes.get(id);
+  };
+  const calls=[];
+  const scope=vm.createContext({
+    el,state:{activeMode:'storyboard',modelId:'director-model'},
+    window:{
+      getStudioDirectorNavigation:()=>({projectId:'project-1',projectTitle:'Test',sceneOrder:['scene-a','scene-b']}),
+      startStudioRevision:async options=>{calls.push(options);},
+      storyboardRevisionPreset:key=>key==='continuity'?'Keep continuity':'',
+      reportConsoleError:error=>{throw error;}
+    },syncControls(){}
+  });
+  vm.runInContext(section(chat,'  var studioComposerMode = \'conversation\';',
+    '  function syncModeUi() {'),scope);
+  scope.studioComposerMode='revision';
+  el('director-studio-revision-preset').value='continuity';
+  el('director-studio-revision-input').value='Correct continuity in both Scenes';
+  el('director-studio-revision-fresh').checked=true;
+  scope.runStudioRevision();
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(calls.length,1);
+  assert.equal(calls[0].projectId,'project-1');
+  assert.equal(calls[0].modelId,'director-model');
+  assert.equal(calls[0].preset,'continuity');
+  assert.equal(calls[0].generateFreshTakes,true);
+  assert.equal(calls[0].instruction,'Correct continuity in both Scenes');
+  assert.equal(el('director-studio-revision-status').textContent,'Scene revision completed.');
+  el('director-studio-revision-preset').value='coherence';
+  el('director-studio-revision-input').value='';
+  scope.runStudioRevision();
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(calls.length,2,'coherence does not require a text instruction');
+  assert.equal(calls[1].preset,'coherence');
+  assert.equal(el('director-chat-input').value,'','revision has not changed the chat composer draft');
+});
+
+test('Studio Revise Scenes launcher uses the common Director composer', () => {
+  const storyboard=fs.readFileSync(path.join(base,'tool/js/storyboard.js'),'utf8');
+  assert.match(storyboard,/storyboard-director-tools-btn'\)\.onclick = function \(\) \{\s*window\.openStudioDirectorRevision\(\)/);
+  assert.match(storyboard,/window\.startStudioRevision = function \(options\)/);
+  assert.match(storyboard,/return reviseScenes\(options\.instruction, options\.modelId/);
+  assert.match(html,/id="director-studio-composer-mode-select"/);
+  assert.match(html,/id="director-studio-revision-fresh"/);
+});

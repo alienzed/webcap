@@ -1,5 +1,5 @@
 'use strict';
-const {test,expect}=require('@playwright/test');
+const {test,expect}=require('./test.cjs');
 const {resetModel,queueModel,openDirector,say,story,seedProject,openProject}=require('./helpers.cjs');
 
 test('Flow 5 — moving the Studio editor does not change a conversation-bound Project write',async({page,request})=>{

@@ -128,6 +128,8 @@ function harness() {
     prepareWrite:(...args)=>{requests.push(['project',...args]);return Promise.resolve();},
     writeSelectedScene:async action=>{requests.push(['scene',action]);return {};},
     writeNewScene:async action=>{requests.push(['new-scene',action]);return {};},
+    reviewAuthoredScenes:async action=>{requests.push(['review-authored',action]);return {review:true,count:action.scenes.length};},
+    reviewPendingScenes:async projectId=>{requests.push(['reopen-review',projectId]);return {review:true};},
   };
   const window = {studioDirectorBridge:bridge};
   const source = part(workbench, '  function sceneIdsFromRequest(instruction, story, selectedScene) {',
@@ -232,6 +234,25 @@ test('a Scene authoring failure remains visible at its single failed operation',
   assert.equal(h.requests.length,1,'no invented replacement attempts');
   assert.ok(h.statuses.some(row=>/Director action failed: Model authoring failed/.test(row[0])));
   assert.equal(h.finishes.length,0);
+});
+
+test('authored conversation Scene records open Review directly and remain reopenable',async()=>{
+  const h=harness();
+  h.functions.presentAction({kind:'create_scene',instruction:'Two eight-second Scenes',
+    scenes:[{title:'Only authored Scene',prompt:'Complete H3 Prompt',durationSeconds:8}]},
+    null,{projectId:'p1'},'Two eight-second Scenes');
+  assert.match(h.suggestions.children[0].textContent,/Review authored Scene/);
+  h.suggestions.children[0].onclick();
+  await flush();
+  assert.equal(h.requests.length,1);
+  assert.equal(h.requests[0][0],'review-authored');
+  assert.equal(h.requests[0][1].scenes.length,1);
+  assert.equal(h.requests[0][1].scenes[0].durationSeconds,8);
+  assert.equal(h.finishes.length,0,'review does not claim a completed save');
+  h.suggestions.children[0].onclick();
+  await flush();
+  assert.deepEqual(h.requests.map(row=>row[0]),['review-authored','reopen-review']);
+  assert.equal(h.requests[1][1],'p1');
 });
 
 test('structured Director changes merge by complete field, without overwriting unrelated drafts', () => {

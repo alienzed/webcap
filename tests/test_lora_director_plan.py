@@ -73,8 +73,9 @@ def test_capability_group_names_are_searchable(monkeypatch):
         {"stage": "h3", "name": "pose.safetensors", "enriched": True,
          "enrichment": {"promptOptions": {"Hand gestures": ["open palm", "pointing"]}}},
         {"stage": "h3", "name": "other.safetensors", "enriched": True,
-         "enrichment": {"promptOptions": {"Clothing": ["red jacket"]}}},
+         "enrichment": {"description": "unrelated " * 100,
+                        "promptOptions": {"Clothing": ["red jacket"]}}},
     ])
-    choices = lora_director_plan.shortlist("h3", "hand gestures", max_chars=120)
+    choices = lora_director_plan.shortlist("h3", "hand gestures", max_chars=350)
     assert [choice["name"] for choice in choices] == ["pose.safetensors"]
     assert choices[0]["promptOptions"]["Hand gestures"] == ["open palm", "pointing"]

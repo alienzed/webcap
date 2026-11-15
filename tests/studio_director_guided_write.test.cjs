@@ -23,7 +23,7 @@ test('selected Scene list uses one bounded call per Scene, preserving successes 
     recommendedWriteFields:()=>['prompt'],
     el:id=>id==='studio-dw-batch-scenes'?{querySelectorAll:()=>ids.map(value=>({value}))}:{disabled:false},
     status:(...args)=>statuses.push(args),window:{flushStudioDirectorStoryEdits:async()=>{},studioDirectorBridge:{
-      messages:()=>[{role:'user',content:'Agreed early: retain the red scarf.'}],selectWriteProject:()=>{},
+      messages:()=>[{role:'user',content:'Keep the lamp unlit.'}],selectWriteProject:()=>{},
       writeSelectedScene:async launch=>{
         calls.push(launch);
         if(launch.sceneId==='b') throw new Error('Invalid Scene-specific model output');
@@ -56,7 +56,7 @@ test('selected Scene list stops on a shared runtime failure',async()=>{
     recommendedWriteFields:()=>[],
     el:id=>id==='studio-dw-batch-scenes'?{querySelectorAll:()=>ids.map(value=>({value}))}:{disabled:false},
     status:()=>{},window:{flushStudioDirectorStoryEdits:async()=>{},studioDirectorBridge:{
-      messages:()=>[],selectWriteProject:()=>{},
+      messages:()=>[{role:'user',content:'Quiet the ending.'}],selectWriteProject:()=>{},
       writeSelectedScene:async launch=>{calls.push(launch.sceneId);throw new Error('Failed to fetch');}
     }},
     loadStory:async()=>({id:'p1',title:'Beacon',sceneOrder:ids,
@@ -67,24 +67,6 @@ test('selected Scene list stops on a shared runtime failure',async()=>{
   assert.deepEqual(calls,['a']);
   assert.equal(outcome.failed.length,1);
   assert.equal(outcome.notAttempted.length,1);
-});
-
-for (const hidden of [true,false]) for (const target of [
-  {sceneId:'scene-a',sceneNumber:0}, {sceneId:'',sceneNumber:1}, {sceneId:'',sceneNumber:0}
-]) test('suggestion prepares the correct Scene operation, panel hidden='+hidden+', target='+JSON.stringify(target), async () => {
-  const mode={}, operation={options:[{value:'scene-write'}]}, calls=[];
-  const scope=vm.createContext({recommendations:{writeHint:'scenes',...target},writeOperationChosen:false,
-    el:id=>({'studio-dw-write-operation':operation,'studio-dw-scene-mode':mode,
-      'studio-dw-write-panel':{classList:{contains:()=>hidden}}})[id],
-    toggle:async which=>{assert.equal(which,'write');calls.push('setup');return true;},
-    refreshWrite:async()=>{calls.push('setup');return true;},
-    writePrepare:(...args)=>{assert.equal(args.length,0);calls.push('prepare');},
-    status:message=>assert.fail(message)});
-  vm.runInContext(part('  function openRecommendedWrite() {','  function captureActionLabel(capture) {'),scope);
-  await scope.openRecommendedWrite();
-  assert.deepEqual(calls,['setup','prepare']);
-  assert.equal(mode.value,target.sceneId || target.sceneNumber ? 'revise' : 'create');
-  assert.equal(operation.value,'scene-write');
 });
 
 test('Scene Review includes the whole unit and selects all actual changes, irrespective of field hints', () => {

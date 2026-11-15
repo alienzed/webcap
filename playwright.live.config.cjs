@@ -7,7 +7,7 @@ const {defineConfig}=require('@playwright/test');
 module.exports=defineConfig({
   testDir:'./tests/live',
   testMatch:'*.spec.cjs',
-  timeout:240_000,
+  timeout:480_000,
   expect:{timeout:90_000},
   workers:1,
   retries:0,

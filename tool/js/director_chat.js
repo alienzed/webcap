@@ -446,6 +446,7 @@
     renderStoryboardAttachmentViewer();
     renderStudioStoryAccess();
     renderStudioOperations();
+    if (studio) window.studioDirectorWorkbench.updateWorkingWrite();
     renderMessages();
     syncControls();
   }
@@ -3598,8 +3599,10 @@
         var targetProject = resolvedTarget.projectId ? {projectId:resolvedTarget.projectId} : selectedProject;
         var nextAction = studioResponse && studioResponse.action ||
           (activeChatMode === 'storyboard' ? studioActionFromExplicitRequest(content, targetScene) : null);
-        if (activeChatMode === 'storyboard' && studioResponse && studioResponse.changes)
+        if (activeChatMode === 'storyboard' && studioResponse && studioResponse.changes) {
           studioMergeWorkingChanges(studioResponse.changes, resolvedTarget, nextAction, content);
+          window.studioDirectorWorkbench.updateWorkingWrite();
+        }
         if (nextAction && (!Array.isArray(nextAction.fields) || !nextAction.fields.length) &&
             studioResponse && studioResponse.changes) {
           nextAction = Object.assign({},nextAction,{fields:Object.keys(
@@ -4138,6 +4141,39 @@
       return '';
     },
     workingStoryId: function () { return studioAttachedStoryId() || window.getStudioDirectorNavigation().projectId; },
+    preparedWrite: function () {
+      var working = state.studioWorkingDraft;
+      var navigation = window.getStudioDirectorNavigation();
+      var projectId = navigation.projectId || studioAttachedStoryId();
+      var sceneId = navigation.sceneId;
+      var fields = sceneId && working.scenes[sceneId];
+      if (projectId && fields && Object.keys(fields).length)
+        return {kind:'scene',projectId:projectId,sceneId:sceneId,fields:Object.keys(fields)};
+      fields = projectId && working.projects[projectId];
+      if (fields && Object.keys(fields).length)
+        return {kind:'project',projectId:projectId,fields:Object.keys(fields)};
+      if (projectId && working.newScene && working.newScene.prompt)
+        return {kind:'new-scene',projectId:projectId,fields:Object.keys(working.newScene)};
+      if (working.newProject && working.newProject.concept && working.newProject.style)
+        return {kind:'new-project',fields:Object.keys(working.newProject)};
+      return null;
+    },
+    preparedSceneFields: function (sceneId) {
+      return Object.assign({}, state.studioWorkingDraft.scenes[sceneId] || {});
+    },
+    reviewPreparedWrite: function (draft) {
+      if (!this.canReview()) throw new Error('Open the Studio conversation to review its prepared material.');
+      if (draft.kind === 'project') {
+        this.selectWriteProject(draft.projectId);
+        return prepareStudioBrief({requestedFields:draft.fields});
+      }
+      if (draft.kind === 'new-project') return prepareStudioProject({});
+      if (draft.kind === 'new-scene') return this.writeNewScene({
+        projectId:draft.projectId,instruction:'Review prepared new Scene material.',
+        authorRequest:'Save that prompt'
+      });
+      throw new Error('Scene drafts are reviewed by the Scene workbench.');
+    },
     modelId: function () { return state.modelId; },
     messages: function () {
       return (state.modeMessages.storyboard || []).map(function (message) {
@@ -4211,6 +4247,7 @@
         fieldNames:Object.keys(values).filter(function (key) {return !!names[key];})
       };
       markStudioReadinessOutdated();
+      window.studioDirectorWorkbench.updateWorkingWrite();
       window.studioDirectorWorkbench.markSavedFields(selected,story);
       var savedFields = Object.keys(values).filter(function(key){return names[key];}).map(function(key){
         return names[key] + (key === 'invariants' ? ' (' + values[key].length + ')' : '');
@@ -4368,7 +4405,12 @@
       });
     },
     writeNewScene: function (launch) {
-      if (!this.isReady()) return Promise.reject(new Error(this.readinessMessage()));
+      var prepared = launch && state.studioWorkingDraft.newScene &&
+        typeof state.studioWorkingDraft.newScene.prompt === 'string' &&
+        !!state.studioWorkingDraft.newScene.prompt.trim() &&
+        studioRequestAppliesPreparedMaterial(launch.authorRequest || launch.instruction);
+      if (!this.isReady() && !(prepared && this.canReview()))
+        return Promise.reject(new Error(this.readinessMessage()));
       if (!launch || !launch.projectId || !String(launch.instruction || '').trim())
         return Promise.reject(new Error('A saved Project and agreed new-Scene brief are required.'));
       var storyId = launch.projectId;

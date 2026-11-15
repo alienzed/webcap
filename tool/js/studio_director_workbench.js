@@ -357,27 +357,31 @@
     if (!scene || (story.sceneOrder || []).indexOf(sceneId) === -1)
       throw new Error('Select a saved Scene to review.');
     fields.forEach(function (key) {
-      if (['title','prompt'].indexOf(key) === -1 || typeof candidate[key] !== 'string')
+      if (key === 'durationSeconds') {
+        if (!Number.isInteger(candidate[key])) throw new Error('Director did not supply a numeric Scene duration.');
+      } else if (!['title','prompt'].includes(key) || typeof candidate[key] !== 'string')
         throw new Error('Director did not supply complete ' + key + ' material.');
     });
       proposedScene = {storyId:story.id,sceneId:sceneId,expected:{},fields:fields};
       var host = el('studio-dw-scene-editors');host.replaceChildren();
       fields.forEach(function (key) {
-        var old = String(scene[key] || '');
-        proposedScene.expected[key] = old;
+        var old = String(scene[key] == null ? '' : scene[key]);
+        proposedScene.expected[key] = scene[key];
         var label = document.createElement('label'), saved = document.createElement('details'),
           hint = document.createElement('summary'), before = document.createElement('pre'),
-          textarea = document.createElement('textarea');
+          textarea = document.createElement(key === 'durationSeconds' ? 'input' : 'textarea');
         label.textContent = labels[key];hint.textContent = 'Saved ' + labels[key];
         before.textContent = old || '(empty)'; saved.append(hint,before);
         var diff = document.createElement('details'), diffSummary = document.createElement('summary'), diffBody = document.createElement('div');
         diff.className = 'studio-director-diff'; diffSummary.textContent = 'What changes?';
-        diff.open = old !== candidate[key];
+        diff.open = old !== String(candidate[key]);
         diffBody.className = 'studio-director-diff-content';
-        window.studioDirectorRenderDiff(diffBody,old,candidate[key]);
+        window.studioDirectorRenderDiff(diffBody,old,String(candidate[key]));
         diff.append(diffSummary,diffBody);
         textarea.dataset.field = key;textarea.value = candidate[key];
-        textarea.addEventListener('input',function(){window.studioDirectorRenderDiff(diffBody,old,textarea.value);});textarea.rows = key === 'prompt' ? 13 : 5;
+        if (key === 'durationSeconds') {textarea.type='number';textarea.min=4;textarea.max=15;textarea.step=1;}
+        textarea.addEventListener('input',function(){window.studioDirectorRenderDiff(diffBody,old,textarea.value);});
+        if (key !== 'durationSeconds') textarea.rows = key === 'prompt' ? 13 : 5;
         textarea.setAttribute('aria-label',labels[key]);
         label.append(textarea);host.append(saved,diff,label);
       });
@@ -716,8 +720,9 @@
   function applyScene() {
     if (!proposedScene) throw new Error('There is no reviewed Scene proposal.');
     var changes = {};
-    Array.from(el('studio-dw-scene-editors').querySelectorAll('textarea[data-field]')).forEach(function (node) {
-      changes[node.dataset.field] = node.value;
+    Array.from(el('studio-dw-scene-editors').querySelectorAll('[data-field]')).forEach(function (node) {
+      changes[node.dataset.field] = node.dataset.field === 'durationSeconds'
+        ? Number(node.value) : node.value;
     });
     var button = el('studio-dw-scene-apply');
     button.disabled = true;
@@ -756,15 +761,25 @@
   // Write reflects an explicit conversational proposal, not a standalone operation picker.
   function showConversationWrite() {
     var action = pendingCreativeAction;
-    var ready = !!action;
-    var awaitingProject = ready && !!action.awaitingProject;
-    var awaitingScenes = ready && !!action.awaitingScenes;
+    var prepared = action ? null : window.studioDirectorBridge.preparedWrite();
+    var ready = !!(action || prepared);
+    var awaitingProject = !!(action && action.awaitingProject);
+    var awaitingScenes = !!(action && action.awaitingScenes);
     el('studio-dw-write-empty').classList.toggle('hidden', ready);
     el('studio-dw-write-ready').classList.toggle('hidden', !ready);
     el('studio-dw-write-panel').classList.toggle('hidden', !(awaitingProject || awaitingScenes));
     el('studio-dw-write-panel').classList.toggle('studio-dw-awaiting-project', awaitingProject);
     el('studio-dw-write-panel').classList.toggle('studio-dw-awaiting-scenes', awaitingScenes);
     if (!ready) return;
+    if (prepared) {
+      var fieldLabels = prepared.fields.map(function (field) {return labels[field] || field;});
+      var scope = ({scene:'Scene',project:'Project', 'new-project':'New Project',
+        'new-scene':'New Scene'})[prepared.kind];
+      el('studio-dw-write-ready-title').textContent = scope + ' draft prepared';
+      el('studio-dw-write-ready-direction').textContent = fieldLabels.join(' · ');
+      el('studio-dw-write-ready-launch').textContent = 'Review ' + scope;
+      return;
+    }
     var title = ({create_project:'Create Project',write_project:'Revise Project',
       create_scene:'Create Scenes',write_scenes:'Revise Scenes'})[action.kind];
     el('studio-dw-write-ready-title').textContent = title;
@@ -996,6 +1011,7 @@
 
   window.studioDirectorWorkbench = {
     presentAction:presentAction,
+    updateWorkingWrite:showConversationWrite,
     completeWriteAction:function (kind, story, selected) {
       var action = pendingCreativeAction;
       if (!action) return;
@@ -1090,7 +1106,7 @@
       button.dataset.result=state;
       button.title=detail || 'Read selected Project fields';
     },
-    updateContext:updateScope,
+    updateContext:function () {updateScope(); showConversationWrite();},
     showSentWriteContext: function(operation, messages) {
       var preview = el('studio-dw-write-context-json');
       var details = el('studio-dw-write-context');
@@ -1169,6 +1185,27 @@
       el('studio-dw-close-actions').focus();
     }
     el('studio-dw-write-ready-launch').onclick=function () {
+      if (!pendingCreativeAction) {
+        var draft = window.studioDirectorBridge.preparedWrite();
+        if (!draft) {showConversationWrite();return;}
+        if (draft.kind === 'scene') {
+          return window.flushStudioDirectorStoryEdits(draft.projectId)
+            .then(function () {return loadStory(draft.projectId);})
+            .then(function (story) {
+              var changes = window.studioDirectorBridge.preparedWrite();
+              if (!changes || changes.kind !== 'scene' ||
+                  changes.projectId !== draft.projectId || changes.sceneId !== draft.sceneId)
+                throw new Error('Prepared Scene target changed. Reopen Write.');
+              var candidate = window.studioDirectorBridge.preparedSceneFields(draft.sceneId);
+              var changed = changes.fields.filter(function (field) {
+                return JSON.stringify(candidate[field]) !== JSON.stringify(story.scenes[draft.sceneId][field]);
+              });
+              if (!changed.length) {status('These Scene fields already match the saved values.',false,true);return;}
+              showSceneReview(story,draft.sceneId,changed,candidate);
+            }).catch(function (error) {status('Prepared Scene review failed: '+error.message,true);});
+        }
+        return window.studioDirectorBridge.reviewPreparedWrite(draft);
+      }
       var proposed = el('studio-dw-suggestions').querySelector('[data-guided-write]');
       if (!proposed) throw new Error('The proposed Director action is no longer available.');
       proposed.click();

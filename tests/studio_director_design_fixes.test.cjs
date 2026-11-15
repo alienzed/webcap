@@ -24,6 +24,7 @@ test('Chat and Director mode initialization use controls present in the app shel
     el:id=>nodes.get(id) || null,
     state:{activeMode:'chat',open:false,storyboardAttachments:{},workshop:null},
     document:{querySelector:()=>nodes.get('storyboard-workspace')},
+    window:{studioDirectorWorkbench:{updateWorkingWrite(){}}},
     studioDirectorSelectedScene:()=>null,
     availableModes:()=>[],activeContextMode:()=>null,modeAvailable:()=>true,
     persistentMode:()=>true,studioWorkingStoryLabel:()=>'Test Project',
@@ -184,7 +185,9 @@ test('Write availability follows a conversational proposal without inventing a m
     }
     return nodes.get(id);
   }
-  const scope = vm.createContext({el});
+  let prepared = null;
+  const scope = vm.createContext({el,labels:{prompt:'H3 Prompt',title:'Title'},
+    window:{studioDirectorBridge:{preparedWrite:()=>prepared}}});
   vm.runInContext(section(rail,'  var pendingCreativeAction = null;',
     '  function sceneIdsFromRequest('),scope);
   scope.showConversationWrite();
@@ -205,6 +208,17 @@ test('Write availability follows a conversational proposal without inventing a m
   scope.pendingCreativeAction = null;
   scope.showConversationWrite();
   assert.equal(el('studio-dw-write-ready').classList.contains('hidden'),true);
+  prepared = {kind:'scene',projectId:'project-a',sceneId:'scene-2',fields:['prompt','title']};
+  scope.showConversationWrite();
+  assert.equal(el('studio-dw-write-ready').classList.contains('hidden'),false);
+  assert.equal(el('studio-dw-write-ready-title').textContent,'Scene draft prepared');
+  assert.equal(el('studio-dw-write-ready-direction').textContent,'H3 Prompt · Title');
+  assert.equal(el('studio-dw-write-ready-launch').textContent,'Review Scene');
+  assert.equal(el('studio-dw-write-panel').classList.contains('hidden'),true);
+  scope.pendingCreativeAction={kind:'write_scenes',instruction:'New instruction'};
+  scope.showConversationWrite();
+  assert.equal(el('studio-dw-write-ready-direction').textContent,'New instruction',
+    'explicit action takes precedence over an already structured draft');
 });
 
 test('Studio header uses accessible compact history and new-conversation icons', () => {
@@ -295,4 +309,36 @@ test('conversation persistence includes frozen Write targets without extra autho
   assert.match(chat,/stored\.writeAction = message\.writeAction/);
   assert.match(chat,/messages\[messages\.length - 1\]\.writeAction = window\.studioDirectorWorkbench\.presentAction/);
   assert.ok(chat.includes('completeWriteAction(kind, story, selected)'));
+});
+
+test('prepared Write derives exact target and fields deterministically from existing draft', () => {
+  const state={studioWorkingDraft:{
+    scenes:{'scene-2':{prompt:'Complete H3 prompt',durationSeconds:10}},
+    projects:{'project-1':{style:'Warm and dim'}},
+    newScene:{prompt:'New Scene prompt'},
+    newProject:{concept:'New Project',style:'Soft light'},sourceRequest:''
+  }};
+  let target={projectId:'project-1',sceneId:'scene-2'};
+  const context=vm.createContext({state,window:{
+    getStudioDirectorNavigation:()=>target
+  },studioAttachedStoryId:()=>''});
+  const source=section(chat,'    preparedWrite: function () {',
+    '    preparedSceneFields: function (sceneId) {');
+  const prepared=vm.runInContext('({'+source+'})',context).preparedWrite;
+  let result=prepared();
+  assert.equal(result.kind,'scene');
+  assert.equal(result.sceneId,'scene-2');
+  assert.deepEqual(Array.from(result.fields),['prompt','durationSeconds']);
+  target={projectId:'project-1',sceneId:''};
+  result=prepared();
+  assert.equal(result.kind,'project');
+  assert.deepEqual(Array.from(result.fields),['style']);
+  delete state.studioWorkingDraft.projects['project-1'];
+  result=prepared();
+  assert.equal(result.kind,'new-scene');
+  delete state.studioWorkingDraft.newScene.prompt;
+  result=prepared();
+  assert.equal(result.kind,'new-project');
+  state.studioWorkingDraft.newProject.style='';
+  assert.equal(prepared(),null);
 });

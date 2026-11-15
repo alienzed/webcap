@@ -140,7 +140,7 @@ test('Apply receipt names the actual scoped Scene fields and retains authoritati
   const state={modeMessages:{storyboard:[]},sessionDirty:{},
     studioWorkingDraft:{projects:{},scenes:{},newProject:{},newScene:{},sourceRequest:''}};
   const scope=vm.createContext({state,markStudioReadinessOutdated(){},renderMessages(){},persistSession:async()=>{},
-    window:{studioDirectorWorkbench:{markSavedFields(){},completeWriteAction(){return false;}}}});
+    window:{studioDirectorWorkbench:{markSavedFields(){},completeWriteAction(){return false;},updateWorkingWrite(){}}}});
   const bridge=vm.runInContext('({'+part(chat,'    recordApplied: function (kind, story, selected) {','    reviewCapture: function (capture, storyId) {')+'})',scope);
   await bridge.recordApplied('scene.update',{id:'project-1',title:'Project',updatedAt:'now'},
     {sceneId:'scene-1',savedFields:{prompt:'The reviewed prompt.'}});

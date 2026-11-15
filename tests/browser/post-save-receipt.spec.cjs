@@ -3,6 +3,7 @@ const fs=require('node:fs');
 const path=require('node:path');
 const {test,expect}=require('./test.cjs');
 const {resetModel,queueModel,observedModels,openDirector,openProject,say,seedProject,story}=require('./helpers.cjs');
+const {ensureAttachedProject}=require('./helpers.cjs');
 
 // An actual filesystem permission failure AFTER Scene persistence. This does
 // not intercept/mimic WebCap routes, fabricate a save receipt or mock app code.
@@ -11,7 +12,7 @@ test('Flow 7 variation — Scene persists when subsequent conversation receipt c
   const project=await seedProject(page,'Post-save receipt fault '+Date.now());
   await openDirector(page);
   await openProject(page,project.id);
-  await page.locator('#director-studio-attach-current').click();
+  await ensureAttachedProject(page,project.title);
   await queueModel(request,{
     reply:'Here is a complete Scene.',
     scenes:[{title:'Night Window',prompt:'A lamp glows behind the rain-streaked glass.',durationSeconds:8}],

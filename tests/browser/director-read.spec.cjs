@@ -1,5 +1,5 @@
 'use strict';
-const {test,expect}=require('@playwright/test');
+const {test,expect}=require('./test.cjs');
 const modelUrl='http://127.0.0.1:4211';
 test('Flow 4 checkpoint — Director displays a plain-text Read response through the real queue',async({page,request})=>{
   const reset=await request.post(modelUrl+'/__acceptance/reset');expect(reset.ok()).toBeTruthy();

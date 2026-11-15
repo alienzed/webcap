@@ -17,6 +17,9 @@ const method = slice(director,
 const studioRequestedDuration = new Function(slice(director,
   '  function studioRequestedDuration(instruction) {',
   '  window.studioDirectorBridge = {') + 'return studioRequestedDuration;')();
+const studioMentionedDuration = new Function(slice(director,
+  '  function studioRequestedDuration(instruction) {',
+  '  window.studioDirectorBridge = {') + 'return studioMentionedDuration;')();
 
 test('one new Scene keeps the selected Project and complete brief through a single authoring call, then REVIEW only', async () => {
   const story = {id:'lighthouse',title:'Last Light',concept:'A final watch',
@@ -27,7 +30,7 @@ test('one new Scene keeps the selected Project and complete brief through a sing
   const state={pending:false,jobId:'',studioScenesProposal:null};
   const launch={projectId:'lighthouse',instruction:brief,authorRequest:brief};
   const scope=vm.createContext({
-    state, studioRequestedDuration, syncControls(){}, studioActionStatus(){}, showStudioScenesReview(){reviewed++;},
+    state, studioRequestedDuration, studioMentionedDuration, syncControls(){}, studioActionStatus(){}, showStudioScenesReview(){reviewed++;},
     window:{
       flushStudioDirectorStoryEdits:async id=>{assert.equal(id,'lighthouse');},
       reportConsoleError:()=>{assert.fail('No error expected')},
@@ -76,7 +79,7 @@ test('a malformed duration from Director leaves the full new Scene available for
   const state={pending:false,jobId:'',studioScenesProposal:null};
   let reviewed=0;
   const scope=vm.createContext({
-    state,studioRequestedDuration,syncControls(){},studioActionStatus(){},
+    state,studioRequestedDuration,studioMentionedDuration,syncControls(){},studioActionStatus(){},
     showStudioScenesReview(){reviewed++;},
     window:{
       flushStudioDirectorStoryEdits:async()=>{},
@@ -106,7 +109,7 @@ test('invalid output prevents review or mutation and reports failure', async () 
   const failures=[];
   let reviewed=0;
   const scope=vm.createContext({
-    state,studioRequestedDuration,syncControls(){},studioActionStatus:(m,error)=>{if(error)failures.push(m);},
+    state,studioRequestedDuration,studioMentionedDuration,syncControls(){},studioActionStatus:(m,error)=>{if(error)failures.push(m);},
     showStudioScenesReview(){reviewed++;},
     window:{
       flushStudioDirectorStoryEdits:async()=>{},
@@ -139,7 +142,7 @@ test('launched Scene creation saves through the existing insertion route, with a
   let reviewed=0;
   const state={pending:false,jobId:'',studioScenesProposal:null};
   const scope=vm.createContext({
-    state,studioRequestedDuration,syncControls(){},studioActionStatus(){},
+    state,studioRequestedDuration,studioMentionedDuration,syncControls(){},studioActionStatus(){},
     showStudioScenesReview(){reviewed++;},
     window:{
       flushStudioDirectorStoryEdits:async()=>{},

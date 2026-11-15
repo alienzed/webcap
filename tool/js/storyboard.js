@@ -3897,7 +3897,7 @@
         '</div>' +
         ratingHtml +
         (take.mediaPurged && take.generated ? '<button type="button" class="review-captions-btn" data-take-action="regenerate" data-take-id="' + escapeHtml(takeId) + '">Regenerate</button>' : '') +
-        '<button type="button" class="review-captions-btn" data-take-action="select" data-take-id="' + escapeHtml(takeId) + '"' + (selected ? ' disabled' : '') + '>' + (selected ? 'Selected' : 'Select') + '</button>' +
+        '<button type="button" class="review-captions-btn" data-take-action="select" data-take-id="' + escapeHtml(takeId) + '"' + '>' + (selected ? 'Unselect' : 'Select') + '</button>' +
         (!take.mediaPurged && /\.(mp4|webm|ogg|mov|mkv|avi|m4v|wmv|mpg|mpeg)$/i.test(String(take.mediaPath || '')) ?
           '<button type="button" class="review-captions-btn" data-take-clip="' + escapeHtml(takeId) + '">Open in Clip</button>' : '') +
       '</div>' +
@@ -4020,8 +4020,8 @@
     identity.title = take.sourceFilename || '';
     var selected = take.id === selectedTakeId;
     card.classList.toggle('selected', selected);
-    select.disabled = selected;
-    select.textContent = selected ? 'Selected' : 'Select';
+    select.disabled = false;
+    select.textContent = selected ? 'Unselect' : 'Select';
     var rating = Math.max(0, Math.min(5, Number(take.rating || 0)));
     card.querySelectorAll('[data-take-rating][data-rating-value]').forEach(function (star) {
       var active = Number(star.dataset.ratingValue) <= rating;
@@ -5030,12 +5030,14 @@
   }
 
   function selectTake(sceneId, takeId) {
+    var scene = storyState.story.scenes[sceneId];
+    var nextTakeId = scene.selectedTakeId === takeId ? '' : takeId;
     setSaveState('Saving...');
     flushPendingSaves().then(function () { return request({
       operation: 'select_take',
       storyId: storyState.story.id,
       sceneId: sceneId,
-      takeId: takeId
+      takeId: nextTakeId
     }); }).then(function (payload) {
 
       storyState.sequenceEncodingWarnings = [];

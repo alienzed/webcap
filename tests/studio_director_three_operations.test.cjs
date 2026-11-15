@@ -6,6 +6,8 @@ const path = require('node:path');
 
 const chat = fs.readFileSync(path.join(__dirname, '../tool/js/director_chat.js'), 'utf8');
 const workbench = fs.readFileSync(path.join(__dirname, '../tool/js/studio_director_workbench.js'), 'utf8');
+const html = fs.readFileSync(path.join(__dirname, '../tool/tool.html'), 'utf8');
+const backend = fs.readFileSync(path.join(__dirname, '../tool/server/app.py'), 'utf8');
 function part(source, begin, end) {
   const first = source.indexOf(begin), last = source.indexOf(end, first + begin.length);
   assert.ok(first >= 0 && last > first, 'Missing production function: ' + begin);
@@ -17,6 +19,24 @@ const requestedDuration = new Function(part(chat, '  function studioRequestedDur
   '  window.studioDirectorBridge = {') + 'return studioRequestedDuration;')();
 const sceneTargets = new Function(part(workbench, '  function sceneIdsFromRequest(instruction, story, selectedScene) {',
   '  function presentAction(') + 'return sceneIdsFromRequest;')();
+
+test('retired Director assessment and guideline artifacts are absent without losing I/O or write controls', () => {
+  assert.doesNotMatch(html,/id="studio-dw-assessment-dialog"|class="studio-dw-readiness hidden"/);
+  assert.doesNotMatch(html,/id="studio-director-io-review"|id="director-chat-story-prepare"/);
+  assert.doesNotMatch(chat,/parseStoryGuidelineProposal|prepareStoryChanges\(|reviewGeneratedCapture|studio-director-io-review/);
+  assert.doesNotMatch(workbench,/reviewGeneratedCapture|studio-dw-assessment-dialog|setReadinessFreshness/);
+  assert.doesNotMatch(backend,/"storyboard_story_guidelines"/);
+  assert.match(html,/id="studio-director-io-raw"/);
+  assert.match(html,/id="studio-dw-write-panel"/);
+  assert.match(html,/id="studio-scenes-review"/);
+});
+
+test('shared Studio guidance treats review as optional and saved state as WebCap-owned', () => {
+  const request = part(chat,'  function studioDirectorRequestMessages(', '  function studioDirectorChatRequestMessages(');
+  assert.match(request,/direct-save or review policy/);
+  assert.match(request,/WebCap confirms an actual save/);
+  assert.doesNotMatch(request,/WebCap confirms Apply|scoped reviewed Write/);
+});
 
 test('Read is plain prose; an absent or malformed optional action does not discard its reply', () => {
   assert.deepEqual(parse('The saved title is Rainy Bookshop.'), {

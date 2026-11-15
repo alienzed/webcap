@@ -21,7 +21,7 @@ test('Director overlays Projects as a resizable drawer with an optional manual w
     'director-chat-drawer', 'director-chat-messages', 'director-chat-input',
     'studio-director-workbench', 'studio-dw-read', 'studio-dw-write',
     'studio-dw-read-project', 'studio-dw-write-project', 'studio-dw-scene-fields',
-    'studio-dw-read-send', 'studio-dw-write-prepare', 'studio-dw-readiness-list',
+    'studio-dw-read-send', 'studio-dw-write-prepare',
     'studio-dw-write-context-json', 'studio-dw-scene-review', 'studio-dw-batch-review'
   ]) assert.match(html, new RegExp('id="' + id + '"'));
   assert.match(html, /class="director-chat-layout"/);
@@ -419,6 +419,6 @@ test('legacy Workshop request context never treats stored Scene Intent as a crea
   assert.doesNotMatch(serialized, /PRIVATE_LEGACY_INTENT|sceneIntent|sceneSummary/);
   assert.doesNotMatch(source, /Use the outline to develop Scenes that have no prompt yet/);
   assert.match(source, /Author a complete usable H3 Prompt when writing a new Scene/);
-  const workshopDraft = part('  function prepareWorkshopRevision() {', '  function parseStoryGuidelineProposal(raw) {');
+  const workshopDraft = part('  function prepareWorkshopRevision() {', '  function applyWorkshopRevision() {');
   assert.doesNotMatch(workshopDraft, /sceneIntent|sceneSummary/);
 });

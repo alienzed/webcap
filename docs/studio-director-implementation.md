@@ -79,3 +79,16 @@ post-save refresh failures, and is not a statistical model-reliability claim.
 - No real-browser/model acceptance was executed in this session. Record it separately rather than rewriting this file as though it happened.
 
 The stable source of truth is the actual saved Project/Scene state and execution receipts, not chat claims, readiness scoring or the model's creative self-assessment.
+
+## Orphan cleanup and remaining callers (2026-11-14)
+
+The current Studio Director implementation is the three-operation Read, Write Project and Write Scene(s) handoff. The follow-up orphan audit made these bounded changes on `cleanup/studio-director-orphans`:
+
+1. **Confirmed inert UI:** deleted the hidden readiness/creative-assessment panel, its unused dialog and no-op presentation bridge. The existing I/O inspector still shows raw and parsed responses; it no longer offers the retired `readiness.capture` review button that only led to a dead-end notice.
+2. **Retired guideline proposal:** deleted the permanently hidden Story-guideline proposal button, its single event caller, local proposal/parse/review functions and its dedicated LLM operation/schema. Saved legacy guidelines and other Storyboard guideline tools remain unchanged.
+3. **Conversation compatibility:** stopped feeding historical readiness metadata to an inert UI, but preserved old chat records and `readiness` serialization/validation. No migration, bulk history rewrite or new gate was added.
+4. **Focused coverage:** removed the retired operation from route tests and added regression checks that the obsolete UI/actions are gone while I/O and the active Write/Scene review controls remain.
+
+**Retained deliberately:** the explicit legacy Read panel is hidden but still has working bindings, an outbound bridge and compatibility tests; the timed-shot Workshop has a callable frontend event path and possible restored-session context; the old Scene/sequence preparation paths still have call sites in the bridge. Delete these only in a separately verified caller-migration phase, not by removing markup and leaving event handlers broken. The active Project/Scene writers, current Scene review, multi-Scene incremental saves, Check Coherence and Revise & Generate remain in place.
+
+**Acceptance:** focused CI validates code/contracts and avoids claiming real-model acceptance. Inspect a restored legacy Studio conversation and the current Write/Scene flow in a browser before claiming full UI acceptance. This cleanup does not change normal model calls, save semantics, Project identity, Undo/Redo or generation.

@@ -905,23 +905,17 @@ def test_storyboard_reviewed_guidelines_route_applies_only_approved_fields():
     assert "changed since review" in stale.get_json()["error"]
 
 
-def test_director_chat_story_guideline_proposal_uses_structured_schema(monkeypatch):
-    captured = {}
-    def capture(client, model, contract, context=None, label=""):
-        captured.update({"client": client, "contract": contract, "label": label})
-        return {"jobId": "fake-guidelines-1"}
+def test_director_chat_story_guideline_proposal_is_retired(monkeypatch):
+    def enqueue(*args, **kwargs):
+        raise AssertionError("Retired guideline proposal must not launch another model call")
 
-    monkeypatch.setattr(app_module, "enqueue_llm", capture)
+    monkeypatch.setattr(app_module, "enqueue_llm", enqueue)
     response = app_module.app.test_client().post("/fs/director/chat", json={
         "model": "director", "operation": "storyboard_story_guidelines",
         "messages": [{"role": "user", "content": "We decided to change the pacing."}],
     })
-    assert response.status_code == 202
-    assert captured["client"] == "chat"
-    assert captured["contract"]["operation"] == "storyboard_story_guidelines"
-    fields = captured["contract"]["response_schema"]["properties"]["guidelines"]["properties"]
-    assert set(fields) == {"visualFocus", "creativeDirection", "variation", "pacing", "sceneRelationships"}
-    assert captured["label"] == "Storyboard Guideline Proposal"
+    assert response.status_code == 400
+    assert "Unsupported Director Chat operation" in response.get_json()["error"]
 
 
 def test_storyboard_chat_preserves_inline_story_reference_in_director_request(monkeypatch):

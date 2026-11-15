@@ -113,6 +113,47 @@ test('a written-out author duration survives malformed optional model duration',
     'WebCap carries the author\'s twelve seconds through a malformed model field');
 });
 
+test('later new Scene sees prior saved Scene for continuity, not leftover working draft', async () => {
+  const state={pending:false,jobId:'',studioScenesProposal:null,
+    studioWorkingDraft:{projects:{},scenes:{},newProject:{title:'Old Draft',prompt:'OLD SCENE PROMPT'},
+      sourceRequest:'Create Scene 1'}};
+  const story={id:'p1',title:'Project',concept:'An evening story',style:'Quiet light',
+    invariants:[],sceneOrder:['s1'],scenes:{s1:{title:'Opening',prompt:'SAVED FIRST SCENE',durationSeconds:8}}};
+  let requests=0,reviewed=0;
+  const scope=vm.createContext({
+    state,studioRequestedDuration,studioMentionedDuration,
+    studioRequestAppliesPreparedMaterial,studioWorkingFieldChanges,
+    syncControls(){},scheduleSessionSave(){},studioActionStatus(){},
+    showStudioScenesReview(){reviewed++;},
+    window:{
+      flushStudioDirectorStoryEdits:async()=>{},
+      reportConsoleError:()=>assert.fail('Valid next Scene should not fail'),
+      studioDirectorBridge:{
+        isReady:()=>true,readinessMessage:()=> '',
+        makeProposal:async instruction=>{
+          requests++;
+          const payload=JSON.parse(instruction);
+          assert.equal(payload.project.previousScene.prompt,'SAVED FIRST SCENE');
+          assert.equal(payload.project.previousScene.title,'Opening');
+          assert.deepEqual(JSON.parse(JSON.stringify(payload.project.unsavedWorkingFields)),{});
+          assert.doesNotMatch(instruction,/OLD SCENE PROMPT/);
+          return JSON.stringify({title:'Second Scene',prompt:'New independent complete H3 prompt'});
+        }
+      }
+    },
+    requestJson:async()=>({story}),
+    Promise,JSON,Number,String,Error,encodeURIComponent
+  });
+  const writer=vm.runInContext('({' + method + '})',scope).writeNewScene;
+  const result=await writer.call(scope.window.studioDirectorBridge,{
+    projectId:'p1',instruction:'Create the second Scene',sequenceIndex:1,directSave:false
+  });
+  assert.equal(requests,1);
+  assert.equal(reviewed,1);
+  assert.equal(result.review,true);
+  assert.equal(state.studioScenesProposal.drafts[0].title,'Second Scene');
+});
+
 test('missing Prompt retains title and duration as editable draft even on direct save', async () => {
   const state={pending:false,jobId:'',studioScenesProposal:null,
     studioWorkingDraft:{projects:{},scenes:{},newProject:{},newScene:{},sourceRequest:''}};

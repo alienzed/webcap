@@ -144,6 +144,30 @@ Destructive or lossy mutations of source Set media and user-authored Set state m
 - Construct mutation arguments explicitly in code.
 - Do not introduce arbitrary code execution paths.
 
+## Fallible Model Output and Cheap Recovery
+
+LLM suggestions and generated content are best-effort material, not authoritative
+application state or proof of correctness. Design for useful partial work and
+inexpensive recovery instead of trying to make the model infallible.
+
+- Accept ordinary prose for discussion and Read. Optional metadata, action hints,
+  rationales and assessments must not invalidate a useful answer.
+- For structured creative output, preserve independently usable fields and
+  already completed items when optional fields are missing or malformed. Do not
+  replace saved values with invalid or missing values.
+- Validate at the operation boundary: real destination identity, requested
+  mutation, supported runtime parameters, concurrency and persistence. An
+  unsupported parameter may prevent that specific execution or save, but must
+  not erase an otherwise useful editable draft.
+- Prefer an editable result, explicit correction, existing Undo/Redo or a normal
+  retry over automatic repair calls, speculative restrictions, quarantine or new
+  fallback machinery.
+- Keep actual failures visible. A rejected optional suggestion is not a failed
+  Read; a failed save is not a failed model response; a successful save remains
+  successful even if later refresh or receipt work fails.
+- Before adding a guard, identify the concrete loss or invalid state it
+  prevents. If a normal WebCap operation can still use the result, let it.
+
 ## LLM Guidance
 
 Write model-facing instructions as positive, actionable directions describing the desired behavior. Prefer what the model should do over negated prohibitions (for example, `do not ...`), which can inadvertently prime the unwanted behavior. Keep guidance concise, concrete, and appropriate to the current task; express exceptions or boundaries through affirmative scope and explicit output contracts wherever possible. Review existing prompts for redundant or conflicting creative directives before adding new ones.

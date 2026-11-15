@@ -61,7 +61,7 @@ test('Only explicitly supplied conversation content is sent; legacy snapshots ar
     })
   });
   vm.runInContext(part('  function studioDirectorRequestMessages(messages, includePromptContract, explicitWrite, navigationSnapshot) {',
-    '  function studioDirectorChatRequestMessages(messages, selectedScene, navigationSnapshot) {'), context);
+    '  function studioDirectorChatRequestMessages(messages, selectedScene, navigationSnapshot, boundTarget) {'), context);
   const result = await vm.runInContext(
     'studioDirectorRequestMessages([{role:"user",content:"Develop the idea"}])', context);
   assert.equal(result.length, 2);
@@ -74,7 +74,7 @@ test('Only explicitly supplied conversation content is sent; legacy snapshots ar
 
 test('Studio conversation uses a simple Read or one optional authoring action', async()=>{
   const scope=vm.createContext({
-    state:{studioStoryAccess:null,storyboardAttachments:{},workshop:null},
+    state:{studioStoryAccess:null,storyboardAttachments:{},workshop:null,studioWorkingDraft:{projects:{},scenes:{},newProject:{},newScene:{}}},
     Object,String,Promise,
     window:{getStudioDirectorNavigation:()=>({projectId:'p1',sceneOrder:[]})},
     studioAttachedStoryId:()=>'',requestJson:async url=>
@@ -97,12 +97,12 @@ test('Studio conversation uses a simple Read or one optional authoring action', 
 });
 test('explicit Write guidance asks for the draft, not another conversational recommendation', async () => {
   const context = vm.createContext({
-    state:{studioStoryAccess:null,storyboardAttachments:{}},
+    state:{studioStoryAccess:null,storyboardAttachments:{},studioWorkingDraft:{projects:{},scenes:{},newProject:{},newScene:{}}},
     Object,String,Promise,window:{getStudioDirectorNavigation:()=>({})},
     requestJson:async()=>({system:'Studio producer expertise',actions:[]})
   });
   vm.runInContext(part('  function studioDirectorRequestMessages(messages, includePromptContract, explicitWrite, navigationSnapshot) {',
-    '  function studioDirectorChatRequestMessages(messages, selectedScene, navigationSnapshot) {'),context);
+    '  function studioDirectorChatRequestMessages(messages, selectedScene, navigationSnapshot, boundTarget) {'),context);
   const conversational = await vm.runInContext(
     "studioDirectorRequestMessages([{role:'user',content:'Discuss Scene'}],false)",context);
   const writing = await vm.runInContext(
@@ -280,7 +280,7 @@ test('bounded Scene writer receives saved duration and linked constraints',()=>{
 });
 
 test('H3 detailed authoring contract is included when Director may propose a Prompt revision', async () => {
-  const state = {studioStoryAccess:null,storyboardAttachments:{},workshop:null};
+  const state = {studioStoryAccess:null,storyboardAttachments:{},workshop:null,studioWorkingDraft:{projects:{},scenes:{},newProject:{},newScene:{}}};
   const context = vm.createContext({
     state,Object,String,Promise,window:{getStudioDirectorNavigation:()=>({})},
     requestJson:async () => ({
@@ -289,7 +289,7 @@ test('H3 detailed authoring contract is included when Director may propose a Pro
     })
   });
   vm.runInContext(part('  function studioDirectorRequestMessages(messages, includePromptContract, explicitWrite, navigationSnapshot) {',
-    '  function studioDirectorChatRequestMessages(messages, selectedScene, navigationSnapshot) {'),context);
+    '  function studioDirectorChatRequestMessages(messages, selectedScene, navigationSnapshot, boundTarget) {'),context);
   const ordinary = await vm.runInContext(
     "studioDirectorRequestMessages([{role:'user',content:'Discuss scene'}])",context);
   const detailed = await vm.runInContext(
@@ -301,7 +301,7 @@ test('H3 detailed authoring contract is included when Director may propose a Pro
 
 test('Studio conversation receives the canonical H3 template as reference without an automatic Write', async () => {
   const template = fs.readFileSync(path.join(__dirname, '..', 'docs/mmh3-prompt-runtime-context.txt'), 'utf8').trim();
-  const state = {studioStoryAccess:null,storyboardAttachments:{},workshop:null};
+  const state = {studioStoryAccess:null,storyboardAttachments:{},workshop:null,studioWorkingDraft:{projects:{},scenes:{},newProject:{},newScene:{}}};
   const context = vm.createContext({
     state,Object,String,Promise,window:{getStudioDirectorNavigation:()=>({})},
     studioAttachedStoryId:()=>'', 

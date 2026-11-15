@@ -1963,6 +1963,8 @@
       if (!payload.story || !payload.story.id) throw new Error('Project creation returned no authoritative Story ID.');
       createdStory = payload.story;
       state.studioProjectProposal = null;
+      state.studioWorkingDraft.newProject = {};
+      scheduleSessionSave();
       el('studio-project-review').close();
       var name = payload.story.title || 'Untitled Project';
       if (continueWithProject) {
@@ -3339,16 +3341,22 @@
         String(target && target.projectId || '');
       if (projectKey) {
         working.projects[projectKey] = Object.assign({},working.projects[projectKey],project);
-      } else working.newProject = Object.assign({},working.newProject,project);
-      changed = true;
+        changed = true;
+      } else if (action && action.kind === 'create_project') {
+        working.newProject = Object.assign({},working.newProject,project);
+        changed = true;
+      }
     }
     if (Object.keys(scene).length) {
       var sceneKey = action && action.kind === 'create_scene' ? '' :
         String(target && target.sceneId || '');
       if (sceneKey) {
         working.scenes[sceneKey] = Object.assign({},working.scenes[sceneKey],scene);
-      } else working.newScene = Object.assign({},working.newScene,scene);
-      changed = true;
+        changed = true;
+      } else if (action && action.kind === 'create_scene') {
+        working.newScene = Object.assign({},working.newScene,scene);
+        changed = true;
+      }
     }
     if (changed) {
       working.sourceRequest = String(request || '');
@@ -4747,7 +4755,7 @@
           !!workingScene.prompt.trim() &&
           (state.studioWorkingDraft.sourceRequest ===
             String(launch.authorRequest || launch.instruction) || applyExisting);
-        state.pending = false;
+        if (!reuse) state.pending = false;
         var proposal = reuse ?
           Promise.resolve(JSON.stringify({scenes:[Object.assign({
             title:'Scene ' + (order.length+1),
@@ -4805,6 +4813,13 @@
                 !result.scenes[0].id)
               throw new Error('Scene creation returned no confirmed saved result.');
             var saved = result.scenes[0];
+            // The server has committed the new Scene. Clear a matching draft
+            // before refresh/receipt, so a later reporting failure cannot
+            // cause the same candidate to be inserted twice.
+            if (state.studioWorkingDraft.newScene.prompt === saved.prompt) {
+              state.studioWorkingDraft.newScene = {};
+              scheduleSessionSave();
+            }
             return window.refreshStudioDirectorStoryIfOpen(storyId).then(function () {
               return window.studioDirectorBridge.recordApplied('scene.create',result.story,{
                 scenes:[{id:saved.id,title:saved.title,prompt:saved.prompt,

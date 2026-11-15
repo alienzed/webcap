@@ -311,7 +311,7 @@ test('plain Read completes the real send/persist path with one chat call and no 
   const done=new Promise(resolve=>{complete=resolve;});
   const el=id=>id==='director-chat-input'?input:{textContent:'',dataset:{newResult:'false'}};
   const ctx=vm.createContext({
-    state,el,Promise,Object,String,JSON,Array,performance:{now:()=>1},
+    state,el,Promise,Object,String,JSON,Array,parseStudioChatResponse:parse,performance:{now:()=>1},
     inputHistory:[],inputHistoryIndex:0,inputHistoryDraft:'',
     persistentMode:mode=>mode==='storyboard',
     studioAttachedStoryId:()=> 'p1',

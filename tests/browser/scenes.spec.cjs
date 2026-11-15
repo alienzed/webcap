@@ -19,7 +19,7 @@ test('Flow 2 — returned Scene count, editable review and persistent real recor
   await page.locator('[data-assistant-mode="storyboard"]').click();
   await expect(page.locator('#director-studio-attach-current')).toBeVisible();
   await page.locator('#director-studio-attach-current').click();
-  const model=page.locator('#director-chat-model');
+  const model=page.locator('#app-header-director-model');
   await expect(model.locator('option[value="acceptance::acceptance-model"]')).toHaveCount(1);
   await model.selectOption('acceptance::acceptance-model');
   const authored=[
@@ -65,7 +65,7 @@ test('Flow 6 — each conversation reply owns its own editable Scene review',asy
   await page.locator('#director-chat-rail-btn').click();
   await page.locator('[data-assistant-mode="storyboard"]').click();
   await page.locator('#director-studio-attach-current').click();
-  const model=page.locator('#director-chat-model');
+  const model=page.locator('#app-header-director-model');
   await expect(model.locator('option[value="acceptance::acceptance-model"]')).toHaveCount(1);
   await model.selectOption('acceptance::acceptance-model');
   await queueModel(request,{

@@ -214,3 +214,40 @@ test('an incomplete optional field does not erase valid authored material', () =
   assert.equal(merge({scene:{title:null}},{projectId:'p1',sceneId:'s1'},response.action,'Again'),false);
   assert.equal(state.studioWorkingDraft.scenes.s1.prompt,'Complete H3 Prompt');
 });
+
+test('Project revision accepts one full field replacement and preserves unrelated saved values', () => {
+  const helper=part(chat,'  // A Studio conversation owns unsaved sparse field replacements.',
+    '  function parseStudioChatResponse(raw) {');
+  const workingFields=new Function(helper+'return studioWorkingFieldChanges;')();
+  const source=part(chat,'  function parseStudioBriefDraft(raw) {',
+    '  // A bounded, editable-review-only word comparison.');
+  const parseBrief=new Function('studioWorkingFieldChanges',source+
+    'return parseStudioBriefDraft;')(workingFields);
+  const parsed=parseBrief('{"concept":"Quiet rain inside the bookshop"}');
+  assert.equal(parsed.concept,'Quiet rain inside the bookshop');
+  assert.ok(!Object.hasOwn(parsed,'title'));
+  assert.ok(!Object.hasOwn(parsed,'style'));
+  assert.ok(!Object.hasOwn(parsed,'invariants'));
+  const baseline={title:'Rainy Bookshop',concept:'Old premise',style:'Amber lamps',
+    invariants:[{kind:'location',title:'Door',text:'Green door'}]};
+  const merged=Object.assign({},baseline,parsed);
+  assert.equal(merged.concept,'Quiet rain inside the bookshop');
+  assert.equal(merged.style,'Amber lamps');
+  assert.deepEqual(merged.invariants,baseline.invariants);
+  const partial=parseBrief('{"style":"Cool light","invariants":[{"kind":"location"}]}');
+  assert.equal(partial.style,'Cool light');
+  assert.ok(!Object.hasOwn(partial,'invariants'),
+    'one malformed optional list must not erase saved Invariants');
+});
+
+test('an unbound Scene revision never becomes a new-Scene creation draft', () => {
+  const state={studioWorkingDraft:{projects:{},scenes:{},newProject:{},newScene:{},sourceRequest:''},
+    sessionDirty:{storyboard:false}};
+  const source=part(chat,'  // A Studio conversation owns unsaved sparse field replacements.',
+    '  function parseStudioChatResponse(raw) {');
+  const merge=new Function('state',source+'return studioMergeWorkingChanges;')(state);
+  assert.equal(merge({scene:{prompt:'Complete H3 rewrite'}},{projectId:'p1'},
+    {kind:'write_scenes'},'Revise Scenes 1 and 3'),false);
+  assert.deepEqual(state.studioWorkingDraft.newScene,{});
+  assert.equal(state.sessionDirty.storyboard,false);
+});

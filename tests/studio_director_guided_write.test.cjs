@@ -326,12 +326,14 @@ test('completed new Scene with Title and H3 Prompt reviews directly without anot
   let complete;
   const finished=new Promise(resolve=>{complete=resolve;});
   const scope=vm.createContext({captureProjectId:'',
+    recommendations:{writeFields:['title','prompt','durationSeconds']},
     el:id=>id==='studio-dw-write-project' ? {value:'p1'} : {},
     window:{studioDirectorBridge:{
       canReview:()=>true,
-      reviewSceneCapture:(item,id)=>{
+      reviewSceneCapture:(item,id,options)=>{
         assert.equal(id,'p1');
         assert.equal(item,capture);
+        assert.equal(options.durationRequested,true);
         complete();
         return Promise.resolve();
       },

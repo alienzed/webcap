@@ -360,7 +360,7 @@ test('Studio Revision mode dispatches the existing Storyboard revision operation
       startStudioRevision:async options=>{calls.push(options);},
       storyboardRevisionPreset:key=>key==='continuity'?'Keep continuity':'',
       reportConsoleError:error=>{throw error;}
-    },syncControls(){}
+    },syncControls(){},setOpen(){}
   });
   vm.runInContext(section(chat,'  var studioComposerMode = \'conversation\';',
     '  function syncModeUi() {'),scope);
@@ -377,6 +377,7 @@ test('Studio Revision mode dispatches the existing Storyboard revision operation
   assert.equal(calls[0].generateFreshTakes,true);
   assert.equal(calls[0].instruction,'Correct continuity in both Scenes');
   assert.equal(el('director-studio-revision-status').textContent,'Scene revision completed.');
+  scope.studioComposerMode='revision'; // Reopen the ephemeral operation after the first run completes.
   el('director-studio-revision-preset').value='coherence';
   el('director-studio-revision-input').value='';
   scope.runStudioRevision();
@@ -393,4 +394,15 @@ test('Studio Revise Scenes launcher uses the common Director composer', () => {
   assert.match(storyboard,/return reviseScenes\(options\.instruction, options\.modelId/);
   assert.match(html,/id="director-studio-composer-mode-select"/);
   assert.match(html,/id="director-studio-revision-fresh"/);
+});
+
+test('Studio operation mode hides conversation without deleting history, and pin remains available',()=>{
+  const header=html.split('<div class="director-chat-header-actions">')[1].split('</header>',1)[0];
+  assert.match(header,/id="director-studio-composer-mode-select"/);
+  assert.match(header,/id="director-chat-pin"/);
+  assert.match(css,/\.director-chat-drawer\.studio-director\.studio-revision-mode \.director-chat-messages/);
+  assert.match(css,/\.app-frame\.director-chat-pinned\.studio-director-active > \.director-chat-drawer\.studio-director/);
+  assert.match(chat,/drawer\.classList\.toggle\('studio-revision-mode', revision\)/);
+  assert.match(html,/id="storyboard-open-director"[^>]*class="review-captions-btn hidden"/);
+  assert.match(chat,/if \(studio\) toggle\.focus\(\)/);
 });

@@ -338,6 +338,16 @@
     var studio = state.activeMode === 'storyboard';
     var revision = studioRevisionActive();
     var mode = el('director-studio-composer-mode');
+    var drawer = el('director-chat-drawer');
+    drawer.classList.toggle('studio-revision-mode', revision);
+    if (revision) {
+      drawer.classList.remove('studio-actions-open');
+      el('studio-dw-open-tools').setAttribute('aria-expanded','false');
+      el('director-chat-title').textContent = 'Revise Scenes';
+    }
+    el('director-chat-history-toggle').classList.toggle('hidden', revision);
+    el('director-chat-clear').classList.toggle('hidden', revision);
+    el('studio-dw-open-tools').classList.toggle('hidden', revision);
     mode.classList.toggle('hidden', !studio);
     el('director-studio-composer-mode-select').value = studioComposerMode;
     el('director-studio-revision-controls').classList.toggle('hidden', !revision);
@@ -396,6 +406,10 @@
     })).then(function () {
       status.textContent = preset === 'coherence'
         ? 'Coherence review completed.' : 'Scene revision completed.';
+      if (studioRevisionActive()) {
+        setOpen(false);
+        studioComposerMode = 'conversation';
+      }
     }).catch(function (error) {
       status.textContent = 'Revision: ' + String(error.message || error);
       window.reportConsoleError('Studio revision', error);
@@ -1611,6 +1625,7 @@
         : 'Send';
     }
     revisionInput.disabled = studioRevisionRunning;
+    el('director-studio-composer-mode-select').disabled = studioRevisionRunning;
     if (input) input.disabled = state.pending || (persistentMode(state.activeMode) && !state.sessionReady);
     if (model) model.disabled = state.pending || !state.modelsLoaded;
     if (refresh) refresh.disabled = state.pending;
@@ -3798,9 +3813,9 @@
         if (!state.open) return;
         if (state.activeMode === 'storyboard') {
           if (!studioWorkspaceVisible()) return;
-          maybeOpenNewStudioConversation();
+          if (!studioRevisionActive()) maybeOpenNewStudioConversation();
         }
-        var input = el('director-chat-input');
+        var input = studioRevisionActive() ? el('director-studio-revision-input') : el('director-chat-input');
         if (input) input.focus();
       });
     }
@@ -3857,6 +3872,7 @@
       var minimum = Math.min(420, maximum);
       width = Math.round(Math.max(minimum, Math.min(maximum, width)));
       drawer.style.setProperty('--studio-director-width', width + 'px');
+      el('app-frame').style.setProperty('--studio-director-width', width + 'px');
       grip.setAttribute('aria-valuemin', minimum);
       grip.setAttribute('aria-valuemax', maximum);
       grip.setAttribute('aria-valuenow', width);
@@ -3865,6 +3881,7 @@
     var saved = Number(localStorage.getItem(key));
     var preferred = saved > 0 && Number.isFinite(saved) ? saved : 820;
     drawer.style.setProperty('--studio-director-width', preferred + 'px');
+    el('app-frame').style.setProperty('--studio-director-width', preferred + 'px');
     function refreshBounds(width) {
       var maximum = Math.max(1, el('app-frame').clientWidth - 42);
       grip.setAttribute('aria-valuemin', Math.min(420, maximum));
@@ -3933,7 +3950,7 @@
     close.onclick = function () {
       var studio = state.activeMode === 'storyboard';
       setOpen(false);
-      if (studio) el('storyboard-open-director').focus();
+      if (studio) toggle.focus();
     };
     clear.onclick = newChat;
     contextRefresh.onclick = function () {
@@ -4180,12 +4197,12 @@
       }
     });
     document.addEventListener('pointerdown', function (event) {
-      if (!state.open || state.activeMode === 'storyboard' || state.pinned || document.querySelector('dialog[open]') ||
+      if (!state.open || state.pinned || document.querySelector('dialog[open]') ||
           drawer.contains(event.target) || toggle.contains(event.target)) return;
       setOpen(false);
     });
     window.addEventListener('keydown', function (event) {
-      if (event.key === 'Escape' && state.open && state.activeMode !== 'storyboard' &&
+      if (event.key === 'Escape' && state.open && !state.pinned &&
           !document.querySelector('dialog[open]')) setOpen(false);
     });
 
@@ -4875,8 +4892,13 @@
     // Story navigation has no authority to mutate Assistant conversations or
     // their explicitly attached reference snapshots.
   };
-  window.openStoryboardAssistant = function () { setOpen(true, 'storyboard'); };
+  window.openStoryboardAssistant = function () {
+    studioComposerMode = 'conversation';
+    return setOpen(true, 'storyboard');
+  };
   window.openStudioDirectorRevision = function (preset) {
+    studioComposerMode = 'revision';
+    el('director-studio-revision-status').textContent = '';
     return Promise.resolve(setOpen(true, 'storyboard')).then(function () {
       setStudioComposerMode('revision', preset === undefined ? undefined : preset);
     });
@@ -4885,6 +4907,7 @@
     if (state.pending || state.attachmentPending)
       return Promise.reject(new Error('Finish the current Director request first.'));
     var context = window.studioDirectorWorkbench.sceneRead(story, sceneId);
+    studioComposerMode = 'conversation';
     return Promise.all([setOpen(true, 'storyboard'), state.sessionLoadPromise]).then(function () {
       if (!state.sessionReady) throw new Error('Director conversation could not load. Check the Console.');
       window.studioDirectorBridge.selectWriteProject(story.id, story.title);

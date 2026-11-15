@@ -4021,7 +4021,7 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
 .director-chat-drawer.studio-director .director-chat-header-copy {flex:1;min-width:0;gap:2px;}
 .director-chat-drawer.studio-director .director-chat-header-copy strong {font-size:21px;line-height:1.2;overflow-wrap:anywhere;}
 .director-chat-drawer.studio-director #director-chat-mode-description {display:none;}
-.director-chat-drawer.studio-director #director-chat-pin {display:none;}
+.director-chat-drawer.studio-director #director-chat-pin {display:inline-flex;flex:0 0 34px;align-items:center;justify-content:center;}
 .director-chat-drawer.studio-director #studio-dw-open-tools {display:inline-flex;}
 .director-chat-drawer.studio-director .director-chat-header-actions {flex-wrap:nowrap;gap:5px;max-width:100%;}
 .director-chat-drawer.studio-director .director-chat-header-actions button {min-height:34px;width:34px;padding:5px;font-size:18px;justify-content:center;align-items:center;}
@@ -4045,6 +4045,60 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
   .director-chat-drawer.studio-director .director-chat-header-copy {flex-basis:auto;}
   .director-chat-drawer.studio-director .director-chat-messages {padding:20px;}
   .director-chat-drawer.studio-director .director-chat-composer {padding:12px 20px 18px;}
+}
+
+/* Director: the pinned workbench shares space with Studio; unpinned floats and dismisses. */
+.app-frame.director-chat-pinned.studio-director-active {
+  grid-template-columns:42px minmax(0,1fr) minmax(360px,min(var(--studio-director-width,820px),55vw));
+  grid-template-areas:"header header header" "rail workspace assistant" "rail status status";
+}
+.app-frame.shell-immersive.director-chat-pinned.studio-director-active {
+  grid-template-columns:minmax(0,1fr) minmax(360px,min(var(--studio-director-width,820px),55vw));
+  grid-template-areas:"workspace assistant" "status status";
+}
+.app-frame.director-chat-pinned.studio-director-active > .director-chat-drawer.studio-director {
+  grid-area:assistant;position:relative;inset:auto;z-index:5;
+  width:auto;min-width:0;border:0;border-left:1px solid var(--border);
+  box-shadow:none;border-radius:0;
+}
+/* Revision is an ephemeral task, not another window onto the previous conversation. */
+.director-chat-drawer.studio-director.studio-revision-mode .director-chat-messages,
+.director-chat-drawer.studio-director.studio-revision-mode .director-chat-empty,
+.director-chat-drawer.studio-director.studio-revision-mode #studio-dw-suggestions,
+.director-chat-drawer.studio-director.studio-revision-mode #director-chat-attachments,
+.director-chat-drawer.studio-director.studio-revision-mode #director-chat-context-panel,
+.director-chat-drawer.studio-director.studio-revision-mode #director-chat-history-toggle,
+.director-chat-drawer.studio-director.studio-revision-mode #director-chat-clear,
+.director-chat-drawer.studio-director.studio-revision-mode #studio-dw-open-tools,
+.director-chat-drawer.studio-director.studio-revision-mode #director-chat-save-status {display:none!important;}
+.director-chat-drawer.studio-director.studio-revision-mode .director-chat-conversation {
+  justify-content:flex-start;
+}
+.director-chat-drawer.studio-director.studio-revision-mode .director-chat-composer {
+  margin-top:clamp(16px,5vh,60px);
+}
+.director-studio-revision-target {font-size:14px;color:var(--muted);margin-bottom:10px;}
+.director-chat-drawer.studio-director .director-studio-composer-mode {margin:0;flex:0 0 auto;}
+.director-chat-drawer.studio-director .director-studio-composer-mode select {max-width:160px;min-width:140px;}
+.director-chat-drawer.studio-director .director-chat-header-actions button {flex-shrink:0;}
+.director-chat-drawer.studio-director .director-chat-header-actions #director-chat-history-toggle,
+.director-chat-drawer.studio-director .director-chat-header-actions #director-chat-clear {width:auto;padding:5px 9px;font-size:13px;}
+.director-chat-drawer.studio-director .director-header-button-label {display:inline;}
+.director-chat-drawer.studio-director .studio-header-icon {display:none;}
+@media (max-width:880px) {
+  .app-frame.director-chat-pinned.studio-director-active {
+    grid-template-columns:42px minmax(0,1fr);
+    grid-template-areas:"header header" "rail workspace" "rail status";
+  }
+  .app-frame.shell-immersive.director-chat-pinned.studio-director-active {
+    grid-template-columns:minmax(0,1fr);
+    grid-template-areas:"workspace" "status";
+  }
+  .app-frame.director-chat-pinned.studio-director-active > .director-chat-drawer.studio-director {
+    grid-area:2 / 1 / -1 / -1;position:absolute;inset:0 0 0 auto;
+    width:min(var(--studio-director-width,820px),calc(100% - 42px));
+    min-width:0;z-index:74;box-shadow:-12px 0 32px #0004;
+  }
 }
 
 /* Contextual QA discussion: inspectable exact evidence without taking over the chat. */
@@ -4130,8 +4184,8 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
 
 /* Studio Director: one-line identity and compact navigation; Write remains a conversational action shelf. */
 .director-chat-drawer.studio-director .director-chat-header-actions #studio-dw-open-tools {width:auto;padding:5px 11px;font-size:14px;}
-.director-chat-drawer.studio-director .director-header-button-label {display:none;}
-.director-chat-drawer.studio-director .studio-header-icon {display:block;width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}
+.director-chat-drawer.studio-director .director-header-button-label {display:inline;}
+.director-chat-drawer.studio-director .studio-header-icon {display:none;}
 .director-chat-drawer:not(.studio-director) .studio-header-icon {display:none;}
 .director-chat-drawer.studio-director .studio-dw-write-availability {display:block;}
 .director-chat-drawer.studio-director .studio-dw-write-availability p {margin:0;color:var(--muted);line-height:1.45;}

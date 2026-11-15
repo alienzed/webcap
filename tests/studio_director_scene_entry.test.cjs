@@ -77,3 +77,12 @@ test('automatic Director revisions get a distinct persisted receipt; reviewed Ap
   assert.match(state.modeMessages.storyboard[1].content,/"operation": "scene.update"/);
   assert.match(director,/WebCap · Director revision/);
 });
+
+test('inline Scene Revise invokes the existing targeted refine_prompt operation',()=>{
+  const calls=[];
+  const scope=vm.createContext({runDirector:(...args)=>calls.push(args)});
+  vm.runInContext(section(scene,'  function reviseSceneWithDirector(sceneId) {','  function handleSceneAction('),scope);
+  scope.reviseSceneWithDirector('scene-two');
+  assert.deepEqual(calls,[['scene-two','refine_prompt']]);
+  assert.doesNotMatch(section(scene,'  function reviseSceneWithDirector(sceneId) {','  function handleSceneAction('),/openSceneDirector\(/);
+});

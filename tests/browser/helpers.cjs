@@ -66,12 +66,29 @@ async function seedScene(page, projectId, scene) {
   expect(response.ok()).toBeTruthy();
   return (await response.json()).scene;
 }
+async function reopenDirectorIfClosed(page) {
+  const drawer=page.locator('#director-chat-drawer');
+  if(!(await drawer.isVisible())) {
+    await page.locator('#director-chat-rail-btn').click();
+    const studio=page.locator('[data-assistant-mode="storyboard"]');
+    if(await studio.isVisible()) await studio.click();
+  }
+  await expect(drawer).toBeVisible();
+}
 async function openProject(page, projectId) {
+  const drawer=page.locator('#director-chat-drawer');
+  const wasOpen=await drawer.isVisible();
   const row=page.locator('#storyboard-library-list [data-story-id="'+projectId+'"]');
   await expect(row).toBeVisible();
   await row.locator('[data-story-open]').click();
+  const selected=await story(page,projectId);
+  await expect(page.locator('#storyboard-story-title')).toHaveValue(selected.title);
+  // Unpinned Director intentionally auto-closes on Studio navigation.
+  // Reopen it through the real rail if this journey was using it.
+  if(wasOpen) await reopenDirectorIfClosed(page);
 }
 async function ensureAttachedProject(page,expectedTitle) {
+  await reopenDirectorIfClosed(page);
   // Opening a Scene can launch Director's contextual Revision mode. These
   // cases explicitly test conversation/Read and must choose that visible mode.
   const composerMode=page.locator('#director-studio-composer-mode-select');
@@ -82,4 +99,4 @@ async function ensureAttachedProject(page,expectedTitle) {
   if(await attach.isVisible()) await attach.click();
   await expect(label).toContainText(expectedTitle);
 }
-module.exports={freshDirectorSession,ensureAttachedProject,resetModel,queueModel,observedModels,openDirector,say,stories,story,seedProject,seedScene,openProject};
+module.exports={reopenDirectorIfClosed,freshDirectorSession,ensureAttachedProject,resetModel,queueModel,observedModels,openDirector,say,stories,story,seedProject,seedScene,openProject};

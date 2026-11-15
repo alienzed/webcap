@@ -48,7 +48,7 @@ async function sendLive(page,instruction){
   await expect(page.locator('#director-chat-progress')).toBeHidden({timeout:180000});
 }
 async function actualReply(page){
-  const texts=await page.locator('#director-chat-messages').innerText();
+  const texts=await page.locator('#director-chat-messages').textContent();
   expect(texts.trim().length).toBeGreaterThan(0);
   return texts;
 }
@@ -62,6 +62,7 @@ async function addEvidence(testInfo,page,model,request,additional={}){
 async function latestSceneReview(page){
   const action=page.locator('#studio-dw-suggestions .studio-dw-suggestion-action');
   await expect(action).toBeVisible({timeout:180000});
+  await expect(action).toContainText(/Review authored Scene/i);
   await action.click();
   await expect(page.locator('#studio-scenes-review')).toBeVisible();
   return page.locator('#studio-scenes-rows .studio-scenes-row');

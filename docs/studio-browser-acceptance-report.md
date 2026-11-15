@@ -34,12 +34,12 @@ The smoke test uses a separate isolated app and **actual remote model**. It veri
 | Flow | Browser test | Evidence / state |
 | --- | --- | --- |
 | 1 — New Project and Overview | `project.spec.cjs` | **Passing checkpoint** on run [43773272703](https://github.com/alienzed/webcap/actions/runs/43773272703): visible Review, edited Overview and Invariant persisted, reload, one inference call; open-another-Project variant remains unverified |
-| 2 — Create multiple Scenes | `scenes.spec.cjs` — count/persistence and incomplete sibling | **Unverified on latest revision**; first CI attempt failed on the test fixture's assumption there was only one Project, since the suite shares isolated data; fixture corrected. No Scene acceptance pass claimed yet |
+| 2 — Create multiple Scenes | `scenes.spec.cjs` — count/persistence and incomplete sibling | **Unverified on latest revision**; first CI attempt failed on a shared-fixture count assumption, corrected without weakening Scene assertions. No Scene acceptance pass claimed yet |
 | 3 — Revise Overview and Scenes | `revisions.spec.cjs` — Project save and partial batch | **Unverified**; multiple batch outcomes, cancellation, unsupported durations and context preservation need separate observed results |
 | 4 — Conversation and explicit Read | `director-read.spec.cjs` and `explicit-read.spec.cjs` | **Plain-text conversation passing checkpoint** on run 43773272703; **explicit Read not verified**, with a real-browser assertion intentionally requiring visible selection-and-sharing UI. The legacy `studio-dw-read` control is currently hidden in source; automatic context attachment does not count as a pass |
 | 5 — Change Project context | `context-switch.spec.cjs` | **Unverified**; real A/B navigation, bound destination and save verification written |
 | 6 — Two proposals same Project | `scenes.spec.cjs` — ownership | **Unverified**; review switching and preservation of an edited unsaved draft asserted through real reply controls |
-| 7 — Recovery and failures | `recovery.spec.cjs` | **Unverified**; in-session navigation, saved draft, retry/no duplicate and external inference failure checks written. Concurrent update conflict, cancellation and post-save refresh/receipt failure not yet exercised |
+| 7 — Recovery and failures | `recovery.spec.cjs` | **Unverified**; in-session navigation, saved draft, retry/no duplicate and external inference failure checks written. Concurrent update conflict and cancellation remain unexercised; `post-save-receipt.spec.cjs` adds a real isolated-filesystem permission fault after Scene save, but awaits a browser result |
 | 8 — Studio Blocks | `blocks.spec.cjs` | **Passing UI/persistence checkpoint** on [43772879212](https://github.com/alienzed/webcap/actions/runs/43772879212): create, reopen and slash-insert; later change added real Send + exact external inference request check, **not yet verified on latest revision** |
 | 9 — Optional specialist tools | `specialist.spec.cjs` | **Unverified** utility discovery, Coherence preset and no accidental Take-generation while cancelled. Actual Coherence execution and Revise & Generate effects **not automated**, so the optional full flow is not complete |
 
@@ -48,7 +48,7 @@ The smoke test uses a separate isolated app and **actual remote model**. It veri
 ## Known unautomated steps / investigation needs
 
 - **Explicit Read:** user-selected Project, Scene and field sharing, inspect exactly what was shared, and refreshed selected context must be proven in browser. The visible Project-access `Inspect fields` is not a substitute for the documented user-selected **Share context** flow. The historical `studio-dw-read` selector is hidden; decide whether current UI can fulfill this contract before any product UI change.
-- **Save succeeds but receipt or refresh fails:** requires a controlled *real* post-save transport/storage fault, not mocked success responses. This scenario is not implemented yet and must not count as passing.
+- **Save succeeds but receipt or refresh fails:** `post-save-receipt.spec.cjs` now creates a real POSIX permission failure in the isolated conversation directory after the authored Scene is ready, and asserts the Scene persists while the application reports the receipt error. **Not yet CI-verified**. It does not run on Windows without an equivalent real fault mechanism.
 - **Cancellation and concurrent edit conflicts:** additional real operations are required, including confirmed saved/failed/not-attempted counts and saved-value freshness.
 - **Complete specialist flow:** Coherence model response, review, actual effects, and Revise & Generate need a separate deterministic browser exercise; Take generation requires a configured inference worker and should remain disabled in the default no-GPU suite.
 - **Visual UX and hierarchy:** reading order, discoverability, dialogs/pinning, keyboard navigation, narrow viewport, and creative-quality judgments still warrant human inspection. Browser checks cannot certify design quality.
@@ -57,3 +57,5 @@ The smoke test uses a separate isolated app and **actual remote model**. It veri
 ## Evidence boundaries
 
 CI launches actual Chromium against actual isolated WebCap. Failures in the suite are treated as evidence requiring investigation, not as permission to modify production code. No production Studio behavior or UI was changed by this browser-test branch.
+
+**Latest branch CI:** [GitHub Actions Studio browser acceptance](https://github.com/alienzed/webcap/actions/workflows/studio-browser-acceptance.yml) remains the authoritative check for this draft PR; a run in progress is not reported as a pass. The latest targeted checks before expansion were **3 passed, 2 failed on fixture setup** (run 43773272703), after which the fixture was corrected. Later expanded runs have not yet been accepted as complete.

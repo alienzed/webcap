@@ -225,9 +225,10 @@ test('new Project Apply persists only reviewed Project fields before Scene autho
   let projectSaved=false,sceneAuthoring=false,finish;
   const done=new Promise(resolve=>finish=resolve);
   const scope=vm.createContext({
-    state:{studioProjectProposal:{title:story.title},pending:false,studioStoryAccess:null},
+    state:{studioProjectProposal:{title:story.title},pending:false,studioStoryAccess:null,
+      studioWorkingDraft:{projects:{},scenes:{},newProject:{},newScene:{},sourceRequest:''}},
     el:id=>fields[id]||{},
-    syncControls:()=>{},recordStudioOperation:()=>{},studioActionStatus:()=>{},
+    syncControls:()=>{},recordStudioOperation:()=>{},studioActionStatus:()=>{},scheduleSessionSave:()=>{},
     window:{
       studioDirectorBridge:{recordApplied:async()=>{}},
       refreshStudioDirectorStoryIfOpen:async()=>finish(),

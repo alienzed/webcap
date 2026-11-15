@@ -3421,15 +3421,18 @@
     catch (_) { return {reply:text,action:null,changes:null}; }
     // Accept structured action metadata when supplied, without making it a
     // prerequisite for a useful conversational answer.
-    if (!value || typeof value !== 'object' || Array.isArray(value) ||
-        typeof value.reply !== 'string' || !value.reply.trim())
+    if (!value || typeof value !== 'object' || Array.isArray(value))
       return {reply:text,action:null,changes:null};
+    // A missing conversational wrapper must not discard independently usable
+    // structured fields. Keep the raw answer visible rather than inventing prose.
+    var reply = typeof value.reply === 'string' && value.reply.trim()
+      ? value.reply : text;
     var action = value.action;
     if (!action || typeof action !== 'object' || Array.isArray(action) ||
         !['create_project','write_project','create_scene','write_scenes'].includes(action.kind) ||
         typeof action.instruction !== 'string' || !action.instruction.trim())
       action = null;
-    return {reply:value.reply,action:action,changes:value.changes || null};
+    return {reply:reply,action:action,changes:value.changes || null};
   }
 
   function studioActionFromExplicitRequest(request, selectedScene) {

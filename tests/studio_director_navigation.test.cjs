@@ -12,7 +12,7 @@ test('Director navigation supplies identity and Scene order without saved creati
     source.indexOf('  function openStoryboardActivity(target) {')),scope);
   const navigation=scope.getStudioDirectorNavigation();
   assert.deepEqual(JSON.parse(JSON.stringify(navigation)),{
-    projectId:'p1',projectTitle:'Current Project',sceneId:'b',sceneNumber:2,sceneOrder:['a','b']});
+    projectId:'p1',projectTitle:'Current Project',sceneId:'b',sceneNumber:2,sceneTitle:'',sceneOrder:['a','b']});
   assert.doesNotMatch(JSON.stringify(navigation),/Private/);
   navigation.sceneOrder.push('c');
   assert.deepEqual(story.sceneOrder,['a','b'],'navigation cannot mutate saved order');
@@ -236,12 +236,12 @@ test('open Director badge follows Scene 1 to Scene 2 navigation without starting
       '  function openStoryboardActivity(target) {'),navigation);
   h.scope.window.getStudioDirectorNavigation=()=>navigation.getStudioDirectorNavigation();
   h.scope.window.refreshAssistantModes();
-  assert.equal(badge.textContent,'Scene 1');
+  assert.equal(badge.textContent,'Scene 1 · Arrival');
   assert.equal(badge.hidden,false);
 
   await navigation.setSceneViewMode('focus','b');
   assert.equal(storyState.activeSceneId,'b');
-  assert.equal(badge.textContent,'Scene 2');
+  assert.equal(badge.textContent,'Scene 2 · Departure');
   assert.equal(badge.hidden,false);
   assert.strictEqual(h.state.modeMessages.storyboard,messages,'navigation cannot reset conversation');
   assert.deepEqual(h.requests,[],'navigation must not issue an LLM request');

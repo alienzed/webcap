@@ -891,7 +891,9 @@
         if (frozen.kind === 'create_scene') {
           // Authored records are reviewed directly, without a second model call.
           // Otherwise authorize one authoring call, and retain its review action.
-          var operation = frozen.scenes && frozen.scenes.length ?
+          var operation = frozen.draftReady ?
+            window.studioDirectorBridge.reviewPendingScenes(projectId) :
+            frozen.scenes && frozen.scenes.length ?
             window.studioDirectorBridge.reviewAuthoredScenes({
               projectId:projectId,scenes:frozen.scenes,
               rationale:'Authored in Studio Director conversation.'

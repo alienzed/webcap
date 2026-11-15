@@ -72,46 +72,29 @@ test('Only explicitly supplied conversation content is sent; legacy snapshots ar
   assert.equal(result[1].content, 'Develop the idea');
 });
 
-test('Studio prompting selects the current goal rather than steering every task to Project edits', async () => {
-  const context = vm.createContext({
-    state: {studioStoryAccess:null,storyboardAttachments:{},workshop:null},
-    Object, String, Promise, window:{getStudioDirectorNavigation:()=>({projectId:'p1',sceneOrder:['scene-a']})},
-    studioAttachedStoryId:()=>'', 
-    requestJson: async url => url.startsWith('/fs/storyboard?story=')
-      ? {story:{id:'p1',title:'Beacon',concept:'Lighthouse',style:'Coastal dusk',invariants:[]}}
-      : {
-        system: 'WebCap Studio Director role',
-        actions: [
-          {name:'context.read',status:'available',description:'Read chosen saved fields'},
-          {name:'scene.revise',status:'available',description:'Revise the full Scene H3 Prompt'}
-        ],
-        promptContract:'integrated_multimodal_description: [Shot 1]'
-      }
+test('Studio conversation uses a simple Read or one optional authoring action', async()=>{
+  const scope=vm.createContext({
+    state:{studioStoryAccess:null,storyboardAttachments:{},workshop:null},
+    Object,String,Promise,
+    window:{getStudioDirectorNavigation:()=>({projectId:'p1',sceneOrder:[]})},
+    studioAttachedStoryId:()=>'',requestJson:async url=>
+      url==='/fs/storyboard'?{stories:[]}:
+      url.startsWith('/fs/storyboard?story=')?{story:{
+        id:'p1',title:'Beacon',concept:'Lighthouse',style:'Coastal dusk',invariants:[],sceneOrder:[]}}:
+      {system:'Studio Director',actions:[],promptContract:'H3 template'}
   });
   vm.runInContext(part('  function studioDirectorRequestMessages(messages, includePromptContract, explicitWrite, navigationSnapshot) {',
-    '  // Retain available conversational work across ordinary follow-up questions.'),context);
-  const assembled = await vm.runInContext(
-    "studioDirectorChatRequestMessages([{role:'user',content:'Revise only the Scene action'}])",context);
-  const system = assembled[0].content;
-  assert.match(system,/CURRENT SAVED PROJECT OVERVIEW/);
-  assert.match(system,/Lighthouse/);
-  assert.match(system,/For a direct question, answer fully and finish without a workflow suggestion/);
-  assert.match(system,/an appropriately scoped reviewed Write or an author-operated Studio action/);
-  assert.doesNotMatch(system,/When choices are clear, offer to review Concept/);
-  assert.match(system,/Ask one focused question only for a consequential missing decision/);
-  assert.match(system,/author it in capture.content with the H3 template/);
-  assert.match(system,/one authored text for both chat and Review Scene/);
-  assert.match(system,/"projectId":"p1","sceneOrder":\["scene-a"\]/);
-  assert.match(system,/Usually checks=\[\], readHints=\[\]/);
-  assert.match(system,/at most two useful checks/);
-  assert.match(system,/title and content as the full usable H3 Prompt/);
-  assert.match(system,/H3 PRODUCTION PROMPT REFERENCE/);
-  assert.match(system,/Use new-project, project or scenes for Write/);
-  assert.match(system,/writeFields names affected fields/);
-  assert.equal(assembled[1].content,'Revise only the Scene action');
-  assert.equal(assembled.length,2, 'no extra request or hidden context event');
+    '  // Retain available conversational work across ordinary follow-up questions.'),scope);
+  const out=await vm.runInContext(
+    "studioDirectorChatRequestMessages([{role:'user',content:'Revise the Project look'}])",scope);
+  assert.match(out[0].content,/CURRENT SAVED PROJECT OVERVIEW/);
+  assert.match(out[0].content,/Lighthouse/);
+  assert.match(out[0].content,/A plain-text answer is acceptable/);
+  assert.match(out[0].content,/write_project/);
+  assert.match(out[0].content,/WebCap owns exact Project\/Scene IDs/);
+  assert.doesNotMatch(out[0].content,/READINESS: Usually checks|capture.content/);
+  assert.equal(out[1].content,'Revise the Project look');
 });
-
 test('explicit Write guidance asks for the draft, not another conversational recommendation', async () => {
   const context = vm.createContext({
     state:{studioStoryAccess:null,storyboardAttachments:{}},
@@ -326,10 +309,10 @@ test('Studio conversation receives the canonical H3 template as reference withou
   const context = vm.createContext({
     state,Object,String,Promise,window:{getStudioDirectorNavigation:()=>({})},
     studioAttachedStoryId:()=>'', 
-    requestJson:async () => ({system:'Studio guidance',actions:[],promptContract:template})
+    requestJson:async url => url==='/fs/storyboard'?{stories:[]}:{system:'Studio guidance',actions:[],promptContract:template}
   });
   vm.runInContext(part('  function studioDirectorRequestMessages(messages, includePromptContract, explicitWrite, navigationSnapshot) {',
-    '  // The creative assessment is advisory.'),context);
+    '  // Retain available conversational work across ordinary follow-up questions.'),context);
   const result = await vm.runInContext(
     "studioDirectorChatRequestMessages([{role:'user',content:'How should an H3 prompt be structured?'}])",context);
   assert.equal(result.length,2);

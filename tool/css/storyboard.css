@@ -2614,7 +2614,7 @@ html[data-theme="dark"] .storyboard-prompt-take-status {
 
 @media (max-width: 1800px) {
   .storyboard-scenes-list.is-focus .storyboard-scene-body {
-    grid-template-columns: minmax(600px, 1fr) minmax(320px, 360px);
+    grid-template-columns: minmax(0, 1fr) minmax(320px, 360px);
   }
 }
 

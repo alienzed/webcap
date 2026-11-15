@@ -2751,8 +2751,7 @@
           '<summary title="Scene actions" aria-label="Scene actions">•••</summary>' +
           '<div class="storyboard-scene-menu-popover">' +
             '<button type="button" data-scene-action="duplicate">Duplicate Scene</button>' +
-            '<button type="button" data-scene-action="insert-director">Insert Scene After</button>' +
-            '<button type="button" data-scene-action="insert-director-custom">Insert Scene After…</button>' +
+            '<button type="button" data-scene-action="insert-director">Insert Scene After…</button>' +
             (index === order.length - 1 ? '<button type="button" data-scene-action="extend-story">Extend Story…</button>' : '') +
             '<button type="button" data-scene-action="up"' + (index === 0 ? ' disabled' : '') + '>Move earlier</button>' +
             '<button type="button" data-scene-action="down"' + (index === order.length - 1 ? ' disabled' : '') + '>Move later</button>' +
@@ -4904,7 +4903,7 @@
     el('storyboard-scene-creation-count').value = '3';
     el('storyboard-scene-creation-instruction').value = '';
     sceneCreationHistory.reset(el('storyboard-scene-creation-instruction'));
-    el('storyboard-scene-creation-run').textContent = mode === 'extend' ? 'Extend Story' : 'Insert Scene';
+    el('storyboard-scene-creation-run').textContent = mode === 'extend' ? 'Extend Story' : 'Generate Scene';
     modal.classList.remove('hidden');
     modal.setAttribute('aria-hidden', 'false');
     el(mode === 'extend' ? 'storyboard-scene-creation-count' : 'storyboard-scene-creation-instruction').focus();
@@ -5879,8 +5878,7 @@
     if (action === 'up') reorderScene(sceneId, -1);
     else if (action === 'down') reorderScene(sceneId, 1);
     else if (action === 'duplicate') duplicateScene(sceneId);
-    else if (action === 'insert-director') insertDirectorSceneAfter(sceneId);
-    else if (action === 'insert-director-custom') openSceneCreation('insert', sceneId);
+    else if (action === 'insert-director') openSceneCreation('insert', sceneId);
     else if (action === 'extend-story') openSceneCreation('extend');
     else if (action === 'delete') deleteScene(sceneId);
   }

@@ -1,5 +1,5 @@
 'use strict';
-const {test,expect}=require('@playwright/test');
+const {test,expect}=require('./test.cjs');
 const {openDirector,say,resetModel,queueModel,observedModels,stories,story}=require('./helpers.cjs');
 
 test('Flow 1 — create and review a Project Overview; verify actual persistence',async({page,request})=>{

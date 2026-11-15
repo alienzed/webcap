@@ -3,9 +3,10 @@ const {test,expect}=require('@playwright/test');
 const {resetModel,queueModel,observedModels,openDirector,say,stories,story}=require('./helpers.cjs');
 
 async function newSelectedProject(page) {
+  const previous=new Set((await stories(page)).map(item=>item.id));
   await page.locator('#storyboard-new-btn').click();
-  await expect.poll(async()=> (await stories(page)).length).toBe(1);
-  const candidate=(await stories(page))[0];
+  await expect.poll(async()=> (await stories(page)).some(item=>!previous.has(item.id))).toBeTruthy();
+  const candidate=(await stories(page)).find(item=>!previous.has(item.id));
   await expect(page.locator('#storyboard-library-list [data-story-id="'+candidate.id+'"]')).toBeVisible();
   return candidate;
 }

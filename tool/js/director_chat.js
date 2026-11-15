@@ -739,7 +739,6 @@
       state.studioBriefUndo = null;
       if (window.studioDirectorWorkbench) window.studioDirectorWorkbench.resetConversation();
       state.studioReadiness = chat.readiness || {checks:[],readHints:[],writeHint:'',writeFields:[],sceneId:''};
-      if (window.studioDirectorWorkbench) window.studioDirectorWorkbench.updateReadiness(state.studioReadiness, true);
       state.studioSceneProposal = null;
       state.studioProjectProposal = null;
       state.studioScenesProposal = null;
@@ -3060,8 +3059,7 @@
         state.studioBriefUndo = null;
         if (window.studioDirectorWorkbench) window.studioDirectorWorkbench.resetConversation();
         state.studioReadiness = {checks:[],readHints:[],writeHint:'',writeFields:[],sceneId:''};
-        if (window.studioDirectorWorkbench) window.studioDirectorWorkbench.updateReadiness(state.studioReadiness, true);
-        state.modeElapsedByAssistantIndex.storyboard = {};
+          state.modeElapsedByAssistantIndex.storyboard = {};
         state.modeMetricsByAssistantIndex.storyboard = {};
         if (!preserveContext) {
           state.storyboardAttachments = {};
@@ -4565,10 +4563,6 @@
         state.pending = false;
         syncControls();
       });
-    },
-    updateReadiness: function (value) {
-      state.studioReadiness = value;
-      state.sessionDirty.storyboard = true;
     },
     checkProjectCoherence: function (storyId) {
       if (!this.isReady()) return Promise.reject(new Error('Studio Director must be ready to check Project coherence.'));

@@ -34,10 +34,10 @@ def test_writer_workshop_uses_existing_h3_prompt_contract_and_user_playbook(monk
 def test_studio_guidance_teaches_only_focused_creative_workflows():
     result = guidance("minimax_h3")
     actions = {entry["name"]: entry["description"] for entry in result["actions"]}
-    assert set(actions) == {"context.read", "project.create", "project.revise", "scenes.write"}
-    assert "selected Scene automatically" in actions["context.read"]
-    assert "requested initial Scenes" in actions["project.create"]
-    assert "Invariants" in actions["project.revise"]
+    assert set(actions) == {"context.read", "project.write", "scenes.write"}
+    assert "automatically supplies" in actions["context.read"]
+    assert "preserving unrelated" in actions["project.write"]
+    assert "Invariants" in actions["project.write"]
     assert "one or more Scenes" in actions["scenes.write"]
     assert len(result["system"]) < 6000
     assert "normally 1-3 sentences" in result["system"]
@@ -60,7 +60,7 @@ def test_director_role_combines_webcap_workflow_expertise_with_creative_judgment
 
 def test_action_catalog_excludes_low_value_studio_director_operations():
     by_name = {action["name"]: action for action in ACTIONS}
-    assert set(by_name) == {"context.read", "project.create", "project.revise", "scenes.write"}
+    assert set(by_name) == {"context.read", "project.write", "scenes.write"}
     assert all(action["status"] == "available" for action in ACTIONS)
     for retired in ("scene.move", "scene.duplicate", "scene.split", "scene.invariants",
                     "playbook.propose", "scene.sequence.draft", "scene.batch.revise"):

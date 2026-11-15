@@ -1489,7 +1489,10 @@ function sweepLoras(model, folder) {
     var requested = generateState.pendingJobActions[jobId] || '';
     button.dataset.generateJobAction = operation;
     button.dataset.jobId = jobId;
-    button.textContent = status === 'stopping' ? 'Stopping…'
+    var compact = button.classList.contains('generate-take-job-action');
+    button.textContent = compact
+      ? (status === 'stopping' || requested ? '…' : operation === 'cancel' ? '×' : operation === 'stop' ? '■' : '')
+      : status === 'stopping' ? 'Stopping…'
       : requested ? (requested === 'cancel' ? 'Cancelling…' : 'Stopping…')
       : operation === 'cancel' ? 'Cancel' : operation === 'stop' ? 'Stop' : '';
     button.disabled = !operation || !!requested;
@@ -1737,7 +1740,7 @@ function sweepLoras(model, folder) {
       entry.appendChild(card);
       var action = document.createElement('button');
       action.type = 'button';
-      action.className = 'review-captions-btn generate-take-job-action';
+      action.className = 'generate-take-job-action';
       action.dataset.generateJobAction = '';
       entry.appendChild(action);
       host.insertBefore(entry, host.firstChild);

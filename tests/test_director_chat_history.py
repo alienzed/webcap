@@ -509,3 +509,35 @@ def test_invalid_optional_draft_fields_do_not_discard_good_fields():
         "projects": {},
     })
     assert fields["scenes"]["scene-1"] == {"prompt": "Full replacement"}
+
+
+def test_conversational_write_action_roundtrips_without_becoming_project_state(sessions):
+    created = history.create_chat("storyboard")
+    action = {
+        "kind": "write_scenes",
+        "instruction": "Make the ending quieter.",
+        "fields": ["prompt"],
+        "request": "Make Scene 2 quieter.",
+        "projectId": "project-1",
+        "scene": {"projectId": "project-1", "sceneId": "scene-2", "sceneNumber": 2},
+    }
+    saved = history.save_chat(created["id"], {
+        "expectedRevision": created["revision"], "title": "Scene revision",
+        "messages": [
+            {"role": "user", "content": "Make Scene 2 quieter."},
+            {"role": "assistant", "content": "I can revise the ending.", "writeAction": action},
+        ],
+        "draft": "",
+    })
+    restored = history.open_chat(created["id"])
+    assert restored["messages"][1]["writeAction"] == action
+    assert "writeAction" not in restored["workingDraft"]
+    assert "writeAction" not in history._summary(saved)
+
+
+def test_conversational_write_action_is_only_assistant_metadata():
+    result = history._validate_messages([
+        {"role": "user", "content": "Discussion", "writeAction": {
+            "kind": "write_scenes", "instruction": "Do something"}}
+    ])
+    assert "writeAction" not in result[0]

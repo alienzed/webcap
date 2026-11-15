@@ -3177,9 +3177,16 @@
       var recent = messages.filter(function (message) {
         return !/\[WEBCAP APPLIED FIELD VALUES\]|\[WEBCAP EXPLICIT READ\]/.test(
           String(message.content || ''));
-      }).slice(-10);
-      var outbound = [{role:'system', content:''}].concat(recent.map(function (message) {
-        return {role:message.role,content:message.content};
+      }).slice(-8);
+      var outbound = [{role:'system', content:''}].concat(recent.map(function (message, index) {
+        var content = String(message.content || '');
+        // Earlier full authoring outputs belong in the structured working
+        // draft. Keep useful discussion excerpts; the live instruction stays
+        // verbatim, however long it is.
+        if (index < recent.length - 1 && content.length > 3000)
+          content = content.slice(0,1800) + '\n[Earlier long message abbreviated]\n' +
+            content.slice(-900);
+        return {role:message.role,content:content};
       })); // Persisted inspection metadata is not part of the LLM conversation.
       // Navigation and destination identity alone convey no saved creative material.
       var storyRefs = Object.keys(state.storyboardAttachments || {}).filter(function (key) {

@@ -4129,5 +4129,6 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
 .director-chat-drawer.studio-director .studio-dw-actions {display:none;}
 .director-chat-drawer.studio-director #studio-dw-write-panel {border:0;padding:0;background:transparent;}
 .director-chat-drawer.studio-director #studio-dw-write-panel > :not(label):not(#studio-dw-batch-controls) {display:none!important;}
+.director-chat-drawer.studio-director #studio-dw-write-panel > label:not(:first-child) {display:none!important;}
 .director-chat-drawer.studio-director #studio-dw-write-panel.studio-dw-awaiting-project #studio-dw-batch-controls {display:none!important;}
 .director-chat-drawer.studio-director #studio-dw-write-panel.studio-dw-awaiting-scenes #studio-dw-batch-controls {display:block;}

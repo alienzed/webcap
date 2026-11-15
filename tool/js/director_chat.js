@@ -3217,7 +3217,7 @@
     // The selected/connected Project already has an authoritative ID. Only
     // look across all Projects when the author might be naming a different one.
     // Scene-only discussion must not enumerate the entire Project repository.
-    var namesAnotherProject = /\\b(?:project|story|named|called|titled)\\b|["“][^"”]+["”]/i.test(requestText);
+    var namesAnotherProject = /\b(?:project|story|named|called|titled)\b|["“][^"”]+["”]/i.test(requestText);
     var projects = namesAnotherProject
       ? requestJson('/fs/storyboard') : Promise.resolve({stories:[]});
     return projects.then(function (listing) {
@@ -3330,8 +3330,8 @@
     // "Save that prompt" can reuse a known complete draft. "Use warmer
     // lighting" is a *new creative request*, not permission to save old work.
     request = String(request || '');
-    return /\\b(?:save|apply|use|store)\\s+(?:(?:the|a|my)\\s+)?(?:this|that|it|previous|latest|current|prepared|existing|above|draft|prompt|proposal|material|concept)\\b/i.test(request) &&
-      !/\\b(?:change|modify|revise|rewrite|make|adjust|remove|replace|shorten|lengthen|extend|improve|darken|lighten|instead)\\b/i.test(request);
+    return /\b(?:save|apply|use|store)\s+(?:(?:the|a|my)\s+)?(?:this|that|it|previous|latest|current|prepared|existing|above|draft|prompt|proposal|material|concept)\b/i.test(request) &&
+      !/\b(?:change|modify|revise|rewrite|make|adjust|remove|replace|shorten|lengthen|extend|improve|darken|lighten|instead)\b/i.test(request);
   }
 
   function studioWorkingFieldChanges(source, names) {

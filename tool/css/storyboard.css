@@ -4254,6 +4254,17 @@ html[data-theme="dark"] .storyboard-prompt-take-status {
 
 /* Scene strip owns the view switch; Project Tools owns scoped operations. */
 .storyboard-scenes-heading .storyboard-scenes-heading-left { flex: 1 1 auto; }
+/* Compact Project production actions share the existing Scenes heading row. */
+.storyboard-project-tool-bar {
+  display:inline-flex; align-items:center; flex-wrap:wrap; gap:5px; min-width:0;
+}
+#storyboard-project-tool-bar > .storyboard-tool-icon,
+#storyboard-project-tool-bar .storyboard-header-menu > .storyboard-tool-icon {
+  display:inline-flex; align-items:center; justify-content:center;
+  box-sizing:border-box; width:36px; min-width:36px; height:36px; min-height:36px;
+  padding:0; font-size:21px; line-height:1; font-weight:650;
+}
+.storyboard-project-tool-bar .storyboard-header-menu > summary::after { content:none; }
 .storyboard-header-menu { position:relative; flex:0 0 auto; z-index:20; }
 .storyboard-header-menu > summary {
   list-style:none; cursor:pointer; display:flex; align-items:center;

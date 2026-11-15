@@ -412,9 +412,12 @@ def _h3_calibrated_ceiling(frames: int, ar_label: str):
         # be resolved while browsing/reviewing a set, use the conservative
         # baseline policy instead of making Training Review unavailable.
         return None
-    if calibration.get("hardware") != current_hardware:
-        # A calibration only applies to the hardware it measured. Treat stale
-        # calibration as absent; the baseline ceilings remain safe.
+    saved_hardware = calibration.get("hardware") or {}
+    if any(saved_hardware.get(field) != current_hardware[field] for field in ("gpu_model", "total_vram_mib")):
+        # Do not apply GPU-specific ceilings to another GPU. An ordinary change
+        # in WSL-visible RAM does not invalidate the measured GPU envelope.
+        print("[WARN] H3 calibrated ceilings ignored: saved GPU "
+              + str(saved_hardware) + " differs from current " + str(current_hardware), flush=True)
         return None
     safe_shapes = calibration.get("safe_shapes")
     if safe_shapes is None:

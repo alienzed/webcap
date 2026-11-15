@@ -46,7 +46,7 @@ test('one new Scene keeps the selected Project and complete brief through a sing
         isReady:()=>true,readinessMessage:()=> '',
         makeProposal:async (instruction,operation,includePromptContract)=>{
           authored++;
-          assert.equal(operation,'studio_scene_sequence_draft');
+          assert.equal(operation,'studio_scene_field_draft');
           assert.equal(includePromptContract,true);
           const payload=JSON.parse(instruction);
           assert.equal(payload.instruction,brief);
@@ -54,10 +54,10 @@ test('one new Scene keeps the selected Project and complete brief through a sing
           assert.equal(payload.project.style,story.style);
           assert.equal(payload.project.existingSceneTitles[0],'Old opening');
           assert.doesNotMatch(instruction,/["']summary["']|["']intent["']/i);
-          return JSON.stringify({scenes:[{
+          return JSON.stringify({
             title:'Closing the Logbook',durationSeconds:12,
             prompt:'integrated_multimodal_description: [Shot 1] Mara calmly closes the logbook at the oak desk.'
-          }],rationale:'Quiet conclusion'});
+          });
         }
       }
     },
@@ -94,10 +94,10 @@ test('a malformed duration from Director leaves the full new Scene available for
       reportConsoleError:()=>{assert.fail('An editable duration is not a writer failure');},
       studioDirectorBridge:{
         isReady:()=>true,readinessMessage:()=> '',
-        makeProposal:async()=>JSON.stringify({scenes:[{
+        makeProposal:async()=>JSON.stringify({
           title:'Closing the Logbook',prompt:'Complete H3 prompt for a quiet ending',
           durationSeconds:'twelve'
-        }],rationale:'Quiet ending'})
+        })
       }
     },
     requestJson:async()=>({story:{id:'p1',title:'Project',sceneOrder:[],scenes:{}}}),
@@ -127,7 +127,7 @@ test('invalid output prevents review or mutation and reports failure', async () 
         makeProposal:async()=>JSON.stringify({scenes:[
           {title:'One',durationSeconds:12,prompt:'A'},
           {title:'Two',durationSeconds:12,prompt:'B'}
-        ],rationale:'Wrong count'})
+        ]})
       }
     },
     requestJson:async()=>({story:{id:'p1',title:'P',sceneOrder:[],scenes:{}}}),
@@ -136,7 +136,7 @@ test('invalid output prevents review or mutation and reports failure', async () 
   });
   const writer=vm.runInContext('({' + method + '})',scope).writeNewScene;
   await assert.rejects(writer.call(scope.window.studioDirectorBridge,
-    {projectId:'p1',instruction:'Add exactly one Scene'}),/exactly one Scene/);
+    {projectId:'p1',instruction:'Add exactly one Scene'}),/no usable Scene Prompt/);
   assert.equal(state.studioScenesProposal,null);
   assert.equal(reviewed,0);
   assert.match(failures.at(-1),/New Scene draft failed/);
@@ -161,8 +161,8 @@ test('launched Scene creation saves through the existing insertion route, with a
           receipts.push({kind,fields});
         },
         makeProposal:async()=>{
-          return JSON.stringify({scenes:[{title:'Closing',prompt:'Full H3 prompt for 12s',
-            durationSeconds:'garbled'}]});
+          return JSON.stringify({title:'Closing',prompt:'Full H3 prompt for 12s',
+            durationSeconds:'garbled'});
         }
       }
     },

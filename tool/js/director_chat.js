@@ -3202,12 +3202,19 @@
   }
 
   function parseStudioChatResponse(raw) {
+    var text = String(raw || '').trim();
+    if (!text) throw new Error('Director returned an empty conversation response.');
     var value;
-    try { value = JSON.parse(String(raw || '')); }
+    try { value = JSON.parse(text); }
     catch (error) {
-      throw new Error('Director returned invalid conversation JSON: ' + error.message +
-        '\nRaw Director response:\n' + String(raw || ''));
+      // OpenAI-compatible remote endpoints may return prose despite a supplied schema.
+      // Prose is a Read reply, not an implicit Write action.
+      if (text.startsWith('{') || text.startsWith('['))
+        throw new Error('Director returned invalid conversation JSON: ' + error.message +
+          '\nRaw Director response:\n' + String(raw || ''));
+      return null;
     }
+    if (typeof value === 'string') return null;
     if (!value || typeof value !== 'object' || Array.isArray(value) ||
         typeof value.reply !== 'string' || !value.reply.trim())
       throw new Error('Director response requires a conversational reply.\nRaw Director response:\n' + String(raw || ''));

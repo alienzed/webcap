@@ -124,6 +124,7 @@ function harness() {
     }};
   const bridge = {
     isReady:()=>true, readinessMessage:()=>'',placeSuggestedAction:()=>{},
+    finishWriteAction:()=>{},
     prepareWrite:(...args)=>{requests.push(['project',...args]);return Promise.resolve();},
     writeSelectedScene:async action=>{requests.push(['scene',action]);return {};},
     writeNewScene:async action=>{requests.push(['new-scene',action]);return {};},

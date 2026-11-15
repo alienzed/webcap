@@ -1740,10 +1740,26 @@
   function prepareStudioProject(options) {
     if (state.pending || state.activeMode !== 'storyboard' || !state.sessionReady) return;
     if (state.studioProjectProposal) { showStudioProjectReview(); return; }
+    var workingProject = state.studioWorkingDraft.newProject;
+    var authorRequest = String(options && options.authorRequest || options && options.instruction || '');
+    var sameWork = state.studioWorkingDraft.sourceRequest === authorRequest ||
+      /\b(?:save|apply|use)\b/i.test(authorRequest);
+    if (sameWork && workingProject && workingProject.concept && workingProject.style &&
+        !/\bscenes\b/i.test(authorRequest)) {
+      state.studioProjectProposal = parseStudioProjectDraft(JSON.stringify(Object.assign({
+        title:'', concept:'', style:'', invariants:[], initialScenes:[],
+        rationale:'Structured Project material retained from Director conversation.'
+      },workingProject)));
+      studioActionStatus('Project fields ready for review, without another model call.',false);
+      showStudioProjectReview();
+      return;
+    }
     if (!state.modelId) { studioActionStatus('No Director model is available. Refresh models.', true); return; }
     var discussion = (state.modeMessages.storyboard || []).filter(function (message) {
       return message && (message.role === 'assistant' || message.role === 'user');
-    }).map(function (message) {
+    }).filter(function (message) {
+      return !/\[WEBCAP APPLIED FIELD VALUES\]|\[WEBCAP EXPLICIT READ\]/.test(message.content);
+    }).slice(-8).map(function (message) {
       return {role:message.role,content:message.content};
     });
     if (!discussion.some(function (message) { return message.role === 'user'; })) {
@@ -2197,7 +2213,9 @@
     }
     var discussion = (state.modeMessages.storyboard || []).filter(function (message) {
       return message && (message.role === 'assistant' || message.role === 'user');
-    }).map(function (message) {
+    }).filter(function (message) {
+      return !/\[WEBCAP APPLIED FIELD VALUES\]|\[WEBCAP EXPLICIT READ\]/.test(message.content);
+    }).slice(-8).map(function (message) {
       return {role:message.role,content:message.content};
     });
     instruction = instruction || String((discussion.filter(function (message) {
@@ -2220,6 +2238,25 @@
       var story = payload.story;
       if (!story || story.id !== storyId) throw new Error('Attached Project is unavailable.');
       var expected = { title: story.title, concept: story.concept, style: story.style, invariants: story.invariants };
+      var workingProject = state.studioWorkingDraft.projects[storyId] || {};
+      var authorRequest = String(options && options.authorRequest || instruction);
+      var sameWork = state.studioWorkingDraft.sourceRequest === authorRequest ||
+        /\b(?:save|apply|use)\b/i.test(authorRequest);
+      var required = requestedFields.length ? requestedFields : Object.keys(workingProject);
+      if (sameWork && required.length && required.every(function (field) {
+        return Object.prototype.hasOwnProperty.call(workingProject,field);
+      })) {
+        var drafted = Object.assign({},expected,workingProject);
+        state.studioBriefProposal = {
+          storyId:storyId,storyTitle:story.title,expected:expected,draft:drafted,
+          instruction:instruction,requestedFields:required,
+          rationale:'Structured Director fields retained; no additional model request.'
+        };
+        finishProgress(null);
+        studioActionStatus('Project fields ready for review, without another model call.',false);
+        showStudioBriefReview();
+        return;
+      }
       var input = {
         task: 'Author complete revised Project Overview field values using the freshly saved Project ' +
           'as the baseline. Follow the specific agreed instruction, changing only the requested fields. ' +

@@ -20,7 +20,8 @@ test('Scene header contains one Project Tools launchpad and no Sequence header c
     assert.match(heading,new RegExp('data-project-tool="'+key+'"'));
   assert.doesNotMatch(heading,/id="storyboard-scenes-sequence-btn"/);
   assert.equal((html.match(/id="storyboard-director-tools-btn"/g)||[]).length,1);
-  assert.match(css,/storyboard-scene-progression > #storyboard-scenes-sequence-btn/);
+  assert.match(css,/storyboard-scene-strip > #storyboard-scenes-sequence-btn/);
+  assert.match(html,/<button id="storyboard-scenes-sequence-btn"/);
 });
 
 test('Scene strip combines Add and Extend into one action menu and owns Sequence',()=>{
@@ -28,13 +29,13 @@ test('Scene strip combines Add and Extend into one action menu and owns Sequence
   assert.match(render,/storyboard-add-scene/);
   assert.match(render,/data-scene-add="blank"/);
   assert.match(render,/data-scene-add="extend"/);
-  assert.match(render,/storyboard-scenes-sequence-btn/);
+  assert.doesNotMatch(render,/storyboard-scenes-sequence-btn/);
   assert.doesNotMatch(render,/data-scene-progress-add|data-extend-story/);
   const click=section("    sceneProgression.addEventListener('click', function (event) {",
     "    sceneProgression.addEventListener('contextmenu', function (event) {");
   assert.match(click,/if \(addChoice.dataset.sceneAdd === 'blank'\) addScene\(\)/);
   assert.match(click,/else openSceneCreation\('extend'\)/);
-  assert.match(click,/setSceneViewMode\('sequence'\)/);
+  assert.match(source,/el\('storyboard-scenes-sequence-btn'\)\.onclick/);
 });
 
 test('literal replacement counts all matches and respects case without regex or LLM',()=>{

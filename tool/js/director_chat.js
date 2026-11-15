@@ -1834,10 +1834,10 @@
         'Writing initial Scene ' + (index + 1) + '/' + briefs.length + ' · ' + label,
         story.id, []);
       var input = {
-        task:'Author exactly ONE new Scene with one complete usable H3 prompt, title and ' +
-          'whole-second durationSeconds. Use the approved Project direction and the Scene brief. ' +
-          'Match the requested title and duration, including prompt timing. ' +
-          'Return the existing Scene sequence JSON format with exactly one Scene.',
+        task:'Author exactly ONE new Scene with one complete usable H3 Prompt. ' +
+          'Return one JSON object with prompt and title (and durationSeconds if supplied). ' +
+          'Use the approved Project direction and Scene brief, matching the requested ' +
+          'title and duration in the prompt timing.',
         instruction:brief.brief, requestedTitle:brief.title, durationSeconds:brief.durationSeconds,
         project:{title:current.title,concept:current.concept,style:current.style,
           invariants:current.invariants}
@@ -1845,10 +1845,10 @@
       return studioDirectorRequestMessages([{role:'user',content:JSON.stringify(input)}],
         true,true,{projectId:story.id,projectTitle:story.title,sceneOrder:current.sceneOrder})
         .then(function (messages) {
-          window.studioDirectorWorkbench.showSentWriteContext('studio_scene_sequence_draft',messages);
+          window.studioDirectorWorkbench.showSentWriteContext('studio_scene_field_draft',messages);
           return requestJson('/fs/director/chat', {
             method:'POST',headers:{'Content-Type':'application/json'},
-            body:JSON.stringify({model:state.modelId,operation:'studio_scene_sequence_draft',
+            body:JSON.stringify({model:state.modelId,operation:'studio_scene_field_draft',
               messages:messages})
           });
         }).then(function (payload) {
@@ -1860,15 +1860,15 @@
         }).then(function (job) {
           var raw = String(job.result && job.result.text || '');
           state.lastStudioIoRaw = raw;
-          var draft = parseStudioScenesDraft(raw);
-          if (draft.scenes.length !== 1)
-            throw new Error('Initial Scene authoring must return exactly one Scene.');
-          var scene = draft.scenes[0];
-          if (!scene.prompt.trim())
-            throw new Error('Director did not return a complete Prompt for this initial Scene.');
-          // The reviewed brief, not model metadata, owns the saved duration.
-          scene.durationSeconds = brief.durationSeconds;
-          if (brief.title) scene.title = brief.title;
+          var authored;
+          try { authored = JSON.parse(raw); }
+          catch (error) { throw new Error('Director returned invalid Scene JSON.\\nRaw response:\\n' + raw); }
+          if (!authored || typeof authored !== 'object' || Array.isArray(authored) ||
+              typeof authored.prompt !== 'string' || !authored.prompt.trim())
+            throw new Error('Director did not return a usable Prompt for this initial Scene.');
+          // The reviewed brief, not model metadata, owns the saved title and duration.
+          var scene = {title:brief.title || String(authored.title || '').trim() || label,
+            prompt:authored.prompt, durationSeconds:brief.durationSeconds};
           return requestJson('/fs/studio/director/scenes-draft', {
             method:'POST',headers:{'Content-Type':'application/json'},
             body:JSON.stringify({

@@ -2587,7 +2587,7 @@ html[data-theme="dark"] .storyboard-prompt-take-status {
 
   .storyboard-scenes-list.is-focus .storyboard-scene:has(> .storyboard-takes[open]) .storyboard-takes-summary {
     min-height: 0;
-    padding: 28px 14px 12px;
+    padding: 16px 14px 12px;
   }
 
   .storyboard-scenes-list.is-focus .storyboard-scene:has(> .storyboard-takes[open]) .storyboard-takes-content {

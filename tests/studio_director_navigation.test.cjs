@@ -77,6 +77,7 @@ function actualSceneRequestFixture() {
       requests.push(url);
       if(url.startsWith('/fs/studio/director/guidance'))
         return {system:'Director guidance',actions:[],promptContract:'H3 prompt format'};
+      if(url==='/fs/storyboard') return {stories:Object.values(stories)};
       if(url.startsWith('/fs/storyboard?story=')) {
         const id=decodeURIComponent(url.split('=')[1]);
         return {story:stories[id]};
@@ -89,10 +90,10 @@ function actualSceneRequestFixture() {
   vm.runInContext(section(workbench,'  function readPayload(story, keys) {',
     '  function updateReadSelection() {')+
     'window.studioDirectorWorkbench={'+sceneRead+'};',scope);
-  vm.runInContext(section(director,'  function studioDirectorSelectedScene(navigation) {',
+  vm.runInContext(section(director,'  function studioDirectorSelectedScene(navigation, authorRequest) {',
     '  function syncModeUi() {')+
     section(director,'  function studioDirectorRequestMessages(messages, includePromptContract, explicitWrite, navigationSnapshot) {',
-      '  // The creative assessment is advisory.'),scope);
+      '  // Retain available conversational work across ordinary follow-up questions.'),scope);
   return {scope,state,stories,requests,setNavigation:next=>{navigation=next;}};
 }
 
@@ -111,6 +112,7 @@ test('Studio chat supplies the selected saved Scene in the actual model request,
   assert.match(outgoing[0].content,/scene:a:durationSeconds","value":12/);
   assert.doesNotMatch(outgoing[0].content,/Dormant old Intent/);
   assert.deepEqual(h.requests,[
+    '/fs/storyboard',
     '/fs/storyboard?story=p1',
     '/fs/studio/director/guidance?targetModel=minimax_h3'
   ]);

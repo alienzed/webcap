@@ -3884,6 +3884,16 @@
           (activeChatMode === 'storyboard' ? studioActionFromExplicitRequest(content, targetScene) : null);
         if (activeChatMode === 'storyboard' && studioResponse && studioResponse.changes)
           studioMergeWorkingChanges(studioResponse.changes, resolvedTarget, nextAction, content);
+        if (nextAction && (!Array.isArray(nextAction.fields) || !nextAction.fields.length) &&
+            studioResponse && studioResponse.changes) {
+          nextAction = Object.assign({},nextAction,{fields:Object.keys(
+            nextAction.kind === 'create_project' || nextAction.kind === 'write_project' ?
+              studioWorkingFieldChanges(studioResponse.changes.project,
+                ['title','concept','style','invariants']) :
+              studioWorkingFieldChanges(studioResponse.changes.scene,
+                ['title','prompt','durationSeconds'])
+          )});
+        }
         if (nextAction) {
           try {
             window.studioDirectorWorkbench.presentAction(
@@ -4673,11 +4683,26 @@
             })() : null
           }
         });
-        // Reuse the existing Scene writer and reviewed insertion/Apply.
+        // Reuse complete structured Scene fields already authored in the
+        // conversation; never ask the model to rewrite the same work.
+        var workingScene = state.studioWorkingDraft.newScene;
+        var applyExisting = /\b(?:save|apply|use|store)\b/i.test(
+          String(launch.authorRequest || launch.instruction));
+        var reuse = launch.sequenceIndex !== undefined && launch.sequenceIndex > 0 ?
+          false : workingScene && typeof workingScene.prompt === 'string' &&
+          !!workingScene.prompt.trim() &&
+          (state.studioWorkingDraft.sourceRequest ===
+            String(launch.authorRequest || launch.instruction) || applyExisting);
         state.pending = false;
-        return window.studioDirectorBridge.makeProposal(instruction,
-          'studio_scene_sequence_draft', true,
-          {projectId:storyId,projectTitle:story.title,sceneOrder:order}).then(function (raw) {
+        var proposal = reuse ?
+          Promise.resolve(JSON.stringify({scenes:[Object.assign({
+            title:'Scene ' + (order.length+1),
+            durationSeconds:6
+          },workingScene)]})) :
+          window.studioDirectorBridge.makeProposal(instruction,
+            'studio_scene_sequence_draft', true,
+            {projectId:storyId,projectTitle:story.title,sceneOrder:order});
+        return proposal.then(function (raw) {
           state.lastStudioIoRaw = raw;
           var draft = parseStudioScenesDraft(raw);
           if (draft.scenes.length !== 1)
@@ -4772,6 +4797,30 @@
             !story.sceneOrder.includes(sceneId) || !story.scenes || !story.scenes[sceneId])
           throw new Error('Selected Scene is no longer available in its saved Project.');
         var original = story.scenes[sceneId];
+        var workingScene = state.studioWorkingDraft.scenes[sceneId];
+        var applyExisting = /\b(?:save|apply|use|store)\b/i.test(
+          String(launch.authorRequest || launch.instruction));
+        if (workingScene && (state.studioWorkingDraft.sourceRequest ===
+            String(launch.authorRequest || launch.instruction) || applyExisting)) {
+          var pendingChanges = {};
+          fields.forEach(function (field) {
+            if (Object.prototype.hasOwnProperty.call(workingScene,field))
+              pendingChanges[field] = workingScene[field];
+          });
+          if (Object.keys(pendingChanges).length) {
+            var prompt = Object.prototype.hasOwnProperty.call(pendingChanges,'prompt') ?
+              pendingChanges.prompt : null;
+            delete pendingChanges.prompt;
+            if (prompt === null && !Object.keys(pendingChanges).length)
+              return null;
+            return window.studioDirectorWorkbench.applyScenePrompt(story,sceneId,
+              prompt,pendingChanges).then(function (result) {
+                studioActionStatus('Scene ' + (story.sceneOrder.indexOf(sceneId) + 1) +
+                  ' saved from existing structured draft.',false);
+                return result;
+              });
+          }
+        }
         // A literal title-only edit is a saved field change, not a creative
         // prompting task. Use the same scoped/conflict-checked Scene save.
         var literal = /\b(?:rename|set|change)\b[^\n]{0,80}\b(?:to|as)\s+["'“]([^"'”]+)["'”]\s*[.!]?\s*$/i.exec(

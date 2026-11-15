@@ -47,19 +47,29 @@ function portAvailable() {
   cfg.filesystem.output_root = path.join(temp,'output');
   cfg.filesystem.app_data_root = path.join(temp,'data');
   cfg.filesystem.models = path.join(temp,'models');
-  cfg.director_model = 'acceptance::acceptance-model';
+  const liveEndpoint=process.env.WEBCAP_TEST_REMOTE_ENDPOINT;
+  const liveModel=process.env.WEBCAP_TEST_REMOTE_MODEL;
+  if(Boolean(liveEndpoint)!==Boolean(liveModel))
+    throw new Error('Live smoke requires BOTH WEBCAP_TEST_REMOTE_ENDPOINT and WEBCAP_TEST_REMOTE_MODEL.');
+  const remoteId=liveEndpoint?'acceptance-live':'acceptance';
+  cfg.director_model = remoteId+'::'+(liveModel||'acceptance-model');
   cfg.storyboard = cfg.storyboard || {};
   cfg.storyboard.director = {
     ...(cfg.storyboard.director || {}),
     mode:'remote',
-    remote_endpoints:[{id:'acceptance',name:'Acceptance',endpoint:'http://127.0.0.1:4211',enabled:true}]
+    remote_endpoints:[{
+      id:remoteId,name:liveEndpoint?'Live acceptance':'Acceptance',
+      endpoint:liveEndpoint||'http://127.0.0.1:4211',enabled:true
+    }]
   };
   fs.writeFileSync(path.join(temp,'tool/config.json'),JSON.stringify(cfg,null,2));
   fs.mkdirSync(path.dirname(logFile),{recursive:true});
   const logs = fs.openSync(logFile,'w');
-  modelProcess=spawn(process.execPath,[path.join(root,'tests/browser/model-boundary.cjs')],{
-    cwd:root,stdio:['ignore',logs,logs]
-  });
+  if (!liveEndpoint) {
+    modelProcess=spawn(process.execPath,[path.join(root,'tests/browser/model-boundary.cjs')],{
+      cwd:root,stdio:['ignore',logs,logs]
+    });
+  }
   const python = process.env.WEBCAP_TEST_PYTHON || (process.platform === 'win32' ? 'python' : 'python3');
   child=spawn(python,['-m','tool.server.app'],{
     cwd:temp,env:{...process.env,PYTHONPATH:temp,PYTHONUNBUFFERED:'1'},

@@ -18,7 +18,7 @@
   height: 100%;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   background: var(--bg);
   overflow: hidden;
 }
@@ -1371,4 +1371,19 @@
   .generate-lora-row { grid-template-columns: 16px minmax(0, 1fr) 48px 25px 64px 24px; gap: 4px; }
   .generate-lora-arrows button { width: 23px; }
   .generate-lora-row input[data-generate-lora-strength] { width: 64px; }
+}
+
+
+/* The Generations heading belongs to its controls, not a full-width workspace row. */
+.generate-create-controls > .generate-toolbar {
+  display: block;
+  min-height: 0;
+  padding: 0 6px 10px;
+  margin-bottom: 8px;
+  background: transparent;
+  border-bottom: 1px solid var(--border);
+}
+.generate-create-controls .generate-toolbar-copy strong {
+  font-size: 24px;
+  line-height: 1.2;
 }

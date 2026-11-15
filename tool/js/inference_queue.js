@@ -159,10 +159,19 @@
     var panel = el('inference-queue-error');
     var summary = el('inference-queue-error-message');
     var traceback = el('inference-queue-error-traceback');
+    var source = el('inference-queue-error-source');
     if (!panel || !summary || !traceback) return;
     var failed = state.queue.paused &&
       String(state.queue.pauseReason || '').startsWith('Inference paused after an execution error:');
     panel.classList.toggle('hidden', !failed);
+    var failedJob = failed && Array.isArray(state.queue.jobs) && state.queue.jobs.find(function (job) {
+      return String(job.jobId || '') === String(state.queue.failedJobId || '');
+    });
+    if (source) {
+      source.classList.toggle('hidden', !failedJob);
+      source.dataset.jobId = failedJob ? String(failedJob.jobId || '') : '';
+      if (failedJob) source.textContent = 'Open ' + jobClientLabel(failedJob) + ' source';
+    }
     if (!failed) return;
     var error = formatExecutionFailure(state.queue.pauseReason);
     summary.textContent = error.summary;
@@ -658,6 +667,10 @@
       action(pause.dataset.inferenceQueueAction || 'pause_queue');
     };
     clear.onclick = function () { action('clear_all'); };
+    var failureSource = el('inference-queue-error-source');
+    if (failureSource) failureSource.onclick = function () {
+      if (failureSource.dataset.jobId) openJobScreen(failureSource.dataset.jobId);
+    };
     el('inference-queue-error-copy').onclick = function () {
       var failure = formatExecutionFailure(state.queue.pauseReason);
       navigator.clipboard.writeText(failure.full).catch(function (err) {

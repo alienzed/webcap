@@ -34,7 +34,8 @@ test('Scenes header keeps context left and three responsive actions right',()=>{
 
 test('Header preserves generation, revision presets and direct Find & Replace',()=>{
   assert.match(source,/el\('storyboard-generate-scenes-btn'\)\.onclick = generateScenes/);
-  assert.match(source,/el\('storyboard-director-tools-btn'\)\.onclick = openDirectorTools/);
+  assert.match(source,/el\('storyboard-director-tools-btn'\)\.onclick = function \(\) \{\s*window\.openStudioDirectorRevision\(\)/);
+  assert.match(html,/id="director-studio-revision-preset"/);
   assert.match(source,/el\('storyboard-find-replace-btn'\)\.onclick = openProjectReplace/);
   assert.match(source,/el\('storyboard-cancel-takes-btn'\)\.onclick = cancelStoryTakes/);
   assert.match(source,/this\.value === 'continuity'/);

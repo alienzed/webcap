@@ -837,7 +837,7 @@
     button.textContent = ({
       create_project:'Create Project · Review',
       write_project:'Revise Project · Review',
-      create_scene:'Create Scene(s) · Save',
+      create_scene:'Create Scene(s) · Review',
       write_scenes:'Revise Scene(s) · Save'
     })[frozen.kind];
     button.title = frozen.instruction;

@@ -428,3 +428,135 @@ test('Review Create Project persists explicit continuation without touching unbo
   assert.equal(attached.label, 'The Station');
   assert.equal(await create(false), null);
 });
+
+
+test('new Scene capture keeps its prompt, requires missing requested duration, and saves reviewed 12s',async()=>{
+  const workbench=fs.readFileSync(path.join(__dirname,'../tool/js/studio_director_workbench.js'),'utf8');
+  const cut=(text,a,b)=>{
+    const i=text.indexOf(a),j=text.indexOf(b,i+a.length);
+    assert.ok(i>=0&&j>i,'missing actual handler '+a);
+    return text.slice(i,j);
+  };
+  const story={id:'p1',title:'Bookshop',sceneOrder:['old'],scenes:{
+    old:{id:'old',title:'Unchanged',prompt:'Original Scene',durationSeconds:8}
+  }};
+  const capture={field:'scene',sceneId:'',title:'Closing the Bookshop',
+    content:'Complete H3 Prompt: 0-4 closing door; 4-8 leaving; 8-12 warm window.'};
+  const nodes=new Map(),posts=[],receipts=[],modelRequests=[];
+  function node(tag) {
+    return {tag,children:[],dataset:{},style:{},textContent:'',value:'',open:false,
+      append(...items){this.children.push(...items);},
+      appendChild(child){this.children.push(child);return child;},
+      replaceChildren(...items){this.children=[...items];},
+      setAttribute(){},remove(){this.removed=true;},
+      showModal(){this.open=true;},close(){this.open=false;},
+      querySelector(selector){
+        const field=/data-field="([^"]+)"/.exec(selector);
+        if(!field)throw new Error('Unexpected selector '+selector);
+        const visit=item=>item.dataset&&item.dataset.field===field[1]?item:
+          (item.children||[]).map(visit).find(Boolean);
+        return visit(this);
+      },
+      querySelectorAll(selector){
+        assert.equal(selector,'.studio-scenes-row');
+        return this.children.filter(child=>child.className==='studio-scenes-row'&&!child.removed);
+      }
+    };
+  }
+  const el=id=>{
+    if(!nodes.has(id))nodes.set(id,node(id));
+    return nodes.get(id);
+  };
+  el('studio-dw-write-project').value='p1';
+  const state={pending:false,studioSceneProposal:null,studioScenesProposal:null};
+  const scope=vm.createContext({state,el,document:{createElement:node},
+    captureProjectId:'p1',recommendations:{writeFields:['title','prompt','durationSeconds']},
+    Number,String,Array,Object,JSON,Promise,
+    syncControls(){},recordStudioOperation(){},studioActionStatus(){},
+    status:message=>assert.fail('Unexpected error '+message),
+    requestJson:async(url,args)=>{
+      if(url==='/fs/storyboard?story=p1')return{story};
+      assert.equal(url,'/fs/studio/director/scenes-draft');
+      const payload=JSON.parse(args.body);posts.push(payload);
+      assert.equal(payload.scenes.length,1);
+      const saved={id:'created',...payload.scenes[0]};
+      story.scenes.created=saved;story.sceneOrder.push('created');
+      return{story,scenes:[saved]};
+    },
+    window:{
+      flushStudioDirectorStoryEdits:async()=>{},
+      refreshStudioDirectorStoryIfOpen:async()=>{},
+      reportConsoleError:(_label,error)=>assert.fail(error.message),
+      studioDirectorBridge:{}
+    }
+  });
+  const bridge=cut(source,'    reviewSceneCapture: function (capture, storyId, options) {',
+    '    updateReadiness: function (value) {').trim().replace(/,$/,'');
+  vm.runInContext(
+    cut(source,'  function addStudioScenesRow(item) {','  function prepareStudioScenes() {')+
+    cut(source,'  function applyStudioScenes() {','  function parseStudioSceneDraft(raw) {')+
+    cut(workbench,'  function reviewCreativeCapture(capture) {','  function openWriteForCapture() {')+
+    'window.studioDirectorBridge={'+bridge+
+    ',canReview:()=>true,recordApplied:async(_kind,_story,receipt)=>window.__receipt(receipt)};',scope);
+  scope.window.__receipt=receipt=>receipts.push(receipt);
+  scope.reviewCreativeCapture(capture);
+  await new Promise(setImmediate);
+  assert.equal(state.studioScenesProposal.drafts[0].prompt,capture.content);
+  assert.equal(state.studioScenesProposal.drafts[0].requiresDurationSelection,true);
+  assert.equal(el('studio-scenes-review').open,true,'duration-aware review is visible');
+  const row=el('studio-scenes-rows').children[0],duration=row.querySelector('[data-field="durationSeconds"]');
+  assert.equal(duration.value,'');
+  assert.equal(row.dataset.durationRequired,'true');
+  scope.applyStudioScenes();
+  assert.equal(posts.length,0,'missing requested duration cannot silently save six seconds');
+  assert.match(el('studio-scenes-error').textContent,/Choose the requested duration/);
+  duration.value='12';
+  await scope.applyStudioScenes();
+  assert.equal(posts.length,1);
+  assert.equal(posts[0].scenes[0].durationSeconds,12);
+  assert.equal(posts[0].scenes[0].prompt,capture.content);
+  assert.equal(receipts[0].scenes[0].durationSeconds,12);
+  assert.equal(story.scenes.created.durationSeconds,12);
+  assert.equal(story.scenes.old.durationSeconds,8);
+  assert.equal(story.scenes.old.prompt,'Original Scene');
+  assert.equal(modelRequests.length,0,'review reuses the authored H3 prompt with no repair call');
+});
+
+test('missing unrequested Scene duration uses the six-second default in the same review',()=>{
+  const rows=[],host={appendChild:item=>rows.push(item)};
+  const create=tag=>({tag,children:[],dataset:{},style:{},value:'',textContent:'',
+    append(...items){this.children.push(...items);},appendChild(item){this.children.push(item);},
+    setAttribute(){}});
+  const scope=vm.createContext({document:{createElement:create},el:()=>host,Number,String});
+  vm.runInContext(part('  function addStudioScenesRow(item) {',
+    '  function showStudioScenesReview() {'),scope);
+  scope.addStudioScenesRow({title:'Untimed',prompt:'Complete H3 prompt'});
+  const row=rows[0];
+  const duration=row.children.flatMap(function walk(item){
+    return [item,...(item.children||[]).flatMap(walk)];
+  }).find(item=>item.dataset&&item.dataset.field==='durationSeconds');
+  assert.equal(duration.value,6);
+  assert.equal(row.dataset.durationRequired,'false');
+});
+
+test('dedicated new-Scene writer flags a missing explicitly requested duration for review',async()=>{
+  const proposalState={pending:false,lastStudioIoRaw:'',lastStudioIoError:''};
+  const target={id:'p1',title:'Bookshop',concept:'A warm shop at dusk',style:'Evening rain',
+    invariants:[],sceneOrder:[],scenes:{}};
+  const scope=vm.createContext({state:proposalState,JSON,Object,String,Promise,Number,
+    syncControls(){},studioActionStatus(){},showStudioScenesReview(){},
+    parseStudioScenesDraft:raw=>JSON.parse(raw),
+    requestJson:async url=>{assert.equal(url,'/fs/storyboard?story=p1');return{story:target};},
+    window:{flushStudioDirectorStoryEdits:async()=>{},
+      reportConsoleError:(_label,error)=>assert.fail(error.message),
+      studioDirectorBridge:{}}
+  });
+  const writer=part('    writeNewScene: function (launch) {',
+    '    writeSelectedScene: function (launch) {').trim().replace(/,$/,'');
+  vm.runInContext('window.studioDirectorBridge={'+writer+
+    ',isReady:()=>true,makeProposal:async()=>JSON.stringify({scenes:[{title:"Closing",prompt:"Full H3 0-12"}]})};',scope);
+  await scope.window.studioDirectorBridge.writeNewScene({
+    projectId:'p1',instruction:'Create Closing',durationRequested:true});
+  assert.equal(proposalState.studioScenesProposal.drafts[0].requiresDurationSelection,true);
+  assert.equal(proposalState.studioScenesProposal.drafts[0].prompt,'Full H3 0-12');
+});

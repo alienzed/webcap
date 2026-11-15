@@ -34,7 +34,8 @@ function portAvailableOn(port) {
 function portAvailable() { return portAvailableOn(4200); }
 (async () => {
   await portAvailable(); // Refuse to reuse a running WebCap process on port 4200.
-  if (!process.env.WEBCAP_TEST_REMOTE_ENDPOINT) await portAvailableOn(4211);
+  const useLocalModels=process.env.WEBCAP_ACCEPTANCE_MODE==='live';
+  if (!useLocalModels) await portAvailableOn(4211);
   for (const name of ['tool','docs','scripts']) {
     if (!fs.existsSync(path.join(root,name))) continue;
     fs.cpSync(path.join(root,name),path.join(temp,name),{
@@ -50,26 +51,44 @@ function portAvailable() { return portAvailableOn(4200); }
   cfg.filesystem.output_root = path.join(temp,'output');
   cfg.filesystem.app_data_root = path.join(temp,'data');
   cfg.filesystem.models = path.join(temp,'models');
-  const liveEndpoint=process.env.WEBCAP_TEST_REMOTE_ENDPOINT;
-  const liveModel=process.env.WEBCAP_TEST_REMOTE_MODEL;
-  if(Boolean(liveEndpoint)!==Boolean(liveModel))
-    throw new Error('Live smoke requires BOTH WEBCAP_TEST_REMOTE_ENDPOINT and WEBCAP_TEST_REMOTE_MODEL.');
-  const remoteId=liveEndpoint?'acceptance-live':'acceptance';
-  cfg.director_model = remoteId+'::'+(liveModel||'acceptance-model');
-  cfg.storyboard = cfg.storyboard || {};
-  cfg.storyboard.director = {
-    ...(cfg.storyboard.director || {}),
-    mode:'remote',
-    remote_endpoints:[{
-      id:remoteId,name:liveEndpoint?'Live acceptance':'Acceptance',
-      endpoint:liveEndpoint||'http://127.0.0.1:4211',enabled:true
-    }]
-  };
+  if (useLocalModels) {
+    // Read only inference-related fields; never copy the real app configuration
+    // or redirect the isolated app to the user's writable Project/Set roots.
+    const source=process.env.WEBCAP_TEST_CONFIG
+      ? path.resolve(process.env.WEBCAP_TEST_CONFIG)
+      : path.join(root,'tool','config.json');
+    if (!fs.existsSync(source))
+      throw new Error('Real-model acceptance needs a local WebCap config: '+source);
+    const real=JSON.parse(fs.readFileSync(source,'utf8'));
+    const realDirector=real.storyboard && real.storyboard.director;
+    if (!realDirector || typeof realDirector!=='object')
+      throw new Error('Configured Studio Director runtime was not found in '+source);
+    cfg.storyboard=cfg.storyboard||{};
+    cfg.storyboard.director=JSON.parse(JSON.stringify(realDirector));
+    cfg.director_model=process.env.WEBCAP_TEST_DIRECTOR_MODEL ||
+      String(real.director_model||'');
+    // Local GGUF discovery needs the user's model directory, but WebCap
+    // application writes remain exclusively under the temporary roots.
+    cfg.filesystem.models=String(real.filesystem?.models||'');
+    if (real.training?.wsl_distribution)
+      cfg.training.wsl_distribution=real.training.wsl_distribution;
+    console.log('Real-model acceptance: using existing Director configuration (read-only) from',source,
+      '; selected model:',cfg.director_model||'(first available)');
+  } else {
+    cfg.director_model='acceptance::acceptance-model';
+    cfg.storyboard=cfg.storyboard||{};
+    cfg.storyboard.director={
+      ...(cfg.storyboard.director||{}),
+      mode:'remote',
+      remote_endpoints:[{id:'acceptance',name:'Acceptance',
+        endpoint:'http://127.0.0.1:4211',enabled:true}]
+    };
+  }
   fs.writeFileSync(path.join(temp,'tool/config.json'),JSON.stringify(cfg,null,2));
   fs.mkdirSync(path.dirname(logFile),{recursive:true});
   fs.writeFileSync(path.join(root,'test-results','studio-temp-root.txt'),temp);
   const logs = fs.openSync(logFile,'w');
-  if (!liveEndpoint) {
+  if (!useLocalModels) {
     modelProcess=spawn(process.execPath,[path.join(root,'tests/browser/model-boundary.cjs')],{
       cwd:root,stdio:['ignore',logs,logs]
     });

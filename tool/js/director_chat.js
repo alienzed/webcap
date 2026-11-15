@@ -1491,10 +1491,6 @@
     var history = el('director-chat-history-toggle');
     if (history) history.disabled = state.pending || !state.sessionReady;
     syncStudioFlow();
-    el('director-studio-prepare-scene').disabled = state.pending || !state.sessionReady ||
-      state.activeMode !== 'storyboard';
-    el('director-studio-prepare-scenes').disabled = state.pending || !state.sessionReady ||
-      state.activeMode !== 'storyboard' || !state.modelId;
     if (state.activeMode === 'storyboard' && window.studioDirectorWorkbench) {
       window.studioDirectorWorkbench.setUndo(state.studioBriefUndo);
       window.studioDirectorWorkbench.updateContext();
@@ -2433,37 +2429,6 @@
     });
   }
 
-  function parseStudioScenesDraft(raw) {
-    var value = String(raw || '').trim();
-    var fence = String.fromCharCode(96).repeat(3);
-    if (value.startsWith(fence) && value.endsWith(fence)) {
-      var newline = value.indexOf('\n');
-      if (newline >= 0) value = value.slice(newline + 1, -3).trim();
-    }
-    var result;
-    try { result = JSON.parse(value); }
-    catch (error) { throw new Error('Director returned invalid Scene sequence JSON: ' + error.message + '\nRaw Director response:\n' + String(raw || '')); }
-    if (!result || typeof result !== 'object' || Array.isArray(result) ||
-        !Array.isArray(result.scenes) || result.scenes.length < 1 || result.scenes.length > 32) {
-      throw new Error('Director must return one to 32 Scene entries.\nRaw Director response:\n' + String(raw || ''));
-    }
-    // One malformed field must not discard the other authored Scenes.
-    // The existing review lets the author correct or remove incomplete rows.
-    return {
-      scenes: result.scenes.map(function (entry) {
-        var item = entry && typeof entry === 'object' && !Array.isArray(entry) ? entry : {};
-        var scene = {
-          title: typeof item.title === 'string' ? item.title : '',
-          prompt: typeof item.prompt === 'string' ? item.prompt : ''
-        };
-        if (Object.prototype.hasOwnProperty.call(item, 'durationSeconds'))
-          scene.durationSeconds = item.durationSeconds;
-        return scene;
-      }),
-      rationale: typeof result.rationale === 'string' ? result.rationale : ''
-    };
-  }
-
   function addStudioScenesRow(item) {
     var row = document.createElement('section');
     row.className = 'studio-scenes-row';
@@ -2547,92 +2512,6 @@
     var dialog = el('studio-scenes-review');
     if (dialog.open) dialog.close();
     dialog.showModal();
-  }
-
-  function prepareStudioScenes() {
-    if (state.pending || state.activeMode !== 'storyboard' || !state.sessionReady) return;
-    if (state.studioScenesProposal) { showStudioScenesReview(); return; }
-    if (!state.modelId) { studioActionStatus('Select a Director model.', true); return; }
-    var storyId = studioAttachedStoryId();
-    if (!storyId) {
-      studioActionStatus('Attach one Project explicitly before preparing a Scene sequence.', true);
-      return;
-    }
-    var discussion = (state.modeMessages.storyboard || []).filter(function (message) {
-      return message && (message.role === 'assistant' || message.role === 'user');
-    }).map(function (message) {
-      return {role:message.role,content:message.content};
-    });
-    if (!discussion.some(function (message) { return message.role === 'user'; })) {
-      studioActionStatus('Discuss the Scenes first, then prepare a sequence.', true);
-      return;
-    }
-    state.pending = true;
-    state.jobId = '';
-    studioActionStatus('Preparing a Scene sequence for review…', false);
-    startProgress();
-    syncControls();
-    Promise.resolve().then(function () {
-      return window.flushStudioDirectorStoryEdits(storyId);
-    }).then(function () {
-      return requestJson('/fs/storyboard?story=' + encodeURIComponent(storyId));
-    }).then(function (payload) {
-      var story = payload.story;
-      if (!story || story.id !== storyId) throw new Error('Attached Project is no longer available.');
-      var order = (story.sceneOrder || []).slice();
-      var input = {
-        task: 'Write up to 32 complete new Scenes from the agreed discussion. ' +
-          'Keep each Scene independently generatable and preserve the core appeal. ' +
-          'Use as many Scenes as the author explicitly requested, up to 32 per review; otherwise ' +
-          'select a modest number that fits the discussion. For each Scene return a working title, ' +
-          'a complete usable H3 prompt, and durationSeconds. ' +
-          'Use the duration the author requested within 4–15 seconds, otherwise 6 seconds. ' +
-          'Time each full prompt to that duration, including the relevant Project Invariants. ' +
-          'Return a brief overall rationale. Existing Scenes are reference material; this request creates new Scenes only.',
-        project: {
-          id: story.id, title: story.title, concept: story.concept, style: story.style,
-          invariants: story.invariants,
-          currentScenes: order.map(function (id, index) {
-            var scene = story.scenes[id];
-            return { id: id, position: index + 1, title: scene.title, prompt: scene.prompt };
-          })
-        },
-        discussion: discussion
-      };
-      return studioDirectorRequestMessages([{ role: 'user', content: JSON.stringify(input) }], true, true)
-        .then(function (messages) {
-          window.studioDirectorWorkbench.showSentWriteContext('studio_scene_sequence_draft', messages);
-          return requestJson('/fs/director/chat', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ model: state.modelId, operation: 'studio_scene_sequence_draft', messages: messages })
-          });
-        }).then(function (result) {
-          if (!result.job || !result.job.jobId) throw new Error('Sequence extraction was not queued.');
-          state.jobId = String(result.job.jobId);
-          state.requestDiagnostic = result.job.request || null;
-          trackTransientLlmJob(result.job);
-          return waitForJob(result.job);
-        }).then(function (job) {
-          var result = job.result && typeof job.result === 'object' ? job.result : {};
-          var draft = parseStudioScenesDraft(result.text);
-          state.studioScenesProposal = {
-            storyId: storyId, storyTitle: story.title, sceneOrder: order,
-            scenes: story.scenes, drafts: draft.scenes, rationale: draft.rationale
-          };
-          finishProgress(null);
-          studioActionStatus('Scene sequence prepared; review the whole block before creating.', false);
-          showStudioScenesReview();
-        });
-    }).catch(function (error) {
-      finishProgress(error);
-      studioActionStatus('Scene sequence failed: ' + String(error.message || error), true);
-      if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Studio Scene sequence', error);
-      else throw error;
-    }).finally(function () {
-      state.pending = false;
-      state.jobId = '';
-      syncControls();
-    });
   }
 
   function applyStudioScenes() {
@@ -2735,27 +2614,6 @@
     });
   }
 
-  function parseStudioSceneDraft(raw) {
-    var value = String(raw || '').trim();
-    var fence = String.fromCharCode(96).repeat(3);
-    if (value.startsWith(fence) && value.endsWith(fence)) {
-      var newline = value.indexOf('\n');
-      if (newline >= 0) value = value.slice(newline + 1, -3).trim();
-    }
-    var draft;
-    try { draft = JSON.parse(value); }
-    catch (error) { throw new Error('Director returned invalid Scene draft JSON: ' + error.message); }
-    if (!draft || typeof draft !== 'object' || Array.isArray(draft) ||
-        typeof draft.prompt !== 'string' || !draft.prompt.trim()) {
-      throw new Error('Scene draft must include a complete Prompt.');
-    }
-    return {
-      title: typeof draft.title === 'string' ? draft.title.trim() : '',
-      prompt: draft.prompt.trim(),
-      rationale: typeof draft.rationale === 'string' ? draft.rationale.trim() : ''
-    };
-  }
-
   function showStudioSceneDraftReview() {
     var proposal = state.studioSceneProposal;
     if (!proposal) throw new Error('Prepare a Studio Scene before reviewing it.');
@@ -2785,104 +2643,6 @@
     placement.value = proposal.placement || 'end';
     if (dialog.open) dialog.close();
     dialog.showModal();
-  }
-
-  function prepareStudioSceneDraft() {
-    if (state.pending || state.activeMode !== 'storyboard' || !state.sessionReady) return;
-    if (!state.modelId) {
-      studioActionStatus('Select a Director model before preparing a Scene.', true);
-      return;
-    }
-    if (state.studioSceneProposal) {
-      showStudioSceneDraftReview();
-      return;
-    }
-    var storyId = studioAttachedStoryId();
-    if (!storyId) {
-      studioActionStatus('Connect a Project before preparing a Scene.', true);
-      return;
-    }
-    var discussion = (state.modeMessages.storyboard || []).filter(function (message) {
-      return message && (message.role === 'assistant' || message.role === 'user');
-    }).map(function (message) {
-      return {role:message.role,content:message.content};
-    });
-    if (!discussion.some(function (message) { return message.role === 'user'; })) {
-      studioActionStatus('Explore the idea with Director first, then prepare a Scene from your conversation.', true);
-      return;
-    }
-    state.pending = true;
-    state.jobId = '';
-    studioActionStatus('Extracting one tentative Scene for review…', false);
-    startProgress();
-    syncControls();
-    Promise.resolve().then(function () {
-      return window.flushStudioDirectorStoryEdits(storyId);
-    }).then(function () {
-      return requestJson('/fs/storyboard?story=' + encodeURIComponent(storyId));
-    }).then(function (payload) {
-      var story = payload.story;
-      if (!story || story.id !== storyId) throw new Error('Attached Story was not found.');
-      var order = story.sceneOrder || [];
-      state.studioSceneProposal = null;
-      var input = {
-        task: 'Draft exactly ONE tentative, feasible Scene from this creative discussion. ' +
-          'Select the strongest agreed direction. Keep the core appeal. ' +
-          'Return a short working title (it may be blank), a complete H3 generation prompt ' +
-          'and a brief production rationale. No new project or existing Scene edits yet.',
-        project: {
-          id: story.id, title: story.title, concept: story.concept,
-          style: story.style, invariants: story.invariants,
-          currentScenes: order.map(function (id, index) {
-            var scene = story.scenes[id];
-            return { id: id, position: index + 1, title: scene.title, prompt: scene.prompt };
-          })
-        },
-        discussion: discussion.slice(-60)
-      };
-      return studioDirectorRequestMessages([{ role: 'user', content: JSON.stringify(input, null, 2) }], false, true)
-        .then(function (messages) {
-          window.studioDirectorWorkbench.showSentWriteContext('studio_scene_draft', messages);
-          return requestJson('/fs/director/chat', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              model: state.modelId, operation: 'studio_scene_draft', messages: messages
-            })
-          });
-        }).then(function (response) {
-          if (!response.job || !response.job.jobId) throw new Error('Scene draft job was not queued.');
-          state.jobId = String(response.job.jobId);
-          state.requestDiagnostic = response.job.request || null;
-          trackTransientLlmJob(response.job);
-          return waitForJob(response.job);
-        }).then(function (job) {
-          var result = job.result && typeof job.result === 'object' ? job.result : {};
-          var draft = parseStudioSceneDraft(result.text);
-          state.studioSceneProposal = {
-            storyId: storyId,
-            storyTitle: story.title,
-            expectedUpdatedAt: story.updatedAt,
-            sceneOrder: order.slice(),
-            scenes: story.scenes,
-            title: draft.title,
-            prompt: draft.prompt,
-            rationale: draft.rationale,
-            placement: 'end'
-          };
-          finishProgress(null);
-          studioActionStatus('Scene draft ready. Review and choose its position before creating.', false);
-          showStudioSceneDraftReview();
-        });
-    }).catch(function (error) {
-      finishProgress(error);
-      studioActionStatus('Scene proposal failed: ' + String(error.message || error), true);
-      if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Studio Scene proposal', error);
-      else throw error;
-    }).finally(function () {
-      state.pending = false;
-      state.jobId = '';
-      syncControls();
-    });
   }
 
   function applyStudioSceneDraft() {
@@ -4101,8 +3861,6 @@
     el('director-studio-access-details').ontoggle = function () {
       if (this.open && state.studioStoryAccess && !state.studioAccessIndex) loadStudioAccessIndex();
     };
-    el('director-studio-prepare-scene').onclick = prepareStudioSceneDraft;
-    el('director-studio-prepare-scenes').onclick = prepareStudioScenes;
     el('studio-project-add-scene').onclick = function () {
       if (el('studio-project-extra-scenes').children.length +
           (el('studio-project-include-scene').checked ? 1 : 0) >= 32) {
@@ -4411,8 +4169,6 @@
         return prepareStudioProject(options);
       }
       if (kind === 'project') return prepareStudioBrief(options);
-      if (kind === 'scene') return prepareStudioSceneDraft();
-      if (kind === 'scenes') return prepareStudioScenes();
       throw new Error('Unsupported reviewed Write operation: ' + kind);
     },
     recordApplied: function (kind, story, selected) {

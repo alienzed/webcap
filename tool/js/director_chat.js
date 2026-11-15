@@ -2559,20 +2559,20 @@
     var durationLabel = document.createElement('label');
     durationLabel.textContent = 'Duration (s)';
     var duration = document.createElement('input');
-    duration.type = 'number'; duration.min = '4'; duration.max = '15'; duration.step = 'any';
+    duration.type = 'text'; duration.inputMode = 'decimal'; duration.placeholder = '6';
     duration.dataset.field = 'durationSeconds';
     var suppliedDuration = (typeof item.durationSeconds === 'number' ||
       typeof item.durationSeconds === 'string') && String(item.durationSeconds).trim() !== '';
     var numericDuration = Number(item.durationSeconds);
     var usableDuration = suppliedDuration && Number.isFinite(numericDuration) &&
       numericDuration >= 4 && numericDuration <= 15;
-    duration.value = usableDuration ? numericDuration : 6;
+    duration.value = suppliedDuration ? String(item.durationSeconds) : '6';
     durationLabel.appendChild(duration);
     if (!usableDuration) {
       var durationNote = document.createElement('span');
       durationNote.textContent = !suppliedDuration
         ? 'Duration missing; using the 6s default. You can change it.'
-        : 'Duration ' + String(item.durationSeconds) + ' is not supported; using 6s. You can change it.';
+        : 'Duration ' + String(item.durationSeconds) + ' needs correction before this Scene can be saved.';
       durationLabel.appendChild(durationNote);
     }
     var promptLabel = document.createElement('label');
@@ -2635,9 +2635,12 @@
       }
       var durationInput = row.querySelector('[data-field="durationSeconds"]');
       var supplied = String(durationInput.value || '').trim();
-      var duration = supplied ? Number(supplied) : NaN;
-      if (!Number.isFinite(duration) || duration < 4 || duration > 15) {
-        duration = 6;
+      var duration = supplied ? Number(supplied) : 6;
+      if (supplied && (!Number.isFinite(duration) || duration < 4 || duration > 15)) {
+        incompleteRows.push(row);
+        return;
+      }
+      if (!supplied) {
         durationInput.value = '6';
         defaulted++;
       }
@@ -2645,7 +2648,7 @@
     });
     if (!readyRows.length) {
       el('studio-scenes-error').textContent = rows.length
-        ? 'No complete H3 Prompts to save yet. Complete a Prompt or remove an empty Scene; your drafts are preserved.'
+        ? 'No Scenes are ready to save. Complete a Prompt or correct an unsupported duration; your drafts are preserved.'
         : 'Add a Scene with a Prompt before applying.';
       return;
     }
@@ -2688,7 +2691,7 @@
         readyRows.forEach(function (item) {item.row.remove();});
         el('studio-scenes-error').textContent = savedCount + ' Scene' +
           (savedCount === 1 ? '' : 's') + ' saved. ' + incompleteRows.length +
-          ' still need a Prompt; complete or remove them here.' +
+          ' still need a Prompt or duration correction; edit or remove them here.' +
           (defaulted ? ' ' + defaulted + ' saved using the 6s duration default.' : '');
       } else {
         state.studioScenesProposal = null;

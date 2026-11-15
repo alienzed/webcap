@@ -210,7 +210,7 @@ def test_director_chat_route_preserves_all_structured_schemas(monkeypatch, opera
         assert set(captured["schema"]["properties"]) == expected_fields
         assert captured["schema"]["additionalProperties"] is False
         if operation == "studio_brief_draft":
-            assert captured["schema"]["required"] == ["title", "concept", "style", "invariants", "rationale"]
+            assert "required" not in captured["schema"], "Unchanged Project fields are not model outputs"
             assert captured["schema"]["properties"]["invariants"]["items"]["required"] == ["kind", "title", "text"]
 
 

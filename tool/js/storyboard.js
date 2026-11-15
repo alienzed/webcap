@@ -2544,6 +2544,7 @@
     editor.classList.toggle('story-collapsed', storyState.storyCollapsed);
     toggleButton.setAttribute('aria-expanded', storyState.storyCollapsed ? 'false' : 'true');
     showButton.classList.toggle('hidden', !storyState.storyCollapsed);
+    el('storyboard-collapsed-director').classList.toggle('hidden', !storyState.storyCollapsed);
     showButton.setAttribute('aria-expanded', storyState.storyCollapsed ? 'false' : 'true');
   }
 
@@ -5876,6 +5877,7 @@
       projectTitle: story ? story.title : '',
       sceneId: target.sceneId,
       sceneNumber: story && target.sceneId ? story.sceneOrder.indexOf(target.sceneId) + 1 : 0,
+      sceneTitle: story && target.sceneId && story.scenes[target.sceneId] ? story.scenes[target.sceneId].title || '' : '',
       sceneOrder: story ? story.sceneOrder.slice() : []
     };
   }

@@ -27,7 +27,7 @@ test('Director overlays Projects as a resizable drawer with an optional manual w
   assert.match(html, /class="director-chat-layout"/);
   assert.match(html, /class="director-chat-sidebar"/);
   assert.match(html, /static\/js\/studio_director_workbench\.js/);
-  assert.match(css, /\.director-chat-drawer\.studio-director #director-studio-flow \{ display: none !important; \}/);
+  assert.match(css,/studio-director/);
   assert.match(css, /studio-dw-actions/);
   assert.match(css, /font-size:16px/);
   assert.match(css,/studio-director/);

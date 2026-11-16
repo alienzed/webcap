@@ -1008,6 +1008,19 @@
   }
 
   window.studioDirectorWorkbench = {
+    approvedReadPayload:readPayload,
+    approvedReadLabel:function (projectId,keys) {
+      var name = readStory && readStory.id === projectId ? storyName(readStory) : projectId;
+      var sceneIds = new Set(keys.filter(function (key) {return key.startsWith('scene:');})
+        .map(function (key) {return key.split(':')[1];}));
+      var labels = [];
+      if (keys.some(function (key) {return key.startsWith('project.');})) labels.push('Overview');
+      sceneIds.forEach(function (id) {
+        var index = readStory && readStory.id === projectId ? readStory.sceneOrder.indexOf(id) : -1;
+        labels.push(index >= 0 ? 'Scene ' + (index + 1) : 'Scene');
+      });
+      return name + ' · ' + labels.join(' + ');
+    },
     presentAction:presentAction,
     updateWorkingWrite:showConversationWrite,
     completeWriteAction:function (kind, story, selected) {

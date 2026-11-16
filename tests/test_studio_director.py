@@ -287,8 +287,22 @@ def test_studio_chat_schema_accepts_prose_and_actual_creative_material_without_a
         "title", "prompt", "durationSeconds"
     ]
     assert "sceneId" not in schema["properties"]["changes"]["properties"]["scene"]["properties"]
+    project = schema["properties"]["changes"]["properties"]["project"]
+    assert "required" not in project, "Partial Project revisions must not rewrite unrelated fields"
+    invariant = project["properties"]["invariants"]["items"]
+    assert invariant["required"] == ["kind", "title", "text"]
+    assert invariant["additionalProperties"] is False
+    assert "character" in invariant["properties"]["kind"]["enum"]
     assert "checks" not in schema["properties"]
     assert "capture" not in schema["properties"]
+
+
+def test_studio_guidance_requests_explicit_invariants_without_inventing_unrequested_ones():
+    from tool.server.studio_director import guidance
+
+    system = guidance()["system"]
+    assert "changes.project.invariants entry with kind, title and text" in system
+    assert "Do not invent invariants for requests that do not need them" in system
 
 
 def test_historical_readiness_records_are_accepted_as_inert_saved_chat_data():

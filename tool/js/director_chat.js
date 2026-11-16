@@ -302,22 +302,8 @@
         (!explicitProject && state.studioStoryAccess &&
           state.studioStoryAccess.storyId !== navigation.projectId))
       return null;
-    var references = [], match, pattern = /\bscene\s*(\d+)\b/gi;
-    while ((match = pattern.exec(String(authorRequest || ''))))
-      references.push(Number(match[1]));
-    var group = /\bscenes\s+(\d+(?:\s*(?:,|and|&)\s*\d+)*)/i.exec(
-      String(authorRequest || ''));
-    if (group) group[1].match(/\d+/g).forEach(function (value) {
-      references.push(Number(value));
-    });
-    if (references.length) {
-      var distinct = Array.from(new Set(references));
-      if (distinct.length !== 1 || !navigation.sceneOrder ||
-          distinct[0] < 1 || distinct[0] > navigation.sceneOrder.length) return null;
-      return {projectId:navigation.projectId,
-        sceneId:navigation.sceneOrder[distinct[0] - 1],
-        sceneNumber:distinct[0],label:'Scene ' + distinct[0]};
-    }
+    // A Scene named in conversational prose is not a deterministic Write binding.
+    // Only selected UI context or an explicit Read selection supplies a target.
     if (navigation.sceneId) return {
       projectId: navigation.projectId, sceneId: navigation.sceneId,
       sceneNumber:navigation.sceneNumber,

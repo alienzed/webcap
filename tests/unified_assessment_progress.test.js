@@ -147,6 +147,8 @@ test('Diagnostics and Activity share one snapshot and retain the live card throu
   assert.equal(card.querySelector('[data-progress-track]').getAttribute('aria-valuenow'), undefined);
   assert.equal(snapshots[0].childJobId, 'job-exact');
   assert.equal(nodes['diagnostics-assessment-run'].disabled, true);
+  assert.equal(card.children.includes(nodes['diagnostics-assessment-stop']), true, 'Stop belongs to the live progress card');
+  assert.equal(nodes['diagnostics-assessment-stop'].hidden, false);
   ctx.modelLabPublishProgress({...run(), summary: {completed: 4}});
   assert.equal(nodes['diagnostics-assessment-activity'].children[0], card);
   assert.match(card.querySelector('[data-progress-counts]').textContent, /4 completed/);

@@ -106,7 +106,8 @@ function harness() {
     if (!controls.has(id)) controls.set(id,{value:'',disabled:false});
     return controls.get(id);
   }
-  const document = {createElement() {return {type:'',dataset:{},textContent:'',disabled:false};}};
+  const document = {createElement() {return {type:'',dataset:{},textContent:'',disabled:false,value:'',
+    children:[],setAttribute(){},appendChild(node){this.children.push(node);}};}};
   const requests = [],statuses = [],finishes = [],reviews = [];
   const story = {id:'p1', title:'Rainy Bookshop',
     sceneOrder:['one','two','three'], scenes:{
@@ -153,7 +154,7 @@ test('received existing Scene fields open the existing Review without regenerati
   h.functions.presentAction({kind:'write_scenes',instruction:'Rewrite Scene 2',
     authoredFields:{prompt:'Complete authored replacement',durationSeconds:12}},
     {projectId:'p1',sceneId:'two',sceneNumber:2},{projectId:'p1'},'Rewrite Scene 2');
-  h.suggestions.children[0].onclick();
+  h.suggestions.children.find(node=>node.type==='button').onclick();
   await flush();
   assert.equal(h.requests.length,0,'review has no model call');
   assert.equal(h.reviews.length,1);
@@ -166,15 +167,15 @@ test('authored conversation Scene records open Review directly and remain reopen
   h.functions.presentAction({kind:'create_scene',instruction:'Two eight-second Scenes',
     scenes:[{title:'Only authored Scene',prompt:'Complete H3 Prompt',durationSeconds:8}]},
     null,{projectId:'p1'},'Two eight-second Scenes');
-  assert.match(h.suggestions.children[0].textContent,/Review authored Scene/);
-  h.suggestions.children[0].onclick();
+  assert.match(h.suggestions.children.find(node=>node.type==='button').textContent,/Review authored Scene/);
+  h.suggestions.children.find(node=>node.type==='button').onclick();
   await flush();
   assert.equal(h.requests.length,1);
   assert.equal(h.requests[0][0],'review-authored');
   assert.equal(h.requests[0][1].scenes.length,1);
   assert.equal(h.requests[0][1].scenes[0].durationSeconds,8);
   assert.equal(h.finishes.length,0,'review does not claim a completed save');
-  h.suggestions.children[0].onclick();
+  h.suggestions.children.find(node=>node.type==='button').onclick();
   await flush();
   assert.deepEqual(h.requests.map(row=>row[0]),['review-authored','reopen-review']);
   assert.equal(h.requests[1][1],'p1');

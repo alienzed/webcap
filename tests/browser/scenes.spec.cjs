@@ -159,3 +159,56 @@ test('Flow 2 variation — useful partial Scene survives invalid sibling metadat
   expect(completed.scenes[completed.sceneOrder[1]].durationSeconds).toBe(10);
   expect((await observedModels(request)).calls).toHaveLength(1);
 });
+
+test('Flow 2 — a single authored changes.scene record reaches review without an action hint',async({page,request})=>{
+  await resetModel(request);
+  await freshDirectorSession(page);
+  await page.goto('/');
+  await page.locator('#activity-storyboard-btn').click();
+  const project=await newSelectedProject(page);
+  await page.locator('#director-chat-rail-btn').click();
+  await page.locator('[data-assistant-mode="storyboard"]').click();
+  await ensureAttachedProject(page,project.title);
+  await page.locator('#app-header-director-model').selectOption('acceptance::acceptance-model');
+  const authored={title:'First Window',prompt:'A visitor stands beside a blue window.',durationSeconds:8};
+  await queueModel(request,{changes:{scene:authored}}); // No reply or action.
+  await say(page,'Author one new Scene about a window.');
+  const action=page.locator('#studio-dw-suggestions .studio-dw-suggestion-action');
+  await expect(action).toContainText('Review authored Scene');
+  await expect(page.locator('#director-chat-progress')).toBeHidden();
+  await action.click();
+  await expect(page.locator('#studio-scenes-review')).toBeVisible();
+  const row=page.locator('#studio-scenes-rows .studio-scenes-row');
+  await expect(row).toHaveCount(1);
+  await expect(row.first().locator('[data-field="prompt"]')).toHaveValue(authored.prompt);
+  await page.locator('#studio-scenes-apply').click();
+  await expect.poll(async()=> (await story(page,project.id)).sceneOrder.length).toBe(1);
+  const saved=await story(page,project.id);
+  expect(saved.scenes[saved.sceneOrder[0]].prompt).toBe(authored.prompt);
+  expect((await observedModels(request)).calls).toHaveLength(1);
+});
+
+test('Flow 2 — wrong optional action hint does not discard actually authored Scene records',async({page,request})=>{
+  await resetModel(request);
+  await freshDirectorSession(page);
+  await page.goto('/');
+  await page.locator('#activity-storyboard-btn').click();
+  const project=await newSelectedProject(page);
+  await page.locator('#director-chat-rail-btn').click();
+  await page.locator('[data-assistant-mode="storyboard"]').click();
+  await ensureAttachedProject(page,project.title);
+  await page.locator('#app-header-director-model').selectOption('acceptance::acceptance-model');
+  await queueModel(request,{
+    reply:'Draft ready',
+    action:{kind:'write_project',instruction:'Revise the Project'},
+    scenes:[{title:'Crossing',prompt:'A figure crosses a stone bridge.',durationSeconds:12}]
+  });
+  await say(page,'Create one new Scene about a stone bridge.');
+  const action=page.locator('#studio-dw-suggestions .studio-dw-suggestion-action');
+  await expect(action).toContainText('Review authored Scene');
+  await expect(page.locator('#director-chat-progress')).toBeHidden();
+  await action.click();
+  await expect(page.locator('#studio-scenes-review')).toBeVisible();
+  await expect(page.locator('#studio-scenes-rows .studio-scenes-row')).toHaveCount(1);
+  expect((await observedModels(request)).calls).toHaveLength(1);
+});

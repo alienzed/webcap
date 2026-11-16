@@ -1270,6 +1270,7 @@
     el('studio-dw-read-send').onclick=readSend;
     el('studio-dw-read-clear').onclick=function () {
       window.studioDirectorBridge.clearApprovedRead();
+      renderApprovedSources();
       status('Saved context cleared. No Project or Scene details will be shared.',false,true);
     };
     el('studio-dw-read-all').onclick=selectEntireReadProject;

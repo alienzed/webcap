@@ -1418,17 +1418,14 @@
       // control, so earlier replies get a launcher bound to their saved
       // response, never a copy of the latest reply's action closure.
       if (studioReply && index !== state.studioActionIndex &&
-          message.writeAction && !message.writeAction.completed) {
+          message.writeAction && message.writeAction.kind === 'create_scene' &&
+          !message.writeAction.completed) {
         var savedAction = message.writeAction;
         var oldAction = document.createElement('button');
         oldAction.type = 'button';
         oldAction.className = 'studio-dw-suggestion-action';
         oldAction.dataset.suggestionKind = 'write';
-        oldAction.textContent = savedAction.kind === 'create_scene'
-          ? 'Review authored Scene(s)' :
-          ({create_project:'Create Project · Review',
-            write_project:'Revise Project · Review',
-            write_scenes:'Revise Scene(s) · Save'})[savedAction.kind] || 'Review proposed changes';
+        oldAction.textContent = 'Review authored Scene(s)';
         oldAction.onclick = function () {
           var proposal = savedAction;
           // The original response contains the authoritative authored records;

@@ -14,16 +14,48 @@ async function startRealRevision(page,projectId,model,instruction) {
   expect(job?.jobId).toBeTruthy();
   return job.jobId;
 }
-async function jobStatus(page,id) {
+// The visible Storyboard recovery watcher may consume a terminal receipt
+// after navigation. Capture the exact response it received before consumption;
+// a vanished job without an observed terminal receipt is still a hard failure.
+function captureJobReceipts(page) {
+  const terminal=new Map();
+  const pending=new Set();
+  page.on('response',response=>{
+    const url=new URL(response.url());
+    if(url.pathname!=='/fs/director/job'||!response.ok()) return;
+    const id=url.searchParams.get('job');
+    if(!id) return;
+    const read=response.json().then(payload=>{
+      const job=payload && payload.job;
+      if(job && job.jobId===id && terminalStatuses.has(String(job.status||'')))
+        terminal.set(id,job);
+    }).catch(()=>{});
+    pending.add(read);
+    void read.finally(()=>pending.delete(read));
+  });
+  return {
+    async terminal(id) {
+      await Promise.all([...pending]);
+      return terminal.get(id);
+    }
+  };
+}
+async function jobStatus(page,id,receipts) {
   const response=await page.request.get('/fs/director/job?job='+encodeURIComponent(id));
-  expect(response.ok()).toBeTruthy();
-  return (await response.json()).job;
+  if(response.ok()) return (await response.json()).job;
+  const body=await response.text();
+  if(response.status()===404 && receipts) {
+    const observed=await receipts.terminal(id);
+    if(observed) return observed;
+  }
+  throw new Error('Director job '+id+' status unavailable (HTTP '+response.status()+
+    '): '+body+'; no matching terminal receipt observed in the browser.');
 }
 // Poll using ordinary Playwright assertions; never infer completion from elapsed time.
-async function finishJob(page,id) {
+async function finishJob(page,id,receipts) {
   let last;
   await expect.poll(async()=>{
-    last=await jobStatus(page,id);
+    last=await jobStatus(page,id,receipts);
     return terminalStatuses.has(String(last.status||''));
   },{timeout:300000,intervals:[400,900,1600]}).toBe(true);
   return last;
@@ -47,13 +79,14 @@ test('Live boundary — cancellation after a saved Scene preserves only confirme
   const model=await openLiveDirector(page);
   await attachProject(page,project);
   const instruction='Revise each Scene with a distinctly visible antique brass lantern, keeping its existing action, location, title and duration.';
+  const receipts=captureJobReceipts(page);
   const id=await startRealRevision(page,project.id,model,instruction);
   let reachedFirst=false,earlyEnd=null;
   try {
     await expect.poll(async()=>{
       const saved=await story(page,project.id);
       const firstSaved=saved.scenes[originals[0].id].prompt!==originals[0].prompt;
-      const running=await jobStatus(page,id);
+      const running=await jobStatus(page,id,receipts);
       if(terminalStatuses.has(running.status) && !firstSaved) {
         earlyEnd=running;
         throw new Error('Revision reached '+running.status+' before any Scene save: '+String(running.error||''));
@@ -62,14 +95,14 @@ test('Live boundary — cancellation after a saved Scene preserves only confirme
       return firstSaved;
     },{timeout:300000,intervals:[300,600,1000]}).toBe(true);
   } catch(error) {
-    const stillRunning=await jobStatus(page,id);
+    const stillRunning=await jobStatus(page,id,receipts);
     if(!terminalStatuses.has(stillRunning.status))
       await page.request.post('/fs/director/job',{data:{operation:'cancel_job',jobId:id}});
     await record(testInfo,'cancel-before-first-save',{jobId:id,earlyEnd,project:await story(page,project.id)});
     throw error;
   }
   expect(reachedFirst).toBe(true);
-  const beforeCancel=await jobStatus(page,id);
+  const beforeCancel=await jobStatus(page,id,receipts);
   // A very fast model may already have completed all Scenes. Report the real
   // timing as an unexercised cancellation boundary, not as a passing test.
   if(terminalStatuses.has(beforeCancel.status)) {
@@ -78,7 +111,7 @@ test('Live boundary — cancellation after a saved Scene preserves only confirme
   }
   const stopped=await page.request.post('/fs/director/job',{data:{operation:'cancel_job',jobId:id}});
   expect(stopped.ok(),await stopped.text()).toBeTruthy();
-  const receipt=await finishJob(page,id);
+  const receipt=await finishJob(page,id,receipts);
   expect(['stopped','cancelled'].includes(receipt.status),'Cancellation did not stop the revision: '+JSON.stringify(receipt)).toBe(true);
   const saved=await story(page,project.id);
   expect(saved.sceneOrder).toEqual(originals.map(x=>x.id));
@@ -115,10 +148,11 @@ test('Live boundary — navigating to another Project cannot retarget an in-flig
   const model=await openLiveDirector(page);
   await attachProject(page,a);
   const instruction='Revise every Scene prompt to include a small silver clock that remains visible; preserve each original Scene action and the title and duration.';
+  const receipts=captureJobReceipts(page);
   const id=await startRealRevision(page,a.id,model,instruction);
   await openProject(page,b.id);
   await expect(page.locator('#storyboard-story-title')).toHaveValue(b.title);
-  const receipt=await finishJob(page,id);
+  const receipt=await finishJob(page,id,receipts);
   expect(receipt.status,'Real revision must finish normally: '+JSON.stringify(receipt)).toBe('completed');
   const savedA=await story(page,a.id),savedB=await story(page,b.id);
   expect(savedA.sceneOrder).toEqual(originals.map(x=>x.id));
@@ -146,13 +180,14 @@ test('Live boundary — a provider token cutoff never claims unsaved Scene draft
   const request='Author 30 distinct, fully detailed eight-second H3 Scenes as structured scenes records. '+
     'For every Scene include a complete standalone prompt with character, physical location, '+
     'shot-by-shot timing, camera, lighting, ambience and dialogue. Return all the authored records.';
+  const receipts=captureJobReceipts(page);
   const response=await page.request.post('/fs/director/chat',{data:{
     model,operation:'studio_scenes_draft',messages:[{role:'user',content:request}]
   }});
   expect(response.ok(),await response.text()).toBeTruthy();
   const id=(await response.json()).job?.jobId;
   expect(id).toBeTruthy();
-  const receipt=await finishJob(page,id);
+  const receipt=await finishJob(page,id,receipts);
   const source=await story(page,project.id);
   expect(source.sceneOrder,'No draft-only model result may silently save Scenes').toHaveLength(0);
   const result=receipt.result||{};

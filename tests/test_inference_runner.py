@@ -134,7 +134,7 @@ def test_pause_releases_sticky_idle_gpu_and_unblocks_llm(inference_root, monkeyp
     inference_runner._advance_queue()
     assert execution_queue.resource_owner() == "inference"
     assert execution_queue.get_job(second["id"])["status"] == "queued"
-    assert execution_queue.get_job(first["id"])["status"] == "completed"
+    assert inference_runner.job_status(first["id"])["status"] == "completed"
 
     inference_runner.action("pause_queue")
     assert inference_runner._monitor_has_work() is True

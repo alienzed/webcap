@@ -103,7 +103,7 @@ test('explicit Write guidance asks for the draft, not another conversational rec
     "studioDirectorRequestMessages([{role:'user',content:'Discuss Scene'}],false)",context);
   const writing = await vm.runInContext(
     "studioDirectorRequestMessages([{role:'user',content:'Revise Scene'}],false,true)",context);
-  assert.match(conversational[0].content,/suggest at most one useful action/);
+  assert.match(conversational[0].content,/When creative fields are requested, return their complete actual authored values NOW/);
   assert.doesNotMatch(writing[0].content,/suggest at most one useful action/);
   assert.match(writing[0].content,/EXPLICIT WRITE/);
   assert.match(writing[0].content,/Produce the requested complete editable proposal/);

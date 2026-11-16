@@ -11,7 +11,7 @@ test('Live Flow 1 — real Director authors a reviewed Project and persisted Ove
     'Add a recurring invariant: the bookseller wears a red scarf. Supply the Project title, concept, visual style and invariant as structured Project material.';
   await sendLive(page,instruction);
   const action=page.locator('#studio-dw-suggestions .studio-dw-suggestion-action');
-  await expect(action).toContainText(/Create Project|Review new Project/i);
+  await expect(action).toContainText(/Review authored Project/i);
   await action.click();
   const dialog=page.locator('#studio-project-review');
   await expect(dialog).toBeVisible();
@@ -116,7 +116,8 @@ test('Live Flow 3 — a real Project revision saves reviewed fields without chan
   const instruction='Revise only the Project visual atmosphere to a warm amber-lit interior, leaving the Project concept, Scene prompts and durations untouched. Return a Project style revision for review.';
   await sendLive(page,instruction);
   const action=page.locator('#studio-dw-suggestions .studio-dw-suggestion-action');
-  await expect(action).toContainText(/Revise Project|Review Project changes/i);
+  await expect(action).toContainText(/Review authored Project/i);
+  await page.locator('#studio-dw-suggestions select[aria-label="Project material destination"]').selectOption(project.id);
   await action.click();
   await expect(page.locator('#studio-brief-review')).toBeVisible();
   const revised=await page.locator('#studio-brief-style').inputValue();

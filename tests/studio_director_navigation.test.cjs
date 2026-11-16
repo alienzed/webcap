@@ -26,9 +26,9 @@ test('sending a Studio message never attaches an open Project automatically',()=
   const end=chat.indexOf("  function ",start+10);
   assert.ok(start>=0&&end>start);
   const code=chat.slice(start,end);
-  assert.doesNotMatch(code,/state\\.studioStoryAccess\\s*=/,
+  assert.doesNotMatch(code,/state\.studioStoryAccess\s*=/,
     'Only explicit attachment can change the Director association');
-  assert.match(code,/studioAttachedStoryId\\(\\).*selectedNavigation/,
+  assert.match(code,/studioAttachedStoryId\(\).*selectedNavigation/,
     'Navigation may still supply a suggested Write destination');
 });
 

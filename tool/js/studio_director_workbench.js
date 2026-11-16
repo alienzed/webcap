@@ -1228,6 +1228,7 @@
       if (!proposed) throw new Error('The proposed Director action is no longer available.');
       proposed.click();
     };
+    el('director-chat-context-approve').onclick=function () {openDirectAction('read');};
     el('studio-dw-open-tools').onclick=function () {
       if (el('director-chat-drawer').classList.contains('studio-actions-open')) el('studio-dw-close-actions').click();
       else openDirectAction(lastQuickAction);

@@ -244,7 +244,7 @@ test('bounded Scene writer receives saved duration and linked constraints',()=>{
     .split('    makeProposal: function (')[0];
   const preview=workbench.split('  function showWriteContext() {')[1]
     .split('  function updateScope() {')[0];
-  assert.match(writer,/studioApprovedSavedContext\(story\)/);
+  assert.match(writer,/sceneRead\(story,sceneId\)/);
   assert.match(writer,/durationSeconds/);
   assert.match(preview,/durationSeconds:scene\.durationSeconds,invariantRefs:scene\.invariantRefs/);
 });

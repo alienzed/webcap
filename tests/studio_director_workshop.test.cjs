@@ -324,7 +324,7 @@ test('large explicit Read selections are sent intact, with no arbitrary client c
     loadStory:async()=>story,
     status:()=>{},
     updateScope:()=>{},
-    updateReadSelection:()=>{updates++;},
+    updateReadSelection:()=>{updates++;},renderApprovedSources(){},
     window:{
       studioDirectorBridge:{approveRead:(projectId,keys)=>{sent={projectId,keys};}},
       studioDirectorWorkbench:{setReadStatus:(_state,message)=>{readStatus=message;}}

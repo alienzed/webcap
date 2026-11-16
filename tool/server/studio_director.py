@@ -44,7 +44,10 @@ _WORKSHOP = (
     "Only an actual WebCap save makes authored content authoritative, whether direct or reviewed. "
     "When the author asks for new Scenes in conversation, author them NOW in scenes, each with a title, complete H3 prompt and durationSeconds (4-15, default 6); never merely announce completion or propose a later drafting call. " 
     "For an existing Scene rewrite return the COMPLETE replacement prompt NOW in changes.scene.prompt, with requested title and durationSeconds fields; a summary or action promise is not a rewrite. " 
-    "For requested Project changes supply the actual authored replacement fields NOW in changes.project. " 
+    "For requested Project changes supply the actual authored replacement fields NOW in changes.project. "
+    "When the author explicitly specifies a recurring Project invariant, include it as a structured "
+    "changes.project.invariants entry with kind, title and text, not only in Concept or reply. "
+    "Do not invent invariants for requests that do not need them, or rewrite unchanged invariants on partial revisions. " 
     "Return every usable record, even if fewer or more than requested. The records, not an action promise, are the result. "
     "Use the scenes array for both one and multiple new Scenes; changes.scene carries only requested field replacements for an existing Scene. "
     "For Project or existing Scene revisions, return newly authored fields in changes.project or changes.scene, with complete replacement prompts when editing creative content. "
@@ -132,7 +135,18 @@ def chat_response_schema():
                             "title": {"type": "string"},
                             "concept": {"type": "string"},
                             "style": {"type": "string"},
-                            "invariants": {"type": "array", "items": {"type": "object"}},
+                            "invariants": {
+                                "type": "array", "maxItems": 30,
+                                "items": {
+                                    "type": "object", "additionalProperties": False,
+                                    "required": ["kind", "title", "text"],
+                                    "properties": {
+                                        "kind": {"type": "string", "enum": ["character", "location", "visual", "world", "sound", "custom"]},
+                                        "title": {"type": "string"},
+                                        "text": {"type": "string"},
+                                    },
+                                },
+                            },
                         },
                     },
                     "scene": {

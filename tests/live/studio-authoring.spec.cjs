@@ -9,12 +9,38 @@ test('Live Flow 1 — real Director authors a reviewed Project and persisted Ove
   const instruction='Create a new Studio Project called "'+name+
     '". Concept: A bookseller opens a shop in a rainy city. Visual atmosphere: amber light and blue rain. '+
     'Add a recurring invariant: the bookseller wears a red scarf. Supply the Project title, concept, visual style and invariant as structured Project material.';
+  // Inspect the actual completed provider record before Review; the final saved
+  // list alone cannot distinguish missing model material from a lost UI field.
+  const providerJob=page.waitForResponse(async response=>{
+    if(!response.url().includes('/fs/director/job?')) return false;
+    try{
+      const body=await response.json();
+      return body.job?.status==='completed';
+    }catch{return false;}
+  },{timeout:300000});
   await sendLive(page,instruction);
+  const job=(await (await providerJob).json()).job;
+  const raw=String(job.result?.text||'');
+  let authored;
+  try{authored=JSON.parse(raw);}catch(error){
+    await testInfo.attach('flow1-raw-director-output',{body:Buffer.from(raw),contentType:'text/plain'});
+    throw new Error('Flow 1: completed Director response is not structured JSON: '+error.message);
+  }
+  await testInfo.attach('flow1-project-authoring-boundary',{
+    body:Buffer.from(JSON.stringify({model,request:instruction,raw:authored},null,2)),
+    contentType:'application/json'
+  });
+  const authoredInvariants=authored?.changes?.project?.invariants;
+  expect(Array.isArray(authoredInvariants) && authoredInvariants.some(item=>typeof item?.text==='string' && item.text.trim()),
+    'Flow 1 authoring: Director did not return a structured invariant despite the explicit recurring-invariant request in changes.project.invariants').toBe(true);
   const action=page.locator('#studio-dw-suggestions .studio-dw-suggestion-action');
   await expect(action).toContainText(/Review authored Project/i);
   await action.click();
   const dialog=page.locator('#studio-project-review');
   await expect(dialog).toBeVisible();
+  const reviewInvariants=await page.locator('#studio-project-invariants .studio-project-invariant textarea').allInputValues();
+  expect(reviewInvariants.some(value=>value.trim()),
+    'Flow 1 Review: authored invariant did not reach the editable Project review').toBe(true);
   const title=await page.locator('#studio-project-title').inputValue();
   const concept=await page.locator('#studio-project-concept').inputValue();
   const style=await page.locator('#studio-project-style').inputValue();

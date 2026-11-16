@@ -305,7 +305,29 @@
       pendingCreativeAction.chosenSceneIds = checked ? inputs.map(function (input) { return input.value; }) : [];
     showWriteContext();
   }
+  function renderApprovedSources() {
+    var host = el('studio-dw-approved-sources');
+    host.replaceChildren();
+    window.studioDirectorBridge.approvedReadSources().forEach(function (source) {
+      var row = document.createElement('div');
+      row.className = 'studio-dw-approved-source';
+      var label = document.createElement('span');
+      label.textContent = source.label;
+      var button = document.createElement('button');
+      button.type = 'button';
+      button.textContent = 'Remove';
+      button.title = 'Stop sharing this Project source';
+      button.onclick = function () {
+        window.studioDirectorBridge.removeApprovedRead(source.projectId);
+        renderApprovedSources();
+        status('Selected source removed; other approved sources retained.',false,true);
+      };
+      row.append(label,button);
+      host.appendChild(row);
+    });
+  }
   function refreshRead() {
+    renderApprovedSources();
     return refreshProjects().then(function () {return loadStory(el('studio-dw-read-project').value);})
       .then(renderReadStory).catch(function (e) { status('Read setup failed: ' + e.message, true); });
   }

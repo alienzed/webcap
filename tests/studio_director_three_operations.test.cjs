@@ -17,8 +17,8 @@ const parse = new Function(part(chat, '  function parseStudioChatResponse(raw) {
   '  function storyboardRequestMessages(') + 'return parseStudioChatResponse;')();
 const requestedDuration = new Function(part(chat, '  function studioRequestedDuration(instruction) {',
   '  window.studioDirectorBridge = {') + 'return studioRequestedDuration;')();
-const sceneTargets = new Function(part(workbench, '  function sceneIdsFromRequest(instruction, story, selectedScene) {',
-  '  function presentAction(') + 'return sceneIdsFromRequest;')();
+const sceneTargets = new Function(part(workbench, '  function selectedSceneIds(story, selectedScene) {',
+  '  function presentAction(') + 'return selectedSceneIds;')();
 
 test('retired Director assessment and guideline artifacts are absent without losing I/O or write controls', () => {
   assert.doesNotMatch(html,/id="studio-dw-assessment-dialog"|class="studio-dw-readiness hidden"/);
@@ -82,15 +82,12 @@ test('ordinary prose never manufactures a Studio write action', () => {
   assert.match(workbench,/Do not offer a creative Review based on an LLM action promise/);
 });
 
-test('WebCap resolves finite saved Scene IDs, with explicit numbers ahead of selection', () => {
-  const story = {id:'p1',sceneOrder:['one','two','three']};
-  const selected = {projectId:'p1',sceneId:'two'};
-  assert.deepEqual(sceneTargets('Revise scenes 1 and 3', story, selected), ['one','three']);
-  assert.deepEqual(sceneTargets('Revise Scene 3', story, selected), ['three']);
-  assert.deepEqual(sceneTargets('Make the ending quieter', story, selected), ['two']);
-  assert.deepEqual(sceneTargets('Revise scenes', story, selected), []);
-  assert.deepEqual(sceneTargets('Revise Scene 7', story, selected), []);
-  assert.deepEqual(sceneTargets('Make the ending quieter', story, {projectId:'other',sceneId:'two'}), []);
+test('WebCap binds review to the selected existing Scene without parsing request prose', () => {
+  const story={id:'p1',sceneOrder:['one','two','three']};
+  const selected={projectId:'p1',sceneId:'two'};
+  assert.deepEqual(sceneTargets(story,selected),['two']);
+  assert.deepEqual(sceneTargets(story,{projectId:'other',sceneId:'two'}),[]);
+  assert.deepEqual(sceneTargets(story,null),[]);
 });
 
 test('Explicit duration is a WebCap parameter, not optional LLM metadata', () => {
@@ -125,11 +122,11 @@ function harness() {
     reviewPendingScenes:async projectId=>{requests.push(['reopen-review',projectId]);return {review:true};},
   };
   const window = {studioDirectorBridge:bridge};
-  const source = part(workbench, '  function sceneIdsFromRequest(instruction, story, selectedScene) {',
+  const source = part(workbench, '  function selectedSceneIds(story, selectedScene) {',
     '  window.studioDirectorWorkbench = {');
   const creator = new Function('el','document','window','refreshProjects','loadStory',
     'storyName','projectFields','status','openWriteForCapture','showConversationWrite','showSceneReview',
-    source + 'return {presentAction,sceneIdsFromRequest};');
+    source + 'return {presentAction,selectedSceneIds};');
   let opened = 0;
   const functions = creator(el,document,window,
     async()=>[{id:'p1',title:'Rainy Bookshop'}],async id=>{

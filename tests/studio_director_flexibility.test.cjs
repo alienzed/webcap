@@ -22,12 +22,59 @@ test('a selected Studio Project cannot silently authorize saved Read material', 
   assert.doesNotMatch(body, /studioActionFromExplicitRequest/);
 });
 
-test('approved Read scope supports multiple unrelated Project sources without changing destination', () => {
-  assert.match(chat, /studioApprovedReads/);
-  assert.match(chat, /AUTHOR-APPROVED SAVED CONTEXT/);
-  assert.match(workbench, /approveRead\(story\.id, keys\)/);
-  assert.match(html, /id="studio-dw-read-project"/);
-  assert.match(html, /id="studio-dw-read-clear"/);
+test('approved Read scope sends material from multiple Projects, not the open editor', async () => {
+  const body = section(chat, '  function studioApprovedReadSources() {',
+    '  // Retain available conversational work across ordinary follow-up questions.');
+  const saved = {
+    a:{id:'a',title:'Reference A',concept:'An archived pacing reference',scenes:{},sceneOrder:[]},
+    b:{id:'b',title:'Reference B',concept:'A character reference',scenes:{},sceneOrder:[]},
+    c:{id:'c',title:'Current open editor',concept:'PRIVATE OPEN PROJECT',scenes:{},sceneOrder:[]}
+  };
+  const requested=[];
+  const state={
+    studioApprovedRead:{sources:[
+      {projectId:'a',keys:['project.concept'],label:'Reference A · Overview'},
+      {projectId:'b',keys:['project.concept'],label:'Reference B · Overview'}
+    ]},
+    studioWorkingDraft:{newProject:{},newScene:{}}
+  };
+  const scope=vm.createContext({
+    state,Promise,JSON,Object,String,encodeURIComponent,
+    window:{
+      getStudioDirectorNavigation:()=>({projectId:'c'}),
+      studioDirectorWorkbench:{approvedReadPayload:(story,keys)=>({
+        projectId:story.id,projectTitle:story.title,
+        fields:keys.map(key=>({id:key,value:story[key.slice(8)]}))
+      })}
+    },
+    studioAttachedStoryId:()=>'',requestJson:async url=>{
+      requested.push(url);
+      return {story:saved[url.split('=')[1]]};
+    },
+    studioDirectorRequestMessages:async messages=>[
+      {role:'system',content:'Creative guidance'},...messages
+    ],
+    parseStudioChatResponse:raw=>JSON.parse(raw)
+  });
+  vm.runInContext(body,scope);
+  const bound={};
+  const result=await scope.studioDirectorChatRequestMessages(
+    [{role:'user',content:'Use A for pacing and B for character, write elsewhere.'}],
+    null,{projectId:'c'},bound);
+  assert.equal(bound.projectId,'c','the selected editor is a potential destination only');
+  assert.deepEqual(requested,['/fs/storyboard?story=a','/fs/storyboard?story=b']);
+  assert.match(result[0].content,/An archived pacing reference/);
+  assert.match(result[0].content,/A character reference/);
+  assert.doesNotMatch(result[0].content,/PRIVATE OPEN PROJECT/);
+  assert.match(result[0].content,/independent sources/);
+  assert.match(workbench,/approveRead\(story\.id, keys\)/);
+  assert.match(html,/id="studio-dw-approved-sources"/);
+});
+
+test('one approved source can be removed without revoking unrelated sources',()=>{
+  assert.match(chat,/removeApprovedRead: function \(projectId\)/);
+  assert.match(chat,/item\.projectId !== projectId/);
+  assert.match(workbench,/studioDirectorBridge\.removeApprovedRead\(source\.projectId\)/);
 });
 
 test('existing authored response fields are a session asset, not assigned to the open Project', () => {

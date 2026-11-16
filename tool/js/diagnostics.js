@@ -727,6 +727,10 @@ function refreshUnifiedModelAssessment() {
         }
       });
       if (qualityReview && Array.isArray(qualityReview.tasks)) {
+        var judgeNameInHistory = ((labModels.directors || []).find(function (entry) { return String(entry.modelRef || '') === String(qualityReview.judgeModelRef || ''); }) || {}).label || qualityReview.judgeModelRef || 'Unknown judge';
+        var judgeProvenance = document.createElement('div');
+        judgeProvenance.textContent = 'Quality reviewer: ' + judgeNameInHistory + ' · Run ' + (qualityRun && qualityRun.id || 'unknown') + ' · ' + (qualityReview.finishedAt || 'not finished') + ' · ' + qualityReview.tasks.length + ' judged task(s). Advisory, not consensus.';
+        raw.appendChild(judgeProvenance);
         qualityReview.tasks.forEach(function (task) {
           var detail = document.createElement('div');
           detail.textContent = 'LLM judge · ' + task.task + ' ' + task.score + '/5: ' + task.reason;
@@ -760,18 +764,13 @@ function refreshUnifiedModelAssessment() {
         judgeOption.value = 'judge';
         judgeOption.textContent = 'Judge Model';
         actions.appendChild(judgeOption);
+        actions.disabled = !!(qualityReview && qualityReview.status === 'running');
         actions.addEventListener('change', function () {
           var action = actions.value;
           actions.value = '';
           if (action === 'judge') diagnosticsAssessmentJudge(judgeSource.id, ref);
         });
         name.appendChild(actions);
-        var judgeButton = document.createElement('button');
-        judgeButton.type = 'button';
-        judgeButton.className = 'review-captions-btn';
-        judgeButton.textContent = qualityReview && qualityReview.status === 'completed' ? 'Reassess with LLM' : 'Assess with LLM';
-        judgeButton.disabled = !!(qualityReview && qualityReview.status === 'running');
-        judgeButton.addEventListener('click', function () { diagnosticsAssessmentJudge(judgeSource.id, ref); });
         // The model dropdown is the primary entry point for this action.
       }
       expanded.appendChild(panel);
@@ -929,7 +928,6 @@ function diagnosticsAssessmentConfig() {
   var visionRefs = diagnosticsAssessmentSelected.vision;
   if (!directorRefs.size && !visionRefs.size) throw new Error('Choose at least one model.');
   var deep = diagnosticsEl('diagnostics-assessment-deep').checked;
-  var judgeRef = String(diagnosticsEl('diagnostics-assessment-judge-model').value || '').trim();
 
   var catalog = diagnosticsAssessmentCatalog;
   var visions = (catalog.visions || []).filter(function (model) { return visionRefs.has(String(model.modelRef || '')); });
@@ -941,12 +939,11 @@ function diagnosticsAssessmentConfig() {
   var files = modelLabCurrentFiles();
   var canLab = !!sourceFolder && files.length >= 2;
   if (visions.length && !canLab) throw new Error('Open a Set with at least two media items to assess Vision models. Director assessment needs no Set.');
-  if (deep && directors.length && !judgeRef) throw new Error('Choose an LLM judge to automatically review Deep Director results.');
   return {
     folder: sourceFolder, files: files, groups: modelLabGroups(),
     depth: deep ? 'deep' : 'quick', sampleCount: deep ? 16 : 8,
     visionModels: visions, directorModels: directors,
-    judgeModelRef: deep && directors.length ? judgeRef : ''
+    judgeModelRef: ''
   };
 }
 

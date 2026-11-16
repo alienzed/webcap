@@ -37,6 +37,12 @@ utility briefs can remain prose; WebCap need not mine arbitrary prose for writes
 New/existing and one/many are parameters, not more capabilities. WebCap owns source
 and destination bindings. The model authors the material it was given and asked
 for; it need not know which editor or drawer is open or invent application IDs.
+**Unsaved authored material belongs to the conversation/session, not a saved
+Project or Scene.** Each response's actual authored fields remain independently
+reopenable, editable and applicable, including after changing navigation. A
+source/provenance reference and a suggested destination are metadata about that
+material, not an irreversible attachment or permission to save. Projects own
+material only after authoritative persistence.
 
 ### Read and context
 
@@ -47,7 +53,13 @@ optional full preview. An approval is a local selection, not an LLM request or a
 acknowledgement-only exchange. Later conversation turns refresh exactly the
 approved saved fields without another confirmation; a new conversation or reload
 starts without an approved scope. Write destinations are independent of Read
-approval and never grant access to saved creative fields.
+approval and never grant access to saved creative fields. Context can contain
+approved excerpts from **multiple Projects simultaneously**, including a Scene
+from an unrelated Project as a template for pacing, a character or staging.
+Maintain provenance for each selected item; the current Studio Project may be
+a convenient suggested source, never an automatic permission. The author may
+change, revoke or inspect approved selections without changing the conversation
+or its unsaved material. Do not require one global Project to own all Read items.
 
 A Scene correction such as "make it night" normally needs the current prompt,
 duration, instruction and applicable Project/continuity constraints, not the
@@ -57,6 +69,9 @@ agreed Project direction; Project-wide questions can need broader saved material
 Supply what serves the task, without defaulting to everything. Identify the
 supplied scope and do not claim to have read missing material.
 
+Treat approved Read items as source references, not write targets. A saved Scene
+from Project B can inform a new Scene destined for Project A or an entirely new
+Project; transferring the creative idea does not transfer Project B's identity.
 Use fresh saved values where current state matters. If current saved material
 contradicts an older conversational assumption, do not silently draft against
 the stale copy. Ordinary questions and brainstorming do not change saved records
@@ -111,11 +126,49 @@ requirement or review destination. Old Projects continue to load and save.
 
 ## 3. WebCap execution and interaction
 
-Ordinary Director chat does not save. A conversational request to write/revise
-produces an appropriate targeted launch action before execution. WebCap establishes
-the destination and selected scope; ask the author to choose only when it is not
-obvious. New material can be drafted before choosing/creating its destination;
-an existing revision requires its actual source material before authoring.
+Ordinary Director chat does not save. When the author requests creative
+material, the model returns the actual complete requested fields in that same
+response. WebCap offers Review/Apply because fields were received, not because
+it parsed the author's prose, trusted a model action hint, or promised another
+authoring call. The author may first develop material, pivot to a new Project
+mid-conversation, or choose a different Project when applying it. No new model
+call is required solely to decide or change the destination.
+
+### Conversation material, provenance and destination
+
+The conversation/session owns unsaved Project and Scene drafts, including
+multiple alternatives across responses. Provenance records which approved saved
+reference(s), if any, influenced a draft; it is not a required Project link.
+The current Project/Scene, last explicitly selected destination and source
+provenance can suggest a destination without imposing it. Reuse the existing
+Project and Scene review forms to show the suggested target, allow correction
+and then confirm Apply. **A selected Project, approved Read source, or model
+claim never independently authorizes a write.** If a target is deterministically
+known from an explicitly launched operation, the normal advertised direct-save
+path remains available; otherwise use the existing Review/Apply confirmation.
+Do not invent a confidence score, prose classifier, or extra generic agent layer.
+
+A revision of existing saved fields requires the actual approved source
+material for authorship; an unsaved draft can instead be authored without any
+Project selection. Moving a draft between new-Project creation, an existing
+Project revision and Scene insertion must retain its material while using the
+appropriate existing save route. Project and Scene IDs are selected and
+validated by WebCap at Apply, not issued by the model. Destination selection
+must not alter an already launched in-flight operation's frozen target.
+
+### Request and response schemas
+
+For explicitly selected authoring operations, request complete fields through
+an operation-specific schema with those requested fields required: a new
+Project's title, Concept, Visual / atmosphere and Invariants; the particular
+fields of an existing Project revision; new Scene records with title, duration
+and full H3 Prompt; and existing Scene replacements with full Prompt when
+creative content changes, plus requested title/duration changes. A conversation
+may freely mix discussion and structured material, but a schema that allows
+only an action promise or prose is not an adequate authoring contract. WebCap
+must not require unrelated fields merely to revise one field. Keep every
+independently useful returned field/record when a model nevertheless returns
+incomplete material, and expose the unmet request without erasing partial work.
 
 Once launched, Scene writes normally save each successful result as it finishes.
 Make that direct-save behavior visible before launch and report each actual save.

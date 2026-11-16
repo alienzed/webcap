@@ -2148,6 +2148,8 @@
         // The author explicitly approved this read grant in the Create review.
         // Conversation history stays independent of which Project is open in Studio.
         state.studioStoryAccess = {storyId: payload.story.id, label: name};
+        // The newly created Project is a destination, not an inherited Read grant.
+        state.studioApprovedRead = null;
         // The Scene from the previous Project cannot follow this explicit continuation.
         state.sceneRead = null;
         state.studioAccessIndex = null;

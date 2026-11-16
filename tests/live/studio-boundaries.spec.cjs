@@ -84,6 +84,19 @@ test('Live boundary — cancellation after a saved Scene preserves only confirme
   expect(saved.sceneOrder).toEqual(originals.map(x=>x.id));
   expect(saved.scenes[originals[0].id].prompt).not.toBe(originals[0].prompt);
   const prompts=saved.sceneOrder.map(sceneId=>saved.scenes[sceneId].prompt);
+  const changed=originals.map((scene,index)=>prompts[index]!==scene.prompt);
+  const completedPrefix=changed.findIndex(value=>!value);
+  // A cancelled sequence may have more than one completed save, but cannot
+  // skip a target or silently continue saving subsequent targets.
+  if(completedPrefix!==-1)
+    expect(changed.slice(completedPrefix)).toEqual(changed.slice(completedPrefix).map(()=>false));
+  const reportedCount=/stopped after (\\d+) Scenes/i.exec(String(receipt.error||''));
+  if(reportedCount)
+    expect(changed.filter(Boolean).length).toBe(Number(reportedCount[1]));
+  if(changed.every(Boolean)) {
+    await record(testInfo,'cancel-window-missed-after-save',{jobId:id,receipt,changed,project:saved});
+    test.skip(true,'All Scenes were saved before cancellation became effective.');
+  }
   await page.reload();
   const restored=await story(page,project.id);
   expect(restored.sceneOrder).toEqual(saved.sceneOrder);
@@ -93,7 +106,7 @@ test('Live boundary — cancellation after a saved Scene preserves only confirme
     expect(restored.scenes[original.id].durationSeconds).toBe(original.durationSeconds);
   }
   await record(testInfo,'live-cancel-evidence',{model,instruction,jobId:id,beforeCancel,receipt,
-    originalPrompts:originals.map(x=>x.prompt),persistedPrompts:prompts});
+    originalPrompts:originals.map(x=>x.prompt),persistedPrompts:prompts,changed});
 });
 
 test('Live boundary — navigating to another Project cannot retarget an in-flight revision',async({page},testInfo)=>{

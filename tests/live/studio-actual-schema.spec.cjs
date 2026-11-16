@@ -173,3 +173,60 @@ test('LIVE conversation — pivot into a new Project while an unrelated Project 
   expect(original.concept).toBe('A coastguard searches a lighthouse.');
   expect(observation.requests).toHaveLength(1);
 });
+
+test('LIVE conversation — an existing Scene rewrite must contain changes.scene.prompt and apply only to its selected Scene',async({page},testInfo)=>{
+  const project=await seedProject(page,'Live Chat Prompt Revision '+Date.now(),{
+    concept:'A night watchman visits a railway station.',
+    style:'Wet blue evening.'
+  });
+  const first=await seedScene(page,project.id,{
+    title:'Platform',prompt:'A watchman walks through a railway station at night.',durationSeconds:8
+  });
+  const second=await seedScene(page,project.id,{
+    title:'Ticket office',prompt:'A locked ticket office stands beneath a dim lamp.',durationSeconds:10
+  });
+  const model=await openLiveDirector(page);
+  await attachProject(page,project);
+  await page.locator('[data-scene-progress="'+first.id+'"]').click();
+  await reopenDirectorIfClosed(page);
+  // Author-approved Read shares the selected Scene's real saved baseline.
+  await page.locator('#director-chat-context-approve').click();
+  await page.locator('#studio-dw-read-project').selectOption(project.id);
+  await page.locator('#studio-dw-read-selection summary').click();
+  await page.locator('#studio-dw-project-fields input[data-group-select]').first().uncheck();
+  const toggles=page.locator('#studio-dw-scene-fields input[data-group-select]');
+  await expect(toggles).toHaveCount(2);
+  await toggles.first().check();
+  await page.locator('#studio-dw-read-send').click();
+  const observation=observeRealDirector(page);
+  const instruction='Revise the selected existing Platform Scene prompt to show the watchman '+
+    'discovering an antique silver whistle, preserving the same station and eight-second duration. '+
+    'Return the COMPLETE replacement H3 prompt in changes.scene.prompt, not a summary, '+
+    'an action intention, or a new Scene. Do not revise the Ticket office Scene.';
+  await sendLive(page,instruction);
+  const {parsed,receipt}=await observation.result();
+  await evidence(testInfo,'actual-conversation-existing-scene-result',{model,instruction,raw:receipt.raw,parsed});
+  expect(observation.requests).toHaveLength(1);
+  expect(observation.requests[0].operation).toBe('studio_chat');
+  expect(typeof parsed.changes?.scene?.prompt,
+    'Real-model Scene rewrite omitted changes.scene.prompt').toBe('string');
+  const authored=parsed.changes.scene.prompt;
+  expect(authored.trim().length,'A real Scene rewrite must contain a complete replacement prompt')
+    .toBeGreaterThan(80);
+  expect(authored).not.toBe(first.prompt);
+  expect((await story(page,project.id)).scenes[first.id].prompt).toBe(first.prompt);
+  const action=page.locator('#studio-dw-suggestions .studio-dw-suggestion-action');
+  await expect(action).toContainText('Review authored Scene');
+  await action.click();
+  await expect(page.locator('#studio-dw-scene-review')).toBeVisible();
+  await expect(page.locator('#studio-dw-scene-editors [data-field="prompt"]')).toHaveValue(authored);
+  await page.locator('#studio-dw-scene-apply').click();
+  await expect.poll(async()=> (await story(page,project.id)).scenes[first.id].prompt).toBe(authored);
+  const saved=await story(page,project.id);
+  expect(saved.scenes[second.id].prompt).toBe(second.prompt);
+  expect(saved.scenes[first.id].title).toBe(first.title);
+  expect(saved.scenes[first.id].durationSeconds).toBe(8);
+  expect(observation.requests).toHaveLength(1);
+  await page.reload();
+  expect((await story(page,project.id)).scenes[first.id].prompt).toBe(authored);
+});

@@ -898,11 +898,15 @@
           option.textContent = (isProjectMaterial ? 'Revise ' : '') + storyName(item);
           destination.appendChild(option);
         });
-        // Project material defaults to a new Project; new Scenes suggest the
-        // selected Project, but both choices remain author-correctable.
-        destination.value = isProjectMaterial ? '' :
-          items.some(function (item) {return item.id === frozen.projectId;})
-            ? frozen.projectId : '';
+        // Complete newly titled material suggests a new Project; partial
+        // Project replacements suggest the attached Project, for confirmation.
+        // These are only defaults: neither authorizes a save or changes fields.
+        var knownProject = items.some(function (item) {return item.id === frozen.projectId;});
+        var suggestedRevision = isProjectMaterial && knownProject &&
+          !Object.prototype.hasOwnProperty.call(frozen.authoredFields,'title');
+        destination.value = isProjectMaterial
+          ? suggestedRevision ? frozen.projectId : ''
+          : knownProject ? frozen.projectId : '';
         destination.onchange();
       }).catch(function (error) {
         status('Project destinations could not load: ' + error.message,true);

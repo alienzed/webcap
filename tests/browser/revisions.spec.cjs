@@ -21,7 +21,8 @@ test('Flow 3 — reviewed Overview revision changes only intended persisted fiel
   });
   await say(page,'Revise the Project atmosphere to soft amber light.');
   const action=page.locator('#studio-dw-suggestions .studio-dw-suggestion-action');
-  await expect(action).toContainText('Revise Project');
+  await expect(action).toContainText('Review authored Project');
+  await page.locator('#studio-dw-suggestions select[aria-label="Project material destination"]').selectOption(original.id);
   await action.click();
   await expect(page.locator('#studio-brief-review')).toBeVisible();
   await expect(page.locator('#studio-brief-style')).toHaveValue('Soft amber light.');

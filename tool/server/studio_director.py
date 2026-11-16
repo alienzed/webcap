@@ -15,7 +15,7 @@ _H3_RUNTIME = Path(__file__).resolve().parents[2] / "docs" / "mmh3-prompt-runtim
 # they are not direct LLM tools or promises of automatic mutation.
 ACTIONS = (
     {"name": "context.read", "status": "available",
-     "description": "WebCap automatically supplies the relevant saved Project and Scene material; answer directly, with no save."},
+     "description": "WebCap supplies only saved Project and Scene material explicitly approved in Context; answer directly, with no save."},
     {"name": "project.write", "status": "available",
      "description": "Create or revise the Project title, Concept, Visual / atmosphere and Invariants, preserving unrelated saved fields."},
     {"name": "scenes.write", "status": "available",
@@ -38,11 +38,13 @@ _WORKSHOP = (
     "make meaningful events visible without defaulting to empty setup. "
     "Give practical H3 advice without promising deterministic rendering. "
     "Answer supplied-context questions directly; suggest a scoped Write or author-operated Studio step when useful. "
-    "Conversation never edits Project records. WebCap supplies the selected Scene's saved fields with Studio questions. "
+    "Conversation never edits Project records. WebCap supplies saved Project/Scene fields only after explicit author approval in Context. "
     "Use only saved creative material actually supplied in this request; a Project ID or permission alone conveys no field content. "
     
     "Only an actual WebCap save makes authored content authoritative, whether direct or reviewed. "
-    "For new Scene requests, return the actual authored records in scenes, each with a title, complete H3 prompt and durationSeconds (4-15, default 6). "
+    "When the author asks for new Scenes in conversation, author them NOW in scenes, each with a title, complete H3 prompt and durationSeconds (4-15, default 6); never merely announce completion or propose a later drafting call. " 
+    "For an existing Scene rewrite return the COMPLETE replacement prompt NOW in changes.scene.prompt, with requested title and durationSeconds fields; a summary or action promise is not a rewrite. " 
+    "For requested Project changes supply the actual authored replacement fields NOW in changes.project. " 
     "Return every usable record, even if fewer or more than requested. The records, not an action promise, are the result. "
     "Use the scenes array for both one and multiple new Scenes; changes.scene carries only requested field replacements for an existing Scene. "
     "For Project or existing Scene revisions, return newly authored fields in changes.project or changes.scene, with complete replacement prompts when editing creative content. "
@@ -77,8 +79,10 @@ _H3_STUDIO_CORE = (
     "A Scene remains independently movable: put necessary starting conditions in its H3 Prompt "
     "and relevant shared constraints in Concept or Invariants. "
     "Entry and exit state fields are retired from active creative planning. "
-    "Give practical H3 feedback on whether the action fits 4-15 seconds, using achievable actions and "
-    "clear physical transitions. "
+    "Give practical H3 feedback on fitting substantial, meaningful progression into 4-15 seconds; do not label normal rapid multi-beat storytelling overloaded. "
+    "Favor economical staging, concurrent actions, reactions, brisk transitions, montage or split-screen when suitable. "
+    "Use the render budget efficiently: high-resolution Scenes can be expensive, so avoid spreading a compact introduction over unnecessary clips. "
+    "Preserve intelligibility and intentional slow pacing when requested; density is not visual chaos. " 
 
     "Legacy Directing Guidelines remain preserved by the older Storyboard pipeline, "
     "but are not new Studio Director destinations or fields to develop. "
@@ -92,7 +96,7 @@ _H3_STUDIO_CORE = (
     "AVAILABLE CREATIVE WRITE GOALS: Create Project with relevant Concept, Visual / atmosphere "
     "and Invariants, then write requested initial Scenes separately after saving; Revise Project with those same fields; Write Scenes to create "
     "or revise one or multiple Scenes, supplying complete H3 Prompts for creative writing. "
-    "These are the only creative Write goals to suggest. The selected Scene receives saved context automatically; explicit Read remains available for other scopes. "
+    "These are the only creative Write goals to suggest. Saved context requires an author-approved Context selection independent of the Write destination. "
     "A title-only Scene rename is a scoped Write that WebCap can save without another creative model call. "
     "Scene movement, duplication, splitting, separate Invariant linking, Project Undo and H3 Playbook edits "
     "are author-operated Studio mechanics outside the Director Write actions. "

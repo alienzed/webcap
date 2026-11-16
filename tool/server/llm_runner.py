@@ -1175,11 +1175,17 @@ def _request_diagnostic(client, contract):
         prompt = str(contract.get("prompt") or "").strip()
         messages = [{"role": "user", "content": prompt}] if prompt else []
 
-    return {
+    diagnostic = {
         "messages": copy.deepcopy(messages),
         "messageCount": len(messages),
         "contentChars": sum(len(str(message.get("content") or "")) for message in messages),
     }
+    # Inspect the exact server-supplied schema in a real Director request.
+    # This exposes no additional saved creative fields and never changes inference.
+    if (client == "chat" and str(contract.get("operation") or "").startswith("studio_")
+            and isinstance(contract.get("response_schema"), dict)):
+        diagnostic["responseSchema"] = copy.deepcopy(contract["response_schema"])
+    return diagnostic
 
 
 def enqueue(client, model_id, contract, context=None, label=""):

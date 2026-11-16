@@ -106,6 +106,13 @@ test('Flow 6 — each conversation reply owns its own editable Scene review',asy
   await expect(page.locator('#studio-scenes-review')).toBeVisible();
   await expect(row.locator('[data-field="prompt"]')).toHaveValue('First edited and unsaved.');
   await page.locator('#studio-scenes-close').click();
+  // Switching forward again must return the second reply's own untouched draft.
+  const newer=page.locator('#director-chat-messages .studio-dw-suggestion-action').last();
+  await expect(newer).toBeVisible();
+  await newer.click();
+  await expect(page.locator('#studio-scenes-review')).toBeVisible();
+  await expect(row.locator('[data-field="prompt"]')).toHaveValue('Second unique scene prompt.');
+  await page.locator('#studio-scenes-close').click();
   expect((await story(page,project.id)).sceneOrder).toHaveLength(0);
   expect((await observedModels(request)).calls).toHaveLength(2);
 });

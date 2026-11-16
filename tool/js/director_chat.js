@@ -1414,6 +1414,37 @@
         meta.textContent = formatResponseMetrics(metricsMap[index], elapsedMap[index]);
         row.appendChild(meta);
       }
+      // Each reply must retain its own action. The workbench has one active
+      // control, so earlier replies get a launcher bound to their saved
+      // response, never a copy of the latest reply's action closure.
+      if (studioReply && index !== state.studioActionIndex &&
+          message.writeAction && message.writeAction.kind === 'create_scene' &&
+          !message.writeAction.completed) {
+        var savedAction = message.writeAction;
+        var oldAction = document.createElement('button');
+        oldAction.type = 'button';
+        oldAction.className = 'studio-dw-suggestion-action';
+        oldAction.dataset.suggestionKind = 'write';
+        oldAction.textContent = 'Review authored Scene(s)';
+        oldAction.onclick = function () {
+          var proposal = savedAction;
+          // The original response contains the authoritative authored records;
+          // action hints may be absent or incorrect.
+          if (proposal.kind === 'create_scene' && !Array.isArray(proposal.scenes) && message.rawResponse) {
+            var recovered = parseStudioChatResponse(message.rawResponse);
+            if (recovered.scenes && recovered.scenes.length)
+              proposal = Object.assign({},proposal,{scenes:recovered.scenes});
+            else if (recovered.changes && recovered.changes.scene)
+              proposal = Object.assign({},proposal,{scenes:[recovered.changes.scene]});
+          }
+          window.studioDirectorWorkbench.presentAction(proposal, proposal.scene,
+            {projectId:proposal.projectId}, proposal.request, index);
+          renderMessages();
+          var active = el('studio-dw-suggestions').querySelector('.studio-dw-suggestion-action');
+          if (active) active.click();
+        };
+        row.appendChild(oldAction);
+      }
       host.appendChild(row);
       if (studioReply && index === state.studioActionIndex) suggestionRow = row;
     });

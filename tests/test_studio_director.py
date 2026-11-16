@@ -245,7 +245,7 @@ def test_director_chat_route_preserves_all_structured_schemas(monkeypatch, opera
         if operation == "studio_project_draft":
             assert captured["schema"]["required"] == ["title", "concept", "style", "invariants", "rationale"]
         if operation == "studio_brief_draft":
-            assert "required" not in captured["schema"], "Unchanged Project fields are not model outputs"
+            assert captured["schema"]["required"] == [], "No unrequested Project field is required"
             assert captured["schema"]["properties"]["invariants"]["items"]["required"] == ["kind", "title", "text"]
 
 

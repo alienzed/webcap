@@ -3757,6 +3757,15 @@
           )});
         }
         var authoredScenes = studioResponse && studioResponse.scenes;
+        // A single Scene can also arrive in changes.scene. These are authored
+        // structured fields, regardless of the optional action metadata.
+        if (activeChatMode === 'storyboard' && !targetScene &&
+            (!authoredScenes || !authoredScenes.length) && studioResponse &&
+            studioResponse.changes && studioResponse.changes.scene) {
+          var singleScene = studioWorkingFieldChanges(studioResponse.changes.scene,
+            ['title','prompt','durationSeconds']);
+          if (Object.keys(singleScene).length) authoredScenes = [singleScene];
+        }
         if (activeChatMode === 'storyboard' && authoredScenes && authoredScenes.length) {
           // These are the actual unsaved records, not an action promise.
           // Keep the review action with its material for conversation recovery.

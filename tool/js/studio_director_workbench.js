@@ -76,6 +76,7 @@
     fields.replaceChildren(); scenes.replaceChildren();
     if (!story) { updateReadSelection(); return; }
     var chosen = readChoices[story.id], firstSelection = !chosen;
+    var route = activeTarget();
     if (firstSelection) chosen = new Set();
     function addUnit(label, paths, host, suggested) {
       if (firstSelection && suggested) paths.forEach(function (path) { chosen.add(path); });
@@ -104,7 +105,7 @@
       var paths = contextFields.map(function (field) {
         return 'scene:' + id + ':' + field;
       });
-      var suggested = true;
+      var suggested = route.storyId === story.id && route.sceneId === id;
       addUnit('Scene ' + (index + 1) + ' · ' + (scene.title || 'Untitled'), paths, scenes, suggested);
     });
     readChoices[story.id] = chosen;
@@ -164,16 +165,15 @@
   function readSend(instruction) {
     var id = el('studio-dw-read-project').value, keys = selectedPaths();
     if (!id || !keys.length) { status('Choose a Project and at least one field.', true); return; }
-    if (!window.studioDirectorBridge.isReady()) { status(window.studioDirectorBridge.readinessMessage(), true); return; }
     el('studio-dw-read-send').disabled = true;
-    window.studioDirectorWorkbench.setReadStatus('working','Reading selected saved fields…');
+    window.studioDirectorWorkbench.setReadStatus('working','Preparing saved context selection…');
     // Same exact serializer drives the inspector and the outbound LLM message.
     loadStory(id).then(function (story) {
       var payload = readPayload(story, keys);
       el('studio-dw-read-preview-data').textContent = JSON.stringify(payload, null, 2);
-      window.studioDirectorBridge.sendRead(payload, keys, typeof instruction === 'string' ? instruction : undefined);
+      window.studioDirectorBridge.approveRead(story.id, keys);
       lastReadSource = story.id;
-      status('Selected fields sent. Awaiting Director’s own acknowledgment.', false);
+      status('Context approved for subsequent Director messages. No model request sent.', false, true);
       el('studio-dw-read-panel').classList.add('hidden');
       el('studio-dw-read').setAttribute('aria-expanded', 'false');
       updateScope();
@@ -805,11 +805,16 @@
   function presentAction(action, selectedScene, selectedProject, authorRequest, messageIndex) {
     if (!action || !['create_project','write_project','create_scene','write_scenes'].includes(action.kind) ||
         !String(action.instruction || '').trim()) return;
+    // Do not offer a creative Review based on an LLM action promise or user prose.
+    if (!(Array.isArray(action.scenes) && action.scenes.length) &&
+        !(action.authoredFields && Object.keys(action.authoredFields).length)) return;
     var frozen = {
       kind:action.kind, instruction:String(action.instruction).trim(),
       fields:Array.isArray(action.fields) ? action.fields.slice() : [],
       scenes:action.kind === 'create_scene' && Array.isArray(action.scenes)
         ? action.scenes.slice() : null,
+      authoredFields:action.authoredFields && typeof action.authoredFields === 'object'
+        ? Object.assign({},action.authoredFields) : null,
       request:String(authorRequest || ''),
       sourceMessageIndex:messageIndex,
       projectId:String(selectedProject && selectedProject.projectId || ''),
@@ -833,17 +838,18 @@
     button.dataset.suggestionKind = 'write';
     button.dataset.guidedWrite = 'true';
     button.textContent = ({
-      create_project:'Create Project · Review',
-      write_project:'Revise Project · Review',
+      create_project:'Review authored Project',
+      write_project:'Review authored Project',
       create_scene:frozen.scenes && frozen.scenes.length
         ? 'Review authored Scene(s)' : 'Create Scene(s) · Review',
-      write_scenes:'Revise Scene(s) · Save'
+      write_scenes:'Review authored Scene'
     })[frozen.kind];
     button.title = frozen.instruction;
     button.onclick = function () {
       if (pendingCreativeAction !== frozen) return;
       var reviewingScenes = frozen.kind === 'create_scene' &&
-        (frozen.draftReady || (frozen.scenes && frozen.scenes.length));
+        (frozen.draftReady || (frozen.scenes && frozen.scenes.length)) ||
+        frozen.kind === 'write_scenes' && !!frozen.authoredFields;
       if (reviewingScenes ? !window.studioDirectorBridge.canReview() :
           !window.studioDirectorBridge.isReady()) {
         status(reviewingScenes ? 'Open an available Studio conversation to review Scenes.' :
@@ -908,6 +914,23 @@
         }
         return loadStory(projectId).then(function (story) {
           var ids = selectedSceneIds(story,frozen.scene);
+          if (frozen.kind === 'write_scenes' && frozen.authoredFields) {
+            if (ids.length !== 1) {
+              frozen.awaitingScenes = true;
+              showConversationWrite();
+              status('Select the Scene to review in Write.',true);
+              openWriteForCapture();
+              return;
+            }
+            var candidate = frozen.authoredFields;
+            var edited = ['title','prompt','durationSeconds'].filter(function (name) {
+              return Object.prototype.hasOwnProperty.call(candidate,name) &&
+                JSON.stringify(candidate[name]) !== JSON.stringify(story.scenes[ids[0]][name]);
+            });
+            if (edited.length) showSceneReview(story,ids[0],edited,candidate);
+            else status('Returned fields already match the saved Scene.',false,true);
+            return;
+          }
           if (Array.isArray(frozen.chosenSceneIds))
             ids = frozen.chosenSceneIds.filter(function (id) {return story.sceneOrder.includes(id);});
           if (!ids.length) {
@@ -988,6 +1011,19 @@
   }
 
   window.studioDirectorWorkbench = {
+    approvedReadPayload:readPayload,
+    approvedReadLabel:function (projectId,keys) {
+      var name = readStory && readStory.id === projectId ? storyName(readStory) : projectId;
+      var sceneIds = new Set(keys.filter(function (key) {return key.startsWith('scene:');})
+        .map(function (key) {return key.split(':')[1];}));
+      var labels = [];
+      if (keys.some(function (key) {return key.startsWith('project.');})) labels.push('Overview');
+      sceneIds.forEach(function (id) {
+        var index = readStory && readStory.id === projectId ? readStory.sceneOrder.indexOf(id) : -1;
+        labels.push(index >= 0 ? 'Scene ' + (index + 1) : 'Scene');
+      });
+      return name + ' · ' + labels.join(' + ');
+    },
     presentAction:presentAction,
     updateWorkingWrite:showConversationWrite,
     completeWriteAction:function (kind, story, selected) {
@@ -1192,6 +1228,7 @@
       if (!proposed) throw new Error('The proposed Director action is no longer available.');
       proposed.click();
     };
+    el('director-chat-context-approve').onclick=function () {openDirectAction('read');};
     el('studio-dw-open-tools').onclick=function () {
       if (el('director-chat-drawer').classList.contains('studio-actions-open')) el('studio-dw-close-actions').click();
       else openDirectAction(lastQuickAction);
@@ -1208,6 +1245,10 @@
       }
     });
     el('studio-dw-read-send').onclick=readSend;
+    el('studio-dw-read-clear').onclick=function () {
+      window.studioDirectorBridge.clearApprovedRead();
+      status('Saved context cleared. No Project or Scene details will be shared.',false,true);
+    };
     el('studio-dw-read-all').onclick=selectEntireReadProject;
     el('studio-dw-scenes-select-all').onclick=function () {selectWriteScenes(true);};
     el('studio-dw-scenes-select-none').onclick=function () {selectWriteScenes(false);};

@@ -40,9 +40,14 @@ for; it need not know which editor or drawer is open or invent application IDs.
 
 ### Read and context
 
-Asking about or revising a Project/Scene authorizes relevant saved context to be
-supplied automatically. No redundant Read permission or acknowledgement-only call
-is required. WebCap identifies the supplied scope without protocol clutter.
+Saved Project and Scene context is proposed from the current Studio selection, but
+is supplied only after the author approves it through the existing Context (Read)
+sidebar. The sidebar shows the Project and selected Overview/Scenes, with an
+optional full preview. An approval is a local selection, not an LLM request or an
+acknowledgement-only exchange. Later conversation turns refresh exactly the
+approved saved fields without another confirmation; a new conversation or reload
+starts without an approved scope. Write destinations are independent of Read
+approval and never grant access to saved creative fields.
 
 A Scene correction such as "make it night" normally needs the current prompt,
 duration, instruction and applicable Project/continuity constraints, not the

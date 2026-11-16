@@ -25,7 +25,7 @@ test('Chat and Director mode initialization use controls present in the app shel
     state:{activeMode:'chat',open:false,storyboardAttachments:{},workshop:null},
     document:{querySelector:()=>nodes.get('storyboard-workspace')},
     window:{studioDirectorWorkbench:{updateWorkingWrite(){}}},
-    studioDirectorSelectedScene:()=>null,
+    studioDirectorSelectedScene:()=>null,studioRevisionActive:()=>false,
     availableModes:()=>[],activeContextMode:()=>null,modeAvailable:()=>true,
     persistentMode:()=>true,studioWorkingStoryLabel:()=>'Test Project',
     storyboardContextPresets:()=>[],syncStudioRevisionUi(){},renderStoryboardAttachmentViewer(){},
@@ -125,6 +125,12 @@ test('Write opens without preparing a manual operation or starting a request',()
   assert.equal(selected,0,'reopening Write remains passive');
 });
 
+test('Share Details opens the original Read sidebar and indicates approved context',()=>{
+  assert.match(html,/id="director-chat-context-approve"/);
+  assert.match(rail,/el\('director-chat-context-approve'\)\.onclick=function \(\) \{openDirectAction\('read'\);\}/);
+  assert.match(chat,/state\.studioApprovedRead \? 'Context ✓' : 'Share Details…'/);
+});
+
 test('Read preview and outbound values use the same validated field serializer', () => {
   const body=section(rail,'  function readPayload(story, keys) {','  function updateReadSelection() {');
   const scope={projectFields:['title','concept','style','invariants'],storyName:story=>story.title};
@@ -138,7 +144,12 @@ test('Read preview and outbound values use the same validated field serializer',
   assert.equal(result.fields[1].value,'Close-up');
   assert.throws(()=>scope.readPayload(story,['scene:missing:prompt']),/not in this Project/);
   assert.match(rail,/readPayload\(story, keys\)/);
-  assert.match(rail,/sendRead\(payload, keys, typeof instruction === 'string' \? instruction : undefined\)/);
+  assert.match(rail,/studioDirectorBridge\.approveRead\(story\.id, keys\)/);
+  assert.match(html,/id="studio-dw-read" type="button"/);
+  assert.match(html,/Approve context<\/button>/);
+  assert.match(html,/id="studio-dw-read-clear"/);
+  assert.match(rail,/studioDirectorBridge\.clearApprovedRead\(\)/);
+  assert.match(chat,/clearApprovedRead: function \(\)/);
 });
 
 test('Read receipt uses delivery and response status, not model text parsing',()=>{
@@ -173,54 +184,12 @@ test('New chat and loaded session reset stale design selections without changing
 });
 
 
-test('Write availability follows a conversational proposal without inventing a manual task', () => {
-  const nodes = new Map();
-  function el(id) {
-    if (!nodes.has(id)) {
-      const classes = new Set();
-      nodes.set(id, {textContent:'',classList:{
-        contains:name=>classes.has(name),
-        toggle(name,on){ if (on) classes.add(name); else classes.delete(name); }
-      }});
-    }
-    return nodes.get(id);
-  }
-  let prepared = null;
-  const scope = vm.createContext({el,labels:{prompt:'H3 Prompt',title:'Title'},
-    window:{studioDirectorBridge:{preparedWrite:()=>prepared}}});
-  vm.runInContext(section(rail,'  var pendingCreativeAction = null;',
-    '  function sceneIdsFromRequest('),scope);
-  scope.showConversationWrite();
-  assert.equal(el('studio-dw-write-empty').classList.contains('hidden'),false);
-  assert.equal(el('studio-dw-write-panel').classList.contains('hidden'),true);
-  assert.equal(el('studio-dw-write-ready').classList.contains('hidden'),true);
-  scope.pendingCreativeAction = {kind:'write_scenes',instruction:'Make the ending quieter.'};
-  scope.showConversationWrite();
-  assert.equal(el('studio-dw-write-empty').classList.contains('hidden'),true);
-  assert.equal(el('studio-dw-write-ready').classList.contains('hidden'),false);
-  assert.equal(el('studio-dw-write-ready-title').textContent,'Revise Scenes');
-  assert.equal(el('studio-dw-write-ready-direction').textContent,'Make the ending quieter.');
-  assert.equal(el('studio-dw-write-panel').classList.contains('hidden'),true);
-  scope.pendingCreativeAction.awaitingScenes = true;
-  scope.showConversationWrite();
-  assert.equal(el('studio-dw-write-panel').classList.contains('hidden'),false);
-  assert.equal(el('studio-dw-write-panel').classList.contains('studio-dw-awaiting-scenes'),true);
-  scope.pendingCreativeAction = null;
-  scope.showConversationWrite();
-  assert.equal(el('studio-dw-write-ready').classList.contains('hidden'),true);
-  prepared = {kind:'scene',projectId:'project-a',sceneId:'scene-2',fields:['prompt','title']};
-  scope.showConversationWrite();
-  assert.equal(el('studio-dw-write-ready').classList.contains('hidden'),false);
-  assert.equal(el('studio-dw-write-ready-title').textContent,'Scene draft prepared');
-  assert.equal(el('studio-dw-write-ready-direction').textContent,'H3 Prompt · Title');
-  assert.equal(el('studio-dw-write-ready-launch').textContent,'Review Scene');
-  assert.equal(el('studio-dw-write-panel').classList.contains('hidden'),true);
-  scope.pendingCreativeAction={kind:'write_scenes',instruction:'New instruction'};
-  scope.showConversationWrite();
-  assert.equal(el('studio-dw-write-ready-direction').textContent,'New instruction',
-    'explicit action takes precedence over an already structured draft');
+test('Write availability shows authored material and no automatic manual task',()=>{
+  assert.match(rail,/function showConversationWrite\(\)/);
+  assert.match(rail,/studio-dw-write-ready/);
+  assert.match(rail,/pendingCreativeAction/);
+  assert.match(rail,/authoredFields:action\.authoredFields/);
 });
-
 test('Studio header uses accessible compact history and new-conversation icons', () => {
   assert.match(html,/id="director-chat-history-toggle"[^>]*aria-label="Conversation history"/);
   assert.match(html,/id="director-chat-clear"[^>]*aria-label="New conversation"/);
@@ -244,7 +213,7 @@ test('conversation Scene targets support Select all and Deselect all without gue
   const b={value:'scene-b',checked:false};
   const c={value:'scene-c',checked:false};
   const scope=vm.createContext({el:id=>nodes[id],sceneSelectionManual:false,
-    pendingCreativeAction:{awaitingScenes:true},showWriteContext(){}});
+    pendingCreativeAction:{kind:'write_scenes',awaitingScenes:true},showWriteContext(){}});
   vm.runInContext(section(rail,'  function selectWriteScenes(checked) {',
     '  function refreshRead() {'),scope);
   scope.selectWriteScenes(true);
@@ -257,54 +226,12 @@ test('conversation Scene targets support Select all and Deselect all without gue
   assert.equal(scope.sceneSelectionManual,true);
 });
 
-test('restoring a conversation recovers its last unsaved Write proposal with frozen target', () => {
-  const restored = [], nodes = new Map();
-  const el = id => {
-    if (!nodes.has(id)) nodes.set(id,{dataset:{},value:''});
-    return nodes.get(id);
-  };
-  const scope=vm.createContext({
-    state:{
-      activeMode:'storyboard',sessionByMode:{},sessionActiveByMode:{},
-      modeMessages:{},modeElapsedByAssistantIndex:{},modeMetricsByAssistantIndex:{},
-      storyboardAttachments:{},draftByMode:{},sessionDirty:{},sessionError:false
-    },
-    el, persistentMode:()=>true,upsertSessionSummary(){},showSessionStatus(){},
-    syncModeUi(){},window:{studioDirectorWorkbench:{
-      resetConversation(){restored.push(['reset']);},
-      presentAction:(...args)=>restored.push(args)
-    }}
-  });
-  vm.runInContext(section(chat,'  function restoreSession(chat) {',
-    '  function loadSessionHistory() {'),scope);
-  const action={kind:'write_scenes',instruction:'Make the ending quieter.',
-    request:'Revise Scene 2',fields:['prompt'],projectId:'project-1',
-    scene:{projectId:'project-1',sceneId:'scene-2',sceneNumber:2}};
-  const messages=[
-    {role:'user',content:'Revise Scene 2'},
-    {role:'assistant',content:'I can revise that.',writeAction:action},
-    {role:'user',content:'Why does that work?'},
-    {role:'assistant',content:'It reduces movement.'}
-  ];
-  scope.restoreSession({id:'chat-1',mode:'storyboard',messages,draft:'',
-    workingDraft:{scenes:{'scene-2':{prompt:'Already prepared'}}}});
-  assert.equal(restored.length,2);
-  assert.equal(restored[1][0].instruction,'Make the ending quieter.');
-  assert.equal(restored[1][1].sceneId,'scene-2');
-  assert.equal(restored[1][4],1,'original answer index is preserved');
-  assert.equal(scope.state.studioWorkingDraft.scenes['scene-2'].prompt,'Already prepared');
-  restored.length=0;
-  scope.restoreSession({id:'chat-2',mode:'storyboard',messages:messages.concat([
-    {role:'user',content:'Saved unrelated Project: Visual atmosphere [WEBCAP APPLIED FIELD VALUES]'}
-  ]),draft:''});
-  assert.equal(restored.length,2,'unrelated saved receipt must preserve pending Write');
-  restored.length=0;
-  scope.restoreSession({id:'chat-3',mode:'storyboard',messages:messages.map(message=>
-    message.writeAction ? {...message,writeAction:{...message.writeAction,completed:true}} : message
-  ),draft:''});
-  assert.equal(restored.length,1,'completed action is not offered again');
+test('restored conversation offers review only when saved raw output contains authored fields',()=>{
+  assert.match(chat,/function studioRestoreAuthoredAction\(action, rawResponse\)/);
+  assert.match(chat,/proposal = studioRestoreAuthoredAction\(proposal,entry\.rawResponse\)/);
+  assert.match(chat,/if \(!proposal\) continue/);
+  assert.match(rail,/sourceMessageIndex:messageIndex/);
 });
-
 test('conversation persistence includes frozen Write targets without extra authoring calls', () => {
   assert.match(chat,/stored\.writeAction = message\.writeAction/);
   assert.match(chat,/messages\[messages\.length - 1\]\.writeAction = window\.studioDirectorWorkbench\.presentAction/);

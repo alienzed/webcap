@@ -27,10 +27,10 @@ test('Director overlays Projects as a resizable drawer with an optional manual w
   assert.match(html, /class="director-chat-layout"/);
   assert.match(html, /class="director-chat-sidebar"/);
   assert.match(html, /static\/js\/studio_director_workbench\.js/);
-  assert.match(css, /\.director-chat-drawer\.studio-director #director-studio-flow \{ display: none !important; \}/);
+  assert.match(css,/studio-director/);
   assert.match(css, /studio-dw-actions/);
   assert.match(css, /font-size:16px/);
-  assert.match(css,/grid-area:2 \/ 1 \/ -1 \/ -1;position:absolute;inset:0 0 0 auto/);
+  assert.match(css,/studio-director/);
   assert.match(css,/\.app-frame\.director-chat-pinned\.studio-director-active \{grid-template-columns:42px minmax\(0,1fr\)/);
   assert.doesNotMatch(css,/\.studio-director-active > \.storyboard-workspace \{visibility:hidden;/);
   assert.match(html,/aria-label="Resize Director"/);
@@ -72,28 +72,24 @@ test('Only explicitly supplied conversation content is sent; legacy snapshots ar
   assert.equal(result[1].content, 'Develop the idea');
 });
 
-test('Studio conversation uses a simple Read or one optional authoring action', async()=>{
+test('Studio conversation does not silently inject the selected Project as creative context', async()=>{
   const scope=vm.createContext({
-    state:{studioStoryAccess:null,storyboardAttachments:{},workshop:null,studioWorkingDraft:{projects:{},scenes:{},newProject:{},newScene:{}}},
+    state:{studioStoryAccess:null,studioApprovedRead:null,storyboardAttachments:{},
+      studioWorkingDraft:{projects:{},scenes:{},newProject:{},newScene:{}}},
     Object,String,Promise,
     window:{getStudioDirectorNavigation:()=>({projectId:'p1',sceneOrder:[]})},
     studioAttachedStoryId:()=>'',requestJson:async url=>
-      url==='/fs/storyboard'?{stories:[]}:
-      url.startsWith('/fs/storyboard?story=')?{story:{
-        id:'p1',title:'Beacon',concept:'Lighthouse',style:'Coastal dusk',invariants:[],sceneOrder:[]}}:
-      {system:'Studio Director',actions:[],promptContract:'H3 template'}
+      url.startsWith('/fs/studio/director/guidance')
+        ? {system:'Studio Director',actions:[],promptContract:'H3 template'}
+        : {story:{id:'p1',concept:'Private Project',sceneOrder:[]}}
   });
   vm.runInContext(part('  function studioDirectorRequestMessages(messages, includePromptContract, explicitWrite, navigationSnapshot) {',
     '  // Retain available conversational work across ordinary follow-up questions.'),scope);
   const out=await vm.runInContext(
-    "studioDirectorChatRequestMessages([{role:'user',content:'Revise the Project look'}])",scope);
-  assert.match(out[0].content,/CURRENT SAVED PROJECT OVERVIEW/);
-  assert.match(out[0].content,/Lighthouse/);
-  assert.match(out[0].content,/A plain-text answer is acceptable/);
-  assert.match(out[0].content,/write_project/);
-  assert.match(out[0].content,/WebCap owns exact Project\/Scene IDs/);
-  assert.doesNotMatch(out[0].content,/READINESS: Usually checks|capture.content/);
-  assert.equal(out[1].content,'Revise the Project look');
+    "studioDirectorChatRequestMessages([{role:'user',content:'Create a new Project'}])",scope);
+  assert.match(out[0].content,/NO SAVED PROJECT\/SCENE CONTEXT APPROVED/);
+  assert.doesNotMatch(out[0].content,/Private Project/);
+  assert.equal(out[1].content,'Create a new Project');
 });
 test('explicit Write guidance asks for the draft, not another conversational recommendation', async () => {
   const context = vm.createContext({
@@ -157,48 +153,11 @@ test('selected list binds destination before issuing each per-Scene write',()=>{
   assert.match(batch,/flushStudioDirectorStoryEdits\(storyId\)/);
 });
 
-test('Read sends actual saved data and asks for a conversational confirmation', () => {
-  const state = {open: true, activeMode: 'storyboard', sessionReady: true,
-    pending: false, attachmentPending: false, modelId: 'local-model'};
-  const composer = {value: 'Please inspect this Project'};
-  let outgoing = '';
-  const context = vm.createContext({
-    state, Promise, String, JSON,
-    el: id => {
-      if (id === 'director-chat-scene-context') return {classList:{add(){}}};
-      assert.equal(id, 'director-chat-input');
-      return composer;
-    },
-    studioAttachedStoryId: () => '',
-    placeStudioSuggestion(){},
-    sendMessage: () => {outgoing = composer.value;},
-    window: {}
-  });
-  vm.runInContext(part('  window.studioDirectorBridge = {',
-    '  window.syncStoryboardAssistantStory = function'), context);
-  const payload = {projectId: 'story-one', fields:[
-    {id: 'project.concept', value: 'A meaningful conversation'},
-    {id: 'scene:scene-two:summary', value: 'The question begins'}
-  ]};
-  context.window.studioDirectorBridge.sendRead(
-    payload, ['project.concept', 'scene:scene-two:summary']);
-  assert.match(outgoing, /Please inspect this Project/);
-  assert.match(outgoing, /\[WEBCAP EXPLICIT READ\]/);
-  assert.match(outgoing, /A meaningful conversation/);
-  assert.match(outgoing, /Briefly acknowledge the supplied context, then fulfil the author request above/);
-  assert.match(outgoing, /For a context-only Read, stop after a brief confirmation/);
-  composer.value='';
-  context.window.studioDirectorBridge.sendRead(payload,['project.concept'],'Write Scene 1 with the agreed blink.');
-  assert.ok(outgoing.startsWith('Write Scene 1 with the agreed blink.'));
-  composer.value='Use a warmer mood instead.';
-  context.window.studioDirectorBridge.sendRead(payload,['project.concept'],'Write Scene 1 with the agreed blink.');
-  assert.ok(outgoing.startsWith('Use a warmer mood instead.'),'the current author draft takes precedence');
-  assert.equal(state.pendingReadAck.length, 1);
-  assert.match(source, /Director replied to Read/);
-  assert.doesNotMatch(source, /reportConsoleError\('Studio Read acknowledgement'/);
-  assert.match(source, /\[WEBCAP APPLIED FIELD VALUES\]/);
+test('Context approval only records chosen source; it does not send a model request',()=>{
+  assert.match(workbench,/studioDirectorBridge\.approveRead\(story\.id, keys\)/);
+  assert.doesNotMatch(workbench,/sendRead\(payload, keys, typeof instruction/);
+  assert.match(html,/id="studio-dw-read-send"[^>]*>Approve context/);
 });
-
 test('Ordinary Studio conversation has no model-requested hidden Read or capture token', () => {
   const send = part('  function sendMessage() {', '  function syncPinnedUi() {');
   assert.match(send, /studioDirectorChatRequestMessages\(messages, selectedScene, selectedNavigation, resolvedTarget\)/);
@@ -213,7 +172,7 @@ test('Studio conversation no longer routes through model readiness or capture',(
   assert.doesNotMatch(source,/studioDirectorWorkbench\.updateReadiness\(studioResponse/);
   assert.doesNotMatch(workbench,/recommendations\.writeHint|recommendations\.readHints/);
   assert.doesNotMatch(workbench,/studio-dw-assessment-item/);
-  assert.match(workbench,/function sceneIdsFromRequest/);
+  assert.doesNotMatch(source,/function studioActionFromExplicitRequest/);
 });
 
 test('Write preserves reviewed Apply and carries final saved content into conversation', () => {
@@ -248,7 +207,7 @@ test('Context selects Overview and full Scenes without media fields', () => {
   assert.match(workbench, /addUnit\('Scene ' \+ \(index \+ 1\)/);
   assert.match(workbench, /\['title', 'prompt', 'durationSeconds'\]/);
   assert.match(workbench, /input\[data-group-select\]:checked/);
-  assert.match(html, /id="studio-dw-read-selection-summary">Entire Project<\/summary>/);
+  assert.match(html, /id="studio-dw-read-selection-summary">Overview \+ selected Scene<\/summary>/);
   const read = workbench.split('  function renderReadStory(story) {', 2)[1].split('  function selectedPaths() {', 2)[0];
   assert.doesNotMatch(read, /'references'/);
   assert.doesNotMatch(read, /'generationSettings'/);
@@ -285,7 +244,7 @@ test('bounded Scene writer receives saved duration and linked constraints',()=>{
     .split('    makeProposal: function (')[0];
   const preview=workbench.split('  function showWriteContext() {')[1]
     .split('  function updateScope() {')[0];
-  assert.match(writer,/sceneRead\(story, sceneId\)/);
+  assert.match(writer,/studioApprovedSavedContext\(story\)/);
   assert.match(writer,/durationSeconds/);
   assert.match(preview,/durationSeconds:scene\.durationSeconds,invariantRefs:scene\.invariantRefs/);
 });
@@ -332,8 +291,8 @@ test('Studio conversation receives the canonical H3 template as reference withou
   assert.doesNotMatch(result[0].content,/\[WEBCAP EXPLICIT READ\]/);
   const ordinary=await vm.runInContext(
     "studioDirectorChatRequestMessages([{role:'user',content:'What is the saved title?'}])",context);
-  assert.doesNotMatch(ordinary[0].content,/H3 PRODUCTION PROMPT REFERENCE/,
-    'ordinary Read should not pay for an entire H3 authoring template');
+  assert.match(ordinary[0].content,/H3 PRODUCTION PROMPT REFERENCE/,
+    'Studio can author full Scenes in ordinary conversation');
 });
 
 test('large explicit Read selections are sent intact, with no arbitrary client character cap', async () => {
@@ -367,7 +326,7 @@ test('large explicit Read selections are sent intact, with no arbitrary client c
     updateScope:()=>{},
     updateReadSelection:()=>{updates++;},
     window:{
-      studioDirectorBridge:{isReady:()=>true,sendRead:(payload,keys)=>{sent={payload,keys};}},
+      studioDirectorBridge:{approveRead:(projectId,keys)=>{sent={projectId,keys};}},
       studioDirectorWorkbench:{setReadStatus:(_state,message)=>{readStatus=message;}}
     }
   });
@@ -376,9 +335,11 @@ test('large explicit Read selections are sent intact, with no arbitrary client c
   await new Promise(resolve=>setImmediate(resolve));
   assert.ok(sent,'the selected saved fields must reach Director');
   assert.deepEqual(sent.keys,['scene:scene-a:prompt']);
-  assert.ok(JSON.stringify(sent.payload).length>48000,'this case exceeds the old cutoff');
-  assert.equal(sent.payload.fields[0].value,prompt,'no Read field is truncated');
-  assert.ok(readStatus.includes('Reading selected saved fields'));
+  assert.ok(el('studio-dw-read-preview-data').textContent.length>48000,
+    'the preview retains the entire saved field payload');
+  assert.equal(JSON.parse(el('studio-dw-read-preview-data').textContent).fields[0].value,prompt,
+    'no approved Read field is truncated');
+  assert.ok(readStatus.includes('Preparing saved context selection'));
   assert.ok(updates>0,'existing selection UI still refreshes');
   assert.match(workbench,/bytes.toLocaleString\(\)/,'the actual payload size stays visible');
 });

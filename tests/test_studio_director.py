@@ -28,18 +28,18 @@ def test_writer_workshop_uses_existing_h3_prompt_contract_and_user_playbook(monk
     assert "integrated_multimodal_description" in result["promptContract"]
     assert "TECHNICAL H3 PRODUCTION PROMPT CONTRACT" not in text
     assert "[Shot 1]" not in text
-    assert len(text) < 6000
+    assert len(text) < 8000
 
 
 def test_studio_guidance_teaches_only_focused_creative_workflows():
     result = guidance("minimax_h3")
     actions = {entry["name"]: entry["description"] for entry in result["actions"]}
     assert set(actions) == {"context.read", "project.write", "scenes.write"}
-    assert "automatically supplies" in actions["context.read"]
+    assert "explicitly approved" in actions["context.read"]
     assert "preserving unrelated" in actions["project.write"]
     assert "Invariants" in actions["project.write"]
     assert "one or more Scenes" in actions["scenes.write"]
-    assert len(result["system"]) < 6000
+    assert len(result["system"]) < 8000
     assert "normally 1-3 sentences" in result["system"]
     assert "brief exchanges" in result["system"]
 
@@ -48,7 +48,7 @@ def test_director_role_combines_webcap_workflow_expertise_with_creative_judgment
     system = guidance("minimax_h3")["system"]
     assert "MiniMax H3 production expert, and WebCap Studio workflow guide" in system
     assert "Answer supplied-context questions directly" in system
-    assert "WebCap resolves the actual destination" in system
+    assert "WebCap owns destination" in system
     assert "Use only saved creative material actually supplied" in system
     assert "Conversation never edits Project records" in system
     assert "Project Overview (Concept, Visual / atmosphere, Invariants)" in system
@@ -59,7 +59,7 @@ def test_director_role_combines_webcap_workflow_expertise_with_creative_judgment
     assert "Scene writes may save directly" in system
     assert "A title-only Scene rename is a scoped Write" in system
     assert "After the author approves the review" not in system
-    assert len(system) < 6000
+    assert len(system) < 8000
 
 
 def test_action_catalog_excludes_low_value_studio_director_operations():
@@ -115,8 +115,8 @@ def test_h3_runtime_reference_uses_current_studio_fields_and_conditional_legacy_
 
 def test_freeform_workshop_does_not_claim_hidden_context_or_mutations():
     text = guidance("minimax_h3")["system"]
-    assert "WebCap supplies the selected Scene\'s saved fields" in text
-    assert "explicit Read remains available for other scopes" in text
+    assert "saved Project/Scene fields only after explicit author approval" in text
+    assert "Saved context requires an author-approved Context selection" in text
     assert "Conversation never edits Project records" in text
     assert "strengthen the idea, do not replace it" in text
     assert "Enthusiastically elevate the author\'s vision" in text

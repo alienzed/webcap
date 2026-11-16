@@ -230,3 +230,75 @@ test('LIVE conversation — an existing Scene rewrite must contain changes.scene
   await page.reload();
   expect((await story(page,project.id)).scenes[first.id].prompt).toBe(authored);
 });
+
+test('LIVE cross-Project references — an unrelated Scene and character Invariant inform a new Scene saved elsewhere',async({page},testInfo)=>{
+  const a=await seedProject(page,'Live Pace Source '+Date.now(),{
+    concept:'A crowded market with a chase.',style:'Handheld documentary camera.'
+  });
+  const source=await seedScene(page,a.id,{
+    title:'Fast Cut',prompt:'Three rapid connected moments: a courier runs, vaults a cart, then turns into an alley.',durationSeconds:8
+  });
+  const b=await seedProject(page,'Live Character Source '+Date.now(),{
+    concept:'An unrelated world, not the destination.',
+    invariants:[{kind:'character',title:'Mara',text:'Mara wears a copper hairpin and a dark green coat.'}]
+  });
+  const c=await seedProject(page,'Live Different Destination '+Date.now(),{
+    concept:'An evening railway platform.',style:'Soft amber lamps.'
+  });
+  const model=await openLiveDirector(page);
+  await attachProject(page,c);
+  const share=page.locator('#director-chat-context-approve');
+  const selection=page.locator('#studio-dw-read-selection');
+  const reveal=async()=>{
+    if((await selection.getAttribute('open'))===null)
+      await selection.locator('summary').click();
+  };
+  await share.click();
+  await page.locator('#studio-dw-read-project').selectOption(a.id);
+  await reveal();
+  await page.locator('#studio-dw-project-fields input[data-group-select]').first().uncheck();
+  await page.locator('#studio-dw-scene-fields input[data-group-select]').first().check();
+  await page.locator('#studio-dw-read-send').click();
+
+  await share.click();
+  await page.locator('#studio-dw-read-project').selectOption(b.id);
+  await reveal();
+  await page.locator('#studio-dw-project-fields input[data-group-select]').first().uncheck();
+  await page.locator('#studio-dw-project-fields input[data-group-select]').last().check();
+  await page.locator('#studio-dw-read-send').click();
+
+  const observation=observeRealDirector(page);
+  const instruction='Author ONE complete eight-second Scene for a railway station, using the approved '+
+    'Fast Cut Scene from a completely different Project as the pacing reference and Mara '+
+    'from the approved character Invariant. Explicitly show Mara with the copper hairpin. '+
+    'Return an actual Scene record with title, prompt and durationSeconds in scenes. '+
+    'Do not assume that either reference Project is the destination.';
+  await sendLive(page,instruction);
+  const {parsed,receipt}=await observation.result();
+  const outbound=JSON.stringify(observation.requests[0]?.messages);
+  await evidence(testInfo,'actual-independent-reference-model-request',{model,instruction,
+    outbound,raw:receipt.raw,parsed});
+  expect(observation.requests).toHaveLength(1);
+  expect(outbound).toContain(source.prompt);
+  expect(outbound).toContain('Mara wears a copper hairpin and a dark green coat.');
+  expect(outbound).not.toContain('An unrelated world, not the destination.');
+  expect(Array.isArray(parsed.scenes)).toBe(true);
+  expect(parsed.scenes.length).toBeGreaterThan(0);
+  for(const item of parsed.scenes){
+    expect(typeof item.prompt,'Reference-based Scene omitted prompt').toBe('string');
+    expect(item.prompt.trim().length).toBeGreaterThan(80);
+    expect(item.prompt).toMatch(/Mara/i);
+    expect(typeof item.title).toBe('string');
+    expect(Number.isFinite(item.durationSeconds)).toBe(true);
+  }
+  const destination=page.locator('#studio-dw-suggestions select[aria-label="Scene material destination"]');
+  await destination.selectOption(c.id);
+  await page.locator('#studio-dw-suggestions .studio-dw-suggestion-action').click();
+  await expect(page.locator('#studio-scenes-review')).toBeVisible();
+  await page.locator('#studio-scenes-apply').click();
+  await expect.poll(async()=> (await story(page,c.id)).sceneOrder.length)
+    .toBe(parsed.scenes.length);
+  expect((await story(page,a.id)).scenes[source.id].prompt).toBe(source.prompt);
+  expect((await story(page,b.id)).sceneOrder).toHaveLength(0);
+  expect(observation.requests).toHaveLength(1);
+});

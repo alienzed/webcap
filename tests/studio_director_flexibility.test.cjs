@@ -71,6 +71,26 @@ test('approved Read scope sends material from multiple Projects, not the open ed
   assert.match(html,/id="studio-dw-approved-sources"/);
 });
 
+test('a single character Invariant can be supplied without the rest of its Overview',()=>{
+  const source = section(workbench,'  function readPayload(story, keys) {',
+    '  function updateReadSelection() {');
+  const scope={projectFields:['title','concept','style','invariants'],
+    storyName:story=>story.title};
+  vm.createContext(scope);
+  vm.runInContext(source,scope);
+  const story={id:'c',title:'Reference C',concept:'Private unrelated narrative',
+    style:'Private unrelated style',sceneOrder:[],scenes:{},invariants:[
+      {kind:'character',title:'Mara',text:'Mara has a silver hairpin.'},
+      {kind:'character',title:'Ari',text:'Ari wears a green jacket.'}
+    ]};
+  const fields=scope.readPayload(story,['invariant:character:Mara']).fields;
+  assert.equal(fields.length,1);
+  assert.equal(fields[0].value.text,'Mara has a silver hairpin.');
+  assert.doesNotMatch(JSON.stringify(fields),/Private unrelated|Ari wears/);
+  assert.throws(()=>scope.readPayload(story,['invariant:character:Missing']),
+    /no longer in this Project/);
+});
+
 test('one approved source can be removed without revoking unrelated sources',()=>{
   assert.match(chat,/removeApprovedRead: function \(projectId\)/);
   assert.match(chat,/item\.projectId !== projectId/);

@@ -152,6 +152,8 @@ test('approved source load failure remains visible instead of sending guessed co
 });
 
 test('navigation changes do not silently change the approved context badge',async()=>{
+  const director=fs.readFileSync(path.join(__dirname,'../tool/js/director_chat.js'),'utf8');
+  const section=(source,start,end)=>source.slice(source.indexOf(start),source.indexOf(end,source.indexOf(start)+start.length));
   const h=actualSceneRequestFixture();
   h.state.activeMode='storyboard';
   h.state.studioApprovedRead={projectId:'p1',keys:['scene:a:prompt'],label:'Moon crossing · Scene 1'};
@@ -286,6 +288,7 @@ test('global Chat navigation never overwrites the Studio surface choice',()=>{
 
 
 test('new Project continuation cannot inherit the old approved Read grant',()=>{
+  const director=fs.readFileSync(path.join(__dirname,'../tool/js/director_chat.js'),'utf8');
   assert.match(director,/state\.studioApprovedRead = null;\s*\/\/ The Scene from the previous Project/);
   assert.match(director,/state\.studioStoryAccess = \{storyId: payload\.story\.id, label: name\}/);
 });

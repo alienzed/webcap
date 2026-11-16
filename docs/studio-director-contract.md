@@ -60,6 +60,11 @@ Maintain provenance for each selected item; the current Studio Project may be
 a convenient suggested source, never an automatic permission. The author may
 change, revoke or inspect approved selections without changing the conversation
 or its unsaved material. Do not require one global Project to own all Read items.
+An explicitly launched, target-specific Project or Scene writer may read the
+saved fields of that exact target as necessary to execute the selected operation;
+that direct author action authorizes its known source. Opening or selecting a
+Project alone, or mentioning it in ordinary chat, never does. Unrelated
+reference Projects still require explicit Read approval.
 
 A Scene correction such as "make it night" normally needs the current prompt,
 duration, instruction and applicable Project/continuity constraints, not the

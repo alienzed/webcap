@@ -14,7 +14,8 @@ test('Live Flow 5 — Director Project attachment survives opening another Proje
   const instruction='Change only the attached Project visual atmosphere to soft silver moonlight; present the Project change for review.';
   await sendLive(page,instruction);
   const action=page.locator('#studio-dw-suggestions .studio-dw-suggestion-action');
-  await expect(action).toContainText(/Revise Project|Review Project changes/i);
+  await expect(action).toContainText(/Review authored Project/i);
+  await page.locator('#studio-dw-suggestions select[aria-label="Project material destination"]').selectOption(a.id);
   await action.click();
   await expect(page.locator('#studio-brief-review')).toBeVisible();
   const updated=await page.locator('#studio-brief-style').inputValue();

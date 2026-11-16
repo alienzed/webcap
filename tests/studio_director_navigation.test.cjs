@@ -20,20 +20,18 @@ test('Director navigation supplies identity and Scene order without saved creati
   assert.equal(scope.getStudioDirectorNavigation().projectId,'');
 });
 
-test('the first explicit Studio message retains the Project destination without a Read',()=>{
+test('sending a Studio message never attaches an open Project automatically',()=>{
   const chat=fs.readFileSync(path.join(__dirname,'../tool/js/director_chat.js'),'utf8');
-  const start=chat.indexOf('      // An explicit message starts work in the open Project.');
-  const code=chat.slice(start,chat.indexOf('      state.workshopProposal = null;',start));
-  for (const existing of ['', 'chosen-project']) {
-    const state={studioStoryAccess:existing ? {storyId:existing,label:'Chosen'} : null};
-    const scope=vm.createContext({state,studioAttachedStoryId:()=>existing,
-      window:{getStudioDirectorNavigation:()=>({projectId:'open-project',projectTitle:'Open Project'})}});
-    vm.runInContext(code,scope);
-    assert.equal(state.studioStoryAccess.storyId,existing || 'open-project');
-    assert.deepEqual(Object.keys(state),['studioStoryAccess']);
-    assert.deepEqual(Object.keys(state.studioStoryAccess).sort(),['label','storyId']);
-  }
+  const start=chat.indexOf("  function sendMessage() {");
+  const end=chat.indexOf("  function ",start+10);
+  assert.ok(start>=0&&end>start);
+  const code=chat.slice(start,end);
+  assert.doesNotMatch(code,/state\.studioStoryAccess\s*=/,
+    'Only explicit attachment can change the Director association');
+  assert.match(code,/studioAttachedStoryId\(\).*selectedNavigation/,
+    'Navigation may still supply a suggested Write destination');
 });
+
 
 test('Director binds only after classic scripts have registered Studio navigation',()=>{
   const html=fs.readFileSync(path.join(__dirname,'../tool/tool.html'),'utf8');
@@ -287,10 +285,14 @@ test('global Chat navigation never overwrites the Studio surface choice',()=>{
 });
 
 
-test('new Project continuation cannot inherit the old approved Read grant',()=>{
+test('new Project continuation changes explicit attachment while retaining independently approved Read sources',()=>{
   const director=fs.readFileSync(path.join(__dirname,'../tool/js/director_chat.js'),'utf8');
-  assert.match(director,/state\.studioApprovedRead = null;\s*\/\/ The Scene from the previous Project/);
-  assert.match(director,/state\.studioStoryAccess = \{storyId: payload\.story\.id, label: name\}/);
+  const start=director.indexOf('  function applyStudioProject() {');
+  const end=director.indexOf('  function showStudioBriefReview() {',start);
+  assert.ok(start>=0&&end>start);
+  const code=director.slice(start,end);
+  assert.doesNotMatch(code,/state\.studioApprovedRead\s*=\s*null/);
+  assert.match(code,/state\.studioStoryAccess = \{storyId: payload\.story\.id, label: name\}/);
 });
 test('Project creation label is truthful for zero Scenes',()=>{
   const html=fs.readFileSync(path.join(__dirname,'../tool/tool.html'),'utf8');
@@ -300,7 +302,7 @@ test('Project creation label is truthful for zero Scenes',()=>{
 
 test('ordinary Director conversation preserves prepared Scene reviews without mutating saved Projects',()=>{
   const chat=fs.readFileSync(path.join(__dirname,'../tool/js/director_chat.js'),'utf8');
-  const start=chat.indexOf("    if (activeChatMode === 'storyboard') {\n      // An explicit message starts work");
+  const start=chat.indexOf("    if (activeChatMode === 'storyboard') {\n      // Navigation may suggest a destination");
   const end=chat.indexOf('    // Freeze the Project destination alongside the user',start);
   assert.ok(start>=0&&end>start,'Director conversation transition section exists');
   const scene={storyId:'p1',prompt:'Complete existing prompt'};

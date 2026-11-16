@@ -898,14 +898,11 @@
           option.textContent = (isProjectMaterial ? 'Revise ' : '') + storyName(item);
           destination.appendChild(option);
         });
-        // Complete newly titled material suggests a new Project; partial
-        // Project replacements suggest the attached Project, for confirmation.
-        // These are only defaults: neither authorizes a save or changes fields.
+        // Only a deterministically launched operation may suggest a revision.
+        // Conversation fields (including title) never classify create vs revise.
         var knownProject = items.some(function (item) {return item.id === frozen.projectId;});
-        var suggestedRevision = isProjectMaterial && knownProject &&
-          !Object.prototype.hasOwnProperty.call(frozen.authoredFields,'title');
         destination.value = isProjectMaterial
-          ? suggestedRevision ? frozen.projectId : ''
+          ? frozen.kind === 'write_project' && knownProject ? frozen.projectId : ''
           : knownProject ? frozen.projectId : '';
         destination.onchange();
       }).catch(function (error) {

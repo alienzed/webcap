@@ -23,6 +23,8 @@ function sceneFixture(raw = '{"prompt":"Mara finishes quietly under a still came
     }}
   };
   const state={pending:false,jobId:'',lastStudioIoRaw:'',lastStudioIoError:'',
+    studioApprovedRead:{projectId:'p1',keys:['project.title','project.concept','project.style','project.invariants',
+      'scene:s1:title','scene:s1:prompt','scene:s1:durationSeconds']},
     modeMessages:{storyboard:[]},sessionDirty:{storyboard:false},studioWorkingDraft:{projects:{},scenes:{},newProject:{},newScene:{},sourceRequest:''}};
   const window={
     flushStudioDirectorStoryEdits:async()=>{events.push(['flush']);},
@@ -59,7 +61,9 @@ function sceneFixture(raw = '{"prompt":"Mara finishes quietly under a still came
   const applyScenePrompt=section(workbench,'    applyScenePrompt: function (story, sceneId, prompt, extraChanges) {',
     '    setStatus:status,').trim().replace(/,$/,'');
   vm.runInContext(readPayload+
-    'window.studioDirectorWorkbench={'+sceneRead+','+applyScenePrompt+'};',context);
+    'window.studioDirectorWorkbench={approvedReadPayload:readPayload,'+sceneRead+','+applyScenePrompt+'};',context);
+  vm.runInContext(section(director,'  function studioApprovedSavedContext(story) {',
+    '  function studioDirectorChatRequestMessages('),context);
   vm.runInContext(section(director,'  function studioRequestAppliesPreparedMaterial(request) {',
     '  function studioWorkingFieldChanges(source, names) {')+
     section(director,'  function studioRequestedDuration(instruction) {',

@@ -860,7 +860,7 @@ def test_generation_trash_moves_whole_result_and_rejects_active_job(tmp_path, mo
     directory = output_root / "generations" / "2026-11-15" / "job-1"
     references = directory / "references"
     references.mkdir(parents=True)
-    (directory / generate_store.MANIFEST_NAME).write_text("{}", encoding="utf-8")
+    (directory / generate_store.MANIFEST_NAME).write_text('{"jobId":"job-1"}', encoding="utf-8")
     (directory / "result.png").write_bytes(b"image")
     (references / "first.png").write_bytes(b"reference")
 

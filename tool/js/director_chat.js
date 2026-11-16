@@ -3704,8 +3704,8 @@
           studioWorkingFieldChanges(studioResponse.changes.scene,
             ['title','prompt','durationSeconds']);
         if (projectFields && Object.keys(projectFields).length)
-          nextAction = {kind:studioResponse.action && studioResponse.action.kind === 'create_project'
-            ? 'create_project' : targetProject && targetProject.projectId ? 'write_project' : 'create_project',
+          nextAction = {kind:studioResponse.action && studioResponse.action.kind === 'write_project'
+            ? 'write_project' : 'create_project',
             instruction:content,fields:Object.keys(projectFields),authoredFields:projectFields};
         if (sceneFields && Object.keys(sceneFields).length && targetScene)
           nextAction = {kind:'write_scenes',instruction:content,

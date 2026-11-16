@@ -3197,8 +3197,11 @@
       }
       // Read questions do not need the full H3 production contract by default.
       // Explicit questions about H3 prompting still receive the authoring reference.
-      var needsPromptReference = /\b(?:H3|prompting|prompts?|integrated_multimodal_description)\b/i.test(requestText);
+      var creatingScenes = (studioActionFromExplicitRequest(requestText,selectedScene) || {}).kind === 'create_scene';
+      var needsPromptReference = creatingScenes ||
+        /\b(?:H3|prompting|prompts?|integrated_multimodal_description)\b/i.test(requestText);
       return studioDirectorRequestMessages(messages, needsPromptReference, false, navigation).then(function (outbound) {
+      if (creatingScenes) outbound[0].content += '\n\nNEW SCENE AUTHORING: Return the complete authored Scene records in scenes:[{title,prompt,durationSeconds}]. Each prompt must be a full usable H3 generation Prompt, not an outline, a plan, an action hint or a promise. Return the records actually authored, even if fewer than requested. WebCap will handle placement, review, persistence and counting. Do not make a second request necessary.\n';
       outbound[0].content += '\n\nCONVERSATION: Reply naturally and answer direct questions from supplied material. ' +
         'A plain-text answer is acceptable. For ordinary discussion answer briefly, normally 1-3 sentences. ' +
         'When the author requests Project edits or revisions to existing Scenes, propose an optional action ' +
@@ -3367,8 +3370,8 @@
     var kind = '';
     if (/^(?:create|start|add|draft|make|write)\b[\s\S]{0,45}\b(?:new\s+)?project\b/i.test(command))
       kind = 'create_project';
-    else if (/^(?:create|add|draft|write|make)\b[\s\S]{0,45}\b(?:new\s+)?scenes?\b/i.test(command) &&
-        /\b(?:new|create|add|draft)\b/i.test(request))
+    else if (/^(?:create|add|draft|write|make|author|generate)\b[\s\S]{0,65}\b(?:new\s+)?scenes?\b/i.test(command) &&
+        /\b(?:new|create|add|draft|author|generate)\b/i.test(request))
       kind = 'create_scene';
     else if (/^(?:revise|rewrite|update|edit|change|improve|adjust|rename|save|apply|use)\b[\s\S]{0,65}\b(?:project|concept|overview|invariants|atmosphere|visuals)\b/i.test(command))
       kind = 'write_project';
@@ -3664,6 +3667,11 @@
     // Fetch its latest saved fields later, when building the actual LLM request.
     var selectedNavigation = activeChatMode === 'storyboard' ? window.getStudioDirectorNavigation() : null;
     var selectedScene = selectedNavigation ? studioDirectorSelectedScene(selectedNavigation, content) : null;
+    // A clearly launched new-Scene request needs the authoring schema, not the
+    // generic chat schema that allows an action-only completion.
+    var authoringGoal = activeChatMode === 'storyboard' &&
+      (studioActionFromExplicitRequest(content,selectedScene) || {}).kind === 'create_scene'
+      ? 'create_scenes' : '';
 
     if (!inputHistory.length || inputHistory[inputHistory.length - 1] !== content) inputHistory.push(content);
     inputHistoryIndex = inputHistory.length;
@@ -3738,6 +3746,7 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ model: state.modelId,
             operation: activeChatMode === 'storyboard' ? 'studio_chat' : 'freeform_chat',
+            authoringGoal: authoringGoal,
             messages: outboundMessages })
         });
       }).then(function (payload) {

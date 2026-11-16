@@ -163,6 +163,41 @@
       destination:el('media-explorer-export-destination').value.trim()
     });
   }
+  function trashGenerations(item) {
+    var chosen = selected.has(item.id) ? items.filter(function (entry) {
+      return selected.has(entry.id);
+    }) : [item];
+    // Saved references are part of their owning generation, not separate trashable files.
+    if (!chosen.length || chosen.some(function (entry) {
+      return entry.source !== 'generate' || entry.role !== 'generated' || !entry.storageId;
+    })) {
+      report(new Error('Select only generated results to move to Trash.'));
+      return;
+    }
+    var ids = Array.from(new Set(chosen.map(function (entry) { return entry.storageId; })));
+    if (!window.confirm('Move ' + ids.length + ' generation(s), including saved references, to the operating system Trash?')) return;
+    var moved = 0;
+    ids.reduce(function (chain, storageId) {
+      return chain.then(function () {
+        return fetch('/fs/generate/result/trash', {
+          method: 'POST', headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({storageId: storageId})
+        }).then(function (response) {
+          return response.json().then(function (payload) {
+            if (!response.ok || !payload.ok) throw new Error(payload.error || 'Could not move generation to Trash.');
+            moved++;
+          });
+        });
+      });
+    }, Promise.resolve()).catch(function (error) {
+      report(new Error('Moved ' + moved + ' of ' + ids.length + ' generation(s) to Trash: ' + error.message));
+    }).finally(function () {
+      if (moved) {
+        selected.clear(); active = -1; artifact = '';
+        selectItem(-1); load(true);
+      }
+    });
+  }
   function itemActions(item) {
     var actions = [{label:'View full size', run:function () { openLoupe(items.findIndex(function (x) { return x.id === item.id; })); }}];
     if (item.source === 'external') {
@@ -174,6 +209,10 @@
       actions.push({separator:true});
       actions.push({label:'Move to Folder…', run:function () { externalMutation(item, 'move'); }});
       actions.push({label:'Move to Trash', run:function () { externalMutation(item, 'trash'); }});
+    }
+    if (item.source === 'generate' && item.role === 'generated' && item.storageId) {
+      actions.push({separator:true});
+      actions.push({label:'Move to Trash', run:function () { trashGenerations(item); }});
     }
     return actions;
   }
@@ -722,6 +761,13 @@
       text(epoch, 'Open Campaign'); epoch.addEventListener('click', function () {
         window.openTestBenchActivity({folder: item.ownerFolder, modelId: item.model, campaignId: item.storageId});
       }); actions.appendChild(epoch);
+    }
+    if (item.source === 'generate' && item.role === 'generated' && item.storageId) {
+      var trashButton = document.createElement('button');
+      trashButton.type = 'button'; trashButton.className = 'review-captions-btn';
+      text(trashButton, 'Move to Trash');
+      trashButton.addEventListener('click', function () { trashGenerations(item); });
+      actions.appendChild(trashButton);
     }
     var deletion = null;
     if (item.source === 'generate' && item.role === 'generated' && item.storageId) {

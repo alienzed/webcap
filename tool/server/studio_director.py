@@ -140,7 +140,7 @@ def chat_response_schema():
                         "description": "Requested replacements for an existing Scene; new Scene records belong in scenes.",
                         "properties": {
                             "title": {"type": "string"},
-                            "prompt": {"type": "string"},
+                            "prompt": {"type": "string", "minLength": 1},
                             "durationSeconds": {"type": "integer"},
                         },
                     },

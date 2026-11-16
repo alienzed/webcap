@@ -26,19 +26,23 @@ async function evidence(testInfo,label,data) {
 }
 async function chooseScene(page,sceneId) {
   await page.locator('[data-scene-progress="'+sceneId+'"]').click();
-  await reopenDirectorIfClosed(page);
-  await expect(page.locator('[data-scene-progress="'+sceneId+'"]')).toHaveClass(/active|storyboard-scene-progress-step/);
+  await expect(page.locator('.storyboard-scene-progress-card[data-scene-id="'+sceneId+'"]'))
+    .toHaveClass(/active/);
 }
-async function reviseSelectedScene(page,instruction) {
-  const mode=page.locator('#director-studio-composer-mode-select');
-  await mode.selectOption('revision');
-  await expect(page.locator('#director-studio-revision-controls')).toBeVisible();
-  await page.locator('#director-studio-revision-preset').selectOption('');
-  await page.locator('#director-studio-revision-fresh').uncheck();
-  await page.locator('#director-studio-revision-input').fill(instruction);
-  await page.locator('#director-chat-send').click();
-  await expect(page.locator('#director-studio-revision-status'))
-    .toContainText('Scene revision completed.',{timeout:300000});
+async function reviseSelectedScene(page,sceneId,instruction,beforePrompt,projectId) {
+  // The composer Revision mode deliberately targets ALL Scenes. Use the
+  // contextual prompt-specific Revise control to exercise exactly one Scene.
+  const editor=page.locator('[data-scene-id="'+sceneId+'"]').filter({
+    has:page.locator('[data-director-correction]')
+  }).first();
+  await expect(editor.locator('[data-director-correction]')).toBeVisible();
+  await editor.locator('[data-director-correction]').fill(instruction);
+  await editor.locator('[data-director-refine]').click();
+  await expect.poll(async()=>{
+    const current=await story(page,projectId);
+    return current.scenes[sceneId].prompt;
+  },{timeout:300000,intervals:[1500,3000]}).not.toBe(beforePrompt);
+  await expect(editor.locator('[data-director-status]')).toContainText(/Director completed|Refined/i,{timeout:30000});
 }
 
 test('Live journey — revise Overview, Develop Scenes button, revise a Scene, then revise Overview again',async({page},testInfo)=>{
@@ -76,7 +80,7 @@ test('Live journey — revise Overview, Develop Scenes button, revise a Scene, t
 
   const targetId=developed.sceneOrder[0];
   await chooseScene(page,targetId);
-  await reviseSelectedScene(page,instructions[1]);
+  await reviseSelectedScene(page,targetId,instructions[1],developed.scenes[targetId].prompt,project.id);
   const afterScene=await story(page,project.id);
   expect(afterScene.sceneOrder).toEqual(developed.sceneOrder);
   expect(afterScene.scenes[targetId].prompt).not.toBe(developed.scenes[targetId].prompt);

@@ -50,6 +50,60 @@ Each flow has independently observable checkpoints: a later failure must not obs
 
 Run this only when testing the broader Studio Director-adjacent experience; it is not a prerequisite for the three core Read/Write capabilities.
 
+## Flexible conversation and cross-Project transitions
+
+These are **journeys through existing features**, not six new model operations or
+a complete cross-product of launch points. Record source provenance, approved
+Read items, each received response's actual fields, the suggested destination,
+the destination confirmed at Apply and the saved record IDs independently.
+
+1. **Mid-conversation new Project pivot.** Start in saved Project A, discuss
+   an unrelated concept, receive new Overview material, and choose **Create
+   Project** in Review. The existing A stays unchanged; its selection alone
+   neither grants Read access nor binds the draft to A. Continue discussing
+   both projects without creating a new chat.
+2. **Switch sources and targets independently.** Read selected details from
+   A, navigate to B, revise material, return to A, and optionally apply material
+   originating in A to B. The approved source list, conversation and potential
+   destination remain distinguishable; each write uses the author-confirmed
+   destination, even when Studio navigation changes.
+3. **Author without any destination.** Receive two actual new Scenes in a
+   conversation with no attached Project, edit one, then choose Project B
+   in the existing Review/Apply surface. Retain fields and edits through the
+   choice without a second model call or an invented Project.
+4. **Change creative direction after Scene creation.** Author and save Scenes,
+   then develop a new Overview direction in the same conversation, save that
+   Overview first and revise selected Scenes from the new saved direction. A
+   Project-only change never rewrites Scenes, and a new direction may be
+   applied to a different Project than its source.
+5. **Multiple entry points, same material ownership.** Author or revise a
+   Scene from the inline Scene button, the Director composer, and the existing
+   Write panel. Verify real returned fields, the same relevant review/save
+   semantics, and that entering through a Scene does not permanently bind
+   later unrelated conversation drafts to it.
+6. **Ambiguous target, visible correction.** Read a Scene from A as a pacing
+   reference, an Invariant from C as a character reference, while B is open;
+   create/revise a draft and inspect the suggested destination. Change the
+   target to B or create a new Project in the existing form. Confirm only
+   the chosen saved record changes. A mention in prose, an open editor, a
+   Read source or a model-suggested action is not conclusive destination
+   evidence.
+
+**Required schema checkpoints before these journeys:** inspect the actual
+studio_chat schema received by the model and its request guidance.
+The relevant authored response fields must be explicitly required for a
+selected authoring operation; absence of action hints must not remove valid
+creative fields. Conversation may remain open-ended, but ordinary chat and
+requested authoring must not share a schema that permits a bare completion
+claim as a successful authored response. Partial returned fields remain
+recoverable even when a model violates its requested schema.
+
+**Read approval checkpoints:** suggest current Overview/Scene but send no
+saved creative content before authorization; approve multiple independent
+Project/Scene source items; refresh only the approved items on later requests;
+revoke one source without deleting other selections or unsaved proposals.
+Do not require detailed JSON inspection or an acknowledgment-only model call.
+
 ## Targeted variations (not a full matrix)
 
 Run only where they add coverage not already demonstrated by the main flows:

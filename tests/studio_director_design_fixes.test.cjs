@@ -221,7 +221,7 @@ test('restored conversation offers review only when saved raw output contains au
   assert.match(chat,/function studioRestoreAuthoredAction\(action, rawResponse\)/);
   assert.match(chat,/proposal = studioRestoreAuthoredAction\(proposal,entry\.rawResponse\)/);
   assert.match(chat,/if \(!proposal\) continue/);
-  assert.match(chat,/sourceMessageIndex:messageIndex/);
+  assert.match(rail,/sourceMessageIndex:messageIndex/);
 });
 test('conversation persistence includes frozen Write targets without extra authoring calls', () => {
   assert.match(chat,/stored\.writeAction = message\.writeAction/);

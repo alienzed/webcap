@@ -2385,7 +2385,7 @@
     var instruction = String(options && options.instruction || '').trim();
     var manualReview = !instruction;
     var storyId = String(options && options.storyId || studioAttachedStoryId() || '');
-    if (state.studioBriefProposal &&
+    if (!(options && options.authoredFields) && state.studioBriefProposal &&
         state.studioBriefProposal.storyId === storyId &&
         (!instruction || instruction === state.studioBriefProposal.instruction)) {
       showStudioBriefReview(); return;

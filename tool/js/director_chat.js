@@ -2463,7 +2463,9 @@
           'Preserve unrelated Project details and all Scenes. Keep the core appeal in Concept. ' +
           'WebCap merges requested fields and offers reviewed saving.',
         instruction: instruction, requestedFields: requestedFields,
-        project: studioApprovedSavedContext(story),
+        // This explicit targeted Project revision authorizes its own saved baseline.
+        project: {id:story.id,title:story.title,concept:story.concept,
+          style:story.style,invariants:story.invariants},
         unsavedWorkingFields:workingProject,discussion: discussion
       };
       return studioDirectorRequestMessages([{ role: 'user', content: JSON.stringify(input) }], false, true)
@@ -4766,10 +4768,22 @@
           instruction:launch.instruction,
           authorRequest:launch.authorRequest || launch.instruction,
           requestedDurationSeconds:studioRequestedDuration(launch.authorRequest || launch.instruction),
-          project:studioApprovedSavedContext(story),
-          unsavedWorkingFields:studioRequestAppliesPreparedMaterial(
-            launch.authorRequest || launch.instruction) ?
-            (state.studioWorkingDraft.newScene || {}) : {}
+          // Explicitly launched Scene creation uses this selected Project's saved direction.
+          project:{
+            title:story.title,concept:story.concept,style:story.style,
+            invariants:story.invariants,
+            existingSceneTitles:order.map(function (id) {
+              var scene = story.scenes[id];
+              return scene && scene.title || '';
+            }),
+            previousScene:order.length ? (function () {
+              var prior = story.scenes[order[order.length - 1]];
+              return {title:prior.title,prompt:prior.prompt,durationSeconds:prior.durationSeconds};
+            })() : null,
+            unsavedWorkingFields:studioRequestAppliesPreparedMaterial(
+              launch.authorRequest || launch.instruction) ?
+              (state.studioWorkingDraft.newScene || {}) : {}
+          }
         });
         // Reuse complete structured Scene fields already authored in the
         // conversation; never ask the model to rewrite the same work.
@@ -4991,7 +5005,8 @@
             });
         }
         var authorRequest = String(launch.authorRequest || launch.instruction);
-        var context = studioApprovedSavedContext(story);
+        // Explicitly launching revision of this saved Scene authorizes its baseline.
+        var context = window.studioDirectorWorkbench.sceneRead(story,sceneId).payload;
         var instruction = JSON.stringify({
           task:'Revise this one existing Scene using the agreed creative instruction. ' +
             'Return one JSON object with a complete replacement H3 prompt. ' +

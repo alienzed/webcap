@@ -118,6 +118,85 @@ def test_new_generate_resumes_manual_pause_without_claiming_gpu(inference_root, 
     assert starts == [True]
 
 
+def test_pause_releases_sticky_idle_gpu_and_unblocks_llm(inference_root, monkeypatch):
+    monkeypatch.setattr(inference_runner, "_start_worker_for_requested_inference", lambda: None)
+    monkeypatch.setattr(inference_runner, "_ensure_monitor_started", lambda **_kwargs: None)
+    monkeypatch.setattr(inference_runner, "_reserve_gpu", lambda: execution_queue.reserve_resource("inference"))
+    monkeypatch.setattr(inference_runner, "_release_gpu", lambda: execution_queue.release_resource("inference"))
+    monkeypatch.setattr(gpu_prep, "prepare_gpu_for", lambda _owner: True)
+    first = execution_queue.enqueue("inference", {"request": {"prompt": "first"}})
+    second = execution_queue.enqueue("inference", {"request": {"prompt": "second"}})
+    monkeypatch.setattr(
+        inference_runner, "_execute_claimed",
+        lambda job_id: execution_queue.finish_job_transient(job_id, status="completed"),
+    )
+
+    inference_runner._advance_queue()
+    assert execution_queue.resource_owner() == "inference"
+    assert execution_queue.get_job(second["id"])["status"] == "queued"
+    assert execution_queue.get_job(first["id"])["status"] == "completed"
+
+    inference_runner.action("pause_queue")
+    assert inference_runner._monitor_has_work() is True
+    assert inference_runner._advance_queue() is None
+    assert execution_queue.resource_owner() == ""
+    assert inference_runner._monitor_has_work() is False
+    assert execution_queue.get_job(second["id"])["status"] == "queued"
+    assert execution_queue.reserve_resource("llm") is True
+
+
+def test_pause_does_not_release_gpu_during_active_inference(inference_root, monkeypatch):
+    monkeypatch.setattr(inference_runner, "_ensure_monitor_started", lambda **_kwargs: None)
+    monkeypatch.setattr(inference_runner, "_release_gpu", lambda: execution_queue.release_resource("inference"))
+    queued = execution_queue.enqueue("inference", {"request": {"prompt": "active"}})
+    execution_queue.claim_next("inference")
+    execution_queue.mark_running(queued["id"])
+    assert execution_queue.reserve_resource("inference") is True
+
+    inference_runner.action("pause_queue")
+    assert inference_runner._advance_queue() is None
+    assert execution_queue.resource_owner() == "inference"
+    assert execution_queue.reserve_resource("llm") is False
+
+    execution_queue.finish_job_transient(queued["id"], status="completed")
+    assert inference_runner._advance_queue() is None
+    assert execution_queue.resource_owner() == ""
+
+
+def test_pause_preserves_verified_live_provider_hold_until_terminal(inference_root, monkeypatch):
+    monkeypatch.setattr(inference_runner, "_ensure_monitor_started", lambda **_kwargs: None)
+    monkeypatch.setattr(inference_runner, "_release_gpu", lambda: execution_queue.release_resource("inference"))
+    assert execution_queue.reserve_resource("inference") is True
+    inference_runner._hold_live_provider_runtime("provider-live")
+    monkeypatch.setattr(inference_runtime, "read_job", lambda _id: {"status": "in_progress"})
+
+    inference_runner.action("pause_queue")
+    assert inference_runner._advance_queue() is None
+    assert execution_queue.resource_owner() == "inference"
+    assert inference_runner._monitor_has_work() is True
+
+    monkeypatch.setattr(inference_runtime, "read_job", lambda _id: {"status": "completed"})
+    assert inference_runner._advance_queue() is None
+    assert execution_queue.resource_owner() == ""
+    assert inference_runner._provider_runtime_holds == set()
+    assert inference_runner._monitor_has_work() is False
+
+
+def test_paused_idle_gpu_releases_after_failed_provider_cleanup(inference_root, monkeypatch):
+    monkeypatch.setattr(inference_runner, "_ensure_monitor_started", lambda **_kwargs: None)
+    monkeypatch.setattr(inference_runner, "_release_gpu", lambda: execution_queue.release_resource("inference"))
+    assert execution_queue.reserve_resource("inference") is True
+    inference_runner._hold_live_provider_runtime("provider-error")
+    execution_queue.pause_lane("inference", reason="Inference paused after an execution error: provider failed")
+    monkeypatch.setattr(inference_runtime, "read_job", lambda _id: None)
+
+    assert inference_runner._monitor_has_work() is True
+    assert inference_runner._advance_queue() is None
+    assert execution_queue.resource_owner() == ""
+    assert inference_runner._provider_runtime_holds == set()
+    assert inference_runner.snapshot()["paused"] is True
+
+
 def test_new_generate_does_not_resume_execution_error(inference_root, monkeypatch):
     execution_queue.pause_lane("inference", reason="Inference paused after an execution error: boom")
     starts = []

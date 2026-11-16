@@ -34,7 +34,7 @@ test('retired Director assessment and guideline artifacts are absent without los
 test('shared Studio guidance treats review as optional and saved state as WebCap-owned', () => {
   const request = part(chat,'  function studioDirectorRequestMessages(', '  function studioDirectorChatRequestMessages(');
   assert.match(request,/direct-save or review policy/);
-  assert.match(request,/WebCap confirms an actual save/);
+  assert.match(request,/Only WebCap determines review, destination and actual persistence/);
   assert.doesNotMatch(request,/WebCap confirms Apply|scoped reviewed Write/);
 });
 

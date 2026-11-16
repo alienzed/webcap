@@ -105,14 +105,14 @@ _H3_STUDIO_CORE = (
 )
 
 
-def chat_response_schema():
-    """A conversational answer with, optionally, one proposed creative action.
+def chat_response_schema(scene_authoring=False):
+    """Context-scoped conversational or new-Scene authoring response shape.
 
     Transport shape only; a schema-valid reply is not evidence that an
     authored Scene exists. Read can be plain prose, and model output never
     supplies authoritative IDs, destinations or save actions.
     """
-    return {
+    schema = {
         "type": "object",
         "additionalProperties": False,
         "required": [],
@@ -170,6 +170,18 @@ def chat_response_schema():
             },
         },
     }
+    if scene_authoring:
+        # The UI already knows when the author explicitly requested new Scenes.
+        # Ask for authored records, not an action promise or an empty reply.
+        # This guides generation; WebCap still preserves whatever material the
+        # provider actually returns and never rejects a useful partial draft.
+        schema["required"] = ["scenes"]
+        schema["properties"]["scenes"]["items"]["required"] = ["prompt"]
+        schema["properties"]["scenes"]["items"]["properties"]["prompt"] = {
+            "type": "string", "minLength": 1,
+            "description": "Complete H3 generation Prompt for this Scene; not a summary or promise.",
+        }
+    return schema
 
 
 def guidance(target_model="minimax_h3"):

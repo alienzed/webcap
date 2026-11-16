@@ -242,6 +242,47 @@ def test_director_chat_route_preserves_all_structured_schemas(monkeypatch, opera
             assert captured["schema"]["properties"]["invariants"]["items"]["required"] == ["kind", "title", "text"]
 
 
+def test_new_scene_authoring_schema_requires_prompts_but_not_action_metadata():
+    from tool.server.studio_director import chat_response_schema
+
+    ordinary = chat_response_schema()
+    authored = chat_response_schema(scene_authoring=True)
+    assert ordinary["required"] == []
+    assert "required" not in ordinary["properties"]["scenes"]["items"]
+    assert authored["required"] == ["scenes"]
+    assert authored["properties"]["scenes"]["items"]["required"] == ["prompt"]
+    assert authored["properties"]["scenes"]["items"]["properties"]["prompt"]["minLength"] == 1
+    assert "reply" not in authored["required"]
+    assert "action" not in authored["required"]
+    assert "title" not in authored["properties"]["scenes"]["items"]["required"]
+
+
+def test_studio_chat_route_selects_scene_creation_schema_for_explicit_goal(monkeypatch):
+    import importlib
+
+    server = importlib.import_module("tool.server.app")
+    captured = []
+
+    def enqueue(client, model, contract, context, label):
+        captured.append(contract["response_schema"])
+        return {"jobId": "test-director"}
+
+    monkeypatch.setattr(server, "enqueue_llm", enqueue)
+    for authoring_goal in ("", "create_scenes"):
+        data = {
+            "model": "qwen",
+            "operation": "studio_chat",
+            "messages": [{"role": "user", "content": "Author a Scene."}],
+        }
+        if authoring_goal:
+            data["authoringGoal"] = authoring_goal
+        response = server.app.test_client().post("/fs/director/chat", json=data)
+        assert response.status_code == 202
+    assert captured[0]["required"] == []
+    assert captured[1]["required"] == ["scenes"]
+    assert captured[1]["properties"]["scenes"]["items"]["required"] == ["prompt"]
+
+
 def test_studio_chat_schema_accepts_read_and_one_optional_authoring_action():
     from tool.server.studio_director import chat_response_schema
 

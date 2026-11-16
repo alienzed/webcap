@@ -98,3 +98,17 @@ test('LLM quality-review operation errors remain unmeasured',()=>{
   assert.equal(ctx.diagnosticsAssessmentReviewLabel({status:'failed',error:'Exceeded maxTokens'}),'Not measured');
   assert.equal(ctx.diagnosticsAssessmentReviewLabel({status:'running'}),'Judging…');
 });
+
+test('Judge Model is a per-model action without requiring Deep assessment',()=>{
+  const html=fs.readFileSync('tool/tool.html','utf8');
+  assert.match(source,/judgeOption\.textContent = 'Judge Model'/);
+  assert.match(source,/if \(action === 'judge'\) diagnosticsAssessmentJudge\(judgeSource\.id, ref\)/);
+  assert.doesNotMatch(source,/if \(deep && directors\.length && !judgeRef\)/);
+  assert.match(html,/Deep assessment <small>\(4K\/8K\/16K\)<\/small>/);
+});
+test('Quality summaries disclose evidence count and reviewer provenance',()=>{
+  assert.match(source,/qualityReview\.tasks\.length \+ ' task'/);
+  assert.match(source,/Advisory judgment by /);
+  assert.match(source,/Quality reviewer: /);
+  assert.match(source,/not a reliability or consensus measure/i);
+});

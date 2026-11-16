@@ -331,6 +331,30 @@ test('Explorer deletion targets only owner-backed generated artifacts', () => {
 });
 
 
+test('Generate trash operates on the owning result, not a saved reference', async () => {
+  const f = fixture(); f.window.openMediaExplorerActivity();
+  await f.settle(f.pending[0], [
+    {...media('generated'), storageId:'2026-11-15/job-a'},
+    {...media('reference'), role:'reference', storageId:'2026-11-15/job-a'}
+  ]);
+  const generated = f.nodes['media-explorer-grid'].children[0];
+  const reference = f.nodes['media-explorer-grid'].children[1];
+  generated.querySelector('.media-explorer-item-menu').click({preventDefault(){},stopPropagation(){}});
+  const trash = f.menus.at(-1).find(action => action.label === 'Move to Trash');
+  assert.ok(trash);
+  reference.querySelector('.media-explorer-item-menu').click({preventDefault(){},stopPropagation(){}});
+  assert.equal(f.menus.at(-1).some(action => action.label === 'Move to Trash'),false);
+  trash.run();
+  const req = f.pending.at(-1);
+  assert.equal(req.url, '/fs/generate/result/trash');
+  assert.deepEqual(JSON.parse(req.options.body), {storageId:'2026-11-15/job-a'});
+  await f.settle(req, [], true, {storageId:'2026-11-15/job-a'});
+  assert.equal(f.errors.length, 0);
+  assert.ok(f.pending.some(request => request.url.startsWith('/fs/media_explorer?') && request !== f.pending[0]),
+    'refresh owner-backed results after moving the generation');
+});
+
+
 test('Storyboard provenance preserves exact take identity for owner handoff', () => {
   const backend = fs.readFileSync('tool/server/media_explorer.py', 'utf8');
   const explorer = fs.readFileSync('tool/js/media_explorer.js', 'utf8');

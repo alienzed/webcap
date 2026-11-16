@@ -125,6 +125,12 @@ test('Write opens without preparing a manual operation or starting a request',()
   assert.equal(selected,0,'reopening Write remains passive');
 });
 
+test('Share Details opens the original Read sidebar and indicates approved context',()=>{
+  assert.match(html,/id="director-chat-context-approve"/);
+  assert.match(rail,/el\('director-chat-context-approve'\)\.onclick=function \(\) \{openDirectAction\('read'\);\}/);
+  assert.match(chat,/state\.studioApprovedRead \? 'Context ✓' : 'Share Details…'/);
+});
+
 test('Read preview and outbound values use the same validated field serializer', () => {
   const body=section(rail,'  function readPayload(story, keys) {','  function updateReadSelection() {');
   const scope={projectFields:['title','concept','style','invariants'],storyName:story=>story.title};

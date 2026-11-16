@@ -60,6 +60,7 @@ test('Live journey — revise Overview, Develop Scenes button, revise a Scene, t
   ];
   const style1=await reviseOverview(page,instructions[0],project.id);
   const afterOverview=await story(page,project.id);
+  expect(style1).not.toBe(original.style);
   expect(afterOverview.concept).toBe(original.concept);
   expect(afterOverview.sceneOrder).toHaveLength(0);
 
@@ -92,6 +93,7 @@ test('Live journey — revise Overview, Develop Scenes button, revise a Scene, t
 
   await reopenDirectorIfClosed(page);
   const style2=await reviseOverview(page,instructions[2],project.id);
+  expect(style2).not.toBe(style1);
   const final=await story(page,project.id);
   expect(final.style).toBe(style2);
   expect(final.concept).toBe(original.concept);
@@ -129,6 +131,7 @@ test('Live journey — edit A, move to B and edit B, then return to A in the sam
     'Revise only the attached Project A visual atmosphere again to soft amber dawn light; preserve its existing Scene prompt and Concept.'
   ];
   const styleA1=await reviseOverview(page,instructions[0],a.id);
+  expect(styleA1).not.toBe(a.style);
   expect((await story(page,b.id)).style).toBe(b.style);
 
   await openProject(page,b.id);
@@ -139,6 +142,7 @@ test('Live journey — edit A, move to B and edit B, then return to A in the sam
   await attach.click();
   await expect(page.locator('#director-chat-title')).toContainText(b.title);
   const styleB=await reviseOverview(page,instructions[1],b.id);
+  expect(styleB).not.toBe(b.style);
   const afterB=await story(page,b.id);
   expect(afterB.scenes[bScene.id].prompt).toBe(bScene.prompt);
   expect((await story(page,a.id)).style).toBe(styleA1);
@@ -149,6 +153,7 @@ test('Live journey — edit A, move to B and edit B, then return to A in the sam
   await attach.click();
   await expect(page.locator('#director-chat-title')).toContainText(a.title);
   const styleA2=await reviseOverview(page,instructions[2],a.id);
+  expect(styleA2).not.toBe(styleA1);
   const savedA=await story(page,a.id), savedB=await story(page,b.id);
   expect(savedA.style).toBe(styleA2);
   expect(savedA.concept).toBe(a.concept);

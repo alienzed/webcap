@@ -15,7 +15,7 @@ test('attachment changes only on explicit attach, detach or explicit continue af
     part('  function sendMessage() {','  function '),
     part('    selectWriteProject: function (','    prepareWrite: function ('),
     part('    reviewCapture: function (','    reviewSceneCapture: function ('),
-    part('    reviewSceneCapture: function (','    applyScenePrompt: function ('),
+    part('    reviewSceneCapture: function (','    checkProjectCoherence: function ('),
     part('  window.openStudioDirectorScene = function (','  window.closeStudioDirectorOnExit')
   ]) assert.doesNotMatch(section,/state\.studioStoryAccess\s*=/,
     'A navigation, material review or target selection must not reattach conversation');

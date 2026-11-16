@@ -56,3 +56,9 @@ test('conversation Project review does not infer create-vs-revise from returned 
   assert.doesNotMatch(section,/hasOwnProperty\.call\(frozen\.authoredFields,'title'\)/);
   assert.match(section,/destination\.value = isProjectMaterial/);
 });
+
+test('a newly authored Project response cannot be shadowed by a cached same-instruction proposal',()=>{
+  const body=part('  function prepareStudioBrief(options) {','  function applyStudioBrief() {');
+  assert.match(body,/!\(options && options\.authoredFields\)/,
+    'Fresh authored material must replace cached Review for the same destination and instruction');
+});

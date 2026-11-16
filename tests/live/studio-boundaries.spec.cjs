@@ -90,7 +90,7 @@ test('Live boundary — cancellation after a saved Scene preserves only confirme
   // skip a target or silently continue saving subsequent targets.
   if(completedPrefix!==-1)
     expect(changed.slice(completedPrefix)).toEqual(changed.slice(completedPrefix).map(()=>false));
-  const reportedCount=/stopped after (\\d+) Scenes/i.exec(String(receipt.error||''));
+  const reportedCount=/stopped after (\d+) Scenes/i.exec(String(receipt.error||''));
   if(reportedCount)
     expect(changed.filter(Boolean).length).toBe(Number(reportedCount[1]));
   if(changed.every(Boolean)) {

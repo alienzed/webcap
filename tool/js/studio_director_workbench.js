@@ -868,20 +868,25 @@
     }
     var host = el('studio-dw-suggestions');
     host.replaceChildren();
-    // One explicit, correctable choice for conversation-authored Project material.
-    // A selected editor or approved Read source is not permission to overwrite.
-    if (frozen.authoredFields &&
-        (frozen.kind === 'create_project' || frozen.kind === 'write_project')) {
+    // Every conversation-authored result has a visible, correctable destination.
+    // The open editor remains a suggestion, not an automatic save authorization.
+    var isProjectMaterial = (frozen.kind === 'create_project' ||
+      frozen.kind === 'write_project') && !!frozen.authoredFields;
+    if (isProjectMaterial || frozen.kind === 'create_scene' ||
+        frozen.kind === 'write_scenes') {
       var destination = document.createElement('select');
       var destinationLabel = document.createElement('label');
       destinationLabel.textContent = 'Destination ';
-      destination.setAttribute('aria-label','Project material destination');
-      var newOption = document.createElement('option');
-      newOption.value = ''; newOption.textContent = 'New Project';
-      destination.appendChild(newOption);
+      destination.setAttribute('aria-label',isProjectMaterial
+        ? 'Project material destination' : 'Scene material destination');
+      var defaultOption = document.createElement('option');
+      defaultOption.value = '';
+      defaultOption.textContent = isProjectMaterial ? 'New Project' : 'Choose Project…';
+      destination.appendChild(defaultOption);
       destination.onchange = function () {
-        frozen.kind = destination.value ? 'write_project' : 'create_project';
         frozen.chosenProjectId = destination.value;
+        if (isProjectMaterial)
+          frozen.kind = destination.value ? 'write_project' : 'create_project';
         showConversationWrite();
       };
       destinationLabel.appendChild(destination);
@@ -889,12 +894,15 @@
       refreshProjects().then(function (items) {
         items.forEach(function (item) {
           var option = document.createElement('option');
-          option.value = item.id; option.textContent = 'Revise ' + storyName(item);
+          option.value = item.id;
+          option.textContent = (isProjectMaterial ? 'Revise ' : '') + storyName(item);
           destination.appendChild(option);
         });
-        // New Project is a safe visible default; the author can choose any saved target.
-        destination.value = frozen.kind === 'write_project' && frozen.projectId
-          ? frozen.projectId : '';
+        // Project material defaults to a new Project; new Scenes suggest the
+        // selected Project, but both choices remain author-correctable.
+        destination.value = isProjectMaterial ? '' :
+          items.some(function (item) {return item.id === frozen.projectId;})
+            ? frozen.projectId : '';
         destination.onchange();
       }).catch(function (error) {
         status('Project destinations could not load: ' + error.message,true);

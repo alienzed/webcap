@@ -1,6 +1,6 @@
 'use strict';
 const {test,expect}=require('../browser/test.cjs');
-const {openLiveDirector,attachProject,story,seedProject,seedScene,addEvidence}=require('./helpers.cjs');
+const {openLiveDirector,attachProject,story,seedProject,seedScene}=require('./helpers.cjs');
 
 async function reviseUsingRealModel(page,instruction) {
   const mode=page.locator('#director-studio-composer-mode-select');
@@ -40,7 +40,7 @@ test('Live Flow 3 — single existing Scene revision persists without changing t
   expect(Object.keys(result.takes||{})).toHaveLength(0);
   await page.reload();
   expect((await story(page,project.id)).scenes[scene.id].prompt).toBe(result.prompt);
-  await addEvidence(testInfo,page,model,instruction,{projectId:project.id,sceneId:scene.id,before:scene.prompt,after:result.prompt});
+  await testInfo.attach('studio-live-revision-evidence',{body:Buffer.from(JSON.stringify({model,instruction,projectId:project.id,sceneId:scene.id,before:scene.prompt,after:result.prompt},null,2)),contentType:'application/json'});
 });
 
 test('Live Flow 3 — multi-Scene revision saves each real result without rewriting unrelated fields',async({page},testInfo)=>{
@@ -71,7 +71,7 @@ test('Live Flow 3 — multi-Scene revision saves each real result without rewrit
   const restored=await story(page,project.id);
   for(const id of saved.sceneOrder)
     expect(restored.scenes[id].prompt).toBe(saved.scenes[id].prompt);
-  await addEvidence(testInfo,page,model,instruction,{projectId:project.id,
+  await testInfo.attach('studio-live-revision-evidence',{body:Buffer.from(JSON.stringify({model,instruction,projectId:project.id,
     before:[first.prompt,second.prompt],
-    after:saved.sceneOrder.map(id=>saved.scenes[id].prompt)});
+    after:saved.sceneOrder.map(id=>saved.scenes[id].prompt)},null,2)),contentType:'application/json'});
 });

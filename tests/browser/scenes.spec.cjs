@@ -46,6 +46,11 @@ test('Flow 2 — returned Scene count, editable review and persistent real recor
   await rows.nth(1).locator('[data-field="prompt"]').fill(authored[1].prompt+' Interior is warmly lit.');
   const callsBefore=await observedModels(request);
   expect(callsBefore.calls).toHaveLength(1);
+  const outbound=callsBefore.calls[0];
+  const requestedSchema=outbound.response_format?.json_schema?.schema;
+  expect(requestedSchema?.required).toContain('scenes');
+  expect(requestedSchema?.properties?.scenes?.items?.required).toContain('prompt');
+  expect(JSON.stringify(outbound.messages)).toContain('H3 PRODUCTION PROMPT REFERENCE');
   await page.locator('#studio-scenes-apply').click();
   await expect.poll(async()=> (await story(page,project.id)).sceneOrder.length).toBe(2);
   const saved=await story(page,project.id);
@@ -218,5 +223,37 @@ test('Flow 2 — wrong optional action hint does not discard actually authored S
   await action.click();
   await expect(page.locator('#studio-scenes-review')).toBeVisible();
   await expect(page.locator('#studio-scenes-rows .studio-scenes-row')).toHaveCount(1);
+  expect((await observedModels(request)).calls).toHaveLength(1);
+});
+
+test('Flow 2 — Author Scene imperative uses actual Prompt-producing schema',async({page,request})=>{
+  await resetModel(request);
+  await freshDirectorSession(page);
+  await page.goto('/');
+  await page.locator('#activity-storyboard-btn').click();
+  const project=await newSelectedProject(page);
+  await page.locator('#director-chat-rail-btn').click();
+  await page.locator('[data-assistant-mode="storyboard"]').click();
+  await ensureAttachedProject(page,project.title);
+  await page.locator('#app-header-director-model').selectOption('acceptance::acceptance-model');
+  await queueModel(request,{
+    scenes:[{title:'Blue Lantern',prompt:'An antique bookseller lights a blue lantern.',durationSeconds:8}]
+  });
+  await say(page,'Author one new Scene with a blue lantern, lasting eight seconds.');
+  const action=page.locator('#studio-dw-suggestions .studio-dw-suggestion-action');
+  await expect(action).toContainText('Review authored Scene');
+  await expect(page.locator('#director-chat-progress')).toBeHidden();
+  const calls=(await observedModels(request)).calls;
+  expect(calls).toHaveLength(1);
+  const schema=calls[0].response_format?.json_schema?.schema;
+  expect(schema?.required).toContain('scenes');
+  expect(schema?.properties?.scenes?.items?.required).toContain('prompt');
+  expect(JSON.stringify(calls[0].messages)).toContain('NEW SCENE AUTHORING');
+  expect(JSON.stringify(calls[0].messages)).toContain('H3 PRODUCTION PROMPT REFERENCE');
+  await action.click();
+  const row=page.locator('#studio-scenes-rows .studio-scenes-row');
+  await expect(row).toHaveCount(1);
+  await expect(row.first().locator('[data-field="prompt"]')).toHaveValue('An antique bookseller lights a blue lantern.');
+  await page.locator('#studio-scenes-close').click();
   expect((await observedModels(request)).calls).toHaveLength(1);
 });

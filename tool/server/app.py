@@ -2325,23 +2325,13 @@ def director_chat_route():
         if operation == "studio_scenes_draft":
             # New-Scene authoring is a sequence of *material*, not an action
             # promise or a requirement to match a guessed requested count.
-            # Keep individual fields optional so incomplete useful drafts reach
-            # the editable review rather than being rejected by the schema.
+            # Request complete Scene records with the same contract as Studio
+            # conversation. Ingest still retains incomplete provider results.
             contract["response_schema"] = {
                 "type": "object", "additionalProperties": False,
                 "required": ["scenes"],
                 "properties": {
-                    "scenes": {
-                        "type": "array", "maxItems": 32,
-                        "items": {
-                            "type": "object", "additionalProperties": False,
-                            "properties": {
-                                "title": {"type": "string"},
-                                "prompt": {"type": "string"},
-                                "durationSeconds": {"type": "number"},
-                            },
-                        },
-                    },
+                    "scenes": studio_chat_response_schema()["properties"]["scenes"],
                     "rationale": {"type": "string"},
                 },
             }

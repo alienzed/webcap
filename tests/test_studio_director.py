@@ -235,6 +235,12 @@ def test_director_chat_route_preserves_all_structured_schemas(monkeypatch, opera
             assert captured["schema"]["required"] == ["scenes"]
             assert "prompt" not in captured["schema"]["properties"]
             assert captured["schema"]["properties"]["scenes"]["items"]["properties"]["prompt"]["type"] == "string"
+        if operation in {"studio_chat", "studio_scenes_draft"}:
+            record = captured["schema"]["properties"]["scenes"]["items"]
+            assert record["required"] == ["title", "prompt", "durationSeconds"]
+            assert record["properties"]["prompt"]["minLength"] == 1
+            if operation == "studio_chat":
+                assert "required" not in captured["schema"]["properties"]["changes"]["properties"]["scene"]
         if operation == "studio_project_draft":
             assert captured["schema"]["required"] == ["title", "concept", "style", "invariants", "rationale"]
         if operation == "studio_brief_draft":

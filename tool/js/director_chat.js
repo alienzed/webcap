@@ -3195,10 +3195,9 @@
         boundTarget.sceneNumber = boundTarget.sceneId ?
           story.sceneOrder.indexOf(boundTarget.sceneId) + 1 : 0;
       }
-      // Read questions do not need the full H3 production contract by default.
-      // Explicit questions about H3 prompting still receive the authoring reference.
-      var needsPromptReference = /\b(?:H3|prompting|prompts?|integrated_multimodal_description)\b/i.test(requestText);
-      return studioDirectorRequestMessages(messages, needsPromptReference, false, navigation).then(function (outbound) {
+      // Studio can author Scenes in any reply. Supply its production reference
+      // consistently instead of guessing the task from conversational wording.
+      return studioDirectorRequestMessages(messages, true, false, navigation).then(function (outbound) {
       outbound[0].content += '\n\nCONVERSATION: Reply naturally and answer direct questions from supplied material. ' +
         'A plain-text answer is acceptable. For ordinary discussion answer briefly, normally 1-3 sentences. ' +
         'When the author requests Project edits or revisions to existing Scenes, propose an optional action ' +
@@ -3210,7 +3209,7 @@
         'WebCap owns exact Project/Scene IDs, navigation, execution and saving. Do not invent saved IDs, readiness checks, ' +
         'permission metadata, capture fields or assessments. For an existing Scene revision propose write_scenes; ' +
         'For new Scenes, author the requested content in scenes:[{title,prompt,durationSeconds}] in this response; the actual records are the result. ' +
-        'Return each usable authored Scene, even if the count differs from the request. A single Scene may instead use changes.scene. ' +
+        'Return each usable authored Scene with title, complete H3 prompt and durationSeconds, even if the count differs from the request. Use scenes for both one and multiple new Scenes. ' +
         'A separate action hint is unnecessary for authored records; WebCap chooses the review and save destination. ' +
         'The Scene fields remain unsaved editable drafts until WebCap confirms persistence. ' +
         'For other creative changes, offer a review action; provide full revised prose only when requested.\n';

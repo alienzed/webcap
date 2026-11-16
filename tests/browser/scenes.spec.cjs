@@ -46,6 +46,11 @@ test('Flow 2 — returned Scene count, editable review and persistent real recor
   await rows.nth(1).locator('[data-field="prompt"]').fill(authored[1].prompt+' Interior is warmly lit.');
   const callsBefore=await observedModels(request);
   expect(callsBefore.calls).toHaveLength(1);
+  const outbound=callsBefore.calls[0];
+  const sceneSchema=outbound.response_format.json_schema.schema.properties.scenes.items;
+  expect(sceneSchema.required).toEqual(['title','prompt','durationSeconds']);
+  expect(sceneSchema.properties.prompt.minLength).toBe(1);
+  expect(JSON.stringify(outbound.messages)).toContain('H3 PRODUCTION PROMPT REFERENCE');
   await page.locator('#studio-scenes-apply').click();
   await expect.poll(async()=> (await story(page,project.id)).sceneOrder.length).toBe(2);
   const saved=await story(page,project.id);

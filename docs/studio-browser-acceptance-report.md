@@ -4,6 +4,28 @@
 
 ## Repeatable commands
 
+### Latest local verification — complete Scene output contract (2026-11-15)
+
+Working tree based on `ec8928f1`, with the consistent Scene output contract:
+**10 live Playwright checks passed in 3.0 minutes**, using
+`remote-1::mo-shakib/gemma4-e4b-uncensored:q4_k_m` and isolated application data.
+Command: `npx playwright test --config=playwright.live.config.cjs --max-failures=1`.
+Eight focused Python schema tests also passed.
+
+The live run verified prompts present in new-Scene Review, edited Prompt
+persistence after reload, independent reply-owned Scene proposals with retained
+edits, Project creation and revision, explicit Read, A/B ownership, draft recovery,
+Blocks insertion and Send, and Coherence review/discard. These are passes for the
+implemented checkpoints, not proof of every unimplemented flow variation below.
+
+Both Studio conversation and explicit Scene authoring now request complete new
+Scene records (`title`, nonempty `prompt`, `durationSeconds`) through one shared
+record schema. Read needs no Scene array; existing-Scene changes remain sparse.
+Studio conversation receives the H3 reference consistently, without deriving an
+authoring goal from prose. Received partial drafts remain editable; no response
+rejection, repair call, or automatic re-authoring was added. The earlier failing
+run notes below are historical evidence, not the result of this latest run.
+
 ### Local real-model investigation — 2026-11-15
 
 Ran `npx playwright test --config=playwright.live.config.cjs` on Windows against

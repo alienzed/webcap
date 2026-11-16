@@ -42,9 +42,9 @@ _WORKSHOP = (
     "Use only saved creative material actually supplied in this request; a Project ID or permission alone conveys no field content. "
     
     "Only an actual WebCap save makes authored content authoritative, whether direct or reviewed. "
-    "For new Scene requests, author and return actual Scene records in scenes, with a complete prompt and useful title and duration when available. "
+    "For new Scene requests, return the actual authored records in scenes, each with a title, complete H3 prompt and durationSeconds (4-15, default 6). "
     "Return every usable record, even if fewer or more than requested. The records, not an action promise, are the result. "
-    "A single new Scene may also use changes.scene for its authored fields. "
+    "Use the scenes array for both one and multiple new Scenes; changes.scene carries only requested field replacements for an existing Scene. "
     "For Project or existing Scene revisions, return newly authored fields in changes.project or changes.scene, with complete replacement prompts when editing creative content. "
     "Action hints and conversational replies are optional and never substitute for requested creative content. "
     "WebCap owns destination, actions, review and persistence. Read may be plain prose.\n"
@@ -132,6 +132,7 @@ def chat_response_schema():
                     },
                     "scene": {
                         "type": "object", "additionalProperties": False,
+                        "description": "Requested replacements for an existing Scene; new Scene records belong in scenes.",
                         "properties": {
                             "title": {"type": "string"},
                             "prompt": {"type": "string"},
@@ -142,12 +143,13 @@ def chat_response_schema():
             },
             "scenes": {
                 "type": "array", "maxItems": 32,
-                "description": "For Scene creation return the actual authored records here, with prompts, titles and durations when available; WebCap counts and reviews them.",
+                "description": "Actual new Scene drafts, each with a title, complete H3 prompt and durationSeconds. WebCap counts and reviews the returned records.",
                 "items": {
                     "type": "object", "additionalProperties": False,
+                    "required": ["title", "prompt", "durationSeconds"],
                     "properties": {
                         "title": {"type": "string"},
-                        "prompt": {"type": "string"},
+                        "prompt": {"type": "string", "minLength": 1},
                         "durationSeconds": {"type": "number"},
                     },
                 },

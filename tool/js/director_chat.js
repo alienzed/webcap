@@ -444,6 +444,9 @@
     }
 
     var studio = state.activeMode === 'storyboard';
+    var contextButton = el('director-chat-context-approve');
+    contextButton.classList.toggle('hidden', !studio || studioRevisionActive());
+    contextButton.textContent = state.studioApprovedRead ? 'Context ✓' : 'Share Details…';
     var contextual = !persistentMode(state.activeMode);
     var context = active && typeof active.contextSnapshot === 'function'
       ? active.contextSnapshot() : null;

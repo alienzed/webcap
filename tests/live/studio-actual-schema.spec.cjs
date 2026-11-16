@@ -56,11 +56,17 @@ test('LIVE contract — explicitly requested Scene revision must return a full n
   const instruction='Revise this existing eight-second H3 Scene with a clearly visible brass compass. '+
     'Keep the courier, the lighthouse, parcel, duration, and core action. '+
     'Return the complete replacement prompt in the required prompt field, not an explanation or plan.';
+  // Use WebCap's actual published Studio guidance and H3 prompt contract,
+  // rather than an invented friendly test-only system prompt.
+  const guidanceResponse=await page.request.get('/fs/studio/director/guidance?targetModel=minimax_h3');
+  expect(guidanceResponse.ok()).toBeTruthy();
+  const guidance=await guidanceResponse.json();
+  expect(guidance.system).toBeTruthy();
+  expect(guidance.promptContract).toBeTruthy();
   const outbound=[{
     role:'system',
-    content:'You are Director authoring one replacement video Scene prompt. '+
-      'Return one JSON object with a complete standalone H3 video prompt in the prompt string field. '+
-      'Do not return an action, plan, summary, or empty prompt. Include concrete visible action, camera, atmosphere and timing.'
+    content:guidance.system+'\\n\\nH3 PRODUCTION PROMPT REFERENCE:\\n'+guidance.promptContract+
+      '\\n\\nEXPLICIT WRITE: Return the full replacement prompt value in the required prompt field now. WebCap handles review and persistence.'
   },{
     role:'user',
     content:JSON.stringify({project:{concept:project.concept,style:project.style},

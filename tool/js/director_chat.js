@@ -3763,9 +3763,16 @@
         if (activeChatMode === 'storyboard' && !targetScene &&
             (!authoredScenes || !authoredScenes.length) && studioResponse &&
             studioResponse.changes && studioResponse.changes.scene) {
-          var singleScene = studioWorkingFieldChanges(studioResponse.changes.scene,
-            ['title','prompt','durationSeconds']);
-          if (Object.keys(singleScene).length) authoredScenes = [singleScene];
+          var sourceScene = studioResponse.changes.scene;
+          if (sourceScene && typeof sourceScene === 'object' && !Array.isArray(sourceScene)) {
+            var singleScene = {};
+            ['title','prompt','durationSeconds'].forEach(function (field) {
+              if (Object.prototype.hasOwnProperty.call(sourceScene,field))
+                singleScene[field] = sourceScene[field];
+            });
+            // Invalid duration is still useful review metadata for correction.
+            if (Object.keys(singleScene).length) authoredScenes = [singleScene];
+          }
         }
         if (activeChatMode === 'storyboard' && authoredScenes && authoredScenes.length) {
           // These are the actual unsaved records, not an action promise.

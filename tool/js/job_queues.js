@@ -100,6 +100,22 @@
     }
     return button;
   }
+  function canOpenLlmSource(job) {
+    return ['chat', 'storyboard', 'generate', 'test'].indexOf(String(job.client || '')) !== -1;
+  }
+  function openLlmSource(id) {
+    var job = jobsFor('llm').find(function (item) {
+      return String(item.jobId || item.id || '') === String(id || '');
+    });
+    if (!job) throw new Error('LLM job is no longer in the queue: ' + String(id || ''));
+    if (!canOpenLlmSource(job)) throw new Error('No originating screen is available for this LLM job.');
+    if (typeof window.openActivityItemDestination !== 'function') throw new Error('Activity navigation is unavailable.');
+    // Use the same destination routing as Activity and Inference Queues.
+    window.openActivityItemDestination(Object.assign({}, job, {
+      id: String(job.jobId || job.id || ''),
+      kind: 'director'
+    }));
+  }
   function row(job, which, position, totalQueued) {
     var node = document.createElement('div');
     node.className = 'inference-queue-row job-queue-row status-' + String(job.status || 'queued');
@@ -126,7 +142,10 @@
     }
     node.appendChild(copy);
     var controls = textNode('div', 'inference-queue-actions', '');
-    if (which === 'llm') controls.appendChild(actionButton(active(job) ? 'Stop' : 'Cancel', which, 'cancel_job', job));
+    if (which === 'llm') {
+      if (canOpenLlmSource(job)) controls.appendChild(actionButton('Open source', which, 'open_source', job));
+      controls.appendChild(actionButton(active(job) ? 'Stop' : 'Cancel', which, 'cancel_job', job));
+    }
     if (which === 'training') {
       if (job.status === 'queued') {
         var up = actionButton('↑', which, 'up', job);
@@ -269,6 +288,10 @@
     return pendingRefresh;
   }
   function perform(which, operation, id) {
+    if (which === 'llm' && operation === 'open_source') {
+      openLlmSource(id);
+      return Promise.resolve();
+    }
     if (operation === 'view_activity') {
       window.focusActivityByJob(id);
       return Promise.resolve();

@@ -3164,7 +3164,8 @@
   function positionSceneActionMenu(menu, pointer) {
     if (!menu || !menu.open) return;
     var summary = menu.querySelector('summary');
-    var popover = menu.querySelector('.storyboard-scene-menu-popover');
+    var popover = menu.querySelector(menu.classList.contains('storyboard-add-scene')
+      ? '.storyboard-add-scene-menu' : '.storyboard-scene-menu-popover');
     if (!summary || !popover) throw new Error('Storyboard Scene action menu markup is missing.');
 
     var anchorRect = summary.getBoundingClientRect();
@@ -6450,10 +6451,10 @@
       }
       var addMenu = event.target.closest('.storyboard-add-scene > summary');
       if (addMenu) {
-        var pop = addMenu.parentElement.querySelector('.storyboard-add-scene-menu');
-        var rect = addMenu.getBoundingClientRect();
-        pop.style.top = Math.min(rect.bottom + 5, window.innerHeight - 112) + 'px';
-        pop.style.left = Math.max(8, Math.min(rect.left, window.innerWidth - 205)) + 'px';
+        var addDetails = addMenu.closest('.storyboard-add-scene');
+        window.setTimeout(function () {
+          positionSceneActionMenu(addDetails);
+        }, 0);
         return;
       }
       var addChoice = event.target.closest('[data-scene-add]');

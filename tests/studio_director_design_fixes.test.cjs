@@ -406,3 +406,22 @@ test('Studio operation mode hides conversation without deleting history, and pin
   assert.match(html,/id="storyboard-open-director"[^>]*class="review-captions-btn hidden"/);
   assert.match(chat,/if \(studio\) toggle\.focus\(\)/);
 });
+
+test('Scene plus menu anchors to its button and flips above the viewport edge', () => {
+  const storyboard = fs.readFileSync(path.join(base, 'tool/js/storyboard.js'), 'utf8');
+  const css = fs.readFileSync(path.join(base, 'tool/css/storyboard.css'), 'utf8');
+  const position = section(storyboard,
+    '  function positionSceneActionMenu(menu, pointer) {', '  var STORY_RAIL_ICONS =');
+  const menu = {open:true, classList:{contains:name=>name === 'storyboard-add-scene'}};
+  const popover = {offsetWidth:190, offsetHeight:100, style:{}};
+  const anchor = {getBoundingClientRect:()=>({left:850,right:892,top:650,bottom:692})};
+  menu.querySelector = selector => selector === 'summary' ? anchor :
+    selector === '.storyboard-add-scene-menu' ? popover : null;
+  const scope = vm.createContext({window:{innerWidth:1000,innerHeight:700}});
+  vm.runInContext(position, scope);
+  scope.positionSceneActionMenu(menu);
+  assert.equal(popover.style.left, '702px');
+  assert.equal(popover.style.top, '546px', 'menu flips above the plus button');
+  assert.ok(css.includes('.storyboard-add-scene-menu {') && css.includes('position:fixed;'));
+  assert.ok(storyboard.includes('positionSceneActionMenu(addDetails);'));
+});

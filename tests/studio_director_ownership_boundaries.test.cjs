@@ -33,3 +33,16 @@ test('saving a Project never revokes previously approved cross-Project Read sour
   assert.doesNotMatch(body,/state\.studioApprovedRead\s*=\s*null/,
     'Approved sources are session references, not inherited from the saved destination');
 });
+
+test('explicit Scene entry can target B while Director remains attached to A',()=>{
+  const section=part('  function studioDirectorSelectedScene(', '  function ');
+  const state={studioStoryAccess:{storyId:'A'},sceneRead:null};
+  const window={getStudioDirectorNavigation:()=>({projectId:'B',sceneId:'scene-b',sceneNumber:2})};
+  const selected=new Function('state','window',section+'return studioDirectorSelectedScene;')(state,window);
+  assert.equal(selected(window.getStudioDirectorNavigation(),'write a scene',false),null,
+    'Passive navigation must not override the explicit A attachment');
+  state.sceneRead={projectId:'B',sceneId:'scene-b',sceneNumber:2,label:'Scene 2'};
+  assert.equal(selected(window.getStudioDirectorNavigation(),'write a scene',false).sceneId,'scene-b',
+    'An explicitly opened Scene B must be usable without reattaching Director');
+  assert.equal(state.studioStoryAccess.storyId,'A');
+});

@@ -66,7 +66,7 @@ from .training_review import discover_saved_initializers, prepare_training_revie
 from .h3_probe import h3_probe_log, h3_probe_status, prepare_h3_probe, start_h3_probe, stop_h3_probe
 from .permissions import normalize_path_permissions, run_with_directory_repair
 from .folder_state_store import FolderStateReadError, FolderStateUnsafeWriteError, read_folder_state, reject_wholesale_state_map_clear, write_folder_state_with_owned_drafts, set_media_annotation_state, set_media_rating, write_folder_state_atomic
-from .storage_manager import clear_set_generated_sight as storage_clear_set_generated_sight, cancel_scan as storage_cancel_scan, measure as storage_measure, open_path as storage_open_path, overview as storage_overview, purge as storage_purge, scan_status as storage_scan_status, start_scan as storage_start_scan
+from .storage_manager import clear_set_generated_sight as storage_clear_set_generated_sight, cancel_scan as storage_cancel_scan, measure as storage_measure, open_path as storage_open_path, overview as storage_overview, purge as storage_purge, trash_generate as storage_trash_generate, scan_status as storage_scan_status, start_scan as storage_start_scan
 from .studio_director import guidance as studio_director_guidance, read_story_scope as studio_read_story_scope, chat_response_schema as studio_chat_response_schema
 from .director_chat_history import create_chat as create_director_chat, delete_chat as delete_director_chat, list_chats as list_director_chats, open_chat as open_director_chat, save_chat as save_director_chat
 from .storyboard_store import add_tentative_scene_at as storyboard_add_tentative_scene_at, add_tentative_scenes_at as storyboard_add_tentative_scenes_at, create_studio_project as storyboard_create_studio_project, apply_studio_brief as storyboard_apply_studio_brief, undo_studio_brief as storyboard_undo_studio_brief
@@ -2776,6 +2776,21 @@ def generate_result_delete_route():
         return jsonify({"ok": False, "error": str(exc)}), 404
     except Exception as exc:
         app.logger.exception("GENERATE RESULT DELETE FAILED: %s", exc)
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
+@app.route("/fs/generate/result/trash", methods=["POST"])
+def generate_result_trash_route():
+    try:
+        data = request.get_json(silent=True) or {}
+        storage_id = str(data.get("storageId") or "").strip()
+        if not storage_id:
+            raise ValueError("Generation storage ID is required.")
+        return jsonify(storage_trash_generate(storage_id))
+    except FileNotFoundError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 404
+    except Exception as exc:
+        app.logger.exception("GENERATE RESULT TRASH FAILED: %s", exc)
         return jsonify({"ok": False, "error": str(exc)}), 400
 
 

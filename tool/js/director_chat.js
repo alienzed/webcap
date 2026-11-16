@@ -3742,9 +3742,9 @@
           studioWorkingFieldChanges(studioResponse.changes.scene,
             ['title','prompt','durationSeconds']);
         if (projectFields && Object.keys(projectFields).length)
-          nextAction = {kind:studioResponse.action && studioResponse.action.kind === 'write_project'
-            ? 'write_project' : 'create_project',
-            instruction:content,fields:Object.keys(projectFields),authoredFields:projectFields};
+          // Creative fields are real material; the user chooses create vs revise in Review.
+          nextAction = {kind:'create_project',instruction:content,
+            fields:Object.keys(projectFields),authoredFields:projectFields};
         if (sceneFields && Object.keys(sceneFields).length && targetScene)
           nextAction = {kind:'write_scenes',instruction:content,
             fields:Object.keys(sceneFields),authoredFields:sceneFields};

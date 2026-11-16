@@ -172,6 +172,7 @@
       var payload = readPayload(story, keys);
       el('studio-dw-read-preview-data').textContent = JSON.stringify(payload, null, 2);
       window.studioDirectorBridge.approveRead(story.id, keys);
+      renderApprovedSources();
       lastReadSource = story.id;
       status('Context approved for subsequent Director messages. No model request sent.', false, true);
       el('studio-dw-read-panel').classList.add('hidden');

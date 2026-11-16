@@ -2383,12 +2383,14 @@
     if (state.pending || state.activeMode !== 'storyboard' || !state.sessionReady) return;
     var instruction = String(options && options.instruction || '').trim();
     var manualReview = !instruction;
-    if (state.studioBriefProposal && (!instruction ||
-        instruction === state.studioBriefProposal.instruction)) {
+    var storyId = String(options && options.storyId || studioAttachedStoryId() || '');
+    if (state.studioBriefProposal &&
+        state.studioBriefProposal.storyId === storyId &&
+        (!instruction || instruction === state.studioBriefProposal.instruction)) {
       showStudioBriefReview(); return;
     }
-    if (instruction) state.studioBriefProposal = null;
-    var storyId = studioAttachedStoryId();
+    if (instruction || state.studioBriefProposal && state.studioBriefProposal.storyId !== storyId)
+      state.studioBriefProposal = null;
     if (!storyId) {
       studioActionStatus('Attach a Project explicitly before updating Concept, Style or Invariants.', true);
       return;
@@ -3618,13 +3620,8 @@
     inputHistoryDraft = '';
 
     if (activeChatMode === 'storyboard') {
-      // An explicit message starts work in the open Project. Retain that
-      // destination across reloads without attaching any creative field values.
-      if (!studioAttachedStoryId()) {
-        var navigation = window.getStudioDirectorNavigation();
-        if (navigation.projectId)
-          state.studioStoryAccess = {storyId:navigation.projectId,label:navigation.projectTitle};
-      }
+      // Navigation may suggest a destination, but sending a message cannot
+      // attach the conversation or approve saved creative material.
       state.workshopProposal = null;
       // Keep authored Scene and Project reviews available across questions.
       // Explicit new Write actions own replacement of existing drafts.
@@ -4361,8 +4358,7 @@
     reviewPreparedWrite: function (draft) {
       if (!this.canReview()) throw new Error('Open the Studio conversation to review its prepared material.');
       if (draft.kind === 'project') {
-        this.selectWriteProject(draft.projectId);
-        return prepareStudioBrief({requestedFields:draft.fields});
+        return prepareStudioBrief({storyId:draft.projectId,requestedFields:draft.fields});
       }
       if (draft.kind === 'new-project') return prepareStudioProject({});
       if (draft.kind === 'new-scene') return this.writeNewScene({
@@ -4425,16 +4421,14 @@
     },
     selectWriteProject: function (storyId, storyTitle) {
       if (!storyId) throw new Error('Select a Project destination for Write.');
-      if (studioAttachedStoryId() !== storyId) {
-        // Never reuse a draft extracted against a different saved Project.
+      // Selecting a destination is operation-local. Do not change the
+      // conversation attachment, approved Read selections, or navigation.
+      if (state.studioBriefProposal && state.studioBriefProposal.storyId !== storyId)
         state.studioBriefProposal = null;
+      if (state.studioSceneProposal && state.studioSceneProposal.storyId !== storyId)
         state.studioSceneProposal = null;
+      if (state.studioScenesProposal && state.studioScenesProposal.storyId !== storyId)
         state.studioScenesProposal = null;
-      }
-      state.studioStoryAccess = {storyId: storyId, label: storyTitle || storyId};
-      state.studioAccessIndex = null;
-      scheduleSessionSave();
-      syncModeUi();
     },
     prepareWrite: function (kind, storyId, storyTitle, options) {
       if (!this.isReady()) throw new Error('Director must be ready before Write.');
@@ -4443,7 +4437,7 @@
         state.studioProjectProposal = null; // Create a fresh review from current conversation.
         return prepareStudioProject(options);
       }
-      if (kind === 'project') return prepareStudioBrief(options);
+      if (kind === 'project') return prepareStudioBrief(Object.assign({},options,{storyId:storyId}));
       throw new Error('Unsupported reviewed Write operation: ' + kind);
     },
     recordApplied: function (kind, story, selected) {
@@ -4544,7 +4538,6 @@
         } else {
           proposed[capture.field] = capture.content;
         }
-        state.studioStoryAccess = {storyId:storyId,label:story.title || storyId};
         state.studioBriefProposal = {
           storyId:storyId,storyTitle:story.title,expected:expected,draft:proposed,renames:renames,
           rationale:'Director developed this material in conversation. Review and edit before saving.'
@@ -4575,7 +4568,6 @@
       }).then(function (payload) {
         var story = payload.story;
         if (!story || story.id !== storyId) throw new Error('Selected Project is unavailable.');
-        state.studioStoryAccess = {storyId:storyId,label:story.title || storyId};
         if (Number.isInteger(capture.durationSeconds)) {
           // Reuse complete authored material with its duration in the existing review.
           state.studioScenesProposal = {

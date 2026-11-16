@@ -1245,6 +1245,10 @@
       }
     });
     el('studio-dw-read-send').onclick=readSend;
+    el('studio-dw-read-clear').onclick=function () {
+      window.studioDirectorBridge.clearApprovedRead();
+      status('Saved context cleared. No Project or Scene details will be shared.',false,true);
+    };
     el('studio-dw-read-all').onclick=selectEntireReadProject;
     el('studio-dw-scenes-select-all').onclick=function () {selectWriteScenes(true);};
     el('studio-dw-scenes-select-none').onclick=function () {selectWriteScenes(false);};

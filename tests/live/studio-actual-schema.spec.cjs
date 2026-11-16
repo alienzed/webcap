@@ -1,6 +1,6 @@
 'use strict';
 const {test,expect}=require('../browser/test.cjs');
-const {openLiveDirector,attachProject,sendLive,story,stories,seedProject,
+const {openLiveDirector,attachProject,sendLive,story,stories,seedProject,seedScene,
   openProject,reopenDirectorIfClosed}=require('./helpers.cjs');
 
 // Real backend + actual configured LLM. Observe the raw provider result and

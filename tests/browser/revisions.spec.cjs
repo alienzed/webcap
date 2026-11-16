@@ -46,24 +46,17 @@ test('Flow 3 batch — partial Scene save followed by model failure reports and 
   await openDirector(page);
   await openProject(page,project.id);
   await ensureAttachedProject(page,project.title);
-  await queueModel(request,{
-    reply:'I can revise both Scene prompts.',
-    action:{kind:'write_scenes',instruction:'Revise both Scene prompts.',fields:['prompt']}
-  });
-  await say(page,'Revise Scene 1 and Scene 2 with warmer lighting.');
-  const action=page.locator('#studio-dw-suggestions .studio-dw-suggestion-action');
-  await expect(action).toContainText('Revise Scene');
-  await action.click();
-  // The author must explicitly resolve the targets if the chat wasn't launched
-  // from one Scene. That real selection is part of acceptance, not bypassed.
+  // Explicit selected-Scene Write is the proper entry point for batch authoring.
+  // A conversational action promise cannot launch a write without authored content.
+  await page.locator('#studio-dw-open-tools').click();
+  await page.locator('#studio-dw-write').click();
   const pane=page.locator('#studio-dw-write-panel');
   await expect(pane).toBeVisible();
   await page.locator('#studio-dw-write-project').selectOption(project.id);
   await page.locator('#studio-dw-write-operation').selectOption('scene-write');
   await page.locator('#studio-dw-scene-mode').selectOption('revise');
-  const choices=pane.locator('input[type="checkbox"]');
-  await expect(choices).not.toHaveCount(0);
-  for(const id of [first.id,second.id]) {
+  await page.locator('#studio-dw-write-instruction').fill('Revise both selected Scene prompts with warmer lighting.');
+  for (const id of [first.id, second.id]) {
     const box=pane.locator('input[type="checkbox"][value="'+id+'"]');
     await expect(box).toBeVisible();
     await box.check();
@@ -73,10 +66,10 @@ test('Flow 3 batch — partial Scene save followed by model failure reports and 
   await request.post('http://127.0.0.1:4211/__acceptance/queue',{
     data:{httpError:503,message:'Acceptance inference unavailable'}
   });
-  await action.click();
+  await page.locator('#studio-dw-write-prepare').click();
   await expect(page.locator('#studio-dw-status')).toContainText(/Saved 1|Failed 1/);
   const persisted=await story(page,project.id);
   expect(persisted.scenes[first.id].prompt).toBe('First revision, warm amber lamps.');
   expect(persisted.scenes[second.id].prompt).toBe('Second saved prompt.');
-  expect((await observedModels(request)).calls.length).toBe(3);
+  expect((await observedModels(request)).calls.length).toBe(2);
 });

@@ -73,7 +73,7 @@ test('Live Flow 2 — real authored Scenes reach the review surface and persist 
   await addEvidence(testInfo,page,model,instruction,{returned,savedSceneIds:saved.sceneOrder,persisted});
 });
 
-test('Live Flow 4 — explicitly selected saved Project and Scene data are shared with real Director',async({page},testInfo)=>{
+test('Live Flow 4 — approved Overview and Scene references reach the real model, not merely the UI',async({page},testInfo)=>{
   const project=await seedProject(page,'Live Read '+Date.now(),{
     concept:'A silver gate stands in a blue courtyard.',style:'Soft dusk.'
   });
@@ -82,26 +82,38 @@ test('Live Flow 4 — explicitly selected saved Project and Scene data are share
   });
   const model=await openLiveDirector(page);
   await attachProject(page,project);
-  const details=page.locator('#director-studio-access-details');
-  await expect(page.locator('#director-studio-access')).toBeVisible();
-  await details.locator('summary').click();
-  await page.locator('#director-studio-access-field').selectOption('brief');
-  await waitForLiveJob(page,()=>page.locator('#director-studio-access-read').click());
-  await expect(page.locator('#director-studio-access-data')).toContainText('silver gate');
-  await expect(page.locator('#director-chat-messages')).toContainText('silver gate',{timeout:180000});
-  const before=await page.locator('#director-chat-messages').innerText();
-  await page.locator('#director-studio-access-field').selectOption('prompt');
-  await expect(page.locator('#director-studio-access-scene')).toBeVisible();
-  await page.locator('#director-studio-access-scene').selectOption(scene.id);
-  await waitForLiveJob(page,()=>page.locator('#director-studio-access-read').click());
-  await expect(page.locator('#director-studio-access-data')).toContainText('A visitor opens a silver gate.');
-  await expect.poll(async()=> (await page.locator('#director-chat-messages').innerText()).length,
-    {timeout:180000}).toBeGreaterThan(before.length);
+  const outbound=[];
+  page.on('request',request=>{
+    if(new URL(request.url()).pathname==='/fs/director/chat' && request.method()==='POST'){
+      try{outbound.push(request.postDataJSON());}catch{}
+    }
+  });
+  const share=page.locator('#director-chat-context-approve');
+  await share.click();
+  await page.locator('#studio-dw-read-project').selectOption(project.id);
+  await page.locator('#studio-dw-read-send').click();
+  await sendLive(page,'Using the approved saved Overview, describe the setting in one sentence. Do not change it.');
+  expect(outbound).toHaveLength(1);
+  expect(JSON.stringify(outbound[0].messages)).toContain('A silver gate stands in a blue courtyard.');
+  expect(JSON.stringify(outbound[0].messages)).not.toContain(scene.prompt);
+
+  await share.click();
+  await page.locator('#studio-dw-read-project').selectOption(project.id);
+  await page.locator('#studio-dw-read-selection summary').click();
+  await page.locator('#studio-dw-project-fields input[data-group-select]').first().uncheck();
+  await page.locator('#studio-dw-scene-fields input[data-group-select]').first().check();
+  await page.locator('#studio-dw-read-send').click();
+  await sendLive(page,'Using the newly approved Scene as a reference, describe the physical action without changing the Project.');
+  expect(outbound).toHaveLength(2);
+  const secondRequest=JSON.stringify(outbound[1].messages);
+  expect(secondRequest).toContain('A visitor opens a silver gate.');
+  expect(secondRequest).toContain('A silver gate stands in a blue courtyard.');
   const actual=await story(page,project.id);
   expect(actual.concept).toBe('A silver gate stands in a blue courtyard.');
   expect(actual.scenes[scene.id].prompt).toBe('A visitor opens a silver gate.');
-  await addEvidence(testInfo,page,model,'Explicit Read: brief, then selected Scene prompt',
-    {visibleSource:await page.locator('#director-studio-access-data').innerText(),sourceProjectId:project.id});
+  await addEvidence(testInfo,page,model,'Approved Read: Overview, then Scene',{
+    outboundRequests:outbound,sourceProjectId:project.id
+  });
 });
 
 test('Live Flow 3 — a real Project revision saves reviewed fields without changing an unrelated Scene',async({page},testInfo)=>{

@@ -1891,6 +1891,24 @@ def _training_queue_references(action_id):
     return _training_queue_reference_map().get(str(action_id or ""), [])
 
 
+def trash_generate(item_id):
+    """Move a complete, inactive Generate result to OS Trash, preserving its manifest and references."""
+    from send2trash import send2trash
+    path = _resolve_generate(item_id, require_manifest=True)
+    if path.name in _active_generate_job_ids():
+        raise RuntimeError("Generation result is still referenced by active Generate work.")
+    send2trash(str(path))
+    try:
+        path.parent.rmdir()
+    except OSError:
+        pass
+    with _CACHE_LOCK:
+        cache = _read_cache()
+        cache.get("items", {}).pop(_cache_key("generate", item_id, ""), None)
+        _write_cache(cache)
+    return {"ok": True, "storageId": item_id}
+
+
 def purge(area, item_id, folder=""):
     area = str(area or "").strip()
     if area not in PURGEABLE_AREAS:

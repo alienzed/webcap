@@ -168,7 +168,7 @@ test('Flow 2 — a single authored changes.scene record reaches review without a
   await page.locator('[data-assistant-mode="storyboard"]').click();
   await ensureAttachedProject(page,project.title);
   await page.locator('#app-header-director-model').selectOption('acceptance::acceptance-model');
-  const authored={title:'First Window',prompt:'A visitor stands beside a blue window.',durationSeconds:8};
+  const authored={title:'First Window',prompt:'A visitor stands beside a blue window.',durationSeconds:99};
   await queueModel(request,{changes:{scene:authored}}); // No reply or action.
   await say(page,'Author one new Scene about a window.');
   const action=page.locator('#studio-dw-suggestions .studio-dw-suggestion-action');
@@ -179,10 +179,13 @@ test('Flow 2 — a single authored changes.scene record reaches review without a
   const row=page.locator('#studio-scenes-rows .studio-scenes-row');
   await expect(row).toHaveCount(1);
   await expect(row.first().locator('[data-field="prompt"]')).toHaveValue(authored.prompt);
+  await expect(row.first().locator('[data-field="durationSeconds"]')).toHaveValue('99');
+  await row.first().locator('[data-field="durationSeconds"]').fill('8');
   await page.locator('#studio-scenes-apply').click();
   await expect.poll(async()=> (await story(page,project.id)).sceneOrder.length).toBe(1);
   const saved=await story(page,project.id);
   expect(saved.scenes[saved.sceneOrder[0]].prompt).toBe(authored.prompt);
+  expect(saved.scenes[saved.sceneOrder[0]].durationSeconds).toBe(8);
   expect((await observedModels(request)).calls).toHaveLength(1);
 });
 

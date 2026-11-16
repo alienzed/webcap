@@ -6,14 +6,21 @@ const {openLiveDirector,attachProject,sendLive,story,stories,seedProject,seedSce
 // Real backend + actual configured LLM. Observe the raw provider result and
 // outbound operation, not just the text on a review button.
 function observeRealDirector(page) {
-  const requests=[],receipts=[];
+  const requests=[],receipts=[],schemas=[];
   page.on('request',request=>{
     if(new URL(request.url()).pathname!=='/fs/director/chat' || request.method()!=='POST')return;
     try{ requests.push(request.postDataJSON()); }catch{}
   });
   page.on('response',async response=>{
-    if(new URL(response.url()).pathname!=='/fs/director/job'||!response.ok())return;
+    const pathname=new URL(response.url()).pathname;
+    if(!response.ok())return;
     try {
+      if(pathname==='/fs/director/chat'){
+        const result=(await response.json()).job;
+        if(result?.request?.responseSchema) schemas.push(result.request.responseSchema);
+        return;
+      }
+      if(pathname!=='/fs/director/job')return;
       const result=(await response.json()).job;
       if(result && result.status==='completed' && result.result?.text)
         receipts.push({jobId:result.jobId,raw:result.result.text,
@@ -22,7 +29,7 @@ function observeRealDirector(page) {
     }catch{}
   });
   return {
-    requests,receipts,
+    requests,receipts,schemas,
     async result(){
       await expect.poll(()=>receipts.length,{timeout:30000}).toBeGreaterThan(0);
       const receipt=receipts[receipts.length-1];
@@ -65,6 +72,11 @@ test('LIVE contract — explicitly requested Scene revision must return a full n
   expect(response.ok(),'Real Director revision was not queued: '+await response.text()).toBeTruthy();
   const initial=(await response.json()).job;
   expect(initial?.jobId).toBeTruthy();
+  const schema=initial.request?.responseSchema;
+  expect(schema,'The real Director job did not expose its operation-specific schema').toBeTruthy();
+  expect(schema.required,'WebCap sent prompt as optional on an explicitly requested Scene rewrite')
+    .toContain('prompt');
+  expect(schema.properties.prompt.minLength).toBe(1);
   let terminal;
   await expect.poll(async()=>{
     const poll=await page.request.get('/fs/director/job?job='+encodeURIComponent(initial.jobId));
@@ -103,6 +115,10 @@ test('LIVE conversation — real Scene records have required title, duration and
     operation:observation.requests.at(-1)?.operation,raw:receipt.raw,parsed});
   expect(observation.requests).toHaveLength(1);
   expect(observation.requests[0].operation).toBe('studio_chat');
+  await expect.poll(()=>observation.schemas.length).toBe(1);
+  expect(observation.schemas[0].properties.scenes.items.required)
+    .toEqual(['title','prompt','durationSeconds']);
+  expect(observation.schemas[0].properties.scenes.items.properties.prompt.minLength).toBe(1);
   expect(Array.isArray(parsed.scenes),'Real conversation returned no structured scenes array').toBe(true);
   expect(parsed.scenes.length,'The real model must return Scene records, not an action promise')
     .toBeGreaterThan(0);
@@ -208,6 +224,9 @@ test('LIVE conversation — an existing Scene rewrite must contain changes.scene
   await evidence(testInfo,'actual-conversation-existing-scene-result',{model,instruction,raw:receipt.raw,parsed});
   expect(observation.requests).toHaveLength(1);
   expect(observation.requests[0].operation).toBe('studio_chat');
+  await expect.poll(()=>observation.schemas.length).toBe(1);
+  expect(observation.schemas[0].properties.changes.properties.scene.properties.prompt.type)
+    .toBe('string');
   expect(typeof parsed.changes?.scene?.prompt,
     'Real-model Scene rewrite omitted changes.scene.prompt').toBe('string');
   const authored=parsed.changes.scene.prompt;

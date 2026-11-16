@@ -233,6 +233,8 @@ test('LIVE conversation — an existing Scene rewrite must contain changes.scene
   await expect.poll(()=>observation.schemas.length).toBe(1);
   expect(observation.schemas[0].properties.changes.properties.scene.properties.prompt.type)
     .toBe('string');
+  expect(observation.schemas[0].properties.changes.properties.scene.properties.prompt.minLength)
+    .toBe(1);
   expect(typeof parsed.changes?.scene?.prompt,
     'Real-model Scene rewrite omitted changes.scene.prompt').toBe('string');
   const authored=parsed.changes.scene.prompt;

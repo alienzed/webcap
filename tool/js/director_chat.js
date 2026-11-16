@@ -298,21 +298,22 @@
   // binds its Scene when the Storyboard is in the overview/list view.
   function studioDirectorSelectedScene(navigation, authorRequest, explicitProject) {
     navigation = navigation || window.getStudioDirectorNavigation();
-    if (!navigation.projectId ||
-        (!explicitProject && state.studioStoryAccess &&
-          state.studioStoryAccess.storyId !== navigation.projectId))
-      return null;
-    // A Scene named in conversational prose is not a deterministic Write binding.
-    // Only selected UI context or an explicit Read selection supplies a target.
-    if (navigation.sceneId) return {
-      projectId: navigation.projectId, sceneId: navigation.sceneId,
-      sceneNumber:navigation.sceneNumber,
-      label: navigation.sceneNumber > 0 ? 'Scene ' + navigation.sceneNumber : 'Selected Scene'
-    };
+    if (!navigation.projectId) return null;
+    // A contextual Scene entry is an explicit UI target even when a different
+    // Project remains attached to the conversation. It grants no unrelated Read.
     var entry = state.sceneRead;
     if (entry && entry.projectId === navigation.projectId && entry.sceneId) return {
       projectId: entry.projectId, sceneId: entry.sceneId,
       sceneNumber:entry.sceneNumber, label: entry.label
+    };
+    if (!explicitProject && state.studioStoryAccess &&
+        state.studioStoryAccess.storyId !== navigation.projectId) return null;
+    // Passive Scene navigation may suggest a target in the attached Project;
+    // neither navigation nor mentions in prose authorize another Project.
+    if (navigation.sceneId) return {
+      projectId: navigation.projectId, sceneId: navigation.sceneId,
+      sceneNumber:navigation.sceneNumber,
+      label: navigation.sceneNumber > 0 ? 'Scene ' + navigation.sceneNumber : 'Selected Scene'
     };
     return null;
   }

@@ -107,8 +107,8 @@ test('one click runs one Scene writer with fresh saved context, saves a full pro
   assert.ok(h.events.some(row=>row[0]==='receipt'));
   assert.equal(h.state.modeMessages.storyboard.length,0,
     'Writer results remain in structured state, not duplicated chat history');
-  assert.equal(h.state.studioWorkingDraft.scenes.s1.prompt,
-    'Mara finishes quietly under a still camera.');
+  assert.equal(h.state.studioWorkingDraft.scenes.s1,undefined,
+    'authoritative saved fields must not remain as an unsaved working draft');
   assert.deepEqual(h.errors,[]);
 });
 

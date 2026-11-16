@@ -97,6 +97,11 @@
     }
     var overview = projectFields.map(function (key) {return 'project.' + key;});
     addUnit('Overview', overview, fields, true);
+    // An individual Invariant can be shared without sharing the entire Overview.
+    (story.invariants || []).forEach(function (item) {
+      var key = 'invariant:' + encodeURIComponent(item.kind) + ':' + encodeURIComponent(item.title);
+      addUnit('Invariant · ' + (item.title || 'Untitled'), [key], fields, false);
+    });
     (story.sceneOrder || []).forEach(function (id, index) {
       var scene = story.scenes && story.scenes[id];
       if (!scene) throw new Error('Project has a Scene index with no matching Scene.');
@@ -132,6 +137,12 @@
           var field = key.slice(8);
           if (projectFields.indexOf(field) === -1) throw new Error('Unknown Project field: ' + field);
           value = story[field];
+        } else if (parts[0] === 'invariant' && parts.length === 3) {
+          var kind = decodeURIComponent(parts[1]), title = decodeURIComponent(parts[2]);
+          value = (story.invariants || []).find(function (item) {
+            return item.kind === kind && item.title === title;
+          });
+          if (!value) throw new Error('Selected Invariant is no longer in this Project: ' + key);
         } else {
           if (parts.length !== 3 || parts[0] !== 'scene' ||
               ['title','prompt','durationSeconds'].indexOf(parts[2]) === -1 ||
@@ -151,8 +162,10 @@
     var toggles = Array.from(el('studio-dw-read-panel').querySelectorAll('input[data-group-select]'));
     var overview = toggles.some(function (toggle) {return toggle.checked && toggle.groupPaths[0].startsWith('project.');});
     var sceneCount = toggles.filter(function (toggle) {return toggle.checked && toggle.groupPaths[0].startsWith('scene:');}).length;
+    var invariantCount = toggles.filter(function (toggle) {return toggle.checked && toggle.groupPaths[0].startsWith('invariant:');}).length;
     el('studio-dw-read-selection-summary').textContent = units && units === toggles.length ? 'Entire Project' :
-      [overview ? 'Overview' : '', sceneCount ? sceneCount + (sceneCount === 1 ? ' Scene' : ' Scenes') : '']
+      [overview ? 'Overview' : '', invariantCount ? invariantCount + (invariantCount === 1 ? ' Invariant' : ' Invariants') : '',
+        sceneCount ? sceneCount + (sceneCount === 1 ? ' Scene' : ' Scenes') : '']
         .filter(Boolean).join(' + ') || 'Choose material';
     el('studio-dw-read-count').textContent = units +
       (units === 1 ? ' selection' : ' selections') + ' · ' + bytes.toLocaleString() + ' characters';
@@ -172,6 +185,7 @@
       var payload = readPayload(story, keys);
       el('studio-dw-read-preview-data').textContent = JSON.stringify(payload, null, 2);
       window.studioDirectorBridge.approveRead(story.id, keys);
+      renderApprovedSources();
       lastReadSource = story.id;
       status('Context approved for subsequent Director messages. No model request sent.', false, true);
       el('studio-dw-read-panel').classList.add('hidden');
@@ -305,7 +319,29 @@
       pendingCreativeAction.chosenSceneIds = checked ? inputs.map(function (input) { return input.value; }) : [];
     showWriteContext();
   }
+  function renderApprovedSources() {
+    var host = el('studio-dw-approved-sources');
+    host.replaceChildren();
+    window.studioDirectorBridge.approvedReadSources().forEach(function (source) {
+      var row = document.createElement('div');
+      row.className = 'studio-dw-approved-source';
+      var label = document.createElement('span');
+      label.textContent = source.label;
+      var button = document.createElement('button');
+      button.type = 'button';
+      button.textContent = 'Remove';
+      button.title = 'Stop sharing this Project source';
+      button.onclick = function () {
+        window.studioDirectorBridge.removeApprovedRead(source.projectId);
+        renderApprovedSources();
+        status('Selected source removed; other approved sources retained.',false,true);
+      };
+      row.append(label,button);
+      host.appendChild(row);
+    });
+  }
   function refreshRead() {
+    renderApprovedSources();
     return refreshProjects().then(function () {return loadStory(el('studio-dw-read-project').value);})
       .then(renderReadStory).catch(function (e) { status('Read setup failed: ' + e.message, true); });
   }
@@ -832,6 +868,50 @@
     }
     var host = el('studio-dw-suggestions');
     host.replaceChildren();
+    // Every conversation-authored result has a visible, correctable destination.
+    // The open editor remains a suggestion, not an automatic save authorization.
+    var isProjectMaterial = (frozen.kind === 'create_project' ||
+      frozen.kind === 'write_project') && !!frozen.authoredFields;
+    if (isProjectMaterial || frozen.kind === 'create_scene' ||
+        frozen.kind === 'write_scenes') {
+      var destination = document.createElement('select');
+      var destinationLabel = document.createElement('label');
+      destinationLabel.textContent = 'Destination ';
+      destination.setAttribute('aria-label',isProjectMaterial
+        ? 'Project material destination' : 'Scene material destination');
+      var defaultOption = document.createElement('option');
+      defaultOption.value = '';
+      defaultOption.textContent = isProjectMaterial ? 'New Project' : 'Choose Project…';
+      destination.appendChild(defaultOption);
+      destination.onchange = function () {
+        frozen.chosenProjectId = destination.value;
+        if (isProjectMaterial)
+          frozen.kind = destination.value ? 'write_project' : 'create_project';
+        showConversationWrite();
+      };
+      destinationLabel.appendChild(destination);
+      host.appendChild(destinationLabel);
+      refreshProjects().then(function (items) {
+        items.forEach(function (item) {
+          var option = document.createElement('option');
+          option.value = item.id;
+          option.textContent = (isProjectMaterial ? 'Revise ' : '') + storyName(item);
+          destination.appendChild(option);
+        });
+        // Complete newly titled material suggests a new Project; partial
+        // Project replacements suggest the attached Project, for confirmation.
+        // These are only defaults: neither authorizes a save or changes fields.
+        var knownProject = items.some(function (item) {return item.id === frozen.projectId;});
+        var suggestedRevision = isProjectMaterial && knownProject &&
+          !Object.prototype.hasOwnProperty.call(frozen.authoredFields,'title');
+        destination.value = isProjectMaterial
+          ? suggestedRevision ? frozen.projectId : ''
+          : knownProject ? frozen.projectId : '';
+        destination.onchange();
+      }).catch(function (error) {
+        status('Project destinations could not load: ' + error.message,true);
+      });
+    }
     var button = document.createElement('button');
     button.type = 'button';
     button.className = 'studio-dw-suggestion-action';
@@ -861,7 +941,8 @@
       refreshProjects().then(function (items) {
         if (frozen.kind === 'create_project')
           return window.studioDirectorBridge.prepareWrite('new-project','', '',{
-            instruction:frozen.instruction,authorRequest:frozen.request
+            instruction:frozen.instruction,authorRequest:frozen.request,
+            authoredFields:frozen.authoredFields
           });
         var projectId = Object.prototype.hasOwnProperty.call(frozen, 'chosenProjectId')
           ? frozen.chosenProjectId : frozen.projectId;
@@ -885,7 +966,8 @@
         if (frozen.kind === 'write_project') {
           var fields = frozen.fields.filter(function (name) {return projectFields.includes(name);});
           return window.studioDirectorBridge.prepareWrite('project',projectId,storyName(item),{
-            instruction:frozen.instruction,authorRequest:frozen.request,requestedFields:fields
+            instruction:frozen.instruction,authorRequest:frozen.request,requestedFields:fields,
+            authoredFields:frozen.authoredFields
           });
         }
         if (frozen.kind === 'create_scene') {
@@ -1021,6 +1103,9 @@
       sceneIds.forEach(function (id) {
         var index = readStory && readStory.id === projectId ? readStory.sceneOrder.indexOf(id) : -1;
         labels.push(index >= 0 ? 'Scene ' + (index + 1) : 'Scene');
+      });
+      keys.filter(function (key) {return key.startsWith('invariant:');}).forEach(function (key) {
+        labels.push('Invariant ' + decodeURIComponent(key.split(':')[2]));
       });
       return name + ' · ' + labels.join(' + ');
     },
@@ -1247,6 +1332,7 @@
     el('studio-dw-read-send').onclick=readSend;
     el('studio-dw-read-clear').onclick=function () {
       window.studioDirectorBridge.clearApprovedRead();
+      renderApprovedSources();
       status('Saved context cleared. No Project or Scene details will be shared.',false,true);
     };
     el('studio-dw-read-all').onclick=selectEntireReadProject;

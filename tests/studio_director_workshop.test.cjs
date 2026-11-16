@@ -103,7 +103,7 @@ test('explicit Write guidance asks for the draft, not another conversational rec
     "studioDirectorRequestMessages([{role:'user',content:'Discuss Scene'}],false)",context);
   const writing = await vm.runInContext(
     "studioDirectorRequestMessages([{role:'user',content:'Revise Scene'}],false,true)",context);
-  assert.match(conversational[0].content,/suggest at most one useful action/);
+  assert.match(conversational[0].content,/When creative fields are requested, return their complete actual authored values NOW/);
   assert.doesNotMatch(writing[0].content,/suggest at most one useful action/);
   assert.match(writing[0].content,/EXPLICIT WRITE/);
   assert.match(writing[0].content,/Produce the requested complete editable proposal/);
@@ -244,7 +244,7 @@ test('bounded Scene writer receives saved duration and linked constraints',()=>{
     .split('    makeProposal: function (')[0];
   const preview=workbench.split('  function showWriteContext() {')[1]
     .split('  function updateScope() {')[0];
-  assert.match(writer,/studioApprovedSavedContext\(story\)/);
+  assert.match(writer,/sceneRead\(story,sceneId\)/);
   assert.match(writer,/durationSeconds/);
   assert.match(preview,/durationSeconds:scene\.durationSeconds,invariantRefs:scene\.invariantRefs/);
 });
@@ -324,7 +324,7 @@ test('large explicit Read selections are sent intact, with no arbitrary client c
     loadStory:async()=>story,
     status:()=>{},
     updateScope:()=>{},
-    updateReadSelection:()=>{updates++;},
+    updateReadSelection:()=>{updates++;},renderApprovedSources(){},
     window:{
       studioDirectorBridge:{approveRead:(projectId,keys)=>{sent={projectId,keys};}},
       studioDirectorWorkbench:{setReadStatus:(_state,message)=>{readStatus=message;}}

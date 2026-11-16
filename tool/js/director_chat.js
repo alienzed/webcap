@@ -302,22 +302,8 @@
         (!explicitProject && state.studioStoryAccess &&
           state.studioStoryAccess.storyId !== navigation.projectId))
       return null;
-    var references = [], match, pattern = /\bscene\s*(\d+)\b/gi;
-    while ((match = pattern.exec(String(authorRequest || ''))))
-      references.push(Number(match[1]));
-    var group = /\bscenes\s+(\d+(?:\s*(?:,|and|&)\s*\d+)*)/i.exec(
-      String(authorRequest || ''));
-    if (group) group[1].match(/\d+/g).forEach(function (value) {
-      references.push(Number(value));
-    });
-    if (references.length) {
-      var distinct = Array.from(new Set(references));
-      if (distinct.length !== 1 || !navigation.sceneOrder ||
-          distinct[0] < 1 || distinct[0] > navigation.sceneOrder.length) return null;
-      return {projectId:navigation.projectId,
-        sceneId:navigation.sceneOrder[distinct[0] - 1],
-        sceneNumber:distinct[0],label:'Scene ' + distinct[0]};
-    }
+    // A Scene named in conversational prose is not a deterministic Write binding.
+    // Only selected UI context or an explicit Read selection supplies a target.
     if (navigation.sceneId) return {
       projectId: navigation.projectId, sceneId: navigation.sceneId,
       sceneNumber:navigation.sceneNumber,
@@ -1911,6 +1897,15 @@
 
   function prepareStudioProject(options) {
     if (state.pending || state.activeMode !== 'storyboard' || !state.sessionReady) return;
+    if (options && options.authoredFields) {
+      // The chat response already authored this material; review the exact fields.
+      state.studioProjectProposal = parseStudioProjectDraft(JSON.stringify(Object.assign({
+        title:'',concept:'',style:'',invariants:[],initialScenes:[],
+        rationale:'Authored in this Director conversation; no second model call.'
+      },options.authoredFields)));
+      showStudioProjectReview();
+      return;
+    }
     if (state.studioProjectProposal) { showStudioProjectReview(); return; }
     var workingProject = state.studioWorkingDraft.newProject;
     var authorRequest = String(options && options.authorRequest || options && options.instruction || '');
@@ -2425,9 +2420,9 @@
       var story = payload.story;
       if (!story || story.id !== storyId) throw new Error('Attached Project is unavailable.');
       var expected = { title: story.title, concept: story.concept, style: story.style, invariants: story.invariants };
-      var workingProject = state.studioWorkingDraft.projects[storyId] || {};
+      var workingProject = options && options.authoredFields || state.studioWorkingDraft.projects[storyId] || {};
       var authorRequest = String(options && options.authorRequest || instruction);
-      var sameWork = manualReview ||
+      var sameWork = !!(options && options.authoredFields) || manualReview ||
         state.studioWorkingDraft.sourceRequest === authorRequest ||
         studioRequestAppliesPreparedMaterial(authorRequest);
       var required = Object.keys(workingProject).filter(function (field) {
@@ -2454,7 +2449,9 @@
           'Preserve unrelated Project details and all Scenes. Keep the core appeal in Concept. ' +
           'WebCap merges requested fields and offers reviewed saving.',
         instruction: instruction, requestedFields: requestedFields,
-        project: studioApprovedSavedContext(story),
+        // This explicit targeted Project revision authorizes its own saved baseline.
+        project: {id:story.id,title:story.title,concept:story.concept,
+          style:story.style,invariants:story.invariants},
         unsavedWorkingFields:workingProject,discussion: discussion
       };
       return studioDirectorRequestMessages([{ role: 'user', content: JSON.stringify(input) }], false, true)
@@ -2462,7 +2459,8 @@
           window.studioDirectorWorkbench.showSentWriteContext('studio_brief_draft', messages);
           return requestJson('/fs/director/chat', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({model: state.modelId, operation: 'studio_brief_draft', messages: messages})
+            body: JSON.stringify({model: state.modelId, operation: 'studio_brief_draft', messages: messages,
+              requiredFields:requestedFields})
           });
         }).then(function (result) {
           if (!result.job || !result.job.jobId) throw new Error('Creative brief extraction was not queued.');
@@ -3123,9 +3121,8 @@
       }).slice(-8);
       var outbound = [{role:'system', content:''}].concat(recent.map(function (message, index) {
         var content = String(message.content || '');
-        // Earlier full authoring outputs belong in the structured working
-        // draft. Keep useful discussion excerpts; the live instruction stays
-        // verbatim, however long it is.
+        // The complete authored response is preserved in conversation history.
+        // This prose excerpt is bounded; structured material travels separately.
         if (index < recent.length - 1 && content.length > 3000)
           content = content.slice(0,1800) + '\n[Earlier long message abbreviated]\n' +
             content.slice(-900);
@@ -3145,11 +3142,10 @@
         '\nCURRENT PROJECT NAVIGATION (identity and one-based Scene positions; saved content is supplied separately when available):\n' + JSON.stringify(navigation) +
         (explicitWrite
           ? '\nEXPLICIT WRITE: The author has chosen to draft. Produce the requested complete editable proposal in the specified format. WebCap handles destination, editing and the selected direct-save or review policy.\n'
-          : '\nFor a direct question, answer fully and finish without a workflow suggestion. ' +
-            'When the author is developing material or requests a next step, suggest at most one useful action: ' +
-            'an appropriately scoped Write or an author-operated Studio action. ' +
-            'Fulfil the author’s request in conversation, including drafting complete material when asked. ' +
-            'Treat proposed work as unsaved until WebCap confirms an actual save, either directly or after review.\n') +
+          : '\nFor a direct question, answer directly. ' +
+            'When creative fields are requested, return their complete actual authored values NOW. ' +
+            'Do not describe a future Write action or claim that WebCap has saved anything. ' +
+            'Only WebCap determines review, destination and actual persistence.\n') +
         outbound[0].content };
       if (includePromptContract) outbound[0].content +=
         '\n\nH3 PRODUCTION PROMPT REFERENCE (know this template when discussing H3; apply it only when drafting an H3 Prompt field, not when authoring Project fields):\n' + payload.promptContract;
@@ -3158,18 +3154,26 @@
     });
   }
 
-  function studioApprovedSavedContext(story) {
+  function studioApprovedReadSources() {
     var approved = state.studioApprovedRead;
-    return approved && approved.projectId === story.id
-      ? window.studioDirectorWorkbench.approvedReadPayload(story,approved.keys)
+    if (!approved) return [];
+    if (Array.isArray(approved.sources)) return approved.sources;
+    // Compatibility with an existing in-memory single-Project selection.
+    return approved.projectId ? [approved] : [];
+  }
+
+  function studioApprovedSavedContext(story) {
+    var source = studioApprovedReadSources().find(function (item) {
+      return item.projectId === story.id;
+    });
+    return source
+      ? window.studioDirectorWorkbench.approvedReadPayload(story,source.keys)
       : null;
   }
 
   function studioDirectorChatRequestMessages(messages, selectedScene, navigationSnapshot, boundTarget) {
-    // Navigation binds a potential Write destination; it never grants Read.
-    // Only the author's explicitly approved Context selection can supply saved creative fields.
+    // Navigation is a suggested Write destination, never permission to Read.
     var navigation = navigationSnapshot || window.getStudioDirectorNavigation();
-    var approved = state.studioApprovedRead;
     var targetProjectId = selectedScene ? selectedScene.projectId :
       (studioAttachedStoryId() || navigation.projectId || '');
     if (boundTarget) {
@@ -3177,37 +3181,47 @@
       boundTarget.sceneId = selectedScene && selectedScene.projectId === targetProjectId ? selectedScene.sceneId : '';
       boundTarget.sceneNumber = boundTarget.sceneId ? selectedScene.sceneNumber : 0;
     }
-    var approvedId = approved && approved.projectId;
-    return (approvedId
-      ? requestJson('/fs/storyboard?story=' + encodeURIComponent(approvedId))
-      : Promise.resolve(null)).then(function (response) {
-      var story = response && response.story;
-      if (approvedId && (!story || story.id !== approvedId))
-        throw new Error('Approved Context Project is no longer available. Choose Context again.');
-      // Do not leak the Studio navigation or selected destination through model system context.
+    var sources = studioApprovedReadSources();
+    return Promise.all(sources.map(function (source) {
+      return requestJson('/fs/storyboard?story=' + encodeURIComponent(source.projectId))
+        .then(function (response) {
+          var story = response && response.story;
+          if (!story || story.id !== source.projectId)
+            throw new Error('Approved Context Project is no longer available. Change Context.');
+          return window.studioDirectorWorkbench.approvedReadPayload(story,source.keys);
+        });
+    })).then(function (approvedPayloads) {
+      // Do not leak the selected editor's creative content through automatic navigation context.
       return studioDirectorRequestMessages(messages, true, false,
         {projectId:'',projectTitle:'',sceneId:'',sceneNumber:0,sceneOrder:[]}).then(function (outbound) {
-        outbound[0].content += '\\n\\nSTUDIO CONVERSATION AND AUTHORING: Answer ordinary questions naturally. ' +
-          'When the author asks to create or revise Project material, return actual complete requested field values in changes.project. ' +
-          'When revising an existing Scene, return its actual complete replacement H3 Prompt in changes.scene.prompt; include title and durationSeconds when requested. ' +
-          'When creating Scenes, return scenes:[{title,prompt,durationSeconds}] with full complete H3 Prompts for all authored Scenes, including just one. ' +
-          'These fields are the authored result in this same response, not promises to draft on a subsequent button click. ' +
-          'Return every useful authored field and Scene. For ordinary discussion, no invented action or save claim. ' +
-          'WebCap retains, reviews and applies the returned material; neither the model nor its reply can certify a save.\\n';
-        if (story) {
-          var payload = window.studioDirectorWorkbench.approvedReadPayload(story,approved.keys);
-          outbound[0].content += '\\n\\nAUTHOR-APPROVED SAVED CONTEXT (refreshed for this request):\\n' +
-            JSON.stringify(payload) + '\\nNo other saved Project or Scene material is authorized.\\n';
+        outbound[0].content += '\n\nSTUDIO CONVERSATION AND AUTHORING: Answer ordinary questions naturally. ' +
+          'When the author requests Project material, return actual replacement field values in changes.project now. ' +
+          'When revising a Scene, return its full replacement H3 Prompt in changes.scene.prompt and any requested title or durationSeconds. ' +
+          'When authoring new Scenes, return scenes:[{title,prompt,durationSeconds}] with full prompts, whether one or many. ' +
+          'These actual fields are the authored result in this same response, not promises for another action. ' +
+          'Return all useful authored fields and Scenes. Ordinary discussion needs no invented action or save claim. ' +
+          'WebCap owns review, destination and persistence; only an actual save is authoritative.\n';
+        if (approvedPayloads.length) {
+          outbound[0].content += '\nAUTHOR-APPROVED SAVED CONTEXT (independent sources; refreshed for this request):\n' +
+            JSON.stringify(approvedPayloads) +
+            '\nEach source retains its own Project identity and is reference material, not an automatic Write destination.\n';
         } else {
-          outbound[0].content += '\\n\\nNO SAVED PROJECT/SCENE CONTEXT APPROVED. ' +
-            'Do not assume access to the Project selected in Studio.\\n';
+          outbound[0].content += '\nNO SAVED PROJECT/SCENE CONTEXT APPROVED. ' +
+            'Do not assume access to saved fields of the Project selected in Studio.\n';
         }
-        // Conversation-created drafts remain available independently of saved Project access.
-        var working = state.studioWorkingDraft;
-        if (Object.keys(working.newProject).length)
-          outbound[0].content += '\\nUNSAVED NEW PROJECT DRAFT:\\n' + JSON.stringify(working.newProject);
-        if (Object.keys(working.newScene).length)
-          outbound[0].content += '\\nUNSAVED NEW SCENE DRAFT:\\n' + JSON.stringify(working.newScene);
+        // Earlier authored responses belong to this conversation, not any selected Project.
+        // Include actual structured fields, rather than only the visible prose summary.
+        var prior = messages.filter(function (message) {
+          return message.role === 'assistant' && typeof message.rawResponse === 'string';
+        }).slice(-3).map(function (message) {
+          var parsed = parseStudioChatResponse(message.rawResponse);
+          return {changes:parsed.changes,scenes:parsed.scenes};
+        }).filter(function (material) {
+          return material.changes || material.scenes && material.scenes.length;
+        });
+        if (prior.length)
+          outbound[0].content += '\nRECENT UNSAVED MATERIAL AUTHORED IN THIS CONVERSATION:\n' +
+            JSON.stringify(prior) + '\nSaved fields, if any, must still come from the approved references above.\n';
         return outbound;
       });
     });
@@ -3261,8 +3275,8 @@
     var scene = studioWorkingFieldChanges(changes.scene,
       ['title','prompt','durationSeconds']);
     if (Object.keys(project).length) {
-      var projectKey = action && action.kind === 'create_project' ? '' :
-        String(target && target.projectId || '');
+      var projectKey = action && action.kind === 'write_project'
+        ? String(target && target.projectId || '') : '';
       if (projectKey) {
         working.projects[projectKey] = Object.assign({},working.projects[projectKey],project);
         changed = true;
@@ -3272,8 +3286,8 @@
       }
     }
     if (Object.keys(scene).length) {
-      var sceneKey = action && action.kind === 'create_scene' ? '' :
-        String(target && target.sceneId || '');
+      var sceneKey = action && action.kind === 'write_scenes'
+        ? String(target && target.sceneId || '') : '';
       if (sceneKey) {
         working.scenes[sceneKey] = Object.assign({},working.scenes[sceneKey],scene);
         changed = true;
@@ -3715,16 +3729,16 @@
           studioWorkingFieldChanges(studioResponse.changes.scene,
             ['title','prompt','durationSeconds']);
         if (projectFields && Object.keys(projectFields).length)
-          nextAction = {kind:studioResponse.action && studioResponse.action.kind === 'write_project'
-            ? 'write_project' : 'create_project',
-            instruction:content,fields:Object.keys(projectFields),authoredFields:projectFields};
+          // Creative fields are real material; the user chooses create vs revise in Review.
+          nextAction = {kind:'create_project',instruction:content,
+            fields:Object.keys(projectFields),authoredFields:projectFields};
         if (sceneFields && Object.keys(sceneFields).length && targetScene)
           nextAction = {kind:'write_scenes',instruction:content,
             fields:Object.keys(sceneFields),authoredFields:sceneFields};
-        if (activeChatMode === 'storyboard' && studioResponse && studioResponse.changes) {
-          studioMergeWorkingChanges(studioResponse.changes, resolvedTarget, nextAction, content);
+        // Conversation owns newly authored material in each persisted rawResponse.
+        // Do not copy it into a selected Project or Scene's working draft before Apply.
+        if (activeChatMode === 'storyboard' && studioResponse && studioResponse.changes)
           window.studioDirectorWorkbench.updateWorkingWrite();
-        }
         var authoredScenes = studioResponse && studioResponse.scenes;
         // A single Scene can also arrive in changes.scene. These are authored
         // structured fields, regardless of the optional action metadata.
@@ -4367,11 +4381,31 @@
       state.studioApprovedRead = null;
       syncModeUi();
     },
+    approvedReadSources: function () {
+      return studioApprovedReadSources().map(function (item) {
+        return {projectId:item.projectId,keys:item.keys.slice(),label:item.label};
+      });
+    },
+    removeApprovedRead: function (projectId) {
+      var remaining = studioApprovedReadSources().filter(function (item) {
+        return item.projectId !== projectId;
+      });
+      state.studioApprovedRead = remaining.length ? {
+        sources:remaining,label:remaining.map(function (item) {return item.label;}).join(' · ')
+      } : null;
+      syncModeUi();
+    },
     approveRead: function (projectId, keys) {
       if (!projectId || !Array.isArray(keys) || !keys.length)
         throw new Error('Choose saved Project details before approving Context.');
-      state.studioApprovedRead = {projectId:projectId,keys:keys.slice(),
-        label:window.studioDirectorWorkbench.approvedReadLabel(projectId,keys)};
+      var sources = studioApprovedReadSources().filter(function (item) {
+        return item.projectId !== projectId;
+      });
+      sources.push({projectId:projectId,keys:keys.slice(),
+        label:window.studioDirectorWorkbench.approvedReadLabel(projectId,keys)});
+      state.studioApprovedRead = {
+        sources:sources,label:sources.map(function (item) {return item.label;}).join(' · ')
+      };
       syncModeUi();
     },
     sendRead: function (payload, keys, instruction) {
@@ -4718,10 +4752,22 @@
           instruction:launch.instruction,
           authorRequest:launch.authorRequest || launch.instruction,
           requestedDurationSeconds:studioRequestedDuration(launch.authorRequest || launch.instruction),
-          project:studioApprovedSavedContext(story),
-          unsavedWorkingFields:studioRequestAppliesPreparedMaterial(
-            launch.authorRequest || launch.instruction) ?
-            (state.studioWorkingDraft.newScene || {}) : {}
+          // Explicitly launched Scene creation uses this selected Project's saved direction.
+          project:{
+            title:story.title,concept:story.concept,style:story.style,
+            invariants:story.invariants,
+            existingSceneTitles:order.map(function (id) {
+              var scene = story.scenes[id];
+              return scene && scene.title || '';
+            }),
+            previousScene:order.length ? (function () {
+              var prior = story.scenes[order[order.length - 1]];
+              return {title:prior.title,prompt:prior.prompt,durationSeconds:prior.durationSeconds};
+            })() : null,
+            unsavedWorkingFields:studioRequestAppliesPreparedMaterial(
+              launch.authorRequest || launch.instruction) ?
+              (state.studioWorkingDraft.newScene || {}) : {}
+          }
         });
         // Reuse complete structured Scene fields already authored in the
         // conversation; never ask the model to rewrite the same work.
@@ -4943,7 +4989,8 @@
             });
         }
         var authorRequest = String(launch.authorRequest || launch.instruction);
-        var context = studioApprovedSavedContext(story);
+        // Explicitly launching revision of this saved Scene authorizes its baseline.
+        var context = window.studioDirectorWorkbench.sceneRead(story,sceneId).payload;
         var instruction = JSON.stringify({
           task:'Revise this one existing Scene using the agreed creative instruction. ' +
             'Return one JSON object with a complete replacement H3 prompt. ' +
@@ -4962,7 +5009,8 @@
         state.pending = false;
         return window.studioDirectorBridge.makeProposal(instruction, 'studio_scene_field_draft', true,
           {projectId:storyId,projectTitle:story.title,sceneId:sceneId,
-            sceneNumber:story.sceneOrder.indexOf(sceneId)+1,sceneOrder:story.sceneOrder.slice()})
+            sceneNumber:story.sceneOrder.indexOf(sceneId)+1,sceneOrder:story.sceneOrder.slice()},
+          ['prompt'].concat(wantsTitle ? ['title'] : [], wantsDuration ? ['durationSeconds'] : []))
           .then(function (raw) {
             state.lastStudioIoRaw = raw;
             var proposed;
@@ -5036,7 +5084,7 @@
         syncControls();
       });
     },
-    makeProposal: function (instruction, operation, includePromptContract, navigationSnapshot) {
+    makeProposal: function (instruction, operation, includePromptContract, navigationSnapshot, requiredFields) {
       if (!this.isReady()) return Promise.reject(new Error('Director must be ready to draft.'));
       state.pending = true;
       syncControls();
@@ -5045,7 +5093,8 @@
         window.studioDirectorWorkbench.showSentWriteContext(operation || 'studio_scene_field_draft', messages);
         return requestJson('/fs/director/chat', {
           method:'POST',headers:{'Content-Type':'application/json'},
-          body:JSON.stringify({model:state.modelId,operation:operation || 'studio_scene_field_draft',messages:messages})
+          body:JSON.stringify({model:state.modelId,operation:operation || 'studio_scene_field_draft',
+            messages:messages,requiredFields:requiredFields || []})
         });
       }).then(function (payload) {
         if (!payload.job || !payload.job.jobId) throw new Error('Director did not queue a draft.');

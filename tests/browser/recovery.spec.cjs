@@ -50,7 +50,7 @@ test('Flow 7 failure checkpoint — external inference failure remains visible w
   });
   expect(queued.ok()).toBeTruthy();
   await say(page,'Discuss this Project before revising it.');
-  await expect(page.locator('#director-studio-action-status')).toContainText(/outage|unavailable|failed|error/i);
+  await expect(page.locator('#director-chat-progress')).toContainText(/outage|unavailable|failed|error/i);
   expect((await story(page,project.id)).sceneOrder).toHaveLength(0);
   expect((await observedModels(request)).calls).toHaveLength(1);
 });

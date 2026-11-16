@@ -2,6 +2,39 @@
 
 [Functional contract](studio-director-contract.md) is authoritative. This file tracks the three-operation implementation and evidence; it does not define a competing architecture. The earlier incremental plans and audits from November 14 were superseded by the three-operation cutover in PR #950. Consult the PR history for original gap analyses.
 
+## Scope correction — session material and independent references (2026-11-16)
+
+The functional contract and [Studio user flows](studio-user-flows.md)
+now clarify the original UX goal. This is an incremental correction to the
+existing three operations, not an agent subsystem replacement:
+
+1. **Documentation first:** distinguish authored conversation/session material,
+   explicitly approved, independently sourced Read references, a suggested
+   destination, and authoritative saved Project/Scene records.
+2. **Acceptance tests next:** prove a pivot from a selected Project to a new
+   Project; unsaved Scenes before choosing a destination; multiple Read sources
+   from unrelated Projects; switching projects while preserving the session;
+   a correctable default destination; and no second authoring call to reuse
+   material. Capture a deterministic real UI/route result before widening code.
+3. **Bounded code corrections:** use existing Context selection, session
+   messages/raw responses, Project and Scene Review/Apply surfaces and existing
+   save routes. Stop binding fresh creative material to selected Project/Scene
+   IDs before an author confirms its destination. Do not erase historical drafts
+   or invent model action parsing to choose a target.
+4. **Schema/request alignment:** model-facing guidance requires requested
+   authored fields, not merely optional hints. An explicitly launched authoring
+   operation should use required fields appropriate to that operation; ordinary
+   conversation still supports prose and best-effort partial results. Audit
+   provider schema compatibility before requiring nested union constructs.
+5. **Validation and risk:** focused deterministic tests must pass before
+   claiming compatibility; live-model adherence and browser-level behavior
+   require separate evidence. There is no new permission/quality gate or
+   requirement to confirm every already-explicit direct save.
+
+The historical #950 implementation status below is a dated snapshot and may
+describe paths now being corrected; it is not proof that flexible sourcing or
+destination-independent drafts already work.
+
 ## Implementation at the #950 handoff (2026-11-14)
 
 Branch: `codex/studio-director-three-operations`. The implementation is code-complete for its scoped flow and has passed the focused GitHub Actions checks; real-browser/selected-model acceptance is **not recorded as passed**. Do not infer production reliability from mocked regression tests.

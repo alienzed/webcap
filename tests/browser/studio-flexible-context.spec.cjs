@@ -1,0 +1,127 @@
+'use strict';
+const {test,expect}=require('./test.cjs');
+const {resetModel,queueModel,observedModels,openDirector,say,story,stories,
+  seedProject,seedScene,openProject,reopenDirectorIfClosed}=require('./helpers.cjs');
+
+test('Pivot: authored new Overview never overwrites the selected Project',async({page,request})=>{
+  await resetModel(request);
+  const a=await seedProject(page,'Pivot Source '+Date.now(),{
+    concept:'A totally unrelated lighthouse adventure.',style:'Blue storm light.'
+  });
+  await openDirector(page);
+  await openProject(page,a.id);
+  await reopenDirectorIfClosed(page);
+  const name='New Pivot '+Date.now();
+  await queueModel(request,{reply:'The different Project is drafted.',changes:{project:{
+    title:name,concept:'A woodcarver creates a tiny automaton.',
+    style:'Warm golden morning light.',invariants:[]}}});
+  await say(page,'Develop this separate idea as a new Project.');
+  const action=page.locator('#studio-dw-suggestions .studio-dw-suggestion-action');
+  await expect(action).toBeVisible();
+  const destination=page.locator('#studio-dw-suggestions select[aria-label="Project material destination"]');
+  await expect(destination).toHaveValue('');
+  await action.click();
+  await expect(page.locator('#studio-project-review')).toBeVisible();
+  await expect(page.locator('#studio-project-title')).toHaveValue(name);
+  await page.locator('#studio-project-create').click();
+  await expect.poll(async()=>(await stories(page)).some(item=>item.title===name)).toBeTruthy();
+  const newProject=(await stories(page)).find(item=>item.title===name);
+  expect((await story(page,newProject.id)).style).toBe('Warm golden morning light.');
+  expect((await story(page,a.id)).style).toBe('Blue storm light.');
+  expect((await observedModels(request)).calls).toHaveLength(1);
+});
+
+test('Cross-Project references: approved sources do not decide where material is applied',async({page,request})=>{
+  await resetModel(request);
+  const a=await seedProject(page,'Pacing Reference '+Date.now(),{
+    concept:'A sequence of rapid linked actions.',style:'Documentary natural light.'
+  });
+  const b=await seedProject(page,'Destination '+Date.now(),{
+    concept:'An unrelated workshop.',style:'Cold blue evening.'
+  });
+  const c=await seedProject(page,'Character Reference '+Date.now(),{
+    concept:'A separate world not involved in this destination.',
+    style:'Different unrelated lighting.',
+    invariants:[{kind:'character',title:'Mara',text:'Mara has a silver hairpin.'}]
+  });
+  const sourceScene=await seedScene(page,b.id,{
+    title:'Reference Character',prompt:'A violin maker enters through a red doorway.',
+    durationSeconds:8
+  });
+  await openDirector(page);
+  await openProject(page,b.id);
+  await reopenDirectorIfClosed(page);
+
+  const share=page.locator('#director-chat-context-approve');
+  await share.click();
+  await page.locator('#studio-dw-read-project').selectOption(a.id);
+  await expect(page.locator('#studio-dw-read-send')).toBeEnabled();
+  await page.locator('#studio-dw-read-send').click();
+
+  await share.click();
+  await page.locator('#studio-dw-read-project').selectOption(b.id);
+  await page.locator('#studio-dw-read-selection summary').click();
+  await page.locator('#studio-dw-project-fields input[data-group-select]').first().uncheck();
+  const sceneCheckbox=page.locator('#studio-dw-scene-fields input[data-group-select]');
+  await expect(sceneCheckbox).toHaveCount(1);
+  await sceneCheckbox.check();
+  await page.locator('#studio-dw-read-send').click();
+  await share.click();
+  await page.locator('#studio-dw-read-project').selectOption(c.id);
+  const overview=page.locator('#studio-dw-project-fields input[data-group-select]').first();
+  await overview.uncheck();
+  await page.locator('#studio-dw-project-fields input[data-group-select]').last().check();
+  await page.locator('#studio-dw-read-send').click();
+  await share.click();
+  await expect(page.locator('#studio-dw-approved-sources .studio-dw-approved-source')).toHaveCount(3);
+
+  await queueModel(request,{reply:'The revised visual atmosphere is ready.',
+    changes:{project:{style:'Coordinated fast-paced split-screen action.'}}});
+  await say(page,'Write a tighter atmosphere using the shared pacing reference.');
+  await expect.poll(async()=> (await observedModels(request)).calls.length).toBe(1);
+  const requestBody=(await observedModels(request)).calls[0];
+  const text=JSON.stringify(requestBody.messages);
+  expect(text).toContain('A sequence of rapid linked actions.');
+  expect(text).toContain('A violin maker enters through a red doorway.');
+  expect(text).toContain('Mara has a silver hairpin.');
+  expect(text).not.toContain('A separate world not involved in this destination.');
+  // The author chooses the destination in WebCap; references are not write IDs.
+  const destination=page.locator('#studio-dw-suggestions select[aria-label="Project material destination"]');
+  await destination.selectOption(b.id);
+  await page.locator('#studio-dw-suggestions .studio-dw-suggestion-action').click();
+  await expect(page.locator('#studio-brief-review')).toBeVisible();
+  await expect(page.locator('#studio-brief-target')).toContainText(b.title);
+  await expect(page.locator('#studio-brief-style')).toHaveValue('Coordinated fast-paced split-screen action.');
+  await page.locator('#studio-brief-apply').click();
+  await expect.poll(async()=>(await story(page,b.id)).style)
+    .toBe('Coordinated fast-paced split-screen action.');
+  expect((await story(page,a.id)).style).toBe('Documentary natural light.');
+  expect((await story(page,b.id)).scenes[sourceScene.id].prompt)
+    .toBe('A violin maker enters through a red doorway.');
+  expect((await observedModels(request)).calls).toHaveLength(1);
+});
+
+test('A Scene draft can be moved from its suggested Project to another before review',async({page,request})=>{
+  await resetModel(request);
+  const a=await seedProject(page,'Scene Source '+Date.now(),{style:'Evening light.'});
+  const b=await seedProject(page,'Scene Destination '+Date.now(),{style:'Daylight.'});
+  await openDirector(page);
+  await openProject(page,a.id);
+  await reopenDirectorIfClosed(page);
+  const scenes=[
+    {title:'Chase',prompt:'A courier crosses a crowded marketplace.',durationSeconds:8},
+    {title:'Arrival',prompt:'The courier enters a quiet courtyard.',durationSeconds:12}
+  ];
+  await queueModel(request,{reply:'Both Scenes are authored.',scenes});
+  await say(page,'Author two Scenes, then I will choose the destination.');
+  const destination=page.locator('#studio-dw-suggestions select[aria-label="Scene material destination"]');
+  await expect(destination).toHaveValue(a.id,'open Project is a visible suggestion only');
+  await destination.selectOption(b.id);
+  await page.locator('#studio-dw-suggestions .studio-dw-suggestion-action').click();
+  await expect(page.locator('#studio-scenes-review')).toBeVisible();
+  await expect(page.locator('#studio-scenes-rows .studio-scenes-row')).toHaveCount(2);
+  await page.locator('#studio-scenes-apply').click();
+  await expect.poll(async()=>(await story(page,b.id)).sceneOrder.length).toBe(2);
+  expect((await story(page,a.id)).sceneOrder).toHaveLength(0);
+  expect((await observedModels(request)).calls).toHaveLength(1);
+});

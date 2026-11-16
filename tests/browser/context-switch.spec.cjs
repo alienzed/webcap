@@ -22,7 +22,8 @@ test('Flow 5 — moving the Studio editor does not change a conversation-bound P
   });
   await say(page,'Revise the attached Project atmosphere to silver moonlight.');
   const action=page.locator('#studio-dw-suggestions .studio-dw-suggestion-action');
-  await expect(action).toContainText('Revise Project');
+  await expect(action).toContainText('Review authored Project');
+  await page.locator('#studio-dw-suggestions select[aria-label="Project material destination"]').selectOption(a.id);
   await action.click();
   await expect(page.locator('#studio-brief-review')).toBeVisible();
   await expect(page.locator('#studio-brief-target')).toContainText('Project A');

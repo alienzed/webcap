@@ -855,6 +855,38 @@
     }
     var host = el('studio-dw-suggestions');
     host.replaceChildren();
+    // One explicit, correctable choice for conversation-authored Project material.
+    // A selected editor or approved Read source is not permission to overwrite.
+    if (frozen.authoredFields &&
+        (frozen.kind === 'create_project' || frozen.kind === 'write_project')) {
+      var destination = document.createElement('select');
+      var destinationLabel = document.createElement('label');
+      destinationLabel.textContent = 'Destination ';
+      destination.setAttribute('aria-label','Project material destination');
+      var newOption = document.createElement('option');
+      newOption.value = ''; newOption.textContent = 'New Project';
+      destination.appendChild(newOption);
+      destination.onchange = function () {
+        frozen.kind = destination.value ? 'write_project' : 'create_project';
+        frozen.chosenProjectId = destination.value;
+        showConversationWrite();
+      };
+      destinationLabel.appendChild(destination);
+      host.appendChild(destinationLabel);
+      refreshProjects().then(function (items) {
+        items.forEach(function (item) {
+          var option = document.createElement('option');
+          option.value = item.id; option.textContent = 'Revise ' + storyName(item);
+          destination.appendChild(option);
+        });
+        // New Project is a safe visible default; the author can choose any saved target.
+        destination.value = frozen.kind === 'write_project' && frozen.projectId
+          ? frozen.projectId : '';
+        destination.onchange();
+      }).catch(function (error) {
+        status('Project destinations could not load: ' + error.message,true);
+      });
+    }
     var button = document.createElement('button');
     button.type = 'button';
     button.className = 'studio-dw-suggestion-action';

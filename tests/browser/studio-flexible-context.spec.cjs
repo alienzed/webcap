@@ -60,6 +60,7 @@ test('Cross-Project references: approved sources do not decide where material is
 
   await share.click();
   await page.locator('#studio-dw-read-project').selectOption(b.id);
+  await page.locator('#studio-dw-read-selection summary').click();
   await page.locator('#studio-dw-project-fields input[data-group-select]').first().uncheck();
   const sceneCheckbox=page.locator('#studio-dw-scene-fields input[data-group-select]');
   await expect(sceneCheckbox).toHaveCount(1);

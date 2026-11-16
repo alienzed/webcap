@@ -15,15 +15,15 @@ Each flow has independently observable checkpoints: a later failure must not obs
 **Check:** The reviewed Overview is actually saved under a new Project, not accidentally into the open Project; requested fields and invariants persist, and unrelated saved state is unchanged.
 
 ### 2. Create multiple Scenes
-**Do:** In that Project, request several Scenes, including specific nondefault durations; review already-authored material where available, or launch authoring from a brief, and save the useful results.  
-**Check:** Every usable returned Scene is available and saved/reviewed through the advertised path, without an unnecessary second model call; titles, complete prompts, durations, count, order and Project ownership match actual records. An incomplete Scene does not invalidate complete ones.
+**Do:** In that Project, request several Scenes, including specific nondefault durations; also author material before choosing the destination and then select its Project without regenerating it; review already-authored material where available, or launch authoring from a brief, and save the useful results.  
+**Check:** Selecting the destination after authoring never causes a second authoring call. Every usable returned Scene is available and saved/reviewed through the advertised path, without an unnecessary second model call; titles, complete prompts, durations, count, order and Project ownership match actual records. An incomplete Scene does not invalidate complete ones.
 
 ### 3. Revise an Overview and Scenes
-**Do:** Ask Director to revise selected Project details, then revise one Scene and a batch of Scenes; use the contextual Scene revision shortcut for one edit and the Director action for another.  
-**Check:** Only intended fields and Scenes change; old titles/durations, unrelated prompts and continuity details survive. Direct-save and reviewed-save behavior are clear before execution; each actual save, unchanged result, draft requiring review, failure and unattempted target is reported truthfully.
+**Do:** Ask Director to revise selected Project details, then revise one Scene and a batch of Scenes; use the contextual Scene revision shortcut for one edit and the Director action for another. Also revise a Project and its Scenes together: save the Project change first, then author the Scenes using the newly saved direction.  
+**Check:** The Project-first sequence uses freshly saved Project direction for subsequent Scene calls, without silently rewriting Scene prompts from a Project-only edit. Only intended fields and Scenes change; old titles/durations, unrelated prompts and continuity details survive. Direct-save and reviewed-save behavior are clear before execution; each actual save, unchanged result, draft requiring review, failure and unattempted target is reported truthfully.
 
 ### 4. Continue a creative conversation
-**Do:** Discuss changes, ask Director a precise question about saved Project and Scene details, then refine a previously authored idea and apply a useful revision after a follow-up.  
+**Do:** Discuss changes, explicitly Read selected Project/Scene values and inspect what was shared, update the saved source and Read again to confirm fresh values, then refine a previously authored idea and apply a useful revision after a follow-up.  
 **Check:** Read answers use the correct fresh saved context (including when the model replies in plain prose), without a separate acknowledgment-only call; conversation alone never saves. Existing complete authored material remains actionable after follow-ups, without re-authoring or silently replacing accepted work.
 
 ### 5. Switch Project context mid-conversation
@@ -35,12 +35,12 @@ Each flow has independently observable checkpoints: a later failure must not obs
 **Check:** Each response opens its own actual material; edits and unsaved status survive switching; reviewing or saving one does not falsely complete or overwrite the other.
 
 ### 7. Leave, return, and recover
-**Do:** Save some changes, leave other drafts uncommitted, navigate away or reopen the conversation, and resume; include one interrupted/failed operation and one edit conflicting with newer saved material.  
-**Check:** Saved state survives, recoverable drafts remain available where supported, conflicts and failures are visible, and retrying does not duplicate work. A save followed by a failed refresh/receipt is still reported as saved; an unconfirmed save never is.
+**Do:** Save some changes, leave other drafts uncommitted, navigate away or reopen the conversation, and resume; include one interrupted/failed operation and one edit conflicting with newer saved material. Exercise actual Undo/Redo after manual and Director edits, including independent fields, and reload the page.  
+**Check:** Field-scoped Undo/Redo restores the expected values without changing unrelated fields, and session-only field history clears after reload. Saved state survives, recoverable drafts remain available where supported, conflicts and failures are visible, and retrying does not duplicate work. A save followed by a failed refresh/receipt is still reported as saved; an unconfirmed save never is.
 
 ### 8. Compose with reusable Studio Blocks
-**Do:** Create or edit an Idea/Guidance Block, insert it into a partly written Director prompt using `/`, edit the resulting text and send when ready.  
-**Check:** Insertion occurs at the cursor without prematurely sending, preserving the rest of the prompt; the actual edited text is sent, with no hidden Block attachment or automatic Project mutation.
+**Do:** Create or edit an Idea/Guidance Block, reopen/edit it, copy and delete a Block, and insert another into a partly written Director prompt using `/`. Exercise arrow-key selection, Escape dismissal, and Enter insertion; edit the resulting text and send when ready.  
+**Check:** Reopen/edit persists; copy yields plain text; deletion removes the selected Block; keyboard navigation, Escape and Enter work without sending. Insertion occurs at the cursor without prematurely sending, preserving the rest of the prompt; the actual edited text is sent, with no hidden Block attachment or automatic Project mutation.
 
 ## Optional specialist flow
 

@@ -3121,9 +3121,8 @@
       }).slice(-8);
       var outbound = [{role:'system', content:''}].concat(recent.map(function (message, index) {
         var content = String(message.content || '');
-        // Earlier full authoring outputs belong in the structured working
-        // draft. Keep useful discussion excerpts; the live instruction stays
-        // verbatim, however long it is.
+        // The complete authored response is preserved in conversation history.
+        // This prose excerpt is bounded; structured material travels separately.
         if (index < recent.length - 1 && content.length > 3000)
           content = content.slice(0,1800) + '\n[Earlier long message abbreviated]\n' +
             content.slice(-900);
@@ -3143,11 +3142,10 @@
         '\nCURRENT PROJECT NAVIGATION (identity and one-based Scene positions; saved content is supplied separately when available):\n' + JSON.stringify(navigation) +
         (explicitWrite
           ? '\nEXPLICIT WRITE: The author has chosen to draft. Produce the requested complete editable proposal in the specified format. WebCap handles destination, editing and the selected direct-save or review policy.\n'
-          : '\nFor a direct question, answer fully and finish without a workflow suggestion. ' +
-            'When the author is developing material or requests a next step, suggest at most one useful action: ' +
-            'an appropriately scoped Write or an author-operated Studio action. ' +
-            'Fulfil the author’s request in conversation, including drafting complete material when asked. ' +
-            'Treat proposed work as unsaved until WebCap confirms an actual save, either directly or after review.\n') +
+          : '\nFor a direct question, answer directly. ' +
+            'When creative fields are requested, return their complete actual authored values NOW. ' +
+            'Do not describe a future Write action or claim that WebCap has saved anything. ' +
+            'Only WebCap determines review, destination and actual persistence.\n') +
         outbound[0].content };
       if (includePromptContract) outbound[0].content +=
         '\n\nH3 PRODUCTION PROMPT REFERENCE (know this template when discussing H3; apply it only when drafting an H3 Prompt field, not when authoring Project fields):\n' + payload.promptContract;

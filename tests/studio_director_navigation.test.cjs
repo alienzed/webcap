@@ -20,20 +20,18 @@ test('Director navigation supplies identity and Scene order without saved creati
   assert.equal(scope.getStudioDirectorNavigation().projectId,'');
 });
 
-test('the first explicit Studio message retains the Project destination without a Read',()=>{
+test('sending a Studio message never attaches an open Project automatically',()=>{
   const chat=fs.readFileSync(path.join(__dirname,'../tool/js/director_chat.js'),'utf8');
-  const start=chat.indexOf('      // An explicit message starts work in the open Project.');
-  const code=chat.slice(start,chat.indexOf('      state.workshopProposal = null;',start));
-  for (const existing of ['', 'chosen-project']) {
-    const state={studioStoryAccess:existing ? {storyId:existing,label:'Chosen'} : null};
-    const scope=vm.createContext({state,studioAttachedStoryId:()=>existing,
-      window:{getStudioDirectorNavigation:()=>({projectId:'open-project',projectTitle:'Open Project'})}});
-    vm.runInContext(code,scope);
-    assert.equal(state.studioStoryAccess.storyId,existing || 'open-project');
-    assert.deepEqual(Object.keys(state),['studioStoryAccess']);
-    assert.deepEqual(Object.keys(state.studioStoryAccess).sort(),['label','storyId']);
-  }
+  const start=chat.indexOf("  function sendMessage() {");
+  const end=chat.indexOf("  function ",start+10);
+  assert.ok(start>=0&&end>start);
+  const code=chat.slice(start,end);
+  assert.doesNotMatch(code,/state\\.studioStoryAccess\\s*=/,
+    'Only explicit attachment can change the Director association');
+  assert.match(code,/studioAttachedStoryId\\(\\).*selectedNavigation/,
+    'Navigation may still supply a suggested Write destination');
 });
+
 
 test('Director binds only after classic scripts have registered Studio navigation',()=>{
   const html=fs.readFileSync(path.join(__dirname,'../tool/tool.html'),'utf8');

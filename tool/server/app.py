@@ -2292,8 +2292,15 @@ def director_chat_route():
         if operation == "studio_chat":
             contract["response_schema"] = studio_chat_response_schema()
         if operation == "studio_brief_draft":
+            required_fields = data.get("requiredFields") or []
+            if not isinstance(required_fields, list) or any(
+                not isinstance(field, str) or field not in
+                {"title", "concept", "style", "invariants"} for field in required_fields
+            ):
+                raise ValueError("Invalid required Project fields.")
             contract["response_schema"] = {
                 "type": "object", "additionalProperties": False,
+                "required": list(dict.fromkeys(required_fields)),
                 "properties": {
                     "title": {"type": "string", "maxLength": 240},
                     "concept": {"type": "string"},
@@ -2313,9 +2320,16 @@ def director_chat_route():
                 },
             }
         if operation == "studio_scene_field_draft":
+            required_fields = data.get("requiredFields") or []
+            if not isinstance(required_fields, list) or any(
+                not isinstance(field, str) or field not in
+                {"title", "prompt", "durationSeconds"} for field in required_fields
+            ):
+                raise ValueError("Invalid required Scene fields.")
             contract["response_schema"] = {
                 "type": "object", "additionalProperties": False,
-                "required": ["prompt"],
+                "required": ["prompt"] + [field for field in
+                    dict.fromkeys(required_fields) if field != "prompt"],
                 "properties": {
                     "title": {"type": "string"},
                     "prompt": {"type": "string", "minLength": 1},

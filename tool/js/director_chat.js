@@ -1911,6 +1911,15 @@
 
   function prepareStudioProject(options) {
     if (state.pending || state.activeMode !== 'storyboard' || !state.sessionReady) return;
+    if (options && options.authoredFields) {
+      // The chat response already authored this material; review the exact fields.
+      state.studioProjectProposal = parseStudioProjectDraft(JSON.stringify(Object.assign({
+        title:'',concept:'',style:'',invariants:[],initialScenes:[],
+        rationale:'Authored in this Director conversation; no second model call.'
+      },options.authoredFields)));
+      showStudioProjectReview();
+      return;
+    }
     if (state.studioProjectProposal) { showStudioProjectReview(); return; }
     var workingProject = state.studioWorkingDraft.newProject;
     var authorRequest = String(options && options.authorRequest || options && options.instruction || '');
@@ -2425,9 +2434,9 @@
       var story = payload.story;
       if (!story || story.id !== storyId) throw new Error('Attached Project is unavailable.');
       var expected = { title: story.title, concept: story.concept, style: story.style, invariants: story.invariants };
-      var workingProject = state.studioWorkingDraft.projects[storyId] || {};
+      var workingProject = options && options.authoredFields || state.studioWorkingDraft.projects[storyId] || {};
       var authorRequest = String(options && options.authorRequest || instruction);
-      var sameWork = manualReview ||
+      var sameWork = !!(options && options.authoredFields) || manualReview ||
         state.studioWorkingDraft.sourceRequest === authorRequest ||
         studioRequestAppliesPreparedMaterial(authorRequest);
       var required = Object.keys(workingProject).filter(function (field) {
@@ -3279,8 +3288,8 @@
     var scene = studioWorkingFieldChanges(changes.scene,
       ['title','prompt','durationSeconds']);
     if (Object.keys(project).length) {
-      var projectKey = action && action.kind === 'create_project' ? '' :
-        String(target && target.projectId || '');
+      var projectKey = action && action.kind === 'write_project'
+        ? String(target && target.projectId || '') : '';
       if (projectKey) {
         working.projects[projectKey] = Object.assign({},working.projects[projectKey],project);
         changed = true;
@@ -3290,8 +3299,8 @@
       }
     }
     if (Object.keys(scene).length) {
-      var sceneKey = action && action.kind === 'create_scene' ? '' :
-        String(target && target.sceneId || '');
+      var sceneKey = action && action.kind === 'write_scenes'
+        ? String(target && target.sceneId || '') : '';
       if (sceneKey) {
         working.scenes[sceneKey] = Object.assign({},working.scenes[sceneKey],scene);
         changed = true;
@@ -3739,10 +3748,10 @@
         if (sceneFields && Object.keys(sceneFields).length && targetScene)
           nextAction = {kind:'write_scenes',instruction:content,
             fields:Object.keys(sceneFields),authoredFields:sceneFields};
-        if (activeChatMode === 'storyboard' && studioResponse && studioResponse.changes) {
-          studioMergeWorkingChanges(studioResponse.changes, resolvedTarget, nextAction, content);
+        // Conversation owns newly authored material in each persisted rawResponse.
+        // Do not copy it into a selected Project or Scene's working draft before Apply.
+        if (activeChatMode === 'storyboard' && studioResponse && studioResponse.changes)
           window.studioDirectorWorkbench.updateWorkingWrite();
-        }
         var authoredScenes = studioResponse && studioResponse.scenes;
         // A single Scene can also arrive in changes.scene. These are authored
         // structured fields, regardless of the optional action metadata.

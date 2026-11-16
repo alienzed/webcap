@@ -138,7 +138,9 @@ test('Read preview and outbound values use the same validated field serializer',
   assert.equal(result.fields[1].value,'Close-up');
   assert.throws(()=>scope.readPayload(story,['scene:missing:prompt']),/not in this Project/);
   assert.match(rail,/readPayload\(story, keys\)/);
-  assert.match(rail,/sendRead\(payload, keys, typeof instruction === 'string' \? instruction : undefined\)/);
+  assert.match(rail,/studioDirectorBridge\.approveRead\(story\.id, keys\)/);
+  assert.match(html,/id="studio-dw-read" type="button"/);
+  assert.match(html,/Approve context<\/button>/);
 });
 
 test('Read receipt uses delivery and response status, not model text parsing',()=>{

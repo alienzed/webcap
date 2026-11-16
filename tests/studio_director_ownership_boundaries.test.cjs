@@ -27,3 +27,9 @@ test('targeted Project Review consumes its passed destination instead of requiri
   assert.match(body,/proposal\.storyId === storyId/);
   assert.match(director,/prepareStudioBrief\(Object\.assign/);
 });
+
+test('saving a Project never revokes previously approved cross-Project Read sources',()=>{
+  const body=part('  function applyStudioProject() {','  function showStudioBriefReview() {');
+  assert.doesNotMatch(body,/state\.studioApprovedRead\s*=\s*null/,
+    'Approved sources are session references, not inherited from the saved destination');
+});

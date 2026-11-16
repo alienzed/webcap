@@ -248,6 +248,30 @@ def test_director_chat_route_preserves_all_structured_schemas(monkeypatch, opera
             assert captured["schema"]["properties"]["invariants"]["items"]["required"] == ["kind", "title", "text"]
 
 
+@pytest.mark.parametrize("operation, required_fields, expected", [
+    ("studio_brief_draft", ["style"], ["style"]),
+    ("studio_brief_draft", ["concept", "invariants"], ["concept", "invariants"]),
+    ("studio_scene_field_draft", ["prompt", "title"], ["prompt", "title"]),
+    ("studio_scene_field_draft", ["prompt", "durationSeconds"], ["prompt", "durationSeconds"]),
+])
+def test_explicit_studio_authoring_requires_each_requested_field(
+        monkeypatch, operation, required_fields, expected):
+    from tool.server import app as server
+    captured = {}
+
+    def enqueue(client, model, contract, context, label):
+        captured.update(contract)
+        return {"jobId": "test-required-fields"}
+
+    monkeypatch.setattr(server, "enqueue_llm", enqueue)
+    response = server.app.test_client().post("/fs/director/chat", json={
+        "model": "test", "operation": operation, "requiredFields": required_fields,
+        "messages": [{"role": "user", "content": "Return complete requested fields."}],
+    })
+    assert response.status_code == 202
+    assert captured["response_schema"]["required"] == expected
+
+
 def test_studio_chat_schema_accepts_read_and_one_optional_authoring_action():
     from tool.server.studio_director import chat_response_schema
 

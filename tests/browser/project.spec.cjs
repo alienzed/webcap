@@ -17,7 +17,7 @@ test('Flow 1 — create and review a Project Overview; verify actual persistence
   await openDirector(page);
   await say(page,'Create a Project with a rainy bookshop, title '+name+' and a red-scarfed bookseller.');
   const suggestion=page.locator('#studio-dw-suggestions .studio-dw-suggestion-action');
-  await expect(suggestion).toContainText('Create Project');
+  await expect(suggestion).toContainText('Review authored Project');
   await suggestion.click();
   await expect(page.locator('#studio-project-review')).toBeVisible();
   await expect(page.locator('#studio-project-title')).toHaveValue(name);
@@ -57,7 +57,7 @@ test('Flow 1 variation — missing optional action metadata does not hide usable
   await openDirector(page);
   await say(page,'Create a Project with a swaying lantern and violet moonlight.');
   const suggestion=page.locator('#studio-dw-suggestions .studio-dw-suggestion-action');
-  await expect(suggestion).toContainText('Create Project');
+  await expect(suggestion).toContainText('Review authored Project');
   await suggestion.click();
   await expect(page.locator('#studio-project-review')).toBeVisible();
   await expect(page.locator('#studio-project-title')).toHaveValue(name);

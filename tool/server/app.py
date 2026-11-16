@@ -2290,7 +2290,14 @@ def director_chat_route():
             raise ValueError("Unsupported Director Chat operation.")
         contract = {"operation": operation, "messages": messages}
         if operation == "studio_chat":
-            contract["response_schema"] = studio_chat_response_schema()
+            # Scene creation has a concrete authored-output contract. Ordinary
+            # Read and conversation keep their flexible reply shape.
+            authoring_goal = str(data.get("authoringGoal") or "").strip()
+            if authoring_goal not in {"", "create_scenes"}:
+                raise ValueError("Unsupported Studio authoring goal.")
+            contract["response_schema"] = studio_chat_response_schema(
+                scene_authoring=authoring_goal == "create_scenes"
+            )
         if operation == "studio_brief_draft":
             contract["response_schema"] = {
                 "type": "object", "additionalProperties": False,

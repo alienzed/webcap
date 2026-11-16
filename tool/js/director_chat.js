@@ -2146,9 +2146,9 @@
         // The author explicitly approved this read grant in the Create review.
         // Conversation history stays independent of which Project is open in Studio.
         state.studioStoryAccess = {storyId: payload.story.id, label: name};
-        // The newly created Project is a destination, not an inherited Read grant.
-        state.studioApprovedRead = null;
-        // The Scene from the previous Project cannot follow this explicit continuation.
+        // Continuing with the new Project changes the deliberate attachment,
+        // not the author's independently approved cross-Project references.
+        // The Scene from the previous Project cannot become a new write target.
         state.sceneRead = null;
         state.studioAccessIndex = null;
         el('director-studio-access-status').textContent = 'Connected to ' + name + '. No fields read yet.';

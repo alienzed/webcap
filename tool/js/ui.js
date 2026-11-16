@@ -64,14 +64,6 @@ function ensureContextMenu() {
           .catch(function(err) { setStatus(String(err && err.message ? err.message : err)); });
       }
     }
-    // F2: Rename selected media item
-    if (e.key === 'F2') {
-      if (deriveShellNavigationState().activity === 'media') return;
-      e.preventDefault();
-      if (state && state.currentItem && state.currentItem.fileName) {
-        promptRenameMedia(state.currentItem);
-      }
-    }
   });
   addEventListener('scroll', function (event) {
     if (contextMenuEl && contextMenuEl.contains(event.target)) return;

@@ -54,11 +54,17 @@ test('Live boundary — cancellation after a saved Scene preserves only confirme
       const saved=await story(page,project.id);
       const firstSaved=saved.scenes[originals[0].id].prompt!==originals[0].prompt;
       const running=await jobStatus(page,id);
-      if(terminalStatuses.has(running.status) && !firstSaved) earlyEnd=running;
+      if(terminalStatuses.has(running.status) && !firstSaved) {
+        earlyEnd=running;
+        throw new Error('Revision reached '+running.status+' before any Scene save: '+String(running.error||''));
+      }
       reachedFirst=firstSaved;
       return firstSaved;
     },{timeout:300000,intervals:[300,600,1000]}).toBe(true);
   } catch(error) {
+    const stillRunning=await jobStatus(page,id);
+    if(!terminalStatuses.has(stillRunning.status))
+      await page.request.post('/fs/director/job',{data:{operation:'cancel_job',jobId:id}});
     await record(testInfo,'cancel-before-first-save',{jobId:id,earlyEnd,project:await story(page,project.id)});
     throw error;
   }

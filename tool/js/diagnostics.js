@@ -262,7 +262,11 @@ function diagnosticsRenderAssessmentProgress(run) {
       diagnosticsEl('diagnostics-modal').classList.contains('hidden')) return;
   var host = diagnosticsEl('diagnostics-assessment-activity');
   var card = host.querySelector('[data-progress-card-id]');
-  if (!card) { card = ProgressCard.create(); host.replaceChildren(card); }
+  if (!card) {
+    card = ProgressCard.create();
+    card.appendChild(diagnosticsEl('diagnostics-assessment-stop'));
+    host.replaceChildren(card);
+  }
   host.classList.remove('hidden');
   var terminal = ['completed', 'failed', 'error', 'stopped', 'interrupted', 'cancelled'].indexOf(String(run.status)) !== -1;
   ProgressCard.update(card, modelLabProgressSnapshot(run), {

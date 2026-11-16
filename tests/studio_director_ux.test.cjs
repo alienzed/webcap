@@ -119,8 +119,8 @@ test('identical Invariants are not preselected because JSON properties arrived i
 });
 
 test('ordinary discussion asks for concise new decisions while complete creative fields remain complete',()=>{
-  assert.match(chat,/For ordinary discussion answer briefly, normally 1-3 sentences/);
-  assert.match(chat,/WebCap owns exact Project\/Scene IDs/);
+  assert.match(chat,/For ordinary discussion, no invented action or save claim/);
+  assert.match(chat,/WebCap retains, reviews and applies the returned material/);
 });
 
 test('compact Director replies keep the exact full text and leave General Chat alone',()=>{
@@ -269,7 +269,7 @@ test('Director reads Prompt even when a legacy Scene has no authored Prompt',()=
 test('Director conversation preserves actual authored Scene records alongside prose',()=>{
   const scope=vm.createContext({});
   vm.runInContext(part(chat,'  function parseStudioChatResponse(raw) {',
-    '  function studioActionFromExplicitRequest(request, selectedScene) {'),scope);
+    '  function storyboardRequestMessages('),scope);
   const response=scope.parseStudioChatResponse(JSON.stringify({
     reply:'I authored one usable Scene.',
     action:{kind:'create_scene',instruction:'Two eight-second Scenes'},

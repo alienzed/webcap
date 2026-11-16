@@ -46,3 +46,13 @@ test('explicit Scene entry can target B while Director remains attached to A',()
     'An explicitly opened Scene B must be usable without reattaching Director');
   assert.equal(state.studioStoryAccess.storyId,'A');
 });
+
+test('conversation Project review does not infer create-vs-revise from returned title',()=>{
+  const workbench=fs.readFileSync(path.join(__dirname,'../tool/js/studio_director_workbench.js'),'utf8');
+  const start=workbench.indexOf('  function presentAction(');
+  const end=workbench.indexOf('  window.studioDirectorWorkbench = {',start);
+  assert.ok(start>=0&&end>start);
+  const section=workbench.slice(start,end);
+  assert.doesNotMatch(section,/hasOwnProperty\.call\(frozen\.authoredFields,'title'\)/);
+  assert.match(section,/destination\.value = isProjectMaterial/);
+});

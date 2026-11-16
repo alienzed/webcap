@@ -74,7 +74,7 @@ def test_action_catalog_excludes_low_value_studio_director_operations():
 def test_project_coherence_remains_explicit_but_not_advertised_as_creative_action():
     from tool.server.studio_director import chat_response_schema
     assert "project.coherence.check" not in {action["name"] for action in ACTIONS}
-    kinds = chat_response_schema()["properties"]["action"]["anyOf"][1]["properties"]["kind"]["enum"]
+    kinds = chat_response_schema()["properties"]["action"]["properties"]["kind"]["enum"]
     assert "coherence-check" not in kinds, "Coherence remains a separate utility"
 
 
@@ -246,14 +246,13 @@ def test_studio_chat_schema_accepts_read_and_one_optional_authoring_action():
     from tool.server.studio_director import chat_response_schema
 
     schema = chat_response_schema()
-    assert schema["required"] == ["reply"], "A useful Read must not require action metadata"
-    assert schema["properties"]["reply"]["minLength"] == 1
+    assert schema["required"] == [], "A Scene draft need not include conversational prose or action metadata"
+    assert schema["properties"]["reply"]["type"] == "string"
     assert schema["properties"]["scenes"]["type"] == "array"
-    assert "scenes" not in schema["required"], "Discussion still allows plain answers"
-    nullable, suggestion = schema["properties"]["action"]["anyOf"]
-    assert nullable == {"type": "null"}
+    assert "scenes" not in schema["required"], "Read and Project writes need no Scene array"
+    suggestion = schema["properties"]["action"]
     assert suggestion["additionalProperties"] is False
-    assert set(suggestion["required"]) == {"kind", "instruction"}
+    assert not suggestion.get("required"), "Action suggestions never gate authored material"
     assert set(suggestion["properties"]["kind"]["enum"]) == {
         "create_project", "write_project", "create_scene", "write_scenes"
     }

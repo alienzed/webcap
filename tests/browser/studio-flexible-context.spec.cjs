@@ -39,6 +39,11 @@ test('Cross-Project references: approved sources do not decide where material is
   const b=await seedProject(page,'Destination '+Date.now(),{
     concept:'An unrelated workshop.',style:'Cold blue evening.'
   });
+  const c=await seedProject(page,'Character Reference '+Date.now(),{
+    concept:'A separate world not involved in this destination.',
+    style:'Different unrelated lighting.',
+    invariants:[{kind:'character',title:'Mara',text:'Mara has a silver hairpin.'}]
+  });
   const sourceScene=await seedScene(page,b.id,{
     title:'Reference Character',prompt:'A violin maker enters through a red doorway.',
     durationSeconds:8
@@ -61,7 +66,13 @@ test('Cross-Project references: approved sources do not decide where material is
   await sceneCheckbox.check();
   await page.locator('#studio-dw-read-send').click();
   await share.click();
-  await expect(page.locator('#studio-dw-approved-sources .studio-dw-approved-source')).toHaveCount(2);
+  await page.locator('#studio-dw-read-project').selectOption(c.id);
+  const overview=page.locator('#studio-dw-project-fields input[data-group-select]').first();
+  await overview.uncheck();
+  await page.locator('#studio-dw-project-fields input[data-group-select]').last().check();
+  await page.locator('#studio-dw-read-send').click();
+  await share.click();
+  await expect(page.locator('#studio-dw-approved-sources .studio-dw-approved-source')).toHaveCount(3);
 
   await queueModel(request,{reply:'The revised visual atmosphere is ready.',
     changes:{project:{style:'Coordinated fast-paced split-screen action.'}}});
@@ -70,6 +81,8 @@ test('Cross-Project references: approved sources do not decide where material is
   const text=JSON.stringify(requestBody.messages);
   expect(text).toContain('A sequence of rapid linked actions.');
   expect(text).toContain('A violin maker enters through a red doorway.');
+  expect(text).toContain('Mara has a silver hairpin.');
+  expect(text).not.toContain('A separate world not involved in this destination.');
   // The author chooses the destination in WebCap; references are not write IDs.
   const destination=page.locator('#studio-dw-suggestions select[aria-label="Project material destination"]');
   await destination.selectOption(b.id);

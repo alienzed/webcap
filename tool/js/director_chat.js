@@ -355,7 +355,7 @@
     el('director-studio-revision-controls').classList.toggle('hidden', !revision);
     el('director-chat-input').classList.toggle('hidden', revision);
     el('director-chat-scene-context').classList.toggle('hidden', revision ||
-      !studioDirectorSelectedScene());
+      !state.studioApprovedRead);
     el('studio-director-inspect').classList.toggle('hidden', revision || !studio);
     var preset = el('director-studio-revision-preset').value;
     el('director-studio-revision-fresh-label').classList.toggle('hidden', !revision || preset === 'coherence');
@@ -1908,8 +1908,7 @@
     var sameWork = manualReview ||
       state.studioWorkingDraft.sourceRequest === authorRequest ||
       studioRequestAppliesPreparedMaterial(authorRequest);
-    if (sameWork && workingProject && workingProject.concept && workingProject.style &&
-        !/\bscenes\b/i.test(authorRequest)) {
+    if (sameWork && workingProject && Object.keys(workingProject).length) {
       state.studioProjectProposal = parseStudioProjectDraft(JSON.stringify(Object.assign({
         title:'', concept:'', style:'', invariants:[], initialScenes:[],
         rationale:'Structured Project material retained from Director conversation.'
@@ -2419,10 +2418,10 @@
       var sameWork = manualReview ||
         state.studioWorkingDraft.sourceRequest === authorRequest ||
         studioRequestAppliesPreparedMaterial(authorRequest);
-      var required = requestedFields.length ? requestedFields : Object.keys(workingProject);
-      if (sameWork && required.length && required.every(function (field) {
-        return Object.prototype.hasOwnProperty.call(workingProject,field);
-      })) {
+      var required = Object.keys(workingProject).filter(function (field) {
+        return ['title','concept','style','invariants'].includes(field);
+      });
+      if (sameWork && required.length) {
         var drafted = Object.assign({},expected,workingProject);
         state.studioBriefProposal = {
           storyId:storyId,storyTitle:story.title,expected:expected,draft:drafted,
@@ -3295,29 +3294,6 @@
       scenes:Array.isArray(value.scenes) ? value.scenes : null};
   }
 
-  function studioActionFromExplicitRequest(request, selectedScene) {
-    // Plain-text remote models can answer correctly without returning the
-    // optional action JSON. Do not make a second LLM call to classify a clear
-    // author instruction. An action is only an offer, never an automatic save.
-    request = String(request || '').trim();
-    if (!request || /[?]\s*$/.test(request)) return null;
-    // A command starts with the requested operation. Mentioning an editing
-    // verb inside a factual question ("make no changes") is not a write.
-    var command = request.replace(/^(?:please|let['’]s)\s+/i, '');
-    var kind = '';
-    if (/^(?:create|start|add|draft|make|write)\b[\s\S]{0,45}\b(?:new\s+)?project\b/i.test(command))
-      kind = 'create_project';
-    else if (/^(?:create|add|draft|write|make)\b[\s\S]{0,45}\b(?:new\s+)?scenes?\b/i.test(command) &&
-        /\b(?:new|create|add|draft)\b/i.test(request))
-      kind = 'create_scene';
-    else if (/^(?:revise|rewrite|update|edit|change|improve|adjust|rename|save|apply|use)\b[\s\S]{0,65}\b(?:project|concept|overview|invariants|atmosphere|visuals)\b/i.test(command))
-      kind = 'write_project';
-    else if (/^(?:revise|rewrite|update|edit|change|improve|adjust|rename|make|quiet|shorten|extend|fix|save|apply|use)\b/i.test(command) &&
-        (selectedScene || /\bscenes?\s*\d+\b/i.test(request)))
-      kind = 'write_scenes';
-    if (!kind) return null;
-    return {kind:kind,instruction:request,fields:[]};
-  }
 
   function storyboardRequestMessages(messages, includePrimer) {
     var context = includePrimer === false ? [] : [STORYBOARD_WORKSHOP_PRIMER];

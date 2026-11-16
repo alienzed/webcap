@@ -2471,7 +2471,8 @@
           window.studioDirectorWorkbench.showSentWriteContext('studio_brief_draft', messages);
           return requestJson('/fs/director/chat', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({model: state.modelId, operation: 'studio_brief_draft', messages: messages})
+            body: JSON.stringify({model: state.modelId, operation: 'studio_brief_draft', messages: messages,
+              requiredFields:requestedFields})
           });
         }).then(function (result) {
           if (!result.job || !result.job.jobId) throw new Error('Creative brief extraction was not queued.');
@@ -5009,7 +5010,8 @@
         state.pending = false;
         return window.studioDirectorBridge.makeProposal(instruction, 'studio_scene_field_draft', true,
           {projectId:storyId,projectTitle:story.title,sceneId:sceneId,
-            sceneNumber:story.sceneOrder.indexOf(sceneId)+1,sceneOrder:story.sceneOrder.slice()})
+            sceneNumber:story.sceneOrder.indexOf(sceneId)+1,sceneOrder:story.sceneOrder.slice()},
+          ['prompt'].concat(wantsTitle ? ['title'] : [], wantsDuration ? ['durationSeconds'] : []))
           .then(function (raw) {
             state.lastStudioIoRaw = raw;
             var proposed;
@@ -5083,7 +5085,7 @@
         syncControls();
       });
     },
-    makeProposal: function (instruction, operation, includePromptContract, navigationSnapshot) {
+    makeProposal: function (instruction, operation, includePromptContract, navigationSnapshot, requiredFields) {
       if (!this.isReady()) return Promise.reject(new Error('Director must be ready to draft.'));
       state.pending = true;
       syncControls();
@@ -5092,7 +5094,8 @@
         window.studioDirectorWorkbench.showSentWriteContext(operation || 'studio_scene_field_draft', messages);
         return requestJson('/fs/director/chat', {
           method:'POST',headers:{'Content-Type':'application/json'},
-          body:JSON.stringify({model:state.modelId,operation:operation || 'studio_scene_field_draft',messages:messages})
+          body:JSON.stringify({model:state.modelId,operation:operation || 'studio_scene_field_draft',
+            messages:messages,requiredFields:requiredFields || []})
         });
       }).then(function (payload) {
         if (!payload.job || !payload.job.jobId) throw new Error('Director did not queue a draft.');

@@ -3906,9 +3906,9 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
 }
 
 
-/* Studio Director: dedicated action/feedback rail. Legacy controls remain wired
-   for old saved conversations, but no longer compete with the new Read/Write UI. */
-.director-chat-drawer.studio-director #director-studio-flow { display: none !important; }
+/* Keep Project attachment and explicit Read accessible beside Write. The old
+   capture shortcut is superseded by the current review actions. */
+.director-chat-drawer.studio-director #director-studio-flow > .director-studio-flow-main { display: none; }
 .director-chat-drawer.studio-director .studio-director-workbench {
   display:flex;flex-direction:column;min-height:0;overflow-y:auto;
   padding:18px;gap:16px;font-size:16px;line-height:1.45;

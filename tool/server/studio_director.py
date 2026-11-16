@@ -42,7 +42,12 @@ _WORKSHOP = (
     "Use only saved creative material actually supplied in this request; a Project ID or permission alone conveys no field content. "
     
     "Only an actual WebCap save makes authored content authoritative, whether direct or reviewed. "
-    "Suggest an optional Write action when useful. Return only newly authored fields in changes.project/scene when available; creative Scene Prompt replacements must be complete. A missing optional field leaves other material useful. WebCap resolves the actual destination and chooses direct save or review. Read may be plain prose.\n"
+    "For new Scene requests, author and return actual Scene records in scenes, with a complete prompt and useful title and duration when available. "
+    "Return every usable record, even if fewer or more than requested. The records, not an action promise, are the result. "
+    "A single new Scene may also use changes.scene for its authored fields. "
+    "For Project or existing Scene revisions, return newly authored fields in changes.project or changes.scene, with complete replacement prompts when editing creative content. "
+    "Action hints and conversational replies are optional and never substitute for requested creative content. "
+    "WebCap owns destination, actions, review and persistence. Read may be plain prose.\n"
 )
 
 
@@ -103,15 +108,16 @@ _H3_STUDIO_CORE = (
 def chat_response_schema():
     """A conversational answer with, optionally, one proposed creative action.
 
-    Read is equally valid as plain prose; the UI treats this schema as advisory.
-    The model supplies no saved IDs or target authority.
+    Transport shape only; a schema-valid reply is not evidence that an
+    authored Scene exists. Read can be plain prose, and model output never
+    supplies authoritative IDs, destinations or save actions.
     """
     return {
         "type": "object",
         "additionalProperties": False,
-        "required": ["reply"],
+        "required": [],
         "properties": {
-            "reply": {"type": "string", "minLength": 1},
+            "reply": {"type": "string"},
             "changes": {
                 "type": "object", "additionalProperties": False,
                 "properties": {
@@ -136,7 +142,7 @@ def chat_response_schema():
             },
             "scenes": {
                 "type": "array", "maxItems": 32,
-                "description": "Actually authored, unsaved Scene records for review; no implied completion count.",
+                "description": "For Scene creation return the actual authored records here, with prompts, titles and durations when available; WebCap counts and reviews them.",
                 "items": {
                     "type": "object", "additionalProperties": False,
                     "properties": {
@@ -147,26 +153,20 @@ def chat_response_schema():
                 },
             },
             "action": {
-                "anyOf": [
-                    {"type": "null"},
-                    {
-                        "type": "object",
-                        "additionalProperties": False,
-                        "required": ["kind", "instruction"],
-                        "properties": {
-                            "kind": {"type": "string", "enum": [
-                                "create_project", "write_project",
-                                "create_scene", "write_scenes",
-                            ]},
-                            "instruction": {"type": "string", "minLength": 1},
-                            "fields": {"type": "array", "maxItems": 4,
-                                       "items": {"type": "string", "enum": [
-                                           "title", "concept", "style", "invariants",
-                                           "prompt", "durationSeconds",
-                                       ]}},
-                        },
-                    },
-                ],
+                "type": "object", "additionalProperties": False,
+                "description": "Optional suggestion; authored content lives in changes or scenes.",
+                "properties": {
+                    "kind": {"type": "string", "enum": [
+                        "create_project", "write_project",
+                        "create_scene", "write_scenes",
+                    ]},
+                    "instruction": {"type": "string"},
+                    "fields": {"type": "array", "maxItems": 4,
+                               "items": {"type": "string", "enum": [
+                                   "title", "concept", "style", "invariants",
+                                   "prompt", "durationSeconds",
+                               ]}},
+                },
             },
         },
     }

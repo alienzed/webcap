@@ -5,3 +5,5 @@ tool/config.json
 .webcap_state.json
 # Local agent audit scripts and temporary test state.
 /.audit-*
+/node_modules/
+/test-results/

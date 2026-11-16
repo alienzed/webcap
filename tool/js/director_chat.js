@@ -3178,9 +3178,10 @@
         'Fields lists only requested changed fields: Project title/concept/style/invariants or Scene title/prompt/durationSeconds. ' +
         'WebCap owns exact Project/Scene IDs, navigation, execution and saving. Do not invent saved IDs, readiness checks, ' +
         'permission metadata, capture fields or assessments. For an existing Scene revision propose write_scenes; ' +
-        'for a new Scene, author the actual material in scenes:[{title,prompt,durationSeconds}] in the same response. ' +
-        'Return the useful Scene records you can produce, even if fewer than requested; do not promise or simulate additional Scenes. ' +
-        'The scenes array represents unsaved editable drafts, not a completed save. ' +
+        'For new Scenes, author the requested content in scenes:[{title,prompt,durationSeconds}] in this response; the actual records are the result. ' +
+        'Return each usable authored Scene, even if the count differs from the request. A single Scene may instead use changes.scene. ' +
+        'A separate action hint is unnecessary for authored records; WebCap chooses the review and save destination. ' +
+        'The Scene fields remain unsaved editable drafts until WebCap confirms persistence. ' +
         'For other creative changes, offer a review action; provide full revised prose only when requested.\n';
       if (!selectedScene) {
         if (!story) {
@@ -3757,6 +3758,22 @@
           )});
         }
         var authoredScenes = studioResponse && studioResponse.scenes;
+        // A single Scene can also arrive in changes.scene. These are authored
+        // structured fields, regardless of the optional action metadata.
+        if (activeChatMode === 'storyboard' && !targetScene &&
+            (!authoredScenes || !authoredScenes.length) && studioResponse &&
+            studioResponse.changes && studioResponse.changes.scene) {
+          var sourceScene = studioResponse.changes.scene;
+          if (sourceScene && typeof sourceScene === 'object' && !Array.isArray(sourceScene)) {
+            var singleScene = {};
+            ['title','prompt','durationSeconds'].forEach(function (field) {
+              if (Object.prototype.hasOwnProperty.call(sourceScene,field))
+                singleScene[field] = sourceScene[field];
+            });
+            // Invalid duration is still useful review metadata for correction.
+            if (Object.keys(singleScene).length) authoredScenes = [singleScene];
+          }
+        }
         if (activeChatMode === 'storyboard' && authoredScenes && authoredScenes.length) {
           // These are the actual unsaved records, not an action promise.
           // Keep the review action with its material for conversation recovery.
@@ -3767,7 +3784,7 @@
         if (nextAction) {
           try {
             messages[messages.length - 1].writeAction = window.studioDirectorWorkbench.presentAction(
-              nextAction, targetScene, targetProject, content);
+              nextAction, targetScene, targetProject, content, messages.length - 1);
           } catch (processingError) {
             // Optional action presentation must never invalidate a useful answer.
             window.reportConsoleError('Studio action suggestion', processingError);

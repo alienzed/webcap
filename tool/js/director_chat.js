@@ -858,14 +858,9 @@
           if (!entry.writeAction) continue;
           var proposal = entry.writeAction;
           if (proposal.completed) break;
-          // The saved response, not a duplicated action promise, owns authored
-          // material. History preserves rawResponse but intentionally retains
-          // only minimal action metadata.
-          if (proposal.kind === 'create_scene' && entry.rawResponse) {
-            var restored = parseStudioChatResponse(entry.rawResponse);
-            if (restored.scenes && restored.scenes.length)
-              proposal = Object.assign({},proposal,{scenes:restored.scenes});
-          }
+          // Only real authored material in the original response reopens review.
+          proposal = studioRestoreAuthoredAction(proposal,entry.rawResponse);
+          if (!proposal) continue;
           window.studioDirectorWorkbench.presentAction(proposal, proposal.scene,
             {projectId:proposal.projectId}, proposal.request, actionIndex);
           break;
@@ -1330,6 +1325,25 @@
     node.classList.add('hidden');
   }
 
+  function studioRestoreAuthoredAction(action, rawResponse) {
+    if (!action || !rawResponse) return null;
+    var response = parseStudioChatResponse(rawResponse);
+    var restored = Object.assign({},action);
+    if (action.kind === 'create_scene' && response.scenes && response.scenes.length)
+      restored.scenes = response.scenes;
+    else if (action.kind === 'create_scene' && response.changes && response.changes.scene)
+      restored.scenes = [response.changes.scene];
+    else if ((action.kind === 'write_project' || action.kind === 'create_project') &&
+             response.changes && response.changes.project)
+      restored.authoredFields = studioWorkingFieldChanges(response.changes.project,
+        ['title','concept','style','invariants']);
+    else if (action.kind === 'write_scenes' && response.changes && response.changes.scene)
+      restored.authoredFields = studioWorkingFieldChanges(response.changes.scene,
+        ['title','prompt','durationSeconds']);
+    return (restored.scenes && restored.scenes.length) ||
+      (restored.authoredFields && Object.keys(restored.authoredFields).length) ? restored : null;
+  }
+
   function renderMessages() {
     var host = el('director-chat-messages');
     var empty = el('director-chat-empty');
@@ -1418,25 +1432,18 @@
       // control, so earlier replies get a launcher bound to their saved
       // response, never a copy of the latest reply's action closure.
       if (studioReply && index !== state.studioActionIndex &&
-          message.writeAction && message.writeAction.kind === 'create_scene' &&
-          !message.writeAction.completed) {
+          message.writeAction && !message.writeAction.completed &&
+          studioRestoreAuthoredAction(message.writeAction,message.rawResponse)) {
         var savedAction = message.writeAction;
         var oldAction = document.createElement('button');
         oldAction.type = 'button';
         oldAction.className = 'studio-dw-suggestion-action';
         oldAction.dataset.suggestionKind = 'write';
-        oldAction.textContent = 'Review authored Scene(s)';
+        oldAction.textContent = savedAction.kind === 'create_scene' || savedAction.kind === 'write_scenes'
+          ? 'Review authored Scene(s)' : 'Review authored Project';
         oldAction.onclick = function () {
-          var proposal = savedAction;
-          // The original response contains the authoritative authored records;
-          // action hints may be absent or incorrect.
-          if (proposal.kind === 'create_scene' && !Array.isArray(proposal.scenes) && message.rawResponse) {
-            var recovered = parseStudioChatResponse(message.rawResponse);
-            if (recovered.scenes && recovered.scenes.length)
-              proposal = Object.assign({},proposal,{scenes:recovered.scenes});
-            else if (recovered.changes && recovered.changes.scene)
-              proposal = Object.assign({},proposal,{scenes:[recovered.changes.scene]});
-          }
+          var proposal = studioRestoreAuthoredAction(savedAction,message.rawResponse);
+          if (!proposal) return;
           window.studioDirectorWorkbench.presentAction(proposal, proposal.scene,
             {projectId:proposal.projectId}, proposal.request, index);
           renderMessages();

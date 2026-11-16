@@ -141,6 +141,17 @@ call is required solely to decide or change the destination.
 
 ### Conversation material, provenance and destination
 
+**Four independent identities (normative):**
+
+- **Navigation:** the Project and Scene currently visible in Storyboard. Opening, switching or focusing an editor changes navigation only.
+- **Conversation attachment:** the Project the author deliberately chose as Director's working association, if any. It is a persistent convenience for labels and default target suggestion, **not** authorization to Read saved creative fields. Sending a message, opening a Project, selecting a Read reference or choosing a destination must never implicitly create, replace or clear this association. Only an explicit attach/detach action (and the existing explicit "continue with created Project" choice) changes it.
+- **Approved Read sources:** an independently selected, potentially multi-Project list of saved fields the author permitted the model to see. Neither navigation, attachment nor Write destination grants Read approval. The explicit operation-specific authoring shortcut may read its exact, already-authorized target as described above.
+- **Write destination:** a proposal's suggested or author-chosen Project/Scene target, confirmed at Apply or frozen when an explicit direct-save operation launches. Changing the destination affects **that operation only**; it does not reattach the conversation or change approved Read sources. At Apply, WebCap loads the destination's fresh saved values, validates the target, merges only received/requested fields, and persists only the chosen record. A destination remains editable until execution is launched.
+
+**Recommendation versus authorization:** the current navigation or deliberate attachment can suggest a destination; a returned `title`, a missing `title`, a model action hint or the source Project must not decide create-versus-revise. The author chooses **New Project** or an **existing Project** explicitly in the current Review/Apply surface. Choosing a different target must not cause another creative model call. Do not turn a suggestion into an automatic attachment.
+
+**Conversational authoring versus explicit writing:** ordinary chat supports discussion and can return independently useful structured creative fields in the same response. The general chat schema cannot require a Project or Scene field on *every* turn; it must, however, provide a real structured authoring path and positively instruct the model to return the requested fields. Explicitly launched Write Project/Scene operations select the appropriate operation-specific required-field schema rather than pretending the conversation's optional fields are mandatory. A missing requested field is an observable failure of that authoring checkpoint, not permission to discard unrelated useful fields.
+
 The conversation/session owns unsaved Project and Scene drafts, including
 multiple alternatives across responses. Provenance records which approved saved
 reference(s), if any, influenced a draft; it is not a required Project link.

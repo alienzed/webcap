@@ -74,8 +74,7 @@ test('Flow 6 — each conversation reply owns its own editable Scene review',asy
   await model.selectOption('acceptance::acceptance-model');
   await queueModel(request,{
     reply:'First Scene is ready.',
-    scenes:[{title:'First',prompt:'First unique scene prompt.',durationSeconds:8}],
-    action:{kind:'create_scene',instruction:'Create a first Scene.'}
+    scenes:[{title:'First',prompt:'First unique scene prompt.',durationSeconds:8}]
   });
   await say(page,'Create a first Scene');
   let action=page.locator('#studio-dw-suggestions .studio-dw-suggestion-action');
@@ -89,8 +88,7 @@ test('Flow 6 — each conversation reply owns its own editable Scene review',asy
 
   await queueModel(request,{
     reply:'Second Scene is ready.',
-    scenes:[{title:'Second',prompt:'Second unique scene prompt.',durationSeconds:10}],
-    action:{kind:'create_scene',instruction:'Create a second Scene.'}
+    scenes:[{title:'Second',prompt:'Second unique scene prompt.',durationSeconds:10}]
   });
   await say(page,'Create a second Scene');
   action=page.locator('#studio-dw-suggestions .studio-dw-suggestion-action');

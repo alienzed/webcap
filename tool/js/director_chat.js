@@ -4363,6 +4363,10 @@
         return {role:message.role,content:message.content};
       });
     },
+    clearApprovedRead: function () {
+      state.studioApprovedRead = null;
+      syncModeUi();
+    },
     approveRead: function (projectId, keys) {
       if (!projectId || !Array.isArray(keys) || !keys.length)
         throw new Error('Choose saved Project details before approving Context.');

@@ -98,3 +98,28 @@ test('Cross-Project references: approved sources do not decide where material is
     .toBe('A violin maker enters through a red doorway.');
   expect((await observedModels(request)).calls).toHaveLength(1);
 });
+
+test('A Scene draft can be moved from its suggested Project to another before review',async({page,request})=>{
+  await resetModel(request);
+  const a=await seedProject(page,'Scene Source '+Date.now(),{style:'Evening light.'});
+  const b=await seedProject(page,'Scene Destination '+Date.now(),{style:'Daylight.'});
+  await openDirector(page);
+  await openProject(page,a.id);
+  await reopenDirectorIfClosed(page);
+  const scenes=[
+    {title:'Chase',prompt:'A courier crosses a crowded marketplace.',durationSeconds:8},
+    {title:'Arrival',prompt:'The courier enters a quiet courtyard.',durationSeconds:12}
+  ];
+  await queueModel(request,{reply:'Both Scenes are authored.',scenes});
+  await say(page,'Author two Scenes, then I will choose the destination.');
+  const destination=page.locator('#studio-dw-suggestions select[aria-label="Scene material destination"]');
+  await expect(destination).toHaveValue(a.id,'open Project is a visible suggestion only');
+  await destination.selectOption(b.id);
+  await page.locator('#studio-dw-suggestions .studio-dw-suggestion-action').click();
+  await expect(page.locator('#studio-scenes-review')).toBeVisible();
+  await expect(page.locator('#studio-scenes-rows .studio-scenes-row')).toHaveCount(2);
+  await page.locator('#studio-scenes-apply').click();
+  await expect.poll(async()=>(await story(page,b.id)).sceneOrder.length).toBe(2);
+  expect((await story(page,a.id)).sceneOrder).toHaveLength(0);
+  expect((await observedModels(request)).calls).toHaveLength(1);
+});

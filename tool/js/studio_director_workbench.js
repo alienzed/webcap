@@ -97,6 +97,11 @@
     }
     var overview = projectFields.map(function (key) {return 'project.' + key;});
     addUnit('Overview', overview, fields, true);
+    // An individual Invariant can be shared without sharing the entire Overview.
+    (story.invariants || []).forEach(function (item) {
+      var key = 'invariant:' + encodeURIComponent(item.kind) + ':' + encodeURIComponent(item.title);
+      addUnit('Invariant · ' + (item.title || 'Untitled'), [key], fields, false);
+    });
     (story.sceneOrder || []).forEach(function (id, index) {
       var scene = story.scenes && story.scenes[id];
       if (!scene) throw new Error('Project has a Scene index with no matching Scene.');
@@ -132,6 +137,12 @@
           var field = key.slice(8);
           if (projectFields.indexOf(field) === -1) throw new Error('Unknown Project field: ' + field);
           value = story[field];
+        } else if (parts[0] === 'invariant' && parts.length === 3) {
+          var kind = decodeURIComponent(parts[1]), title = decodeURIComponent(parts[2]);
+          value = (story.invariants || []).find(function (item) {
+            return item.kind === kind && item.title === title;
+          });
+          if (!value) throw new Error('Selected Invariant is no longer in this Project: ' + key);
         } else {
           if (parts.length !== 3 || parts[0] !== 'scene' ||
               ['title','prompt','durationSeconds'].indexOf(parts[2]) === -1 ||
@@ -151,8 +162,10 @@
     var toggles = Array.from(el('studio-dw-read-panel').querySelectorAll('input[data-group-select]'));
     var overview = toggles.some(function (toggle) {return toggle.checked && toggle.groupPaths[0].startsWith('project.');});
     var sceneCount = toggles.filter(function (toggle) {return toggle.checked && toggle.groupPaths[0].startsWith('scene:');}).length;
+    var invariantCount = toggles.filter(function (toggle) {return toggle.checked && toggle.groupPaths[0].startsWith('invariant:');}).length;
     el('studio-dw-read-selection-summary').textContent = units && units === toggles.length ? 'Entire Project' :
-      [overview ? 'Overview' : '', sceneCount ? sceneCount + (sceneCount === 1 ? ' Scene' : ' Scenes') : '']
+      [overview ? 'Overview' : '', invariantCount ? invariantCount + (invariantCount === 1 ? ' Invariant' : ' Invariants') : '',
+        sceneCount ? sceneCount + (sceneCount === 1 ? ' Scene' : ' Scenes') : '']
         .filter(Boolean).join(' + ') || 'Choose material';
     el('studio-dw-read-count').textContent = units +
       (units === 1 ? ' selection' : ' selections') + ' · ' + bytes.toLocaleString() + ' characters';
@@ -1078,6 +1091,9 @@
       sceneIds.forEach(function (id) {
         var index = readStory && readStory.id === projectId ? readStory.sceneOrder.indexOf(id) : -1;
         labels.push(index >= 0 ? 'Scene ' + (index + 1) : 'Scene');
+      });
+      keys.filter(function (key) {return key.startsWith('invariant:');}).forEach(function (key) {
+        labels.push('Invariant ' + decodeURIComponent(key.split(':')[2]));
       });
       return name + ' · ' + labels.join(' + ');
     },

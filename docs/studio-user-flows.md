@@ -104,6 +104,18 @@ Project/Scene source items; refresh only the approved items on later requests;
 revoke one source without deleting other selections or unsaved proposals.
 Do not require detailed JSON inspection or an acknowledgment-only model call.
 
+## Mandatory independence checkpoints (live acceptance)
+
+Use **one continuing real-model conversation** across the transitions, not five independent mock-model replies. Record the actual outbound request, model schema, returned fields, suggested destination, confirmed target, saved IDs, and conversation attachment after each operation:
+
+1. Start a fresh, unassociated conversation while Project A is visible. Send an ordinary message; the conversation **remains unattached**. Read no saved creative fields without explicit Context approval. Author a new Project B, choose **New Project**, and save B without modifying A.
+2. Explicitly attach A; open B and send a new message. The Director association remains A even though navigation displays B. Author a style-only revision, choose B as the destination in Review, save only B, and verify the conversation remains attached to A. Return to A and revise it separately in that same conversation.
+3. With A attached and B visible, explicitly approve a Scene from C and an Invariant from D as separate Read sources. The LLM receives exactly those approved saved fields, not the unapproved contents of A or B. Choosing B as the write destination does not modify the sources or attachment.
+4. Author Scenes without choosing a destination, then review and select B. Reopening either the same or an earlier response retains actual complete prompts and human edits; selection alone does not make a second model call. A subsequent Scene-only revision preserves unrelated title/duration/Scene fields.
+5. For explicitly launched Project/Scene writes (including inline Scene Revise and Develop Scenes), inspect the actual server-side requested schema and authored response. A requested full Prompt must be nonempty and present. The result must save only to its frozen target even if navigation changes while it runs. Separate a model omission from WebCap's missing required field or incorrect target.
+
+**Failure triage:** if Review does not appear, check the raw response before blaming the button: distinguish a genuinely absent `changes.project` from a missing action for material that *was* returned. If a Review appears but saves incorrectly, trace destination selection, fresh baseline, selected changed fields and authoritative save receipt. A stale test label is a test defect, not evidence of model or persistence failure. No synthetic model result may satisfy a live acceptance checkpoint.
+
 ## Targeted variations (not a full matrix)
 
 Run only where they add coverage not already demonstrated by the main flows:

@@ -56,7 +56,6 @@ jobs:
           node --test tests/studio_scene_revision_contract.test.cjs
           node --test tests/studio_director_navigation.test.cjs tests/studio_director_scene_entry.test.cjs tests/studio_director_targeted_scene_launch.test.cjs tests/studio_director_one_new_scene.test.cjs
           node --test tests/studio_director_three_operations.test.cjs tests/studio_director_design_fixes.test.cjs tests/studio_director_workshop.test.cjs tests/studio_director_scene_draft.test.cjs tests/studio_director_ux.test.cjs tests/studio_director_guided_write.test.cjs tests/studio_director_useful_functions.test.cjs
-          node --test tests/studio_blocks_slash.test.cjs
       - name: Python compile
         run: |
           python -m compileall -q tool/server tests/test_studio_director.py tests/test_director_chat_history.py tests/test_storyboard_store.py
@@ -71,3 +70,5 @@ jobs:
           python -m pytest -q tests/test_studio_invariant_ops.py tests/test_studio_director.py tests/test_studio_scene_draft.py tests/test_studio_scene_structure.py tests/test_studio_scene_batch.py tests/test_studio_scene_split.py tests/test_studio_scene_invariant_links.py
           python -m pytest -q tests/test_storyboard_llm_contract.py
           python -m pytest -q tests/test_storyboard_ui_contract.py -k "entry_and_exit_states"
+      - name: Existing Blocks slash checks
+        run: node --test tests/studio_blocks_slash.test.cjs

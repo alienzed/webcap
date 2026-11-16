@@ -157,12 +157,12 @@ test('History footer is centered at the bottom without changing text top or widt
   h.focus(field);
   assert.equal(field.style.paddingRight,'11px','text width is unchanged');
   assert.equal(field.style.paddingTop,'8px','text starts in its usual position');
-  assert.equal(field.style.paddingBottom,'40px','floating controls reserve the last text line');
-  assert.equal(h.toolbar.style.left,'350px');
-  assert.equal(h.toolbar.style.top,'216px');
+  assert.equal(field.style.paddingBottom,'29px','compact controls reduce the reserved inset');
+  assert.equal(h.toolbar.style.left,'529px');
+  assert.equal(h.toolbar.style.top,'223px');
   assert.equal(h.toolbar.style.width,undefined,'history should not span the textarea width');
-  assert.match(h.css(),/transform:translateX\(-50%\)/);
-  assert.match(h.css(),/border-radius:7px/);
+  assert.doesNotMatch(h.css(),/transform:translateX/);
+  assert.match(h.css(),/border:0;border-radius:3px/);
   h.blur(field);
   assert.equal(field.style.paddingBottom,'8px','original bottom padding is restored');
 });

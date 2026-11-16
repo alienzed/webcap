@@ -24,7 +24,7 @@ test('attachment changes only on explicit attach, detach or explicit continue af
 test('targeted Project Review consumes its passed destination instead of requiring attachment',()=>{
   const body=part('  function prepareStudioBrief(options) {','  function applyStudioBrief() {');
   assert.match(body,/options\.storyId/);
-  assert.match(body,/proposal\.storyId === storyId/);
+  assert.match(body,/state\.studioBriefProposal\.storyId === storyId/);
   assert.match(director,/prepareStudioBrief\(Object\.assign/);
 });
 

@@ -52,8 +52,8 @@ test('one new Scene keeps the selected Project and complete brief through a sing
           const payload=JSON.parse(instruction);
           assert.equal(payload.instruction,brief);
           assert.equal(payload.authorRequest,brief);
-          assert.equal(payload.project.fields.find(x=>x.id==='project.style').value,story.style);
-          assert.equal(payload.project.fields.find(x=>x.id==='scene:s1:title').value,'Old opening');
+          assert.equal(payload.project.style,story.style);
+          assert.equal(payload.project.existingSceneTitles[0],'Old opening');
           assert.doesNotMatch(instruction,/["']summary["']|["']intent["']/i);
           return JSON.stringify({
             title:'Closing the Logbook',durationSeconds:12,
@@ -70,15 +70,6 @@ test('one new Scene keeps the selected Project and complete brief through a sing
     parseStudioScenesDraft:raw=>JSON.parse(raw),
     console, Promise, JSON, Number, String, Error, encodeURIComponent
   });
-  scope.studioApprovedSavedContext = story => {
-    const approved=state.studioApprovedRead;
-    if(!approved || approved.projectId!==story.id)return null;
-    return {projectId:story.id,fields:approved.keys.map(key=>{
-      if(key.startsWith('project.'))return {id:key,value:story[key.slice(8)]};
-      const parts=key.split(':');
-      return {id:key,value:story.scenes[parts[1]][parts[2]]};
-    })};
-  };
   const writer=vm.runInContext('({' + method + '})',scope).writeNewScene;
   await writer.call(scope.window.studioDirectorBridge,launch);
   assert.equal(requested,1);
@@ -114,15 +105,6 @@ test('malformed model duration remains visible in review instead of becoming inv
     parseStudioScenesDraft:raw=>JSON.parse(raw),
     Promise,JSON,Number,String,Error,encodeURIComponent
   });
-  scope.studioApprovedSavedContext = story => {
-    const approved=state.studioApprovedRead;
-    if(!approved || approved.projectId!==story.id)return null;
-    return {projectId:story.id,fields:approved.keys.map(key=>{
-      if(key.startsWith('project.'))return {id:key,value:story[key.slice(8)]};
-      const parts=key.split(':');
-      return {id:key,value:story.scenes[parts[1]][parts[2]]};
-    })};
-  };
   const writer=vm.runInContext('({' + method + '})',scope).writeNewScene;
   await writer.call(scope.window.studioDirectorBridge,
     {projectId:'p1',instruction:'Add a twelve-second closing Scene'});
@@ -153,9 +135,9 @@ test('later new Scene sees prior saved Scene for continuity, not leftover workin
         makeProposal:async instruction=>{
           requests++;
           const payload=JSON.parse(instruction);
-          assert.equal(payload.project.fields.find(x=>x.id==='scene:s1:prompt').value,'SAVED FIRST SCENE');
-          assert.equal(payload.project.fields.find(x=>x.id==='scene:s1:title').value,'Opening');
-          assert.deepEqual(JSON.parse(JSON.stringify(payload.unsavedWorkingFields)),{});
+          assert.equal(payload.project.previousScene.prompt,'SAVED FIRST SCENE');
+          assert.equal(payload.project.previousScene.title,'Opening');
+          assert.deepEqual(JSON.parse(JSON.stringify(payload.project.unsavedWorkingFields)),{});
           assert.doesNotMatch(instruction,/OLD SCENE PROMPT/);
           return JSON.stringify({title:'Second Scene',prompt:'New independent complete H3 prompt'});
         }
@@ -164,15 +146,6 @@ test('later new Scene sees prior saved Scene for continuity, not leftover workin
     requestJson:async()=>({story}),
     Promise,JSON,Number,String,Error,encodeURIComponent
   });
-  scope.studioApprovedSavedContext = story => {
-    const approved=state.studioApprovedRead;
-    if(!approved || approved.projectId!==story.id)return null;
-    return {projectId:story.id,fields:approved.keys.map(key=>{
-      if(key.startsWith('project.'))return {id:key,value:story[key.slice(8)]};
-      const parts=key.split(':');
-      return {id:key,value:story.scenes[parts[1]][parts[2]]};
-    })};
-  };
   const writer=vm.runInContext('({' + method + '})',scope).writeNewScene;
   const result=await writer.call(scope.window.studioDirectorBridge,{
     projectId:'p1',instruction:'Create the second Scene',sequenceIndex:1,directSave:false
@@ -212,15 +185,6 @@ test('missing Prompt retains title and duration as editable draft even on direct
     },
     Promise,JSON,Number,String,Error,encodeURIComponent
   });
-  scope.studioApprovedSavedContext = story => {
-    const approved=state.studioApprovedRead;
-    if(!approved || approved.projectId!==story.id)return null;
-    return {projectId:story.id,fields:approved.keys.map(key=>{
-      if(key.startsWith('project.'))return {id:key,value:story[key.slice(8)]};
-      const parts=key.split(':');
-      return {id:key,value:story.scenes[parts[1]][parts[2]]};
-    })};
-  };
   const writer=vm.runInContext('({' + method + '})',scope).writeNewScene;
   const result=await writer.call(scope.window.studioDirectorBridge,{
     projectId:'p1',instruction:brief,authorRequest:brief,directSave:true
@@ -261,15 +225,6 @@ test('actual multi-Scene output is retained even when the request mentioned one'
     parseStudioScenesDraft:raw=>JSON.parse(raw),
     Promise, JSON, Number, String, Error, encodeURIComponent
   });
-  scope.studioApprovedSavedContext = story => {
-    const approved=state.studioApprovedRead;
-    if(!approved || approved.projectId!==story.id)return null;
-    return {projectId:story.id,fields:approved.keys.map(key=>{
-      if(key.startsWith('project.'))return {id:key,value:story[key.slice(8)]};
-      const parts=key.split(':');
-      return {id:key,value:story.scenes[parts[1]][parts[2]]};
-    })};
-  };
   const writer=vm.runInContext('({' + method + '})',scope).writeNewScene;
   const result=await writer.call(scope.window.studioDirectorBridge,
     {projectId:'p1',instruction:'Add exactly one Scene'});
@@ -320,15 +275,6 @@ test('invalid returned duration retains review and does not invent a successful 
     },
     parseStudioScenesDraft:raw=>JSON.parse(raw),Promise,JSON,String,Number,Error,encodeURIComponent
   });
-  scope.studioApprovedSavedContext = story => {
-    const approved=state.studioApprovedRead;
-    if(!approved || approved.projectId!==story.id)return null;
-    return {projectId:story.id,fields:approved.keys.map(key=>{
-      if(key.startsWith('project.'))return {id:key,value:story[key.slice(8)]};
-      const parts=key.split(':');
-      return {id:key,value:story.scenes[parts[1]][parts[2]]};
-    })};
-  };
   const writer=vm.runInContext('({' + method + '})',scope).writeNewScene;
   const result=await writer.call(scope.window.studioDirectorBridge,{
     projectId:'p1',instruction:'Create a closing Scene lasting 12 seconds',
@@ -372,15 +318,6 @@ test('two eight-second Scenes request retains one actually authored Scene withou
     },
     Promise,JSON,Number,String,Error,encodeURIComponent
   });
-  scope.studioApprovedSavedContext = story => {
-    const approved=state.studioApprovedRead;
-    if(!approved || approved.projectId!==story.id)return null;
-    return {projectId:story.id,fields:approved.keys.map(key=>{
-      if(key.startsWith('project.'))return {id:key,value:story[key.slice(8)]};
-      const parts=key.split(':');
-      return {id:key,value:story.scenes[parts[1]][parts[2]]};
-    })};
-  };
   const writer=vm.runInContext('({' + method + '})',scope).writeNewScene;
   const result=await writer.call(scope.window.studioDirectorBridge,{
     projectId:'p1',instruction:'Create two eight-second Scenes',

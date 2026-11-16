@@ -5,7 +5,7 @@ var diagnosticsAssessmentCatalog = { directors: [], visions: [] };
 var diagnosticsAssessmentRunId = '';
 var diagnosticsAssessmentRunStatus = '';
 var diagnosticsAssessmentStoppingId = '';
-var diagnosticsAssessmentSort = { key: 'directorSpeed', descending: true };
+var diagnosticsAssessmentSort = { key: 'quality', descending: true };
 var diagnosticsAssessmentExpanded = new Set();
 var diagnosticsAssessmentReviewRefresh = 0;
 var diagnosticsAssessmentRuntime = 'local';
@@ -413,7 +413,7 @@ function refreshUnifiedModelAssessment() {
     [{key: '', name: 'Select'}, {key: 'model', name: 'Model'},
       {key: 'size', name: 'Size'}, {key: 'thinking', name: 'Thinking'},
       {key: 'directorSpeed', name: 'Director tok/s'}, {key: 'visionSpeed', name: 'Vision tok/s'},
-      {key: 'output', name: 'Valid output'}, {key: 'quality', name: 'Quality'},
+      {key: 'output', name: 'Valid output'}, {key: 'quality', name: 'Quality (advisory)'},
       {key: 'result', name: 'Assessment'}].forEach(function (column) {
       var th = document.createElement('th');
       th.scope = 'col';
@@ -528,7 +528,7 @@ function refreshUnifiedModelAssessment() {
       var outputCell = cell('Output', '—', 'output');
       outputCell.title = 'Largest observed completion, potentially including reasoning tokens; not a verified limit.';
       var qualityCell = cell('Quality', '—', 'quality');
-      qualityCell.title = 'Advisory LLM judgment, separate from technical qualification.';
+      qualityCell.title = 'Subjective LLM review of saved outputs, not an objective benchmark; open the model to see judge, tasks and evidence.';
       // Keep decision metrics together; technical qualification remains separate.
       [sizeCell, thinkingCell, directorSpeed, visionSpeed, outputCell, qualityCell].forEach(function (item) {
         line.insertBefore(item, qualification);
@@ -585,8 +585,10 @@ function refreshUnifiedModelAssessment() {
       if (qualityReview && qualityReview.status === 'completed' && (qualityReview.tasks || []).length) {
         qualityReason = qualityReview.tasks.map(function (task) { return task.task + ': ' + task.reason; }).join(' · ');
         row.assessmentSort.quality = qualityReview.tasks.reduce(function (total, item) { return total + item.score; }, 0) / qualityReview.tasks.length;
-        qualityCell.textContent = row.assessmentSort.quality.toFixed(1) + '/5';
-        qualityCell.title = 'Advisory LLM review, separate from technical qualification: ' + qualityReason;
+        qualityCell.textContent = row.assessmentSort.quality.toFixed(1) + '/5 · ' + qualityReview.tasks.length + ' task' + (qualityReview.tasks.length === 1 ? '' : 's');
+        var judgeModel = (labModels.directors || []).find(function (entry) { return String(entry.modelRef || '') === String(qualityReview.judgeModelRef || ''); });
+        var judgeName = judgeModel ? String(judgeModel.label || judgeModel.modelId || qualityReview.judgeModelRef) : String(qualityReview.judgeModelRef || 'unknown');
+        qualityCell.title = 'Advisory judgment by ' + judgeName + ' · ' + qualityReview.tasks.length + ' task(s) · Run ' + qualityRun.id + ' · ' + (qualityReview.finishedAt || 'date unknown') + '. Not a reliability or consensus measure. ' + qualityReason;
       } else if (qualityReview) {
         qualityCell.textContent = qualityReview.status === 'running' ? 'Judging…' : '—';
         if (qualityReview.error) qualityCell.title = 'Quality measurement unavailable; see Console for operation errors.';
@@ -617,8 +619,8 @@ function refreshUnifiedModelAssessment() {
         metrics.appendChild(metric);
       });
       var qualityMetric = document.createElement('span');
-      qualityMetric.textContent = 'Quality: ' + qualityLabel;
-      qualityMetric.title = qualityReason || 'No completed LLM quality review.';
+      qualityMetric.textContent = 'Quality: ' + (qualityReview && qualityReview.status === 'completed' && qualityReview.tasks && qualityReview.tasks.length ? qualityCell.textContent : qualityLabel);
+      qualityMetric.title = qualityCell.title;
       metrics.appendChild(qualityMetric);
       summary.appendChild(metrics);
       panel.appendChild(summary);
@@ -725,6 +727,10 @@ function refreshUnifiedModelAssessment() {
         }
       });
       if (qualityReview && Array.isArray(qualityReview.tasks)) {
+        var judgeNameInHistory = ((labModels.directors || []).find(function (entry) { return String(entry.modelRef || '') === String(qualityReview.judgeModelRef || ''); }) || {}).label || qualityReview.judgeModelRef || 'Unknown judge';
+        var judgeProvenance = document.createElement('div');
+        judgeProvenance.textContent = 'Quality reviewer: ' + judgeNameInHistory + ' · Run ' + (qualityRun && qualityRun.id || 'unknown') + ' · ' + (qualityReview.finishedAt || 'not finished') + ' · ' + qualityReview.tasks.length + ' judged task(s). Advisory, not consensus.';
+        raw.appendChild(judgeProvenance);
         qualityReview.tasks.forEach(function (task) {
           var detail = document.createElement('div');
           detail.textContent = 'LLM judge · ' + task.task + ' ' + task.score + '/5: ' + task.reason;
@@ -745,13 +751,27 @@ function refreshUnifiedModelAssessment() {
         });
       });
       if (supportsDirector && judgeSource) {
-        var judgeButton = document.createElement('button');
-        judgeButton.type = 'button';
-        judgeButton.className = 'review-captions-btn';
-        judgeButton.textContent = qualityReview && qualityReview.status === 'completed' ? 'Reassess with LLM' : 'Assess with LLM';
-        judgeButton.disabled = !!(qualityReview && qualityReview.status === 'running');
-        judgeButton.addEventListener('click', function () { diagnosticsAssessmentJudge(judgeSource.id, ref); });
-        panel.appendChild(judgeButton);
+        // Keep judging saved output independent of Deep assessment and its long probes.
+        // This belongs beside the model name, not inside the advanced evidence panel.
+        var actions = document.createElement('select');
+        actions.className = 'model-assessment-actions';
+        actions.setAttribute('aria-label', 'Actions for ' + title);
+        var placeholder = document.createElement('option');
+        placeholder.value = '';
+        placeholder.textContent = 'Actions…';
+        actions.appendChild(placeholder);
+        var judgeOption = document.createElement('option');
+        judgeOption.value = 'judge';
+        judgeOption.textContent = 'Judge Model';
+        actions.appendChild(judgeOption);
+        actions.disabled = !!(qualityReview && qualityReview.status === 'running');
+        actions.addEventListener('change', function () {
+          var action = actions.value;
+          actions.value = '';
+          if (action === 'judge') diagnosticsAssessmentJudge(judgeSource.id, ref);
+        });
+        name.appendChild(actions);
+        // The model dropdown is the primary entry point for this action.
       }
       expanded.appendChild(panel);
       row.appendChild(expanded);
@@ -908,7 +928,6 @@ function diagnosticsAssessmentConfig() {
   var visionRefs = diagnosticsAssessmentSelected.vision;
   if (!directorRefs.size && !visionRefs.size) throw new Error('Choose at least one model.');
   var deep = diagnosticsEl('diagnostics-assessment-deep').checked;
-  var judgeRef = String(diagnosticsEl('diagnostics-assessment-judge-model').value || '').trim();
 
   var catalog = diagnosticsAssessmentCatalog;
   var visions = (catalog.visions || []).filter(function (model) { return visionRefs.has(String(model.modelRef || '')); });
@@ -920,12 +939,11 @@ function diagnosticsAssessmentConfig() {
   var files = modelLabCurrentFiles();
   var canLab = !!sourceFolder && files.length >= 2;
   if (visions.length && !canLab) throw new Error('Open a Set with at least two media items to assess Vision models. Director assessment needs no Set.');
-  if (deep && directors.length && !judgeRef) throw new Error('Choose an LLM judge to automatically review Deep Director results.');
   return {
     folder: sourceFolder, files: files, groups: modelLabGroups(),
     depth: deep ? 'deep' : 'quick', sampleCount: deep ? 16 : 8,
     visionModels: visions, directorModels: directors,
-    judgeModelRef: deep && directors.length ? judgeRef : ''
+    judgeModelRef: ''
   };
 }
 

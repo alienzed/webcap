@@ -102,7 +102,7 @@ test('server no-work response stays disabled after the start callback finishes',
   assert.match(nodes.get('diagnostics-assessment-selection').textContent, /0 tests needed/);
 });
 
-test('Deep schedules selected LLM judge while Quick does not', async () => {
+test('Quick and Deep plan independently of manually selected quality judge', async () => {
   const {ctx, nodes} = view();
   const configs = [];
   ctx.modelLabPost = async req => {
@@ -115,7 +115,7 @@ test('Deep schedules selected LLM judge while Quick does not', async () => {
   nodes.get('diagnostics-assessment-deep').checked = true;
   ctx.diagnosticsRefreshSelectionPlan();
   await Promise.resolve();
-  assert.equal(configs[1].judgeModelRef, 'local::judge.gguf');
+  assert.equal(configs[1].judgeModelRef, '');
   nodes.get('diagnostics-assessment-judge-model').value = '';
-  assert.throws(() => ctx.diagnosticsAssessmentConfig(), /Choose an LLM judge/);
+  assert.equal(ctx.diagnosticsAssessmentConfig().judgeModelRef, '');
 });

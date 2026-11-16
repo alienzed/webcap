@@ -24,10 +24,10 @@ def test_assessment_table_is_compact_and_retains_thinking_as_context():
     assert "{key: 'visionSpeed', name: 'Vision tok/s'}" in source
     assert "{key: 'size', name: 'Size'}" in source
     assert "{key: 'thinking', name: 'Thinking'}" in source
-    assert "{key: 'quality', name: 'Quality'}" in source
+    assert "{key: 'quality', name: 'Quality (advisory)'}" in source
     assert "thinkingLabel = supported ? 'Yes' : 'No'" in source
     assert "thinkingCell.textContent = thinkingLabel" in source
-    assert "qualityCell.textContent = row.assessmentSort.quality.toFixed(1) + '/5'" in source
+    assert "qualityCell.textContent = row.assessmentSort.quality.toFixed(1) + '/5 · '" in source
     assert "row.assessmentSort.quality = qualityReview.tasks.reduce" in source
     assert "tests.director_thinking" in source
     assert "' · Thinking: ' + thinkingLabel" in source

@@ -805,6 +805,9 @@
   function presentAction(action, selectedScene, selectedProject, authorRequest, messageIndex) {
     if (!action || !['create_project','write_project','create_scene','write_scenes'].includes(action.kind) ||
         !String(action.instruction || '').trim()) return;
+    // Do not offer a creative Review based on an LLM action promise or user prose.
+    if (!(Array.isArray(action.scenes) && action.scenes.length) &&
+        !(action.authoredFields && Object.keys(action.authoredFields).length)) return;
     var frozen = {
       kind:action.kind, instruction:String(action.instruction).trim(),
       fields:Array.isArray(action.fields) ? action.fields.slice() : [],

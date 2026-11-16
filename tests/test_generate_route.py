@@ -851,3 +851,43 @@ def test_generate_failed_attempt_preserves_reference_for_retry(tmp_path, monkeyp
         generate_generation.execute("job-1", request)
 
     assert reference.is_file()
+
+
+def test_generation_trash_moves_whole_result_and_rejects_active_job(tmp_path, monkeypatch):
+    from tool.server import storage_manager
+
+    output_root = tmp_path / "output"
+    directory = output_root / "generations" / "2026-11-15" / "job-1"
+    references = directory / "references"
+    references.mkdir(parents=True)
+    (directory / generate_store.MANIFEST_NAME).write_text('{"jobId":"job-1"}', encoding="utf-8")
+    (directory / "result.png").write_bytes(b"image")
+    (references / "first.png").write_bytes(b"reference")
+
+    monkeypatch.setattr(storage_manager.app_config, "output_root", lambda: output_root)
+    monkeypatch.setattr(storage_manager, "_active_generate_job_ids", lambda: {"job-1"})
+    moved = []
+    monkeypatch.setattr("send2trash.send2trash", lambda path: moved.append(Path(path)))
+    with pytest.raises(RuntimeError, match="active Generate work"):
+        storage_manager.trash_generate("2026-11-15/job-1")
+    assert not moved
+    assert directory.is_dir()
+
+    monkeypatch.setattr(storage_manager, "_active_generate_job_ids", lambda: set())
+    monkeypatch.setattr(storage_manager, "_read_cache", lambda: {"version": 1, "items": {}})
+    monkeypatch.setattr(storage_manager, "_write_cache", lambda _cache: None)
+
+    def move_directory(path):
+        directory_path = Path(path)
+        assert (directory_path / "result.png").is_file()
+        assert (directory_path / "references" / "first.png").is_file()
+        moved.append(directory_path)
+        import shutil
+        shutil.move(path, str(tmp_path / "trashed-result"))
+
+    monkeypatch.setattr("send2trash.send2trash", move_directory)
+    response = storage_manager.trash_generate("2026-11-15/job-1")
+    assert response == {"ok": True, "storageId": "2026-11-15/job-1"}
+    assert moved == [directory]
+    assert not directory.exists()
+    assert (tmp_path / "trashed-result" / "references" / "first.png").is_file()

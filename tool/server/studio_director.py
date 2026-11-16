@@ -110,7 +110,7 @@ _H3_STUDIO_CORE = (
 
 
 def chat_response_schema():
-    """A conversational answer with, optionally, one proposed creative action.
+    """A conversational answer or actual independently useful creative fields.
 
     Transport shape only; a schema-valid reply is not evidence that an
     authored Scene exists. Read can be plain prose, and model output never
@@ -120,6 +120,7 @@ def chat_response_schema():
         "type": "object",
         "additionalProperties": False,
         "required": [],
+        "minProperties": 1,
         "properties": {
             "reply": {"type": "string"},
             "changes": {
@@ -158,22 +159,7 @@ def chat_response_schema():
                     },
                 },
             },
-            "action": {
-                "type": "object", "additionalProperties": False,
-                "description": "Optional suggestion; authored content lives in changes or scenes.",
-                "properties": {
-                    "kind": {"type": "string", "enum": [
-                        "create_project", "write_project",
-                        "create_scene", "write_scenes",
-                    ]},
-                    "instruction": {"type": "string"},
-                    "fields": {"type": "array", "maxItems": 4,
-                               "items": {"type": "string", "enum": [
-                                   "title", "concept", "style", "invariants",
-                                   "prompt", "durationSeconds",
-                               ]}},
-                },
-            },
+
         },
     }
 

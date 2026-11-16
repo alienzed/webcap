@@ -46,7 +46,7 @@ _WORKSHOP = (
     "Return every usable record, even if fewer or more than requested. The records, not an action promise, are the result. "
     "A single new Scene may also use changes.scene for its authored fields. "
     "For Project or existing Scene revisions, return newly authored fields in changes.project or changes.scene, with complete replacement prompts when editing creative content. "
-    "Action hints and conversational reply are optional, never substitutes for requested creative content. "
+    "Action hints and conversational replies are optional and never substitute for requested creative content. "
     "WebCap owns destination, actions, review and persistence. Read may be plain prose.\n"
 )
 
@@ -108,8 +108,9 @@ _H3_STUDIO_CORE = (
 def chat_response_schema():
     """A conversational answer with, optionally, one proposed creative action.
 
-    Read is equally valid as plain prose; the UI treats this schema as advisory.
-    The model supplies no saved IDs or target authority.
+    Transport shape only; a schema-valid reply is not evidence that an
+    authored Scene exists. Read can be plain prose, and model output never
+    supplies authoritative IDs, destinations or save actions.
     """
     return {
         "type": "object",

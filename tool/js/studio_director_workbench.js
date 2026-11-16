@@ -884,7 +884,8 @@
       refreshProjects().then(function (items) {
         if (frozen.kind === 'create_project')
           return window.studioDirectorBridge.prepareWrite('new-project','', '',{
-            instruction:frozen.instruction,authorRequest:frozen.request
+            instruction:frozen.instruction,authorRequest:frozen.request,
+            authoredFields:frozen.authoredFields
           });
         var projectId = Object.prototype.hasOwnProperty.call(frozen, 'chosenProjectId')
           ? frozen.chosenProjectId : frozen.projectId;
@@ -908,7 +909,8 @@
         if (frozen.kind === 'write_project') {
           var fields = frozen.fields.filter(function (name) {return projectFields.includes(name);});
           return window.studioDirectorBridge.prepareWrite('project',projectId,storyName(item),{
-            instruction:frozen.instruction,authorRequest:frozen.request,requestedFields:fields
+            instruction:frozen.instruction,authorRequest:frozen.request,requestedFields:fields,
+            authoredFields:frozen.authoredFields
           });
         }
         if (frozen.kind === 'create_scene') {

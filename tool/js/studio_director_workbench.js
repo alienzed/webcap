@@ -924,12 +924,12 @@
     button.title = frozen.instruction;
     button.onclick = function () {
       if (pendingCreativeAction !== frozen) return;
-      var reviewingScenes = frozen.kind === 'create_scene' &&
+      var reviewingScenes = !!frozen.authoredFields || frozen.kind === 'create_scene' &&
         (frozen.draftReady || (frozen.scenes && frozen.scenes.length)) ||
         frozen.kind === 'write_scenes' && !!frozen.authoredFields;
       if (reviewingScenes ? !window.studioDirectorBridge.canReview() :
           !window.studioDirectorBridge.isReady()) {
-        status(reviewingScenes ? 'Open an available Studio conversation to review Scenes.' :
+        status(reviewingScenes ? 'Open an available Studio conversation to review authored material.' :
           window.studioDirectorBridge.readinessMessage(),true);
         return;
       }

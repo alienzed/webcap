@@ -26,7 +26,7 @@ function authoredFixture() {
     showStudioScenesReview: () => shown.push(state.studioScenesProposal.drafts.map(item => item.prompt)),
     rememberStudioScenesReview: () => {},
     window:{flushStudioDirectorStoryEdits: () => Promise.resolve()},
-    requestJson: () => Promise.resolve({story:{id:'project',title:'Project',sceneOrder:[],scenes:{}}}),
+    requestJson: url => Promise.resolve({story:{id:decodeURIComponent(url.split('=')[1]),title:'Project',sceneOrder:[],scenes:{}}}),
     studioActionStatus: () => {}
   };
   const review = method(director,
@@ -64,7 +64,21 @@ test('independent Scene review cannot be displaced by a conversation reply', asy
   assert.equal(state.studioScenesProposal.drafts[0].prompt,'Keep me');
 });
 
-test('another Project never reuses a same-response Scene review', async () => {
+test('changing destination preserves the same response edits without reauthoring or changing its source', async () => {
+  const {state,review,pending} = authoredFixture();
+  const scenes = [{prompt:'Original authored prompt'}];
+  await review({projectId:'project',sourceMessageIndex:10,scenes});
+  state.studioScenesProposal.drafts[0].prompt = 'Author edited prompt';
+  state.studioScenesProposal.placement = 'before|old-scene';
+  await pending.call({reviewAuthoredScenes:review},'different',10);
+  assert.equal(state.studioScenesProposal.storyId,'different');
+  assert.equal(state.studioScenesProposal.drafts[0].prompt,'Author edited prompt');
+  assert.equal(state.studioScenesProposal.placement,'end');
+  assert.equal(JSON.parse(state.studioScenesProposal.sourceScenesSignature)[0].prompt,
+    'Original authored prompt');
+});
+
+test('a different destination cannot substitute different material for the same response', async () => {
   const {state,review} = authoredFixture();
   await review({projectId:'project',sourceMessageIndex:10,scenes:[{prompt:'Project A'}]});
   await assert.rejects(review({projectId:'different',sourceMessageIndex:10,

@@ -2328,8 +2328,7 @@ def director_chat_route():
                 raise ValueError("Invalid required Scene fields.")
             contract["response_schema"] = {
                 "type": "object", "additionalProperties": False,
-                "required": ["prompt"] + [field for field in
-                    dict.fromkeys(required_fields) if field != "prompt"],
+                "required": list(dict.fromkeys(required_fields)) or ["prompt"],
                 "properties": {
                     "title": {"type": "string"},
                     "prompt": {"type": "string", "minLength": 1},

@@ -254,6 +254,8 @@ def test_director_chat_route_preserves_all_structured_schemas(monkeypatch, opera
     ("studio_brief_draft", ["concept", "invariants"], ["concept", "invariants"]),
     ("studio_scene_field_draft", ["prompt", "title"], ["prompt", "title"]),
     ("studio_scene_field_draft", ["prompt", "durationSeconds"], ["prompt", "durationSeconds"]),
+    ("studio_scene_field_draft", ["title"], ["title"]),
+    ("studio_scene_field_draft", ["durationSeconds"], ["durationSeconds"]),
 ])
 def test_explicit_studio_authoring_requires_each_requested_field(
         monkeypatch, operation, required_fields, expected):

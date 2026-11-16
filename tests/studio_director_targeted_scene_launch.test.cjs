@@ -179,6 +179,38 @@ test('invalid or incomplete model output cannot initiate any save or report succ
   }
 });
 
+test('a missing creative prompt reports failure and retains independently usable requested fields',async()=>{
+  const h=sceneFixture('{"title":"Quiet ending","durationSeconds":10}');
+  await assert.rejects(h.window.studioDirectorBridge.writeSelectedScene({
+    ...h.launch,fields:['prompt','title','durationSeconds']
+  }),/requested Scene prompt/);
+  assert.equal(h.events.filter(row=>row[0]==='save').length,0);
+  assert.equal(h.saved.scenes.s1.prompt,'Mara shouts at the rover.');
+  assert.deepEqual(JSON.parse(JSON.stringify(h.state.studioWorkingDraft.scenes.s1)),
+    {title:'Quiet ending',durationSeconds:10});
+  assert.ok(h.errors.some(message=>message.includes('requested Scene prompt')));
+});
+
+test('a model-authored title-only change requests and saves only the title',async()=>{
+  const h=sceneFixture('{"title":"Silent departure","prompt":"Unrequested rewrite"}');
+  await h.window.studioDirectorBridge.writeSelectedScene({
+    ...h.launch,instruction:'Give the Scene a quieter title.',fields:['title']
+  });
+  const call=h.events.find(row=>row[0]==='model');
+  assert.deepEqual(JSON.parse(call[1]).requestedFields,['title']);
+  assert.deepEqual(JSON.parse(JSON.stringify(call[5])),['title']);
+  assert.equal(h.saved.scenes.s1.title,'Silent departure');
+  assert.equal(h.saved.scenes.s1.prompt,'Mara shouts at the rover.');
+});
+
+test('an unchanged prompt does not conceal an omitted requested title',async()=>{
+  const h=sceneFixture('{"prompt":"Mara shouts at the rover."}');
+  await h.window.studioDirectorBridge.writeSelectedScene({...h.launch,fields:['prompt','title']});
+  assert.equal(h.events.filter(row=>row[0]==='save').length,0);
+  assert.ok(h.events.some(row=>row[0]==='status' && row[2] && /title not supplied/.test(row[1])));
+  assert.equal(h.state.studioWorkingDraft.scenes.s1,undefined);
+});
+
 test('save failure never produces a saved receipt; post-save refresh failure reports saved truth',async()=>{
   const h=sceneFixture();
   h.context.api=async()=>{throw new Error('Save rejected: stale prompt');};

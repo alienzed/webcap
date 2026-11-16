@@ -78,6 +78,7 @@ test('Cross-Project references: approved sources do not decide where material is
   await queueModel(request,{reply:'The revised visual atmosphere is ready.',
     changes:{project:{style:'Coordinated fast-paced split-screen action.'}}});
   await say(page,'Write a tighter atmosphere using the shared pacing reference.');
+  await expect.poll(async()=> (await observedModels(request)).calls.length).toBe(1);
   const requestBody=(await observedModels(request)).calls[0];
   const text=JSON.stringify(requestBody.messages);
   expect(text).toContain('A sequence of rapid linked actions.');

@@ -147,6 +147,9 @@ test('Read preview and outbound values use the same validated field serializer',
   assert.match(rail,/studioDirectorBridge\.approveRead\(story\.id, keys\)/);
   assert.match(html,/id="studio-dw-read" type="button"/);
   assert.match(html,/Approve context<\/button>/);
+  assert.match(html,/id="studio-dw-read-clear"/);
+  assert.match(rail,/studioDirectorBridge\.clearApprovedRead\(\)/);
+  assert.match(chat,/clearApprovedRead: function \(\)/);
 });
 
 test('Read receipt uses delivery and response status, not model text parsing',()=>{

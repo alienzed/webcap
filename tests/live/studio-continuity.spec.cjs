@@ -1,7 +1,7 @@
 'use strict';
 const {test,expect}=require('../browser/test.cjs');
 const {waitForLiveJob,openLiveDirector,attachProject,sendLive,addEvidence,latestSceneReview,
-       story,stories,seedProject,openProject}=require('./helpers.cjs');
+       story,stories,seedProject,openProject,reopenDirectorIfClosed}=require('./helpers.cjs');
 
 test('Live Flow 5 — Director Project attachment survives opening another Project',async({page},testInfo)=>{
   const a=await seedProject(page,'Director A '+Date.now(),{style:'Cool blue light.'});
@@ -33,7 +33,8 @@ test('Live Flow 6 — separate real authored replies retain distinct Scene revie
   const firstInstruction='Author one new Scene for review: a bookseller lights a blue lantern, lasting eight seconds. Supply one complete Scene prompt and title.';
   await sendLive(page,firstInstruction);
   const firstAction=page.locator('#studio-dw-suggestions .studio-dw-suggestion-action');
-  await expect(firstAction).toBeVisible({timeout:180000});
+  await expect(firstAction).toBeVisible({timeout:10000});
+  await expect(firstAction).toContainText(/Review authored Scene|Create Scene\(s\) · Review/i,{timeout:1000});
   await firstAction.click();
   await expect(page.locator('#studio-scenes-review')).toBeVisible();
   const row=page.locator('#studio-scenes-rows .studio-scenes-row').first();
@@ -45,7 +46,8 @@ test('Live Flow 6 — separate real authored replies retain distinct Scene revie
   const secondInstruction='Author one DIFFERENT new Scene for review: a visitor unfolds a green map, lasting ten seconds. Do not replace the previous Scene proposal.';
   await sendLive(page,secondInstruction);
   const secondAction=page.locator('#studio-dw-suggestions .studio-dw-suggestion-action');
-  await expect(secondAction).toBeVisible({timeout:180000});
+  await expect(secondAction).toBeVisible({timeout:10000});
+  await expect(secondAction).toContainText(/Review authored Scene|Create Scene\(s\) · Review/i,{timeout:1000});
   await secondAction.click();
   await expect(page.locator('#studio-scenes-review')).toBeVisible();
   const secondPrompt=await row.locator('[data-field="prompt"]').inputValue();
@@ -108,8 +110,9 @@ test('Live Flow 8 — slash-inserted Studio Block reaches the real Director mode
   await page.locator('#studio-blocks-save').click();
   await expect(page.locator('#studio-blocks-status')).toHaveText('Saved.');
   await page.locator('#studio-blocks-close').click();
+  await reopenDirectorIfClosed(page);
   const composer=page.locator('#director-chat-input');
-  await composer.fill('Discuss: /Acceptance Lamp  and mention how to frame the shot.');
+  await composer.fill('Discuss: /Acceptance  and mention how to frame the shot.');
   await composer.evaluate(node=>{
     const pos=node.value.indexOf('  and mention');node.setSelectionRange(pos,pos);
     node.dispatchEvent(new Event('input',{bubbles:true}));

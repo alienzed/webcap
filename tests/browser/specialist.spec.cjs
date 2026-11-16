@@ -20,5 +20,5 @@ test('Flow 9 optional checkpoint — discover Coherence via current Director Rev
   await expect(page.locator('#director-chat-input')).toBeVisible();
   const persisted=await story(page,project.id);
   expect(persisted.scenes[scene.id].prompt).toBe('A woman waits outside a quiet bookshop.');
-  expect(persisted.scenes[scene.id].takes||[]).toHaveLength(0);
+  expect(Object.keys(persisted.scenes[scene.id].takes)).toHaveLength(0);
 });

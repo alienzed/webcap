@@ -94,6 +94,8 @@ async function ensureAttachedProject(page,expectedTitle) {
   const composerMode=page.locator('#director-studio-composer-mode-select');
   if(await composerMode.isVisible() && await composerMode.inputValue()!=='conversation')
     await composerMode.selectOption('conversation');
+  const tools=page.locator('#studio-dw-open-tools');
+  if(await tools.getAttribute('aria-expanded')!=='true') await tools.click();
   const label=page.locator('#director-chat-title');
   const attach=page.locator('#director-studio-attach-current');
   if(await attach.isVisible()) await attach.click();

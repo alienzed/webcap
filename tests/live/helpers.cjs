@@ -1,5 +1,5 @@
 'use strict';
-const {expect}=require('../browser/test.cjs');
+const {test,expect}=require('../browser/test.cjs');
 const {freshDirectorSession,story,stories,seedProject,seedScene,openProject,reopenDirectorIfClosed}=require('../browser/helpers.cjs');
 
 // Reuses the deterministic suite's browser/routes/data helpers. The only
@@ -35,6 +35,8 @@ async function attachProject(page,project){
   const mode=page.locator('#director-studio-composer-mode-select');
   if(await mode.isVisible() && await mode.inputValue()!=='conversation')
     await mode.selectOption('conversation');
+  const tools=page.locator('#studio-dw-open-tools');
+  if(await tools.getAttribute('aria-expanded')!=='true') await tools.click();
   const attach=page.locator('#director-studio-attach-current');
   if(await attach.isVisible()) await attach.click();
   await expect(page.locator('#director-chat-title')).toContainText(project.title);
@@ -53,6 +55,9 @@ async function waitForLiveJob(page,trigger){
   await trigger();
   const response=await terminal;
   const payload=await response.json();
+  await test.info().attach('director-job-'+payload.job.jobId,{
+    body:Buffer.from(JSON.stringify(payload.job,null,2)),contentType:'application/json'
+  });
   if(payload.job.status!=='completed')
     throw new Error('Real Director job '+payload.job.status+': '+String(payload.job.error||'No diagnostic provided'));
   await expect(page.locator('#director-chat-progress')).toBeHidden({timeout:20000});
@@ -64,6 +69,8 @@ async function sendLive(page,instruction){
   await waitForLiveJob(page,()=>page.locator('#director-chat-send').click());
 }
 async function actualReply(page){
+  await reopenDirectorIfClosed(page);
+  await expect(page.locator('#director-chat-messages')).not.toBeEmpty();
   const texts=await page.locator('#director-chat-messages').textContent();
   expect(texts.trim().length).toBeGreaterThan(0);
   return texts;
@@ -71,14 +78,14 @@ async function actualReply(page){
 async function addEvidence(testInfo,page,model,request,additional={}){
   await testInfo.attach('studio-live-model-and-observed-reply',{
     body:Buffer.from(JSON.stringify({
-      model,request,reply:await actualReply(page),...additional
+      model,request,reply:additional.coherenceReview || await actualReply(page),...additional
     },null,2)),contentType:'application/json'
   });
 }
 async function latestSceneReview(page){
   const action=page.locator('#studio-dw-suggestions .studio-dw-suggestion-action');
-  await expect(action).toBeVisible({timeout:180000});
-  await expect(action).toContainText(/Review authored Scene/i);
+  await expect(action).toBeVisible({timeout:10000});
+  await expect(action).toContainText(/Review authored Scene|Create Scene\(s\) · Review/i,{timeout:1000});
   await action.click();
   await expect(page.locator('#studio-scenes-review')).toBeVisible();
   return page.locator('#studio-scenes-rows .studio-scenes-row');

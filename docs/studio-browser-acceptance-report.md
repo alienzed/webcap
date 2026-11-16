@@ -4,6 +4,46 @@
 
 ## Repeatable commands
 
+### Local real-model investigation — 2026-11-15
+
+Ran `npx playwright test --config=playwright.live.config.cjs` on Windows against
+`remote-1::mo-shakib/gemma4-e4b-uncensored:q4_k_m`, using disposable WebCap data
+and the actual configured inference endpoint. The launcher now prefers this
+checkout's virtual environment; no Python override is needed here.
+
+- The latest full run completed with **7 passed / 3 failed**. Passing checks were
+  the live reply smoke, Project creation/save/reload, explicit Read, reviewed
+  Project revision, A/B Project attachment, unsaved Scene recovery/save/reload,
+  and Coherence review/discard with no Take creation.
+- A subsequent targeted run verified **Blocks insertion and actual Send pass**
+  after reopening the intentionally auto-closed Director and using the existing
+  single-token slash search. Thus eight distinct live checks have passing
+  evidence across these runs; this is not a claim of a final 8/10 full-suite run.
+- Explicit Read and Project attachment had been hidden by a CSS rule targeting
+  their entire container. Restored those existing controls behind **Read / Write**,
+  while leaving the superseded capture shortcut hidden.
+- Fixed the conversation response handoff to pass its message index into Scene
+  review ownership. Without that index, a conversation draft was mistaken for
+  an independent review and blocked authoring the next draft. All seven focused
+  ownership tests pass, but the live switching retest was blocked earlier by
+  missing Scene material; the complete Flow 6 remains unverified.
+- **Flow 2 remains failing. Flow 6 remains incomplete.** Several actual replies
+  claimed Scene drafting but supplied no usable Scene records. The UI then
+  advertised an existing-Scene revision. Missing or wrong model action metadata
+  is not itself a content failure: the receipt code already creates the review
+  action from actual `scenes` records independently of that metadata. Preserve
+  that responsibility boundary in any repair; do not add prose interpretation,
+  require semantic perfection, or weaken tests to call absent drafts successful.
+- Corrected test-only evidence collection after reload, Blocks navigation and
+  slash-query setup, and Coherence assertions against the actual Takes map.
+  Live job receipts are now attached to test evidence, including on failures.
+
+These are passing checkpoints, not certification of every variation in the
+flow document. In particular, do not mark proposal switching complete from the
+focused tests alone. Next investigate why the normal authoring request/schema
+does not yield the structured material the flow requires; discuss any change
+to the user-facing authoring workflow before implementing new UI.
+
 Run from the repository root with Python 3, Node 22 and Playwright Chromium installed:
 
 ```sh

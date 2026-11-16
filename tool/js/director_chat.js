@@ -3767,7 +3767,7 @@
         if (nextAction) {
           try {
             messages[messages.length - 1].writeAction = window.studioDirectorWorkbench.presentAction(
-              nextAction, targetScene, targetProject, content);
+              nextAction, targetScene, targetProject, content, messages.length - 1);
           } catch (processingError) {
             // Optional action presentation must never invalidate a useful answer.
             window.reportConsoleError('Studio action suggestion', processingError);

@@ -26,8 +26,8 @@ test('Live optional Flow 9 — real Coherence review proposes changes without si
   const beforeApply=await story(page,project.id);
   expect(beforeApply.scenes[first.id].prompt).toBe('An explorer approaches a library at dawn.');
   expect(beforeApply.scenes[second.id].prompt).toBe('The same explorer walks through the library at dusk.');
-  expect(beforeApply.scenes[first.id].takes||[]).toHaveLength(0);
-  expect(beforeApply.scenes[second.id].takes||[]).toHaveLength(0);
+  expect(Object.keys(beforeApply.scenes[first.id].takes)).toHaveLength(0);
+  expect(Object.keys(beforeApply.scenes[second.id].takes)).toHaveLength(0);
   await addEvidence(testInfo,page,model,'Check Coherence via the existing revision composer',
     {coherenceReview:await results.innerText(),projectId:project.id});
   await results.getByRole('button',{name:'Close / Discard'}).click();

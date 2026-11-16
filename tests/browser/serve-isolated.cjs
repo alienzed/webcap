@@ -93,10 +93,16 @@ function portAvailable() { return portAvailableOn(4200); }
       cwd:root,stdio:['ignore',logs,logs]
     });
   }
-  const python = process.env.WEBCAP_TEST_PYTHON || (process.platform === 'win32' ? 'python' : 'python3');
+  const venvPython = path.join(root,'venv',process.platform === 'win32' ? 'Scripts/python.exe' : 'bin/python');
+  const python = process.env.WEBCAP_TEST_PYTHON ||
+    (fs.existsSync(venvPython) ? venvPython : (process.platform === 'win32' ? 'python' : 'python3'));
   child=spawn(python,['-m','tool.server.app'],{
     cwd:temp,env:{...process.env,PYTHONPATH:temp,PYTHONUNBUFFERED:'1'},
     stdio:['ignore',logs,logs]
+  });
+  child.once('error',error=>{
+    console.error('Could not start isolated WebCap with',python,':',error);
+    cleanup(1);
   });
   child.once('exit',(code,signal)=>{
     console.error('Isolated WebCap exited:',code,signal,'; backend log:',logFile);

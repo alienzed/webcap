@@ -11,7 +11,8 @@ async function reviseOverview(page,instruction,projectId) {
   await mode.selectOption('conversation');
   await sendLive(page,instruction);
   const action=page.locator('#studio-dw-suggestions .studio-dw-suggestion-action');
-  await expect(action).toContainText(/Revise Project|Review Project changes/);
+  await expect(action).toContainText(/Review authored Project/);
+  await page.locator('#studio-dw-suggestions select[aria-label="Project material destination"]').selectOption(projectId);
   await action.click();
   const review=page.locator('#studio-brief-review');
   await expect(review).toBeVisible();

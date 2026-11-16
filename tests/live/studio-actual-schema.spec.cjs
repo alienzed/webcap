@@ -209,6 +209,8 @@ test('LIVE conversation — an existing Scene rewrite must contain changes.scene
   });
   const model=await openLiveDirector(page);
   await attachProject(page,project);
+  // Unpinned Director overlays the Scene strip; dismiss it before navigating.
+  await page.locator('#director-chat-close').click();
   await page.locator('[data-scene-progress="'+first.id+'"]').click();
   await reopenDirectorIfClosed(page);
   // Author-approved Read shares the selected Scene's real saved baseline.

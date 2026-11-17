@@ -813,35 +813,12 @@
   var pendingCreativeAction = null;
   // Write reflects an explicit conversational proposal, not a standalone operation picker.
   function showConversationWrite() {
-    var action = pendingCreativeAction;
-    var selectedDraft = !action || action.reviewReady
-      ? window.studioDirectorBridge.preparedWrite() : null;
-    var prepared = action && !(action.reviewReady && selectedDraft && selectedDraft.kind === 'scene')
-      ? null : selectedDraft;
-    var ready = !!(action || prepared);
-    var awaitingProject = !!(action && action.awaitingProject);
-    var awaitingScenes = !!(action && action.awaitingScenes);
-    el('studio-dw-write-empty').classList.toggle('hidden', ready);
-    el('studio-dw-write-ready').classList.toggle('hidden', !ready);
-    el('studio-dw-write-panel').classList.toggle('hidden', !(awaitingProject || awaitingScenes));
-    el('studio-dw-write-panel').classList.toggle('studio-dw-awaiting-project', awaitingProject);
-    el('studio-dw-write-panel').classList.toggle('studio-dw-awaiting-scenes', awaitingScenes);
-    if (!ready) return;
-    if (prepared) {
-      var fieldLabels = prepared.fields.map(function (field) {return labels[field] || field;});
-      var scope = ({scene:'Scene',project:'Project', 'new-project':'New Project',
-        'new-scene':'New Scene'})[prepared.kind];
-      el('studio-dw-write-ready-title').textContent = scope + ' draft prepared';
-      el('studio-dw-write-ready-direction').textContent = fieldLabels.join(' · ');
-      el('studio-dw-write-ready-launch').textContent = 'Review ' + scope;
-      return;
-    }
-    var title = ({create_project:'Create Project',write_project:'Revise Project',
-      create_scene:'Create Scenes',write_scenes:'Revise Scenes'})[action.kind];
-    el('studio-dw-write-ready-title').textContent = title;
-    el('studio-dw-write-ready-direction').textContent = action.instruction;
-    el('studio-dw-write-ready-launch').textContent = awaitingProject || awaitingScenes
-      ? 'Continue with selected target' : title;
+    // Write is an explicit user-selected function, not a suggested chat action.
+    // Never reopen old Review proposals as a substitute for the Write panel.
+    el('studio-dw-write-empty').classList.add('hidden');
+    el('studio-dw-write-ready').classList.add('hidden');
+    el('studio-dw-write-panel').classList.remove('studio-dw-awaiting-project');
+    el('studio-dw-write-panel').classList.remove('studio-dw-awaiting-scenes');
   }
 
   // Scene targets belong to the selected Studio context or the explicit Write

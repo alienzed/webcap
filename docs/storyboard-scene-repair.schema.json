@@ -28,12 +28,6 @@
             "additionalProperties": false,
             "minProperties": 1,
             "properties": {
-              "entryState": {
-                "type": "string"
-              },
-              "exitState": {
-                "type": "string"
-              },
               "prompt": {
                 "type": "string",
                 "minLength": 1

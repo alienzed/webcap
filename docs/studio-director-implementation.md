@@ -2,6 +2,12 @@
 
 [Functional contract](studio-director-contract.md) is authoritative. This file tracks the three-operation implementation and evidence; it does not define a competing architecture. The earlier incremental plans and audits from November 14 were superseded by the three-operation cutover in PR #950. Consult the PR history for original gap analyses.
 
+## One-time explicit Read snapshots — PR #1028
+
+The authoritative [Studio Director contract](studio-director-contract.md) now defines each Read as a single user action that copies the selected saved values into a full, visible, persisted user conversation message. The Read handler reads the chosen Project once, serializes the exact captured values, and saves the message without an LLM call. All later chat and explicit Write requests carry these same unchanged messages as part of complete history; neither request path refreshes a source or injects a hidden approved-context subscription. A subsequent Read is required to capture edits, and different Projects may be read into the same conversation.
+
+The obsolete approved-source state, badge, clear-context control and request-time fetch helpers were removed. Explicit Write still obtains the current authoritative *destination* Project or Scene baseline independently, with operation-specific schemas and H3 guidance where relevant. Existing specialist tools remain separate. Browser and unit acceptance must check that the complete Read text visible in chat equals the exact later user-message content, including after reload and source edits. The opt-in real-model acceptance suite is not claimed passed by deterministic CI.
+
 ## November 17 full contract and test-suite reconciliation — PR #1025
 
 **Active correction:** [PR #1025](https://github.com/alienzed/webcap/pull/1025), branch `fix/studio-live-contract-20261117`, follows merged PR #1024. This is not represented as a verified live-model release.

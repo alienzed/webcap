@@ -4791,6 +4791,7 @@
             '(4–15 seconds, default 6 when unspecified). Honor the author\'s creative direction, ' +
             'specific titles and timings. Deliver every Scene you can usefully author now.',
           authorDirection:launch.authorRequest || launch.instruction,
+          discussion:studioConversationMessages(state.modeMessages.storyboard),
           project:Object.assign({},creativeContext,{
             unsavedWorkingFields:sameSource ? (state.studioWorkingDraft.newScene || {}) : {}
           })
@@ -5022,6 +5023,7 @@
             'when prompt is selected. Preserve all unaffected creative content and fields. ' +
             'Deliver the actual authored values in one JSON object.',
           authorDirection:launch.authorRequest || launch.instruction,
+          discussion:studioConversationMessages(state.modeMessages.storyboard),
           requestedFields:requestedFields,
           savedScene:context,
           unsavedWorkingFields:workingScene || {}

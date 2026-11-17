@@ -1,7 +1,7 @@
 'use strict';
 const {test,expect}=require('./test.cjs');
 const {resetModel,queueModel,observedModels,openDirector,say,story,stories,
-  seedProject,openProject,reopenDirectorIfClosed,ensureAttachedProject}=require('./helpers.cjs');
+  seedProject,seedScene,openProject,reopenDirectorIfClosed,ensureAttachedProject}=require('./helpers.cjs');
 
 test('mixed Director response keeps both Project and Scene drafts independently reviewable',async({page,request})=>{
   await resetModel(request);
@@ -50,4 +50,51 @@ test('mixed Director response keeps both Project and Scene drafts independently 
   expect((await story(page,project.id)).sceneOrder).toEqual(savedSource.sceneOrder);
   expect((await observedModels(request)).calls).toHaveLength(1,
     'review and saving two independent results never requires another model call');
+});
+
+
+test('an edited existing-Scene review reopens with the author edits and leaves saved fields unchanged',async({page,request})=>{
+  await resetModel(request);
+  const project=await seedProject(page,'Review Draft '+Date.now(),{
+    concept:'An evening arrival.',style:'Blue twilight.'
+  });
+  const scene=await seedScene(page,project.id,{
+    title:'Station',prompt:'A watchman crosses the empty platform.',durationSeconds:8
+  });
+  await openDirector(page);
+  await openProject(page,project.id);
+  // Unpinned Director covers Scene navigation; explicitly select the saved Scene.
+  await page.locator('#director-chat-close').click();
+  await page.locator('[data-scene-progress="'+scene.id+'"]').click();
+  await reopenDirectorIfClosed(page);
+  await ensureAttachedProject(page,project.title);
+  await queueModel(request,{
+    reply:'The complete Scene revision is ready for review.',
+    changes:{scene:{title:'Moonlit Station',
+      prompt:'A watchman approaches the silent station doorway beneath blue moonlight.',
+      durationSeconds:10}}
+  });
+  await say(page,'Revise the existing Station Scene with a more distinctive approach.');
+  const action=page.locator('#studio-dw-suggestions .studio-dw-suggestion-action');
+  await expect(action).toContainText('Review authored Scene');
+  await action.click();
+  await expect(page.locator('#studio-dw-scene-review')).toBeVisible();
+  const prompt=page.locator('#studio-dw-scene-editors [data-field="prompt"]');
+  const title=page.locator('#studio-dw-scene-editors [data-field="title"]');
+  const duration=page.locator('#studio-dw-scene-editors [data-field="durationSeconds"]');
+  const revised='My edited H3: the watchman pauses beside the doorway as rain falls.';
+  await prompt.fill(revised);
+  await title.fill('Author title');
+  await duration.fill('12');
+  await page.locator('#studio-dw-scene-close').click();
+  expect((await story(page,project.id)).scenes[scene.id].prompt).toBe(scene.prompt);
+  await action.click();
+  await expect(page.locator('#studio-dw-scene-review')).toBeVisible();
+  await expect(prompt).toHaveValue(revised);
+  await expect(title).toHaveValue('Author title');
+  await expect(duration).toHaveValue('12');
+  await page.locator('#studio-dw-scene-close').click();
+  expect((await observedModels(request)).calls).toHaveLength(1,
+    'reopening a user-edited review should not ask the LLM to regenerate it');
+  expect((await story(page,project.id)).scenes[scene.id].title).toBe('Station');
 });

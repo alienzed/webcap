@@ -11,7 +11,7 @@ function harness(saved,frameWidth=1400) {
     getBoundingClientRect:()=>({width:Math.min(width,frame.clientWidth-42)})};
   const grip={classList:{add(){},remove(){}},setPointerCapture(){},
     setAttribute:(key,value)=>attributes[key]=value,addEventListener:(name,fn)=>handlers[name]=fn};
-  const frame={clientWidth:frameWidth};
+  const frame={clientWidth:frameWidth,style:{setProperty(key,value){assert.equal(key,'--studio-director-width');}}};
   const scope=vm.createContext({el:id=>({'studio-director-resizer':grip,'director-chat-drawer':drawer,'app-frame':frame})[id],
     state:{open:true,activeMode:'storyboard'},window:{addEventListener:(name,fn)=>windowHandlers[name]=fn},
     localStorage:{getItem:key=>storage.get(key),setItem:(key,value)=>storage.set(key,String(value))}});

@@ -228,8 +228,6 @@ def test_story_scene_lifecycle(storyboard_fs):
     assert story["sceneOrder"] == [first["id"], second["id"]]
     assert first["seed"] == 42
     assert first["durationSeconds"] == 8
-    assert first["entryState"] == "The road is empty in heavy rain."
-    assert first["exitState"] == "The car has stopped beneath the hotel awning."
 
     story, updated = storyboard_store.update_scene(
         story["id"],
@@ -254,8 +252,6 @@ def test_story_scene_lifecycle(storyboard_fs):
     assert duplicate["promptDirectorModel"] == ""
     assert duplicate["promptDirectorJobId"] == ""
     assert duplicate["planDirectorModel"] == ""
-    assert duplicate["entryState"] == updated["entryState"]
-    assert duplicate["exitState"] == updated["exitState"]
     assert duplicate["invariantRefs"] == updated["invariantRefs"]
     assert duplicate["takes"] == {}
     assert duplicate["takeOrder"] == []
@@ -298,8 +294,6 @@ def test_insert_director_scene_after_creates_one_scene_at_gap(storyboard_fs):
 
     assert story["sceneOrder"] == [first["id"], inserted["id"], second["id"]]
     assert inserted["title"] == "Inserted"
-    assert inserted["entryState"] == ""
-    assert inserted["exitState"] == ""
     assert inserted["promptDirectorModel"] == "director.gguf"
     assert inserted["planDirectorModel"] == "director.gguf"
 
@@ -701,8 +695,6 @@ def test_apply_developed_plan_replaces_active_scenes_and_preserves_old_takes(sto
 
     first = developed["scenes"][developed["sceneOrder"][0]]
     assert first["prompt"] == "Three brisk shots carry her from the doors into the lobby."
-    assert first["entryState"] == ""
-    assert first["exitState"] == ""
     assert first["promptDirectorModel"] == "director.gguf"
 
 
@@ -744,8 +736,6 @@ def test_apply_developed_plan_accepts_minimal_scene_shape(storyboard_fs):
 
     saved = developed["scenes"][developed["sceneOrder"][0]]
     assert saved["title"] == "Opening"
-    assert saved["entryState"] == ""
-    assert saved["exitState"] == ""
     assert saved["prompt"] == "A fast three-beat entrance sequence."
 
 
@@ -858,10 +848,11 @@ def test_developed_plan_rejects_missing_or_invalid_required_content(storyboard_f
     with pytest.raises(ValueError, match="invalid prompt"):
         storyboard_store.apply_developed_plan(story["id"], {"scenes": [missing_prompt]})
 
-    bad_entry = dict(base_scene)
-    bad_entry["entryState"] = {"unexpected": True}
-    with pytest.raises(ValueError, match="entryState must be text"):
-        storyboard_store.apply_developed_plan(story["id"], {"scenes": [bad_entry]})
+    legacy_fields = {**base_scene, "entryState": {"unexpected": True}, "exitState": 5}
+    developed = storyboard_store.apply_developed_plan(story["id"], {"scenes": [legacy_fields]})
+    normalized_scene = developed["scenes"][developed["sceneOrder"][0]]
+    assert "entryState" not in normalized_scene
+    assert "exitState" not in normalized_scene
 
 def test_take_label_is_editable_and_persists(storyboard_fs):
     story = storyboard_store.create_story({"title": "Story"})
@@ -1317,26 +1308,20 @@ def test_scene_refine_completion_is_persisted_only_for_successful_refine(storybo
         model_id="director.gguf",
         job_id="job-refine-fields",
         operation="refine_prompt",
-        scene_fields={
-            "entryState": "Revised entry.",
-            "exitState": "Revised exit.",
-        },
     )
     assert refined_scene_fields["summary"] == ""
-    assert refined_scene_fields["entryState"] == "Revised entry."
-    assert refined_scene_fields["exitState"] == "Revised exit."
+    assert "entryState" not in refined_scene_fields
+    assert "exitState" not in refined_scene_fields
     assert refined_scene_fields["prompt"] == "Scene-aware refined prompt."
     assert refined_scene_fields["previousRevision"] == {
-        "entryState": "",
-        "exitState": "",
         "prompt": "Longer refined prompt.",
         "durationSeconds": 12.0,
     }
 
     _, restored_scene_fields = storyboard_store.restore_previous_prompt(story["id"], scene["id"])
     assert restored_scene_fields["summary"] == ""
-    assert restored_scene_fields["entryState"] == ""
-    assert restored_scene_fields["exitState"] == ""
+    assert "entryState" not in restored_scene_fields
+    assert "exitState" not in restored_scene_fields
     assert restored_scene_fields["prompt"] == "Longer refined prompt."
     assert restored_scene_fields["durationSeconds"] == 12
 

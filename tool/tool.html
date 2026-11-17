@@ -2168,7 +2168,7 @@
                     </div>
                     <div class="director-chat-progress-track" aria-hidden="true"><span></span></div>
                 </div>
-                <div id="studio-dw-suggestions" class="studio-dw-suggestions hidden" aria-label="Suggested next action"></div>
+
                 <div id="director-chat-messages" class="director-chat-messages" aria-live="polite"></div>
                 <div id="director-chat-empty" class="director-chat-empty">
                     <strong id="director-chat-empty-title">Your creative workshop</strong>
@@ -2206,14 +2206,7 @@
                     <div id="director-chat-sidebar" class="director-chat-sidebar">
                 <section id="studio-director-workbench" class="studio-director-workbench" aria-label="Director actions and feedback">
                   <div class="studio-dw-heading"><div><strong id="studio-dw-heading">Write</strong></div><button id="studio-dw-close-actions" type="button" aria-label="Close Director actions">Close</button></div>
-                  <div id="studio-dw-write-availability" class="studio-dw-write-availability" aria-live="polite">
-                    <p id="studio-dw-write-empty">Nothing ready to write. Discuss a change with Director to prepare an action.</p>
-                    <div id="studio-dw-write-ready" class="hidden">
-                      <strong id="studio-dw-write-ready-title"></strong>
-                      <p id="studio-dw-write-ready-direction"></p>
-                      <button id="studio-dw-write-ready-launch" type="button" class="studio-dw-primary">Continue</button>
-                    </div>
-                  </div>
+
                   <div class="studio-dw-actions">
                     <button id="studio-dw-read" type="button" aria-expanded="false" aria-controls="studio-dw-read-panel" title="Share saved material with Director">Context</button>
                     <button id="studio-dw-write" type="button" aria-expanded="false" aria-controls="studio-dw-write-panel" title="Configure a Studio Write">Write options</button>
@@ -2267,7 +2260,7 @@
                             <strong id="director-studio-flow-title">Working with: New Project</strong>
                             <p id="director-studio-flow-description">Concept / overview · Visual / atmosphere · Invariants</p>
                         </div>
-                        <button id="director-studio-capture" type="button" class="studio-primary-action">Review new Project</button>
+                        <button id="director-studio-capture" type="button" class="studio-primary-action">Create Project · Save</button>
                     </div>
                     <div id="director-studio-flow-target" class="director-studio-flow-target hidden">
                         <span id="director-studio-flow-target-label"></span>
@@ -2317,165 +2310,12 @@
                 <details><summary>Recorded Read and Apply payloads</summary><pre id="studio-director-io-history"></pre></details>
               </div>
             </dialog>
-            <dialog id="studio-dw-batch-review" class="studio-scene-draft-review" aria-labelledby="studio-dw-batch-title">
-              <header class="studio-scene-draft-header"><div><h2 id="studio-dw-batch-title" title="Choose the exact changes to save together. Other Scenes, prompts and Takes remain unchanged.">Review Scene revisions</h2></div>
-                <button id="studio-dw-batch-close" type="button" class="review-captions-btn">Close</button></header>
-              <div class="studio-scene-draft-content">
-                <p id="studio-dw-batch-target-warning" role="status"></p>
-                <div id="studio-dw-batch-editors"></div>
-                <p id="studio-dw-batch-error" role="alert"></p>
-              </div>
-              <footer class="studio-scene-draft-footer">
-                <button id="studio-dw-batch-cancel" type="button" class="review-captions-btn">Back to conversation</button>
-                <button id="studio-dw-batch-apply" type="button">Apply selected Scene changes</button>
-              </footer>
-            </dialog>
-            <dialog id="studio-dw-scene-review" class="studio-scene-draft-review" aria-labelledby="studio-dw-scene-review-title">
-              <header class="studio-scene-draft-header"><div><h2 id="studio-dw-scene-review-title" title="Editable proposals for selected existing fields. Unselected fields and Takes are preserved.">Review Scene changes</h2></div>
-                <button id="studio-dw-scene-close" type="button" class="review-captions-btn">Close</button></header>
-              <div class="studio-scene-draft-content">
-                <p id="studio-dw-scene-target"></p>
-                <p id="studio-dw-scene-summary" class="studio-review-summary"></p>
-                <div id="studio-dw-scene-editors"></div>
-                <p id="studio-dw-scene-error" role="alert"></p>
-              </div>
-              <footer class="studio-scene-draft-footer">
-                <button id="studio-dw-scene-cancel" type="button" class="review-captions-btn">Back to conversation</button>
-                <button id="studio-dw-scene-apply" type="button">Apply selected fields</button>
-              </footer>
-            </dialog>
-            <dialog id="studio-brief-review" class="studio-scene-draft-review" aria-labelledby="studio-brief-review-title">
-                <header class="studio-scene-draft-header">
-                    <div>
-                        <h2 id="studio-brief-review-title" title="Review the Overview together. Changed parts are selected; Apply confirms your reviewed changes.">Review Project Overview</h2>
-                    </div>
-                    <button id="studio-brief-close" type="button" class="review-captions-btn">Close</button>
-                </header>
-                <div class="studio-scene-draft-content">
-                    <p id="studio-brief-target" class="studio-scene-draft-target"></p>
-                    <p id="studio-brief-summary" class="studio-review-summary" aria-live="polite"></p>
-                    <details><summary>Director's rationale</summary><p id="studio-brief-rationale" class="studio-scene-draft-rationale"></p></details>
-                    <div id="studio-brief-parts">
-                    <section class="studio-brief-field" data-brief-field="title">
-                    <label for="studio-brief-title"><input id="studio-brief-title-selected" type="checkbox"> Project title</label>
-                    <small id="studio-brief-title-state"></small>
-                    <details><summary>Saved Project title</summary><p id="studio-brief-title-before" class="studio-scene-draft-rationale"></p></details>
-                    <details class="studio-director-diff" open><summary>What changes?</summary><div id="studio-brief-title-diff" class="studio-director-diff-content"></div></details>
-                    <input id="studio-brief-title" type="text" maxlength="240" aria-label="Project title">
-                    </section>
-                    <section class="studio-brief-field" data-brief-field="concept">
-                    <label for="studio-brief-concept"><input id="studio-brief-concept-selected" type="checkbox" checked> Concept / overview <small>(including Core Appeal)</small></label>
-                    <small id="studio-brief-concept-state"></small>
-                    <details><summary>Saved Concept</summary><p id="studio-brief-concept-before" class="studio-scene-draft-rationale"></p></details>
-                    <details class="studio-director-diff" open><summary>What changes?</summary><div id="studio-brief-concept-diff" class="studio-director-diff-content"></div></details>
-                    <textarea id="studio-brief-concept" rows="5"></textarea>
-                    </section>
-                    <section class="studio-brief-field" data-brief-field="style">
-                    <label for="studio-brief-style"><input id="studio-brief-style-selected" type="checkbox" checked> Visual / atmosphere</label>
-                    <small id="studio-brief-style-state"></small>
-                    <details><summary>Saved Visual / atmosphere</summary><p id="studio-brief-style-before" class="studio-scene-draft-rationale"></p></details>
-                    <details class="studio-director-diff" open><summary>What changes?</summary><div id="studio-brief-style-diff" class="studio-director-diff-content"></div></details>
-                    <textarea id="studio-brief-style" rows="3"></textarea>
-                    </section>
-                    <section class="studio-brief-field" data-brief-field="invariants">
-                    <label><input id="studio-brief-invariants-selected" type="checkbox"> Invariants</label>
-                    <small id="studio-brief-invariants-state"></small>
-                    <p class="studio-scene-draft-rationale">Names and types referenced by Scenes must remain stable. Edit descriptions freely; coordinated renames require separate review.</p>
-                    <div id="studio-brief-invariants"></div>
-                    <button id="studio-brief-add-invariant" type="button" class="review-captions-btn">Add invariant</button>
-                    </section>
-                    <details id="studio-brief-unchanged"><summary title="Parts retained by Director; expand to inspect or edit.">Other parts</summary></details>
-                    </div>
-                    <p id="studio-brief-error" class="studio-scene-draft-error" aria-live="polite"></p>
-                </div>
-                <footer class="studio-scene-draft-footer">
-                    <button id="studio-brief-discard" type="button" class="review-captions-btn">Back to conversation</button>
-                    <button id="studio-brief-apply" type="button">Apply Selected</button>
-                </footer>
-            </dialog>
-            <dialog id="studio-project-review" class="studio-scene-draft-review" aria-labelledby="studio-project-review-title">
-                <header class="studio-scene-draft-header">
-                    <div>
-                        <h2 id="studio-project-review-title" title="An idea can become a Project without a title, finished outline or Scenes. Nothing is created until you approve.">Review New Project</h2>
-                    </div>
-                    <button id="studio-project-close" type="button" class="review-captions-btn">Close</button>
-                </header>
-                <div class="studio-scene-draft-content">
-                    <p id="studio-project-rationale" class="studio-scene-draft-rationale"></p>
-                    <label for="studio-project-title">Working title <small>(optional)</small></label>
-                    <input id="studio-project-title" type="text" maxlength="240" placeholder="Untitled Project">
-                    <label for="studio-project-concept">Concept / overview <small>(including Core Appeal)</small></label>
-                    <textarea id="studio-project-concept" rows="5" placeholder="What makes this idea worth watching?"></textarea>
-                    <label for="studio-project-style">Visual / atmosphere</label>
-                    <textarea id="studio-project-style" rows="2"></textarea>
-                    <label>Invariants <small>(optional; only genuinely persistent facts)</small></label>
-                    <div id="studio-project-invariants"></div>
-                    <button id="studio-project-add-invariant" type="button" class="review-captions-btn">Add invariant</button>
-                    <label for="studio-project-include-scene"><input id="studio-project-include-scene" type="checkbox"> Write an initial Scene after creating this Project</label>
-                    <div id="studio-project-first-scene-fields" class="hidden">
-                        <label for="studio-project-scene-title">Scene title <small>(optional)</small></label>
-                        <input id="studio-project-scene-title" type="text" maxlength="240">
-                        <label for="studio-project-scene-duration">Duration (seconds)</label>
-                        <input id="studio-project-scene-duration" type="number" min="4" max="15" step="1" value="6">
-                        <label for="studio-project-scene-prompt">Scene brief</label>
-                        <textarea id="studio-project-scene-prompt" rows="3" placeholder="Director authors the full H3 Prompt after Project creation"></textarea>
-                    </div>
-                    <div id="studio-project-extra-scenes" aria-label="Additional proposed Scenes"></div>
-                    <button id="studio-project-add-scene" type="button" class="review-captions-btn">Add another Scene</button>
-                    <label for="studio-project-continue"><input id="studio-project-continue" type="checkbox" checked> Continue with this Project in Director</label>
-                    <p id="studio-project-error" class="studio-scene-draft-error" aria-live="polite"></p>
-                </div>
-                <footer class="studio-scene-draft-footer">
-                    <button id="studio-project-discard" type="button" class="review-captions-btn">Back to conversation</button>
-                    <button id="studio-project-create" type="button">Create Project</button>
-                </footer>
-            </dialog>
-            <dialog id="studio-scenes-review" class="studio-scene-draft-review" aria-labelledby="studio-scenes-review-title">
-                <header class="studio-scene-draft-header">
-                    <div>
-                        <h2 id="studio-scenes-review-title" title="Review Scene prompts in their proposed order. Edit or remove any Scene before applying the whole block.">Review new Scenes</h2>
-                    </div>
-                    <button id="studio-scenes-close" type="button" class="review-captions-btn">Close</button>
-                </header>
-                <div class="studio-scene-draft-content">
-                    <p id="studio-scenes-target" class="studio-scene-draft-target"></p>
-                    <p id="studio-scenes-rationale" class="studio-scene-draft-rationale"></p>
-                    <div id="studio-scenes-rows"></div>
-                    <button id="studio-scenes-add" type="button" class="review-captions-btn">Add a Scene</button>
-                    <label for="studio-scenes-placement">Insert the sequence</label>
-                    <select id="studio-scenes-placement"></select>
-                    <p id="studio-scenes-error" class="studio-scene-draft-error" aria-live="polite"></p>
-                </div>
-                <footer class="studio-scene-draft-footer">
-                    <button id="studio-scenes-discard" type="button" class="review-captions-btn">Back to conversation</button>
-                    <button id="studio-scenes-apply" type="button">Create reviewed Scenes</button>
-                </footer>
-            </dialog>
-            <dialog id="studio-scene-draft-review" class="studio-scene-draft-review" aria-labelledby="studio-scene-draft-review-title">
-                <header class="studio-scene-draft-header">
-                    <div>
-                        <h2 id="studio-scene-draft-review-title" title="One tentative Scene, extracted from the conversation. Nothing is created until you approve.">Prepare a Scene</h2>
-                    </div>
-                    <button id="studio-scene-draft-close" type="button" class="review-captions-btn">Close</button>
-                </header>
-                <div class="studio-scene-draft-content">
-                    <p id="studio-scene-draft-target" class="studio-scene-draft-target"></p>
-                    <p id="studio-scene-draft-rationale" class="studio-scene-draft-rationale"></p>
-                    <label for="studio-scene-draft-title">Working title <small>(optional)</small></label>
-                    <input id="studio-scene-draft-title" type="text" placeholder="Untitled Scene">
-                    <div id="studio-scene-draft-prompt-row">
-                        <label for="studio-scene-draft-prompt">H3 Prompt <small>(editable)</small></label>
-                        <textarea id="studio-scene-draft-prompt" rows="12" placeholder="Full H3 production prompt…"></textarea>
-                    </div>
-                    <label for="studio-scene-draft-placement">Place the new Scene</label>
-                    <select id="studio-scene-draft-placement" aria-label="New Scene placement"></select>
-                    <p id="studio-scene-draft-error" class="studio-scene-draft-error" aria-live="polite"></p>
-                </div>
-                <footer class="studio-scene-draft-footer">
-                    <button id="studio-scene-draft-discard" type="button" class="review-captions-btn">Back to conversation</button>
-                    <button id="studio-scene-draft-apply" type="button">Create Scene</button>
-                </footer>
-            </dialog>
+
+
+
+
+
+
             <dialog id="storyboard-workshop-review" class="storyboard-workshop-review" aria-labelledby="storyboard-workshop-review-title">
                 <div class="storyboard-workshop-review-head">
                     <div>

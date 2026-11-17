@@ -18,7 +18,7 @@ function section(source, start, end) {
 test('a selected Studio Project cannot silently authorize saved Read material', () => {
   const body = section(chat, '  function studioDirectorChatRequestMessages(', '  // Retain available conversational work');
   assert.match(body, /approved/);
-  assert.match(body, /NO SAVED PROJECT\/SCENE CONTEXT APPROVED/);
+  assert.match(body, /No saved Project or Scene reference was supplied/);
   assert.doesNotMatch(body, /studioActionFromExplicitRequest/);
 });
 

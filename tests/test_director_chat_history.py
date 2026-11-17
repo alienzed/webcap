@@ -111,7 +111,8 @@ def test_mixed_director_deliverables_and_edited_scene_review_survive_session_rel
     chat = history.create_chat("storyboard")
     raw = json.dumps({
         "reply": "The visual style should be colder. Here is the new scene.",
-        "changes": {"project": {"style": "Moonlit blue haze"}},
+        "changes": {"project": {"style": "Moonlit blue haze"},
+                    "scene": {"prompt": "A revised existing Scene."}},
         "scenes": [{"title": "Night platform",
                     "prompt": "Complete H3 scene with the approaching train.",
                     "durationSeconds": 8}],
@@ -124,7 +125,7 @@ def test_mixed_director_deliverables_and_edited_scene_review_survive_session_rel
         "completed": False,
     }
     scene_action = {
-        "kind": "write_scenes", "actionKey": "primary",
+        "kind": "write_scenes", "actionKey": "alternate-1",
         "instruction": "Develop the project and scenes", "request": "Develop the project and scenes",
         "projectId": "project-1", "scene": {"projectId": "project-1", "sceneId": "scene-1"},
         "fields": ["prompt"], "completed": False,
@@ -133,11 +134,16 @@ def test_mixed_director_deliverables_and_edited_scene_review_survive_session_rel
             "values": {"prompt": "My edited H3 Scene prompt.", "durationSeconds": "10"},
         },
     }
+    new_scene_action = {
+        "kind": "create_scene", "actionKey": "primary",
+        "instruction": "Develop the project and scenes", "request": "Develop the project and scenes",
+        "projectId": "project-1", "fields": [], "completed": False,
+    }
     saved = history.save_chat(chat["id"], {
         "expectedRevision": 0, "title": "Mixed creative work", "draft": "",
         "messages": [{"role": "assistant", "content": "Here is the work.",
-                      "rawResponse": raw, "writeAction": scene_action,
-                      "otherWriteActions": [project_action]}],
+                      "rawResponse": raw, "writeAction": new_scene_action,
+                      "otherWriteActions": [project_action, scene_action]}],
         "workingDraft": {
             "projects": {"project-1": {"style": "Unsaved warmer look"}},
             "scenes": {"scene-1": {"title": "Unsaved title"}},
@@ -158,10 +164,11 @@ def test_mixed_director_deliverables_and_edited_scene_review_survive_session_rel
     restored = history.open_chat(chat["id"])
     reply = restored["messages"][0]
     assert reply["rawResponse"] == raw
-    assert reply["writeAction"]["reviewDraft"]["values"]["prompt"] == "My edited H3 Scene prompt."
+    assert reply["writeAction"]["kind"] == "create_scene"
     assert reply["writeAction"]["actionKey"] == "primary"
     assert reply["otherWriteActions"][0]["kind"] == "create_project"
     assert reply["otherWriteActions"][0]["completed"] is False
+    assert reply["otherWriteActions"][1]["reviewDraft"]["values"]["prompt"] == "My edited H3 Scene prompt."
     assert "authoredFields" not in reply["otherWriteActions"][0], (
         "model-authored fields come from rawResponse, not a second cached authority")
     assert restored["workingDraft"]["draftOrigins"]["scenes"]["scene-1"]["fields"] == ["title"]
@@ -169,15 +176,18 @@ def test_mixed_director_deliverables_and_edited_scene_review_survive_session_rel
         '{"style":"Original"}')
     assert restored["workingDraft"]["draftOrigins"]["scenes"]["scene-1"]["projectId"] == "project-1"
 
-    scene_action["completed"] = True
     revision = history.save_chat(chat["id"], {
         "expectedRevision": 1, "title": "Mixed creative work", "draft": "",
-        "messages": [{**reply, "writeAction": {**reply["writeAction"], "completed": True}}],
+        "messages": [{**reply, "otherWriteActions": [
+            reply["otherWriteActions"][0],
+            {**reply["otherWriteActions"][1], "completed": True},
+        ]}],
         "workingDraft": restored["workingDraft"],
     })
-    assert revision["messages"][0]["writeAction"]["completed"] is True
+    assert revision["messages"][0]["otherWriteActions"][1]["completed"] is True
+    assert revision["messages"][0]["writeAction"]["completed"] is False
     assert revision["messages"][0]["otherWriteActions"][0]["completed"] is False, (
-        "saving one deliverable must not complete or hide the other")
+        "saving one deliverable must not complete or hide either other result")
 
 
 def test_multiple_independent_conversations_and_active_history(sessions):

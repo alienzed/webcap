@@ -250,3 +250,36 @@ rounds; clarify consequential ambiguity without pestering the author.
 Reuse the current classic-script architecture, routes, persistence and stable Scene
 revision machinery. Consolidation means consistent behavior and contracts, not a
 new generic agent framework or a requirement to rename every internal function.
+
+
+## 2026-11-17 amendment — focused Chat and explicit Write (supersedes combined-response behavior)
+
+This section supersedes earlier passages permitting structured Project or Scene authoring
+inside an ordinary chat response, including combined `reply`/`changes`/`scenes`
+schemas and model-initiated write suggestions. The four independent application
+identities and explicit saved-source authorization remain unchanged.
+
+- **Chat** is creative discussion and returns ordinary text only. It receives
+  the full alternating user/assistant conversation, excluding WebCap-generated
+  save receipts and raw structured results. It does not receive H3 production
+  templates, field schemas, or conditional instructions to author records.
+- **Write** is an explicit author-initiated operation. It receives its specific
+  authoring instruction, complete conversational context, operation-specific
+  guidance and required structured fields. WebCap never interprets prose to
+  infer which operation should execute.
+- Structured Write results belong to their targeted editors and history, not
+  the chat transcript. New operations do not create speculative conversational
+  drafts or require a separate review step. Existing saved conversations and
+  historical drafts remain readable; legacy artifacts are not migrations.
+- Context is never silently cut to a fixed message count, abbreviated by
+  length, or automatically summarized. A provider context-limit failure must
+  remain visible. Automatic compaction is deferred.
+- A missing required creative field is an incomplete Write, not a successful
+  mutation or an occasion to invent a fallback. Independently usable material
+  and successful operations remain usable.
+- Existing focused generation workflows (First Cut, Develop Scenes, Enhance
+  Prompt) and their production-specific guidance are unaffected.
+
+Acceptance requires one end-to-end Chat → Write Project → Chat → Write Scene →
+Revise Scene flow, no raw JSON in new chat output, full conversation in outgoing
+requests, and actual saved/editor field changes with field-history recovery.

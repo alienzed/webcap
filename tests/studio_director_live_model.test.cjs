@@ -71,7 +71,7 @@ test('opt-in Studio Director: conversation, Project Write and Scene revision use
         {role:'user',content:'Suggest a brief, imaginative bookshop opening. No writing or saving.'}
       ],report);
       assert.ok(raw.trim().length>10);
-      assert.equal(report.at(-1).schema,undefined,'chat must not receive a structured authoring schema');
+      assert.ok(report.at(-1).schema==null,'chat must not receive a structured authoring schema');
       const after=(await api('/fs/storyboard?story='+encodeURIComponent(seed.id))).story;
       assert.deepEqual(after,before);
     });

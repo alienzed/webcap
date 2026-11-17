@@ -1915,11 +1915,13 @@
       state.studioWorkingDraft.draftOrigins.newProject;
     var sameWork = manualReview || !!newProjectOrigin &&
       newProjectOrigin.request === authorRequest;
-    if (sameWork && workingProject && Object.keys(workingProject).length) {
-      var retained = manualReview ? workingProject : Object.fromEntries(
-        (newProjectOrigin.fields || []).filter(function (field) {
-          return Object.prototype.hasOwnProperty.call(workingProject,field);
-        }).map(function (field) {return [field,workingProject[field]];}));
+    var retained = sameWork && workingProject
+      ? manualReview ? workingProject : Object.fromEntries(
+          (newProjectOrigin.fields || []).filter(function (field) {
+            return Object.prototype.hasOwnProperty.call(workingProject,field);
+          }).map(function (field) {return [field,workingProject[field]];}))
+      : {};
+    if (Object.keys(retained).length) {
       state.studioProjectProposal = parseStudioProjectDraft(JSON.stringify(Object.assign({
         title:'', concept:'', style:'', invariants:[], initialScenes:[],
         rationale:'Structured Project material retained from Director conversation.'
@@ -2443,14 +2445,16 @@
       var sameWork = !!(options && options.authoredFields) || manualReview ||
         !!draftOrigin && draftOrigin.request === authorRequest &&
           draftOrigin.baseline === JSON.stringify(expected);
-      var required = Object.keys(workingProject).filter(function (field) {
-        return ['title','concept','style','invariants'].includes(field);
-      });
-      if (sameWork && required.length) {
-        var retained = manualReview || options && options.authoredFields ? workingProject :
+      var retained = sameWork
+        ? manualReview || options && options.authoredFields ? workingProject :
           Object.fromEntries((draftOrigin.fields || []).filter(function (field) {
             return Object.prototype.hasOwnProperty.call(workingProject,field);
-          }).map(function (field) {return [field,workingProject[field]];}));
+          }).map(function (field) {return [field,workingProject[field]];}))
+        : {};
+      var required = Object.keys(retained).filter(function (field) {
+        return ['title','concept','style','invariants'].includes(field);
+      });
+      if (required.length) {
         var drafted = Object.assign({},expected,retained);
         state.studioBriefProposal = {
           storyId:storyId,storyTitle:story.title,expected:expected,draft:drafted,
@@ -4943,11 +4947,16 @@
           draftOrigin.baseline === baseline;
         if (workingScene && applyExisting) {
           var pendingChanges = {};
-          fields.forEach(function (field) {
+          var reuseFields = fields.concat(allowCreativeFieldChanges ? ['title','durationSeconds'] : []);
+          reuseFields.forEach(function (field) {
             if (Array.isArray(draftOrigin.fields) && draftOrigin.fields.includes(field) &&
                 Object.prototype.hasOwnProperty.call(workingScene,field))
               pendingChanges[field] = workingScene[field];
           });
+          if (draftOrigin.timingNeedsReview) {
+            studioActionStatus('Scene timing still needs review; authored fields retained. Nothing saved.',true);
+            return {review:true};
+          }
           if (Object.keys(pendingChanges).length) {
             // A duration requested through an explicit Write must be supplied
             // as a real, supported field before WebCap can save a timed revision.
@@ -5031,7 +5040,9 @@
                 projectId:storyId,
                 request:String(launch.authorRequest || launch.instruction),
                 baseline:baseline,
-                fields:Object.keys(authored)
+                fields:Object.keys(authored),
+                timingNeedsReview:invalidOptionalDuration ||
+                  (wantsDuration && !Object.hasOwn(extras,'durationSeconds'))
               };
               scheduleSessionSave();
             }

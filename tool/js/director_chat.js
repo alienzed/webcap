@@ -4423,9 +4423,9 @@
         var instruction = JSON.stringify({
           task:'Create the requested independently generatable H3 Scenes for this Project. ' +
             'Give each Scene a useful title, complete H3 Prompt and durationSeconds ' +
-            '(4–15 seconds). Follow any author-specified timing; when no duration is ' +
-            'specified, choose an appropriate duration from the authored action, rather ' +
-            'than using an implicit WebCap default. Deliver all useful Scenes now.',
+            '. Follow the author\'s specified timing. When timing is unspecified, choose a ' +
+            'duration that supports the supplied actions, shot transitions and dialogue. ' +
+            'Deliver the authored Scenes now.',
           authorDirection:launch.authorRequest || launch.instruction,
           project:creativeContext
         });
@@ -4438,51 +4438,37 @@
           state.lastStudioIoRaw = raw;
           var fields;
           try { fields = JSON.parse(raw); }
-          catch (error) { throw new Error('Director returned invalid Scene JSON.\nRaw response:\n' + raw); }
+          catch (error) { throw new Error('Director returned invalid Scene JSON.\\nRaw response:\\n' + raw); }
           if (!fields || typeof fields !== 'object' || Array.isArray(fields))
-            throw new Error('Director returned no usable Scene fields.\\nRaw response:\\n' + raw);
-          // Accept both the current multi-Scene response and legacy single-Scene
-          // objects. The number of records returned is the only authored count.
+            throw new Error('Director returned no Scene object.\\nRaw response:\\n' + raw);
           var records = Array.isArray(fields.scenes) ? fields.scenes : [fields];
-          var drafts = records.filter(function (item) {
-            return item && typeof item === 'object' && !Array.isArray(item);
-          }).map(function (item) {
-            return {
-              title:typeof item.title === 'string' ? item.title : '',
-              prompt:typeof item.prompt === 'string' ? item.prompt : '',
-              durationSeconds:Object.prototype.hasOwnProperty.call(item,'durationSeconds')
-                ? item.durationSeconds : undefined
-            };
-          }).filter(function (item) {
-            return item.title.trim() || item.prompt.trim() ||
-              item.durationSeconds !== undefined;
+          if (!records.length)
+            throw new Error('Director returned zero Scenes.\\nRaw response:\\n' + raw);
+          // Preserve source order and report incomplete items explicitly. Only
+          // fields actually returned can be saved; never fabricate a duration.
+          var creations = [], incomplete = [];
+          records.forEach(function (item, index) {
+            if (!item || typeof item !== 'object' || Array.isArray(item)) {
+              incomplete.push('Scene ' + (index + 1) + ': expected an object');
+              return;
+            }
+            var title = typeof item.title === 'string' ? item.title : '';
+            var prompt = typeof item.prompt === 'string' ? item.prompt : '';
+            var duration = item.durationSeconds;
+            var problems = [];
+            if (!prompt.trim()) problems.push('missing Prompt');
+            if (duration === undefined || duration === null || duration === '' ||
+                typeof duration !== 'number' || !Number.isFinite(duration) || duration <= 0)
+              problems.push('missing or unusable durationSeconds');
+            if (problems.length) {
+              incomplete.push('Scene ' + (index + 1) + ': ' + problems.join(', '));
+              return;
+            }
+            creations.push({title:title,prompt:prompt,durationSeconds:duration});
           });
-          if (!drafts.length)
-            throw new Error('Director returned no usable Scene fields.\\nRaw response:\\n' + raw);
-          var missingPrompt = drafts.some(function (item) {return !item.prompt.trim();});
-          var missingDuration = drafts.some(function (item) {
-            return item.durationSeconds === undefined;
-          });
-          var invalidDuration = drafts.some(function (item) {
-            return item.durationSeconds !== undefined &&
-              (!Number.isInteger(Number(item.durationSeconds)) ||
-              Number(item.durationSeconds) < 4 || Number(item.durationSeconds) > 15);
-          });
-          var draft = {scenes:drafts,rationale:typeof fields.rationale === 'string' ? fields.rationale : ''};
-          // Persist each mechanically usable Scene returned by this explicit Write.
-          // Do not invent missing prompt text or duration values, or launch Review.
-          var valid = drafts.filter(function (item) {
-            return item.title.trim() && item.prompt.trim() &&
-              Number.isInteger(Number(item.durationSeconds)) &&
-              Number(item.durationSeconds)>=4 && Number(item.durationSeconds)<=15;
-          });
-          var omitted = drafts.length-valid.length;
-          if (!valid.length)
-            throw new Error('Director returned no Scene records with persistable fields.\\nRaw response:\\n'+raw);
-          var creations = valid.map(function (item,index) {
-            return {title:item.title.trim(),
-              prompt:item.prompt,durationSeconds:Number(item.durationSeconds)};
-          });
+          if (!creations.length)
+            throw new Error('Director returned no Scenes WebCap could save. ' +
+              incomplete.join('; ') + '\\nRaw response:\\n' + raw);
           state.pending = true;
           syncControls();
           return requestJson('/fs/studio/director/scenes-draft',{
@@ -4512,7 +4498,7 @@
               .catch(function(error){error.saved=true;throw error;})
               .then(function(){
                 studioActionStatus(saved.length+' Scene(s) saved.'+
-                  (omitted ? ' '+omitted+' returned record(s) could not be stored; inspect raw I/O.' : ''),!!omitted);
+                  (incomplete.length ? ' ' + incomplete.join('; ') + '. Inspect raw I/O.' : ''),!!incomplete.length);
                 return result;
               });
           });

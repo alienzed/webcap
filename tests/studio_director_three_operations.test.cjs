@@ -127,6 +127,7 @@ test('manual multi-Scene Write uses explicit field controls instead of interpret
   assert.equal(launches.length,1);
   assert.deepEqual(launches[0].fields,['title','durationSeconds'],
     'explicit selected fields must not cause an unwanted Prompt rewrite');
+  assert.equal(launches[0].forceAuthor,true,'manual launch must author fresh material');
   assert.equal(launches[0].sceneId,'s1');
   assert.equal(result.saved.length,1);
   selectedFields=['prompt'];

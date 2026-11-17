@@ -1313,7 +1313,7 @@ function buildPrimerTemplateAssistRequest() {
     model: getDirectorModelPreference('webcap.director.model'),
     groups: groups,
     mappings: typeof getPrimerMappingsRows === 'function' ? getPrimerMappingsRows() : [],
-    preferredCaptionSequence: getPreferredCaptionSequence(),
+    defaultCaptionTemplate: getConfiguredPrimerTemplate(),
     currentTemplate: templateEl ? String(templateEl.value || '') : ''
   };
 }

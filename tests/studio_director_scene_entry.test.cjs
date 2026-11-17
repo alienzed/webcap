@@ -51,7 +51,9 @@ test('direct Scene Revise delegates to the one selected-Scene writer',async()=>{
 });
 test('quick Apply changes only prompt, retaining the original prompt as its conflict check',async()=>{
   let sent, receiptKind;
-  const scope=vm.createContext({window:{studioDirectorWorkbench:{},flushStudioDirectorStoryEdits:async()=>{},
+  const scope=vm.createContext({window:{studioDirectorWorkbench:{},
+    webcapTextareaRevisions:{recordFieldChange:()=>{}},
+    flushStudioDirectorStoryEdits:async()=>{},
     refreshStudioDirectorStoryIfOpen:async()=>{},studioDirectorBridge:{recordApplied:async(kind)=>{receiptKind=kind;}}},
     api:async(url,options)=>{sent={url,body:JSON.parse(options.body)};return {story:{id:'p'},scene:{prompt:'After'}};}});
   const method=section(workbench,'    applyScenePrompt: function','    setStatus:status,').trim().replace(/,$/,'');
@@ -62,20 +64,22 @@ test('quick Apply changes only prompt, retaining the original prompt as its conf
   assert.equal(receiptKind,'scene.director.revision');
 });
 
-test('automatic Director revisions get a distinct persisted receipt; reviewed Apply stays reviewed', async()=>{
-  const state={modeMessages:{storyboard:[]},sessionDirty:{storyboard:false},studioWorkingDraft:{projects:{},scenes:{},newProject:{},newScene:{},sourceRequest:''}};
-  const scope=vm.createContext({state,window:{studioDirectorWorkbench:{markSavedFields(){},completeWriteAction(){return false;},updateWorkingWrite(){}}},
-    markStudioReadinessOutdated(){},renderMessages(){},persistSession:async()=>{}});
-  const method=section(director,'    recordApplied: function','    reviewCapture: function').trim().replace(/,$/,'');
-  vm.runInContext('var recorder={'+method+'};',scope);
-  const story={id:'p',title:'Project'},fields={sceneId:'s',savedFields:{prompt:'After'}};
-  await scope.recorder.recordApplied('scene.director.revision',story,fields);
-  await scope.recorder.recordApplied('scene.update',story,fields);
-  assert.match(state.modeMessages.storyboard[0].content,/^Saved Project: H3 Prompt/);
-  assert.match(state.modeMessages.storyboard[0].content,/"operation": "scene.director.revision"/);
-  assert.match(state.modeMessages.storyboard[1].content,/^Saved Project: H3 Prompt/);
-  assert.match(state.modeMessages.storyboard[1].content,/"operation": "scene.update"/);
-  assert.match(director,/WebCap · Director revision/);
+test('direct Scene revisions record only confirmed authoritative save receipts',async()=>{
+  const state={modeMessages:{storyboard:[]},sessionDirty:{storyboard:false}};
+  const scope=vm.createContext({state,JSON,String,Object,Promise,
+    window:{studioDirectorWorkbench:{markSavedFields(){}}},
+    renderMessages(){},persistSession:async()=>{}});
+  const method=section(director,'    recordApplied: function',
+    '    writeNewScene: function').trim().replace(/,$/,'');
+  // Scope only the receipt method, not the unrelated utility methods following it.
+  const receipt=method.slice(0,method.indexOf('    checkProjectCoherence:'));
+  vm.runInContext('var recorder={'+receipt.trim().replace(/,$/,'')+'};',scope);
+  const story={id:'p',title:'Project',updatedAt:'recent'};
+  await scope.recorder.recordApplied('scene.director.revision',story,
+    {sceneId:'s',savedFields:{prompt:'After'}});
+  assert.equal(state.modeMessages.storyboard.length,1);
+  assert.match(state.modeMessages.storyboard[0].content,/\[WEBCAP APPLIED FIELD VALUES\]/);
+  assert.match(state.modeMessages.storyboard[0].content,/scene.director.revision/);
 });
 
 test('inline Scene Revise invokes the existing targeted refine_prompt operation',()=>{

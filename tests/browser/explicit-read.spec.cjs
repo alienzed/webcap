@@ -1,6 +1,6 @@
 'use strict';
 const {test,expect}=require('./test.cjs');
-const {openDirector,openProject,ensureAttachedProject,resetModel,queueModel,observedModels,story,seedProject,seedScene}=require('./helpers.cjs');
+const {openDirector,openProject,reopenDirectorIfClosed,ensureAttachedProject,resetModel,queueModel,observedModels,story,seedProject,seedScene}=require('./helpers.cjs');
 
 test('Flow 4 — explicit Read persists immutable visible Project snapshots and never calls the model',async({page,request})=>{
   await resetModel(request);
@@ -42,6 +42,7 @@ test('Flow 4 — explicit Read persists immutable visible Project snapshots and 
   }});
   expect(changed.ok()).toBeTruthy();
   await page.reload();
+  await reopenDirectorIfClosed(page);
   await expect(page.locator('#director-chat-messages')).toContainText('The woman opens a silver gate beneath blue dusk.');
   const persisted=await page.locator('#director-chat-messages .director-chat-message-user .director-chat-message-body').allTextContents();
   expect(persisted).toEqual(snapshots);
@@ -56,6 +57,9 @@ test('Flow 4 — explicit Read persists immutable visible Project snapshots and 
   snapshots.forEach(snapshot=>expect(calls[0].messages.some(message=>message.role==='user' && message.content===snapshot)).toBe(true));
   expect(JSON.stringify(calls[0].messages)).not.toContain('new moon');
 
+  if(await details.locator('summary').getAttribute('aria-expanded')==='false') await details.locator('summary').click();
+  await page.locator('#director-studio-access-field').selectOption('prompt');
+  await page.locator('#director-studio-access-scene').selectOption(scene.id);
   await page.locator('#director-studio-access-read').click();
   await expect(page.locator('#director-chat-messages')).toContainText('The woman closes the silver gate under a new moon.');
   expect((await observedModels(request)).calls).toHaveLength(1);

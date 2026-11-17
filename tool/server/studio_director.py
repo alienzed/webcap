@@ -71,75 +71,18 @@ def chat_guidance():
     )
 
 
-def chat_response_schema():
-    """A conversational answer or actual independently useful creative fields.
-
-    Transport shape only; a schema-valid reply is not evidence that an
-    authored Scene exists. Read can be plain prose, and model output never
-    supplies authoritative IDs, destinations or save actions.
-    """
+def scene_records_schema():
+    """Scene records returned only by an explicitly initiated Write operation."""
     return {
-        "type": "object",
-        "additionalProperties": False,
-        # Every Studio chat turn addresses the author first. Creative fields
-        # remain independent extras; parsing still accepts useful incomplete
-        # model output when a provider ignores the requested response shape.
-        "required": ["reply"],
-        "minProperties": 1,
-        "properties": {
-            "reply": {
-                "type": "string", "minLength": 1,
-                "description": "Direct answer to the author's current message. For discussion, include the creative options, recommendation and reasoning here. If also authoring Project/Scene fields, retain the response to the author here.",
+        "type": "array", "maxItems": 32,
+        "items": {
+            "type": "object", "additionalProperties": False,
+            "required": ["title", "prompt", "durationSeconds"],
+            "properties": {
+                "title": {"type": "string"},
+                "prompt": {"type": "string", "minLength": 1},
+                "durationSeconds": {"type": "number"},
             },
-            "changes": {
-                "type": "object", "additionalProperties": False,
-                "properties": {
-                    "project": {
-                        "type": "object", "additionalProperties": False,
-                        "description": "Actual authored Project field values. For a partial revision, include the fields being changed and preserve all other fields by omitting them. Every included value is a complete replacement ready for review.",
-                        "properties": {
-                            "title": {"type": "string"},
-                            "concept": {"type": "string"},
-                            "style": {"type": "string"},
-                            "invariants": {
-                                "type": "array", "maxItems": 30,
-                                "items": {
-                                    "type": "object", "additionalProperties": False,
-                                    "required": ["kind", "title", "text"],
-                                    "properties": {
-                                        "kind": {"type": "string", "enum": ["character", "location", "visual", "world", "sound", "custom"]},
-                                        "title": {"type": "string"},
-                                        "text": {"type": "string"},
-                                    },
-                                },
-                            },
-                        },
-                    },
-                    "scene": {
-                        "type": "object", "additionalProperties": False,
-                        "description": "Actual requested replacements for an existing Scene. Include the fields being changed and preserve other fields by omitting them. Creative revisions include the complete replacement prompt; new Scene records belong in scenes.",
-                        "properties": {
-                            "title": {"type": "string"},
-                            "prompt": {"type": "string", "minLength": 1},
-                            "durationSeconds": {"type": "integer"},
-                        },
-                    },
-                },
-            },
-            "scenes": {
-                "type": "array", "maxItems": 32,
-                "description": "Actual new Scene drafts, each with a title, complete H3 prompt and durationSeconds. WebCap counts and reviews the returned records.",
-                "items": {
-                    "type": "object", "additionalProperties": False,
-                    "required": ["title", "prompt", "durationSeconds"],
-                    "properties": {
-                        "title": {"type": "string"},
-                        "prompt": {"type": "string", "minLength": 1},
-                        "durationSeconds": {"type": "number"},
-                    },
-                },
-            },
-
         },
     }
 

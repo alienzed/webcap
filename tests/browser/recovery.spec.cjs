@@ -1,40 +1,31 @@
 'use strict';
 const {test,expect}=require('./test.cjs');
-const {resetModel,queueModel,observedModels,openDirector,openProject,say,seedProject,story}=require('./helpers.cjs');
+const {resetModel,queueModel,observedModels,openDirector,openProject,say,seedProject,story,runWrite}=require('./helpers.cjs');
 const {ensureAttachedProject}=require('./helpers.cjs');
 
-test('Flow 7 — unsaved Scene work survives navigating away and back, then saves exactly once',async({page,request})=>{
+test('Flow 7 — navigation leaves unsaved conversation intact; explicit Scene Write saves once',async({page,request})=>{
   await resetModel(request);
-  const project=await seedProject(page,'Resume retained draft '+Date.now());
+  const project=await seedProject(page,'Write recovery '+Date.now());
   const other=await seedProject(page,'Unrelated Project '+Date.now());
   await openDirector(page);
   await openProject(page,project.id);
   await ensureAttachedProject(page,project.title);
-  await queueModel(request,{
-    reply:'A Scene has been authored.',
-    scenes:[{title:'Original Scene',prompt:'The door opens slowly.',durationSeconds:8}],
-    action:{kind:'create_scene',instruction:'Create an opening Scene.'}
-  });
-  await say(page,'Create an opening Scene');
-  const action=page.locator('#studio-dw-suggestions .studio-dw-suggestion-action');
-  await expect(action).toBeVisible();
-  await action.click();
-  await expect(page.locator('#studio-scenes-review')).toBeVisible();
-  const prompt=page.locator('#studio-scenes-rows [data-field="prompt"]');
-  await prompt.fill('An edited draft: the door opens slowly in rain.');
-  await page.locator('#studio-scenes-close').click();
-  expect((await story(page,project.id)).sceneOrder).toHaveLength(0);
+  await queueModel(request,'The opening should show a rain-streaked window.');
+  await say(page,'Our opening Scene is a door opening slowly in rain.');
+  await expect.poll(async()=> (await observedModels(request)).calls.length).toBe(1);
   await openProject(page,other.id);
   await openProject(page,project.id);
-  await action.click();
-  await expect(page.locator('#studio-scenes-review')).toBeVisible();
-  await expect(prompt).toHaveValue('An edited draft: the door opens slowly in rain.');
-  await page.locator('#studio-scenes-apply').click();
+  await queueModel(request,{scenes:[
+    {title:'Original Scene',prompt:'The door opens slowly in rain.',durationSeconds:8}
+  ]});
+  await runWrite(page,{projectId:project.id,operation:'scene-write',sceneMode:'create'});
   await expect.poll(async()=> (await story(page,project.id)).sceneOrder.length).toBe(1);
   const saved=await story(page,project.id);
-  expect(saved.scenes[saved.sceneOrder[0]].prompt).toBe('An edited draft: the door opens slowly in rain.');
+  expect(saved.scenes[saved.sceneOrder[0]].prompt).toBe('The door opens slowly in rain.');
   expect((await story(page,other.id)).sceneOrder).toHaveLength(0);
-  expect((await observedModels(request)).calls).toHaveLength(1);
+  const calls=(await observedModels(request)).calls;
+  expect(calls).toHaveLength(2);
+  expect(JSON.stringify(calls[1].messages)).toContain('Our opening Scene is a door opening slowly in rain.');
   await page.reload();
   expect((await story(page,project.id)).sceneOrder).toEqual(saved.sceneOrder);
 });

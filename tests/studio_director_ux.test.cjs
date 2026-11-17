@@ -280,7 +280,7 @@ test('ordinary Director conversation displays raw structured output instead of d
 
 test('new-Scene authoring preserves returned arrays and independently useful partial drafts',()=>{
   const body=part(chat,'          var records = Array.isArray(fields.scenes) ? fields.scenes : [fields];',
-    "          // The author's requested timing belongs in the actual authored Scene.");
+    '          // Persist each mechanically usable Scene returned by this explicit Write.');
   const normalize=vm.runInNewContext('(function(fields,raw){' + body +
     'return {drafts:drafts,missingPrompt:missingPrompt};})');
   const single=normalize({scenes:[{title:'Only',prompt:'One complete H3 Scene',durationSeconds:8}]},'');

@@ -193,8 +193,8 @@ test('Scene Prompt uses the same bottom footer, never a toolbar in its heading',
   field.closest=selector=>selector==='.storyboard-prompt-block'
     ? promptBlock : originalClosest(selector);
   h.focus(field);
-  assert.equal(h.toolbar.style.top,'216px');
-  assert.equal(h.toolbar.style.left,'350px');
+  assert.equal(h.toolbar.style.top,'223px');
+  assert.equal(h.toolbar.style.left,'529px');
   assert.equal(field.style.paddingTop,'');
   field.value='Subject: revised';h.input(field);h.idle();
   h.click('[data-rev-prev]');

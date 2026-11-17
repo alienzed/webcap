@@ -91,7 +91,7 @@ function actualSceneRequestFixture() {
   vm.runInContext(section(director,'  function studioDirectorSelectedScene(navigation, authorRequest, explicitProject) {',
     '  function syncModeUi() {')+
     section(director,'  function studioConversationMessages(messages) {',
-      '  // Retain available conversational work across ordinary follow-up questions.'),scope);
+      '  function storyboardRequestMessages(messages, includePrimer) {'),scope);
   return {scope,state,stories,requests,setNavigation:next=>{navigation=next;}};
 }
 

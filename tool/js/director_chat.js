@@ -1848,7 +1848,8 @@
     return studioDirectorRequestMessages(discussion.concat([
       {role:'user',content:JSON.stringify(task)}
     ]),false,true).then(function (messages) {
-      window.studioDirectorWorkbench.showSentWriteContext('studio_project_draft',messages);
+      state.requestDiagnostic = {model:state.modelId,operation:'studio_project_draft',messages:messages};
+        window.studioDirectorWorkbench.showSentWriteContext('studio_project_draft',messages);
       return requestJson('/fs/director/chat',{
         method:'POST',headers:{'Content-Type':'application/json'},
         body:JSON.stringify({model:state.modelId,operation:'studio_project_draft',messages:messages})
@@ -1856,7 +1857,7 @@
     }).then(function (payload) {
       if (!payload.job || !payload.job.jobId) throw new Error('Project Write did not queue.');
       state.jobId = String(payload.job.jobId);
-      state.requestDiagnostic = payload.job.request || null;
+      state.requestDiagnostic = payload.job.request || state.requestDiagnostic;
       trackTransientLlmJob(payload.job);
       return waitForJob(payload.job);
     }).then(function (job) {
@@ -2341,6 +2342,7 @@
       return studioDirectorRequestMessages(discussion.concat([
         {role:'user',content:JSON.stringify(task)}
       ]),false,true).then(function (messages) {
+        state.requestDiagnostic = {model:state.modelId,operation:'studio_brief_draft',messages:messages};
         window.studioDirectorWorkbench.showSentWriteContext('studio_brief_draft',messages);
         return requestJson('/fs/director/chat',{
           method:'POST',headers:{'Content-Type':'application/json'},
@@ -2350,7 +2352,7 @@
       }).then(function (payload) {
         if (!payload.job || !payload.job.jobId) throw new Error('Overview Write did not queue.');
         state.jobId = String(payload.job.jobId);
-        state.requestDiagnostic = payload.job.request || null;
+        state.requestDiagnostic = payload.job.request || state.requestDiagnostic;
         trackTransientLlmJob(payload.job);
         return waitForJob(payload.job);
       }).then(function (job) {
@@ -2807,7 +2809,7 @@
     }).then(function (payload) {
       if (!payload.job || !payload.job.jobId) throw new Error('Studio Director did not return a queued job.');
       state.jobId = String(payload.job.jobId);
-      state.requestDiagnostic = payload.job.request || null;
+      state.requestDiagnostic = payload.job.request || state.requestDiagnostic;
       trackTransientLlmJob(payload.job);
       return waitForJob(payload.job);
     }).then(function (job) {
@@ -3396,7 +3398,7 @@
     }).then(function (payload) {
       if (!payload.job || !payload.job.jobId) throw new Error('Workshop proposal job was not queued.');
       state.jobId = String(payload.job.jobId);
-      state.requestDiagnostic = payload.job.request || null;
+      state.requestDiagnostic = payload.job.request || state.requestDiagnostic;
       trackTransientLlmJob(payload.job);
       return waitForJob(payload.job);
     }).then(function (job) {
@@ -3534,7 +3536,7 @@
       }).then(function (payload) {
         if (!payload.job || !payload.job.jobId) throw new Error('Assistant did not return a queued job.');
         state.jobId = String(payload.job.jobId);
-        state.requestDiagnostic = payload.job.request || null;
+        state.requestDiagnostic = payload.job.request || state.requestDiagnostic;
         trackTransientLlmJob(payload.job);
         renderProgress({ phase: payload.job.status === 'queued' ? 'queued' : 'preparing', jobStatus: payload.job.status, model: payload.job.modelId });
         return waitForJob(payload.job);
@@ -3657,8 +3659,12 @@
   function studioDirectorOpenIo() {
     var dialog = el('studio-director-io-dialog'), chooser = el('studio-director-io-exchange');
     var responses = currentMessages().filter(function(m){return m.role === 'assistant';});
-    if (state.lastStudioIoError && state.lastStudioIoRaw)
-      responses.push({content:'Failed response',rawResponse:state.lastStudioIoRaw});
+    if (state.lastStudioIoRaw)
+      responses.push({
+        content:state.lastStudioIoError ? 'Latest Write response (operation failed)' :
+          'Latest Write response',
+        rawResponse:state.lastStudioIoRaw
+      });
     chooser.replaceChildren();
     responses.forEach(function(message,index){
       var option=document.createElement('option');
@@ -4628,6 +4634,7 @@
       syncControls();
       startProgress();
       return studioDirectorRequestMessages(studioConversationMessages(state.modeMessages.storyboard).concat([{role:'user',content:instruction}]), includePromptContract, true, navigationSnapshot).then(function (messages) {
+        state.requestDiagnostic = {model:state.modelId,operation:operation || 'studio_scene_field_draft',messages:messages};
         window.studioDirectorWorkbench.showSentWriteContext(operation || 'studio_scene_field_draft', messages);
         return requestJson('/fs/director/chat', {
           method:'POST',headers:{'Content-Type':'application/json'},
@@ -4637,7 +4644,7 @@
       }).then(function (payload) {
         if (!payload.job || !payload.job.jobId) throw new Error('Director did not queue a draft.');
         state.jobId = payload.job.jobId;
-        state.requestDiagnostic = payload.job.request || null;
+        state.requestDiagnostic = payload.job.request || state.requestDiagnostic;
         trackTransientLlmJob(payload.job);
         return waitForJob(payload.job);
       }).then(function (job) {

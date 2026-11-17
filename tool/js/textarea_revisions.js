@@ -273,37 +273,67 @@
   function renderSettings() {
     var host = document.getElementById('app-settings-textarea-history');
     if (!host) return;
-    host.replaceChildren();
-    var master = document.createElement('label'), masterInput = document.createElement('input'),
-      masterText = document.createElement('span');
-    master.className = 'app-settings-toggle';
-    masterInput.type = 'checkbox'; masterInput.checked = preferences.master;
-    masterInput.setAttribute('aria-label','Enable textarea history');
-    masterInput.addEventListener('change',function () {setMasterEnabled(masterInput.checked);});
-    masterText.textContent = 'Enable textarea history';
-    master.append(masterInput,masterText);
-    host.appendChild(master);
-    var current = '', group = null;
+    // Build once: changing a checkbox must not collapse groups or steal focus.
+    if (!host.firstChild) {
+      var master = document.createElement('label'), masterInput = document.createElement('input'),
+        masterText = document.createElement('span');
+      master.className = 'app-settings-toggle webcap-history-master';
+      masterInput.type = 'checkbox'; masterInput.dataset.historyMaster = 'true';
+      masterInput.setAttribute('aria-label','Enable textarea history');
+      masterInput.addEventListener('change',function () {setMasterEnabled(masterInput.checked);});
+      masterText.textContent = 'Enable textarea history';
+      master.append(masterInput,masterText);
+      host.appendChild(master);
+      var groups = [], byGroup = {};
+      fieldTypes.forEach(function (item) {
+        if (!byGroup[item.group]) {
+          var details = document.createElement('details'),
+            summary = document.createElement('summary'),
+            title = document.createElement('span'),
+            count = document.createElement('span'),
+            body = document.createElement('div');
+          details.className = 'webcap-history-group';
+          details.open = groups.length === 0;
+          title.textContent = item.group;
+          count.className = 'webcap-history-count';
+          count.dataset.historyGroupCount = item.group;
+          body.className = 'webcap-history-fields';
+          summary.append(title,count);
+          details.append(summary,body);
+          host.appendChild(details);
+          byGroup[item.group] = body;
+          groups.push(item.group);
+        }
+        var label = document.createElement('label'), input = document.createElement('input'),
+          text = document.createElement('span');
+        label.className = 'app-settings-toggle';
+        input.type = 'checkbox';
+        input.dataset.historyField = item.id;
+        input.addEventListener('change',function () {setEnabled(item.id,input.checked);});
+        text.textContent = item.label;
+        label.append(input,text);
+        byGroup[item.group].appendChild(label);
+      });
+    }
+    var masterControl = host.querySelector('[data-history-master]');
+    if (masterControl) masterControl.checked = preferences.master;
     fieldTypes.forEach(function (item) {
-      if (item.group !== current) {
-        current = item.group;
-        group = document.createElement('fieldset');
-        group.className = 'webcap-history-group';
-        var heading = document.createElement('legend');
-        heading.textContent = current;
-        group.appendChild(heading);
-        host.appendChild(group);
-      }
-      var label = document.createElement('label'), input = document.createElement('input'),
-        text = document.createElement('span');
-      label.className = 'app-settings-toggle';
-      input.type = 'checkbox'; input.checked = !!preferences.fields[item.id];
+      var input = host.querySelector('[data-history-field="' + item.id + '"]');
+      if (!input) return;
+      input.checked = !!preferences.fields[item.id];
       input.disabled = !preferences.master;
-      input.setAttribute('data-history-field',item.id);
-      input.addEventListener('change',function () {setEnabled(item.id,input.checked);});
-      text.textContent = item.label;
-      label.append(input,text);
-      group.appendChild(label);
+    });
+    var totals = {};
+    fieldTypes.forEach(function (item) {
+      if (!totals[item.group]) totals[item.group] = {enabled:0,total:0};
+      totals[item.group].total++;
+      if (preferences.fields[item.id]) totals[item.group].enabled++;
+    });
+    Object.keys(totals).forEach(function (group) {
+      var count = Array.from(host.querySelectorAll('[data-history-group-count]')).find(function (node) {
+        return node.dataset.historyGroupCount === group;
+      });
+      if (count) count.textContent = totals[group].enabled + ' / ' + totals[group].total + ' enabled';
     });
   }
 

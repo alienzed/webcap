@@ -4743,6 +4743,9 @@
             !story.sceneOrder.includes(sceneId) || !story.scenes || !story.scenes[sceneId])
           throw new Error('Selected Scene is no longer available in its saved Project.');
         var original = story.scenes[sceneId];
+        var baseline = JSON.stringify({
+          title:original.title,prompt:original.prompt,durationSeconds:original.durationSeconds
+        });
         // An explicit selected-Scene Write always asks the model anew. Saved
         // fields are the authoritative baseline; no Review cache can shortcut it.
         // Explicitly launching revision of this saved Scene authorizes its baseline.

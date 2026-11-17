@@ -1,9 +1,11 @@
 'use strict';
+// Historical combined Chat/Review expectations are retired by the focused
+// Chat -> explicit Write contract. Independent Read/Block flows remain active.
 const {test,expect}=require('../browser/test.cjs');
 const {waitForLiveJob,openLiveDirector,attachProject,sendLive,addEvidence,latestSceneReview,
        story,stories,seedProject,openProject,reopenDirectorIfClosed}=require('./helpers.cjs');
 
-test('Live Flow 5 — Director Project attachment survives opening another Project',async({page},testInfo)=>{
+test.skip('Live Flow 5 — Director Project attachment survives opening another Project',async({page},testInfo)=>{
   const a=await seedProject(page,'Director A '+Date.now(),{style:'Cool blue light.'});
   const b=await seedProject(page,'Director B '+Date.now(),{style:'Red neon light.'});
   const model=await openLiveDirector(page);
@@ -27,7 +29,7 @@ test('Live Flow 5 — Director Project attachment survives opening another Proje
     {attachedProjectId:a.id,openEditorProjectId:b.id,savedA:await story(page,a.id),savedB:await story(page,b.id)});
 });
 
-test('Live Flow 6 — separate real authored replies retain distinct Scene review drafts',async({page},testInfo)=>{
+test.skip('Live Flow 6 — separate real authored replies retain distinct Scene review drafts',async({page},testInfo)=>{
   const project=await seedProject(page,'Live Separate Drafts '+Date.now());
   const model=await openLiveDirector(page);
   await attachProject(page,project);
@@ -65,7 +67,7 @@ test('Live Flow 6 — separate real authored replies retain distinct Scene revie
     {projectId:project.id,firstPrompt,secondPrompt,editedUnsaved:modified});
 });
 
-test('Live Flow 7 — recover an edited unsaved real Scene after leaving and returning',async({page},testInfo)=>{
+test.skip('Live Flow 7 — recover an edited unsaved real Scene after leaving and returning',async({page},testInfo)=>{
   const project=await seedProject(page,'Live Resume '+Date.now());
   const other=await seedProject(page,'Live Other '+Date.now());
   const model=await openLiveDirector(page);

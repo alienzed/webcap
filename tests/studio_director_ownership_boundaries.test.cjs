@@ -23,7 +23,7 @@ test('focused Overview Write uses the explicitly supplied destination ID',()=>{
   const body=part('  function prepareStudioBrief(options) {',
     '  function startStudioWorkshop() {');
   assert.match(body,/options && options\.storyId/);
-  assert.match(body,/storyId:storyId/);
+  assert.match(body,/encodeURIComponent\(storyId\)/);
   assert.doesNotMatch(body,/studioBriefProposal|showStudioBriefReview/);
 });
 
@@ -50,7 +50,7 @@ test('explicit Scene entry can target B while Director remains attached to A',()
 test('New versus existing Project is chosen by the Write operation UI',()=>{
   const rail=fs.readFileSync(path.join(__dirname,'../tool/js/studio_director_workbench.js'),'utf8');
   assert.match(rail,/if \(operation !== 'new-project' && operation !== 'project'\)/);
-  assert.match(rail,/bridge\.prepareWrite\(operation,id/);
+  assert.match(rail,/bridge\.prepareWrite\(operation,\s*id/);
   assert.doesNotMatch(rail,/function presentAction\(/);
 });
 

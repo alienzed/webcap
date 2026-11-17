@@ -29,7 +29,7 @@ test('one new Scene keeps the selected Project and complete brief through a sing
     sceneOrder:['s1'],scenes:{s1:{title:'Old opening',prompt:'Existing saved text'}}};
   const brief='Add a twelve-second Scene titled Closing the Logbook. Mara calmly closes the lighthouse logbook at the oak desk, using this Project’s visual direction.';
   let requested = 0, authored = 0, reviewed = 0, saved = 0;
-  const state={pending:false,jobId:'',studioScenesProposal:null,studioWorkingDraft:{projects:{},scenes:{},newProject:{},newScene:{},sourceRequest:''}};
+  const state={modeMessages:{storyboard:[]},pending:false,jobId:'',studioScenesProposal:null,studioWorkingDraft:{projects:{},scenes:{},newProject:{},newScene:{},sourceRequest:''}};
   state.studioApprovedRead={projectId:'lighthouse',keys:['project.style','scene:s1:title']};
   const launch={projectId:'lighthouse',instruction:brief,authorRequest:brief};
   const scope=vm.createContext({
@@ -79,7 +79,7 @@ test('one new Scene keeps the selected Project and complete brief through a sing
 });
 
 test('malformed model duration remains visible in review instead of becoming invented metadata', async () => {
-  const state={pending:false,jobId:'',studioScenesProposal:null,studioWorkingDraft:{projects:{},scenes:{},newProject:{},newScene:{},sourceRequest:''}};
+  const state={modeMessages:{storyboard:[]},pending:false,jobId:'',studioScenesProposal:null,studioWorkingDraft:{projects:{},scenes:{},newProject:{},newScene:{},sourceRequest:''}};
   let reviewed=0;
   const scope=vm.createContext({
     state,studioWorkingFieldChanges,syncControls(){},scheduleSessionSave(){},studioActionStatus(){},
@@ -110,7 +110,7 @@ test('malformed model duration remains visible in review instead of becoming inv
 });
 
 test('later new Scene sees prior saved Scene for continuity, not leftover working draft', async () => {
-  const state={pending:false,jobId:'',studioScenesProposal:null,
+  const state={modeMessages:{storyboard:[]},pending:false,jobId:'',studioScenesProposal:null,
     studioWorkingDraft:{projects:{},scenes:{},newProject:{title:'Old Draft',prompt:'OLD SCENE PROMPT'},
       sourceRequest:'Create Scene 1'}};
   state.studioApprovedRead={projectId:'p1',keys:['scene:s1:prompt','scene:s1:title']};
@@ -152,7 +152,7 @@ test('later new Scene sees prior saved Scene for continuity, not leftover workin
 });
 
 test('missing Prompt retains title and duration as editable draft even on direct save', async () => {
-  const state={pending:false,jobId:'',studioScenesProposal:null,
+  const state={modeMessages:{storyboard:[]},pending:false,jobId:'',studioScenesProposal:null,
     studioWorkingDraft:{projects:{},scenes:{},newProject:{},newScene:{},sourceRequest:''}};
   const brief='Create a 12-second closing Scene';
   let authored=0,reviewed=0,saves=0,sessionSaves=0;
@@ -199,7 +199,7 @@ test('missing Prompt retains title and duration as editable draft even on direct
 });
 
 test('missing authored Scene duration is reviewable rather than silently defaulted',async()=>{
-  const state={pending:false,jobId:'',studioScenesProposal:null,
+  const state={modeMessages:{storyboard:[]},pending:false,jobId:'',studioScenesProposal:null,
     studioWorkingDraft:{projects:{},scenes:{},newProject:{},newScene:{},sourceRequest:''}};
   let saves=0,reviews=0;
   const scope=vm.createContext({
@@ -229,7 +229,7 @@ test('missing authored Scene duration is reviewable rather than silently default
 test('new Scene draft reauthors from fresh Project context when the baseline changed',async()=>{
   const story={id:'p1',title:'Bookshop',concept:'An evening opening',style:'Warm lamps',
     invariants:[],sceneOrder:[],scenes:{}};
-  const state={pending:false,jobId:'',studioScenesProposal:null,
+  const state={modeMessages:{storyboard:[]},pending:false,jobId:'',studioScenesProposal:null,
     studioWorkingDraft:{projects:{},scenes:{},newProject:{},newScene:{}}};
   let calls=0;
   const scope=vm.createContext({
@@ -266,7 +266,7 @@ test('new Scene draft reauthors from fresh Project context when the baseline cha
 test('manual new Scene launch authors again even when the Project and request are unchanged',async()=>{
   const story={id:'p1',title:'Bookshop',concept:'An opening',style:'Warm lamps',
     invariants:[],sceneOrder:[],scenes:{}};
-  const state={pending:false,jobId:'',studioScenesProposal:null,
+  const state={modeMessages:{storyboard:[]},pending:false,jobId:'',studioScenesProposal:null,
     studioWorkingDraft:{projects:{},scenes:{},newProject:{},newScene:{}}};
   let calls=0;
   const scope=vm.createContext({
@@ -298,7 +298,7 @@ test('new Scene drafts cannot leak across Projects with identical author request
     invariants:[],sceneOrder:[],scenes:{}};
   const second={id:'p2',title:'Two',concept:'An ocean crossing',style:'Cold blue',
     invariants:[],sceneOrder:[],scenes:{}};
-  const state={pending:false,jobId:'',studioScenesProposal:null,
+  const state={modeMessages:{storyboard:[]},pending:false,jobId:'',studioScenesProposal:null,
     studioWorkingDraft:{projects:{},scenes:{},newProject:{},newScene:{}}};
   let calls=0;
   const scope=vm.createContext({
@@ -330,7 +330,7 @@ test('new Scene drafts cannot leak across Projects with identical author request
 });
 
 test('actual multi-Scene output is retained even when the request mentioned one', async () => {
-  const state={pending:false,jobId:'',studioScenesProposal:null,studioWorkingDraft:{projects:{},scenes:{},newProject:{},newScene:{},sourceRequest:''}};
+  const state={modeMessages:{storyboard:[]},pending:false,jobId:'',studioScenesProposal:null,studioWorkingDraft:{projects:{},scenes:{},newProject:{},newScene:{},sourceRequest:''}};
   const failures=[];
   let reviewed=0;
   const scope=vm.createContext({
@@ -367,7 +367,7 @@ test('invalid returned duration retains review and does not invent a successful 
     invariants:[],sceneOrder:['old'],scenes:{old:{title:'Opening',prompt:'Original'} }};
   const requests=[],receipts=[],refreshes=[];
   let reviewed=0;
-  const state={pending:false,jobId:'',studioScenesProposal:null,studioWorkingDraft:{projects:{},scenes:{},newProject:{},newScene:{},sourceRequest:''}};
+  const state={modeMessages:{storyboard:[]},pending:false,jobId:'',studioScenesProposal:null,studioWorkingDraft:{projects:{},scenes:{},newProject:{},newScene:{},sourceRequest:''}};
   const scope=vm.createContext({
     state,studioWorkingFieldChanges,syncControls(){},scheduleSessionSave(){},studioActionStatus(){},
     showStudioScenesReview(){reviewed++;},
@@ -420,7 +420,7 @@ test('invalid returned duration retains review and does not invent a successful 
 test('two eight-second Scenes request retains one actually authored Scene without a replacement call',async()=>{
   const story={id:'p1',title:'Project',concept:'A quiet evening',style:'Amber light',
     invariants:[],sceneOrder:[],scenes:{}};
-  const state={pending:false,jobId:'',studioScenesProposal:null,
+  const state={modeMessages:{storyboard:[]},pending:false,jobId:'',studioScenesProposal:null,
     studioWorkingDraft:{projects:{},scenes:{},newProject:{},newScene:{},sourceRequest:''}};
   let calls=0,reviews=0,saves=0;
   const scope=vm.createContext({

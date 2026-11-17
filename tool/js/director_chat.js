@@ -4982,11 +4982,14 @@
         // Explicitly launching revision of this saved Scene authorizes its baseline.
         var context = window.studioDirectorWorkbench.sceneRead(story,sceneId).payload;
         var instruction = JSON.stringify({
-          task:'Revise this Scene in the author\'s direction and provide a complete replacement H3 Prompt ' +
-            'when changing creative content. Preserve its established direction and unaffected fields. ' +
-            'When optionalCreativeFields are provided, also return the title or durationSeconds ' +
-            'only if the author\'s requested creative change calls for them. ' +
-            'Return the actual authored field values in one JSON object.',
+          task:'Revise the selected Scene fields in the author\'s direction. ' +
+            'Return complete replacement values for requestedFields, including a full standalone H3 Prompt ' +
+            'when prompt is requested. Preserve the established creative direction and unaffected fields. ' +
+            (allowCreativeFieldChanges
+              ? 'You may also return title or durationSeconds when the author explicitly requests ' +
+                'those creative changes; preserve them otherwise. '
+              : '') +
+            'Deliver the actual authored field values in one JSON object.',
           authorDirection:launch.authorRequest || launch.instruction,
           requestedFields:requestedFields,
           optionalCreativeFields:allowCreativeFieldChanges ? ['title','durationSeconds'] : [],

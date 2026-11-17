@@ -833,7 +833,6 @@
       if (window.studioDirectorWorkbench) {
         window.studioDirectorWorkbench.resetConversation();
       }
-      state.studioProjectProposal = null;
       state.studioScenesReviewsByResponse = {};
       state.workshopProposal = null;
     }
@@ -1427,9 +1426,6 @@
       if (!target || !target.storyId) throw new Error('Studio did not return a Story ID.');
       state.studioStoryAccess = {storyId: target.storyId, label: target.label || target.storyId};
       state.studioAccessIndex = null;
-      state.studioSceneProposal = null;
-      state.studioScenesProposal = null;
-      state.studioBriefProposal = null;
       el('director-studio-access-data').classList.add('hidden');
       el('director-studio-access-status').textContent = 'Granted access. No fields read yet.';
       scheduleSessionSave();

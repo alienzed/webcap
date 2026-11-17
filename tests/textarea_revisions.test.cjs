@@ -11,7 +11,7 @@ function editor(value, sceneId) {
     id: '', name: '', dataset: {sceneField:'prompt'}, value,
     disabled:false, readOnly:false, isConnected:true, style:{paddingRight:'',paddingTop:'',paddingBottom:''},
     parentElement:null,
-    matches: s => s === 'textarea',
+    matches(s) { return s === 'textarea' || (s.includes('textarea[data-scene-field="prompt"]') && this.dataset.sceneField === 'prompt'); },
     getAttribute:()=>null,
     getBoundingClientRect:()=>({top:100,left:100,right:600,bottom:250,width:500}),
     closest:s => {
@@ -117,6 +117,8 @@ test('recreated Scene textareas reuse the same key, other Scenes stay isolated',
 test('the same caption textarea switches histories when WebCap changes its media target',()=>{
   const h=harness(),field=editor('Caption A','unused');
   field.id='editor';
+  field.dataset = {};
+  h.window.webcapTextareaRevisions.setEnabled('caption.editor',true);
   h.focus(field);
   const first=h.window.webcapTextareaRevisions.identity(field);
   field.value='Caption A edited';h.input(field);h.idle();
@@ -198,9 +200,38 @@ test('Scene Prompt uses the same bottom footer, never a toolbar in its heading',
 test('Chat and Studio Director conversation composer does not attach History',()=>{
   const h=harness(), field=editor('A question','unused');
   field.id='director-chat-input';
+  field.dataset = {};
   h.focus(field);
   assert.equal(field.style.paddingBottom,'');
   assert.equal(h.toolbar.style.display,undefined);
   assert.equal(h.window.webcapTextareaRevisions.history(
     h.window.webcapTextareaRevisions.identity(field)),undefined);
+});
+
+test('explicit field allowlist disables unknown textareas by default',()=>{
+  const h=harness(),field=editor('Transient','unused');
+  field.dataset={};
+  assert.equal(h.window.webcapTextareaRevisions.enabledFor(field),false);
+  h.focus(field);
+  assert.equal(h.toolbar.style.display,undefined);
+  assert.equal(h.window.webcapTextareaRevisions.history(h.window.webcapTextareaRevisions.identity(field)),undefined);
+});
+
+test('history preferences opt in and master switch disable the field without losing revisions',()=>{
+  const h=harness(),field=editor('First','scene-preferences');
+  const api=h.window.webcapTextareaRevisions;
+  assert.equal(api.enabledFor(field),true);
+  h.focus(field);
+  field.value='Second';h.input(field);h.idle();
+  const key=api.identity(field);
+  api.setEnabled('scene.prompt',false);
+  assert.equal(api.enabledFor(field),false);
+  assert.equal(h.toolbar.style.display,'none');
+  assert.equal(api.history(key).versions.length,2);
+  api.setEnabled('scene.prompt',true);
+  api.setMasterEnabled(false);
+  assert.equal(api.enabledFor(field),false);
+  api.setMasterEnabled(true);
+  assert.equal(api.enabledFor(field),true);
+  assert.equal(api.history(key).versions.length,2);
 });

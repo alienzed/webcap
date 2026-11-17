@@ -571,7 +571,7 @@
     toolbar = document.createElement('div');
     toolbar.className = 'webcap-revision-tools';
     toolbar.setAttribute('aria-label','Textarea revisions');
-    toolbar.innerHTML = '<button type="button" data-rev-prev aria-label="Previous revision" title="Previous revision">&#x2039;</button><button type="button" data-rev-compare aria-label="Compare revisions" title="Compare revisions">&#x21ba;</button><button type="button" data-rev-next aria-label="Next revision" title="Next revision">&#x203a;</button><span data-rev-count>1/1</span>';
+    toolbar.innerHTML = '<button type="button" data-rev-prev aria-label="Previous revision" title="Previous revision">&#x2039;</button><button type="button" data-rev-compare aria-label="Compare revisions" title="Compare revisions"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></button><button type="button" data-rev-next aria-label="Next revision" title="Next revision">&#x203a;</button><span data-rev-count>1/1</span>';
     document.body.appendChild(toolbar);
     diffDialog = document.createElement('dialog');
     diffDialog.className = 'webcap-revision-diff';

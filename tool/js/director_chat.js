@@ -3224,68 +3224,12 @@
   }
 
   function parseStudioChatResponse(raw) {
-    var text = String(raw || '').trim();
-    if (!text) throw new Error('Director returned no answer.');
-    var value;
-    try { value = JSON.parse(text); }
-    catch (_) { return {reply:text,action:null,changes:null}; }
-    // Accept structured action metadata when supplied, without making it a
-    // prerequisite for a useful conversational answer.
-    if (!value || typeof value !== 'object' || Array.isArray(value))
-      return {reply:text,action:null,changes:null};
-    // The model may return useful authored fields without a conversational
-    // reply. Display a short factual inventory of what was actually authored,
-    // not raw JSON masquerading as creative conversation. The original result
-    // remains available in Director I/O and for independent Review actions.
-    var reply = typeof value.reply === 'string' && value.reply.trim()
-      ? value.reply : '';
-    if (!reply) {
-      var summaries = [];
-      var changes = value.changes && typeof value.changes === 'object' ? value.changes : {};
-      function summaryFields(record, permitted) {
-        if (!record || typeof record !== 'object' || Array.isArray(record)) return [];
-        return permitted.filter(function (field) {
-          var current = record[field];
-          return typeof current === 'string' && !!current.trim() ||
-            field === 'invariants' && Array.isArray(current) && !!current.length ||
-            field === 'durationSeconds' && typeof current === 'number' && Number.isFinite(current);
-        });
-      }
-      function draftLabel(kind, record, permitted) {
-        var authored = summaryFields(record,permitted);
-        if (!authored.length) return;
-        var name = record && typeof record.title === 'string' && record.title.trim()
-          ? ' “' + record.title.trim().slice(0,100) + '”' : '';
-        var labels = {style:'visual style',prompt:'H3 prompt',durationSeconds:'duration',
-          invariants:'invariants'};
-        summaries.push(kind + name + ' — ' + authored.map(function (field) {
-          return labels[field] || field;
-        }).join(', ') + '.');
-      }
-      draftLabel('Project draft',changes.project,['title','concept','style','invariants']);
-      draftLabel('Scene revision draft',changes.scene,['title','prompt','durationSeconds']);
-      var scenes = Array.isArray(value.scenes) ? value.scenes.filter(function (scene) {
-        return !!summaryFields(scene,['title','prompt','durationSeconds']).length;
-      }) : [];
-      if (scenes.length) {
-        var sceneNames = scenes.slice(0,3).map(function (scene) {
-          return typeof scene.title === 'string' && scene.title.trim() ?
-            '“' + scene.title.trim().slice(0,80) + '”' : '';
-        }).filter(Boolean);
-        summaries.push(scenes.length + ' new Scene draft' + (scenes.length === 1 ? '' : 's') +
-          (sceneNames.length ? ': ' + sceneNames.join(', ') : '') + '.');
-      }
-      reply = summaries.length ? summaries.join(' ') + ' Review the proposed material below.' : text;
-    }
-    var action = value.action;
-    if (!action || typeof action !== 'object' || Array.isArray(action) ||
-        !['create_project','write_project','create_scene','write_scenes'].includes(action.kind) ||
-        typeof action.instruction !== 'string' || !action.instruction.trim())
-      action = null;
-    return {reply:reply,action:action,changes:value.changes || null,
-      scenes:Array.isArray(value.scenes) ? value.scenes : null};
+    // Ordinary Director is conversation only. Display exactly what the model
+    // returned; do not infer authoring fields, actions, or completion.
+    var text=String(raw == null ? '' : raw);
+    if (!text.trim()) throw new Error('Director returned no answer.');
+    return {reply:text,action:null,changes:null,scenes:null};
   }
-
 
   function storyboardRequestMessages(messages, includePrimer) {
     var context = includePrimer === false ? [] : [STORYBOARD_WORKSHOP_PRIMER];

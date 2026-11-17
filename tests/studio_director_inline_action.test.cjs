@@ -29,15 +29,15 @@ function harness() {
   return {scope,host,suggestion,button};
 }
 
-test('the current reply owns the existing action; message rerenders preserve its node and handler',()=>{
+test('ordinary Studio replies never resurrect chat-generated Write actions across rerenders',()=>{
   const h=harness();let calls=0;h.button.onclick=()=>calls++;
   h.scope.renderMessages();
-  assert.equal(h.suggestion.parent,h.host.lastElementChild);
-  assert.equal(h.suggestion.classList.contains('hidden'),false);
+  assert.equal(h.suggestion.classList.contains('hidden'),true);
+  assert.equal(h.host.children.some(row=>row.children.includes(h.suggestion)),false);
   h.scope.renderMessages();
-  assert.equal(h.suggestion.parent,h.host.lastElementChild);
-  assert.equal(h.suggestion.children[0],h.button);
-  h.button.onclick();assert.equal(calls,1);
+  assert.equal(h.suggestion.classList.contains('hidden'),true);
+  assert.equal(h.host.children.some(row=>row.children.includes(h.suggestion)),false);
+  assert.equal(calls,0);
 });
 
 test('later user messages and Apply receipts leave no action beneath an older reply',()=>{

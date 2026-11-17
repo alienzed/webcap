@@ -1,6 +1,6 @@
 'use strict';
 const {test,expect}=require('../browser/test.cjs');
-const {freshDirectorSession,story,stories,seedProject,seedScene,openProject,reopenDirectorIfClosed}=require('../browser/helpers.cjs');
+const {freshDirectorSession,story,stories,seedProject,seedScene,openProject,reopenDirectorIfClosed,openWrite}=require('../browser/helpers.cjs');
 
 // Reuses the deterministic suite's browser/routes/data helpers. The only
 // difference is that the real Director model, not the controlled endpoint,
@@ -100,4 +100,30 @@ async function latestSceneReview(page){
   await expect(page.locator('#studio-scenes-review')).toBeVisible();
   return page.locator('#studio-scenes-rows .studio-scenes-row');
 }
-module.exports={waitForLiveJob,openLiveDirector,attachProject,approveOverview,sendLive,actualReply,addEvidence,latestSceneReview,story,stories,seedProject,seedScene,openProject,reopenDirectorIfClosed};
+
+// A real explicit Write is separate from ordinary chat and starts one
+// operation-scoped model request. This does not infer authoring from chat prose.
+async function writeLive(page,options){
+  await openWrite(page,options);
+  await waitForLiveJob(page,()=>page.locator('#studio-dw-write-prepare').click());
+}
+function observeLiveCalls(page){
+  const requests=[], jobs=[];
+  page.on('request',request=>{
+    if(request.method()!=='POST' || new URL(request.url()).pathname!=='/fs/director/chat')return;
+    try{requests.push(request.postDataJSON());}catch{}
+  });
+  page.on('response',async response=>{
+    if(!response.ok() || new URL(response.url()).pathname!=='/fs/director/job')return;
+    try{
+      const job=(await response.json()).job;
+      if(job?.status==='completed' && job.result?.text)
+        jobs.push({raw:job.result.text,finishReason:job.result.finishReason,jobId:job.jobId});
+    }catch{}
+  });
+  return {requests,jobs,async last(){
+    await expect.poll(()=>jobs.length,{timeout:60000}).toBeGreaterThan(0);
+    return jobs.at(-1);
+  }};
+}
+module.exports={writeLive,observeLiveCalls,waitForLiveJob,openLiveDirector,attachProject,approveOverview,sendLive,actualReply,addEvidence,latestSceneReview,story,stories,seedProject,seedScene,openProject,reopenDirectorIfClosed};

@@ -16,13 +16,13 @@ def test_writer_workshop_keeps_creative_identity_separate_from_h3_playbook(monke
     system, reference = result["system"], result["promptContract"]
     assert "STUDIO DIRECTOR | CREATIVE PARTNER" in system
     assert "imaginative, capable creative director" in system
-    assert "CREATIVE WORK: When asked to create or revise material" in system
-    assert "If an essential creative decision is missing" in system
-    assert "providing any independently useful work" in system
-    assert "Concept (story.concept)" in system
-    assert "Invariants (story.invariants)" in system
-    assert "complete H3 Prompt (scene.prompt)" in system
-    assert "4–15 seconds" in system
+    assert "DISCUSSION: Develop ideas and make useful recommendations" in system
+    assert "Explicit Write functions" in system
+    assert "full H3 production" not in system
+    assert "Concept (story.concept)" not in system
+    assert "Invariants (story.invariants)" not in system
+    assert "complete H3 Prompt (scene.prompt)" not in system
+    assert "4–15 seconds" not in system
     assert "integrated_multimodal_description" in reference
     assert "Keep risky hand-to-hand interactions simple." in reference
     assert "Keep risky hand-to-hand interactions simple." not in system
@@ -49,8 +49,8 @@ def test_director_role_is_creative_partner_not_webcap_workflow_engine():
     assert "sound creative judgment" in system
     assert "producible results" in system
     assert "The author sets the direction" in system
-    assert "deliver the actual usable" in system
-    assert "Preserve established details outside the requested change" in system
+    assert "Explicit Write functions" in system
+    assert "The author sets the direction" in system
     assert "only WebCap saves Project and Scene records" in system
     assert "WebCap Studio workflow guide" not in system
     assert "review policy" not in system
@@ -95,8 +95,8 @@ def test_unconfigured_h3_studio_still_has_production_expertise(monkeypatch):
     result = guidance("minimax_h3")
     system, reference = result["system"], result["promptContract"]
     assert "short generative-video Projects and Scenes" in system
-    assert "4–15 seconds" in system
-    assert "complete standalone H3 Prompt" in system
+    assert "4–15 seconds" not in system
+    assert "complete standalone H3 Prompt" not in system
     assert "USER'S H3 PRODUCTION PLAYBOOK" not in system
     assert "USER'S H3 PRODUCTION PLAYBOOK" not in reference
     assert "[Shot 1]" not in system
@@ -115,7 +115,7 @@ def test_freeform_workshop_does_not_claim_hidden_context_or_mutations():
     assert "treat earlier unsaved ideas as proposals" in system
     assert "only WebCap saves Project and Scene records" in system
     assert "elevate the author's" in system
-    assert "a promise to work later" in system
+    assert "Explicit Write functions" in system
     assert "CURRENT PROJECT NAVIGATION" not in system
     assert "WebCap resolved Project" not in system
 
@@ -126,7 +126,7 @@ def test_studio_guidance_describes_actual_project_and_scene_fields():
         "scene.prompt", "durationSeconds",
     ):
         assert phrase.casefold() in system.casefold()
-    assert "complete standalone H3 Prompt" in system
+    assert "complete standalone H3 Prompt" not in system
     assert "unaffected titles, durations" in system
     assert "Invariants when stable recurring facts matter" in system
     assert "Legacy Directing Guidelines" not in system
@@ -191,7 +191,7 @@ def test_retired_director_model_operations_are_not_queued(monkeypatch, operation
     ("studio_scenes_draft", {"scenes", "rationale"}),
     ("storyboard_workshop_shots", {"summary", "shots"}),
     ("freeform_chat", None),
-    ("studio_chat", {"reply", "changes", "scenes"}),
+    ("studio_chat", None),
 ])
 def test_director_chat_route_preserves_all_structured_schemas(monkeypatch, operation, expected_fields):
     import importlib
@@ -227,14 +227,10 @@ def test_director_chat_route_preserves_all_structured_schemas(monkeypatch, opera
             assert captured["schema"]["required"] == ["scenes"]
             assert "prompt" not in captured["schema"]["properties"]
             assert captured["schema"]["properties"]["scenes"]["items"]["properties"]["prompt"]["type"] == "string"
-        if operation in {"studio_chat", "studio_scenes_draft"}:
+        if operation == "studio_scenes_draft":
             record = captured["schema"]["properties"]["scenes"]["items"]
             assert record["required"] == ["title", "prompt", "durationSeconds"]
             assert record["properties"]["prompt"]["minLength"] == 1
-            if operation == "studio_chat":
-                assert captured["schema"]["required"] == ["reply"]
-                assert captured["schema"]["properties"]["reply"]["minLength"] == 1
-                assert "required" not in captured["schema"]["properties"]["changes"]["properties"]["scene"]
         if operation == "studio_project_draft":
             assert captured["schema"]["required"] == ["title", "concept", "style", "invariants", "rationale"]
         if operation == "studio_brief_draft":
@@ -268,38 +264,24 @@ def test_explicit_studio_authoring_requires_each_requested_field(
     assert captured["response_schema"]["required"] == expected
 
 
-def test_studio_chat_schema_accepts_prose_and_actual_creative_material_without_action():
+def test_studio_chat_is_conversation_only_without_writing_schema():
     from tool.server.studio_director import chat_response_schema
-
     schema = chat_response_schema()
-    assert schema["required"] == ["reply"], (
-        "A creative partner answers the author on every turn; independently usable "
-        "Project/Scene fields remain optional and partial"
-    )
-    assert schema["minProperties"] == 1
-    assert "action" not in schema["properties"], "The model cannot author an application action"
-    assert schema["properties"]["reply"]["type"] == "string"
-    assert schema["properties"]["reply"]["minLength"] == 1
-    assert "recommendation" in schema["properties"]["reply"]["description"]
-    assert schema["properties"]["scenes"]["items"]["required"] == [
-        "title", "prompt", "durationSeconds"
-    ]
-    assert "sceneId" not in schema["properties"]["changes"]["properties"]["scene"]["properties"]
-    project = schema["properties"]["changes"]["properties"]["project"]
-    assert "required" not in project, "Partial Project revisions must not rewrite unrelated fields"
-    invariant = project["properties"]["invariants"]["items"]
-    assert invariant["required"] == ["kind", "title", "text"]
-    assert invariant["additionalProperties"] is False
-    assert "character" in invariant["properties"]["kind"]["enum"]
-    assert "checks" not in schema["properties"]
-    assert "capture" not in schema["properties"]
+    assert schema["required"] == ["reply"]
+    assert set(schema["properties"]) == {"reply"}
+    assert "changes" not in schema["properties"]
+    assert "scenes" not in schema["properties"]
+    assert "action" not in schema["properties"]
 
 
-def test_studio_guidance_requests_relevant_invariants_not_ritual_fields():
+def test_studio_guidance_keeps_project_and_h3_authoring_out_of_chat():
     system = guidance()["system"]
-    assert "Invariants when stable recurring facts matter" in system
-    assert "requested Project fields" in system
-    assert "When several pieces are requested, deliver all the useful pieces you can" in system
+    reference = guidance()["promptContract"]
+    assert "STUDIO DIRECTOR | CREATIVE PARTNER" in system
+    assert "H3 PROMPT AUTHORING REFERENCE" not in system
+    assert "integrated_multimodal_description:" in reference
+    assert "When several pieces are requested" not in system
+
 
 def test_historical_readiness_records_are_accepted_as_inert_saved_chat_data():
     from tool.server.director_chat_history import _validate_readiness

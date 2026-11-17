@@ -187,7 +187,8 @@ test('Scene Prompt uses the same bottom footer, never a toolbar in its heading',
   const actions={insertBefore(){throw Error('History should not enter heading');}};
   const promptBlock={querySelector:()=>actions};
   const originalClosest=field.closest;
-  field.matches=selector=>selector==='textarea' ||
+  const originalMatches=field.matches;
+  field.matches=selector=>originalMatches.call(field,selector) ||
     selector==='.storyboard-prompt-textarea[data-scene-field="prompt"]';
   field.closest=selector=>selector==='.storyboard-prompt-block'
     ? promptBlock : originalClosest(selector);

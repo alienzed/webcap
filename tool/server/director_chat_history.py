@@ -236,6 +236,19 @@ def _validate_working_draft(value):
     return result
 
 
+def _validate_write_io(records):
+    """Retain verbatim Scene Write output for diagnostics, separate from chat context."""
+    if not isinstance(records, list):
+        raise ValueError("Studio Write I/O history must be an array.")
+    for record in records:
+        if (not isinstance(record, dict)
+                or set(record) != {"operation", "projectId", "at", "rawResponse"}
+                or record["operation"] != "studio_scenes_draft"
+                or not all(isinstance(record[key], str) for key in record)):
+            raise ValueError("Studio Write I/O record is invalid.")
+    return [dict(record) for record in records]
+
+
 def _validate_operations(operations):
     """Small author-visible receipts, never a copy of LLM extraction or Story data."""
     if not isinstance(operations, list) or len(operations) > 25:
@@ -404,7 +417,7 @@ def create_chat(mode):
         chat_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ") + "-" + uuid.uuid4().hex[:8]
         now = _now()
         chat = {"id": chat_id, "mode": mode, "title": "New chat", "createdAt": now,
-                "updatedAt": now, "revision": 0, "messages": [], "draft": "", "attachments": {}, "workshop": None, "operations": [], "storyAccess": None, "readiness": _validate_readiness(None), "workingDraft": _validate_working_draft(None)}
+                "updatedAt": now, "revision": 0, "messages": [], "draft": "", "attachments": {}, "workshop": None, "operations": [], "writeIo": [], "storyAccess": None, "readiness": _validate_readiness(None), "workingDraft": _validate_working_draft(None)}
         _write(_path(chat_id), chat)
         _set_active(mode, chat_id)
         return chat
@@ -436,6 +449,7 @@ def save_chat(chat_id, payload):
                     attachments=_validate_attachments(payload.get("attachments", {})),
                     workshop=_validate_workshop(payload.get("workshop")),
                     operations=_validate_operations(payload.get("operations", chat.get("operations", []))),
+                    writeIo=_validate_write_io(payload.get("writeIo", chat.get("writeIo", []))),
                     storyAccess=_validate_story_access(payload.get("storyAccess", chat.get("storyAccess"))),
                     readiness=_validate_readiness(payload.get("readiness", chat.get("readiness"))),
                     workingDraft=_validate_working_draft(payload.get("workingDraft", chat.get("workingDraft"))),

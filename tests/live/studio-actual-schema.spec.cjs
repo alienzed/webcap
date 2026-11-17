@@ -158,8 +158,9 @@ test('LIVE creative partner — discuss staging, make a recommendation, then aut
   await evidence(testInfo,'actual-creative-followup',{model,writing,
     outbound:observation.requests[1],raw:second.raw,parsed:authored});
   expect(observation.requests).toHaveLength(2,'Each author turn should make one model request');
-  expect(JSON.stringify(observation.requests[1].messages))
-    .toContain(first.parsed.reply,'Director must retain the staging discussion across turns');
+  expect(observation.requests[1].messages.some(message=>
+    message.role==='assistant' && message.content.includes(first.parsed.reply)),
+    'Director must retain the creative discussion across turns').toBe(true);
   expect(Array.isArray(authored.scenes),'Director answered with a plan instead of an authored Scene').toBe(true);
   expect(authored.scenes.length).toBeGreaterThan(0);
   const scene=authored.scenes[0];
@@ -364,9 +365,16 @@ test('LIVE conversation — an existing Scene rewrite must contain changes.scene
   });
   expect(observation.requests).toHaveLength(2,'Follow-up must use one model call');
   expect(observation.requests[1].operation).toBe('studio_chat');
-  const followupContext=JSON.stringify(observation.requests[1].messages);
-  expect(followupContext,'Fresh approved Read must supply the last saved Scene revision')
-    .toContain(authored);
+  const followupContext=observation.requests[1].messages[0].content;
+  const approvedText=followupContext.split(
+    'AUTHOR-APPROVED SAVED CONTEXT (independent sources; refreshed for this request):\n'
+  )[1]?.split('\nEach source retains')[0];
+  expect(approvedText,'The second turn lost its author-approved saved Scene baseline').toBeTruthy();
+  const approved=JSON.parse(approvedText);
+  const refreshed=approved.flatMap(source=>source.fields||[])
+    .find(field=>field.id==='scene:'+first.id+':prompt')?.value;
+  expect(refreshed,'Fresh approved Read must contain the newly saved Scene prompt')
+    .toBe(authored);
   expect(followupContext).not.toContain(second.prompt);
   const followupPrompt=secondResponse.changes?.scene?.prompt;
   expect(typeof followupPrompt,'Follow-up Scene edit omitted changes.scene.prompt').toBe('string');

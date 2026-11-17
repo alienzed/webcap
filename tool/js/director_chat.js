@@ -727,11 +727,6 @@
       var stored = { role: message.role, content: message.content };
       if (mode === 'storyboard' && message.role === 'assistant' && message.rawResponse)
         stored.rawResponse = message.rawResponse;
-      if (mode === 'storyboard' && message.role === 'assistant' && message.writeAction)
-        stored.writeAction = message.writeAction;
-      if (mode === 'storyboard' && message.role === 'assistant' &&
-          Array.isArray(message.otherWriteActions) && message.otherWriteActions.length)
-        stored.otherWriteActions = message.otherWriteActions;
       return stored;
     });
     var draft = state.draftByMode[mode] || '';
@@ -1447,9 +1442,6 @@
     // Disconnect revokes all active context, including legacy snapshots that
     // could otherwise keep supplying Story data after the grant is removed.
     state.storyboardAttachments = {};
-    state.studioSceneProposal = null;
-    state.studioScenesProposal = null;
-    state.studioBriefProposal = null;
     el('director-studio-access-data').classList.add('hidden');
     scheduleSessionSave();
     syncModeUi();

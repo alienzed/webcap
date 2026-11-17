@@ -55,7 +55,7 @@ jobs:
           node --check tool/js/studio_blocks.js
           node --check tool/js/storyboard.js
           node --check tool/js/studio_director_workbench.js
-          node --test tests/studio_director_*.test.cjs tests/studio_scene_*.test.cjs
+          node --test tests/common_workspace_refresh.test.cjs tests/studio_director_*.test.cjs tests/studio_scene_*.test.cjs
           for file in tests/live/*.cjs tests/browser/*.spec.cjs; do node --check "$file"; done
 
       - name: Python compile

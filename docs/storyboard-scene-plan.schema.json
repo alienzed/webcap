@@ -24,14 +24,6 @@
             "type": "string",
             "minLength": 1
           },
-          "entryState": {
-            "type": "string",
-            "description": "Optional planning note for a specific starting state or handoff."
-          },
-          "exitState": {
-            "type": "string",
-            "description": "Optional planning note for a specific ending state or handoff."
-          },
           "prompt": {
             "type": "string",
             "minLength": 1,

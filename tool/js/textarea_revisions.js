@@ -118,13 +118,6 @@
       "enabled": false
     },
     {
-      "group": "Captions & Prep",
-      "id": "caption.sheet",
-      "label": "Combined caption sheet (read-only)",
-      "selector": "#caption-sheet-text",
-      "enabled": false
-    },
-    {
       "group": "Evaluations & Utilities",
       "id": "evaluation.vision",
       "label": "Ask Vision question",

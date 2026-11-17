@@ -151,7 +151,7 @@ test('later new Scene sees prior saved Scene for continuity, not leftover workin
   assert.equal(state.studioScenesProposal.drafts[0].title,'Second Scene');
 });
 
-test('missing Prompt retains title and duration as editable draft even on direct save', async () => {
+test('legacy review retains incomplete Scene fields without saving', async () => {
   const state={modeMessages:{storyboard:[]},pending:false,jobId:'',studioScenesProposal:null,
     studioWorkingDraft:{projects:{},scenes:{},newProject:{},newScene:{},sourceRequest:''}};
   const brief='Create a 12-second closing Scene';
@@ -182,7 +182,7 @@ test('missing Prompt retains title and duration as editable draft even on direct
   vm.runInContext(conversationHelper,scope);
   const writer=vm.runInContext('({' + method + '})',scope).writeNewScene;
   const result=await writer.call(scope.window.studioDirectorBridge,{
-    projectId:'p1',instruction:brief,authorRequest:brief,directSave:true
+    projectId:'p1',instruction:brief,authorRequest:brief,directSave:false
   });
   assert.equal(result.review,true);
   assert.equal(authored,1,'no repair LLM call');
@@ -198,7 +198,7 @@ test('missing Prompt retains title and duration as editable draft even on direct
   assert.equal(statuses.at(-1).error,false);
 });
 
-test('missing authored Scene duration is reviewable rather than silently defaulted',async()=>{
+test('legacy Scene review keeps an omitted duration editable',async()=>{
   const state={modeMessages:{storyboard:[]},pending:false,jobId:'',studioScenesProposal:null,
     studioWorkingDraft:{projects:{},scenes:{},newProject:{},newScene:{},sourceRequest:''}};
   let saves=0,reviews=0;
@@ -218,7 +218,7 @@ test('missing authored Scene duration is reviewable rather than silently default
   vm.runInContext(conversationHelper,scope);
   const writer=vm.runInContext('({' + method + '})',scope).writeNewScene;
   const result=await writer.call(scope.window.studioDirectorBridge,
-    {projectId:'p1',instruction:'Write an eight-second arrival.',directSave:true});
+    {projectId:'p1',instruction:'Write an eight-second arrival.',directSave:false});
   assert.equal(result.review,true);
   assert.equal(reviews,1);
   assert.equal(saves,0);
@@ -362,7 +362,7 @@ test('actual multi-Scene output is retained even when the request mentioned one'
 });
 
 
-test('invalid returned duration retains review and does not invent a successful save',async()=>{
+test('legacy Scene review retains invalid duration without a save',async()=>{
   const story={id:'p1',title:'Bookshop',concept:'Evening rain',style:'Warm lamps',
     invariants:[],sceneOrder:['old'],scenes:{old:{title:'Opening',prompt:'Original'} }};
   const requests=[],receipts=[],refreshes=[];
@@ -406,7 +406,7 @@ test('invalid returned duration retains review and does not invent a successful 
   const writer=vm.runInContext('({' + method + '})',scope).writeNewScene;
   const result=await writer.call(scope.window.studioDirectorBridge,{
     projectId:'p1',instruction:'Create a closing Scene lasting 12 seconds',
-    authorRequest:'Create a 12-second closing Scene',directSave:true
+    authorRequest:'Create a 12-second closing Scene',directSave:false
   });
   assert.deepEqual(requests,['/fs/storyboard?story=p1']);
   assert.equal(result.review,true);

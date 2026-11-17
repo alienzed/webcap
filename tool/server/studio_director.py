@@ -1,4 +1,4 @@
-"""Concise, built-in WebCap Studio expertise for the H3 Writer's Workshop.
+"""Concise, built-in creative-partner guidance for Studio Director.
 
 The production-prompt shape is returned separately for prompt-authoring tasks,
 rather than spent on every open-ended brainstorm request.
@@ -38,28 +38,6 @@ _WORKSHOP = (
     "Use the saved Project and Scene facts actually supplied as context; treat earlier "
     "unsaved ideas as proposals that the author may refine. "
     "Conversation can develop material, but only WebCap saves Project and Scene records.\n"
-)
-
-
-_H3_STUDIO_CORE = (
-    "STUDIO CREATIVE MATERIAL\n"
-    "A Project's Title identifies the work. Concept (story.concept) defines its premise, "
-    "core appeal and Scene relationships. Visual / atmosphere (story.style) establishes "
-    "shared mood, look and camera language. Invariants (story.invariants) record recurring "
-    "character, location or other continuity facts that should remain stable. "
-    "A Scene's Title identifies the clip, and its complete H3 Prompt (scene.prompt) "
-    "is the generatable creative content. Scenes are independently producible clips "
-    "lasting 4–15 seconds; durationSeconds is the saved duration setting. "
-    "Develop requested Project fields into complete, useful field values, adding "
-    "Invariants when stable recurring facts matter. "
-    "For Scene creation or creative revision, provide a complete standalone H3 Prompt "
-    "with clear starting conditions, visual actions, staging, timing and sound. "
-    "Revise the existing prompt rather than merely describing a change. "
-    "Keep unaffected titles, durations, creative decisions and continuity intact. "
-    "When several pieces are requested, deliver all the useful pieces you can. "
-    "For H3 writing, use the production reference supplied with that task. "
-    "Actual authored material can be offered for review or application by WebCap; "
-    "discussion and draft creation never imply a saved change.\n"
 )
 
 

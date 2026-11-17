@@ -1,417 +1,123 @@
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
-const vm = require('node:vm');
+// Studio Director: no Review/Apply stage. Focused Write owns its result
+// and saves directly. Historical Review test cases were superseded.
+const test=require('node:test');
+const assert=require('node:assert/strict');
+const fs=require('node:fs');
+const path=require('node:path');
+const vm=require('node:vm');
+const source=fs.readFileSync(path.join(__dirname,'../tool/js/director_chat.js'),'utf8');
+const html=fs.readFileSync(path.join(__dirname,'../tool/tool.html'),'utf8');
+const part=(from,to)=>{
+  const a=source.indexOf(from),b=source.indexOf(to,a+from.length);
+  assert.ok(a>=0&&b>a,'Missing direct Write function: '+from);
+  return source.slice(a,b);
+};
+const plain=o=>JSON.parse(JSON.stringify(o));
 
-const source = fs.readFileSync(path.join(__dirname, '..', 'tool/js/director_chat.js'), 'utf8');
-const html = fs.readFileSync(path.join(__dirname, '..', 'tool/tool.html'), 'utf8');
+test('Review dialogs and combined Chat action launchers are absent',()=>{
+  for(const id of ['studio-project-review','studio-brief-review','studio-scenes-review',
+    'studio-scene-draft-review','studio-dw-batch-review','studio-dw-scene-review',
+    'studio-dw-suggestions','studio-dw-write-ready-launch'])
+    assert.doesNotMatch(html,new RegExp('id="'+id+'"'));
+  for(const name of ['showStudioProjectReview','showStudioBriefReview',
+    'showStudioScenesReview','applyStudioProject','applyStudioBrief',
+    'parseStudioReadiness','studioAuthoredWriteActions'])
+    assert.doesNotMatch(source,new RegExp('function '+name+'\\('));
+});
 
-function part(start, end) {
-  const a = source.indexOf(start);
-  const b = source.indexOf(end, a + start.length);
-  assert.ok(a >= 0 && b > a, 'Missing Studio code: ' + start);
-  return source.slice(a, b);
+test('Create Project applies received structured fields through one direct save',async()=>{
+  const events=[],versions=[];
+  const story={id:'p1',title:'Lighthouse',concept:'A keeper sees a light',
+    style:'Muted blue dawn',invariants:[],sceneOrder:[],scenes:{}};
+  const scope=vm.createContext({
+    requestJson:async(url,opts)=>{
+      events.push(['request',url,JSON.parse(opts.body)]);
+      return {story};
+    },
+    recordStudioOperation:(...args)=>events.push(['operation',...args]),
+    studioActionStatus:(...args)=>events.push(['status',...args]),
+    window:{
+      webcapTextareaRevisions:{recordFieldChange:(...args)=>versions.push(args)},
+      studioDirectorBridge:{recordApplied:async(...args)=>events.push(['receipt',...args])},
+      refreshStudioDirectorStoryIfOpen:async id=>events.push(['refresh',id])
+    },
+    Promise,JSON,Object,String,Error
+  });
+  const fn=vm.runInContext(part('  function commitFocusedStudioProject(proposal) {',
+    '  function prepareStudioProject(options) {')+';commitFocusedStudioProject',scope);
+  await fn({title:story.title,concept:story.concept,style:story.style,invariants:[]});
+  assert.equal(events.filter(e=>e[0]==='request').length,1);
+  assert.equal(events.find(e=>e[0]==='request')[1],'/fs/studio/director/project-create');
+  assert.equal(events.find(e=>e[0]==='receipt')[1],'project.create');
+  assert.equal(versions.length,3);
+  assert.deepEqual(plain(versions.map(v=>v[0])),[
+    'project:p1:storyboard-story-title',
+    'project:p1:storyboard-story-concept',
+    'project:p1:storyboard-story-style']);
+});
+
+function sceneHarness(response) {
+  const story={id:'p1',title:'Station',concept:'A lost mitten',
+    style:'Blue dawn',invariants:[],sceneOrder:['s1'],scenes:{
+      s1:{id:'s1',title:'Arrival',prompt:'Existing saved prompt',durationSeconds:8}
+    }};
+  let raw=response,requests=[],receipt=[],history=[],errors=[];
+  const state={pending:false,jobId:'',lastStudioIoRaw:'',lastStudioIoError:''};
+  const el=()=>({dataset:{}});
+  const window={
+    flushStudioDirectorStoryEdits:async()=>{},
+    refreshStudioDirectorStoryIfOpen:async()=>{},
+    webcapTextareaRevisions:{recordFieldChange:(...x)=>history.push(x)},
+    reportConsoleError:(...x)=>errors.push(x)
+  };
+  window.studioDirectorBridge={
+    isReady:()=>true,readinessMessage:()=>'',makeProposal:async()=>raw,
+    recordApplied:async(...x)=>receipt.push(x)
+  };
+  const scope=vm.createContext({
+    state,el,window,requestJson:async(url,options)=>{
+      requests.push([url,options&&JSON.parse(options.body)]);
+      if(url==='/fs/storyboard?story=p1')return {story};
+      assert.equal(url,'/fs/studio/director/scenes-draft');
+      const value=JSON.parse(options.body),created=value.scenes.map((item,index)=>({
+        id:'new-'+index,...item
+      }));
+      for(const c of created){story.sceneOrder.push(c.id);story.scenes[c.id]=c;}
+      return {story,scenes:created};
+    },
+    syncControls(){},studioActionStatus(){},Promise,JSON,Object,String,
+    Number,Array,Error,encodeURIComponent
+  });
+  const body=part('    writeNewScene: function (launch) {',
+    '    writeSelectedScene: function (launch) {').trim().replace(/,\s*$/,'');
+  const write=vm.runInContext('({'+body+'})',scope).writeNewScene;
+  return {write,window,state,story,requests,receipt,history,errors,
+    setResponse:v=>{raw=v;}};
 }
 
-test('Studio scene reviewer has editable Prompt, placement and approval controls', () => {
-  for (const name of [
-    'studio-scene-draft-review',
-    'studio-scene-draft-title', 'studio-scene-draft-prompt',
-    'studio-scene-draft-placement', 'studio-scene-draft-apply'
-  ]) assert.match(html, new RegExp('id="' + name + '"'));
-  assert.match(html, /Nothing is created until you approve/);
-  assert.doesNotMatch(source, /operation: 'studio_scene_draft'/);
-  assert.match(source, /\/fs\/studio\/director\/scene-draft/);
+test('one focused Scene request saves actual returned records, not requested count',async()=>{
+  const h=sceneHarness(JSON.stringify({scenes:[
+    {title:'Find',prompt:'Full H3 prompt 1',durationSeconds:8},
+    {title:'Departure',prompt:'Full H3 prompt 2',durationSeconds:10}
+  ]}));
+  await h.write.call(h.window.studioDirectorBridge,{
+    projectId:'p1',instruction:'Write one Scene about the red mitten'});
+  const saved=h.requests.filter(x=>x[0]==='/fs/studio/director/scenes-draft');
+  assert.equal(saved.length,1);
+  assert.equal(saved[0][1].scenes.length,2);
+  assert.deepEqual(h.story.sceneOrder,['s1','new-0','new-1']);
+  assert.equal(h.receipt.length,1);
+  assert.equal(h.history.length,6,'History records each received field after confirmed save');
+  assert.equal(h.errors.length,0);
 });
 
-test('complete Scene capture has an editable Prompt and one reviewed Apply saves all fields', async () => {
-  const prompt='integrated_multimodal_description: [Shot 1] A crimson kite rises.';
-  const proposal={
-    storyId:'project-1',storyTitle:'Kite Project',expectedUpdatedAt:'before',
-    sceneOrder:[],scenes:{},title:'Kite flight',
-    prompt,rationale:'Authored together in chat.',placement:'end'
-  };
-  const nodes=new Map();
-  const el=id=>{
-    if (!nodes.has(id)) nodes.set(id,{
-      value:'',textContent:'',disabled:false,open:false,
-      classList:{hidden:false,toggle(name,on){if(name==='hidden')this.hidden=on;}},
-      appendChild(item){this.options.push(item);},replaceChildren(){this.options=[];},
-      options:[],showModal(){this.open=true;},close(){this.open=false;}
-    });
-    return nodes.get(id);
-  };
-  const calls=[];
-  let completed;
-  const done=new Promise(resolve=>{completed=resolve;});
-  const scope=vm.createContext({
-    state:{studioSceneProposal:proposal,pending:false},el,
-    document:{createElement:()=>({value:'',textContent:''})},
-    window:{
-      flushStudioDirectorStoryEdits:async()=>{calls.push('flush');},
-      studioDirectorBridge:{recordApplied:async (_kind,_story,changes)=>{
-        calls.push('receipt');assert.equal(changes.scenes[0].prompt,prompt);
-      }},
-      refreshStudioDirectorStoryIfOpen:async()=>{calls.push('refresh');completed();}
-    },
-    syncControls(){},studioActionStatus(){},recordStudioOperation(){},
-    requestJson:async(url,args)=>{
-      calls.push('apply');assert.equal(url,'/fs/studio/director/scene-draft');
-      const payload=JSON.parse(args.body);
-      assert.deepEqual(payload.scene,{title:'Kite flight',prompt});
-      assert.equal(payload.expectedUpdatedAt,'before');
-      return {story:{id:'project-1',sceneOrder:['scene-1']},
-        scene:{id:'scene-1',...payload.scene}};
-    },
-  });
-  vm.runInContext(
-    part('  function showStudioSceneDraftReview() {','  function applyStudioSceneDraft() {')+
-    part('  function applyStudioSceneDraft() {','  function startStudioWorkshop() {'),scope);
-  scope.showStudioSceneDraftReview();
-  assert.equal(el('studio-scene-draft-prompt-row').classList.hidden,false);
-  assert.equal(el('studio-scene-draft-prompt').value,prompt);
-  scope.applyStudioSceneDraft();
-  await done;
-  assert.deepEqual(calls,['flush','apply','receipt','refresh']);
-  assert.equal(scope.state.studioSceneProposal,null);
-
-});
-
-test('Only explicitly attached Story ID qualifies as a Scene target', () => {
-  const state = { storyboardAttachments: {} };
-  const context = vm.createContext({ state, Object });
-  const target = vm.runInContext('(' + part('  function studioAttachedStoryId() {', '  function studioWorkingStoryLabel() {').trim() + ')', context);
-  assert.equal(target(), '');
-  state.storyboardAttachments['scene:other:scene-a'] = { label: 'Scene' };
-  assert.equal(target(), '');
-  state.storyboardAttachments['story:studio-a'] = { label: 'Story A' };
-  assert.equal(target(), 'studio-a');
-  state.storyboardAttachments['story:studio-b'] = { label: 'Story B' };
-  assert.equal(target(), '');
-});
-
-test('Studio project proposals remain separate from conversation and must be reviewed', () => {
-  for (const name of [
-    'director-studio-capture', 'studio-project-review', 'studio-project-concept',
-    'studio-project-style', 'studio-project-invariants', 'studio-project-include-scene',
-    'studio-project-create'
-  ]) assert.match(html, new RegExp('id="' + name + '"'));
-  const prep = part('  function prepareStudioProject(options) {', '  function applyStudioProject() {');
-  assert.match(prep, /operation: 'studio_project_draft'/);
-  assert.match(prep, /showStudioProjectReview\(\)/);
-  assert.doesNotMatch(prep, /\/fs\/studio\/director\/project-create/);
-  const apply = part('  function applyStudioProject() {', '  function parseStudioBriefDraft(raw) {');
-  assert.match(apply, /\/fs\/studio\/director\/project-create/);
-  assert.match(apply, /studioDirectorBridge\.recordApplied\(/);
-  assert.match(apply, /refreshStudioDirectorStoryIfOpen/);
-  assert.doesNotMatch(apply, /state\.storyboardAttachments\s*=/);
-});
-
-test('Unbound Project parser accepts zero Scenes and refuses invented or invalid structure', () => {
-  const context = vm.createContext({ JSON, String, Error, Array });
-  const parse = vm.runInContext('(' + part('  function parseStudioProjectDraft(raw) {', '  function addStudioProjectInvariant(').trim() + ')', context);
-  const project = parse(JSON.stringify({
-    title: '', concept: 'A single simple idea', style: 'Blue twilight.', rationale: '',
-    invariants: []
-  }));
-  assert.equal(project.firstScene, undefined);
-  assert.equal(project.title, '');
-  assert.throws(() => parse('{}'), /no usable Project material/);
-  assert.throws(() => parse(JSON.stringify({
-    title: '', concept: '', style: '', rationale: '', invariants: []
-  })), /no usable Project material/);
-});
-
-
-test('Retained multi-Scene review supports arbitrary placement without legacy model authoring', () => {
-  for (const id of [
-    'studio-scenes-review', 'studio-scenes-rows',
-    'studio-scenes-placement', 'studio-scenes-apply', 'studio-scenes-add'
-  ]) assert.match(html, new RegExp('id="' + id + '"'));
-  assert.doesNotMatch(source, /function prepareStudioScenes\(\)|studio_scene_sequence_draft/);
-  const apply = part('  function applyStudioScenes() {', '  function showStudioSceneDraftReview() {');
-  assert.match(apply, /expectedSceneOrder: proposal\.sceneOrder/);
-  assert.match(apply, /\/fs\/studio\/director\/scenes-draft/);
-  assert.match(apply, /studioDirectorBridge\.recordApplied\(/);
-  assert.match(source, /option\('before\|' \+ id/);
-  assert.match(source, /option\('after\|' \+ id/);
-});
-
-test('Scene review retains prompts and flags durations for author correction', () => {
-  function node(tag) {
-    return {tag,children:[],style:{},dataset:{},textContent:'',
-      append(...items){this.children.push(...items);},
-      appendChild(item){this.children.push(item);},
-      setAttribute(){},remove(){}};
-  }
-  const host=node('host');
-  const scope=vm.createContext({document:{createElement:node},el:()=>host,Number,String});
-  vm.runInContext(part('  function addStudioScenesRow(item) {',
-    '  function showStudioScenesReview() {'),scope);
-  scope.addStudioScenesRow({title:'A',prompt:'Useful first Prompt',durationSeconds:'twelve'});
-  scope.addStudioScenesRow({title:'B',prompt:'Useful second Prompt'});
-  scope.addStudioScenesRow({title:'C',prompt:'',durationSeconds:12.5});
-  const find=(item,pred)=>pred(item)?item:item.children.map(child=>find(child,pred)).find(Boolean);
-  const messages=item=>[item.textContent,...item.children.flatMap(messages)].filter(Boolean).join(' ');
-  assert.equal(host.children.length,3);
-  assert.equal(find(host.children[0],item=>item.dataset.field==='prompt').value,'Useful first Prompt');
-  assert.equal(find(host.children[0],item=>item.dataset.field==='durationSeconds').value,'twelve');
-  assert.match(messages(host.children[0]),/needs correction before this Scene can be saved/);
-  assert.equal(find(host.children[1],item=>item.dataset.field==='prompt').value,'Useful second Prompt');
-  assert.equal(find(host.children[1],item=>item.dataset.field==='durationSeconds').value,'6');
-  assert.match(messages(host.children[1]),/6s default/);
-  assert.equal(String(find(host.children[2],item=>item.dataset.field==='durationSeconds').value),'12.5');
-  assert.match(messages(host.children[2]),/No Prompt supplied/);
-  assert.doesNotMatch(messages(host.children[2]),/not supported/,'fractional seconds are not automatically invalid');
-});
-
-test('new Scene Apply sends the edited prompt and duration and records the authoritative saved values',async()=>{
-  let payload,receipt,finish;
-  const done=new Promise(resolve=>{finish=resolve;});
-  const values={title:'Edited title',prompt:'Edited full prompt',durationSeconds:'8'};
-  const row={querySelector:selector=>({value:values[selector.match(/data-field="([^"]+)"/)[1]]})};
-  const scope=vm.createContext({state:{pending:false,studioScenesProposal:{storyId:'p1',sceneOrder:['old']}},
-    el:id=>id==='studio-scenes-rows'?{querySelectorAll:()=>[row]}:
-      id==='studio-scenes-placement'?{value:'after|old'}:{textContent:'',close(){}},
-    syncControls(){},recordStudioOperation(){},studioActionStatus:message=>{if(message.includes('failed'))assert.fail(message);},
-    window:{flushStudioDirectorStoryEdits:async()=>{},studioDirectorBridge:{recordApplied:async(_kind,_story,fields)=>{receipt=fields;}},
-      refreshStudioDirectorStoryIfOpen:async()=>finish()},
-    requestJson:async(_url,options)=>{
-      payload=JSON.parse(options.body);
-      return{story:{id:'p1'},scenes:[{id:'new',...payload.scenes[0]}]};
-    }
-  });
-  vm.runInContext(part('  function applyStudioScenes() {','  function showStudioSceneDraftReview() {'),scope);
-  scope.applyStudioScenes();await done;
-  assert.deepEqual(payload,{storyId:'p1',expectedSceneOrder:['old'],placement:'after',relativeSceneId:'old',
-    scenes:[{...values,durationSeconds:8}]});
-  assert.equal(receipt.scenes[0].prompt,values.prompt);
-  assert.equal(receipt.scenes[0].durationSeconds,8);
-});
-
-
-test('Apply saves usable Scenes and retains incomplete rows for later Apply', async () => {
-  const node=(title,prompt,duration)=>({
-    fields:{title:{value:title},prompt:{value:prompt},durationSeconds:{value:duration}},
-    removed:false,
-    querySelector(selector){return this.fields[selector.match(/data-field="([^"]+)"/)[1]];},
-    remove(){this.removed=true;}
-  });
-  const first=node('Opening','Complete H3 Prompt A','');
-  const incomplete=node('Unfinished','','10');
-  const last=node('Ending','Complete H3 Prompt C','12.5');
-  const rows=[first,incomplete,last], requests=[], receipts=[], errors=[], statuses=[];
-  let dialogClosed=0;
-  let currentStory={id:'p1',title:'Project',sceneOrder:['old'],scenes:{}};
-  const proposal={storyId:'p1',storyTitle:'Project',sceneOrder:['old'],scenes:{},
-    drafts:[{title:'Opening',prompt:'Complete H3 Prompt A'},{title:'Unfinished',prompt:''},
-      {title:'Ending',prompt:'Complete H3 Prompt C'}]};
-  const status={textContent:''};
-  const state={pending:false,studioScenesProposal:proposal};
-  const scope=vm.createContext({
-    state,Number,String,Array,Promise,JSON,
-    el:id=>id==='studio-scenes-rows'?{querySelectorAll:()=>rows.filter(row=>!row.removed)}:
-      id==='studio-scenes-placement'?{value:'end'}:
-      id==='studio-scenes-error'?status:
-      id==='studio-scenes-review'?{close(){dialogClosed++;}}:{},
-    syncControls(){},recordStudioOperation(){},studioActionStatus:message=>statuses.push(message),
-    window:{flushStudioDirectorStoryEdits:async()=>{},
-      studioDirectorBridge:{recordApplied:async(_kind,_story,fields)=>{receipts.push(fields);}},
-      refreshStudioDirectorStoryIfOpen:async()=>{},
-      reportConsoleError:(_label,error)=>errors.push(error)},
-    requestJson:async(url,options)=>{
-      assert.equal(url,'/fs/studio/director/scenes-draft');
-      const payload=JSON.parse(options.body);
-      requests.push(payload);
-      assert.deepEqual(payload.expectedSceneOrder,currentStory.sceneOrder);
-      const created=payload.scenes.map((item,i)=>({...item,id:'created-'+requests.length+'-'+i}));
-      currentStory={...currentStory,sceneOrder:[...currentStory.sceneOrder,...created.map(x=>x.id)],
-        scenes:{...currentStory.scenes,...Object.fromEntries(created.map(x=>[x.id,x]))}};
-      return{story:currentStory,scenes:created};
-    }
-  });
-  vm.runInContext(part('  function applyStudioScenes() {',
-    '  function showStudioSceneDraftReview() {'),scope);
-  const run=()=>scope.applyStudioScenes();
-  await run();
-  assert.deepEqual(errors,[]);
-  assert.equal(requests.length,1);
-  assert.deepEqual(requests[0].scenes.map(x=>x.prompt),['Complete H3 Prompt A','Complete H3 Prompt C']);
-  assert.deepEqual(requests[0].scenes.map(x=>x.durationSeconds),[6,12.5]);
-  assert.equal(first.removed,true);
-  assert.equal(last.removed,true);
-  assert.equal(incomplete.removed,false);
-  assert.equal(dialogClosed,0);
-  assert.equal(state.studioScenesProposal,proposal);
-  assert.deepEqual(Array.from(proposal.sceneOrder),currentStory.sceneOrder);
-  assert.equal(proposal.drafts.length,1);
-  assert.equal(proposal.drafts[0].title,'Unfinished');
-  assert.match(status.textContent,/2 Scenes saved/);
-  assert.match(status.textContent,/still need a Prompt/);
-  assert.match(statuses.at(-1),/1 duration defaulted to 6s/);
-  incomplete.fields.prompt.value='Completed H3 Prompt B';
-  await run();
-  assert.deepEqual(errors,[]);
-  assert.equal(requests.length,2);
-  assert.equal(requests[1].scenes[0].prompt,'Completed H3 Prompt B');
-  assert.equal(requests[1].scenes[0].durationSeconds,10);
-  assert.equal(state.studioScenesProposal,null);
-  assert.equal(dialogClosed,1);
-  assert.equal(receipts.length,2);
-});
-
-test('invalid duration cannot be silently replaced; other usable Scenes still save',async()=>{
-  const makeRow=(title,prompt,duration)=>({
-    fields:{title:{value:title},prompt:{value:prompt},durationSeconds:{value:duration}},
-    removed:false,
-    querySelector(selector){return this.fields[selector.match(/data-field="([^"]+)"/)[1]];},
-    remove(){this.removed=true;}
-  });
-  const invalid=makeRow('First','A complete H3 Prompt','twelve');
-  const valid=makeRow('Second','Another complete H3 Prompt','8');
-  const rows=[invalid,valid], requests=[], errors=[];
-  const story={id:'p1',sceneOrder:['prior'],scenes:{}};
-  const proposal={storyId:'p1',sceneOrder:['prior'],scenes:story.scenes,
-    drafts:[{title:'First',prompt:'A complete H3 Prompt'},
-      {title:'Second',prompt:'Another complete H3 Prompt'}]};
-  const state={pending:false,studioScenesProposal:proposal};
-  const scope=vm.createContext({state,Number,String,Array,Promise,JSON,
-    el:id=>id==='studio-scenes-rows'?{querySelectorAll:()=>rows.filter(row=>!row.removed)}:
-      id==='studio-scenes-placement'?{value:'end'}:
-      id==='studio-scenes-review'?{close(){}}:{textContent:''},
-    syncControls(){},recordStudioOperation(){},studioActionStatus(){},
-    window:{flushStudioDirectorStoryEdits:async()=>{},
-      studioDirectorBridge:{recordApplied:async()=>{}},
-      refreshStudioDirectorStoryIfOpen:async()=>{},
-      reportConsoleError:(_label,error)=>errors.push(error)},
-    requestJson:async(_url,options)=>{
-      const body=JSON.parse(options.body);requests.push(body);
-      const created=body.scenes.map((scene,i)=>({...scene,id:'new-'+i}));
-      return {story:{...story,sceneOrder:['prior',...created.map(x=>x.id)]},
-        scenes:created};
-    }
-  });
-  vm.runInContext(part('  function applyStudioScenes() {',
-    '  function showStudioSceneDraftReview() {'),scope);
-  await scope.applyStudioScenes();
-  assert.deepEqual(errors,[]);
-  assert.equal(requests.length,1);
-  assert.equal(requests[0].scenes.length,1);
-  assert.equal(requests[0].scenes[0].title,'Second');
-  assert.equal(requests[0].scenes[0].durationSeconds,8);
-  assert.equal(invalid.removed,false);
-  assert.equal(invalid.fields.durationSeconds.value,'twelve');
-  assert.equal(valid.removed,true);
-  assert.equal(proposal.drafts.length,1);
-  assert.equal(proposal.drafts[0].durationSeconds,'twelve');
-});
-
-test('Apply with only empty prompts leaves the review intact without a save request', () => {
-  const row={querySelector:selector=>({value:selector.includes('prompt')?'':'Incomplete'})};
-  const status={textContent:''},proposal={storyId:'p1',sceneOrder:[]};
-  const scope=vm.createContext({
-    state:{pending:false,studioScenesProposal:proposal},Array,Number,String,
-    el:id=>id==='studio-scenes-rows'?{querySelectorAll:()=>[row]}:status,
-    requestJson:()=>assert.fail('No write is possible without a Prompt')
-  });
-  vm.runInContext(part('  function applyStudioScenes() {',
-    '  function showStudioSceneDraftReview() {'),scope);
-  scope.applyStudioScenes();
-  assert.match(status.textContent,/No Scenes are ready to save/);
-});
-
-test('Studio brief review limits Apply to explicitly checked Story fields', () => {
-  for (const id of [
-    'director-studio-capture', 'studio-brief-review',
-    'studio-brief-concept-selected', 'studio-brief-style-selected',
-    'studio-brief-invariants-selected', 'studio-brief-apply'
-  ]) assert.match(html, new RegExp('id="' + id + '"'));
-  const prep = part('  function prepareStudioBrief(', '  function applyStudioBrief() {');
-  assert.match(prep, /studioAttachedStoryId\(\)/);
-  assert.match(prep, /window\.flushStudioDirectorStoryEdits\(storyId\)/);
-  assert.match(prep, /operation: 'studio_brief_draft'/);
-  assert.doesNotMatch(prep, /\/fs\/studio\/director\/brief'/);
-  const apply = part('  function applyStudioBrief() {', '  function addStudioScenesRow(item) {');
-  assert.match(apply, /studio-brief-concept-selected/);
-  assert.match(apply, /studio-brief-style-selected/);
-  assert.match(apply, /studio-brief-invariants-selected/);
-  assert.match(apply, /expected: expected, changes: changes/);
-  assert.match(apply, /\/fs\/studio\/director\/brief'/);
-  assert.doesNotMatch(html, /id="studio-dw-undo-button"/);
-  assert.doesNotMatch(html, /id="director-studio-undo-brief"/,
-    'legacy direct Undo shortcut must not bypass reviewed confirmation');
-});
-
-
-test('Review Create Project persists explicit continuation without touching unbound conversations', async () => {
-  const code = part('  function applyStudioProject() {', '  function parseStudioBriefDraft(raw) {');
-  async function create(continueChecked) {
-    let persisted, refreshed, receipt, message;
-    const state = {
-      studioProjectProposal: {concept: 'A comic train station scene'},
-      studioStoryAccess: null, studioAccessIndex: [],
-      studioWorkingDraft:{projects:{},scenes:{},newProject:{},newScene:{},sourceRequest:''},
-      pending: false,
-    };
-    const nodes = {
-      'studio-project-title': {value: 'The Station'},
-      'studio-project-concept': {value: 'A comic train station scene'},
-      'studio-project-style': {value: 'Muted pastel palette'},
-      'studio-project-invariants': {querySelectorAll: () => []},
-      'studio-project-include-scene': {checked: false},
-      'studio-project-extra-scenes': {querySelectorAll: () => []},
-      'studio-project-continue': {checked: continueChecked},
-      'studio-project-error': {textContent: ''},
-      'studio-project-review': {close() {this.closed = true;}},
-      'director-studio-access-status': {textContent: ''},
-      'director-studio-access-data': {classList: {add() {}}},
-    };
-    const context = vm.createContext({
-      state, Promise, JSON, String, Error,
-      el: id => {
-        if (!nodes[id]) throw Error('Unexpected Studio control: ' + id);
-        return nodes[id];
-      },
-      syncControls() {}, syncModeUi() {}, scheduleSessionSave() {},
-      writeInitialProjectScenes:async()=>({saved:[],failed:[],notAttempted:[]}),
-      requestJson: async (url, opts) => {
-        assert.equal(url, '/fs/studio/director/project-create');
-        const payload = JSON.parse(opts.body);
-        assert.equal(payload.proposal.concept, 'A comic train station scene');
-        return {story: {id: 'story-created', title: 'The Station', concept: 'A comic train station scene', style: 'Muted pastel palette', invariants: [], sceneOrder: [], scenes: {}}};
-      },
-      recordStudioOperation: (kind, label, storyId) => {
-        receipt = {kind, label, storyId};
-      },
-      studioActionStatus: text => {message = text;},
-      persistSession: async mode => {
-        assert.equal(mode, 'storyboard');
-        persisted = state.studioStoryAccess && {...state.studioStoryAccess};
-      },
-      window: {
-        refreshStudioDirectorStoryIfOpen: async id => {refreshed = id;},
-        studioDirectorBridge: {recordApplied: async (kind, story, fields) => {
-          assert.equal(kind, 'project.create');
-          assert.equal(story.id, 'story-created');
-          assert.equal(fields.concept, 'A comic train station scene');
-          persisted = state.studioStoryAccess && {...state.studioStoryAccess};
-        }}
-      },
-    });
-    vm.runInContext(code, context);
-    vm.runInContext('applyStudioProject()', context);
-    await new Promise(resolve => setImmediate(resolve));
-    assert.equal(state.pending, false);
-    assert.equal(nodes['studio-project-review'].closed, true);
-    assert.equal(receipt.kind, 'project.create');
-    assert.equal(receipt.storyId, 'story-created');
-    assert.equal(refreshed, 'story-created');
-    assert.match(message, /Project saved/);
-    return persisted;
-  }
-  const attached = await create(true);
-  assert.equal(attached.storyId, 'story-created');
-  assert.equal(attached.label, 'The Station');
-  assert.equal(await create(false), null);
+test('an unparseable model response stays in raw I/O with no save',async()=>{
+  const h=sceneHarness('not structured JSON');
+  await assert.rejects(()=>h.write.call(h.window.studioDirectorBridge,{
+    projectId:'p1',instruction:'Write the opening Scene'}),/JSON failed to parse/);
+  assert.equal(h.requests.filter(x=>x[0]==='/fs/studio/director/scenes-draft').length,0);
+  assert.equal(h.state.lastStudioIoRaw,'not structured JSON');
+  assert.match(h.state.lastStudioIoError,/JSON failed to parse/);
+  assert.equal(h.receipt.length,0);
+  assert.equal(h.errors.length,1);
 });

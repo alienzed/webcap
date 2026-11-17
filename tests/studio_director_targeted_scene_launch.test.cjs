@@ -203,6 +203,48 @@ test('a missing creative prompt reports failure and retains independently usable
   assert.ok(h.errors.some(message=>message.includes('requested Scene prompt')));
 });
 
+test('retry after a title-only partial result cannot save it as a prompt-and-title revision',async()=>{
+  const h=sceneFixture('{"title":"Quiet arrival"}');
+  const request='Replace both the Scene prompt and title.';
+  const launch={...h.launch,fields:['prompt','title'],authorRequest:request,
+    instruction:request};
+  await assert.rejects(h.window.studioDirectorBridge.writeSelectedScene(launch),
+    /did not return the requested Scene prompt/);
+  assert.equal(h.events.filter(event=>event[0]==='model').length,1);
+  assert.equal(h.events.filter(event=>event[0]==='save').length,0);
+  assert.equal(h.state.studioWorkingDraft.scenes.s1.title,'Quiet arrival');
+  assert.deepEqual(h.state.studioWorkingDraft.draftOrigins.scenes.s1.fields,['title']);
+  h.changeResponse('{"title":"Quiet arrival"}');
+  await assert.rejects(h.window.studioDirectorBridge.writeSelectedScene(launch),
+    /did not return the requested Scene prompt/);
+  assert.equal(h.events.filter(event=>event[0]==='model').length,2,
+    'repeating the identical request must not silently apply the partial title');
+  assert.equal(h.events.filter(event=>event[0]==='save').length,0);
+  assert.equal(h.saved.scenes.s1.title,'Opening');
+  assert.equal(h.saved.scenes.s1.prompt,'Mara shouts at the rover.');
+});
+
+test('a partial title remains available while the retry authors a complete requested prompt',async()=>{
+  const h=sceneFixture('{"title":"Quiet arrival"}');
+  const request='Replace both the Scene prompt and title.';
+  const launch={...h.launch,fields:['prompt','title'],authorRequest:request,
+    instruction:request};
+  await assert.rejects(h.window.studioDirectorBridge.writeSelectedScene(launch),
+    /requested Scene prompt/);
+  h.changeResponse('{"title":"Quiet arrival","prompt":"The camera stays wide while Mara settles beside the rover."}');
+  await h.window.studioDirectorBridge.writeSelectedScene(launch);
+  assert.equal(h.events.filter(event=>event[0]==='model').length,2);
+  const secondRequest=JSON.parse(h.events.filter(event=>event[0]==='model')[1][1]);
+  assert.equal(secondRequest.unsavedWorkingFields.title,'Quiet arrival',
+    'the model receives independently useful partial material to continue');
+  const save=h.events.find(event=>event[0]==='save')[1];
+  assert.deepEqual(JSON.parse(JSON.stringify(save.changes)),{
+    prompt:'The camera stays wide while Mara settles beside the rover.',
+    title:'Quiet arrival'
+  });
+  assert.equal(h.saved.scenes.s1.title,'Quiet arrival');
+});
+
 test('a model-authored title-only change requests and saves only the title',async()=>{
   const h=sceneFixture('{"title":"Silent departure","prompt":"Unrequested rewrite"}');
   await h.window.studioDirectorBridge.writeSelectedScene({
@@ -301,8 +343,8 @@ test('already authored structured Scene prompt applies with exact requested dura
   assert.equal(h.saved.scenes.s1.durationSeconds,14);
 });
 
-test('unsupported duration never saves a working prompt with contradictory timing',async()=>{
-  const h=sceneFixture();
+test('missing duration in an otherwise complete draft triggers fresh authoring, not a partial save',async()=>{
+  const h=sceneFixture('{"prompt":"Updated scene with no valid timing","durationSeconds":20}');
   const request='Make Scene 1 last 20 seconds.';
   h.state.studioWorkingDraft.scenes.s1={prompt:'Complete twenty-second H3 replacement'};
   authoredSceneOrigin(h,request,['prompt','durationSeconds']);
@@ -311,7 +353,8 @@ test('unsupported duration never saves a working prompt with contradictory timin
     fields:['prompt','durationSeconds']
   });
   assert.equal(result.review,true);
-  assert.equal(h.events.filter(row=>row[0]==='model').length,0);
+  assert.equal(h.events.filter(row=>row[0]==='model').length,1,
+    'an incomplete cached draft cannot bypass the unsupplied duration');
   assert.equal(h.events.filter(row=>row[0]==='save').length,0);
   assert.equal(h.saved.scenes.s1.prompt,'Mara shouts at the rover.');
 });

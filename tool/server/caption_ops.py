@@ -387,7 +387,7 @@ Design requirements:
 - Infer each group's meaning from its label, optional semantic alias, AND vocabulary, including renderedDefault and affixes. Abbreviated or
   unfamiliar labels are not enough by themselves: values may reveal garment shape, limb positioning, accessories,
   a second subject, a relationship, or environmental detail. Do not expand uncertain abbreviations into invented facts.
-- Treat preferredCaptionSequence as a broad hint for structuring a new template, not a strict ordering constraint.
+- Treat defaultCaptionTemplate as the app-wide fallback structure for a new template, not a strict ordering constraint.
   Use each group's meaning, aliases, and vocabulary to position its placeholder naturally. Never infer caption order
   from the input group list. When currentTemplate already establishes an intentional structure, refine rather than
   needlessly reorder it. Place mapping-only keys where their meaning fits, and give every group a natural place.
@@ -410,7 +410,7 @@ Design requirements:
 """.strip()
 
 
-def build_caption_template_assist_messages(groups=None, mappings=None, current_template="", preferred_sequence=""):
+def build_caption_template_assist_messages(groups=None, mappings=None, current_template="", default_template=""):
     clean_groups = []
     available_keys = []
     seen_keys = set()
@@ -476,7 +476,7 @@ def build_caption_template_assist_messages(groups=None, mappings=None, current_t
     payload = {
         "availableKeys": available_keys,
         "groups": clean_groups,
-        "preferredCaptionSequence": str(preferred_sequence or "").strip(),
+        "defaultCaptionTemplate": str(default_template or "").strip(),
         "customMappings": clean_mappings,
         "currentTemplate": str(current_template or ""),
     }
@@ -486,7 +486,7 @@ def build_caption_template_assist_messages(groups=None, mappings=None, current_t
             "role": "user",
             "content": (
                 "Create one improved WebCap Caption Primer template from this exact schema. "
-                "Use preferredCaptionSequence as a broad sequence hint for a new template, and preserve useful "
+                "Use defaultCaptionTemplate as the starting structure for a new template, and preserve useful "
                 "structure already present in currentTemplate. Treat groups as an unordered inventory of "
                 "available placeholders. Place them by meaning with natural conditional glue.\n\n"
                 + json.dumps(payload, ensure_ascii=False, separators=(",", ":"))

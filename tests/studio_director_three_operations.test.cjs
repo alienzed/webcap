@@ -37,52 +37,33 @@ test('shared Studio creative guidance leaves save and review mechanics to WebCap
   assert.doesNotMatch(request,/CURRENT WEBCAP CAPABILITIES|STUDIO WORKBENCH STATE|CURRENT PROJECT NAVIGATION/);
   assert.doesNotMatch(request,/direct-save or review policy|Only WebCap determines review/);
 });
-test('Read is plain prose; an absent or malformed optional action does not discard its reply', () => {
-  assert.deepEqual(parse('The saved title is Rainy Bookshop.'), {
-    reply: 'The saved title is Rainy Bookshop.', action: null, changes: null
-  });
-  const structured = parse(JSON.stringify({reply: 'Saved details are consistent.', action: null}));
-  assert.equal(structured.reply, 'Saved details are consistent.');
-  assert.equal(structured.action, null);
-  const invalid = parse(JSON.stringify({reply: 'Useful answer.', action: {kind:'edit_everything'}}));
-  assert.equal(invalid.reply, 'Useful answer.');
-  assert.equal(invalid.action, null);
-  assert.equal(parse('{"reply":unfinished').reply, '{"reply":unfinished');
-  assert.throws(() => parse('  '), /no answer/);
+test('ordinary Studio reply displays the exact raw text without interpretation',()=>{
+  assert.equal(parse('The saved title is Rainy Bookshop.').reply,'The saved title is Rainy Bookshop.');
+  const raw=JSON.stringify({reply:'A useful thought',action:{kind:'write_scenes'}});
+  assert.equal(parse(raw).reply,raw);
+  assert.equal(parse(raw).action,null);
+  assert.equal(parse(raw).changes,null);
+  assert.equal(parse(raw).scenes,null);
+  assert.equal(parse('{"reply":unfinished').reply,'{"reply":unfinished');
+  assert.throws(()=>parse('  '),/no answer/);
 });
 
-test('model-authored fields without reply remain reviewable with a factual chat summary', () => {
-  const changes = {scene:{prompt:'Complete replacement prompt',durationSeconds:12}};
-  const response = parse(JSON.stringify({changes}));
-  assert.equal(response.reply,
-    'Scene revision draft — H3 prompt, duration. Review the proposed material below.');
-  assert.deepEqual(response.changes,changes);
+test('unexpected structured chat output is displayed verbatim rather than promoted into drafts',()=>{
+  const raw=JSON.stringify({changes:{scene:{prompt:'A revision',durationSeconds:8}}});
+  const response=parse(raw);
+  assert.equal(response.reply,raw);
+  assert.equal(response.changes,null);
   assert.equal(response.action,null);
-  const project = parse(JSON.stringify({changes:{project:{
-    title:'Kitten Chaos',concept:'Kittens stumble through silly mishaps.',
-    style:'Warm natural light'
-  }}}));
-  assert.match(project.reply,/Project draft “Kitten Chaos”/);
-  assert.match(project.reply,/title, concept, visual style/);
-  assert.doesNotMatch(project.reply,/\\\"changes\\\"/);
-  assert.equal(project.changes.project.title,'Kitten Chaos',
-    'only the conversational display changes; the authored Project fields survive');
-  const mixed = parse(JSON.stringify({reply:'Useful answer.',changes,
-    action:{kind:'unsupported_operation',instruction:'Change things'}}));
-  assert.equal(mixed.reply,'Useful answer.');
-  assert.deepEqual(mixed.changes,changes);
-  assert.equal(mixed.action,null);
+  assert.doesNotMatch(response.reply,/Review the proposed material/);
 });
 
-test('Only a small, optional action accompanies conversation', () => {
-  const result = parse(JSON.stringify({reply:'I can make that quieter.', action:{
-    kind:'write_scenes', instruction:'Make the ending quieter.', fields:['prompt']
-  }}));
-  assert.equal(result.action.kind, 'write_scenes');
-  assert.equal(result.action.instruction, 'Make the ending quieter.');
-  assert.match(chat, /studioDirectorWorkbench\.presentAction/);
-  assert.doesNotMatch(part(chat, '  function parseStudioChatResponse(raw) {',
-    '  function storyboardRequestMessages('), /readiness|capture/i);
+test('even a model action hint has no authority to invoke WebCap Write',()=>{
+  const raw=JSON.stringify({reply:'An idea',action:{kind:'write_scenes',instruction:'Change it'}});
+  const response=parse(raw);
+  assert.equal(response.reply,raw);
+  assert.equal(response.action,null);
+  assert.doesNotMatch(part(chat,'  function parseStudioChatResponse(raw) {',
+    '  function storyboardRequestMessages('),/presentAction|write_scenes/);
 });
 
 test('ordinary chat never offers implicit Project or Scene writes, even with structured response fields',()=>{
@@ -93,20 +74,10 @@ test('ordinary chat never offers implicit Project or Scene writes, even with str
   assert.match(workbench,/function writePrepare\(options\)/);
 });
 
-test('orphan changes.scene keeps unsupported model-authored timing editable in Review',()=>{
-  const fields=new Function(part(chat,
-    '  function studioWorkingFieldChanges(source, names) {',
-    '  function studioMergeWorkingChanges(changes, target, action, request) {')+
-    'return studioWorkingFieldChanges;')();
-  const route=new Function('studioWorkingFieldChanges',part(chat,
-    '  function studioAuthoredWriteActions(response, instruction, targetScene) {',
-    '  function studioStoredActions(entry) {')+'return studioAuthoredWriteActions;')(fields);
-  const actions=route(parse(JSON.stringify({changes:{scene:{
-    title:'Untimed moment',prompt:'An otherwise usable H3 prompt.',durationSeconds:99
-  }}})),'Create an opening Scene',null);
-  assert.deepEqual(actions.map(a=>a.kind),['create_scene']);
-  assert.equal(actions[0].scenes[0].durationSeconds,99,
-    'invalid authored timing remains in the editable Scene review, not a fabricated default');
+test('ordinary chat does not reinterpret a returned Scene object',()=>{
+  const raw=JSON.stringify({changes:{scene:{title:'Moment',prompt:'Full prompt',durationSeconds:99}}});
+  assert.equal(parse(raw).reply,raw);
+  assert.equal(parse(raw).changes,null);
 });
 
 test('completing the Scene action leaves the same response Project action available',()=>{
@@ -140,20 +111,12 @@ test('completing the Scene action leaves the same response Project action availa
   assert.equal(saved,2);
 });
 
-test('standalone new Scene fields do not misclassify Project fields or require a selected Scene',()=>{
-  const fields=new Function(part(chat,
-    '  function studioWorkingFieldChanges(source, names) {',
-    '  function studioMergeWorkingChanges(changes, target, action, request) {')+
-    'return studioWorkingFieldChanges;')();
-  const route=new Function('studioWorkingFieldChanges',part(chat,
-    '  function studioAuthoredWriteActions(response, instruction, targetScene) {',
-    '  function studioStoredActions(entry) {')+'return studioAuthoredWriteActions;')(fields);
-  const response=parse(JSON.stringify({
-    changes:{project:{concept:'A sharp new premise'},scene:{title:'Arrival',prompt:'A usable scene'}},
-  }));
-  const actions=route(response,'Reimagine the opening',null);
-  assert.deepEqual(actions.map(a=>a.kind),['create_project','create_scene']);
-  assert.equal(actions[1].scenes[0].prompt,'A usable scene');
+test('ordinary chat cannot classify any saved Project or Scene destination',()=>{
+  const raw=JSON.stringify({changes:{project:{concept:'A new idea'},scene:{prompt:'A prompt'}}});
+  const response=parse(raw);
+  assert.equal(response.reply,raw);
+  assert.equal(response.changes,null);
+  assert.equal(response.action,null);
 });
 
 test('ordinary prose and model action hints never launch a Write',()=>{

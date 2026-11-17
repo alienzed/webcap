@@ -489,6 +489,7 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
                 "[PREVIOUS AUTHORED SCENE - RELATIONSHIP CONTEXT]\n"
                 + json.dumps({
                     key: previous_scene.get(key)
+                    for key in ("title", "prompt")
                     if _clean(previous_scene.get(key))
                 }, indent=2, ensure_ascii=False)
                 + "\n\nThe planned outline and author direction establish this Scene's creative scope."

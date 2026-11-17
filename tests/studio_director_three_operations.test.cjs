@@ -96,6 +96,49 @@ test('explicit Scene writes rely on authored duration values rather than guessin
   assert.match(chat,/missingDuration/);
   assert.doesNotMatch(chat,/draft\.scenes\[0\]\.durationSeconds = requestedDuration/);
 });
+function harness() {
+  const suggestions = {children:[],replaceChildren(){this.children=[];},
+    appendChild(value){this.children.push(value);}};
+  const controls = new Map([['studio-dw-suggestions',suggestions]]);
+  function el(id) {
+    if (!controls.has(id)) controls.set(id,{value:'',disabled:false});
+    return controls.get(id);
+  }
+  const document = {createElement() {return {type:'',dataset:{},textContent:'',disabled:false,value:'',
+    children:[],setAttribute(){},appendChild(node){this.children.push(node);}};}};
+  const requests = [],statuses = [],finishes = [],reviews = [];
+  const story = {id:'p1', title:'Rainy Bookshop',
+    sceneOrder:['one','two','three'], scenes:{
+      one:{title:'Opening',prompt:'Old opening'},two:{title:'Middle',prompt:'Old middle'},three:{title:'Ending',prompt:'Old ending'}
+    }};
+  const bridge = {
+    isReady:()=>true, canReview:()=>true, readinessMessage:()=>'',placeSuggestedAction:()=>{},
+    finishWriteAction:action=>finishes.push(action),
+    prepareWrite:(...args)=>{requests.push(['project',...args]);return Promise.resolve();},
+    writeSelectedScene:async action=>{requests.push(['scene',action]);return {};},
+    writeNewScene:async action=>{requests.push(['new-scene',action]);return {};},
+    reviewAuthoredScenes:async action=>{requests.push(['review-authored',action]);return {review:true,count:action.scenes.length};},
+    reviewPendingScenes:async projectId=>{requests.push(['reopen-review',projectId]);return {review:true};},
+  };
+  const window = {studioDirectorBridge:bridge};
+  const source = part(workbench, '  function selectedSceneIds(story, selectedScene) {',
+    '  window.studioDirectorWorkbench = {');
+  const creator = new Function('el','document','window','refreshProjects','loadStory',
+    'storyName','projectFields','status','openWriteForCapture','showConversationWrite','showSceneReview',
+    source + 'return {presentAction,selectedSceneIds};');
+  let opened = 0;
+  const functions = creator(el,document,window,
+    async()=>[{id:'p1',title:'Rainy Bookshop'}],async id=>{
+      assert.equal(id,'p1');return story;
+    },
+    value=>value.title, ['title','concept','style','invariants'],
+    (...args)=>statuses.push(args),()=>{opened++;},()=>{},(...args)=>reviews.push(args));
+  return {functions,bridge,requests,statuses,finishes,reviews,suggestions,story,opened:()=>opened};
+}
+async function flush() {
+  for (let i=0;i<5;i++) await new Promise(setImmediate);
+}
+
 test('an action promise alone never presents a review or launches a model call', async () => {
   const h=harness();
   assert.equal(h.functions.presentAction({kind:'write_scenes',instruction:'Rewrite Scene 2'},

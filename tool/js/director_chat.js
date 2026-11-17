@@ -2099,29 +2099,14 @@
 
 
   function parseStudioBriefDraft(raw) {
-    var value = String(raw || '').trim(), fence = String.fromCharCode(96).repeat(3);
-    if (value.startsWith(fence) && value.endsWith(fence)) {
-      var newline = value.indexOf('\n');
-      if (newline >= 0) value = value.slice(newline + 1, -3).trim();
+    var fields;
+    try { fields = JSON.parse(String(raw || '')); }
+    catch (error) {
+      throw new Error('Overview Write returned invalid JSON: ' + error.message +
+        '\\nRaw response:\\n' + String(raw || ''));
     }
-    var result;
-    try { result = JSON.parse(value); }
-    catch (error) { throw new Error('Director returned invalid Project JSON: ' + error.message +
-      '\nRaw Director response:\n' + String(raw || '')); }
-    if (!result || typeof result !== 'object' || Array.isArray(result))
-      throw new Error('Director returned no Project field replacements.');
-    var fields = studioWorkingFieldChanges(result,['title','concept','style','invariants']);
-    if (Array.isArray(fields.invariants)) {
-      var kinds = ['character','location','visual','world','sound','custom'];
-      if (fields.invariants.length > 30 || fields.invariants.some(function (item) {
-        return !item || typeof item !== 'object' || Array.isArray(item) ||
-          !kinds.includes(item.kind) || typeof item.title !== 'string' ||
-          typeof item.text !== 'string';
-      })) delete fields.invariants; // Keep the original list; other fields survive.
-    }
-    if (!Object.keys(fields).length)
-      throw new Error('Director returned no usable Project field values.\nRaw response:\n' + String(raw || ''));
-    fields.rationale = typeof result.rationale === 'string' ? result.rationale : '';
+    if (!fields || typeof fields !== 'object' || Array.isArray(fields))
+      throw new Error('Overview Write returned no field object. Raw response:\\n' + String(raw || ''));
     return fields;
   }
 
@@ -2298,8 +2283,7 @@
         });
         if (operations.length) changes.invariantOps = operations;
       } else if (['title','concept','style'].includes(key) &&
-                 typeof authored[key] === 'string' && authored[key].trim() &&
-                 authored[key] !== expected[key]) {
+                 typeof authored[key] === 'string' && authored[key] !== expected[key]) {
         changes[key] = authored[key];
         originals[key] = expected[key];
       }
@@ -2328,138 +2312,66 @@
   }
 
   function prepareStudioBrief(options) {
-    if (state.pending || state.activeMode !== 'storyboard' || !state.sessionReady) return;
-    var instruction = String(options && options.instruction || '').trim();
-    var manualReview = !instruction && !(options && options.forceAuthor);
-    var storyId = String(options && options.storyId || studioAttachedStoryId() || '');
-    if (!(options && (options.authoredFields || options.forceAuthor)) && state.studioBriefProposal &&
-        state.studioBriefProposal.storyId === storyId &&
-        (!instruction || instruction === state.studioBriefProposal.instruction)) {
-      showStudioBriefReview(); return;
-    }
-    if (instruction || state.studioBriefProposal && state.studioBriefProposal.storyId !== storyId)
-      state.studioBriefProposal = null;
-    if (!storyId) {
-      studioActionStatus('Attach a Project explicitly before updating Concept, Style or Invariants.', true);
-      return;
-    }
+    if (state.pending || state.activeMode !== 'storyboard' || !state.sessionReady)
+      throw new Error('Finish the current Director request before writing an Overview.');
+    var storyId = String(options && options.storyId || '');
+    if (!storyId) throw new Error('Select an existing Project destination for Overview Write.');
+    var fields = Array.isArray(options && options.requestedFields) &&
+      options.requestedFields.length ? options.requestedFields.slice() :
+      ['title','concept','style','invariants'];
     var discussion = studioConversationMessages(state.modeMessages.storyboard);
-    instruction = instruction || String((discussion.filter(function (message) {
-      return message.role === 'user' && !message.content.includes('[WEBCAP APPLIED FIELD VALUES]');
-    }).slice(-1)[0] || {}).content || '').trim();
-    var requestedFields = Array.isArray(options && options.requestedFields)
-      ? options.requestedFields.filter(function (field) {
-        return ['title','concept','style','invariants'].includes(field);
-      }) : [];
     state.pending = true;
     state.jobId = '';
-    studioActionStatus('Preparing Project Overview for review…', false);
     startProgress();
     syncControls();
-    Promise.resolve().then(function () {
-      return window.flushStudioDirectorStoryEdits(storyId);
-    }).then(function () {
+    return window.flushStudioDirectorStoryEdits(storyId).then(function () {
       return requestJson('/fs/storyboard?story=' + encodeURIComponent(storyId));
     }).then(function (payload) {
       var story = payload.story;
-      if (!story || story.id !== storyId) throw new Error('Attached Project is unavailable.');
-      var expected = { title: story.title, concept: story.concept, style: story.style, invariants: story.invariants };
-      var workingProject = options && options.forceAuthor ? {} :
-        options && options.authoredFields || state.studioWorkingDraft.projects[storyId] || {};
-      var authorRequest = String(options && options.authorRequest || instruction);
-      var draftOrigin = state.studioWorkingDraft.draftOrigins &&
-        state.studioWorkingDraft.draftOrigins.projects &&
-        state.studioWorkingDraft.draftOrigins.projects[storyId];
-      // Explicit Review still presents any retained fields against the current
-      // saved baseline. Automatic reuse requires the same target and baseline.
-      var sameWork = !(options && options.forceAuthor) && (
-        !!(options && options.authoredFields) || manualReview ||
-        !!draftOrigin && draftOrigin.request === authorRequest &&
-          draftOrigin.baseline === JSON.stringify(expected));
-      var retained = sameWork
-        ? manualReview || options && options.authoredFields ? workingProject :
-          Object.fromEntries((draftOrigin.fields || []).filter(function (field) {
-            return Object.prototype.hasOwnProperty.call(workingProject,field);
-          }).map(function (field) {return [field,workingProject[field]];}))
-        : {};
-      var required = Object.keys(retained).filter(function (field) {
-        return ['title','concept','style','invariants'].includes(field);
-      });
-      if (required.length) {
-        var drafted = Object.assign({},expected,retained);
-        state.studioBriefProposal = {
-          storyId:storyId,storyTitle:story.title,expected:expected,draft:drafted,
-          instruction:instruction,requestedFields:required,
-          rationale:'Structured Director fields retained; no additional model request.'
-        };
-        finishProgress(null);
-        studioActionStatus('Project fields ready for review, without another model call.',false);
-        showStudioBriefReview();
-        return;
-      }
-      if (!state.modelId)
-        throw new Error('No Director model is available to author new Project fields.');
-      var input = {
-        task: 'Revise the requested Project fields using the supplied saved Project as baseline. ' +
-          'Return complete replacement values for the fields you improve, preserving established ' +
-          'creative direction and all unaffected fields and Scenes.',
-        instruction: instruction, requestedFields: requestedFields,
-        // This explicit targeted Project revision authorizes its own saved baseline.
-        project: {id:story.id,title:story.title,concept:story.concept,
-          style:story.style,invariants:story.invariants},
-        unsavedWorkingFields:workingProject
+      if (!story || story.id !== storyId) throw new Error('Selected Project is unavailable.');
+      var expected = {
+        title:story.title, concept:story.concept,
+        style:story.style, invariants:story.invariants
       };
-      return studioDirectorRequestMessages(discussion.concat([{ role: 'user', content: JSON.stringify(input) }]), false, true)
-        .then(function (messages) {
-          window.studioDirectorWorkbench.showSentWriteContext('studio_brief_draft', messages);
-          return requestJson('/fs/director/chat', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({model: state.modelId, operation: 'studio_brief_draft', messages: messages,
-              requiredFields:requestedFields})
-          });
-        }).then(function (result) {
-          if (!result.job || !result.job.jobId) throw new Error('Creative brief extraction was not queued.');
-          state.jobId = String(result.job.jobId);
-          state.requestDiagnostic = result.job.request || null;
-          trackTransientLlmJob(result.job);
-          return waitForJob(result.job);
-        }).then(function (job) {
-          var result = job.result && typeof job.result === 'object' ? job.result : {};
-          var changes = parseStudioBriefDraft(result.text);
-          state.studioWorkingDraft.projects[storyId] = Object.assign({},
-            state.studioWorkingDraft.projects[storyId],
-            studioWorkingFieldChanges(changes,['title','concept','style','invariants']));
-          state.studioWorkingDraft.draftOrigins =
-            state.studioWorkingDraft.draftOrigins || {projects:{},scenes:{}};
-          state.studioWorkingDraft.draftOrigins.projects =
-            state.studioWorkingDraft.draftOrigins.projects || {};
-          state.studioWorkingDraft.draftOrigins.projects[storyId] = {
-            request:authorRequest,baseline:JSON.stringify(expected),
-            fields:Object.keys(studioWorkingFieldChanges(changes,['title','concept','style','invariants']))
-          };
-          scheduleSessionSave();
-          var draft = Object.assign({},expected,changes);
-          state.studioBriefProposal = {
-            storyId: storyId, storyTitle: story.title, expected: expected, draft: draft,
-            instruction:instruction,
-            requestedFields:requestedFields.length ? requestedFields :
-              Object.keys(changes).filter(function (key) {
-                return ['title','concept','style','invariants'].includes(key);
-              }),
-            rationale: changes.rationale
-          };
-          finishProgress(null);
-          return commitFocusedStudioBrief(storyId,expected,changes,requestedFields);
+      var task = {
+        task:'Revise the selected Project Overview using our creative discussion and saved Project baseline. Return the complete values for requestedFields.',
+        instruction:String(options && options.instruction || '').trim(),
+        requestedFields:fields, project:expected
+      };
+      return studioDirectorRequestMessages(discussion.concat([
+        {role:'user',content:JSON.stringify(task)}
+      ]),false,true).then(function (messages) {
+        window.studioDirectorWorkbench.showSentWriteContext('studio_brief_draft',messages);
+        return requestJson('/fs/director/chat',{
+          method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({model:state.modelId,operation:'studio_brief_draft',
+            requiredFields:fields,messages:messages})
         });
+      }).then(function (payload) {
+        if (!payload.job || !payload.job.jobId) throw new Error('Overview Write did not queue.');
+        state.jobId = String(payload.job.jobId);
+        state.requestDiagnostic = payload.job.request || null;
+        trackTransientLlmJob(payload.job);
+        return waitForJob(payload.job);
+      }).then(function (job) {
+        var raw = String(job.result && job.result.text || '');
+        state.lastStudioIoRaw = raw;
+        el('studio-director-inspect').dataset.newResult = 'true';
+        return commitFocusedStudioBrief(storyId,expected,parseStudioBriefDraft(raw),fields);
+      });
+    }).then(function (result) {
+      finishProgress(null);
+      return result;
     }).catch(function (error) {
+      state.lastStudioIoError = String(error.message || error);
+      el('studio-director-inspect').dataset.newResult = 'true';
+      studioActionStatus((error.saved ? 'Overview saved, reporting failed: ' :
+        'Overview Write failed: ') + state.lastStudioIoError,true);
       finishProgress(error);
-      studioActionStatus('Creative brief proposal failed: ' + String(error.message || error), true);
-      if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Studio Brief proposal', error);
-      else throw error;
+      window.reportConsoleError('Studio Overview Write',error);
+      throw error;
     }).finally(function () {
-      state.pending = false;
-      state.jobId = '';
-      syncControls();
+      state.pending = false;state.jobId = '';syncControls();
     });
   }
 

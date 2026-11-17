@@ -232,6 +232,8 @@ def test_director_chat_route_preserves_all_structured_schemas(monkeypatch, opera
             assert record["required"] == ["title", "prompt", "durationSeconds"]
             assert record["properties"]["prompt"]["minLength"] == 1
             if operation == "studio_chat":
+                assert captured["schema"]["required"] == ["reply"]
+                assert captured["schema"]["properties"]["reply"]["minLength"] == 1
                 assert "required" not in captured["schema"]["properties"]["changes"]["properties"]["scene"]
         if operation == "studio_project_draft":
             assert captured["schema"]["required"] == ["title", "concept", "style", "invariants", "rationale"]
@@ -270,10 +272,15 @@ def test_studio_chat_schema_accepts_prose_and_actual_creative_material_without_a
     from tool.server.studio_director import chat_response_schema
 
     schema = chat_response_schema()
-    assert schema["required"] == [], "Discussion and authored fields share an open-ended conversation"
+    assert schema["required"] == ["reply"], (
+        "A creative partner answers the author on every turn; independently usable "
+        "Project/Scene fields remain optional and partial"
+    )
     assert schema["minProperties"] == 1
     assert "action" not in schema["properties"], "The model cannot author an application action"
     assert schema["properties"]["reply"]["type"] == "string"
+    assert schema["properties"]["reply"]["minLength"] == 1
+    assert "recommendation" in schema["properties"]["reply"]["description"]
     assert schema["properties"]["scenes"]["items"]["required"] == [
         "title", "prompt", "durationSeconds"
     ]

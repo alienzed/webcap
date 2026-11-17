@@ -459,7 +459,8 @@
         return;
       }
       return bridge.writeNewScene({
-        projectId:id, instruction:instruction, authorRequest:instruction
+        projectId:id, instruction:instruction, authorRequest:instruction,
+        forceAuthor:true
       });
     }
     if (operation !== 'new-project' && operation !== 'project')
@@ -604,7 +605,8 @@
       var label = 'Scene ' + position + ' · ' + (story.scenes[id].title || id);
       status('Writing ' + label + ' (' + current + '/' + ids.length + ') · Save on completion',false,true);
       return window.studioDirectorBridge.writeSelectedScene({
-        projectId:storyId,sceneId:id,instruction:instruction,fields:fields.slice()
+        projectId:storyId,sceneId:id,instruction:instruction,fields:fields.slice(),
+        forceAuthor:true
       }).then(function (result) {
         if (result === null) outcome.unchanged.push(label);
         else if (result && result.review) outcome.review.push(label);

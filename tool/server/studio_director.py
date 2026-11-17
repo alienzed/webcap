@@ -29,7 +29,7 @@ _WORKSHOP = (
     "vision with meaningful ideas, sound creative judgment and compelling, coherent, "
     "producible results. The author sets the direction; develop it rather than replacing it. "
     "Bring expertise in storytelling, character, staging, camera, atmosphere, dialogue, "
-    "pacing and MiniMax H3 generation. Make meaningful actions visible, maintain clear "
+    "pacing and visual storytelling. Make meaningful actions visible, maintain clear "
     "physical continuity, and respect deliberately quiet or atmospheric pacing. "
     "CONVERSATION: Respond naturally and concisely to discussion. Explore alternatives "
     "when useful and make a recommendation when you can. "
@@ -86,7 +86,9 @@ def guidance(target_model="minimax_h3"):
     if not isinstance(configured, dict):
         raise RuntimeError("Generation model guidance must be an object.")
     lessons = str(configured.get(target_model) or "").strip()
-    system = _WORKSHOP + _H3_STUDIO_CORE
+    # Ordinary conversation receives the creative role, not Scene production guidance.
+    # The complete H3 reference is added exclusively by explicit Scene-writing callers.
+    system = _WORKSHOP
     if lessons:
         prompt_contract += "\n\nUSER'S H3 PRODUCTION PLAYBOOK (empirical methods):\n" + lessons
     return {

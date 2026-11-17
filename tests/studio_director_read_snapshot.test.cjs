@@ -48,8 +48,8 @@ test('ordinary chat and explicit Write pass exact Read message text in full hist
     assert.equal(url,'/fs/studio/director/guidance?targetModel=minimax_h3');
     return {system:'Creative partner',promptContract:'H3 Scene guidance'};
   };
-  const maker=new Function('requestJson',requestSource+
-    'return {base:studioDirectorRequestMessages,chat:studioDirectorChatRequestMessages};')(requestJson);
+  const maker=new Function('requestJson','studioAttachedStoryId',requestSource+
+    'return {base:studioDirectorRequestMessages,chat:studioDirectorChatRequestMessages};')(requestJson,()=> '');
   const visible='[WEBCAP EXPLICIT READ — SAVED SNAPSHOT]\\n'+
     JSON.stringify({projectId:'A',fields:[{id:'project.style',value:'Old version'}]},null,2)+
     '\\n[END WEBCAP READ]';

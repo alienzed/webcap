@@ -585,10 +585,14 @@
       status('Enter a revision instruction before launch.', true);
       return Promise.resolve();
     }
-    // The author chose the Scenes and the revision operation. The model
-    // decides which additional authored fields the instruction calls for;
-    // WebCap never interprets the instruction's prose to select fields.
-    var fields = ['prompt'];
+    // The author explicitly selects application fields. WebCap never parses
+    // prose to decide whether a title or duration mutation is authorized.
+    var fields = Array.from(el('studio-dw-batch-fields').querySelectorAll('input:checked'))
+      .map(function (node) {return node.value;});
+    if (!fields.length) {
+      status('Choose at least one field to revise.', true);
+      return Promise.resolve();
+    }
     var button = el('studio-dw-write-prepare');
     button.disabled = true;
     var outcome = {saved:[],unchanged:[],review:[],failed:[],notAttempted:[],reportingErrors:[]};
@@ -600,8 +604,7 @@
       var label = 'Scene ' + position + ' · ' + (story.scenes[id].title || id);
       status('Writing ' + label + ' (' + current + '/' + ids.length + ') · Save on completion',false,true);
       return window.studioDirectorBridge.writeSelectedScene({
-        projectId:storyId,sceneId:id,instruction:instruction,fields:fields.slice(),
-        allowCreativeFieldChanges:true
+        projectId:storyId,sceneId:id,instruction:instruction,fields:fields.slice()
       }).then(function (result) {
         if (result === null) outcome.unchanged.push(label);
         else if (result && result.review) outcome.review.push(label);

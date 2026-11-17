@@ -186,7 +186,7 @@ def test_retired_director_model_operations_are_not_queued(monkeypatch, operation
 
 @pytest.mark.parametrize("operation, expected_fields", [
     ("studio_brief_draft", {"title", "concept", "style", "invariants", "rationale"}),
-    ("studio_project_draft", {"title", "concept", "style", "invariants", "initialScenes", "rationale"}),
+    ("studio_project_draft", {"title", "concept", "style", "invariants"}),
     ("studio_scene_field_draft", {"title", "prompt", "durationSeconds"}),
     ("studio_scenes_draft", {"scenes", "rationale"}),
     ("storyboard_workshop_shots", {"summary", "shots"}),
@@ -232,7 +232,7 @@ def test_director_chat_route_preserves_all_structured_schemas(monkeypatch, opera
             assert record["required"] == ["title", "prompt", "durationSeconds"]
             assert record["properties"]["prompt"]["minLength"] == 1
         if operation == "studio_project_draft":
-            assert captured["schema"]["required"] == ["title", "concept", "style", "invariants", "rationale"]
+            assert captured["schema"]["required"] == ["title", "concept", "style", "invariants"]
         if operation == "studio_brief_draft":
             assert captured["schema"]["required"] == [], "No unrequested Project field is required"
             assert captured["schema"]["properties"]["invariants"]["items"]["required"] == ["kind", "title", "text"]

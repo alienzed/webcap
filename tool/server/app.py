@@ -2289,8 +2289,7 @@ def director_chat_route():
         if operation not in {"freeform_chat", "studio_chat", "storyboard_workshop_shots", "studio_project_draft", "studio_brief_draft", "studio_scene_field_draft", "studio_scenes_draft"}:
             raise ValueError("Unsupported Director Chat operation.")
         contract = {"operation": operation, "messages": messages}
-        if operation == "studio_chat":
-            contract["response_schema"] = studio_chat_response_schema()
+        # Studio conversation is ordinary prose. Structured schemas belong to explicit Write operations.
         if operation == "studio_brief_draft":
             required_fields = data.get("requiredFields") or []
             if not isinstance(required_fields, list) or any(

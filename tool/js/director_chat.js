@@ -4841,6 +4841,10 @@
       var storyId = launch.projectId, sceneId = launch.sceneId;
       var fields = Array.isArray(launch.fields) ? launch.fields : [];
       var wantsTitle = fields.includes('title'), wantsDuration = fields.includes('durationSeconds');
+      // Manual batch revisions authorize the model to supply additional
+      // fields when the creative direction warrants them. They are optional,
+      // not invented from words parsed by WebCap.
+      var allowCreativeFieldChanges = !!launch.allowCreativeFieldChanges;
       var wantsPrompt = fields.includes('prompt') || !fields.length;
       var requestedFields = (wantsPrompt ? ['prompt'] : [])
         .concat(wantsTitle ? ['title'] : [], wantsDuration ? ['durationSeconds'] : []);
@@ -4892,12 +4896,14 @@
         // Explicitly launching revision of this saved Scene authorizes its baseline.
         var context = window.studioDirectorWorkbench.sceneRead(story,sceneId).payload;
         var instruction = JSON.stringify({
-          task:'Revise the requested fields of this Scene in the author\'s direction. ' +
-            'When changing creative content, return the complete replacement H3 Prompt. ' +
-            'Preserve all unaffected details and the established timing. ' +
-            'Return the requested field values in one JSON object.',
+          task:'Revise this Scene in the author\'s direction and provide a complete replacement H3 Prompt ' +
+            'when changing creative content. Preserve its established direction and unaffected fields. ' +
+            'When optionalCreativeFields are provided, also return the title or durationSeconds ' +
+            'only if the author\'s requested creative change calls for them. ' +
+            'Return the actual authored field values in one JSON object.',
           authorDirection:launch.authorRequest || launch.instruction,
           requestedFields:requestedFields,
+          optionalCreativeFields:allowCreativeFieldChanges ? ['title','durationSeconds'] : [],
           savedScene:context,
           unsavedWorkingFields:workingScene || {}
         });
@@ -4914,17 +4920,24 @@
             if (!proposed || typeof proposed !== 'object' || Array.isArray(proposed))
               throw new Error('Director returned no usable Scene fields.\nRaw response:\n' + raw);
             var extras = {}, missing = [];
-            if (wantsTitle) {
-              if (typeof proposed.title === 'string' && proposed.title.trim())
-                extras.title = proposed.title.trim();
-              else missing.push('title');
+            var hasTitle = Object.prototype.hasOwnProperty.call(proposed,'title');
+            var hasDuration = Object.prototype.hasOwnProperty.call(proposed,'durationSeconds');
+            if (wantsTitle || (allowCreativeFieldChanges && hasTitle)) {
+              if (typeof proposed.title === 'string' && proposed.title.trim()) {
+                if (wantsTitle || proposed.title.trim() !== String(original.title || '').trim())
+                  extras.title = proposed.title.trim();
+              } else if (wantsTitle) missing.push('title');
             }
-            if (wantsDuration) {
+            if (wantsDuration || (allowCreativeFieldChanges && hasDuration)) {
               if (Number.isInteger(proposed.durationSeconds) &&
-                  proposed.durationSeconds >= 4 && proposed.durationSeconds <= 15)
-                extras.durationSeconds = proposed.durationSeconds;
-              else missing.push('duration');
+                  proposed.durationSeconds >= 4 && proposed.durationSeconds <= 15) {
+                if (wantsDuration || proposed.durationSeconds !== original.durationSeconds)
+                  extras.durationSeconds = proposed.durationSeconds;
+              } else if (wantsDuration) missing.push('duration');
             }
+            var invalidOptionalDuration = allowCreativeFieldChanges && hasDuration &&
+              (!Number.isInteger(proposed.durationSeconds) ||
+                proposed.durationSeconds < 4 || proposed.durationSeconds > 15);
             var prompt = wantsPrompt && typeof proposed.prompt === 'string' && proposed.prompt.trim()
               ? proposed.prompt : null;
             var authored = Object.assign({},extras,prompt !== null ? {prompt:prompt} : {});
@@ -4941,7 +4954,8 @@
               throw new Error('Director did not return the requested Scene prompt. Other usable requested fields are retained for review.\nRaw response:\n' + raw);
             if (!Object.keys(authored).length)
               throw new Error('Director did not return the requested Scene fields.\nRaw response:\n' + raw);
-            if (wantsDuration && !Object.hasOwn(extras,'durationSeconds')) {
+            if ((wantsDuration && !Object.hasOwn(extras,'durationSeconds')) ||
+                invalidOptionalDuration) {
               studioActionStatus('Scene timing is missing or unsupported. Authored fields retained for review; nothing saved.',true);
               return {review:true};
             }

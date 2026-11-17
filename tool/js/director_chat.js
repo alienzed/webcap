@@ -1488,30 +1488,8 @@
         meta.textContent = formatResponseMetrics(metricsMap[index], elapsedMap[index]);
         row.appendChild(meta);
       }
-      // Every actual deliverable has its own launcher and completion state,
-      // including a Project and Scene returned together in one response.
-      if (studioReply) studioStoredActions(message).forEach(function (savedAction) {
-        if (savedAction.completed || (index === state.studioActionIndex &&
-            (savedAction.actionKey || 'primary') === (state.studioActionKey || 'primary')))
-          return;
-        if (!studioRestoreAuthoredAction(savedAction,message.rawResponse)) return;
-        var oldAction = document.createElement('button');
-        oldAction.type = 'button';
-        oldAction.className = 'studio-dw-suggestion-action';
-        oldAction.dataset.suggestionKind = 'write';
-        oldAction.textContent = savedAction.kind === 'create_scene' || savedAction.kind === 'write_scenes'
-          ? 'Review authored Scene(s)' : 'Review authored Project';
-        oldAction.onclick = function () {
-          var proposal = studioRestoreAuthoredAction(savedAction,message.rawResponse);
-          if (!proposal) return;
-          window.studioDirectorWorkbench.presentAction(proposal, proposal.scene,
-            {projectId:proposal.projectId}, proposal.request, index);
-          renderMessages();
-          var active = el('studio-dw-suggestions').querySelector('.studio-dw-suggestion-action');
-          if (active) active.click();
-        };
-        row.appendChild(oldAction);
-      });
+      // Saved historical action metadata remains readable, but conversation
+      // responses no longer launch implicit Write/Review operations.
       host.appendChild(row);
       if (studioReply && index === state.studioActionIndex) suggestionRow = row;
     });

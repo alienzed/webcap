@@ -844,24 +844,6 @@
       state.studioOperations = Array.isArray(chat.operations) ? chat.operations.slice() : [];
       if (window.studioDirectorWorkbench) {
         window.studioDirectorWorkbench.resetConversation();
-        // Recover the last unsaved proposal with its original bound target.
-        // A saved receipt closes that task, while ordinary follow-ups need not.
-        for (var actionIndex = chat.messages.length - 1; actionIndex >= 0; actionIndex--) {
-          var entry = chat.messages[actionIndex];
-          var options = studioStoredActions(entry);
-          // A completed Project action never hides an unsaved Scene from the
-          // same reply (or vice versa). Each stays bound to the original raw
-          // material and the original response index.
-          var proposal = options.map(function (item) {
-            return item.completed ? null : studioRestoreAuthoredAction(item,entry.rawResponse);
-          }).find(function (item) {return !!item;});
-          if (proposal) {
-            window.studioDirectorWorkbench.presentAction(proposal, proposal.scene,
-              {projectId:proposal.projectId}, proposal.request, actionIndex);
-            break;
-          }
-          if (options.some(function (item) {return item.completed;})) break;
-        }
       }
       state.studioReadiness = chat.readiness || {checks:[],readHints:[],writeHint:'',writeFields:[],sceneId:''};
       state.studioSceneProposal = null;

@@ -206,7 +206,7 @@ def test_insert_custom_scene_direction_drives_without_story_or_other_prompts():
     assert "[EXISTING SCENE PROMPTS]" not in prompt
     assert "OLD FIRST PROMPT" in prompt
     assert "EXISTING SECOND PROMPT" in prompt
-    assert "She is just inside the closed front door." in prompt
+    assert "She is just inside the closed front door." not in prompt
     assert "[STORY VISUAL / ATMOSPHERE - CONSTRAINT]" in prompt
     assert "[STORY INVARIANTS - CONSTRAINTS]" in prompt
 
@@ -428,7 +428,7 @@ def test_refine_scene_is_isolated_unless_continuity_explicitly_requested():
     )["prompt"]
     assert "[PREVIOUS SCENE - CONTINUITY FACTS ONLY]" in continuity
     assert "She reaches the hotel entrance." not in continuity
-    assert "She is just inside the closed front door." in continuity
+    assert "She is just inside the closed front door." not in continuity
     assert "OLD FIRST PROMPT" in continuity
 
 

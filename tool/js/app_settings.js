@@ -44,7 +44,6 @@ function normalizeAppConfigShape(cfg) {
   if (!out.filesystem || typeof out.filesystem !== 'object') out.filesystem = {};
   if (!out.training || typeof out.training !== 'object') out.training = {};
   if (!out.primer || typeof out.primer !== 'object') out.primer = {};
-  if (!out.caption_assist || typeof out.caption_assist !== 'object') out.caption_assist = {};
   if (!out.storyboard || typeof out.storyboard !== 'object') out.storyboard = {};
   if (!out.storyboard.director || typeof out.storyboard.director !== 'object') out.storyboard.director = {};
   if (!out.generation_model_guidance || typeof out.generation_model_guidance !== 'object' || Array.isArray(out.generation_model_guidance)) out.generation_model_guidance = {};
@@ -101,7 +100,7 @@ function normalizeAppConfigShape(cfg) {
   if (!Object.prototype.hasOwnProperty.call(out.storyboard.director, 'max_tokens')) out.storyboard.director.max_tokens = 16384;
   if (out.storyboard.director.max_tokens !== null && !Number.isInteger(out.storyboard.director.max_tokens)) out.storyboard.director.max_tokens = null;
   if (typeof out.primer.template !== 'string') out.primer.template = '';
-  if (typeof out.caption_assist.preferred_sequence !== 'string') out.caption_assist.preferred_sequence = DEFAULT_CAPTION_ASSIST_SEQUENCE;
+  delete out.caption_assist;
   if (!out.analysis || typeof out.analysis !== 'object') out.analysis = {};
   if (typeof out.analysis.enableFaceAnalysis !== 'boolean') out.analysis.enableFaceAnalysis = false;
   if (typeof out.analysis.enableMediaPipeAnalysis !== 'boolean') out.analysis.enableMediaPipeAnalysis = false;
@@ -275,7 +274,7 @@ function appSettingsCaptionSequenceContainsGroup(sequenceText, groupLabel) {
 
 function renderAppSettingsCaptionSequenceGroups() {
   var host = ui.appSettingsCaptionSequenceGroupsEl;
-  var sequenceEl = ui.appSettingsCaptionSequenceEl;
+  var sequenceEl = ui.appSettingsPrimerTemplateEl;
   if (!host || !sequenceEl) return;
   var groups = (typeof checklistItems !== 'undefined' && Array.isArray(checklistItems) && checklistItems.length) ? checklistItems.slice() : getDefaultRequirementItems().slice();
   var missing = groups.filter(function (label) { return !appSettingsCaptionSequenceContainsGroup(sequenceEl.value, label); });
@@ -292,7 +291,7 @@ function renderAppSettingsCaptionSequenceGroups() {
     button.type = 'button';
     button.className = 'review-captions-btn app-settings-caption-sequence-chip';
     button.textContent = label;
-    button.title = 'Insert ' + label + ' into the new-template sequence hint';
+    button.title = 'Insert ' + label + ' into the default caption template';
     button.addEventListener('click', function () {
       var value = String(sequenceEl.value || '');
       var start = appSettingsCaptionSequenceCursor && Number.isInteger(appSettingsCaptionSequenceCursor.start) ? appSettingsCaptionSequenceCursor.start : value.length;
@@ -302,7 +301,7 @@ function renderAppSettingsCaptionSequenceGroups() {
       var before = value.slice(0, start), after = value.slice(end);
       var prefix = before && !before.endsWith('\n') ? '\n' : '';
       var suffix = after && !after.startsWith('\n') ? '\n' : '';
-      var insertion = prefix + label + suffix;
+      var insertion = prefix + '{' + normalizeRequirementPrimerKey(label) + ', }' + suffix;
       sequenceEl.value = before + insertion + after;
       var caret = start + insertion.length - suffix.length;
       sequenceEl.focus(); sequenceEl.setSelectionRange(caret, caret);
@@ -314,7 +313,7 @@ function renderAppSettingsCaptionSequenceGroups() {
 }
 
 function captureAppSettingsCaptionSequenceCursor() {
-  var el = ui.appSettingsCaptionSequenceEl; if (!el) return;
+  var el = ui.appSettingsPrimerTemplateEl; if (!el) return;
   appSettingsCaptionSequenceCursor = { start: typeof el.selectionStart === 'number' ? el.selectionStart : String(el.value || '').length, end: typeof el.selectionEnd === 'number' ? el.selectionEnd : String(el.value || '').length };
 }
 
@@ -346,7 +345,6 @@ function fillAppSettingsForm(cfg) {
   if (ui.appSettingsStoryboardContextSizeEl) ui.appSettingsStoryboardContextSizeEl.value = c.storyboard.director.context_size == null ? '' : c.storyboard.director.context_size;
   if (ui.appSettingsStoryboardMaxTokensEl) ui.appSettingsStoryboardMaxTokensEl.value = c.storyboard.director.max_tokens == null ? '' : c.storyboard.director.max_tokens;
   if (ui.appSettingsPrimerTemplateEl) ui.appSettingsPrimerTemplateEl.value = c.primer.template || '';
-  if (ui.appSettingsCaptionSequenceEl) ui.appSettingsCaptionSequenceEl.value = c.caption_assist.preferred_sequence;
   refreshAppSettingsVisionModels(c.vision_model);
   renderAppSettingsCaptionSequenceGroups();
   if (typeof applyAppTheme === 'function') applyAppTheme(c.theme);
@@ -393,7 +391,7 @@ function collectAppSettingsFormConfig() {
   base.storyboard.director.max_tokens = maxTokensValue === '' ? null : Number(maxTokensValue);
   base.primer.template = ui.appSettingsPrimerTemplateEl ? ui.appSettingsPrimerTemplateEl.value : '';
   base.vision_model = ui.appSettingsVisionModelEl ? ui.appSettingsVisionModelEl.value : base.vision_model;
-  base.caption_assist.preferred_sequence = ui.appSettingsCaptionSequenceEl ? ui.appSettingsCaptionSequenceEl.value : DEFAULT_CAPTION_ASSIST_SEQUENCE;
+  delete base.caption_assist;
   base.analysis.enableFaceAnalysis = !!(ui.appSettingsEnableFaceAnalysisEl && ui.appSettingsEnableFaceAnalysisEl.checked);
   base.analysis.enableMediaPipeAnalysis = !!(ui.appSettingsEnableMediaPipeAnalysisEl && ui.appSettingsEnableMediaPipeAnalysisEl.checked);
   return normalizeAppConfigShape(base);
@@ -754,7 +752,6 @@ function wireAppSettingsUi() {
     ui.appSettingsStoryboardContextSizeEl,
     ui.appSettingsStoryboardMaxTokensEl,
     ui.appSettingsPrimerTemplateEl,
-    ui.appSettingsCaptionSequenceEl,
     ui.appSettingsVisionModelEl,
     ui.appSettingsEnableFaceAnalysisEl,
     ui.appSettingsEnableMediaPipeAnalysisEl,
@@ -766,9 +763,9 @@ function wireAppSettingsUi() {
     el.addEventListener('input', syncAppSettingsJsonFromForm);
     el.addEventListener('change', syncAppSettingsJsonFromForm);
   });
-  if (ui.appSettingsCaptionSequenceEl) {
-    ['focus', 'click', 'keyup', 'select'].forEach(function (eventName) { ui.appSettingsCaptionSequenceEl.addEventListener(eventName, captureAppSettingsCaptionSequenceCursor); });
-    ui.appSettingsCaptionSequenceEl.addEventListener('input', function () { captureAppSettingsCaptionSequenceCursor(); renderAppSettingsCaptionSequenceGroups(); });
+  if (ui.appSettingsPrimerTemplateEl) {
+    ['focus', 'click', 'keyup', 'select'].forEach(function (eventName) { ui.appSettingsPrimerTemplateEl.addEventListener(eventName, captureAppSettingsCaptionSequenceCursor); });
+    ui.appSettingsPrimerTemplateEl.addEventListener('input', function () { captureAppSettingsCaptionSequenceCursor(); renderAppSettingsCaptionSequenceGroups(); });
   }
   if (ui.appSettingsJsonEl) {
     ui.appSettingsJsonEl.addEventListener('blur', function () {

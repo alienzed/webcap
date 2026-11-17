@@ -4216,22 +4216,6 @@
     }
   }
 
-  function studioRequestedDuration(instruction) {
-    var seconds = studioMentionedDuration(instruction);
-    return Number.isInteger(seconds) && seconds >= 4 && seconds <= 15 ? seconds : null;
-  }
-
-  function studioMentionedDuration(instruction) {
-    var match = /\b(\d+(?:\.\d+)?|zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty)\s*(?:-|\s)?\s*(?:seconds?|secs?|s)\b/i.exec(
-      String(instruction || ''));
-    if (!match) return null;
-    var words = ['zero','one','two','three','four','five','six','seven','eight','nine',
-      'ten','eleven','twelve','thirteen','fourteen','fifteen','sixteen','seventeen',
-      'eighteen','nineteen','twenty'];
-    var value = words.indexOf(match[1].toLowerCase());
-    return value >= 0 ? value : match[1].toLowerCase() === 'thirty' ? 30 : Number(match[1]);
-  }
-
   // Only actual persisted field values clear a retained draft. Keep unrelated
   // fields available if the save applied only part of the author's material.
   function forgetSavedStudioSceneFields(storyId, sceneId, savedScene) {
@@ -4702,7 +4686,6 @@
             'Existing Scenes are retained and are not revision destinations.',
           instruction:launch.instruction,
           authorRequest:launch.authorRequest || launch.instruction,
-          requestedDurationSeconds:studioRequestedDuration(launch.authorRequest || launch.instruction),
           // Explicitly launched Scene creation uses this selected Project's saved direction.
           project:{
             title:story.title,concept:story.concept,style:story.style,
@@ -4770,8 +4753,6 @@
           var draft = {scenes:drafts,rationale:typeof fields.rationale === 'string' ? fields.rationale : ''};
           // The author's explicit duration is a WebCap request parameter,
           // not optional model metadata that may silently default to six.
-          var authorDuration = studioMentionedDuration(launch.authorRequest || launch.instruction);
-          var requestedDuration = studioRequestedDuration(launch.authorRequest || launch.instruction);
           // Requested duration guides authoring; the editable draft preserves
           // what the model actually returned instead of fabricating metadata.
           // Preserve the existing one-Scene working draft contract. Multi-Scene
@@ -4786,8 +4767,7 @@
           }
           // A missing Prompt retains an editable partial draft without
           // attempting to persist an empty Scene.
-          if (drafts.length !== 1 || missingPrompt || invalidDuration || !launch.directSave ||
-              (authorDuration !== null && requestedDuration === null)) {
+          if (drafts.length !== 1 || missingPrompt || invalidDuration || !launch.directSave) {
             var priorReview = state.studioScenesProposal;
             if (priorReview && Number.isInteger(priorReview.sourceMessageIndex)) {
               rememberStudioScenesReview();
@@ -4895,23 +4875,13 @@
         var workingScene = state.studioWorkingDraft.scenes[sceneId];
         var applyExisting = state.studioWorkingDraft.sourceRequest ===
           String(launch.authorRequest || launch.instruction);
-        if (workingScene && (state.studioWorkingDraft.sourceRequest ===
-            String(launch.authorRequest || launch.instruction) || applyExisting)) {
+        if (workingScene && applyExisting) {
           var pendingChanges = {};
           fields.forEach(function (field) {
             if (Object.prototype.hasOwnProperty.call(workingScene,field))
               pendingChanges[field] = workingScene[field];
           });
           if (Object.keys(pendingChanges).length) {
-            var originalDuration = studioMentionedDuration(launch.authorRequest || launch.instruction);
-            var requestedDuration = studioRequestedDuration(launch.authorRequest || launch.instruction);
-            if (wantsDuration && originalDuration !== null && requestedDuration === null) {
-              studioActionStatus('Requested ' + originalDuration +
-                's is outside the supported 4–15s range. Draft retained; nothing saved.',true);
-              return {review:true};
-            }
-            if (wantsDuration && requestedDuration !== null)
-              pendingChanges.durationSeconds = requestedDuration;
             var prompt = Object.prototype.hasOwnProperty.call(pendingChanges,'prompt') ?
               pendingChanges.prompt : null;
             delete pendingChanges.prompt;
@@ -4926,39 +4896,16 @@
               });
           }
         }
-        // A literal title-only edit is a saved field change, not a creative
-        // prompting task. Use the same scoped/conflict-checked Scene save.
-        var literal = /\b(?:rename|set|change)\b[^\n]{0,80}\b(?:to|as)\s+["'“]([^"'”]+)["'”]\s*[.!]?\s*$/i.exec(
-          String(launch.authorRequest || launch.instruction));
-        if (fields.length === 1 && wantsTitle && literal) {
-          var title = literal[1].trim();
-          if (title === String(original.title || '').trim()) {
-            studioActionStatus('Scene title is unchanged.',false);
-            return null;
-          }
-          return window.studioDirectorWorkbench.applyScenePrompt(story,sceneId,null,{title:title})
-            .then(function (result) {
-              studioActionStatus('Scene ' + (story.sceneOrder.indexOf(sceneId)+1) +
-                ' title saved.',false);
-              return result;
-            });
-        }
-        var authorRequest = String(launch.authorRequest || launch.instruction);
         // Explicitly launching revision of this saved Scene authorizes its baseline.
         var context = window.studioDirectorWorkbench.sceneRead(story,sceneId).payload;
         var instruction = JSON.stringify({
-          task:'Revise the requested fields of this one existing Scene using the agreed instruction. ' +
-            (wantsPrompt ? 'Return a complete replacement H3 prompt. ' : '') +
-            'Return one JSON object containing the requestedFields below. ' +
-            'Preserve unaffected details, align prompt timing with the saved/requested duration, and keep other Scene fields unchanged.',
-          sceneId:sceneId, instruction:launch.instruction,
-          authorRequest:launch.authorRequest || launch.instruction,
-          requestedDurationSeconds:studioRequestedDuration(launch.authorRequest || launch.instruction),
+          task:'Revise the requested fields of this Scene in the author\'s direction. ' +
+            'When changing creative content, return the complete replacement H3 Prompt. ' +
+            'Preserve all unaffected details and the established timing. ' +
+            'Return the requested field values in one JSON object.',
+          authorDirection:launch.instruction,
           requestedFields:requestedFields,
-          responseExample:Object.assign(wantsPrompt ? {prompt:'complete replacement H3 prompt'} : {},
-            wantsTitle ? {title:'complete new title'} : {},
-            wantsDuration ? {durationSeconds:12} : {}),
-          savedContext:context,
+          savedScene:context,
           unsavedWorkingFields:workingScene || {}
         });
         state.pending = false;
@@ -4974,15 +4921,13 @@
             if (!proposed || typeof proposed !== 'object' || Array.isArray(proposed))
               throw new Error('Director returned no usable Scene fields.\nRaw response:\n' + raw);
             var extras = {}, missing = [];
-            var duration = studioRequestedDuration(launch.authorRequest || launch.instruction);
             if (wantsTitle) {
               if (typeof proposed.title === 'string' && proposed.title.trim())
                 extras.title = proposed.title.trim();
               else missing.push('title');
             }
             if (wantsDuration) {
-              if (duration !== null) extras.durationSeconds = duration;
-              else if (Number.isInteger(proposed.durationSeconds) &&
+              if (Number.isInteger(proposed.durationSeconds) &&
                   proposed.durationSeconds >= 4 && proposed.durationSeconds <= 15)
                 extras.durationSeconds = proposed.durationSeconds;
               else missing.push('duration');
@@ -5010,12 +4955,6 @@
               studioActionStatus('Director returned no Scene changes.' +
                 (missing.length ? ' Requested ' + missing.join(' and ') + ' not supplied.' : ''),!!missing.length);
               return null;
-            }
-            var authorDuration = studioMentionedDuration(launch.authorRequest || launch.instruction);
-            if (wantsDuration && authorDuration !== null && duration === null) {
-              studioActionStatus('Requested ' + authorDuration +
-                's is outside the supported 4–15s range. Full prompt retained; nothing saved.',true);
-              return {review:true};
             }
             state.pending = true;
             syncControls();

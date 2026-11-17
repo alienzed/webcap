@@ -183,7 +183,7 @@ def read_story_scope(story, field, scene_id=""):
             raise ValueError("Select an existing Scene in the granted Story.")
         scene = story["scenes"][scene_id]
         if field == "scene":
-            data = {key: scene.get(key) for key in ("id", "title", "prompt", "entryState", "exitState", "notes")}
+            data = {key: scene.get(key) for key in ("id", "title", "prompt", "notes")}
         elif field == "prompt":
             data = {"id": scene_id, "prompt": scene.get("prompt", ""), "durationSeconds": scene.get("durationSeconds")}
         else:

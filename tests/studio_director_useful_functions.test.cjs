@@ -23,7 +23,7 @@ test('one visible Scenes entrypoint delegates to the canonical one-or-many write
   assert.match(rail, /el\('studio-dw-scene-mode'\)\.value === 'revise'\) return prepareBatchScenes\(id\)/);
   assert.match(rail, /bridge\.writeNewScene\(\{/);
   assert.match(rail, /function prepareBatchScenes\(storyId\)/);
-  assert.match(rail, /function applyBatchScenes\(\)/);
+  assert.doesNotMatch(rail, /function applyBatchScenes\(\)/);
   assert.doesNotMatch(chat, /if \(kind === 'scenes'\) return prepareStudioScenes\(\)/);
   assert.match(chat, /writeNewScene: function \(launch\)/);
   assert.match(chat, /writeSelectedScene: function \(launch\)/);
@@ -38,8 +38,10 @@ test('Read and the optional coherence utility stay separate from creative Write'
   assert.doesNotMatch(chat, /suggest coherence-check/);
 });
 
-test('ordinary replies prioritize short exchanges rather than full assessments', () => {
-  assert.match(chat, /STUDIO CONVERSATION DELIVERY: Answer the author in the JSON reply field on every turn/);
-  assert.match(backend, /CONVERSATION: Respond naturally and concisely/);
-  assert.match(backend, /CREATIVE WORK: When asked to create or revise material/);
+test('ordinary Chat has a small prose-only instruction, separate from H3 Write',()=>{
+  assert.match(backend,/def chat_guidance\(\):/);
+  assert.match(backend,/Respond in ordinary conversational text/);
+  assert.doesNotMatch(chat,/STUDIO CONVERSATION DELIVERY/);
+  assert.match(chat,/studioDirectorChatRequestMessages\(messages\)/);
+  assert.match(chat,/includePromptContract/);
 });

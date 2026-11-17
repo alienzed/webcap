@@ -3293,7 +3293,13 @@
       return message && (message.role === 'user' || message.role === 'assistant') &&
         !/\[WEBCAP APPLIED FIELD VALUES\]|\[WEBCAP EXPLICIT READ\]/.test(String(message.content || ''));
     }).map(function (message) {
-      return {role:message.role,content:String(message.content || '')};
+      var content = String(message.content || '');
+      // Read legacy transcripts without replaying old structured payloads
+      // into a new conversational request.
+      if (message.role === 'assistant' && typeof message.rawResponse === 'string' &&
+          content.trim() === message.rawResponse.trim())
+        content = parseStudioChatResponse(message.rawResponse).reply;
+      return {role:message.role,content:content};
     });
   }
 
@@ -3328,16 +3334,9 @@
       : null;
   }
 
-  function studioDirectorChatRequestMessages(messages, selectedScene, navigationSnapshot, boundTarget) {
-    // Navigation is a suggested Write destination, never permission to Read.
-    var navigation = navigationSnapshot || window.getStudioDirectorNavigation();
-    var targetProjectId = selectedScene ? selectedScene.projectId :
-      (studioAttachedStoryId() || navigation.projectId || '');
-    if (boundTarget) {
-      boundTarget.projectId = targetProjectId;
-      boundTarget.sceneId = selectedScene && selectedScene.projectId === targetProjectId ? selectedScene.sceneId : '';
-      boundTarget.sceneNumber = boundTarget.sceneId ? selectedScene.sceneNumber : 0;
-    }
+  function studioDirectorChatRequestMessages(messages) {
+    // Conversation is independent of navigation and destination. Only
+    // explicit approved saved Read selections can add private saved context.
     var sources = studioApprovedReadSources();
     return Promise.all(sources.map(function (source) {
       return requestJson('/fs/storyboard?story=' + encodeURIComponent(source.projectId))
@@ -3776,11 +3775,6 @@
       return;
     }
 
-    // Freeze the selected Scene before conversation persistence or network work.
-    // Fetch its latest saved fields later, when building the actual LLM request.
-    var selectedNavigation = activeChatMode === 'storyboard' ? window.getStudioDirectorNavigation() : null;
-    var selectedScene = selectedNavigation ? studioDirectorSelectedScene(selectedNavigation, content) : null;
-
     if (!inputHistory.length || inputHistory[inputHistory.length - 1] !== content) inputHistory.push(content);
     inputHistoryIndex = inputHistory.length;
     inputHistoryDraft = '';
@@ -3793,11 +3787,6 @@
       // Explicit new Write actions own replacement of existing drafts.
       el('director-chat-workshop-status').textContent = '';
     }
-    // Freeze the Project destination alongside the user's instruction.
-    var selectedProjectId = activeChatMode === 'storyboard' ?
-      (studioAttachedStoryId() || (selectedNavigation && selectedNavigation.projectId) || '') : '';
-    var selectedProject = selectedProjectId ? {projectId:selectedProjectId} : null;
-    var resolvedTarget = {};
     var messages = currentMessages();
     var elapsedMap = currentElapsedMap();
     var metricsMap = currentMetricsMap();
@@ -3842,7 +3831,7 @@
         });
       }
       return (activeChatMode === 'storyboard'
-        ? studioDirectorChatRequestMessages(messages, selectedScene, selectedNavigation, resolvedTarget)
+        ? studioDirectorChatRequestMessages(messages)
         : Promise.resolve(messages)).then(function (outboundMessages) {
         return requestJson('/fs/director/chat', {
           method: 'POST',

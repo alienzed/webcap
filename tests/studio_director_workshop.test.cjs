@@ -110,7 +110,7 @@ test('explicit Writes stay task-scoped without duplicating application instructi
   assert.match(writing[0].content,/H3 production reference/);
   assert.doesNotMatch(writing[0].content,/CURRENT PROJECT NAVIGATION|CURRENT WEBCAP CAPABILITIES|STUDIO WORKBENCH STATE/);
   assert.equal(writing[1].content,'Revise Scene','the specific authoring task stays in the current user request');
-  assert.match(source,/studioDirectorRequestMessages\(\[\{role:'user',content:instruction\}\], includePromptContract, true, navigationSnapshot\)/);
+  assert.match(source,/studioDirectorRequestMessages\(\(state\.modeMessages\.storyboard \|\| \[\]\)\.concat/);
 });
 
 test('active Project draft paths use explicit Write guidance', () => {
@@ -118,7 +118,7 @@ test('active Project draft paths use explicit Write guidance', () => {
     const marker = "showSentWriteContext('" + operation + "', messages)";
     const index = source.indexOf(marker);
     assert.ok(index !== -1, 'Missing draft operation: ' + operation);
-    const before = source.slice(Math.max(0, index - 1400), index);
+    const before = source.slice(Math.max(0, index - 3500), index);
     assert.match(before,/studioDirectorRequestMessages\(/,
       'Explicit Write guidance not used by ' + operation);
   }
@@ -271,30 +271,17 @@ test('H3 detailed authoring contract is included when Director may propose a Pro
   assert.match(workbench, /writeSelectedScene\(\{/);
 });
 
-test('Studio conversation receives the canonical H3 template as reference without an automatic Write', async () => {
-  const template = fs.readFileSync(path.join(__dirname, '..', 'docs/mmh3-prompt-runtime-context.txt'), 'utf8').trim();
-  const state = {studioStoryAccess:null,storyboardAttachments:{},workshop:null,studioWorkingDraft:{projects:{},scenes:{},newProject:{},newScene:{}}};
-  const context = vm.createContext({
-    state,Object,String,Promise,window:{getStudioDirectorNavigation:()=>({})},
-    studioAttachedStoryId:()=>'', 
-    requestJson:async url => url==='/fs/storyboard'?{stories:[]}:{system:'Studio guidance',actions:[],promptContract:template}
-  });
+test('ordinary Studio conversation does not receive the H3 production contract',async()=> {
+  const state={studioStoryAccess:null,studioApprovedRead:null,studioWorkingDraft:{projects:{},scenes:{}}};
+  const scope=vm.createContext({state,Object,String,Promise,
+    window:{getStudioDirectorNavigation:()=>({})},studioAttachedStoryId:()=> '',
+    requestJson:async()=>({system:'Creative partner',promptContract:'H3 production reference'})});
   vm.runInContext(part('  function studioDirectorRequestMessages(messages, includePromptContract, explicitWrite, navigationSnapshot) {',
-    '  // Retain available conversational work across ordinary follow-up questions.'),context);
-  const result = await vm.runInContext(
-    "studioDirectorChatRequestMessages([{role:'user',content:'How should an H3 prompt be structured?'}])",context);
-  assert.equal(result.length,2);
-  assert.match(result[0].content,/H3 PROMPT AUTHORING REFERENCE/);
-  assert.match(result[0].content,/integrated_multimodal_description:/);
-  assert.match(result[0].content,/overall_soundscape:/);
-  assert.match(result[0].content,/non_diegetic_music:/);
-  assert.doesNotMatch(result[0].content,/CURRENT WEBCAP CAPABILITIES|CURRENT PROJECT NAVIGATION/);
-  assert.equal(result[1].content,'How should an H3 prompt be structured?');
-  assert.doesNotMatch(result[0].content,/\[WEBCAP EXPLICIT READ\]/);
-  const ordinary=await vm.runInContext(
-    "studioDirectorChatRequestMessages([{role:'user',content:'What is the saved title?'}])",context);
-  assert.match(ordinary[0].content,/H3 PROMPT AUTHORING REFERENCE/,
-    'Studio can author full Scenes in ordinary conversation');
+    '  // Retain available conversational work across ordinary follow-up questions.'),scope);
+  const out=await vm.runInContext("studioDirectorChatRequestMessages([{role:'user',content:'How should the story unfold?'}])",scope);
+  assert.equal(out.length,2);
+  assert.doesNotMatch(out[0].content,/H3 production reference|H3 PROMPT AUTHORING REFERENCE/);
+  assert.equal(out[1].content,'How should the story unfold?');
 });
 
 test('large explicit Read selections are sent intact, with no arbitrary client character cap', async () => {

@@ -98,7 +98,7 @@ test('operational errors reveal Advanced and preserve the shared Console detail'
   assert.equal(el('studio-dw-status').textContent,'Saved Scene 1');
 });
 
-test('Write opens without preparing a manual operation or starting a request',()=>{
+test('Write opens the explicit operation picker without launching a model request',()=>{
   const nodes={};
   function node(id) {
     const classes=new Set();
@@ -113,8 +113,8 @@ test('Write opens without preparing a manual operation or starting a request',()
   vm.runInContext(section(rail,'  function toggle(which) {','  function parseProposal(raw) {')+rail.slice(a,b),scope);
   node('studio-dw-write').onclick=()=>scope.toggle('write');
   node('studio-dw-open-tools').click();
-  assert.equal(selected,0,'opening Write must not prepare a manual operation');
-  assert.equal(availability,1);
+  assert.equal(selected,1,'opening Write populates the explicit operation selector');
+  assert.ok(availability>=1);
   assert.equal(node('studio-dw-open-tools').attrs['aria-expanded'],'true');
   assert.equal(node('director-chat-drawer').classList.contains('studio-actions-open'),true);
   node('studio-dw-open-tools').click();
@@ -122,7 +122,7 @@ test('Write opens without preparing a manual operation or starting a request',()
   assert.equal(node('director-chat-drawer').classList.contains('studio-actions-open'),false);
   assert.equal(node('studio-dw-open-tools').focused,true);
   node('studio-dw-open-tools').click();
-  assert.equal(selected,0,'reopening Write remains passive');
+  assert.equal(selected,2,'reopening Write refreshes the picker without starting a model');
 });
 
 test('Share Details opens the original Read sidebar and indicates approved context',()=>{

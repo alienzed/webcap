@@ -267,18 +267,15 @@ test('Director reads Prompt even when a legacy Scene has no authored Prompt',()=
 });
 
 
-test('Director conversation preserves actual authored Scene records alongside prose',()=>{
+test('ordinary Director conversation displays raw structured output instead of drafting Scenes',()=>{
   const scope=vm.createContext({});
   vm.runInContext(part(chat,'  function parseStudioChatResponse(raw) {',
     '  function storyboardRequestMessages('),scope);
-  const response=scope.parseStudioChatResponse(JSON.stringify({
-    reply:'I authored one usable Scene.',
-    action:{kind:'create_scene',instruction:'Two eight-second Scenes'},
-    scenes:[{title:'First',prompt:'Complete H3 prompt',durationSeconds:8}]
-  }));
-  assert.equal(response.reply,'I authored one usable Scene.');
-  assert.equal(response.scenes.length,1,'requested quantity must not manufacture authored results');
-  assert.equal(response.scenes[0].durationSeconds,8);
+  const raw=JSON.stringify({reply:'A useful idea',scenes:[{prompt:'Unexpected content'}]});
+  const result=scope.parseStudioChatResponse(raw);
+  assert.equal(result.reply,raw);
+  assert.equal(result.scenes,null);
+  assert.equal(result.action,null);
 });
 
 test('new-Scene authoring preserves returned arrays and independently useful partial drafts',()=>{

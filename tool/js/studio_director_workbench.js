@@ -388,7 +388,7 @@
     }
     return object;
   }
-  function showSceneReview(story, sceneId, fields, candidate) {
+  function showSceneReview(story, sceneId, fields, candidate, options) {
     var scene = story.scenes && story.scenes[sceneId];
     if (!scene || (story.sceneOrder || []).indexOf(sceneId) === -1)
       throw new Error('Select a saved Scene to review.');
@@ -416,9 +416,14 @@
         diff.append(diffSummary,diffBody);
         textarea.dataset.field = key;
         if (key === 'prompt') textarea.dataset.revisionKey = 'project:' + story.id + ':scene:' + sceneId + ':field:' + key;
-        textarea.value = candidate[key];
+        textarea.value = options && options.values &&
+          Object.prototype.hasOwnProperty.call(options.values,key)
+          ? options.values[key] : candidate[key];
         if (key === 'durationSeconds') {textarea.type='number';textarea.min=4;textarea.max=15;textarea.step=1;}
-        textarea.addEventListener('input',function(){window.studioDirectorRenderDiff(diffBody,old,textarea.value);});
+        textarea.addEventListener('input',function(){
+          window.studioDirectorRenderDiff(diffBody,old,textarea.value);
+          if (options && options.onEdit) options.onEdit(key,textarea.value);
+        });
         if (key !== 'durationSeconds') textarea.rows = key === 'prompt' ? 13 : 5;
         textarea.setAttribute('aria-label',labels[key]);
         label.append(textarea);host.append(saved,diff,label);
@@ -850,7 +855,9 @@
     if (!(Array.isArray(action.scenes) && action.scenes.length) &&
         !(action.authoredFields && Object.keys(action.authoredFields).length)) return;
     var frozen = {
-      kind:action.kind, instruction:String(action.instruction).trim(),
+      kind:action.kind, actionKey:action.actionKey || 'primary',
+      reviewDraft:action.reviewDraft || null,
+      instruction:String(action.instruction).trim(),
       fields:Array.isArray(action.fields) ? action.fields.slice() : [],
       scenes:action.kind === 'create_scene' && Array.isArray(action.scenes)
         ? action.scenes.slice() : null,
@@ -1011,7 +1018,21 @@
               return Object.prototype.hasOwnProperty.call(candidate,name) &&
                 JSON.stringify(candidate[name]) !== JSON.stringify(story.scenes[ids[0]][name]);
             });
-            if (edited.length) showSceneReview(story,ids[0],edited,candidate);
+            if (edited.length) {
+              var retained = frozen.reviewDraft &&
+                frozen.reviewDraft.projectId === projectId &&
+                frozen.reviewDraft.sceneId === ids[0] ? frozen.reviewDraft.values : null;
+              showSceneReview(story,ids[0],edited,candidate,{
+                values:retained,
+                onEdit:function (field,value) {
+                  if (!frozen.reviewDraft || frozen.reviewDraft.projectId !== projectId ||
+                      frozen.reviewDraft.sceneId !== ids[0])
+                    frozen.reviewDraft = {projectId:projectId,sceneId:ids[0],values:{}};
+                  frozen.reviewDraft.values[field] = value;
+                  window.studioDirectorBridge.markWriteActionEdited(frozen);
+                }
+              });
+            }
             else status('Returned fields already match the saved Scene.',false,true);
             return;
           }
@@ -1087,7 +1108,7 @@
       }).finally(function () {button.disabled = false;});
     };
     host.appendChild(button);
-    window.studioDirectorBridge.placeSuggestedAction(host, messageIndex);
+    window.studioDirectorBridge.placeSuggestedAction(host, messageIndex, frozen);
     showConversationWrite();
     return frozen;
   }
@@ -1118,7 +1139,9 @@
       var matches =
         (action.kind === 'create_project' && kind === 'project.create') ||
         (projectId === story.id && action.kind === 'write_project' && kind === 'brief.apply') ||
-        (projectId === story.id && action.kind === 'create_scene' && kind === 'scenes.create');
+        (projectId === story.id && action.kind === 'create_scene' && kind === 'scenes.create') ||
+        (projectId === story.id && action.kind === 'write_scenes' &&
+          kind === 'scene.update' && selected.sceneId === (action.scene && action.scene.sceneId));
       if (!matches) return;
       pendingCreativeAction = null;
       el('studio-dw-suggestions').replaceChildren();

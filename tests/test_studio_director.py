@@ -127,7 +127,7 @@ def test_studio_guidance_describes_actual_project_and_scene_fields():
     ):
         assert phrase.casefold() in system.casefold()
     assert "complete standalone H3 Prompt" in system
-    assert "unchanged titles, durations" in system
+    assert "unaffected titles, durations" in system
     assert "Invariants when stable recurring facts matter" in system
     assert "Legacy Directing Guidelines" not in system
 

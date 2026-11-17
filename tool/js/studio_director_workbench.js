@@ -414,7 +414,9 @@
         diffBody.className = 'studio-director-diff-content';
         window.studioDirectorRenderDiff(diffBody,old,String(candidate[key]));
         diff.append(diffSummary,diffBody);
-        textarea.dataset.field = key;textarea.value = candidate[key];
+        textarea.dataset.field = key;
+        if (key === 'prompt') textarea.dataset.revisionKey = 'project:' + story.id + ':scene:' + sceneId + ':field:' + key;
+        textarea.value = candidate[key];
         if (key === 'durationSeconds') {textarea.type='number';textarea.min=4;textarea.max=15;textarea.step=1;}
         textarea.addEventListener('input',function(){window.studioDirectorRenderDiff(diffBody,old,textarea.value);});
         if (key !== 'durationSeconds') textarea.rows = key === 'prompt' ? 13 : 5;
@@ -673,6 +675,7 @@
         checkbox.dataset.selectField = field;
         checkbox.checked = value !== old;
         editor.dataset.field = field;
+        if (field === 'prompt') editor.dataset.revisionKey = 'project:' + proposedBatch.storyId + ':scene:' + entry.sceneId + ':field:' + field;
         editor.value = value;
         editor.setAttribute('aria-label',labels[field]);
         editor.rows = field === 'prompt' ? 12 : field === 'title' ? 1 : 4;

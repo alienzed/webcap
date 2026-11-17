@@ -81,6 +81,44 @@ def _set_active(mode, chat_id):
     _write(_active_path(), active)
 
 
+def _validated_write_action(action):
+    """Persist the review destination and user edits, not copied model content."""
+    if (not isinstance(action, dict) or action.get("kind") not in
+            {"create_project", "write_project", "create_scene", "write_scenes"}
+            or not isinstance(action.get("instruction"), str)
+            or not action["instruction"].strip()):
+        return None
+    scene = action.get("scene")
+    if not isinstance(scene, dict):
+        scene = None
+    fields = action.get("fields")
+    result = {
+        "kind": action["kind"], "instruction": action["instruction"],
+        "fields": [field for field in (fields if isinstance(fields, list) else [])
+                   if isinstance(field, str)],
+        "request": str(action.get("request") or ""),
+        "projectId": str(action.get("projectId") or ""),
+        "scene": {key: scene[key] for key in ("projectId", "sceneId", "sceneNumber")
+                  if key in scene} if scene else None,
+        "completed": action.get("completed") is True,
+    }
+    if isinstance(action.get("actionKey"), str) and action["actionKey"]:
+        result["actionKey"] = action["actionKey"]
+    if isinstance(action.get("chosenProjectId"), str):
+        result["chosenProjectId"] = action["chosenProjectId"]
+    review = action.get("reviewDraft")
+    if isinstance(review, dict) and isinstance(review.get("values"), dict):
+        values = {key: value for key, value in review["values"].items()
+                  if key in {"title", "prompt", "durationSeconds"} and isinstance(value, str)}
+        if (isinstance(review.get("projectId"), str)
+                and isinstance(review.get("sceneId"), str)):
+            result["reviewDraft"] = {
+                "projectId": review["projectId"], "sceneId": review["sceneId"],
+                "values": values,
+            }
+    return result
+
+
 def _validate_messages(messages):
     if not isinstance(messages, list):
         raise ValueError("Assistant conversation messages must be an array.")
@@ -95,26 +133,18 @@ def _validate_messages(messages):
                     or not item["rawResponse"].strip()):
                 raise ValueError("Only assistant messages can store a complete model response.")
             message["rawResponse"] = item["rawResponse"]
-        if "writeAction" in item and item["role"] == "assistant":
-            action = item["writeAction"]
-            # Conversation-owned suggestion, not authorization or a saved Story field.
-            if (isinstance(action, dict) and action.get("kind") in
-                    {"create_project", "write_project", "create_scene", "write_scenes"}
-                    and isinstance(action.get("instruction"), str) and action["instruction"].strip()):
-                scene = action.get("scene")
-                if not isinstance(scene, dict):
-                    scene = None
-                fields = action.get("fields")
-                message["writeAction"] = {
-                    "kind": action["kind"], "instruction": action["instruction"],
-                    "fields": [field for field in (fields if isinstance(fields, list) else [])
-                               if isinstance(field, str)],
-                    "request": str(action.get("request") or ""),
-                    "projectId": str(action.get("projectId") or ""),
-                    "scene": {key: scene[key] for key in ("projectId", "sceneId", "sceneNumber")
-                              if key in scene} if scene else None,
-                    "completed": action.get("completed") is True,
-                }
+        if item["role"] == "assistant":
+            if "writeAction" in item:
+                action = _validated_write_action(item["writeAction"])
+                if action:
+                    message["writeAction"] = action
+            if "otherWriteActions" in item:
+                if not isinstance(item["otherWriteActions"], list):
+                    raise ValueError("Assistant alternate Write actions must be an array.")
+                message["otherWriteActions"] = [
+                    action for value in item["otherWriteActions"]
+                    if (action := _validated_write_action(value))
+                ]
         result.append(message)
     return result
 
@@ -161,7 +191,7 @@ def _validate_working_draft(value):
     scenes = value.get("scenes") or {}
     if not isinstance(projects, dict) or not isinstance(scenes, dict):
         raise ValueError("Studio working draft targets must be objects.")
-    return {
+    result = {
         "projects": {key: fields(item, {"title", "concept", "style", "invariants"})
                      for key, item in projects.items() if isinstance(key, str) and isinstance(item, dict)},
         "scenes": {key: fields(item, {"title", "prompt", "durationSeconds"})
@@ -170,6 +200,40 @@ def _validate_working_draft(value):
         "newScene": fields(value.get("newScene") or {}, {"title", "prompt", "durationSeconds"}),
         "sourceRequest": str(value.get("sourceRequest") or ""),
     }
+    if "draftOrigins" in value:
+        # Current frontend provenance was previously dropped at this boundary.
+        # Restore actual saved baselines for target-specific reuse after reload.
+        origins = value["draftOrigins"]
+        if not isinstance(origins, dict):
+            raise ValueError("Studio draft origins must be an object.")
+
+        def origin(item):
+            if item is None:
+                return None
+            if not isinstance(item, dict):
+                raise ValueError("Studio draft origin must be an object.")
+            result = {key: item[key] for key in ("projectId", "request", "baseline")
+                      if isinstance(item.get(key), str)}
+            if isinstance(item.get("fields"), list):
+                result["fields"] = [name for name in item["fields"] if isinstance(name, str)]
+            if isinstance(item.get("timingNeedsReview"), bool):
+                result["timingNeedsReview"] = item["timingNeedsReview"]
+            return result
+
+        def origin_map(name):
+            entries = origins.get(name) or {}
+            if not isinstance(entries, dict):
+                raise ValueError("Studio draft origins map must be an object.")
+            return {key: origin(item) for key, item in entries.items()
+                    if isinstance(key, str) and isinstance(item, dict)}
+
+        result["draftOrigins"] = {
+            "projects": origin_map("projects"),
+            "scenes": origin_map("scenes"),
+            "newProject": origin(origins.get("newProject")),
+            "newScene": origin(origins.get("newScene")),
+        }
+    return result
 
 
 def _validate_operations(operations):

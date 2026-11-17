@@ -122,6 +122,37 @@ test('mixed Project, selected Scene, and new Scene material stays independently 
     'inactive deliverables must keep independent launchers');
 });
 
+test('completing the Scene action leaves the same response Project action available',()=>{
+  const sceneAction={kind:'create_scene',actionKey:'primary',
+    instruction:'Author the work',request:'Author the work',completed:false};
+  const projectAction={kind:'create_project',actionKey:'alternate-0',
+    instruction:'Author the work',request:'Author the work',completed:false};
+  const state={studioActionIndex:0,studioActionKey:'primary',modeMessages:{
+    storyboard:[{role:'assistant',content:'Here are both results.',
+      writeAction:sceneAction,otherWriteActions:[projectAction]}]
+  }};
+  const actionHelpers=new Function('state',part(chat,
+    '  function studioStoredActions(entry) {',
+    '  function studioRestoreAuthoredAction(action, rawResponse) {')+
+    'return {studioStoredActions,studioActiveStoredAction};')(state);
+  let saved=0;
+  const src=part(chat,
+    '    finishWriteAction:function (action) {',
+    '    canReview: function () {').trim().replace(/,$/,'');
+  const finish=new Function('state','studioActiveStoredAction','scheduleSessionSave',
+    'return ({'+src+'}).finishWriteAction;')(
+    state,actionHelpers.studioActiveStoredAction,()=>saved++);
+  finish(sceneAction);
+  assert.equal(sceneAction.completed,true);
+  assert.equal(projectAction.completed,false,
+    'one completed Scene cannot consume a separate Project deliverable');
+  state.studioActionKey='alternate-0';
+  assert.equal(actionHelpers.studioActiveStoredAction(state.modeMessages.storyboard[0]),projectAction);
+  finish(projectAction);
+  assert.equal(projectAction.completed,true);
+  assert.equal(saved,2);
+});
+
 test('standalone new Scene fields do not misclassify Project fields or require a selected Scene',()=>{
   const fields=new Function(part(chat,
     '  function studioWorkingFieldChanges(source, names) {',

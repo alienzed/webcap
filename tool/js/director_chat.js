@@ -1916,10 +1916,14 @@
     var sameWork = manualReview || !!newProjectOrigin &&
       newProjectOrigin.request === authorRequest;
     if (sameWork && workingProject && Object.keys(workingProject).length) {
+      var retained = manualReview ? workingProject : Object.fromEntries(
+        (newProjectOrigin.fields || []).filter(function (field) {
+          return Object.prototype.hasOwnProperty.call(workingProject,field);
+        }).map(function (field) {return [field,workingProject[field]];}));
       state.studioProjectProposal = parseStudioProjectDraft(JSON.stringify(Object.assign({
         title:'', concept:'', style:'', invariants:[], initialScenes:[],
         rationale:'Structured Project material retained from Director conversation.'
-      },workingProject)));
+      },retained)));
       studioActionStatus('Project fields ready for review, without another model call.',false);
       showStudioProjectReview();
       return;
@@ -1972,7 +1976,11 @@
             ['title','concept','style','invariants']));
         state.studioWorkingDraft.draftOrigins =
           state.studioWorkingDraft.draftOrigins || {projects:{},scenes:{}};
-        state.studioWorkingDraft.draftOrigins.newProject = {request:authorRequest};
+        state.studioWorkingDraft.draftOrigins.newProject = {
+          request:authorRequest,
+          fields:Object.keys(studioWorkingFieldChanges(state.studioProjectProposal,
+            ['title','concept','style','invariants']))
+        };
         scheduleSessionSave();
         finishProgress(null);
         studioActionStatus('Project ready for review. Nothing has been created.', false);
@@ -2439,7 +2447,11 @@
         return ['title','concept','style','invariants'].includes(field);
       });
       if (sameWork && required.length) {
-        var drafted = Object.assign({},expected,workingProject);
+        var retained = manualReview || options && options.authoredFields ? workingProject :
+          Object.fromEntries((draftOrigin.fields || []).filter(function (field) {
+            return Object.prototype.hasOwnProperty.call(workingProject,field);
+          }).map(function (field) {return [field,workingProject[field]];}));
+        var drafted = Object.assign({},expected,retained);
         state.studioBriefProposal = {
           storyId:storyId,storyTitle:story.title,expected:expected,draft:drafted,
           instruction:instruction,requestedFields:required,
@@ -2487,7 +2499,8 @@
           state.studioWorkingDraft.draftOrigins.projects =
             state.studioWorkingDraft.draftOrigins.projects || {};
           state.studioWorkingDraft.draftOrigins.projects[storyId] = {
-            request:authorRequest,baseline:JSON.stringify(expected)
+            request:authorRequest,baseline:JSON.stringify(expected),
+            fields:Object.keys(studioWorkingFieldChanges(changes,['title','concept','style','invariants']))
           };
           scheduleSessionSave();
           var draft = Object.assign({},expected,changes);
@@ -4749,7 +4762,10 @@
         var workingScene = state.studioWorkingDraft.newScene;
         if (!reuse) state.pending = false;
         var proposal = reuse ?
-          Promise.resolve(JSON.stringify(workingScene)) :
+          Promise.resolve(JSON.stringify(Object.fromEntries(
+            (draftOrigin.fields || []).filter(function (field) {
+              return Object.prototype.hasOwnProperty.call(workingScene,field);
+            }).map(function (field) {return [field,workingScene[field]];})))) :
           window.studioDirectorBridge.makeProposal(instruction,
             'studio_scenes_draft', true,
             {projectId:storyId,projectTitle:story.title,sceneOrder:order});
@@ -4801,7 +4817,8 @@
             state.studioWorkingDraft.draftOrigins.newScene = {
               projectId:storyId,
               request:String(launch.authorRequest || launch.instruction),
-              baseline:baseline
+              baseline:baseline,
+              fields:Object.keys(studioWorkingFieldChanges(drafts[0],['title','prompt','durationSeconds']))
             };
             scheduleSessionSave();
           }
@@ -4927,7 +4944,8 @@
         if (workingScene && applyExisting) {
           var pendingChanges = {};
           fields.forEach(function (field) {
-            if (Object.prototype.hasOwnProperty.call(workingScene,field))
+            if (Array.isArray(draftOrigin.fields) && draftOrigin.fields.includes(field) &&
+                Object.prototype.hasOwnProperty.call(workingScene,field))
               pendingChanges[field] = workingScene[field];
           });
           if (Object.keys(pendingChanges).length) {
@@ -5012,7 +5030,8 @@
               state.studioWorkingDraft.draftOrigins.scenes[sceneId] = {
                 projectId:storyId,
                 request:String(launch.authorRequest || launch.instruction),
-                baseline:baseline
+                baseline:baseline,
+                fields:Object.keys(authored)
               };
               scheduleSessionSave();
             }

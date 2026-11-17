@@ -49,7 +49,7 @@ test('Live Flow 2 — real explicit Scene Write saves actual complete Scene reco
   await addEvidence(info,page,model,direction,{request,receipt,scenes});
 });
 
-test('Live Flow 4 — approved Overview and Scene references reach real chat but do not authorize saving',async({page},info)=>{
+test('Live Flow 4 — explicit Read snapshots reach chat unchanged and do not save',async({page},info)=>{
   const project=await seedProject(page,'Live Read '+Date.now(),{
     concept:'A silver gate stands in a blue courtyard.',style:'Soft dusk.'
   });
@@ -60,7 +60,9 @@ test('Live Flow 4 — approved Overview and Scene references reach real chat but
   await attachProject(page,project);
   const observed=observeLiveCalls(page);
   await approveOverview(page,project.id);
-  await sendLive(page,'Discuss the approved setting briefly. Do not write or save.');
+  await expect(page.locator('#director-chat-messages')).toContainText(project.concept);
+  expect(observed.requests).toHaveLength(0);
+  await sendLive(page,'Discuss the previously read setting briefly. Do not write or save.');
   expect(JSON.stringify(observed.requests[0].messages)).toContain(project.concept);
   expect(JSON.stringify(observed.requests[0].messages)).not.toContain(scene.prompt);
   await page.locator('#director-chat-context-approve').click();
@@ -69,14 +71,16 @@ test('Live Flow 4 — approved Overview and Scene references reach real chat but
   if(await selection.getAttribute('open')===null) await selection.locator('summary').click();
   await page.locator('#studio-dw-scene-fields input[data-group-select]').first().check();
   await page.locator('#studio-dw-read-send').click();
-  await sendLive(page,'Discuss the physical action in the approved Scene without changing it.');
+  await expect(page.locator('#director-chat-messages')).toContainText(scene.prompt);
+  expect(observed.requests).toHaveLength(1);
+  await sendLive(page,'Discuss the physical action in the previously read Scene without changing it.');
   const messages=JSON.stringify(observed.requests.at(-1).messages);
   expect(messages).toContain(project.concept);
   expect(messages).toContain(scene.prompt);
   const actual=await story(page,project.id);
   expect(actual.concept).toBe(project.concept);
   expect(actual.scenes[scene.id].prompt).toBe(scene.prompt);
-  await addEvidence(info,page,model,'Approved Read context',{outbound:observed.requests,saved:actual});
+  await addEvidence(info,page,model,'Explicit Read snapshots',{outbound:observed.requests,saved:actual});
 });
 
 test('Live Flow 3 — real Project revision saves only returned fields without modifying unrelated Scenes',async({page},info)=>{

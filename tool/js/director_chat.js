@@ -4938,7 +4938,15 @@
         var baseline = JSON.stringify({
           title:original.title,prompt:original.prompt,durationSeconds:original.durationSeconds
         });
-        var applyExisting = !launch.forceAuthor && !!draftOrigin && draftOrigin.projectId === storyId &&
+        // A partial result remains available for Review, but cannot satisfy a
+        // later retry unless every requested field was actually authored.
+        // In particular, a title does not stand in for a requested H3 Prompt.
+        var completeDraft = !!draftOrigin && requestedFields.every(function (field) {
+          return Array.isArray(draftOrigin.fields) && draftOrigin.fields.includes(field) &&
+            workingScene && Object.prototype.hasOwnProperty.call(workingScene,field);
+        });
+        var applyExisting = !launch.forceAuthor && completeDraft &&
+          draftOrigin.projectId === storyId &&
           draftOrigin.request === String(launch.authorRequest || launch.instruction) &&
           draftOrigin.baseline === baseline;
         if (workingScene && applyExisting) {

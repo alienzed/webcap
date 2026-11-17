@@ -2290,97 +2290,67 @@ def director_chat_route():
             raise ValueError("Unsupported Director Chat operation.")
         contract = {"operation": operation, "messages": messages}
         # Studio conversation is ordinary prose. Structured schemas belong to explicit Write operations.
+        # Explicit Studio Write schemas contain only the fields the chosen
+        # operation is authoring. Chat never inherits these definitions.
+        invariant_schema = {
+            "type": "array", "maxItems": 30,
+            "items": {
+                "type": "object", "additionalProperties": False,
+                "required": ["kind", "title", "text"],
+                "properties": {
+                    "kind": {"type": "string", "enum": [
+                        "character", "location", "visual", "world", "sound", "custom"
+                    ]},
+                    "title": {"type": "string"}, "text": {"type": "string"},
+                },
+            },
+        }
+        project_field_schemas = {
+            "title": {"type": "string"},
+            "concept": {"type": "string"},
+            "style": {"type": "string"},
+            "invariants": invariant_schema,
+        }
+        scene_field_schemas = {
+            "title": {"type": "string"},
+            "prompt": {"type": "string"},
+            "durationSeconds": {"type": "integer", "minimum": 4, "maximum": 15},
+        }
         if operation == "studio_brief_draft":
-            required_fields = data.get("requiredFields") or []
-            if not isinstance(required_fields, list) or any(
-                not isinstance(field, str) or field not in
-                {"title", "concept", "style", "invariants"} for field in required_fields
-            ):
-                raise ValueError("Invalid required Project fields.")
+            requested = data.get("requiredFields") or list(project_field_schemas)
+            if (not isinstance(requested, list) or
+                    any(not isinstance(key, str) or key not in project_field_schemas
+                        for key in requested)):
+                raise ValueError("Invalid requested Project fields.")
+            fields = list(dict.fromkeys(requested))
             contract["response_schema"] = {
                 "type": "object", "additionalProperties": False,
-                "required": list(dict.fromkeys(required_fields)),
-                "properties": {
-                    "title": {"type": "string", "maxLength": 240},
-                    "concept": {"type": "string"},
-                    "style": {"type": "string"},
-                    "invariants": {
-                        "type": "array", "maxItems": 30,
-                        "items": {
-                            "type": "object", "additionalProperties": False,
-                            "required": ["kind", "title", "text"],
-                            "properties": {
-                                "kind": {"type": "string", "enum": ["character", "location", "visual", "world", "sound", "custom"]},
-                                "title": {"type": "string"}, "text": {"type": "string"},
-                            },
-                        },
-                    },
-                    "rationale": {"type": "string"},
-                },
-            }
-        if operation == "studio_scene_field_draft":
-            required_fields = data.get("requiredFields") or []
-            if not isinstance(required_fields, list) or any(
-                not isinstance(field, str) or field not in
-                {"title", "prompt", "durationSeconds"} for field in required_fields
-            ):
-                raise ValueError("Invalid required Scene fields.")
-            contract["response_schema"] = {
-                "type": "object", "additionalProperties": False,
-                "required": list(dict.fromkeys(required_fields)) or ["prompt"],
-                "properties": {
-                    "title": {"type": "string"},
-                    "prompt": {"type": "string", "minLength": 1},
-                    "durationSeconds": {"type": "integer", "minimum": 4, "maximum": 15},
-                },
-            }
-        if operation == "studio_scenes_draft":
-            # New-Scene authoring is a sequence of *material*, not an action
-            # promise or a requirement to match a guessed requested count.
-            # Request complete Scene records with the same contract as Studio
-            # conversation. Ingest still retains incomplete provider results.
-            contract["response_schema"] = {
-                "type": "object", "additionalProperties": False,
-                "required": ["scenes"],
-                "properties": {
-                    "scenes": studio_scene_records_schema(),
-                    "rationale": {"type": "string"},
-                },
+                "required": fields,
+                "properties": {key: project_field_schemas[key] for key in fields},
             }
         if operation == "studio_project_draft":
             contract["response_schema"] = {
-                "type": "object",
-                "additionalProperties": False,
-                "required": ["title", "concept", "style", "invariants", "rationale"],
-                "properties": {
-                    "title": {"type": "string"},
-                    "concept": {"type": "string"},
-                    "style": {"type": "string"},
-                    "invariants": {
-                        "type": "array", "maxItems": 30,
-                        "items": {
-                            "type": "object", "additionalProperties": False,
-                            "required": ["kind", "title", "text"],
-                            "properties": {
-                                "kind": {"type": "string", "enum": ["character", "location", "visual", "world", "sound", "custom"]},
-                                "title": {"type": "string"}, "text": {"type": "string"},
-                            },
-                        },
-                    },
-                    "initialScenes": {
-                        "type": "array", "maxItems": 32,
-                        "items": {
-                            "type": "object", "additionalProperties": False,
-                            "required": ["title", "brief", "durationSeconds"],
-                            "properties": {
-                                "title": {"type": "string", "maxLength": 240},
-                                "brief": {"type": "string", "minLength": 1, "maxLength": 4000},
-                                "durationSeconds": {"type": "integer", "minimum": 4, "maximum": 15},
-                            },
-                        },
-                    },
-                    "rationale": {"type": "string"},
-                },
+                "type": "object", "additionalProperties": False,
+                "required": list(project_field_schemas),
+                "properties": project_field_schemas,
+            }
+        if operation == "studio_scene_field_draft":
+            requested = data.get("requiredFields") or ["prompt"]
+            if (not isinstance(requested, list) or
+                    any(not isinstance(key, str) or key not in scene_field_schemas
+                        for key in requested)):
+                raise ValueError("Invalid requested Scene fields.")
+            fields = list(dict.fromkeys(requested))
+            contract["response_schema"] = {
+                "type": "object", "additionalProperties": False,
+                "required": fields,
+                "properties": {key: scene_field_schemas[key] for key in fields},
+            }
+        if operation == "studio_scenes_draft":
+            contract["response_schema"] = {
+                "type": "object", "additionalProperties": False,
+                "required": ["scenes"],
+                "properties": {"scenes": studio_scene_records_schema()},
             }
         if operation == "storyboard_workshop_shots":
             contract["response_schema"] = {

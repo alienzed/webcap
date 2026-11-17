@@ -2360,14 +2360,15 @@ def director_chat_route():
                 },
             }
         if operation == "studio_project_draft":
+            # Project creation writes only Project fields. Scene creation has
+            # its own explicit Write, H3 reference and response contract.
             contract["response_schema"] = {
-                "type": "object",
-                "additionalProperties": False,
-                "required": ["title", "concept", "style", "invariants", "rationale"],
+                "type": "object", "additionalProperties": False,
+                "required": ["title", "concept", "style", "invariants"],
                 "properties": {
-                    "title": {"type": "string"},
-                    "concept": {"type": "string"},
-                    "style": {"type": "string"},
+                    "title": {"type": "string", "maxLength": 240},
+                    "concept": {"type": "string", "maxLength": 20000},
+                    "style": {"type": "string", "maxLength": 10000},
                     "invariants": {
                         "type": "array", "maxItems": 30,
                         "items": {
@@ -2379,19 +2380,6 @@ def director_chat_route():
                             },
                         },
                     },
-                    "initialScenes": {
-                        "type": "array", "maxItems": 32,
-                        "items": {
-                            "type": "object", "additionalProperties": False,
-                            "required": ["title", "brief", "durationSeconds"],
-                            "properties": {
-                                "title": {"type": "string", "maxLength": 240},
-                                "brief": {"type": "string", "minLength": 1, "maxLength": 4000},
-                                "durationSeconds": {"type": "integer", "minimum": 4, "maximum": 15},
-                            },
-                        },
-                    },
-                    "rationale": {"type": "string"},
                 },
             }
         if operation == "storyboard_workshop_shots":

@@ -4270,22 +4270,6 @@
   }
 
   window.studioDirectorBridge = {
-    placeSuggestedAction: placeStudioSuggestion,
-    markWriteActionEdited:function (action) {
-      var entry = state.modeMessages.storyboard[state.studioActionIndex];
-      if (studioActiveStoredAction(entry) !== action)
-        throw new Error('Edited Scene Review is no longer bound to its original Director proposal.');
-      scheduleSessionSave();
-    },
-    finishWriteAction:function (action) {
-      var entry = state.modeMessages.storyboard[state.studioActionIndex];
-      var stored = studioActiveStoredAction(entry);
-      if (!stored || stored.kind !== action.kind ||
-          stored.instruction !== action.instruction)
-        throw new Error('Completed Write action no longer matches its conversation proposal.');
-      stored.completed = true;
-      scheduleSessionSave();
-    },
     canReview: function () {
       return state.open && state.activeMode === 'storyboard' && state.sessionReady &&
         !state.pending && !state.attachmentPending;
@@ -4453,12 +4437,6 @@
       var savedTarget = selected.sceneId && story.scenes && story.scenes[selected.sceneId]
         ? 'Scene ' + ((story.sceneOrder || []).indexOf(selected.sceneId) + 1) + ' · ' + (story.scenes[selected.sceneId].title || selected.sceneId)
         : story.title || story.id;
-      if ((kind !== 'scenes.create' || !state.studioScenesProposal) &&
-          window.studioDirectorWorkbench.completeWriteAction(kind, story, selected)) {
-        var sourceMessage = state.modeMessages.storyboard[state.studioActionIndex];
-        var activeAction = studioActiveStoredAction(sourceMessage);
-        if (activeAction) activeAction.completed = true;
-      }
       state.modeMessages.storyboard.push({role:'user',
         content:'Saved ' + savedTarget + ': ' + (savedFields.join(' · ') || 'Scene changes') +
           String.fromCharCode(10) + '[WEBCAP APPLIED FIELD VALUES]' +

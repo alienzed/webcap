@@ -4712,10 +4712,7 @@
           typeof workingScene.prompt === 'string' && workingScene.prompt.trim());
         if (!reuse) state.pending = false;
         var proposal = reuse ?
-          Promise.resolve(JSON.stringify(Object.assign({
-            title:'Scene ' + (order.length+1),
-            durationSeconds:6
-          },workingScene))) :
+          Promise.resolve(JSON.stringify(workingScene)) :
           window.studioDirectorBridge.makeProposal(instruction,
             'studio_scenes_draft', true,
             {projectId:storyId,projectTitle:story.title,sceneOrder:order});
@@ -4745,16 +4742,17 @@
           if (!drafts.length)
             throw new Error('Director returned no usable Scene fields.\\nRaw response:\\n' + raw);
           var missingPrompt = drafts.some(function (item) {return !item.prompt.trim();});
+          var missingDuration = drafts.some(function (item) {
+            return item.durationSeconds === undefined;
+          });
           var invalidDuration = drafts.some(function (item) {
             return item.durationSeconds !== undefined &&
-              (!Number.isFinite(Number(item.durationSeconds)) ||
+              (!Number.isInteger(Number(item.durationSeconds)) ||
               Number(item.durationSeconds) < 4 || Number(item.durationSeconds) > 15);
           });
           var draft = {scenes:drafts,rationale:typeof fields.rationale === 'string' ? fields.rationale : ''};
-          // The author's explicit duration is a WebCap request parameter,
-          // not optional model metadata that may silently default to six.
-          // Requested duration guides authoring; the editable draft preserves
-          // what the model actually returned instead of fabricating metadata.
+          // The author's requested timing belongs in the actual authored Scene.
+          // A missing duration stays editable instead of silently becoming six seconds.
           // Preserve the existing one-Scene working draft contract. Multi-Scene
           // records belong to the multi-Scene review, not a singleton cache.
           if (drafts.length === 1) {
@@ -4767,7 +4765,8 @@
           }
           // A missing Prompt retains an editable partial draft without
           // attempting to persist an empty Scene.
-          if (drafts.length !== 1 || missingPrompt || invalidDuration || !launch.directSave) {
+          if (drafts.length !== 1 || missingPrompt || missingDuration ||
+              invalidDuration || !launch.directSave) {
             var priorReview = state.studioScenesProposal;
             if (priorReview && Number.isInteger(priorReview.sourceMessageIndex)) {
               rememberStudioScenesReview();
@@ -4782,22 +4781,17 @@
             showStudioScenesReview();
             studioActionStatus(missingPrompt
               ? 'Scene fields retained. Complete the missing H3 Prompt in Review before saving.'
-              : invalidDuration
+              : missingDuration || invalidDuration
                 ? 'Scene duration needs review. Authored fields retained; nothing saved.'
-                : authorDuration !== null && requestedDuration === null
-                  ? 'Requested ' + authorDuration + 's is outside the supported 4–15s range. Draft retained for review; nothing saved.'
-                  : drafts.length + ' authored Scene' + (drafts.length === 1 ? '' : 's') + ' ready for review. Nothing has been saved.',
-              authorDuration !== null && requestedDuration === null);
+                : drafts.length + ' authored Scene' + (drafts.length === 1 ? '' : 's') +
+                  ' ready for review. Nothing has been saved.',
+              missingPrompt || missingDuration || invalidDuration);
             return {review:true};
           }
           var scene = draft.scenes[0];
           if (!scene || typeof scene.prompt !== 'string' || !scene.prompt.trim())
             throw new Error('Director returned no usable Scene Prompt.');
           var validDuration = Number(scene.durationSeconds);
-          // No explicit duration: the existing six-second WebCap default is
-          // valid. Explicit unsupported durations never reach this save.
-          if (!Number.isFinite(validDuration) || validDuration < 4 || validDuration > 15)
-            validDuration = 6;
           var creation = {
             title:String(scene.title || '').trim() || 'Scene ' + (order.length + 1),
             prompt:scene.prompt, durationSeconds:validDuration

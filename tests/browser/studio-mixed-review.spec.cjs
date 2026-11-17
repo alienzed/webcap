@@ -22,10 +22,6 @@ test('usable Project draft without reply has a readable summary and remains revi
   await expect(page.locator('#studio-project-title')).toHaveValue('Kitten Chaos');
   await expect(page.locator('#studio-project-concept')).toHaveValue(draft.concept);
   expect((await observedModels(request)).calls).toHaveLength(1);
-  // The raw response remains available separately for exact inspection.
-  const raw=await page.evaluate(()=>document.querySelector('#studio-director-io-raw')?.textContent||'');
-  // I/O panel may be collapsed; it still remains the owner of raw diagnostics.
-  expect(typeof raw).toBe('string');
 });
 
 test('mixed Director response keeps both Project and Scene drafts independently reviewable',async({page,request})=>{

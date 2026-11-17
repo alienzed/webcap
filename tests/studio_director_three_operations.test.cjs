@@ -213,6 +213,72 @@ test('authored conversation Scene records open Review directly and remain reopen
   assert.equal(h.requests[1][1],'p1');
 });
 
+test('Project drafts retain separate origins and reject stale saved baselines',async()=>{
+  const source=part(chat,'  function prepareStudioBrief(options) {','  function applyStudioBrief() {');
+  const projectFields=new Function(part(chat,
+    '  function studioWorkingFieldChanges(source, names) {',
+    '  function studioMergeWorkingChanges(changes, target, action, request) {')+
+    'return studioWorkingFieldChanges;')();
+  const projects={
+    p1:{id:'p1',title:'First',concept:'Quiet arrival',style:'Blue dusk',invariants:[]},
+    p2:{id:'p2',title:'Second',concept:'Busy market',style:'Warm noon',invariants:[]}
+  };
+  const state={
+    pending:false,jobId:'',modelId:'model',activeMode:'storyboard',sessionReady:true,
+    modeMessages:{storyboard:[{role:'user',content:'Improve the atmosphere'}]},
+    studioBriefProposal:null,
+    studioWorkingDraft:{projects:{},scenes:{},newProject:{},newScene:{}}
+  };
+  let modelCalls=0,reviews=0;
+  const seenBaselines=[];
+  const prepare=new Function('state','window','studioAttachedStoryId','studioActionStatus',
+    'startProgress','syncControls','requestJson','studioDirectorRequestMessages',
+    'waitForJob','trackTransientLlmJob','parseStudioBriefDraft','studioWorkingFieldChanges',
+    'scheduleSessionSave','finishProgress','showStudioBriefReview','Promise',
+    source+'return prepareStudioBrief;')(
+      state,{flushStudioDirectorStoryEdits:async()=>{},
+        studioDirectorWorkbench:{showSentWriteContext(){}},
+        reportConsoleError:(_name,error)=>assert.fail(error.message)},
+      ()=>'',
+      ()=>{},()=>{},()=>{},
+      async(url,options)=>{
+        if(url.startsWith('/fs/storyboard?story='))return {story:projects[url.split('=')[1]]};
+        if(url==='/fs/director/chat'){
+          modelCalls++;
+          const payload=JSON.parse(JSON.parse(options.body).messages[0].content);
+          seenBaselines.push(payload.project.style);
+          return {job:{jobId:'job'+modelCalls}};
+        }
+        throw new Error('Unexpected URL '+url);
+      },
+      async messages=>messages,
+      async ()=>({result:{text:JSON.stringify({style:'Improved atmosphere '+modelCalls})}}),
+      ()=>{},raw=>JSON.parse(raw),projectFields,()=>{},()=>{},()=>{reviews++;},Promise);
+  const tick=()=>new Promise(resolve=>setImmediate(resolve));
+  prepare({storyId:'p1',instruction:'Improve the atmosphere'});
+  await tick();
+  assert.equal(modelCalls,1);
+  assert.equal(state.studioWorkingDraft.draftOrigins.projects.p1.request,'Improve the atmosphere');
+  state.studioBriefProposal=null;
+  prepare({storyId:'p2',instruction:'Improve the atmosphere'});
+  await tick();
+  assert.equal(modelCalls,2,'identical wording for a different Project must author separately');
+  assert.deepEqual(Object.keys(state.studioWorkingDraft.draftOrigins.projects).sort(),['p1','p2']);
+  state.studioBriefProposal=null;
+  prepare({storyId:'p1',instruction:'Improve the atmosphere'});
+  await tick();
+  assert.equal(modelCalls,2,'an intervening different Project must not evict a reusable first draft');
+  assert.equal(state.studioBriefProposal.draft.style,'Improved atmosphere 1');
+  projects.p1.style='New authoritative moonlight';
+  state.studioBriefProposal=null;
+  prepare({storyId:'p1',instruction:'Improve the atmosphere'});
+  await tick();
+  assert.equal(modelCalls,3,'a changed authoritative Project baseline invalidates retained material');
+  assert.deepEqual(seenBaselines,['Blue dusk','Warm noon','New authoritative moonlight']);
+  assert.equal(state.studioBriefProposal.expected.style,'New authoritative moonlight');
+  assert.equal(reviews,4);
+});
+
 test('structured Director changes merge by complete field, without overwriting unrelated drafts', () => {
   const state={studioWorkingDraft:{projects:{},scenes:{},newProject:{},newScene:{},sourceRequest:''},
     sessionDirty:{storyboard:false}};

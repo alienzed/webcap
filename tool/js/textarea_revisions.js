@@ -493,8 +493,8 @@
   // Token-level comparison preserves whitespace and never writes to an editor.
   // Keep the dynamic-programming section bounded for very long prompts.
   function diffTokens(before, after) {
-    var a = before.match(/\\s+|\\S+/g) || [];
-    var b = after.match(/\\s+|\\S+/g) || [];
+    var a = before.match(/\s+|\S+/g) || [];
+    var b = after.match(/\s+|\S+/g) || [];
     var start = 0;
     while (start < a.length && start < b.length && a[start] === b[start]) start++;
     var endA = a.length, endB = b.length;

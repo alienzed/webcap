@@ -7,7 +7,7 @@
 - Chat is conversational and does not author structured saved fields, create action suggestions, or save. Unexpected structured text is shown verbatim; malformed text remains inspectable.
 - An author explicitly chooses **Write → Project** (Create/Revise) or **Write → Scene(s)** (Create/Revise) and a destination. Each Write is a fresh, task-scoped model request using the **complete conversation history**, not a cached reply or shortened transcript.
 - Ordinary chat and Project Write never receive H3 production reference instructions. Scene writing receives the H3 reference and the operation-specific response schema.
-- Only author-approved saved Read references are automatically shared. Project navigation, conversation attachment and Write destination are independent.
+- Only explicit Read captures saved material. Each complete snapshot is visible and persisted as a user conversation message; subsequent requests transmit the unchanged message, without rereading or hidden system context. Project navigation, attachment and Write destination remain independent.
 - Saves occur directly, without a Studio Review/Apply stage. Verify actual persisted values after reload; do not infer saves from model prose, UI status or job completion.
 - WebCap displays real errors/raw I/O rather than making creative-completeness judgments, inventing missing values or automatically repairing model output.
 - Keep standalone **Develop Scenes**, **Revise Scenes**, **Revise & Generate**, **First Cut** and **Coherence** operational. Specialist review surfaces used by those distinct functions are not the retired Director Write Review.
@@ -20,7 +20,7 @@ Start with no attached Project. Discuss an idea and ask for a recommendation. Co
 
 ### 2. Write new Scenes
 
-Choose a saved Project; discuss staging in chat. Click Write → Scene(s) → Create. Confirm the `studio_scenes_draft` request includes the full conversation, selected Project, relevant Scene continuity, approved Read sources and H3 guidance. Save each mechanically usable returned Scene (title, prompt, supported duration) with a generated ID. Actual record count may differ from the request. On a mixed valid/invalid batch, preserve usable records, explain what could not save and make raw I/O available. Never synthesize a prompt/title/duration.
+Choose a saved Project; discuss staging in chat. Click Write → Scene(s) → Create. Confirm the `studio_scenes_draft` request includes the full conversation, selected Project, relevant Scene continuity, previously captured Read messages and H3 guidance. Save each mechanically usable returned Scene (title, prompt, supported duration) with a generated ID. Actual record count may differ from the request. On a mixed valid/invalid batch, preserve usable records, explain what could not save and make raw I/O available. Never synthesize a prompt/title/duration.
 
 ### 3. Revise only a selected Scene
 
@@ -32,7 +32,7 @@ Choose a Project Write destination independently of navigation/attachment. Revis
 
 ### 5. Explicit cross-Project Read
 
-Approve an Overview in Project A, an individual Scene in B and one character Invariant in C. Discuss the references in chat, then explicitly Write to D. Confirm all approved facts reach the real model in both chat and Write, no unapproved creative fields leak and only D receives the write. Revoke one source; all other approvals remain.
+Read an Overview in Project A, an individual Scene in B and a character Invariant in C. Each click captures the current saved fields and appends one full visible message to the existing conversation; Read itself makes no LLM call. Compare that exact message text with the user messages supplied to later ordinary chat and Write operations. Edit and empty the original fields, reload the conversation and confirm the old snapshots are identical. Only an additional explicit Read reflects later values. Write to D and confirm A/B/C remain unchanged and D is the sole destination. Navigation, attachment and source mutation cannot add, refresh or remove a snapshot.
 
 ### 6. Continue across navigation and repeated Writes
 

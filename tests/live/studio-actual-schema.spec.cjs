@@ -206,7 +206,7 @@ test('LIVE existing Scene revision — explicit selected target changes prompt a
   expect(saved.scenes[first.id].title).toBe(first.title);
 });
 
-test('LIVE cross-Project references — approved Read informs Write without redirecting the destination',async({page},info)=>{
+test('LIVE cross-Project snapshots — explicit Read informs Write without redirecting the destination',async({page},info)=>{
   const pace=await seedProject(page,'Live Pace '+Date.now(),{
     concept:'A market chase.',style:'Handheld documentary camera.'
   });
@@ -231,13 +231,22 @@ test('LIVE cross-Project references — approved Read informs Write without redi
   await page.locator('#studio-dw-project-fields input[data-group-select]').first().uncheck();
   await page.locator('#studio-dw-scene-fields input[data-group-select]').first().check();
   await page.locator('#studio-dw-read-send').click();
+  await expect(page.locator('#director-chat-messages')).toContainText(source.prompt);
+  expect(observed.requests).toHaveLength(0);
   await share.click();
   await page.locator('#studio-dw-read-project').selectOption(character.id);
   await page.locator('#studio-dw-project-fields input[data-group-select]').first().uncheck();
   await page.locator('#studio-dw-project-fields input[data-group-select]').last().check();
   await page.locator('#studio-dw-read-send').click();
+  await expect(page.locator('#director-chat-messages')).toContainText('Mara has a copper hairpin');
+  expect(observed.requests).toHaveLength(0);
+  const snapshots=await page.locator('#director-chat-messages .director-chat-message-user .director-chat-message-body').allTextContents();
+  expect(snapshots).toHaveLength(2);
+  await page.reload();
+  await reopenDirectorIfClosed(page);
+  await expect(page.locator('#director-chat-messages')).toContainText(source.prompt);
   const direction='Write a new Scene on the selected railway platform with Mara and her copper hairpin. '+
-    'Use the approved chase reference for the motion, not its setting.';
+    'Use the earlier chase snapshot for the motion, not its setting.';
   await writeLive(page,{projectId:destination.id,operation:'scene-write',sceneMode:'create',
     instruction:direction});
   await expect.poll(async()=>(await story(page,destination.id)).sceneOrder.length,{timeout:60000}).toBeGreaterThan(0);
@@ -246,6 +255,8 @@ test('LIVE cross-Project references — approved Read informs Write without redi
   const outbound=JSON.stringify(request.messages);
   expect(outbound).toContain(source.prompt);
   expect(outbound).toContain('Mara has a copper hairpin');
+  snapshots.forEach(snapshot=>expect(request.messages.some(message=>message.role==='user' && message.content===snapshot)).toBe(true));
+  expect(request.messages[0].content).not.toContain('AUTHOR-APPROVED SAVED CONTEXT');
   expect(request.operation).toBe('studio_scenes_draft');
   expect((await story(page,pace.id)).sceneOrder).toEqual([source.id]);
   expect((await story(page,character.id)).sceneOrder).toHaveLength(0);

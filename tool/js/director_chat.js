@@ -3214,17 +3214,10 @@
         throw new Error('Studio Director creative guidance is unavailable.');
       if (includePromptContract && (!payload.promptContract || typeof payload.promptContract !== 'string'))
         throw new Error('H3 prompt-authoring reference is unavailable.');
-      // Application receipts and restored inspection metadata are not user/LLM discussion.
-      var recent = messages.filter(function (message) {
-        return !/\[WEBCAP APPLIED FIELD VALUES\]|\[WEBCAP EXPLICIT READ\]/.test(
-          String(message.content || ''));
-      }).slice(-8);
-      var outbound = [{role:'system', content:payload.system}].concat(recent.map(function (message, index) {
-        var content = String(message.content || '');
-        if (index < recent.length - 1 && content.length > 3000)
-          content = content.slice(0,1800) + '\n[Earlier long message abbreviated]\n' +
-            content.slice(-900);
-        return {role:message.role,content:content};
+      // Preserve the complete actual conversation, including long messages.
+      // Task-specific Write material is supplied separately by the caller.
+      var outbound = [{role:'system', content:payload.system}].concat(messages.map(function(message) {
+        return {role:message.role, content:String(message.content || '')};
       }));
       if (includePromptContract)
         outbound[0].content += '\n\nH3 PROMPT AUTHORING REFERENCE:\n' + payload.promptContract;
@@ -3270,15 +3263,9 @@
         });
     })).then(function (approvedPayloads) {
       // Do not leak the selected editor's creative content through automatic navigation context.
-      return studioDirectorRequestMessages(messages, true, false,
+      return studioDirectorRequestMessages(messages, false, false,
         {projectId:'',projectTitle:'',sceneId:'',sceneNumber:0,sceneOrder:[]}).then(function (outbound) {
-        outbound[0].content += '\n\nSTUDIO CONVERSATION DELIVERY: Answer the author in the JSON reply field on every turn. ' +
-          'For creative discussion, give concrete alternatives, your recommendation and why in reply. ' +
-          'When creating or revising Project or Scene material, include the actual authored fields alongside reply. ' +
-          'Use changes.project for authored Project field values; changes.scene for changes to an existing Scene; ' +
-          'and scenes for new Scene drafts. A creative Scene revision includes the complete replacement H3 prompt. ' +
-          'Include every useful field or Scene that is ready, even when another part needs a question. ' +
-          'These are drafts; WebCap decides where and whether to save them.\n';
+        outbound[0].content += '\n\nAnswer the author conversationally. Project and Scene writing are explicit functions, not conversational output requirements.\n';
         if (approvedPayloads.length) {
           outbound[0].content += '\nAUTHOR-APPROVED SAVED CONTEXT (independent sources; refreshed for this request):\n' +
             JSON.stringify(approvedPayloads) +
@@ -3286,19 +3273,6 @@
         } else {
           outbound[0].content += '\nNo saved Project or Scene reference was supplied for this conversation.\n';
         }
-        // Earlier authored responses belong to this conversation, not any selected Project.
-        // Include actual structured fields, rather than only the visible prose summary.
-        var prior = messages.filter(function (message) {
-          return message.role === 'assistant' && typeof message.rawResponse === 'string';
-        }).slice(-3).map(function (message) {
-          var parsed = parseStudioChatResponse(message.rawResponse);
-          return {changes:parsed.changes,scenes:parsed.scenes};
-        }).filter(function (material) {
-          return material.changes || material.scenes && material.scenes.length;
-        });
-        if (prior.length)
-          outbound[0].content += '\nRECENT UNSAVED MATERIAL AUTHORED IN THIS CONVERSATION:\n' +
-            JSON.stringify(prior) + '\nSaved fields, if any, must still come from the approved references above.\n';
         return outbound;
       });
     });
@@ -3824,34 +3798,6 @@
           sceneNumber:resolvedTarget.sceneNumber
         } : selectedScene;
         var targetProject = resolvedTarget.projectId ? {projectId:resolvedTarget.projectId} : selectedProject;
-        // Authored fields, never action hints or parsed author prose, own review affordances.
-        // Keep every independently authored result visible and reviewable.
-        var actions = studioAuthoredWriteActions(studioResponse,content,targetScene);
-        if (activeChatMode === 'storyboard' && studioResponse && studioResponse.changes)
-          window.studioDirectorWorkbench.updateWorkingWrite();
-        var nextAction = actions.pop() || null;
-        var otherActions = actions;
-        if (nextAction) {
-          var assistantIndex = messages.length - 1;
-          // Store alternate actions independently rather than overwriting
-          // their review paths with the last returned Scene.
-          if (otherActions.length)
-            messages[assistantIndex].otherWriteActions = otherActions.map(function (action, i) {
-              return Object.assign({},action,{
-                actionKey:'alternate-' + i,request:content,
-                sourceMessageIndex:assistantIndex,
-                projectId:String(targetProject && targetProject.projectId || ''),
-                scene:targetScene && Object.assign({},targetScene)
-              });
-            });
-          nextAction.actionKey = 'primary';
-          try {
-            messages[assistantIndex].writeAction = window.studioDirectorWorkbench.presentAction(
-              nextAction, targetScene, targetProject, content, assistantIndex);
-          } catch (processingError) {
-            window.reportConsoleError('Studio action suggestion', processingError);
-          }
-        }
         if (studioResponse) messages[messages.length - 1].rawResponse = String(result.text || '');
         if (activeChatMode === 'storyboard' && studioResponse) el('studio-director-inspect').dataset.newResult = 'true';
         var assistantIndex = messages.length - 1;

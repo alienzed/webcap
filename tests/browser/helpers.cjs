@@ -106,7 +106,7 @@ async function openWrite(page, {projectId, operation='project', sceneMode, instr
   // Conversation send resolves at dispatch. Do not initiate a Write until the
   // previous model job has actually left its busy state.
   await expect(page.locator('#director-chat-progress')).toBeHidden({timeout:60000});
-  await expect(page.locator('#director-chat-send')).toBeEnabled({timeout:60000});
+  await expect(page.locator('#director-chat-input')).toBeEnabled({timeout:60000});
   const tools=page.locator('#studio-dw-open-tools');
   if(await tools.getAttribute('aria-expanded')!=='true') await tools.click();
   const panel=page.locator('#studio-dw-write-panel');

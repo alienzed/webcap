@@ -135,15 +135,11 @@ test('saved Project and independent conversation response are separate persisten
   assert.match(chat, /stored\.writeAction = message\.writeAction/);
 });
 
-test('multiple distinct scene records are retained as actual response material', () => {
-  const parsed = section(chat, '  function parseStudioChatResponse(raw) {',
-    '  function storyboardRequestMessages(');
-  const parse = new Function(parsed + 'return parseStudioChatResponse;')();
-  const result = parse(JSON.stringify({reply:'Authored actual records',scenes:[
-    {title:'First',prompt:'Complete first scene prompt',durationSeconds:8},
-    {title:'Second',prompt:'Complete second scene prompt',durationSeconds:12}
-  ]}));
-  assert.equal(result.scenes.length, 2);
-  assert.equal(result.scenes[1].durationSeconds,12);
-  assert.deepEqual(result.scenes.map(scene=>scene.title),['First','Second']);
+test('ordinary chat does not create actionable Scene records from structured model text',()=>{
+  const parsed=section(chat,'  function parseStudioChatResponse(raw) {','  function storyboardRequestMessages(');
+  const parse=new Function(parsed+'return parseStudioChatResponse;')();
+  const raw=JSON.stringify({scenes:[{prompt:'Unrequested Scene 1'},{prompt:'Unrequested Scene 2'}]});
+  assert.equal(parse(raw).reply,raw);
+  assert.equal(parse(raw).scenes,null);
+  assert.equal(parse(raw).action,null);
 });

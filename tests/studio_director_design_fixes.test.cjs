@@ -125,13 +125,14 @@ test('Write opens the explicit operation picker without launching a model reques
   assert.equal(selected,1,'reopening Write reuses the visible picker without starting a model');
 });
 
-test('Share Details opens the original Read sidebar and indicates approved context',()=>{
+test('Read remains explicitly accessible without a standing approval badge',()=>{
   assert.match(html,/id="director-chat-context-approve"/);
   assert.match(rail,/el\('director-chat-context-approve'\)\.onclick=function \(\) \{openDirectAction\('read'\);\}/);
-  assert.match(chat,/state\.studioApprovedRead \? 'Context ✓' : 'Share Details…'/);
+  assert.match(chat,/contextButton\.textContent = 'Read…'/);
+  assert.doesNotMatch(chat,/studioApprovedRead/);
 });
 
-test('Read preview and outbound values use the same validated field serializer', () => {
+test('Read preview and persisted chat use the same validated serializer', () => {
   const body=section(rail,'  function readPayload(story, keys) {','  function updateReadSelection() {');
   const scope={projectFields:['title','concept','style','invariants'],storyName:story=>story.title};
   vm.createContext(scope);
@@ -144,20 +145,20 @@ test('Read preview and outbound values use the same validated field serializer',
   assert.equal(result.fields[1].value,'Close-up');
   assert.throws(()=>scope.readPayload(story,['scene:missing:prompt']),/not in this Project/);
   assert.match(rail,/readPayload\(story, keys\)/);
-  assert.match(rail,/studioDirectorBridge\.approveRead\(story\.id, keys\)/);
+  assert.match(rail,/studioDirectorBridge\.appendReadSnapshot\(payload\)/);
   assert.match(html,/id="studio-dw-read" type="button"/);
-  assert.match(html,/Approve context<\/button>/);
-  assert.match(html,/id="studio-dw-read-clear"/);
-  assert.match(rail,/studioDirectorBridge\.clearApprovedRead\(\)/);
-  assert.match(chat,/clearApprovedRead: function \(\)/);
+  assert.match(html,/Read into conversation<\/button>/);
+  assert.doesNotMatch(html,/id="studio-dw-read-clear"/);
 });
 
-test('Read receipt uses delivery and response status, not model text parsing',()=>{
-  assert.match(chat,/var fieldCount = state\.pendingReadAck\.length/);
-  assert.match(chat,/setReadStatus\('success', feedback\)/);
-  assert.doesNotMatch(chat,/Director acknowledgement mismatch/);
+test('Read receipt reflects confirmed persistence rather than model acknowledgment',()=>{
+  const append=section(chat,'    appendReadSnapshot: function (payload) {',
+    '    selectWriteProject: function (');
+  assert.match(append,/renderMessages\(\)/);
+  assert.match(append,/return persistSession\('storyboard'\)/);
+  assert.doesNotMatch(append,/sendMessage\(\)|requestJson\(/);
+  assert.doesNotMatch(chat,/pendingReadAck/);
   assert.match(rail,/setReadStatus:function\(state,detail\)/);
-  assert.doesNotMatch(chat,/director-chat-read-receipt/);
 });
 
 test('Select entire Project reuses Read selection and shows size without rejecting it',()=>{

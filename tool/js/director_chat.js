@@ -4227,7 +4227,12 @@
       }
     });
     if (changed) {
-      if (!Object.keys(draft).length) delete state.studioWorkingDraft.scenes[sceneId];
+      if (!Object.keys(draft).length) {
+        delete state.studioWorkingDraft.scenes[sceneId];
+        if (state.studioWorkingDraft.draftOrigins &&
+            state.studioWorkingDraft.draftOrigins.scenes)
+          delete state.studioWorkingDraft.draftOrigins.scenes[sceneId];
+      }
       scheduleSessionSave();
     }
   }
@@ -4863,8 +4868,15 @@
           throw new Error('Selected Scene is no longer available in its saved Project.');
         var original = story.scenes[sceneId];
         var workingScene = state.studioWorkingDraft.scenes[sceneId];
-        var applyExisting = state.studioWorkingDraft.sourceRequest ===
-          String(launch.authorRequest || launch.instruction);
+        var draftOrigin = state.studioWorkingDraft.draftOrigins &&
+          state.studioWorkingDraft.draftOrigins.scenes &&
+          state.studioWorkingDraft.draftOrigins.scenes[sceneId];
+        var baseline = JSON.stringify({
+          title:original.title,prompt:original.prompt,durationSeconds:original.durationSeconds
+        });
+        var applyExisting = !!draftOrigin && draftOrigin.projectId === storyId &&
+          draftOrigin.request === String(launch.authorRequest || launch.instruction) &&
+          draftOrigin.baseline === baseline;
         if (workingScene && applyExisting) {
           var pendingChanges = {};
           fields.forEach(function (field) {
@@ -4946,8 +4958,15 @@
             if (Object.keys(authored).length) {
               state.studioWorkingDraft.scenes[sceneId] = Object.assign(
                 {},state.studioWorkingDraft.scenes[sceneId] || {},authored);
-              state.studioWorkingDraft.sourceRequest =
-                String(launch.authorRequest || launch.instruction);
+              state.studioWorkingDraft.draftOrigins =
+                state.studioWorkingDraft.draftOrigins || {projects:{},scenes:{}};
+              state.studioWorkingDraft.draftOrigins.scenes =
+                state.studioWorkingDraft.draftOrigins.scenes || {};
+              state.studioWorkingDraft.draftOrigins.scenes[sceneId] = {
+                projectId:storyId,
+                request:String(launch.authorRequest || launch.instruction),
+                baseline:baseline
+              };
               scheduleSessionSave();
             }
             if (wantsPrompt && prompt === null)

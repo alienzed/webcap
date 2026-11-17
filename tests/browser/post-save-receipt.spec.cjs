@@ -2,7 +2,7 @@
 const fs=require('node:fs');
 const path=require('node:path');
 const {test,expect}=require('./test.cjs');
-const {resetModel,queueModel,observedModels,openDirector,openProject,say,seedProject,story}=require('./helpers.cjs');
+const {resetModel,queueModel,observedModels,openDirector,openProject,openWrite,seedProject,story}=require('./helpers.cjs');
 const {ensureAttachedProject}=require('./helpers.cjs');
 
 // An actual filesystem permission failure AFTER Scene persistence. This does
@@ -14,16 +14,11 @@ test('Flow 7 variation — Scene persists when subsequent conversation receipt c
   await openDirector(page);
   await openProject(page,project.id);
   await ensureAttachedProject(page,project.title);
-  await queueModel(request,{
-    reply:'Here is a complete Scene.',
-    scenes:[{title:'Night Window',prompt:'A lamp glows behind the rain-streaked glass.',durationSeconds:8}],
-    action:{kind:'create_scene',instruction:'Create Night Window.'}
-  });
-  await say(page,'Create a Scene called Night Window.');
-  const action=page.locator('#studio-dw-suggestions .studio-dw-suggestion-action');
-  await expect(action).toBeVisible();
-  await action.click();
-  await expect(page.locator('#studio-scenes-review')).toBeVisible();
+  await queueModel(request,{scenes:[{
+    title:'Night Window',prompt:'A lamp glows behind the rain-streaked glass.',durationSeconds:8
+  }]});
+  await openWrite(page,{projectId:project.id,operation:'scene-write',
+    sceneMode:'create',instruction:'Create Night Window.'});
 
   const root=fs.readFileSync(path.join(__dirname,'../../test-results/studio-temp-root.txt'),'utf8').trim();
   let chatId='';
@@ -38,10 +33,10 @@ test('Flow 7 variation — Scene persists when subsequent conversation receipt c
 
   try{
     fs.chmodSync(chatDirectory,0o500);
-    await page.locator('#studio-scenes-apply').click();
+    await page.locator('#studio-dw-write-prepare').click();
     await expect.poll(async()=> (await story(page,project.id)).sceneOrder.length).toBe(1);
     await expect(page.locator('#director-studio-action-status')).toContainText(
-      /created, but history save or refresh failed|saved, but/i
+      /saved, but recording or refreshing failed/i
     );
   }finally{
     fs.chmodSync(chatDirectory,0o700);

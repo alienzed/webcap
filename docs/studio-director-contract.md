@@ -1,149 +1,109 @@
-# Studio Director — Chat and explicit Write contract
+# Studio Director — normative Chat and Write contract
 
-**Status:** Normative design for Studio Director. Updated November 17, 2026.
-This document replaces the earlier combined conversation/authoring strategy in full.
-Use it alongside `AGENTS.md`; an older design document, test or historical
-transcript does not override this contract.
+**Authoritative strategy, November 17, 2026.** Applies with `AGENTS.md`.
+Older Studio design documents and historic tests are evidence only, not competing contracts.
 
-## Purpose
+## The complete flow
 
-Studio Director is a creative collaborator and a focused author. The two tasks
-are **separate LLM operations**, not separate personalities inferred from prose.
-Reliability comes from the author deliberately choosing the operation, and WebCap
-supplying only the instructions and response format for that operation.
+**Chat → explicit Write → LLM response → target fields → History.**
 
-### Normal path
+**Chat** is a natural creative conversation. Send all user and Director turns in
+chronological order, no fixed cap, clipping, summarization or compaction. The
+model returns prose. Chat does not author fields, recommend WebCap actions, claim
+saves, parse user prose as commands, or return a combined `reply/changes` schema.
 
-1. **Chat:** User and Director discuss creative ideas naturally. The model returns
-   ordinary text. Chat never produces, requests, extracts, or applies structured
-   Project/Scene field values, actions, write hints or readiness metadata.
-2. **Write:** The author chooses an explicit operation and destination in WebCap
-   (Create Project, revise Overview, create Scene(s), revise selected Scene(s)).
-   WebCap gives the model the full conversation, relevant *explicitly authorized*
-   saved source fields, an exact operation-specific creative task and response
-   schema. The model returns authored material, not conversational commentary.
-3. **Apply:** WebCap consumes the structured result in the same operation that
-   requested it. It maps *received* field values to the explicitly selected
-   target, saves valid independently usable work through existing persistence,
-   updates the editor and field history, and reports actual partial or full saves.
-   No intermediate Review/Apply ceremony is required for new writes.
-4. **Continue:** New Chat turns see the actual conversation, including the
-   Director's earlier *chat* replies; structured authoring payloads are not
-   written back as chat text. The saved Project/Scene is authoritative and
-   available to subsequent writes via their explicitly chosen targets.
+**Write** is a user-selected interface operation. Choose Create Project, Revise
+Overview, Create Scene(s), or Revise Scene(s). Each operation sends one clear,
+focused writing request with the complete actual conversation, relevant saved
+baseline and the correct production reference, plus its operation-specific
+structured response format. Do not repeat the conversation inside a JSON field,
+supply redundant schemas, send workflow instructions to the model, or append
+model-discovered actions. The LLM is entrusted with the creative work. Follow
+proven narrow-generation patterns from First Cut, Develop Scenes and Enhance
+Prompt; retain their quality, independence and guidance.
 
-**The ordinary Chat response is never a Write trigger.** There is no intent
-classification, prose parsing for commands or destinations, model-suggested
-action object, readiness scoring, automatic authoring, or second assessment call.
+**Apply** is deterministic: the operation that requested the response maps
+received structured values to the intended fields. WebCap does not judge
+creativity, inspect prose for meaning, score compliance, invent fallback content,
+run automatic repairs or reject a response on speculative semantic grounds.
+WebCap must remain a **dumb waiter**, not a gate or a judge. Its obligations are
+correct request routing, output structure handling, deterministic targeting,
+persistence and honest operational errors. Fail loudly on genuine API, provider,
+transport, unsupported field type, missing target or save errors, not subjective
+quality complaints. A malformed response is diagnostic evidence for debugging
+request/guidance/schema; preserve it fully in I/O. Do not silently drop an
+otherwise available response or preemptively create a new review procedure.
 
-## Requests and guidance
+**History** provides backward/forward recovery of successful field writes,
+including manual and Director edits. Direct writes update the editor via its
+existing field-history mechanism. **Review is removed**, not preserved as an
+alternative for new operations. History is the recovery workflow, not a
+validation gate. If History fails, fix History rather than reintroducing Review.
 
-**Chat:** A short creative-conversation system primer, the complete chronological
-user/assistant exchange and any author-approved saved Read references. Natural
-text output only. Do not include H3 production templates, field definitions,
-JSON response schemas, multi-role instructions, hidden action contracts,
-unrequested project navigation, or backend write metadata.
+**I/O** exposes complete copyable sent messages and raw provider responses,
+including unsuccessful requests and responses that could not be applied.
+Do not erase an LLM response because saving it failed, and do not misreport
+application failure as a creative failure. No speculative draft storage or
+parallel chat/field deliverables: Chat delivers prose, Write delivers fields.
 
-**Write:** Operation-specific creative guidance, precisely scoped requested field
-names and required output fields, the **same full chronological chat exchange**
-(as distinct `user`/`assistant` messages), and one final targeted writing
-instruction with its explicit saved baseline/constraints. Do not duplicate the
-conversation inside an embedded `discussion` JSON property, and do not send
-unrelated saved projects or UI state. H3 production guidance appears only for
-operations writing H3 prompts, not title-only or Overview changes. Existing
-successful First Cut, Develop Scenes and Enhance Prompt prompt expertise must
-not be diluted in this refactor.
+## Boundaries and focused payloads
 
-**Context:** No arbitrary last-eight cap, character clipping, hidden summaries
-or automatic compaction. Expose actual provider/context-limit failures.
-Model-specific context measurement and compaction are later work, not a reason
-to silently drop history now.
+WebCap decides the operation, destination, field names, selected Scene IDs,
+save order and authoritative saved values. The model never chooses IDs, actions
+or destinations by prose. Navigation, deliberate conversation attachment,
+explicitly approved Read sources, and current Write destination remain distinct.
+An explicit Write may read its selected target's current saved baseline;
+arbitrary unrelated saved Projects do not become implicit context.
 
-**Independent identities:** Visible Project/Scene navigation, deliberate
-conversation attachment, explicitly approved saved Read references, and the
-current Write destination are distinct. None silently changes another.
-An explicit Write authorizes reading *its own selected saved baseline* for
-revision; it does not authorize reading arbitrary projects. A model never
-chooses IDs, a save target or a write operation by its wording.
+Chat receives its concise creative primer and the full real conversation.
+An approved Read source is included only if explicitly selected. Chat does not
+receive H3 production templates, field schemas or Write controls.
 
-## One contract per operation
+Write receives the same chronological conversation, a *single* operation-local
+task payload, exact requested fields, saved baseline/continuity material needed
+for that task, and only relevant authoring guidance. Include H3 reference for
+writing H3 prompts, not title-only/Overview operations. Preserve prompt-specific
+templates and real model guidance; avoid prohibitions, duplicate instructions,
+irrelevant optional schema properties, explanatory rationales as mandatory fields,
+or model-facing WebCap implementation jargon.
 
-- **Chat:** No structured response schema; plain text, one displayed answer.
-- **Create Project:** Author requested Project title, Concept, Visual /
-  atmosphere and useful Invariants. A response may include initial Scene briefs;
-  these are separately processed only when complete. Absent optional initial
-  material must not invalidate a useful Project.
-- **Revise Overview:** Require only specifically selected Project fields;
-  return complete replacements for them. Never insist on rewriting unrelated
-  fields because an optional schema property happens to exist.
-- **Create Scene(s):** Ask for full generatable prompt, useful title and supported
-  duration for each authored Scene. Accept the **actual number of complete
-  returned records**, including more or fewer than requested; report shortfalls
-  honestly. Each saved Scene remains independently useful if another fails.
-- **Revise Scene(s):** Require only selected fields. Title-only/duration-only
-  changes must not require a new prompt. Prompt revisions should preserve
-  unaffected creative decisions, but WebCap must not implement story-specific
-  semantic validators or replace model creative judgment with brittle heuristics.
-  Each selected Scene has its own deterministic target and save result.
+Write schemas should describe expected output positively and require the actual
+requested fields, as the app's proven authoring operations do. A schema is a
+transport agreement, not a semantic quality verdict. Map real returned fields
+rather than judging whether an LLM's creative choice was sufficiently good.
+New Scene writes should handle the actual records returned, not assume the
+requested count is proof. Actual save responses determine success; report
+unsaved records and technical errors truthfully.
 
-Schema-required fields should match the operation's real expectations. Use a
-small, purposeful schema without redundant optional properties or boilerplate
-`rationale` requirements merely for compatibility. Structure is a transport
-contract, **not** a proof that requested creative content is semantically
-correct, nor a license to throw away useful partial material.
+No last-eight history cap. Do not predict model-specific context limits or
+introduce automatic compaction now. A provider context error is visible in I/O
+and Console; compaction can be designed later using observed behavior.
 
-Parse **structured output as structured output**, not conversation prose.
-Keep actual received fields/records even if a different requested field is
-missing or invalid. Apply valid independent pieces; expose incomplete pieces
-through the operation's own editable/error surface and I/O diagnostics,
-without inventing default creative values, silently coercing semantic content,
-repairing via regex or making an automatic second LLM call. Only the actual
-persistence response proves a save. A model's textual claim does not.
+## Remove the old system
 
-Every interface action has exactly one traceable route:
-**UI selection → task instruction → request contract → model response
-→ operation-owned parser → typed field mapping → authoritative save
-→ editor/history and truthful receipt.** The route must be the same for
-direct shortcuts and the Write panel where they represent the same task.
+Delete runtime paths for conversational structured authoring, LLM-generated
+write actions/readiness, Review/Apply modals and controllers, alternate authoring
+pipelines, retained draft orchestration and speculative validation/repair.
+Do not leave hidden live pathways or feature flags. Old saved conversations
+and Projects must still open without executing legacy authoring actions;
+archive-read compatibility may be a small inert rendering adapter, not a
+second executable architecture. Historic data need not be migrated, modified
+or destroyed.
 
-## Interface, lifecycle and cleanup
+## Acceptance and evidence
 
-New Write results go to editable fields via existing persistence and undo/redo
-history; they do **not** wait for a new Review modal or conversational proposal.
-Existing chat text remains readable. Old stored structured messages may be
-shown as inert archive content, but cannot launch hidden legacy write actions.
-Preserve existing saved Project/Scene data and old conversation files; no data
-migration or deletion is authorized.
+Tests must exercise real visible actions:
+Chat (more than eight turns) → Write Project → Chat → Write Scene →
+Revise Scene title/prompt/duration, switching navigation where appropriate,
+observing actual fields, History backward/forward and persistence. Confirm
+the exact prompt/schema sent for each action, no duplicated context, no
+Chat-field interpretation, no H3 formatting prompt in ordinary Chat, no
+second Review prompt, correct selective field writes, and full copyable I/O
+on an LLM error, malformed response or application failure.
 
-Remove **dead execution paths**, including combined Chat response parsers,
-conversational Write suggestions, model action metadata, readiness processing,
-legacy review-only controllers and duplicated authoring routes, once their
-actual callers and compatibility requirements are traced. Do not keep two
-competing active architectures under a permanent feature flag. Compatibility
-for reading old stored data should be localized and inert, not a second system.
+Update Node/Python deterministic contracts and Playwright mock and live flows,
+not only source-pattern assertions. Preserve tests of still-supported
+functions; remove or replace tests asserting behavior explicitly retired by
+this contract. Do not mark tests as passing when they haven't executed.
 
-Keep plain classic JavaScript, Python backend and file-based storage. Do not
-introduce orchestration layers, a new agent, speculative retries, automatic
-compaction, blanket validators, creative grading, or extra model calls.
-
-## Tests and acceptance
-
-Update deterministic unit tests and Playwright tests together with the code.
-Retire *obsolete assumptions*, not entire useful test suites. Exercise the
-complete Chat → Write Project → Chat → Write Scene → revise title, prompt and
-duration path with mock and real providers. Inspect exact outgoing messages
-and schemas for all operations; verify conversation roles, complete history,
-no production reference in Chat, focused H3 reference only where needed,
-unrelated saved-field isolation, target binding and actual persisted edits.
-
-Test partial Project/Scene output, mixed complete and incomplete Scenes,
-returned extra Scenes, unchanged revisions, invalid duration, failed writes,
-post-save reporting failures, changing navigation, explicit Read approval and
-restoring old conversations. Confirm field history recovers direct changes.
-Playwright must exercise actual visible controls and saved results—not only
-assert that DOM elements exist. Separate deterministic correctness from
-real-model semantic observations and do not claim runtime verification without
-running it.
-
-The feature branch is not ready to merge while these checks fail or are unrun.
-Rollback via Git must remain possible without corrupting saved data.
+Do not merge until architecture and checks conform to this contract.

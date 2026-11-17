@@ -7,27 +7,25 @@ from tool.server.studio_director import guidance, ACTIONS
 
 
 def test_writer_workshop_keeps_creative_identity_separate_from_h3_playbook(monkeypatch):
-    monkeypatch.setattr(
-        app_config,
-        "config",
-        {"generation_model_guidance": {"minimax_h3": "Keep risky hand-to-hand interactions simple."}},
-    )
+    monkeypatch.setattr(app_config, "config", {
+        "generation_model_guidance": {"minimax_h3": "Keep risky hand-to-hand interactions simple."}
+    })
     result = guidance("minimax_h3")
-    system, reference = result["system"], result["promptContract"]
-    assert "STUDIO DIRECTOR | CREATIVE PARTNER" in system
-    assert "imaginative, capable creative director" in system
-    assert "CREATIVE WORK: When asked to create or revise material" in system
-    assert "If an essential creative decision is missing" in system
-    assert "providing any independently useful work" in system
-    assert "Concept (story.concept)" in system
-    assert "Invariants (story.invariants)" in system
-    assert "complete H3 Prompt (scene.prompt)" in system
-    assert "4–15 seconds" in system
+    writer, chat, reference = result["system"], result["chatSystem"], result["promptContract"]
+    assert "FOCUSED CREATIVE WRITER" in writer
+    assert "Return complete, usable authored field values" in writer
+    assert "Concept (story.concept)" in writer
+    assert "complete H3 Prompt (scene.prompt)" in writer
+    assert "4–15 seconds" in writer
+    assert "creative partner" in chat
+    assert "Respond in ordinary conversational text" in chat
+    assert "H3 PROMPT AUTHORING REFERENCE" not in chat
     assert "integrated_multimodal_description" in reference
     assert "Keep risky hand-to-hand interactions simple." in reference
-    assert "Keep risky hand-to-hand interactions simple." not in system
-    assert "[Shot 1]" not in system
-    assert len(system) < 4000
+    assert "Keep risky hand-to-hand interactions simple." not in writer
+    assert "[Shot 1]" not in writer
+    assert len(chat) < 1500
+    assert len(writer) < 4000
 
 def test_studio_guidance_teaches_only_focused_creative_workflows():
     result = guidance("minimax_h3")
@@ -37,25 +35,22 @@ def test_studio_guidance_teaches_only_focused_creative_workflows():
     assert "preserving unrelated" in actions["project.write"]
     assert "Invariants" in actions["project.write"]
     assert "one or more Scenes" in actions["scenes.write"]
-    assert "Respond naturally and concisely" in result["system"]
-    assert "make a recommendation when you can" in result["system"]
+    assert "Discuss the author's ideas naturally" in result["chatSystem"]
+    assert "Return complete, usable authored field values" in result["system"]
     assert "CURRENT WEBCAP CAPABILITIES" not in result["system"]
-    assert len(result["system"]) < 4000
 
 def test_director_role_is_creative_partner_not_webcap_workflow_engine():
-    system = guidance("minimax_h3")["system"]
-    assert "elevate the author's" in system
-    assert "meaningful ideas" in system
-    assert "sound creative judgment" in system
-    assert "producible results" in system
-    assert "The author sets the direction" in system
-    assert "deliver the actual usable" in system
-    assert "Preserve established details outside the requested change" in system
-    assert "only WebCap saves Project and Scene records" in system
-    assert "WebCap Studio workflow guide" not in system
-    assert "review policy" not in system
-    assert "direct-save" not in system
-    assert "queue" not in system.lower()
+    chat = guidance("minimax_h3")["chatSystem"]
+    writer = guidance("minimax_h3")["system"]
+    assert "thoughtful, imaginative creative partner" in chat
+    assert "Discuss the author's ideas naturally" in chat
+    assert "author initiates separate writing" in chat
+    assert "Fulfil the author's explicitly selected" in writer
+    assert "WebCap owns IDs, destinations" in writer
+    assert "WebCap Studio workflow guide" not in writer
+    assert "review policy" not in writer
+    assert "direct-save" not in writer
+    assert "queue" not in writer.lower()
 
 def test_action_catalog_excludes_low_value_studio_director_operations():
     by_name = {action["name"]: action for action in ACTIONS}
@@ -93,13 +88,13 @@ def test_unsupported_generation_model_fails_instead_of_misapplying_h3_guidance()
 def test_unconfigured_h3_studio_still_has_production_expertise(monkeypatch):
     monkeypatch.setattr(app_config, "config", {"generation_model_guidance": {}})
     result = guidance("minimax_h3")
-    system, reference = result["system"], result["promptContract"]
-    assert "short generative-video Projects and Scenes" in system
-    assert "4–15 seconds" in system
-    assert "complete standalone H3 Prompt" in system
-    assert "USER'S H3 PRODUCTION PLAYBOOK" not in system
+    writer, reference = result["system"], result["promptContract"]
+    assert "short-video creative writer" in writer
+    assert "4–15 seconds" in writer
+    assert "complete standalone H3 Prompt" in writer
+    assert "USER'S H3 PRODUCTION PLAYBOOK" not in writer
     assert "USER'S H3 PRODUCTION PLAYBOOK" not in reference
-    assert "[Shot 1]" not in system
+    assert "[Shot 1]" not in writer
     assert "[Shot 1]" in reference
 
 def test_h3_runtime_reference_uses_current_studio_fields_and_conditional_legacy_guidelines():
@@ -110,14 +105,14 @@ def test_h3_runtime_reference_uses_current_studio_fields_and_conditional_legacy_
 
 
 def test_freeform_workshop_does_not_claim_hidden_context_or_mutations():
-    system = guidance("minimax_h3")["system"]
-    assert "saved Project and Scene facts actually supplied" in system
-    assert "treat earlier unsaved ideas as proposals" in system
-    assert "only WebCap saves Project and Scene records" in system
-    assert "elevate the author's" in system
-    assert "a promise to work later" in system
-    assert "CURRENT PROJECT NAVIGATION" not in system
-    assert "WebCap resolved Project" not in system
+    chat = guidance("minimax_h3")["chatSystem"]
+    writer = guidance("minimax_h3")["system"]
+    assert "Discuss the author's ideas naturally" in chat
+    assert "separate writing operations" in chat
+    assert "explicitly provided saved creative" in writer
+    assert "WebCap owns IDs, destinations" in writer
+    assert "CURRENT PROJECT NAVIGATION" not in writer
+    assert "WebCap resolved Project" not in writer
 
 def test_studio_guidance_describes_actual_project_and_scene_fields():
     system = guidance("minimax_h3")["system"]
@@ -191,7 +186,7 @@ def test_retired_director_model_operations_are_not_queued(monkeypatch, operation
     ("studio_scenes_draft", {"scenes", "rationale"}),
     ("storyboard_workshop_shots", {"summary", "shots"}),
     ("freeform_chat", None),
-    ("studio_chat", {"reply", "changes", "scenes"}),
+    ("studio_chat", None),
 ])
 def test_director_chat_route_preserves_all_structured_schemas(monkeypatch, operation, expected_fields):
     import importlib
@@ -227,14 +222,10 @@ def test_director_chat_route_preserves_all_structured_schemas(monkeypatch, opera
             assert captured["schema"]["required"] == ["scenes"]
             assert "prompt" not in captured["schema"]["properties"]
             assert captured["schema"]["properties"]["scenes"]["items"]["properties"]["prompt"]["type"] == "string"
-        if operation in {"studio_chat", "studio_scenes_draft"}:
+        if operation == "studio_scenes_draft":
             record = captured["schema"]["properties"]["scenes"]["items"]
             assert record["required"] == ["title", "prompt", "durationSeconds"]
             assert record["properties"]["prompt"]["minLength"] == 1
-            if operation == "studio_chat":
-                assert captured["schema"]["required"] == ["reply"]
-                assert captured["schema"]["properties"]["reply"]["minLength"] == 1
-                assert "required" not in captured["schema"]["properties"]["changes"]["properties"]["scene"]
         if operation == "studio_project_draft":
             assert captured["schema"]["required"] == ["title", "concept", "style", "invariants", "rationale"]
         if operation == "studio_brief_draft":

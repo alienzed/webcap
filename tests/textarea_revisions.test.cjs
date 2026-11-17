@@ -26,7 +26,8 @@ function editor(value, sceneId) {
   };
 }
 
-function harness() {
+function harness(savedPreferences) {
+  const preferenceStorage = savedPreferences ? Object.assign({},savedPreferences) : {};
   const docHandlers={}, controls={}, toolbarHandlers={}, pending=new Map();
   let timerId=0,captionKey='caption:set/item-a';
   for (const name of ['[data-rev-prev]','[data-rev-next]','[data-rev-count]']) {
@@ -49,6 +50,10 @@ function harness() {
     addEventListener(name,fn){docHandlers[name]=fn;}
   };
   const window={
+    localStorage: {
+      getItem(key) { return Object.prototype.hasOwnProperty.call(preferenceStorage,key) ? preferenceStorage[key] : null; },
+      setItem(key,value) { preferenceStorage[key] = value; }
+    },
     getStudioDirectorNavigation:()=>({projectId:'project-1'}),
     addEventListener(){}
   };
@@ -60,6 +65,7 @@ function harness() {
     Map,Array,String,Object});
   docHandlers.DOMContentLoaded();
   return {document,window,controls,toolbarHandlers,toolbar,
+    preferences:()=>Object.assign({},preferenceStorage),
     css:()=>injectedCss,
     captionTarget(key){captionKey=key;},
     focus(field){docHandlers.focusin({target:field});},
@@ -248,4 +254,24 @@ test('Storyboard and Director review share a logical Scene prompt history key',(
   const review=editor('Revised','unused');
   review.dataset={revisionKey:key,field:'prompt'};
   assert.equal(h.window.webcapTextareaRevisions.identity(review),key);
+});
+
+test('browser-local preferences survive reload while revision content does not',()=>{
+  const h=harness(),field=editor('Private text','scene-local');
+  const api=h.window.webcapTextareaRevisions;
+  h.focus(field);
+  field.value='Private revision';h.input(field);h.idle();
+  api.setEnabled('scene.prompt',false);
+  api.setEnabled('generation.prompt',true);
+  api.setMasterEnabled(false);
+  const storage=h.preferences();
+  const serialized=Object.values(storage).join(' ');
+  assert.doesNotMatch(serialized,/Private text|Private revision/);
+  const reloaded=harness(storage);
+  assert.equal(reloaded.window.webcapTextareaRevisions.enabledFor(field),false);
+  assert.equal(reloaded.window.webcapTextareaRevisions.history(api.identity(field)),undefined);
+  reloaded.window.webcapTextareaRevisions.setMasterEnabled(true);
+  assert.equal(reloaded.window.webcapTextareaRevisions.enabledFor(field),false);
+  reloaded.window.webcapTextareaRevisions.setEnabled('scene.prompt',true);
+  assert.equal(reloaded.window.webcapTextareaRevisions.enabledFor(field),true);
 });

@@ -4564,178 +4564,62 @@
     },
     writeSelectedScene: function (launch) {
       if (!this.isReady()) return Promise.reject(new Error(this.readinessMessage()));
-      if (!launch || !launch.projectId || !launch.sceneId || !String(launch.instruction || '').trim())
-        return Promise.reject(new Error('A specific saved Scene and agreed revision instruction are required.'));
+      if (!launch || !launch.projectId || !launch.sceneId ||
+          !String(launch.instruction || '').trim())
+        return Promise.reject(new Error('Choose an existing Scene and revision instruction.'));
       var storyId = launch.projectId, sceneId = launch.sceneId;
-      var fields = Array.isArray(launch.fields) ? launch.fields : [];
-      var wantsTitle = fields.includes('title'), wantsDuration = fields.includes('durationSeconds');
-      var wantsPrompt = fields.includes('prompt') || !fields.length;
-      var requestedFields = (wantsPrompt ? ['prompt'] : [])
-        .concat(wantsTitle ? ['title'] : [], wantsDuration ? ['durationSeconds'] : []);
-      state.lastStudioIoRaw = '';
-      state.lastStudioIoError = '';
-      // Lock the launch while flushing/fetching; makeProposal takes over the
-      // busy state synchronously once the fresh Scene has been loaded.
+      var fields = Array.isArray(launch.fields) && launch.fields.length ?
+        launch.fields.slice() : ['prompt'];
       state.pending = true;
+      state.jobId = '';
       syncControls();
       return window.flushStudioDirectorStoryEdits(storyId).then(function () {
         return requestJson('/fs/storyboard?story=' + encodeURIComponent(storyId));
       }).then(function (payload) {
-        var story = payload && payload.story;
-        if (!story || story.id !== storyId || !Array.isArray(story.sceneOrder) ||
-            !story.sceneOrder.includes(sceneId) || !story.scenes || !story.scenes[sceneId])
-          throw new Error('Selected Scene is no longer available in its saved Project.');
-        var original = story.scenes[sceneId];
-        var workingScene = state.studioWorkingDraft.scenes[sceneId];
-        var draftOrigin = state.studioWorkingDraft.draftOrigins &&
-          state.studioWorkingDraft.draftOrigins.scenes &&
-          state.studioWorkingDraft.draftOrigins.scenes[sceneId];
-        var baseline = JSON.stringify({
-          title:original.title,prompt:original.prompt,durationSeconds:original.durationSeconds
-        });
-        // A partial result remains available for Review, but cannot satisfy a
-        // later retry unless every requested field was actually authored.
-        // In particular, a title does not stand in for a requested H3 Prompt.
-        var completeDraft = !!draftOrigin && requestedFields.every(function (field) {
-          return Array.isArray(draftOrigin.fields) && draftOrigin.fields.includes(field) &&
-            workingScene && Object.prototype.hasOwnProperty.call(workingScene,field);
-        });
-        var applyExisting = !launch.forceAuthor && completeDraft &&
-          draftOrigin.projectId === storyId &&
-          draftOrigin.request === String(launch.authorRequest || launch.instruction) &&
-          draftOrigin.baseline === baseline;
-        if (workingScene && applyExisting) {
-          var pendingChanges = {};
-          fields.forEach(function (field) {
-            if (Array.isArray(draftOrigin.fields) && draftOrigin.fields.includes(field) &&
-                Object.prototype.hasOwnProperty.call(workingScene,field))
-              pendingChanges[field] = workingScene[field];
-          });
-          if (draftOrigin.timingNeedsReview) {
-            studioActionStatus('Scene timing still needs review; authored fields retained. Nothing saved.',true);
-            return {review:true};
-          }
-          if (Object.keys(pendingChanges).length) {
-            // A duration requested through an explicit Write must be supplied
-            // as a real, supported field before WebCap can save a timed revision.
-            if (wantsDuration && (!Number.isInteger(pendingChanges.durationSeconds) ||
-                pendingChanges.durationSeconds < 4 || pendingChanges.durationSeconds > 15)) {
-              studioActionStatus('Scene timing is missing or unsupported. Draft retained for review; nothing saved.',true);
-              return {review:true};
-            }
-            var prompt = Object.prototype.hasOwnProperty.call(pendingChanges,'prompt') ?
-              pendingChanges.prompt : null;
-            delete pendingChanges.prompt;
-            if (prompt === null && !Object.keys(pendingChanges).length)
-              return null;
-            var missing = wantsTitle && !pendingChanges.title ? ' Requested title was not updated.' : '';
-            return window.studioDirectorWorkbench.applyScenePrompt(story,sceneId,
-              prompt,pendingChanges).then(function (result) {
-                studioActionStatus('Scene ' + (story.sceneOrder.indexOf(sceneId) + 1) +
-                  ' saved from existing structured draft.' + missing,!!missing);
-                return result;
-              });
-          }
-        }
-        // Explicitly launching revision of this saved Scene authorizes its baseline.
-        var context = window.studioDirectorWorkbench.sceneRead(story,sceneId).payload;
-        var instruction = JSON.stringify({
-          task:'Revise the requested Scene fields in the author\'s direction. ' +
-            'Return complete replacement values for requestedFields, including a standalone H3 Prompt ' +
-            'when prompt is selected. Preserve all unaffected creative content and fields. ' +
-            'Deliver the actual authored values in one JSON object.',
+        var story = payload.story;
+        if (!story || story.id !== storyId ||
+            !story.scenes || !story.scenes[sceneId])
+          throw new Error('The selected saved Scene is unavailable.');
+        var task = JSON.stringify({
+          task:"Revise exactly the selected Scene fields using the author's creative direction. Return complete replacement values for requestedFields.",
           authorDirection:launch.authorRequest || launch.instruction,
-          requestedFields:requestedFields,
-          savedScene:context,
-          unsavedWorkingFields:workingScene || {}
+          requestedFields:fields,
+          savedScene:window.studioDirectorWorkbench.sceneRead(story,sceneId).payload
         });
         state.pending = false;
-        return window.studioDirectorBridge.makeProposal(instruction, 'studio_scene_field_draft', wantsPrompt,
-          {projectId:storyId,projectTitle:story.title,sceneId:sceneId,
-            sceneNumber:story.sceneOrder.indexOf(sceneId)+1,sceneOrder:story.sceneOrder.slice()},
-          requestedFields)
-          .then(function (raw) {
-            state.lastStudioIoRaw = raw;
-            var proposed;
-            try {proposed = JSON.parse(raw);}
-            catch (error) {throw new Error('Director returned invalid Scene JSON.\nRaw response:\n' + raw);}
-            if (!proposed || typeof proposed !== 'object' || Array.isArray(proposed))
-              throw new Error('Director returned no usable Scene fields.\nRaw response:\n' + raw);
-            var extras = {}, missing = [];
-            if (wantsTitle) {
-              if (typeof proposed.title === 'string' && proposed.title.trim())
-                extras.title = proposed.title.trim();
-              else missing.push('title');
-            }
-            if (wantsDuration) {
-              if (Number.isInteger(proposed.durationSeconds) &&
-                  proposed.durationSeconds >= 4 && proposed.durationSeconds <= 15)
-                extras.durationSeconds = proposed.durationSeconds;
-              else missing.push('duration');
-            }
-            var prompt = wantsPrompt && typeof proposed.prompt === 'string' && proposed.prompt.trim()
-              ? proposed.prompt : null;
-            var authored = Object.assign({},extras,prompt !== null ? {prompt:prompt} : {});
-            // Keep independent requested fields even when the model omits the
-            // required creative prompt. The missing prompt remains an error.
-            if (Object.keys(authored).length) {
-              state.studioWorkingDraft.scenes[sceneId] = Object.assign(
-                {},state.studioWorkingDraft.scenes[sceneId] || {},authored);
-              state.studioWorkingDraft.draftOrigins =
-                state.studioWorkingDraft.draftOrigins || {projects:{},scenes:{}};
-              state.studioWorkingDraft.draftOrigins.scenes =
-                state.studioWorkingDraft.draftOrigins.scenes || {};
-              state.studioWorkingDraft.draftOrigins.scenes[sceneId] = {
-                projectId:storyId,
-                request:String(launch.authorRequest || launch.instruction),
-                baseline:baseline,
-                fields:Object.keys(authored),
-                timingNeedsReview:wantsDuration && !Object.hasOwn(extras,'durationSeconds')
-              };
-              scheduleSessionSave();
-            }
-            if (wantsPrompt && prompt === null)
-              throw new Error('Director did not return the requested Scene prompt. Other usable requested fields are retained for review.\nRaw response:\n' + raw);
-            if (!Object.keys(authored).length)
-              throw new Error('Director did not return the requested Scene fields.\nRaw response:\n' + raw);
-            if (wantsDuration && !Object.hasOwn(extras,'durationSeconds')) {
-              studioActionStatus('Scene timing is missing or unsupported. Authored fields retained for review; nothing saved.',true);
-              return {review:true};
-            }
-            if ((prompt === null || prompt.trim() === String(original.prompt || '').trim()) &&
-                (!Object.hasOwn(extras,'title') || extras.title === String(original.title || '').trim()) &&
-                (!Object.hasOwn(extras,'durationSeconds') || extras.durationSeconds === original.durationSeconds)) {
-              forgetSavedStudioSceneFields(storyId,sceneId,original);
-              studioActionStatus('Director returned no Scene changes.' +
-                (missing.length ? ' Requested ' + missing.join(' and ') + ' not supplied.' : ''),!!missing.length);
-              return null;
-            }
-            state.pending = true;
-            syncControls();
-            return window.studioDirectorWorkbench.applyScenePrompt(story, sceneId, prompt, extras)
-              .then(function (savedResult) {
-                studioActionStatus('Scene ' + (story.sceneOrder.indexOf(sceneId)+1) + ' saved.' +
-                   (missing.length ? ' Requested ' + missing.join(' and ') + ' not updated; inspect the saved Scene.' : ''),!!missing.length);
-                return savedResult;
-              });
-          });
-      }).then(function (result) {
-        if (result && result.story && result.story.id === storyId && result.scene)
-          forgetSavedStudioSceneFields(storyId,sceneId,result.scene);
-        return result;
+        return window.studioDirectorBridge.makeProposal(
+          task,'studio_scene_field_draft',fields.includes('prompt'),
+          {projectId:storyId,sceneId:sceneId},fields
+        ).then(function (raw) {
+          state.lastStudioIoRaw = raw;
+          var authored;
+          try {authored = JSON.parse(raw);}
+          catch (error) {throw new Error('Scene revision JSON failed to parse: ' + error.message);}
+          if (!authored || typeof authored !== 'object' || Array.isArray(authored))
+            throw new Error('Scene revision returned no field object; see Director I/O.');
+          var extras = {};
+          if (fields.includes('title') && Object.prototype.hasOwnProperty.call(authored,'title'))
+            extras.title = authored.title;
+          if (fields.includes('durationSeconds') &&
+              Object.prototype.hasOwnProperty.call(authored,'durationSeconds'))
+            extras.durationSeconds = authored.durationSeconds;
+          var prompt = fields.includes('prompt') ? authored.prompt : null;
+          state.pending = true;
+          syncControls();
+          return window.studioDirectorWorkbench.applyScenePrompt(story,sceneId,prompt,extras);
+        }).then(function (result) {
+          studioActionStatus('Scene revision saved.',false);
+          return result;
+        });
       }).catch(function (error) {
-        if (error.saved && error.savedScene)
-          forgetSavedStudioSceneFields(storyId,sceneId,error.savedScene);
         state.lastStudioIoError = String(error.message || error);
-        studioActionStatus(error.saved
-          ? 'Scene saved, but refreshing or recording it failed: ' + state.lastStudioIoError
-          : 'Scene revision failed: ' + state.lastStudioIoError, true);
-        window.reportConsoleError('Director Scene write', error);
+        el('studio-director-inspect').dataset.newResult = 'true';
+        studioActionStatus((error.saved ? 'Scene saved but reporting failed: ' :
+          'Scene revision failed: ') + state.lastStudioIoError,true);
+        window.reportConsoleError('Studio Scene revision',error);
         throw error;
       }).finally(function () {
-        state.pending = false;
-        state.jobId = '';
-        syncControls();
+        state.pending = false;state.jobId = '';syncControls();
       });
     },
     makeProposal: function (instruction, operation, includePromptContract, navigationSnapshot, requiredFields) {

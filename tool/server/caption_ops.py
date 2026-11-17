@@ -1,5 +1,6 @@
 
 from pathlib import Path
+import hashlib
 import json
 import os
 import tempfile
@@ -94,6 +95,49 @@ def save_caption_text(folder: str, media_name: str, text: str):
         caption_path.unlink()
         app_config.debug_print('[BACKEND][WRITE] Caption deleted.')
     return {'ok': True, 'caption_file': caption_name}
+
+
+def replace_set_caption_text(folder: str, search: str, replacement: str, preview_signature=None):
+    """Preview or apply literal, case-sensitive replacement in this Set's media captions."""
+    if not search:
+        raise ValueError("Find text cannot be empty")
+    folder_path = _resolve_folder(folder)
+    media = list_media_files(folder)
+    caption_names = sorted({_caption_name_for_media(name) for name in media})
+    matches = []
+    signature = hashlib.sha256()
+    for name in caption_names:
+        path = folder_path / name
+        if not path.is_file():
+            continue
+        text = run_with_directory_repair(folder_path, lambda: path.read_text(encoding="utf-8"))
+        count = text.count(search)
+        if not count:
+            continue
+        signature.update(name.encode("utf-8"))
+        signature.update(b"\\0")
+        signature.update(text.encode("utf-8"))
+        signature.update(b"\\0")
+        matches.append((name, text, count))
+    digest = signature.hexdigest()
+    summary = {
+        "files": len(matches),
+        "occurrences": sum(count for _, _, count in matches),
+        "signature": digest,
+    }
+    if preview_signature is None:
+        return summary
+    if preview_signature != digest:
+        raise ValueError("Captions changed since preview. Preview again before replacing.")
+    for index, (name, text, _) in enumerate(matches):
+        try:
+            # Uses the existing atomic caption writer and permission handling.
+            media_name = next(media_name for media_name in media if _caption_name_for_media(media_name) == name)
+            save_caption_text(folder, media_name, text.replace(search, replacement))
+        except Exception as exc:
+            raise RuntimeError(f"Replaced {index} of {len(matches)} captions before an error: {exc}") from exc
+    return dict(summary, replaced=True)
+
 
 def serve_media_file(folder: str, media_name: str):
     folder_path = _resolve_folder(folder)

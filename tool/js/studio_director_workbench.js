@@ -459,11 +459,8 @@
     if (operation !== 'new-project' && !id) {status('Choose a destination Project.',true);return;}
     if (operation === 'scene-write') {
       if (el('studio-dw-scene-mode').value === 'revise') return prepareBatchScenes(id);
-      var instruction = manualSceneInstruction();
-      if (!instruction) {
-        status('Enter an instruction for the new Scene before launch.', true);
-        return;
-      }
+      var instruction = manualSceneInstruction() ||
+        'Create the Scene(s) we have developed in this Studio conversation.';
       return bridge.writeNewScene({
         projectId:id, instruction:instruction, authorRequest:instruction,
         forceAuthor:true, directSave:true
@@ -598,11 +595,10 @@
       status('Choose one to 32 Scenes to revise.', true);
       return Promise.resolve();
     }
-    var instruction = manualSceneInstruction();
-    if (!instruction) {
-      status('Enter a revision instruction before launch.', true);
-      return Promise.resolve();
-    }
+    // An explicit Write selection provides the operation. Conversation
+    // history provides the creative brief even if this optional box is empty.
+    var instruction = manualSceneInstruction() ||
+      'Revise the selected Scene Prompts according to our Studio conversation.';
     // The existing batch authoring action revises Scene Prompts.
     // Additional title and duration drafts arrive as actual structured
     // content in conversation; never infer field mutations from prose.

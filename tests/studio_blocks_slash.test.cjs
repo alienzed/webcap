@@ -18,44 +18,67 @@ test('slash matching is limited to the current token and caret', () => {
   assert.equal(slashMatch('hello /one two',14),null);
   assert.equal(slashMatch('/block and more',15),null);
 });
-function node() {
-  const listeners = {};
-  const n = {
-    value:'', selectionStart:0, selectionEnd:0, children:[],attrs:{},
+// Slash listens on document, including for dynamically added Invariant editors.
+// The fixture models bubbled input and captured keydown rather than attaching
+// listeners to the composer itself, as the old implementation did.
+function node(bubble, invariant=false) {
+  const n={
+    id:'',value:'',selectionStart:0,selectionEnd:0,children:[],attrs:{},style:{},
     className:'',classList:{
       items:new Set(['hidden']),
       remove(v){this.items.delete(v);},add(v){this.items.add(v);},
       contains(v){return this.items.has(v);}
     },
+    matches(selector){return invariant && selector==='[data-story-invariant-text]';},
+    closest(){return null;},
+    getBoundingClientRect(){return {left:20,top:24,right:420,bottom:60,width:400,height:36};},
     setAttribute(k,v){this.attrs[k]=v;},
     append(...items){this.children.push(...items);},
     appendChild(item){this.children.push(item);return item;},
     replaceChildren(){this.children=[];},
-    addEventListener(name,fn,capture){(listeners[name] ||= []).push({fn,capture:!!capture});},
-    dispatchEvent(e){
-      (listeners[e.type]||[]).slice().sort((a,b)=>Number(b.capture)-Number(a.capture)).forEach(l=>l.fn(e));
-    },
     focus(){},
     setSelectionRange(a,b){this.selectionStart=a;this.selectionEnd=b;},
+    dispatchEvent(event){event.target ||= n;bubble(event);return true;}
   };
   return n;
 }
-function setup(blocks, isStudio) {
-  const input=node(), host=node(), calls=[];
-  const nodes={'director-chat-input':input,'studio-blocks-slash':host};
-  const ctx = new Function('el','api','document','window','Event','report',
-    extract('  function slashMatch(text, caret) {', '  function bind() {')+'\nreturn setupSlash;')(
-    id=>nodes[id],
-    async ()=>{calls.push('load');return {blocks};},
-    {createElement:()=>node()},
-    {studioDirectorBridge:{isStudioMode:isStudio}},
-    class Event{constructor(type){this.type=type;}},
+function setup(blocks,isStudio,{invariants=[]}={}) {
+  const listeners={},calls=[];
+  function dispatch(event){
+    (listeners[event.type]||[]).slice()
+      .sort((a,b)=>Number(b.capture)-Number(a.capture))
+      .forEach(item=>item.fn(event));
+  }
+  const input=node(dispatch),host=node(dispatch),invariantInput=node(dispatch,true);
+  host.id='studio-blocks-slash';
+  const elements={'director-chat-input':input,'studio-blocks-slash':host};
+  const document={
+    body:node(dispatch),
+    createElement:()=>node(dispatch),
+    addEventListener(type,fn,capture){
+      (listeners[type] ||= []).push({fn,capture:!!capture});
+    }
+  };
+  const window={
+    studioDirectorBridge:{isStudioMode:isStudio},
+    getStoryboardSlashInvariants:()=>invariants,
+    addEventListener(){},
+    innerWidth:1440,innerHeight:900
+  };
+  const setupSlash=new Function('el','api','document','window','Event','report',
+    extract('  function slashMatch(text, caret) {', '  function bind() {')+
+    '\nreturn setupSlash;')(
+    id=>elements[id],
+    async()=>{calls.push('load');return {blocks};},
+    document,window,
+    class Event{constructor(type,options={}){this.type=type;this.bubbles=options.bubbles;}},
     error=>{throw error;}
   );
-  ctx();
-  return {input,host,calls};
+  setupSlash();
+  return {input,host,invariantInput,invariantHost:document.body.children[0],calls,invariants};
 }
 function tick(){return new Promise(resolve=>setImmediate(resolve));}
+
 test('type / to search, Enter inserts exact Block text and retains surrounding draft', async()=>{
   const {input,host,calls}=setup([
     {title:'Early hook',type:'idea',content:'A striking opening moment.'},
@@ -80,6 +103,62 @@ test('slash never fetches Blocks in ordinary Chat mode',async()=>{
   input.dispatchEvent({type:'input'});
   await tick();
   assert.deepEqual(calls,[]);
+});
+
+
+test('Studio chat slash also inserts an approved local Invariant as ordinary text',async()=>{
+  const invariant={title:'North Window',kind:'location',text:'The north window glows blue.'};
+  const {input,host,calls}=setup(
+    [{title:'Unrelated Block',type:'idea',content:'No match here.'}],()=>true,
+    {invariants:[invariant]});
+  input.value='Keep /north';input.setSelectionRange(11,11);
+  input.dispatchEvent({type:'input'});
+  await tick();
+  assert.deepEqual(calls,['load']);
+  assert.equal(host.children.length,1);
+  assert.equal(host.children[0].children[0].textContent,'North Window');
+  let stopped=false;
+  input.dispatchEvent({type:'keydown',key:'Tab',preventDefault(){},
+    stopImmediatePropagation(){stopped=true;}});
+  assert.equal(stopped,true);
+  assert.equal(input.value,'Keep The north window glows blue. ');
+  assert.equal(invariant.text,'The north window glows blue.',
+    'slash insertion never edits the source Invariant');
+});
+
+test('Invariant textareas use the same Block picker without enabling Director chat',async()=>{
+  const {invariantInput,invariantHost,calls}=setup(
+    [{title:'Continuity',type:'guidance',content:'Keep the copper hairpin visible.'}],
+    ()=>false);
+  invariantInput.value='Rule: /cont';
+  invariantInput.setSelectionRange(invariantInput.value.length,invariantInput.value.length);
+  invariantInput.dispatchEvent({type:'input'});
+  await tick();
+  assert.deepEqual(calls,['load']);
+  assert.equal(invariantHost.children.length,1);
+  assert.equal(invariantHost.children[0].children[0].textContent,'Continuity');
+  assert.equal(invariantInput.attrs['aria-controls'],'studio-blocks-invariant-slash');
+  let stopped=false;
+  invariantInput.dispatchEvent({type:'keydown',key:'Enter',preventDefault(){},
+    stopImmediatePropagation(){stopped=true;}});
+  assert.equal(stopped,true);
+  assert.equal(invariantInput.value,'Rule: Keep the copper hairpin visible. ');
+  assert.equal(invariantHost.classList.contains('hidden'),true);
+});
+
+test('Escape dismisses slash suggestions without changing the authored draft',async()=>{
+  const {input,host}=setup([{title:'Opening',type:'idea',content:'A new opening.'}],()=>true);
+  input.value='Keep /open';input.setSelectionRange(input.value.length,input.value.length);
+  input.dispatchEvent({type:'input'});
+  await tick();
+  assert.equal(host.classList.contains('hidden'),false);
+  let stopped=false;
+  input.dispatchEvent({type:'keydown',key:'Escape',preventDefault(){},
+    stopImmediatePropagation(){stopped=true;}});
+  assert.equal(stopped,true);
+  assert.equal(input.value,'Keep /open');
+  assert.equal(host.classList.contains('hidden'),true);
+  assert.equal(input.attrs['aria-expanded'],'false');
 });
 
 test('Blocks belongs to the Projects pane; Director belongs to Project actions', () => {

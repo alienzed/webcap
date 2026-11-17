@@ -473,7 +473,7 @@
       throw new Error('Unsupported Studio creative Write goal: ' + operation);
     try {
       var item = projects.find(function (p) {return p.id === id;});
-      bridge.prepareWrite(operation, id, item && storyName(item));
+      bridge.prepareWrite(operation, id, item && storyName(item), {forceAuthor:true});
       status('Preparing a reviewed proposal. No saved fields have changed.', false);
     } catch (error) {status('Write failed: ' + error.message, true);}
   }

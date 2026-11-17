@@ -350,6 +350,21 @@ test('a matching retained title-only draft applies without creating an unwanted 
   assert.equal(h.saved.scenes.s1.prompt,'Mara shouts at the rover.');
 });
 
+test('an explicit repeat Write authors anew even when the prior draft and words match',async()=>{
+  const h=sceneFixture('{"prompt":"Fresh complete replacement from the model."}');
+  const instruction='Give this Scene a quieter ending.';
+  h.state.studioWorkingDraft.scenes.s1={prompt:'Older unsaved replacement'};
+  authoredSceneOrigin(h,instruction,['prompt']);
+  const result=await h.window.studioDirectorBridge.writeSelectedScene({
+    ...h.launch,instruction,authorRequest:instruction,forceAuthor:true
+  });
+  assert.ok(result.story);
+  assert.equal(h.events.filter(row=>row[0]==='model').length,1);
+  assert.equal(h.events.find(row=>row[0]==='save')[1].changes.prompt,
+    'Fresh complete replacement from the model.');
+  assert.equal(h.saved.scenes.s1.prompt,'Fresh complete replacement from the model.');
+});
+
 test('saved Scene baseline changes invalidate a matching retained draft',async()=>{
   const h=sceneFixture('{"prompt":"First proposed rewrite.","durationSeconds":20}');
   const request='Make this Scene fourteen seconds with a quieter ending.';

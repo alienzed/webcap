@@ -33,12 +33,8 @@ _WORKSHOP = (
     "physical continuity, and respect deliberately quiet or atmospheric pacing. "
     "CONVERSATION: Respond naturally and concisely to discussion. Explore alternatives "
     "when useful and make a recommendation when you can. "
-    "CREATIVE WORK: When asked to create or revise material, deliver the actual usable "
-    "work now. Choose sensible creative details where the direction leaves room for "
-    "judgment. Preserve established details outside the requested change. "
-    "If an essential creative decision is missing, ask one focused question while "
-    "providing any independently useful work that is already possible. "
-    "A partial, concrete result is more helpful than a promise to work later. "
+    "DISCUSSION: Develop ideas and make useful recommendations. Explicit Write functions "
+    "are separately launched by the author with their own task and format. "
     "Use the saved Project and Scene facts actually supplied as context; treat earlier "
     "unsaved ideas as proposals that the author may refine. "
     "Conversation can develop material, but only WebCap saves Project and Scene records.\n"
@@ -68,77 +64,15 @@ _H3_STUDIO_CORE = (
 
 
 def chat_response_schema():
-    """A conversational answer or actual independently useful creative fields.
-
-    Transport shape only; a schema-valid reply is not evidence that an
-    authored Scene exists. Read can be plain prose, and model output never
-    supplies authoritative IDs, destinations or save actions.
-    """
+    """Ordinary Studio chat is conversation, not an implicit Write request."""
     return {
         "type": "object",
         "additionalProperties": False,
-        # Every Studio chat turn addresses the author first. Creative fields
-        # remain independent extras; parsing still accepts useful incomplete
-        # model output when a provider ignores the requested response shape.
         "required": ["reply"],
-        "minProperties": 1,
         "properties": {
-            "reply": {
-                "type": "string", "minLength": 1,
-                "description": "Direct answer to the author's current message. For discussion, include the creative options, recommendation and reasoning here. If also authoring Project/Scene fields, retain the response to the author here.",
-            },
-            "changes": {
-                "type": "object", "additionalProperties": False,
-                "properties": {
-                    "project": {
-                        "type": "object", "additionalProperties": False,
-                        "description": "Actual authored Project field values. For a partial revision, include the fields being changed and preserve all other fields by omitting them. Every included value is a complete replacement ready for review.",
-                        "properties": {
-                            "title": {"type": "string"},
-                            "concept": {"type": "string"},
-                            "style": {"type": "string"},
-                            "invariants": {
-                                "type": "array", "maxItems": 30,
-                                "items": {
-                                    "type": "object", "additionalProperties": False,
-                                    "required": ["kind", "title", "text"],
-                                    "properties": {
-                                        "kind": {"type": "string", "enum": ["character", "location", "visual", "world", "sound", "custom"]},
-                                        "title": {"type": "string"},
-                                        "text": {"type": "string"},
-                                    },
-                                },
-                            },
-                        },
-                    },
-                    "scene": {
-                        "type": "object", "additionalProperties": False,
-                        "description": "Actual requested replacements for an existing Scene. Include the fields being changed and preserve other fields by omitting them. Creative revisions include the complete replacement prompt; new Scene records belong in scenes.",
-                        "properties": {
-                            "title": {"type": "string"},
-                            "prompt": {"type": "string", "minLength": 1},
-                            "durationSeconds": {"type": "integer"},
-                        },
-                    },
-                },
-            },
-            "scenes": {
-                "type": "array", "maxItems": 32,
-                "description": "Actual new Scene drafts, each with a title, complete H3 prompt and durationSeconds. WebCap counts and reviews the returned records.",
-                "items": {
-                    "type": "object", "additionalProperties": False,
-                    "required": ["title", "prompt", "durationSeconds"],
-                    "properties": {
-                        "title": {"type": "string"},
-                        "prompt": {"type": "string", "minLength": 1},
-                        "durationSeconds": {"type": "number"},
-                    },
-                },
-            },
-
+            "reply": {"type": "string", "description": "Answer the author naturally."},
         },
     }
-
 
 def guidance(target_model="minimax_h3"):
     """Return concise Studio expertise plus the distinct prompt-authoring contract."""

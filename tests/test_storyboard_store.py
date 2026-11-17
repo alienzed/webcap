@@ -1562,3 +1562,33 @@ def test_legacy_workshop_context_uses_saved_prompt_without_scene_intent(storyboa
     assert "[Shot 1]" in context["shots"]
     persisted = storyboard_store.load_story(story["id"])["scenes"][scene["id"]]
     assert persisted["summary"] == scene["summary"]
+
+
+def test_legacy_scene_states_load_and_disappear_on_next_scene_save(storyboard_fs):
+    story = storyboard_store.create_story({"title": "Legacy Story"})
+    story, scene = storyboard_store.add_scene(story["id"], {"title": "Opening", "prompt": "Original"})
+    path = storyboard_store._story_path(story["id"])
+    saved = json.loads(path.read_text(encoding="utf-8"))
+    saved["scenes"][scene["id"]]["entryState"] = "Old entry state"
+    saved["scenes"][scene["id"]]["exitState"] = "Old exit state"
+    saved["scenes"][scene["id"]]["previousRevision"] = {
+        "entryState": "Previous entry",
+        "exitState": "Previous exit",
+        "prompt": "Earlier prompt",
+        "durationSeconds": 6,
+    }
+    path.write_text(json.dumps(saved), encoding="utf-8")
+
+    legacy = storyboard_store.load_story(story["id"])
+    assert legacy["scenes"][scene["id"]]["entryState"] == "Old entry state"
+    updated_story, updated_scene = storyboard_store.update_scene(
+        story["id"], scene["id"], {"prompt": "Updated"}
+    )
+    assert updated_scene["prompt"] == "Updated"
+    assert "entryState" not in updated_scene
+    assert "exitState" not in updated_scene
+
+    _, restored = storyboard_store.restore_previous_prompt(story["id"], scene["id"])
+    assert restored["prompt"] == "Earlier prompt"
+    assert "entryState" not in restored
+    assert "exitState" not in restored

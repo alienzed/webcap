@@ -46,7 +46,7 @@ def test_director_role_is_creative_partner_not_webcap_workflow_engine():
     assert "Discuss the author's ideas naturally" in chat
     assert "author initiates separate writing" in chat
     assert "Fulfil the author's explicitly selected" in writer
-    assert "WebCap owns IDs, destinations" in writer
+    assert "the application handles persistence" in writer
     assert "WebCap Studio workflow guide" not in writer
     assert "review policy" not in writer
     assert "direct-save" not in writer
@@ -108,7 +108,7 @@ def test_freeform_workshop_does_not_claim_hidden_context_or_mutations():
     assert "Discuss the author's ideas naturally" in chat
     assert "separate writing operations" in chat
     assert "explicitly provided saved creative" in writer
-    assert "WebCap owns IDs, destinations" in writer
+    assert "the application handles persistence" in writer
     assert "CURRENT PROJECT NAVIGATION" not in writer
     assert "WebCap resolved Project" not in writer
 

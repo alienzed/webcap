@@ -473,11 +473,20 @@
       throw new Error('Unsupported Studio creative Write goal: ' + operation);
     try {
       var item = projects.find(function (p) {return p.id === id;});
-      bridge.prepareWrite(operation, id, item && storyName(item),{
+      return Promise.resolve(bridge.prepareWrite(operation, id, item && storyName(item),{
         instruction:manualSceneInstruction()
+      })).catch(function (error) {
+        status('Write failed: ' + String(error.message || error), true);
+        if (typeof window.reportConsoleError === 'function')
+          window.reportConsoleError('Studio Project Write', error);
+        throw error;
       });
-      status('Writing to the explicit destination…', false);
-    } catch (error) {status('Write failed: ' + error.message, true);}
+    } catch (error) {
+      status('Write failed: ' + String(error.message || error), true);
+      if (typeof window.reportConsoleError === 'function')
+        window.reportConsoleError('Studio Project Write', error);
+      throw error;
+    }
   }
   function prepareProjectCoherence(storyId) {
     var button = el('studio-dw-write-prepare');
@@ -1282,9 +1291,11 @@
     function openDirectAction(which) {
       lastQuickAction = which;
       el('director-chat-drawer').classList.add('studio-actions-open');
-      if (which === 'write') showConversationWrite();
-      else if (el('studio-dw-' + which + '-panel').classList.contains('hidden'))
+      // Opening Write must actually reveal its operation picker. Merely
+      // updating conversation suggestions left the Write panel hidden.
+      if (el('studio-dw-' + which + '-panel').classList.contains('hidden'))
         el('studio-dw-' + which).click();
+      if (which === 'write') showConversationWrite();
       el('studio-dw-open-tools').setAttribute('aria-expanded','true');
       el('studio-dw-close-actions').focus();
     }

@@ -75,7 +75,7 @@ test('title and duration Write never rewrites an unselected Prompt',async()=>{
 
 test('a write to an unavailable target fails without saving another Scene',async()=>{
   const h=harness();
-  await assert.rejects(()=>h.apply(h.saved,'missing','Unrelated content',{}),
+  assert.throws(()=>h.apply(h.saved,'missing','Unrelated content',{}),
     /selected Scene no longer exists/);
   assert.equal(h.events.length,0);
 });

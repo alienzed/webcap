@@ -40,7 +40,7 @@ def _clean(value):
     return str(value or "").strip()
 
 
-def _prompt_response_schema(allow_duration=False, allow_scene_fields=False, allow_unchanged=False):
+def _prompt_response_schema(allow_duration=False, allow_unchanged=False):
     schema = {
         "type": "object",
         "additionalProperties": False,
@@ -59,15 +59,6 @@ def _prompt_response_schema(allow_duration=False, allow_scene_fields=False, allo
             "description": "False only when the requested refinement does not require any change to this Scene.",
         }
         schema["required"] = ["changed", "prompt"]
-    if allow_scene_fields:
-        schema["properties"]["entryState"] = {
-            "type": "string",
-            "description": "Optional revised Scene entry state.",
-        }
-        schema["properties"]["exitState"] = {
-            "type": "string",
-            "description": "Optional revised Scene exit state.",
-        }
     if allow_duration:
         schema["properties"]["durationSeconds"] = {
             "type": "number",
@@ -103,8 +94,6 @@ def _story_outline_response_schema(target_scene_count=None):
         "properties": {
             "title": {"type": "string", "minLength": 1},
             "prompt": {"type": "string", "minLength": 1},
-            "entryState": {"type": "string"},
-            "exitState": {"type": "string"},
             "suggestedDurationSeconds": {
                 "type": "number",
                 "minimum": 6,
@@ -167,8 +156,6 @@ def _scene_context(scene):
     fields = (
         ("Title", scene.get("title")),
         ("Prompt", scene.get("prompt")),
-        ("Entry state", scene.get("entryState")),
-        ("Exit state", scene.get("exitState")),
         ("Duration seconds", scene.get("durationSeconds")),
     )
     for label, value in fields:
@@ -220,8 +207,6 @@ def _repair_scene_plan(story):
         result.append({
             "sceneNumber": index,
             "title": _clean(scene.get("title")),
-            "entryState": _clean(scene.get("entryState")),
-            "exitState": _clean(scene.get("exitState")),
             "durationSeconds": scene.get("durationSeconds"),
             "referenceRoles": _reference_roles(scene),
             "invariantRefs": scene.get("invariantRefs") if isinstance(scene.get("invariantRefs"), list) else [],
@@ -243,8 +228,6 @@ def _previous_scene_context(story, scene_id):
     fields = (
         ("Title", scene.get("title")),
         ("Prompt", scene.get("prompt")),
-        ("Entry state", scene.get("entryState")),
-        ("Exit state", scene.get("exitState")),
     )
     return "\n".join(
         label + ": " + _clean(value)
@@ -506,7 +489,6 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
                 "[PREVIOUS AUTHORED SCENE - RELATIONSHIP CONTEXT]\n"
                 + json.dumps({
                     key: previous_scene.get(key)
-                    for key in ("title", "prompt", "entryState", "exitState")
                     if _clean(previous_scene.get(key))
                 }, indent=2, ensure_ascii=False)
                 + "\n\nThe planned outline and author direction establish this Scene's creative scope."
@@ -514,7 +496,7 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
         blocks.append(
             "[CURRENT TASK]\nAuthor exactly this one planned Scene as a complete MiniMax H3 Scene. "
             "Preserve the planned Scene's purpose and its place in the complete outline. "
-            "Return the complete title, optional entryState / exitState, suggestedDurationSeconds, and the full H3 generation prompt exactly as it should be stored. "
+            "Return the complete title, suggestedDurationSeconds, and the full H3 generation prompt exactly as it should be stored. "
             "Follow the supplied Director and H3 guidance. Return only JSON matching the supplied schema."
         )
         return {
@@ -607,7 +589,6 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
             + ": " + _clean(scenes[ordered_id].get("prompt"))
             for number, ordered_id in enumerate(order, start=1)
         ))
-        last_exit = _clean(scenes[order[-1]].get("exitState"))
         if last_exit:
             blocks.append("[LAST SCENE EXIT STATE]\n" + last_exit)
         if _clean(instruction):
@@ -661,7 +642,7 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
             "[USER REPAIR INSTRUCTION]\n" + correction
             + "\n\n[CURRENT TASK]\nApply the user's instruction to the current Scene plan. "
             "Return sparse updates to existing Scenes, preserving their order and count. "
-            "Include only fields that need changing: entryState, exitState, or complete revised H3 prompt. "
+            "Include only fields that need changing: a complete revised H3 prompt. "
             "Use the supplied 1-based sceneNumber for each affected Scene, once per Scene. "
             "Return {\"changes\":[]} when the instruction is already satisfied."
         )
@@ -741,7 +722,6 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
         "prompt": "\n\n".join(blocks).strip() + "\n",
         "response_schema": _prompt_response_schema(
             allow_duration=operation == "refine_prompt",
-            allow_scene_fields=operation == "refine_prompt",
             allow_unchanged=operation == "refine_prompt",
         ),
     }

@@ -596,7 +596,8 @@
 
   function conversationTitle(messages) {
     for (var message of messages) {
-      if (message.role !== 'user' || message.content.includes('[WEBCAP APPLIED FIELD VALUES]')) continue;
+      if (message.role !== 'user' || message.content.includes('[WEBCAP APPLIED FIELD VALUES]') ||
+          message.content.startsWith('[WEBCAP EXPLICIT READ')) continue;
       var text = message.content.split('[WEBCAP EXPLICIT READ]')[0].trim();
       if (!text || text === 'Read the selected saved context and acknowledge receipt.') continue;
       return text.replace(/\s+/g, ' ').slice(0,72);
@@ -1372,9 +1373,6 @@
     var suggestionRow = null;
     currentMessages().forEach(function (message, index) {
       var studioReply = state.activeMode === 'storyboard' && message.role === 'assistant';
-      var previous = currentMessages()[index-1];
-      var readReceipt = studioReply && previous && previous.role === 'user' &&
-        previous.content.includes('[WEBCAP EXPLICIT READ]');
       var visibleText = studioReply ? studioReplyText(message.content) : message.content;
       // Older saved conversations may contain the raw structured JSON as the
       // visible chat message. Re-render that material as a factual draft
@@ -1383,7 +1381,7 @@
           String(message.content || '').trim() === String(message.rawResponse).trim()) {
         visibleText = studioReplyText(parseStudioChatResponse(message.rawResponse).reply);
       }
-      if (studioReply && !visibleText.trim() && !readReceipt)
+      if (studioReply && !visibleText.trim())
         return;
       var row = document.createElement('div');
       row.className = 'director-chat-message director-chat-message-' + message.role;
@@ -1393,7 +1391,7 @@
       label.textContent = message.role === 'assistant' ? 'Director' :
         (message.content.indexOf('[WEBCAP APPLIED FIELD VALUES]') !== -1
           ? (message.content.startsWith('Director revision saved:') ? 'WebCap · Director revision' : 'WebCap · Reviewed Apply') :
-         message.content.indexOf('[WEBCAP EXPLICIT READ]') !== -1 ? 'You · Read to Director' : 'You');
+         message.content.startsWith('[WEBCAP EXPLICIT READ') ? 'You · Read snapshot' : 'You');
 
       var body = document.createElement('div');
       body.className = 'director-chat-message-body';
@@ -1415,30 +1413,12 @@
         row.classList.add('director-chat-save-receipt');
         label.textContent = '✓ Saved';
       }
-      if (message.role === 'user' && (message.content.indexOf('[WEBCAP EXPLICIT READ]') !== -1 ||
-          message.content.indexOf('[WEBCAP APPLIED FIELD VALUES]') !== -1)) {
-        var applied = message.content.indexOf('[WEBCAP APPLIED FIELD VALUES]') !== -1;
-        var startMark = applied ? '[WEBCAP APPLIED FIELD VALUES]' : '[WEBCAP EXPLICIT READ]';
-        var endMark = applied ? '[END WEBCAP APPLY]' : '[END WEBCAP READ]';
-        var marker = message.content.indexOf(startMark);
-        var closing = message.content.indexOf(endMark, marker);
-        if (closing !== -1) {
-          // Preserve the original payload in session history, not the creative chat.
-          var description = message.content.slice(0, marker).trim();
-          body.textContent = description === 'Read the selected saved context and acknowledge receipt.'
-            ? 'Read saved Project fields'
-            : (description || (applied ? 'Reviewed changes saved' : 'Read saved Project fields'));
-        }
-      }
+      // The full Read message is exactly what subsequent LLM requests receive.
+      // Do not collapse it into a receipt or alter its source values.
+      if (message.role === 'user' && message.content.startsWith('[WEBCAP EXPLICIT READ'))
+        body.textContent = message.content;
 
       row.appendChild(label);
-      if (readReceipt) {
-        var receipt = document.createElement('span');
-        receipt.className = 'director-chat-context-receipt';
-        receipt.textContent = '✓ Context supplied';
-        receipt.title = 'Saved Project material supplied with this request. Full response is available in I/O.';
-        row.appendChild(receipt);
-      }
       if (body.textContent || body.children.length) row.appendChild(body);
       var elapsedMap = currentElapsedMap();
       var metricsMap = currentMetricsMap();

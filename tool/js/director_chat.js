@@ -4710,7 +4710,9 @@
         });
       }).catch(function (error) {
         state.lastStudioIoError = String(error.message || error);
-        studioActionStatus('New Scene draft failed: ' + state.lastStudioIoError, true);
+        studioActionStatus(error.saved
+          ? 'Scenes saved, but recording or refreshing failed: ' + state.lastStudioIoError
+          : 'New Scene Write failed: ' + state.lastStudioIoError, true);
         window.reportConsoleError('Director new Scene', error);
         throw error;
       }).finally(function () {

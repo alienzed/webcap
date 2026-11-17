@@ -1911,8 +1911,10 @@
     var workingProject = state.studioWorkingDraft.newProject;
     var authorRequest = String(options && options.authorRequest || options && options.instruction || '');
     var manualReview = !String(options && options.instruction || '').trim();
-    var sameWork = manualReview ||
-      state.studioWorkingDraft.sourceRequest === authorRequest;
+    var newProjectOrigin = state.studioWorkingDraft.draftOrigins &&
+      state.studioWorkingDraft.draftOrigins.newProject;
+    var sameWork = manualReview || !!newProjectOrigin &&
+      newProjectOrigin.request === authorRequest;
     if (sameWork && workingProject && Object.keys(workingProject).length) {
       state.studioProjectProposal = parseStudioProjectDraft(JSON.stringify(Object.assign({
         title:'', concept:'', style:'', invariants:[], initialScenes:[],
@@ -1968,8 +1970,9 @@
           state.studioWorkingDraft.newProject,
           studioWorkingFieldChanges(state.studioProjectProposal,
             ['title','concept','style','invariants']));
-        state.studioWorkingDraft.sourceRequest =
-          String(options && options.authorRequest || options && options.instruction || '');
+        state.studioWorkingDraft.draftOrigins =
+          state.studioWorkingDraft.draftOrigins || {projects:{},scenes:{}};
+        state.studioWorkingDraft.draftOrigins.newProject = {request:authorRequest};
         scheduleSessionSave();
         finishProgress(null);
         studioActionStatus('Project ready for review. Nothing has been created.', false);
@@ -2137,6 +2140,8 @@
       createdStory = payload.story;
       state.studioProjectProposal = null;
       state.studioWorkingDraft.newProject = {};
+      if (state.studioWorkingDraft.draftOrigins)
+        state.studioWorkingDraft.draftOrigins.newProject = null;
       scheduleSessionSave();
       el('studio-project-review').close();
       var name = payload.story.title || 'Untitled Project';
@@ -2422,8 +2427,14 @@
       var expected = { title: story.title, concept: story.concept, style: story.style, invariants: story.invariants };
       var workingProject = options && options.authoredFields || state.studioWorkingDraft.projects[storyId] || {};
       var authorRequest = String(options && options.authorRequest || instruction);
+      var draftOrigin = state.studioWorkingDraft.draftOrigins &&
+        state.studioWorkingDraft.draftOrigins.projects &&
+        state.studioWorkingDraft.draftOrigins.projects[storyId];
+      // Explicit Review still presents any retained fields against the current
+      // saved baseline. Automatic reuse requires the same target and baseline.
       var sameWork = !!(options && options.authoredFields) || manualReview ||
-        state.studioWorkingDraft.sourceRequest === authorRequest;
+        !!draftOrigin && draftOrigin.request === authorRequest &&
+          draftOrigin.baseline === JSON.stringify(expected);
       var required = Object.keys(workingProject).filter(function (field) {
         return ['title','concept','style','invariants'].includes(field);
       });
@@ -2471,7 +2482,13 @@
           state.studioWorkingDraft.projects[storyId] = Object.assign({},
             state.studioWorkingDraft.projects[storyId],
             studioWorkingFieldChanges(changes,['title','concept','style','invariants']));
-          state.studioWorkingDraft.sourceRequest = authorRequest;
+          state.studioWorkingDraft.draftOrigins =
+            state.studioWorkingDraft.draftOrigins || {projects:{},scenes:{}};
+          state.studioWorkingDraft.draftOrigins.projects =
+            state.studioWorkingDraft.draftOrigins.projects || {};
+          state.studioWorkingDraft.draftOrigins.projects[storyId] = {
+            request:authorRequest,baseline:JSON.stringify(expected)
+          };
           scheduleSessionSave();
           var draft = Object.assign({},expected,changes);
           state.studioBriefProposal = {
@@ -2558,6 +2575,23 @@
       if (!result.story || !result.revisionId) throw new Error('Brief Apply did not return its revision ID.');
       applied = true;
       state.studioBriefProposal = null;
+      // Clear only fields whose value was actually persisted, preserving
+      // independent unsaved work for a later revision.
+      var retained = state.studioWorkingDraft.projects[proposal.storyId];
+      if (retained) {
+        Object.keys(retained).forEach(function (field) {
+          if (Object.prototype.hasOwnProperty.call(result.story,field) &&
+              JSON.stringify(retained[field]) === JSON.stringify(result.story[field]))
+            delete retained[field];
+        });
+        if (!Object.keys(retained).length) {
+          delete state.studioWorkingDraft.projects[proposal.storyId];
+          if (state.studioWorkingDraft.draftOrigins &&
+              state.studioWorkingDraft.draftOrigins.projects)
+            delete state.studioWorkingDraft.draftOrigins.projects[proposal.storyId];
+        }
+        scheduleSessionSave();
+      }
       el('studio-brief-review').close();
       recordStudioOperation('brief.apply', 'Updated ' + Object.keys(changes).join(', '),
         proposal.storyId, []);

@@ -2019,7 +2019,7 @@
       return;
     }
     if (state.studioProjectProposal && !(options && options.forceAuthor)) { showStudioProjectReview(); return; }
-    var workingProject = state.studioWorkingDraft.newProject;
+    var workingProject = options && options.forceAuthor ? {} : state.studioWorkingDraft.newProject;
     var authorRequest = String(options && options.authorRequest || options && options.instruction || '');
     var manualReview = !String(options && options.instruction || '').trim();
     var newProjectOrigin = state.studioWorkingDraft.draftOrigins &&
@@ -2595,9 +2595,10 @@
         state.studioWorkingDraft.draftOrigins.projects[storyId];
       // Explicit Review still presents any retained fields against the current
       // saved baseline. Automatic reuse requires the same target and baseline.
-      var sameWork = !!(options && options.authoredFields) || manualReview ||
+      var sameWork = !(options && options.forceAuthor) && (
+        !!(options && options.authoredFields) || manualReview ||
         !!draftOrigin && draftOrigin.request === authorRequest &&
-          draftOrigin.baseline === JSON.stringify(expected);
+          draftOrigin.baseline === JSON.stringify(expected));
       var retained = sameWork
         ? manualReview || options && options.authoredFields ? workingProject :
           Object.fromEntries((draftOrigin.fields || []).filter(function (field) {

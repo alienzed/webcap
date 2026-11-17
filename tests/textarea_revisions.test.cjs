@@ -241,3 +241,11 @@ test('history preferences opt in and master switch disable the field without los
   assert.equal(api.enabledFor(field),true);
   assert.equal(api.history(key).versions.length,2);
 });
+
+test('Storyboard and Director review share a logical Scene prompt history key',()=>{
+  const h=harness(),field=editor('Original','scene-shared');
+  const key=h.window.webcapTextareaRevisions.identity(field);
+  const review=editor('Revised','unused');
+  review.dataset={revisionKey:key,field:'prompt'};
+  assert.equal(h.window.webcapTextareaRevisions.identity(review),key);
+});

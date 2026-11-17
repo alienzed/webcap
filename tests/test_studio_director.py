@@ -213,7 +213,7 @@ def test_director_chat_route_preserves_all_structured_schemas(monkeypatch, opera
         assert captured["schema"]["additionalProperties"] is False
         if operation == "studio_scene_field_draft":
             assert captured["schema"]["required"] == ["prompt"]
-            assert captured["schema"]["properties"]["prompt"]["minLength"] == 1
+            assert captured["schema"]["properties"]["prompt"]["type"] == "string"
             assert "title" not in captured["schema"]["properties"]
             assert "durationSeconds" not in captured["schema"]["properties"]
         if operation == "studio_scenes_draft":

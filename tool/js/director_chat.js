@@ -4735,57 +4735,8 @@
             !story.sceneOrder.includes(sceneId) || !story.scenes || !story.scenes[sceneId])
           throw new Error('Selected Scene is no longer available in its saved Project.');
         var original = story.scenes[sceneId];
-        var workingScene = state.studioWorkingDraft.scenes[sceneId];
-        var draftOrigin = state.studioWorkingDraft.draftOrigins &&
-          state.studioWorkingDraft.draftOrigins.scenes &&
-          state.studioWorkingDraft.draftOrigins.scenes[sceneId];
-        var baseline = JSON.stringify({
-          title:original.title,prompt:original.prompt,durationSeconds:original.durationSeconds
-        });
-        // A partial result remains available for Review, but cannot satisfy a
-        // later retry unless every requested field was actually authored.
-        // In particular, a title does not stand in for a requested H3 Prompt.
-        var completeDraft = !!draftOrigin && requestedFields.every(function (field) {
-          return Array.isArray(draftOrigin.fields) && draftOrigin.fields.includes(field) &&
-            workingScene && Object.prototype.hasOwnProperty.call(workingScene,field);
-        });
-        var applyExisting = !launch.forceAuthor && completeDraft &&
-          draftOrigin.projectId === storyId &&
-          draftOrigin.request === String(launch.authorRequest || launch.instruction) &&
-          draftOrigin.baseline === baseline;
-        if (workingScene && applyExisting) {
-          var pendingChanges = {};
-          fields.forEach(function (field) {
-            if (Array.isArray(draftOrigin.fields) && draftOrigin.fields.includes(field) &&
-                Object.prototype.hasOwnProperty.call(workingScene,field))
-              pendingChanges[field] = workingScene[field];
-          });
-          if (draftOrigin.timingNeedsReview) {
-            studioActionStatus('Scene timing still needs review; authored fields retained. Nothing saved.',true);
-            return {review:true};
-          }
-          if (Object.keys(pendingChanges).length) {
-            // A duration requested through an explicit Write must be supplied
-            // as a real, supported field before WebCap can save a timed revision.
-            if (wantsDuration && (!Number.isInteger(pendingChanges.durationSeconds) ||
-                pendingChanges.durationSeconds < 4 || pendingChanges.durationSeconds > 15)) {
-              studioActionStatus('Scene timing is missing or unsupported. Draft retained for review; nothing saved.',true);
-              return {review:true};
-            }
-            var prompt = Object.prototype.hasOwnProperty.call(pendingChanges,'prompt') ?
-              pendingChanges.prompt : null;
-            delete pendingChanges.prompt;
-            if (prompt === null && !Object.keys(pendingChanges).length)
-              return null;
-            var missing = wantsTitle && !pendingChanges.title ? ' Requested title was not updated.' : '';
-            return window.studioDirectorWorkbench.applyScenePrompt(story,sceneId,
-              prompt,pendingChanges).then(function (result) {
-                studioActionStatus('Scene ' + (story.sceneOrder.indexOf(sceneId) + 1) +
-                  ' saved from existing structured draft.' + missing,!!missing);
-                return result;
-              });
-          }
-        }
+        // An explicit selected-Scene Write always asks the model anew. Saved
+        // fields are the authoritative baseline; no Review cache can shortcut it.
         // Explicitly launching revision of this saved Scene authorizes its baseline.
         var context = window.studioDirectorWorkbench.sceneRead(story,sceneId).payload;
         var instruction = JSON.stringify({
@@ -4795,8 +4746,7 @@
             'Deliver the actual authored values in one JSON object.',
           authorDirection:launch.authorRequest || launch.instruction,
           requestedFields:requestedFields,
-          savedScene:context,
-          unsavedWorkingFields:workingScene || {}
+          savedScene:context
         });
         state.pending = false;
         return window.studioDirectorBridge.makeProposal(instruction, 'studio_scene_field_draft', wantsPrompt,

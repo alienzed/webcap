@@ -2,9 +2,23 @@
 
 [Functional contract](studio-director-contract.md) is authoritative. This file tracks the three-operation implementation and evidence; it does not define a competing architecture. The earlier incremental plans and audits from November 14 were superseded by the three-operation cutover in PR #950. Consult the PR history for original gap analyses.
 
+## November 17 full contract and test-suite reconciliation — PR #1025
+
+**Active correction:** [PR #1025](https://github.com/alienzed/webcap/pull/1025), branch `fix/studio-live-contract-20261117`, follows merged PR #1024. This is not represented as a verified live-model release.
+
+- Audited all opt-in Playwright live files, including `studio-actual-schema`, `studio-authoring`, `studio-continuity`, cross-Project ownership and mixed editing journeys. Replaced obsolete chat-produced JSON drafts and Review/Apply assertions with explicit Write operations, real request/schema capture and actual saved data.
+- Corrected explicit Write request composition to include author-approved independent Read sources. Scoped Project revision to a complete baseline schema, preserving existing creative fields; no H3 guidance in ordinary chat or Project Write.
+- Replaced obsolete standalone live backend smoke test extraction with current freeform chat / explicit Project / selected Scene API checks, and updated suite documentation.
+- Expanded GitHub Actions to run **all** `tests/studio_director_*.test.cjs` and `tests/studio_scene_*.test.cjs`, not only handpicked cases. Corrected fixture and obsolete test assumptions; removed provably unused implicit chat authoring and draft-merge functions.
+- Traced six browser failures to a real test race: `say()` only awaited send dispatch, so subsequent `runWrite()` could arrive while the chat job was still pending. The browser helper now waits for chat completion before starting an explicit Write. The product correctly refuses concurrent submissions.
+- The Studio Director History, I/O and specialist Develop/Revise/Coherence/First Cut paths remain separate. Standalone specialist Review UI is not the retired Director Write Review.
+- Remaining release evidence: passing current-head deterministic Playwright, focused/full Studio checks, and a real-model Playwright run on a machine that has access to the configured model. **Do not merge this follow-up without verified deterministic checks.** Never label an opt-in live-model test as passed when it was not run.
+
+The implementation statuses below describe earlier architecture checkpoints and are retained as historical material.
+
 ## Task-scoped contract implementation — 2026-11-17
 
-**Active branch:** `codex/studio-director-task-scoped-contract-20261117` ([draft PR #1024](https://github.com/alienzed/webcap/pull/1024)). This section supersedes older Review/capture guidance below. The [functional contract](studio-director-contract.md) is the normative specification; old dated checkpoints are historical.
+**Merged historical baseline:** `codex/studio-director-task-scoped-contract-20261117` ([merged PR #1024](https://github.com/alienzed/webcap/pull/1024)). This section supersedes older Review/capture guidance below. The [functional contract](studio-director-contract.md) is the normative specification; old dated checkpoints are historical.
 
 Implemented on the branch, subject to CI and browser acceptance:
 

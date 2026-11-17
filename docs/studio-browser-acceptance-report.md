@@ -1,5 +1,8 @@
 # Studio Director browser acceptance — execution and coverage report
 
+> **Historical evidence — NOT current acceptance.** The results below describe an earlier Studio Director architecture with structured chat, H3 reference in conversation and Review/Apply. They do not verify the current November 17, 2026 conversation-only/direct-Write contract. See [current user flows](studio-user-flows.md) and [live-model acceptance](studio-director-live-acceptance.md) instead. Real-model passage for the new design remains unverified until a fresh run.
+
+
 **Contract:** [studio-user-flows.md](studio-user-flows.md). This document reports implementation and evidence, not a replacement contract. Each status is based on observed Chromium/Flask behavior, not source inspection, mocked DOM, promises from an LLM, or a passing code-only test.
 
 ## Repeatable commands

@@ -55,11 +55,9 @@ jobs:
           node --check tool/js/studio_blocks.js
           node --check tool/js/storyboard.js
           node --check tool/js/studio_director_workbench.js
-          node --test tests/studio_scene_revision_contract.test.cjs
-          node --test tests/studio_director_navigation.test.cjs tests/studio_director_scene_entry.test.cjs tests/studio_director_targeted_scene_launch.test.cjs tests/studio_director_one_new_scene.test.cjs
-          node --test tests/studio_director_three_operations.test.cjs tests/studio_director_design_fixes.test.cjs tests/studio_director_workshop.test.cjs tests/studio_director_scene_draft.test.cjs tests/studio_director_ux.test.cjs tests/studio_director_guided_write.test.cjs tests/studio_director_useful_functions.test.cjs
-          node --test tests/studio_director_flexibility.test.cjs tests/studio_director_ownership_boundaries.test.cjs
-          node --check tests/live/studio-independent-ownership.spec.cjs
+          node --test tests/common_workspace_refresh.test.cjs tests/studio_director_*.test.cjs tests/studio_scene_*.test.cjs
+          for file in tests/live/*.cjs tests/browser/*.spec.cjs; do node --check "$file"; done
+
       - name: Python compile
         run: |
           python -m compileall -q tool/server tests/test_studio_director.py tests/test_director_chat_history.py tests/test_storyboard_store.py

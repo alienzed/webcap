@@ -1,6 +1,6 @@
 'use strict';
 const {test,expect}=require('../browser/test.cjs');
-const {openLiveDirector,sendLive,story,seedProject,openProject,reopenDirectorIfClosed}=require('./helpers.cjs');
+const {openLiveDirector,sendLive,writeLive,observeLiveCalls,story,seedProject,openProject,reopenDirectorIfClosed}=require('./helpers.cjs');
 
 test('LIVE — conversation attachment survives a different write destination and navigation',async({page},testInfo)=>{
   const a=await seedProject(page,'Attached A '+Date.now(),{concept:'A maritime museum.',style:'Cold blue hall light.'});
@@ -36,36 +36,23 @@ test('LIVE — conversation attachment survives a different write destination an
   await reopenDirectorIfClosed(page);
   await expect(page.locator('#director-chat-title')).toContainText(a.title);
 
-  const responses=[];
-  page.on('response',async res=>{
-    if(res.ok()&&new URL(res.url()).pathname==='/fs/director/job'){
-      try{
-        const job=(await res.json()).job;
-        if(job?.status==='completed'&&job.result?.text) responses.push(job.result.text);
-      }catch{}
-    }
-  });
-  await sendLive(page,'Author a complete replacement Project visual atmosphere: warm bright amber sunlight in a greenhouse. Return changes.project.style for review.');
-  const raw=responses.at(-1);
-  expect(raw,'Real Director completed without a structured response').toBeTruthy();
+  const observed=observeLiveCalls(page);
+  const direction='Revise the explicitly selected Project B visual atmosphere to bright amber sunlight in a greenhouse. Preserve all other fields.';
+  await writeLive(page,{projectId:b.id,operation:'project',instruction:direction});
+  await expect.poll(async()=>(await story(page,b.id)).style,{timeout:60000})
+    .not.toBe('Soft green daylight.');
+  const saved=await story(page,b.id);
+  const raw=observed.jobs.at(-1)?.raw||'';
+  expect(raw,'The model returned no Project revision response').toBeTruthy();
   const authored=JSON.parse(raw);
-  expect(typeof authored.changes?.project?.style).toBe('string');
-  const desired=authored.changes.project.style;
-  expect(desired.trim().length).toBeGreaterThan(10);
-  const destination=page.locator('#studio-dw-suggestions select[aria-label="Project material destination"]');
-  await expect(destination).toBeVisible();
-  await destination.selectOption(b.id);
-  await page.locator('#studio-dw-suggestions .studio-dw-suggestion-action').click();
-  await expect(page.locator('#studio-brief-target')).toContainText(b.title);
-  await expect(page.locator('#studio-brief-style')).toHaveValue(desired);
-  await page.locator('#studio-brief-apply').click();
-  await expect.poll(async()=>(await story(page,b.id)).style).toBe(desired);
+  expect(typeof authored.style).toBe('string');
+  expect(saved.style).toBe(authored.style);
   expect((await story(page,a.id)).style).toBe('Cold blue hall light.');
   await expect(page.locator('#director-chat-title')).toContainText(a.title);
   await sendLive(page,'Discuss another staging possibility, without editing saved material.');
   await expect(page.locator('#director-chat-title')).toContainText(a.title);
   expect(await attachment()).toBe(a.id);
   await testInfo.attach('independent-live-destinations',{body:Buffer.from(JSON.stringify({
-    model,attached:a.id,destination:b.id,requests,raw,style:desired
+    model,attached:a.id,destination:b.id,requests,raw,style:saved.style
   },null,2)),contentType:'application/json'});
 });

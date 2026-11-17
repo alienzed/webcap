@@ -80,37 +80,18 @@ test('ordinary chat does not reinterpret a returned Scene object',()=>{
   assert.equal(parse(raw).changes,null);
 });
 
-test('completing the Scene action leaves the same response Project action available',()=>{
-  const sceneAction={kind:'create_scene',actionKey:'primary',
-    instruction:'Author the work',request:'Author the work',completed:false};
-  const projectAction={kind:'create_project',actionKey:'alternate-0',
-    instruction:'Author the work',request:'Author the work',completed:false};
-  const state={studioActionIndex:0,studioActionKey:'primary',modeMessages:{
-    storyboard:[{role:'assistant',content:'Here are both results.',
-      writeAction:sceneAction,otherWriteActions:[projectAction]}]
-  }};
-  const actionHelpers=new Function('state',part(chat,
-    '  function studioStoredActions(entry) {',
-    '  function studioRestoreAuthoredAction(action, rawResponse) {')+
-    'return {studioStoredActions,studioActiveStoredAction};')(state);
-  let saved=0;
-  const src=part(chat,
-    '    finishWriteAction:function (action) {',
-    '    canReview: function () {').trim().replace(/,$/,'');
-  const finish=new Function('state','studioActiveStoredAction','scheduleSessionSave',
-    'return ({'+src+'}).finishWriteAction;')(
-    state,actionHelpers.studioActiveStoredAction,()=>saved++);
-  finish(sceneAction);
-  assert.equal(sceneAction.completed,true);
-  assert.equal(projectAction.completed,false,
-    'one completed Scene cannot consume a separate Project deliverable');
-  state.studioActionKey='alternate-0';
-  assert.equal(actionHelpers.studioActiveStoredAction(state.modeMessages.storyboard[0]),projectAction);
-  finish(projectAction);
-  assert.equal(projectAction.completed,true);
-  assert.equal(saved,2);
+test('historical structured conversation actions cannot initiate either Scene or Project writes',()=>{
+  const response=parse(JSON.stringify({
+    reply:'Project and Scene ideas',
+    changes:{project:{style:'Warm sunrise'},scene:{prompt:'Unexpected H3'}},
+    scenes:[{title:'Unexpected',prompt:'A prompt',durationSeconds:8}]
+  }));
+  assert.equal(response.action,null);
+  assert.equal(response.changes,null);
+  assert.equal(response.scenes,null);
+  assert.doesNotMatch(part(chat,'  function sendMessage() {','  function syncPinnedUi() {'),
+    /studioDirectorWorkbench\.presentAction\(|studioAuthoredWriteActions/);
 });
-
 test('ordinary chat cannot classify any saved Project or Scene destination',()=>{
   const raw=JSON.stringify({changes:{project:{concept:'A new idea'},scene:{prompt:'A prompt'}}});
   const response=parse(raw);
@@ -126,15 +107,13 @@ test('ordinary prose and model action hints never launch a Write',()=>{
   assert.doesNotMatch(chat,/function studioActionFromExplicitRequest/);
 });
 
-test('WebCap binds review to the selected existing Scene without parsing request prose', () => {
+test('WebCap binds explicit Scene destination by actual saved ID, not author prose',()=>{
   const story={id:'p1',sceneOrder:['one','two','three']};
   const selected={projectId:'p1',sceneId:'two'};
   assert.deepEqual(sceneTargets(story,selected),['two']);
   assert.deepEqual(sceneTargets(story,{projectId:'other',sceneId:'two'}),[]);
   assert.deepEqual(sceneTargets(story,null),[]);
 });
-
-
 test('explicit Scene writes rely on authored duration values rather than guessing from prose',()=>{
   assert.doesNotMatch(chat,/function studioRequestedDuration\(|function studioMentionedDuration\(/);
   assert.match(chat,/Number\.isInteger\(proposed\.durationSeconds\)/);
@@ -225,38 +204,20 @@ test('an action promise alone never presents a review or launches a model call',
   assert.equal(h.requests.length,0);
 });
 
-test('received existing Scene fields open the existing Review without regenerating', async () => {
-  const h=harness();
-  h.functions.presentAction({kind:'write_scenes',instruction:'Rewrite Scene 2',
-    authoredFields:{prompt:'Complete authored replacement',durationSeconds:12}},
-    {projectId:'p1',sceneId:'two',sceneNumber:2},{projectId:'p1'},'Rewrite Scene 2');
-  h.suggestions.children.find(node=>node.type==='button').onclick();
-  await flush();
-  assert.equal(h.requests.length,0,'review has no model call');
-  assert.equal(h.reviews.length,1);
-  assert.deepEqual(h.reviews[0][2],['prompt','durationSeconds']);
-  assert.equal(h.reviews[0][3].prompt,'Complete authored replacement');
+test('selected existing Scene Write asks for a fresh model response and saves directly',()=>{
+  const writer=part(chat,'    writeSelectedScene: function (launch) {','    makeProposal: function');
+  assert.match(writer,/studioDirectorBridge\.makeProposal\(/);
+  assert.match(writer,/studioDirectorWorkbench\.applyScenePrompt\(/);
+  assert.match(writer,/state\.lastStudioIoRaw = raw/);
+  assert.doesNotMatch(writer,/showStudioScenesReview|showSceneReview|reviewAuthoredScenes/);
 });
-
-test('authored conversation Scene records open Review directly and remain reopenable',async()=>{
-  const h=harness();
-  h.functions.presentAction({kind:'create_scene',instruction:'Two eight-second Scenes',
-    scenes:[{title:'Only authored Scene',prompt:'Complete H3 Prompt',durationSeconds:8}]},
-    null,{projectId:'p1'},'Two eight-second Scenes');
-  assert.match(h.suggestions.children.find(node=>node.type==='button').textContent,/Review authored Scene/);
-  h.suggestions.children.find(node=>node.type==='button').onclick();
-  await flush();
-  assert.equal(h.requests.length,1);
-  assert.equal(h.requests[0][0],'review-authored');
-  assert.equal(h.requests[0][1].scenes.length,1);
-  assert.equal(h.requests[0][1].scenes[0].durationSeconds,8);
-  assert.equal(h.finishes.length,0,'review does not claim a completed save');
-  h.suggestions.children.find(node=>node.type==='button').onclick();
-  await flush();
-  assert.deepEqual(h.requests.map(row=>row[0]),['review-authored','reopen-review']);
-  assert.equal(h.requests[1][1],'p1');
+test('new Scene Write creates actual returned records with direct persistence, not Review capture',()=>{
+  const writer=part(chat,'    writeNewScene: function (launch) {','    writeSelectedScene: function');
+  assert.match(writer,/studioDirectorBridge\.makeProposal\(/);
+  assert.match(writer,/\/fs\/studio\/director\/scenes-draft/);
+  assert.match(writer,/var valid = drafts\.filter/);
+  assert.doesNotMatch(writer,/showStudioScenesReview|reviewPendingScenes|reviewAuthoredScenes/);
 });
-
 test('Project Write loads a fresh explicit target and saves changed fields without a proposal',()=>{
   const project=part(chat,'  function prepareStudioBrief(options) {','  function applyStudioBrief() {');
   assert.match(project,/studioAttachedStoryId\(\)/);
@@ -266,29 +227,15 @@ test('Project Write loads a fresh explicit target and saves changed fields witho
   assert.doesNotMatch(project,/showStudioBriefReview\(\)/);
 });
 
-test('structured Director changes merge by complete field, without overwriting unrelated drafts', () => {
-  const state={studioWorkingDraft:{projects:{},scenes:{},newProject:{},newScene:{},sourceRequest:''},
-    sessionDirty:{storyboard:false}};
-  const source=part(chat,'  // A Studio conversation owns unsaved sparse field replacements.',
-    '  function parseStudioChatResponse(raw) {');
-  const merge=new Function('state',source+'return studioMergeWorkingChanges;')(state);
-  assert.equal(merge({project:{concept:'First concept',style:'Warm light'}},
-    {projectId:'p1'}, {kind:'write_project'},'Describe the Project'),true);
-  assert.equal(merge({project:{concept:'Second concept'}},
-    {projectId:'p1'}, {kind:'write_project'},'Change the premise'),true);
-  assert.deepEqual(state.studioWorkingDraft.projects.p1,
-    {concept:'Second concept',style:'Warm light'});
-  assert.equal(merge({scene:{title:'Quiet Ending',prompt:'Complete H3 Prompt'}},
-    {projectId:'p1',sceneId:'s2'}, {kind:'write_scenes'},'Revise Scene 2'),true);
-  assert.equal(merge({scene:{durationSeconds:12}},
-    {projectId:'p1',sceneId:'s2'}, {kind:'write_scenes'},'Make it twelve seconds'),true);
-  assert.deepEqual(state.studioWorkingDraft.scenes.s2,
-    {title:'Quiet Ending',prompt:'Complete H3 Prompt',durationSeconds:12});
-  assert.equal(state.studioWorkingDraft.projects.p1.style,'Warm light');
-  assert.equal(state.studioWorkingDraft.sourceRequest,'Make it twelve seconds');
-  assert.equal(state.sessionDirty.storyboard,true);
+test('ordinary Studio replies never merge Project or Scene fields into saved/unsaved state',()=>{
+  const response=parse(JSON.stringify({changes:{
+    project:{style:'Warm light'},scene:{prompt:'Complete H3 Prompt'}
+  }}));
+  assert.equal(response.changes,null);
+  assert.equal(response.action,null);
+  assert.doesNotMatch(chat,/function studioMergeWorkingChanges\(/);
+  assert.doesNotMatch(chat,/function studioAuthoredWriteActions\(/);
 });
-
 test('ordinary chat retains unexpected content verbatim and does not merge any fields',()=>{
   const raw=JSON.stringify({reply:'A discussion',changes:{scene:{
     prompt:'Unexpected prompt',title:null,durationSeconds:'invalid'}}});
@@ -325,19 +272,13 @@ test('Project revision accepts one full field replacement and preserves unrelate
     'WebCap must expose model material rather than silently sanitizing it');
 });
 
-test('an unbound Scene revision never becomes a new-Scene creation draft', () => {
-  const state={studioWorkingDraft:{projects:{},scenes:{},newProject:{},newScene:{},sourceRequest:''},
-    sessionDirty:{storyboard:false}};
-  const source=part(chat,'  // A Studio conversation owns unsaved sparse field replacements.',
-    '  function parseStudioChatResponse(raw) {');
-  const merge=new Function('state',source+'return studioMergeWorkingChanges;')(state);
-  assert.equal(merge({scene:{prompt:'Complete H3 rewrite'}},{projectId:'p1'},
-    {kind:'write_scenes'},'Revise Scenes 1 and 3'),false);
-  assert.deepEqual(state.studioWorkingDraft.newScene,{});
-  assert.equal(state.sessionDirty.storyboard,false);
+test('unbound chat content cannot initiate an implicit Scene creation',()=>{
+  const response=parse(JSON.stringify({scenes:[{title:'A',prompt:'Unexpected Scene',durationSeconds:8}]}));
+  assert.equal(response.scenes,null);
+  assert.equal(response.action,null);
+  const send=part(chat,'  function sendMessage() {','  function syncPinnedUi() {');
+  assert.doesNotMatch(send,/studioAuthoredWriteActions|studioMergeWorkingChanges|showStudioScenesReview/);
 });
-
-
 test('an explicit Write always authors anew without previous draft-cache shortcuts',()=>{
   const create=part(chat,'    writeNewScene: function (launch) {','    writeSelectedScene: function');
   const revise=part(chat,'    writeSelectedScene: function (launch) {','    makeProposal: function');

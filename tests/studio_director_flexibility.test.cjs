@@ -97,20 +97,15 @@ test('one approved source can be removed without revoking unrelated sources',()=
   assert.match(workbench,/studioDirectorBridge\.removeApprovedRead\(source\.projectId\)/);
 });
 
-test('existing authored response fields are a session asset, not assigned to the open Project', () => {
-  const source = section(chat, '  function studioWorkingFieldChanges(source, names) {',
-    '  function parseStudioChatResponse(raw) {');
-  const state = {
-    studioWorkingDraft: {projects:{},scenes:{},newProject:{},newScene:{},sourceRequest:''},
-    sessionDirty: {storyboard:false}
-  };
-  const merge = new Function('state', source + 'return studioMergeWorkingChanges;')(state);
-  merge({project:{style:'A new idea from a reference, not an edit to the open Project'}},
-    {projectId:'project-a'}, null, 'Make the mood warmer');
-  assert.deepEqual(state.studioWorkingDraft.projects, {},
-    'creative material must not acquire a Project owner solely from navigation');
-  assert.deepEqual(state.studioWorkingDraft.scenes, {},
-    'creative material must not acquire a Scene owner solely from navigation');
+test('ordinary chat never converts returned Project fields into pending writes',()=>{
+  const parser=section(chat,'  function parseStudioChatResponse(raw) {','  function storyboardRequestMessages(');
+  const parse=new Function(parser+'return parseStudioChatResponse;')();
+  const raw=JSON.stringify({reply:'A creative idea',changes:{project:{style:'Warm daylight'}}});
+  const parsed=parse(raw);
+  assert.equal(parsed.reply,raw);
+  assert.equal(parsed.changes,null);
+  assert.equal(parsed.action,null);
+  assert.doesNotMatch(chat,/function studioMergeWorkingChanges\(/);
 });
 
 test('source material never determines a write destination and review uses returned fields', () => {

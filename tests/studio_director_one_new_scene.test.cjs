@@ -16,7 +16,7 @@ const writerSource=part('    writeNewScene: function (launch) {',
   '    writeSelectedScene: function (launch) {');
 const studioWorkingFieldChanges=new Function(part(
   '  function studioWorkingFieldChanges(source, names) {',
-  '  function studioMergeWorkingChanges(changes, target, action, request) {'
+  '  function parseStudioChatResponse(raw) {'
 )+'return studioWorkingFieldChanges;')();
 
 function harness(options={}) {

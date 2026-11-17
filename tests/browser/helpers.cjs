@@ -103,6 +103,10 @@ async function ensureAttachedProject(page,expectedTitle) {
 }
 async function openWrite(page, {projectId, operation='project', sceneMode, instruction='', sceneIds=[]}={}) {
   await reopenDirectorIfClosed(page);
+  // Conversation send resolves at dispatch. Do not initiate a Write until the
+  // previous model job has actually left its busy state.
+  await expect(page.locator('#director-chat-progress')).toBeHidden({timeout:60000});
+  await expect(page.locator('#director-chat-input')).toBeEnabled({timeout:60000});
   const tools=page.locator('#studio-dw-open-tools');
   if(await tools.getAttribute('aria-expanded')!=='true') await tools.click();
   const panel=page.locator('#studio-dw-write-panel');
@@ -116,8 +120,10 @@ async function openWrite(page, {projectId, operation='project', sceneMode, instr
   }
   await op.selectOption(operation);
   if(operation==='scene-write') {
+    await expect(page.locator('#studio-dw-scene-mode-row')).toBeVisible();
     await page.locator('#studio-dw-scene-mode').selectOption(sceneMode || 'create');
     if(sceneMode==='revise') {
+      await expect(page.locator('#studio-dw-batch-controls')).toBeVisible();
       for(const sceneId of sceneIds) await page.locator('#studio-dw-batch-scenes input[value="'+sceneId+'"]').check();
     }
   }

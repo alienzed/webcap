@@ -1,189 +1,90 @@
 'use strict';
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
+const test=require('node:test');
+const assert=require('node:assert/strict');
+const fs=require('node:fs');
+const path=require('node:path');
+const director=fs.readFileSync(path.join(__dirname,'../tool/js/director_chat.js'),'utf8');
+const workbench=fs.readFileSync(path.join(__dirname,'../tool/js/studio_director_workbench.js'),'utf8');
 
-const director = fs.readFileSync(path.join(__dirname, '../tool/js/director_chat.js'), 'utf8');
-const workbench = fs.readFileSync(path.join(__dirname, '../tool/js/studio_director_workbench.js'), 'utf8');
-
-// Exercise the real classic-script methods without loading the browser or
-// replacing them with rewritten copies of their decision logic.
-function method(source, start, end, name, bindings) {
-  const from = source.indexOf(start);
-  const to = source.indexOf(end, from);
-  assert.ok(from >= 0 && to > from, 'missing ' + name + ' method');
-  const sourceMethod = source.slice(from, to);
-  return new Function(...Object.keys(bindings),
-    'return ({' + sourceMethod + '\n}).' + name + ';')(...Object.values(bindings));
+function part(source,start,end){
+  const a=source.indexOf(start),b=source.indexOf(end,a+start.length);
+  assert.ok(a>=0&&b>a,'Production section absent: '+start);
+  return source.slice(a,b);
 }
 
-function authoredFixture() {
-  const state = {studioScenesProposal:null,studioScenesReviewsByResponse:{}};
-  const shown = [];
-  const bindings = {
-    state,
-    showStudioScenesReview: () => shown.push(state.studioScenesProposal.drafts.map(item => item.prompt)),
-    rememberStudioScenesReview: () => {},
-    window:{flushStudioDirectorStoryEdits: () => Promise.resolve()},
-    requestJson: url => Promise.resolve({story:{id:decodeURIComponent(url.split('=')[1]),title:'Project',sceneOrder:[],scenes:{}}}),
-    studioActionStatus: () => {}
+test('Write receives explicitly approved independent saved references without transferring its destination',async()=>{
+  const section=part(director,
+    '  function studioDirectorRequestMessages(messages, includePromptContract, explicitWrite, navigationSnapshot) {',
+    '  function studioDirectorChatRequestMessages(');
+  const refs=[{projectId:'source',keys:['project.style']}];
+  const state={studioApprovedRead:{sources:refs}};
+  const requestJson=async url=>{
+    if(url.includes('/fs/studio/director/guidance'))return {system:'Creative partner',promptContract:'H3 writing reference'};
+    if(url.includes('/fs/storyboard?story=source'))return {story:{id:'source',style:'Warm amber source'}};
+    assert.fail('Unexpected request '+url);
   };
-  const review = method(director,
-    '    reviewAuthoredScenes: function (launch) {',
-    '\n    writeNewScene: function', 'reviewAuthoredScenes', bindings);
-  const pending = method(director,
-    '    reviewPendingScenes: function (projectId, sourceMessageIndex) {',
-    '\n    reviewAuthoredScenes: function', 'reviewPendingScenes', bindings);
-  return {state,shown,review,pending};
-}
-
-test('authored review belongs to the clicked reply even within the same Project', async () => {
-  const {state,shown,review,pending} = authoredFixture();
-  const a = {projectId:'project',sourceMessageIndex:4,scenes:[{title:'First',prompt:'First prompt'}]};
-  const b = {projectId:'project',sourceMessageIndex:6,scenes:[{title:'Second',prompt:'Second prompt'}]};
-  await review(a);
-  await review(b);
-  assert.deepEqual(shown, [['First prompt'],['Second prompt']]);
-  assert.equal(state.studioScenesReviewsByResponse[4].drafts[0].prompt,'First prompt');
-  state.studioScenesProposal.drafts[0].prompt = 'Second prompt, edited';
-  await review(a);
-  await pending('project',6);
-  assert.equal(state.studioScenesProposal.drafts[0].prompt,'Second prompt, edited');
-  await assert.rejects(review({...b,scenes:[{title:'Second',prompt:'Different returned material'}]}),
-    /no longer matches/);
-  assert.equal(state.studioScenesProposal.drafts[0].prompt,'Second prompt, edited');
-  await assert.rejects(pending('project',999), /no longer available/);
+  const window={studioDirectorWorkbench:{
+    approvedReadPayload:(story,keys)=>({projectId:story.id,
+      fields:keys.map(key=>({id:key,value:story.style}))})
+  }};
+  const request=new Function('state','requestJson','window',section+
+    'return studioDirectorRequestMessages;')(state,requestJson,window);
+  const input=[{role:'user',content:JSON.stringify({
+    task:'Write a Scene',destinationProjectId:'destination'
+  })}];
+  const output=await request(input,true,true);
+  assert.match(output[0].content,/H3 PROMPT AUTHORING REFERENCE/);
+  assert.match(output[0].content,/Warm amber source/);
+  assert.equal(output[1].content,input[0].content);
+  assert.equal(JSON.parse(output[1].content).destinationProjectId,'destination');
 });
 
-test('independent Scene review cannot be displaced by a conversation reply', async () => {
-  const {state,review} = authoredFixture();
-  state.studioScenesProposal = {storyId:'project',drafts:[{title:'Unrelated',prompt:'Keep me'}]};
-  await assert.rejects(review({projectId:'project',sourceMessageIndex:10,
-    scenes:[{prompt:'New reply'}]}), /independent Scene review/);
-  assert.equal(state.studioScenesProposal.drafts[0].prompt,'Keep me');
+test('ordinary conversation does not receive H3 guidance or implicit saved creative material',async()=>{
+  const section=part(director,
+    '  function studioDirectorRequestMessages(messages, includePromptContract, explicitWrite, navigationSnapshot) {',
+    '  function studioDirectorChatRequestMessages(');
+  const state={studioApprovedRead:null};
+  const requestJson=async()=>({system:'Creative partner',promptContract:'H3 secret'});
+  const window={};
+  const build=new Function('state','requestJson','window',section+
+    'return studioDirectorRequestMessages;')(state,requestJson,window);
+  const messages=await build([{role:'user',content:'Discuss the mood.'}],false,false);
+  assert.equal(messages[0].content,'Creative partner');
+  assert.doesNotMatch(JSON.stringify(messages),/H3 secret/);
+  assert.equal(messages[1].content,'Discuss the mood.');
 });
 
-test('changing destination preserves the same response edits without reauthoring or changing its source', async () => {
-  const {state,review,pending} = authoredFixture();
-  const scenes = [{prompt:'Original authored prompt'}];
-  await review({projectId:'project',sourceMessageIndex:10,scenes});
-  state.studioScenesProposal.drafts[0].prompt = 'Author edited prompt';
-  state.studioScenesProposal.placement = 'before|old-scene';
-  await pending.call({reviewAuthoredScenes:review},'different',10);
-  assert.equal(state.studioScenesProposal.storyId,'different');
-  assert.equal(state.studioScenesProposal.drafts[0].prompt,'Author edited prompt');
-  assert.equal(state.studioScenesProposal.placement,'end');
-  assert.equal(JSON.parse(state.studioScenesProposal.sourceScenesSignature)[0].prompt,
-    'Original authored prompt');
-});
-
-test('a different destination cannot substitute different material for the same response', async () => {
-  const {state,review} = authoredFixture();
-  await review({projectId:'project',sourceMessageIndex:10,scenes:[{prompt:'Project A'}]});
-  await assert.rejects(review({projectId:'different',sourceMessageIndex:10,
-    scenes:[{prompt:'Project B'}]}), /no longer matches/);
-  assert.equal(state.studioScenesProposal.storyId,'project');
-  assert.equal(state.studioScenesProposal.drafts[0].prompt,'Project A');
-});
-
-test('modal edits and selected placement stay with the displayed review', () => {
-  const from = director.indexOf('  var displayedStudioScenesProposal = null;');
-  const to = director.indexOf('\n  function showStudioScenesReview()',from);
-  assert.ok(from >= 0 && to > from);
-  const source = director.slice(from,to);
-  const first = {drafts:[{title:'Original',prompt:'Original',durationSeconds:6}]};
-  const second = {drafts:[{title:'Other',prompt:'Other',durationSeconds:6}]};
-  const fields = {
-    title:{value:'Edited title'},
-    prompt:{value:'Edited prompt'},
-    durationSeconds:{value:'9'}
-  };
-  const row = {querySelector:selector => fields[selector.match(/data-field="([^"]+)"/)[1]]};
-  const elements = {
-    'studio-scenes-review':{open:true},
-    'studio-scenes-rows':{querySelectorAll:()=>[row]},
-    'studio-scenes-placement':{value:'start'}
-  };
-  const state = {studioScenesProposal:second};
-  // Set the displayed review independently of the target for a subsequent click.
-  const hooks = new Function('el','state','first',source +
-    '\ndisplayedStudioScenesProposal = first; return rememberStudioScenesReview;')(
-      id=>elements[id],state,first);
-  hooks();
-  assert.deepEqual(first.drafts,[{title:'Edited title',prompt:'Edited prompt',durationSeconds:'9'}]);
-  assert.equal(first.placement,'start');
-  assert.equal(second.drafts[0].prompt,'Other');
-});
-
-test('saved field cleanup preserves unmatched unsaved fields', () => {
-  const from = director.indexOf('  function forgetSavedStudioSceneFields(');
-  const to = director.indexOf('\n  window.studioDirectorBridge = {',from);
-  assert.ok(from >= 0 && to > from);
-  const state = {studioWorkingDraft:{scenes:{scene1:{prompt:'Saved prompt',title:'Still unsaved'}}}};
-  let recorded = 0;
-  const clear = new Function('state','scheduleSessionSave',
-    director.slice(from,to) + '\nreturn forgetSavedStudioSceneFields;')(state,()=>recorded++);
-  clear('project','scene1',{prompt:'Saved prompt',title:'Old title'});
-  assert.deepEqual(state.studioWorkingDraft.scenes.scene1,{title:'Still unsaved'});
-  clear('project','scene1',{title:'Still unsaved'});
+test('actual saved field cleanup does not erase unrelated unsaved working values',()=>{
+  const from=director.indexOf('  function forgetSavedStudioSceneFields(');
+  const to=director.indexOf('\n  window.studioDirectorBridge = {',from);
+  assert.ok(from>=0&&to>from);
+  const state={studioWorkingDraft:{scenes:{
+    scene1:{prompt:'Saved prompt',title:'Separate unsaved title'}
+  }}};
+  let writes=0;
+  const clear=new Function('state','scheduleSessionSave',
+    director.slice(from,to)+'return forgetSavedStudioSceneFields;')(
+      state,()=>writes++);
+  clear('project','scene1',{prompt:'Saved prompt',title:'Other title'});
+  assert.deepEqual(state.studioWorkingDraft.scenes.scene1,{title:'Separate unsaved title'});
+  clear('project','scene1',{title:'Separate unsaved title'});
   assert.equal(state.studioWorkingDraft.scenes.scene1,undefined);
-  assert.equal(recorded,2);
+  assert.equal(writes,2);
 });
 
-test('batch revisions distinguish saved, unsaved, unchanged and reporting failures', async () => {
-  const from = workbench.indexOf('          function next(i) {',workbench.indexOf('function presentAction('));
-  const to = workbench.indexOf('\n          return next(0);',from);
-  assert.ok(from >= 0 && to > from);
-  const code = workbench.slice(from,to) + '\nreturn next;';
-  const ids = ['one','two','three'];
-  const saved = [],unchanged = [],review = [],failed = [],notAttempted = [],reportingErrors = [];
-  const reports = [],finished = [];
-  const frozen = {instruction:'Revise',request:'Revise'};
-  const values = [{scene:{},story:{}},{review:true},null];
-  const next = new Function('window','ids','story','frozen','fields','projectId',
-    'completed','unchanged','review','failed','notAttempted','reportingErrors',
-    'status','showConversationWrite','finishSceneAction',code)(
-    {studioDirectorBridge:{writeSelectedScene:()=>Promise.resolve(values.shift())}},
-    ids,{id:'project',sceneOrder:ids},frozen,['prompt'],'project',
-    saved,unchanged,review,failed,notAttempted,reportingErrors,
-    message=>reports.push(message),()=>{},value=>finished.push(value));
-  await next(0);
-  assert.deepEqual(saved,['one']);
-  assert.deepEqual(review,['two']);
-  assert.deepEqual(unchanged,['three']);
-  assert.deepEqual(failed,[]);
-  assert.match(reports.at(-1),/Drafts needing review 1 \(Scene 2\)/);
-  assert.deepEqual(finished,[false]);
+test('selected Scene batch is independently saved per Scene, not a single deferred Review',()=>{
+  const batch=part(workbench,'  function prepareBatchScenes(storyId) {',
+    '  function renderBatchReview() {');
+  assert.match(batch,/studioDirectorBridge\.writeSelectedScene\(/);
+  assert.match(batch,/outcome\.saved\.push/);
+  assert.match(batch,/outcome\.failed\.push/);
+  assert.match(batch,/outcome\.reportingErrors\.push/);
+  assert.doesNotMatch(batch,/renderBatchReview\(/);
 });
 
-
-test('batch continues after retained reviews and distinguishes saved-but-unreported results', async () => {
-  const from = workbench.indexOf('          function next(i) {',workbench.indexOf('function presentAction('));
-  const to = workbench.indexOf('\n          return next(0);',from);
-  const code = workbench.slice(from,to) + '\nreturn next;';
-  const ids = ['one','two','three'];
-  const saved = [],unchanged = [],review = [],failed = [],notAttempted = [],reportingErrors = [];
-  const reports = [],finished = [],refreshed = [];
-  const frozen = {instruction:'Revise',request:'Revise'};
-  const savedError = Object.assign(new Error('Conversation receipt failed'),{saved:true});
-  const values = [{review:true},savedError,null];
-  const next = new Function('window','ids','story','frozen','fields','projectId',
-    'completed','unchanged','review','failed','notAttempted','reportingErrors',
-    'status','showConversationWrite','finishSceneAction',code)(
-    {studioDirectorBridge:{writeSelectedScene:()=> {
-      const value = values.shift();
-      return value instanceof Error ? Promise.reject(value) : Promise.resolve(value);
-    }}},ids,{id:'project',sceneOrder:ids},frozen,['prompt'],'project',
-    saved,unchanged,review,failed,notAttempted,reportingErrors,
-    message=>reports.push(message),()=>refreshed.push(true),value=>finished.push(value));
-  await next(0);
-  assert.deepEqual(saved,['two']);
-  assert.deepEqual(review,['one']);
-  assert.deepEqual(unchanged,['three']);
-  assert.deepEqual(failed,[]);
-  assert.deepEqual(reportingErrors,['Scene 2']);
-  assert.match(reports.at(-1),/Saved, but reporting failed for Scene 2/);
-  assert.deepEqual(refreshed,[]);
-  assert.deepEqual(finished,[false]);
+test('retired chat-to-Write action and draft-merge paths have no executable entry points',()=>{
+  assert.doesNotMatch(director,/function studioAuthoredWriteActions\(/);
+  assert.doesNotMatch(director,/function studioMergeWorkingChanges\(/);
+  const send=part(director,'  function sendMessage() {','  function syncPinnedUi() {');
+  assert.doesNotMatch(send,/presentAction\(|showStudioScenesReview\(|showStudioProjectReview\(/);
 });

@@ -2300,7 +2300,10 @@ def director_chat_route():
                 raise ValueError("Invalid required Project fields.")
             contract["response_schema"] = {
                 "type": "object", "additionalProperties": False,
-                "required": list(dict.fromkeys(required_fields)),
+                # Revise a complete baseline deterministically: the model must
+                # return every Project field, preserving unchanged values.
+                # Optional fields were routinely omitted by structured models.
+                "required": ["title", "concept", "style", "invariants"],
                 "properties": {
                     "title": {"type": "string", "maxLength": 240},
                     "concept": {"type": "string"},
@@ -2316,7 +2319,6 @@ def director_chat_route():
                             },
                         },
                     },
-                    "rationale": {"type": "string"},
                 },
             }
         if operation == "studio_scene_field_draft":
@@ -2356,7 +2358,6 @@ def director_chat_route():
                             },
                         },
                     },
-                    "rationale": {"type": "string"},
                 },
             }
         if operation == "studio_project_draft":

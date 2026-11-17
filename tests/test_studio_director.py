@@ -185,10 +185,10 @@ def test_retired_director_model_operations_are_not_queued(monkeypatch, operation
 
 
 @pytest.mark.parametrize("operation, expected_fields", [
-    ("studio_brief_draft", {"title", "concept", "style", "invariants", "rationale"}),
+    ("studio_brief_draft", {"title", "concept", "style", "invariants"}),
     ("studio_project_draft", {"title", "concept", "style", "invariants"}),
     ("studio_scene_field_draft", {"title", "prompt", "durationSeconds"}),
-    ("studio_scenes_draft", {"scenes", "rationale"}),
+    ("studio_scenes_draft", {"scenes"}),
     ("storyboard_workshop_shots", {"summary", "shots"}),
     ("freeform_chat", None),
     ("studio_chat", None),
@@ -234,13 +234,13 @@ def test_director_chat_route_preserves_all_structured_schemas(monkeypatch, opera
         if operation == "studio_project_draft":
             assert captured["schema"]["required"] == ["title", "concept", "style", "invariants"]
         if operation == "studio_brief_draft":
-            assert captured["schema"]["required"] == [], "No unrequested Project field is required"
+            assert captured["schema"]["required"] == ["title", "concept", "style", "invariants"], "The model returns a full Project baseline so unrelated fields can be preserved"
             assert captured["schema"]["properties"]["invariants"]["items"]["required"] == ["kind", "title", "text"]
 
 
 @pytest.mark.parametrize("operation, required_fields, expected", [
-    ("studio_brief_draft", ["style"], ["style"]),
-    ("studio_brief_draft", ["concept", "invariants"], ["concept", "invariants"]),
+    ("studio_brief_draft", ["style"], ["title", "concept", "style", "invariants"]),
+    ("studio_brief_draft", ["concept", "invariants"], ["title", "concept", "style", "invariants"]),
     ("studio_scene_field_draft", ["prompt", "title"], ["prompt", "title"]),
     ("studio_scene_field_draft", ["prompt", "durationSeconds"], ["prompt", "durationSeconds"]),
     ("studio_scene_field_draft", ["title"], ["title"]),
@@ -316,3 +316,5 @@ def test_director_scene_index_is_lightweight_and_selected_scene_reads_full_promp
     selected = read_story_scope(story, "scene", "scene-a")
     assert selected["prompt"] == long_prompt
     assert "summary" not in selected
+    assert "entryState" not in selected and "exitState" not in selected
+    assert "durationSeconds" in selected

@@ -12,11 +12,11 @@ test('Revise & Generate remains available in the existing Project utilities', ()
   const actions = markup.split('<div class="studio-dw-actions">')[1].split('</div>')[0];
   assert.match(actions, /id="studio-dw-read"/);
   assert.match(actions, /id="studio-dw-write"/);
-  const utilities = markup.split('<summary>Other Project utilities</summary>')[1].split('</details>')[0];
+  const utilities = markup.split('id="storyboard-project-tool-bar"')[1].split('</div>')[0];
   assert.match(utilities, /id="storyboard-director-tools-btn"/);
   assert.equal((markup.match(/id="storyboard-director-tools-btn"/g) || []).length, 1);
   assert.doesNotMatch(markup, /id="storyboard-director-tools-menu"/);
-  assert.match(storyboard, /el\('storyboard-director-tools-btn'\)\.onclick = openDirectorTools/);
+  assert.match(storyboard, /el\('storyboard-director-tools-btn'\)\.onclick = function \(\) \{\s*window\.openStudioDirectorRevision\(\)/);
 });
 
 test('Revise & Generate retains the existing production operation with explicit destination', () => {
@@ -33,9 +33,11 @@ test('Revise & Generate retains the existing production operation with explicit 
   assert.match(storyboard, /generate-takes'\)\.onchange = syncDirectorToolsRunLabel/);
 });
 
-test('frontend and backend agree on structured Studio chat operation', () => {
+test('frontend and backend agree on freeform Studio chat and task-scoped Write operations', () => {
   assert.ok(chat.includes("operation: activeChatMode === 'storyboard' ? 'studio_chat' : 'freeform_chat'"));
-  assert.match(server, /if operation == "studio_chat":/);
+  assert.doesNotMatch(server, /if operation == "studio_chat":\s*\n\s*contract\["response_schema"\]/);
   assert.match(server, /"freeform_chat", "studio_chat"/);
-  assert.match(chat, /Restart or update the backend so it matches the current Studio Director frontend/);
+  assert.match(chat, /studioDirectorChatRequestMessages\(messages/);
+  assert.match(server, /if operation == "studio_scene_field_draft":/);
+  assert.match(server, /if operation == "studio_scenes_draft":/);
 });

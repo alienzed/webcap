@@ -234,12 +234,12 @@ test('restored conversation offers review only when saved raw output contains au
     'restoration evaluates each independently authored deliverable');
   assert.match(rail,/sourceMessageIndex:messageIndex/);
 });
-test('conversation persistence includes frozen Write targets without extra authoring calls', () => {
+test('conversation no longer manufactures Write actions and preserves History',()=>{
+  const send=chat.slice(chat.indexOf('  function send('),chat.indexOf('  function jobRequest('));
+  assert.doesNotMatch(send,/studioAuthoredWriteActions\(/);
+  assert.doesNotMatch(send,/studioDirectorWorkbench\.presentAction\(/);
   assert.match(chat,/stored\.writeAction = message\.writeAction/);
-  assert.match(chat,/messages\[assistantIndex\]\.writeAction = window\.studioDirectorWorkbench\.presentAction/);
-  assert.match(chat,/stored\.otherWriteActions = message\.otherWriteActions/,
-    'a mixed Project and Scene response retains all independent review actions');
-  assert.ok(chat.includes('completeWriteAction(kind, story, selected)'));
+  assert.match(chat,/recordApplied: function \(kind, story, selected\)/);
 });
 
 test('prepared Write derives exact target and fields deterministically from existing draft', () => {

@@ -1218,7 +1218,7 @@ def caption_template_assist_route():
             groups=data.get("groups"),
             mappings=data.get("mappings"),
             current_template=data.get("currentTemplate", ""),
-            preferred_sequence=data.get("preferredCaptionSequence", ""),
+            default_template=data.get("defaultCaptionTemplate", ""),
         )
         job = enqueue_llm(
             "caption",

@@ -26,7 +26,7 @@ function editor(value, sceneId) {
   };
 }
 
-function harness(savedPreferences) {
+function harness(savedPreferences, showSettings) {
   const preferenceStorage = savedPreferences ? Object.assign({},savedPreferences) : {};
   const docHandlers={}, controls={}, toolbarHandlers={}, pending=new Map();
   let timerId=0,captionKey='caption:set/item-a';
@@ -41,12 +41,38 @@ function harness(savedPreferences) {
     contains:()=>false
   };
   let injectedCss='';
+  function settingsElement(tag) {
+    return {
+      tagName:tag.toUpperCase(), dataset:{}, children:[], checked:false, disabled:false,
+      listeners:{}, textContent:'', open:false, firstChild:null,
+      setAttribute(name,value){this[name]=value;},
+      addEventListener(name,fn){this.listeners[name]=fn;},
+      append(...nodes){nodes.forEach(node=>this.appendChild(node));},
+      appendChild(node){this.children.push(node);this.firstChild=this.children[0];node.parentNode=this;},
+      replaceChildren(){this.children=[];this.firstChild=null;},
+      querySelector(selector){return this.querySelectorAll(selector)[0]||null;},
+      querySelectorAll(selector){
+        const match=selector.match(/^\\[data-history-(master|field|group-count)(?:="([^"]+)")?\\]$/);
+        const found=[];
+        function walk(node) {
+          if(match && node.dataset) {
+            const key={master:'historyMaster',field:'historyField','group-count':'historyGroupCount'}[match[1]];
+            if(node.dataset[key]!==undefined && (match[2]===undefined||node.dataset[key]===match[2])) found.push(node);
+          }
+          (node.children||[]).forEach(walk);
+        }
+        walk(this);
+        return found;
+      }
+    };
+  }
+  const settingsHost=showSettings?settingsElement('div'):null;
   const head={appendChild(node){injectedCss=node.textContent;}};
   const body={appendChild(node){node.parentNode=this;}};
   const document={
     readyState:'loading',head,body,
-    getElementById:()=>null,
-    createElement:name=>name==='style'?{textContent:''}:toolbar,
+    getElementById:id=>id==='app-settings-textarea-history'?settingsHost:null,
+    createElement:name=>name==='style'?{textContent:''}:(name==='div'&&!toolbar.parentNode?toolbar:settingsElement(name)),
     addEventListener(name,fn){docHandlers[name]=fn;}
   };
   const window={
@@ -64,7 +90,7 @@ function harness(savedPreferences) {
     clearTimeout:id=>pending.delete(id),
     Map,Array,String,Object});
   docHandlers.DOMContentLoaded();
-  return {document,window,controls,toolbarHandlers,toolbar,
+  return {document,window,controls,toolbarHandlers,toolbar,settingsHost,
     preferences:()=>Object.assign({},preferenceStorage),
     css:()=>injectedCss,
     captionTarget(key){captionKey=key;},
@@ -274,4 +300,28 @@ test('browser-local preferences survive reload while revision content does not',
   assert.equal(reloaded.window.webcapTextareaRevisions.enabledFor(field),false);
   reloaded.window.webcapTextareaRevisions.setEnabled('scene.prompt',true);
   assert.equal(reloaded.window.webcapTextareaRevisions.enabledFor(field),true);
+});
+
+test('Settings groups are collapsible, show live counts and retain open state when changed',()=>{
+  const h=harness(null,true),api=h.window.webcapTextareaRevisions,host=h.settingsHost;
+  const details=host.children.filter(node=>node.tagName==='DETAILS');
+  assert.equal(details.length,7);
+  assert.equal(details[0].open,true);
+  assert.equal(details[1].open,false);
+  const counts=host.querySelectorAll('[data-history-group-count]');
+  assert.equal(counts[0].textContent,'3 / 4 enabled');
+  const scene=host.querySelector('[data-history-field="scene.prompt"]');
+  assert.equal(scene.checked,true);
+  details[1].open=true;
+  scene.checked=false;
+  scene.listeners.change();
+  assert.equal(details[1].open,true,'checkbox change must preserve expanded group');
+  assert.equal(host.querySelector('[data-history-field="scene.prompt"]'),scene,'rows should not be rebuilt');
+  assert.equal(counts[1].textContent,'0 / 4 enabled');
+  const master=host.querySelector('[data-history-master]');
+  master.checked=false;master.listeners.change();
+  assert.equal(scene.disabled,true);
+  assert.equal(details[1].open,true);
+  master.checked=true;master.listeners.change();
+  assert.equal(scene.disabled,false);
 });

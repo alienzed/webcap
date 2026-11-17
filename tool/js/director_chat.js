@@ -4575,16 +4575,9 @@
       });
     },
     writeNewScene: function (launch) {
-      var newSceneOrigin = state.studioWorkingDraft.draftOrigins &&
-        state.studioWorkingDraft.draftOrigins.newScene;
-      var prepared = launch && !launch.forceAuthor && newSceneOrigin &&
-        newSceneOrigin.projectId === launch.projectId &&
-        newSceneOrigin.request === String(launch.authorRequest || launch.instruction) &&
-        state.studioWorkingDraft.newScene &&
-        typeof state.studioWorkingDraft.newScene.prompt === 'string' &&
-        !!state.studioWorkingDraft.newScene.prompt.trim();
-      if (!this.isReady() && !(prepared && this.canReview()))
-        return Promise.reject(new Error(this.readinessMessage()));
+      // Each explicit Write is a new model request. Historical draft caches are
+      // not an alternative authoring path and never suppress a Write.
+      if (!this.isReady()) return Promise.reject(new Error(this.readinessMessage()));
       if (!launch || !launch.projectId || !String(launch.instruction || '').trim())
         return Promise.reject(new Error('A saved Project and agreed new-Scene brief are required.'));
       var storyId = launch.projectId;
@@ -4611,36 +4604,21 @@
             return {title:prior.title,prompt:prior.prompt,durationSeconds:prior.durationSeconds};
           })() : null
         };
-        var baseline = JSON.stringify({sceneOrder:order,project:creativeContext});
-        var draftOrigin = state.studioWorkingDraft.draftOrigins &&
-          state.studioWorkingDraft.draftOrigins.newScene;
-        var sameSource = !!draftOrigin && draftOrigin.projectId === storyId &&
-          draftOrigin.request === String(launch.authorRequest || launch.instruction);
-        var reuse = !launch.forceAuthor && sameSource && draftOrigin.baseline === baseline &&
-          state.studioWorkingDraft.newScene &&
-          typeof state.studioWorkingDraft.newScene.prompt === 'string' &&
-          !!state.studioWorkingDraft.newScene.prompt.trim();
         var instruction = JSON.stringify({
           task:'Create the requested independently generatable H3 Scenes for this Project. ' +
             'Give each Scene a useful title, complete H3 Prompt and durationSeconds ' +
-            '(4–15 seconds, default 6 when unspecified). Honor the author\'s creative direction, ' +
-            'specific titles and timings. Deliver every Scene you can usefully author now.',
+            '(4–15 seconds). Follow any author-specified timing; when no duration is ' +
+            'specified, choose an appropriate duration from the authored action, rather ' +
+            'than using an implicit WebCap default. Deliver all useful Scenes now.',
           authorDirection:launch.authorRequest || launch.instruction,
-          project:Object.assign({},creativeContext,{
-            unsavedWorkingFields:sameSource ? (state.studioWorkingDraft.newScene || {}) : {}
-          })
+          project:creativeContext
         });
-        var workingScene = state.studioWorkingDraft.newScene;
-        if (!reuse) state.pending = false;
-        var proposal = reuse ?
-          Promise.resolve(JSON.stringify(Object.fromEntries(
-            (draftOrigin.fields || []).filter(function (field) {
-              return Object.prototype.hasOwnProperty.call(workingScene,field);
-            }).map(function (field) {return [field,workingScene[field]];})))) :
-          window.studioDirectorBridge.makeProposal(instruction,
-            'studio_scenes_draft', true,
-            {projectId:storyId,projectTitle:story.title,sceneOrder:order});
-        return proposal.then(function (raw) {
+        // The model, not an old single-Scene working draft, authors this request.
+        state.pending = false;
+        return window.studioDirectorBridge.makeProposal(instruction,
+          'studio_scenes_draft', true,
+          {projectId:storyId,projectTitle:story.title,sceneOrder:order})
+        .then(function (raw) {
           state.lastStudioIoRaw = raw;
           var fields;
           try { fields = JSON.parse(raw); }
@@ -4675,24 +4653,6 @@
               Number(item.durationSeconds) < 4 || Number(item.durationSeconds) > 15);
           });
           var draft = {scenes:drafts,rationale:typeof fields.rationale === 'string' ? fields.rationale : ''};
-          // The author's requested timing belongs in the actual authored Scene.
-          // A missing duration stays editable instead of silently becoming six seconds.
-          // Preserve the existing one-Scene working draft contract. Multi-Scene
-          // records belong to the multi-Scene review, not a singleton cache.
-          if (drafts.length === 1) {
-            state.studioWorkingDraft.newScene = Object.assign({},
-              state.studioWorkingDraft.newScene,
-              studioWorkingFieldChanges(drafts[0],['title','prompt','durationSeconds']));
-            state.studioWorkingDraft.draftOrigins =
-              state.studioWorkingDraft.draftOrigins || {projects:{},scenes:{}};
-            state.studioWorkingDraft.draftOrigins.newScene = {
-              projectId:storyId,
-              request:String(launch.authorRequest || launch.instruction),
-              baseline:baseline,
-              fields:Object.keys(studioWorkingFieldChanges(drafts[0],['title','prompt','durationSeconds']))
-            };
-            scheduleSessionSave();
-          }
           // Persist each mechanically usable Scene returned by this explicit Write.
           // Do not invent missing prompt text or duration values, or launch Review.
           var valid = drafts.filter(function (item) {

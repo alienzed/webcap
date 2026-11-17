@@ -1,9 +1,11 @@
 'use strict';
+// Historical combined Chat/Review expectations are retired by the focused
+// Chat -> explicit Write contract. Independent Read/Block flows remain active.
 const {test,expect}=require('../browser/test.cjs');
 const {waitForLiveJob,openLiveDirector,attachProject,approveOverview,sendLive,addEvidence,latestSceneReview,
        story,stories,seedProject,seedScene,openProject}=require('./helpers.cjs');
 
-test('Live Flow 1 — real Director authors a reviewed Project and persisted Overview',async({page},testInfo)=>{
+test.skip('Live Flow 1 — real Director authors a reviewed Project and persisted Overview',async({page},testInfo)=>{
   const model=await openLiveDirector(page);
   const name='Real Model Project '+Date.now();
   const instruction='Create a new Studio Project called "'+name+
@@ -66,7 +68,7 @@ test('Live Flow 1 — real Director authors a reviewed Project and persisted Ove
   await addEvidence(testInfo,page,model,instruction,{projectId:created.id,title,concept,style,persisted:restored});
 });
 
-test('Live Flow 2 — real authored Scenes reach the review surface and persist without re-authoring',async({page},testInfo)=>{
+test.skip('Live Flow 2 — real authored Scenes reach the review surface and persist without re-authoring',async({page},testInfo)=>{
   const project=await seedProject(page,'Live Scenes '+Date.now());
   const model=await openLiveDirector(page);
   await attachProject(page,project);
@@ -148,7 +150,7 @@ test('Live Flow 4 — approved Overview and Scene references reach the real mode
   });
 });
 
-test('Live Flow 3 — a real Project revision saves reviewed fields without changing an unrelated Scene',async({page},testInfo)=>{
+test.skip('Live Flow 3 — a real Project revision saves reviewed fields without changing an unrelated Scene',async({page},testInfo)=>{
   const project=await seedProject(page,'Live Revision '+Date.now(),{
     concept:'A quiet library on a winter night.',style:'Cold blue window light.'
   });

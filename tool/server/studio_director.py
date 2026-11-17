@@ -33,8 +33,7 @@ _WORKSHOP = (
     "Make useful creative decisions where the direction leaves room for judgment. "
     "Write producible work with clear physical continuity, staging, camera, "
     "atmosphere, dialogue and pacing where relevant. "
-    "Return only requested authoring material; WebCap owns IDs, destinations, "
-    "persistence and history.\n"
+    "Return the requested authored fields.\n"
 )
 
 _H3_STUDIO_CORE = (
@@ -54,8 +53,7 @@ _H3_STUDIO_CORE = (
     "Keep unaffected titles, durations, creative decisions and continuity intact. "
     "When several pieces are requested, deliver all the useful pieces you can. "
     "For H3 writing, use the production reference supplied with that task. "
-    "Actual authored material can be offered for review or application by WebCap; "
-    "discussion and draft creation never imply a saved change.\n"
+    "Provide the actual requested creative material; the application handles persistence.\n"
 )
 
 
@@ -81,7 +79,7 @@ def scene_records_schema():
             "properties": {
                 "title": {"type": "string"},
                 "prompt": {"type": "string", "minLength": 1},
-                "durationSeconds": {"type": "number"},
+                "durationSeconds": {"type": "integer"},
             },
         },
     }

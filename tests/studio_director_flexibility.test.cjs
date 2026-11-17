@@ -65,7 +65,7 @@ test('a single character Invariant can be supplied without the rest of its Overv
 test('Read approvals and standing source controls have been removed',()=>{
   assert.doesNotMatch(chat,/removeApprovedRead|studioApprovedRead|approvedReadSources/);
   assert.doesNotMatch(workbench,/removeApprovedRead|approveRead\(/);
-  assert.match(workbench,/appendReadSnapshot\(payload\)/);
+  assert.match(workbench,/appendReadSnapshot\(payload, readConversationId\)/);
 });
 
 test('ordinary chat never converts returned Project fields into pending writes',()=>{

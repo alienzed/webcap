@@ -1322,14 +1322,9 @@
     var empty = el('director-chat-empty');
     if (!host || !empty) return;
 
-    // Preserve the workbench-owned action while rebuilding message rows.
-    var suggestion = el('studio-dw-suggestions');
-    host.before(suggestion);
-    suggestion.classList.add('hidden');
     host.innerHTML = '';
     empty.classList.toggle('hidden', currentMessages().length > 0);
 
-    var suggestionRow = null;
     currentMessages().forEach(function (message, index) {
       var studioReply = state.activeMode === 'storyboard' && message.role === 'assistant';
       var previous = currentMessages()[index-1];
@@ -1408,38 +1403,9 @@
         meta.textContent = formatResponseMetrics(metricsMap[index], elapsedMap[index]);
         row.appendChild(meta);
       }
-      // Every actual deliverable has its own launcher and completion state,
-      // including a Project and Scene returned together in one response.
-      if (studioReply) studioStoredActions(message).forEach(function (savedAction) {
-        if (savedAction.completed || (index === state.studioActionIndex &&
-            (savedAction.actionKey || 'primary') === (state.studioActionKey || 'primary')))
-          return;
-        if (!studioRestoreAuthoredAction(savedAction,message.rawResponse)) return;
-        var oldAction = document.createElement('button');
-        oldAction.type = 'button';
-        oldAction.className = 'studio-dw-suggestion-action';
-        oldAction.dataset.suggestionKind = 'write';
-        oldAction.textContent = savedAction.kind === 'create_scene' || savedAction.kind === 'write_scenes'
-          ? 'Review authored Scene(s)' : 'Review authored Project';
-        oldAction.onclick = function () {
-          var proposal = studioRestoreAuthoredAction(savedAction,message.rawResponse);
-          if (!proposal) return;
-          window.studioDirectorWorkbench.presentAction(proposal, proposal.scene,
-            {projectId:proposal.projectId}, proposal.request, index);
-          renderMessages();
-          var active = el('studio-dw-suggestions').querySelector('.studio-dw-suggestion-action');
-          if (active) active.click();
-        };
-        row.appendChild(oldAction);
-      });
       host.appendChild(row);
-      if (studioReply && index === state.studioActionIndex) suggestionRow = row;
     });
 
-    if (state.activeMode === 'storyboard' && suggestionRow && suggestion.children.length) {
-      suggestionRow.appendChild(suggestion);
-      suggestion.classList.remove('hidden');
-    }
     host.scrollTop = host.scrollHeight;
   }
 

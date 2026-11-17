@@ -62,6 +62,8 @@ function sceneFixture(raw = '{"prompt":"Mara finishes quietly under a still came
     '    setStatus:status,').trim().replace(/,$/,'');
   vm.runInContext(readPayload+
     'window.studioDirectorWorkbench={approvedReadPayload:readPayload,'+sceneRead+','+applyScenePrompt+'};',context);
+  vm.runInContext(section(director,'  function studioConversationMessages(messages) {',
+    '  function studioDirectorRequestMessages('),context);
   vm.runInContext(section(director,'  function studioApprovedReadSources() {',
     '  function studioDirectorChatRequestMessages('),context);
   vm.runInContext(section(director,'  function studioWorkingFieldChanges(source, names) {',

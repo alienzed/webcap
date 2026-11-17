@@ -1331,8 +1331,18 @@
       actions.push({kind:'write_scenes',instruction:instruction,
         fields:Object.keys(scene),authoredFields:scene});
     var scenes = Array.isArray(response.scenes) ? response.scenes.slice() : [];
-    if (!targetScene && !scenes.length && scene && Object.keys(scene).length)
-      scenes = [scene];
+    if (!targetScene && !scenes.length && response.changes &&
+        response.changes.scene && typeof response.changes.scene === 'object' &&
+        !Array.isArray(response.changes.scene)) {
+      // A new Scene's unsupported timing remains visible for editing; it
+      // must not silently become the six-second fallback in Review.
+      var singleScene = {};
+      ['title','prompt','durationSeconds'].forEach(function (field) {
+        if (Object.prototype.hasOwnProperty.call(response.changes.scene,field))
+          singleScene[field] = response.changes.scene[field];
+      });
+      if (Object.keys(singleScene).length) scenes = [singleScene];
+    }
     if (scenes.length)
       actions.push({kind:'create_scene',instruction:instruction,fields:[],scenes:scenes});
     return actions;

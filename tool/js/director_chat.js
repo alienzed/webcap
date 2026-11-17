@@ -4326,6 +4326,12 @@
 
   window.studioDirectorBridge = {
     placeSuggestedAction: placeStudioSuggestion,
+    markWriteActionEdited:function (action) {
+      var entry = state.modeMessages.storyboard[state.studioActionIndex];
+      if (studioActiveStoredAction(entry) !== action)
+        throw new Error('Edited Scene Review is no longer bound to its original Director proposal.');
+      scheduleSessionSave();
+    },
     finishWriteAction:function (action) {
       var entry = state.modeMessages.storyboard[state.studioActionIndex];
       var stored = studioActiveStoredAction(entry);

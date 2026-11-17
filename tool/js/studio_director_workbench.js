@@ -224,12 +224,12 @@
               durationSeconds:scene.durationSeconds,invariantRefs:scene.invariantRefs};
           });
       }
-      text='Current saved snapshot (reloaded before drafting):' +
+      text='Saved context preview (reloaded before Write):' +
         String.fromCharCode(10) + JSON.stringify(data,null,2) +
-        String.fromCharCode(10) + 'Recent conversation context is also supplied.';
+        String.fromCharCode(10) + 'The full conversation is also supplied.';
     }
     el('studio-dw-write-context').querySelector('summary').textContent =
-      'Inspect draft context';
+      'Inspect Write context';
     el('studio-dw-write-context-json').textContent=text;
   }
 
@@ -251,7 +251,7 @@
     el('studio-dw-heading').textContent = 'Write';
     el('studio-dw-heading').title = mode === 'Read'
       ? 'Explicit source · nothing sent until Send'
-      : mode === 'Write' ? 'Reviewed destination · nothing saved until Apply'
+      : mode === 'Write' ? 'Explicit destination · direct save after response'
       : 'Conversation is independent of Studio navigation';
   }
   function manualSceneInstruction() {
@@ -301,10 +301,6 @@
       input.checked = sceneSelectionManual ? checked.has(id) : id === suggestedScene;
       input.onchange = function () {
         sceneSelectionManual = true;
-        if (pendingCreativeAction && pendingCreativeAction.kind === 'write_scenes')
-          pendingCreativeAction.chosenSceneIds = Array.from(
-            el('studio-dw-batch-scenes').querySelectorAll('input:checked')
-          ).map(function (node) {return node.value;});
       };
       label.append(input, document.createTextNode('Scene ' + (index+1) + ' · ' + (story.scenes[id].title || 'Untitled')));
       batchHost.appendChild(label);
@@ -454,21 +450,15 @@
           status(summary + ' · No H3 Prompt changes proposed.', !!failures.length);
           return;
         }
-        proposedBatch = {
-          storyId:storyId,
-          fields:['prompt'],
-          scenes:changed.map(function (entry) {
-            var scene = originalStory.scenes[entry.sceneId];
-            return {
-              sceneId:entry.sceneId,
-              before:{sceneId:entry.sceneId,position:ids.indexOf(entry.sceneId)+1,
-                title:scene.title,prompt:scene.prompt},
-              draft:{sceneId:entry.sceneId,prompt:entry.prompt}
-            };
-          })
-        };
-        renderBatchReview();
-        status(summary + ' · Review ' + changed.length + ' proposed Prompt changes before applying.', !!failures.length);
+        var report = changed.map(function (entry) {
+          return {sceneId:entry.sceneId,prompt:entry.prompt};
+        });
+        el('studio-dw-write-context-json').textContent = JSON.stringify(
+          {operation:'check-coherence',suggestedScenePrompts:report},null,2);
+        window.reportConsoleInfo('Studio Coherence suggestions',JSON.stringify(report,null,2));
+        status(summary + ' · ' + report.length +
+          ' suggested Prompt changes available in the Write context and Console. ' +
+          'No fields were changed.',!!failures.length,true);
       });
     }).catch(function (error) {
       status('Project coherence check failed: ' + String(error.message || error), true);
@@ -572,24 +562,6 @@
       });
       return name + ' · ' + labels.join(' + ');
     },
-    presentAction:presentAction,
-    updateWorkingWrite:showConversationWrite,
-    completeWriteAction:function (kind, story, selected) {
-      var action = pendingCreativeAction;
-      if (!action) return;
-      var projectId = action.chosenProjectId || action.projectId;
-      var matches =
-        (action.kind === 'create_project' && kind === 'project.create') ||
-        (projectId === story.id && action.kind === 'write_project' && kind === 'brief.apply') ||
-        (projectId === story.id && action.kind === 'create_scene' && kind === 'scenes.create') ||
-        (projectId === story.id && action.kind === 'write_scenes' &&
-          kind === 'scene.update' && selected.sceneId === (action.scene && action.scene.sceneId));
-      if (!matches) return;
-      pendingCreativeAction = null;
-      el('studio-dw-suggestions').replaceChildren();
-      showConversationWrite();
-      return true;
-    },
     sceneRead: function (story, sceneId) {
       if (!story || !story.sceneOrder.includes(sceneId)) throw new Error('Select a saved Scene in this Project.');
       var scene = story.scenes[sceneId];
@@ -672,7 +644,7 @@
       button.dataset.result=state;
       button.title=detail || 'Read selected Project fields';
     },
-    updateContext:function () {updateScope(); showConversationWrite();},
+    updateContext:function () {updateScope();},
     showSentWriteContext: function(operation, messages) {
       var preview = el('studio-dw-write-context-json');
       var details = el('studio-dw-write-context');
@@ -685,9 +657,6 @@
       var instruction = el('studio-dw-write-instruction');
       instruction.value = '';
       delete instruction.dataset.instructionSeeded;
-      pendingCreativeAction = null;
-      el('studio-dw-suggestions').replaceChildren();
-      showConversationWrite();
       readChoices = {};
       writeOperationChosen = false;
       sceneSelectionManual = false;
@@ -714,8 +683,6 @@
       loadStory(this.value).then(renderReadStory).catch(function(e) { status(e.message,true); });
     };
     el('studio-dw-write-project').onchange=function () {
-      if (pendingCreativeAction && pendingCreativeAction.kind !== 'create_project')
-        pendingCreativeAction.chosenProjectId = this.value;
       loadStory(this.value).then(renderWriteStory).catch(function(e) { status(e.message,true); });
     };
     el('studio-dw-write-operation').onchange=function () {
@@ -744,40 +711,11 @@
     function openDirectAction(which) {
       lastQuickAction = which;
       el('director-chat-drawer').classList.add('studio-actions-open');
-      if (which === 'write') showConversationWrite();
-      else if (el('studio-dw-' + which + '-panel').classList.contains('hidden'))
+      if (el('studio-dw-' + which + '-panel').classList.contains('hidden'))
         el('studio-dw-' + which).click();
       el('studio-dw-open-tools').setAttribute('aria-expanded','true');
       el('studio-dw-close-actions').focus();
     }
-    el('studio-dw-write-ready-launch').onclick=function () {
-      var reviewDraft = !pendingCreativeAction || pendingCreativeAction.reviewReady
-        ? window.studioDirectorBridge.preparedWrite() : null;
-      if (!pendingCreativeAction || (pendingCreativeAction.reviewReady && reviewDraft && reviewDraft.kind === 'scene')) {
-        var draft = reviewDraft;
-        if (!draft) {showConversationWrite();return;}
-        if (draft.kind === 'scene') {
-          return window.flushStudioDirectorStoryEdits(draft.projectId)
-            .then(function () {return loadStory(draft.projectId);})
-            .then(function (story) {
-              var changes = window.studioDirectorBridge.preparedWrite();
-              if (!changes || changes.kind !== 'scene' ||
-                  changes.projectId !== draft.projectId || changes.sceneId !== draft.sceneId)
-                throw new Error('Prepared Scene target changed. Reopen Write.');
-              var candidate = window.studioDirectorBridge.preparedSceneFields(draft.sceneId);
-              var changed = changes.fields.filter(function (field) {
-                return JSON.stringify(candidate[field]) !== JSON.stringify(story.scenes[draft.sceneId][field]);
-              });
-              if (!changed.length) {status('These Scene fields already match the saved values.',false,true);return;}
-              showSceneReview(story,draft.sceneId,changed,candidate);
-            }).catch(function (error) {status('Prepared Scene review failed: '+error.message,true);});
-        }
-        return window.studioDirectorBridge.reviewPreparedWrite(draft);
-      }
-      var proposed = el('studio-dw-suggestions').querySelector('[data-guided-write]');
-      if (!proposed) throw new Error('The proposed Director action is no longer available.');
-      proposed.click();
-    };
     el('director-chat-context-approve').onclick=function () {openDirectAction('read');};
     el('studio-dw-open-tools').onclick=function () {
       if (el('director-chat-drawer').classList.contains('studio-actions-open')) el('studio-dw-close-actions').click();
@@ -804,16 +742,7 @@
     el('studio-dw-scenes-select-all').onclick=function () {selectWriteScenes(true);};
     el('studio-dw-scenes-select-none').onclick=function () {selectWriteScenes(false);};
     el('studio-dw-write-prepare').onclick=writePrepare;
-    el('studio-dw-scene-apply').onclick=applyScene;
-    el('studio-dw-batch-apply').onclick=applyBatchScenes;
-    ['studio-dw-batch-close','studio-dw-batch-cancel'].forEach(function (id) {
-      el(id).onclick=function () {el('studio-dw-batch-review').close();};
-    });
-    ['studio-dw-scene-close','studio-dw-scene-cancel'].forEach(function (id) {
-      el(id).onclick=function () {el('studio-dw-scene-review').close();};
-    });
     updateScope();
-    showConversationWrite();
   }
   if (document.readyState==='loading') document.addEventListener('DOMContentLoaded',bind);
   else bind();

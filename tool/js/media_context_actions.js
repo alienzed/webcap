@@ -642,7 +642,6 @@ function buildMediaContextMenuActions(mediaItem, key) {
           setStatus('FPS must be a finite number greater than zero.');
           return;
         }
-        if (!confirm('Convert this video to ' + fps + ' FPS?\n\nThis will overwrite the file and may discard or duplicate frames.')) return;
         setStatus('Converting video to ' + fps + ' FPS...');
         fetch('/media/convert_fps', {
           method: 'POST',

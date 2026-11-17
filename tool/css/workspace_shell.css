@@ -4224,7 +4224,4 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
 .director-chat-drawer.studio-director #studio-dw-write-panel.studio-dw-awaiting-scenes #studio-dw-batch-controls {display:block;}
 
 .director-chat-drawer.studio-director .studio-dw-scene-select-actions {display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;}
-.studio-director-workbench .studio-dw-batch-fields {display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin:6px 0 12px;}
-.studio-director-workbench .studio-dw-batch-fields > span {font-size:14px;font-weight:600;}
-.studio-director-workbench .studio-dw-batch-fields label {font-size:14px;}
 .director-chat-drawer.studio-director .studio-dw-scene-select-actions button {min-height:32px;font-size:13px;padding:4px 9px;}

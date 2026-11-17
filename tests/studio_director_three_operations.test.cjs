@@ -96,39 +96,49 @@ test('explicit Scene writes rely on authored duration values rather than guessin
   assert.match(chat,/missingDuration/);
   assert.doesNotMatch(chat,/draft\.scenes\[0\]\.durationSeconds = requestedDuration/);
 });
-test('manual multi-Scene Write delegates title and duration choices to actual authored fields',async()=>{
+test('manual multi-Scene Write uses explicit field controls instead of interpreting prose',async()=>{
   const source=part(workbench,'  function prepareBatchScenes(storyId) {',
     '  function renderBatchReview() {');
   assert.doesNotMatch(source,/\.test\(instruction\)|\.match\(instruction\)/,
-    'WebCap must not inspect natural-language instructions to choose fields');
+    'WebCap must not inspect natural language to choose fields');
+  assert.match(html,/id="studio-dw-batch-fields"/);
+  assert.match(html,/type="checkbox" value="prompt" checked/);
   const story={id:'p1',title:'Film',sceneOrder:['s1'],scenes:{s1:{
     id:'s1',title:'Platform',prompt:'A porter waits.',durationSeconds:8
   }}};
   const launches=[],statuses=[],prepare={disabled:false};
+  let selectedFields=['title','durationSeconds'];
   const el=id=>id==='studio-dw-batch-scenes'
     ? {querySelectorAll:()=>[{value:'s1'}]}
-    : id==='studio-dw-write-prepare' ? prepare : null;
+    : id==='studio-dw-batch-fields'
+      ? {querySelectorAll:()=>selectedFields.map(value=>({value}))}
+      : id==='studio-dw-write-prepare' ? prepare : null;
   const bridge={
     selectWriteProject(id){assert.equal(id,'p1');},
     async writeSelectedScene(launch){launches.push(launch);return {story};}
   };
   const revise=new Function('el','manualSceneInstruction','status','window',
-    'loadStory','storyName', 'Promise',
-    source+'return prepareBatchScenes;')(
+    'loadStory','storyName','Promise',source+'return prepareBatchScenes;')(
       el,()=> 'Give the Platform Scene a quieter title and make it fourteen seconds.',
-      (message)=>statuses.push(message),
+      message=>statuses.push(message),
       {flushStudioDirectorStoryEdits:async()=>{},studioDirectorBridge:bridge},
       async()=>story,story=>story.title,Promise);
   const result=await revise('p1');
   assert.equal(launches.length,1);
-  assert.deepEqual(launches[0].fields,['prompt']);
-  assert.equal(launches[0].allowCreativeFieldChanges,true);
+  assert.deepEqual(launches[0].fields,['title','durationSeconds'],
+    'explicit selected fields must not cause an unwanted Prompt rewrite');
   assert.equal(launches[0].sceneId,'s1');
-  assert.equal(launches[0].instruction,'Give the Platform Scene a quieter title and make it fourteen seconds.');
   assert.equal(result.saved.length,1);
+  selectedFields=['prompt'];
+  await revise('p1');
+  assert.deepEqual(launches[1].fields,['prompt'],'default Prompt-only revision remains available');
+  selectedFields=[];
+  await revise('p1');
+  assert.equal(launches.length,2,'empty field selection does not start another authoring call');
+  assert.ok(statuses.some(message=>/Choose at least one field/.test(message)));
   assert.equal(prepare.disabled,false);
-  assert.ok(statuses.some(message=>/Saved 1/.test(message)));
 });
+
 
 function harness() {
   const suggestions = {children:[],replaceChildren(){this.children=[];},

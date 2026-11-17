@@ -3265,8 +3265,9 @@
       // Do not leak the selected editor's creative content through automatic navigation context.
       return studioDirectorRequestMessages(messages, true, false,
         {projectId:'',projectTitle:'',sceneId:'',sceneNumber:0,sceneOrder:[]}).then(function (outbound) {
-        outbound[0].content += '\n\nSTUDIO CONVERSATION DELIVERY: Respond naturally to the author. ' +
-          'When there is useful Project or Scene material ready, deliver the actual content alongside the reply. ' +
+        outbound[0].content += '\n\nSTUDIO CONVERSATION DELIVERY: Answer the author in the JSON reply field on every turn. ' +
+          'For creative discussion, give concrete alternatives, your recommendation and why in reply. ' +
+          'When creating or revising Project or Scene material, include the actual authored fields alongside reply. ' +
           'Use changes.project for authored Project field values; changes.scene for changes to an existing Scene; ' +
           'and scenes for new Scene drafts. A creative Scene revision includes the complete replacement H3 prompt. ' +
           'Include every useful field or Scene that is ready, even when another part needs a question. ' +

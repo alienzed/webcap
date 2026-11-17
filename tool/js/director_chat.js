@@ -1694,45 +1694,16 @@
 
 
   function parseStudioProjectDraft(raw) {
-    var value = String(raw || '').trim();
-    var fence = String.fromCharCode(96).repeat(3);
-    if (value.startsWith(fence) && value.endsWith(fence)) {
-      var newline = value.indexOf('\n');
-      if (newline >= 0) value = value.slice(newline + 1, -3).trim();
+    // A focused Write returns structured data, not conversational prose.
+    var value;
+    try { value = JSON.parse(String(raw || '')); }
+    catch (error) {
+      throw new Error('Director Project Write returned invalid JSON: ' + error.message +
+        '\\nRaw response:\\n' + String(raw || ''));
     }
-    var proposal;
-    try { proposal = JSON.parse(value); }
-    catch (error) { throw new Error('Director returned invalid Project JSON: ' + error.message + '\nRaw Director response:\n' + String(raw || '')); }
-    if (!proposal || Array.isArray(proposal) || typeof proposal !== 'object')
-      throw new Error('Director returned no Project proposal.\nRaw Director response:\n' + String(raw || ''));
-    // The review owns completeness: missing explanatory fields or one imperfect
-    // initial Scene must not erase the usable Project proposal.
-    proposal.title = typeof proposal.title === 'string' ? proposal.title : '';
-    proposal.concept = typeof proposal.concept === 'string' ? proposal.concept : '';
-    proposal.style = typeof proposal.style === 'string' ? proposal.style : '';
-    proposal.rationale = typeof proposal.rationale === 'string' ? proposal.rationale : '';
-    proposal.invariants = Array.isArray(proposal.invariants) ? proposal.invariants.map(function (item) {
-      var row = item && typeof item === 'object' && !Array.isArray(item) ? item : {};
-      var kinds = ['visual', 'character', 'location', 'world', 'sound', 'custom'];
-      return {
-        kind: kinds.includes(row.kind) ? row.kind : 'custom',
-        title: typeof row.title === 'string' ? row.title : '',
-        text: typeof row.text === 'string' ? row.text : ''
-      };
-    }) : [];
-    proposal.initialScenes = Array.isArray(proposal.initialScenes) ? proposal.initialScenes.map(function (item) {
-      var row = item && typeof item === 'object' && !Array.isArray(item) ? item : {};
-      return {
-        title: typeof row.title === 'string' ? row.title : '',
-        brief: typeof row.brief === 'string' ? row.brief : '',
-        // Preserve an unsupported value for explicit correction in Review.
-        durationSeconds: row.durationSeconds
-      };
-    }) : [];
-    if (!proposal.title.trim() && !proposal.concept.trim() && !proposal.style.trim() &&
-        !proposal.invariants.length && !proposal.initialScenes.length)
-      throw new Error('Director returned no usable Project material.\nRaw Director response:\n' + String(raw || ''));
-    return proposal;
+    if (!value || typeof value !== 'object' || Array.isArray(value))
+      throw new Error('Project Write returned no object. Raw response:\\n' + String(raw || ''));
+    return value;
   }
 
   function addStudioProjectInvariant(item, destination, original) {
@@ -1835,145 +1806,80 @@
   }
 
   function commitFocusedStudioProject(proposal) {
-    if (!proposal || !String(proposal.concept || '').trim() ||
-        !String(proposal.style || '').trim())
-      throw new Error('Director did not return complete Concept and Visual / atmosphere fields.');
-    var initial = Array.isArray(proposal.initialScenes) ? proposal.initialScenes : [];
-    var ready = initial.filter(function (scene) {
-      return scene && String(scene.brief || '').trim() &&
-        Number.isInteger(scene.durationSeconds) &&
-        scene.durationSeconds >= 4 && scene.durationSeconds <= 15;
-    });
-    var incompleteCount = initial.length - ready.length;
     return requestJson('/fs/studio/director/project-create', {
-      method:'POST',headers:{'Content-Type':'application/json'},
+      method:'POST', headers:{'Content-Type':'application/json'},
       body:JSON.stringify({proposal:{
-        title:String(proposal.title || '').trim(),concept:proposal.concept,
-        style:proposal.style,invariants:proposal.invariants || []
+        title:proposal.title, concept:proposal.concept, style:proposal.style,
+        invariants:proposal.invariants
       }})
     }).then(function (result) {
       if (!result.story || !result.story.id)
-        throw new Error('Project creation returned no saved Project ID.');
-      state.studioProjectProposal = null;
-      state.studioWorkingDraft.newProject = {};
-      recordStudioOperation('project.create','Created Project: ' + (result.story.title || result.story.id),
-        result.story.id,result.story.sceneOrder || []);
-      studioActionStatus('Project saved: ' + (result.story.title || result.story.id),false);
+        throw new Error('Project creation returned no confirmed saved Project.');
+      recordStudioOperation('project.create','Created Project: ' +
+        (result.story.title || result.story.id),result.story.id,result.story.sceneOrder || []);
       return window.studioDirectorBridge.recordApplied('project.create',result.story,{
-        title:result.story.title,concept:result.story.concept,style:result.story.style,
-        invariants:result.story.invariants
+        title:result.story.title, concept:result.story.concept,
+        style:result.story.style, invariants:result.story.invariants
       }).catch(function (error) {
-        window.reportConsoleError('Project receipt after save',error);
-        studioActionStatus('Project saved, but conversation receipt failed: ' + error.message,true);
+        error.saved = true;
+        window.reportConsoleError('Project save receipt',error);
+        throw error;
       }).then(function () {
-        return writeInitialProjectScenes(result.story,ready);
-      }).then(function (outcome) {
-        if (incompleteCount || outcome.failed.length || outcome.notAttempted.length ||
-            outcome.reportingErrors.length)
-          studioActionStatus('Project saved; ' + incompleteCount +
-            ' incomplete initial Scene brief(s) were not sent for authoring. ' +
-            outcome.failed.concat(outcome.notAttempted,outcome.reportingErrors).join(' | '),true);
-        return window.refreshStudioDirectorStoryIfOpen(result.story.id);
+        return window.refreshStudioDirectorStoryIfOpen(result.story.id).then(function () {
+          studioActionStatus('Project created: ' + (result.story.title || result.story.id),false);
+          return result.story;
+        });
       });
     });
   }
 
   function prepareStudioProject(options) {
-    if (state.pending || state.activeMode !== 'storyboard' || !state.sessionReady) return;
-    if (options && options.authoredFields) {
-      // The chat response already authored this material; review the exact fields.
-      state.studioProjectProposal = parseStudioProjectDraft(JSON.stringify(Object.assign({
-        title:'',concept:'',style:'',invariants:[],initialScenes:[],
-        rationale:'Authored in this Director conversation; no second model call.'
-      },options.authoredFields)));
-      showStudioProjectReview();
-      return;
-    }
-    if (state.studioProjectProposal && !(options && options.forceAuthor)) { showStudioProjectReview(); return; }
-    var workingProject = options && options.forceAuthor ? {} : state.studioWorkingDraft.newProject;
-    var authorRequest = String(options && options.authorRequest || options && options.instruction || '');
-    var manualReview = !String(options && options.instruction || '').trim();
-    var newProjectOrigin = state.studioWorkingDraft.draftOrigins &&
-      state.studioWorkingDraft.draftOrigins.newProject;
-    var sameWork = manualReview || !!newProjectOrigin &&
-      newProjectOrigin.request === authorRequest;
-    var retained = !(options && options.forceAuthor) && sameWork && workingProject
-      ? manualReview ? workingProject : Object.fromEntries(
-          (newProjectOrigin.fields || []).filter(function (field) {
-            return Object.prototype.hasOwnProperty.call(workingProject,field);
-          }).map(function (field) {return [field,workingProject[field]];}))
-      : {};
-    if (Object.keys(retained).length) {
-      state.studioProjectProposal = parseStudioProjectDraft(JSON.stringify(Object.assign({
-        title:'', concept:'', style:'', invariants:[], initialScenes:[],
-        rationale:'Structured Project material retained from Director conversation.'
-      },retained)));
-      studioActionStatus('Project fields ready for review, without another model call.',false);
-      showStudioProjectReview();
-      return;
-    }
-    if (!state.modelId) { studioActionStatus('No Director model is available. Refresh models.', true); return; }
+    if (state.pending || state.activeMode !== 'storyboard' || !state.sessionReady)
+      throw new Error('Finish the current Director request before writing a Project.');
     var discussion = studioConversationMessages(state.modeMessages.storyboard);
-    if (!discussion.some(function (message) { return message.role === 'user'; })) {
-      studioActionStatus('Discuss an idea first, then prepare a Project.', true);
-      return;
-    }
+    var task = {
+      task:'Create one Project with a useful title, developed Concept, Visual / atmosphere and continuity Invariants based on our creative discussion.',
+      instruction:String(options && options.instruction || '').trim()
+    };
     state.pending = true;
     state.jobId = '';
-    studioActionStatus('Preparing a new Project for review…', false);
     startProgress();
     syncControls();
-    var input = {
-      task: 'Create one usable Project with a distinctive title, developed Concept and core appeal, ' +
-        'Visual / atmosphere, and Invariants only for relevant recurring facts. ' +
-        'When the author wants initial Scenes, include short titled Scene briefs with durations ' +
-        'for later individual Scene authoring. Otherwise return an empty initialScenes array. ' +
-        'Deliver the actual Project fields and a concise rationale now.',
-      instruction: String(options && options.instruction || '').trim(),
-      unsavedWorkingFields:workingProject || {}
-    };
-    studioDirectorRequestMessages(discussion.concat([{ role: 'user', content: JSON.stringify(input) }]), false, true)
-      .then(function (messages) {
-        window.studioDirectorWorkbench.showSentWriteContext('studio_project_draft', messages);
-        return requestJson('/fs/director/chat', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ model: state.modelId, operation: 'studio_project_draft', messages: messages })
-        });
-      }).then(function (payload) {
-        if (!payload.job || !payload.job.jobId) throw new Error('Project extraction was not queued.');
-        state.jobId = String(payload.job.jobId);
-        state.requestDiagnostic = payload.job.request || null;
-        trackTransientLlmJob(payload.job);
-        return waitForJob(payload.job);
-      }).then(function (job) {
-        var result = job.result && typeof job.result === 'object' ? job.result : {};
-        state.studioProjectProposal = parseStudioProjectDraft(result.text);
-        state.studioWorkingDraft.newProject = Object.assign({},
-          state.studioWorkingDraft.newProject,
-          studioWorkingFieldChanges(state.studioProjectProposal,
-            ['title','concept','style','invariants']));
-        state.studioWorkingDraft.draftOrigins =
-          state.studioWorkingDraft.draftOrigins || {projects:{},scenes:{}};
-        state.studioWorkingDraft.draftOrigins.newProject = {
-          request:authorRequest,
-          fields:Object.keys(studioWorkingFieldChanges(state.studioProjectProposal,
-            ['title','concept','style','invariants']))
-        };
-        scheduleSessionSave();
-        finishProgress(null);
-        return commitFocusedStudioProject(state.studioProjectProposal);
-      }).catch(function (error) {
-        finishProgress(error);
-        studioActionStatus('Project proposal failed: ' + String(error.message || error), true);
-        if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Studio Project proposal', error);
-        else throw error;
-      }).finally(function () {
-        state.pending = false;
-        state.jobId = '';
-        syncControls();
+    return studioDirectorRequestMessages(discussion.concat([
+      {role:'user',content:JSON.stringify(task)}
+    ]),false,true).then(function (messages) {
+      window.studioDirectorWorkbench.showSentWriteContext('studio_project_draft',messages);
+      return requestJson('/fs/director/chat',{
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({model:state.modelId,operation:'studio_project_draft',messages:messages})
       });
+    }).then(function (payload) {
+      if (!payload.job || !payload.job.jobId) throw new Error('Project Write did not queue.');
+      state.jobId = String(payload.job.jobId);
+      state.requestDiagnostic = payload.job.request || null;
+      trackTransientLlmJob(payload.job);
+      return waitForJob(payload.job);
+    }).then(function (job) {
+      var raw = String(job.result && job.result.text || '');
+      state.lastStudioIoRaw = raw;
+      el('studio-director-inspect').dataset.newResult = 'true';
+      var proposal = parseStudioProjectDraft(raw);
+      return commitFocusedStudioProject(proposal);
+    }).then(function (result) {
+      finishProgress(null);
+      return result;
+    }).catch(function (error) {
+      state.lastStudioIoError = String(error.message || error);
+      el('studio-director-inspect').dataset.newResult = 'true';
+      studioActionStatus((error.saved ? 'Project saved, reporting failed: ' :
+        'Project Write failed: ') + state.lastStudioIoError,true);
+      finishProgress(error);
+      window.reportConsoleError('Studio Project Write',error);
+      throw error;
+    }).finally(function () {
+      state.pending = false;state.jobId = '';syncControls();
+    });
   }
-
 
   // The reviewed Project is saved before any Scene authoring. Each approved
   // brief uses the existing one-Scene writer schema and Studio insertion route.

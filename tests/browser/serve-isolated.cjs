@@ -75,6 +75,8 @@ function portAvailable() { return portAvailableOn(4200); }
     console.log('Real-model acceptance: using existing Director configuration (read-only) from',source,
       '; selected model:',cfg.director_model||'(first available)');
   } else {
+    // Controlled inference is remote-only; no local model directory or WSL is needed.
+    cfg.filesystem.models='';
     cfg.director_model='acceptance::acceptance-model';
     cfg.storyboard=cfg.storyboard||{};
     cfg.storyboard.director={

@@ -41,6 +41,16 @@ async function attachProject(page,project){
   if(await attach.isVisible()) await attach.click();
   await expect(page.locator('#director-chat-title')).toContainText(project.title);
 }
+async function approveOverview(page,projectId){
+  await page.locator('#director-chat-context-approve').click();
+  await page.locator('#studio-dw-read-project').selectOption(projectId);
+  const selection=page.locator('#studio-dw-read-selection');
+  if(await selection.getAttribute('open')===null) await selection.locator('summary').click();
+  await page.locator('#studio-dw-project-fields input[data-group-select]').first().check();
+  for(const toggle of await page.locator('#studio-dw-scene-fields input[data-group-select]').all())
+    await toggle.uncheck();
+  await page.locator('#studio-dw-read-send').click();
+}
 async function waitForLiveJob(page,trigger){
   // Follow the real WebCap inference job, not elapsed time, model prose,
   // or a suggestion left over from an earlier reply.
@@ -90,4 +100,4 @@ async function latestSceneReview(page){
   await expect(page.locator('#studio-scenes-review')).toBeVisible();
   return page.locator('#studio-scenes-rows .studio-scenes-row');
 }
-module.exports={waitForLiveJob,openLiveDirector,attachProject,sendLive,actualReply,addEvidence,latestSceneReview,story,stories,seedProject,seedScene,openProject,reopenDirectorIfClosed};
+module.exports={waitForLiveJob,openLiveDirector,attachProject,approveOverview,sendLive,actualReply,addEvidence,latestSceneReview,story,stories,seedProject,seedScene,openProject,reopenDirectorIfClosed};

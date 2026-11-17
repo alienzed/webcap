@@ -1,6 +1,6 @@
 'use strict';
 const {test,expect}=require('../browser/test.cjs');
-const {openLiveDirector,attachProject,sendLive,story,seedProject,seedScene,
+const {openLiveDirector,attachProject,approveOverview,sendLive,story,seedProject,seedScene,
   openProject,reopenDirectorIfClosed}=require('./helpers.cjs');
 
 // These journeys deliberately keep the real Project and Studio conversation
@@ -9,6 +9,7 @@ const {openLiveDirector,attachProject,sendLive,story,seedProject,seedScene,
 async function reviseOverview(page,instruction,projectId) {
   const mode=page.locator('#director-studio-composer-mode-select');
   await mode.selectOption('conversation');
+  await approveOverview(page,projectId);
   await sendLive(page,instruction);
   const action=page.locator('#studio-dw-suggestions .studio-dw-suggestion-action');
   await expect(action).toContainText(/Review authored Project/);
@@ -18,6 +19,9 @@ async function reviseOverview(page,instruction,projectId) {
   await expect(review).toBeVisible();
   const style=await page.locator('#studio-brief-style').inputValue();
   expect(style.trim(),'Director must return a useful Overview revision').toBeTruthy();
+  await expect(page.locator('#studio-brief-title-selected')).not.toBeChecked();
+  await expect(page.locator('#studio-brief-concept-selected')).not.toBeChecked();
+  await expect(page.locator('#studio-brief-invariants-selected')).not.toBeChecked();
   await page.locator('#studio-brief-apply').click();
   await expect.poll(async()=>(await story(page,projectId)).style,{timeout:30000}).toBe(style);
   return style;
@@ -26,6 +30,8 @@ async function evidence(testInfo,label,data) {
   await testInfo.attach(label,{body:Buffer.from(JSON.stringify(data,null,2)),contentType:'application/json'});
 }
 async function chooseScene(page,sceneId) {
+  if(await page.locator('#director-chat-drawer').isVisible())
+    await page.locator('#director-chat-close').click();
   await page.locator('[data-scene-progress="'+sceneId+'"]').click();
   await expect(page.locator('.storyboard-scene-progress-card[data-scene-id="'+sceneId+'"]'))
     .toHaveClass(/active/);
@@ -66,6 +72,7 @@ test('Live journey — revise Overview, Develop Scenes button, revise a Scene, t
   expect(afterOverview.sceneOrder).toHaveLength(0);
 
   // Exercise the actual UI button, NOT /fs/storyboard/director called by the test.
+  await page.locator('#director-chat-close').click();
   const develop=page.locator('#storyboard-develop-btn');
   await expect(develop).toBeVisible();
   await develop.click();
@@ -139,6 +146,8 @@ test('Live journey — edit A, move to B and edit B, then return to A in the sam
   await expect(page.locator('#director-chat-title')).toContainText(a.title);
   // Navigation alone must not silently switch Director's connected Project.
   const attach=page.locator('#director-studio-attach-current');
+  const tools=page.locator('#studio-dw-open-tools');
+  if(await tools.getAttribute('aria-expanded')!=='true') await tools.click();
   await expect(attach).toBeVisible();
   await attach.click();
   await expect(page.locator('#director-chat-title')).toContainText(b.title);
@@ -150,6 +159,7 @@ test('Live journey — edit A, move to B and edit B, then return to A in the sam
 
   await openProject(page,a.id);
   await expect(page.locator('#director-chat-title')).toContainText(b.title);
+  if(await tools.getAttribute('aria-expanded')!=='true') await tools.click();
   await expect(attach).toBeVisible();
   await attach.click();
   await expect(page.locator('#director-chat-title')).toContainText(a.title);

@@ -19,9 +19,19 @@ test('LIVE — conversation attachment survives a different write destination an
   // Attachment controls live in the Read / Write sidebar.
   await page.locator('#studio-dw-open-tools').click();
   await expect(page.locator('#director-studio-attach-current')).toBeVisible();
-  await expect(page.locator('#director-chat-title')).not.toContainText(a.title);
+  // The header may suggest the open Project even without an attachment.
+  // The saved conversation, not that label, owns the association.
+  const sessions=await page.request.get('/fs/director/chats').then(response=>response.json());
+  const chatId=sessions.activeByMode.storyboard;
+  const attachment=async()=>{
+    const result=await page.request.get('/fs/director/chats/'+chatId+'?inspect=1')
+      .then(response=>response.json());
+    return result.chat.storyAccess?.storyId || null;
+  };
+  expect(await attachment()).toBeNull();
   await page.locator('#director-studio-attach-current').click();
   await expect(page.locator('#director-chat-title')).toContainText(a.title);
+  await expect.poll(attachment).toBe(a.id);
   await openProject(page,b.id);
   await reopenDirectorIfClosed(page);
   await expect(page.locator('#director-chat-title')).toContainText(a.title);
@@ -54,6 +64,7 @@ test('LIVE — conversation attachment survives a different write destination an
   await expect(page.locator('#director-chat-title')).toContainText(a.title);
   await sendLive(page,'Discuss another staging possibility, without editing saved material.');
   await expect(page.locator('#director-chat-title')).toContainText(a.title);
+  expect(await attachment()).toBe(a.id);
   await testInfo.attach('independent-live-destinations',{body:Buffer.from(JSON.stringify({
     model,attached:a.id,destination:b.id,requests,raw,style:desired
   },null,2)),contentType:'application/json'});

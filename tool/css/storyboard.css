@@ -3644,6 +3644,16 @@ html[data-theme="dark"] .storyboard-prompt-take-status {
 }
 /* The Scene column can be narrow even on a wide desktop when Story is visible. */
 @container (max-width: 780px) {
+  .storyboard-scenes-list.is-focus .storyboard-scene-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .storyboard-scene-inspector { position: static; }
+  .storyboard-scenes-list.is-focus .storyboard-director-actions {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .storyboard-scenes-list.is-focus .storyboard-director-actions .storyboard-save-state {
+    grid-column: 1 / -1;
+  }
   .storyboard-scenes-heading {
     grid-template-columns: minmax(0, 1fr);
   }

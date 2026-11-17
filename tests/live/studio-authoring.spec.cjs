@@ -1,6 +1,6 @@
 'use strict';
 const {test,expect}=require('../browser/test.cjs');
-const {waitForLiveJob,openLiveDirector,attachProject,sendLive,addEvidence,latestSceneReview,
+const {waitForLiveJob,openLiveDirector,attachProject,approveOverview,sendLive,addEvidence,latestSceneReview,
        story,stories,seedProject,seedScene,openProject}=require('./helpers.cjs');
 
 test('Live Flow 1 — real Director authors a reviewed Project and persisted Overview',async({page},testInfo)=>{
@@ -38,7 +38,8 @@ test('Live Flow 1 — real Director authors a reviewed Project and persisted Ove
   await action.click();
   const dialog=page.locator('#studio-project-review');
   await expect(dialog).toBeVisible();
-  const reviewInvariants=await page.locator('#studio-project-invariants .studio-project-invariant textarea').allInputValues();
+  const reviewInvariants=await page.locator('#studio-project-invariants .studio-project-invariant textarea')
+    .evaluateAll(fields=>fields.map(field=>field.value));
   expect(reviewInvariants.some(value=>value.trim()),
     'Flow 1 Review: authored invariant did not reach the editable Project review').toBe(true);
   const title=await page.locator('#studio-project-title').inputValue();
@@ -117,6 +118,11 @@ test('Live Flow 4 — approved Overview and Scene references reach the real mode
   const share=page.locator('#director-chat-context-approve');
   await share.click();
   await page.locator('#studio-dw-read-project').selectOption(project.id);
+  const selection=page.locator('#studio-dw-read-selection');
+  if(await selection.getAttribute('open')===null) await selection.locator('summary').click();
+  await page.locator('#studio-dw-project-fields input[data-group-select]').first().check();
+  // The selected Scene is suggested too; this first Read approves only Overview.
+  await page.locator('#studio-dw-scene-fields input[data-group-select]').first().uncheck();
   await page.locator('#studio-dw-read-send').click();
   await sendLive(page,'Using the approved saved Overview, describe the setting in one sentence. Do not change it.');
   expect(outbound).toHaveLength(1);
@@ -125,8 +131,8 @@ test('Live Flow 4 — approved Overview and Scene references reach the real mode
 
   await share.click();
   await page.locator('#studio-dw-read-project').selectOption(project.id);
-  await page.locator('#studio-dw-read-selection summary').click();
-  await page.locator('#studio-dw-project-fields input[data-group-select]').first().uncheck();
+  if(await selection.getAttribute('open')===null) await selection.locator('summary').click();
+  await page.locator('#studio-dw-project-fields input[data-group-select]').first().check();
   await page.locator('#studio-dw-scene-fields input[data-group-select]').first().check();
   await page.locator('#studio-dw-read-send').click();
   await sendLive(page,'Using the newly approved Scene as a reference, describe the physical action without changing the Project.');
@@ -152,6 +158,8 @@ test('Live Flow 3 — a real Project revision saves reviewed fields without chan
   const model=await openLiveDirector(page);
   await attachProject(page,project);
   const instruction='Revise only the Project visual atmosphere to a warm amber-lit interior, leaving the Project concept, Scene prompts and durations untouched. Return a Project style revision for review.';
+  // Conversation attachment identifies the subject; approve its saved baseline separately.
+  await approveOverview(page,project.id);
   await sendLive(page,instruction);
   const action=page.locator('#studio-dw-suggestions .studio-dw-suggestion-action');
   await expect(action).toContainText(/Review authored Project/i);
@@ -161,6 +169,12 @@ test('Live Flow 3 — a real Project revision saves reviewed fields without chan
   const revised=await page.locator('#studio-brief-style').inputValue();
   expect(revised.trim()).toBeTruthy();
   expect(revised).not.toBe('Cold blue window light.');
+  await expect(page.locator('#studio-brief-title-selected'),
+    'Style-only authoring must not propose a changed Project title').not.toBeChecked();
+  await expect(page.locator('#studio-brief-concept-selected'),
+    'Style-only authoring must not propose a changed Project concept').not.toBeChecked();
+  await expect(page.locator('#studio-brief-invariants-selected'),
+    'Style-only authoring must not propose changed Project invariants').not.toBeChecked();
   await page.locator('#studio-brief-apply').click();
   await expect.poll(async()=> (await story(page,project.id)).style).toBe(revised);
   const saved=await story(page,project.id);

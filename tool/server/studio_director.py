@@ -92,6 +92,7 @@ def chat_response_schema():
                 "properties": {
                     "project": {
                         "type": "object", "additionalProperties": False,
+                        "description": "Actual authored Project field values. For a partial revision, include the fields being changed and preserve all other fields by omitting them. Every included value is a complete replacement ready for review.",
                         "properties": {
                             "title": {"type": "string"},
                             "concept": {"type": "string"},
@@ -112,7 +113,7 @@ def chat_response_schema():
                     },
                     "scene": {
                         "type": "object", "additionalProperties": False,
-                        "description": "Requested replacements for an existing Scene; new Scene records belong in scenes.",
+                        "description": "Actual requested replacements for an existing Scene. Include the fields being changed and preserve other fields by omitting them. Creative revisions include the complete replacement prompt; new Scene records belong in scenes.",
                         "properties": {
                             "title": {"type": "string"},
                             "prompt": {"type": "string", "minLength": 1},

@@ -1966,6 +1966,47 @@
     dialog.showModal();
   }
 
+  function commitFocusedStudioProject(proposal) {
+    if (!proposal || !String(proposal.concept || '').trim() ||
+        !String(proposal.style || '').trim())
+      throw new Error('Director did not return complete Concept and Visual / atmosphere fields.');
+    var initial = Array.isArray(proposal.initialScenes) ? proposal.initialScenes : [];
+    if (initial.some(function (scene) {
+      return !scene || !String(scene.brief || '').trim() ||
+        !Number.isInteger(scene.durationSeconds) ||
+        scene.durationSeconds < 4 || scene.durationSeconds > 15;
+    })) throw new Error('Director returned incomplete initial Scene briefs or durations.');
+    return requestJson('/fs/studio/director/project-create', {
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({proposal:{
+        title:String(proposal.title || '').trim(),concept:proposal.concept,
+        style:proposal.style,invariants:proposal.invariants || []
+      }})
+    }).then(function (result) {
+      if (!result.story || !result.story.id)
+        throw new Error('Project creation returned no saved Project ID.');
+      state.studioProjectProposal = null;
+      state.studioWorkingDraft.newProject = {};
+      recordStudioOperation('project.create','Created Project: ' + (result.story.title || result.story.id),
+        result.story.id,result.story.sceneOrder || []);
+      studioActionStatus('Project saved: ' + (result.story.title || result.story.id),false);
+      return window.studioDirectorBridge.recordApplied('project.create',result.story,{
+        title:result.story.title,concept:result.story.concept,style:result.story.style,
+        invariants:result.story.invariants
+      }).catch(function (error) {
+        window.reportConsoleError('Project receipt after save',error);
+        studioActionStatus('Project saved, but conversation receipt failed: ' + error.message,true);
+      }).then(function () {
+        return writeInitialProjectScenes(result.story,initial);
+      }).then(function (outcome) {
+        if (outcome.failed.length || outcome.notAttempted.length || outcome.reportingErrors.length)
+          studioActionStatus('Project saved, but initial Scenes were incomplete: ' +
+            outcome.failed.concat(outcome.notAttempted,outcome.reportingErrors).join(' | '),true);
+        return window.refreshStudioDirectorStoryIfOpen(result.story.id);
+      });
+    });
+  }
+
   function prepareStudioProject(options) {
     if (state.pending || state.activeMode !== 'storyboard' || !state.sessionReady) return;
     if (options && options.authoredFields) {
@@ -2049,8 +2090,7 @@
         };
         scheduleSessionSave();
         finishProgress(null);
-        studioActionStatus('Project ready for review. Nothing has been created.', false);
-        showStudioProjectReview();
+        return commitFocusedStudioProject(state.studioProjectProposal);
       }).catch(function (error) {
         finishProgress(error);
         studioActionStatus('Project proposal failed: ' + String(error.message || error), true);

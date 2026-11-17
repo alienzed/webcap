@@ -108,17 +108,17 @@ def replace_set_caption_text(folder: str, search: str, replacement: str, preview
     signature = hashlib.sha256()
     for name in caption_names:
         path = folder_path / name
-        if not path.is_file():
-            continue
-        text = run_with_directory_repair(folder_path, lambda: path.read_text(encoding="utf-8"))
-        count = text.count(search)
-        if not count:
-            continue
         signature.update(name.encode("utf-8"))
         signature.update(b"\\0")
+        if not path.is_file():
+            signature.update(b"missing")
+            continue
+        text = run_with_directory_repair(folder_path, lambda: path.read_text(encoding="utf-8"))
         signature.update(text.encode("utf-8"))
         signature.update(b"\\0")
-        matches.append((name, text, count))
+        count = text.count(search)
+        if count:
+            matches.append((name, text, count))
     digest = signature.hexdigest()
     summary = {
         "files": len(matches),
@@ -127,7 +127,7 @@ def replace_set_caption_text(folder: str, search: str, replacement: str, preview
     }
     if preview_signature is None:
         return summary
-    if preview_signature != digest:
+    if not isinstance(preview_signature, str) or preview_signature != digest:
         raise ValueError("Captions changed since preview. Preview again before replacing.")
     for index, (name, text, _) in enumerate(matches):
         try:

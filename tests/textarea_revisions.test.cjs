@@ -40,6 +40,7 @@ function harness() {
   const body={appendChild(node){node.parentNode=this;}};
   const document={
     readyState:'loading',head,body,
+    getElementById:()=>null,
     createElement:name=>name==='style'?{textContent:''}:toolbar,
     addEventListener(name,fn){docHandlers[name]=fn;}
   };

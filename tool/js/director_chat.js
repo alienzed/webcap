@@ -3591,7 +3591,7 @@
     if (responses.length) chooser.value=String(responses.length-1);
     render();
     var recorded = currentMessages().filter(function(message){
-      return message.role === 'user' && (message.content.includes('[WEBCAP EXPLICIT READ]') ||
+      return message.role === 'user' && (message.content.startsWith('[WEBCAP EXPLICIT READ') ||
         message.content.includes('[WEBCAP APPLIED FIELD VALUES]'));
     });
     el('studio-director-io-history').textContent = recorded.length ? recorded.map(function(message,index){

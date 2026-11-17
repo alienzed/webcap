@@ -2062,9 +2062,9 @@
         'for later individual Scene authoring. Otherwise return an empty initialScenes array. ' +
         'Deliver the actual Project fields and a concise rationale now.',
       instruction: String(options && options.instruction || '').trim(),
-      unsavedWorkingFields:workingProject || {},discussion: discussion
+      unsavedWorkingFields:workingProject || {}
     };
-    studioDirectorRequestMessages([{ role: 'user', content: JSON.stringify(input) }], false, true)
+    studioDirectorRequestMessages(discussion.concat([{ role: 'user', content: JSON.stringify(input) }]), false, true)
       .then(function (messages) {
         window.studioDirectorWorkbench.showSentWriteContext('studio_project_draft', messages);
         return requestJson('/fs/director/chat', {
@@ -2126,7 +2126,7 @@
         project:{title:current.title,concept:current.concept,style:current.style,
           invariants:current.invariants}
       };
-      return studioDirectorRequestMessages([{role:'user',content:JSON.stringify(input)}],
+      return studioDirectorRequestMessages(studioConversationMessages(state.modeMessages.storyboard).concat([{role:'user',content:JSON.stringify(input)}]),
         true,true,{projectId:story.id,projectTitle:story.title,sceneOrder:current.sceneOrder})
         .then(function (messages) {
           window.studioDirectorWorkbench.showSentWriteContext('studio_scene_field_draft',messages);
@@ -2633,9 +2633,9 @@
         // This explicit targeted Project revision authorizes its own saved baseline.
         project: {id:story.id,title:story.title,concept:story.concept,
           style:story.style,invariants:story.invariants},
-        unsavedWorkingFields:workingProject,discussion: discussion
+        unsavedWorkingFields:workingProject
       };
-      return studioDirectorRequestMessages([{ role: 'user', content: JSON.stringify(input) }], false, true)
+      return studioDirectorRequestMessages(discussion.concat([{ role: 'user', content: JSON.stringify(input) }]), false, true)
         .then(function (messages) {
           window.studioDirectorWorkbench.showSentWriteContext('studio_brief_draft', messages);
           return requestJson('/fs/director/chat', {
@@ -4878,7 +4878,6 @@
             '(4–15 seconds, default 6 when unspecified). Honor the author\'s creative direction, ' +
             'specific titles and timings. Deliver every Scene you can usefully author now.',
           authorDirection:launch.authorRequest || launch.instruction,
-          discussion:studioConversationMessages(state.modeMessages.storyboard),
           project:Object.assign({},creativeContext,{
             unsavedWorkingFields:sameSource ? (state.studioWorkingDraft.newScene || {}) : {}
           })
@@ -5095,7 +5094,6 @@
             'when prompt is selected. Preserve all unaffected creative content and fields. ' +
             'Deliver the actual authored values in one JSON object.',
           authorDirection:launch.authorRequest || launch.instruction,
-          discussion:studioConversationMessages(state.modeMessages.storyboard),
           requestedFields:requestedFields,
           savedScene:context,
           unsavedWorkingFields:workingScene || {}
@@ -5194,7 +5192,7 @@
       state.pending = true;
       syncControls();
       startProgress();
-      return studioDirectorRequestMessages([{role:'user',content:instruction}], includePromptContract, true, navigationSnapshot).then(function (messages) {
+      return studioDirectorRequestMessages(studioConversationMessages(state.modeMessages.storyboard).concat([{role:'user',content:instruction}]), includePromptContract, true, navigationSnapshot).then(function (messages) {
         window.studioDirectorWorkbench.showSentWriteContext(operation || 'studio_scene_field_draft', messages);
         return requestJson('/fs/director/chat', {
           method:'POST',headers:{'Content-Type':'application/json'},

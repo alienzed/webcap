@@ -289,23 +289,15 @@ test('structured Director changes merge by complete field, without overwriting u
   assert.equal(state.sessionDirty.storyboard,true);
 });
 
-test('an incomplete optional field does not erase valid authored material', () => {
-  const state={studioWorkingDraft:{projects:{},scenes:{},newProject:{},newScene:{},sourceRequest:''},
-    sessionDirty:{storyboard:false}};
-  const source=part(chat,'  // A Studio conversation owns unsaved sparse field replacements.',
-    '  function parseStudioChatResponse(raw) {');
-  const merge=new Function('state',source+'return studioMergeWorkingChanges;')(state);
-  const response=parse(JSON.stringify({
-    reply:'I revised the Scene.',
-    changes:{scene:{prompt:'Complete H3 Prompt',title:null,durationSeconds:'invalid'}},
-    action:{kind:'write_scenes',instruction:'Quiet ending'}
-  }));
-  assert.equal(response.reply,'I revised the Scene.');
-  assert.equal(merge(response.changes,{projectId:'p1',sceneId:'s1'},response.action,
-    'Quiet ending'),true);
-  assert.deepEqual(state.studioWorkingDraft.scenes.s1,{prompt:'Complete H3 Prompt'});
-  assert.equal(merge({scene:{title:null}},{projectId:'p1',sceneId:'s1'},response.action,'Again'),false);
-  assert.equal(state.studioWorkingDraft.scenes.s1.prompt,'Complete H3 Prompt');
+test('ordinary chat retains unexpected content verbatim and does not merge any fields',()=>{
+  const raw=JSON.stringify({reply:'A discussion',changes:{scene:{
+    prompt:'Unexpected prompt',title:null,durationSeconds:'invalid'}}});
+  const answer=parse(raw);
+  assert.equal(answer.reply,raw);
+  assert.equal(answer.changes,null);
+  assert.equal(answer.action,null);
+  assert.doesNotMatch(part(chat,'  function parseStudioChatResponse(raw) {',
+    '  function storyboardRequestMessages('),/studioMergeWorkingChanges/);
 });
 
 test('Project revision accepts one full field replacement and preserves unrelated saved values', () => {

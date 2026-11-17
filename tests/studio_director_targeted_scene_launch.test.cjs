@@ -447,8 +447,8 @@ test('a different Scene draft does not evict provenance of the first Scene',asyn
     ...h.launch,authorRequest:firstRequest,fields:['prompt','durationSeconds']
   });
   assert.equal(resumed.review,true);
-  assert.equal(h.events.filter(row=>row[0]==='model').length,2,
-    'the retained first Scene draft is reusable despite an intervening Scene draft');
+  assert.equal(h.events.filter(row=>row[0]==='model').length,3,
+    'the first Scene draft is retained, but its invalid duration cannot satisfy a retry');
   assert.equal(h.events.filter(row=>row[0]==='save').length,0);
 });
 

@@ -52,7 +52,7 @@ function harness(savedPreferences, showSettings) {
       replaceChildren(){this.children=[];this.firstChild=null;},
       querySelector(selector){return this.querySelectorAll(selector)[0]||null;},
       querySelectorAll(selector){
-        const match=selector.match(/^\\[data-history-(master|field|group-count)(?:="([^"]+)")?\\]$/);
+        const match=selector.match(/^\[data-history-(master|field|group-count)(?:="([^"]+)")?\]$/);
         const found=[];
         function walk(node) {
           if(match && node.dataset) {

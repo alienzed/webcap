@@ -322,7 +322,9 @@ test('explicitly selected title and duration changes do not rewrite an unselecte
     ...h.launch,fields:['title','durationSeconds'],
     instruction:'Rename the Scene and adjust its duration.'
   });
-  const request=JSON.parse(h.events.find(row=>row[0]==='model')[1]);
+  const model=h.events.find(row=>row[0]==='model');
+  const request=JSON.parse(model[1]);
+  assert.equal(model[3],false,'title/timing-only revision does not need H3 prompt guidance');
   assert.deepEqual(JSON.parse(JSON.stringify(request.requestedFields)),
     ['title','durationSeconds']);
   const save=h.events.find(row=>row[0]==='save')[1];

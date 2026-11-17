@@ -3860,7 +3860,7 @@
         var assistantText = String(result.text || '').trim();
         if (activeChatMode === 'storyboard' && !assistantText)
           throw new Error('Director returned an empty conversation response.');
-        if (activeChatMode === 'storyboard' && /^[\\s]*[\\[{]/.test(assistantText)) {
+        if (activeChatMode === 'storyboard' && /^\s*[\[{]/.test(assistantText)) {
           var structured = false;
           try { JSON.parse(assistantText); structured = true; } catch (_) {}
           if (structured)

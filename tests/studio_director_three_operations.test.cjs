@@ -197,7 +197,7 @@ test('standalone new Scene fields do not misclassify Project fields or require a
 
 test('ordinary prose never manufactures a Studio write action', () => {
   assert.doesNotMatch(chat,/function studioActionFromExplicitRequest/);
-  assert.match(chat,/var actions = studioAuthoredWriteActions\(studioResponse,content,targetScene\)/);
+  assert.doesNotMatch(chat,/var actions = studioAuthoredWriteActions\(studioResponse,content,targetScene\)/);
   assert.doesNotMatch(part(chat,
     '  function studioAuthoredWriteActions(response, instruction, targetScene) {',
     '  function studioStoredActions(entry) {'),/\.test\(instruction\)|\.match\(instruction\)/,
@@ -490,27 +490,25 @@ test('draft reuse is based on exact authored provenance, not linguistic heuristi
   assert.match(chat,/sourceMessageIndex/);
   assert.doesNotMatch(workbench,/literalTitleOnly/);
 });
-test('Studio request sends bounded discussion, current full words, and no saved-field receipts',async()=>{
-  const request=new Function('state','window','requestJson',part(chat,
-    '  function studioDirectorRequestMessages(messages, includePromptContract, explicitWrite, navigationSnapshot) {',
-    '  function studioDirectorChatRequestMessages(')+
+test('Studio requests send the entire exchange without truncation or saved receipts',async()=>{
+  const composed=new Function('requestJson',part(chat,
+    '  function studioConversationMessages(messages) {',
+    '  function studioApprovedReadSources() {')+
     'return studioDirectorRequestMessages;')(
-      {studioStoryAccess:null,storyboardAttachments:{}},
-      {getStudioDirectorNavigation:()=>({projectId:'p1',projectTitle:'A Project',sceneOrder:[]})},
-      async()=>({system:'Small Director guidance',actions:[],promptContract:'H3'}));
-  const fullUser='Please revise the Story with these details: '+('Z'.repeat(3900));
+      async()=>({system:'Focused Write',chatSystem:'Creative conversation',
+        promptContract:'H3'}));
+  const fullUser='Please revise the Story: '+('Z'.repeat(3900));
   const discussion=Array.from({length:12},(_,i)=>({
     role:i%2?'assistant':'user',content:i===10?'A'.repeat(4500):'Turn '+i
   }));
-  discussion.push({role:'user',content:'[WEBCAP APPLIED FIELD VALUES] large saved receipt'});
+  discussion.push({role:'user',content:'[WEBCAP APPLIED FIELD VALUES] receipt'});
   discussion.push({role:'user',content:fullUser});
-  const result=await request(discussion,false,false,
-    {projectId:'p1',projectTitle:'A Project',sceneOrder:[]});
-  assert.ok(result.length<=9,'only a short tail is model discussion');
-  assert.equal(result.at(-1).content,fullUser,'never truncate the active request');
-  assert.doesNotMatch(JSON.stringify(result),/large saved receipt/);
-  assert.ok(result.some(x=>x.content.includes('[Earlier long message abbreviated]')),
-    'historical huge turns should not be re-sent verbatim');
+  const result=await composed(discussion,false,false);
+  assert.equal(result.length,14,'every genuine chat turn is retained');
+  assert.equal(result.at(-1).content,fullUser);
+  assert.equal(result[11].content,'A'.repeat(4500));
+  assert.doesNotMatch(JSON.stringify(result),/saved receipt|abbreviated/);
+  assert.equal(result[0].content,'Creative conversation');
 });
 
 

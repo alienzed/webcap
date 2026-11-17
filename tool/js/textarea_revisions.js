@@ -596,12 +596,13 @@
       else if (prev || next) step(prev ? -1 : 1);
     });
     document.addEventListener('focusin',function (event) {
+      if (diffDialog && diffDialog.contains(event.target)) return;
       if (event.target.matches && event.target.matches('textarea') && enabledFor(event.target)) attach(event.target);
       else if (!toolbar.contains(event.target)) detach();
     });
     document.addEventListener('focusout',function (event) {
       if (!active || event.target !== active.field) return;
-      if (toolbar.contains(event.relatedTarget)) return;
+      if (toolbar.contains(event.relatedTarget) || (diffDialog && diffDialog.open)) return;
       detach();
     },true);
     document.addEventListener('change',function (event) {

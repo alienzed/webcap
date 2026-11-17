@@ -92,3 +92,59 @@ test('explicit Write reuses direct Project/Scene save routes, preserving old dat
   assert.match(chat,/function showStudioProjectReview\(/,
     'older saved proposals remain compatible, not destroyed by migration');
 });
+
+test('explicit Overview Write persists only requested fields, without opening Review',async()=>{
+  const source=segment(chat,'  function commitFocusedStudioBrief(',
+    '  function prepareStudioBrief(');
+  const requests=[],receipts=[];
+  const commit=new Function('requestJson','recordStudioOperation','studioActionStatus',
+    'window','state',source+'return commitFocusedStudioBrief;')(
+    async(path,options)=>{
+      requests.push([path,JSON.parse(options.body)]);
+      return {story:{id:'p1',title:'Existing',concept:'Unchanged',
+        style:'Blue dawn',invariants:[]},revisionId:'r1'};
+    },
+    ()=>{},()=>{},{
+      studioDirectorBridge:{recordApplied:async(kind,story,fields)=>{receipts.push({kind,fields});}},
+      refreshStudioDirectorStoryIfOpen:async()=>{}
+    },{studioBriefProposal:{storyId:'p1'}}
+  );
+  await commit('p1',{title:'Existing',concept:'Unchanged',style:'Warm dusk',invariants:[]},
+    {title:'Invented title',style:'Blue dawn'},['style']);
+  assert.equal(requests.length,1);
+  assert.equal(requests[0][0],'/fs/studio/director/brief');
+  assert.deepEqual(requests[0][1].changes,{style:'Blue dawn'});
+  assert.deepEqual(requests[0][1].expected,{style:'Warm dusk'});
+  assert.equal(receipts.length,1);
+  assert.deepEqual(receipts[0].fields,{style:'Blue dawn'});
+});
+
+test('focused Write Scene is launched directly and prefilled without rewriting user input',()=>{
+  const operation=segment(workbench,'  function setOperation() {',
+    '  function renderWriteStory(');
+  assert.match(operation,/if \(sceneWrite\) seedManualSceneInstruction\(\);/);
+  const seed=segment(workbench,'  function seedManualSceneInstruction() {',
+    '  function setOperation()');
+  assert.match(seed,/dataset\.instructionSeeded/);
+  assert.match(seed,/studioDirectorBridge\.messages\(\)/);
+  assert.match(workbench,/forceAuthor:true, directSave:true/);
+  assert.match(chat,/if \(launch\.directSave && \(drafts\.length !== 1 \|\| missingPrompt/);
+});
+
+test('Write field omissions cannot become a fabricated confirmed save',async()=>{
+  const source=segment(chat,'  function commitFocusedStudioProject(',
+    '  function prepareStudioProject(');
+  let mutations=0;
+  const commit=new Function('requestJson','recordStudioOperation','studioActionStatus',
+    'window','state','writeInitialProjectScenes',source+'return commitFocusedStudioProject;')(
+    async()=>{mutations++;return {};},()=>{},()=>{},{
+      studioDirectorBridge:{recordApplied:async()=>{}},
+      refreshStudioDirectorStoryIfOpen:async()=>{}
+    },{studioProjectProposal:null,studioWorkingDraft:{newProject:{}}},async()=>({
+      failed:[],notAttempted:[],reportingErrors:[]
+    })
+  );
+  await assert.rejects(()=>commit({title:'Incomplete',concept:'Only concept',
+    style:'',invariants:[]}),/complete Concept and Visual/);
+  assert.equal(mutations,0);
+});

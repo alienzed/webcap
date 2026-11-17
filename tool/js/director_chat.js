@@ -4943,63 +4943,37 @@
             };
             scheduleSessionSave();
           }
-          // Direct Write never silently opens a second Review workflow.
-          // Keep any partial provider material for diagnosis, but do not save
-          // an incomplete Scene or invent absent prompt/duration values.
-          if (launch.directSave && (drafts.length !== 1 || missingPrompt ||
-              missingDuration || invalidDuration))
-            throw new Error('Director did not return one complete savable Scene. ' +
-              'No Scene was saved; inspect Director I/O for the actual response.');
-          // Legacy review remains available for existing conversations.
-          if (drafts.length !== 1 || missingPrompt || missingDuration ||
-              invalidDuration || !launch.directSave) {
-            var priorReview = state.studioScenesProposal;
-            if (priorReview && Number.isInteger(priorReview.sourceMessageIndex)) {
-              rememberStudioScenesReview();
-              state.studioScenesReviewsByResponse[priorReview.sourceMessageIndex] = priorReview;
-            }
-            state.studioScenesProposal = {
-              storyId:storyId, storyTitle:story.title, sceneOrder:order,
-              scenes:story.scenes, drafts:draft.scenes, rationale:draft.rationale,
-              sourceMessageIndex:launch.sourceMessageIndex,
-              sourceScenesSignature:JSON.stringify(draft.scenes)
-            };
-            showStudioScenesReview();
-            studioActionStatus(missingPrompt
-              ? 'Scene fields retained. Complete the missing H3 Prompt in Review before saving.'
-              : missingDuration || invalidDuration
-                ? 'Scene duration needs review. Authored fields retained; nothing saved.'
-                : drafts.length + ' authored Scene' + (drafts.length === 1 ? '' : 's') +
-                  ' ready for review. Nothing has been saved.',
-              missingDuration || invalidDuration);
-            return {review:true};
-          }
-          var scene = draft.scenes[0];
-          if (!scene || typeof scene.prompt !== 'string' || !scene.prompt.trim())
-            throw new Error('Director returned no usable Scene Prompt.');
-          var validDuration = Number(scene.durationSeconds);
-          var creation = {
-            title:String(scene.title || '').trim() || 'Scene ' + (order.length + 1),
-            prompt:scene.prompt, durationSeconds:validDuration
-          };
+          // Accept every independently savable Scene; a partial record is not
+          // authority to discard a different complete record.
+          var complete = drafts.filter(function (item) {
+            return item.prompt.trim() && Number.isInteger(Number(item.durationSeconds)) &&
+              Number(item.durationSeconds) >= 4 && Number(item.durationSeconds) <= 15;
+          });
+          var incompleteCount = drafts.length - complete.length;
+          if (!complete.length)
+            throw new Error('Director returned no complete savable Scenes. No Scene was saved. ' +
+              'The raw response and partial fields remain available in Director I/O.\\nRaw response:\\n' + raw);
+          var creations = complete.map(function (scene,index) {
+            return {title:String(scene.title || '').trim() || 'Scene ' + (order.length + index + 1),
+              prompt:scene.prompt, durationSeconds:Number(scene.durationSeconds)};
+          });
           state.pending = true;
           syncControls();
           return requestJson('/fs/studio/director/scenes-draft', {
             method:'POST', headers:{'Content-Type':'application/json'},
             body:JSON.stringify({
-              storyId:storyId, expectedSceneOrder:order, scenes:[creation],
+              storyId:storyId, expectedSceneOrder:order, scenes:creations,
               placement:'end', relativeSceneId:''
             })
           }).then(function (result) {
             if (!result || !result.story || result.story.id !== storyId ||
-                !Array.isArray(result.scenes) || result.scenes.length !== 1 ||
-                !result.scenes[0].id)
-              throw new Error('Scene creation returned no confirmed saved result.');
-            var saved = result.scenes[0];
-            // The server has committed the new Scene. Clear a matching draft
-            // before refresh/receipt, so a later reporting failure cannot
-            // cause the same candidate to be inserted twice.
-            if (state.studioWorkingDraft.newScene.prompt === saved.prompt) {
+                !Array.isArray(result.scenes) || result.scenes.length !== creations.length ||
+                result.scenes.some(function (scene) {return !scene.id;}))
+              throw new Error('Scene creation returned no confirmed complete saved result. ' +
+                'Inspect the Project before retrying to avoid duplicates.');
+            // Clear only successfully persisted partial working material.
+            if (creations.length === 1 &&
+                state.studioWorkingDraft.newScene.prompt === result.scenes[0].prompt) {
               state.studioWorkingDraft.newScene = {};
               if (state.studioWorkingDraft.draftOrigins)
                 state.studioWorkingDraft.draftOrigins.newScene = null;
@@ -5007,14 +4981,19 @@
             }
             return window.refreshStudioDirectorStoryIfOpen(storyId).then(function () {
               return window.studioDirectorBridge.recordApplied('scene.create',result.story,{
-                scenes:[{id:saved.id,title:saved.title,prompt:saved.prompt,
-                  durationSeconds:saved.durationSeconds}]
+                scenes:result.scenes.map(function (saved) {
+                  return {id:saved.id,title:saved.title,prompt:saved.prompt,
+                    durationSeconds:saved.durationSeconds};
+                })
               });
             }).catch(function (error) {
               error.saved = true;
               throw error;
             }).then(function () {
-              studioActionStatus('Scene created and saved: ' + saved.title, false);
+              studioActionStatus(result.scenes.length + ' Scene(s) created and saved.' +
+                (incompleteCount ? ' ' + incompleteCount +
+                  ' incomplete returned record(s) were not saved; inspect Director I/O.' : ''),
+                !!incompleteCount);
               return result;
             });
           });

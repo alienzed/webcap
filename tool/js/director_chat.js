@@ -4785,7 +4785,7 @@
                 ? 'Scene duration needs review. Authored fields retained; nothing saved.'
                 : drafts.length + ' authored Scene' + (drafts.length === 1 ? '' : 's') +
                   ' ready for review. Nothing has been saved.',
-              missingPrompt || missingDuration || invalidDuration);
+              missingDuration || invalidDuration);
             return {review:true};
           }
           var scene = draft.scenes[0];
@@ -4876,6 +4876,13 @@
               pendingChanges[field] = workingScene[field];
           });
           if (Object.keys(pendingChanges).length) {
+            // A duration requested through an explicit Write must be supplied
+            // as a real, supported field before WebCap can save a timed revision.
+            if (wantsDuration && (!Number.isInteger(pendingChanges.durationSeconds) ||
+                pendingChanges.durationSeconds < 4 || pendingChanges.durationSeconds > 15)) {
+              studioActionStatus('Scene timing is missing or unsupported. Draft retained for review; nothing saved.',true);
+              return {review:true};
+            }
             var prompt = Object.prototype.hasOwnProperty.call(pendingChanges,'prompt') ?
               pendingChanges.prompt : null;
             delete pendingChanges.prompt;
@@ -4897,7 +4904,7 @@
             'When changing creative content, return the complete replacement H3 Prompt. ' +
             'Preserve all unaffected details and the established timing. ' +
             'Return the requested field values in one JSON object.',
-          authorDirection:launch.instruction,
+          authorDirection:launch.authorRequest || launch.instruction,
           requestedFields:requestedFields,
           savedScene:context,
           unsavedWorkingFields:workingScene || {}
@@ -4942,6 +4949,10 @@
               throw new Error('Director did not return the requested Scene prompt. Other usable requested fields are retained for review.\nRaw response:\n' + raw);
             if (!Object.keys(authored).length)
               throw new Error('Director did not return the requested Scene fields.\nRaw response:\n' + raw);
+            if (wantsDuration && !Object.hasOwn(extras,'durationSeconds')) {
+              studioActionStatus('Scene timing is missing or unsupported. Authored fields retained for review; nothing saved.',true);
+              return {review:true};
+            }
             if ((prompt === null || prompt.trim() === String(original.prompt || '').trim()) &&
                 (!Object.hasOwn(extras,'title') || extras.title === String(original.title || '').trim()) &&
                 (!Object.hasOwn(extras,'durationSeconds') || extras.durationSeconds === original.durationSeconds)) {

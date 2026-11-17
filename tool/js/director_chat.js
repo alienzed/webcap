@@ -1858,7 +1858,7 @@
         title: typeof row.title === 'string' ? row.title : '',
         brief: typeof row.brief === 'string' ? row.brief : '',
         // Preserve an unsupported value for explicit correction in Review.
-        durationSeconds: row.durationSeconds == null ? 6 : row.durationSeconds
+        durationSeconds: row.durationSeconds
       };
     }) : [];
     if (!proposal.title.trim() && !proposal.concept.trim() && !proposal.style.trim() &&
@@ -1971,11 +1971,12 @@
         !String(proposal.style || '').trim())
       throw new Error('Director did not return complete Concept and Visual / atmosphere fields.');
     var initial = Array.isArray(proposal.initialScenes) ? proposal.initialScenes : [];
-    if (initial.some(function (scene) {
-      return !scene || !String(scene.brief || '').trim() ||
-        !Number.isInteger(scene.durationSeconds) ||
-        scene.durationSeconds < 4 || scene.durationSeconds > 15;
-    })) throw new Error('Director returned incomplete initial Scene briefs or durations.');
+    var ready = initial.filter(function (scene) {
+      return scene && String(scene.brief || '').trim() &&
+        Number.isInteger(scene.durationSeconds) &&
+        scene.durationSeconds >= 4 && scene.durationSeconds <= 15;
+    });
+    var incompleteCount = initial.length - ready.length;
     return requestJson('/fs/studio/director/project-create', {
       method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({proposal:{
@@ -1997,10 +1998,12 @@
         window.reportConsoleError('Project receipt after save',error);
         studioActionStatus('Project saved, but conversation receipt failed: ' + error.message,true);
       }).then(function () {
-        return writeInitialProjectScenes(result.story,initial);
+        return writeInitialProjectScenes(result.story,ready);
       }).then(function (outcome) {
-        if (outcome.failed.length || outcome.notAttempted.length || outcome.reportingErrors.length)
-          studioActionStatus('Project saved, but initial Scenes were incomplete: ' +
+        if (incompleteCount || outcome.failed.length || outcome.notAttempted.length ||
+            outcome.reportingErrors.length)
+          studioActionStatus('Project saved; ' + incompleteCount +
+            ' incomplete initial Scene brief(s) were not sent for authoring. ' +
             outcome.failed.concat(outcome.notAttempted,outcome.reportingErrors).join(' | '),true);
         return window.refreshStudioDirectorStoryIfOpen(result.story.id);
       });

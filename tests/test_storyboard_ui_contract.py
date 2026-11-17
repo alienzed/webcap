@@ -1175,7 +1175,7 @@ def test_storyboard_scene_progress_cards_mark_saved_refinements():
     assert ".storyboard-scene-progress-step .storyboard-scene-progress-refined" in css
 
 
-def test_scene_entry_and_exit_states_are_retired_from_authoring_but_preserved_in_storage():
+def test_scene_entry_and_exit_states_are_retired_from_active_authoring_and_storage():
     storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
     store = (ROOT / "tool" / "server" / "storyboard_store.py").read_text(encoding="utf-8")
 
@@ -1189,9 +1189,9 @@ def test_scene_entry_and_exit_states_are_retired_from_authoring_but_preserved_in
     assert "field('entryState')" not in payload
     assert "field('exitState')" not in payload
 
-    # Existing authored values remain readable and retained by normal edits.
-    assert 'value.get("entryState", current.get("entryState", ""))' in store
-    assert 'value.get("exitState", current.get("exitState", ""))' in store
+    # Legacy disk data is tolerated by the loader; subsequent Scene normalization omits both keys.
+    assert 'value.get("entryState", current.get("entryState", ""))' not in store
+    assert 'value.get("exitState", current.get("exitState", ""))' not in store
 
 
 def test_storyboard_scene_uses_large_visible_generation_and_conditioning_inspector():

@@ -98,31 +98,12 @@ test('operational errors reveal Advanced and preserve the shared Console detail'
   assert.equal(el('studio-dw-status').textContent,'Saved Scene 1');
 });
 
-test('Write opens without preparing a manual operation or starting a request',()=>{
-  const nodes={};
-  function node(id) {
-    const classes=new Set();
-    return nodes[id] ||= {attrs:{},classList:{add:x=>classes.add(x),remove:x=>classes.delete(x),contains:x=>classes.has(x),toggle(x,on){if(on)classes.add(x);else classes.delete(x);}},
-      setAttribute(k,v){this.attrs[k]=v;},focus(){this.focused=true;},click(){this.onclick();}};
-  }
-  let selected=0, availability=0;
-  node('studio-dw-write-panel').classList.add('hidden');
-  const a=rail.indexOf('    function openDirectAction(which) {');
-  const b=rail.indexOf("    rail.addEventListener('keydown'",a);
-  const scope=vm.createContext({el:node,lastQuickAction:'write',updateScope(){},showConversationWrite(){availability++;},refreshWrite:async()=>{selected++;}});
-  vm.runInContext(section(rail,'  function toggle(which) {','  function parseProposal(raw) {')+rail.slice(a,b),scope);
-  node('studio-dw-write').onclick=()=>scope.toggle('write');
-  node('studio-dw-open-tools').click();
-  assert.equal(selected,0,'opening Write must not prepare a manual operation');
-  assert.equal(availability,1);
-  assert.equal(node('studio-dw-open-tools').attrs['aria-expanded'],'true');
-  assert.equal(node('director-chat-drawer').classList.contains('studio-actions-open'),true);
-  node('studio-dw-open-tools').click();
-  assert.equal(node('studio-dw-open-tools').attrs['aria-expanded'],'false');
-  assert.equal(node('director-chat-drawer').classList.contains('studio-actions-open'),false);
-  assert.equal(node('studio-dw-open-tools').focused,true);
-  node('studio-dw-open-tools').click();
-  assert.equal(selected,0,'reopening Write remains passive');
+test('Write panel remains passive until the explicit prepare click',()=>{
+  assert.match(rail,/function toggle\(which\)/);
+  assert.match(rail,/function writePrepare\(options\)/);
+  const open=section(rail,'  function toggle(which) {','  function parseProposal(raw) {');
+  assert.doesNotMatch(open,/makeProposal\(|writeNewScene\(|writeSelectedScene\(/);
+  assert.match(rail,/studio-dw-write-prepare/);
 });
 
 test('Share Details opens the original Read sidebar and indicates approved context',()=>{
@@ -184,94 +165,52 @@ test('New chat and loaded session reset stale design selections without changing
 });
 
 
-test('Write availability shows authored material and no automatic manual task',()=>{
-  assert.match(rail,/function showConversationWrite\(\)/);
-  assert.match(rail,/studio-dw-write-ready/);
-  assert.match(rail,/pendingCreativeAction/);
-  assert.match(rail,/authoredFields:action\.authoredFields/);
+test('Write is an explicit operation picker, not a model-suggested action surface',()=>{
+  assert.doesNotMatch(rail,/showConversationWrite|pendingCreativeAction/);
+  assert.doesNotMatch(html,/id="studio-dw-write-ready"|id="studio-dw-suggestions"/);
+  assert.match(html,/id="studio-dw-write-operation"/);
 });
-test('Studio header uses accessible compact history and new-conversation icons', () => {
+
+test('Studio header retains conversation controls independent of Write',()=>{
   assert.match(html,/id="director-chat-history-toggle"[^>]*aria-label="Conversation history"/);
   assert.match(html,/id="director-chat-clear"[^>]*aria-label="New conversation"/);
-  assert.match(css,/studio-director \.studio-director-breadcrumb \{display:none;/);
-  assert.match(rail,/function showConversationWrite\(\)/);
-  assert.doesNotMatch(section(rail,'  function toggle(which) {','  function parseProposal(raw) {'),
-    /seedManualSceneInstruction\(\)/);
+  assert.doesNotMatch(rail,/showConversationWrite/);
+  assert.match(rail,/function setOperation\(\)/);
 });
 
-
-test('conversation Scene targets support Select all and Deselect all without guessing', () => {
+test('Scene target checkboxes support Select all and Deselect all without LLM targeting',()=>{
   assert.match(html,/id="studio-dw-scenes-select-all"/);
   assert.match(html,/id="studio-dw-scenes-select-none"/);
-  assert.match(rail,/if \(Array\.isArray\(frozen\.chosenSceneIds\)\)/);
-  const nodes = {
-    'studio-dw-batch-scenes': {
-      querySelectorAll:()=>[a,b,c]
-    }
-  };
-  const a={value:'scene-a',checked:false};
-  const b={value:'scene-b',checked:false};
-  const c={value:'scene-c',checked:false};
-  const scope=vm.createContext({el:id=>nodes[id],sceneSelectionManual:false,
-    pendingCreativeAction:{kind:'write_scenes',awaitingScenes:true},showWriteContext(){}});
+  const selections=[{value:'a',checked:false},{value:'b',checked:false}];
+  const scope=vm.createContext({el:id=>id==='studio-dw-batch-scenes'
+    ? {querySelectorAll:()=>selections}:null,
+    showWriteContext(){},sceneSelectionManual:false,Array});
   vm.runInContext(section(rail,'  function selectWriteScenes(checked) {',
-    '  function refreshRead() {'),scope);
+    '  function renderApprovedSources() {'),scope);
   scope.selectWriteScenes(true);
-  assert.deepEqual(Array.from(scope.pendingCreativeAction.chosenSceneIds),
-    ['scene-a','scene-b','scene-c']);
-  assert.equal([a,b,c].every(x=>x.checked),true);
+  assert.ok(selections.every(x=>x.checked));
   scope.selectWriteScenes(false);
-  assert.deepEqual(Array.from(scope.pendingCreativeAction.chosenSceneIds),[]);
-  assert.equal([a,b,c].some(x=>x.checked),false);
+  assert.ok(selections.every(x=>!x.checked));
   assert.equal(scope.sceneSelectionManual,true);
 });
 
-test('restored conversation offers review only when saved raw output contains authored fields',()=>{
-  assert.match(chat,/function studioRestoreAuthoredAction\(action, rawResponse\)/);
-  assert.match(chat,/item\.completed \? null : studioRestoreAuthoredAction\(item,entry\.rawResponse\)/);
-  assert.match(chat,/if \(proposal\) \{/);
-  assert.match(chat,/studioStoredActions\(entry\)/,
-    'restoration evaluates each independently authored deliverable');
-  assert.match(rail,/sourceMessageIndex:messageIndex/);
-});
-test('conversation persistence includes frozen Write targets without extra authoring calls', () => {
-  assert.match(chat,/stored\.writeAction = message\.writeAction/);
-  assert.match(chat,/messages\[assistantIndex\]\.writeAction = window\.studioDirectorWorkbench\.presentAction/);
-  assert.match(chat,/stored\.otherWriteActions = message\.otherWriteActions/,
-    'a mixed Project and Scene response retains all independent review actions');
-  assert.ok(chat.includes('completeWriteAction(kind, story, selected)'));
+test('restored old messages are inert archive data, not Write suggestions',()=>{
+  assert.doesNotMatch(chat,/studioRestoreAuthoredAction|studioStoredActions|studioAuthoredWriteActions/);
+  assert.doesNotMatch(rail,/presentAction|pendingCreativeAction/);
+  assert.match(chat,/function parseStudioChatResponse\(raw\)/);
 });
 
-test('prepared Write derives exact target and fields deterministically from existing draft', () => {
-  const state={studioWorkingDraft:{
-    scenes:{'scene-2':{prompt:'Complete H3 prompt',durationSeconds:10}},
-    projects:{'project-1':{style:'Warm and dim'}},
-    newScene:{prompt:'New Scene prompt'},
-    newProject:{concept:'New Project',style:'Soft light'},sourceRequest:''
-  }};
-  let target={projectId:'project-1',sceneId:'scene-2'};
-  const context=vm.createContext({state,window:{
-    getStudioDirectorNavigation:()=>target
-  },studioAttachedStoryId:()=>''});
-  const source=section(chat,'    preparedWrite: function () {',
-    '    preparedSceneFields: function (sceneId) {');
-  const prepared=vm.runInContext('({'+source+'})',context).preparedWrite;
-  let result=prepared();
-  assert.equal(result.kind,'scene');
-  assert.equal(result.sceneId,'scene-2');
-  assert.deepEqual(Array.from(result.fields),['prompt','durationSeconds']);
-  target={projectId:'project-1',sceneId:''};
-  result=prepared();
-  assert.equal(result.kind,'project');
-  assert.deepEqual(Array.from(result.fields),['style']);
-  delete state.studioWorkingDraft.projects['project-1'];
-  result=prepared();
-  assert.equal(result.kind,'new-scene');
-  delete state.studioWorkingDraft.newScene.prompt;
-  result=prepared();
-  assert.equal(result.kind,'new-project');
-  state.studioWorkingDraft.newProject.style='';
-  assert.equal(prepared(),null);
+test('conversation persistence never stores executable LLM-generated Write actions',()=>{
+  assert.doesNotMatch(chat,/stored\.writeAction\s*=|stored\.otherWriteActions\s*=/);
+  assert.doesNotMatch(chat,/completeWriteAction\(/);
+  assert.match(chat,/state\.modeMessages\.storyboard/);
+});
+
+test('new Write binds explicit destination rather than a retained draft',()=>{
+  assert.doesNotMatch(chat,/preparedWrite: function|reviewPreparedWrite: function/);
+  assert.doesNotMatch(chat,/state\.studioWorkingDraft/);
+  assert.match(rail,/function writePrepare\(options\)/);
+  assert.match(rail,/var id = el\('studio-dw-write-project'\)\.value/);
 });
 
 test('Studio Revision mode dispatches the existing Storyboard revision operation with explicit scope', async () => {

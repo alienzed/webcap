@@ -1700,6 +1700,11 @@
     }).then(function (result) {
       if (!result.story || !result.story.id)
         throw new Error('Project creation returned no confirmed saved Project.');
+      ['title','concept','style'].forEach(function (field) {
+        window.webcapTextareaRevisions.recordFieldChange(
+          'project:' + result.story.id + ':storyboard-story-' + field,
+          '', result.story[field]);
+      });
       recordStudioOperation('project.create','Created Project: ' +
         (result.story.title || result.story.id),result.story.id,result.story.sceneOrder || []);
       return window.studioDirectorBridge.recordApplied('project.create',result.story,{
@@ -1819,7 +1824,12 @@
     }).then(function (result) {
       if (!result.story || !result.revisionId)
         throw new Error('Project revision returned no saved revision.');
-      state.studioBriefProposal = null;
+      ['title','concept','style'].forEach(function (field) {
+        if (!Object.prototype.hasOwnProperty.call(changes,field)) return;
+        window.webcapTextareaRevisions.recordFieldChange(
+          'project:' + storyId + ':storyboard-story-' + field,
+          expected[field], result.story[field]);
+      });
       recordStudioOperation('brief.apply','Updated Project fields: ' + Object.keys(changes).join(', '),storyId,[]);
       studioActionStatus('Project Overview saved.',false);
       return window.studioDirectorBridge.recordApplied('brief.apply',result.story,
@@ -3250,6 +3260,13 @@
           if (!result || !result.story || result.story.id !== storyId ||
               !Array.isArray(result.scenes))
             throw new Error('Scene Write returned no authoritative saved result.');
+          result.scenes.forEach(function (scene) {
+            ['title','prompt','durationSeconds'].forEach(function (field) {
+              window.webcapTextareaRevisions.recordFieldChange(
+                'project:' + storyId + ':scene:' + scene.id + ':field:' + field,
+                '', scene[field]);
+            });
+          });
           return window.refreshStudioDirectorStoryIfOpen(storyId).then(function () {
             return window.studioDirectorBridge.recordApplied('scene.create',result.story,{
               scenes:result.scenes.map(function (scene) {

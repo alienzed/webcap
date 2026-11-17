@@ -4952,8 +4952,14 @@
             };
             scheduleSessionSave();
           }
-          // A missing Prompt retains an editable partial draft without
-          // attempting to persist an empty Scene.
+          // Direct Write never silently opens a second Review workflow.
+          // Keep any partial provider material for diagnosis, but do not save
+          // an incomplete Scene or invent absent prompt/duration values.
+          if (launch.directSave && (drafts.length !== 1 || missingPrompt ||
+              missingDuration || invalidDuration))
+            throw new Error('Director did not return one complete savable Scene. ' +
+              'No Scene was saved; inspect Director I/O for the actual response.');
+          // Legacy review remains available for existing conversations.
           if (drafts.length !== 1 || missingPrompt || missingDuration ||
               invalidDuration || !launch.directSave) {
             var priorReview = state.studioScenesProposal;

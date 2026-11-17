@@ -30,7 +30,7 @@ function harness(savedPreferences, showSettings) {
   const preferenceStorage = savedPreferences ? Object.assign({},savedPreferences) : {};
   const docHandlers={}, controls={}, toolbarHandlers={}, pending=new Map();
   let timerId=0,captionKey='caption:set/item-a';
-  for (const name of ['[data-rev-prev]','[data-rev-next]','[data-rev-count]']) {
+  for (const name of ['[data-rev-prev]','[data-rev-next]','[data-rev-compare]','[data-rev-count]']) {
     controls[name]={disabled:false,textContent:''};
   }
   const toolbar={
@@ -40,11 +40,13 @@ function harness(savedPreferences, showSettings) {
     querySelector:s=>controls[s],
     contains:()=>false
   };
-  let injectedCss='';
+  let injectedCss='',diffDialog=null;
   function settingsElement(tag) {
     return {
       tagName:tag.toUpperCase(), dataset:{}, children:[], checked:false, disabled:false,
       listeners:{}, textContent:'', open:false, firstChild:null,
+      showModal(){this.open=true;},close(){this.open=false;},
+      contains(node){return node===this || this.children.some(child=>child===node || (child.contains && child.contains(node)));},
       setAttribute(name,value){this[name]=value;},
       addEventListener(name,fn){this.listeners[name]=fn;},
       append(...nodes){nodes.forEach(node=>this.appendChild(node));},
@@ -72,7 +74,14 @@ function harness(savedPreferences, showSettings) {
   const document={
     readyState:'loading',head,body,
     getElementById:id=>id==='app-settings-textarea-history'?settingsHost:null,
-    createElement:name=>name==='style'?{textContent:''}:(name==='div'&&!toolbar.parentNode?toolbar:settingsElement(name)),
+    createElement(name){
+      if(name==='style')return {textContent:''};
+      if(name==='div'&&!toolbar.parentNode)return toolbar;
+      const element=settingsElement(name);
+      if(name==='dialog')diffDialog=element;
+      return element;
+    },
+    createTextNode:text=>({textContent:text,tagName:'#TEXT'}),
     addEventListener(name,fn){docHandlers[name]=fn;}
   };
   const window={
@@ -93,6 +102,10 @@ function harness(savedPreferences, showSettings) {
   return {document,window,controls,toolbarHandlers,toolbar,settingsHost,
     preferences:()=>Object.assign({},preferenceStorage),
     css:()=>injectedCss,
+    dialog:()=>diffDialog,
+    diffParts:()=>diffDialog.children[1].children.map(node=>({kind:node.tagName,text:node.textContent})),
+    diffHeading:()=>diffDialog.children[0].children[0].textContent,
+    modalFocus(){docHandlers.focusin({target:diffDialog.children[0].children[1]});},
     captionTarget(key){captionKey=key;},
     focus(field){docHandlers.focusin({target:field});},
     input(field){docHandlers.input({target:field});},
@@ -324,4 +337,44 @@ test('Settings groups are collapsible, show live counts and retain open state wh
   assert.equal(details[1].open,true);
   master.checked=true;master.listeners.change();
   assert.equal(scene.disabled,false);
+});
+
+test('comparison icon stays between arrows and is disabled for a single revision',()=>{
+  const h=harness(),field=editor('Only','scene-compare-one');
+  h.focus(field);
+  assert.equal(h.controls['[data-rev-compare]'].disabled,true);
+  assert.match(h.toolbar.innerHTML,/data-rev-prev[^]*data-rev-compare[^]*data-rev-next/);
+});
+
+test('comparison shows selected revision against latest without overwriting editor',()=>{
+  const h=harness(),field=editor('The cat sleeps.','scene-compare');
+  h.focus(field);
+  field.value='The dog sleeps.';
+  h.input(field);h.idle();
+  h.click('[data-rev-prev]');
+  assert.equal(field.value,'The cat sleeps.');
+  h.click('[data-rev-compare]');
+  assert.equal(h.dialog().open,true);
+  h.modalFocus();
+  assert.equal(field.value,'The cat sleeps.','modal focus retains selected revision');
+  assert.equal(h.diffHeading(),'Revision 1 → 2');
+  assert.ok(h.diffParts().some(p=>p.kind==='DEL'&&p.text.includes('cat')));
+  assert.ok(h.diffParts().some(p=>p.kind==='INS'&&p.text.includes('dog')));
+  assert.equal(field.value,'The cat sleeps.','opening the modal does not edit preview');
+  h.blur(field);
+  assert.equal(field.value,'The dog sleeps.','leaving history restores latest content');
+});
+
+test('comparing latest uses preceding revision, preserves whitespace and escapes markup',()=>{
+  const h=harness(),field=editor('Hello  <scene>','scene-compare-safe');
+  h.focus(field);
+  field.value='Hello  <shot>';
+  h.input(field);h.idle();
+  h.click('[data-rev-compare]');
+  assert.equal(h.diffHeading(),'Revision 1 → 2');
+  assert.ok(h.diffParts().some(p=>p.kind==='DEL'&&p.text.includes('<scene>')));
+  assert.ok(h.diffParts().some(p=>p.kind==='INS'&&p.text.includes('<shot>')));
+  assert.equal(field.value,'Hello  <shot>');
+  assert.equal(h.window.webcapTextareaRevisions.history(
+    h.window.webcapTextareaRevisions.identity(field)).versions.length,2);
 });

@@ -4458,12 +4458,17 @@
             throw new Error('Director returned zero Scenes.\\nRaw response:\\n' + raw);
           // Preserve source order and report incomplete items explicitly. Only
           // fields actually returned can be saved; never fabricate a duration.
-          var creations = [], incomplete = [];
+          var creations = [], incomplete = [], notMapped = [];
           records.forEach(function (item, index) {
             if (!item || typeof item !== 'object' || Array.isArray(item)) {
               incomplete.push('Scene ' + (index + 1) + ': expected an object');
               return;
             }
+            var extras = Object.keys(item).filter(function (key) {
+              return !['title','prompt','durationSeconds'].includes(key);
+            });
+            if (extras.length)
+              notMapped.push('Scene ' + (index + 1) + ' additional properties in raw I/O: ' + extras.join(', '));
             var title = typeof item.title === 'string' ? item.title : '';
             var prompt = typeof item.prompt === 'string' ? item.prompt : '';
             var duration = item.durationSeconds;
@@ -4510,7 +4515,9 @@
               .catch(function(error){error.saved=true;throw error;})
               .then(function(){
                 studioActionStatus(saved.length+' Scene(s) saved.'+
-                  (incomplete.length ? ' ' + incomplete.join('; ') + '. Inspect raw I/O.' : ''),!!incomplete.length);
+                  (incomplete.length || notMapped.length
+                    ? ' ' + incomplete.concat(notMapped).join('; ') + '. Inspect raw I/O.' : ''),
+                  !!(incomplete.length || notMapped.length));
                 return result;
               });
           });

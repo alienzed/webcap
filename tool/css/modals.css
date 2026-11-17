@@ -3939,8 +3939,12 @@ html[data-theme="dark"] .app-settings-environment-check {
 #set-scan-vision-model { min-width:160px; max-width:min(300px,55vw); font:inherit; }
 
 /* Browser-session textarea history preferences in Advanced Settings. */
-.webcap-history-settings { display:grid; gap:12px; padding:4px 0; }
-.webcap-history-group { min-width:0; margin:0; padding:10px 12px 12px; border:1px solid var(--border); border-radius:8px; display:grid; gap:7px; }
-.webcap-history-group legend { width:auto; margin:0; padding:0 5px; color:var(--text); font-size:14px; font-weight:650; }
-.webcap-history-group .app-settings-toggle { margin:0; }
-.webcap-history-group input:disabled + span { opacity:.5; }
+.webcap-history-settings { display:grid; gap:7px; padding:3px 0; }
+.webcap-history-master { margin:0 0 6px; font-weight:600; }
+.webcap-history-group { min-width:0; margin:0; border:1px solid var(--border); border-radius:7px; overflow:hidden; }
+.webcap-history-group > summary { display:flex; align-items:center; gap:10px; padding:9px 11px; cursor:pointer; font-size:14px; font-weight:600; }
+.webcap-history-group > summary > span:first-child { flex:1; min-width:0; }
+.webcap-history-count { font-size:12px; font-weight:400; color:var(--muted); white-space:nowrap; font-variant-numeric:tabular-nums; }
+.webcap-history-fields { display:grid; gap:2px; padding:3px 11px 10px; border-top:1px solid var(--border); }
+.webcap-history-fields .app-settings-toggle { margin:0; padding:4px 0; line-height:1.3; font-size:13px; }
+.webcap-history-fields input:disabled + span { opacity:.5; }

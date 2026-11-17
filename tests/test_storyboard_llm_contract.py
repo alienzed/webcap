@@ -103,10 +103,10 @@ def test_refine_prompt_preserves_existing_prompt_and_keeps_scene_fields_optional
     assert "smallest relevant edit" in prompt
     assert "Keep the camera behind her" in prompt
     assert schema["required"] == ["changed", "prompt"]
-    assert {"entryState", "exitState", "durationSeconds"}.issubset(schema["properties"])
+    assert {"durationSeconds"}.issubset(schema["properties"])
     assert "summary" not in schema["properties"]
-    assert "entryState" not in schema["required"]
-    assert "exitState" not in schema["required"]
+    assert "entryState" not in schema["properties"]
+    assert "exitState" not in schema["properties"]
     assert schema["properties"]["durationSeconds"]["minimum"] == 6
     assert schema["properties"]["durationSeconds"]["maximum"] == 15
     assert "result_renderer" not in request
@@ -140,10 +140,8 @@ def test_develop_story_uses_simple_scene_schema_and_dense_scene_guidance():
     assert request["response_schema"]["required"] == ["scenes"]
     assert set(scene_schema["required"]) == {"title", "prompt", "suggestedDurationSeconds"}
     assert scene_schema["properties"]["prompt"]["type"] == "string"
-    assert "entryState" in scene_schema["properties"]
-    assert "exitState" in scene_schema["properties"]
-    assert "entryState" not in scene_schema["required"]
-    assert "exitState" not in scene_schema["required"]
+    assert "entryState" not in scene_schema["properties"]
+    assert "exitState" not in scene_schema["properties"]
     assert "continuity" not in scene_schema["properties"]
     assert "invariantRefs" not in scene_schema["properties"]
     assert "sharedContextRefs" not in scene_schema["properties"]
@@ -243,7 +241,7 @@ def test_repair_scenes_is_sparse_and_prompt_is_complete_string():
     prompt = request["prompt"]
     fields = request["response_schema"]["properties"]["changes"]["items"]["properties"]["fields"]
 
-    assert set(fields["properties"]) == {"entryState", "exitState", "prompt"}
+    assert set(fields["properties"]) == {"prompt"}
     assert fields["properties"]["prompt"]["type"] == "string"
     assert "complete revised H3 prompt" in prompt
     assert "Return sparse updates to existing Scenes" in prompt
@@ -480,11 +478,12 @@ def test_model_guidance_only_for_h3_authoring(monkeypatch):
 
 
 
-def test_extend_story_uses_only_last_exit_state_as_continuity_handoff():
+def test_extend_story_uses_existing_scene_prompts_for_continuity():
     story = _story()
     story["scenes"]["scene-2"]["exitState"] = "Mara reaches the locked lift."
     prompt = storyboard_llm_contract.build_request(story, "", "extend_story", scene_count=2)["prompt"]
-    assert "[LAST SCENE EXIT STATE]\nMara reaches the locked lift." in prompt
+    assert "[LAST SCENE EXIT STATE]" not in prompt
+    assert "Mara reaches the locked lift." not in prompt
     assert "EXISTING SECOND PROMPT" in prompt
 
 

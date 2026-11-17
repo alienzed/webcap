@@ -154,7 +154,7 @@ test('selected list binds destination before issuing each per-Scene write',()=>{
 });
 
 test('explicit Read saves one visible snapshot without a model request',()=>{
-  assert.match(workbench,/studioDirectorBridge\.appendReadSnapshot\(payload\)/);
+  assert.match(workbench,/studioDirectorBridge\.appendReadSnapshot\(payload, readConversationId\)/);
   assert.doesNotMatch(workbench,/sendRead\(payload, keys, typeof instruction/);
   assert.match(html,/id="studio-dw-read-send"[^>]*>Read into conversation/);
 });
@@ -313,7 +313,9 @@ test('large explicit Read selections are sent intact, with no arbitrary client c
     updateScope:()=>{},
     updateReadSelection:()=>{updates++;},renderApprovedSources(){},
     window:{
-      studioDirectorBridge:{appendReadSnapshot:async payload=>{sent=payload;}},
+      studioDirectorBridge:{readConversationId:()=> 'session-A',
+        assertReadConversation:owner=>assert.equal(owner,'session-A'),
+        appendReadSnapshot:async (payload,owner)=>{assert.equal(owner,'session-A');sent=payload;}},
       studioDirectorWorkbench:{setReadStatus:(_state,message)=>{readStatus=message;}}
     }
   });

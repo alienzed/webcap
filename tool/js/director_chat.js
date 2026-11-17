@@ -1525,19 +1525,24 @@
     syncModeUi();
   }
 
-  function readStudioStoryScope(field, sceneId) {
+  function readStudioStoryScope(field, sceneId, readConversationId) {
+    if (readConversationId) window.studioDirectorBridge.assertReadConversation(readConversationId);
     var chat = state.sessionByMode.storyboard;
     if (!chat || !state.studioStoryAccess || !chat.id) {
       return Promise.reject(new Error('Connect a Project in this Studio conversation first.'));
     }
     var url = '/fs/studio/director/story-read?chatId=' + encodeURIComponent(chat.id) +
       '&field=' + encodeURIComponent(field) + '&sceneId=' + encodeURIComponent(sceneId || '');
-    return flushSessionSave().then(function () { return requestJson(url); });
+    return flushSessionSave().then(function () {
+      if (readConversationId) window.studioDirectorBridge.assertReadConversation(readConversationId);
+      return requestJson(url);
+    });
   }
 
-  function loadStudioAccessIndex() {
+  function loadStudioAccessIndex(readConversationId) {
     if (!state.studioStoryAccess || state.studioAccessIndex) return Promise.resolve();
-    return readStudioStoryScope('index', '').then(function (result) {
+    return readStudioStoryScope('index', '', readConversationId).then(function (result) {
+      if (readConversationId) window.studioDirectorBridge.assertReadConversation(readConversationId);
       if (!Array.isArray(result.data)) throw new Error('Story index returned invalid data.');
       state.studioAccessIndex = result.data;
       var scene = el('director-studio-access-scene');
@@ -1564,9 +1569,10 @@
     var scene = el('director-studio-access-scene');
     var storyId = state.studioStoryAccess && state.studioStoryAccess.storyId;
     if (!storyId) throw new Error('Choose a Story to inspect.');
-    return (needsScene ? loadStudioAccessIndex() : Promise.resolve()).then(function () {
+    return (needsScene ? loadStudioAccessIndex(readConversationId) : Promise.resolve()).then(function () {
+      window.studioDirectorBridge.assertReadConversation(readConversationId);
       if (needsScene && !scene.value) throw new Error('Select a Scene first.');
-      return readStudioStoryScope(field, needsScene ? scene.value : '');
+      return readStudioStoryScope(field, needsScene ? scene.value : '', readConversationId);
     }).then(function (result) {
       window.studioDirectorBridge.assertReadConversation(readConversationId);
       if (result.storyId !== storyId) throw new Error('Project changed while reading fields.');

@@ -187,6 +187,26 @@ test('LIVE creative partner — discuss staging, make a recommendation, then aut
   const saved=await story(page,project.id);
   expect(saved.scenes[saved.sceneOrder[0]].prompt).toBe(scene.prompt);
   expect(observation.requests).toHaveLength(2,'Review and Apply must not re-author the Scene');
+  // Creative quality cannot be established by a keyword or length threshold.
+  // Attach the author-facing judgment and actual authored result together
+  // for an independent human (or separately evaluated judge-model) review.
+  await evidence(testInfo,'creative-quality-review-required',{
+    model,
+    goal:'Imaginative, capable director who elevates the author\'s vision.',
+    authorRequest:discussion,
+    directorRecommendation:first.parsed.reply,
+    followupRequest:writing,
+    authoredTitle:scene.title,
+    authoredPrompt:scene.prompt,
+    rubric:[
+      'Offers at least two meaningfully different staging ideas, not paraphrases.',
+      'Makes a clear recommendation and explains it using the author\'s tone and intent.',
+      'The authored Scene incorporates the recommended staging, not merely the same subject.',
+      'The result is a coherent, self-contained, producible eight-second H3 Scene.',
+      'Creative decisions add value without overriding the author\'s established vision.'
+    ],
+    assessment:'Not scored automatically. A passing browser test proves transport, drafts, and persistence only.'
+  });
 });
 
 test('LIVE conversation — real Scene records have required title, duration and complete prompt before choosing Project',async({page},testInfo)=>{

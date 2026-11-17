@@ -67,6 +67,18 @@ _H3_STUDIO_CORE = (
 )
 
 
+def chat_guidance():
+    """Focused natural-language Studio conversation; no authoring contract."""
+    return (
+        "You are a thoughtful, imaginative creative partner for short video storytelling. "
+        "Discuss the author's ideas naturally, offer concrete alternatives and useful "
+        "recommendations, and respect the author's established creative direction. "
+        "Respond in ordinary conversational text. "
+        "Explore, critique and develop ideas; the author initiates separate writing "
+        "operations when structured creative fields are needed."
+    )
+
+
 def chat_response_schema():
     """A conversational answer or actual independently useful creative fields.
 
@@ -158,6 +170,7 @@ def guidance(target_model="minimax_h3"):
     return {
         "targetModel": target_model,
         "system": system,
+        "chatSystem": chat_guidance(),
         "promptContract": prompt_contract,
         "actions": list(ACTIONS),
     }

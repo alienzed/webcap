@@ -40,3 +40,39 @@ test('Studio conversation never promotes a model JSON claim into an authored cha
   await expect(page.locator('#studio-dw-suggestions .studio-dw-suggestion-action')).toHaveCount(0);
   await expect(page.locator('#director-chat-progress-detail')).toContainText(/structured data|conversation/i);
 });
+
+test('Studio Chat -> Write Scene saves an H3 prompt directly and preserves conversation',async({page,request})=>{
+  await resetModel(request);
+  const project=await page.request.post('/fs/storyboard',{data:{operation:'create_story',story:{
+    title:'Conversation to Scene '+Date.now(),
+    concept:'A courier finds a lost red mitten at a station.',
+    style:'Restrained blue dawn.',invariants:[],status:'active',targetSceneCount:2
+  }}});
+  expect(project.ok()).toBeTruthy();
+  const id=(await project.json()).story.id;
+  await openDirector(page);
+  const opening='The courier notices a red mitten on an empty platform. Discuss the staging.';
+  const answer='A static wide opening followed by a subtle hand gesture makes the moment intimate.';
+  await queueModel(request,answer);
+  await say(page,opening);
+  await expect(page.locator('#director-chat-messages .director-chat-message-assistant').last())
+    .toContainText('static wide opening');
+  const prompt='Eight-second locked-off wide shot at an empty blue-dawn station. '+
+    'A courier stops beside a single red mitten, reaches with the left hand, '+
+    'and lifts the mitten into the palm. Only distant wind and cloth movement.';
+  await queueModel(request,{scenes:[{title:'The Find',prompt,durationSeconds:8}]});
+  await page.locator('#studio-dw-write').click();
+  await page.locator('#studio-dw-write-operation').selectOption('scene-write');
+  await page.locator('#studio-dw-write-project').selectOption(id);
+  await page.locator('#studio-dw-scene-mode').selectOption('create');
+  await page.locator('#studio-dw-write-instruction').fill('Write the Scene we discussed.');
+  await page.locator('#studio-dw-write-prepare').click();
+  await expect.poll(async()=> (await story(page,id)).sceneOrder.length,{timeout:30000}).toBe(1);
+  const saved=await story(page,id);
+  expect(saved.scenes[saved.sceneOrder[0]].prompt).toBe(prompt);
+  await expect(page.locator('#studio-scenes-review')).not.toBeVisible();
+  const calls=(await observedModels(request)).calls;
+  expect(calls).toHaveLength(2);
+  expect(JSON.stringify(calls[1])).toContain(opening);
+  expect(JSON.stringify(calls[1])).toContain(answer);
+});

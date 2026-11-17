@@ -119,7 +119,7 @@ test('identical Invariants are not preselected because JSON properties arrived i
 });
 
 test('ordinary discussion asks for concise new decisions while complete creative fields remain complete',()=>{
-  assert.match(chat,/STUDIO CONVERSATION DELIVERY: Respond naturally/);
+  assert.match(chat,/STUDIO CONVERSATION DELIVERY: Answer the author in the JSON reply field on every turn/);
   assert.match(chat,/These are drafts; WebCap decides where and whether to save them/);
 });
 

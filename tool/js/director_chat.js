@@ -1968,107 +1968,67 @@
 
   function prepareStudioProject(options) {
     if (state.pending || state.activeMode !== 'storyboard' || !state.sessionReady) return;
-    if (options && options.authoredFields) {
-      // The chat response already authored this material; review the exact fields.
-      state.studioProjectProposal = parseStudioProjectDraft(JSON.stringify(Object.assign({
-        title:'',concept:'',style:'',invariants:[],initialScenes:[],
-        rationale:'Authored in this Director conversation; no second model call.'
-      },options.authoredFields)));
-      showStudioProjectReview();
+    if (!state.modelId) {
+      studioActionStatus('No Director model is available. Refresh models.', true);
       return;
     }
-    if (state.studioProjectProposal) { showStudioProjectReview(); return; }
-    var workingProject = state.studioWorkingDraft.newProject;
-    var authorRequest = String(options && options.authorRequest || options && options.instruction || '');
-    var manualReview = !String(options && options.instruction || '').trim();
-    var newProjectOrigin = state.studioWorkingDraft.draftOrigins &&
-      state.studioWorkingDraft.draftOrigins.newProject;
-    var sameWork = manualReview || !!newProjectOrigin &&
-      newProjectOrigin.request === authorRequest;
-    var retained = sameWork && workingProject
-      ? manualReview ? workingProject : Object.fromEntries(
-          (newProjectOrigin.fields || []).filter(function (field) {
-            return Object.prototype.hasOwnProperty.call(workingProject,field);
-          }).map(function (field) {return [field,workingProject[field]];}))
-      : {};
-    if (Object.keys(retained).length) {
-      state.studioProjectProposal = parseStudioProjectDraft(JSON.stringify(Object.assign({
-        title:'', concept:'', style:'', invariants:[], initialScenes:[],
-        rationale:'Structured Project material retained from Director conversation.'
-      },retained)));
-      studioActionStatus('Project fields ready for review, without another model call.',false);
-      showStudioProjectReview();
-      return;
-    }
-    if (!state.modelId) { studioActionStatus('No Director model is available. Refresh models.', true); return; }
-    var discussion = (state.modeMessages.storyboard || []).filter(function (message) {
-      return message && (message.role === 'assistant' || message.role === 'user');
-    }).filter(function (message) {
-      return !/\[WEBCAP APPLIED FIELD VALUES\]|\[WEBCAP EXPLICIT READ\]/.test(message.content);
-    }).slice(-8).map(function (message) {
-      return {role:message.role,content:message.content};
-    });
-    if (!discussion.some(function (message) { return message.role === 'user'; })) {
-      studioActionStatus('Discuss an idea first, then prepare a Project.', true);
-      return;
-    }
+    var instruction = String(options && options.instruction || '');
+    var input = {
+      task:'Create one Project with its title, Concept, Visual / atmosphere and relevant Invariants. ' +
+        'Return complete Project field values in the supplied response format. ' +
+        'Scene writing is a separate Write → Scene(s) action.',
+      instruction:instruction
+    };
     state.pending = true;
     state.jobId = '';
-    studioActionStatus('Preparing a new Project for review…', false);
+    studioActionStatus('Writing Project…', false);
     startProgress();
     syncControls();
-    var input = {
-      task: 'Create one usable Project with a distinctive title, developed Concept and core appeal, ' +
-        'Visual / atmosphere, and Invariants only for relevant recurring facts. ' +
-        'When the author wants initial Scenes, include short titled Scene briefs with durations ' +
-        'for later individual Scene authoring. Otherwise return an empty initialScenes array. ' +
-        'Deliver the actual Project fields and a concise rationale now.',
-      instruction: String(options && options.instruction || '').trim(),
-      unsavedWorkingFields:workingProject || {},discussion: discussion
-    };
-    studioDirectorRequestMessages((state.modeMessages.storyboard || []).concat([{ role: 'user', content: JSON.stringify(input) }]), false, true)
-      .then(function (messages) {
-        window.studioDirectorWorkbench.showSentWriteContext('studio_project_draft', messages);
-        return requestJson('/fs/director/chat', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ model: state.modelId, operation: 'studio_project_draft', messages: messages })
-        });
-      }).then(function (payload) {
-        if (!payload.job || !payload.job.jobId) throw new Error('Project extraction was not queued.');
-        state.jobId = String(payload.job.jobId);
-        state.requestDiagnostic = payload.job.request || null;
-        trackTransientLlmJob(payload.job);
-        return waitForJob(payload.job);
-      }).then(function (job) {
-        var result = job.result && typeof job.result === 'object' ? job.result : {};
-        state.studioProjectProposal = parseStudioProjectDraft(result.text);
-        state.studioWorkingDraft.newProject = Object.assign({},
-          state.studioWorkingDraft.newProject,
-          studioWorkingFieldChanges(state.studioProjectProposal,
-            ['title','concept','style','invariants']));
-        state.studioWorkingDraft.draftOrigins =
-          state.studioWorkingDraft.draftOrigins || {projects:{},scenes:{}};
-        state.studioWorkingDraft.draftOrigins.newProject = {
-          request:authorRequest,
-          fields:Object.keys(studioWorkingFieldChanges(state.studioProjectProposal,
-            ['title','concept','style','invariants']))
-        };
-        scheduleSessionSave();
-        finishProgress(null);
-        studioActionStatus('Project ready for review. Nothing has been created.', false);
-        showStudioProjectReview();
-      }).catch(function (error) {
-        finishProgress(error);
-        studioActionStatus('Project proposal failed: ' + String(error.message || error), true);
-        if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Studio Project proposal', error);
-        else throw error;
-      }).finally(function () {
-        state.pending = false;
-        state.jobId = '';
-        syncControls();
+    return studioDirectorRequestMessages((state.modeMessages.storyboard || []).concat([
+      {role:'user',content:JSON.stringify(input)}
+    ]), false, true).then(function (messages) {
+      window.studioDirectorWorkbench.showSentWriteContext('studio_project_draft', messages);
+      return requestJson('/fs/director/chat', {
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({model:state.modelId,operation:'studio_project_draft',messages:messages})
       });
+    }).then(function (payload) {
+      if (!payload.job || !payload.job.jobId) throw new Error('Project Write did not queue a job.');
+      state.jobId = String(payload.job.jobId);
+      state.requestDiagnostic = payload.job.request || null;
+      trackTransientLlmJob(payload.job);
+      return waitForJob(payload.job);
+    }).then(function (job) {
+      var raw = String(job.result && job.result.text || '');
+      state.lastStudioIoRaw = raw;
+      var proposal = parseStudioProjectDraft(raw);
+      return requestJson('/fs/studio/director/project-create', {
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({proposal:{
+          title:proposal.title,concept:proposal.concept,
+          style:proposal.style,invariants:proposal.invariants
+        }})
+      });
+    }).then(function (payload) {
+      if (!payload.story || !payload.story.id) throw new Error('Project save returned no saved Project.');
+      var story = payload.story;
+      recordStudioOperation('project.create','Created Project: '+(story.title || story.id),story.id,[]);
+      studioActionStatus('Project saved: '+(story.title || story.id),false);
+      return window.studioDirectorBridge.recordApplied('project.create',story,{
+        title:story.title,concept:story.concept,style:story.style,invariants:story.invariants
+      }).then(function () {return window.refreshStudioDirectorStoryIfOpen(story.id);});
+    }).catch(function (error) {
+      state.lastStudioIoError = String(error.message || error);
+      studioActionStatus('Project Write failed: '+state.lastStudioIoError,true);
+      if (typeof window.reportConsoleError === 'function')
+        window.reportConsoleError('Studio Project Write',error);
+    }).finally(function () {
+      state.pending = false;
+      state.jobId = '';
+      finishProgress(null);
+      syncControls();
+    });
   }
-
 
   // The reviewed Project is saved before any Scene authoring. Each approved
   // brief uses the existing one-Scene writer schema and Studio insertion route.

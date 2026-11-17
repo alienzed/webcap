@@ -2018,7 +2018,7 @@
       showStudioProjectReview();
       return;
     }
-    if (state.studioProjectProposal) { showStudioProjectReview(); return; }
+    if (state.studioProjectProposal && !(options && options.forceAuthor)) { showStudioProjectReview(); return; }
     var workingProject = state.studioWorkingDraft.newProject;
     var authorRequest = String(options && options.authorRequest || options && options.instruction || '');
     var manualReview = !String(options && options.instruction || '').trim();
@@ -2026,7 +2026,7 @@
       state.studioWorkingDraft.draftOrigins.newProject;
     var sameWork = manualReview || !!newProjectOrigin &&
       newProjectOrigin.request === authorRequest;
-    var retained = sameWork && workingProject
+    var retained = !(options && options.forceAuthor) && sameWork && workingProject
       ? manualReview ? workingProject : Object.fromEntries(
           (newProjectOrigin.fields || []).filter(function (field) {
             return Object.prototype.hasOwnProperty.call(workingProject,field);
@@ -2553,9 +2553,9 @@
   function prepareStudioBrief(options) {
     if (state.pending || state.activeMode !== 'storyboard' || !state.sessionReady) return;
     var instruction = String(options && options.instruction || '').trim();
-    var manualReview = !instruction;
+    var manualReview = !instruction && !(options && options.forceAuthor);
     var storyId = String(options && options.storyId || studioAttachedStoryId() || '');
-    if (!(options && options.authoredFields) && state.studioBriefProposal &&
+    if (!(options && (options.authoredFields || options.forceAuthor)) && state.studioBriefProposal &&
         state.studioBriefProposal.storyId === storyId &&
         (!instruction || instruction === state.studioBriefProposal.instruction)) {
       showStudioBriefReview(); return;
@@ -2587,7 +2587,8 @@
       var story = payload.story;
       if (!story || story.id !== storyId) throw new Error('Attached Project is unavailable.');
       var expected = { title: story.title, concept: story.concept, style: story.style, invariants: story.invariants };
-      var workingProject = options && options.authoredFields || state.studioWorkingDraft.projects[storyId] || {};
+      var workingProject = options && options.forceAuthor ? {} :
+        options && options.authoredFields || state.studioWorkingDraft.projects[storyId] || {};
       var authorRequest = String(options && options.authorRequest || instruction);
       var draftOrigin = state.studioWorkingDraft.draftOrigins &&
         state.studioWorkingDraft.draftOrigins.projects &&

@@ -737,6 +737,9 @@
         stored.rawResponse = message.rawResponse;
       if (mode === 'storyboard' && message.role === 'assistant' && message.writeAction)
         stored.writeAction = message.writeAction;
+      if (mode === 'storyboard' && message.role === 'assistant' &&
+          Array.isArray(message.otherWriteActions) && message.otherWriteActions.length)
+        stored.otherWriteActions = message.otherWriteActions;
       return stored;
     });
     var draft = state.draftByMode[mode] || '';
@@ -845,15 +848,19 @@
         // A saved receipt closes that task, while ordinary follow-ups need not.
         for (var actionIndex = chat.messages.length - 1; actionIndex >= 0; actionIndex--) {
           var entry = chat.messages[actionIndex];
-          if (!entry.writeAction) continue;
-          var proposal = entry.writeAction;
-          if (proposal.completed) break;
-          // Only real authored material in the original response reopens review.
-          proposal = studioRestoreAuthoredAction(proposal,entry.rawResponse);
-          if (!proposal) continue;
-          window.studioDirectorWorkbench.presentAction(proposal, proposal.scene,
-            {projectId:proposal.projectId}, proposal.request, actionIndex);
-          break;
+          var options = studioStoredActions(entry);
+          // A completed Project action never hides an unsaved Scene from the
+          // same reply (or vice versa). Each stays bound to the original raw
+          // material and the original response index.
+          var proposal = options.map(function (item) {
+            return item.completed ? null : studioRestoreAuthoredAction(item,entry.rawResponse);
+          }).find(function (item) {return !!item;});
+          if (proposal) {
+            window.studioDirectorWorkbench.presentAction(proposal, proposal.scene,
+              {projectId:proposal.projectId}, proposal.request, actionIndex);
+            break;
+          }
+          if (options.some(function (item) {return item.completed;})) break;
         }
       }
       state.studioReadiness = chat.readiness || {checks:[],readHints:[],writeHint:'',writeFields:[],sceneId:''};
@@ -1307,11 +1314,67 @@
     return String(content || '').replace(/^\s*RECEIVED:\s*(?:project\.\w+|scene:[\w-]+:\w+)(?:[ \t]*,[ \t]*(?:project\.\w+|scene:[\w-]+:\w+))*[ \t]*[.;]?[ \t]*(?:\r?\n)?/i, '').trim();
   }
 
-  function placeStudioSuggestion(node, messageIndex) {
-    // Keep this action attached to the answer which proposed it. A later Read
-    // or follow-up must neither move it under a different reply nor discard it.
+  // Project fields, edits to a selected Scene, and new Scene records are
+  // independent creative deliverables, even when one model turn returns all
+  // of them. UI targeting and saving remain explicit WebCap operations.
+  function studioAuthoredWriteActions(response, instruction, targetScene) {
+    if (!response) return [];
+    var actions = [];
+    var project = response.changes &&
+      studioWorkingFieldChanges(response.changes.project,['title','concept','style','invariants']);
+    if (project && Object.keys(project).length)
+      actions.push({kind:'create_project',instruction:instruction,
+        fields:Object.keys(project),authoredFields:project});
+    var scene = response.changes &&
+      studioWorkingFieldChanges(response.changes.scene,['title','prompt','durationSeconds']);
+    if (scene && Object.keys(scene).length && targetScene)
+      actions.push({kind:'write_scenes',instruction:instruction,
+        fields:Object.keys(scene),authoredFields:scene});
+    var scenes = Array.isArray(response.scenes) ? response.scenes.slice() : [];
+    if (!targetScene && !scenes.length && response.changes &&
+        response.changes.scene && typeof response.changes.scene === 'object' &&
+        !Array.isArray(response.changes.scene)) {
+      // A new Scene's unsupported timing remains visible for editing; it
+      // must not silently become the six-second fallback in Review.
+      var singleScene = {};
+      ['title','prompt','durationSeconds'].forEach(function (field) {
+        if (Object.prototype.hasOwnProperty.call(response.changes.scene,field))
+          singleScene[field] = response.changes.scene[field];
+      });
+      if (Object.keys(singleScene).length) scenes = [singleScene];
+    }
+    if (scenes.length)
+      actions.push({kind:'create_scene',instruction:instruction,fields:[],scenes:scenes});
+    return actions;
+  }
+
+  function studioStoredActions(entry) {
+    return entry ? [entry.writeAction].concat(entry.otherWriteActions || []).filter(Boolean) : [];
+  }
+
+  function studioActiveStoredAction(entry) {
+    return studioStoredActions(entry).find(function (item) {
+      return (item.actionKey || 'primary') === (state.studioActionKey || 'primary');
+    });
+  }
+
+  function placeStudioSuggestion(node, messageIndex, action) {
+    // The workbench displays one active action, but a reply can own several
+    // independent Project/Scene deliverables. Keep their identities separate.
     if (state.activeMode === 'storyboard' || Number.isInteger(messageIndex))
       state.studioActionIndex = Number.isInteger(messageIndex) ? messageIndex : currentMessages().length - 1;
+    state.studioActionKey = action && action.actionKey || 'primary';
+    var entry = state.modeMessages.storyboard[state.studioActionIndex];
+    if (entry && action) {
+      if (entry.writeAction && (entry.writeAction.actionKey || 'primary') === state.studioActionKey)
+        entry.writeAction = action;
+      else if (Array.isArray(entry.otherWriteActions)) {
+        var alternate = entry.otherWriteActions.findIndex(function (item) {
+          return item.actionKey === state.studioActionKey;
+        });
+        if (alternate >= 0) entry.otherWriteActions[alternate] = action;
+      }
+    }
     node.classList.add('hidden');
   }
 
@@ -1418,13 +1481,13 @@
         meta.textContent = formatResponseMetrics(metricsMap[index], elapsedMap[index]);
         row.appendChild(meta);
       }
-      // Each reply must retain its own action. The workbench has one active
-      // control, so earlier replies get a launcher bound to their saved
-      // response, never a copy of the latest reply's action closure.
-      if (studioReply && index !== state.studioActionIndex &&
-          message.writeAction && !message.writeAction.completed &&
-          studioRestoreAuthoredAction(message.writeAction,message.rawResponse)) {
-        var savedAction = message.writeAction;
+      // Every actual deliverable has its own launcher and completion state,
+      // including a Project and Scene returned together in one response.
+      if (studioReply) studioStoredActions(message).forEach(function (savedAction) {
+        if (savedAction.completed || (index === state.studioActionIndex &&
+            (savedAction.actionKey || 'primary') === (state.studioActionKey || 'primary')))
+          return;
+        if (!studioRestoreAuthoredAction(savedAction,message.rawResponse)) return;
         var oldAction = document.createElement('button');
         oldAction.type = 'button';
         oldAction.className = 'studio-dw-suggestion-action';
@@ -1441,7 +1504,7 @@
           if (active) active.click();
         };
         row.appendChild(oldAction);
-      }
+      });
       host.appendChild(row);
       if (studioReply && index === state.studioActionIndex) suggestionRow = row;
     });
@@ -3714,54 +3777,30 @@
         } : selectedScene;
         var targetProject = resolvedTarget.projectId ? {projectId:resolvedTarget.projectId} : selectedProject;
         // Authored fields, never action hints or parsed author prose, own review affordances.
-        var nextAction = null;
-        var projectFields = studioResponse && studioResponse.changes &&
-          studioWorkingFieldChanges(studioResponse.changes.project,
-            ['title','concept','style','invariants']);
-        var sceneFields = studioResponse && studioResponse.changes &&
-          studioWorkingFieldChanges(studioResponse.changes.scene,
-            ['title','prompt','durationSeconds']);
-        if (projectFields && Object.keys(projectFields).length)
-          // Creative fields are real material; the user chooses create vs revise in Review.
-          nextAction = {kind:'create_project',instruction:content,
-            fields:Object.keys(projectFields),authoredFields:projectFields};
-        if (sceneFields && Object.keys(sceneFields).length && targetScene)
-          nextAction = {kind:'write_scenes',instruction:content,
-            fields:Object.keys(sceneFields),authoredFields:sceneFields};
-        // Conversation owns newly authored material in each persisted rawResponse.
-        // Do not copy it into a selected Project or Scene's working draft before Apply.
+        // Keep every independently authored result visible and reviewable.
+        var actions = studioAuthoredWriteActions(studioResponse,content,targetScene);
         if (activeChatMode === 'storyboard' && studioResponse && studioResponse.changes)
           window.studioDirectorWorkbench.updateWorkingWrite();
-        var authoredScenes = studioResponse && studioResponse.scenes;
-        // A single Scene can also arrive in changes.scene. These are authored
-        // structured fields, regardless of the optional action metadata.
-        if (activeChatMode === 'storyboard' && !targetScene &&
-            (!authoredScenes || !authoredScenes.length) && studioResponse &&
-            studioResponse.changes && studioResponse.changes.scene) {
-          var sourceScene = studioResponse.changes.scene;
-          if (sourceScene && typeof sourceScene === 'object' && !Array.isArray(sourceScene)) {
-            var singleScene = {};
-            ['title','prompt','durationSeconds'].forEach(function (field) {
-              if (Object.prototype.hasOwnProperty.call(sourceScene,field))
-                singleScene[field] = sourceScene[field];
-            });
-            // Invalid duration is still useful review metadata for correction.
-            if (Object.keys(singleScene).length) authoredScenes = [singleScene];
-          }
-        }
-        if (activeChatMode === 'storyboard' && authoredScenes && authoredScenes.length) {
-          // These are the actual unsaved records, not an action promise.
-          // Keep the review action with its material for conversation recovery.
-          nextAction = Object.assign({},nextAction || {
-            kind:'create_scene',instruction:content,fields:[]
-          },{kind:'create_scene',scenes:authoredScenes});
-        }
+        var nextAction = actions.pop() || null;
+        var otherActions = actions;
         if (nextAction) {
+          var assistantIndex = messages.length - 1;
+          // Store alternate actions independently rather than overwriting
+          // their review paths with the last returned Scene.
+          if (otherActions.length)
+            messages[assistantIndex].otherWriteActions = otherActions.map(function (action, i) {
+              return Object.assign({},action,{
+                actionKey:'alternate-' + i,request:content,
+                sourceMessageIndex:assistantIndex,
+                projectId:String(targetProject && targetProject.projectId || ''),
+                scene:targetScene && Object.assign({},targetScene)
+              });
+            });
+          nextAction.actionKey = 'primary';
           try {
-            messages[messages.length - 1].writeAction = window.studioDirectorWorkbench.presentAction(
-              nextAction, targetScene, targetProject, content, messages.length - 1);
+            messages[assistantIndex].writeAction = window.studioDirectorWorkbench.presentAction(
+              nextAction, targetScene, targetProject, content, assistantIndex);
           } catch (processingError) {
-            // Optional action presentation must never invalidate a useful answer.
             window.reportConsoleError('Studio action suggestion', processingError);
           }
         }
@@ -4290,13 +4329,19 @@
 
   window.studioDirectorBridge = {
     placeSuggestedAction: placeStudioSuggestion,
+    markWriteActionEdited:function (action) {
+      var entry = state.modeMessages.storyboard[state.studioActionIndex];
+      if (studioActiveStoredAction(entry) !== action)
+        throw new Error('Edited Scene Review is no longer bound to its original Director proposal.');
+      scheduleSessionSave();
+    },
     finishWriteAction:function (action) {
       var entry = state.modeMessages.storyboard[state.studioActionIndex];
-      if (!entry || !entry.writeAction ||
-          entry.writeAction.kind !== action.kind ||
-          entry.writeAction.instruction !== action.instruction)
+      var stored = studioActiveStoredAction(entry);
+      if (!stored || stored.kind !== action.kind ||
+          stored.instruction !== action.instruction)
         throw new Error('Completed Write action no longer matches its conversation proposal.');
-      entry.writeAction.completed = true;
+      stored.completed = true;
       scheduleSessionSave();
     },
     canReview: function () {
@@ -4469,8 +4514,8 @@
       if ((kind !== 'scenes.create' || !state.studioScenesProposal) &&
           window.studioDirectorWorkbench.completeWriteAction(kind, story, selected)) {
         var sourceMessage = state.modeMessages.storyboard[state.studioActionIndex];
-        if (sourceMessage && sourceMessage.writeAction)
-          sourceMessage.writeAction.completed = true;
+        var activeAction = studioActiveStoredAction(sourceMessage);
+        if (activeAction) activeAction.completed = true;
       }
       state.modeMessages.storyboard.push({role:'user',
         content:'Saved ' + savedTarget + ': ' + (savedFields.join(' · ') || 'Scene changes') +
@@ -4938,7 +4983,15 @@
         var baseline = JSON.stringify({
           title:original.title,prompt:original.prompt,durationSeconds:original.durationSeconds
         });
-        var applyExisting = !launch.forceAuthor && !!draftOrigin && draftOrigin.projectId === storyId &&
+        // A partial result remains available for Review, but cannot satisfy a
+        // later retry unless every requested field was actually authored.
+        // In particular, a title does not stand in for a requested H3 Prompt.
+        var completeDraft = !!draftOrigin && requestedFields.every(function (field) {
+          return Array.isArray(draftOrigin.fields) && draftOrigin.fields.includes(field) &&
+            workingScene && Object.prototype.hasOwnProperty.call(workingScene,field);
+        });
+        var applyExisting = !launch.forceAuthor && completeDraft &&
+          draftOrigin.projectId === storyId &&
           draftOrigin.request === String(launch.authorRequest || launch.instruction) &&
           draftOrigin.baseline === baseline;
         if (workingScene && applyExisting) {

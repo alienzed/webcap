@@ -142,3 +142,15 @@ The audit of the merged guidance and test work identified three concrete follow-
 - **Honest creative evaluation.** The real-model conversation test retains both the creative recommendation and actual authored Scene for independent review under five qualitative criteria, alongside deterministic field/target/persistence assertions. A green controlled CI suite alone does not demonstrate the Director vision or 90% first-attempt creative success.
 
 **Boundary retained:** Ordinary conversation can author H3 Scenes without an explicit mode switch. Its standing H3 reference therefore remains available; suppressing it based on keyword detection would reintroduce forbidden prose routing, while adding an extraction call would introduce unproven complexity. Further just-in-time specialization of ordinary conversation should be justified by a controlled real-model comparison, not inferred from prompt length alone.
+
+
+## Regression contract — independent creative material (2026-11-17)
+
+These are deterministic application responsibilities, not tests of whether the selected LLM writes well:
+
+- A single response can contain a Project field revision, an existing Scene revision, and one or more new Scene records. WebCap must preserve a separate author-controlled Review/Apply path and completion state for **each** usable deliverable, all bound to the actual returned response. Saving one result does not mark another result complete. Restoring the conversation must retain each remaining action.
+- A requested prompt-and-title revision returning only a title is **partial material**. The title stays accessible for explicit Review, but repeating the full request must never silently save that title as if the missing prompt had been supplied. A fresh model attempt may use the retained partial fields for continuity; do not invent missing authored fields.
+- When the author edits an existing Scene's proposal in Review, closing and reopening that proposal must restore those edits, including after reopening the saved conversation. The raw model response remains intact; edited values are stored separately from it, never as saved Scene authority.
+- Session serialization must preserve reviewed-action identity, completed status, edited review values, and the per-draft origin/baseline metadata already used by the frontend. Dropping any of them at the server boundary breaks recovery even if the current DOM seems correct.
+
+Targeted deterministic tests exercise the routing, partial-output retry, editable review lifecycle, and actual conversation-file round-trip. The live-model acceptance suite remains separate and cannot be inferred from those checks.

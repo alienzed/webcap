@@ -110,26 +110,31 @@ def test_project_can_start_without_scenes_or_with_prompt_only_scenes(isolated_st
     })
     assert rejected.status_code == 400
 
-def test_new_scene_response_schemas_require_prompt_not_intent(monkeypatch):
+def test_focused_scene_write_schema_has_no_legacy_intent_or_optional_rationale(monkeypatch):
     from tool.server import app as application
     captured = {}
     def fake_enqueue(client, model, contract, context, label):
-        captured[contract["operation"]] = contract["response_schema"]
+        captured[contract["operation"]] = contract.get("response_schema")
         return {"jobId": "test", "status": "queued"}
     monkeypatch.setattr(application, "enqueue_llm", fake_enqueue)
     client = app.test_client()
-    for operation in ("studio_project_draft", "studio_scene_field_draft"):
+    for operation in ("studio_project_draft", "studio_scene_field_draft", "studio_scenes_draft", "studio_chat"):
         response = client.post("/fs/director/chat", json={
             "model": "test-model", "operation": operation,
             "messages": [{"role": "user", "content": "Write a full Scene"}],
         })
         assert response.status_code == 202, response.json
+    assert captured["studio_chat"] is None
     assert captured["studio_scene_field_draft"]["required"] == ["prompt"]
-    assert captured["studio_scene_field_draft"]["properties"]["prompt"]["minLength"] == 1
-    initial = captured["studio_project_draft"]["properties"]["initialScenes"]["items"]
-    assert initial["required"] == ["title", "brief", "durationSeconds"]
-    assert "prompt" not in initial["properties"]
-    assert "summary" not in captured["studio_scene_field_draft"]["properties"]
+    assert set(captured["studio_scene_field_draft"]["properties"]) == {"prompt"}
+    assert set(captured["studio_project_draft"]["properties"]) == {
+        "title", "concept", "style", "invariants"
+    }
+    record = captured["studio_scenes_draft"]["properties"]["scenes"]["items"]
+    assert record["required"] == ["title", "prompt", "durationSeconds"]
+    assert "summary" not in record["properties"]
+    assert "rationale" not in captured["studio_scenes_draft"]["properties"]
+
 
 def test_studio_brief_apply_is_field_scoped_and_undoable(isolated_storyboard):
     client = isolated_storyboard

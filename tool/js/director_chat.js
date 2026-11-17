@@ -4781,37 +4781,16 @@
               if (Number.isInteger(proposed.durationSeconds) &&
                   proposed.durationSeconds >= 4 && proposed.durationSeconds <= 15)
                 extras.durationSeconds = proposed.durationSeconds;
-              else missing.push('duration');
+              else missing.push('durationSeconds');
             }
             var prompt = wantsPrompt && typeof proposed.prompt === 'string' && proposed.prompt.trim()
               ? proposed.prompt : null;
+            if (wantsPrompt && prompt === null) missing.push('prompt');
             var authored = Object.assign({},extras,prompt !== null ? {prompt:prompt} : {});
-            // Keep independent requested fields even when the model omits the
-            // required creative prompt. The missing prompt remains an error.
-            if (Object.keys(authored).length) {
-              state.studioWorkingDraft.scenes[sceneId] = Object.assign(
-                {},state.studioWorkingDraft.scenes[sceneId] || {},authored);
-              state.studioWorkingDraft.draftOrigins =
-                state.studioWorkingDraft.draftOrigins || {projects:{},scenes:{}};
-              state.studioWorkingDraft.draftOrigins.scenes =
-                state.studioWorkingDraft.draftOrigins.scenes || {};
-              state.studioWorkingDraft.draftOrigins.scenes[sceneId] = {
-                projectId:storyId,
-                request:String(launch.authorRequest || launch.instruction),
-                baseline:baseline,
-                fields:Object.keys(authored),
-                timingNeedsReview:wantsDuration && !Object.hasOwn(extras,'durationSeconds')
-              };
-              scheduleSessionSave();
-            }
-            if (wantsPrompt && prompt === null)
-              throw new Error('Director did not return the requested Scene prompt. Other usable requested fields are retained for review.\nRaw response:\n' + raw);
+            // An explicit Write has no Review cache. Save each mechanically
+            // usable requested field and report independently missing fields.
             if (!Object.keys(authored).length)
-              throw new Error('Director did not return the requested Scene fields.\nRaw response:\n' + raw);
-            if (wantsDuration && !Object.hasOwn(extras,'durationSeconds')) {
-              studioActionStatus('Scene timing is missing or unsupported. Authored fields retained for review; nothing saved.',true);
-              return {review:true};
-            }
+              throw new Error('Director did not return any usable requested Scene fields.\\nRaw response:\\n' + raw);
             if ((prompt === null || prompt.trim() === String(original.prompt || '').trim()) &&
                 (!Object.hasOwn(extras,'title') || extras.title === String(original.title || '').trim()) &&
                 (!Object.hasOwn(extras,'durationSeconds') || extras.durationSeconds === original.durationSeconds)) {
@@ -4825,7 +4804,7 @@
             return window.studioDirectorWorkbench.applyScenePrompt(story, sceneId, prompt, extras)
               .then(function (savedResult) {
                 studioActionStatus('Scene ' + (story.sceneOrder.indexOf(sceneId)+1) + ' saved.' +
-                   (missing.length ? ' Requested ' + missing.join(' and ') + ' not updated; inspect the saved Scene.' : ''),!!missing.length);
+                   (missing.length ? ' Requested ' + missing.join(' and ') + ' not supplied; inspect raw I/O.' : ''),!!missing.length);
                 return savedResult;
               });
           });

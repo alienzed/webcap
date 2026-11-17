@@ -1,6 +1,14 @@
 # Studio Director — behavioral contract and hostile guidance audit
 
-**Status:** Proposed design guidance, 2026-11-16. Documentation only; no runtime or UX changes are authorized by this file. [The functional contract](studio-director-contract.md) and [user flows](studio-user-flows.md) remain authoritative where this proposal has not been adopted. This document distinguishes verified code behavior from hypotheses about model performance.
+**Status:** Implementation plan and hostile pre-change audit, 2026-11-16. The core guidance and deterministic request changes are implemented on the companion branch; live-model acceptance remains unverified. [The functional contract](studio-director-contract.md) and [user flows](studio-user-flows.md) remain authoritative where this proposal has not been adopted. This document distinguishes verified code behavior from hypotheses about model performance.
+
+## Vision and acceptance filter
+
+> Studio Director is an imaginative, capable creative partner who understands and elevates the author's vision, contributes meaningful ideas, exercises sound creative judgment, and helps turn that vision into compelling, coherent, producible work.
+
+Every decision—prompt, model request, application action or UI detail—must answer: **Does this make Studio Director more reliable at being an imaginative, capable creative partner who elevates the author's vision?**
+
+The author's suggested mechanisms, as well as proposed mechanisms from implementation reviews, are hypotheses rather than fixed requirements.
 
 ## Product outcome
 
@@ -51,7 +59,7 @@ The code paths for [First Cut](../tool/server/storyboard_first_cut.py), [Develop
 
 This is an architectural *pattern to reuse*, not evidence that every one of these model responses is correct. The user's positive experience with these workflows is useful qualitative evidence. We should not force their multi-stage structure onto ordinary conversation, but we should reuse their **task clarity, context economy and deliverable-first instructions**.
 
-## Hostile audit of the actual Director instructions
+## Hostile audit of the pre-change Director instructions
 
 Read **all three layers**, not just one Python string: [built-in role and H3 guidance](../tool/server/studio_director.py), [request assembly](../tool/js/director_chat.js), and operation-specific writing requests from the same JavaScript module. Also check the optional user H3 Playbook and [H3 runtime instructions](mmh3-prompt-runtime-context.txt).
 
@@ -65,7 +73,7 @@ Read **all three layers**, not just one Python string: [built-in role and H3 gui
 
 **F5 — Format masquerading as task success.** Generic chat accepts reply-only results and optional Project/Scene fields. That is appropriate for genuine discussion, but does not establish fulfillment of a clear Scene-rewrite request. Conversely, simply making every field required would break legitimate partial revisions. **Change direction:** evaluate *actual delivered content* against the user's task. Preserve all returned content. Use focused operation-specific delivery formats for contextual Write actions. Do not pretend either schema shape alone determines creative behavior.
 
-**F6 — User-prose interpretation still exists in WebCap.** The present code uses regular expressions to detect "save that" draft reuse ([studioRequestAppliesPreparedMaterial](../tool/js/director_chat.js)), infer durations ([studioRequestedDuration and related helpers](../tool/js/director_chat.js)), recognize rename/title changes ([writeSelectedScene](../tool/js/director_chat.js)), and infer requested Scene fields from author wording ([presentAction](../tool/js/studio_director_workbench.js)). This directly conflicts with **NO PROSE PARSING** for control flow. **Change direction:** explicit UI actions and typed parameters choose operation/target; structured model material supplies requested creative values. Do not replace these regexes with a more elaborate classifier.
+**F6 — User-prose interpretation existed in WebCap.** Before this branch, the code used regular expressions to detect "save that" draft reuse ([studioRequestAppliesPreparedMaterial](../tool/js/director_chat.js)), infer durations ([studioRequestedDuration and related helpers](../tool/js/director_chat.js)), recognize rename/title changes ([writeSelectedScene](../tool/js/director_chat.js)), and infer requested Scene fields from author wording ([presentAction](../tool/js/studio_director_workbench.js)). That conflicts with **NO PROSE PARSING** for control flow. **Applied:** explicit UI action fields and actual authored output now choose operations and values; draft reuse checks exact source provenance. Timing not returned as a valid field remains an editable draft rather than being guessed.
 
 **F7 — Missing baseline can be more consequential than a schema omission.** A plain chat request to revise "the selected Scene" is not guaranteed to include that Scene's saved prompt: approved Read sources are intentionally independent of navigation. A contextual Revise action does fetch its target and provide the baseline. **Change direction:** make the contextual path easy and obvious; freeform conversation should accurately say when the baseline is absent and still offer useful ideas.
 
@@ -79,7 +87,7 @@ Read **all three layers**, not just one Python string: [built-in role and H3 gui
 2. **Compare the instructions against adversarial everyday requests**: ambiguous creativity, explicit Scene revision, missing approved baseline, partial multi-Scene work, Project pivot, one-field revision, follow-up refinement and no-op change. Resolve contradictory or irrelevant sentences before adding new ones.
 3. **Run the selected real model**, preserve its unedited results, and judge useful creative completion separately from WebCap data routing and persistence. Compare the revised wording with the present baseline; record regressions as well as improvements.
 
-## Proposed minimal guidance core (design, not deployed)
+## Guidance principle (implemented in a shorter form)
 
 > You are the author's proactive creative partner for short generative-video Projects and Scenes. Help them make their intended work compelling, coherent and producible while preserving their creative decisions.
 >
@@ -91,7 +99,7 @@ Read **all three layers**, not just one Python string: [built-in role and H3 gui
 >
 > **Deliver the artifact.** For a Scene creation or creative rewrite, return a complete, usable H3 prompt; for Project work, return the actual authored fields; for discussion, answer directly. The application handles selection, saving and the result's presentation.
 
-The short core is intentionally **not** a complete deployed prompt: each bounded task adds the relevant source, author request, optional H3 production reference and concise output-field convention. It does not enumerate buttons, actions, queue states or model call plans.
+The example above is **not** a verbatim runtime prompt. The shorter implemented role and field guide live in `studio_director.py`; each scoped task adds its author direction, source and H3 reference as needed. It does not enumerate buttons, queues, or save workflows.
 
 ## Minimal, measurable next steps
 
@@ -104,3 +112,22 @@ The short core is intentionally **not** a complete deployed prompt: each bounded
 **Non-goals:** No new general agent framework, no prose classifier, no blanket schema tightening, no automatic model repair/verification call, no speculative access gate, no persistence rewrite, no compulsory Review redesign.
 
 **Status of findings:** The instruction-layer problems and regex call sites are confirmed by source inspection. Their causal impact on the particular real-model omission is a testable hypothesis until that run's raw receipt and a controlled guidance comparison are examined.
+
+
+## Implementation record — phased and bounded
+
+**Phase 1 — Behavioral contract:** Recorded the agreed creative-partner vision as the decision filter and compared it against the authoritative Studio contract and user flows. No new model workflow was invented.
+
+**Phase 2 — Guidance consolidation:** Replaced duplicated Workshop/H3 instructions with a concise creative role and field meanings. The configurable production Playbook travels with the H3 reference rather than every Project-only task. Kept current Scene prompt structure and server schemas unchanged.
+
+**Phase 3 — Just-in-time request assembly:** Removed routine capability listings, navigation identifiers, and save-policy prose from the LLM's system prompt. Preserved approved saved Read material, bounded conversation history, recent unsaved structured drafts, and the exact author-provided instruction. Explicit Project and Scene writers now use shorter bounded tasks. Studio conversation retains the H3 reference because it may author Scenes on any turn; changing that further should be compared with a real model, not guessed.
+
+**Phase 4 — Deterministic application routing:** Removed regex-based interpretation of the author's words for scoped Scene fields, duration, title-only shortcut and draft reuse. Already-authored results are reused through exact source provenance or their response-specific Review action. Requested timing comes from actual model-authored duration fields; unsupported or missing timing is retained for correction rather than silently saved under a fabricated value. Existing Read permission, Project/Scene IDs, save routes and history remain application-owned.
+
+**Phase 5 — Verification:** Updated contract tests to assert outcomes, actual saved values, scoped context and omitted-content preservation rather than previous prompt wording. Retained real-model acceptance expectations, including complete Scene revisions. CI results must be reported separately; they do not establish that an LLM succeeds 90% of the time.
+
+**Explicitly deferred by design:** A provider-specific tool-call side channel, another agent-planning layer, universal schema tightening, new Review/History UX, and a general model repair or grading loop. Each would add complexity without a demonstrated requirement.
+
+### Release evidence still needed
+
+For one configured representative model, run the cumulative real-browser flows and the focused existing-Scene rewrite test with actual saved prompt approval. Collect the outbound context, raw returned material, displayed draft, target and authoritative saved values. Repeat a small representative prompt set multiple times before claiming any reliability rate. A failure to return useful creative material is **model adherence**; a failure to retain or correctly save returned material is **WebCap correctness**. Do not conceal either with retries, defaults, or weaker tests.

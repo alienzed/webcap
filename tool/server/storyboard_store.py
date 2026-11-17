@@ -1215,7 +1215,7 @@ def add_tentative_scene_at(story_id, expected_updated_at, scene_draft, placement
 
 @_serialized_mutation
 def add_tentative_scenes_at(story_id, expected_scene_order, drafts, placement, relative_scene_id=""):
-    """Insert a reviewed block of up to 32 Scenes with one Story commit.
+    """Insert the returned Scene records with one Story commit.
 
     Check only the structural field being modified, so unrelated Concept or
     Scene edits do not invalidate a reviewed placement.
@@ -1224,8 +1224,8 @@ def add_tentative_scenes_at(story_id, expected_scene_order, drafts, placement, r
     order = list(story.get("sceneOrder") or [])
     if not isinstance(expected_scene_order, list) or order != expected_scene_order:
         raise RuntimeError("Scene order changed during review. Prepare a fresh placement.")
-    if not isinstance(drafts, list) or not 1 <= len(drafts) <= 32:
-        raise ValueError("Create between one and 32 tentative Scenes per review.")
+    if not isinstance(drafts, list) or not drafts:
+        raise ValueError("At least one Scene is required to save.")
     if placement not in {"start", "end", "before", "after"}:
         raise ValueError("Select start, end, before or after.")
     relative_scene_id = str(relative_scene_id or "").strip()
@@ -1238,14 +1238,15 @@ def add_tentative_scenes_at(story_id, expected_scene_order, drafts, placement, r
 
     new_scenes = []
     for item in drafts:
-        if (not isinstance(item, dict) or not {"title", "prompt"}.issubset(item)
-                or not set(item).issubset({"title", "prompt", "durationSeconds"})):
-            raise ValueError("Each Scene needs a title and prompt, with optional duration.")
-        title, prompt = item["title"], item["prompt"]
+        if not isinstance(item, dict):
+            raise ValueError("Scene material must be an object.")
+        title, prompt = item.get("title", ""), item.get("prompt")
         if not isinstance(title, str) or not isinstance(prompt, str) or not prompt.strip():
-            raise ValueError("Each Scene needs a complete prompt.")
-        if len(title) > 240 or len(prompt) > 60000:
-            raise ValueError("Scene text is too long.")
+            raise ValueError("A Scene needs a usable prompt to save.")
+        if "durationSeconds" not in item:
+            raise ValueError("A Scene duration is missing; the original model response must be retained.")
+        # Preserve all received Scene fields supported by storage. Unknown model
+        # properties are reported by the caller rather than rejecting the prompt.
         new_scenes.append(_normalize_scene(_new_id("scene"), item))
 
     updated = copy.deepcopy(story)

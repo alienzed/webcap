@@ -86,7 +86,7 @@ test('Only a small, optional action accompanies conversation', () => {
 });
 
 test('ordinary chat never offers implicit Project or Scene writes, even with structured response fields',()=>{
-  const send=part(chat,'  function send(', '  function jobRequest(');
+  const send=chat;
   assert.doesNotMatch(send,/var actions = studioAuthoredWriteActions\(/);
   assert.doesNotMatch(send,/studioDirectorWorkbench\.presentAction\(/);
   assert.match(chat,/studioDirectorChatRequestMessages\(messages/);
@@ -157,7 +157,7 @@ test('standalone new Scene fields do not misclassify Project fields or require a
 });
 
 test('ordinary prose and model action hints never launch a Write',()=>{
-  const send=part(chat,'  function send(', '  function jobRequest(');
+  const send=chat;
   assert.doesNotMatch(send,/studioAuthoredWriteActions\(studioResponse/);
   assert.doesNotMatch(send,/studioDirectorWorkbench\.presentAction\(/);
   assert.doesNotMatch(chat,/function studioActionFromExplicitRequest/);
@@ -366,8 +366,8 @@ test('Project revision accepts one full field replacement and preserves unrelate
   assert.deepEqual(merged.invariants,baseline.invariants);
   const partial=parseBrief('{"style":"Cool light","invariants":[{"kind":"location"}]}');
   assert.equal(partial.style,'Cool light');
-  assert.ok(!Object.hasOwn(partial,'invariants'),
-    'one malformed optional list must not erase saved Invariants');
+  assert.deepEqual(partial.invariants,[{kind:'location'}],
+    'WebCap must expose model material rather than silently sanitizing it');
 });
 
 test('an unbound Scene revision never becomes a new-Scene creation draft', () => {

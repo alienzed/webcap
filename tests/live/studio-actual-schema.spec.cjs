@@ -119,6 +119,75 @@ test('LIVE contract — explicitly requested Scene revision must return a full n
   expect(saved.scenes[scene.id].durationSeconds).toBe(8);
 });
 
+test('LIVE creative partner — discuss staging, make a recommendation, then author the chosen Scene',async({page},testInfo)=>{
+  const project=await seedProject(page,'Live Creative Partner '+Date.now(),{
+    concept:'A night porter notices a paper crane caught in a railway station doorway.',
+    style:'Rain-slick blue twilight, restrained and humane.'
+  });
+  const model=await openLiveDirector(page);
+  await attachProject(page,project);
+  const observation=observeRealDirector(page);
+
+  // No JSON field names or WebCap commands in the author's words.
+  const discussion='An eight-second Scene about a night porter finding a paper crane '+
+    'caught in the railway station door feels visually flat. Suggest two distinct ways '+
+    'to stage the moment and recommend the stronger one, explaining why. '+
+    'We are discussing the idea, not writing the Scene yet.';
+  await sendLive(page,discussion);
+  const first=await observation.result();
+  await evidence(testInfo,'actual-creative-discussion',{model,discussion,
+    outbound:observation.requests[0],raw:first.receipt.raw,parsed:first.parsed});
+  expect(observation.requests).toHaveLength(1);
+  expect(observation.requests[0].operation).toBe('studio_chat');
+  expect(typeof first.parsed.reply,'Director did not discuss the creative decision').toBe('string');
+  expect(first.parsed.reply.trim().length,'Creative recommendation was not substantive')
+    .toBeGreaterThan(75);
+  expect(first.parsed.reply).toMatch(/crane|paper|porter|station|door/i);
+  expect((await story(page,project.id)).sceneOrder).toHaveLength(0);
+
+  const writing='Use the approach you recommended and write the complete eight-second '+
+    'Scene of the night porter discovering the trapped paper crane in the railway '+
+    'station doorway. Include the observable action, staging, and timed progression.';
+  await sendLive(page,writing);
+  await expect.poll(()=>observation.receipts.length,{timeout:30000}).toBe(2);
+  const second=observation.receipts[1];
+  let authored;
+  try {authored=JSON.parse(second.raw);}
+  catch(error){throw new Error('Creative follow-up omitted structured Scene records: '+
+    error.message+'\nRaw result:\n'+second.raw);}
+  await evidence(testInfo,'actual-creative-followup',{model,writing,
+    outbound:observation.requests[1],raw:second.raw,parsed:authored});
+  expect(observation.requests).toHaveLength(2,'Each author turn should make one model request');
+  expect(JSON.stringify(observation.requests[1].messages))
+    .toContain(first.parsed.reply,'Director must retain the staging discussion across turns');
+  expect(Array.isArray(authored.scenes),'Director answered with a plan instead of an authored Scene').toBe(true);
+  expect(authored.scenes.length).toBeGreaterThan(0);
+  const scene=authored.scenes[0];
+  expect(typeof scene.title).toBe('string');
+  expect(scene.title.trim()).toBeTruthy();
+  expect(scene.durationSeconds).toBe(8);
+  expect(typeof scene.prompt).toBe('string');
+  expect(scene.prompt.trim().length).toBeGreaterThan(80);
+  expect(scene.prompt).toMatch(/crane|paper bird/i);
+  expect(scene.prompt).toMatch(/porter|station/i);
+
+  // The model can author; only the author's explicit Apply can persist.
+  expect((await story(page,project.id)).sceneOrder).toHaveLength(0);
+  const destination=page.locator('#studio-dw-suggestions select[aria-label="Scene material destination"]');
+  await destination.selectOption(project.id);
+  await page.locator('#studio-dw-suggestions .studio-dw-suggestion-action').click();
+  await expect(page.locator('#studio-scenes-review')).toBeVisible();
+  const rows=page.locator('#studio-scenes-rows .studio-scenes-row');
+  await expect(rows).toHaveCount(authored.scenes.length);
+  await expect(rows.first().locator('[data-field="prompt"]')).toHaveValue(scene.prompt);
+  await page.locator('#studio-scenes-apply').click();
+  await expect.poll(async()=> (await story(page,project.id)).sceneOrder.length)
+    .toBe(authored.scenes.length);
+  const saved=await story(page,project.id);
+  expect(saved.scenes[saved.sceneOrder[0]].prompt).toBe(scene.prompt);
+  expect(observation.requests).toHaveLength(2,'Review and Apply must not re-author the Scene');
+});
+
 test('LIVE conversation — real Scene records have required title, duration and complete prompt before choosing Project',async({page},testInfo)=>{
   const a=await seedProject(page,'Live Reference '+Date.now(),{style:'Cool afternoon light.'});
   const b=await seedProject(page,'Live Scene Target '+Date.now(),{style:'Warm sunrise.'});

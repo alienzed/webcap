@@ -10,28 +10,28 @@ function part(a,b){
   assert.ok(start>=0&&end>start,'Missing real function boundaries: '+a);
   return director.slice(start,end);
 }
-test('attachment changes only on explicit attach, detach or explicit continue after Project creation',()=>{
+test('Chat and selected Write destinations never silently change conversation attachment',()=>{
   for(const section of [
-    part('  function sendMessage() {','  function '),
+    part('  function sendMessage() {','  function syncPinnedUi() {'),
     part('    selectWriteProject: function (','    prepareWrite: function ('),
-    part('    reviewCapture: function (','    reviewSceneCapture: function ('),
-    part('    reviewSceneCapture: function (','    checkProjectCoherence: function ('),
     part('  window.openStudioDirectorScene = function (','  window.closeStudioDirectorOnExit')
-  ]) assert.doesNotMatch(section,/state\.studioStoryAccess\s*=/,
-    'A navigation, material review or target selection must not reattach conversation');
-  assert.match(spec,/Four independent identities/);
-});
-test('targeted Project Review consumes its passed destination instead of requiring attachment',()=>{
-  const body=part('  function prepareStudioBrief(options) {','  function applyStudioBrief() {');
-  assert.match(body,/options\.storyId/);
-  assert.match(body,/state\.studioBriefProposal\.storyId === storyId/);
-  assert.match(director,/prepareStudioBrief\(Object\.assign/);
+  ]) assert.doesNotMatch(section,/state\.studioStoryAccess\s*=/);
+  assert.match(spec,/Navigation, deliberate conversation attachment/);
 });
 
-test('saving a Project never revokes previously approved cross-Project Read sources',()=>{
-  const body=part('  function applyStudioProject() {','  function showStudioBriefReview() {');
-  assert.doesNotMatch(body,/state\.studioApprovedRead\s*=\s*null/,
-    'Approved sources are session references, not inherited from the saved destination');
+test('focused Overview Write uses the explicitly supplied destination ID',()=>{
+  const body=part('  function prepareStudioBrief(options) {',
+    '  function startStudioWorkshop() {');
+  assert.match(body,/options && options\.storyId/);
+  assert.match(body,/storyId:storyId/);
+  assert.doesNotMatch(body,/studioBriefProposal|showStudioBriefReview/);
+});
+
+test('creating a Project does not replace approved Read sources',()=>{
+  const body=part('  function commitFocusedStudioProject(proposal) {',
+    '  function prepareStudioProject(options) {');
+  assert.doesNotMatch(body,/state\.studioApprovedRead\s*=/);
+  assert.match(body,/recordApplied\('project.create'/);
 });
 
 test('explicit Scene entry can target B while Director remains attached to A',()=>{
@@ -47,18 +47,17 @@ test('explicit Scene entry can target B while Director remains attached to A',()
   assert.equal(state.studioStoryAccess.storyId,'A');
 });
 
-test('conversation Project review does not infer create-vs-revise from returned title',()=>{
-  const workbench=fs.readFileSync(path.join(__dirname,'../tool/js/studio_director_workbench.js'),'utf8');
-  const start=workbench.indexOf('  function presentAction(');
-  const end=workbench.indexOf('  window.studioDirectorWorkbench = {',start);
-  assert.ok(start>=0&&end>start);
-  const section=workbench.slice(start,end);
-  assert.doesNotMatch(section,/hasOwnProperty\.call\(frozen\.authoredFields,'title'\)/);
-  assert.match(section,/destination\.value = isProjectMaterial/);
+test('New versus existing Project is chosen by the Write operation UI',()=>{
+  const rail=fs.readFileSync(path.join(__dirname,'../tool/js/studio_director_workbench.js'),'utf8');
+  assert.match(rail,/if \(operation !== 'new-project' && operation !== 'project'\)/);
+  assert.match(rail,/bridge\.prepareWrite\(operation,id/);
+  assert.doesNotMatch(rail,/function presentAction\(/);
 });
 
-test('a newly authored Project response cannot be shadowed by a cached same-instruction proposal',()=>{
-  const body=part('  function prepareStudioBrief(options) {','  function applyStudioBrief() {');
-  assert.match(body,/!\(options && options\.authoredFields\)/,
-    'Fresh authored material must replace cached Review for the same destination and instruction');
+test('a fresh Project Write performs a new focused model request without cached drafts',()=>{
+  const body=part('  function prepareStudioProject(options) {',
+    '  function parseStudioBriefDraft(raw) {');
+  assert.match(body,/operation:'studio_project_draft'/);
+  assert.doesNotMatch(body,/studioWorkingDraft|state\.studioProjectProposal/);
+  assert.match(body,/commitFocusedStudioProject\(proposal\)/);
 });

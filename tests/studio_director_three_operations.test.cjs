@@ -75,6 +75,69 @@ test('Only a small, optional action accompanies conversation', () => {
     '  function storyboardRequestMessages('), /readiness|capture/i);
 });
 
+test('mixed Project, selected Scene, and new Scene material stays independently actionable',async()=>{
+  const fields=new Function(part(chat,
+    '  function studioWorkingFieldChanges(source, names) {',
+    '  function studioMergeWorkingChanges(changes, target, action, request) {')+
+    'return studioWorkingFieldChanges;')();
+  const route=new Function('studioWorkingFieldChanges',part(chat,
+    '  function studioAuthoredWriteActions(response, instruction, targetScene) {',
+    '  function studioStoredActions(entry) {')+'return studioAuthoredWriteActions;')(fields);
+  const response=parse(JSON.stringify({
+    reply:'The Project should be colder, the selected Scene quieter; here is another Scene.',
+    changes:{
+      project:{style:'Moonlit blue haze'},
+      scene:{prompt:'Complete new H3 prompt for the selected Scene',title:'Quiet platform'}
+    },
+    scenes:[{title:'Final approach',prompt:'A separate complete H3 prompt',durationSeconds:8}]
+  }));
+  const actions=route(response,'Develop the Project and its Scenes',{projectId:'p1',sceneId:'two'});
+  assert.deepEqual(actions.map(a=>a.kind),['create_project','write_scenes','create_scene']);
+  assert.equal(actions[0].authoredFields.style,'Moonlit blue haze');
+  assert.equal(actions[1].authoredFields.prompt,'Complete new H3 prompt for the selected Scene');
+  assert.equal(actions[2].scenes[0].title,'Final approach');
+  assert.equal(actions.every(a=>a.instruction==='Develop the Project and its Scenes'),true);
+  const h=harness();
+  h.functions.presentAction({...actions[0],actionKey:'alternate-0'},null,
+    {projectId:'p1'},'Develop the Project and its Scenes',4);
+  h.suggestions.children.find(node=>node.type==='button').onclick();
+  await flush();
+  assert.equal(h.requests.at(-1)[0],'project',
+    'Project result must open its own author-confirmed Review');
+  h.functions.presentAction({...actions[1],actionKey:'alternate-1'},
+    {projectId:'p1',sceneId:'two',sceneNumber:2},{projectId:'p1'},'Develop',4);
+  h.suggestions.children.find(node=>node.type==='button').onclick();
+  await flush();
+  assert.equal(h.reviews.at(-1)[1],'two',
+    'selected Scene revision must remain separate from the Project material');
+  h.functions.presentAction({...actions[2],actionKey:'primary'},null,
+    {projectId:'p1'},'Develop',4);
+  h.suggestions.children.find(node=>node.type==='button').onclick();
+  await flush();
+  assert.equal(h.requests.at(-1)[0],'review-authored');
+  assert.equal(h.requests.at(-1)[1].scenes[0].title,'Final approach');
+  assert.match(chat,/stored\.otherWriteActions = message\.otherWriteActions/,
+    'all deliverables, not only the last one, must persist with the conversation');
+  assert.match(chat,/studioStoredActions\(message\)\.forEach/,
+    'inactive deliverables must keep independent launchers');
+});
+
+test('standalone new Scene fields do not misclassify Project fields or require a selected Scene',()=>{
+  const fields=new Function(part(chat,
+    '  function studioWorkingFieldChanges(source, names) {',
+    '  function studioMergeWorkingChanges(changes, target, action, request) {')+
+    'return studioWorkingFieldChanges;')();
+  const route=new Function('studioWorkingFieldChanges',part(chat,
+    '  function studioAuthoredWriteActions(response, instruction, targetScene) {',
+    '  function studioStoredActions(entry) {')+'return studioAuthoredWriteActions;')(fields);
+  const response=parse(JSON.stringify({
+    changes:{project:{concept:'A sharp new premise'},scene:{title:'Arrival',prompt:'A usable scene'}},
+  }));
+  const actions=route(response,'Reimagine the opening',null);
+  assert.deepEqual(actions.map(a=>a.kind),['create_project','create_scene']);
+  assert.equal(actions[1].scenes[0].prompt,'A usable scene');
+});
+
 test('ordinary prose never manufactures a Studio write action', () => {
   assert.doesNotMatch(chat,/function studioActionFromExplicitRequest/);
   assert.match(chat,/var nextAction = null/);

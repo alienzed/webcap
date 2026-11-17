@@ -171,7 +171,7 @@ def test_mixed_director_deliverables_and_edited_scene_review_survive_session_rel
 
     scene_action["completed"] = True
     revision = history.save_chat(chat["id"], {
-        "expectedRevision": 1, "title": "Mixed creative work",
+        "expectedRevision": 1, "title": "Mixed creative work", "draft": "",
         "messages": [{**reply, "writeAction": {**reply["writeAction"], "completed": True}}],
         "workingDraft": restored["workingDraft"],
     })

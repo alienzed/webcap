@@ -783,9 +783,11 @@ def caption_set_replace_route():
     data = request.get_json(silent=True) or {}
     folder = data.get("folder", "")
     try:
+        if data.get("apply") is True and not isinstance(data.get("signature"), str):
+            raise ValueError("Preview required before replacing captions.")
         return jsonify(replace_set_caption_text(
             folder, str(data.get("find") or ""), str(data.get("replace") or ""),
-            data.get("signature") if data.get("apply") is True else None,
+            data["signature"] if data.get("apply") is True else None,
         ))
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400

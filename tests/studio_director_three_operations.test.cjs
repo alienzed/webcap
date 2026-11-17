@@ -15,8 +15,6 @@ function part(source, begin, end) {
 }
 const parse = new Function(part(chat, '  function parseStudioChatResponse(raw) {',
   '  function storyboardRequestMessages(') + 'return parseStudioChatResponse;')();
-const requestedDuration = new Function(part(chat, '  function studioRequestedDuration(instruction) {',
-  '  window.studioDirectorBridge = {') + 'return studioRequestedDuration;')();
 const sceneTargets = new Function(part(workbench, '  function selectedSceneIds(story, selectedScene) {',
   '  function presentAction(') + 'return selectedSceneIds;')();
 
@@ -31,13 +29,14 @@ test('retired Director assessment and guideline artifacts are absent without los
   assert.match(html,/id="studio-scenes-review"/);
 });
 
-test('shared Studio guidance treats review as optional and saved state as WebCap-owned', () => {
-  const request = part(chat,'  function studioDirectorRequestMessages(', '  function studioDirectorChatRequestMessages(');
-  assert.match(request,/direct-save or review policy/);
-  assert.match(request,/Only WebCap determines review, destination and actual persistence/);
-  assert.doesNotMatch(request,/WebCap confirms Apply|scoped reviewed Write/);
-});
 
+test('shared Studio creative guidance leaves save and review mechanics to WebCap',()=>{
+  const request = part(chat,'  function studioDirectorRequestMessages(', '  function studioDirectorChatRequestMessages(');
+  assert.match(request,/payload.system/);
+  assert.match(request,/H3 PROMPT AUTHORING REFERENCE/);
+  assert.doesNotMatch(request,/CURRENT WEBCAP CAPABILITIES|STUDIO WORKBENCH STATE|CURRENT PROJECT NAVIGATION/);
+  assert.doesNotMatch(request,/direct-save or review policy|Only WebCap determines review/);
+});
 test('Read is plain prose; an absent or malformed optional action does not discard its reply', () => {
   assert.deepEqual(parse('The saved title is Rainy Bookshop.'), {
     reply: 'The saved title is Rainy Bookshop.', action: null, changes: null
@@ -90,14 +89,13 @@ test('WebCap binds review to the selected existing Scene without parsing request
   assert.deepEqual(sceneTargets(story,null),[]);
 });
 
-test('Explicit duration is a WebCap parameter, not optional LLM metadata', () => {
-  assert.equal(requestedDuration('Make this a 12-second Scene'), 12);
-  assert.equal(requestedDuration('Use 14s'), 14);
-  assert.equal(requestedDuration('No duration mentioned'), null);
-  assert.equal(requestedDuration('Use 30 seconds'), null);
-  assert.doesNotMatch(chat, /draft\.scenes\[0\]\.durationSeconds = requestedDuration/);
-});
 
+test('explicit Scene writes rely on authored duration values rather than guessing from prose',()=>{
+  assert.doesNotMatch(chat,/function studioRequestedDuration\(|function studioMentionedDuration\(/);
+  assert.match(chat,/Number\.isInteger\(proposed\.durationSeconds\)/);
+  assert.match(chat,/missingDuration/);
+  assert.doesNotMatch(chat,/draft\.scenes\[0\]\.durationSeconds = requestedDuration/);
+});
 function harness() {
   const suggestions = {children:[],replaceChildren(){this.children=[];},
     appendChild(value){this.children.push(value);}};
@@ -260,19 +258,13 @@ test('an unbound Scene revision never becomes a new-Scene creation draft', () =>
   assert.equal(state.sessionDirty.storyboard,false);
 });
 
-test('prepared material is reused only for an explicit apply, not a fresh creative instruction',()=>{
-  const apply=new Function(part(chat,
-    '  function studioRequestAppliesPreparedMaterial(request) {',
-    '  function studioWorkingFieldChanges(source, names) {')+
-    'return studioRequestAppliesPreparedMaterial;')();
-  assert.equal(apply('Save that prompt to Scene 2.'),true);
-  assert.equal(apply('Apply this Project draft.'),true);
-  assert.equal(apply('Use the previous concept.'),true);
-  assert.equal(apply('Use warmer lighting in Scene 2.'),false);
-  assert.equal(apply('Apply new blue lighting to Scene 2.'),false);
-  assert.equal(apply('Save this prompt but make it darker.'),false);
-});
 
+test('draft reuse is based on exact authored provenance, not linguistic heuristics',()=>{
+  assert.doesNotMatch(chat,/function studioRequestAppliesPreparedMaterial\(/);
+  assert.match(chat,/state\.studioWorkingDraft\.sourceRequest ===/);
+  assert.match(chat,/sourceMessageIndex/);
+  assert.doesNotMatch(workbench,/literalTitleOnly/);
+});
 test('Studio request sends bounded discussion, current full words, and no saved-field receipts',async()=>{
   const request=new Function('state','window','requestJson',part(chat,
     '  function studioDirectorRequestMessages(messages, includePromptContract, explicitWrite, navigationSnapshot) {',
@@ -296,13 +288,16 @@ test('Studio request sends bounded discussion, current full words, and no saved-
     'historical huge turns should not be re-sent verbatim');
 });
 
-test('WebCap respects written-out timing and does not silently default unsupported timing',()=>{
-  assert.equal(requestedDuration('Create a twelve-second Scene'),12);
-  assert.equal(requestedDuration('Make it fourteen seconds'),14);
-  assert.equal(requestedDuration('Create a 9-second Scene'),9);
-  assert.equal(requestedDuration('Create a twenty-second Scene'),null);
-});
 
+test('unsupported Scene timing remains editable and cannot silently become a saved default',()=>{
+  const write=part(chat,'    writeSelectedScene: function (launch) {','    makeProposal: function');
+  assert.match(write,/Scene timing is missing or unsupported/);
+  assert.match(write,/return \{review:true\}/);
+  const create=part(chat,'    writeNewScene: function (launch) {','    writeSelectedScene: function');
+  assert.match(create,/missingDuration/);
+  assert.match(create,/Scene duration needs review/);
+  assert.doesNotMatch(create,/durationSeconds:6/);
+});
 test('manual Project review reuses durable authored fields without a model request',()=>{
   const projectFields=new Function(part(chat,
     '  function studioWorkingFieldChanges(source, names) {',
@@ -312,23 +307,19 @@ test('manual Project review reuses durable authored fields without a model reque
     '  function parseStudioProjectDraft(raw) {',
     '  function addStudioProjectInvariant(')+
     'return parseStudioProjectDraft;')();
-  const applies=new Function(part(chat,
-    '  function studioRequestAppliesPreparedMaterial(request) {',
-    '  function studioWorkingFieldChanges(source, names) {')+
-    'return studioRequestAppliesPreparedMaterial;')();
   const state={pending:false,activeMode:'storyboard',sessionReady:true,
     modelId:'',studioProjectProposal:null,
     studioWorkingDraft:{projects:{},scenes:{},
       newProject:{title:'Rainy Bookshop',concept:'Late-night reading',
         style:'Amber lamps',invariants:[]},newScene:{},sourceRequest:'Describe it'}};
   let reviewed=0;
-  const prepare=new Function('state','studioRequestAppliesPreparedMaterial',
+  const prepare=new Function('state',
     'parseStudioProjectDraft','showStudioProjectReview','studioActionStatus',
     'studioWorkingFieldChanges',part(chat,
     '  function prepareStudioProject(options) {',
     '  // The reviewed Project is saved before any Scene authoring.')+
     'return prepareStudioProject;')(
-    state,applies,parseProject,()=>{reviewed++;},()=>{},projectFields);
+    state,parseProject,()=>{reviewed++;},()=>{},projectFields);
   prepare();
   assert.equal(reviewed,1);
   assert.equal(state.studioProjectProposal.title,'Rainy Bookshop');

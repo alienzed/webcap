@@ -39,7 +39,7 @@ test('Read and the optional coherence utility stay separate from creative Write'
 });
 
 test('ordinary replies prioritize short exchanges rather than full assessments', () => {
-  assert.match(chat, /Answer ordinary questions naturally/);
-  assert.match(chat, /Ordinary discussion needs no invented action or save claim/);
-  assert.match(backend, /normally 1-3 sentences in one short paragraph/);
+  assert.match(chat, /STUDIO CONVERSATION DELIVERY: Respond naturally/);
+  assert.match(backend, /CONVERSATION: Respond naturally and concisely/);
+  assert.match(backend, /CREATIVE WORK: When asked to create or revise material/);
 });

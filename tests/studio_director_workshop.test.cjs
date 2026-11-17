@@ -66,8 +66,9 @@ test('Only explicitly supplied conversation content is sent; legacy snapshots ar
     'studioDirectorRequestMessages([{role:"user",content:"Develop the idea"}])', context);
   assert.equal(result.length, 2);
   assert.match(result[0].content, /Authoritative expertise/);
-  assert.match(result[0].content, /CURRENT WEBCAP CAPABILITIES/);
-  assert.match(result[0].content, /STUDIO WORKBENCH STATE/);
+  assert.doesNotMatch(result[0].content, /CURRENT WEBCAP CAPABILITIES/);
+  assert.doesNotMatch(result[0].content, /STUDIO WORKBENCH STATE/);
+  assert.doesNotMatch(result[0].content, /CURRENT PROJECT NAVIGATION/);
   assert.doesNotMatch(result[0].content, /Historical secret/);
   assert.equal(result[1].content, 'Develop the idea');
 });
@@ -87,27 +88,28 @@ test('Studio conversation does not silently inject the selected Project as creat
     '  // Retain available conversational work across ordinary follow-up questions.'),scope);
   const out=await vm.runInContext(
     "studioDirectorChatRequestMessages([{role:'user',content:'Create a new Project'}])",scope);
-  assert.match(out[0].content,/NO SAVED PROJECT\/SCENE CONTEXT APPROVED/);
+  assert.match(out[0].content,/No saved Project or Scene reference was supplied/);
   assert.doesNotMatch(out[0].content,/Private Project/);
   assert.equal(out[1].content,'Create a new Project');
 });
-test('explicit Write guidance asks for the draft, not another conversational recommendation', async () => {
-  const context = vm.createContext({
-    state:{studioStoryAccess:null,storyboardAttachments:{},studioWorkingDraft:{projects:{},scenes:{},newProject:{},newScene:{}}},
+test('explicit Writes stay task-scoped without duplicating application instructions',async()=>{
+  const context=vm.createContext({
+    state:{studioStoryAccess:null,storyboardAttachments:{},
+      studioWorkingDraft:{projects:{},scenes:{},newProject:{},newScene:{}}},
     Object,String,Promise,window:{getStudioDirectorNavigation:()=>({})},
-    requestJson:async()=>({system:'Studio producer expertise',actions:[]})
+    requestJson:async()=>({system:'Studio producer expertise',actions:[],
+      promptContract:'H3 production reference'})
   });
   vm.runInContext(part('  function studioDirectorRequestMessages(messages, includePromptContract, explicitWrite, navigationSnapshot) {',
     '  function studioDirectorChatRequestMessages(messages, selectedScene, navigationSnapshot, boundTarget) {'),context);
-  const conversational = await vm.runInContext(
+  const conversational=await vm.runInContext(
     "studioDirectorRequestMessages([{role:'user',content:'Discuss Scene'}],false)",context);
-  const writing = await vm.runInContext(
-    "studioDirectorRequestMessages([{role:'user',content:'Revise Scene'}],false,true)",context);
-  assert.match(conversational[0].content,/When creative fields are requested, return their complete actual authored values NOW/);
-  assert.doesNotMatch(writing[0].content,/suggest at most one useful action/);
-  assert.match(writing[0].content,/EXPLICIT WRITE/);
-  assert.match(writing[0].content,/Produce the requested complete editable proposal/);
-  assert.equal(writing[1].content,'Revise Scene');
+  const writing=await vm.runInContext(
+    "studioDirectorRequestMessages([{role:'user',content:'Revise Scene'}],true,true)",context);
+  assert.equal(conversational[0].content,'Studio producer expertise');
+  assert.match(writing[0].content,/H3 production reference/);
+  assert.doesNotMatch(writing[0].content,/CURRENT PROJECT NAVIGATION|CURRENT WEBCAP CAPABILITIES|STUDIO WORKBENCH STATE/);
+  assert.equal(writing[1].content,'Revise Scene','the specific authoring task stays in the current user request');
   assert.match(source,/studioDirectorRequestMessages\(\[\{role:'user',content:instruction\}\], includePromptContract, true, navigationSnapshot\)/);
 });
 
@@ -282,16 +284,16 @@ test('Studio conversation receives the canonical H3 template as reference withou
   const result = await vm.runInContext(
     "studioDirectorChatRequestMessages([{role:'user',content:'How should an H3 prompt be structured?'}])",context);
   assert.equal(result.length,2);
-  assert.match(result[0].content,/H3 PRODUCTION PROMPT REFERENCE/);
+  assert.match(result[0].content,/H3 PROMPT AUTHORING REFERENCE/);
   assert.match(result[0].content,/integrated_multimodal_description:/);
   assert.match(result[0].content,/overall_soundscape:/);
   assert.match(result[0].content,/non_diegetic_music:/);
-  assert.match(result[0].content,/not when authoring Project fields/);
+  assert.doesNotMatch(result[0].content,/CURRENT WEBCAP CAPABILITIES|CURRENT PROJECT NAVIGATION/);
   assert.equal(result[1].content,'How should an H3 prompt be structured?');
   assert.doesNotMatch(result[0].content,/\[WEBCAP EXPLICIT READ\]/);
   const ordinary=await vm.runInContext(
     "studioDirectorChatRequestMessages([{role:'user',content:'What is the saved title?'}])",context);
-  assert.match(ordinary[0].content,/H3 PRODUCTION PROMPT REFERENCE/,
+  assert.match(ordinary[0].content,/H3 PROMPT AUTHORING REFERENCE/,
     'Studio can author full Scenes in ordinary conversation');
 });
 

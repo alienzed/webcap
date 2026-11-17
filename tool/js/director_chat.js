@@ -1912,8 +1912,7 @@
     var authorRequest = String(options && options.authorRequest || options && options.instruction || '');
     var manualReview = !String(options && options.instruction || '').trim();
     var sameWork = manualReview ||
-      state.studioWorkingDraft.sourceRequest === authorRequest ||
-      studioRequestAppliesPreparedMaterial(authorRequest);
+      state.studioWorkingDraft.sourceRequest === authorRequest;
     if (sameWork && workingProject && Object.keys(workingProject).length) {
       state.studioProjectProposal = parseStudioProjectDraft(JSON.stringify(Object.assign({
         title:'', concept:'', style:'', invariants:[], initialScenes:[],
@@ -1941,13 +1940,11 @@
     startProgress();
     syncControls();
     var input = {
-      task: 'Author ONE new Studio Project with a complete Concept (including core appeal), ' +
-        'complete Visual / atmosphere, a useful title and only relevant stable Invariants. ' +
-        'When the author explicitly requests initial Scenes, include one short initialScenes ' +
-        'brief per agreed Scene with title, brief and whole-second durationSeconds (4-15, default 6). ' +
-        'Those briefs will be passed to individual Scene-writing calls after this Project is saved. ' +
-        'Return an empty initialScenes array when no Scenes were requested. ' +
-        'Use a short rationale. This is a draft for the existing Project review.',
+      task: 'Create one usable Project with a distinctive title, developed Concept and core appeal, ' +
+        'Visual / atmosphere, and Invariants only for relevant recurring facts. ' +
+        'When the author wants initial Scenes, include short titled Scene briefs with durations ' +
+        'for later individual Scene authoring. Otherwise return an empty initialScenes array. ' +
+        'Deliver the actual Project fields and a concise rationale now.',
       instruction: String(options && options.instruction || '').trim(),
       unsavedWorkingFields:workingProject || {},discussion: discussion
     };
@@ -2426,8 +2423,7 @@
       var workingProject = options && options.authoredFields || state.studioWorkingDraft.projects[storyId] || {};
       var authorRequest = String(options && options.authorRequest || instruction);
       var sameWork = !!(options && options.authoredFields) || manualReview ||
-        state.studioWorkingDraft.sourceRequest === authorRequest ||
-        studioRequestAppliesPreparedMaterial(authorRequest);
+        state.studioWorkingDraft.sourceRequest === authorRequest;
       var required = Object.keys(workingProject).filter(function (field) {
         return ['title','concept','style','invariants'].includes(field);
       });
@@ -2446,11 +2442,9 @@
       if (!state.modelId)
         throw new Error('No Director model is available to author new Project fields.');
       var input = {
-        task: 'Revise the specified Project fields using the saved Project as baseline. ' +
-          'Return only fields that need a complete replacement value: title, concept, style and/or ' +
-          'the complete invariants list. Omit unchanged fields rather than rewriting them. ' +
-          'Preserve unrelated Project details and all Scenes. Keep the core appeal in Concept. ' +
-          'WebCap merges requested fields and offers reviewed saving.',
+        task: 'Revise the requested Project fields using the supplied saved Project as baseline. ' +
+          'Return complete replacement values for the fields you improve, preserving established ' +
+          'creative direction and all unaffected fields and Scenes.',
         instruction: instruction, requestedFields: requestedFields,
         // This explicit targeted Project revision authorizes its own saved baseline.
         project: {id:story.id,title:story.title,concept:story.concept,
@@ -3091,69 +3085,29 @@
   }
 
   function studioDirectorRequestMessages(messages, includePromptContract, explicitWrite, navigationSnapshot) {
-    var navigation = navigationSnapshot || window.getStudioDirectorNavigation();
-    var connected = state.studioStoryAccess && state.studioStoryAccess.storyId;
-    // An explicitly launched write keeps its frozen navigation. Other Director
-    // work uses the connected Project rather than an unrelated Studio shell.
-    var ready = !navigationSnapshot && connected && connected !== navigation.projectId
-      ? requestJson('/fs/storyboard?story=' + encodeURIComponent(connected)).then(function (result) {
-          var story = result && result.story;
-          if (!story || story.id !== connected)
-            throw new Error('The connected Director Project is no longer available.');
-          return {projectId:story.id,projectTitle:story.title,sceneId:'',sceneNumber:0,
-            sceneOrder:story.sceneOrder.slice()};
-        })
-      : Promise.resolve(navigation);
-    return ready.then(function (navigation) {
-      return requestJson('/fs/studio/director/guidance?targetModel=minimax_h3').then(function (payload) {
-      if (!payload.system || typeof payload.system !== 'string') {
-        throw new Error('Studio Director production guidance is missing.');
-      }
-      if (!Array.isArray(payload.actions)) throw new Error('Studio Director capability catalog is missing.');
+    // Creative requests need the author's task and relevant source material.
+    // Navigation, available buttons, IDs and save policy remain WebCap concerns.
+    // Keep the existing call signature for contextual Write callers.
+    return requestJson('/fs/studio/director/guidance?targetModel=minimax_h3').then(function (payload) {
+      if (!payload.system || typeof payload.system !== 'string')
+        throw new Error('Studio Director creative guidance is unavailable.');
       if (includePromptContract && (!payload.promptContract || typeof payload.promptContract !== 'string'))
-        throw new Error('H3 prompt-authoring contract is unavailable.');
-      var capabilities = payload.actions.map(function (action) {
-        return action.name + ' (' + action.status + '): ' + action.description;
-      }).join(String.fromCharCode(10));
-      // Saved field receipts and obsolete explicit-Read payloads stay in chat
-      // history but never re-enter the model context. Keep only recent discussion;
-      // the current authoritative fields and working draft travel separately.
+        throw new Error('H3 prompt-authoring reference is unavailable.');
+      // Application receipts and restored inspection metadata are not user/LLM discussion.
       var recent = messages.filter(function (message) {
         return !/\[WEBCAP APPLIED FIELD VALUES\]|\[WEBCAP EXPLICIT READ\]/.test(
           String(message.content || ''));
       }).slice(-8);
-      var outbound = [{role:'system', content:''}].concat(recent.map(function (message, index) {
+      var outbound = [{role:'system', content:payload.system}].concat(recent.map(function (message, index) {
         var content = String(message.content || '');
-        // The complete authored response is preserved in conversation history.
-        // This prose excerpt is bounded; structured material travels separately.
         if (index < recent.length - 1 && content.length > 3000)
           content = content.slice(0,1800) + '\n[Earlier long message abbreviated]\n' +
             content.slice(-900);
         return {role:message.role,content:content};
-      })); // Persisted inspection metadata is not part of the LLM conversation.
-      // Navigation and destination identity alone convey no saved creative material.
-      var storyRefs = Object.keys(state.storyboardAttachments || {}).filter(function (key) {
-        return key.indexOf('story:') === 0;
-      });
-      var workbench = navigation.projectId
-        ? 'WebCap resolved Project ' + navigation.projectId +
-          '. Only saved content supplied in this request is authoritative.'
-        : 'No Project is selected. A Project or Scene Write will need a destination.';
-      outbound[0] = { role: 'system', content: payload.system +
-        '\n\nCURRENT WEBCAP CAPABILITIES (available vs planned):\n' + capabilities +
-        '\n\nSTUDIO WORKBENCH STATE (controls, not saved Story facts):\n' + workbench +
-        '\nCURRENT PROJECT NAVIGATION (identity and one-based Scene positions; saved content is supplied separately when available):\n' + JSON.stringify(navigation) +
-        (explicitWrite
-          ? '\nEXPLICIT WRITE: The author has chosen to draft. Produce the requested complete editable proposal in the specified format. WebCap handles destination, editing and the selected direct-save or review policy.\n'
-          : '\nFor a direct question, answer directly. ' +
-            'When creative fields are requested, return their complete actual authored values NOW. ' +
-            'Do not describe a future Write action or claim that WebCap has saved anything. ' +
-            'Only WebCap determines review, destination and actual persistence.\n') +
-        outbound[0].content };
-      if (includePromptContract) outbound[0].content +=
-        '\n\nH3 PRODUCTION PROMPT REFERENCE (know this template when discussing H3; apply it only when drafting an H3 Prompt field, not when authoring Project fields):\n' + payload.promptContract;
+      }));
+      if (includePromptContract)
+        outbound[0].content += '\n\nH3 PROMPT AUTHORING REFERENCE:\n' + payload.promptContract;
       return outbound;
-      });
     });
   }
 
@@ -3197,20 +3151,18 @@
       // Do not leak the selected editor's creative content through automatic navigation context.
       return studioDirectorRequestMessages(messages, true, false,
         {projectId:'',projectTitle:'',sceneId:'',sceneNumber:0,sceneOrder:[]}).then(function (outbound) {
-        outbound[0].content += '\n\nSTUDIO CONVERSATION AND AUTHORING: Answer ordinary questions naturally. ' +
-          'When the author requests Project material, return actual replacement field values in changes.project now. ' +
-          'When revising a Scene, return its full replacement H3 Prompt in changes.scene.prompt and any requested title or durationSeconds. ' +
-          'When authoring new Scenes, return scenes:[{title,prompt,durationSeconds}] with full prompts, whether one or many. ' +
-          'These actual fields are the authored result in this same response, not promises for another action. ' +
-          'Return all useful authored fields and Scenes. Ordinary discussion needs no invented action or save claim. ' +
-          'WebCap owns review, destination and persistence; only an actual save is authoritative.\n';
+        outbound[0].content += '\n\nSTUDIO CONVERSATION DELIVERY: Respond naturally to the author. ' +
+          'When there is useful Project or Scene material ready, deliver the actual content alongside the reply. ' +
+          'Use changes.project for authored Project field values; changes.scene for changes to an existing Scene; ' +
+          'and scenes for new Scene drafts. A creative Scene revision includes the complete replacement H3 prompt. ' +
+          'Include every useful field or Scene that is ready, even when another part needs a question. ' +
+          'These are drafts; WebCap decides where and whether to save them.\n';
         if (approvedPayloads.length) {
           outbound[0].content += '\nAUTHOR-APPROVED SAVED CONTEXT (independent sources; refreshed for this request):\n' +
             JSON.stringify(approvedPayloads) +
             '\nEach source retains its own Project identity and is reference material, not an automatic Write destination.\n';
         } else {
-          outbound[0].content += '\nNO SAVED PROJECT/SCENE CONTEXT APPROVED. ' +
-            'Do not assume access to saved fields of the Project selected in Studio.\n';
+          outbound[0].content += '\nNo saved Project or Scene reference was supplied for this conversation.\n';
         }
         // Earlier authored responses belong to this conversation, not any selected Project.
         // Include actual structured fields, rather than only the visible prose summary.
@@ -3239,14 +3191,6 @@
 
   // A Studio conversation owns unsaved sparse field replacements. Saved
   // Project/Scene records stay authoritative until a deliberate Write.
-  function studioRequestAppliesPreparedMaterial(request) {
-    // "Save that prompt" can reuse a known complete draft. "Use warmer
-    // lighting" is a *new creative request*, not permission to save old work.
-    request = String(request || '');
-    return /\b(?:save|apply|use|store)\s+(?:(?:the|a|my)\s+)?(?:this|that|it|previous|latest|current|prepared|existing|above|draft|prompt|proposal|material|concept)\b/i.test(request) &&
-      !/\b(?:change|modify|revise|rewrite|make|adjust|remove|replace|shorten|lengthen|extend|improve|darken|lighten|instead)\b/i.test(request);
-  }
-
   function studioWorkingFieldChanges(source, names) {
     if (!source || typeof source !== 'object' || Array.isArray(source)) return {};
     var result = {};
@@ -4268,22 +4212,6 @@
     }
   }
 
-  function studioRequestedDuration(instruction) {
-    var seconds = studioMentionedDuration(instruction);
-    return Number.isInteger(seconds) && seconds >= 4 && seconds <= 15 ? seconds : null;
-  }
-
-  function studioMentionedDuration(instruction) {
-    var match = /\b(\d+(?:\.\d+)?|zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty)\s*(?:-|\s)?\s*(?:seconds?|secs?|s)\b/i.exec(
-      String(instruction || ''));
-    if (!match) return null;
-    var words = ['zero','one','two','three','four','five','six','seven','eight','nine',
-      'ten','eleven','twelve','thirteen','fourteen','fifteen','sixteen','seventeen',
-      'eighteen','nineteen','twenty'];
-    var value = words.indexOf(match[1].toLowerCase());
-    return value >= 0 ? value : match[1].toLowerCase() === 'thirty' ? 30 : Number(match[1]);
-  }
-
   // Only actual persisted field values clear a retained draft. Keep unrelated
   // fields available if the save applied only part of the author's material.
   function forgetSavedStudioSceneFields(storyId, sceneId, savedScene) {
@@ -4727,7 +4655,7 @@
       var prepared = launch && state.studioWorkingDraft.newScene &&
         typeof state.studioWorkingDraft.newScene.prompt === 'string' &&
         !!state.studioWorkingDraft.newScene.prompt.trim() &&
-        studioRequestAppliesPreparedMaterial(launch.authorRequest || launch.instruction);
+        state.studioWorkingDraft.sourceRequest === String(launch.authorRequest || launch.instruction);
       if (!this.isReady() && !(prepared && this.canReview()))
         return Promise.reject(new Error(this.readinessMessage()));
       if (!launch || !launch.projectId || !String(launch.instruction || '').trim())
@@ -4745,16 +4673,11 @@
           throw new Error('The selected Project is no longer available.');
         var order = story.sceneOrder.slice();
         var instruction = JSON.stringify({
-          task:'Author the new Scenes requested for this existing Project in one response. ' +
-            'Return JSON with scenes: an array of authored Scene records, each with a complete usable H3 prompt, ' +
-            'a useful title, and durationSeconds when supplied. Return the Scenes you can actually author; ' +
-            'a partial sequence is useful and does not require filler or replacement requests. ' +
-            'Use the author-requested durations and titles when clear; use 6 seconds when no duration was requested. ' +
-            'Keep every Scene independently generatable, coherent with the saved Project and distinct when appropriate. ' +
-            'Existing Scenes are retained and are not revision destinations.',
-          instruction:launch.instruction,
-          authorRequest:launch.authorRequest || launch.instruction,
-          requestedDurationSeconds:studioRequestedDuration(launch.authorRequest || launch.instruction),
+          task:'Create the requested independently generatable H3 Scenes for this Project. ' +
+            'Give each Scene a useful title, complete H3 Prompt and durationSeconds ' +
+            '(4–15 seconds, default 6 when unspecified). Honor the author\'s creative direction, ' +
+            'specific titles and timings. Deliver every Scene you can usefully author now.',
+          authorDirection:launch.authorRequest || launch.instruction,
           // Explicitly launched Scene creation uses this selected Project's saved direction.
           project:{
             title:story.title,concept:story.concept,style:story.style,
@@ -4767,24 +4690,21 @@
               var prior = story.scenes[order[order.length - 1]];
               return {title:prior.title,prompt:prior.prompt,durationSeconds:prior.durationSeconds};
             })() : null,
-            unsavedWorkingFields:studioRequestAppliesPreparedMaterial(
-              launch.authorRequest || launch.instruction) ?
+            unsavedWorkingFields:state.studioWorkingDraft.sourceRequest ===
+              String(launch.authorRequest || launch.instruction) ?
               (state.studioWorkingDraft.newScene || {}) : {}
           }
         });
         // Reuse complete structured Scene fields already authored in the
         // conversation; never ask the model to rewrite the same work.
         var workingScene = state.studioWorkingDraft.newScene;
-        var applyExisting = studioRequestAppliesPreparedMaterial(
-          launch.authorRequest || launch.instruction);
+        var applyExisting = state.studioWorkingDraft.sourceRequest ===
+          String(launch.authorRequest || launch.instruction);
         var reuse = !!(applyExisting && workingScene &&
           typeof workingScene.prompt === 'string' && workingScene.prompt.trim());
         if (!reuse) state.pending = false;
         var proposal = reuse ?
-          Promise.resolve(JSON.stringify(Object.assign({
-            title:'Scene ' + (order.length+1),
-            durationSeconds:6
-          },workingScene))) :
+          Promise.resolve(JSON.stringify(workingScene)) :
           window.studioDirectorBridge.makeProposal(instruction,
             'studio_scenes_draft', true,
             {projectId:storyId,projectTitle:story.title,sceneOrder:order});
@@ -4814,18 +4734,17 @@
           if (!drafts.length)
             throw new Error('Director returned no usable Scene fields.\\nRaw response:\\n' + raw);
           var missingPrompt = drafts.some(function (item) {return !item.prompt.trim();});
+          var missingDuration = drafts.some(function (item) {
+            return item.durationSeconds === undefined;
+          });
           var invalidDuration = drafts.some(function (item) {
             return item.durationSeconds !== undefined &&
-              (!Number.isFinite(Number(item.durationSeconds)) ||
+              (!Number.isInteger(Number(item.durationSeconds)) ||
               Number(item.durationSeconds) < 4 || Number(item.durationSeconds) > 15);
           });
           var draft = {scenes:drafts,rationale:typeof fields.rationale === 'string' ? fields.rationale : ''};
-          // The author's explicit duration is a WebCap request parameter,
-          // not optional model metadata that may silently default to six.
-          var authorDuration = studioMentionedDuration(launch.authorRequest || launch.instruction);
-          var requestedDuration = studioRequestedDuration(launch.authorRequest || launch.instruction);
-          // Requested duration guides authoring; the editable draft preserves
-          // what the model actually returned instead of fabricating metadata.
+          // The author's requested timing belongs in the actual authored Scene.
+          // A missing duration stays editable instead of silently becoming six seconds.
           // Preserve the existing one-Scene working draft contract. Multi-Scene
           // records belong to the multi-Scene review, not a singleton cache.
           if (drafts.length === 1) {
@@ -4838,8 +4757,8 @@
           }
           // A missing Prompt retains an editable partial draft without
           // attempting to persist an empty Scene.
-          if (drafts.length !== 1 || missingPrompt || invalidDuration || !launch.directSave ||
-              (authorDuration !== null && requestedDuration === null)) {
+          if (drafts.length !== 1 || missingPrompt || missingDuration ||
+              invalidDuration || !launch.directSave) {
             var priorReview = state.studioScenesProposal;
             if (priorReview && Number.isInteger(priorReview.sourceMessageIndex)) {
               rememberStudioScenesReview();
@@ -4854,22 +4773,17 @@
             showStudioScenesReview();
             studioActionStatus(missingPrompt
               ? 'Scene fields retained. Complete the missing H3 Prompt in Review before saving.'
-              : invalidDuration
+              : missingDuration || invalidDuration
                 ? 'Scene duration needs review. Authored fields retained; nothing saved.'
-                : authorDuration !== null && requestedDuration === null
-                  ? 'Requested ' + authorDuration + 's is outside the supported 4–15s range. Draft retained for review; nothing saved.'
-                  : drafts.length + ' authored Scene' + (drafts.length === 1 ? '' : 's') + ' ready for review. Nothing has been saved.',
-              authorDuration !== null && requestedDuration === null);
+                : drafts.length + ' authored Scene' + (drafts.length === 1 ? '' : 's') +
+                  ' ready for review. Nothing has been saved.',
+              missingDuration || invalidDuration);
             return {review:true};
           }
           var scene = draft.scenes[0];
           if (!scene || typeof scene.prompt !== 'string' || !scene.prompt.trim())
             throw new Error('Director returned no usable Scene Prompt.');
           var validDuration = Number(scene.durationSeconds);
-          // No explicit duration: the existing six-second WebCap default is
-          // valid. Explicit unsupported durations never reach this save.
-          if (!Number.isFinite(validDuration) || validDuration < 4 || validDuration > 15)
-            validDuration = 6;
           var creation = {
             title:String(scene.title || '').trim() || 'Scene ' + (order.length + 1),
             prompt:scene.prompt, durationSeconds:validDuration
@@ -4945,25 +4859,22 @@
           throw new Error('Selected Scene is no longer available in its saved Project.');
         var original = story.scenes[sceneId];
         var workingScene = state.studioWorkingDraft.scenes[sceneId];
-        var applyExisting = studioRequestAppliesPreparedMaterial(
-          launch.authorRequest || launch.instruction);
-        if (workingScene && (state.studioWorkingDraft.sourceRequest ===
-            String(launch.authorRequest || launch.instruction) || applyExisting)) {
+        var applyExisting = state.studioWorkingDraft.sourceRequest ===
+          String(launch.authorRequest || launch.instruction);
+        if (workingScene && applyExisting) {
           var pendingChanges = {};
           fields.forEach(function (field) {
             if (Object.prototype.hasOwnProperty.call(workingScene,field))
               pendingChanges[field] = workingScene[field];
           });
           if (Object.keys(pendingChanges).length) {
-            var originalDuration = studioMentionedDuration(launch.authorRequest || launch.instruction);
-            var requestedDuration = studioRequestedDuration(launch.authorRequest || launch.instruction);
-            if (wantsDuration && originalDuration !== null && requestedDuration === null) {
-              studioActionStatus('Requested ' + originalDuration +
-                's is outside the supported 4–15s range. Draft retained; nothing saved.',true);
+            // A duration requested through an explicit Write must be supplied
+            // as a real, supported field before WebCap can save a timed revision.
+            if (wantsDuration && (!Number.isInteger(pendingChanges.durationSeconds) ||
+                pendingChanges.durationSeconds < 4 || pendingChanges.durationSeconds > 15)) {
+              studioActionStatus('Scene timing is missing or unsupported. Draft retained for review; nothing saved.',true);
               return {review:true};
             }
-            if (wantsDuration && requestedDuration !== null)
-              pendingChanges.durationSeconds = requestedDuration;
             var prompt = Object.prototype.hasOwnProperty.call(pendingChanges,'prompt') ?
               pendingChanges.prompt : null;
             delete pendingChanges.prompt;
@@ -4978,39 +4889,16 @@
               });
           }
         }
-        // A literal title-only edit is a saved field change, not a creative
-        // prompting task. Use the same scoped/conflict-checked Scene save.
-        var literal = /\b(?:rename|set|change)\b[^\n]{0,80}\b(?:to|as)\s+["'“]([^"'”]+)["'”]\s*[.!]?\s*$/i.exec(
-          String(launch.authorRequest || launch.instruction));
-        if (fields.length === 1 && wantsTitle && literal) {
-          var title = literal[1].trim();
-          if (title === String(original.title || '').trim()) {
-            studioActionStatus('Scene title is unchanged.',false);
-            return null;
-          }
-          return window.studioDirectorWorkbench.applyScenePrompt(story,sceneId,null,{title:title})
-            .then(function (result) {
-              studioActionStatus('Scene ' + (story.sceneOrder.indexOf(sceneId)+1) +
-                ' title saved.',false);
-              return result;
-            });
-        }
-        var authorRequest = String(launch.authorRequest || launch.instruction);
         // Explicitly launching revision of this saved Scene authorizes its baseline.
         var context = window.studioDirectorWorkbench.sceneRead(story,sceneId).payload;
         var instruction = JSON.stringify({
-          task:'Revise the requested fields of this one existing Scene using the agreed instruction. ' +
-            (wantsPrompt ? 'Return a complete replacement H3 prompt. ' : '') +
-            'Return one JSON object containing the requestedFields below. ' +
-            'Preserve unaffected details, align prompt timing with the saved/requested duration, and keep other Scene fields unchanged.',
-          sceneId:sceneId, instruction:launch.instruction,
-          authorRequest:launch.authorRequest || launch.instruction,
-          requestedDurationSeconds:studioRequestedDuration(launch.authorRequest || launch.instruction),
+          task:'Revise the requested fields of this Scene in the author\'s direction. ' +
+            'When changing creative content, return the complete replacement H3 Prompt. ' +
+            'Preserve all unaffected details and the established timing. ' +
+            'Return the requested field values in one JSON object.',
+          authorDirection:launch.authorRequest || launch.instruction,
           requestedFields:requestedFields,
-          responseExample:Object.assign(wantsPrompt ? {prompt:'complete replacement H3 prompt'} : {},
-            wantsTitle ? {title:'complete new title'} : {},
-            wantsDuration ? {durationSeconds:12} : {}),
-          savedContext:context,
+          savedScene:context,
           unsavedWorkingFields:workingScene || {}
         });
         state.pending = false;
@@ -5026,15 +4914,13 @@
             if (!proposed || typeof proposed !== 'object' || Array.isArray(proposed))
               throw new Error('Director returned no usable Scene fields.\nRaw response:\n' + raw);
             var extras = {}, missing = [];
-            var duration = studioRequestedDuration(launch.authorRequest || launch.instruction);
             if (wantsTitle) {
               if (typeof proposed.title === 'string' && proposed.title.trim())
                 extras.title = proposed.title.trim();
               else missing.push('title');
             }
             if (wantsDuration) {
-              if (duration !== null) extras.durationSeconds = duration;
-              else if (Number.isInteger(proposed.durationSeconds) &&
+              if (Number.isInteger(proposed.durationSeconds) &&
                   proposed.durationSeconds >= 4 && proposed.durationSeconds <= 15)
                 extras.durationSeconds = proposed.durationSeconds;
               else missing.push('duration');
@@ -5055,6 +4941,10 @@
               throw new Error('Director did not return the requested Scene prompt. Other usable requested fields are retained for review.\nRaw response:\n' + raw);
             if (!Object.keys(authored).length)
               throw new Error('Director did not return the requested Scene fields.\nRaw response:\n' + raw);
+            if (wantsDuration && !Object.hasOwn(extras,'durationSeconds')) {
+              studioActionStatus('Scene timing is missing or unsupported. Authored fields retained for review; nothing saved.',true);
+              return {review:true};
+            }
             if ((prompt === null || prompt.trim() === String(original.prompt || '').trim()) &&
                 (!Object.hasOwn(extras,'title') || extras.title === String(original.title || '').trim()) &&
                 (!Object.hasOwn(extras,'durationSeconds') || extras.durationSeconds === original.durationSeconds)) {
@@ -5062,12 +4952,6 @@
               studioActionStatus('Director returned no Scene changes.' +
                 (missing.length ? ' Requested ' + missing.join(' and ') + ' not supplied.' : ''),!!missing.length);
               return null;
-            }
-            var authorDuration = studioMentionedDuration(launch.authorRequest || launch.instruction);
-            if (wantsDuration && authorDuration !== null && duration === null) {
-              studioActionStatus('Requested ' + authorDuration +
-                's is outside the supported 4–15s range. Full prompt retained; nothing saved.',true);
-              return {review:true};
             }
             state.pending = true;
             syncControls();

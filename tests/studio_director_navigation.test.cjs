@@ -100,7 +100,7 @@ test('selected Project/Scene never supplies saved facts before author approval',
   const history=[{role:'user',content:'Draft a new Project unrelated to the open Project.'}];
   const outbound=await h.scope.studioDirectorChatRequestMessages(history,h.scope.studioDirectorSelectedScene());
   assert.equal(outbound[1].content,history[0].content);
-  assert.match(outbound[0].content,/NO SAVED PROJECT\/SCENE CONTEXT APPROVED/);
+  assert.match(outbound[0].content,/No saved Project or Scene reference was supplied/);
   assert.doesNotMatch(outbound[0].content,/Mara walks toward the rover|Naturalistic moonlight|Red suit/);
   assert.equal(h.requests.filter(url=>url.startsWith('/fs/storyboard?story=')).length,0);
 });

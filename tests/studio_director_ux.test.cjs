@@ -119,8 +119,8 @@ test('identical Invariants are not preselected because JSON properties arrived i
 });
 
 test('ordinary discussion asks for concise new decisions while complete creative fields remain complete',()=>{
-  assert.match(chat,/Ordinary discussion needs no invented action or save claim/);
-  assert.match(chat,/WebCap owns review, destination and persistence/);
+  assert.match(chat,/STUDIO CONVERSATION DELIVERY: Respond naturally/);
+  assert.match(chat,/These are drafts; WebCap decides where and whether to save them/);
 });
 
 test('compact Director replies keep the exact full text and leave General Chat alone',()=>{
@@ -282,7 +282,7 @@ test('Director conversation preserves actual authored Scene records alongside pr
 
 test('new-Scene authoring preserves returned arrays and independently useful partial drafts',()=>{
   const body=part(chat,'          var records = Array.isArray(fields.scenes) ? fields.scenes : [fields];',
-    "          // The author's explicit duration is a WebCap request parameter,");
+    "          // The author's requested timing belongs in the actual authored Scene.");
   const normalize=vm.runInNewContext('(function(fields,raw){' + body +
     'return {drafts:drafts,missingPrompt:missingPrompt};})');
   const single=normalize({scenes:[{title:'Only',prompt:'One complete H3 Scene',durationSeconds:8}]},'');

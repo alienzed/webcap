@@ -1028,12 +1028,10 @@
           var fields = frozen.fields.filter(function (name) {
             return ['title','prompt','durationSeconds'].includes(name);
           });
-          var literalTitleOnly = /\b(?:rename|set|change)\b[^\n]{0,80}\b(?:to|as)\s+["'“]([^"'”]+)["'”]\s*[.!]?\s*$/i.test(frozen.request);
-          if (!fields.length) fields = literalTitleOnly ? ['title'] : ['prompt'];
-          if (/\b(?:duration|\d+\s*(?:-\s*|\s+)?(?:seconds?|secs?|s)\b)/i.test(frozen.request) &&
-              !fields.includes('durationSeconds')) fields.push('durationSeconds');
-          if (/\b(?:rename|title)\b/i.test(frozen.request) &&
-              !fields.includes('title')) fields.push('title');
+          // Explicit field selection, not wording in the author's request,
+          // determines a scoped Write. Actual conversational drafts have
+          // already supplied their own fields.
+          if (!fields.length) fields = ['prompt'];
           var completed = [], unchanged = [], review = [], failed = [], notAttempted = [], reportingErrors = [];
           function next(i) {
             if (i >= ids.length) {

@@ -6,6 +6,12 @@ not a claim that the implementation is complete. Use
 current gaps, implementation sequence and acceptance checks. Older Director plans
 are historical wherever they conflict with these two documents.
 
+## Vision — the reason for this system
+
+**Studio Director is an imaginative, capable creative partner who understands and elevates the author's vision, contributes meaningful ideas, exercises sound creative judgment, and helps turn that vision into compelling, coherent, producible work.**
+
+Implementations should be judged by whether they make that collaboration more reliable, not by adherence to a particular UI, model schema or orchestration proposal. See the [behavioral audit and phased implementation](studio-director-behavioral-contract.md) for the evidence and scope of the 2026-11-16 guidance simplification.
+
 ## 1. Keep two contracts separate
 
 **WebCap ↔ LLM:** provide a bounded task and its necessary material; receive a

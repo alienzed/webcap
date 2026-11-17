@@ -258,9 +258,9 @@ function openSetCaptionFindReplace(folderPath) {
     dialog = document.createElement('dialog');
     dialog.id = 'prep-set-caption-replace-dialog';
     dialog.className = 'prep-set-caption-replace';
-    dialog.innerHTML = '<form method="dialog" class="prep-set-caption-replace-form">' +
+    dialog.innerHTML = '<form class="prep-set-caption-replace-form">' +
       '<div class="prep-set-caption-replace-heading"><h2>Find &amp; Replace in Set Captions</h2>' +
-      '<button type="submit" aria-label="Close">×</button></div>' +
+      '<button type="button" data-action="close" aria-label="Close">×</button></div>' +
       '<div class="prep-set-caption-replace-folder"></div>' +
       '<label>Find<input name="find" type="text" required autocomplete="off"></label>' +
       '<label>Replace with<input name="replacement" type="text" autocomplete="off"></label>' +
@@ -289,22 +289,27 @@ function openSetCaptionFindReplace(folderPath) {
     var applyButton = dialog.querySelector('[data-action="apply"]');
     var resultEl = dialog.querySelector('.prep-set-caption-replace-result');
     var current = null;
+    var requestVersion = 0;
     function invalidate() {
+      requestVersion++;
       current = null;
       applyButton.disabled = true;
       resultEl.textContent = '';
     }
     findInput.addEventListener('input',invalidate);
     replacementInput.addEventListener('input',invalidate);
+    form.addEventListener('submit',function(event) {event.preventDefault();send(false);});
+    dialog.querySelector('[data-action="close"]').addEventListener('click',function() {dialog.close();});
     function send(apply) {
       var find = findInput.value;
       if (!find) { resultEl.textContent = 'Enter text to find.'; return; }
       var payload = {folder:dialog.dataset.folder,find:find,replace:replacementInput.value};
       if (apply) {
-        if (!current) return;
+        if (!current || current.folder !== payload.folder || current.find !== payload.find || current.replace !== payload.replace) return;
         payload.apply = true;
         payload.signature = current.signature;
       }
+      var thisRequest = ++requestVersion;
       previewButton.disabled = true;
       applyButton.disabled = true;
       resultEl.textContent = apply ? 'Replacing…' : 'Searching…';
@@ -316,22 +321,24 @@ function openSetCaptionFindReplace(folderPath) {
           return data;
         });
       }).then(function(data) {
+        if (thisRequest !== requestVersion) return;
         if (apply) {
           current = null;
           resultEl.textContent = 'Replaced ' + data.occurrences + ' matches in ' + data.files + ' captions.';
           setStatus(resultEl.textContent);
         } else {
-          current = data;
+          current = {signature:data.signature, folder:payload.folder, find:payload.find, replace:payload.replace};
           resultEl.textContent = data.occurrences + ' matches in ' + data.files + ' captions.';
           applyButton.disabled = data.occurrences === 0;
         }
       }).catch(function(err) {
+        if (thisRequest !== requestVersion) return;
         current = null;
         var message = 'Set caption replacement failed: ' + (err && err.message ? err.message : err);
         resultEl.textContent = message;
         setStatus(message);
         console.error(message,err);
-      }).finally(function() { previewButton.disabled = false; });
+      }).finally(function() {if (thisRequest === requestVersion) previewButton.disabled = false;});
     }
     previewButton.addEventListener('click',function() {send(false);});
     applyButton.addEventListener('click',function() {send(true);});

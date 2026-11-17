@@ -217,6 +217,77 @@ test('missing authored Scene duration is reviewable rather than silently default
   assert.match(state.studioScenesProposal.drafts[0].prompt,/Complete H3/);
 });
 
+test('new Scene draft reauthors from fresh Project context when the baseline changed',async()=>{
+  const story={id:'p1',title:'Bookshop',concept:'An evening opening',style:'Warm lamps',
+    invariants:[],sceneOrder:[],scenes:{}};
+  const state={pending:false,jobId:'',studioScenesProposal:null,
+    studioWorkingDraft:{projects:{},scenes:{},newProject:{},newScene:{}}};
+  let calls=0;
+  const scope=vm.createContext({
+    state,studioWorkingFieldChanges,syncControls(){},scheduleSessionSave(){},
+    studioActionStatus(){},showStudioScenesReview(){},
+    window:{flushStudioDirectorStoryEdits:async()=>{},
+      reportConsoleError:()=>assert.fail('A complete Scene draft should be reviewable'),
+      studioDirectorBridge:{isReady:()=>true,readinessMessage:()=>'',makeProposal:async instruction=>{
+        calls++;
+        const payload=JSON.parse(instruction);
+        assert.equal(payload.project.concept,story.concept);
+        return JSON.stringify({
+          title:'Opening',prompt:calls===1?'First authored opening':'Updated authored opening',
+          durationSeconds:8
+        });
+      }}
+    },
+    requestJson:async()=>({story}),Promise,JSON,Number,String,Error,encodeURIComponent
+  });
+  const writer=vm.runInContext('({' + method + '})',scope).writeNewScene;
+  const launch={projectId:'p1',instruction:'Author an opening Scene',authorRequest:'Author an opening Scene'};
+  await writer.call(scope.window.studioDirectorBridge,launch);
+  assert.equal(calls,1);
+  assert.equal(state.studioWorkingDraft.newScene.prompt,'First authored opening');
+  assert.ok(state.studioWorkingDraft.draftOrigins.newScene.baseline);
+  state.studioScenesProposal=null; // Prior review closed; retained editable draft remains.
+  story.concept='The bookshop is under siege instead';
+  await writer.call(scope.window.studioDirectorBridge,launch);
+  assert.equal(calls,2,'a changed Project baseline cannot reuse the original Scene draft');
+  assert.equal(state.studioScenesProposal.drafts[0].prompt,'Updated authored opening');
+});
+
+test('new Scene drafts cannot leak across Projects with identical author requests',async()=>{
+  const first={id:'p1',title:'One',concept:'A library',style:'Amber',
+    invariants:[],sceneOrder:[],scenes:{}};
+  const second={id:'p2',title:'Two',concept:'An ocean crossing',style:'Cold blue',
+    invariants:[],sceneOrder:[],scenes:{}};
+  const state={pending:false,jobId:'',studioScenesProposal:null,
+    studioWorkingDraft:{projects:{},scenes:{},newProject:{},newScene:{}}};
+  let calls=0;
+  const scope=vm.createContext({
+    state,studioWorkingFieldChanges,syncControls(){},scheduleSessionSave(){},
+    studioActionStatus(){},showStudioScenesReview(){},
+    window:{flushStudioDirectorStoryEdits:async()=>{},
+      reportConsoleError:()=>assert.fail('Each Project should receive an independent Scene'),
+      studioDirectorBridge:{isReady:()=>true,readinessMessage:()=>'',makeProposal:async instruction=>{
+        calls++;
+        const payload=JSON.parse(instruction);
+        assert.deepEqual(JSON.parse(JSON.stringify(payload.project.unsavedWorkingFields)),{},
+          'unrelated Project draft is not part of the next authoring request');
+        return JSON.stringify({title:'Arrival',prompt:'A usable Scene in '+payload.project.title,
+          durationSeconds:8});
+      }}
+    },
+    requestJson:async url=>({story:url.includes('p2')?second:first}),
+    Promise,JSON,Number,String,Error,encodeURIComponent
+  });
+  const writer=vm.runInContext('({' + method + '})',scope).writeNewScene;
+  const instruction='Write an arrival Scene';
+  await writer.call(scope.window.studioDirectorBridge,{projectId:'p1',instruction});
+  state.studioScenesProposal=null;
+  await writer.call(scope.window.studioDirectorBridge,{projectId:'p2',instruction});
+  assert.equal(calls,2,'same words across different Projects must not reuse an old draft');
+  assert.equal(state.studioScenesProposal.drafts[0].prompt,'A usable Scene in Two');
+  assert.equal(state.studioWorkingDraft.draftOrigins.newScene.projectId,'p2');
+});
+
 test('actual multi-Scene output is retained even when the request mentioned one', async () => {
   const state={pending:false,jobId:'',studioScenesProposal:null,studioWorkingDraft:{projects:{},scenes:{},newProject:{},newScene:{},sourceRequest:''}};
   const failures=[];

@@ -276,8 +276,8 @@
     el('studio-dw-batch-controls').classList.toggle('hidden', !revise);
     el('studio-dw-write-project').disabled = operation === 'new-project';
     el('studio-dw-write-prepare').textContent = sceneWrite
-      ? (revise ? 'Revise selected Scenes · Save' : 'Create Scene · Review')
-      : (operation === 'new-project' ? 'Create Project · Review' : 'Revise Overview · Review');
+      ? (revise ? 'Revise selected Scenes · Save' : 'Create Scene · Save')
+      : (operation === 'new-project' ? 'Create Project · Save' : 'Revise Overview · Save');
     showWriteContext();
     updateScope();
   }
@@ -466,7 +466,7 @@
       }
       return bridge.writeNewScene({
         projectId:id, instruction:instruction, authorRequest:instruction,
-        forceAuthor:true
+        forceAuthor:true, directSave:true
       });
     }
     if (operation !== 'new-project' && operation !== 'project')

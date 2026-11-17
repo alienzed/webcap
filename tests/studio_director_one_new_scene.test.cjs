@@ -40,8 +40,7 @@ test('one new Scene keeps the selected Project and complete brief through a sing
           assert.equal(operation,'studio_scenes_draft');
           assert.equal(includePromptContract,true);
           const payload=JSON.parse(instruction);
-          assert.equal(payload.instruction,brief);
-          assert.equal(payload.authorRequest,brief);
+          assert.equal(payload.authorDirection,brief);
           assert.equal(payload.project.style,story.style);
           assert.equal(payload.project.existingSceneTitles[0],'Old opening');
           assert.doesNotMatch(instruction,/["']summary["']|["']intent["']/i);

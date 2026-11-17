@@ -122,6 +122,22 @@ test('mixed Project, selected Scene, and new Scene material stays independently 
     'inactive deliverables must keep independent launchers');
 });
 
+test('orphan changes.scene keeps unsupported model-authored timing editable in Review',()=>{
+  const fields=new Function(part(chat,
+    '  function studioWorkingFieldChanges(source, names) {',
+    '  function studioMergeWorkingChanges(changes, target, action, request) {')+
+    'return studioWorkingFieldChanges;')();
+  const route=new Function('studioWorkingFieldChanges',part(chat,
+    '  function studioAuthoredWriteActions(response, instruction, targetScene) {',
+    '  function studioStoredActions(entry) {')+'return studioAuthoredWriteActions;')(fields);
+  const actions=route(parse(JSON.stringify({changes:{scene:{
+    title:'Untimed moment',prompt:'An otherwise usable H3 prompt.',durationSeconds:99
+  }}})),'Create an opening Scene',null);
+  assert.deepEqual(actions.map(a=>a.kind),['create_scene']);
+  assert.equal(actions[0].scenes[0].durationSeconds,99,
+    'invalid authored timing remains in the editable Scene review, not a fabricated default');
+});
+
 test('completing the Scene action leaves the same response Project action available',()=>{
   const sceneAction={kind:'create_scene',actionKey:'primary',
     instruction:'Author the work',request:'Author the work',completed:false};

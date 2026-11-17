@@ -6,6 +6,9 @@
   var timers = new Map();
   var idleMs = 10000;
   var toolbar = null;
+  var diffDialog = null;
+  var diffContent = null;
+  var diffHeading = null;
   var originalPaddingBottom = '';
   var showingPreview = false;
 
@@ -436,6 +439,7 @@
       h && h.versions.length ? (h.index+1) + '/' + h.versions.length : '1/1';
     toolbar.querySelector('[data-rev-prev]').disabled = !h || h.index === 0;
     toolbar.querySelector('[data-rev-next]').disabled = !h || h.index >= h.versions.length-1;
+    toolbar.querySelector('[data-rev-compare]').disabled = !h || h.versions.length < 2;
     position();
   }
 
@@ -485,20 +489,111 @@
     draw();
   }
 
+
+  // Token-level comparison preserves whitespace and never writes to an editor.
+  // Keep the dynamic-programming section bounded for very long prompts.
+  function diffTokens(before, after) {
+    var a = before.match(/\\s+|\\S+/g) || [];
+    var b = after.match(/\\s+|\\S+/g) || [];
+    var start = 0;
+    while (start < a.length && start < b.length && a[start] === b[start]) start++;
+    var endA = a.length, endB = b.length;
+    while (endA > start && endB > start && a[endA-1] === b[endB-1]) {
+      endA--; endB--;
+    }
+    var result = [];
+    function add(kind, value) {
+      if (!value) return;
+      if (result.length && result[result.length-1].kind === kind)
+        result[result.length-1].text += value;
+      else result.push({kind:kind,text:value});
+    }
+    add('same',a.slice(0,start).join(''));
+    var left = a.slice(start,endA), right = b.slice(start,endB);
+    if (left.length * right.length > 120000) {
+      add('removed',left.join(''));
+      add('added',right.join(''));
+    } else {
+      var rows = new Array(left.length+1);
+      for (var i=0; i<=left.length; i++) rows[i] = new Uint32Array(right.length+1);
+      for (var i=left.length-1; i>=0; i--) {
+        for (var j=right.length-1; j>=0; j--) {
+          rows[i][j] = left[i] === right[j] ? rows[i+1][j+1]+1 :
+            Math.max(rows[i+1][j],rows[i][j+1]);
+        }
+      }
+      var i=0,j=0;
+      while (i<left.length || j<right.length) {
+        if (i<left.length && j<right.length && left[i] === right[j]) {
+          add('same',left[i++]);j++;
+        } else if (i<left.length && (j===right.length || rows[i+1][j]>=rows[i][j+1])) {
+          add('removed',left[i++]);
+        } else {
+          add('added',right[j++]);
+        }
+      }
+    }
+    add('same',a.slice(endA).join(''));
+    return result;
+  }
+
+  function compareRevisions() {
+    if (!active) return;
+    if (identity(active.field) !== active.key) attach(active.field);
+    // Preserve any unsaved current text as a normal revision before comparing.
+    if (!showingPreview) {
+      clearTimeout(timers.get(active.key));
+      timers.delete(active.key);
+      capture(active.key,active.field.value);
+      active.live = active.field.value;
+      draw();
+    }
+    var h = histories.get(active.key);
+    if (!h || h.versions.length < 2) return;
+    var latest = h.versions.length-1;
+    var older = h.index === latest ? latest-1 : h.index;
+    diffHeading.textContent = 'Revision ' + (older+1) + ' → ' + (latest+1);
+    diffContent.replaceChildren();
+    diffTokens(h.versions[older],h.versions[latest]).forEach(function (part) {
+      var node = part.kind === 'same' ? document.createTextNode(part.text) :
+        document.createElement(part.kind === 'removed' ? 'del' : 'ins');
+      if (part.kind !== 'same') node.textContent = part.text;
+      diffContent.appendChild(node);
+    });
+    diffDialog.showModal();
+  }
+
   function initialize() {
     var style = document.createElement('style');
     style.textContent = '.webcap-revision-tools{position:fixed;box-sizing:border-box;display:none;align-items:center;gap:1px;z-index:99999;height:23px;padding:0 3px;pointer-events:none;background:var(--panel, Canvas);color:var(--text, CanvasText);border:0;border-radius:3px;box-shadow:none;font:12px sans-serif}.webcap-revision-tools button{border:0;background:transparent;color:inherit;cursor:pointer;pointer-events:auto;min-width:17px;min-height:20px;padding:0}.webcap-revision-tools button:disabled{opacity:.3;cursor:default}.webcap-revision-tools span{min-width:27px;text-align:center;font-variant-numeric:tabular-nums}';
+    style.textContent += '.webcap-revision-diff{box-sizing:border-box;width:min(820px,calc(100vw - 32px));max-height:80vh;padding:20px;border:1px solid var(--border,#777);border-radius:10px;background:var(--panel,Canvas);color:var(--text,CanvasText);box-shadow:0 15px 45px #0005}.webcap-revision-diff::backdrop{background:#0009}.webcap-revision-diff-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px}.webcap-revision-diff-head h2{font-size:18px;margin:0}.webcap-revision-diff-head button{font:inherit;cursor:pointer;background:transparent;color:inherit;border:1px solid var(--border,#777);border-radius:5px;padding:5px 10px}.webcap-revision-diff-body{font:15px/1.55 ui-monospace,SFMono-Regular,Consolas,monospace;white-space:pre-wrap;overflow-wrap:anywhere;max-height:60vh;overflow:auto}.webcap-revision-diff-body del{background:#bb38383b;color:inherit;text-decoration:line-through}.webcap-revision-diff-body ins{background:#32a05b45;color:inherit;text-decoration:none}';
     document.head.appendChild(style);
     toolbar = document.createElement('div');
     toolbar.className = 'webcap-revision-tools';
     toolbar.setAttribute('aria-label','Textarea revisions');
-    toolbar.innerHTML = '<button type="button" data-rev-prev aria-label="Previous revision" title="Previous revision">&#x2039;</button><span data-rev-count>1/1</span><button type="button" data-rev-next aria-label="Next revision" title="Next revision">&#x203a;</button>';
+    toolbar.innerHTML = '<button type="button" data-rev-prev aria-label="Previous revision" title="Previous revision">&#x2039;</button><button type="button" data-rev-compare aria-label="Compare revisions" title="Compare revisions">&#x21ba;</button><button type="button" data-rev-next aria-label="Next revision" title="Next revision">&#x203a;</button><span data-rev-count>1/1</span>';
     document.body.appendChild(toolbar);
+    diffDialog = document.createElement('dialog');
+    diffDialog.className = 'webcap-revision-diff';
+    var headingRow = document.createElement('div');
+    headingRow.className = 'webcap-revision-diff-head';
+    diffHeading = document.createElement('h2');
+    var closeButton = document.createElement('button');
+    closeButton.type = 'button';
+    closeButton.textContent = 'Close';
+    closeButton.addEventListener('click',function () { diffDialog.close(); });
+    headingRow.append(diffHeading,closeButton);
+    diffContent = document.createElement('div');
+    diffContent.className = 'webcap-revision-diff-body';
+    diffDialog.append(headingRow,diffContent);
+    document.body.appendChild(diffDialog);
     toolbar.addEventListener('pointerdown',function (event) {event.preventDefault();});
     toolbar.addEventListener('click',function (event) {
       var prev = event.target.closest('[data-rev-prev]');
       var next = event.target.closest('[data-rev-next]');
-      if (prev || next) step(prev ? -1 : 1);
+      var compare = event.target.closest('[data-rev-compare]');
+      if (compare) compareRevisions();
+      else if (prev || next) step(prev ? -1 : 1);
     });
     document.addEventListener('focusin',function (event) {
       if (event.target.matches && event.target.matches('textarea') && enabledFor(event.target)) attach(event.target);

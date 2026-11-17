@@ -21,7 +21,8 @@ test('selected Scene list uses one bounded call per Scene, preserving successes 
   const scope=vm.createContext({
     readinessStale:false,recommendations:{writeHint:'scenes',writeInstruction:'Keep the lamp unlit.',writeFields:['prompt']},
     recommendedWriteFields:()=>['prompt'],manualSceneInstruction:()=> 'Keep the lamp unlit.',
-    el:id=>id==='studio-dw-batch-scenes'?{querySelectorAll:()=>ids.map(value=>({value}))}:{disabled:false},
+    el:id=>id==='studio-dw-batch-scenes'?{querySelectorAll:()=>ids.map(value=>({value}))}:
+      id==='studio-dw-batch-fields'?{querySelectorAll:()=>[{value:'prompt'}]}:{disabled:false},
     status:(...args)=>statuses.push(args),window:{flushStudioDirectorStoryEdits:async()=>{},studioDirectorBridge:{
       messages:()=>[{role:'user',content:'Keep the lamp unlit.'}],selectWriteProject:()=>{},
       writeSelectedScene:async launch=>{
@@ -57,7 +58,8 @@ test('selected Scene list stops on a shared runtime failure',async()=>{
   const scope=vm.createContext({
     readinessStale:false,recommendations:{writeHint:'scenes',writeInstruction:'Quiet the ending.',writeFields:[]},
     recommendedWriteFields:()=>[],manualSceneInstruction:()=> 'Quiet the ending.',
-    el:id=>id==='studio-dw-batch-scenes'?{querySelectorAll:()=>ids.map(value=>({value}))}:{disabled:false},
+    el:id=>id==='studio-dw-batch-scenes'?{querySelectorAll:()=>ids.map(value=>({value}))}:
+      id==='studio-dw-batch-fields'?{querySelectorAll:()=>[{value:'prompt'}]}:{disabled:false},
     status:()=>{},window:{flushStudioDirectorStoryEdits:async()=>{},studioDirectorBridge:{
       messages:()=>[{role:'user',content:'Quiet the ending.'}],selectWriteProject:()=>{},
       writeSelectedScene:async launch=>{calls.push(launch.sceneId);throw new Error('Failed to fetch');}

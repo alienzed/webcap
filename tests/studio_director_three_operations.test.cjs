@@ -96,6 +96,39 @@ test('explicit Scene writes rely on authored duration values rather than guessin
   assert.match(chat,/missingDuration/);
   assert.doesNotMatch(chat,/draft\.scenes\[0\]\.durationSeconds = requestedDuration/);
 });
+test('manual multi-Scene Prompt Write does not classify the author request with prose regexes',async()=>{
+  const source=part(workbench,'  function prepareBatchScenes(storyId) {',
+    '  function renderBatchReview() {');
+  assert.doesNotMatch(source,/\.test\(instruction\)|\.match\(instruction\)/,
+    'WebCap must not inspect creative prose to choose fields');
+  const story={id:'p1',title:'Film',sceneOrder:['s1'],scenes:{s1:{
+    id:'s1',title:'Platform',prompt:'A porter waits.',durationSeconds:8
+  }}};
+  const launches=[],statuses=[],prepare={disabled:false};
+  const el=id=>id==='studio-dw-batch-scenes'
+    ? {querySelectorAll:()=>[{value:'s1'}]}
+    : id==='studio-dw-write-prepare' ? prepare : null;
+  const bridge={
+    selectWriteProject(id){assert.equal(id,'p1');},
+    async writeSelectedScene(launch){launches.push(launch);return {story};}
+  };
+  const revise=new Function('el','manualSceneInstruction','status','window',
+    'loadStory','storyName','Promise',source+'return prepareBatchScenes;')(
+      el,()=> 'Make the ending quieter, without changing other Scene details.',
+      message=>statuses.push(message),
+      {flushStudioDirectorStoryEdits:async()=>{},studioDirectorBridge:bridge},
+      async()=>story,story=>story.title,Promise);
+  const result=await revise('p1');
+  assert.equal(launches.length,1);
+  assert.deepEqual(launches[0].fields,['prompt'],
+    'the batch operation has one known creative target: the H3 Prompt');
+  assert.equal(launches[0].forceAuthor,true,'repeated manual Write should author fresh material');
+  assert.equal(launches[0].sceneId,'s1');
+  assert.equal(result.saved.length,1);
+  assert.equal(prepare.disabled,false);
+  assert.ok(statuses.some(message=>/Saved 1/.test(message)));
+});
+
 function harness() {
   const suggestions = {children:[],replaceChildren(){this.children=[];},
     appendChild(value){this.children.push(value);}};
@@ -177,6 +210,72 @@ test('authored conversation Scene records open Review directly and remain reopen
   await flush();
   assert.deepEqual(h.requests.map(row=>row[0]),['review-authored','reopen-review']);
   assert.equal(h.requests[1][1],'p1');
+});
+
+test('Project drafts retain separate origins and reject stale saved baselines',async()=>{
+  const source=part(chat,'  function prepareStudioBrief(options) {','  function applyStudioBrief() {');
+  const projectFields=new Function(part(chat,
+    '  function studioWorkingFieldChanges(source, names) {',
+    '  function studioMergeWorkingChanges(changes, target, action, request) {')+
+    'return studioWorkingFieldChanges;')();
+  const projects={
+    p1:{id:'p1',title:'First',concept:'Quiet arrival',style:'Blue dusk',invariants:[]},
+    p2:{id:'p2',title:'Second',concept:'Busy market',style:'Warm noon',invariants:[]}
+  };
+  const state={
+    pending:false,jobId:'',modelId:'model',activeMode:'storyboard',sessionReady:true,
+    modeMessages:{storyboard:[{role:'user',content:'Improve the atmosphere'}]},
+    studioBriefProposal:null,
+    studioWorkingDraft:{projects:{},scenes:{},newProject:{},newScene:{}}
+  };
+  let modelCalls=0,reviews=0;
+  const seenBaselines=[];
+  const prepare=new Function('state','window','studioAttachedStoryId','studioActionStatus',
+    'startProgress','syncControls','requestJson','studioDirectorRequestMessages',
+    'waitForJob','trackTransientLlmJob','parseStudioBriefDraft','studioWorkingFieldChanges',
+    'scheduleSessionSave','finishProgress','showStudioBriefReview','Promise',
+    source+'return prepareStudioBrief;')(
+      state,{flushStudioDirectorStoryEdits:async()=>{},
+        studioDirectorWorkbench:{showSentWriteContext(){}},
+        reportConsoleError:(_name,error)=>assert.fail(error.message)},
+      ()=>'',
+      ()=>{},()=>{},()=>{},
+      async(url,options)=>{
+        if(url.startsWith('/fs/storyboard?story='))return {story:projects[url.split('=')[1]]};
+        if(url==='/fs/director/chat'){
+          modelCalls++;
+          const payload=JSON.parse(JSON.parse(options.body).messages[0].content);
+          seenBaselines.push(payload.project.style);
+          return {job:{jobId:'job'+modelCalls}};
+        }
+        throw new Error('Unexpected URL '+url);
+      },
+      async messages=>messages,
+      async ()=>({result:{text:JSON.stringify({style:'Improved atmosphere '+modelCalls})}}),
+      ()=>{},raw=>JSON.parse(raw),projectFields,()=>{},()=>{},()=>{reviews++;},Promise);
+  const tick=()=>new Promise(resolve=>setImmediate(resolve));
+  prepare({storyId:'p1',instruction:'Improve the atmosphere'});
+  await tick();
+  assert.equal(modelCalls,1);
+  assert.equal(state.studioWorkingDraft.draftOrigins.projects.p1.request,'Improve the atmosphere');
+  state.studioBriefProposal=null;
+  prepare({storyId:'p2',instruction:'Improve the atmosphere'});
+  await tick();
+  assert.equal(modelCalls,2,'identical wording for a different Project must author separately');
+  assert.deepEqual(Object.keys(state.studioWorkingDraft.draftOrigins.projects).sort(),['p1','p2']);
+  state.studioBriefProposal=null;
+  prepare({storyId:'p1',instruction:'Improve the atmosphere'});
+  await tick();
+  assert.equal(modelCalls,2,'an intervening different Project must not evict a reusable first draft');
+  assert.equal(state.studioBriefProposal.draft.style,'Improved atmosphere 1');
+  projects.p1.style='New authoritative moonlight';
+  state.studioBriefProposal=null;
+  prepare({storyId:'p1',instruction:'Improve the atmosphere'});
+  await tick();
+  assert.equal(modelCalls,3,'a changed authoritative Project baseline invalidates retained material');
+  assert.deepEqual(seenBaselines,['Blue dusk','Warm noon','New authoritative moonlight']);
+  assert.equal(state.studioBriefProposal.expected.style,'New authoritative moonlight');
+  assert.equal(reviews,4);
 });
 
 test('structured Director changes merge by complete field, without overwriting unrelated drafts', () => {
@@ -261,7 +360,9 @@ test('an unbound Scene revision never becomes a new-Scene creation draft', () =>
 
 test('draft reuse is based on exact authored provenance, not linguistic heuristics',()=>{
   assert.doesNotMatch(chat,/function studioRequestAppliesPreparedMaterial\(/);
-  assert.match(chat,/state\.studioWorkingDraft\.sourceRequest ===/);
+  assert.match(chat,/draftOrigin\.projectId === storyId/);
+  assert.match(chat,/draftOrigin\.baseline === baseline/);
+  assert.match(chat,/draftOrigins\.newScene/);
   assert.match(chat,/sourceMessageIndex/);
   assert.doesNotMatch(workbench,/literalTitleOnly/);
 });

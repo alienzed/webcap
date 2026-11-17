@@ -32,6 +32,15 @@ The separate live suites also test Overview revisions, Develop Scenes, UI-based 
 
 The creative-partner journey now checks that Director can discuss contrasting staging ideas, make a recommendation and turn that choice into an authored, eight-second Scene in the next turn. The existing-Scene journey checks two successive real-model rewrites against the *freshly saved* baseline, verifies that the original creative detail survives the follow-up, and proves that only the chosen Scene is saved. The scoped required-prompt job remains a separate schema-contract test rather than pretending to be a browser conversation.
 
+The creative-partner test additionally attaches `creative-quality-review-required`
+with the actual recommendation and resulting H3 Scene. Evaluate five substantive
+criteria: distinct staging alternatives, a reasoned recommendation, follow-through
+on the recommended staging, H3 producibility, and respect for the author's vision.
+Each criterion is pass/fail/not-observable, supported by a concrete excerpt
+from the two raw model turns. Do not score these from keyword overlap or character
+counts. Aggregate independently reviewed first-attempt outcomes over repeated,
+representative tasks and selected models before claiming the 90% target.
+
 Creative quality is partly qualitative: raw requests and outputs are retained for inspection. The assertions cover objectively observable authoring and persistence; **a pass does not establish the 90% first-attempt usability goal**, which requires multiple representative trials and an explicit assessment rubric. A model that returns only promises or omits a required Scene prompt must fail the live test; a WebCap routing/save defect must remain separately diagnosable.
 
 ## Evidence and limitations

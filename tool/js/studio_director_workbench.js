@@ -459,7 +459,8 @@
         return;
       }
       return bridge.writeNewScene({
-        projectId:id, instruction:instruction, authorRequest:instruction
+        projectId:id, instruction:instruction, authorRequest:instruction,
+        forceAuthor:true
       });
     }
     if (operation !== 'new-project' && operation !== 'project')
@@ -585,10 +586,10 @@
       status('Enter a revision instruction before launch.', true);
       return Promise.resolve();
     }
+    // The existing batch authoring action revises Scene Prompts.
+    // Additional title and duration drafts arrive as actual structured
+    // content in conversation; never infer field mutations from prose.
     var fields = ['prompt'];
-    if (/\b(?:rename|title)\b/i.test(instruction)) fields.push('title');
-    if (/\b(?:duration|\d+\s*(?:-\s*|\s+)?(?:seconds?|secs?|s)\b)/i.test(instruction))
-      fields.push('durationSeconds');
     var button = el('studio-dw-write-prepare');
     button.disabled = true;
     var outcome = {saved:[],unchanged:[],review:[],failed:[],notAttempted:[],reportingErrors:[]};
@@ -600,7 +601,8 @@
       var label = 'Scene ' + position + ' · ' + (story.scenes[id].title || id);
       status('Writing ' + label + ' (' + current + '/' + ids.length + ') · Save on completion',false,true);
       return window.studioDirectorBridge.writeSelectedScene({
-        projectId:storyId,sceneId:id,instruction:instruction,fields:fields.slice()
+        projectId:storyId,sceneId:id,instruction:instruction,fields:fields.slice(),
+        forceAuthor:true
       }).then(function (result) {
         if (result === null) outcome.unchanged.push(label);
         else if (result && result.review) outcome.review.push(label);

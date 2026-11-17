@@ -110,7 +110,7 @@ test('explicit Writes stay task-scoped without duplicating application instructi
   assert.match(writing[0].content,/H3 production reference/);
   assert.doesNotMatch(writing[0].content,/CURRENT PROJECT NAVIGATION|CURRENT WEBCAP CAPABILITIES|STUDIO WORKBENCH STATE/);
   assert.equal(writing[1].content,'Revise Scene','the specific authoring task stays in the current user request');
-  assert.match(source,/studioDirectorRequestMessages\(\(state\.modeMessages\.storyboard \|\| \[\]\)\.concat/);
+  assert.match(source,/studioDirectorRequestMessages\(\(state\.modeMessages && state\.modeMessages\.storyboard \|\| \[\]\)\.concat/);
 });
 
 test('explicit Project Write request paths receive full conversation and focused task guidance',()=>{

@@ -126,7 +126,7 @@ test('ordinary discussion stays conversational with no automatic structured draf
 
 test('compact Director replies keep the exact full text and leave General Chat alone',()=>{
   const code=part(chat,"      if (studioReply && visibleText.length > 1200) {",
-    "      if (message.role === 'user' && (message.content.indexOf('[WEBCAP EXPLICIT READ]')");
+    "      if (message.role === 'user' && message.content.indexOf('[WEBCAP APPLIED FIELD VALUES]')");
   const node=()=>({children:[],append(...children){this.children.push(...children);},replaceChildren(...children){this.children=children;}});
   const message={role:'assistant',content:'A useful opening recommendation.\n\n'+('Complete creative details with "quotes" and line breaks.\n').repeat(40)};
   const body=node();

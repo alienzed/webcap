@@ -961,3 +961,80 @@ button.epoch-finder-ranking-row:hover,button.epoch-finder-ranking-row:focus-visi
 #run-analytics-screen .run-lab-evaluation-actions{display:flex;gap:12px;flex-wrap:wrap}
 #run-analytics-screen .run-lab-evaluation-actions button{width:auto;min-height:48px;padding:10px 18px;font-size:18px;font-weight:700}
 @media(max-width:700px){#run-analytics-screen .run-lab-evaluation{padding:18px}#run-analytics-screen .run-lab-evaluation-actions{width:100%}}
+
+/* Prompt Tests form polish: match Generations' editor and settings without changing workflow layout. */
+#test-generations-body .test-generations-controls {
+  padding: 16px;
+  gap: 14px;
+}
+#test-generations-body .test-generations-next-run {
+  gap: 14px;
+}
+#test-generations-body .test-generations-prompt {
+  gap: 9px;
+}
+#test-generations-body .test-generations-next-run .training-run-option:not(.test-generations-prompt) {
+  gap: 6px;
+}
+#test-generations-body .test-generations-prompt-heading > span,
+#test-generations-body .test-generations-next-run .training-run-option > span {
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+#test-generations-body #test-generations-prompt {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 170px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--panel-soft);
+  color: var(--text);
+  font-size: 15px;
+  line-height: 1.55;
+  resize: vertical;
+}
+#test-generations-body .test-generations-next-run :is(.test-generations-settings-grid, .test-generations-prompt) :is(select, input:not([type="checkbox"])) {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  padding: 8px 7px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel-soft);
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.4;
+}
+#test-generations-body .test-generations-settings-grid {
+  gap: 10px 12px;
+}
+#test-generations-body .test-generations-setup-options {
+  gap: 12px;
+}
+#test-generations-body .test-generations-prompt-heading .review-captions-btn {
+  width: auto;
+  min-height: 32px;
+  padding: 5px 8px;
+  font-size: 14px;
+}
+#test-generations-body .test-generations-prompt-heading .test-generations-wildcard-wand {
+  width: 32px;
+  min-width: 32px;
+  padding: 5px;
+}
+#test-generations-body .test-generations-launch-options label,
+#test-generations-body .test-generations-launch-options input[type="number"] {
+  font-size: 14px;
+}
+#test-generations-body .test-generations-launch-options input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+}
+#test-generations-body .test-generations-launch-options #test-generations-run-btn {
+  min-height: 42px;
+  font-size: 14px;
+}

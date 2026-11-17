@@ -216,8 +216,6 @@ def test_story_scene_lifecycle(storyboard_fs):
     story, first = storyboard_store.add_scene(story["id"], {
         "title": "Arrival",
         "summary": "A car reaches the hotel.",
-        "entryState": "The road is empty in heavy rain.",
-        "exitState": "The car has stopped beneath the hotel awning.",
         "prompt": "A car arrives.",
         "durationSeconds": 8,
         "seedMode": "fixed",
@@ -677,8 +675,6 @@ def test_apply_developed_plan_replaces_active_scenes_and_preserves_old_takes(sto
             {
                 "title": "Desk",
                 "summary": "She approaches the empty desk.",
-                "entryState": "Inside the lobby.",
-                "exitState": "At the desk.",
                 "prompt": "A dense visual sequence follows her across the lobby to the desk.",
                 "suggestedDurationSeconds": 12,
             },
@@ -802,8 +798,6 @@ def test_restore_scene_clears_replanning_removal_metadata(storyboard_fs):
             {
                 "title": "New One",
                 "summary": "First.",
-                "entryState": "Start one.",
-                "exitState": "End one.",
                 "prompt": "Prompt one.",
                 "sharedContextRefs": ["mara", "coat", "lobby"],
                 "suggestedDurationSeconds": 6,
@@ -812,8 +806,6 @@ def test_restore_scene_clears_replanning_removal_metadata(storyboard_fs):
             {
                 "title": "New Two",
                 "summary": "Second.",
-                "entryState": "Start two.",
-                "exitState": "End two.",
                 "prompt": "Prompt two.",
                 "sharedContextRefs": ["mara", "coat", "lobby"],
                 "suggestedDurationSeconds": 6,
@@ -1066,8 +1058,6 @@ def test_scene_repair_applies_sparse_fields_and_restores_across_sessions(storybo
     story, first = storyboard_store.add_scene(story["id"], {
         "title": "Funeral",
         "summary": "Elena stands at the grave.",
-        "entryState": "At the cemetery.",
-        "exitState": "Mourners begin to leave.",
         "prompt": "OLD PROMPT",
     })
     story, second = storyboard_store.add_scene(story["id"], {
@@ -1081,8 +1071,6 @@ def test_scene_repair_applies_sparse_fields_and_restores_across_sessions(storybo
         "scenes": {
             first["id"]: {
                 "title": first["title"],
-                "entryState": first["entryState"],
-                "exitState": first["exitState"],
                 "prompt": first["prompt"],
                 "durationSeconds": first["durationSeconds"],
                 "referenceRoles": [],
@@ -1090,8 +1078,6 @@ def test_scene_repair_applies_sparse_fields_and_restores_across_sessions(storybo
             },
             second["id"]: {
                 "title": second["title"],
-                "entryState": second["entryState"],
-                "exitState": second["exitState"],
                 "prompt": second["prompt"],
                 "durationSeconds": second["durationSeconds"],
                 "referenceRoles": [],
@@ -1144,8 +1130,6 @@ def test_scene_repair_refuses_to_overwrite_a_field_edited_while_director_was_run
         "scenes": {
             scene["id"]: {
                 "title": scene["title"],
-                "entryState": "",
-                "exitState": "",
                 "prompt": "Original prompt.",
                 "durationSeconds": scene["durationSeconds"],
                 "referenceRoles": [],
@@ -1176,8 +1160,6 @@ def test_scene_repair_refuses_stale_whole_story_context(storyboard_fs):
         "scenes": {
             scene["id"]: {
                 "title": scene["title"],
-                "entryState": scene["entryState"],
-                "exitState": scene["exitState"],
                 "prompt": scene["prompt"],
                 "durationSeconds": scene["durationSeconds"],
                 "referenceRoles": [],
@@ -1217,8 +1199,6 @@ def test_scene_repair_rejects_duplicate_scene_patch(storyboard_fs):
         "scenes": {
             scene["id"]: {
                 "title": scene["title"],
-                "entryState": scene["entryState"],
-                "exitState": scene["exitState"],
                 "prompt": scene["prompt"],
                 "durationSeconds": scene["durationSeconds"],
                 "referenceRoles": [],
@@ -1256,8 +1236,6 @@ def test_scene_repair_rejects_malformed_patch_instead_of_skipping_it(storyboard_
         "scenes": {
             scene["id"]: {
                 "title": scene["title"],
-                "entryState": scene["entryState"],
-                "exitState": scene["exitState"],
                 "prompt": scene["prompt"],
                 "durationSeconds": scene["durationSeconds"],
                 "referenceRoles": [],

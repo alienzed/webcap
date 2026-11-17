@@ -596,7 +596,12 @@
         if (!result || !result.story || !result.scene)
           throw new Error('Scene save returned no authoritative saved result.');
         var savedFields = {};
-        Object.keys(changes).forEach(function (key) {savedFields[key] = result.scene[key];});
+        Object.keys(changes).forEach(function (key) {
+          savedFields[key] = result.scene[key];
+          window.webcapTextareaRevisions.recordFieldChange(
+            'project:' + story.id + ':scene:' + sceneId + ':field:' + key,
+            expected[key], result.scene[key]);
+        });
         return window.refreshStudioDirectorStoryIfOpen(story.id).then(function () {
           return window.studioDirectorBridge.recordApplied('scene.director.revision',result.story,{
             sceneId:sceneId, savedFields:savedFields

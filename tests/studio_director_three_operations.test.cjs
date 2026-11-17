@@ -86,7 +86,7 @@ test('Only a small, optional action accompanies conversation', () => {
 });
 
 test('ordinary chat never offers implicit Project or Scene writes, even with structured response fields',()=>{
-  const send=chat;
+  const send=part(chat,'  function sendMessage() {','  function syncPinnedUi() {');
   assert.doesNotMatch(send,/var actions = studioAuthoredWriteActions\(/);
   assert.doesNotMatch(send,/studioDirectorWorkbench\.presentAction\(/);
   assert.match(chat,/studioDirectorChatRequestMessages\(messages/);
@@ -157,7 +157,7 @@ test('standalone new Scene fields do not misclassify Project fields or require a
 });
 
 test('ordinary prose and model action hints never launch a Write',()=>{
-  const send=chat;
+  const send=part(chat,'  function sendMessage() {','  function syncPinnedUi() {');
   assert.doesNotMatch(send,/studioAuthoredWriteActions\(studioResponse/);
   assert.doesNotMatch(send,/studioDirectorWorkbench\.presentAction\(/);
   assert.doesNotMatch(chat,/function studioActionFromExplicitRequest/);

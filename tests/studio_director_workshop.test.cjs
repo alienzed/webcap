@@ -113,17 +113,15 @@ test('explicit Writes stay task-scoped without duplicating application instructi
   assert.match(source,/studioDirectorRequestMessages\(\(state\.modeMessages\.storyboard \|\| \[\]\)\.concat/);
 });
 
-test('active Project draft paths use explicit Write guidance', () => {
-  for (const operation of ['studio_project_draft', 'studio_brief_draft']) {
-    const marker = "showSentWriteContext('" + operation + "', messages)";
-    const index = source.indexOf(marker);
-    assert.ok(index !== -1, 'Missing draft operation: ' + operation);
-    const before = source.slice(Math.max(0, index - 3500), index);
-    assert.match(before,/studioDirectorRequestMessages\(/,
-      'Explicit Write guidance not used by ' + operation);
+test('explicit Project Write request paths receive full conversation and focused task guidance',()=>{
+  const create=part('  function prepareStudioProject(options) {','  // The reviewed Project is saved before any Scene authoring.');
+  const revise=part('  function prepareStudioBrief(options) {','  function applyStudioBrief() {');
+  for(const path of [create,revise]) {
+    assert.match(path,/studioDirectorRequestMessages\(/);
+    assert.match(path,/state\.modeMessages && state\.modeMessages\.storyboard/);
+    assert.doesNotMatch(path,/showStudioProjectReview\(|showStudioBriefReview\(/);
   }
 });
-
 
 test('old single and sequence authoring machinery is disconnected; current Draft panel uses canonical writers',()=>{
   assert.doesNotMatch(source,/function prepareStudioScenes\(|function prepareStudioSceneDraft\(|studio_scene_sequence_draft|studio_scene_draft/);

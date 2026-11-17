@@ -106,6 +106,10 @@ def replace_set_caption_text(folder: str, search: str, replacement: str, preview
     caption_names = sorted({_caption_name_for_media(name) for name in media})
     matches = []
     signature = hashlib.sha256()
+    signature.update(search.encode('utf-8'))
+    signature.update(b'\\0')
+    signature.update(replacement.encode('utf-8'))
+    signature.update(b'\\0')
     for name in caption_names:
         path = folder_path / name
         signature.update(name.encode("utf-8"))

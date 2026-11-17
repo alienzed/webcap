@@ -64,9 +64,9 @@ function sceneFixture(raw = '{"prompt":"Mara finishes quietly under a still came
     'window.studioDirectorWorkbench={approvedReadPayload:readPayload,'+sceneRead+','+applyScenePrompt+'};',context);
   vm.runInContext(section(director,'  function studioApprovedReadSources() {',
     '  function studioDirectorChatRequestMessages('),context);
-  vm.runInContext(section(director,'  function studioRequestAppliesPreparedMaterial(request) {',
-    '  function studioWorkingFieldChanges(source, names) {')+
-    section(director,'  function studioRequestedDuration(instruction) {',
+  vm.runInContext(section(director,'  function studioWorkingFieldChanges(source, names) {',
+    '  function studioMergeWorkingChanges(changes, target, action, request) {')+
+    section(director,'  // Only actual persisted field values clear a retained draft.',
     '  window.studioDirectorBridge = {'),context);
   context.scheduleSessionSave=()=>{events.push(['draft-scheduled']);};
   const method=section(director,'    writeSelectedScene: function (launch) {',
@@ -90,11 +90,11 @@ test('one click runs one Scene writer with fresh saved context, saves a full pro
   assert.equal(model[0][2],'studio_scene_field_draft');
   assert.equal(model[0][3],true);
   const request=JSON.parse(model[0][1]);
-  assert.equal(request.sceneId,'s1');
-  assert.equal(request.instruction,'Make the ending quieter.');
-  assert.equal(request.savedContext.fields.find(row=>row.id==='scene:s1:prompt').value,
+  assert.equal(request.sceneId,undefined,'WebCap, not the model, owns the target ID');
+  assert.equal(request.authorDirection,'Make the ending quieter.');
+  assert.equal(request.savedScene.fields.find(row=>row.id==='scene:s1:prompt').value,
     'Mara shouts at the rover.');
-  assert.equal(request.savedContext.fields.find(row=>row.id==='scene:s1:durationSeconds').value,12);
+  assert.equal(request.savedScene.fields.find(row=>row.id==='scene:s1:durationSeconds').value,12);
   assert.doesNotMatch(JSON.stringify(request),/Dormant legacy Intent/);
   assert.equal(h.events.filter(row=>row[0]==='save').length,1);
   const save=h.events.find(row=>row[0]==='save')[1];
@@ -125,8 +125,8 @@ test('second revision reads updated saved prompt, not the earlier conversation b
   const models=h.events.filter(row=>row[0]==='model');
   assert.equal(models.length,2);
   const second=JSON.parse(models[1][1]);
-  assert.equal(second.instruction,'Let the silence hang at the end.');
-  assert.equal(second.savedContext.fields.find(row=>row.id==='scene:s1:prompt').value,
+  assert.equal(second.authorDirection,'Let the silence hang at the end.');
+  assert.equal(second.savedScene.fields.find(row=>row.id==='scene:s1:prompt').value,
     'Mara finishes quietly under a still camera.');
   assert.equal(h.saved.scenes.s1.prompt,'The rover stops; the silence hangs.');
 });
@@ -227,13 +227,15 @@ test('save failure never produces a saved receipt; post-save refresh failure rep
 });
 
 
-test('a quoted title-only revision saves the title without another model call or prompt overwrite',async()=>{
-  const h=sceneFixture();
+test('title-only revision takes the model-authored title without parsing user wording',async()=>{
+  const h=sceneFixture('{"title":"Quiet Ending"}');
   const result=await h.window.studioDirectorBridge.writeSelectedScene({
-    ...h.launch, instruction:'Rename Scene 1 to "Quiet Ending".',
-    authorRequest:'Rename Scene 1 to "Quiet Ending".', fields:['title']
+    ...h.launch,instruction:'Rename Scene 1 to "Quiet Ending".',
+    authorRequest:'Rename Scene 1 to "Quiet Ending".',fields:['title']
   });
-  assert.equal(h.events.filter(row=>row[0]==='model').length,0);
+  assert.equal(h.events.filter(row=>row[0]==='model').length,1);
+  const call=h.events.find(row=>row[0]==='model');
+  assert.deepEqual(JSON.parse(JSON.stringify(call[5])),['title']);
   const save=h.events.find(row=>row[0]==='save')[1];
   assert.deepEqual(JSON.parse(JSON.stringify(save.changes)),{title:'Quiet Ending'});
   assert.deepEqual(JSON.parse(JSON.stringify(save.expected)),{title:'Opening'});
@@ -242,22 +244,22 @@ test('a quoted title-only revision saves the title without another model call or
   assert.ok(result.story);
 });
 
-test('requested duration is taken from author words even when optional model action omits it',async()=>{
-  const h=sceneFixture('{"prompt":"Twelve seconds of the keeper closing the book","durationSeconds":6}');
+test('requested Scene duration comes from actual model-authored fields, not parsed prose',async()=>{
+  const h=sceneFixture('{"prompt":"Fourteen seconds of the keeper closing the book","durationSeconds":14}');
   await h.window.studioDirectorBridge.writeSelectedScene({
-    ...h.launch, instruction:'Quieter ending',authorRequest:'Make this Scene 14 seconds, with a quieter ending.',
+    ...h.launch,instruction:'Quieter ending',authorRequest:'Make this Scene 14 seconds, with a quieter ending.',
     fields:['prompt','durationSeconds']
   });
   const saved=h.events.find(row=>row[0]==='save')[1];
   assert.equal(saved.changes.durationSeconds,14);
   assert.equal(h.saved.scenes.s1.durationSeconds,14);
   const request=JSON.parse(h.events.find(row=>row[0]==='model')[1]);
-  assert.equal(request.requestedDurationSeconds,14);
-  assert.match(request.authorRequest,/14 seconds/);
+  assert.equal(request.requestedDurationSeconds,undefined);
+  assert.match(request.authorDirection,/14 seconds/);
 });
 
 test('unsupported explicit duration preserves a complete Scene draft without saving a mismatch',async()=>{
-  const h=sceneFixture('{"prompt":"Twenty-second complete scene","durationSeconds":12}');
+  const h=sceneFixture('{"prompt":"Twenty-second complete scene","durationSeconds":20}');
   const result=await h.window.studioDirectorBridge.writeSelectedScene({
     ...h.launch,instruction:'Quiet scene',authorRequest:'Make it 20 seconds.',
     fields:['prompt','durationSeconds']
@@ -274,7 +276,7 @@ test('unsupported explicit duration preserves a complete Scene draft without sav
 test('already authored structured Scene prompt applies with exact requested duration, no repeat model call',async()=>{
   const h=sceneFixture();
   const request='Make Scene 1 last 14 seconds with a quieter ending.';
-  h.state.studioWorkingDraft.scenes.s1={prompt:'Complete quiet H3 replacement'};
+  h.state.studioWorkingDraft.scenes.s1={prompt:'Complete quiet H3 replacement',durationSeconds:14};
   h.state.studioWorkingDraft.sourceRequest=request;
   await h.window.studioDirectorBridge.writeSelectedScene({
     ...h.launch,authorRequest:request,instruction:'Quieter ending',
@@ -314,6 +316,6 @@ test('a subsequent Scene rewrite sees the unsaved working prompt, not just the o
   assert.ok(call,'the distinct new change should still author once');
   const input=JSON.parse(call[1]);
   assert.equal(input.unsavedWorkingFields.prompt,'The previous unsaved quiet H3 draft.');
-  assert.equal(input.savedContext.fields.find(field=>field.id==='scene:s1:prompt').value,
+  assert.equal(input.savedScene.fields.find(field=>field.id==='scene:s1:prompt').value,
     'Mara shouts at the rover.');
 });

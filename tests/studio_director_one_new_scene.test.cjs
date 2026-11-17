@@ -253,6 +253,35 @@ test('new Scene draft reauthors from fresh Project context when the baseline cha
   assert.equal(state.studioScenesProposal.drafts[0].prompt,'Updated authored opening');
 });
 
+test('manual new Scene launch authors again even when the Project and request are unchanged',async()=>{
+  const story={id:'p1',title:'Bookshop',concept:'An opening',style:'Warm lamps',
+    invariants:[],sceneOrder:[],scenes:{}};
+  const state={pending:false,jobId:'',studioScenesProposal:null,
+    studioWorkingDraft:{projects:{},scenes:{},newProject:{},newScene:{}}};
+  let calls=0;
+  const scope=vm.createContext({
+    state,studioWorkingFieldChanges,syncControls(){},scheduleSessionSave(){},
+    studioActionStatus(){},showStudioScenesReview(){},
+    window:{flushStudioDirectorStoryEdits:async()=>{},
+      reportConsoleError:()=>assert.fail('Both results are valid authored Scenes'),
+      studioDirectorBridge:{isReady:()=>true,readinessMessage:()=>'',makeProposal:async()=>{
+        calls++;
+        return JSON.stringify({title:'Opening',prompt:'Fresh authored prompt '+calls,
+          durationSeconds:8});
+      }}
+    },
+    requestJson:async()=>({story}),Promise,JSON,Number,String,Error,encodeURIComponent
+  });
+  const writer=vm.runInContext('({' + method + '})',scope).writeNewScene;
+  const launch={projectId:'p1',instruction:'Author the opening',forceAuthor:true};
+  await writer.call(scope.window.studioDirectorBridge,launch);
+  assert.equal(calls,1);
+  state.studioScenesProposal=null;
+  await writer.call(scope.window.studioDirectorBridge,launch);
+  assert.equal(calls,2,'a second explicit authoring request is not a request to reuse cached output');
+  assert.equal(state.studioScenesProposal.drafts[0].prompt,'Fresh authored prompt 2');
+});
+
 test('new Scene drafts cannot leak across Projects with identical author requests',async()=>{
   const first={id:'p1',title:'One',concept:'A library',style:'Amber',
     invariants:[],sceneOrder:[],scenes:{}};

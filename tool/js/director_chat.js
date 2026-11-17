@@ -1317,37 +1317,6 @@
   // Project fields, edits to a selected Scene, and new Scene records are
   // independent creative deliverables, even when one model turn returns all
   // of them. UI targeting and saving remain explicit WebCap operations.
-  function studioAuthoredWriteActions(response, instruction, targetScene) {
-    if (!response) return [];
-    var actions = [];
-    var project = response.changes &&
-      studioWorkingFieldChanges(response.changes.project,['title','concept','style','invariants']);
-    if (project && Object.keys(project).length)
-      actions.push({kind:'create_project',instruction:instruction,
-        fields:Object.keys(project),authoredFields:project});
-    var scene = response.changes &&
-      studioWorkingFieldChanges(response.changes.scene,['title','prompt','durationSeconds']);
-    if (scene && Object.keys(scene).length && targetScene)
-      actions.push({kind:'write_scenes',instruction:instruction,
-        fields:Object.keys(scene),authoredFields:scene});
-    var scenes = Array.isArray(response.scenes) ? response.scenes.slice() : [];
-    if (!targetScene && !scenes.length && response.changes &&
-        response.changes.scene && typeof response.changes.scene === 'object' &&
-        !Array.isArray(response.changes.scene)) {
-      // A new Scene's unsupported timing remains visible for editing; it
-      // must not silently become the six-second fallback in Review.
-      var singleScene = {};
-      ['title','prompt','durationSeconds'].forEach(function (field) {
-        if (Object.prototype.hasOwnProperty.call(response.changes.scene,field))
-          singleScene[field] = response.changes.scene[field];
-      });
-      if (Object.keys(singleScene).length) scenes = [singleScene];
-    }
-    if (scenes.length)
-      actions.push({kind:'create_scene',instruction:instruction,fields:[],scenes:scenes});
-    return actions;
-  }
-
   function studioStoredActions(entry) {
     return entry ? [entry.writeAction].concat(entry.otherWriteActions || []).filter(Boolean) : [];
   }
@@ -3212,43 +3181,6 @@
       }
     });
     return result;
-  }
-
-  function studioMergeWorkingChanges(changes, target, action, request) {
-    if (!changes || typeof changes !== 'object' || Array.isArray(changes)) return false;
-    var working = state.studioWorkingDraft;
-    var changed = false;
-    var project = studioWorkingFieldChanges(changes.project,
-      ['title','concept','style','invariants']);
-    var scene = studioWorkingFieldChanges(changes.scene,
-      ['title','prompt','durationSeconds']);
-    if (Object.keys(project).length) {
-      var projectKey = action && action.kind === 'write_project'
-        ? String(target && target.projectId || '') : '';
-      if (projectKey) {
-        working.projects[projectKey] = Object.assign({},working.projects[projectKey],project);
-        changed = true;
-      } else if (action && action.kind === 'create_project') {
-        working.newProject = Object.assign({},working.newProject,project);
-        changed = true;
-      }
-    }
-    if (Object.keys(scene).length) {
-      var sceneKey = action && action.kind === 'write_scenes'
-        ? String(target && target.sceneId || '') : '';
-      if (sceneKey) {
-        working.scenes[sceneKey] = Object.assign({},working.scenes[sceneKey],scene);
-        changed = true;
-      } else if (action && action.kind === 'create_scene') {
-        working.newScene = Object.assign({},working.newScene,scene);
-        changed = true;
-      }
-    }
-    if (changed) {
-      working.sourceRequest = String(request || '');
-      state.sessionDirty.storyboard = true;
-    }
-    return changed;
   }
 
   function parseStudioChatResponse(raw) {

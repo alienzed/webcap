@@ -11,7 +11,11 @@ function editor(value, sceneId) {
     id: '', name: '', dataset: {sceneField:'prompt'}, value,
     disabled:false, readOnly:false, isConnected:true, style:{paddingRight:'',paddingTop:'',paddingBottom:''},
     parentElement:null,
-    matches(s) { return s === 'textarea' || (s.includes('textarea[data-scene-field="prompt"]') && this.dataset.sceneField === 'prompt'); },
+    matches(s) { return s === 'textarea' || s.split(',').some(part => {
+      part = part.trim();
+      return (this.id && part === '#' + this.id) ||
+        (part.includes('textarea[data-scene-field="prompt"]') && this.dataset.sceneField === 'prompt');
+    }); },
     getAttribute:()=>null,
     getBoundingClientRect:()=>({top:100,left:100,right:600,bottom:250,width:500}),
     closest:s => {

@@ -1979,7 +1979,11 @@
     }).then(function (job) {
       var raw = String(job.result && job.result.text || '');
       state.lastStudioIoRaw = raw;
-      var proposal = parseStudioProjectDraft(raw);
+      var proposal;
+      try { proposal = JSON.parse(raw); }
+      catch (error) { throw new Error('Director returned invalid Project JSON: '+error.message+'\\nRaw response:\\n'+raw); }
+      if (!proposal || typeof proposal !== 'object' || Array.isArray(proposal))
+        throw new Error('Director returned no Project object.\\nRaw response:\\n'+raw);
       return requestJson('/fs/studio/director/project-create', {
         method:'POST',headers:{'Content-Type':'application/json'},
         body:JSON.stringify({proposal:{
@@ -2226,30 +2230,17 @@
 
 
   function parseStudioBriefDraft(raw) {
-    var value = String(raw || '').trim(), fence = String.fromCharCode(96).repeat(3);
-    if (value.startsWith(fence) && value.endsWith(fence)) {
-      var newline = value.indexOf('\n');
-      if (newline >= 0) value = value.slice(newline + 1, -3).trim();
-    }
     var result;
-    try { result = JSON.parse(value); }
-    catch (error) { throw new Error('Director returned invalid Project JSON: ' + error.message +
-      '\nRaw Director response:\n' + String(raw || '')); }
-    if (!result || typeof result !== 'object' || Array.isArray(result))
-      throw new Error('Director returned no Project field replacements.');
-    var fields = studioWorkingFieldChanges(result,['title','concept','style','invariants']);
-    if (Array.isArray(fields.invariants)) {
-      var kinds = ['character','location','visual','world','sound','custom'];
-      if (fields.invariants.length > 30 || fields.invariants.some(function (item) {
-        return !item || typeof item !== 'object' || Array.isArray(item) ||
-          !kinds.includes(item.kind) || typeof item.title !== 'string' ||
-          typeof item.text !== 'string';
-      })) delete fields.invariants; // Keep the original list; other fields survive.
+    try { result = JSON.parse(String(raw || '')); }
+    catch(error) {
+      throw new Error('Director returned invalid Project JSON: '+error.message+
+        '\\nRaw response:\\n'+String(raw || ''));
     }
-    if (!Object.keys(fields).length)
-      throw new Error('Director returned no usable Project field values.\nRaw response:\n' + String(raw || ''));
-    fields.rationale = typeof result.rationale === 'string' ? result.rationale : '';
-    return fields;
+    if (!result || typeof result !== 'object' || Array.isArray(result))
+      throw new Error('Director returned no Project field object.\\nRaw response:\\n'+raw);
+    // Do not silently reinterpret or discard field values. The save endpoint
+    // determines which values can be stored in the selected Project fields.
+    return result;
   }
 
   // A bounded, editable-review-only word comparison. No source text is rewritten.
@@ -4631,8 +4622,6 @@
       });
     },
     writeNewScene: function (launch) {
-      if (state.studioScenesProposal && !Number.isInteger(state.studioScenesProposal.sourceMessageIndex))
-        return Promise.reject(new Error('Finish the independent Scene review before authoring another.'));
       var newSceneOrigin = state.studioWorkingDraft.draftOrigins &&
         state.studioWorkingDraft.draftOrigins.newScene;
       var prepared = launch && !launch.forceAuthor && newSceneOrigin &&

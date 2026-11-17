@@ -2247,6 +2247,12 @@
                     </label>
                     <label id="studio-dw-write-instruction-row" class="hidden" for="studio-dw-write-instruction">Instruction<textarea id="studio-dw-write-instruction" rows="4" placeholder="Describe what the selected Scenes should change or what the new Scene should contain."></textarea></label>
                     <div id="studio-dw-batch-controls" class="hidden">
+                      <div id="studio-dw-batch-fields" class="studio-dw-batch-fields" role="group" aria-label="Scene fields to revise">
+                        <span>Fields</span>
+                        <label><input type="checkbox" value="prompt" checked>Prompt</label>
+                        <label><input type="checkbox" value="title">Title</label>
+                        <label><input type="checkbox" value="durationSeconds">Duration</label>
+                      </div>
                       <div class="studio-dw-scene-select-actions"><button id="studio-dw-scenes-select-all" type="button">Select all</button><button id="studio-dw-scenes-select-none" type="button">Deselect all</button></div>
                       <div id="studio-dw-batch-scenes" class="studio-dw-scene-list"></div>
                     </div>

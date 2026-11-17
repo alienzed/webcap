@@ -131,3 +131,14 @@ The example above is **not** a verbatim runtime prompt. The shorter implemented 
 ### Release evidence still needed
 
 For one configured representative model, run the cumulative real-browser flows and the focused existing-Scene rewrite test with actual saved prompt approval. Collect the outbound context, raw returned material, displayed draft, target and authoritative saved values. Repeat a small representative prompt set multiple times before claiming any reliability rate. A failure to return useful creative material is **model adherence**; a failure to retain or correctly save returned material is **WebCap correctness**. Do not conceal either with retries, defaults, or weaker tests.
+
+
+## Follow-up audit corrections — 2026-11-16
+
+The audit of the merged guidance and test work identified three concrete follow-ups, implemented without a new model workflow:
+
+- **Explicit batch Scene fields.** The manual "Revise selected Scenes" UI now defaults to Prompt and lets the author explicitly choose Title and/or Duration. The selected fields become operation parameters; WebCap no longer scans the author's prose. A title-only change need not author or save a new H3 Prompt. An H3 writing reference is attached to the *scoped writer* only when Prompt is selected.
+- **Per-draft provenance.** New Project, existing Project, existing Scene, and new Scene drafts retain their own source request and relevant saved baseline. Reuse requires the same source and unchanged authoritative creative material; another target cannot overwrite the matching provenance. Only fields actually delivered under that provenance are eligible for automatic reuse. Earlier unmarked drafts remain available for explicit Review but cannot silently qualify for reuse just because their words match.
+- **Honest creative evaluation.** The real-model conversation test retains both the creative recommendation and actual authored Scene for independent review under five qualitative criteria, alongside deterministic field/target/persistence assertions. A green controlled CI suite alone does not demonstrate the Director vision or 90% first-attempt creative success.
+
+**Boundary retained:** Ordinary conversation can author H3 Scenes without an explicit mode switch. Its standing H3 reference therefore remains available; suppressing it based on keyword detection would reintroduce forbidden prose routing, while adding an extraction call would introduce unproven complexity. Further just-in-time specialization of ordinary conversation should be justified by a controlled real-model comparison, not inferred from prompt length alone.

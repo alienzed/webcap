@@ -1314,6 +1314,30 @@
     return String(content || '').replace(/^\s*RECEIVED:\s*(?:project\.\w+|scene:[\w-]+:\w+)(?:[ \t]*,[ \t]*(?:project\.\w+|scene:[\w-]+:\w+))*[ \t]*[.;]?[ \t]*(?:\r?\n)?/i, '').trim();
   }
 
+  // Project fields, edits to a selected Scene, and new Scene records are
+  // independent creative deliverables, even when one model turn returns all
+  // of them. UI targeting and saving remain explicit WebCap operations.
+  function studioAuthoredWriteActions(response, instruction, targetScene) {
+    if (!response) return [];
+    var actions = [];
+    var project = response.changes &&
+      studioWorkingFieldChanges(response.changes.project,['title','concept','style','invariants']);
+    if (project && Object.keys(project).length)
+      actions.push({kind:'create_project',instruction:instruction,
+        fields:Object.keys(project),authoredFields:project});
+    var scene = response.changes &&
+      studioWorkingFieldChanges(response.changes.scene,['title','prompt','durationSeconds']);
+    if (scene && Object.keys(scene).length && targetScene)
+      actions.push({kind:'write_scenes',instruction:instruction,
+        fields:Object.keys(scene),authoredFields:scene});
+    var scenes = Array.isArray(response.scenes) ? response.scenes.slice() : [];
+    if (!targetScene && !scenes.length && scene && Object.keys(scene).length)
+      scenes = [scene];
+    if (scenes.length)
+      actions.push({kind:'create_scene',instruction:instruction,fields:[],scenes:scenes});
+    return actions;
+  }
+
   function studioStoredActions(entry) {
     return entry ? [entry.writeAction].concat(entry.otherWriteActions || []).filter(Boolean) : [];
   }
@@ -3743,43 +3767,12 @@
         } : selectedScene;
         var targetProject = resolvedTarget.projectId ? {projectId:resolvedTarget.projectId} : selectedProject;
         // Authored fields, never action hints or parsed author prose, own review affordances.
-        var nextAction = null, otherActions = [];
-        var projectFields = studioResponse && studioResponse.changes &&
-          studioWorkingFieldChanges(studioResponse.changes.project,
-            ['title','concept','style','invariants']);
-        var sceneFields = studioResponse && studioResponse.changes &&
-          studioWorkingFieldChanges(studioResponse.changes.scene,
-            ['title','prompt','durationSeconds']);
-        if (projectFields && Object.keys(projectFields).length)
-          nextAction = {kind:'create_project',instruction:content,
-            fields:Object.keys(projectFields),authoredFields:projectFields};
-        if (sceneFields && Object.keys(sceneFields).length && targetScene) {
-          if (nextAction) otherActions.push(nextAction);
-          nextAction = {kind:'write_scenes',instruction:content,
-            fields:Object.keys(sceneFields),authoredFields:sceneFields};
-        }
-        // Conversation owns newly authored material in its persisted rawResponse.
-        // Do not copy it into a saved Project or Scene before explicit Apply.
+        // Keep every independently authored result visible and reviewable.
+        var actions = studioAuthoredWriteActions(studioResponse,content,targetScene);
         if (activeChatMode === 'storyboard' && studioResponse && studioResponse.changes)
           window.studioDirectorWorkbench.updateWorkingWrite();
-        var authoredScenes = studioResponse && studioResponse.scenes;
-        if (activeChatMode === 'storyboard' && !targetScene &&
-            (!authoredScenes || !authoredScenes.length) && studioResponse &&
-            studioResponse.changes && studioResponse.changes.scene) {
-          var sourceScene = studioResponse.changes.scene;
-          if (sourceScene && typeof sourceScene === 'object' && !Array.isArray(sourceScene)) {
-            var singleScene = {};
-            ['title','prompt','durationSeconds'].forEach(function (field) {
-              if (Object.prototype.hasOwnProperty.call(sourceScene,field))
-                singleScene[field] = sourceScene[field];
-            });
-            if (Object.keys(singleScene).length) authoredScenes = [singleScene];
-          }
-        }
-        if (activeChatMode === 'storyboard' && authoredScenes && authoredScenes.length) {
-          if (nextAction) otherActions.push(nextAction);
-          nextAction = {kind:'create_scene',instruction:content,fields:[],scenes:authoredScenes};
-        }
+        var nextAction = actions.pop() || null;
+        var otherActions = actions;
         if (nextAction) {
           var assistantIndex = messages.length - 1;
           // Store alternate actions independently rather than overwriting

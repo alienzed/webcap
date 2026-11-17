@@ -1951,6 +1951,9 @@
       return;
     }
     var instruction = String(options && options.instruction || '');
+    var saved = false;
+    state.lastStudioIoRaw = '';
+    state.lastStudioIoError = '';
     var input = {
       task:'Create one Project with its title, Concept, Visual / atmosphere and relevant Invariants. ' +
         'Return complete Project field values in the supplied response format. ' +
@@ -1994,6 +1997,7 @@
     }).then(function (payload) {
       if (!payload.story || !payload.story.id) throw new Error('Project save returned no saved Project.');
       var story = payload.story;
+      saved = true;
       recordStudioOperation('project.create','Created Project: '+(story.title || story.id),story.id,[]);
       studioActionStatus('Project saved: '+(story.title || story.id),false);
       return window.studioDirectorBridge.recordApplied('project.create',story,{
@@ -2001,9 +2005,11 @@
       }).then(function () {return window.refreshStudioDirectorStoryIfOpen(story.id);});
     }).catch(function (error) {
       state.lastStudioIoError = String(error.message || error);
-      studioActionStatus('Project Write failed: '+state.lastStudioIoError,true);
+      studioActionStatus(saved ? 'Project saved, but reporting failed: '+state.lastStudioIoError :
+        'Project Write failed: '+state.lastStudioIoError,true);
       if (typeof window.reportConsoleError === 'function')
         window.reportConsoleError('Studio Project Write',error);
+      throw error;
     }).finally(function () {
       state.pending = false;
       state.jobId = '';
@@ -2407,6 +2413,8 @@
     syncControls();
     studioActionStatus('Writing Project fields…',false);
     var original, saved = false;
+    state.lastStudioIoRaw = '';
+    state.lastStudioIoError = '';
     return window.flushStudioDirectorStoryEdits(storyId).then(function () {
       return requestJson('/fs/storyboard?story='+encodeURIComponent(storyId));
     }).then(function (response) {
@@ -2472,6 +2480,7 @@
         : 'Project Write failed: '+state.lastStudioIoError,true);
       if (typeof window.reportConsoleError === 'function')
         window.reportConsoleError('Studio Project Write',error);
+      throw error;
     }).finally(function () {
       state.pending = false;
       state.jobId = '';

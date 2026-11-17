@@ -140,7 +140,11 @@ test('standalone new Scene fields do not misclassify Project fields or require a
 
 test('ordinary prose never manufactures a Studio write action', () => {
   assert.doesNotMatch(chat,/function studioActionFromExplicitRequest/);
-  assert.match(chat,/var nextAction = null/);
+  assert.match(chat,/var actions = studioAuthoredWriteActions\(studioResponse,content,targetScene\)/);
+  assert.doesNotMatch(part(chat,
+    '  function studioAuthoredWriteActions(response, instruction, targetScene) {',
+    '  function studioStoredActions(entry) {'),/\.test\(instruction\)|\.match\(instruction\)/,
+    'only actual returned fields, never the user prose, determine review actions');
   assert.match(workbench,/Do not offer a creative Review based on an LLM action promise/);
 });
 

@@ -12,24 +12,8 @@ var DEFAULT_PRIMER_TEMPLATE = [
   '{viewpoint| view.}'
 ].join('\n');
 
-var DEFAULT_CAPTION_ASSIST_SEQUENCE = [
-  'subject',
-  'action',
-  'position',
-  'traits',
-  'clothing',
-  'setting / background',
-  'lighting',
-  'framing',
-  'view'
-].join('\n');
-
 function getPreferredCaptionSequence() {
-  var captionAssist = APP_CONFIG && APP_CONFIG.caption_assist && typeof APP_CONFIG.caption_assist === 'object'
-    ? APP_CONFIG.caption_assist
-    : null;
-  if (captionAssist && typeof captionAssist.preferred_sequence === 'string') return captionAssist.preferred_sequence;
-  return DEFAULT_CAPTION_ASSIST_SEQUENCE;
+  return getConfiguredPrimerTemplate();
 }
 
 function getConfiguredPrimerTemplate(requirements) {

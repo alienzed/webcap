@@ -4599,6 +4599,13 @@
             var scene = story.scenes[id];
             return scene && scene.title || '';
           }),
+          // Give an explicit Scene Write all saved Scene continuity; never
+          // assume the most recent Scene is the only relevant reference.
+          existingScenes:order.map(function (id) {
+            var scene = story.scenes[id];
+            return {id:id,title:scene.title,prompt:scene.prompt,
+              durationSeconds:scene.durationSeconds};
+          }),
           previousScene:order.length ? (function () {
             var prior = story.scenes[order[order.length - 1]];
             return {title:prior.title,prompt:prior.prompt,durationSeconds:prior.durationSeconds};
@@ -4656,14 +4663,15 @@
           // Persist each mechanically usable Scene returned by this explicit Write.
           // Do not invent missing prompt text or duration values, or launch Review.
           var valid = drafts.filter(function (item) {
-            return item.prompt.trim() && Number.isInteger(Number(item.durationSeconds)) &&
+            return item.title.trim() && item.prompt.trim() &&
+              Number.isInteger(Number(item.durationSeconds)) &&
               Number(item.durationSeconds)>=4 && Number(item.durationSeconds)<=15;
           });
           var omitted = drafts.length-valid.length;
           if (!valid.length)
             throw new Error('Director returned no Scene records with persistable fields.\\nRaw response:\\n'+raw);
           var creations = valid.map(function (item,index) {
-            return {title:String(item.title || '').trim() || 'Scene '+(order.length+index+1),
+            return {title:item.title.trim(),
               prompt:item.prompt,durationSeconds:Number(item.durationSeconds)};
           });
           state.pending = true;

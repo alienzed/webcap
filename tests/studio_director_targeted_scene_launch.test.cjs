@@ -191,60 +191,43 @@ test('invalid or incomplete model output cannot initiate any save or report succ
   }
 });
 
-test('a missing creative prompt reports failure and retains independently usable requested fields',async()=>{
+test('missing prompt does not block directly saving supplied title and duration',async()=>{
   const h=sceneFixture('{"title":"Quiet ending","durationSeconds":10}');
-  await assert.rejects(h.window.studioDirectorBridge.writeSelectedScene({
+  await h.window.studioDirectorBridge.writeSelectedScene({
     ...h.launch,fields:['prompt','title','durationSeconds']
-  }),/requested Scene prompt/);
-  assert.equal(h.events.filter(row=>row[0]==='save').length,0);
-  assert.equal(h.saved.scenes.s1.prompt,'Mara shouts at the rover.');
-  assert.deepEqual(JSON.parse(JSON.stringify(h.state.studioWorkingDraft.scenes.s1)),
+  });
+  assert.equal(h.events.filter(row=>row[0]==='save').length,1);
+  assert.deepEqual(JSON.parse(JSON.stringify(h.events.find(row=>row[0]==='save')[1].changes)),
     {title:'Quiet ending',durationSeconds:10});
-  assert.ok(h.errors.some(message=>message.includes('requested Scene prompt')));
+  assert.equal(h.saved.scenes.s1.prompt,'Mara shouts at the rover.');
+  assert.ok(h.events.some(row=>row[0]==='status' && row[2] && /prompt not supplied/.test(row[1])));
 });
-
-test('retry after a title-only partial result cannot save it as a prompt-and-title revision',async()=>{
+test('repeat Write always authors anew without reapplying a partial title as a prompt',async()=>{
   const h=sceneFixture('{"title":"Quiet arrival"}');
-  const request='Replace both the Scene prompt and title.';
-  const launch={...h.launch,fields:['prompt','title'],authorRequest:request,
-    instruction:request};
-  await assert.rejects(h.window.studioDirectorBridge.writeSelectedScene(launch),
-    /did not return the requested Scene prompt/);
-  assert.equal(h.events.filter(event=>event[0]==='model').length,1);
-  assert.equal(h.events.filter(event=>event[0]==='save').length,0);
-  assert.equal(h.state.studioWorkingDraft.scenes.s1.title,'Quiet arrival');
-  assert.deepEqual(h.state.studioWorkingDraft.draftOrigins.scenes.s1.fields,['title']);
-  h.changeResponse('{"title":"Quiet arrival"}');
-  await assert.rejects(h.window.studioDirectorBridge.writeSelectedScene(launch),
-    /did not return the requested Scene prompt/);
-  assert.equal(h.events.filter(event=>event[0]==='model').length,2,
-    'repeating the identical request must not silently apply the partial title');
-  assert.equal(h.events.filter(event=>event[0]==='save').length,0);
-  assert.equal(h.saved.scenes.s1.title,'Opening');
+  const launch={...h.launch,fields:['prompt','title'],instruction:'Replace prompt and title'};
+  await h.window.studioDirectorBridge.writeSelectedScene(launch);
+  assert.equal(h.events.filter(row=>row[0]==='save').length,1);
+  assert.equal(h.saved.scenes.s1.title,'Quiet arrival');
+  assert.equal(h.saved.scenes.s1.prompt,'Mara shouts at the rover.');
+  await h.window.studioDirectorBridge.writeSelectedScene(launch);
+  assert.equal(h.events.filter(row=>row[0]==='model').length,2);
+  assert.equal(h.events.filter(row=>row[0]==='save').length,1);
   assert.equal(h.saved.scenes.s1.prompt,'Mara shouts at the rover.');
 });
-
-test('a partial title remains available while the retry authors a complete requested prompt',async()=>{
+test('a subsequent Write uses the saved title and authors the missing prompt afresh',async()=>{
   const h=sceneFixture('{"title":"Quiet arrival"}');
-  const request='Replace both the Scene prompt and title.';
-  const launch={...h.launch,fields:['prompt','title'],authorRequest:request,
-    instruction:request};
-  await assert.rejects(h.window.studioDirectorBridge.writeSelectedScene(launch),
-    /requested Scene prompt/);
+  const launch={...h.launch,fields:['prompt','title'],instruction:'Replace both fields'};
+  await h.window.studioDirectorBridge.writeSelectedScene(launch);
   h.changeResponse('{"title":"Quiet arrival","prompt":"The camera stays wide while Mara settles beside the rover."}');
   await h.window.studioDirectorBridge.writeSelectedScene(launch);
-  assert.equal(h.events.filter(event=>event[0]==='model').length,2);
-  const secondRequest=JSON.parse(h.events.filter(event=>event[0]==='model')[1][1]);
-  assert.ok(!Object.hasOwn(secondRequest,'unsavedWorkingFields'),
-    'an explicit retry uses fresh authoritative values and the conversation, not hidden drafts');
-  const save=h.events.find(event=>event[0]==='save')[1];
-  assert.deepEqual(JSON.parse(JSON.stringify(save.changes)),{
-    prompt:'The camera stays wide while Mara settles beside the rover.',
-    title:'Quiet arrival'
-  });
+  const requests=h.events.filter(row=>row[0]==='model');
+  assert.equal(requests.length,2);
+  const second=JSON.parse(requests[1][1]);
+  assert.ok(!Object.hasOwn(second,'unsavedWorkingFields'));
+  assert.equal(second.savedScene.fields.find(item=>item.id==='scene:s1:title').value,'Quiet arrival');
+  assert.equal(h.saved.scenes.s1.prompt,'The camera stays wide while Mara settles beside the rover.');
   assert.equal(h.saved.scenes.s1.title,'Quiet arrival');
 });
-
 test('a model-authored title-only change requests and saves only the title',async()=>{
   const h=sceneFixture('{"title":"Silent departure","prompt":"Unrequested rewrite"}');
   await h.window.studioDirectorBridge.writeSelectedScene({
@@ -312,21 +295,17 @@ test('requested Scene duration comes from actual model-authored fields, not pars
   assert.match(request.authorDirection,/14 seconds/);
 });
 
-test('unsupported explicit duration preserves a complete Scene draft without saving a mismatch',async()=>{
+test('unsupported duration does not block a valid prompt and never changes saved timing',async()=>{
   const h=sceneFixture('{"prompt":"Twenty-second complete scene","durationSeconds":20}');
-  const result=await h.window.studioDirectorBridge.writeSelectedScene({
+  await h.window.studioDirectorBridge.writeSelectedScene({
     ...h.launch,instruction:'Quiet scene',authorRequest:'Make it 20 seconds.',
     fields:['prompt','durationSeconds']
   });
-  assert.equal(result.review,true);
-  assert.equal(h.events.filter(row=>row[0]==='save').length,0);
-  assert.equal(h.saved.scenes.s1.prompt,'Mara shouts at the rover.');
-  assert.equal(h.state.studioWorkingDraft.scenes.s1.prompt,'Twenty-second complete scene');
-  assert.equal(h.state.modeMessages.storyboard.length,0,
-    'complete writer prompts belong to the structured draft, not another chat turn');
-  assert.ok(h.events.some(row=>row[0]==='status' && /nothing saved/.test(row[1])));
+  assert.equal(h.events.filter(row=>row[0]==='save').length,1);
+  assert.equal(h.saved.scenes.s1.prompt,'Twenty-second complete scene');
+  assert.equal(h.saved.scenes.s1.durationSeconds,12);
+  assert.ok(h.events.some(row=>row[0]==='status' && row[2] && /durationSeconds not supplied/.test(row[1])));
 });
-
 test('an explicit Scene Write reauthors even when a complete earlier draft is cached',async()=>{
   const h=sceneFixture('{"prompt":"Fresh complete quiet H3 replacement","durationSeconds":14}');
   const request='Make Scene 1 last 14 seconds with a quieter ending.';
@@ -343,22 +322,15 @@ test('an explicit Scene Write reauthors even when a complete earlier draft is ca
   assert.equal(h.saved.scenes.s1.durationSeconds,14);
 });
 
-test('missing duration in an otherwise complete draft triggers fresh authoring, not a partial save',async()=>{
+test('a bad duration is excluded while the fresh prompt is saved',async()=>{
   const h=sceneFixture('{"prompt":"Updated scene with no valid timing","durationSeconds":20}');
-  const request='Make Scene 1 last 20 seconds.';
-  h.state.studioWorkingDraft.scenes.s1={prompt:'Complete twenty-second H3 replacement'};
-  authoredSceneOrigin(h,request,['prompt','durationSeconds']);
-  const result=await h.window.studioDirectorBridge.writeSelectedScene({
-    ...h.launch,authorRequest:request,instruction:'Longer ending',
-    fields:['prompt','durationSeconds']
-  });
-  assert.equal(result.review,true);
-  assert.equal(h.events.filter(row=>row[0]==='model').length,1,
-    'an incomplete cached draft cannot bypass the unsupplied duration');
-  assert.equal(h.events.filter(row=>row[0]==='save').length,0);
-  assert.equal(h.saved.scenes.s1.prompt,'Mara shouts at the rover.');
+  const launch={...h.launch,fields:['prompt','durationSeconds'],instruction:'Update Scene'};
+  await h.window.studioDirectorBridge.writeSelectedScene(launch);
+  assert.equal(h.events.filter(row=>row[0]==='model').length,1);
+  assert.equal(h.saved.scenes.s1.prompt,'Updated scene with no valid timing');
+  assert.equal(h.saved.scenes.s1.durationSeconds,12);
+  assert.deepEqual(Object.keys(h.events.find(row=>row[0]==='save')[1].changes),['prompt']);
 });
-
 test('explicitly selected title and duration changes do not rewrite an unselected Scene prompt',async()=>{
   const h=sceneFixture('{"title":"Quiet arrival","durationSeconds":14,"prompt":"Unrequested creative rewrite"}');
   await h.window.studioDirectorBridge.writeSelectedScene({
@@ -408,50 +380,35 @@ test('an explicit repeat Write authors anew even when the prior draft and words 
   assert.equal(h.saved.scenes.s1.prompt,'Fresh complete replacement from the model.');
 });
 
-test('saved Scene baseline changes invalidate a matching retained draft',async()=>{
+test('each explicit Scene Write reads the current saved baseline even after an external edit',async()=>{
   const h=sceneFixture('{"prompt":"First proposed rewrite.","durationSeconds":20}');
-  const request='Make this Scene fourteen seconds with a quieter ending.';
-  const first=await h.window.studioDirectorBridge.writeSelectedScene({
-    ...h.launch,authorRequest:request,fields:['prompt','durationSeconds']
-  });
-  assert.equal(first.review,true);
-  assert.equal(h.events.filter(row=>row[0]==='model').length,1);
-  assert.equal(h.state.studioWorkingDraft.draftOrigins.scenes.s1.request,request);
+  const launch={...h.launch,fields:['prompt','durationSeconds'],instruction:'Quiet ending'};
+  await h.window.studioDirectorBridge.writeSelectedScene(launch);
+  assert.equal(h.saved.scenes.s1.prompt,'First proposed rewrite.');
   h.saved.scenes.s1.prompt='Someone else changed the saved Scene.';
   h.changeResponse('{"prompt":"A fresh rewrite of the externally edited Scene.","durationSeconds":14}');
-  await h.window.studioDirectorBridge.writeSelectedScene({
-    ...h.launch,authorRequest:request,fields:['prompt','durationSeconds']
-  });
-  assert.equal(h.events.filter(row=>row[0]==='model').length,2,
-    'same request is not enough to reuse a draft from a different saved baseline');
-  const saved=h.events.find(row=>row[0]==='save')[1];
-  assert.equal(saved.expected.prompt,'Someone else changed the saved Scene.');
+  await h.window.studioDirectorBridge.writeSelectedScene(launch);
+  const saves=h.events.filter(row=>row[0]==='save');
+  assert.equal(saves.length,2);
+  assert.equal(saves[1][1].expected.prompt,'Someone else changed the saved Scene.');
   assert.equal(h.saved.scenes.s1.prompt,'A fresh rewrite of the externally edited Scene.');
 });
-
-test('a different Scene draft does not evict provenance of the first Scene',async()=>{
-  const h=sceneFixture('{"prompt":"First usable partial rewrite.","durationSeconds":20}');
+test('separate selected Scene Writes never apply another Scene response to the wrong target',async()=>{
+  const h=sceneFixture('{"prompt":"First rewrite.","durationSeconds":20}');
   h.saved.sceneOrder.push('s2');
-  h.saved.scenes.s2={id:'s2',title:'Second',prompt:'A second original.',durationSeconds:8};
-  const firstRequest='Extend both Scenes.';
-  await h.window.studioDirectorBridge.writeSelectedScene({
-    ...h.launch,authorRequest:firstRequest,fields:['prompt','durationSeconds']
-  });
-  h.changeResponse('{"prompt":"Second usable partial rewrite.","durationSeconds":20}');
-  await h.window.studioDirectorBridge.writeSelectedScene({
-    ...h.launch,sceneId:'s2',authorRequest:firstRequest,fields:['prompt','durationSeconds']
-  });
+  h.saved.scenes.s2={id:'s2',title:'Second',prompt:'Second original.',durationSeconds:8};
+  const launch={...h.launch,fields:['prompt','durationSeconds'],instruction:'Rewrite each Scene'};
+  await h.window.studioDirectorBridge.writeSelectedScene(launch);
+  h.changeResponse('{"prompt":"Second rewrite.","durationSeconds":20}');
+  await h.window.studioDirectorBridge.writeSelectedScene({...launch,sceneId:'s2'});
   assert.equal(h.events.filter(row=>row[0]==='model').length,2);
-  assert.deepEqual(Object.keys(h.state.studioWorkingDraft.draftOrigins.scenes).sort(),['s1','s2']);
-  const resumed=await h.window.studioDirectorBridge.writeSelectedScene({
-    ...h.launch,authorRequest:firstRequest,fields:['prompt','durationSeconds']
-  });
-  assert.equal(resumed.review,true);
-  assert.equal(h.events.filter(row=>row[0]==='model').length,3,
-    'the first Scene draft is retained, but its invalid duration cannot satisfy a retry');
-  assert.equal(h.events.filter(row=>row[0]==='save').length,0);
+  const saves=h.events.filter(row=>row[0]==='save').map(row=>row[1]);
+  assert.deepEqual(saves.map(row=>row.sceneId),['s1','s2']);
+  assert.equal(h.saved.scenes.s1.prompt,'First rewrite.');
+  assert.equal(h.saved.scenes.s2.prompt,'Second rewrite.');
+  assert.equal(h.saved.scenes.s1.durationSeconds,12);
+  assert.equal(h.saved.scenes.s2.durationSeconds,8);
 });
-
 test('a subsequent Scene Write uses the saved baseline without hidden unsaved draft injection',async()=>{
   const h=sceneFixture();
   h.state.studioWorkingDraft.scenes.s1={prompt:'The previous unsaved quiet H3 draft.'};

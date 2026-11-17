@@ -270,6 +270,7 @@
   function setOperation() {
     var operation = el('studio-dw-write-operation').value;
     var sceneWrite = operation === 'scene-write';
+    if (sceneWrite) seedManualSceneInstruction();
     var revise = sceneWrite && el('studio-dw-scene-mode').value === 'revise';
     el('studio-dw-scene-mode-row').classList.toggle('hidden', !sceneWrite);
     el('studio-dw-write-instruction-row').classList.toggle('hidden', !sceneWrite);

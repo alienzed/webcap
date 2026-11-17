@@ -16,7 +16,7 @@ test('Revise & Generate remains available in the existing Project utilities', ()
   assert.match(utilities, /id="storyboard-director-tools-btn"/);
   assert.equal((markup.match(/id="storyboard-director-tools-btn"/g) || []).length, 1);
   assert.doesNotMatch(markup, /id="storyboard-director-tools-menu"/);
-  assert.match(storyboard, /el\('storyboard-director-tools-btn'\)\.onclick = openDirectorTools/);
+  assert.match(storyboard, /el\('storyboard-director-tools-btn'\)\.onclick = function \(\) \{\s*window\.openStudioDirectorRevision\(\)/);
 });
 
 test('Revise & Generate retains the existing production operation with explicit destination', () => {

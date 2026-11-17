@@ -62,11 +62,9 @@ def test_action_catalog_excludes_low_value_studio_director_operations():
 
 
 def test_project_coherence_remains_explicit_but_not_advertised_as_creative_action():
-    from tool.server.studio_director import chat_response_schema
     assert "project.coherence.check" not in {action["name"] for action in ACTIONS}
-    assert "action" not in chat_response_schema()["properties"], (
-        "Model output supplies material, not a suggested WebCap action"
-    )
+    assert "chatSystem" in guidance()
+    assert "action" not in guidance()["chatSystem"].lower()
 
 
 def test_studio_guidance_api_is_read_only():
@@ -180,10 +178,10 @@ def test_retired_director_model_operations_are_not_queued(monkeypatch, operation
 
 
 @pytest.mark.parametrize("operation, expected_fields", [
-    ("studio_brief_draft", {"title", "concept", "style", "invariants", "rationale"}),
-    ("studio_project_draft", {"title", "concept", "style", "invariants", "initialScenes", "rationale"}),
-    ("studio_scene_field_draft", {"title", "prompt", "durationSeconds"}),
-    ("studio_scenes_draft", {"scenes", "rationale"}),
+    ("studio_brief_draft", {"title", "concept", "style", "invariants"}),
+    ("studio_project_draft", {"title", "concept", "style", "invariants"}),
+    ("studio_scene_field_draft", {"prompt"}),
+    ("studio_scenes_draft", {"scenes"}),
     ("storyboard_workshop_shots", {"summary", "shots"}),
     ("freeform_chat", None),
     ("studio_chat", None),
@@ -216,8 +214,8 @@ def test_director_chat_route_preserves_all_structured_schemas(monkeypatch, opera
         if operation == "studio_scene_field_draft":
             assert captured["schema"]["required"] == ["prompt"]
             assert captured["schema"]["properties"]["prompt"]["minLength"] == 1
-            assert "title" not in captured["schema"]["required"]
-            assert "durationSeconds" not in captured["schema"]["required"]
+            assert "title" not in captured["schema"]["properties"]
+            assert "durationSeconds" not in captured["schema"]["properties"]
         if operation == "studio_scenes_draft":
             assert captured["schema"]["required"] == ["scenes"]
             assert "prompt" not in captured["schema"]["properties"]
@@ -227,9 +225,9 @@ def test_director_chat_route_preserves_all_structured_schemas(monkeypatch, opera
             assert record["required"] == ["title", "prompt", "durationSeconds"]
             assert record["properties"]["prompt"]["minLength"] == 1
         if operation == "studio_project_draft":
-            assert captured["schema"]["required"] == ["title", "concept", "style", "invariants", "rationale"]
+            assert captured["schema"]["required"] == ["title", "concept", "style", "invariants"]
         if operation == "studio_brief_draft":
-            assert captured["schema"]["required"] == [], "No unrequested Project field is required"
+            assert captured["schema"]["required"] == ["title", "concept", "style", "invariants"], "No unrequested Project field is required"
             assert captured["schema"]["properties"]["invariants"]["items"]["required"] == ["kind", "title", "text"]
 
 
@@ -259,31 +257,11 @@ def test_explicit_studio_authoring_requires_each_requested_field(
     assert captured["response_schema"]["required"] == expected
 
 
-def test_studio_chat_schema_accepts_prose_and_actual_creative_material_without_action():
-    from tool.server.studio_director import chat_response_schema
-
-    schema = chat_response_schema()
-    assert schema["required"] == ["reply"], (
-        "A creative partner answers the author on every turn; independently usable "
-        "Project/Scene fields remain optional and partial"
-    )
-    assert schema["minProperties"] == 1
-    assert "action" not in schema["properties"], "The model cannot author an application action"
-    assert schema["properties"]["reply"]["type"] == "string"
-    assert schema["properties"]["reply"]["minLength"] == 1
-    assert "recommendation" in schema["properties"]["reply"]["description"]
-    assert schema["properties"]["scenes"]["items"]["required"] == [
-        "title", "prompt", "durationSeconds"
-    ]
-    assert "sceneId" not in schema["properties"]["changes"]["properties"]["scene"]["properties"]
-    project = schema["properties"]["changes"]["properties"]["project"]
-    assert "required" not in project, "Partial Project revisions must not rewrite unrelated fields"
-    invariant = project["properties"]["invariants"]["items"]
-    assert invariant["required"] == ["kind", "title", "text"]
-    assert invariant["additionalProperties"] is False
-    assert "character" in invariant["properties"]["kind"]["enum"]
-    assert "checks" not in schema["properties"]
-    assert "capture" not in schema["properties"]
+def test_studio_chat_is_plain_prose_and_write_has_its_own_scene_schema():
+    from tool.server.studio_director import scene_records_schema
+    assert scene_records_schema()["items"]["required"] == ["title", "prompt", "durationSeconds"]
+    assert "changes" not in guidance()["chatSystem"]
+    assert "reply" not in guidance()["chatSystem"]
 
 
 def test_studio_guidance_requests_relevant_invariants_not_ritual_fields():

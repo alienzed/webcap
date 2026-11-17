@@ -3241,8 +3241,10 @@
           catch (error) {throw new Error('Scene Write JSON failed to parse: ' + error.message);}
           if (!authored || !Array.isArray(authored.scenes))
             throw new Error('Scene Write returned no Scenes array; full response is in Director I/O.');
-          // The model authors creative values; WebCap only transports records
-          // and binds the chosen destination. The server owns save integrity.
+          // The model authors creative values; WebCap binds their target.
+          // Keep Director busy until the authoritative save is complete.
+          state.pending = true;
+          syncControls();
           return requestJson('/fs/studio/director/scenes-draft',{
             method:'POST',headers:{'Content-Type':'application/json'},
             body:JSON.stringify({

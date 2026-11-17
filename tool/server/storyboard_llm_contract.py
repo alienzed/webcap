@@ -590,8 +590,6 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
             + ": " + _clean(scenes[ordered_id].get("prompt"))
             for number, ordered_id in enumerate(order, start=1)
         ))
-        if last_exit:
-            blocks.append("[LAST SCENE EXIT STATE]\n" + last_exit)
         if _clean(instruction):
             blocks.append("[USER DIRECTION]\n" + _clean(instruction))
         blocks.append(

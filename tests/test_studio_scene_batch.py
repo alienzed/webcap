@@ -27,8 +27,8 @@ def test_atomic_prompt_revisions_preserve_legacy_summary_and_other_scenes(story)
     assert changed["scenes"][ids[2]] == story["scenes"][ids[2]]
     for sid in ids:
         assert changed["scenes"][sid]["summary"] == story["scenes"][sid]["summary"]
-        assert changed["scenes"][sid]["entryState"] == "Legacy entry"
-        assert changed["scenes"][sid]["exitState"] == "Legacy exit"
+        assert "entryState" not in changed["scenes"][sid]
+        assert "exitState" not in changed["scenes"][sid]
         assert changed["scenes"][sid]["takes"] == story["scenes"][sid]["takes"]
     assert changed["concept"] == story["concept"]
     assert changed["sceneOrder"] == ids

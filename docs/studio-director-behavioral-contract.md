@@ -1,5 +1,7 @@
 # Studio Director — behavioral contract and hostile guidance audit
 
+> **2026-11-17 update:** The [focused Chat/explicit Write amendment](studio-director-contract.md) supersedes historical guidance here that expects ordinary conversation to return structured Project/Scene fields, combined `reply`/authoring JSON, or reviewable drafts from Chat. Explicit Write owns structured output; retained legacy drafts remain readable. See [phased implementation and acceptance](studio-focused-chat-write-implementation.md).
+
 **Status:** Implementation plan and hostile pre-change audit, 2026-11-16. The core guidance and deterministic request changes are implemented on the companion branch; live-model acceptance remains unverified. [The functional contract](studio-director-contract.md) and [user flows](studio-user-flows.md) remain authoritative where this proposal has not been adopted. This document distinguishes verified code behavior from hypotheses about model performance.
 
 ## Vision and acceptance filter

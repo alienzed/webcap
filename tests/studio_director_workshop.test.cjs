@@ -88,7 +88,7 @@ test('Studio conversation does not silently inject the selected Project as creat
     '  // Retain available conversational work across ordinary follow-up questions.'),scope);
   const out=await vm.runInContext(
     "studioDirectorChatRequestMessages([{role:'user',content:'Create a new Project'}])",scope);
-  assert.match(out[0].content,/No saved Project or Scene reference was supplied/);
+  assert.doesNotMatch(out[0].content,/AUTHOR-APPROVED SAVED CONTEXT|Private Project/);
   assert.doesNotMatch(out[0].content,/Private Project/);
   assert.equal(out[1].content,'Create a new Project');
 });
@@ -153,10 +153,10 @@ test('selected list binds destination before issuing each per-Scene write',()=>{
   assert.match(batch,/flushStudioDirectorStoryEdits\(storyId\)/);
 });
 
-test('Context approval only records chosen source; it does not send a model request',()=>{
-  assert.match(workbench,/studioDirectorBridge\.approveRead\(story\.id, keys\)/);
+test('explicit Read saves one visible snapshot without a model request',()=>{
+  assert.match(workbench,/studioDirectorBridge\.appendReadSnapshot\(payload\)/);
   assert.doesNotMatch(workbench,/sendRead\(payload, keys, typeof instruction/);
-  assert.match(html,/id="studio-dw-read-send"[^>]*>Approve context/);
+  assert.match(html,/id="studio-dw-read-send"[^>]*>Read into conversation/);
 });
 test('Ordinary Studio conversation has no model-requested hidden Read or capture token', () => {
   const send = part('  function sendMessage() {', '  function syncPinnedUi() {');
@@ -313,7 +313,7 @@ test('large explicit Read selections are sent intact, with no arbitrary client c
     updateScope:()=>{},
     updateReadSelection:()=>{updates++;},renderApprovedSources(){},
     window:{
-      studioDirectorBridge:{approveRead:(projectId,keys)=>{sent={projectId,keys};}},
+      studioDirectorBridge:{appendReadSnapshot:async payload=>{sent=payload;}},
       studioDirectorWorkbench:{setReadStatus:(_state,message)=>{readStatus=message;}}
     }
   });
@@ -321,7 +321,8 @@ test('large explicit Read selections are sent intact, with no arbitrary client c
   scope.readSend();
   await new Promise(resolve=>setImmediate(resolve));
   assert.ok(sent,'the selected saved fields must reach Director');
-  assert.deepEqual(sent.keys,['scene:scene-a:prompt']);
+  assert.equal(sent.projectId,'project-1');
+  assert.deepEqual(Array.from(sent.fields,field=>field.id),['scene:scene-a:prompt']);
   assert.ok(el('studio-dw-read-preview-data').textContent.length>48000,
     'the preview retains the entire saved field payload');
   assert.equal(JSON.parse(el('studio-dw-read-preview-data').textContent).fields[0].value,prompt,
@@ -346,13 +347,12 @@ test('multi-Scene review preserves actual Project positions and distinguishes a 
   assert.match(apply, /Scene saved, but conversation recording or refresh failed/);
 });
 
-test('legacy Studio field Read remains a neutral context handoff by default', () => {
-  const read = source.split('  function inspectStudioStoryScope() {')[1]
+test('legacy Studio field Read also persists a snapshot without a model call',()=>{
+  const read=source.split('  function inspectStudioStoryScope() {')[1]
     .split('  function syncStudioFlow() {')[0];
-  assert.match(read, /Acknowledge the saved context without assessing it or suggesting next steps/);
-  assert.doesNotMatch(read, /give a concise substantive assessment/);
-  assert.match(source, /state\.pendingReadAck = keys\.slice\(\)/);
-  assert.match(source, /For a context-only Read, stop after a brief confirmation/);
+  assert.match(read,/studioDirectorBridge\.appendReadSnapshot\(/);
+  assert.doesNotMatch(read,/sendMessage\(\)|pendingReadAck|Acknowledge receipt/);
+  assert.match(source,/return persistSession\('storyboard'\)/);
 });
 
 test('legacy Workshop request context never treats stored Scene Intent as a creative brief', () => {

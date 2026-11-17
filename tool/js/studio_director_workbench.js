@@ -1,7 +1,7 @@
 (function () {
   'use strict';
   var readStory = null, writeStory = null, projects = [], proposedScene = null, proposedBatch = null;
-  var readChoices = {}, writeOperationChosen = false, lastReadSource = null;
+  var readChoices = {}, writeOperationChosen = false;
   var sceneSelectionManual = false, sceneSelectionProject = '';
   var lastQuickAction = 'write';
   var sceneFields = ['prompt', 'title', 'durationSeconds'];
@@ -185,7 +185,6 @@
       var payload = readPayload(story, keys);
       el('studio-dw-read-preview-data').textContent = JSON.stringify(payload, null, 2);
       return window.studioDirectorBridge.appendReadSnapshot(payload).then(function () {
-        lastReadSource = story.id;
         status('Read snapshot saved in conversation. No model request sent.', false, true);
         el('studio-dw-read-panel').classList.add('hidden');
         el('studio-dw-read').setAttribute('aria-expanded', 'false');
@@ -320,12 +319,7 @@
       pendingCreativeAction.chosenSceneIds = checked ? inputs.map(function (input) { return input.value; }) : [];
     showWriteContext();
   }
-  function renderApprovedSources() {
-    var host = el('studio-dw-approved-sources');
-    host.textContent = 'Read snapshots are saved in the conversation.';
-  }
   function refreshRead() {
-    renderApprovedSources();
     return refreshProjects().then(function () {return loadStory(el('studio-dw-read-project').value);})
       .then(renderReadStory).catch(function (e) { status('Read setup failed: ' + e.message, true); });
   }
@@ -1216,7 +1210,6 @@
       writeOperationChosen = false;
       sceneSelectionManual = false;
       sceneSelectionProject = '';
-      lastReadSource = null;
       readStory = null;
       writeStory = null;
       el('studio-dw-read-panel').classList.add('hidden');

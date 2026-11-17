@@ -11,45 +11,16 @@ function part(source,start,end) {
   return source.slice(a,b);
 }
 
-test('Overview Review leads with changed parts and retains the same editable nodes for other parts',()=>{
-  const node=()=>({children:[],classList:{toggle(){}},
-    appendChild(child){if(child.parent) child.parent.children.splice(child.parent.children.indexOf(child),1);this.children.push(child);child.parent=this;},
-    insertBefore(child,before){if(child.parent) child.parent.children.splice(child.parent.children.indexOf(child),1);this.children.splice(this.children.indexOf(before),0,child);child.parent=this;},
-    querySelector:()=>true});
-  const parts=node(),other=node(),sections={};
-  parts.appendChild(other);
-  for(const name of ['title','concept','style','invariants']){
-    const section={dataset:{changed:String(['concept','style'].includes(name))},value:name};
-    sections[name]=section;parts.insertBefore(section,other);
-  }
-  const scope=vm.createContext({el:id=>id==='studio-brief-parts'?parts:id==='studio-brief-unchanged'?other:
-    {closest:()=>sections[id.replace('studio-brief-','').replace('-state','')]}});
-  vm.runInContext(part(chat,'  function groupStudioBriefReviewParts() {','  function prepareStudioBrief(options) {'),scope);
-  scope.groupStudioBriefReviewParts();
-  assert.deepEqual(parts.children,[sections.concept,sections.style,other]);
-  assert.deepEqual(other.children,[sections.title,sections.invariants]);
-  assert.equal(sections.title.value,'title');
-  sections.invariants.dataset.changed='true';
-  scope.groupStudioBriefReviewParts();
-  assert.deepEqual(parts.children,[sections.concept,sections.style,sections.invariants,other]);
-  assert.deepEqual(other.children,[sections.title]);
-  assert.doesNotMatch(part(chat,'  function updateStudioBriefReviewSummary() {','  function groupStudioBriefReviewParts() {'),/groupStudioBriefReviewParts\(/,
-    'typing and selection updates must not reparent focused editors');
+test('Overview Write directly applies selected fields, with no Review editors',()=>{
+  assert.match(chat,/function prepareStudioBrief\(options\)/);
+  assert.match(chat,/function commitFocusedStudioBrief\(/);
+  assert.doesNotMatch(chat,/showStudioBriefReview|groupStudioBriefReviewParts/);
+  assert.doesNotMatch(html,/id="studio-brief-review"/);
 });
 
-test('editing retained Overview text includes the edit without requiring a second checkbox action',()=>{
-  const elements={};
-  for(const key of ['title','concept','style']){
-    elements['studio-brief-'+key]={addEventListener(event,fn){this[event]=fn;}};
-    elements['studio-brief-'+key+'-selected']={checked:false};
-  }
-  const code=part(chat,"    ['title','concept','style'].forEach(function (key) {","    ['input','change','click'].forEach");
-  vm.runInContext(code,vm.createContext({el:id=>elements[id]}));
-  elements['studio-brief-title'].input();
-  assert.equal(elements['studio-brief-title-selected'].checked,true);
-  assert.equal(elements['studio-brief-style-selected'].checked,false);
-  elements['studio-brief-title-selected'].checked=false;
-  assert.equal(elements['studio-brief-title-selected'].checked,false,'author can exclude the change explicitly');
+test('Overview Write no longer requires a selection checkbox or second Apply',()=>{
+  assert.doesNotMatch(html,/id="studio-brief-title-selected"|id="studio-brief-apply"/);
+  assert.match(chat,/commitFocusedStudioBrief\(storyId,expected,parseStudioBriefDraft\(raw\),fields\)/);
 });
 
 test('Unpinned Studio Director auto-dismisses; pinned Director remains open',()=>{
@@ -77,50 +48,19 @@ test('Unpinned Studio Director auto-dismisses; pinned Director remains open',()=
   assert.equal(closes,4,'pinning keeps Studio Director open');
 });
 
-test('Project review summary follows edits and selection without changing either',()=>{
-  const elements={};
-  const before={title:'Last Light',concept:'A lamp glows.',style:'Blue dusk.',invariants:[{kind:'character',text:'Keeper',title:'Mara'}]};
-  for (const key of ['title','concept','style','invariants']) {
-    elements['studio-brief-'+key]={value:before[key]};
-    elements['studio-brief-'+key+'-selected']={checked:key!=='title'};
-    const section={dataset:{}};
-    elements['studio-brief-'+key+'-state']={closest:()=>section};
-  }
-  elements['studio-brief-concept'].value='The keeper receives a reply.';
-  elements['studio-brief-invariants'].querySelectorAll=()=>[
-    {querySelectorAll:()=>[{value:'character'},{value:'Mara'},{value:'Keeper'}]}
-  ];
-  elements['studio-brief-summary']={};
-  const scope=vm.createContext({state:{studioBriefProposal:{expected:before}},el:id=>elements[id],
-    studioDirectorRenderDiff:()=>{}});
-  vm.runInContext(part(chat,'  function updateStudioBriefReviewSummary() {','  function prepareStudioBrief(options) {'),scope);
-  scope.updateStudioBriefReviewSummary();
-  assert.match(elements['studio-brief-concept-state'].textContent,/Changed · selected/);
-  assert.match(elements['studio-brief-title-state'].textContent,/Unchanged · not selected/);
-  assert.match(elements['studio-brief-invariants-state'].textContent,/Unchanged/,'JSON key order is not a creative change');
-  assert.equal(elements['studio-brief-summary'].textContent,'Selected: Concept · Visual / atmosphere · Invariants (1)');
-  elements['studio-brief-style-selected'].checked=false;
-  scope.updateStudioBriefReviewSummary();
-  assert.equal(elements['studio-brief-summary'].textContent,'Selected: Concept · Invariants (1)');
-  assert.equal(elements['studio-brief-concept'].value,'The keeper receives a reply.');
+test('Project field changes do not create a separate Review state',()=>{
+  assert.doesNotMatch(chat,/state\.studioBriefProposal|updateStudioBriefReviewSummary/);
+  assert.doesNotMatch(html,/id="studio-brief-summary"/);
 });
 
-test('identical Invariants are not preselected because JSON properties arrived in another order',()=>{
-  const checkbox={checked:true};
-  const existing=[{kind:'character',text:'Keeper',title:'Mara'}];
-  const reviewed=[{item:{kind:'character',title:'Mara',text:'Keeper'}}];
-  const scope=vm.createContext({el:()=>checkbox,existing,reviewed,requested:null});
-  const code=part(chat,"    el('studio-brief-invariants-selected').checked = (!requested","    el('studio-brief-invariants').replaceChildren();");
-  vm.runInContext(code,scope);
-  assert.equal(checkbox.checked,false);
-  reviewed[0].item.text='An older keeper.';
-  vm.runInContext(code,scope);
-  assert.equal(checkbox.checked,true);
+test('Invariants are returned as authored structured values, without a preselection judge',()=>{
+  assert.match(chat,/Object\.prototype\.hasOwnProperty\.call\(authored,key\)/);
+  assert.doesNotMatch(chat,/studio-brief-invariants-selected/);
 });
 
-test('ordinary discussion asks for concise new decisions while complete creative fields remain complete',()=>{
-  assert.match(chat,/STUDIO CONVERSATION DELIVERY: Answer the author in the JSON reply field on every turn/);
-  assert.match(chat,/These are drafts; WebCap decides where and whether to save them/);
+test('ordinary discussion uses the natural-language Chat guidance, not structured Write',()=>{
+  assert.match(chat,/studioDirectorChatRequestMessages\(messages\)/);
+  assert.doesNotMatch(chat,/STUDIO CONVERSATION DELIVERY|These are drafts; WebCap decides/);
 });
 
 test('compact Director replies keep the exact full text and leave General Chat alone',()=>{
@@ -140,40 +80,29 @@ test('compact Director replies keep the exact full text and leave General Chat a
   assert.equal(general.children.length,0);
 });
 
-test('Apply receipt names the actual scoped Scene fields and retains authoritative values',async()=>{
-  const state={modeMessages:{storyboard:[]},sessionDirty:{},
-    studioWorkingDraft:{projects:{},scenes:{},newProject:{},newScene:{},sourceRequest:''}};
-  const scope=vm.createContext({state,markStudioReadinessOutdated(){},renderMessages(){},persistSession:async()=>{},
-    window:{studioDirectorWorkbench:{markSavedFields(){},completeWriteAction(){return false;},updateWorkingWrite(){}}}});
-  const bridge=vm.runInContext('({'+part(chat,'    recordApplied: function (kind, story, selected) {','    reviewCapture: function (capture, storyId) {')+'})',scope);
-  await bridge.recordApplied('scene.update',{id:'project-1',title:'Project',updatedAt:'now'},
-    {sceneId:'scene-1',savedFields:{prompt:'The reviewed prompt.'}});
+test('direct Write receipts describe actual saved fields without embedding creative payload',async()=>{
+  const state={modeMessages:{storyboard:[]},sessionDirty:{storyboard:false}};
+  const scope=vm.createContext({state,JSON,String,Object,Promise,renderMessages(){},
+    persistSession:async()=>{},
+    window:{studioDirectorWorkbench:{markSavedFields(){}}}});
+  const record=part(chat,'    recordApplied: function (kind, story, selected) {',
+    '    checkProjectCoherence: function');
+  const bridge=vm.runInContext('({'+record.trim().replace(/,$/,'')+'})',scope);
+  await bridge.recordApplied('scene.director.revision',
+    {id:'project-1',title:'Project',updatedAt:'now'},
+    {sceneId:'scene-1',savedFields:{prompt:'The new prompt.'}});
   const message=state.modeMessages.storyboard[0].content;
-  assert.match(message,/^Saved Project: H3 Prompt/);
-  const saved=JSON.parse(message.split('[WEBCAP APPLIED FIELD VALUES]')[1].split('[END WEBCAP APPLY]')[0]);
-  assert.deepEqual(Array.from(saved.fieldNames),['prompt']);
-  assert.doesNotMatch(message,/The reviewed prompt\./);
+  assert.match(message,/\[WEBCAP APPLIED FIELD VALUES\]/);
+  assert.match(message,/scene.director.revision/);
+  assert.doesNotMatch(message,/The new prompt\./);
 });
 
-test('editable revision comparison identifies retained, removed and added words without mutating sources',()=>{
-  const before='A woman walks toward the sink, then brushes her teeth.';
-  const after='A woman brushes her teeth.';
-  const elements=[];
-  const host={children:[],replaceChildren(){this.children=[];},appendChild(n){this.children.push(n);}};
-  const scope=vm.createContext({document:{createElement:tag=>{
-    const element={tag,textContent:''};elements.push(element);return element;
-  }}});
-  vm.runInContext(part(chat,'  function studioDirectorRenderDiff(host, before, after) {',
-    '  window.studioDirectorRenderDiff = studioDirectorRenderDiff;'),scope);
-  scope.studioDirectorRenderDiff(host,before,after);
-  assert.ok(host.children.some(n=>n.tag==='del'),'comparison visibly marks removed text');
-  assert.ok(!host.children.some(n=>n.tag==='ins'),'pure deletion does not invent inserted words');
-  assert.ok(host.children.some(n=>n.tag==='del' && n.textContent.includes('walks')),'extra movement is visibly removed');
-  assert.ok(host.children.some(n=>n.tag==='span' && n.textContent.includes('woman')),'unchanged text stays identifiable');
-  assert.equal(before,'A woman walks toward the sink, then brushes her teeth.');
-  assert.equal(after,'A woman brushes her teeth.');
-  scope.studioDirectorRenderDiff(host,'Same text','Same text');
-  assert.equal(host.textContent,'No text changes.');
+test('History replaces the previous Review-only text diff',()=>{
+  assert.doesNotMatch(chat,/studioDirectorRenderDiff/);
+  const history=fs.readFileSync('tool/js/textarea_revisions.js','utf8');
+  assert.match(history,/function step\(direction\)/);
+  assert.match(history,/recordFieldChange/);
+  assert.match(history,/dispatchEvent\(new Event\('input'/);
 });
 
 test('field update indicators identify the saved Project, and clear after author edits',()=>{
@@ -266,49 +195,30 @@ test('Director reads Prompt even when a legacy Scene has no authored Prompt',()=
 });
 
 
-test('Director conversation preserves actual authored Scene records alongside prose',()=>{
-  const scope=vm.createContext({});
+test('archived structured conversations remain readable but cannot launch Write actions',()=>{
+  const scope=vm.createContext({JSON,String,Error});
   vm.runInContext(part(chat,'  function parseStudioChatResponse(raw) {',
     '  function storyboardRequestMessages('),scope);
-  const response=scope.parseStudioChatResponse(JSON.stringify({
-    reply:'I authored one usable Scene.',
-    action:{kind:'create_scene',instruction:'Two eight-second Scenes'},
-    scenes:[{title:'First',prompt:'Complete H3 prompt',durationSeconds:8}]
+  const reply=scope.parseStudioChatResponse(JSON.stringify({
+    reply:'An earlier proposal.',action:{kind:'create_scene'},
+    scenes:[{title:'Old',prompt:'Old Prompt',durationSeconds:8}]
   }));
-  assert.equal(response.reply,'I authored one usable Scene.');
-  assert.equal(response.scenes.length,1,'requested quantity must not manufacture authored results');
-  assert.equal(response.scenes[0].durationSeconds,8);
+  assert.equal(reply.reply,'An earlier proposal.');
+  assert.deepEqual(Object.keys(reply),['reply']);
 });
 
-test('new-Scene authoring preserves returned arrays and independently useful partial drafts',()=>{
-  const body=part(chat,'          var records = Array.isArray(fields.scenes) ? fields.scenes : [fields];',
-    "          // The author's requested timing belongs in the actual authored Scene.");
-  const normalize=vm.runInNewContext('(function(fields,raw){' + body +
-    'return {drafts:drafts,missingPrompt:missingPrompt};})');
-  const single=normalize({scenes:[{title:'Only',prompt:'One complete H3 Scene',durationSeconds:8}]},'');
-  assert.equal(single.drafts.length,1);
-  assert.equal(single.missingPrompt,false);
-  const partial=normalize({scenes:[
-    {title:'Complete',prompt:'H3 prompt',durationSeconds:8},
-    {title:'Useful partial title',durationSeconds:8},
-    null,
-    {title:'',prompt:'',durationSeconds:undefined}
-  ]},'');
-  assert.equal(partial.drafts.length,2);
-  assert.equal(partial.missingPrompt,true);
-  assert.equal(partial.drafts[1].title,'Useful partial title');
-  assert.equal(partial.drafts[0].durationSeconds,8);
-  assert.equal(normalize({prompt:'Legacy complete prompt'},'').drafts.length,1,
-    'existing callers with a single Scene object remain supported');
+test('new-Scene Write passes actual Scene records to the save endpoint',()=>{
+  const method=part(chat,'    writeNewScene: function (launch) {',
+    '    writeSelectedScene: function (launch) {');
+  assert.match(method,/authored\.scenes\.map/);
+  assert.match(method,/\/fs\/studio\/director\/scenes-draft/);
+  assert.doesNotMatch(method,/showStudioScenesReview|sourceMessageIndex|launch\.directSave/);
 });
 
-test('Scene creation presents authored results rather than scheduling from prose counts',()=>{
-  const action=part(workbench,"        if (frozen.kind === 'create_scene') {",
-    '        return loadStory(projectId).then(function (story) {');
-  assert.match(action,/writeNewScene\(/);
-  assert.match(action,/directSave:false/);
-  assert.doesNotMatch(action,/How many new Scenes|sequenceCount|sequenceIndex|function create\(index\)/);
-  assert.match(workbench,/studioDirectorBridge\.reviewAuthoredScenes\(\{/);
-  assert.match(chat,/\x27studio_scenes_draft\x27, true/);
-  assert.doesNotMatch(chat,/draft\.scenes\[0\]\.durationSeconds = requestedDuration/);
+test('Create Scene invokes one focused model operation without Review',()=>{
+  const method=part(chat,'    writeNewScene: function (launch) {',
+    '    writeSelectedScene: function (launch) {');
+  assert.match(method,/makeProposal\(task,'studio_scenes_draft',true/);
+  assert.match(method,/recordApplied\('scene.create'/);
+  assert.doesNotMatch(method,/reviewAuthoredScenes|sourceMessageIndex|showStudioScenesReview/);
 });

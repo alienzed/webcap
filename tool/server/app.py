@@ -2338,13 +2338,24 @@ def director_chat_route():
         if operation == "studio_scenes_draft":
             # New-Scene authoring is a sequence of *material*, not an action
             # promise or a requirement to match a guessed requested count.
-            # Request complete Scene records with the same contract as Studio
-            # conversation. Ingest still retains incomplete provider results.
+            # Explicit Scene writing owns this schema independently of
+            # ordinary freeform Studio chat. Ingest exposes actual provider output.
             contract["response_schema"] = {
                 "type": "object", "additionalProperties": False,
                 "required": ["scenes"],
                 "properties": {
-                    "scenes": studio_chat_response_schema()["properties"]["scenes"],
+                    "scenes": {
+                        "type": "array", "minItems": 1, "maxItems": 32,
+                        "items": {
+                            "type": "object", "additionalProperties": False,
+                            "required": ["title", "prompt", "durationSeconds"],
+                            "properties": {
+                                "title": {"type": "string", "maxLength": 240},
+                                "prompt": {"type": "string", "minLength": 1},
+                                "durationSeconds": {"type": "integer", "minimum": 4, "maximum": 15},
+                            },
+                        },
+                    },
                     "rationale": {"type": "string"},
                 },
             }

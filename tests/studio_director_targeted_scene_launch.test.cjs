@@ -65,7 +65,7 @@ function sceneFixture(raw = '{"prompt":"Mara finishes quietly under a still came
   vm.runInContext(section(director,'  function studioApprovedReadSources() {',
     '  function studioDirectorChatRequestMessages('),context);
   vm.runInContext(section(director,'  function studioWorkingFieldChanges(source, names) {',
-    '  function studioMergeWorkingChanges(changes, target, action, request) {')+
+    '  function parseStudioChatResponse(raw) {')+
     section(director,'  // Only actual persisted field values clear a retained draft.',
     '  window.studioDirectorBridge = {'),context);
   context.scheduleSessionSave=()=>{events.push(['draft-scheduled']);};

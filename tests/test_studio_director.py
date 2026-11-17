@@ -316,3 +316,5 @@ def test_director_scene_index_is_lightweight_and_selected_scene_reads_full_promp
     selected = read_story_scope(story, "scene", "scene-a")
     assert selected["prompt"] == long_prompt
     assert "summary" not in selected
+    assert "entryState" not in selected and "exitState" not in selected
+    assert "durationSeconds" in selected

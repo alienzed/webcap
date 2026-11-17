@@ -39,7 +39,7 @@ test('selected Scene list writes each exact ID once with focused requested field
   const h=fixture();
   const outcome=await h.write('p1');
   assert.deepEqual(h.results.map(x=>x.sceneId),['s1','s2','s3']);
-  assert.deepEqual(h.results.map(x=>x.fields),[['prompt'],['prompt'],['prompt']]);
+  assert.deepEqual(JSON.parse(JSON.stringify(h.results.map(x=>x.fields))),[['prompt'],['prompt'],['prompt']]);
   assert.ok(h.results.every(x=>x.forceAuthor===true&&x.projectId==='p1'));
   assert.equal(outcome.saved.length,3);
   assert.equal(outcome.failed.length,0);

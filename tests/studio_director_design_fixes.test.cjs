@@ -228,13 +228,17 @@ test('conversation Scene targets support Select all and Deselect all without gue
 
 test('restored conversation offers review only when saved raw output contains authored fields',()=>{
   assert.match(chat,/function studioRestoreAuthoredAction\(action, rawResponse\)/);
-  assert.match(chat,/proposal = studioRestoreAuthoredAction\(proposal,entry\.rawResponse\)/);
-  assert.match(chat,/if \(!proposal\) continue/);
+  assert.match(chat,/item\.completed \? null : studioRestoreAuthoredAction\(item,entry\.rawResponse\)/);
+  assert.match(chat,/if \(proposal\) \{/);
+  assert.match(chat,/studioStoredActions\(entry\)/,
+    'restoration evaluates each independently authored deliverable');
   assert.match(rail,/sourceMessageIndex:messageIndex/);
 });
 test('conversation persistence includes frozen Write targets without extra authoring calls', () => {
   assert.match(chat,/stored\.writeAction = message\.writeAction/);
-  assert.match(chat,/messages\[messages\.length - 1\]\.writeAction = window\.studioDirectorWorkbench\.presentAction/);
+  assert.match(chat,/messages\[assistantIndex\]\.writeAction = window\.studioDirectorWorkbench\.presentAction/);
+  assert.match(chat,/stored\.otherWriteActions = message\.otherWriteActions/,
+    'a mixed Project and Scene response retains all independent review actions');
   assert.ok(chat.includes('completeWriteAction(kind, story, selected)'));
 });
 

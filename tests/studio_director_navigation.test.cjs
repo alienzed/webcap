@@ -285,20 +285,22 @@ test('global Chat navigation never overwrites the Studio surface choice',()=>{
 });
 
 
-test('new Project continuation changes explicit attachment while retaining independently approved Read sources',()=>{
+test('new Project Write never implicitly changes approved Read or attached Project',()=>{
   const director=fs.readFileSync(path.join(__dirname,'../tool/js/director_chat.js'),'utf8');
-  const start=director.indexOf('  function applyStudioProject() {');
-  const end=director.indexOf('  function showStudioBriefReview() {',start);
+  const start=director.indexOf('  function commitFocusedStudioProject(proposal) {');
+  const end=director.indexOf('  function prepareStudioProject(options) {',start);
   assert.ok(start>=0&&end>start);
   const code=director.slice(start,end);
-  assert.doesNotMatch(code,/state\.studioApprovedRead\s*=\s*null/);
-  assert.match(code,/state\.studioStoryAccess = \{storyId: payload\.story\.id, label: name\}/);
-});
-test('Project creation label is truthful for zero Scenes',()=>{
-  const html=fs.readFileSync(path.join(__dirname,'../tool/tool.html'),'utf8');
-  assert.ok(html.includes('id="studio-project-create" type="button">Create Project</button>'));
+  assert.doesNotMatch(code,/state\.studioApprovedRead\s*=|state\.studioStoryAccess\s*=/);
+  assert.match(code,/recordApplied\('project.create'/);
 });
 
+test('Create Project directly saves without a Review dialog',()=>{
+  const html=fs.readFileSync(path.join(__dirname,'../tool/tool.html'),'utf8');
+  assert.doesNotMatch(html,/id="studio-project-review"|id="studio-project-create"/);
+  assert.ok(html.includes('id="studio-dw-write-prepare"'));
+  assert.ok(html.includes('id="director-studio-capture"'));
+});
 
 test('ordinary Director conversation preserves prepared Scene reviews without mutating saved Projects',()=>{
   const chat=fs.readFileSync(path.join(__dirname,'../tool/js/director_chat.js'),'utf8');

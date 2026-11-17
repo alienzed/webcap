@@ -122,7 +122,7 @@ test('Write opens the explicit operation picker without launching a model reques
   assert.equal(node('director-chat-drawer').classList.contains('studio-actions-open'),false);
   assert.equal(node('studio-dw-open-tools').focused,true);
   node('studio-dw-open-tools').click();
-  assert.equal(selected,2,'reopening Write refreshes the picker without starting a model');
+  assert.equal(selected,1,'reopening Write reuses the visible picker without starting a model');
 });
 
 test('Share Details opens the original Read sidebar and indicates approved context',()=>{

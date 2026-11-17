@@ -1912,8 +1912,7 @@
     var authorRequest = String(options && options.authorRequest || options && options.instruction || '');
     var manualReview = !String(options && options.instruction || '').trim();
     var sameWork = manualReview ||
-      state.studioWorkingDraft.sourceRequest === authorRequest ||
-      studioRequestAppliesPreparedMaterial(authorRequest);
+      state.studioWorkingDraft.sourceRequest === authorRequest;
     if (sameWork && workingProject && Object.keys(workingProject).length) {
       state.studioProjectProposal = parseStudioProjectDraft(JSON.stringify(Object.assign({
         title:'', concept:'', style:'', invariants:[], initialScenes:[],
@@ -2426,8 +2425,7 @@
       var workingProject = options && options.authoredFields || state.studioWorkingDraft.projects[storyId] || {};
       var authorRequest = String(options && options.authorRequest || instruction);
       var sameWork = !!(options && options.authoredFields) || manualReview ||
-        state.studioWorkingDraft.sourceRequest === authorRequest ||
-        studioRequestAppliesPreparedMaterial(authorRequest);
+        state.studioWorkingDraft.sourceRequest === authorRequest;
       var required = Object.keys(workingProject).filter(function (field) {
         return ['title','concept','style','invariants'].includes(field);
       });
@@ -3197,14 +3195,6 @@
 
   // A Studio conversation owns unsaved sparse field replacements. Saved
   // Project/Scene records stay authoritative until a deliberate Write.
-  function studioRequestAppliesPreparedMaterial(request) {
-    // "Save that prompt" can reuse a known complete draft. "Use warmer
-    // lighting" is a *new creative request*, not permission to save old work.
-    request = String(request || '');
-    return /\b(?:save|apply|use|store)\s+(?:(?:the|a|my)\s+)?(?:this|that|it|previous|latest|current|prepared|existing|above|draft|prompt|proposal|material|concept)\b/i.test(request) &&
-      !/\b(?:change|modify|revise|rewrite|make|adjust|remove|replace|shorten|lengthen|extend|improve|darken|lighten|instead)\b/i.test(request);
-  }
-
   function studioWorkingFieldChanges(source, names) {
     if (!source || typeof source !== 'object' || Array.isArray(source)) return {};
     var result = {};
@@ -4685,7 +4675,7 @@
       var prepared = launch && state.studioWorkingDraft.newScene &&
         typeof state.studioWorkingDraft.newScene.prompt === 'string' &&
         !!state.studioWorkingDraft.newScene.prompt.trim() &&
-        studioRequestAppliesPreparedMaterial(launch.authorRequest || launch.instruction);
+        state.studioWorkingDraft.sourceRequest === String(launch.authorRequest || launch.instruction);
       if (!this.isReady() && !(prepared && this.canReview()))
         return Promise.reject(new Error(this.readinessMessage()));
       if (!launch || !launch.projectId || !String(launch.instruction || '').trim())
@@ -4725,16 +4715,16 @@
               var prior = story.scenes[order[order.length - 1]];
               return {title:prior.title,prompt:prior.prompt,durationSeconds:prior.durationSeconds};
             })() : null,
-            unsavedWorkingFields:studioRequestAppliesPreparedMaterial(
-              launch.authorRequest || launch.instruction) ?
+            unsavedWorkingFields:state.studioWorkingDraft.sourceRequest ===
+              String(launch.authorRequest || launch.instruction) ?
               (state.studioWorkingDraft.newScene || {}) : {}
           }
         });
         // Reuse complete structured Scene fields already authored in the
         // conversation; never ask the model to rewrite the same work.
         var workingScene = state.studioWorkingDraft.newScene;
-        var applyExisting = studioRequestAppliesPreparedMaterial(
-          launch.authorRequest || launch.instruction);
+        var applyExisting = state.studioWorkingDraft.sourceRequest ===
+          String(launch.authorRequest || launch.instruction);
         var reuse = !!(applyExisting && workingScene &&
           typeof workingScene.prompt === 'string' && workingScene.prompt.trim());
         if (!reuse) state.pending = false;
@@ -4903,8 +4893,8 @@
           throw new Error('Selected Scene is no longer available in its saved Project.');
         var original = story.scenes[sceneId];
         var workingScene = state.studioWorkingDraft.scenes[sceneId];
-        var applyExisting = studioRequestAppliesPreparedMaterial(
-          launch.authorRequest || launch.instruction);
+        var applyExisting = state.studioWorkingDraft.sourceRequest ===
+          String(launch.authorRequest || launch.instruction);
         if (workingScene && (state.studioWorkingDraft.sourceRequest ===
             String(launch.authorRequest || launch.instruction) || applyExisting)) {
           var pendingChanges = {};

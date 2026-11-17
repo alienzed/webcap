@@ -16,25 +16,18 @@ function part(start, end) {
   return source.slice(a, b);
 }
 
-test('Director overlays Projects as a resizable drawer with an optional manual workbench', () => {
-  for (const id of [
-    'director-chat-drawer', 'director-chat-messages', 'director-chat-input',
-    'studio-director-workbench', 'studio-dw-read', 'studio-dw-write',
-    'studio-dw-read-project', 'studio-dw-write-project', 'studio-dw-scene-fields',
-    'studio-dw-read-send', 'studio-dw-write-prepare',
-    'studio-dw-write-context-json', 'studio-dw-scene-review', 'studio-dw-batch-review'
-  ]) assert.match(html, new RegExp('id="' + id + '"'));
-  assert.match(html, /class="director-chat-layout"/);
-  assert.match(html, /class="director-chat-sidebar"/);
-  assert.match(html, /static\/js\/studio_director_workbench\.js/);
-  assert.match(css,/studio-director/);
-  assert.match(css, /studio-dw-actions/);
-  assert.match(css, /font-size:16px/);
-  assert.match(css,/studio-director/);
-  assert.match(css,/\.app-frame\.director-chat-pinned\.studio-director-active \{grid-template-columns:42px minmax\(0,1fr\)/);
-  assert.doesNotMatch(css,/\.studio-director-active > \.storyboard-workspace \{visibility:hidden;/);
+test('Studio retains an explicit Read/Write workbench without Review dialogs',()=>{
+  for(const id of ['director-chat-drawer','director-chat-messages','director-chat-input',
+    'studio-director-workbench','studio-dw-read','studio-dw-write',
+    'studio-dw-read-project','studio-dw-write-project','studio-dw-scene-fields',
+    'studio-dw-read-send','studio-dw-write-prepare','studio-dw-write-context-json'])
+    assert.match(html,new RegExp('id="'+id+'"'));
+  for(const id of ['studio-dw-scene-review','studio-dw-batch-review',
+    'studio-project-review','studio-brief-review','studio-scenes-review',
+    'studio-scene-draft-review'])
+    assert.doesNotMatch(html,new RegExp('id="'+id+'"'));
+  assert.match(html,/static\/js\/studio_director_workbench\.js/);
   assert.match(html,/aria-label="Resize Director"/);
-  assert.match(html,/id="storyboard-open-director"/);
   assert.match(html,/id="studio-dw-open-tools"/);
 });
 
@@ -85,56 +78,54 @@ test('Studio conversation does not silently inject the selected Project as creat
         : {story:{id:'p1',concept:'Private Project',sceneOrder:[]}}
   });
   vm.runInContext(part('  function studioConversationMessages(messages) {',
-    '  // Retain available conversational work across ordinary follow-up questions.'),scope);
+    '  function parseStudioChatResponse(raw) {'),scope);
   const out=await vm.runInContext(
     "studioDirectorChatRequestMessages([{role:'user',content:'Create a new Project'}])",scope);
   assert.match(out[0].content,/No saved Project or Scene reference was supplied/);
   assert.doesNotMatch(out[0].content,/Private Project/);
   assert.equal(out[1].content,'Create a new Project');
 });
-test('explicit Writes stay task-scoped without duplicating application instructions',async()=>{
+test('explicit Writes use focused guidance and full role-preserving conversation',async()=>{
   const context=vm.createContext({
-    state:{studioStoryAccess:null,storyboardAttachments:{},
-      studioWorkingDraft:{projects:{},scenes:{},newProject:{},newScene:{}}},
-    Object,String,Promise,window:{getStudioDirectorNavigation:()=>({})},
-    requestJson:async()=>({chatSystem:'Studio conversation',system:'Studio producer expertise',actions:[],
-      promptContract:'H3 production reference'})
+    Object,String,Promise,
+    requestJson:async()=>({
+      chatSystem:'Studio conversation',system:'Studio producer expertise',
+      promptContract:'H3 production reference'
+    })
   });
   vm.runInContext(part('  function studioConversationMessages(messages) {',
     '  function studioDirectorChatRequestMessages(messages) {'),context);
-  const conversational=await vm.runInContext(
-    "studioDirectorRequestMessages([{role:'user',content:'Discuss Scene'}],false)",context);
-  const writing=await vm.runInContext(
-    "studioDirectorRequestMessages([{role:'user',content:'Revise Scene'}],true,true)",context);
+  const history=Array.from({length:20},(_,i)=>({
+    role:i%2?'assistant':'user',content:'Turn '+i
+  }));
+  const conversational=await context.studioDirectorRequestMessages(history,false,false);
+  const writing=await context.studioDirectorRequestMessages(history,true,true);
   assert.equal(conversational[0].content,'Studio conversation');
+  assert.doesNotMatch(conversational[0].content,/H3 production reference/);
   assert.match(writing[0].content,/H3 production reference/);
-  assert.doesNotMatch(writing[0].content,/CURRENT PROJECT NAVIGATION|CURRENT WEBCAP CAPABILITIES|STUDIO WORKBENCH STATE/);
-  assert.equal(writing[1].content,'Revise Scene','the specific authoring task stays in the current user request');
-  assert.match(source,/studioDirectorRequestMessages\(\[\{role:'user',content:instruction\}\], includePromptContract, true, navigationSnapshot\)/);
+  assert.equal(writing.length,21);
+  assert.deepEqual(JSON.parse(JSON.stringify(writing.slice(1))),history);
+  assert.doesNotMatch(writing[0].content,/CURRENT PROJECT NAVIGATION|STUDIO WORKBENCH STATE/);
 });
 
-test('active Project draft paths use explicit Write guidance', () => {
-  for (const operation of ['studio_project_draft', 'studio_brief_draft']) {
-    const marker = "showSentWriteContext('" + operation + "', messages)";
-    const index = source.indexOf(marker);
-    assert.ok(index !== -1, 'Missing draft operation: ' + operation);
-    const before = source.slice(Math.max(0, index - 1400), index);
-    assert.match(before,/studioDirectorRequestMessages\(/,
-      'Explicit Write guidance not used by ' + operation);
+test('Project operations use their own focused schema and authoritative save',()=>{
+  for(const operation of ['studio_project_draft','studio_brief_draft']){
+    assert.match(source,new RegExp("showSentWriteContext\\('"+operation+"'"));
   }
+  assert.match(source,/commitFocusedStudioProject\(proposal\)/);
+  assert.match(source,/commitFocusedStudioBrief\(storyId,expected,parseStudioBriefDraft\(raw\),fields\)/);
+  assert.doesNotMatch(source,/showStudioProjectReview|showStudioBriefReview/);
 });
 
-
-test('old single and sequence authoring machinery is disconnected; current Draft panel uses canonical writers',()=>{
-  assert.doesNotMatch(source,/function prepareStudioScenes\(|function prepareStudioSceneDraft\(|studio_scene_sequence_draft|studio_scene_draft/);
-  assert.doesNotMatch(source,/director-studio-prepare-scenes|director-studio-prepare-scene/);
-  assert.doesNotMatch(html,/id="director-studio-prepare-scenes"|id="director-studio-prepare-scene"|id="director-studio-more"/);
-  assert.match(workbench,/writeNewScene\(\{/);
+test('explicit Write panel owns Project and Scene operations without legacy Review',()=>{
+  assert.match(workbench,/function writePrepare\(options\)/);
   assert.match(workbench,/function prepareBatchScenes\(storyId\)/);
+  assert.match(workbench,/writeNewScene\(\{/);
   assert.match(workbench,/writeSelectedScene\(\{/);
   assert.match(source,/writeNewScene: function \(launch\)/);
   assert.match(source,/writeSelectedScene: function \(launch\)/);
-  assert.match(html,/id="studio-scenes-review"/);
+  assert.doesNotMatch(source,/reviewPendingScenes:|reviewAuthoredScenes:/);
+  assert.doesNotMatch(workbench,/renderBatchReview|showConversationWrite|pendingCreativeAction/);
 });
 
 test('selected Scene revisions use bounded direct-save calls against real Scene IDs',()=>{
@@ -168,29 +159,23 @@ test('Ordinary Studio conversation has no model-requested hidden Read or capture
   assert.doesNotMatch(send, /pendingCapture/);
 });
 
-test('Studio conversation no longer routes through model readiness or capture',()=>{
-  assert.doesNotMatch(source,/parseStudioChatResponse\(result.text\)/);
-  assert.match(source,/studioDirectorWorkbench\.presentAction/); // legacy review compatibility only
-  assert.doesNotMatch(source,/studioDirectorWorkbench\.updateReadiness\(studioResponse/);
-  assert.doesNotMatch(workbench,/recommendations\.writeHint|recommendations\.readHints/);
-  assert.doesNotMatch(workbench,/studio-dw-assessment-item/);
-  assert.doesNotMatch(source,/function studioActionFromExplicitRequest/);
+test('Studio Chat never interprets prose or issues model-generated actions',()=>{
+  const send=part('  function sendMessage() {','  function syncPinnedUi() {');
+  assert.match(send,/studioDirectorChatRequestMessages\(messages\)/);
+  assert.doesNotMatch(send,/studioAuthoredWriteActions|parseStudioChatResponse\(result\.text\)/);
+  assert.doesNotMatch(workbench,/presentAction|updateReadiness|writeHint|pendingCreativeAction/);
+  assert.doesNotMatch(source,/markStudioReadinessOutdated|studioMergeWorkingChanges/);
 });
 
-test('Write preserves reviewed Apply and carries final saved content into conversation', () => {
-  for (const path of [
-    '/fs/studio/director/brief',
-    '/fs/studio/director/scene-draft',
-    '/fs/studio/director/scenes-draft',
-    '/fs/studio/director/project-create'
-  ]) assert.ok(source.includes(path), path);
-  assert.match(workbench, /\/fs\/studio\/director\/scene-fields/);
-  assert.doesNotMatch(workbench, /\/fs\/studio\/director\/playbook/);
-  assert.match(source, /recordApplied: function/);
-  assert.match(source, /return persistSession\('storyboard'\)/);
-  assert.match(source, /\[WEBCAP APPLIED FIELD VALUES\]/);
-  assert.match(source, /window\.studioDirectorBridge\.recordApplied/);
-  assert.match(workbench, /flushStudioDirectorStoryEdits/);
+test('direct Write saves via authoritative existing endpoints with truthful receipts',()=>{
+  for(const route of ['/fs/studio/director/brief',
+    '/fs/studio/director/scenes-draft','/fs/studio/director/project-create'])
+    assert.ok(source.includes(route),route);
+  assert.match(workbench,/\/fs\/studio\/director\/scene-fields/);
+  assert.match(source,/recordApplied: function/);
+  assert.match(source,/return persistSession\('storyboard'\)/);
+  assert.match(source,/\[WEBCAP APPLIED FIELD VALUES\]/);
+  assert.doesNotMatch(source,/applyStudioBrief\(|applyStudioProject\(|applyStudioScenes\(/);
 });
 
 test('General Chat has a separate request path and Studio keeps native storage IDs', () => {
@@ -221,19 +206,13 @@ test('retired Director structural UI is absent', () => {
   assert.doesNotMatch(workbench, /function prepareStructure\(/);
 });
 
-test('multi-Scene review drafts together and applies selected fields in one atomic request', () => {
-  assert.match(html, /value="scene-write">Scenes/);
-  assert.match(html, /id="studio-dw-scene-mode"/);
-  assert.match(html, /id="studio-dw-batch-review"/);
-  assert.match(workbench, /writeSelectedScene\(\{/);
-  assert.match(workbench, /el\('studio-dw-scene-mode'\)\.value === 'revise'/);
-  assert.match(workbench, /function renderBatchReview\(\)/);
-  const applied = workbench.split('  function applyBatchScenes() {')[1]
-    .split('  function applyScene() {')[0];
-  assert.match(applied, /\/fs\/studio\/director\/scene-fields-batch/);
-  assert.match(applied, /flushStudioDirectorStoryEdits/);
-  assert.match(applied, /savedFieldsByScene/);
-  assert.match(applied, /recordApplied/);
+test('multiple selected Scenes follow the same focused per-Scene writer',()=>{
+  const sequence=workbench.split('  function prepareBatchScenes(storyId) {')[1]
+    .split('  window.studioDirectorWorkbench = {')[0];
+  assert.match(sequence,/writeSelectedScene\(\{/);
+  assert.match(sequence,/forceAuthor:true/);
+  assert.match(sequence,/status\(summary/);
+  assert.doesNotMatch(sequence,/renderBatchReview|applyBatchScenes/);
 });
 
 test('Scene splitting is not a Director Write operation', () => {
@@ -280,7 +259,7 @@ test('Studio conversation excludes H3 template; explicit Scene Write includes th
     requestJson:async url => url==='/fs/storyboard'?{stories:[]}:{chatSystem:'Conversational guidance',system:'Focused Writer',actions:[],promptContract:template}
   });
   vm.runInContext(part('  function studioConversationMessages(messages) {',
-    '  // Retain available conversational work across ordinary follow-up questions.'),context);
+    '  function parseStudioChatResponse(raw) {'),context);
   const result = await vm.runInContext(
     "studioDirectorChatRequestMessages([{role:'user',content:'How should an H3 prompt be structured?'}])",context);
   assert.equal(result.length,2);
@@ -353,13 +332,12 @@ test('standalone Invariant linking is not a Director Write operation', () => {
   assert.doesNotMatch(workbench, /function applyInvariantLinks\(/);
 });
 
-test('multi-Scene review preserves actual Project positions and distinguishes a saved Scene from receipt failure', () => {
-  assert.match(workbench, /position = story\.sceneOrder\.indexOf\(id\) \+ 1/);
-  assert.match(workbench, /heading\.textContent = 'Scene ' \+ entry\.before\.position/);
-  const apply = workbench.split('  function applyScene() {')[1]
-    .split('  function setReadinessFreshness(stale) {')[0];
-  assert.match(apply, /applied = true/);
-  assert.match(apply, /Scene saved, but conversation recording or refresh failed/);
+test('per-Scene list uses authoritative positions and detects saved reporting errors',()=>{
+  const sequence=workbench.split('  function prepareBatchScenes(storyId) {')[1]
+    .split('  window.studioDirectorWorkbench = {')[0];
+  assert.match(sequence,/story\.sceneOrder\.indexOf\(id\) \+ 1/);
+  assert.match(sequence,/if \(error\.saved\)/);
+  assert.match(sequence,/reportingErrors/);
 });
 
 test('legacy Studio field Read remains a neutral context handoff by default', () => {

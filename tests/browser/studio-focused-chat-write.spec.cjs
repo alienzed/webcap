@@ -13,7 +13,7 @@ test('Studio Chat discusses an idea, then explicit Write creates a saved Project
     .locator('.director-chat-message-body');
   await expect(reply).toContainText('locked-off opening');
   await expect(reply).not.toContainText('"changes":');
-  await expect(page.locator('#studio-dw-suggestions .studio-dw-suggestion-action')).toHaveCount(0);
+  await expect(page.locator('#studio-dw-suggestions')).toHaveCount(0);
   const projectTitle='Focused Studio Project '+Date.now();
   await queueModel(request,{title:projectTitle,
     concept:'A courier discovers a misplaced red mitten at an empty station.',
@@ -24,7 +24,7 @@ test('Studio Chat discusses an idea, then explicit Write creates a saved Project
   await page.locator('#studio-dw-write-prepare').click();
   await expect.poll(async()=>(await stories(page)).some(p=>p.title===projectTitle),
     {timeout:30000}).toBe(true);
-  await expect(page.locator('#studio-project-review')).not.toBeVisible();
+  await expect(page.locator('#studio-project-review')).toHaveCount(0);
   const created=(await stories(page)).find(p=>p.title===projectTitle);
   expect((await story(page,created.id)).style).toContain('Locked-off');
   const calls=(await observedModels(request)).calls;
@@ -38,7 +38,10 @@ test('Studio conversation never promotes a model JSON claim into an authored cha
   await queueModel(request,{reply:'Renamed the Scene.',changes:{scene:{title:'Left Behind'}}});
   await say(page,'What is a good name for this Scene?');
   await expect(page.locator('#studio-dw-suggestions .studio-dw-suggestion-action')).toHaveCount(0);
-  await expect(page.locator('#director-chat-progress-detail')).toContainText(/structured data|conversation/i);
+  await expect(page.locator('#director-chat-messages .director-chat-message-assistant').last())
+    .toContainText('Renamed the Scene');
+  // Chat output is never interpreted as a save or classified as an action.
+  await expect(page.locator('#studio-dw-write-ready-launch')).toHaveCount(0);
 });
 
 test('Studio Chat -> Write Scene saves an H3 prompt directly and preserves conversation',async({page,request})=>{
@@ -70,7 +73,7 @@ test('Studio Chat -> Write Scene saves an H3 prompt directly and preserves conve
   await expect.poll(async()=> (await story(page,id)).sceneOrder.length,{timeout:30000}).toBe(1);
   const saved=await story(page,id);
   expect(saved.scenes[saved.sceneOrder[0]].prompt).toBe(prompt);
-  await expect(page.locator('#studio-scenes-review')).not.toBeVisible();
+  await expect(page.locator('#studio-scenes-review')).toHaveCount(0);
   const calls=(await observedModels(request)).calls;
   expect(calls).toHaveLength(2);
   expect(JSON.stringify(calls[1])).toContain(opening);

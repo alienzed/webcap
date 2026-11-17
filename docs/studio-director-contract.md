@@ -9,14 +9,14 @@ Studio Director is an imaginative, capable creative partner. The author can disc
 ### 1. Ordinary conversation
 
 - Open Studio Director as a normal, continuous conversation. Answer questions, challenge ideas constructively, and make useful recommendations.
-- Chat **does not author application fields, invoke Write, offer structured draft captures, or save**. Any proposed Project or Scene work is discussion until the author clicks an explicit Write function.
-- Chat receives only the concise creative-partner role and explicitly approved saved Read references. It receives **no H3 production reference, no Project/Scene writing schema, no model-facing capability catalog, and no save/review workflow instructions**.
+- Read is a one-time user action, not an LLM call. The complete snapshot visible in chat is byte-for-byte the user-message content delivered to subsequent LLM requests; a reload preserves it. Chat **does not author application fields, invoke Write, offer structured draft captures, or save**. Any proposed Project or Scene work is discussion until the author clicks an explicit Write function.
+- Chat receives only the concise creative-partner role and the complete persisted conversation, including past explicit Read snapshots. It receives **no H3 production reference, no Project/Scene writing schema, no model-facing capability catalog, and no save/review workflow instructions**.
 - WebCap does not infer the author's intent from prose to choose a function. No hidden staging, readiness scoring, planning, repair, model action prediction, or permission to write follows from conversation.
 - The original model output, including malformed or unexpected responses, and outbound request remain inspectable in I/O. No hidden rewrite, semantic grading, recovery or automatic retry.
 
 ### 2. Write functions
 
-**The selected UI action is the operation.** The model receives the complete available conversation in order, followed by that operation's focused task instruction, exact necessary saved material, task-specific guidance and **task-specific response schema**.
+**The selected UI action is the operation.** The model receives the complete available conversation in order, including immutable Read messages, followed by that operation's focused task instruction, exact necessary saved material, task-specific guidance and **task-specific response schema**.
 
 | Explicit action | Supplied task context | Expected model material |
 | --- | --- | --- |
@@ -37,10 +37,10 @@ Four concepts remain distinct:
 
 1. **Navigation:** which Project/Scene is open in Studio.
 2. **Conversation attachment:** a deliberate working association, useful for labels or suggesting a target; not permission to read its saved content.
-3. **Approved Read references:** explicit author-approved saved fields, potentially spanning several Projects. Refresh approved fields when necessary, and do not include unapproved saved creative material in ordinary chat.
+3. **Read snapshots:** each explicit Read captures the chosen fields from one Project at that moment, displays the exact snapshot in the conversation, and persists it as an ordinary message. Multiple Reads, including across Projects, accumulate in the same uninterrupted history. Later edits never mutate prior snapshots; only another explicit Read captures new values. No standing approvals, refreshes, context subscriptions, system-message injection or additional model call.
 4. **Write destination:** an explicit Project/Scene chosen for that operation. A Write action for a saved target may read its exact current saved baseline; it does not authorize unrelated sources.
 
-Changing navigation, opening a chat, approving a Read source or selecting a Write target must not silently change the other identities. Conversation history survives those transitions. WebCap owns IDs, destination resolution and persistence; model output never authorizes a different destination.
+Changing navigation, opening a chat, performing a Read or selecting a Write target must not silently change the other identities. Conversation history survives those transitions. WebCap owns IDs, destination resolution and persistence; model output never authorizes a different destination.
 
 ### 4. Saving and History
 
@@ -66,7 +66,7 @@ Preserve useful standalone Scene development, Revise Scenes, First Cut and optio
 
 ### 7. Verification
 
-Evaluate actual outbound request messages and schemas, raw provider responses, confirmed saved values, History and the browser interaction separately. Tests must cover normal conversation without H3 guidance or implicit writes; explicit Project/Scene writing with full conversation; navigation/attachment/Read/destination independence; new and revised Scenes; multi-Scene partial failure; raw JSON/model error visibility; and working standalone specialist tools.
+Evaluate actual outbound request messages and schemas, raw provider responses, confirmed saved values, History and the browser interaction separately. Tests must cover normal conversation without H3 guidance or implicit writes; explicit Project/Scene writing with full conversation; navigation/attachment/Read/destination independence; exact visible Read payload equals LLM history after reload and source mutation; new and revised Scenes; multi-Scene partial failure; raw JSON/model error visibility; and working standalone specialist tools.
 
 Static and mocked tests do not establish live-model reliability. Do not weaken a failed test simply to align with a new string or accepted output format. A verified defect in request assembly or saving is a WebCap defect; model creativity is not a WebCap gate.
 

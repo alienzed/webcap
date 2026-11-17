@@ -235,8 +235,8 @@ test('a partial title remains available while the retry authors a complete reque
   await h.window.studioDirectorBridge.writeSelectedScene(launch);
   assert.equal(h.events.filter(event=>event[0]==='model').length,2);
   const secondRequest=JSON.parse(h.events.filter(event=>event[0]==='model')[1][1]);
-  assert.equal(secondRequest.unsavedWorkingFields.title,'Quiet arrival',
-    'the model receives independently useful partial material to continue');
+  assert.ok(!Object.hasOwn(secondRequest,'unsavedWorkingFields'),
+    'an explicit retry uses fresh authoritative values and the conversation, not hidden drafts');
   const save=h.events.find(event=>event[0]==='save')[1];
   assert.deepEqual(JSON.parse(JSON.stringify(save.changes)),{
     prompt:'The camera stays wide while Mara settles beside the rover.',
@@ -327,8 +327,8 @@ test('unsupported explicit duration preserves a complete Scene draft without sav
   assert.ok(h.events.some(row=>row[0]==='status' && /nothing saved/.test(row[1])));
 });
 
-test('already authored structured Scene prompt applies with exact requested duration, no repeat model call',async()=>{
-  const h=sceneFixture();
+test('an explicit Scene Write reauthors even when a complete earlier draft is cached',async()=>{
+  const h=sceneFixture('{"prompt":"Fresh complete quiet H3 replacement","durationSeconds":14}');
   const request='Make Scene 1 last 14 seconds with a quieter ending.';
   h.state.studioWorkingDraft.scenes.s1={prompt:'Complete quiet H3 replacement',durationSeconds:14};
   authoredSceneOrigin(h,request,['prompt','durationSeconds']);
@@ -336,9 +336,9 @@ test('already authored structured Scene prompt applies with exact requested dura
     ...h.launch,authorRequest:request,instruction:'Quieter ending',
     fields:['prompt','durationSeconds']
   });
-  assert.equal(h.events.filter(row=>row[0]==='model').length,0);
+  assert.equal(h.events.filter(row=>row[0]==='model').length,1);
   const save=h.events.find(row=>row[0]==='save')[1];
-  assert.equal(save.changes.prompt,'Complete quiet H3 replacement');
+  assert.equal(save.changes.prompt,'Fresh complete quiet H3 replacement');
   assert.equal(save.changes.durationSeconds,14);
   assert.equal(h.saved.scenes.s1.durationSeconds,14);
 });
@@ -376,8 +376,8 @@ test('explicitly selected title and duration changes do not rewrite an unselecte
   assert.equal(h.saved.scenes.s1.prompt,'Mara shouts at the rover.');
 });
 
-test('a matching retained title-only draft applies without creating an unwanted Prompt',async()=>{
-  const h=sceneFixture();
+test('a title-only explicit Write uses the model without changing the saved Prompt',async()=>{
+  const h=sceneFixture('{"title":"Quiet Arrival"}');
   const request='Call this Scene Quiet Arrival.';
   h.state.studioWorkingDraft.scenes.s1={
     title:'Quiet Arrival',prompt:'Old unrelated unsaved prompt'
@@ -387,7 +387,7 @@ test('a matching retained title-only draft applies without creating an unwanted 
     ...h.launch,fields:['title'],instruction:request,authorRequest:request
   });
   assert.ok(result.story);
-  assert.equal(h.events.filter(row=>row[0]==='model').length,0);
+  assert.equal(h.events.filter(row=>row[0]==='model').length,1);
   assert.deepEqual(JSON.parse(JSON.stringify(h.events.find(row=>row[0]==='save')[1].changes)),
     {title:'Quiet Arrival'});
   assert.equal(h.saved.scenes.s1.prompt,'Mara shouts at the rover.');
@@ -452,7 +452,7 @@ test('a different Scene draft does not evict provenance of the first Scene',asyn
   assert.equal(h.events.filter(row=>row[0]==='save').length,0);
 });
 
-test('a subsequent Scene rewrite sees the unsaved working prompt, not just the older saved prompt',async()=>{
+test('a subsequent Scene Write uses the saved baseline without hidden unsaved draft injection',async()=>{
   const h=sceneFixture();
   h.state.studioWorkingDraft.scenes.s1={prompt:'The previous unsaved quiet H3 draft.'};
   h.state.studioWorkingDraft.sourceRequest='First quieter draft';
@@ -463,7 +463,7 @@ test('a subsequent Scene rewrite sees the unsaved working prompt, not just the o
   const call=h.events.find(event=>event[0]==='model');
   assert.ok(call,'the distinct new change should still author once');
   const input=JSON.parse(call[1]);
-  assert.equal(input.unsavedWorkingFields.prompt,'The previous unsaved quiet H3 draft.');
+  assert.ok(!Object.hasOwn(input,'unsavedWorkingFields'));
   assert.equal(input.savedScene.fields.find(field=>field.id==='scene:s1:prompt').value,
     'Mara shouts at the rover.');
 });

@@ -62,6 +62,14 @@ class SetCaptionReplaceTests(unittest.TestCase):
             caption_ops.replace_set_caption_text("set-one", "red", "green", "")
         self.assertEqual((self.folder / "a.txt").read_text(encoding="utf-8"), "red red\\nBlue")
 
+    def test_preview_is_bound_to_find_and_replacement(self):
+        preview = caption_ops.replace_set_caption_text("set-one", "red", "green")
+        with self.assertRaisesRegex(ValueError, "Preview again"):
+            caption_ops.replace_set_caption_text("set-one", "red", "orange", preview["signature"])
+        with self.assertRaisesRegex(ValueError, "Preview again"):
+            caption_ops.replace_set_caption_text("set-one", "Blue", "green", preview["signature"])
+        self.assertEqual((self.folder / "a.txt").read_text(encoding="utf-8"), "red red\\nBlue")
+
     def test_case_sensitive_and_empty_search(self):
         preview = caption_ops.replace_set_caption_text("set-one", "RED", "green")
         self.assertEqual(preview["occurrences"], 0)

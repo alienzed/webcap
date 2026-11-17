@@ -53,11 +53,11 @@ test('LIVE contract — explicitly requested Scene revision must return a full n
     style:'Quiet overcast morning.'});
   const model=await openLiveDirector(page);
   const original='A courier walks through wet grass toward a white lighthouse carrying a sealed parcel.';
-  const instruction='Revise this existing eight-second H3 Scene with a clearly visible brass compass. '+
-    'Keep the courier, the lighthouse, parcel, duration, and core action. '+
-    'Return the complete replacement prompt in the required prompt field, not an explanation or plan.';
-  // Use WebCap's actual published Studio guidance and H3 prompt contract,
-  // rather than an invented friendly test-only system prompt.
+  const scene=await seedScene(page,project.id,{title:'Lighthouse Delivery',prompt:original,durationSeconds:8});
+  const instruction='The courier should discover a brass compass in the grass while approaching the lighthouse. '+
+    'Keep the sealed parcel, the foggy setting, and the original eight-second action. Rewrite this Scene.';
+  // This isolates the existing scoped Write operation and its server schema.
+  // The full in-app conversational revision is exercised separately below.
   const guidanceResponse=await page.request.get('/fs/studio/director/guidance?targetModel=minimax_h3');
   expect(guidanceResponse.ok()).toBeTruthy();
   const guidance=await guidanceResponse.json();
@@ -65,12 +65,22 @@ test('LIVE contract — explicitly requested Scene revision must return a full n
   expect(guidance.promptContract).toBeTruthy();
   const outbound=[{
     role:'system',
-    content:guidance.system+'\\n\\nH3 PRODUCTION PROMPT REFERENCE:\\n'+guidance.promptContract+
-      '\\n\\nEXPLICIT WRITE: Return the full replacement prompt value in the required prompt field now. WebCap handles review and persistence.'
+    content:guidance.system+'\n\nH3 PROMPT AUTHORING REFERENCE:\n'+guidance.promptContract
   },{
     role:'user',
-    content:JSON.stringify({project:{concept:project.concept,style:project.style},
-      originalPrompt:original,durationSeconds:8,instruction})
+    content:JSON.stringify({
+      task:'Revise the requested fields of this Scene in the author\'s direction. '+
+        'When changing creative content, return the complete replacement H3 Prompt. '+
+        'Preserve all unaffected details and the established timing. '+
+        'Return the requested field values in one JSON object.',
+      authorDirection:instruction,requestedFields:['prompt'],
+      savedScene:{fields:[
+        {id:'scene:'+scene.id+':title',value:scene.title},
+        {id:'scene:'+scene.id+':prompt',value:scene.prompt},
+        {id:'scene:'+scene.id+':durationSeconds',value:scene.durationSeconds}
+      ]},
+      unsavedWorkingFields:{}
+    })
   }];
   const response=await page.request.post('/fs/director/chat',{data:{
     model,operation:'studio_scene_field_draft',requiredFields:['prompt'],messages:outbound
@@ -102,7 +112,11 @@ test('LIVE contract — explicitly requested Scene revision must return a full n
   expect(authored.prompt.trim().length,'The real model must author a complete replacement prompt')
     .toBeGreaterThan(80);
   expect(authored.prompt).not.toBe(original);
-  expect((await story(page,project.id)).sceneOrder).toHaveLength(0);
+  expect(authored.prompt).toMatch(/compass/i);
+  const saved=await story(page,project.id);
+  expect(saved.sceneOrder).toEqual([scene.id]);
+  expect(saved.scenes[scene.id].prompt).toBe(original);
+  expect(saved.scenes[scene.id].durationSeconds).toBe(8);
 });
 
 test('LIVE conversation — real Scene records have required title, duration and complete prompt before choosing Project',async({page},testInfo)=>{
@@ -223,15 +237,18 @@ test('LIVE conversation — an existing Scene rewrite must contain changes.scene
   await toggles.first().check();
   await page.locator('#studio-dw-read-send').click();
   const observation=observeRealDirector(page);
-  const instruction='Revise the selected existing Platform Scene prompt to show the watchman '+
-    'discovering an antique silver whistle, preserving the same station and eight-second duration. '+
-    'Return the COMPLETE replacement H3 prompt in changes.scene.prompt, not a summary, '+
-    'an action intention, or a new Scene. Do not revise the Ticket office Scene.';
+  const instruction='In the Platform Scene, have the watchman notice an antique silver whistle '+
+    'beneath a bench and briefly hesitate before picking it up. Keep the wet blue station '+
+    'atmosphere, the existing action, and the eight-second timing.';
   await sendLive(page,instruction);
   const {parsed,receipt}=await observation.result();
-  await evidence(testInfo,'actual-conversation-existing-scene-result',{model,instruction,raw:receipt.raw,parsed});
+  await evidence(testInfo,'actual-conversation-existing-scene-result',{model,instruction,
+    outbound:observation.requests[0],raw:receipt.raw,parsed});
   expect(observation.requests).toHaveLength(1);
   expect(observation.requests[0].operation).toBe('studio_chat');
+  const firstContext=JSON.stringify(observation.requests[0].messages);
+  expect(firstContext).toContain(first.prompt);
+  expect(firstContext).not.toContain(second.prompt);
   await expect.poll(()=>observation.schemas.length).toBe(1);
   expect(observation.schemas[0].properties.changes.properties.scene.properties.prompt.type)
     .toBe('string');
@@ -243,6 +260,8 @@ test('LIVE conversation — an existing Scene rewrite must contain changes.scene
   expect(authored.trim().length,'A real Scene rewrite must contain a complete replacement prompt')
     .toBeGreaterThan(80);
   expect(authored).not.toBe(first.prompt);
+  expect(authored).toMatch(/whistle/i);
+  expect(authored).toMatch(/station|platform/i);
   expect((await story(page,project.id)).scenes[first.id].prompt).toBe(first.prompt);
   const action=page.locator('#studio-dw-suggestions .studio-dw-suggestion-action');
   await expect(action).toContainText('Review authored Scene');
@@ -256,8 +275,55 @@ test('LIVE conversation — an existing Scene rewrite must contain changes.scene
   expect(saved.scenes[first.id].title).toBe(first.title);
   expect(saved.scenes[first.id].durationSeconds).toBe(8);
   expect(observation.requests).toHaveLength(1);
-  await page.reload();
+
+  // Continue as a creative collaboration. The next response must build on
+  // the just-saved revision rather than the original eight-second draft.
+  await reopenDirectorIfClosed(page);
+  const followup='Keep the silver whistle discovery, but at the end let the watchman '+
+    'glance toward an approaching train before pocketing it. Keep this the same '+
+    'eight-second Platform Scene and leave the Ticket office untouched.';
+  await sendLive(page,followup);
+  await expect.poll(()=>observation.receipts.length,{timeout:30000}).toBe(2);
+  const secondReceipt=observation.receipts[1];
+  let secondResponse;
+  try {secondResponse=JSON.parse(secondReceipt.raw);}
+  catch(error){throw new Error('Follow-up Director reply is not structured JSON: '+
+    error.message+'\nRaw result:\n'+secondReceipt.raw);}
+  await evidence(testInfo,'actual-followup-scene-model-result',{
+    model,instruction:followup,outbound:observation.requests[1],
+    raw:secondReceipt.raw,parsed:secondResponse
+  });
+  expect(observation.requests).toHaveLength(2,'Follow-up must use one model call');
+  expect(observation.requests[1].operation).toBe('studio_chat');
+  const followupContext=JSON.stringify(observation.requests[1].messages);
+  expect(followupContext,'Fresh approved Read must supply the last saved Scene revision')
+    .toContain(authored);
+  expect(followupContext).not.toContain(second.prompt);
+  const followupPrompt=secondResponse.changes?.scene?.prompt;
+  expect(typeof followupPrompt,'Follow-up Scene edit omitted changes.scene.prompt').toBe('string');
+  expect(followupPrompt.trim().length,'Follow-up must return a complete replacement prompt')
+    .toBeGreaterThan(80);
+  expect(followupPrompt).toMatch(/whistle/i);
+  expect(followupPrompt).toMatch(/train/i);
+  expect(followupPrompt).not.toBe(authored);
   expect((await story(page,project.id)).scenes[first.id].prompt).toBe(authored);
+
+  const followupAction=page.locator('#studio-dw-suggestions .studio-dw-suggestion-action');
+  await expect(followupAction).toContainText('Review authored Scene');
+  await followupAction.click();
+  await expect(page.locator('#studio-dw-scene-review')).toBeVisible();
+  await expect(page.locator('#studio-dw-scene-editors [data-field="prompt"]'))
+    .toHaveValue(followupPrompt);
+  await page.locator('#studio-dw-scene-apply').click();
+  await expect.poll(async()=> (await story(page,project.id)).scenes[first.id].prompt)
+    .toBe(followupPrompt);
+  const finalSaved=await story(page,project.id);
+  expect(finalSaved.scenes[second.id].prompt).toBe(second.prompt);
+  expect(finalSaved.scenes[first.id].durationSeconds).toBe(8);
+  expect(finalSaved.scenes[first.id].title).toBe(first.title);
+  expect(observation.requests).toHaveLength(2,'Apply must not cause extra authoring');
+  await page.reload();
+  expect((await story(page,project.id)).scenes[first.id].prompt).toBe(followupPrompt);
 });
 
 test('LIVE cross-Project references — an unrelated Scene and character Invariant inform a new Scene saved elsewhere',async({page},testInfo)=>{

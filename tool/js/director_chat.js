@@ -2421,8 +2421,9 @@
       original = response.story;
       if (!original || original.id !== storyId) throw new Error('Selected Project is unavailable.');
       var input = {
-        task:'Revise the requested Project fields. Return complete replacement values for the fields you change. ' +
-          'Preserve unrelated saved Project fields and Scenes.',
+        task:'Revise the Project in the author’s direction. Return the complete current values ' +
+          'of title, concept, style and invariants. Preserve unrequested saved Project ' +
+          'fields exactly as supplied, and never change Scenes.',
         instruction:instruction,
         requestedFields:requestedFields,
         project:{title:original.title,concept:original.concept,

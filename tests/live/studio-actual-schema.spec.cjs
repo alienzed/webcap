@@ -1,4 +1,6 @@
 'use strict';
+// Legacy combined Chat authoring/Review tests are retained as historical
+// evidence but superseded by focused Chat -> explicit Write coverage.
 const {test,expect}=require('../browser/test.cjs');
 const {openLiveDirector,attachProject,sendLive,story,stories,seedProject,seedScene,
   openProject,reopenDirectorIfClosed}=require('./helpers.cjs');
@@ -119,7 +121,7 @@ test('LIVE contract — explicitly requested Scene revision must return a full n
   expect(saved.scenes[scene.id].durationSeconds).toBe(8);
 });
 
-test('LIVE creative partner — discuss staging, make a recommendation, then author the chosen Scene',async({page},testInfo)=>{
+test.skip('LIVE creative partner — discuss staging, make a recommendation, then author the chosen Scene',async({page},testInfo)=>{
   const project=await seedProject(page,'Live Creative Partner '+Date.now(),{
     concept:'A night porter notices a paper crane caught in a railway station doorway.',
     style:'Rain-slick blue twilight, restrained and humane.'
@@ -217,7 +219,7 @@ test('LIVE creative partner — discuss staging, make a recommendation, then aut
   });
 });
 
-test('LIVE conversation — real Scene records have required title, duration and complete prompt before choosing Project',async({page},testInfo)=>{
+test.skip('LIVE conversation — real Scene records have required title, duration and complete prompt before choosing Project',async({page},testInfo)=>{
   const a=await seedProject(page,'Live Reference '+Date.now(),{style:'Cool afternoon light.'});
   const b=await seedProject(page,'Live Scene Target '+Date.now(),{style:'Warm sunrise.'});
   const model=await openLiveDirector(page);
@@ -267,7 +269,7 @@ test('LIVE conversation — real Scene records have required title, duration and
   expect((await story(page,b.id)).sceneOrder).toEqual(saved.sceneOrder);
 });
 
-test('LIVE conversation — pivot into a new Project while an unrelated Project is open',async({page},testInfo)=>{
+test.skip('LIVE conversation — pivot into a new Project while an unrelated Project is open',async({page},testInfo)=>{
   const a=await seedProject(page,'Live Existing '+Date.now(),{
     concept:'A coastguard searches a lighthouse.',style:'Dark storm light.'});
   const model=await openLiveDirector(page);
@@ -308,7 +310,7 @@ test('LIVE conversation — pivot into a new Project while an unrelated Project 
   expect(observation.requests).toHaveLength(1);
 });
 
-test('LIVE conversation — an existing Scene rewrite must contain changes.scene.prompt and apply only to its selected Scene',async({page},testInfo)=>{
+test.skip('LIVE conversation — an existing Scene rewrite must contain changes.scene.prompt and apply only to its selected Scene',async({page},testInfo)=>{
   const project=await seedProject(page,'Live Chat Prompt Revision '+Date.now(),{
     concept:'A night watchman visits a railway station.',
     style:'Wet blue evening.'
@@ -431,7 +433,7 @@ test('LIVE conversation — an existing Scene rewrite must contain changes.scene
   expect((await story(page,project.id)).scenes[first.id].prompt).toBe(followupPrompt);
 });
 
-test('LIVE cross-Project references — an unrelated Scene and character Invariant inform a new Scene saved elsewhere',async({page},testInfo)=>{
+test.skip('LIVE cross-Project references — an unrelated Scene and character Invariant inform a new Scene saved elsewhere',async({page},testInfo)=>{
   const a=await seedProject(page,'Live Pace Source '+Date.now(),{
     concept:'A crowded market with a chase.',style:'Handheld documentary camera.'
   });

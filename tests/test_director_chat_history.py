@@ -134,7 +134,7 @@ def test_mixed_director_deliverables_and_edited_scene_review_survive_session_rel
         },
     }
     saved = history.save_chat(chat["id"], {
-        "expectedRevision": 0, "title": "Mixed creative work",
+        "expectedRevision": 0, "title": "Mixed creative work", "draft": "",
         "messages": [{"role": "assistant", "content": "Here is the work.",
                       "rawResponse": raw, "writeAction": scene_action,
                       "otherWriteActions": [project_action]}],

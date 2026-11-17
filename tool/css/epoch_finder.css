@@ -973,7 +973,7 @@ button.epoch-finder-ranking-row:hover,button.epoch-finder-ranking-row:focus-visi
 #test-generations-body .test-generations-prompt {
   gap: 9px;
 }
-#test-generations-body .test-generations-next-run .training-run-option {
+#test-generations-body .test-generations-next-run .training-run-option:not(.test-generations-prompt) {
   gap: 6px;
 }
 #test-generations-body .test-generations-prompt-heading > span,

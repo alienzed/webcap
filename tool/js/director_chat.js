@@ -4987,7 +4987,7 @@
           unsavedWorkingFields:workingScene || {}
         });
         state.pending = false;
-        return window.studioDirectorBridge.makeProposal(instruction, 'studio_scene_field_draft', true,
+        return window.studioDirectorBridge.makeProposal(instruction, 'studio_scene_field_draft', wantsPrompt,
           {projectId:storyId,projectTitle:story.title,sceneId:sceneId,
             sceneNumber:story.sceneOrder.indexOf(sceneId)+1,sceneOrder:story.sceneOrder.slice()},
           requestedFields)

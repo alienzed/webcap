@@ -95,82 +95,46 @@ function actualSceneRequestFixture() {
   return {scope,state,stories,requests,setNavigation:next=>{navigation=next;}};
 }
 
-test('selected Project/Scene never supplies saved facts before author approval',async()=>{
+test('navigation cannot inject saved creative material into ordinary conversation',async()=>{
   const h=actualSceneRequestFixture();
-  const history=[{role:'user',content:'Draft a new Project unrelated to the open Project.'}];
-  const outbound=await h.scope.studioDirectorChatRequestMessages(history,h.scope.studioDirectorSelectedScene());
+  const history=[{role:'user',content:'Discuss the open Project.'}];
+  const outbound=await h.scope.studioDirectorChatRequestMessages(history,null);
   assert.equal(outbound[1].content,history[0].content);
-  assert.match(outbound[0].content,/No saved Project or Scene reference was supplied/);
   assert.doesNotMatch(outbound[0].content,/Mara walks toward the rover|Naturalistic moonlight|Red suit/);
   assert.equal(h.requests.filter(url=>url.startsWith('/fs/storyboard?story=')).length,0);
 });
 
-test('approved Overview and Scene fields refresh on each message without another approval or LLM request',async()=>{
+test('a saved Read snapshot survives later Project edits and follows selected destination independently',async()=>{
   const h=actualSceneRequestFixture();
-  h.state.studioApprovedRead={projectId:'p1',keys:['project.concept','scene:a:title',
-    'scene:a:prompt','scene:a:durationSeconds'],label:'Moon crossing · Overview + Scene 1'};
-  const messages=[{role:'user',content:'What is happening?'}];
-  const first=await h.scope.studioDirectorChatRequestMessages(messages,h.scope.studioDirectorSelectedScene());
-  assert.match(first[0].content,/AUTHOR-APPROVED SAVED CONTEXT/);
-  assert.match(first[0].content,/Mara walks toward the rover/);
-  assert.match(first[0].content,/scene:a:durationSeconds/);
-  assert.doesNotMatch(first[0].content,/Naturalistic moonlight|Red suit|The rover drives into a crater/);
-  h.stories.p1.scenes.a.prompt='Mara now rides the rover.';
-  const refreshed=await h.scope.studioDirectorChatRequestMessages(messages,h.scope.studioDirectorSelectedScene());
-  assert.match(refreshed[0].content,/Mara now rides the rover/);
-  assert.doesNotMatch(refreshed[0].content,/Mara walks toward the rover/);
-  assert.equal(h.requests.filter(url=>url.startsWith('/fs/storyboard?story=')).length,2);
-  assert.equal(h.requests.filter(url=>url.includes('/fs/director/chat')).length,0);
-});
-
-test('approved source remains distinct from selected Write destination',async()=>{
-  const h=actualSceneRequestFixture();
-  h.stories.p2={id:'p2',title:'Unrelated Project',concept:'A private different premise',
+  h.stories.p2={id:'p2',title:'Unrelated Project',concept:'Private new premise',
     style:'Blue light',invariants:[],sceneOrder:[],scenes:{}};
-  h.state.studioApprovedRead={projectId:'p1',keys:['scene:a:prompt'],label:'Moon crossing · Scene 1'};
-  h.setNavigation({projectId:'p2',projectTitle:'Unrelated Project',sceneId:'',sceneNumber:0,sceneOrder:[]});
+  const read='[WEBCAP EXPLICIT READ] Mara walks toward the rover.';
+  h.stories.p1.scenes.a.prompt='Mara now rides the rover.';
+  const navigation={projectId:'p2',projectTitle:'Unrelated Project',sceneId:'',sceneNumber:0,sceneOrder:[]};
   const bound={};
   const outbound=await h.scope.studioDirectorChatRequestMessages(
-    [{role:'user',content:'Discuss our approved reference.'}],null,
-    {projectId:'p2',projectTitle:'Unrelated Project',sceneId:'',sceneNumber:0,sceneOrder:[]},bound);
+    [{role:'user',content:read},{role:'user',content:'Discuss the earlier snapshot.'}],
+    null,navigation,bound);
   assert.equal(bound.projectId,'p2');
-  assert.match(outbound[0].content,/Mara walks toward the rover/);
-  assert.doesNotMatch(outbound[0].content,/A private different premise/);
+  assert.equal(outbound[1].content,read);
+  assert.doesNotMatch(outbound[0].content,/Mara walks|Mara now rides|Private new premise/);
+  assert.equal(h.requests.filter(url=>url.startsWith('/fs/storyboard?story=')).length,0);
 });
 
-test('approved source load failure remains visible instead of sending guessed context',async()=>{
+test('another Read is required to capture updated material',async()=>{
   const h=actualSceneRequestFixture();
-  h.state.studioApprovedRead={projectId:'p1',keys:['scene:a:prompt'],label:'Moon crossing · Scene 1'};
-  h.scope.requestJson=async url=>{
-    if(url.includes('/guidance?'))return {system:'Director guidance',actions:[],promptContract:'H3'};
-    throw new Error('Approved saved Project cannot be loaded');
-  };
-  await assert.rejects(h.scope.studioDirectorChatRequestMessages([{role:'user',content:'Read it.'}],null),
-    /Approved saved Project cannot be loaded/);
+  const first='[WEBCAP READ] Mara walks toward the rover.';
+  h.stories.p1.scenes.a.prompt='Mara now rides the rover.';
+  const messages=[{role:'user',content:first}];
+  const before=await h.scope.studioDirectorChatRequestMessages(messages,null);
+  assert.equal(before[1].content,first);
+  assert.doesNotMatch(JSON.stringify(before),/Mara now rides/);
+  const next='[WEBCAP READ] '+h.stories.p1.scenes.a.prompt;
+  const after=await h.scope.studioDirectorChatRequestMessages(
+    messages.concat({role:'user',content:next}),null);
+  assert.equal(after[1].content,first);
+  assert.equal(after[2].content,next);
 });
-
-test('navigation changes do not silently change the approved context badge',async()=>{
-  const director=fs.readFileSync(path.join(__dirname,'../tool/js/director_chat.js'),'utf8');
-  const section=(source,start,end)=>source.slice(source.indexOf(start),source.indexOf(end,source.indexOf(start)+start.length));
-  const h=actualSceneRequestFixture();
-  h.state.activeMode='storyboard';
-  h.state.studioApprovedRead={projectId:'p1',keys:['scene:a:prompt'],label:'Moon crossing · Scene 1'};
-  const badge={textContent:'',title:'',hidden:true,classList:{
-    toggle(name,hidden){if(name==='hidden')badge.hidden=hidden;}
-  }};
-  h.scope.el=()=>badge;
-  vm.runInContext(section(director,'  function syncModeUi() {',
-    "    var row = el('director-chat-mode-row');")+'  }',h.scope);
-  h.scope.syncModeUi();
-  assert.equal(badge.hidden,false);
-  assert.equal(badge.textContent,'Approved context · Moon crossing · Scene 1');
-  h.setNavigation({projectId:'p1',projectTitle:'Moon crossing',sceneId:'b',
-    sceneNumber:2,sceneOrder:['a','b']});
-  h.scope.syncModeUi();
-  assert.equal(badge.textContent,'Approved context · Moon crossing · Scene 1');
-  assert.deepEqual(h.requests,[],'navigation never asks the model to read');
-});
-
 
 function assistantRailHarness() {
   const chat=fs.readFileSync(path.join(__dirname,'../tool/js/director_chat.js'),'utf8');

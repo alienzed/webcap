@@ -1,5 +1,7 @@
 # Studio Director — implementation and acceptance
 
+> **2026-11-17 update:** The [focused Chat/explicit Write amendment](studio-director-contract.md) supersedes historical guidance here that expects ordinary conversation to return structured Project/Scene fields, combined `reply`/authoring JSON, or reviewable drafts from Chat. Explicit Write owns structured output; retained legacy drafts remain readable. See [phased implementation and acceptance](studio-focused-chat-write-implementation.md).
+
 [Functional contract](studio-director-contract.md) is authoritative. This file tracks the three-operation implementation and evidence; it does not define a competing architecture. The earlier incremental plans and audits from November 14 were superseded by the three-operation cutover in PR #950. Consult the PR history for original gap analyses.
 
 ## Scope correction — session material and independent references (2026-11-16)

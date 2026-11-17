@@ -46,7 +46,7 @@ test('mixed Director response keeps both Project and Scene drafts independently 
   await page.locator('#studio-project-create').click();
   await expect.poll(async()=>(await stories(page)).some(p=>p.title===futureTitle)).toBe(true);
   const created=(await stories(page)).find(p=>p.title===futureTitle);
-  expect(created.style).toBe('Cool blue moonlight.');
+  expect((await story(page,created.id)).style).toBe('Cool blue moonlight.');
   expect((await story(page,project.id)).sceneOrder).toEqual(savedSource.sceneOrder);
   expect((await observedModels(request)).calls).toHaveLength(1,
     'review and saving two independent results never requires another model call');

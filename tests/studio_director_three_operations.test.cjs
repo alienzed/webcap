@@ -51,12 +51,22 @@ test('Read is plain prose; an absent or malformed optional action does not disca
   assert.throws(() => parse('  '), /no answer/);
 });
 
-test('Structured Studio fields survive a missing optional conversational reply', () => {
+test('model-authored fields without reply remain reviewable with a factual chat summary', () => {
   const changes = {scene:{prompt:'Complete replacement prompt',durationSeconds:12}};
   const response = parse(JSON.stringify({changes}));
-  assert.equal(response.reply, JSON.stringify({changes}));
+  assert.equal(response.reply,
+    'Scene revision draft — H3 prompt, duration. Review the proposed material below.');
   assert.deepEqual(response.changes,changes);
   assert.equal(response.action,null);
+  const project = parse(JSON.stringify({changes:{project:{
+    title:'Kitten Chaos',concept:'Kittens stumble through silly mishaps.',
+    style:'Warm natural light'
+  }}}));
+  assert.match(project.reply,/Project draft “Kitten Chaos”/);
+  assert.match(project.reply,/title, concept, visual style/);
+  assert.doesNotMatch(project.reply,/\\\"changes\\\"/);
+  assert.equal(project.changes.project.title,'Kitten Chaos',
+    'only the conversational display changes; the authored Project fields survive');
   const mixed = parse(JSON.stringify({reply:'Useful answer.',changes,
     action:{kind:'unsupported_operation',instruction:'Change things'}}));
   assert.equal(mixed.reply,'Useful answer.');

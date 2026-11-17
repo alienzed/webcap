@@ -3091,69 +3091,29 @@
   }
 
   function studioDirectorRequestMessages(messages, includePromptContract, explicitWrite, navigationSnapshot) {
-    var navigation = navigationSnapshot || window.getStudioDirectorNavigation();
-    var connected = state.studioStoryAccess && state.studioStoryAccess.storyId;
-    // An explicitly launched write keeps its frozen navigation. Other Director
-    // work uses the connected Project rather than an unrelated Studio shell.
-    var ready = !navigationSnapshot && connected && connected !== navigation.projectId
-      ? requestJson('/fs/storyboard?story=' + encodeURIComponent(connected)).then(function (result) {
-          var story = result && result.story;
-          if (!story || story.id !== connected)
-            throw new Error('The connected Director Project is no longer available.');
-          return {projectId:story.id,projectTitle:story.title,sceneId:'',sceneNumber:0,
-            sceneOrder:story.sceneOrder.slice()};
-        })
-      : Promise.resolve(navigation);
-    return ready.then(function (navigation) {
-      return requestJson('/fs/studio/director/guidance?targetModel=minimax_h3').then(function (payload) {
-      if (!payload.system || typeof payload.system !== 'string') {
-        throw new Error('Studio Director production guidance is missing.');
-      }
-      if (!Array.isArray(payload.actions)) throw new Error('Studio Director capability catalog is missing.');
+    // Creative requests need the author's task and relevant source material.
+    // Navigation, available buttons, IDs and save policy remain WebCap concerns.
+    // Keep the existing call signature for contextual Write callers.
+    return requestJson('/fs/studio/director/guidance?targetModel=minimax_h3').then(function (payload) {
+      if (!payload.system || typeof payload.system !== 'string')
+        throw new Error('Studio Director creative guidance is unavailable.');
       if (includePromptContract && (!payload.promptContract || typeof payload.promptContract !== 'string'))
-        throw new Error('H3 prompt-authoring contract is unavailable.');
-      var capabilities = payload.actions.map(function (action) {
-        return action.name + ' (' + action.status + '): ' + action.description;
-      }).join(String.fromCharCode(10));
-      // Saved field receipts and obsolete explicit-Read payloads stay in chat
-      // history but never re-enter the model context. Keep only recent discussion;
-      // the current authoritative fields and working draft travel separately.
+        throw new Error('H3 prompt-authoring reference is unavailable.');
+      // Application receipts and restored inspection metadata are not user/LLM discussion.
       var recent = messages.filter(function (message) {
         return !/\[WEBCAP APPLIED FIELD VALUES\]|\[WEBCAP EXPLICIT READ\]/.test(
           String(message.content || ''));
       }).slice(-8);
-      var outbound = [{role:'system', content:''}].concat(recent.map(function (message, index) {
+      var outbound = [{role:'system', content:payload.system}].concat(recent.map(function (message, index) {
         var content = String(message.content || '');
-        // The complete authored response is preserved in conversation history.
-        // This prose excerpt is bounded; structured material travels separately.
         if (index < recent.length - 1 && content.length > 3000)
           content = content.slice(0,1800) + '\n[Earlier long message abbreviated]\n' +
             content.slice(-900);
         return {role:message.role,content:content};
-      })); // Persisted inspection metadata is not part of the LLM conversation.
-      // Navigation and destination identity alone convey no saved creative material.
-      var storyRefs = Object.keys(state.storyboardAttachments || {}).filter(function (key) {
-        return key.indexOf('story:') === 0;
-      });
-      var workbench = navigation.projectId
-        ? 'WebCap resolved Project ' + navigation.projectId +
-          '. Only saved content supplied in this request is authoritative.'
-        : 'No Project is selected. A Project or Scene Write will need a destination.';
-      outbound[0] = { role: 'system', content: payload.system +
-        '\n\nCURRENT WEBCAP CAPABILITIES (available vs planned):\n' + capabilities +
-        '\n\nSTUDIO WORKBENCH STATE (controls, not saved Story facts):\n' + workbench +
-        '\nCURRENT PROJECT NAVIGATION (identity and one-based Scene positions; saved content is supplied separately when available):\n' + JSON.stringify(navigation) +
-        (explicitWrite
-          ? '\nEXPLICIT WRITE: The author has chosen to draft. Produce the requested complete editable proposal in the specified format. WebCap handles destination, editing and the selected direct-save or review policy.\n'
-          : '\nFor a direct question, answer directly. ' +
-            'When creative fields are requested, return their complete actual authored values NOW. ' +
-            'Do not describe a future Write action or claim that WebCap has saved anything. ' +
-            'Only WebCap determines review, destination and actual persistence.\n') +
-        outbound[0].content };
-      if (includePromptContract) outbound[0].content +=
-        '\n\nH3 PRODUCTION PROMPT REFERENCE (know this template when discussing H3; apply it only when drafting an H3 Prompt field, not when authoring Project fields):\n' + payload.promptContract;
+      }));
+      if (includePromptContract)
+        outbound[0].content += '\n\nH3 PROMPT AUTHORING REFERENCE:\n' + payload.promptContract;
       return outbound;
-      });
     });
   }
 
@@ -3197,20 +3157,18 @@
       // Do not leak the selected editor's creative content through automatic navigation context.
       return studioDirectorRequestMessages(messages, true, false,
         {projectId:'',projectTitle:'',sceneId:'',sceneNumber:0,sceneOrder:[]}).then(function (outbound) {
-        outbound[0].content += '\n\nSTUDIO CONVERSATION AND AUTHORING: Answer ordinary questions naturally. ' +
-          'When the author requests Project material, return actual replacement field values in changes.project now. ' +
-          'When revising a Scene, return its full replacement H3 Prompt in changes.scene.prompt and any requested title or durationSeconds. ' +
-          'When authoring new Scenes, return scenes:[{title,prompt,durationSeconds}] with full prompts, whether one or many. ' +
-          'These actual fields are the authored result in this same response, not promises for another action. ' +
-          'Return all useful authored fields and Scenes. Ordinary discussion needs no invented action or save claim. ' +
-          'WebCap owns review, destination and persistence; only an actual save is authoritative.\n';
+        outbound[0].content += '\n\nSTUDIO CONVERSATION DELIVERY: Respond naturally to the author. ' +
+          'When there is useful Project or Scene material ready, deliver the actual content alongside the reply. ' +
+          'Use changes.project for authored Project field values; changes.scene for changes to an existing Scene; ' +
+          'and scenes for new Scene drafts. A creative Scene revision includes the complete replacement H3 prompt. ' +
+          'Include every useful field or Scene that is ready, even when another part needs a question. ' +
+          'These are drafts; WebCap decides where and whether to save them.\n';
         if (approvedPayloads.length) {
           outbound[0].content += '\nAUTHOR-APPROVED SAVED CONTEXT (independent sources; refreshed for this request):\n' +
             JSON.stringify(approvedPayloads) +
             '\nEach source retains its own Project identity and is reference material, not an automatic Write destination.\n';
         } else {
-          outbound[0].content += '\nNO SAVED PROJECT/SCENE CONTEXT APPROVED. ' +
-            'Do not assume access to saved fields of the Project selected in Studio.\n';
+          outbound[0].content += '\nNo saved Project or Scene reference was supplied for this conversation.\n';
         }
         // Earlier authored responses belong to this conversation, not any selected Project.
         // Include actual structured fields, rather than only the visible prose summary.

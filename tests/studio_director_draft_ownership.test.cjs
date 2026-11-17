@@ -12,31 +12,27 @@ function part(source,start,end){
   return source.slice(a,b);
 }
 
-test('Write receives explicitly approved independent saved references without transferring its destination',async()=>{
-  const section=part(director,
+test('Write receives persisted Read snapshots verbatim without changing explicit destination',async()=>{
+  const segment=part(director,
     '  function studioDirectorRequestMessages(messages, includePromptContract, explicitWrite, navigationSnapshot) {',
     '  function studioDirectorChatRequestMessages(');
-  const refs=[{projectId:'source',keys:['project.style']}];
-  const state={studioApprovedRead:{sources:refs}};
+  const requests=[];
   const requestJson=async url=>{
-    if(url.includes('/fs/studio/director/guidance'))return {system:'Creative partner',promptContract:'H3 writing reference'};
-    if(url.includes('/fs/storyboard?story=source'))return {story:{id:'source',style:'Warm amber source'}};
-    assert.fail('Unexpected request '+url);
+    requests.push(url);
+    assert.equal(url,'/fs/studio/director/guidance?targetModel=minimax_h3');
+    return {system:'Creative partner',promptContract:'H3 writing reference'};
   };
-  const window={studioDirectorWorkbench:{
-    approvedReadPayload:(story,keys)=>({projectId:story.id,
-      fields:keys.map(key=>({id:key,value:story.style}))})
-  }};
-  const request=new Function('state','requestJson','window',section+
-    'return studioDirectorRequestMessages;')(state,requestJson,window);
-  const input=[{role:'user',content:JSON.stringify({
-    task:'Write a Scene',destinationProjectId:'destination'
-  })}];
+  const request=new Function('requestJson',segment+'return studioDirectorRequestMessages;')(requestJson);
+  const snapshot='[WEBCAP EXPLICIT READ] From Project source: Warm amber source';
+  const input=[{role:'user',content:snapshot},
+    {role:'user',content:JSON.stringify({task:'Write a Scene',destinationProjectId:'destination'})}];
   const output=await request(input,true,true);
   assert.match(output[0].content,/H3 PROMPT AUTHORING REFERENCE/);
-  assert.match(output[0].content,/Warm amber source/);
-  assert.equal(output[1].content,input[0].content);
-  assert.equal(JSON.parse(output[1].content).destinationProjectId,'destination');
+  assert.doesNotMatch(output[0].content,/Warm amber source/);
+  assert.equal(output[1].content,snapshot);
+  assert.equal(output[2].content,input[1].content);
+  assert.equal(JSON.parse(output[2].content).destinationProjectId,'destination');
+  assert.equal(requests.length,1,'no source reread during Write');
 });
 
 test('ordinary conversation does not receive H3 guidance or implicit saved creative material',async()=>{

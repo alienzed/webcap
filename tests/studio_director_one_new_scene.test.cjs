@@ -14,16 +14,6 @@ function slice(source, start, end) {
 
 const method = slice(director,
   '    writeNewScene: function (launch) {', '    writeSelectedScene: function (launch) {');
-const studioRequestedDuration = new Function(slice(director,
-  '  function studioRequestedDuration(instruction) {',
-  '  window.studioDirectorBridge = {') + 'return studioRequestedDuration;')();
-const studioMentionedDuration = new Function(slice(director,
-  '  function studioRequestedDuration(instruction) {',
-  '  window.studioDirectorBridge = {') + 'return studioMentionedDuration;')();
-const studioRequestAppliesPreparedMaterial = new Function(slice(director,
-  '  function studioRequestAppliesPreparedMaterial(request) {',
-  '  function studioWorkingFieldChanges(source, names) {')+
-  'return studioRequestAppliesPreparedMaterial;')();
 const studioWorkingFieldChanges = new Function(slice(director,
   '  function studioWorkingFieldChanges(source, names) {',
   '  function studioMergeWorkingChanges(changes, target, action, request) {')+
@@ -39,7 +29,7 @@ test('one new Scene keeps the selected Project and complete brief through a sing
   state.studioApprovedRead={projectId:'lighthouse',keys:['project.style','scene:s1:title']};
   const launch={projectId:'lighthouse',instruction:brief,authorRequest:brief};
   const scope=vm.createContext({
-    state, studioRequestedDuration, studioMentionedDuration, studioRequestAppliesPreparedMaterial, studioWorkingFieldChanges, syncControls(){},scheduleSessionSave(){}, studioActionStatus(){}, showStudioScenesReview(){reviewed++;},
+    state, studioWorkingFieldChanges, syncControls(){},scheduleSessionSave(){}, studioActionStatus(){}, showStudioScenesReview(){reviewed++;},
     window:{
       flushStudioDirectorStoryEdits:async id=>{assert.equal(id,'lighthouse');},
       reportConsoleError:()=>{assert.fail('No error expected')},
@@ -88,7 +78,7 @@ test('malformed model duration remains visible in review instead of becoming inv
   const state={pending:false,jobId:'',studioScenesProposal:null,studioWorkingDraft:{projects:{},scenes:{},newProject:{},newScene:{},sourceRequest:''}};
   let reviewed=0;
   const scope=vm.createContext({
-    state,studioRequestedDuration,studioMentionedDuration,studioRequestAppliesPreparedMaterial,studioWorkingFieldChanges,syncControls(){},scheduleSessionSave(){},studioActionStatus(){},
+    state,studioWorkingFieldChanges,syncControls(){},scheduleSessionSave(){},studioActionStatus(){},
     showStudioScenesReview(){reviewed++;},
     window:{
       flushStudioDirectorStoryEdits:async()=>{},
@@ -123,8 +113,7 @@ test('later new Scene sees prior saved Scene for continuity, not leftover workin
     invariants:[],sceneOrder:['s1'],scenes:{s1:{title:'Opening',prompt:'SAVED FIRST SCENE',durationSeconds:8}}};
   let requests=0,reviewed=0;
   const scope=vm.createContext({
-    state,studioRequestedDuration,studioMentionedDuration,
-    studioRequestAppliesPreparedMaterial,studioWorkingFieldChanges,
+    state,studioWorkingFieldChanges,
     syncControls(){},scheduleSessionSave(){},studioActionStatus(){},
     showStudioScenesReview(){reviewed++;},
     window:{
@@ -163,8 +152,7 @@ test('missing Prompt retains title and duration as editable draft even on direct
   let authored=0,reviewed=0,saves=0,sessionSaves=0;
   const statuses=[];
   const scope=vm.createContext({
-    state,studioRequestedDuration,studioMentionedDuration,
-    studioRequestAppliesPreparedMaterial,studioWorkingFieldChanges,syncControls(){},
+    state,studioWorkingFieldChanges,syncControls(){},
     scheduleSessionSave(){sessionSaves++;},
     studioActionStatus:(message,error)=>statuses.push({message,error}),
     showStudioScenesReview(){reviewed++;},
@@ -203,12 +191,39 @@ test('missing Prompt retains title and duration as editable draft even on direct
   assert.equal(statuses.at(-1).error,false);
 });
 
+test('missing authored Scene duration is reviewable rather than silently defaulted',async()=>{
+  const state={pending:false,jobId:'',studioScenesProposal:null,
+    studioWorkingDraft:{projects:{},scenes:{},newProject:{},newScene:{},sourceRequest:''}};
+  let saves=0,reviews=0;
+  const scope=vm.createContext({
+    state,studioWorkingFieldChanges,syncControls(){},scheduleSessionSave(){},
+    studioActionStatus(){},showStudioScenesReview(){reviews++;},
+    window:{flushStudioDirectorStoryEdits:async()=>{},reportConsoleError:()=>assert.fail('Partial work is usable'),
+      studioDirectorBridge:{isReady:()=>true,readinessMessage:()=>'',makeProposal:async()=>JSON.stringify({
+        title:'Arrival',prompt:'Complete H3 generation prompt for arrival'
+      })}},
+    requestJson:async url=>{
+      if(url!=='/fs/storyboard?story=p1')saves++;
+      return {story:{id:'p1',title:'Project',sceneOrder:[],scenes:{}}};
+    },
+    Promise,JSON,Number,String,Error,encodeURIComponent
+  });
+  const writer=vm.runInContext('({' + method + '})',scope).writeNewScene;
+  const result=await writer.call(scope.window.studioDirectorBridge,
+    {projectId:'p1',instruction:'Write an eight-second arrival.',directSave:true});
+  assert.equal(result.review,true);
+  assert.equal(reviews,1);
+  assert.equal(saves,0);
+  assert.equal(state.studioScenesProposal.drafts[0].durationSeconds,undefined);
+  assert.match(state.studioScenesProposal.drafts[0].prompt,/Complete H3/);
+});
+
 test('actual multi-Scene output is retained even when the request mentioned one', async () => {
   const state={pending:false,jobId:'',studioScenesProposal:null,studioWorkingDraft:{projects:{},scenes:{},newProject:{},newScene:{},sourceRequest:''}};
   const failures=[];
   let reviewed=0;
   const scope=vm.createContext({
-    state,studioRequestedDuration,studioMentionedDuration,studioRequestAppliesPreparedMaterial,studioWorkingFieldChanges,syncControls(){},scheduleSessionSave(){},studioActionStatus:(m,error)=>{if(error)failures.push(m);},
+    state,studioWorkingFieldChanges,syncControls(){},scheduleSessionSave(){},studioActionStatus:(m,error)=>{if(error)failures.push(m);},
     showStudioScenesReview(){reviewed++;},
     window:{
       flushStudioDirectorStoryEdits:async()=>{},
@@ -242,7 +257,7 @@ test('invalid returned duration retains review and does not invent a successful 
   let reviewed=0;
   const state={pending:false,jobId:'',studioScenesProposal:null,studioWorkingDraft:{projects:{},scenes:{},newProject:{},newScene:{},sourceRequest:''}};
   const scope=vm.createContext({
-    state,studioRequestedDuration,studioMentionedDuration,studioRequestAppliesPreparedMaterial,studioWorkingFieldChanges,syncControls(){},scheduleSessionSave(){},studioActionStatus(){},
+    state,studioWorkingFieldChanges,syncControls(){},scheduleSessionSave(){},studioActionStatus(){},
     showStudioScenesReview(){reviewed++;},
     window:{
       flushStudioDirectorStoryEdits:async()=>{},
@@ -296,8 +311,7 @@ test('two eight-second Scenes request retains one actually authored Scene withou
     studioWorkingDraft:{projects:{},scenes:{},newProject:{},newScene:{},sourceRequest:''}};
   let calls=0,reviews=0,saves=0;
   const scope=vm.createContext({
-    state,studioRequestedDuration,studioMentionedDuration,
-    studioRequestAppliesPreparedMaterial,studioWorkingFieldChanges,
+    state,studioWorkingFieldChanges,
     syncControls(){},scheduleSessionSave(){},studioActionStatus(){},
     showStudioScenesReview(){reviews++;},
     window:{

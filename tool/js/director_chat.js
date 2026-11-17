@@ -3731,12 +3731,6 @@
         var assistantText = String(result.text || '').trim();
         if (activeChatMode === 'storyboard' && !assistantText)
           throw new Error('Director returned an empty conversation response.');
-        if (activeChatMode === 'storyboard' && /^\s*[\[{]/.test(assistantText)) {
-          var structured = false;
-          try { JSON.parse(assistantText); structured = true; } catch (_) {}
-          if (structured)
-            throw new Error('Director returned structured data to a conversational request; inspect Director I/O.');
-        }
         if (activeChatMode === 'storyboard' && state.pendingReadAck) {
           var fieldCount = state.pendingReadAck.length;
           state.pendingReadAck = null;
@@ -5048,14 +5042,19 @@
       }).then(function (payload) {
         if (!payload.job || !payload.job.jobId) throw new Error('Director did not queue a draft.');
         state.jobId = payload.job.jobId;
+        state.requestDiagnostic = payload.job.request || null;
         trackTransientLlmJob(payload.job);
         return waitForJob(payload.job);
       }).then(function (job) {
         var result = job.result || {};
-        if (!String(result.text || '').trim()) throw new Error('Director returned no draft.');
+        state.lastStudioIoRaw = String(result.text || '');
+        el('studio-director-inspect').dataset.newResult = 'true';
+        if (!String(result.text || '').trim()) throw new Error('Director returned an empty response.');
         finishProgress(null);
         return String(result.text);
       }).catch(function (err) {
+        state.lastStudioIoError = String(err.message || err);
+        el('studio-director-inspect').dataset.newResult = 'true';
         finishProgress(err);
         if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Studio Write', err);
         throw err;

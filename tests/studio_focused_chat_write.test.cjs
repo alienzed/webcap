@@ -34,7 +34,7 @@ test('ordinary Studio Chat has prose guidance and no authoring response schema',
     '  // Retain available conversational work');
   assert.match(conversational,/studioDirectorRequestMessages\(messages, false, false,/);
   assert.doesNotMatch(conversational,/STUDIO CONVERSATION DELIVERY|RECENT UNSAVED MATERIAL AUTHORED/);
-  const response=segment(chat,'        var assistantText = String\(result.text \|\| \'\'\).trim\(\);',
+  const response=segment(chat,"        var assistantText = String(result.text || '').trim();",
     '        var assistantIndex = messages.length - 1;\n        elapsedMap');
   assert.doesNotMatch(response,/studioAuthoredWriteActions\(|presentAction\(/);
   assert.match(response,/Director returned structured data to a conversational request/);

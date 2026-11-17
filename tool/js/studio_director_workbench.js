@@ -263,7 +263,8 @@
     input.dataset.instructionSeeded = 'true';
     var messages = window.studioDirectorBridge.messages().filter(function (message) {
       return message.role === 'user' &&
-        !String(message.content || '').includes('[WEBCAP APPLIED FIELD VALUES]');
+        !String(message.content || '').includes('[WEBCAP APPLIED FIELD VALUES]') &&
+        !String(message.content || '').startsWith('[WEBCAP EXPLICIT READ');
     });
     input.value = String(messages.length && messages[messages.length - 1].content || '').trim();
   }

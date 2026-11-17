@@ -1,9 +1,11 @@
 'use strict';
+// Legacy combined Chat authoring/Review tests are retained as historical
+// evidence but superseded by focused Chat -> explicit Write coverage.
 const {test,expect}=require('./test.cjs');
 const {resetModel,queueModel,observedModels,openDirector,say,story,stories,
   seedProject,seedScene,openProject,reopenDirectorIfClosed,ensureAttachedProject}=require('./helpers.cjs');
 
-test('usable Project draft without reply has a readable summary and remains reviewable',async({page,request})=>{
+test.skip('usable Project draft without reply has a readable summary and remains reviewable',async({page,request})=>{
   await resetModel(request);
   await openDirector(page);
   const draft={title:'Kitten Chaos',concept:'A succession of playful kitten mishaps.',
@@ -24,7 +26,7 @@ test('usable Project draft without reply has a readable summary and remains revi
   expect((await observedModels(request)).calls).toHaveLength(1);
 });
 
-test('mixed Director response keeps both Project and Scene drafts independently reviewable',async({page,request})=>{
+test.skip('mixed Director response keeps both Project and Scene drafts independently reviewable',async({page,request})=>{
   await resetModel(request);
   const project=await seedProject(page,'Mixed Review Source '+Date.now(),{
     concept:'The night watchman notices an empty train.',style:'Warm amber light.'
@@ -74,7 +76,7 @@ test('mixed Director response keeps both Project and Scene drafts independently 
 });
 
 
-test('an edited existing-Scene review reopens with the author edits and leaves saved fields unchanged',async({page,request})=>{
+test.skip('an edited existing-Scene review reopens with the author edits and leaves saved fields unchanged',async({page,request})=>{
   await resetModel(request);
   const project=await seedProject(page,'Review Draft '+Date.now(),{
     concept:'An evening arrival.',style:'Blue twilight.'

@@ -119,17 +119,17 @@ def test_freeform_workshop_does_not_claim_hidden_context_or_mutations():
     assert "CURRENT PROJECT NAVIGATION" not in system
     assert "WebCap resolved Project" not in system
 
-def test_studio_guidance_describes_actual_project_and_scene_fields():
-    system = guidance("minimax_h3")["system"]
-    for phrase in (
-        "story.concept", "story.style", "story.invariants",
-        "scene.prompt", "durationSeconds",
-    ):
-        assert phrase.casefold() in system.casefold()
-    assert "complete standalone H3 Prompt" not in system
-    assert "unaffected titles, durations" in system
-    assert "Invariants when stable recurring facts matter" in system
-    assert "Legacy Directing Guidelines" not in system
+def test_chat_role_excludes_project_fields_and_h3_production_instructions():
+    result = guidance("minimax_h3")
+    system, reference = result["system"], result["promptContract"]
+    assert "STUDIO DIRECTOR | CREATIVE PARTNER" in system
+    assert "meaningful ideas" in system
+    for phrase in ("story.concept", "story.style", "story.invariants",
+                   "scene.prompt", "durationSeconds", "H3 PROMPT",
+                   "integrated_multimodal_description"):
+        assert phrase.casefold() not in system.casefold()
+    assert "integrated_multimodal_description" in reference
+
 
 def test_h3_playbook_review_uses_existing_config_and_checks_conflicts(monkeypatch):
     import copy

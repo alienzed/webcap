@@ -2001,13 +2001,7 @@
       return;
     }
     if (!state.modelId) { studioActionStatus('No Director model is available. Refresh models.', true); return; }
-    var discussion = (state.modeMessages.storyboard || []).filter(function (message) {
-      return message && (message.role === 'assistant' || message.role === 'user');
-    }).filter(function (message) {
-      return !/\[WEBCAP APPLIED FIELD VALUES\]|\[WEBCAP EXPLICIT READ\]/.test(message.content);
-    }).slice(-8).map(function (message) {
-      return {role:message.role,content:message.content};
-    });
+    var discussion = studioConversationMessages(state.modeMessages.storyboard);
     if (!discussion.some(function (message) { return message.role === 'user'; })) {
       studioActionStatus('Discuss an idea first, then prepare a Project.', true);
       return;
@@ -2478,13 +2472,7 @@
       studioActionStatus('Attach a Project explicitly before updating Concept, Style or Invariants.', true);
       return;
     }
-    var discussion = (state.modeMessages.storyboard || []).filter(function (message) {
-      return message && (message.role === 'assistant' || message.role === 'user');
-    }).filter(function (message) {
-      return !/\[WEBCAP APPLIED FIELD VALUES\]|\[WEBCAP EXPLICIT READ\]/.test(message.content);
-    }).slice(-8).map(function (message) {
-      return {role:message.role,content:message.content};
-    });
+    var discussion = studioConversationMessages(state.modeMessages.storyboard);
     instruction = instruction || String((discussion.filter(function (message) {
       return message.role === 'user' && !message.content.includes('[WEBCAP APPLIED FIELD VALUES]');
     }).slice(-1)[0] || {}).content || '').trim();
@@ -3205,27 +3193,25 @@
     });
   }
 
+  function studioConversationMessages(messages) {
+    // Keep the full human/model exchange; save receipts and raw structured
+    // backend results are not conversation turns.
+    return (messages || []).filter(function (message) {
+      return message && (message.role === 'user' || message.role === 'assistant') &&
+        !/\[WEBCAP APPLIED FIELD VALUES\]|\[WEBCAP EXPLICIT READ\]/.test(String(message.content || ''));
+    }).map(function (message) {
+      return {role:message.role,content:String(message.content || '')};
+    });
+  }
+
   function studioDirectorRequestMessages(messages, includePromptContract, explicitWrite, navigationSnapshot) {
-    // Creative requests need the author's task and relevant source material.
-    // Navigation, available buttons, IDs and save policy remain WebCap concerns.
-    // Keep the existing call signature for contextual Write callers.
     return requestJson('/fs/studio/director/guidance?targetModel=minimax_h3').then(function (payload) {
-      if (!payload.system || typeof payload.system !== 'string')
-        throw new Error('Studio Director creative guidance is unavailable.');
+      var system = explicitWrite ? payload.system : payload.chatSystem;
+      if (!system || typeof system !== 'string')
+        throw new Error('Studio Director guidance is unavailable.');
       if (includePromptContract && (!payload.promptContract || typeof payload.promptContract !== 'string'))
         throw new Error('H3 prompt-authoring reference is unavailable.');
-      // Application receipts and restored inspection metadata are not user/LLM discussion.
-      var recent = messages.filter(function (message) {
-        return !/\[WEBCAP APPLIED FIELD VALUES\]|\[WEBCAP EXPLICIT READ\]/.test(
-          String(message.content || ''));
-      }).slice(-8);
-      var outbound = [{role:'system', content:payload.system}].concat(recent.map(function (message, index) {
-        var content = String(message.content || '');
-        if (index < recent.length - 1 && content.length > 3000)
-          content = content.slice(0,1800) + '\n[Earlier long message abbreviated]\n' +
-            content.slice(-900);
-        return {role:message.role,content:content};
-      }));
+      var outbound = [{role:'system', content:system}].concat(studioConversationMessages(messages));
       if (includePromptContract)
         outbound[0].content += '\n\nH3 PROMPT AUTHORING REFERENCE:\n' + payload.promptContract;
       return outbound;
@@ -3270,15 +3256,8 @@
         });
     })).then(function (approvedPayloads) {
       // Do not leak the selected editor's creative content through automatic navigation context.
-      return studioDirectorRequestMessages(messages, true, false,
+      return studioDirectorRequestMessages(messages, false, false,
         {projectId:'',projectTitle:'',sceneId:'',sceneNumber:0,sceneOrder:[]}).then(function (outbound) {
-        outbound[0].content += '\n\nSTUDIO CONVERSATION DELIVERY: Answer the author in the JSON reply field on every turn. ' +
-          'For creative discussion, give concrete alternatives, your recommendation and why in reply. ' +
-          'When creating or revising Project or Scene material, include the actual authored fields alongside reply. ' +
-          'Use changes.project for authored Project field values; changes.scene for changes to an existing Scene; ' +
-          'and scenes for new Scene drafts. A creative Scene revision includes the complete replacement H3 prompt. ' +
-          'Include every useful field or Scene that is ready, even when another part needs a question. ' +
-          'These are drafts; WebCap decides where and whether to save them.\n';
         if (approvedPayloads.length) {
           outbound[0].content += '\nAUTHOR-APPROVED SAVED CONTEXT (independent sources; refreshed for this request):\n' +
             JSON.stringify(approvedPayloads) +
@@ -3286,19 +3265,6 @@
         } else {
           outbound[0].content += '\nNo saved Project or Scene reference was supplied for this conversation.\n';
         }
-        // Earlier authored responses belong to this conversation, not any selected Project.
-        // Include actual structured fields, rather than only the visible prose summary.
-        var prior = messages.filter(function (message) {
-          return message.role === 'assistant' && typeof message.rawResponse === 'string';
-        }).slice(-3).map(function (message) {
-          var parsed = parseStudioChatResponse(message.rawResponse);
-          return {changes:parsed.changes,scenes:parsed.scenes};
-        }).filter(function (material) {
-          return material.changes || material.scenes && material.scenes.length;
-        });
-        if (prior.length)
-          outbound[0].content += '\nRECENT UNSAVED MATERIAL AUTHORED IN THIS CONVERSATION:\n' +
-            JSON.stringify(prior) + '\nSaved fields, if any, must still come from the approved references above.\n';
         return outbound;
       });
     });
@@ -3807,8 +3773,15 @@
         return result;
       }).then(function (result) {
         if (activeChatMode === 'storyboard') state.lastStudioIoRaw = String(result.text || '');
-        var studioResponse = activeChatMode === 'storyboard' ? parseStudioChatResponse(result.text) : null;
-        var assistantText = studioResponse ? studioResponse.reply : String(result.text || '');
+        var assistantText = String(result.text || '').trim();
+        if (activeChatMode === 'storyboard' && !assistantText)
+          throw new Error('Director returned an empty conversation response.');
+        if (activeChatMode === 'storyboard' && /^[\\s]*[\\[{]/.test(assistantText)) {
+          var structured = false;
+          try { JSON.parse(assistantText); structured = true; } catch (_) {}
+          if (structured)
+            throw new Error('Director returned structured data to a conversational request; inspect Director I/O.');
+        }
         if (activeChatMode === 'storyboard' && state.pendingReadAck) {
           var fieldCount = state.pendingReadAck.length;
           state.pendingReadAck = null;
@@ -3819,41 +3792,7 @@
           studioActionStatus(feedback, false);
         }
         messages.push({ role: 'assistant', content: assistantText });
-        var targetScene = resolvedTarget.sceneId ? {
-          projectId:resolvedTarget.projectId,sceneId:resolvedTarget.sceneId,
-          sceneNumber:resolvedTarget.sceneNumber
-        } : selectedScene;
-        var targetProject = resolvedTarget.projectId ? {projectId:resolvedTarget.projectId} : selectedProject;
-        // Authored fields, never action hints or parsed author prose, own review affordances.
-        // Keep every independently authored result visible and reviewable.
-        var actions = studioAuthoredWriteActions(studioResponse,content,targetScene);
-        if (activeChatMode === 'storyboard' && studioResponse && studioResponse.changes)
-          window.studioDirectorWorkbench.updateWorkingWrite();
-        var nextAction = actions.pop() || null;
-        var otherActions = actions;
-        if (nextAction) {
-          var assistantIndex = messages.length - 1;
-          // Store alternate actions independently rather than overwriting
-          // their review paths with the last returned Scene.
-          if (otherActions.length)
-            messages[assistantIndex].otherWriteActions = otherActions.map(function (action, i) {
-              return Object.assign({},action,{
-                actionKey:'alternate-' + i,request:content,
-                sourceMessageIndex:assistantIndex,
-                projectId:String(targetProject && targetProject.projectId || ''),
-                scene:targetScene && Object.assign({},targetScene)
-              });
-            });
-          nextAction.actionKey = 'primary';
-          try {
-            messages[assistantIndex].writeAction = window.studioDirectorWorkbench.presentAction(
-              nextAction, targetScene, targetProject, content, assistantIndex);
-          } catch (processingError) {
-            window.reportConsoleError('Studio action suggestion', processingError);
-          }
-        }
-        if (studioResponse) messages[messages.length - 1].rawResponse = String(result.text || '');
-        if (activeChatMode === 'storyboard' && studioResponse) el('studio-director-inspect').dataset.newResult = 'true';
+        // Only explicit Write operations produce structured material.
         var assistantIndex = messages.length - 1;
         elapsedMap[assistantIndex] = performance.now() - startedAt;
         metricsMap[assistantIndex] = completedResponseMetrics(result);

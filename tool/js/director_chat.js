@@ -2496,6 +2496,60 @@
     unchanged.classList.toggle('hidden', !unchanged.querySelector('.studio-brief-field'));
   }
 
+  function commitFocusedStudioBrief(storyId, expected, authored, requestedFields) {
+    var requested = requestedFields && requestedFields.length ? requestedFields :
+      ['title','concept','style','invariants'];
+    var changes = {},originals = {};
+    requested.forEach(function (key) {
+      if (!Object.prototype.hasOwnProperty.call(authored,key)) return;
+      if (key === 'invariants') {
+        if (!Array.isArray(authored.invariants)) return;
+        var before = expected.invariants || [], after = authored.invariants;
+        var operations = [];
+        before.forEach(function (old) {
+          var matching = after.find(function (item) {
+            return item.kind === old.kind && item.title === old.title;
+          });
+          if (!matching) operations.push({op:'remove',before:old});
+          else if (JSON.stringify(old) !== JSON.stringify(matching))
+            operations.push({op:'update',before:old,after:matching});
+        });
+        after.forEach(function (item) {
+          if (!before.some(function (old) {
+            return item.kind === old.kind && item.title === old.title;
+          })) operations.push({op:'add',after:item});
+        });
+        if (operations.length) changes.invariantOps = operations;
+      } else if (['title','concept','style'].includes(key) &&
+                 typeof authored[key] === 'string' && authored[key].trim() &&
+                 authored[key] !== expected[key]) {
+        changes[key] = authored[key];
+        originals[key] = expected[key];
+      }
+    });
+    if (!Object.keys(changes).length) {
+      studioActionStatus('Director returned no Project field changes.',true);
+      return Promise.resolve(null);
+    }
+    return requestJson('/fs/studio/director/brief',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({storyId:storyId,expected:originals,changes:changes})
+    }).then(function (result) {
+      if (!result.story || !result.revisionId)
+        throw new Error('Project revision returned no saved revision.');
+      state.studioBriefProposal = null;
+      recordStudioOperation('brief.apply','Updated Project fields: ' + Object.keys(changes).join(', '),storyId,[]);
+      studioActionStatus('Project Overview saved.',false);
+      return window.studioDirectorBridge.recordApplied('brief.apply',result.story,
+        Object.fromEntries(Object.keys(changes).map(function (key) {
+          var field = key === 'invariantOps' ? 'invariants' : key;
+          return [field,result.story[field]];
+        }))).then(function () {
+          return window.refreshStudioDirectorStoryIfOpen(storyId);
+        });
+    });
+  }
+
   function prepareStudioBrief(options) {
     if (state.pending || state.activeMode !== 'storyboard' || !state.sessionReady) return;
     var instruction = String(options && options.instruction || '').trim();
@@ -2616,8 +2670,7 @@
             rationale: changes.rationale
           };
           finishProgress(null);
-          studioActionStatus('Project Overview ready for review. Nothing has changed.', false);
-          showStudioBriefReview();
+          return commitFocusedStudioBrief(storyId,expected,changes,requestedFields);
         });
     }).catch(function (error) {
       finishProgress(error);

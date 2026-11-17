@@ -96,6 +96,40 @@ test('explicit Scene writes rely on authored duration values rather than guessin
   assert.match(chat,/missingDuration/);
   assert.doesNotMatch(chat,/draft\.scenes\[0\]\.durationSeconds = requestedDuration/);
 });
+test('manual multi-Scene Write delegates title and duration choices to actual authored fields',async()=>{
+  const source=part(workbench,'  function prepareBatchScenes(storyId) {',
+    '  function renderBatchReview() {');
+  assert.doesNotMatch(source,/\.test\(instruction\)|\.match\(instruction\)/,
+    'WebCap must not inspect natural-language instructions to choose fields');
+  const story={id:'p1',title:'Film',sceneOrder:['s1'],scenes:{s1:{
+    id:'s1',title:'Platform',prompt:'A porter waits.',durationSeconds:8
+  }}};
+  const launches=[],statuses=[],prepare={disabled:false};
+  const el=id=>id==='studio-dw-batch-scenes'
+    ? {querySelectorAll:()=>[{value:'s1'}]}
+    : id==='studio-dw-write-prepare' ? prepare : null;
+  const bridge={
+    selectWriteProject(id){assert.equal(id,'p1');},
+    async writeSelectedScene(launch){launches.push(launch);return {story};}
+  };
+  const revise=new Function('el','manualSceneInstruction','status','window',
+    'loadStory','storyName', 'Promise',
+    source+'return prepareBatchScenes;')(
+      el,()=> 'Give the Platform Scene a quieter title and make it fourteen seconds.',
+      (message)=>statuses.push(message),
+      {flushStudioDirectorStoryEdits:async()=>{},studioDirectorBridge:bridge},
+      async()=>story,story=>story.title,Promise);
+  const result=await revise('p1');
+  assert.equal(launches.length,1);
+  assert.deepEqual(launches[0].fields,['prompt']);
+  assert.equal(launches[0].allowCreativeFieldChanges,true);
+  assert.equal(launches[0].sceneId,'s1');
+  assert.equal(launches[0].instruction,'Give the Platform Scene a quieter title and make it fourteen seconds.');
+  assert.equal(result.saved.length,1);
+  assert.equal(prepare.disabled,false);
+  assert.ok(statuses.some(message=>/Saved 1/.test(message)));
+});
+
 function harness() {
   const suggestions = {children:[],replaceChildren(){this.children=[];},
     appendChild(value){this.children.push(value);}};

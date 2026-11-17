@@ -46,6 +46,7 @@ function harness(savedPreferences, showSettings) {
       tagName:tag.toUpperCase(), dataset:{}, children:[], checked:false, disabled:false,
       listeners:{}, textContent:'', open:false, firstChild:null,
       showModal(){this.open=true;},close(){this.open=false;},
+      contains(node){return node===this || this.children.some(child=>child===node || (child.contains && child.contains(node)));},
       setAttribute(name,value){this[name]=value;},
       addEventListener(name,fn){this.listeners[name]=fn;},
       append(...nodes){nodes.forEach(node=>this.appendChild(node));},
@@ -104,6 +105,7 @@ function harness(savedPreferences, showSettings) {
     dialog:()=>diffDialog,
     diffParts:()=>diffDialog.children[1].children.map(node=>({kind:node.tagName,text:node.textContent})),
     diffHeading:()=>diffDialog.children[0].children[0].textContent,
+    modalFocus(){docHandlers.focusin({target:diffDialog.children[0].children[1]});},
     captionTarget(key){captionKey=key;},
     focus(field){docHandlers.focusin({target:field});},
     input(field){docHandlers.input({target:field});},
@@ -353,6 +355,8 @@ test('comparison shows selected revision against latest without overwriting edit
   assert.equal(field.value,'The cat sleeps.');
   h.click('[data-rev-compare]');
   assert.equal(h.dialog().open,true);
+  h.modalFocus();
+  assert.equal(field.value,'The cat sleeps.','modal focus retains selected revision');
   assert.equal(h.diffHeading(),'Revision 1 → 2');
   assert.ok(h.diffParts().some(p=>p.kind==='DEL'&&p.text.includes('cat')));
   assert.ok(h.diffParts().some(p=>p.kind==='INS'&&p.text.includes('dog')));

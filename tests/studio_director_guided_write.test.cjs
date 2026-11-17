@@ -43,14 +43,14 @@ test('selected Scene list uses one bounded call per Scene, preserving successes 
   assert.equal(outcome.saved.length,2);
   assert.equal(outcome.failed.length,1);
   assert.equal(outcome.unchanged.length,1);
-  assert.equal(outcome.review.length,0);
+  assert.equal(Object.hasOwn(outcome,'review'),false);
   assert.equal(outcome.notAttempted.length,0);
   const final = statuses.at(-1);
   assert.equal(final[2],true,'successful per-Scene outcomes must remain visible');
   assert.match(final[0],/Saved 2: Scene 1 · First, Scene 4 · Fourth/);
   assert.match(final[0],/Unchanged 1: Scene 3 · Third/);
   assert.match(final[0],/Failed 1: Scene 2 · Second/);
-  assert.match(final[0],/Needs review 0/);
+  assert.doesNotMatch(final[0],/Needs review/);
 });
 
 test('selected Scene list stops on a shared runtime failure',async()=>{

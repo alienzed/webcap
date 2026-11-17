@@ -322,7 +322,6 @@
   function renderApprovedSources() {
     var host = el('studio-dw-approved-sources');
     host.textContent = 'Read snapshots are saved in the conversation.';
-    el('studio-dw-read-clear').classList.add('hidden');
   }
   function refreshRead() {
     renderApprovedSources();

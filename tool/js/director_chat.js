@@ -52,6 +52,7 @@
     studioScenesProposal: null,
     studioBriefProposal: null,
     studioOperations: [],
+    studioWriteIo: [],
     sceneRead: null,
     studioReadiness: {checks:[], readHints:[], writeHint:'', writeFields:[], sceneId:'', sceneNumber:0}
   };
@@ -739,6 +740,7 @@
     var attachments = mode === 'storyboard' ? JSON.parse(JSON.stringify(state.storyboardAttachments)) : {};
     var workshop = mode === 'storyboard' ? JSON.parse(JSON.stringify(state.workshop)) : null;
     var operations = mode === 'storyboard' ? state.studioOperations.slice() : [];
+    var writeIo = mode === 'storyboard' ? state.studioWriteIo.slice() : [];
     var storyAccess = mode === 'storyboard' ? state.studioStoryAccess : null;
     var readiness = mode === 'storyboard' ? state.studioReadiness : null;
     var workingDraft = mode === 'storyboard' ? JSON.parse(JSON.stringify(state.studioWorkingDraft)) : null;
@@ -766,7 +768,7 @@
           body: JSON.stringify({
             expectedRevision: current.revision, title: title,
             messages: messages, draft: draft, attachments: attachments, workshop: workshop,
-            operations: operations, storyAccess: storyAccess, readiness: readiness, workingDraft: workingDraft
+            operations: operations, writeIo: writeIo, storyAccess: storyAccess, readiness: readiness, workingDraft: workingDraft
           })
         });
       }).then(function (payload) {
@@ -834,6 +836,7 @@
       state.studioAccessIndex = null;
       state.workshop = chat.workshop || null;
       state.studioOperations = Array.isArray(chat.operations) ? chat.operations.slice() : [];
+      state.studioWriteIo = Array.isArray(chat.writeIo) ? chat.writeIo.slice() : [];
       if (window.studioDirectorWorkbench) {
         window.studioDirectorWorkbench.resetConversation();
         // Recover the last unsaved proposal with its original bound target.
@@ -3569,6 +3572,10 @@
   function studioDirectorOpenIo() {
     var dialog = el('studio-director-io-dialog'), chooser = el('studio-director-io-exchange');
     var responses = currentMessages().filter(function(m){return m.role === 'assistant';});
+    (state.studioWriteIo || []).forEach(function(entry) {
+      responses.push({content:'Write · ' + entry.operation + ' · ' + entry.at,
+        rawResponse:entry.rawResponse});
+    });
     if (state.lastStudioIoError && state.lastStudioIoRaw)
       responses.push({content:'Failed response',rawResponse:state.lastStudioIoRaw});
     chooser.replaceChildren();
@@ -4422,8 +4429,8 @@
         };
         var instruction = JSON.stringify({
           task:'Create the requested independently generatable H3 Scenes for this Project. ' +
-            'Give each Scene a useful title, complete H3 Prompt and durationSeconds ' +
-            '. Follow the author\'s specified timing. When timing is unspecified, choose a ' +
+            'Give each Scene a useful title, complete H3 Prompt and durationSeconds. ' +
+            'Follow the author\'s specified timing. When timing is unspecified, choose a ' +
             'duration that supports the supplied actions, shot transitions and dialogue. ' +
             'Deliver the authored Scenes now.',
           authorDirection:launch.authorRequest || launch.instruction,
@@ -4436,6 +4443,11 @@
           {projectId:storyId,projectTitle:story.title,sceneOrder:order})
         .then(function (raw) {
           state.lastStudioIoRaw = raw;
+          // Keep the exact model result inspectable after reload, even if
+          // parsing or persistence fails. This is diagnostics, not chat context.
+          state.studioWriteIo.push({operation:'studio_scenes_draft',projectId:storyId,
+            at:new Date().toISOString(),rawResponse:raw});
+          scheduleSessionSave();
           var fields;
           try { fields = JSON.parse(raw); }
           catch (error) { throw new Error('Director returned invalid Scene JSON.\\nRaw response:\\n' + raw); }

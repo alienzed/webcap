@@ -226,7 +226,7 @@
       }
       text='Current saved snapshot (reloaded before drafting):' +
         String.fromCharCode(10) + JSON.stringify(data,null,2) +
-        String.fromCharCode(10) + 'Recent conversation context is also supplied.';
+        String.fromCharCode(10) + 'The complete Studio conversation is supplied.';
     }
     el('studio-dw-write-context').querySelector('summary').textContent =
       'Inspect draft context';
@@ -251,7 +251,7 @@
     el('studio-dw-heading').textContent = 'Write';
     el('studio-dw-heading').title = mode === 'Read'
       ? 'Explicit source · nothing sent until Send'
-      : mode === 'Write' ? 'Reviewed destination · nothing saved until Apply'
+      : mode === 'Write' ? 'Explicit Write destination · save occurs when the model returns'
       : 'Conversation is independent of Studio navigation';
   }
   function manualSceneInstruction() {
@@ -272,12 +272,12 @@
     var sceneWrite = operation === 'scene-write';
     var revise = sceneWrite && el('studio-dw-scene-mode').value === 'revise';
     el('studio-dw-scene-mode-row').classList.toggle('hidden', !sceneWrite);
-    el('studio-dw-write-instruction-row').classList.toggle('hidden', !sceneWrite);
+    el('studio-dw-write-instruction-row').classList.remove('hidden');
     el('studio-dw-batch-controls').classList.toggle('hidden', !revise);
     el('studio-dw-write-project').disabled = operation === 'new-project';
     el('studio-dw-write-prepare').textContent = sceneWrite
-      ? (revise ? 'Revise selected Scenes · Save' : 'Create Scene · Review')
-      : (operation === 'new-project' ? 'Create Project · Review' : 'Revise Overview · Review');
+      ? (revise ? 'Revise selected Scenes · Save' : 'Create Scene(s) · Save')
+      : (operation === 'new-project' ? 'Create Project · Save' : 'Revise Overview · Save');
     showWriteContext();
     updateScope();
   }
@@ -466,15 +466,17 @@
       }
       return bridge.writeNewScene({
         projectId:id, instruction:instruction, authorRequest:instruction,
-        forceAuthor:true
+        forceAuthor:true, directSave:true
       });
     }
     if (operation !== 'new-project' && operation !== 'project')
       throw new Error('Unsupported Studio creative Write goal: ' + operation);
     try {
       var item = projects.find(function (p) {return p.id === id;});
-      bridge.prepareWrite(operation, id, item && storyName(item));
-      status('Preparing a reviewed proposal. No saved fields have changed.', false);
+      bridge.prepareWrite(operation, id, item && storyName(item),{
+        instruction:manualSceneInstruction()
+      });
+      status('Writing to the explicit destination…', false);
     } catch (error) {status('Write failed: ' + error.message, true);}
   }
   function prepareProjectCoherence(storyId) {

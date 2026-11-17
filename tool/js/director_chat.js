@@ -1652,7 +1652,7 @@
 
   function syncStudioFlow() {
     var studio = state.activeMode === 'storyboard';
-    var discussed = (state.modeMessages.storyboard || []).some(function (message) {
+    var discussed = (state.modeMessages && state.modeMessages.storyboard || []).some(function (message) {
       return message && message.role === 'user' && String(message.content || '').trim();
     });
     var flow = el('director-studio-flow');
@@ -1962,7 +1962,7 @@
     studioActionStatus('Writing Project…', false);
     startProgress();
     syncControls();
-    return studioDirectorRequestMessages((state.modeMessages.storyboard || []).concat([
+    return studioDirectorRequestMessages((state.modeMessages && state.modeMessages.storyboard || []).concat([
       {role:'user',content:JSON.stringify(input)}
     ]), false, true).then(function (messages) {
       window.studioDirectorWorkbench.showSentWriteContext('studio_project_draft', messages);
@@ -2031,7 +2031,7 @@
         project:{title:current.title,concept:current.concept,style:current.style,
           invariants:current.invariants}
       };
-      return studioDirectorRequestMessages((state.modeMessages.storyboard || []).concat([{role:'user',content:JSON.stringify(input)}]),
+      return studioDirectorRequestMessages((state.modeMessages && state.modeMessages.storyboard || []).concat([{role:'user',content:JSON.stringify(input)}]),
         true,true,{projectId:story.id,projectTitle:story.title,sceneOrder:current.sceneOrder})
         .then(function (messages) {
           window.studioDirectorWorkbench.showSentWriteContext('studio_scene_field_draft',messages);
@@ -2420,7 +2420,7 @@
         project:{title:original.title,concept:original.concept,
           style:original.style,invariants:original.invariants}
       };
-      return studioDirectorRequestMessages((state.modeMessages.storyboard || []).concat([
+      return studioDirectorRequestMessages((state.modeMessages && state.modeMessages.storyboard || []).concat([
         {role:'user',content:JSON.stringify(input)}
       ]),false,true);
     }).then(function (messages) {
@@ -3456,7 +3456,7 @@
     if (state.workshop.shotError) throw new Error(state.workshop.shotError);
     if (state.pending || !state.modelId) return;
     if (state.workshopProposal) { showWorkshopReview(); return; }
-    var decisions = (state.modeMessages.storyboard || []).filter(function (message) {
+    var decisions = (state.modeMessages && state.modeMessages.storyboard || []).filter(function (message) {
       return message && (message.role === 'assistant' || message.role === 'user');
     }).map(function (message) {
       return {role:message.role,content:message.content};
@@ -4270,7 +4270,7 @@
     },
     modelId: function () { return state.modelId; },
     messages: function () {
-      return (state.modeMessages.storyboard || []).map(function (message) {
+      return (state.modeMessages && state.modeMessages.storyboard || []).map(function (message) {
         return {role:message.role,content:message.content};
       });
     },
@@ -4979,7 +4979,7 @@
       state.pending = true;
       syncControls();
       startProgress();
-      return studioDirectorRequestMessages((state.modeMessages.storyboard || []).concat([{role:'user',content:instruction}]), includePromptContract, true, navigationSnapshot).then(function (messages) {
+      return studioDirectorRequestMessages((state.modeMessages && state.modeMessages.storyboard || []).concat([{role:'user',content:instruction}]), includePromptContract, true, navigationSnapshot).then(function (messages) {
         window.studioDirectorWorkbench.showSentWriteContext(operation || 'studio_scene_field_draft', messages);
         return requestJson('/fs/director/chat', {
           method:'POST',headers:{'Content-Type':'application/json'},

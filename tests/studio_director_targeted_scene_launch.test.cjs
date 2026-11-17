@@ -316,84 +316,36 @@ test('unsupported duration never saves a working prompt with contradictory timin
   assert.equal(h.saved.scenes.s1.prompt,'Mara shouts at the rover.');
 });
 
-test('manual Scene revision accepts actual optional title and duration changes without wording parsing',async()=>{
-  const h=sceneFixture('{"prompt":"Mara whispers near the rover.","title":"Quiet departure","durationSeconds":14}');
+test('explicitly selected title and duration changes do not rewrite an unselected Scene prompt',async()=>{
+  const h=sceneFixture('{"title":"Quiet arrival","durationSeconds":14,"prompt":"Unrequested creative rewrite"}');
   await h.window.studioDirectorBridge.writeSelectedScene({
-    ...h.launch,fields:['prompt'],allowCreativeFieldChanges:true,
-    instruction:'Make this Scene longer and give it a quieter title.'
+    ...h.launch,fields:['title','durationSeconds'],
+    instruction:'Rename the Scene and adjust its duration.'
   });
-  const requested=JSON.parse(h.events.find(row=>row[0]==='model')[1]);
-  assert.deepEqual(JSON.parse(JSON.stringify(requested.requestedFields)),['prompt']);
-  assert.deepEqual(JSON.parse(JSON.stringify(requested.optionalCreativeFields)),
+  const request=JSON.parse(h.events.find(row=>row[0]==='model')[1]);
+  assert.deepEqual(JSON.parse(JSON.stringify(request.requestedFields)),
     ['title','durationSeconds']);
-  assert.deepEqual(JSON.parse(JSON.stringify(h.events.find(row=>row[0]==='save')[1].changes)),{
-    prompt:'Mara whispers near the rover.',title:'Quiet departure',durationSeconds:14
-  });
-  assert.equal(h.saved.scenes.s1.durationSeconds,14);
-  assert.equal(h.saved.scenes.s1.title,'Quiet departure');
-});
-
-test('manual creative revision leaves title and duration untouched when model omits them',async()=>{
-  const h=sceneFixture('{"prompt":"A quiet shot of Mara near the rover."}');
-  await h.window.studioDirectorBridge.writeSelectedScene({
-    ...h.launch,fields:['prompt'],allowCreativeFieldChanges:true,
-    instruction:'Make the Scene much quieter.'
-  });
   const save=h.events.find(row=>row[0]==='save')[1];
-  assert.deepEqual(Object.keys(save.changes),['prompt']);
-  assert.equal(h.saved.scenes.s1.title,'Opening');
-  assert.equal(h.saved.scenes.s1.durationSeconds,12);
-});
-
-test('manual creative revision retains a prompt for review if optional model timing is invalid',async()=>{
-  const h=sceneFixture('{"prompt":"Mara waits beneath a midnight sky.","durationSeconds":20}');
-  const result=await h.window.studioDirectorBridge.writeSelectedScene({
-    ...h.launch,fields:['prompt'],allowCreativeFieldChanges:true,
-    instruction:'Make the Scene much longer.'
-  });
-  assert.equal(result.review,true);
-  assert.equal(h.events.filter(row=>row[0]==='save').length,0);
-  assert.equal(h.state.studioWorkingDraft.scenes.s1.prompt,'Mara waits beneath a midnight sky.');
+  assert.deepEqual(JSON.parse(JSON.stringify(save.changes)),
+    {title:'Quiet arrival',durationSeconds:14});
   assert.equal(h.saved.scenes.s1.prompt,'Mara shouts at the rover.');
 });
 
-test('reopening an authored batch draft retains its optional title and duration changes',async()=>{
-  const h=sceneFixture('{"prompt":"Quiet revised shot.","title":"New title","durationSeconds":14}');
-  const request='Give this Scene a new title and make it last fourteen seconds.';
-  const launch={...h.launch,fields:['prompt'],allowCreativeFieldChanges:true,
-    instruction:request,authorRequest:request};
-  // First return a complete draft with invalid optional timing so no saved
-  // value can accidentally make the second attempt look fresh.
-  h.changeResponse('{"prompt":"Quiet revised shot.","title":"New title","durationSeconds":20}');
-  const first=await h.window.studioDirectorBridge.writeSelectedScene(launch);
-  assert.equal(first.review,true);
-  assert.equal(h.events.filter(x=>x[0]==='save').length,0);
-  assert.equal(h.state.studioWorkingDraft.draftOrigins.scenes.s1.timingNeedsReview,true);
-  const reopened=await h.window.studioDirectorBridge.writeSelectedScene(launch);
-  assert.equal(reopened.review,true);
-  assert.equal(h.events.filter(x=>x[0]==='model').length,1,
-    'reopening a draft with invalid authored timing does not trigger a repair model call');
-  assert.equal(h.events.filter(x=>x[0]==='save').length,0);
-});
-
-test('a matching complete batch draft applies all optional fields without another model call',async()=>{
-  const h=sceneFixture('{"prompt":"Quiet revised shot.","title":"New title","durationSeconds":14}');
-  const request='Change the ending, title and duration.';
-  // The existing model response is retained, but no saved mutation has
-  // occurred yet; a model-produced draft and its provenance may be reviewed.
+test('a matching retained title-only draft applies without creating an unwanted Prompt',async()=>{
+  const h=sceneFixture();
+  const request='Call this Scene Quiet Arrival.';
   h.state.studioWorkingDraft.scenes.s1={
-    prompt:'Quiet revised shot.',title:'New title',durationSeconds:14
+    title:'Quiet Arrival',prompt:'Old unrelated unsaved prompt'
   };
-  authoredSceneOrigin(h,request,['prompt','title','durationSeconds']);
+  authoredSceneOrigin(h,request,['title']);
   const result=await h.window.studioDirectorBridge.writeSelectedScene({
-    ...h.launch,fields:['prompt'],allowCreativeFieldChanges:true,
-    instruction:request,authorRequest:request
+    ...h.launch,fields:['title'],instruction:request,authorRequest:request
   });
   assert.ok(result.story);
   assert.equal(h.events.filter(row=>row[0]==='model').length,0);
-  assert.deepEqual(JSON.parse(JSON.stringify(h.events.find(row=>row[0]==='save')[1].changes)),{
-    prompt:'Quiet revised shot.',title:'New title',durationSeconds:14
-  });
+  assert.deepEqual(JSON.parse(JSON.stringify(h.events.find(row=>row[0]==='save')[1].changes)),
+    {title:'Quiet Arrival'});
+  assert.equal(h.saved.scenes.s1.prompt,'Mara shouts at the rover.');
 });
 
 test('saved Scene baseline changes invalidate a matching retained draft',async()=>{

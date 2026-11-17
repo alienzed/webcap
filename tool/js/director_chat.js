@@ -3242,39 +3242,6 @@
       return '';
     },
     workingStoryId: function () { return studioAttachedStoryId() || window.getStudioDirectorNavigation().projectId; },
-    preparedWrite: function () {
-      var working = state.studioWorkingDraft;
-      var navigation = window.getStudioDirectorNavigation();
-      var projectId = navigation.projectId || studioAttachedStoryId();
-      var sceneId = navigation.sceneId;
-      var fields = sceneId && working.scenes[sceneId];
-      if (projectId && fields && Object.keys(fields).length)
-        return {kind:'scene',projectId:projectId,sceneId:sceneId,fields:Object.keys(fields)};
-      fields = projectId && working.projects[projectId];
-      if (fields && Object.keys(fields).length)
-        return {kind:'project',projectId:projectId,fields:Object.keys(fields)};
-      if (projectId && working.newScene && working.newScene.prompt)
-        return {kind:'new-scene',projectId:projectId,fields:Object.keys(working.newScene)};
-      if (working.newProject && working.newProject.concept && working.newProject.style)
-        return {kind:'new-project',fields:Object.keys(working.newProject)};
-      return null;
-    },
-    preparedSceneFields: function (sceneId) {
-      return Object.assign({}, state.studioWorkingDraft.scenes[sceneId] || {});
-    },
-    forgetSavedSceneDraft: forgetSavedStudioSceneFields,
-    reviewPreparedWrite: function (draft) {
-      if (!this.canReview()) throw new Error('Open the Studio conversation to review its prepared material.');
-      if (draft.kind === 'project') {
-        return prepareStudioBrief({storyId:draft.projectId,requestedFields:draft.fields});
-      }
-      if (draft.kind === 'new-project') return prepareStudioProject({});
-      if (draft.kind === 'new-scene') return this.writeNewScene({
-        projectId:draft.projectId,instruction:'Review prepared new Scene material.',
-        authorRequest:'Save that prompt'
-      });
-      throw new Error('Scene drafts are reviewed by the Scene workbench.');
-    },
     modelId: function () { return state.modelId; },
     messages: function () {
       return (state.modeMessages.storyboard || []).map(function (message) {
@@ -3327,60 +3294,27 @@
       state.pendingReadAck = keys.slice();
       sendMessage();
     },
-    selectWriteProject: function (storyId, storyTitle) {
+    selectWriteProject: function (storyId) {
       if (!storyId) throw new Error('Select a Project destination for Write.');
-      // Selecting a destination is operation-local. Do not change the
-      // conversation attachment, approved Read selections, or navigation.
-      if (state.studioBriefProposal && state.studioBriefProposal.storyId !== storyId)
-        state.studioBriefProposal = null;
-      if (state.studioSceneProposal && state.studioSceneProposal.storyId !== storyId)
-        state.studioSceneProposal = null;
-      if (state.studioScenesProposal && state.studioScenesProposal.storyId !== storyId)
-        state.studioScenesProposal = null;
     },
     prepareWrite: function (kind, storyId, storyTitle, options) {
-      var authored = options && options.authoredFields;
-      if (authored ? !this.canReview() : !this.isReady())
-        throw new Error(authored ? 'Open the Studio conversation to review authored material.' :
-          this.readinessMessage());
-      if (kind !== 'new-project') this.selectWriteProject(storyId,storyTitle);
-      if (kind === 'new-project') {
-        state.studioProjectProposal = null; // Create a fresh review from current conversation.
-        return prepareStudioProject(options);
-      }
-      if (kind === 'project') return prepareStudioBrief(Object.assign({},options,{storyId:storyId}));
-      throw new Error('Unsupported reviewed Write operation: ' + kind);
+      if (!this.isReady()) throw new Error(this.readinessMessage());
+      if (kind === 'new-project') return prepareStudioProject(options);
+      if (kind === 'project') return prepareStudioBrief(
+        Object.assign({},options,{storyId:storyId}));
+      throw new Error('Unsupported explicit Write operation: ' + kind);
     },
     recordApplied: function (kind, story, selected) {
       if (!story || !story.id || !selected || typeof selected !== 'object') {
-        throw new Error('Reviewed Apply receipt requires saved Project data.');
+        throw new Error('Write receipt requires saved Project data.');
       }
       var isDirectorRevision = kind === 'scene.director.revision';
       var names = {title:'Title',concept:'Concept',style:'Visual / atmosphere',invariants:'Invariants',prompt:'H3 Prompt',durationSeconds:'Duration'};
       var values = selected.savedFields || selected.fields || selected;
-      var working = state.studioWorkingDraft;
-      if (kind === 'project.create') working.newProject = {};
-      if (Array.isArray(selected.scenes)) working.newScene = {};
-      // A successful receipt clears only fields that actually match saved data.
-      var target = selected.sceneId ? working.scenes[selected.sceneId] :
-        working.projects[story.id];
-      if (target) {
-        Object.keys(values).forEach(function (field) {
-          if (Object.prototype.hasOwnProperty.call(target,field) &&
-              JSON.stringify(target[field]) === JSON.stringify(values[field]))
-            delete target[field];
-        });
-        if (!Object.keys(target).length) {
-          if (selected.sceneId) delete working.scenes[selected.sceneId];
-          else delete working.projects[story.id];
-        }
-      }
       var body = {
         operation:kind, projectId:story.id, savedAt:story.updatedAt,
         fieldNames:Object.keys(values).filter(function (key) {return !!names[key];})
       };
-      markStudioReadinessOutdated();
-      window.studioDirectorWorkbench.updateWorkingWrite();
       window.studioDirectorWorkbench.markSavedFields(selected,story);
       var savedFields = Object.keys(values).filter(function(key){return names[key];}).map(function(key){
         return names[key] + (key === 'invariants' ? ' (' + values[key].length + ')' : '');
@@ -3397,107 +3331,6 @@
       renderMessages();
       state.sessionDirty.storyboard = true;
       return persistSession('storyboard');
-    },
-    reviewCapture: function (capture, storyId) {
-      if (!this.canReview()) return Promise.reject(new Error('Open an available Studio conversation before reviewing.'));
-      if (!storyId || !capture || ['title','concept','style','invariant'].indexOf(capture.field) === -1 ||
-          typeof capture.content !== 'string' || !capture.content.trim()) {
-        return Promise.reject(new Error('Choose a saved Project and a complete creative field proposal.'));
-      }
-      if (state.studioBriefProposal) {
-        return Promise.reject(new Error('A Project proposal is already being reviewed. Finish or discard it before capturing another.'));
-      }
-      state.pending = true;
-      syncControls();
-      return Promise.resolve().then(function () {
-        return window.flushStudioDirectorStoryEdits(storyId);
-      }).then(function () {
-        return requestJson('/fs/storyboard?story=' + encodeURIComponent(storyId));
-      }).then(function (payload) {
-        var story = payload.story;
-        if (!story || story.id !== storyId) throw new Error('Selected Project is unavailable.');
-        var expected = {title:story.title,concept:story.concept,style:story.style,invariants:story.invariants};
-        var proposed = {title:story.title,concept:story.concept,style:story.style,invariants:story.invariants};
-        var renames = [];
-        if (capture.field === 'invariant') {
-          var after = {kind:capture.kind, title:capture.title.trim(), text:capture.content.trim()};
-          proposed.invariants = (story.invariants || []).slice();
-          if (capture.beforeKind && capture.beforeTitle) {
-            var index = proposed.invariants.findIndex(function (item) {
-              return item.kind === capture.beforeKind &&
-                item.title.toLowerCase() === capture.beforeTitle.toLowerCase();
-            });
-            if (index < 0) throw new Error('The referenced Invariant no longer exists. Read and select the saved identity.');
-            var before = proposed.invariants[index];
-            proposed.invariants[index] = after;
-            renames.push({
-              beforeKind:before.kind,beforeTitle:before.title,
-              afterKind:after.kind,afterTitle:after.title
-            });
-          } else {
-            if (proposed.invariants.some(function (item) {
-              return item.kind === after.kind && item.title.toLowerCase() === after.title.toLowerCase();
-            })) throw new Error('An Invariant with this identity already exists. Review it as an update instead.');
-            proposed.invariants.push(after);
-          }
-        } else {
-          proposed[capture.field] = capture.content;
-        }
-        state.studioBriefProposal = {
-          storyId:storyId,storyTitle:story.title,expected:expected,draft:proposed,renames:renames,
-          rationale:'Director developed this material in conversation. Review and edit before saving.'
-        };
-        showStudioBriefReview();
-        studioActionStatus('Review the Project Overview without another model request.',false);
-      }).finally(function () {
-        state.pending = false;
-        syncControls();
-      });
-    },
-    reviewSceneCapture: function (capture, storyId) {
-      if (!this.canReview()) return Promise.reject(new Error('Open an available Studio conversation before reviewing.'));
-      if (!storyId || !capture || capture.field !== 'scene' ||
-          typeof capture.content !== 'string' || !capture.content.trim() ||
-          typeof capture.title !== 'string') {
-        return Promise.reject(new Error('Choose a Project and a complete Scene Prompt.'));
-      }
-      if (state.studioSceneProposal || state.studioScenesProposal) {
-        return Promise.reject(new Error('An unfinished Scene draft exists. Finish or discard it first.'));
-      }
-      state.pending = true;
-      syncControls();
-      return Promise.resolve().then(function () {
-        return window.flushStudioDirectorStoryEdits(storyId);
-      }).then(function () {
-        return requestJson('/fs/storyboard?story=' + encodeURIComponent(storyId));
-      }).then(function (payload) {
-        var story = payload.story;
-        if (!story || story.id !== storyId) throw new Error('Selected Project is unavailable.');
-        if (Number.isInteger(capture.durationSeconds)) {
-          // Reuse complete authored material with its duration in the existing review.
-          state.studioScenesProposal = {
-            storyId:storyId, storyTitle:story.title, sceneOrder:(story.sceneOrder || []).slice(),
-            scenes:story.scenes, drafts:[{title:capture.title,prompt:capture.content,
-              durationSeconds:capture.durationSeconds}],
-            rationale:'Director developed this Scene in conversation. Review before saving.'
-          };
-          showStudioScenesReview();
-        } else {
-          // Old captures did not carry a duration; retain their original review.
-          state.studioSceneProposal = {
-            storyId:storyId, storyTitle:story.title, expectedUpdatedAt:story.updatedAt,
-            sceneOrder:(story.sceneOrder || []).slice(), scenes:story.scenes,
-            title:capture.title, prompt:capture.content,
-            rationale:'Director developed this Scene in conversation. Review before saving.',
-            placement:'end'
-          };
-          showStudioSceneDraftReview();
-        }
-        studioActionStatus('Review the developed Scene without another model request.',false);
-      }).finally(function () {
-        state.pending = false;
-        syncControls();
-      });
     },
     checkProjectCoherence: function (storyId) {
       if (!this.isReady()) return Promise.reject(new Error('Studio Director must be ready to check Project coherence.'));
@@ -3528,98 +3361,6 @@
         state.pending = false;
         state.jobId = '';
         syncControls();
-      });
-    },
-    reviewPendingScenes: function (projectId, sourceMessageIndex) {
-      var proposal = state.studioScenesProposal;
-      var retained = proposal && proposal.sourceMessageIndex === sourceMessageIndex
-        ? proposal : state.studioScenesReviewsByResponse[sourceMessageIndex];
-      if (retained && retained.storyId !== projectId)
-        return this.reviewAuthoredScenes({projectId:projectId,sourceMessageIndex:sourceMessageIndex,
-          scenes:JSON.parse(retained.sourceScenesSignature),rationale:retained.rationale});
-      if (!proposal || proposal.storyId !== projectId ||
-          proposal.sourceMessageIndex !== sourceMessageIndex) {
-        var saved = state.studioScenesReviewsByResponse[sourceMessageIndex];
-        if (!saved || saved.storyId !== projectId)
-          return Promise.reject(new Error('This response\'s authored Scene review is no longer available.'));
-        if (proposal) {
-          if (!Number.isInteger(proposal.sourceMessageIndex))
-            return Promise.reject(new Error('Finish the independent Scene review before switching.'));
-          rememberStudioScenesReview();
-          state.studioScenesReviewsByResponse[proposal.sourceMessageIndex] = proposal;
-        }
-        state.studioScenesProposal = saved;
-        proposal = saved;
-      }
-      showStudioScenesReview();
-      return Promise.resolve({review:true,count:proposal.drafts.length});
-    },
-    reviewAuthoredScenes: function (launch) {
-      if (!launch || !launch.projectId || !Array.isArray(launch.scenes))
-        return Promise.reject(new Error('Select a saved Project and authored Scene records.'));
-      var drafts = launch.scenes.filter(function (item) {
-        return item && typeof item === 'object' && !Array.isArray(item);
-      }).map(function (item) {
-        return {
-          title:typeof item.title === 'string' ? item.title : '',
-          prompt:typeof item.prompt === 'string' ? item.prompt : '',
-          durationSeconds:item.durationSeconds
-        };
-      }).filter(function (item) {
-        return item.title.trim() || item.prompt.trim() || item.durationSeconds !== undefined;
-      });
-      if (!drafts.length)
-        return Promise.reject(new Error('No usable Scene fields were authored.'));
-      var responseIndex = launch.sourceMessageIndex;
-      var hasResponse = Number.isInteger(responseIndex) && responseIndex >= 0;
-      var signature = JSON.stringify(drafts);
-      var existing = state.studioScenesProposal;
-      if (existing && hasResponse && existing.sourceMessageIndex === responseIndex &&
-          existing.sourceScenesSignature !== signature)
-        return Promise.reject(new Error('This response\'s authored Scene material no longer matches the active review.'));
-      if (existing && existing.storyId === launch.projectId &&
-          hasResponse && existing.sourceMessageIndex === responseIndex &&
-          existing.sourceScenesSignature === signature) {
-        showStudioScenesReview();
-        return Promise.resolve({review:true,count:existing.drafts.length});
-      }
-      if (existing && !Number.isInteger(existing.sourceMessageIndex))
-        return Promise.reject(new Error('An independent Scene review is still open. Finish it before reviewing this response.'));
-      var saved = existing && hasResponse && existing.sourceMessageIndex === responseIndex
-        ? existing : hasResponse && state.studioScenesReviewsByResponse[responseIndex];
-      if (saved && saved.sourceScenesSignature !== signature)
-        return Promise.reject(new Error('The saved review does not match this response\'s authored Scene records.'));
-      if (saved && saved.storyId === launch.projectId) {
-        if (existing && existing !== saved) {
-          rememberStudioScenesReview();
-          state.studioScenesReviewsByResponse[existing.sourceMessageIndex] = existing;
-        }
-        state.studioScenesProposal = saved;
-        showStudioScenesReview();
-        return Promise.resolve({review:true,count:saved.drafts.length});
-      }
-      return window.flushStudioDirectorStoryEdits(launch.projectId).then(function () {
-        return requestJson('/fs/storyboard?story=' + encodeURIComponent(launch.projectId));
-      }).then(function (payload) {
-        var story = payload && payload.story;
-        if (!story || story.id !== launch.projectId)
-          throw new Error('The Project is no longer available.');
-        if (existing) {
-          rememberStudioScenesReview();
-          state.studioScenesReviewsByResponse[existing.sourceMessageIndex] = existing;
-        }
-        state.studioScenesProposal = Object.assign({},saved || {},{
-          storyId:story.id,storyTitle:story.title,
-          sceneOrder:story.sceneOrder.slice(),scenes:story.scenes,
-          drafts:saved ? saved.drafts : drafts,rationale:launch.rationale || '',
-          placement:saved && ['start','end'].includes(saved.placement) ? saved.placement : 'end',
-          sourceMessageIndex:hasResponse ? responseIndex : null,
-          sourceScenesSignature:signature
-        });
-        showStudioScenesReview();
-        studioActionStatus(drafts.length + ' authored Scene' +
-          (drafts.length === 1 ? '' : 's') + ' ready for review. Nothing saved.',false);
-        return {review:true,count:drafts.length};
       });
     },
     writeNewScene: function (launch) {

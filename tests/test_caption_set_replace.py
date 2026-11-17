@@ -50,6 +50,18 @@ class SetCaptionReplaceTests(unittest.TestCase):
             caption_ops.replace_set_caption_text("set-one", "red", "green", preview["signature"])
         self.assertEqual((self.folder / "b.txt").read_text(encoding="utf-8"), "red-blue")
 
+    def test_previously_unmatched_caption_becoming_matched_invalidates_preview(self):
+        preview = caption_ops.replace_set_caption_text("set-one", "Blue", "green")
+        (self.folder / "b.txt").write_text("Blue now", encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "Preview again"):
+            caption_ops.replace_set_caption_text("set-one", "Blue", "green", preview["signature"])
+        self.assertEqual((self.folder / "a.txt").read_text(encoding="utf-8"), "red red\\nBlue")
+
+    def test_missing_preview_signature_does_not_apply(self):
+        with self.assertRaisesRegex(ValueError, "Preview again"):
+            caption_ops.replace_set_caption_text("set-one", "red", "green", "")
+        self.assertEqual((self.folder / "a.txt").read_text(encoding="utf-8"), "red red\\nBlue")
+
     def test_case_sensitive_and_empty_search(self):
         preview = caption_ops.replace_set_caption_text("set-one", "RED", "green")
         self.assertEqual(preview["occurrences"], 0)

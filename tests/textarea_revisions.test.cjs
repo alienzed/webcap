@@ -9,7 +9,9 @@ const source = fs.readFileSync(path.join(__dirname, '../tool/js/textarea_revisio
 function editor(value, sceneId) {
   return {
     id: '', name: '', dataset: {sceneField:'prompt'}, value,
-    disabled:false, readOnly:false, isConnected:true, style:{paddingRight:'',paddingTop:'',paddingBottom:''},
+    disabled:false, readOnly:false, isConnected:true, dispatched:[],
+    dispatchEvent(event){this.dispatched.push(event.type);return true;},
+    style:{paddingRight:'',paddingTop:'',paddingBottom:''},
     parentElement:null,
     matches(s) { return s === 'textarea' || s.split(',').some(part => {
       part = part.trim();
@@ -88,7 +90,7 @@ function harness(savedPreferences, showSettings) {
     getComputedStyle:()=>({paddingBottom:'8px'}),
     setTimeout:(fn,ms)=>{assert.equal(ms,10000);pending.set(++timerId,fn);return timerId;},
     clearTimeout:id=>pending.delete(id),
-    Map,Array,String,Object});
+    Map,Array,String,Object,Event:class Event {constructor(type){this.type=type;}}});
   docHandlers.DOMContentLoaded();
   return {document,window,controls,toolbarHandlers,toolbar,settingsHost,
     preferences:()=>Object.assign({},preferenceStorage),
@@ -119,23 +121,21 @@ test('shared textarea history keeps every distinct version and never truncates p
   assert.equal(history.versions.length,26,'consecutive duplicates do not add revisions');
 });
 
-test('browsing is non-destructive; editing an earlier version appends after the latest',()=>{
-  const h=harness(), field=editor('Original','scene-b');
+test('History applies previous/next versions to the live editor and emits autosave input',()=>{
+  const h=harness(),field=editor('Original','scene-b');
   const key=h.window.webcapTextareaRevisions.identity(field);
   h.focus(field);
   field.value='New';h.input(field);h.idle();
   h.click('[data-rev-prev]');
   assert.equal(field.value,'Original');
-  assert.equal(h.window.webcapTextareaRevisions.history(key).versions.length,2);
+  assert.equal(field.dispatched.at(-1),'input','History must notify the existing editor');
   h.blur(field);
-  assert.equal(field.value,'New','browsing does not change the real field on blur');
-  assert.equal(h.window.webcapTextareaRevisions.history(key).index,1,
-    'leaving history returns the cursor to the latest version');
-  h.focus(field);
+  assert.equal(field.value,'Original','previous is an applied version, not a preview');
+  assert.equal(h.window.webcapTextareaRevisions.history(key).index,0);
+  h.focus(field);h.click('[data-rev-next]');
+  assert.equal(field.value,'New');
   h.click('[data-rev-prev]');
-  assert.equal(field.value,'Original','browsing works again after reattachment');
-  field.value='Original but changed';
-  h.input(field);h.idle();
+  field.value='Original but changed';h.input(field);h.idle();
   assert.equal(h.window.webcapTextareaRevisions.history(key).versions.join('|'),
     'Original|New|Original but changed');
 });
@@ -232,7 +232,8 @@ test('Scene Prompt uses the same bottom footer, never a toolbar in its heading',
   h.click('[data-rev-prev]');
   assert.equal(field.value,'Subject:');
   h.blur(field);
-  assert.equal(field.value,'Subject: revised','preview is restored on blur');
+  assert.equal(field.value,'Subject:','History revision remains applied on blur');
+  assert.ok(field.dispatched.includes('input'));
 });
 
 test('Chat and Studio Director conversation composer does not attach History',()=>{
@@ -274,7 +275,7 @@ test('history preferences opt in and master switch disable the field without los
   assert.equal(api.history(key).versions.length,2);
 });
 
-test('Storyboard and Director review share a logical Scene prompt history key',()=>{
+test('Storyboard fields reuse stable Scene prompt history keys',()=>{
   const h=harness(),field=editor('Original','scene-shared');
   const key=h.window.webcapTextareaRevisions.identity(field);
   const review=editor('Revised','unused');
@@ -309,7 +310,7 @@ test('Settings groups are collapsible, show live counts and retain open state wh
   assert.equal(details[0].open,true);
   assert.equal(details[1].open,false);
   const counts=host.querySelectorAll('[data-history-group-count]');
-  assert.equal(counts[0].textContent,'3 / 4 enabled');
+  assert.equal(counts[0].textContent,'4 / 4 enabled');
   const scene=host.querySelector('[data-history-field="scene.prompt"]');
   assert.equal(scene.checked,true);
   details[1].open=true;
@@ -317,11 +318,35 @@ test('Settings groups are collapsible, show live counts and retain open state wh
   scene.listeners.change();
   assert.equal(details[1].open,true,'checkbox change must preserve expanded group');
   assert.equal(host.querySelector('[data-history-field="scene.prompt"]'),scene,'rows should not be rebuilt');
-  assert.equal(counts[1].textContent,'0 / 4 enabled');
+  assert.equal(counts[1].textContent,'2 / 6 enabled');
   const master=host.querySelector('[data-history-master]');
   master.checked=false;master.listeners.change();
   assert.equal(scene.disabled,true);
   assert.equal(details[1].open,true);
   master.checked=true;master.listeners.change();
   assert.equal(scene.disabled,false);
+});
+
+test('direct Write registers model-produced fields without a Review layer',()=>{
+  const h=harness(),api=h.window.webcapTextareaRevisions;
+  const field=editor('Old Prompt','scene-direct');
+  const key=api.identity(field);
+  api.recordFieldChange(key,'Old Prompt','Model authored prompt');
+  const history=api.history(key);
+  assert.deepEqual(Array.from(history.versions),['Old Prompt','Model authored prompt']);
+  field.value='Model authored prompt';
+  h.focus(field);
+  h.click('[data-rev-prev]');
+  assert.equal(field.value,'Old Prompt');
+  h.click('[data-rev-next]');
+  assert.equal(field.value,'Model authored prompt');
+});
+
+test('History includes Studio title and duration editor types',()=>{
+  const h=harness(),entries=h.window.webcapTextareaRevisions.fieldTypes;
+  for(const id of ['project.title','scene.title','scene.duration']) {
+    const type=entries.find(t=>t.id===id);
+    assert.ok(type,'Missing editable History category '+id);
+    assert.equal(type.enabled,true);
+  }
 });

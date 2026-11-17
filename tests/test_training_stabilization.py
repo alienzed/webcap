@@ -2525,3 +2525,77 @@ def test_update_queued_resume_epochs_must_exceed_saved_progress(tmp_path, monkey
     assert status == 409 and "saved resume point" in payload["error"]
 
 
+
+
+def test_missing_result_guard_targets_recovered_job_even_if_queue_is_reordered(tmp_path, monkeypatch):
+    _configure_root(monkeypatch, tmp_path)
+    folder = tmp_path / "sets" / "subject"
+    folder.mkdir(parents=True)
+    captured = tmp_path / "captured.toml"
+    captured.write_text("epochs = 60\n", encoding="utf-8")
+    first = {"id": "first", "folder": "sets/subject", "status": "queued", "stages": "h3",
+             "resumeFromCheckpoint": "/runs/first", "snapshot": {"h3": str(captured)},
+             "artifactDir": str(tmp_path / "jobs/first")}
+    recovered = {"id": "recovered", "folder": "sets/subject", "status": "queued", "stages": "h3",
+                 "resumeFromCheckpoint": "/runs/recovered", "snapshot": {"h3": str(captured)},
+                 "missingResultRecovery": True, "artifactDir": str(tmp_path / "jobs/recovered")}
+    monkeypatch.setattr(training_runner, "_populate_queued_resume_point",
+                        lambda job: job.update(resumePoint={"epoch": 60 if job["id"] == "recovered" else 10,
+                                                           "checkpointAvailable": True}))
+    state = {"queuePaused": True, "queuePauseReason": training_runner._MISSING_RESULT_RECOVERY_REASON,
+             "jobs": [first, recovered]}
+    result = training_runner._recovered_job_already_at_target(state)
+    assert "epoch 60 of 60" in result
+    assert "resumePoint" not in first
+    assert recovered["resumePoint"]["epoch"] == 60
+
+
+def test_missing_result_guard_does_not_block_without_a_resumable_checkpoint(tmp_path, monkeypatch):
+    _configure_root(monkeypatch, tmp_path)
+    captured = tmp_path / "captured.toml"
+    captured.write_text("epochs = 60\n", encoding="utf-8")
+    recovered = {"id": "recovered", "status": "queued", "stages": "h3",
+                 "resumeFromCheckpoint": "/runs/recovered", "snapshot": {"h3": str(captured)},
+                 "missingResultRecovery": True}
+    monkeypatch.setattr(training_runner, "_populate_queued_resume_point",
+                        lambda job: job.update(resumePoint={"epoch": 60, "checkpointAvailable": False}))
+    state = {"queuePaused": True, "queuePauseReason": training_runner._MISSING_RESULT_RECOVERY_REASON,
+             "jobs": [recovered]}
+    assert training_runner._recovered_job_already_at_target(state) == ""
+
+
+def test_training_pause_ui_targets_active_not_selected():
+    from pathlib import Path
+    source = (Path(__file__).resolve().parents[1] / "tool" / "js" / "training_runner_ui.js").read_text(encoding="utf-8")
+    assert "var job = (pause || finish) ? getTrainingRunnerActiveJob() : getTrainingRunnerSelectedJob();" in source
+
+
+def test_checkpoint_pause_keeps_active_and_waiting_jobs_queued(tmp_path, monkeypatch):
+    _configure_root(monkeypatch, tmp_path)
+    active = {"id": "active", "status": "stopping", "stage": "saving", "stages": "h3",
+              "actionRequested": "pause", "startedAt": 1234.0, "outputRunPath": "/runs/active",
+              "folder": "sets/subject"}
+    waiting = {"id": "waiting", "status": "queued", "stage": "queued", "stages": "h3"}
+    monkeypatch.setattr(training_runner, "_checkpointed_stop_error", lambda _job, _action: "")
+    monkeypatch.setattr(training_runner, "_populate_queued_resume_point",
+                        lambda job: job.update(resumePoint={"epoch": 10, "checkpointAvailable": True}))
+    requested = training_runner._apply_terminal_job_status(active, "stopped")
+    assert requested == "pause"
+    assert active["status"] == "queued"
+    assert active["resumeFromCheckpoint"] == "/runs/active"
+    assert active["resumePoint"]["checkpointAvailable"] is True
+    assert "actionRequested" not in active
+    assert waiting == {"id": "waiting", "status": "queued", "stage": "queued", "stages": "h3"}
+
+
+def test_missing_runner_recovery_marks_only_that_job(tmp_path, monkeypatch):
+    _configure_root(monkeypatch, tmp_path)
+    monkeypatch.setattr(training_runner, "_populate_queued_resume_point", lambda _job: None)
+    active = {"id": "active", "status": "running", "stage": "h3",
+              "stages": "h3", "outputRunPath": "/runs/active"}
+    waiting = {"id": "waiting", "status": "queued", "stage": "queued", "stages": "h3"}
+    training_runner._recover_dead_runner(active, "runner disappeared")
+    assert active["status"] == "queued"
+    assert active["missingResultRecovery"] is True
+    assert waiting["status"] == "queued"
+    assert "missingResultRecovery" not in waiting

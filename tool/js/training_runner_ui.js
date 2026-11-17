@@ -535,8 +535,13 @@ function startManagedTraining() {
 }
 
 function stopManagedTraining(cancel, pause, finish) {
-  var job = getTrainingRunnerSelectedJob();
-  if (!job || !job.id) return;
+  // Pause and Finish act on the running process, not a separately selected
+  // queued job; selection can change between render and button activation.
+  var job = (pause || finish) ? getTrainingRunnerActiveJob() : getTrainingRunnerSelectedJob();
+  if (!job || !job.id) {
+    setStatus((pause || finish) ? "No active Training job to pause or finish." : "No selected Training job.");
+    return;
+  }
   var label = cancel ? 'Cancel this queued training job?' : pause
     ? 'Pause this run? Training will finish its current step, save a resumable checkpoint, then exit. This item will remain first and the queue will wait for Resume.'
     : finish

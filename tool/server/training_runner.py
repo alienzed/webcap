@@ -1879,6 +1879,7 @@ def _archive_existing_run_log(log_path, launch_time):
 
 def _launch_job(job, folder_path):
     launch_time = time.time()
+    job.pop("missingResultRecovery", None)
     if not job.get("startedAt"):
         job["startedAt"] = launch_time
     job["updatedAt"] = launch_time
@@ -2354,6 +2355,7 @@ def _await_missing_runner_result(job, detail):
 def _recover_dead_runner(job, detail):
     """Return a positively absent runner to an explicit paused resume state."""
     _queue_paused_job(job)
+    job["missingResultRecovery"] = True
     job["error"] = str(detail or "The recorded runner is no longer active and did not write a result record.").strip()
     return {
         "holdReason": _MISSING_RESULT_RECOVERY_REASON,
@@ -3622,7 +3624,15 @@ def _recovered_job_already_at_target(state):
     """Do not Resume an unconfirmed runner beyond its own captured epoch target."""
     if not state.get("queuePaused") or state.get("queuePauseReason") != _MISSING_RESULT_RECOVERY_REASON:
         return ""
-    job = next((item for item in state.get("jobs", []) if item.get("status") in QUEUE_STATUSES), None)
+    recovered = [
+        item for item in state.get("jobs", [])
+        if item.get("status") in QUEUE_STATUSES and item.get("missingResultRecovery")
+    ]
+    # Historic recovered queues predate the per-job marker; their recovery
+    # job was moved to the front by _refresh_state at recovery time.
+    job = recovered[0] if recovered else next(
+        (item for item in state.get("jobs", []) if item.get("status") in QUEUE_STATUSES), None
+    )
     if not job or not job.get("resumeFromCheckpoint"):
         return ""
     stage = str(job.get("stages") or "")
@@ -3631,6 +3641,10 @@ def _recovered_job_already_at_target(state):
         return ""
     _populate_queued_resume_point(job)
     point = job.get("resumePoint") if isinstance(job.get("resumePoint"), dict) else {}
+    # A directory named epochN alone does not prove that the checkpoint
+    # referenced by DeepSpeed latest exists or can be resumed.
+    if not point.get("checkpointAvailable"):
+        return ""
     last_epoch = int(point.get("epoch") or 0)
     if last_epoch < target:
         return ""

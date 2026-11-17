@@ -2026,7 +2026,7 @@
       instruction: String(options && options.instruction || '').trim(),
       unsavedWorkingFields:workingProject || {},discussion: discussion
     };
-    studioDirectorRequestMessages([{ role: 'user', content: JSON.stringify(input) }], false, true)
+    studioDirectorRequestMessages((state.modeMessages.storyboard || []).concat([{ role: 'user', content: JSON.stringify(input) }]), false, true)
       .then(function (messages) {
         window.studioDirectorWorkbench.showSentWriteContext('studio_project_draft', messages);
         return requestJson('/fs/director/chat', {
@@ -2089,7 +2089,7 @@
         project:{title:current.title,concept:current.concept,style:current.style,
           invariants:current.invariants}
       };
-      return studioDirectorRequestMessages([{role:'user',content:JSON.stringify(input)}],
+      return studioDirectorRequestMessages((state.modeMessages.storyboard || []).concat([{role:'user',content:JSON.stringify(input)}]),
         true,true,{projectId:story.id,projectTitle:story.title,sceneOrder:current.sceneOrder})
         .then(function (messages) {
           window.studioDirectorWorkbench.showSentWriteContext('studio_scene_field_draft',messages);
@@ -2548,7 +2548,7 @@
           style:story.style,invariants:story.invariants},
         unsavedWorkingFields:workingProject,discussion: discussion
       };
-      return studioDirectorRequestMessages([{ role: 'user', content: JSON.stringify(input) }], false, true)
+      return studioDirectorRequestMessages((state.modeMessages.storyboard || []).concat([{ role: 'user', content: JSON.stringify(input) }]), false, true)
         .then(function (messages) {
           window.studioDirectorWorkbench.showSentWriteContext('studio_brief_draft', messages);
           return requestJson('/fs/director/chat', {
@@ -5127,7 +5127,7 @@
       state.pending = true;
       syncControls();
       startProgress();
-      return studioDirectorRequestMessages([{role:'user',content:instruction}], includePromptContract, true, navigationSnapshot).then(function (messages) {
+      return studioDirectorRequestMessages((state.modeMessages.storyboard || []).concat([{role:'user',content:instruction}]), includePromptContract, true, navigationSnapshot).then(function (messages) {
         window.studioDirectorWorkbench.showSentWriteContext(operation || 'studio_scene_field_draft', messages);
         return requestJson('/fs/director/chat', {
           method:'POST',headers:{'Content-Type':'application/json'},

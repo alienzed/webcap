@@ -4773,74 +4773,51 @@
             };
             scheduleSessionSave();
           }
-          // A missing Prompt retains an editable partial draft without
-          // attempting to persist an empty Scene.
-          if (drafts.length !== 1 || missingPrompt || missingDuration ||
-              invalidDuration || !launch.directSave) {
-            var priorReview = state.studioScenesProposal;
-            if (priorReview && Number.isInteger(priorReview.sourceMessageIndex)) {
-              rememberStudioScenesReview();
-              state.studioScenesReviewsByResponse[priorReview.sourceMessageIndex] = priorReview;
-            }
-            state.studioScenesProposal = {
-              storyId:storyId, storyTitle:story.title, sceneOrder:order,
-              scenes:story.scenes, drafts:draft.scenes, rationale:draft.rationale,
-              sourceMessageIndex:launch.sourceMessageIndex,
-              sourceScenesSignature:JSON.stringify(draft.scenes)
-            };
-            showStudioScenesReview();
-            studioActionStatus(missingPrompt
-              ? 'Scene fields retained. Complete the missing H3 Prompt in Review before saving.'
-              : missingDuration || invalidDuration
-                ? 'Scene duration needs review. Authored fields retained; nothing saved.'
-                : drafts.length + ' authored Scene' + (drafts.length === 1 ? '' : 's') +
-                  ' ready for review. Nothing has been saved.',
-              missingDuration || invalidDuration);
-            return {review:true};
-          }
-          var scene = draft.scenes[0];
-          if (!scene || typeof scene.prompt !== 'string' || !scene.prompt.trim())
-            throw new Error('Director returned no usable Scene Prompt.');
-          var validDuration = Number(scene.durationSeconds);
-          var creation = {
-            title:String(scene.title || '').trim() || 'Scene ' + (order.length + 1),
-            prompt:scene.prompt, durationSeconds:validDuration
-          };
+          // Persist each mechanically usable Scene returned by this explicit Write.
+          // Do not invent missing prompt text or duration values, or launch Review.
+          var valid = drafts.filter(function (item) {
+            return item.prompt.trim() && Number.isInteger(Number(item.durationSeconds)) &&
+              Number(item.durationSeconds)>=4 && Number(item.durationSeconds)<=15;
+          });
+          var omitted = drafts.length-valid.length;
+          if (!valid.length)
+            throw new Error('Director returned no Scene records with persistable fields.\\nRaw response:\\n'+raw);
+          var creations = valid.map(function (item,index) {
+            return {title:String(item.title || '').trim() || 'Scene '+(order.length+index+1),
+              prompt:item.prompt,durationSeconds:Number(item.durationSeconds)};
+          });
           state.pending = true;
           syncControls();
-          return requestJson('/fs/studio/director/scenes-draft', {
-            method:'POST', headers:{'Content-Type':'application/json'},
-            body:JSON.stringify({
-              storyId:storyId, expectedSceneOrder:order, scenes:[creation],
-              placement:'end', relativeSceneId:''
-            })
+          return requestJson('/fs/studio/director/scenes-draft',{
+            method:'POST',headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({storyId:storyId,expectedSceneOrder:order,
+              scenes:creations,placement:'end',relativeSceneId:''})
           }).then(function (result) {
             if (!result || !result.story || result.story.id !== storyId ||
-                !Array.isArray(result.scenes) || result.scenes.length !== 1 ||
-                !result.scenes[0].id)
-              throw new Error('Scene creation returned no confirmed saved result.');
-            var saved = result.scenes[0];
-            // The server has committed the new Scene. Clear a matching draft
-            // before refresh/receipt, so a later reporting failure cannot
-            // cause the same candidate to be inserted twice.
-            if (state.studioWorkingDraft.newScene.prompt === saved.prompt) {
-              state.studioWorkingDraft.newScene = {};
+                !Array.isArray(result.scenes) || result.scenes.length !== creations.length ||
+                result.scenes.some(function(item){return !item.id;}))
+              throw new Error('Scene save did not confirm the returned Scene records.');
+            var saved = result.scenes;
+            if (saved.length===1 && state.studioWorkingDraft.newScene.prompt===saved[0].prompt) {
+              state.studioWorkingDraft.newScene={};
               if (state.studioWorkingDraft.draftOrigins)
-                state.studioWorkingDraft.draftOrigins.newScene = null;
+                state.studioWorkingDraft.draftOrigins.newScene=null;
               scheduleSessionSave();
             }
-            return window.refreshStudioDirectorStoryIfOpen(storyId).then(function () {
-              return window.studioDirectorBridge.recordApplied('scene.create',result.story,{
-                scenes:[{id:saved.id,title:saved.title,prompt:saved.prompt,
-                  durationSeconds:saved.durationSeconds}]
+            recordStudioOperation('scenes.create','Created '+saved.length+' Scene(s)',storyId,
+              saved.map(function(item){return item.id;}));
+            return window.studioDirectorBridge.recordApplied('scenes.create',result.story,{
+              scenes:saved.map(function(item){
+                return {id:item.id,title:item.title,prompt:item.prompt,
+                  durationSeconds:item.durationSeconds};
+              })
+            }).then(function(){return window.refreshStudioDirectorStoryIfOpen(storyId);})
+              .catch(function(error){error.saved=true;throw error;})
+              .then(function(){
+                studioActionStatus(saved.length+' Scene(s) saved.'+
+                  (omitted ? ' '+omitted+' returned record(s) could not be stored; inspect raw I/O.' : ''),!!omitted);
+                return result;
               });
-            }).catch(function (error) {
-              error.saved = true;
-              throw error;
-            }).then(function () {
-              studioActionStatus('Scene created and saved: ' + saved.title, false);
-              return result;
-            });
           });
         });
       }).catch(function (error) {

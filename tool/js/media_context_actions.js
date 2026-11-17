@@ -251,6 +251,101 @@ function buildCurrentFolderContextActions() {
   ];
 }
 
+
+function openSetCaptionFindReplace(folderPath) {
+  var dialog = document.getElementById('prep-set-caption-replace-dialog');
+  if (!dialog) {
+    dialog = document.createElement('dialog');
+    dialog.id = 'prep-set-caption-replace-dialog';
+    dialog.className = 'prep-set-caption-replace';
+    dialog.innerHTML = '<form method="dialog" class="prep-set-caption-replace-form">' +
+      '<div class="prep-set-caption-replace-heading"><h2>Find &amp; Replace in Set Captions</h2>' +
+      '<button type="submit" aria-label="Close">×</button></div>' +
+      '<div class="prep-set-caption-replace-folder"></div>' +
+      '<label>Find<input name="find" type="text" required autocomplete="off"></label>' +
+      '<label>Replace with<input name="replacement" type="text" autocomplete="off"></label>' +
+      '<p class="prep-set-caption-replace-note">Exact, case-sensitive text in this Set’s saved captions only.</p>' +
+      '<p class="prep-set-caption-replace-result" role="status" aria-live="polite"></p>' +
+      '<div class="prep-set-caption-replace-actions"><button type="button" data-action="preview">Preview</button>' +
+      '<button type="button" data-action="apply" disabled>Replace matches</button></div></form>';
+    var style = document.createElement('style');
+    style.textContent = '.prep-set-caption-replace{width:min(540px,calc(100vw - 30px));max-height:85vh;padding:22px;border:1px solid var(--border,#777);border-radius:10px;background:var(--panel,Canvas);color:var(--text,CanvasText)}' +
+      '.prep-set-caption-replace::backdrop{background:#0009}.prep-set-caption-replace-form{display:grid;gap:14px}' +
+      '.prep-set-caption-replace-heading{display:flex;justify-content:space-between;align-items:center;gap:12px}' +
+      '.prep-set-caption-replace-heading h2{margin:0;font-size:20px}.prep-set-caption-replace-heading button{border:0;background:none;color:inherit;font-size:24px;cursor:pointer}' +
+      '.prep-set-caption-replace-folder{font-size:14px;overflow-wrap:anywhere;opacity:.75}' +
+      '.prep-set-caption-replace-form label{display:grid;gap:6px;font-size:16px}' +
+      '.prep-set-caption-replace-form input{box-sizing:border-box;width:100%;padding:9px;font:inherit;color:inherit;background:var(--surface,Canvas);border:1px solid var(--border,#777);border-radius:6px}' +
+      '.prep-set-caption-replace-note{font-size:14px;margin:0;opacity:.8}' +
+      '.prep-set-caption-replace-result{margin:0;min-height:22px;font-size:15px}' +
+      '.prep-set-caption-replace-actions{display:flex;justify-content:flex-end;gap:8px}' +
+      '.prep-set-caption-replace-actions button{padding:9px 12px;cursor:pointer}.prep-set-caption-replace-actions button:disabled{opacity:.5;cursor:default}';
+    document.head.appendChild(style);
+    document.body.appendChild(dialog);
+    var form = dialog.querySelector('form');
+    var findInput = form.elements.namedItem('find');
+    var replacementInput = form.elements.namedItem('replacement');
+    var previewButton = dialog.querySelector('[data-action="preview"]');
+    var applyButton = dialog.querySelector('[data-action="apply"]');
+    var resultEl = dialog.querySelector('.prep-set-caption-replace-result');
+    var current = null;
+    function invalidate() {
+      current = null;
+      applyButton.disabled = true;
+      resultEl.textContent = '';
+    }
+    findInput.addEventListener('input',invalidate);
+    replacementInput.addEventListener('input',invalidate);
+    function send(apply) {
+      var find = findInput.value;
+      if (!find) { resultEl.textContent = 'Enter text to find.'; return; }
+      var payload = {folder:dialog.dataset.folder,find:find,replace:replacementInput.value};
+      if (apply) {
+        if (!current) return;
+        payload.apply = true;
+        payload.signature = current.signature;
+      }
+      previewButton.disabled = true;
+      applyButton.disabled = true;
+      resultEl.textContent = apply ? 'Replacing…' : 'Searching…';
+      fetch('/caption/set_replace',{
+        method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)
+      }).then(function(resp) {
+        return resp.json().then(function(data) {
+          if (!resp.ok || data.error) throw new Error(data.error || 'Caption replacement failed.');
+          return data;
+        });
+      }).then(function(data) {
+        if (apply) {
+          current = null;
+          resultEl.textContent = 'Replaced ' + data.occurrences + ' matches in ' + data.files + ' captions.';
+          setStatus(resultEl.textContent);
+        } else {
+          current = data;
+          resultEl.textContent = data.occurrences + ' matches in ' + data.files + ' captions.';
+          applyButton.disabled = data.occurrences === 0;
+        }
+      }).catch(function(err) {
+        current = null;
+        var message = 'Set caption replacement failed: ' + (err && err.message ? err.message : err);
+        resultEl.textContent = message;
+        setStatus(message);
+        console.error(message,err);
+      }).finally(function() { previewButton.disabled = false; });
+    }
+    previewButton.addEventListener('click',function() {send(false);});
+    applyButton.addEventListener('click',function() {send(true);});
+    dialog.addEventListener('close',invalidate);
+    dialog._prepSetReplaceReset = invalidate;
+  }
+  dialog.dataset.folder = folderPath;
+  dialog.querySelector('.prep-set-caption-replace-folder').textContent = folderPath;
+  dialog.querySelector('form').reset();
+  dialog._prepSetReplaceReset();
+  dialog.showModal();
+  dialog.querySelector('input[name="find"]').focus();
+}
+
 function buildFolderContextMenuActions(key) {
   var actions = [
     createFlagAction(key),
@@ -316,6 +411,10 @@ function buildFolderContextMenuActions(key) {
   ];
   var setFolderPath = buildRowRelativePath(key);
   if (isSetFolderPath(setFolderPath)) {
+    actions.push({
+      label: 'Find & Replace Captions',
+      run: function () { openSetCaptionFindReplace(setFolderPath); }
+    });
     actions.push({
       label: 'Clone with VL Captions',
       run: function () { openVlSetClone(setFolderPath); }

@@ -14,7 +14,7 @@ function part(source,start,end){
 
 test('historical chat action metadata cannot reopen retired Project or Scene Review',()=>{
   const operations=part(chat,'  function renderStudioOperations() {',
-    '  function renderMessages(');
+    '  function recordStudioOperation(');
   assert.doesNotMatch(operations,/presentAction\(|showStudioProjectReview\(|showStudioBriefReview\(|showStudioScenesReview\(/);
   const send=part(chat,'  function sendMessage() {','  function syncPinnedUi() {');
   assert.doesNotMatch(send,/presentAction\(|studioAuthoredWriteActions\(/);

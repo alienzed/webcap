@@ -1,285 +1,149 @@
-# Studio Director functional contract — phase 1
+# Studio Director — Chat and explicit Write contract
 
-Agreed with the author on 2026-11-14. This is the authoritative target behavior,
-not a claim that the implementation is complete. Use
-[studio-director-implementation.md](studio-director-implementation.md) for the
-current gaps, implementation sequence and acceptance checks. Older Director plans
-are historical wherever they conflict with these two documents.
+**Status:** Normative design for Studio Director. Updated November 17, 2026.
+This document replaces the earlier combined conversation/authoring strategy in full.
+Use it alongside `AGENTS.md`; an older design document, test or historical
+transcript does not override this contract.
 
-## Vision — the reason for this system
+## Purpose
 
-**Studio Director is an imaginative, capable creative partner who understands and elevates the author's vision, contributes meaningful ideas, exercises sound creative judgment, and helps turn that vision into compelling, coherent, producible work.**
+Studio Director is a creative collaborator and a focused author. The two tasks
+are **separate LLM operations**, not separate personalities inferred from prose.
+Reliability comes from the author deliberately choosing the operation, and WebCap
+supplying only the instructions and response format for that operation.
 
-Implementations should be judged by whether they make that collaboration more reliable, not by adherence to a particular UI, model schema or orchestration proposal. See the [behavioral audit and phased implementation](studio-director-behavioral-contract.md) for the evidence and scope of the 2026-11-16 guidance simplification.
+### Normal path
 
-## 1. Keep two contracts separate
+1. **Chat:** User and Director discuss creative ideas naturally. The model returns
+   ordinary text. Chat never produces, requests, extracts, or applies structured
+   Project/Scene field values, actions, write hints or readiness metadata.
+2. **Write:** The author chooses an explicit operation and destination in WebCap
+   (Create Project, revise Overview, create Scene(s), revise selected Scene(s)).
+   WebCap gives the model the full conversation, relevant *explicitly authorized*
+   saved source fields, an exact operation-specific creative task and response
+   schema. The model returns authored material, not conversational commentary.
+3. **Apply:** WebCap consumes the structured result in the same operation that
+   requested it. It maps *received* field values to the explicitly selected
+   target, saves valid independently usable work through existing persistence,
+   updates the editor and field history, and reports actual partial or full saves.
+   No intermediate Review/Apply ceremony is required for new writes.
+4. **Continue:** New Chat turns see the actual conversation, including the
+   Director's earlier *chat* replies; structured authoring payloads are not
+   written back as chat text. The saved Project/Scene is authoritative and
+   available to subsequent writes via their explicitly chosen targets.
 
-**WebCap ↔ LLM:** provide a bounded task and its necessary material; receive a
-complete answer or complete authored field values. Three capabilities suffice:
-**Read**, **Write Project**, **Write Scene(s)**.
+**The ordinary Chat response is never a Write trigger.** There is no intent
+classification, prose parsing for commands or destinations, model-suggested
+action object, readiness scoring, automatic authoring, or second assessment call.
 
-**WebCap ↔ author:** resolve destinations, offer the appropriate launch action,
-run work, display results, save, provide basic recovery, and explain actual failures.
-Review can be useful, but is not compulsory for every write. The launch action
-must make clear whether the result will save directly or await review. Either
-policy asks the LLM for the same complete material.
+## Requests and guidance
 
-Model output is best-effort creative material, not authoritative application state. Preserve useful prose, independently valid fields, completed Scene results, and editable drafts when optional action hints or metadata are malformed. A malformed or unsupported operation-specific value can prevent that particular save or execution, but should not discard unrelated useful work. Prefer author edits, retry and existing recovery over model repair calls or extra readiness gates.
+**Chat:** A short creative-conversation system primer, the complete chronological
+user/assistant exchange and any author-approved saved Read references. Natural
+text output only. Do not include H3 production templates, field definitions,
+JSON response schemas, multi-role instructions, hidden action contracts,
+unrequested project navigation, or backend write metadata.
 
-The LLM does not manage UI controls, permissions, save policy, real IDs, queues,
-readiness scores or recovery. WebCap does not act as a creative-quality judge.
-It checks the mechanical requirements needed to execute the operation correctly.
-Core authoring uses a consistent field/result structure. Ordinary discussion and
-utility briefs can remain prose; WebCap need not mine arbitrary prose for writes.
+**Write:** Operation-specific creative guidance, precisely scoped requested field
+names and required output fields, the **same full chronological chat exchange**
+(as distinct `user`/`assistant` messages), and one final targeted writing
+instruction with its explicit saved baseline/constraints. Do not duplicate the
+conversation inside an embedded `discussion` JSON property, and do not send
+unrelated saved projects or UI state. H3 production guidance appears only for
+operations writing H3 prompts, not title-only or Overview changes. Existing
+successful First Cut, Develop Scenes and Enhance Prompt prompt expertise must
+not be diluted in this refactor.
 
-## 2. The three capabilities
+**Context:** No arbitrary last-eight cap, character clipping, hidden summaries
+or automatic compaction. Expose actual provider/context-limit failures.
+Model-specific context measurement and compaction are later work, not a reason
+to silently drop history now.
 
-| Capability | Input to the LLM | Output from the LLM |
-|---|---|---|
-| Read | Question or discussion request, plus relevant supplied material | Grounded answer, creative discussion, a useful brief, or one consequential clarification |
-| Write Project | Instruction, relevant agreed direction, and current Project values when revising | Complete values for the Project fields being authored: title, concept, visual/atmosphere and/or invariants |
-| Write Scene(s) | Instruction and the current Scene prompt when revising, plus only the constraints/context needed for that task | Complete usable H3 prompt when creating or revising creative content, with a useful new title or requested title/duration changes |
+**Independent identities:** Visible Project/Scene navigation, deliberate
+conversation attachment, explicitly approved saved Read references, and the
+current Write destination are distinct. None silently changes another.
+An explicit Write authorizes reading *its own selected saved baseline* for
+revision; it does not authorize reading arbitrary projects. A model never
+chooses IDs, a save target or a write operation by its wording.
 
-New/existing and one/many are parameters, not more capabilities. WebCap owns source
-and destination bindings. The model authors the material it was given and asked
-for; it need not know which editor or drawer is open or invent application IDs.
-**Unsaved authored material belongs to the conversation/session, not a saved
-Project or Scene.** Each response's actual authored fields remain independently
-reopenable, editable and applicable, including after changing navigation. A
-source/provenance reference and a suggested destination are metadata about that
-material, not an irreversible attachment or permission to save. Projects own
-material only after authoritative persistence.
+## One contract per operation
 
-### Read and context
+- **Chat:** No structured response schema; plain text, one displayed answer.
+- **Create Project:** Author requested Project title, Concept, Visual /
+  atmosphere and useful Invariants. A response may include initial Scene briefs;
+  these are separately processed only when complete. Absent optional initial
+  material must not invalidate a useful Project.
+- **Revise Overview:** Require only specifically selected Project fields;
+  return complete replacements for them. Never insist on rewriting unrelated
+  fields because an optional schema property happens to exist.
+- **Create Scene(s):** Ask for full generatable prompt, useful title and supported
+  duration for each authored Scene. Accept the **actual number of complete
+  returned records**, including more or fewer than requested; report shortfalls
+  honestly. Each saved Scene remains independently useful if another fails.
+- **Revise Scene(s):** Require only selected fields. Title-only/duration-only
+  changes must not require a new prompt. Prompt revisions should preserve
+  unaffected creative decisions, but WebCap must not implement story-specific
+  semantic validators or replace model creative judgment with brittle heuristics.
+  Each selected Scene has its own deterministic target and save result.
 
-Saved Project and Scene context is proposed from the current Studio selection, but
-is supplied only after the author approves it through the existing Context (Read)
-sidebar. The sidebar shows the Project and selected Overview/Scenes, with an
-optional full preview. An approval is a local selection, not an LLM request or an
-acknowledgement-only exchange. Later conversation turns refresh exactly the
-approved saved fields without another confirmation; a new conversation or reload
-starts without an approved scope. Write destinations are independent of Read
-approval and never grant access to saved creative fields. Context can contain
-approved excerpts from **multiple Projects simultaneously**, including a Scene
-from an unrelated Project as a template for pacing, a character or staging.
-Maintain provenance for each selected item; the current Studio Project may be
-a convenient suggested source, never an automatic permission. The author may
-change, revoke or inspect approved selections without changing the conversation
-or its unsaved material. Do not require one global Project to own all Read items.
-An explicitly launched, target-specific Project or Scene writer may read the
-saved fields of that exact target as necessary to execute the selected operation;
-that direct author action authorizes its known source. Opening or selecting a
-Project alone, or mentioning it in ordinary chat, never does. Unrelated
-reference Projects still require explicit Read approval.
+Schema-required fields should match the operation's real expectations. Use a
+small, purposeful schema without redundant optional properties or boilerplate
+`rationale` requirements merely for compatibility. Structure is a transport
+contract, **not** a proof that requested creative content is semantically
+correct, nor a license to throw away useful partial material.
 
-A Scene correction such as "make it night" normally needs the current prompt,
-duration, instruction and applicable Project/continuity constraints, not the
-whole conversation or unrelated Project fields. Include prior agreed decisions
-when they actually affect the requested edit. New Scene authoring can need
-agreed Project direction; Project-wide questions can need broader saved material.
-Supply what serves the task, without defaulting to everything. Identify the
-supplied scope and do not claim to have read missing material.
+Parse **structured output as structured output**, not conversation prose.
+Keep actual received fields/records even if a different requested field is
+missing or invalid. Apply valid independent pieces; expose incomplete pieces
+through the operation's own editable/error surface and I/O diagnostics,
+without inventing default creative values, silently coercing semantic content,
+repairing via regex or making an automatic second LLM call. Only the actual
+persistence response proves a save. A model's textual claim does not.
 
-Treat approved Read items as source references, not write targets. A saved Scene
-from Project B can inform a new Scene destined for Project A or an entirely new
-Project; transferring the creative idea does not transfer Project B's identity.
-Use fresh saved values where current state matters. If current saved material
-contradicts an older conversational assumption, do not silently draft against
-the stale copy. Ordinary questions and brainstorming do not change saved records
-or discard an available authored result.
+Every interface action has exactly one traceable route:
+**UI selection → task instruction → request contract → model response
+→ operation-owned parser → typed field mapping → authoritative save
+→ editor/history and truthful receipt.** The route must be the same for
+direct shortcuts and the Write panel where they represent the same task.
 
-### Write Project
+## Interface, lifecycle and cleanup
 
-Create or update the requested Project fields. Preserve unrelated values. Complete
-field values must be returned, rather than promises or instructions for a later
-draft. The author can review the small Project Overview where useful.
+New Write results go to editable fields via existing persistence and undo/redo
+history; they do **not** wait for a new Review modal or conversational proposal.
+Existing chat text remains readable. Old stored structured messages may be
+shown as inert archive content, but cannot launch hidden legacy write actions.
+Preserve existing saved Project/Scene data and old conversation files; no data
+migration or deletion is authorized.
 
-When the author requests a new Project with initial Scenes, save the Project
-before writing its Scenes. Use the same Scene capability for each; a shared
-direction or short per-Scene brief is request input, not a stored Intent layer.
-Do not require all full Scene prompts in the Project-writing response. If a
-later Scene fails, retain the created Project and successfully saved Scenes and
-report what remains unfinished. The combined request is not atomic.
+Remove **dead execution paths**, including combined Chat response parsers,
+conversational Write suggestions, model action metadata, readiness processing,
+legacy review-only controllers and duplicated authoring routes, once their
+actual callers and compatibility requirements are traced. Do not keep two
+competing active architectures under a permanent feature flag. Compatibility
+for reading old stored data should be localized and inert, not a second system.
 
-A Project field edit does not implicitly rewrite existing Scene prompts. For
-requested Project-and-Scene changes, perform the Project write first, then the
-Scene calls against the resulting saved Project. Report partial completion
-honestly; phase 1 needs neither a giant combined review nor a compound LLM
-capability.
+Keep plain classic JavaScript, Python backend and file-based storage. Do not
+introduce orchestration layers, a new agent, speculative retries, automatic
+compaction, blanket validators, creative grading, or extra model calls.
 
-### Write Scene(s)
+## Tests and acceptance
 
-A selection of Scenes is a finite call list for this same capability. Use one
-bounded authoring call per Scene, reusing the stable revision-sequence pattern
-where it fits. Carry the common instruction and only relevant context for each
-Scene; connected Scenes may need shared constraints or prior saved results to
-maintain continuity. Do not attach the full conversation to every call or add a
-planning call when the instruction already suffices.
+Update deterministic unit tests and Playwright tests together with the code.
+Retire *obsolete assumptions*, not entire useful test suites. Exercise the
+complete Chat → Write Project → Chat → Write Scene → revise title, prompt and
+duration path with mock and real providers. Inspect exact outgoing messages
+and schemas for all operations; verify conversation roles, complete history,
+no production reference in Chat, focused H3 reference only where needed,
+unrelated saved-field isolation, target binding and actual persisted edits.
 
-- New Scenes receive full usable H3 prompts, useful titles and requested durations,
-  or the existing WebCap default when no duration was specified.
-- Preserve unrelated saved fields deterministically. For full-prompt revisions,
-  instruct the model to retain unaffected details, but do not treat schema
-  validity as proof of semantic preservation. Keep the result inspectable and
-  recoverable. Existing titles and durations remain unchanged unless requested.
-- Requested title/duration changes must survive the entire path to saving. Prompt
-  timing and the saved duration must agree.
-- Title-only changes do not require rewriting the prompt. WebCap can perform a
-  literal field change without an unnecessary creative LLM call.
-- Use one proposed version per Scene. Alternatives can be discussed; phase 1 does
-  not include multiple complete-version management.
-- A no-change result is stated honestly. An outline, empty response or promise to
-  draft is not a successful creative Scene write.
+Test partial Project/Scene output, mixed complete and incomplete Scenes,
+returned extra Scenes, unchanged revisions, invalid duration, failed writes,
+post-save reporting failures, changing navigation, explicit Read approval and
+restoring old conversations. Confirm field history recovers direct changes.
+Playwright must exercise actual visible controls and saved results—not only
+assert that DOM elements exist. Separate deterministic correctness from
+real-model semantic observations and do not claim runtime verification without
+running it.
 
-Intent/summary remains dormant legacy data in JSON. Preserve it without migration,
-deletion or copying into Prompt. It is not an active brief, output, validation
-requirement or review destination. Old Projects continue to load and save.
-
-## 3. WebCap execution and interaction
-
-Ordinary Director chat does not save. When the author requests creative
-material, the model returns the actual complete requested fields in that same
-response. WebCap offers Review/Apply because fields were received, not because
-it parsed the author's prose, trusted a model action hint, or promised another
-authoring call. The author may first develop material, pivot to a new Project
-mid-conversation, or choose a different Project when applying it. No new model
-call is required solely to decide or change the destination.
-
-### Conversation material, provenance and destination
-
-**Four independent identities (normative):**
-
-- **Navigation:** the Project and Scene currently visible in Storyboard. Opening, switching or focusing an editor changes navigation only.
-- **Conversation attachment:** the Project the author deliberately chose as Director's working association, if any. It is a persistent convenience for labels and default target suggestion, **not** authorization to Read saved creative fields. Sending a message, opening a Project, selecting a Read reference or choosing a destination must never implicitly create, replace or clear this association. Only an explicit attach/detach action (and the existing explicit "continue with created Project" choice) changes it.
-- **Approved Read sources:** an independently selected, potentially multi-Project list of saved fields the author permitted the model to see. Neither navigation, attachment nor Write destination grants Read approval. The explicit operation-specific authoring shortcut may read its exact, already-authorized target as described above.
-- **Write destination:** a proposal's suggested or author-chosen Project/Scene target, confirmed at Apply or frozen when an explicit direct-save operation launches. Changing the destination affects **that operation only**; it does not reattach the conversation or change approved Read sources. At Apply, WebCap loads the destination's fresh saved values, validates the target, merges only received/requested fields, and persists only the chosen record. A destination remains editable until execution is launched.
-
-**Recommendation versus authorization:** the current navigation or deliberate attachment can suggest a destination; a returned `title`, a missing `title`, a model action hint or the source Project must not decide create-versus-revise. The author chooses **New Project** or an **existing Project** explicitly in the current Review/Apply surface. Choosing a different target must not cause another creative model call. For freeform conversation material without an explicitly selected Write operation, default the Project Review to **New Project** rather than guessing create/revise from field presence; the author can select any existing Project instead. A deliberately launched Project revision uses its explicit target. Do not turn a suggestion into an automatic attachment.
-
-**Conversational authoring versus explicit writing:** ordinary chat supports discussion and can return independently useful structured creative fields in the same response. The general chat schema cannot require a Project or Scene field on *every* turn; it must, however, provide a real structured authoring path and positively instruct the model to return the requested fields. Explicitly launched Write Project/Scene operations select the appropriate operation-specific required-field schema rather than pretending the conversation's optional fields are mandatory. A missing requested field is an observable failure of that authoring checkpoint, not permission to discard unrelated useful fields.
-
-The conversation/session owns unsaved Project and Scene drafts, including
-multiple alternatives across responses. Provenance records which approved saved
-reference(s), if any, influenced a draft; it is not a required Project link.
-The current Project/Scene, last explicitly selected destination and source
-provenance can suggest a destination without imposing it. Reuse the existing
-Project and Scene review forms to show the suggested target, allow correction
-and then confirm Apply. **A selected Project, approved Read source, or model
-claim never independently authorizes a write.** If a target is deterministically
-known from an explicitly launched operation, the normal advertised direct-save
-path remains available; otherwise use the existing Review/Apply confirmation.
-Do not invent a confidence score, prose classifier, or extra generic agent layer.
-
-A revision of existing saved fields requires the actual approved source
-material for authorship; an unsaved draft can instead be authored without any
-Project selection. Moving a draft between new-Project creation, an existing
-Project revision and Scene insertion must retain its material while using the
-appropriate existing save route. Project and Scene IDs are selected and
-validated by WebCap at Apply, not issued by the model. Destination selection
-must not alter an already launched in-flight operation's frozen target.
-
-### Request and response schemas
-
-For explicitly selected authoring operations, request complete fields through
-an operation-specific schema with those requested fields required: a new
-Project's title, Concept, Visual / atmosphere and Invariants; the particular
-fields of an existing Project revision; new Scene records with title, duration
-and full H3 Prompt; and existing Scene replacements with full Prompt when
-creative content changes, plus requested title/duration changes. A conversation
-may freely mix discussion and structured material, but a schema that allows
-only an action promise or prose is not an adequate authoring contract. WebCap
-must not require unrelated fields merely to revise one field. Keep every
-independently useful returned field/record when a model nevertheless returns
-incomplete material, and expose the unmet request without erasing partial work.
-
-Once launched, Scene writes normally save each successful result as it finishes.
-Make that direct-save behavior visible before launch and report each actual save.
-The explicit Scene Revise shortcut is a direct launch of the same capability.
-New/existing and one/many should not multiply the model-facing contracts.
-WebCap may use review where it genuinely helps the operation; do not add universal
-review gates, readiness gates or model approval rituals.
-
-If complete material has already been authored in the conversation, WebCap reuses
-it for display, review or saving. It does not ask the LLM to regenerate/extract it
-just to make it actionable. If only a brief exists, the launch action performs the
-actual authoring. The author should not need to repeat the instruction or resolve
-the same destination again.
-
-Each Scene's write is one coherent save of its requested changed fields. A call
-list is not an all-or-nothing transaction: apply successes as they finish and
-continue after isolated, item-specific failures. Stop remaining work when a
-shared dependency makes further attempts invalid (for example, a missing
-Project, unavailable model/runtime, or cancellation). Report saved, failed and
-not-attempted targets accurately. Cancellation does not undo earlier saves or
-guarantee interruption of an already-running call. Do not build general
-retry/resume machinery as a prerequisite.
-
-WebCap preserves unrelated fields, uses existing conflict/persistence safeguards,
-and distinguishes a failed save from a later refresh or conversation-receipt failure.
-Navigation must not change an already launched operation's targets.
-
-Recovery is bounded, session-only previous/next history for fields actually
-edited, including manual and Director changes. Reuse existing editor/history
-mechanics where possible; do not silently overwrite newer conflicting edits.
-History clears on reload. This is WebCap functionality, not another model task,
-durable archive, or compulsory diff/review workflow.
-
-## 4. Scope and limits
-
-Revise & Generate and Check Coherence may remain separate utilities. Director can
-produce an ordinary revision brief for them; copy/paste is acceptable for that
-handoff. External LLM buttons can remain outside Director. This contract does not
-add Take generation, media inspection, queue controls or other model capabilities.
-
-The no-retyping/no-extraction requirement applies to core Project/Scene authoring,
-not every useful conversational output. Keep phase 1 to ordinary clear workflows;
-unsupported elaborate requests can be stated as such instead of adding exceptions.
-
-Mechanical validation covers real target bindings, required outputs, field types,
-supported limits and save integrity. It does not certify creative quality. Runtime
-and output failures must be visible; do not silently truncate or drop required
-material. Do not add a creative grading call or routine repair loop.
-
-The desired 99% first-pass reliability is an empirical quality target, not a
-phase-1 statistical release claim. Test deterministic correctness (targets,
-fields and saves) separately from model-dependent creative adherence with the
-selected real model. A small acceptance suite finds regressions but cannot
-establish a percentage. Clear bounded requests should work without repair
-rounds; clarify consequential ambiguity without pestering the author.
-
-Reuse the current classic-script architecture, routes, persistence and stable Scene
-revision machinery. Consolidation means consistent behavior and contracts, not a
-new generic agent framework or a requirement to rename every internal function.
-
-
-## 2026-11-17 amendment — focused Chat and explicit Write (supersedes combined-response behavior)
-
-This section supersedes earlier passages permitting structured Project or Scene authoring
-inside an ordinary chat response, including combined `reply`/`changes`/`scenes`
-schemas and model-initiated write suggestions. The four independent application
-identities and explicit saved-source authorization remain unchanged.
-
-- **Chat** is creative discussion and returns ordinary text only. It receives
-  the full alternating user/assistant conversation, excluding WebCap-generated
-  save receipts and raw structured results. It does not receive H3 production
-  templates, field schemas, or conditional instructions to author records.
-- **Write** is an explicit author-initiated operation. It receives its specific
-  authoring instruction, complete conversational context, operation-specific
-  guidance and required structured fields. WebCap never interprets prose to
-  infer which operation should execute.
-- Structured Write results belong to their targeted editors and history, not
-  the chat transcript. New operations do not create speculative conversational
-  drafts or require a separate review step. Existing saved conversations and
-  historical drafts remain readable; legacy artifacts are not migrations.
-- Context is never silently cut to a fixed message count, abbreviated by
-  length, or automatically summarized. A provider context-limit failure must
-  remain visible. Automatic compaction is deferred.
-- A missing required creative field is an incomplete Write, not a successful
-  mutation or an occasion to invent a fallback. Independently usable material
-  and successful operations remain usable.
-- Existing focused generation workflows (First Cut, Develop Scenes, Enhance
-  Prompt) and their production-specific guidance are unaffected.
-
-Acceptance requires one end-to-end Chat → Write Project → Chat → Write Scene →
-Revise Scene flow, no raw JSON in new chat output, full conversation in outgoing
-requests, and actual saved/editor field changes with field-history recovery.
+The feature branch is not ready to merge while these checks fail or are unrun.
+Rollback via Git must remain possible without corrupting saved data.

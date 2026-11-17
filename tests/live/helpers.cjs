@@ -92,14 +92,6 @@ async function addEvidence(testInfo,page,model,request,additional={}){
     },null,2)),contentType:'application/json'
   });
 }
-async function latestSceneReview(page){
-  const action=page.locator('#studio-dw-suggestions .studio-dw-suggestion-action');
-  await expect(action).toBeVisible({timeout:10000});
-  await expect(action).toContainText(/Review authored Scene|Create Scene\(s\) · Review/i,{timeout:1000});
-  await action.click();
-  await expect(page.locator('#studio-scenes-review')).toBeVisible();
-  return page.locator('#studio-scenes-rows .studio-scenes-row');
-}
 
 // A real explicit Write is separate from ordinary chat and starts one
 // operation-scoped model request. This does not infer authoring from chat prose.
@@ -126,4 +118,4 @@ function observeLiveCalls(page){
     return jobs.at(-1);
   }};
 }
-module.exports={writeLive,observeLiveCalls,waitForLiveJob,openLiveDirector,attachProject,approveOverview,sendLive,actualReply,addEvidence,latestSceneReview,story,stories,seedProject,seedScene,openProject,reopenDirectorIfClosed};
+module.exports={writeLive,observeLiveCalls,waitForLiveJob,openLiveDirector,attachProject,approveOverview,sendLive,actualReply,addEvidence,story,stories,seedProject,seedScene,openProject,reopenDirectorIfClosed};

@@ -28,8 +28,8 @@ test('sending a Studio message never attaches an open Project automatically',()=
   const code=chat.slice(start,end);
   assert.doesNotMatch(code,/state\.studioStoryAccess\s*=/,
     'Only explicit attachment can change the Director association');
-  assert.match(code,/studioAttachedStoryId\(\).*selectedNavigation/,
-    'Navigation may still supply a suggested Write destination');
+  assert.doesNotMatch(code,/studioDirectorSelectedScene\(|selectedNavigation/,
+    'Ordinary conversation no longer resolves a Write target');
 });
 
 
@@ -74,7 +74,7 @@ function actualSceneRequestFixture() {
     requestJson:async url=>{
       requests.push(url);
       if(url.startsWith('/fs/studio/director/guidance'))
-        return {system:'Director guidance',actions:[],promptContract:'H3 prompt format'};
+        return {system:'Write guidance',chatSystem:'Conversation guidance',actions:[],promptContract:'H3 prompt format'};
       if(url==='/fs/storyboard') return {stories:Object.values(stories)};
       if(url.startsWith('/fs/storyboard?story=')) {
         const id=decodeURIComponent(url.split('=')[1]);
@@ -90,7 +90,7 @@ function actualSceneRequestFixture() {
     'window.studioDirectorWorkbench={approvedReadPayload:readPayload,'+sceneRead+'};',scope);
   vm.runInContext(section(director,'  function studioDirectorSelectedScene(navigation, authorRequest, explicitProject) {',
     '  function syncModeUi() {')+
-    section(director,'  function studioDirectorRequestMessages(messages, includePromptContract, explicitWrite, navigationSnapshot) {',
+    section(director,'  function studioConversationMessages(messages) {',
       '  // Retain available conversational work across ordinary follow-up questions.'),scope);
   return {scope,state,stories,requests,setNavigation:next=>{navigation=next;}};
 }
@@ -133,7 +133,7 @@ test('approved source remains distinct from selected Write destination',async()=
   const outbound=await h.scope.studioDirectorChatRequestMessages(
     [{role:'user',content:'Discuss our approved reference.'}],null,
     {projectId:'p2',projectTitle:'Unrelated Project',sceneId:'',sceneNumber:0,sceneOrder:[]},bound);
-  assert.equal(bound.projectId,'p2');
+  assert.deepEqual(bound,{},'Chat no longer binds a proposed Write target');
   assert.match(outbound[0].content,/Mara walks toward the rover/);
   assert.doesNotMatch(outbound[0].content,/A private different premise/);
 });
@@ -142,7 +142,7 @@ test('approved source load failure remains visible instead of sending guessed co
   const h=actualSceneRequestFixture();
   h.state.studioApprovedRead={projectId:'p1',keys:['scene:a:prompt'],label:'Moon crossing · Scene 1'};
   h.scope.requestJson=async url=>{
-    if(url.includes('/guidance?'))return {system:'Director guidance',actions:[],promptContract:'H3'};
+    if(url.includes('/guidance?'))return {system:'Write guidance',chatSystem:'Conversation guidance',actions:[],promptContract:'H3'};
     throw new Error('Approved saved Project cannot be loaded');
   };
   await assert.rejects(h.scope.studioDirectorChatRequestMessages([{role:'user',content:'Read it.'}],null),
@@ -303,7 +303,7 @@ test('Project creation label is truthful for zero Scenes',()=>{
 test('ordinary Director conversation preserves prepared Scene reviews without mutating saved Projects',()=>{
   const chat=fs.readFileSync(path.join(__dirname,'../tool/js/director_chat.js'),'utf8');
   const start=chat.indexOf("    if (activeChatMode === 'storyboard') {\n      // Navigation may suggest a destination");
-  const end=chat.indexOf('    // Freeze the Project destination alongside the user',start);
+  const end=chat.indexOf('    var messages = currentMessages();',start);
   assert.ok(start>=0&&end>start,'Director conversation transition section exists');
   const scene={storyId:'p1',prompt:'Complete existing prompt'};
   const scenes={storyId:'p1',drafts:[{title:'First',prompt:'Complete first prompt'}]};

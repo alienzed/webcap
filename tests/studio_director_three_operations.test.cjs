@@ -295,7 +295,9 @@ test('an unbound Scene revision never becomes a new-Scene creation draft', () =>
 
 test('draft reuse is based on exact authored provenance, not linguistic heuristics',()=>{
   assert.doesNotMatch(chat,/function studioRequestAppliesPreparedMaterial\(/);
-  assert.match(chat,/state\.studioWorkingDraft\.sourceRequest ===/);
+  assert.match(chat,/draftOrigin\.projectId === storyId/);
+  assert.match(chat,/draftOrigin\.baseline === baseline/);
+  assert.match(chat,/draftOrigins\.newScene/);
   assert.match(chat,/sourceMessageIndex/);
   assert.doesNotMatch(workbench,/literalTitleOnly/);
 });

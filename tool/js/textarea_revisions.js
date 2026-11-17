@@ -344,6 +344,9 @@
       var nav = window.getStudioDirectorNavigation();
       project = String(nav && nav.projectId || '');
     }
+    if (scene && scene.dataset && scene.dataset.sceneId && project &&
+        field.dataset.sceneField === 'prompt')
+      return 'project:' + project + ':scene:' + scene.dataset.sceneId + ':field:prompt';
     var marker = field.id || field.getAttribute('name') ||
       (field.dataset.sceneField ? 'scene-field:' + field.dataset.sceneField :
        field.dataset.storyGuideline ? 'story-guideline:' + field.dataset.storyGuideline :

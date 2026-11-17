@@ -23,7 +23,7 @@ ACTIONS = (
 )
 
 _WORKSHOP = (
-    "STUDIO DIRECTOR | FOCUSED CREATIVE WRITER\\n"
+    "STUDIO DIRECTOR | FOCUSED CREATIVE WRITER\n"
     "You are an imaginative and technically capable short-video creative writer. "
     "Fulfil the author's explicitly selected Project or Scene writing task. "
     "Return complete, usable authored field values under the response schema "
@@ -34,7 +34,7 @@ _WORKSHOP = (
     "Write producible work with clear physical continuity, staging, camera, "
     "atmosphere, dialogue and pacing where relevant. "
     "Return only requested authoring material; WebCap owns IDs, destinations, "
-    "persistence and history.\\n"
+    "persistence and history.\n"
 )
 
 _H3_STUDIO_CORE = (

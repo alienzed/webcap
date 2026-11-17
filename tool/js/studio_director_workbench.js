@@ -410,15 +410,16 @@
         before.textContent = old || '(empty)'; saved.append(hint,before);
         var diff = document.createElement('details'), diffSummary = document.createElement('summary'), diffBody = document.createElement('div');
         diff.className = 'studio-director-diff'; diffSummary.textContent = 'What changes?';
-        diff.open = old !== String(candidate[key]);
+        var editableValue = options && options.values &&
+          Object.prototype.hasOwnProperty.call(options.values,key)
+          ? options.values[key] : candidate[key];
+        diff.open = old !== String(editableValue);
         diffBody.className = 'studio-director-diff-content';
-        window.studioDirectorRenderDiff(diffBody,old,String(candidate[key]));
+        window.studioDirectorRenderDiff(diffBody,old,String(editableValue));
         diff.append(diffSummary,diffBody);
         textarea.dataset.field = key;
         if (key === 'prompt') textarea.dataset.revisionKey = 'project:' + story.id + ':scene:' + sceneId + ':field:' + key;
-        textarea.value = options && options.values &&
-          Object.prototype.hasOwnProperty.call(options.values,key)
-          ? options.values[key] : candidate[key];
+        textarea.value = editableValue;
         if (key === 'durationSeconds') {textarea.type='number';textarea.min=4;textarea.max=15;textarea.step=1;}
         textarea.addEventListener('input',function(){
           window.studioDirectorRenderDiff(diffBody,old,textarea.value);

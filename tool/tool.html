@@ -3169,16 +3169,7 @@
                                 </div>
                             </div>
                         </section>
-                        <details class="app-settings-advanced app-settings-section-disclosure">
-                            <summary>Captioning</summary>
-                            <div class="app-settings-disclosure-body">
-                                <label class="app-settings-field app-settings-field-wide">
-                                    <span class="app-settings-field-label">Default Caption Template</span>
-                                    <textarea id="app-settings-primer-template" rows="5" class="app-settings-caption-template" spellcheck="false" placeholder="{position }{surface, }{setting, }{body, }"></textarea>
-                                    <span class="app-settings-note">App-wide fallback when a Set has no saved template. Leave blank to use the built-in starter, including the Set's custom groups. Caption Assist uses the template for structure.</span>
-                                </label>
-                            </div>
-                        </details>
+
                     </div>
 
                     <div id="app-settings-panel-models" class="app-settings-panel hidden" data-app-settings-panel="models" role="tabpanel" aria-labelledby="app-settings-tab-models">
@@ -3376,14 +3367,14 @@
                                 <span class="app-settings-note">Used by Focus Caption when Vision is enabled. Options come from the local llama.cpp runtime and enabled remote Ollama runtimes that report vision capability.</span>
                             </label>
                             <label class="app-settings-field app-settings-field-wide">
-                                <span class="app-settings-field-label">New-template sequence hint</span>
-                                <textarea id="app-settings-caption-sequence" class="app-settings-caption-sequence" rows="10" spellcheck="false" placeholder="Leave blank for a natural new-template order"></textarea>
-                                <span class="app-settings-note">One idea per line. Used only when generating a Caption Template; it does not change an existing template or directly instruct Caption Assist.</span>
+                                <span class="app-settings-field-label">Default Caption Template</span>
+                                <textarea id="app-settings-primer-template" class="app-settings-caption-sequence app-settings-caption-template" rows="10" spellcheck="false" placeholder="Leave blank to use the built-in starter"></textarea>
+                                <span class="app-settings-note">App-wide fallback when a Set has no saved template. Also guides new-template generation; individual Sets can override it.</span>
                             </label>
                             <div class="app-settings-caption-sequence-groups-wrap">
-                                <span class="app-settings-field-label">Current groups not explicitly named</span>
+                                <span class="app-settings-field-label">Groups not yet in the template</span>
                                 <div id="app-settings-caption-sequence-groups" class="app-settings-caption-sequence-groups"></div>
-                                <span class="app-settings-note">Click a group to insert it at the last sequence cursor, or append it when no cursor has been placed.</span>
+                                <span class="app-settings-note">Click a group to insert its template placeholder at the cursor, or append it.</span>
                             </div>
                         </section>
                     </div>

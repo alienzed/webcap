@@ -586,14 +586,10 @@
       status('Enter a revision instruction before launch.', true);
       return Promise.resolve();
     }
-    // The author explicitly selects application fields. WebCap never parses
-    // prose to decide whether a title or duration mutation is authorized.
-    var fields = Array.from(el('studio-dw-batch-fields').querySelectorAll('input:checked'))
-      .map(function (node) {return node.value;});
-    if (!fields.length) {
-      status('Choose at least one field to revise.', true);
-      return Promise.resolve();
-    }
+    // The existing batch authoring action revises Scene Prompts.
+    // Additional title and duration drafts arrive as actual structured
+    // content in conversation; never infer field mutations from prose.
+    var fields = ['prompt'];
     var button = el('studio-dw-write-prepare');
     button.disabled = true;
     var outcome = {saved:[],unchanged:[],review:[],failed:[],notAttempted:[],reportingErrors:[]};

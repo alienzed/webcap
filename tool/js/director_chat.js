@@ -4657,10 +4657,14 @@
     writeNewScene: function (launch) {
       if (state.studioScenesProposal && !Number.isInteger(state.studioScenesProposal.sourceMessageIndex))
         return Promise.reject(new Error('Finish the independent Scene review before authoring another.'));
-      var prepared = launch && state.studioWorkingDraft.newScene &&
+      var newSceneOrigin = state.studioWorkingDraft.draftOrigins &&
+        state.studioWorkingDraft.draftOrigins.newScene;
+      var prepared = launch && newSceneOrigin &&
+        newSceneOrigin.projectId === launch.projectId &&
+        newSceneOrigin.request === String(launch.authorRequest || launch.instruction) &&
+        state.studioWorkingDraft.newScene &&
         typeof state.studioWorkingDraft.newScene.prompt === 'string' &&
-        !!state.studioWorkingDraft.newScene.prompt.trim() &&
-        state.studioWorkingDraft.sourceRequest === String(launch.authorRequest || launch.instruction);
+        !!state.studioWorkingDraft.newScene.prompt.trim();
       if (!this.isReady() && !(prepared && this.canReview()))
         return Promise.reject(new Error(this.readinessMessage()));
       if (!launch || !launch.projectId || !String(launch.instruction || '').trim())
@@ -4677,36 +4681,38 @@
         if (!story || story.id !== storyId || !Array.isArray(story.sceneOrder) || !story.scenes)
           throw new Error('The selected Project is no longer available.');
         var order = story.sceneOrder.slice();
+        var creativeContext = {
+          title:story.title,concept:story.concept,style:story.style,
+          invariants:story.invariants,
+          existingSceneTitles:order.map(function (id) {
+            var scene = story.scenes[id];
+            return scene && scene.title || '';
+          }),
+          previousScene:order.length ? (function () {
+            var prior = story.scenes[order[order.length - 1]];
+            return {title:prior.title,prompt:prior.prompt,durationSeconds:prior.durationSeconds};
+          })() : null
+        };
+        var baseline = JSON.stringify({sceneOrder:order,project:creativeContext});
+        var draftOrigin = state.studioWorkingDraft.draftOrigins &&
+          state.studioWorkingDraft.draftOrigins.newScene;
+        var sameSource = !!draftOrigin && draftOrigin.projectId === storyId &&
+          draftOrigin.request === String(launch.authorRequest || launch.instruction);
+        var reuse = sameSource && draftOrigin.baseline === baseline &&
+          state.studioWorkingDraft.newScene &&
+          typeof state.studioWorkingDraft.newScene.prompt === 'string' &&
+          !!state.studioWorkingDraft.newScene.prompt.trim();
         var instruction = JSON.stringify({
           task:'Create the requested independently generatable H3 Scenes for this Project. ' +
             'Give each Scene a useful title, complete H3 Prompt and durationSeconds ' +
             '(4–15 seconds, default 6 when unspecified). Honor the author\'s creative direction, ' +
             'specific titles and timings. Deliver every Scene you can usefully author now.',
           authorDirection:launch.authorRequest || launch.instruction,
-          // Explicitly launched Scene creation uses this selected Project's saved direction.
-          project:{
-            title:story.title,concept:story.concept,style:story.style,
-            invariants:story.invariants,
-            existingSceneTitles:order.map(function (id) {
-              var scene = story.scenes[id];
-              return scene && scene.title || '';
-            }),
-            previousScene:order.length ? (function () {
-              var prior = story.scenes[order[order.length - 1]];
-              return {title:prior.title,prompt:prior.prompt,durationSeconds:prior.durationSeconds};
-            })() : null,
-            unsavedWorkingFields:state.studioWorkingDraft.sourceRequest ===
-              String(launch.authorRequest || launch.instruction) ?
-              (state.studioWorkingDraft.newScene || {}) : {}
-          }
+          project:Object.assign({},creativeContext,{
+            unsavedWorkingFields:sameSource ? (state.studioWorkingDraft.newScene || {}) : {}
+          })
         });
-        // Reuse complete structured Scene fields already authored in the
-        // conversation; never ask the model to rewrite the same work.
         var workingScene = state.studioWorkingDraft.newScene;
-        var applyExisting = state.studioWorkingDraft.sourceRequest ===
-          String(launch.authorRequest || launch.instruction);
-        var reuse = !!(applyExisting && workingScene &&
-          typeof workingScene.prompt === 'string' && workingScene.prompt.trim());
         if (!reuse) state.pending = false;
         var proposal = reuse ?
           Promise.resolve(JSON.stringify(workingScene)) :
@@ -4756,8 +4762,13 @@
             state.studioWorkingDraft.newScene = Object.assign({},
               state.studioWorkingDraft.newScene,
               studioWorkingFieldChanges(drafts[0],['title','prompt','durationSeconds']));
-            state.studioWorkingDraft.sourceRequest =
-              String(launch.authorRequest || launch.instruction);
+            state.studioWorkingDraft.draftOrigins =
+              state.studioWorkingDraft.draftOrigins || {projects:{},scenes:{}};
+            state.studioWorkingDraft.draftOrigins.newScene = {
+              projectId:storyId,
+              request:String(launch.authorRequest || launch.instruction),
+              baseline:baseline
+            };
             scheduleSessionSave();
           }
           // A missing Prompt retains an editable partial draft without
@@ -4812,6 +4823,8 @@
             // cause the same candidate to be inserted twice.
             if (state.studioWorkingDraft.newScene.prompt === saved.prompt) {
               state.studioWorkingDraft.newScene = {};
+              if (state.studioWorkingDraft.draftOrigins)
+                state.studioWorkingDraft.draftOrigins.newScene = null;
               scheduleSessionSave();
             }
             return window.refreshStudioDirectorStoryIfOpen(storyId).then(function () {

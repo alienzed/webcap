@@ -12,10 +12,6 @@ var DEFAULT_PRIMER_TEMPLATE = [
   '{viewpoint| view.}'
 ].join('\n');
 
-function getPreferredCaptionSequence() {
-  return getConfiguredPrimerTemplate();
-}
-
 function getConfiguredPrimerTemplate(requirements) {
   var appTemplate = APP_CONFIG && APP_CONFIG.primer && typeof APP_CONFIG.primer.template === 'string'
     ? APP_CONFIG.primer.template

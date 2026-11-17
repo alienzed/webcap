@@ -57,10 +57,13 @@ test('Flow 4 — explicit Read persists immutable visible Project snapshots and 
   snapshots.forEach(snapshot=>expect(calls[0].messages.some(message=>message.role==='user' && message.content===snapshot)).toBe(true));
   expect(JSON.stringify(calls[0].messages)).not.toContain('new moon');
 
-  if(await details.getAttribute('open')===null) await details.locator('summary').click();
-  await page.locator('#director-studio-access-field').selectOption('prompt');
-  await page.locator('#director-studio-access-scene').selectOption(scene.id);
-  await page.locator('#director-studio-access-read').click();
+  await page.locator('#director-chat-context-approve').click();
+  await page.locator('#studio-dw-read-project').selectOption(project.id);
+  const selection=page.locator('#studio-dw-read-selection');
+  if(await selection.getAttribute('open')===null) await selection.locator('summary').click();
+  await page.locator('#studio-dw-project-fields input[data-group-select]').first().uncheck();
+  await page.locator('#studio-dw-scene-fields input[data-group-select]').first().check();
+  await page.locator('#studio-dw-read-send').click();
   await expect(page.locator('#director-chat-messages')).toContainText('The woman closes the silver gate under a new moon.');
   expect((await observedModels(request)).calls).toHaveLength(1);
   expect((await story(page,project.id)).scenes[scene.id].prompt)

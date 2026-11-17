@@ -13,7 +13,7 @@ import sys
 import time
 
 from . import config as app_config
-from .caption_ops import _resolve_folder, build_caption_assist_messages, build_caption_enrichment_messages, build_caption_template_assist_messages, list_media_files, load_caption_text, save_caption_text, serve_media_file
+from .caption_ops import _resolve_folder, build_caption_assist_messages, build_caption_enrichment_messages, build_caption_template_assist_messages, list_media_files, load_caption_text, save_caption_text, replace_set_caption_text, serve_media_file
 from .caption_vision import build_caption_vision_messages, build_vision_caption_extras_messages, build_vision_image_caption_messages, build_vision_question_messages, resolve_caption_vision_media, vision_media_data_url
 from .vision_schema_assist import (
     build_vision_schema_sight_messages,
@@ -777,6 +777,24 @@ def caption_save_route():
     except Exception as exc:
         # print("[BACKEND][SAVE] ERROR in /caption/save:", exc)
         return jsonify({"error": str(exc)}), 400
+
+@app.route("/caption/set_replace", methods=["POST"])
+def caption_set_replace_route():
+    data = request.get_json(silent=True) or {}
+    folder = data.get("folder", "")
+    try:
+        if data.get("apply") is True and not isinstance(data.get("signature"), str):
+            raise ValueError("Preview required before replacing captions.")
+        return jsonify(replace_set_caption_text(
+            folder, str(data.get("find") or ""), str(data.get("replace") or ""),
+            data["signature"] if data.get("apply") is True else None,
+        ))
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    except Exception as exc:
+        app.logger.exception("SET CAPTION REPLACE FAILED for folder=%r: %s", folder, exc)
+        return jsonify({"error": str(exc)}), 500
+
 
 @app.route("/caption/assist", methods=["POST"])
 def caption_assist_route():

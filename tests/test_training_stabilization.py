@@ -2532,7 +2532,7 @@ def test_missing_result_guard_targets_recovered_job_even_if_queue_is_reordered(t
     folder = tmp_path / "sets" / "subject"
     folder.mkdir(parents=True)
     captured = tmp_path / "captured.toml"
-    captured.write_text("epochs = 60\\n", encoding="utf-8")
+    captured.write_text("epochs = 60\n", encoding="utf-8")
     first = {"id": "first", "folder": "sets/subject", "status": "queued", "stages": "h3",
              "resumeFromCheckpoint": "/runs/first", "snapshot": {"h3": str(captured)},
              "artifactDir": str(tmp_path / "jobs/first")}
@@ -2553,7 +2553,7 @@ def test_missing_result_guard_targets_recovered_job_even_if_queue_is_reordered(t
 def test_missing_result_guard_does_not_block_without_a_resumable_checkpoint(tmp_path, monkeypatch):
     _configure_root(monkeypatch, tmp_path)
     captured = tmp_path / "captured.toml"
-    captured.write_text("epochs = 60\\n", encoding="utf-8")
+    captured.write_text("epochs = 60\n", encoding="utf-8")
     recovered = {"id": "recovered", "status": "queued", "stages": "h3",
                  "resumeFromCheckpoint": "/runs/recovered", "snapshot": {"h3": str(captured)},
                  "missingResultRecovery": True}

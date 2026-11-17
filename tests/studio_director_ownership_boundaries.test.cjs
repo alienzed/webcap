@@ -19,15 +19,15 @@ test('attachment changes only on explicit attach, detach or explicit continue af
     part('  window.openStudioDirectorScene = function (','  window.closeStudioDirectorOnExit')
   ]) assert.doesNotMatch(section,/state\.studioStoryAccess\s*=/,
     'A navigation, material review or target selection must not reattach conversation');
-  assert.match(spec,/Four independent identities/);
+  assert.match(spec,/Four concepts remain distinct/);
 });
-test('targeted Project Review consumes its passed destination instead of requiring attachment',()=>{
+test('explicit Project revision uses the passed destination independently of attachment',()=>{
   const body=part('  function prepareStudioBrief(options) {','  function applyStudioBrief() {');
   assert.match(body,/options\.storyId/);
-  assert.match(body,/state\.studioBriefProposal\.storyId === storyId/);
+  assert.match(body,/studioAttachedStoryId\(\)/);
+  assert.match(body,/\/fs\/studio\/director\/brief/);
   assert.match(director,/prepareStudioBrief\(Object\.assign/);
 });
-
 test('saving a Project never revokes previously approved cross-Project Read sources',()=>{
   const body=part('  function applyStudioProject() {','  function showStudioBriefReview() {');
   assert.doesNotMatch(body,/state\.studioApprovedRead\s*=\s*null/,
@@ -57,8 +57,10 @@ test('conversation Project review does not infer create-vs-revise from returned 
   assert.match(section,/destination\.value = isProjectMaterial/);
 });
 
-test('a newly authored Project response cannot be shadowed by a cached same-instruction proposal',()=>{
+test('explicit Project Write calls the model rather than reusing a cached Review draft',()=>{
   const body=part('  function prepareStudioBrief(options) {','  function applyStudioBrief() {');
-  assert.match(body,/!\(options && options\.authoredFields\)/,
-    'Fresh authored material must replace cached Review for the same destination and instruction');
+  assert.match(body,/studioDirectorRequestMessages/);
+  assert.match(body,/studio_brief_draft/);
+  assert.doesNotMatch(body,/showStudioBriefReview\(\)/);
+  assert.doesNotMatch(body,/studioBriefProposal\.draft/);
 });

@@ -4710,7 +4710,7 @@
         return Promise.reject(new Error('Finish the independent Scene review before authoring another.'));
       var newSceneOrigin = state.studioWorkingDraft.draftOrigins &&
         state.studioWorkingDraft.draftOrigins.newScene;
-      var prepared = launch && newSceneOrigin &&
+      var prepared = launch && !launch.forceAuthor && newSceneOrigin &&
         newSceneOrigin.projectId === launch.projectId &&
         newSceneOrigin.request === String(launch.authorRequest || launch.instruction) &&
         state.studioWorkingDraft.newScene &&
@@ -4749,7 +4749,7 @@
           state.studioWorkingDraft.draftOrigins.newScene;
         var sameSource = !!draftOrigin && draftOrigin.projectId === storyId &&
           draftOrigin.request === String(launch.authorRequest || launch.instruction);
-        var reuse = sameSource && draftOrigin.baseline === baseline &&
+        var reuse = !launch.forceAuthor && sameSource && draftOrigin.baseline === baseline &&
           state.studioWorkingDraft.newScene &&
           typeof state.studioWorkingDraft.newScene.prompt === 'string' &&
           !!state.studioWorkingDraft.newScene.prompt.trim();
@@ -4938,7 +4938,7 @@
         var baseline = JSON.stringify({
           title:original.title,prompt:original.prompt,durationSeconds:original.durationSeconds
         });
-        var applyExisting = !!draftOrigin && draftOrigin.projectId === storyId &&
+        var applyExisting = !launch.forceAuthor && !!draftOrigin && draftOrigin.projectId === storyId &&
           draftOrigin.request === String(launch.authorRequest || launch.instruction) &&
           draftOrigin.baseline === baseline;
         if (workingScene && applyExisting) {

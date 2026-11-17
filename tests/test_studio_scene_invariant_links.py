@@ -40,7 +40,7 @@ def test_link_existing_character_to_selected_scenes_atomically(project):
         assert current["prompt"] == original["prompt"]
         assert current["summary"] == original["summary"]
         assert current["takes"] == original["takes"]
-        assert current["entryState"] == original["entryState"]
+        assert "entryState" not in current
     assert story["sceneOrder"] == before["sceneOrder"]
     assert story["invariants"] == before["invariants"]
 

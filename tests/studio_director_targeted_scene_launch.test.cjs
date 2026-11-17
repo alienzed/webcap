@@ -357,6 +357,45 @@ test('manual creative revision retains a prompt for review if optional model tim
   assert.equal(h.saved.scenes.s1.prompt,'Mara shouts at the rover.');
 });
 
+test('reopening an authored batch draft retains its optional title and duration changes',async()=>{
+  const h=sceneFixture('{"prompt":"Quiet revised shot.","title":"New title","durationSeconds":14}');
+  const request='Give this Scene a new title and make it last fourteen seconds.';
+  const launch={...h.launch,fields:['prompt'],allowCreativeFieldChanges:true,
+    instruction:request,authorRequest:request};
+  // First return a complete draft with invalid optional timing so no saved
+  // value can accidentally make the second attempt look fresh.
+  h.changeResponse('{"prompt":"Quiet revised shot.","title":"New title","durationSeconds":20}');
+  const first=await h.window.studioDirectorBridge.writeSelectedScene(launch);
+  assert.equal(first.review,true);
+  assert.equal(h.events.filter(x=>x[0]==='save').length,0);
+  assert.equal(h.state.studioWorkingDraft.draftOrigins.scenes.s1.timingNeedsReview,true);
+  const reopened=await h.window.studioDirectorBridge.writeSelectedScene(launch);
+  assert.equal(reopened.review,true);
+  assert.equal(h.events.filter(x=>x[0]==='model').length,1,
+    'reopening a draft with invalid authored timing does not trigger a repair model call');
+  assert.equal(h.events.filter(x=>x[0]==='save').length,0);
+});
+
+test('a matching complete batch draft applies all optional fields without another model call',async()=>{
+  const h=sceneFixture('{"prompt":"Quiet revised shot.","title":"New title","durationSeconds":14}');
+  const request='Change the ending, title and duration.';
+  // The existing model response is retained, but no saved mutation has
+  // occurred yet; a model-produced draft and its provenance may be reviewed.
+  h.state.studioWorkingDraft.scenes.s1={
+    prompt:'Quiet revised shot.',title:'New title',durationSeconds:14
+  };
+  authoredSceneOrigin(h,request,['prompt','title','durationSeconds']);
+  const result=await h.window.studioDirectorBridge.writeSelectedScene({
+    ...h.launch,fields:['prompt'],allowCreativeFieldChanges:true,
+    instruction:request,authorRequest:request
+  });
+  assert.ok(result.story);
+  assert.equal(h.events.filter(row=>row[0]==='model').length,0);
+  assert.deepEqual(JSON.parse(JSON.stringify(h.events.find(row=>row[0]==='save')[1].changes)),{
+    prompt:'Quiet revised shot.',title:'New title',durationSeconds:14
+  });
+});
+
 test('saved Scene baseline changes invalidate a matching retained draft',async()=>{
   const h=sceneFixture('{"prompt":"First proposed rewrite.","durationSeconds":20}');
   const request='Make this Scene fourteen seconds with a quieter ending.';

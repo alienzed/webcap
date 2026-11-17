@@ -57,7 +57,7 @@ test('stale actions and General Chat do not show a review button',()=>{
   assert.equal(h.suggestion.classList.contains('hidden'),true);
 });
 
-test('Read receipts become a factual badge without changing stored replies or creative text',()=>{
+test('historical Read responses preserve stored creative text without synthetic receipt badges',()=>{
   const h=harness();
   const raw='RECEIVED: project.title, scene:scene-a:prompt\n\nKeep the full creative answer.';
   h.scope.messages=[{role:'user',content:'Read the selected saved context and acknowledge receipt.\n[WEBCAP EXPLICIT READ]\n{}\n[END WEBCAP READ]'},
@@ -66,7 +66,7 @@ test('Read receipts become a factual badge without changing stored replies or cr
   const row=h.host.lastElementChild;
   const badge=row.children.find(n=>n.className==='director-chat-context-receipt');
   const body=row.children.find(n=>n.className==='director-chat-message-body');
-  assert.equal(badge.textContent,'✓ Context supplied');
+  assert.equal(badge,undefined,'Read is no longer an LLM request or synthetic acknowledgement');
   assert.equal(body.textContent,'Keep the full creative answer.');
   assert.equal(h.scope.messages[1].content,raw,'original content remains intact');
   assert.equal(h.scope.studioReplyText('RECEIVED: project.title. Keep this same-line answer.'),'Keep this same-line answer.');

@@ -1,7 +1,7 @@
 (function () {
   'use strict';
   var readStory = null, writeStory = null, projects = [], proposedScene = null, proposedBatch = null;
-  var readChoices = {}, writeOperationChosen = false, lastReadSource = null;
+  var readChoices = {}, writeOperationChosen = false;
   var sceneSelectionManual = false, sceneSelectionProject = '';
   var lastQuickAction = 'write';
   var sceneFields = ['prompt', 'title', 'durationSeconds'];
@@ -184,15 +184,14 @@
     loadStory(id).then(function (story) {
       var payload = readPayload(story, keys);
       el('studio-dw-read-preview-data').textContent = JSON.stringify(payload, null, 2);
-      window.studioDirectorBridge.approveRead(story.id, keys);
-      renderApprovedSources();
-      lastReadSource = story.id;
-      status('Context approved for subsequent Director messages. No model request sent.', false, true);
-      el('studio-dw-read-panel').classList.add('hidden');
-      el('studio-dw-read').setAttribute('aria-expanded', 'false');
-      updateScope();
-      if (el('director-chat-drawer').classList.contains('studio-actions-open'))
-        el('studio-dw-close-actions').click();
+      return window.studioDirectorBridge.appendReadSnapshot(payload).then(function () {
+        status('Read snapshot saved in conversation. No model request sent.', false, true);
+        el('studio-dw-read-panel').classList.add('hidden');
+        el('studio-dw-read').setAttribute('aria-expanded', 'false');
+        updateScope();
+        if (el('director-chat-drawer').classList.contains('studio-actions-open'))
+          el('studio-dw-close-actions').click();
+      });
     }).catch(function (error) {
       window.studioDirectorWorkbench.setReadStatus('error','Read failed: ' + String(error.message || error));
       status('Read failed: ' + String(error.message || error), true);
@@ -250,7 +249,7 @@
       !el('studio-dw-write-panel').classList.contains('hidden') ? 'Write' : '';
     el('studio-dw-heading').textContent = 'Write';
     el('studio-dw-heading').title = mode === 'Read'
-      ? 'Explicit source · nothing sent until Send'
+      ? 'Explicit Read · save a snapshot to the conversation'
       : mode === 'Write' ? 'Explicit Write destination · save occurs when the model returns'
       : 'Conversation is independent of Studio navigation';
   }
@@ -263,7 +262,8 @@
     input.dataset.instructionSeeded = 'true';
     var messages = window.studioDirectorBridge.messages().filter(function (message) {
       return message.role === 'user' &&
-        !String(message.content || '').includes('[WEBCAP APPLIED FIELD VALUES]');
+        !String(message.content || '').includes('[WEBCAP APPLIED FIELD VALUES]') &&
+        !String(message.content || '').startsWith('[WEBCAP EXPLICIT READ');
     });
     input.value = String(messages.length && messages[messages.length - 1].content || '').trim();
   }
@@ -319,29 +319,7 @@
       pendingCreativeAction.chosenSceneIds = checked ? inputs.map(function (input) { return input.value; }) : [];
     showWriteContext();
   }
-  function renderApprovedSources() {
-    var host = el('studio-dw-approved-sources');
-    host.replaceChildren();
-    window.studioDirectorBridge.approvedReadSources().forEach(function (source) {
-      var row = document.createElement('div');
-      row.className = 'studio-dw-approved-source';
-      var label = document.createElement('span');
-      label.textContent = source.label;
-      var button = document.createElement('button');
-      button.type = 'button';
-      button.textContent = 'Remove';
-      button.title = 'Stop sharing this Project source';
-      button.onclick = function () {
-        window.studioDirectorBridge.removeApprovedRead(source.projectId);
-        renderApprovedSources();
-        status('Selected source removed; other approved sources retained.',false,true);
-      };
-      row.append(label,button);
-      host.appendChild(row);
-    });
-  }
   function refreshRead() {
-    renderApprovedSources();
     return refreshProjects().then(function () {return loadStory(el('studio-dw-read-project').value);})
       .then(renderReadStory).catch(function (e) { status('Read setup failed: ' + e.message, true); });
   }
@@ -1232,7 +1210,6 @@
       writeOperationChosen = false;
       sceneSelectionManual = false;
       sceneSelectionProject = '';
-      lastReadSource = null;
       readStory = null;
       writeStory = null;
       el('studio-dw-read-panel').classList.add('hidden');
@@ -1337,11 +1314,6 @@
       }
     });
     el('studio-dw-read-send').onclick=readSend;
-    el('studio-dw-read-clear').onclick=function () {
-      window.studioDirectorBridge.clearApprovedRead();
-      renderApprovedSources();
-      status('Saved context cleared. No Project or Scene details will be shared.',false,true);
-    };
     el('studio-dw-read-all').onclick=selectEntireReadProject;
     el('studio-dw-scenes-select-all').onclick=function () {selectWriteScenes(true);};
     el('studio-dw-scenes-select-none').onclick=function () {selectWriteScenes(false);};

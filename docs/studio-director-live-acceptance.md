@@ -27,8 +27,8 @@ The API smoke test is opt-in and skips without `WEBCAP_LIVE_MODEL`. The Playwrig
 - Ordinary `studio_chat` produces a useful conversational answer without a response schema, H3 writing reference or implicit authoring action.
 - Project creation/revision are **explicit** Write functions with Project schemas, full history and correct destination; no Studio Review/Apply.
 - New Scene batches and selected-Scene revision are explicit H3-guided operations. Inspect actual returned JSON and saved fields; allow independently useful results rather than requiring an invented result count.
-- Author-approved saved context from unrelated Projects reaches the model for relevant chat and Write requests without redirecting the destination.
-- Conversation, navigation, attachment, Read approvals and Write destination stay independent.
+- Explicit saved Read snapshots from unrelated Projects persist as visible conversation turns and reach later chat and Write requests unchanged without redirecting the destination; source edits require a second explicit Read.
+- Conversation, navigation, attachment, immutable Read messages and Write destination stay independent. No Read-triggered model call or automatic source reread.
 - Saved Project and Scene state after reload matches confirmed persistence, without modifying siblings or unrelated Projects.
 - Specialist Revise Scenes, Develop Scenes and coherence flows remain available independently of ordinary Director chat.
 - Live provider failures and incomplete responses remain inspectable, without speculative repair. A passed unit test or provider job alone is not a saved-value pass.

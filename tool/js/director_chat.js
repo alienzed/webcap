@@ -52,9 +52,7 @@
     studioScenesProposal: null,
     studioBriefProposal: null,
     studioOperations: [],
-    pendingReadAck: null,
     sceneRead: null,
-    studioApprovedRead: null,
     studioReadiness: {checks:[], readHints:[], writeHint:'', writeFields:[], sceneId:'', sceneNumber:0}
   };
   var STORYBOARD_WORKSHOP_PRIMER = [
@@ -341,8 +339,7 @@
     el('director-studio-composer-mode-select').value = studioComposerMode;
     el('director-studio-revision-controls').classList.toggle('hidden', !revision);
     el('director-chat-input').classList.toggle('hidden', revision);
-    el('director-chat-scene-context').classList.toggle('hidden', revision ||
-      !state.studioApprovedRead);
+    el('director-chat-scene-context').classList.add('hidden');
     el('studio-director-inspect').classList.toggle('hidden', revision || !studio);
     var preset = el('director-studio-revision-preset').value;
     el('director-studio-revision-fresh-label').classList.toggle('hidden', !revision || preset === 'coherence');
@@ -409,12 +406,7 @@
   }
   function syncModeUi() {
     var sceneContext = el('director-chat-scene-context');
-    var approved = state.activeMode === 'storyboard' ? state.studioApprovedRead : null;
-    sceneContext.classList.toggle('hidden', !approved);
-    if (approved) {
-      sceneContext.textContent = 'Approved context · ' + approved.label;
-      sceneContext.title = 'Saved values for this approved selection refresh with each Director message. Change selection in Context.';
-    }
+    sceneContext.classList.add('hidden');
     var row = el('director-chat-mode-row');
     var host = el('director-chat-mode-switch');
     var description = el('director-chat-mode-description');
@@ -433,7 +425,7 @@
     var studio = state.activeMode === 'storyboard';
     var contextButton = el('director-chat-context-approve');
     contextButton.classList.toggle('hidden', !studio || studioRevisionActive());
-    contextButton.textContent = state.studioApprovedRead ? 'Context ✓' : 'Share Details…';
+    contextButton.textContent = 'Read…';
     var contextual = !persistentMode(state.activeMode);
     var context = active && typeof active.contextSnapshot === 'function'
       ? active.contextSnapshot() : null;
@@ -604,7 +596,8 @@
 
   function conversationTitle(messages) {
     for (var message of messages) {
-      if (message.role !== 'user' || message.content.includes('[WEBCAP APPLIED FIELD VALUES]')) continue;
+      if (message.role !== 'user' || message.content.includes('[WEBCAP APPLIED FIELD VALUES]') ||
+          message.content.startsWith('[WEBCAP EXPLICIT READ')) continue;
       var text = message.content.split('[WEBCAP EXPLICIT READ]')[0].trim();
       if (!text || text === 'Read the selected saved context and acknowledge receipt.') continue;
       return text.replace(/\s+/g, ' ').slice(0,72);
@@ -815,7 +808,6 @@
 
   function restoreSession(chat) {
     state.sceneRead = null;
-    state.studioApprovedRead = null;
     if (!chat || !persistentMode(chat.mode) || !Array.isArray(chat.messages)) {
       throw new Error('Saved Assistant conversation is invalid.');
     }
@@ -1381,9 +1373,6 @@
     var suggestionRow = null;
     currentMessages().forEach(function (message, index) {
       var studioReply = state.activeMode === 'storyboard' && message.role === 'assistant';
-      var previous = currentMessages()[index-1];
-      var readReceipt = studioReply && previous && previous.role === 'user' &&
-        previous.content.includes('[WEBCAP EXPLICIT READ]');
       var visibleText = studioReply ? studioReplyText(message.content) : message.content;
       // Older saved conversations may contain the raw structured JSON as the
       // visible chat message. Re-render that material as a factual draft
@@ -1392,7 +1381,7 @@
           String(message.content || '').trim() === String(message.rawResponse).trim()) {
         visibleText = studioReplyText(parseStudioChatResponse(message.rawResponse).reply);
       }
-      if (studioReply && !visibleText.trim() && !readReceipt)
+      if (studioReply && !visibleText.trim())
         return;
       var row = document.createElement('div');
       row.className = 'director-chat-message director-chat-message-' + message.role;
@@ -1402,7 +1391,7 @@
       label.textContent = message.role === 'assistant' ? 'Director' :
         (message.content.indexOf('[WEBCAP APPLIED FIELD VALUES]') !== -1
           ? (message.content.startsWith('Director revision saved:') ? 'WebCap · Director revision' : 'WebCap · Reviewed Apply') :
-         message.content.indexOf('[WEBCAP EXPLICIT READ]') !== -1 ? 'You · Read to Director' : 'You');
+         message.content.startsWith('[WEBCAP EXPLICIT READ') ? 'You · Read snapshot' : 'You');
 
       var body = document.createElement('div');
       body.className = 'director-chat-message-body';
@@ -1424,30 +1413,12 @@
         row.classList.add('director-chat-save-receipt');
         label.textContent = '✓ Saved';
       }
-      if (message.role === 'user' && (message.content.indexOf('[WEBCAP EXPLICIT READ]') !== -1 ||
-          message.content.indexOf('[WEBCAP APPLIED FIELD VALUES]') !== -1)) {
-        var applied = message.content.indexOf('[WEBCAP APPLIED FIELD VALUES]') !== -1;
-        var startMark = applied ? '[WEBCAP APPLIED FIELD VALUES]' : '[WEBCAP EXPLICIT READ]';
-        var endMark = applied ? '[END WEBCAP APPLY]' : '[END WEBCAP READ]';
-        var marker = message.content.indexOf(startMark);
-        var closing = message.content.indexOf(endMark, marker);
-        if (closing !== -1) {
-          // Preserve the original payload in session history, not the creative chat.
-          var description = message.content.slice(0, marker).trim();
-          body.textContent = description === 'Read the selected saved context and acknowledge receipt.'
-            ? 'Read saved Project fields'
-            : (description || (applied ? 'Reviewed changes saved' : 'Read saved Project fields'));
-        }
-      }
+      // The full Read message is exactly what subsequent LLM requests receive.
+      // Do not collapse it into a receipt or alter its source values.
+      if (message.role === 'user' && message.content.startsWith('[WEBCAP EXPLICIT READ'))
+        body.textContent = message.content;
 
       row.appendChild(label);
-      if (readReceipt) {
-        var receipt = document.createElement('span');
-        receipt.className = 'director-chat-context-receipt';
-        receipt.textContent = '✓ Context supplied';
-        receipt.title = 'Saved Project material supplied with this request. Full response is available in I/O.';
-        row.appendChild(receipt);
-      }
       if (body.textContent || body.children.length) row.appendChild(body);
       var elapsedMap = currentElapsedMap();
       var metricsMap = currentMetricsMap();
@@ -1599,19 +1570,10 @@
       var output = el('director-studio-access-data');
       output.textContent = JSON.stringify(result.data, null, 2);
       output.classList.remove('hidden');
-      // Explicit Read delivers selected saved fields; no silent auto-attachment.
-      if (state.pending || !state.modelId) throw new Error('Select a Director model before sending Read.');
-      var source = {projectId: result.storyId, sceneId: result.sceneId || null,
-        field: result.field, savedAt: result.storyUpdatedAt, content: result.data};
-      var composer = el('director-chat-input');
-      var instruction = String(composer.value || '').trim();
-      if (!instruction) instruction = 'Acknowledge the saved context without assessing it or suggesting next steps.';
-      composer.value = '[WEBCAP EXPLICIT PROJECT READ — SAVED FIELD VALUES]\n' +
-        JSON.stringify(source, null, 2) + '\n[END WEBCAP READ]\n\n' +
-        'Acknowledge receipt in your own words, naming the Project and fields actually present. ' +
-        'Then ' + instruction;
-      el('director-studio-access-status').textContent = 'Read sent to Director. Awaiting the model acknowledgment…';
-      sendMessage();
+      return window.studioDirectorBridge.appendReadSnapshot({
+        projectId: result.storyId, sceneId: result.sceneId || null,
+        field: result.field, savedAt: result.storyUpdatedAt, content: result.data
+      });
     }).catch(function (error) {
       el('director-studio-access-status').textContent = 'Read failed: ' + String(error.message || error);
       if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Studio Story read', error);
@@ -2931,7 +2893,6 @@
   function newChat(options) {
     if (state.pending || (persistentMode(state.activeMode) && !state.sessionReady)) return;
     state.sceneRead = null;
-    state.studioApprovedRead = null;
     var preserveContext = !!(options && options.preserveContext);
     if (!persistentMode(state.activeMode)) {
       state.modeMessages[state.activeMode] = [];
@@ -3077,47 +3038,13 @@
       }));
       if (includePromptContract)
         outbound[0].content += '\n\nH3 PROMPT AUTHORING REFERENCE:\n' + payload.promptContract;
-      if (!explicitWrite) return outbound;
-      // An explicit Write receives the same author-approved independent Read
-      // references as conversation, refreshed without changing its destination.
-      // Navigating to or attaching a Project never implicitly approves Read.
-      return Promise.all(studioApprovedReadSources().map(function (source) {
-        return requestJson('/fs/storyboard?story=' + encodeURIComponent(source.projectId))
-          .then(function (response) {
-            var story = response && response.story;
-            if (!story || story.id !== source.projectId)
-              throw new Error('Approved Context Project is unavailable. Change Context.');
-            return window.studioDirectorWorkbench.approvedReadPayload(story,source.keys);
-          });
-      })).then(function (approved) {
-        if (approved.length) outbound[0].content +=
-          '\nAUTHOR-APPROVED SAVED CONTEXT (independent sources; refreshed for this Write):\n' +
-          JSON.stringify(approved) +
-          '\nReferences inform creative work but do not determine the Write destination.\n';
-        return outbound;
-      });
+      // Read snapshots travel as ordinary persisted conversation messages.
+      // Explicit Write callers supply their own authoritative current baselines.
+      return outbound;
     });
-  }
-
-  function studioApprovedReadSources() {
-    var approved = state.studioApprovedRead;
-    if (!approved) return [];
-    if (Array.isArray(approved.sources)) return approved.sources;
-    // Compatibility with an existing in-memory single-Project selection.
-    return approved.projectId ? [approved] : [];
-  }
-
-  function studioApprovedSavedContext(story) {
-    var source = studioApprovedReadSources().find(function (item) {
-      return item.projectId === story.id;
-    });
-    return source
-      ? window.studioDirectorWorkbench.approvedReadPayload(story,source.keys)
-      : null;
   }
 
   function studioDirectorChatRequestMessages(messages, selectedScene, navigationSnapshot, boundTarget) {
-    // Navigation is a suggested Write destination, never permission to Read.
     var navigation = navigationSnapshot || window.getStudioDirectorNavigation();
     var targetProjectId = selectedScene ? selectedScene.projectId :
       (studioAttachedStoryId() || navigation.projectId || '');
@@ -3126,29 +3053,9 @@
       boundTarget.sceneId = selectedScene && selectedScene.projectId === targetProjectId ? selectedScene.sceneId : '';
       boundTarget.sceneNumber = boundTarget.sceneId ? selectedScene.sceneNumber : 0;
     }
-    var sources = studioApprovedReadSources();
-    return Promise.all(sources.map(function (source) {
-      return requestJson('/fs/storyboard?story=' + encodeURIComponent(source.projectId))
-        .then(function (response) {
-          var story = response && response.story;
-          if (!story || story.id !== source.projectId)
-            throw new Error('Approved Context Project is no longer available. Change Context.');
-          return window.studioDirectorWorkbench.approvedReadPayload(story,source.keys);
-        });
-    })).then(function (approvedPayloads) {
-      // Do not leak the selected editor's creative content through automatic navigation context.
-      return studioDirectorRequestMessages(messages, false, false,
-        {projectId:'',projectTitle:'',sceneId:'',sceneNumber:0,sceneOrder:[]}).then(function (outbound) {
-        outbound[0].content += '\n\nAnswer the author conversationally. Project and Scene writing are explicit functions, not conversational output requirements.\n';
-        if (approvedPayloads.length) {
-          outbound[0].content += '\nAUTHOR-APPROVED SAVED CONTEXT (independent sources; refreshed for this request):\n' +
-            JSON.stringify(approvedPayloads) +
-            '\nEach source retains its own Project identity and is reference material, not an automatic Write destination.\n';
-        } else {
-          outbound[0].content += '\nNo saved Project or Scene reference was supplied for this conversation.\n';
-        }
-        return outbound;
-      });
+    return studioDirectorRequestMessages(messages, false, false).then(function (outbound) {
+      outbound[0].content += '\n\nAnswer the author conversationally. Project and Scene writing are explicit functions, not conversational output requirements.\n';
+      return outbound;
     });
   }
 
@@ -3564,15 +3471,6 @@
         if (activeChatMode === 'storyboard') state.lastStudioIoRaw = String(result.text || '');
         var studioResponse = activeChatMode === 'storyboard' ? parseStudioChatResponse(result.text) : null;
         var assistantText = studioResponse ? studioResponse.reply : String(result.text || '');
-        if (activeChatMode === 'storyboard' && state.pendingReadAck) {
-          var fieldCount = state.pendingReadAck.length;
-          state.pendingReadAck = null;
-          // The selected saved fields are already in the completed request.
-          // Model-generated wording cannot independently prove their delivery.
-          var feedback = 'Director replied to Read · ' + fieldCount + ' saved fields supplied.';
-          window.studioDirectorWorkbench.setReadStatus('success', feedback);
-          studioActionStatus(feedback, false);
-        }
         messages.push({ role: 'assistant', content: assistantText });
         var targetScene = resolvedTarget.sceneId ? {
           projectId:resolvedTarget.projectId,sceneId:resolvedTarget.sceneId,
@@ -3595,13 +3493,6 @@
       if (activeChatMode === 'storyboard') {
         state.lastStudioIoError = String(err.message || err);
         el('studio-director-inspect').dataset.newResult = 'true';
-      }
-      if (activeChatMode === 'storyboard' && state.pendingReadAck) {
-        state.pendingReadAck = null;
-        if (window.studioDirectorWorkbench) {
-          window.studioDirectorWorkbench.setReadStatus('error','Read failed: ' + String(err.message || err));
-          window.studioDirectorWorkbench.setStatus('Read failed: ' + String(err.message || err), true);
-        }
       }
       if (['stopped', 'cancelled'].indexOf(String(err && err.jobStatus || '')) === -1) {
         if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Assistant', err);
@@ -3700,7 +3591,7 @@
     if (responses.length) chooser.value=String(responses.length-1);
     render();
     var recorded = currentMessages().filter(function(message){
-      return message.role === 'user' && (message.content.includes('[WEBCAP EXPLICIT READ]') ||
+      return message.role === 'user' && (message.content.startsWith('[WEBCAP EXPLICIT READ') ||
         message.content.includes('[WEBCAP APPLIED FIELD VALUES]'));
     });
     el('studio-director-io-history').textContent = recorded.length ? recorded.map(function(message,index){
@@ -4178,51 +4069,18 @@
         return {role:message.role,content:message.content};
       });
     },
-    clearApprovedRead: function () {
-      state.studioApprovedRead = null;
+    appendReadSnapshot: function (payload) {
+      if (state.activeMode !== 'storyboard' || !state.sessionReady || state.pending || state.attachmentPending)
+        throw new Error('Open an idle Studio Director conversation before Read.');
+      if (!payload || !payload.projectId) throw new Error('Read requires a saved Project snapshot.');
+      var content = '[WEBCAP EXPLICIT READ — SAVED SNAPSHOT]\n' +
+        JSON.stringify(payload, null, 2) + '\n[END WEBCAP READ]';
+      var messages = state.modeMessages.storyboard;
+      messages.push({role:'user',content:content});
+      state.sessionDirty.storyboard = true;
+      renderMessages();
       syncModeUi();
-    },
-    approvedReadSources: function () {
-      return studioApprovedReadSources().map(function (item) {
-        return {projectId:item.projectId,keys:item.keys.slice(),label:item.label};
-      });
-    },
-    removeApprovedRead: function (projectId) {
-      var remaining = studioApprovedReadSources().filter(function (item) {
-        return item.projectId !== projectId;
-      });
-      state.studioApprovedRead = remaining.length ? {
-        sources:remaining,label:remaining.map(function (item) {return item.label;}).join(' · ')
-      } : null;
-      syncModeUi();
-    },
-    approveRead: function (projectId, keys) {
-      if (!projectId || !Array.isArray(keys) || !keys.length)
-        throw new Error('Choose saved Project details before approving Context.');
-      var sources = studioApprovedReadSources().filter(function (item) {
-        return item.projectId !== projectId;
-      });
-      sources.push({projectId:projectId,keys:keys.slice(),
-        label:window.studioDirectorWorkbench.approvedReadLabel(projectId,keys)});
-      state.studioApprovedRead = {
-        sources:sources,label:sources.map(function (item) {return item.label;}).join(' · ')
-      };
-      syncModeUi();
-    },
-    sendRead: function (payload, keys, instruction) {
-      if (!this.isReady()) throw new Error('Open Studio Director and select an available LLM before Read.');
-      if (!Array.isArray(keys) || !keys.length) throw new Error('Select at least one field to Read.');
-      state.sceneRead = null;
-      el('director-chat-scene-context').classList.add('hidden');
-      var composer = el('director-chat-input');
-      var draft = String(composer.value || '').trim();
-      var nl = String.fromCharCode(10);
-      composer.value = (draft || instruction || 'Read the selected saved context and acknowledge receipt.') +
-        nl + nl + '[WEBCAP EXPLICIT READ]' + nl +
-        JSON.stringify(payload, null, 2) + nl + '[END WEBCAP READ]' + nl +
-        'Briefly acknowledge the supplied context, then fulfil the author request above. For a context-only Read, stop after a brief confirmation.';
-      state.pendingReadAck = keys.slice();
-      sendMessage();
+      return persistSession('storyboard');
     },
     selectWriteProject: function (storyId, storyTitle) {
       if (!storyId) throw new Error('Select a Project destination for Write.');

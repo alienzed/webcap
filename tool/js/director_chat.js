@@ -1940,13 +1940,11 @@
     startProgress();
     syncControls();
     var input = {
-      task: 'Author ONE new Studio Project with a complete Concept (including core appeal), ' +
-        'complete Visual / atmosphere, a useful title and only relevant stable Invariants. ' +
-        'When the author explicitly requests initial Scenes, include one short initialScenes ' +
-        'brief per agreed Scene with title, brief and whole-second durationSeconds (4-15, default 6). ' +
-        'Those briefs will be passed to individual Scene-writing calls after this Project is saved. ' +
-        'Return an empty initialScenes array when no Scenes were requested. ' +
-        'Use a short rationale. This is a draft for the existing Project review.',
+      task: 'Create one usable Project with a distinctive title, developed Concept and core appeal, ' +
+        'Visual / atmosphere, and Invariants only for relevant recurring facts. ' +
+        'When the author wants initial Scenes, include short titled Scene briefs with durations ' +
+        'for later individual Scene authoring. Otherwise return an empty initialScenes array. ' +
+        'Deliver the actual Project fields and a concise rationale now.',
       instruction: String(options && options.instruction || '').trim(),
       unsavedWorkingFields:workingProject || {},discussion: discussion
     };
@@ -2444,11 +2442,9 @@
       if (!state.modelId)
         throw new Error('No Director model is available to author new Project fields.');
       var input = {
-        task: 'Revise the specified Project fields using the saved Project as baseline. ' +
-          'Return only fields that need a complete replacement value: title, concept, style and/or ' +
-          'the complete invariants list. Omit unchanged fields rather than rewriting them. ' +
-          'Preserve unrelated Project details and all Scenes. Keep the core appeal in Concept. ' +
-          'WebCap merges requested fields and offers reviewed saving.',
+        task: 'Revise the requested Project fields using the supplied saved Project as baseline. ' +
+          'Return complete replacement values for the fields you improve, preserving established ' +
+          'creative direction and all unaffected fields and Scenes.',
         instruction: instruction, requestedFields: requestedFields,
         // This explicit targeted Project revision authorizes its own saved baseline.
         project: {id:story.id,title:story.title,concept:story.concept,
@@ -4677,15 +4673,11 @@
           throw new Error('The selected Project is no longer available.');
         var order = story.sceneOrder.slice();
         var instruction = JSON.stringify({
-          task:'Author the new Scenes requested for this existing Project in one response. ' +
-            'Return JSON with scenes: an array of authored Scene records, each with a complete usable H3 prompt, ' +
-            'a useful title, and durationSeconds when supplied. Return the Scenes you can actually author; ' +
-            'a partial sequence is useful and does not require filler or replacement requests. ' +
-            'Use the author-requested durations and titles when clear; use 6 seconds when no duration was requested. ' +
-            'Keep every Scene independently generatable, coherent with the saved Project and distinct when appropriate. ' +
-            'Existing Scenes are retained and are not revision destinations.',
-          instruction:launch.instruction,
-          authorRequest:launch.authorRequest || launch.instruction,
+          task:'Create the requested independently generatable H3 Scenes for this Project. ' +
+            'Give each Scene a useful title, complete H3 Prompt and durationSeconds ' +
+            '(4–15 seconds, default 6 when unspecified). Honor the author\'s creative direction, ' +
+            'specific titles and timings. Deliver every Scene you can usefully author now.',
+          authorDirection:launch.authorRequest || launch.instruction,
           // Explicitly launched Scene creation uses this selected Project's saved direction.
           project:{
             title:story.title,concept:story.concept,style:story.style,

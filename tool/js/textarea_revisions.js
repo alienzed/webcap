@@ -9,6 +9,311 @@
   var originalPaddingBottom = '';
   var showingPreview = false;
 
+  // Explicit field types, shared by Settings and the live editor. New textareas
+  // have no revision history until deliberately classified here.
+  var fieldTypes = [
+    {
+      "group": "Studio — Project",
+      "id": "project.overview",
+      "label": "Project overview / concept",
+      "selector": "#storyboard-story-concept, #studio-brief-concept, #studio-project-concept",
+      "enabled": true
+    },
+    {
+      "group": "Studio — Project",
+      "id": "project.style",
+      "label": "Visual style / atmosphere",
+      "selector": "#storyboard-story-style, #studio-brief-style, #studio-project-style",
+      "enabled": true
+    },
+    {
+      "group": "Studio — Project",
+      "id": "project.invariants",
+      "label": "Project invariants / guidelines",
+      "selector": ".studio-project-invariant textarea, textarea[data-story-guideline]",
+      "enabled": true
+    },
+    {
+      "group": "Studio — Project",
+      "id": "project.sceneBrief",
+      "label": "Project creation Scene brief",
+      "selector": "#studio-project-scene-prompt",
+      "enabled": false
+    },
+    {
+      "group": "Studio — Scenes",
+      "id": "scene.prompt",
+      "label": "Scene production prompts",
+      "selector": "textarea[data-scene-field=\"prompt\"], #studio-scene-draft-prompt, #studio-scenes-rows textarea[data-field=\"prompt\"], #studio-dw-scene-editors textarea[data-field=\"prompt\"], #studio-dw-batch-editors textarea[data-field=\"prompt\"]",
+      "enabled": true
+    },
+    {
+      "group": "Studio — Scenes",
+      "id": "scene.entry",
+      "label": "Scene entry state",
+      "selector": "textarea[data-scene-field=\"entryState\"]",
+      "enabled": false
+    },
+    {
+      "group": "Studio — Scenes",
+      "id": "scene.exit",
+      "label": "Scene exit state",
+      "selector": "textarea[data-scene-field=\"exitState\"]",
+      "enabled": false
+    },
+    {
+      "group": "Studio — Scenes",
+      "id": "scene.instructions",
+      "label": "Scene creation / Director instructions",
+      "selector": "#storyboard-scene-creation-instruction, #storyboard-director-tools-instruction, #studio-dw-write-instruction, #director-studio-revision-input",
+      "enabled": false
+    },
+    {
+      "group": "Generations",
+      "id": "generation.prompt",
+      "label": "Generation prompt",
+      "selector": "#generate-prompt",
+      "enabled": true
+    },
+    {
+      "group": "Generations",
+      "id": "generation.testPrompt",
+      "label": "Test Generations prompt",
+      "selector": "#test-generations-prompt",
+      "enabled": false
+    },
+    {
+      "group": "Generations",
+      "id": "generation.wildcard",
+      "label": "Wildcard prompt output",
+      "selector": "#test-generations-wildcard-output",
+      "enabled": false
+    },
+    {
+      "group": "Generations",
+      "id": "generation.epochPrompt",
+      "label": "Epoch Finder test prompt",
+      "selector": "#epoch-finder-prompt",
+      "enabled": false
+    },
+    {
+      "group": "Captions & Prep",
+      "id": "caption.editor",
+      "label": "Caption editor",
+      "selector": "#editor",
+      "enabled": false
+    },
+    {
+      "group": "Captions & Prep",
+      "id": "caption.primer",
+      "label": "Set caption template",
+      "selector": "#primer-template",
+      "enabled": false
+    },
+    {
+      "group": "Captions & Prep",
+      "id": "caption.setNotes",
+      "label": "Set notes",
+      "selector": "#set-notes-editor",
+      "enabled": false
+    },
+    {
+      "group": "Captions & Prep",
+      "id": "caption.sheet",
+      "label": "Combined caption sheet (read-only)",
+      "selector": "#caption-sheet-text",
+      "enabled": false
+    },
+    {
+      "group": "Evaluations & Utilities",
+      "id": "evaluation.vision",
+      "label": "Ask Vision question",
+      "selector": "#ask-vision-question",
+      "enabled": false
+    },
+    {
+      "group": "Evaluations & Utilities",
+      "id": "evaluation.stats",
+      "label": "Statistics phrases",
+      "selector": "#stats-phrases",
+      "enabled": false
+    },
+    {
+      "group": "LoRA Profiles",
+      "id": "lora.epochDescription",
+      "label": "Epoch profile description",
+      "selector": "#epoch-profile-description",
+      "enabled": false
+    },
+    {
+      "group": "LoRA Profiles",
+      "id": "lora.epochWords",
+      "label": "Epoch trigger words",
+      "selector": "#epoch-profile-words",
+      "enabled": false
+    },
+    {
+      "group": "LoRA Profiles",
+      "id": "lora.epochOptions",
+      "label": "Epoch named options JSON",
+      "selector": "#epoch-profile-options",
+      "enabled": false
+    },
+    {
+      "group": "LoRA Profiles",
+      "id": "lora.epochGuidance",
+      "label": "Epoch Director guidance",
+      "selector": "#epoch-profile-guidance",
+      "enabled": false
+    },
+    {
+      "group": "LoRA Profiles",
+      "id": "lora.libraryDescription",
+      "label": "Library profile description",
+      "selector": "#lora-library-description",
+      "enabled": false
+    },
+    {
+      "group": "LoRA Profiles",
+      "id": "lora.libraryWords",
+      "label": "Library trained phrases",
+      "selector": "#lora-library-words",
+      "enabled": false
+    },
+    {
+      "group": "LoRA Profiles",
+      "id": "lora.libraryOptions",
+      "label": "Library options JSON (read-only unless enabled)",
+      "selector": "#lora-library-options",
+      "enabled": false
+    },
+    {
+      "group": "LoRA Profiles",
+      "id": "lora.libraryGuidance",
+      "label": "Library guidance",
+      "selector": "#lora-library-guidance",
+      "enabled": false
+    },
+    {
+      "group": "Settings & Reusable Content",
+      "id": "settings.primer",
+      "label": "Default caption template",
+      "selector": "#app-settings-primer-template",
+      "enabled": false
+    },
+    {
+      "group": "Settings & Reusable Content",
+      "id": "settings.modelGuidance",
+      "label": "Model guidance",
+      "selector": "#app-settings-model-guidance-minimax_h3, #app-settings-model-guidance-krea2_raw",
+      "enabled": false
+    },
+    {
+      "group": "Settings & Reusable Content",
+      "id": "settings.sequence",
+      "label": "Caption sequence hint",
+      "selector": "#app-settings-caption-sequence",
+      "enabled": false
+    },
+    {
+      "group": "Settings & Reusable Content",
+      "id": "settings.json",
+      "label": "Advanced configuration JSON",
+      "selector": "#app-settings-json",
+      "enabled": false
+    },
+    {
+      "group": "Settings & Reusable Content",
+      "id": "studio.blocks",
+      "label": "Reusable Studio Block",
+      "selector": "#studio-blocks-content",
+      "enabled": false
+    }
+  ];
+  var preferenceKey = 'webcap.textarea-history.preferences.v1';
+  var preferenceDefaults = {};
+  fieldTypes.forEach(function (item) { preferenceDefaults[item.id] = item.enabled; });
+  var preferences = {master:true, fields:Object.assign({},preferenceDefaults)};
+  try {
+    var stored = JSON.parse(window.localStorage.getItem(preferenceKey) || 'null');
+    if (stored && typeof stored === 'object') {
+      if (typeof stored.master === 'boolean') preferences.master = stored.master;
+      if (stored.fields && typeof stored.fields === 'object') {
+        Object.keys(preferenceDefaults).forEach(function (id) {
+          if (typeof stored.fields[id] === 'boolean') preferences.fields[id] = stored.fields[id];
+        });
+      }
+    }
+  } catch (error) { /* Browser storage can be disabled; defaults still work. */ }
+
+  function fieldType(field) {
+    if (!field || !field.matches) return null;
+    for (var i=0; i<fieldTypes.length; i++) {
+      if (field.matches(fieldTypes[i].selector)) return fieldTypes[i];
+    }
+    return null;
+  }
+  function enabledFor(field) {
+    var type = fieldType(field);
+    return !!(type && preferences.master && preferences.fields[type.id] &&
+      !field.disabled && !field.readOnly && field.dataset.noRevisionHistory !== 'true');
+  }
+  function savePreferences() {
+    try { window.localStorage.setItem(preferenceKey, JSON.stringify(preferences)); }
+    catch (error) { /* Keep current-session choices if browser storage is unavailable. */ }
+  }
+  function updatePreferences() {
+    if (active && !enabledFor(active.field)) detach();
+    renderSettings();
+  }
+  function setEnabled(id, value) {
+    if (!Object.prototype.hasOwnProperty.call(preferenceDefaults,id)) return;
+    preferences.fields[id] = !!value;
+    savePreferences();
+    updatePreferences();
+  }
+  function setMasterEnabled(value) {
+    preferences.master = !!value;
+    savePreferences();
+    updatePreferences();
+  }
+  function renderSettings() {
+    var host = document.getElementById('app-settings-textarea-history');
+    if (!host) return;
+    host.replaceChildren();
+    var master = document.createElement('label'), masterInput = document.createElement('input'),
+      masterText = document.createElement('span');
+    master.className = 'app-settings-toggle';
+    masterInput.type = 'checkbox'; masterInput.checked = preferences.master;
+    masterInput.setAttribute('aria-label','Enable textarea history');
+    masterInput.addEventListener('change',function () {setMasterEnabled(masterInput.checked);});
+    masterText.textContent = 'Enable textarea history';
+    master.append(masterInput,masterText);
+    host.appendChild(master);
+    var current = '', group = null;
+    fieldTypes.forEach(function (item) {
+      if (item.group !== current) {
+        current = item.group;
+        group = document.createElement('fieldset');
+        group.className = 'webcap-history-group';
+        var heading = document.createElement('legend');
+        heading.textContent = current;
+        group.appendChild(heading);
+        host.appendChild(group);
+      }
+      var label = document.createElement('label'), input = document.createElement('input'),
+        text = document.createElement('span');
+      label.className = 'app-settings-toggle';
+      input.type = 'checkbox'; input.checked = !!preferences.fields[item.id];
+      input.disabled = !preferences.master;
+      input.setAttribute('data-history-field',item.id);
+      input.addEventListener('change',function () {setEnabled(item.id,input.checked);});
+      text.textContent = item.label;
+      label.append(input,text);
+      group.appendChild(label);
+    });
+  }
+
   // Fallback for unnamed editors created from templates. Stable while their
   // surrounding row structure remains the same; semantic data keys win above.
   function structuralKey(field) {
@@ -117,8 +422,7 @@
   }
 
   function attach(field) {
-    if (field.disabled || field.readOnly || field.id === 'director-chat-input' ||
-        field.dataset.noRevisionHistory === 'true') return;
+    if (!enabledFor(field)) return;
     var key = identity(field);
     if (active && active.field === field && active.key === key) return;
     detach();
@@ -171,7 +475,7 @@
       if (prev || next) step(prev ? -1 : 1);
     });
     document.addEventListener('focusin',function (event) {
-      if (event.target.matches && event.target.matches('textarea')) attach(event.target);
+      if (event.target.matches && event.target.matches('textarea') && enabledFor(event.target)) attach(event.target);
       else if (!toolbar.contains(event.target)) detach();
     });
     document.addEventListener('focusout',function (event) {
@@ -191,9 +495,10 @@
     },true);
     window.addEventListener('scroll',position,true);
     window.addEventListener('resize',position);
+    renderSettings();
   }
 
-  window.webcapTextareaRevisions = {identity:identity,capture:capture,history:function (key) {return histories.get(key);}};
+  window.webcapTextareaRevisions = {identity:identity,capture:capture,history:function (key) {return histories.get(key);}, fieldTypes:fieldTypes, enabledFor:enabledFor, setEnabled:setEnabled, setMasterEnabled:setMasterEnabled, renderSettings:renderSettings};
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded',initialize);
   else initialize();
 })();

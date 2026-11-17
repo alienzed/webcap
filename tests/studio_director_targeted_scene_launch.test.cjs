@@ -21,10 +21,16 @@ function setup(response){
     flushStudioDirectorStoryEdits:async()=>{},
     reportConsoleError:(...x)=>events.push(['error',...x])
   };
-  const read=section(workbench,'    sceneRead: function (story, sceneId) {',
-    '    applyScenePrompt: function');
   window.studioDirectorWorkbench={
-    sceneRead:vm.runInNewContext('({'+read+'})').sceneRead,
+    sceneRead:(story,id)=>({payload:{
+      projectId:story.id,projectTitle:story.title,
+      fields:[
+        {id:'project.concept',value:story.concept},
+        {id:'project.style',value:story.style},
+        {id:'scene:'+id+':prompt',value:story.scenes[id].prompt},
+        {id:'scene:'+id+':durationSeconds',value:story.scenes[id].durationSeconds}
+      ]
+    }}),
     applyScenePrompt:async(story,id,prompt,extras)=>{
       events.push(['apply',id,prompt,extras]);
       if(prompt!==null)story.scenes[id].prompt=prompt;

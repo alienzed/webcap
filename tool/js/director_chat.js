@@ -16,8 +16,6 @@
     workshop: null,
     workshopProposal: null,
     modeMessages: {},
-    studioActionIndex: -1,
-    studioWorkingDraft: {projects:{},scenes:{},newProject:{},newScene:{},sourceRequest:''},
     modeContextKeys: {},
     elapsedByAssistantIndex: {},
     modeElapsedByAssistantIndex: {},
@@ -46,16 +44,10 @@
     sessionError: false,
     draftByMode: { chat: '', storyboard: '' },
     studioIntroPending: false,
-    studioSceneProposal: null,
-    studioScenesReviewsByResponse: {},
-    studioProjectProposal: null,
-    studioScenesProposal: null,
-    studioBriefProposal: null,
     studioOperations: [],
     pendingReadAck: null,
     sceneRead: null,
-    studioApprovedRead: null,
-    studioReadiness: {checks:[], readHints:[], writeHint:'', writeFields:[], sceneId:'', sceneNumber:0}
+    studioApprovedRead: null
   };
   var STORYBOARD_WORKSHOP_PRIMER = [
     'You are collaborating with an author developing short AI-generated videos.',
@@ -747,8 +739,8 @@
     var workshop = mode === 'storyboard' ? JSON.parse(JSON.stringify(state.workshop)) : null;
     var operations = mode === 'storyboard' ? state.studioOperations.slice() : [];
     var storyAccess = mode === 'storyboard' ? state.studioStoryAccess : null;
-    var readiness = mode === 'storyboard' ? state.studioReadiness : null;
-    var workingDraft = mode === 'storyboard' ? JSON.parse(JSON.stringify(state.studioWorkingDraft)) : null;
+    var readiness = null;
+    var workingDraft = null;
     var title = state.sessionByMode[mode] ? state.sessionByMode[mode].title : 'New chat';
     if (title === 'New chat') {
       title = conversationTitle(messages);
@@ -831,10 +823,6 @@
       state.metricsByAssistantIndex = {};
     } else {
       state.modeMessages.storyboard = chat.messages.slice();
-      state.studioActionIndex = -1;
-      state.studioWorkingDraft = Object.assign({
-        projects:{},scenes:{},newProject:{},newScene:{},sourceRequest:''
-      }, chat.workingDraft || {});
       state.modeElapsedByAssistantIndex.storyboard = {};
       state.modeMetricsByAssistantIndex.storyboard = {};
       state.storyboardAttachments = Object.assign({}, chat.attachments || {});
@@ -845,12 +833,8 @@
       if (window.studioDirectorWorkbench) {
         window.studioDirectorWorkbench.resetConversation();
       }
-      state.studioReadiness = chat.readiness || {checks:[],readHints:[],writeHint:'',writeFields:[],sceneId:''};
-      state.studioSceneProposal = null;
       state.studioProjectProposal = null;
-      state.studioScenesProposal = null;
       state.studioScenesReviewsByResponse = {};
-      state.studioBriefProposal = null;
       state.workshopProposal = null;
     }
     state.draftByMode[chat.mode] = chat.draft || '';
@@ -1556,7 +1540,7 @@
     var capture = el('director-studio-capture');
     title.textContent = 'Working with: ' + studioWorkingStoryLabel();
     description.textContent = 'Concept / overview · Visual / atmosphere · Invariants';
-    capture.textContent = attached ? 'Review Project changes' : 'Review new Project';
+    capture.textContent = attached ? 'Write attached Project Overview · Save' : 'Create Project · Save';
     capture.disabled = state.pending || state.attachmentPending || !state.sessionReady || !state.modelId || !discussed;
     var useOpen = el('director-studio-flow-target');
     var canAttachOpen = !!openId && openId !== attached;
@@ -1795,55 +1779,6 @@
     return fields;
   }
 
-  // A bounded, editable-review-only word comparison. No source text is rewritten.
-  function studioDirectorRenderDiff(host, before, after) {
-    before = String(before || ''); after = String(after || '');
-    host.replaceChildren();
-    if (before === after) { host.textContent = 'No text changes.'; return; }
-    var oldWords = before.match(/\s+|[^\s]+/g) || [];
-    var newWords = after.match(/\s+|[^\s]+/g) || [];
-    if (oldWords.length > 650 || newWords.length > 650) {
-      var prefix = 0;
-      while (prefix < Math.min(before.length, after.length) && before[prefix] === after[prefix]) prefix++;
-      var suffix = 0;
-      while (suffix < Math.min(before.length, after.length) - prefix &&
-        before[before.length - 1 - suffix] === after[after.length - 1 - suffix]) suffix++;
-      var append = function(tag, value) {
-        if (!value) return;
-        var element = document.createElement(tag);
-        element.textContent = value; host.appendChild(element);
-      };
-      append('span', before.slice(0,prefix));
-      append('del', before.slice(prefix,before.length-suffix));
-      append('ins', after.slice(prefix,after.length-suffix));
-      append('span', after.slice(after.length-suffix));
-      return;
-    }
-    var rows = Array.from({length:oldWords.length+1},function(){return new Uint16Array(newWords.length+1);});
-    for(var i=oldWords.length-1;i>=0;i--)
-      for(var j=newWords.length-1;j>=0;j--)
-        rows[i][j] = oldWords[i] === newWords[j] ? rows[i+1][j+1]+1 :
-          Math.max(rows[i+1][j],rows[i][j+1]);
-    var i=0,j=0,segments=[];
-    function add(tag,word) {
-      var last=segments[segments.length-1];
-      if (last && last.tag === tag) last.text+=word;
-      else segments.push({tag:tag,text:word});
-    }
-    while(i<oldWords.length || j<newWords.length){
-      if(i<oldWords.length && j<newWords.length && oldWords[i]===newWords[j]){
-        add('span',oldWords[i]);i++;j++;
-      } else if(i<oldWords.length && (j===newWords.length || rows[i+1][j]>=rows[i][j+1])) add('del',oldWords[i++]);
-      else add('ins',newWords[j++]);
-    }
-    segments.forEach(function(segment){
-      var node=document.createElement(segment.tag);
-      node.textContent=segment.text;
-      host.appendChild(node);
-    });
-  }
-  window.studioDirectorRenderDiff = studioDirectorRenderDiff;
-
   function commitFocusedStudioBrief(storyId, expected, authored, requestedFields) {
     var requested = requestedFields && requestedFields.length ? requestedFields :
       ['title','concept','style','invariants'];
@@ -2066,11 +2001,8 @@
         state.metricsByAssistantIndex = {};
       } else {
         state.modeMessages.storyboard = [];
-        state.studioActionIndex = -1;
-        state.studioWorkingDraft = {projects:{},scenes:{},newProject:{},newScene:{},sourceRequest:''};
         state.studioOperations = [];
         if (window.studioDirectorWorkbench) window.studioDirectorWorkbench.resetConversation();
-        state.studioReadiness = {checks:[],readHints:[],writeHint:'',writeFields:[],sceneId:''};
           state.modeElapsedByAssistantIndex.storyboard = {};
         state.modeMetricsByAssistantIndex.storyboard = {};
         if (!preserveContext) {
@@ -2080,11 +2012,6 @@
           state.workshop = null;
         }
         state.workshopProposal = null;
-        state.studioSceneProposal = null;
-        state.studioProjectProposal = null;
-        state.studioScenesProposal = null;
-        state.studioScenesReviewsByResponse = {};
-        state.studioBriefProposal = null;
         el('director-chat-workshop-status').textContent = '';
       }
       el('director-chat-input').value = '';
@@ -2235,74 +2162,6 @@
     });
   }
 
-  // Retain available conversational work across ordinary follow-up questions.
-  function markStudioReadinessOutdated() {
-    // Kept only for old conversation metadata; it never invalidates a useful
-    // current action or a completed draft.
-    state.sessionDirty.storyboard = true;
-  }
-
-  // A Studio conversation owns unsaved sparse field replacements. Saved
-  // Project/Scene records stay authoritative until a deliberate Write.
-  function studioWorkingFieldChanges(source, names) {
-    if (!source || typeof source !== 'object' || Array.isArray(source)) return {};
-    var result = {};
-    names.forEach(function (name) {
-      if (!Object.prototype.hasOwnProperty.call(source,name)) return;
-      var value = source[name];
-      if (name === 'invariants') {
-        // A malformed optional entry must not replace a valid saved list.
-        if (Array.isArray(value) && value.every(function (item) {
-          return item && typeof item === 'object' && !Array.isArray(item) &&
-            ['character','location','visual','world','sound','custom'].includes(item.kind) &&
-            typeof item.title === 'string' && typeof item.text === 'string';
-        })) result[name] = value;
-      } else if (name === 'durationSeconds') {
-        if (Number.isInteger(value) && value >= 4 && value <= 15) result[name] = value;
-      } else if (typeof value === 'string' && value.trim()) {
-        result[name] = value;
-      }
-    });
-    return result;
-  }
-
-  function studioMergeWorkingChanges(changes, target, action, request) {
-    if (!changes || typeof changes !== 'object' || Array.isArray(changes)) return false;
-    var working = state.studioWorkingDraft;
-    var changed = false;
-    var project = studioWorkingFieldChanges(changes.project,
-      ['title','concept','style','invariants']);
-    var scene = studioWorkingFieldChanges(changes.scene,
-      ['title','prompt','durationSeconds']);
-    if (Object.keys(project).length) {
-      var projectKey = action && action.kind === 'write_project'
-        ? String(target && target.projectId || '') : '';
-      if (projectKey) {
-        working.projects[projectKey] = Object.assign({},working.projects[projectKey],project);
-        changed = true;
-      } else if (action && action.kind === 'create_project') {
-        working.newProject = Object.assign({},working.newProject,project);
-        changed = true;
-      }
-    }
-    if (Object.keys(scene).length) {
-      var sceneKey = action && action.kind === 'write_scenes'
-        ? String(target && target.sceneId || '') : '';
-      if (sceneKey) {
-        working.scenes[sceneKey] = Object.assign({},working.scenes[sceneKey],scene);
-        changed = true;
-      } else if (action && action.kind === 'create_scene') {
-        working.newScene = Object.assign({},working.newScene,scene);
-        changed = true;
-      }
-    }
-    if (changed) {
-      working.sourceRequest = String(request || '');
-      state.sessionDirty.storyboard = true;
-    }
-    return changed;
-  }
-
   function parseStudioChatResponse(raw) {
     var text = String(raw || '').trim();
     if (!text) throw new Error('Director returned no answer.');
@@ -2421,7 +2280,6 @@
         });
       }
       state.storyboardAttachments[item.key] = item;
-      if (kind === 'story') state.studioSceneProposal = null;
       scheduleSessionSave();
       el('director-chat-attachments-toggle').setAttribute('aria-expanded', 'true');
       syncModeUi();
@@ -2665,7 +2523,6 @@
     var metricsMap = currentMetricsMap();
     var mode = activeContextMode();
     messages.push({ role: 'user', content: content });
-    if (activeChatMode === 'storyboard') markStudioReadinessOutdated();
     input.value = '';
     state.draftByMode[activeChatMode] = '';
     if (persistentMode(activeChatMode)) {
@@ -3193,31 +3050,6 @@
     else {
       syncPinnedUi();
       syncModeUi();
-    }
-  }
-
-  // Only actual persisted field values clear a retained draft. Keep unrelated
-  // fields available if the save applied only part of the author's material.
-  function forgetSavedStudioSceneFields(storyId, sceneId, savedScene) {
-    if (!storyId || !sceneId || !savedScene || typeof savedScene !== 'object') return;
-    var draft = state.studioWorkingDraft.scenes[sceneId];
-    if (!draft) return;
-    var changed = false;
-    Object.keys(draft).forEach(function (field) {
-      if (Object.prototype.hasOwnProperty.call(savedScene,field) &&
-          JSON.stringify(draft[field]) === JSON.stringify(savedScene[field])) {
-        delete draft[field];
-        changed = true;
-      }
-    });
-    if (changed) {
-      if (!Object.keys(draft).length) {
-        delete state.studioWorkingDraft.scenes[sceneId];
-        if (state.studioWorkingDraft.draftOrigins &&
-            state.studioWorkingDraft.draftOrigins.scenes)
-          delete state.studioWorkingDraft.draftOrigins.scenes[sceneId];
-      }
-      scheduleSessionSave();
     }
   }
 

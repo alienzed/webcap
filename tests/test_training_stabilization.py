@@ -2568,3 +2568,34 @@ def test_training_pause_ui_targets_active_not_selected():
     from pathlib import Path
     source = (Path(__file__).resolve().parents[1] / "tool" / "js" / "training_runner_ui.js").read_text(encoding="utf-8")
     assert "var job = (pause || finish) ? getTrainingRunnerActiveJob() : getTrainingRunnerSelectedJob();" in source
+
+
+def test_checkpoint_pause_keeps_active_and_waiting_jobs_queued(tmp_path, monkeypatch):
+    _configure_root(monkeypatch, tmp_path)
+    active = {"id": "active", "status": "stopping", "stage": "saving", "stages": "h3",
+              "actionRequested": "pause", "startedAt": 1234.0, "outputRunPath": "/runs/active",
+              "folder": "sets/subject"}
+    waiting = {"id": "waiting", "status": "queued", "stage": "queued", "stages": "h3"}
+    monkeypatch.setattr(training_runner, "_checkpointed_stop_error", lambda _job, _action: "")
+    monkeypatch.setattr(training_runner, "_populate_queued_resume_point",
+                        lambda job: job.update(resumePoint={"epoch": 10, "checkpointAvailable": True}))
+    requested = training_runner._apply_terminal_job_status(active, "stopped")
+    assert requested == "pause"
+    assert active["status"] == "queued"
+    assert active["resumeFromCheckpoint"] == "/runs/active"
+    assert active["resumePoint"]["checkpointAvailable"] is True
+    assert "actionRequested" not in active
+    assert waiting == {"id": "waiting", "status": "queued", "stage": "queued", "stages": "h3"}
+
+
+def test_missing_runner_recovery_marks_only_that_job(tmp_path, monkeypatch):
+    _configure_root(monkeypatch, tmp_path)
+    monkeypatch.setattr(training_runner, "_populate_queued_resume_point", lambda _job: None)
+    active = {"id": "active", "status": "running", "stage": "h3",
+              "stages": "h3", "outputRunPath": "/runs/active"}
+    waiting = {"id": "waiting", "status": "queued", "stage": "queued", "stages": "h3"}
+    training_runner._recover_dead_runner(active, "runner disappeared")
+    assert active["status"] == "queued"
+    assert active["missingResultRecovery"] is True
+    assert waiting["status"] == "queued"
+    assert "missingResultRecovery" not in waiting

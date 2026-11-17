@@ -3,40 +3,26 @@ const {test,expect}=require('./test.cjs');
 const {resetModel,queueModel,observedModels,openDirector,openProject,say,seedProject,story}=require('./helpers.cjs');
 const {ensureAttachedProject}=require('./helpers.cjs');
 
-test('Flow 7 — unsaved Scene work survives navigating away and back, then saves exactly once',async({page,request})=>{
+test('Flow 7 — explicit Write destination remains independent from the currently open Project',async({page,request})=>{
   await resetModel(request);
-  const project=await seedProject(page,'Resume retained draft '+Date.now());
-  const other=await seedProject(page,'Unrelated Project '+Date.now());
+  const target=await seedProject(page,'Chosen Write destination '+Date.now());
+  const other=await seedProject(page,'Unrelated open Project '+Date.now());
   await openDirector(page);
-  await openProject(page,project.id);
-  await ensureAttachedProject(page,project.title);
-  await queueModel(request,{
-    reply:'A Scene has been authored.',
-    scenes:[{title:'Original Scene',prompt:'The door opens slowly.',durationSeconds:8}],
-    action:{kind:'create_scene',instruction:'Create an opening Scene.'}
-  });
-  await say(page,'Create an opening Scene');
-  const action=page.locator('#studio-dw-suggestions .studio-dw-suggestion-action');
-  await expect(action).toBeVisible();
-  await action.click();
-  await expect(page.locator('#studio-scenes-review')).toBeVisible();
-  const prompt=page.locator('#studio-scenes-rows [data-field="prompt"]');
-  await prompt.fill('An edited draft: the door opens slowly in rain.');
-  await page.locator('#studio-scenes-close').click();
-  expect((await story(page,project.id)).sceneOrder).toHaveLength(0);
   await openProject(page,other.id);
-  await openProject(page,project.id);
-  await action.click();
-  await expect(page.locator('#studio-scenes-review')).toBeVisible();
-  await expect(prompt).toHaveValue('An edited draft: the door opens slowly in rain.');
-  await page.locator('#studio-scenes-apply').click();
-  await expect.poll(async()=> (await story(page,project.id)).sceneOrder.length).toBe(1);
-  const saved=await story(page,project.id);
-  expect(saved.scenes[saved.sceneOrder[0]].prompt).toBe('An edited draft: the door opens slowly in rain.');
+  await queueModel(request,{scenes:[{
+    title:'Arrival',prompt:'Eight-second wide opening as the courier enters the station.',
+    durationSeconds:8
+  }]});
+  await page.locator('#studio-dw-write').click();
+  await page.locator('#studio-dw-write-operation').selectOption('scene-write');
+  await page.locator('#studio-dw-write-project').selectOption(target.id);
+  await page.locator('#studio-dw-scene-mode').selectOption('create');
+  await page.locator('#studio-dw-write-instruction').fill('Create the agreed opening.');
+  await page.locator('#studio-dw-write-prepare').click();
+  await expect.poll(async()=>(await story(page,target.id)).sceneOrder.length,
+    {timeout:30000}).toBe(1);
   expect((await story(page,other.id)).sceneOrder).toHaveLength(0);
   expect((await observedModels(request)).calls).toHaveLength(1);
-  await page.reload();
-  expect((await story(page,project.id)).sceneOrder).toEqual(saved.sceneOrder);
 });
 
 test('Flow 7 failure checkpoint — external inference failure remains visible without false save',async({page,request})=>{

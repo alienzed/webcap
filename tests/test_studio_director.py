@@ -6,30 +6,28 @@ from tool.server import config as app_config
 from tool.server.studio_director import guidance, ACTIONS
 
 
-def test_writer_workshop_uses_existing_h3_prompt_contract_and_user_playbook(monkeypatch):
+def test_writer_workshop_keeps_creative_identity_separate_from_h3_playbook(monkeypatch):
     monkeypatch.setattr(
         app_config,
         "config",
         {"generation_model_guidance": {"minimax_h3": "Keep risky hand-to-hand interactions simple."}},
     )
     result = guidance("minimax_h3")
-    text = result["system"]
-    assert "STUDIO DIRECTOR | EXPERT CREATIVE PRODUCER" in text
-    assert "core appeal" in text.lower()
-    assert "ask one focused question; otherwise offer a specific idea" in text
-    assert "4–15 seconds" in text
-    assert "FIELD DEVELOPMENT" in text
-    assert "Return complete agreed material for requested creative fields" in text
-    assert "Entry and exit state fields are retired" in text
-    assert "These controls and media inspection are outside Studio Director" in text
-    assert "Write Scenes" in text and "directly" in text.lower()
-    assert "Keep risky hand-to-hand interactions simple." in text
-    assert "Conversation alone does not create" in text or "Conversation never edits Project records" in text
-    assert "integrated_multimodal_description" in result["promptContract"]
-    assert "TECHNICAL H3 PRODUCTION PROMPT CONTRACT" not in text
-    assert "[Shot 1]" not in text
-    assert len(text) < 8000
-
+    system, reference = result["system"], result["promptContract"]
+    assert "STUDIO DIRECTOR | CREATIVE PARTNER" in system
+    assert "imaginative, capable creative director" in system
+    assert "CREATIVE WORK: When asked to create or revise material" in system
+    assert "If an essential creative decision is missing" in system
+    assert "providing any independently useful work" in system
+    assert "Concept (story.concept)" in system
+    assert "Invariants (story.invariants)" in system
+    assert "complete H3 Prompt (scene.prompt)" in system
+    assert "4–15 seconds" in system
+    assert "integrated_multimodal_description" in reference
+    assert "Keep risky hand-to-hand interactions simple." in reference
+    assert "Keep risky hand-to-hand interactions simple." not in system
+    assert "[Shot 1]" not in system
+    assert len(system) < 4000
 
 def test_studio_guidance_teaches_only_focused_creative_workflows():
     result = guidance("minimax_h3")
@@ -39,28 +37,25 @@ def test_studio_guidance_teaches_only_focused_creative_workflows():
     assert "preserving unrelated" in actions["project.write"]
     assert "Invariants" in actions["project.write"]
     assert "one or more Scenes" in actions["scenes.write"]
-    assert len(result["system"]) < 8000
-    assert "normally 1-3 sentences" in result["system"]
-    assert "brief exchanges" in result["system"]
+    assert "Respond naturally and concisely" in result["system"]
+    assert "make a recommendation when you can" in result["system"]
+    assert "CURRENT WEBCAP CAPABILITIES" not in result["system"]
+    assert len(result["system"]) < 4000
 
-
-def test_director_role_combines_webcap_workflow_expertise_with_creative_judgment():
+def test_director_role_is_creative_partner_not_webcap_workflow_engine():
     system = guidance("minimax_h3")["system"]
-    assert "MiniMax H3 production expert, and WebCap Studio workflow guide" in system
-    assert "Answer supplied-context questions directly" in system
-    assert "WebCap owns destination" in system
-    assert "Use only saved creative material actually supplied" in system
-    assert "Conversation never edits Project records" in system
-    assert "Project Overview (Concept, Visual / atmosphere, Invariants)" in system
-    assert "Scene (Title, H3 Prompt)" in system
-    assert "scene.prompt) is its creative content" in system
-    assert "preserving unaffected authored material" in system
-    assert "Only an actual WebCap save makes authored content authoritative" in system
-    assert "Scene writes may save directly" in system
-    assert "A title-only Scene rename is a scoped Write" in system
-    assert "After the author approves the review" not in system
-    assert len(system) < 8000
-
+    assert "elevate the author's" in system
+    assert "meaningful ideas" in system
+    assert "sound creative judgment" in system
+    assert "producible results" in system
+    assert "The author sets the direction" in system
+    assert "deliver the actual usable" in system
+    assert "Preserve established details outside the requested change" in system
+    assert "only WebCap saves Project and Scene records" in system
+    assert "WebCap Studio workflow guide" not in system
+    assert "review policy" not in system
+    assert "direct-save" not in system
+    assert "queue" not in system.lower()
 
 def test_action_catalog_excludes_low_value_studio_director_operations():
     by_name = {action["name"]: action for action in ACTIONS}
@@ -98,14 +93,14 @@ def test_unsupported_generation_model_fails_instead_of_misapplying_h3_guidance()
 def test_unconfigured_h3_studio_still_has_production_expertise(monkeypatch):
     monkeypatch.setattr(app_config, "config", {"generation_model_guidance": {}})
     result = guidance("minimax_h3")
-    text = result["system"]
-    assert "core appeal" in text.lower()
-    assert "Take" in text and "Scene" in text and "reference" in text
-    assert "4–15 seconds" in text
-    assert "[Shot 1]" not in text
-    assert "USER'S H3 PRODUCTION PLAYBOOK" not in text
-    assert "[Shot 1]" in result["promptContract"]
-
+    system, reference = result["system"], result["promptContract"]
+    assert "short generative-video Projects and Scenes" in system
+    assert "4–15 seconds" in system
+    assert "complete standalone H3 Prompt" in system
+    assert "USER'S H3 PRODUCTION PLAYBOOK" not in system
+    assert "USER'S H3 PRODUCTION PLAYBOOK" not in reference
+    assert "[Shot 1]" not in system
+    assert "[Shot 1]" in reference
 
 def test_h3_runtime_reference_uses_current_studio_fields_and_conditional_legacy_guidelines():
     prompt = guidance("minimax_h3")["promptContract"]
@@ -115,30 +110,26 @@ def test_h3_runtime_reference_uses_current_studio_fields_and_conditional_legacy_
 
 
 def test_freeform_workshop_does_not_claim_hidden_context_or_mutations():
-    text = guidance("minimax_h3")["system"]
-    assert "saved Project/Scene fields only after explicit author approval" in text
-    assert "Saved context requires an author-approved Context selection" in text
-    assert "Conversation never edits Project records" in text
-    assert "strengthen the idea, do not replace it" in text
-    assert "Enthusiastically elevate the author\'s vision" in text
-    assert "compelling visual ideas, and expert prompting techniques" in text
-    assert "subject, action, interaction or atmosphere" in text
+    system = guidance("minimax_h3")["system"]
+    assert "saved Project and Scene facts actually supplied" in system
+    assert "treat earlier unsaved ideas as proposals" in system
+    assert "only WebCap saves Project and Scene records" in system
+    assert "elevate the author's" in system
+    assert "a promise to work later" in system
+    assert "CURRENT PROJECT NAVIGATION" not in system
+    assert "WebCap resolved Project" not in system
 
-
-
-def test_scene_prompt_is_the_only_active_creative_field():
-    text = guidance("minimax_h3")["system"]
+def test_studio_guidance_describes_actual_project_and_scene_fields():
+    system = guidance("minimax_h3")["system"]
     for phrase in (
         "story.concept", "story.style", "story.invariants",
-        "scene.prompt", "MH3 Take generation",
-        "Legacy Directing Guidelines",
+        "scene.prompt", "durationSeconds",
     ):
-        assert phrase.casefold() in text.casefold()
-    assert "not new Studio Director destinations" in text
-    assert "Older saved summaries are dormant legacy data" in text
-    assert "complete H3 Prompts for creative writing" in text
-    assert "conversation alone never edits them" in text
-
+        assert phrase.casefold() in system.casefold()
+    assert "complete standalone H3 Prompt" in system
+    assert "unchanged titles, durations" in system
+    assert "Invariants when stable recurring facts matter" in system
+    assert "Legacy Directing Guidelines" not in system
 
 def test_h3_playbook_review_uses_existing_config_and_checks_conflicts(monkeypatch):
     import copy
@@ -297,13 +288,11 @@ def test_studio_chat_schema_accepts_prose_and_actual_creative_material_without_a
     assert "capture" not in schema["properties"]
 
 
-def test_studio_guidance_requests_explicit_invariants_without_inventing_unrequested_ones():
-    from tool.server.studio_director import guidance
-
+def test_studio_guidance_requests_relevant_invariants_not_ritual_fields():
     system = guidance()["system"]
-    assert "changes.project.invariants entry with kind, title and text" in system
-    assert "Do not invent invariants for requests that do not need them" in system
-
+    assert "Invariants when stable recurring facts matter" in system
+    assert "requested Project fields" in system
+    assert "When several pieces are requested, deliver all the useful pieces you can" in system
 
 def test_historical_readiness_records_are_accepted_as_inert_saved_chat_data():
     from tool.server.director_chat_history import _validate_readiness

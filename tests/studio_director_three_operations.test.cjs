@@ -266,29 +266,15 @@ test('Project Write loads a fresh explicit target and saves changed fields witho
   assert.doesNotMatch(project,/showStudioBriefReview\(\)/);
 });
 
-test('structured Director changes merge by complete field, without overwriting unrelated drafts', () => {
-  const state={studioWorkingDraft:{projects:{},scenes:{},newProject:{},newScene:{},sourceRequest:''},
-    sessionDirty:{storyboard:false}};
-  const source=part(chat,'  // A Studio conversation owns unsaved sparse field replacements.',
-    '  function parseStudioChatResponse(raw) {');
-  const merge=new Function('state',source+'return studioMergeWorkingChanges;')(state);
-  assert.equal(merge({project:{concept:'First concept',style:'Warm light'}},
-    {projectId:'p1'}, {kind:'write_project'},'Describe the Project'),true);
-  assert.equal(merge({project:{concept:'Second concept'}},
-    {projectId:'p1'}, {kind:'write_project'},'Change the premise'),true);
-  assert.deepEqual(state.studioWorkingDraft.projects.p1,
-    {concept:'Second concept',style:'Warm light'});
-  assert.equal(merge({scene:{title:'Quiet Ending',prompt:'Complete H3 Prompt'}},
-    {projectId:'p1',sceneId:'s2'}, {kind:'write_scenes'},'Revise Scene 2'),true);
-  assert.equal(merge({scene:{durationSeconds:12}},
-    {projectId:'p1',sceneId:'s2'}, {kind:'write_scenes'},'Make it twelve seconds'),true);
-  assert.deepEqual(state.studioWorkingDraft.scenes.s2,
-    {title:'Quiet Ending',prompt:'Complete H3 Prompt',durationSeconds:12});
-  assert.equal(state.studioWorkingDraft.projects.p1.style,'Warm light');
-  assert.equal(state.studioWorkingDraft.sourceRequest,'Make it twelve seconds');
-  assert.equal(state.sessionDirty.storyboard,true);
+test('ordinary Studio replies never merge Project or Scene fields into saved/unsaved state',()=>{
+  const response=parse(JSON.stringify({changes:{
+    project:{style:'Warm light'},scene:{prompt:'Complete H3 Prompt'}
+  }}));
+  assert.equal(response.changes,null);
+  assert.equal(response.action,null);
+  assert.doesNotMatch(chat,/function studioMergeWorkingChanges\(/);
+  assert.doesNotMatch(chat,/function studioAuthoredWriteActions\(/);
 });
-
 test('ordinary chat retains unexpected content verbatim and does not merge any fields',()=>{
   const raw=JSON.stringify({reply:'A discussion',changes:{scene:{
     prompt:'Unexpected prompt',title:null,durationSeconds:'invalid'}}});
@@ -325,19 +311,13 @@ test('Project revision accepts one full field replacement and preserves unrelate
     'WebCap must expose model material rather than silently sanitizing it');
 });
 
-test('an unbound Scene revision never becomes a new-Scene creation draft', () => {
-  const state={studioWorkingDraft:{projects:{},scenes:{},newProject:{},newScene:{},sourceRequest:''},
-    sessionDirty:{storyboard:false}};
-  const source=part(chat,'  // A Studio conversation owns unsaved sparse field replacements.',
-    '  function parseStudioChatResponse(raw) {');
-  const merge=new Function('state',source+'return studioMergeWorkingChanges;')(state);
-  assert.equal(merge({scene:{prompt:'Complete H3 rewrite'}},{projectId:'p1'},
-    {kind:'write_scenes'},'Revise Scenes 1 and 3'),false);
-  assert.deepEqual(state.studioWorkingDraft.newScene,{});
-  assert.equal(state.sessionDirty.storyboard,false);
+test('unbound chat content cannot initiate an implicit Scene creation',()=>{
+  const response=parse(JSON.stringify({scenes:[{title:'A',prompt:'Unexpected Scene',durationSeconds:8}]}));
+  assert.equal(response.scenes,null);
+  assert.equal(response.action,null);
+  const send=part(chat,'  function sendMessage() {','  function syncPinnedUi() {');
+  assert.doesNotMatch(send,/studioAuthoredWriteActions|studioMergeWorkingChanges|showStudioScenesReview/);
 });
-
-
 test('an explicit Write always authors anew without previous draft-cache shortcuts',()=>{
   const create=part(chat,'    writeNewScene: function (launch) {','    writeSelectedScene: function');
   const revise=part(chat,'    writeSelectedScene: function (launch) {','    makeProposal: function');

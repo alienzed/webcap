@@ -517,7 +517,7 @@
     renderStoryboardAttachmentViewer();
     renderStudioStoryAccess();
     renderStudioOperations();
-    if (studio) window.studioDirectorWorkbench.updateWorkingWrite();
+    // Conversation rendering has no Write draft or readiness side effects.
     syncStudioRevisionUi();
     renderMessages();
     syncControls();

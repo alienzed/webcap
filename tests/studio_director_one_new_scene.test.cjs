@@ -14,6 +14,10 @@ function slice(source, start, end) {
 
 const method = slice(director,
   '    writeNewScene: function (launch) {', '    writeSelectedScene: function (launch) {');
+const conversationHelper = slice(director,
+  '  function studioConversationMessages(messages) {',
+  '  function studioDirectorRequestMessages(');
+
 const studioWorkingFieldChanges = new Function(slice(director,
   '  function studioWorkingFieldChanges(source, names) {',
   '  function studioMergeWorkingChanges(changes, target, action, request) {')+
@@ -59,6 +63,7 @@ test('one new Scene keeps the selected Project and complete brief through a sing
     parseStudioScenesDraft:raw=>JSON.parse(raw),
     console, Promise, JSON, Number, String, Error, encodeURIComponent
   });
+  vm.runInContext(conversationHelper,scope);
   const writer=vm.runInContext('({' + method + '})',scope).writeNewScene;
   await writer.call(scope.window.studioDirectorBridge,launch);
   assert.equal(requested,1);
@@ -94,6 +99,7 @@ test('malformed model duration remains visible in review instead of becoming inv
     parseStudioScenesDraft:raw=>JSON.parse(raw),
     Promise,JSON,Number,String,Error,encodeURIComponent
   });
+  vm.runInContext(conversationHelper,scope);
   const writer=vm.runInContext('({' + method + '})',scope).writeNewScene;
   await writer.call(scope.window.studioDirectorBridge,
     {projectId:'p1',instruction:'Add a twelve-second closing Scene'});
@@ -134,6 +140,7 @@ test('later new Scene sees prior saved Scene for continuity, not leftover workin
     requestJson:async()=>({story}),
     Promise,JSON,Number,String,Error,encodeURIComponent
   });
+  vm.runInContext(conversationHelper,scope);
   const writer=vm.runInContext('({' + method + '})',scope).writeNewScene;
   const result=await writer.call(scope.window.studioDirectorBridge,{
     projectId:'p1',instruction:'Create the second Scene',sequenceIndex:1,directSave:false
@@ -172,6 +179,7 @@ test('missing Prompt retains title and duration as editable draft even on direct
     },
     Promise,JSON,Number,String,Error,encodeURIComponent
   });
+  vm.runInContext(conversationHelper,scope);
   const writer=vm.runInContext('({' + method + '})',scope).writeNewScene;
   const result=await writer.call(scope.window.studioDirectorBridge,{
     projectId:'p1',instruction:brief,authorRequest:brief,directSave:true
@@ -207,6 +215,7 @@ test('missing authored Scene duration is reviewable rather than silently default
     },
     Promise,JSON,Number,String,Error,encodeURIComponent
   });
+  vm.runInContext(conversationHelper,scope);
   const writer=vm.runInContext('({' + method + '})',scope).writeNewScene;
   const result=await writer.call(scope.window.studioDirectorBridge,
     {projectId:'p1',instruction:'Write an eight-second arrival.',directSave:true});
@@ -240,6 +249,7 @@ test('new Scene draft reauthors from fresh Project context when the baseline cha
     },
     requestJson:async()=>({story}),Promise,JSON,Number,String,Error,encodeURIComponent
   });
+  vm.runInContext(conversationHelper,scope);
   const writer=vm.runInContext('({' + method + '})',scope).writeNewScene;
   const launch={projectId:'p1',instruction:'Author an opening Scene',authorRequest:'Author an opening Scene'};
   await writer.call(scope.window.studioDirectorBridge,launch);
@@ -272,6 +282,7 @@ test('manual new Scene launch authors again even when the Project and request ar
     },
     requestJson:async()=>({story}),Promise,JSON,Number,String,Error,encodeURIComponent
   });
+  vm.runInContext(conversationHelper,scope);
   const writer=vm.runInContext('({' + method + '})',scope).writeNewScene;
   const launch={projectId:'p1',instruction:'Author the opening',forceAuthor:true};
   await writer.call(scope.window.studioDirectorBridge,launch);
@@ -307,6 +318,7 @@ test('new Scene drafts cannot leak across Projects with identical author request
     requestJson:async url=>({story:url.includes('p2')?second:first}),
     Promise,JSON,Number,String,Error,encodeURIComponent
   });
+  vm.runInContext(conversationHelper,scope);
   const writer=vm.runInContext('({' + method + '})',scope).writeNewScene;
   const instruction='Write an arrival Scene';
   await writer.call(scope.window.studioDirectorBridge,{projectId:'p1',instruction});
@@ -339,6 +351,7 @@ test('actual multi-Scene output is retained even when the request mentioned one'
     parseStudioScenesDraft:raw=>JSON.parse(raw),
     Promise, JSON, Number, String, Error, encodeURIComponent
   });
+  vm.runInContext(conversationHelper,scope);
   const writer=vm.runInContext('({' + method + '})',scope).writeNewScene;
   const result=await writer.call(scope.window.studioDirectorBridge,
     {projectId:'p1',instruction:'Add exactly one Scene'});
@@ -389,6 +402,7 @@ test('invalid returned duration retains review and does not invent a successful 
     },
     parseStudioScenesDraft:raw=>JSON.parse(raw),Promise,JSON,String,Number,Error,encodeURIComponent
   });
+  vm.runInContext(conversationHelper,scope);
   const writer=vm.runInContext('({' + method + '})',scope).writeNewScene;
   const result=await writer.call(scope.window.studioDirectorBridge,{
     projectId:'p1',instruction:'Create a closing Scene lasting 12 seconds',
@@ -431,6 +445,7 @@ test('two eight-second Scenes request retains one actually authored Scene withou
     },
     Promise,JSON,Number,String,Error,encodeURIComponent
   });
+  vm.runInContext(conversationHelper,scope);
   const writer=vm.runInContext('({' + method + '})',scope).writeNewScene;
   const result=await writer.call(scope.window.studioDirectorBridge,{
     projectId:'p1',instruction:'Create two eight-second Scenes',

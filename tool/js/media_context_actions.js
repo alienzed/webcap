@@ -632,39 +632,44 @@ function buildMediaContextMenuActions(mediaItem, key) {
           });
       }
     });
+    function convertVideoToFps(fps) {
+      if (!isFinite(fps) || fps <= 0) {
+        setStatus('FPS must be a finite number greater than zero.');
+        return;
+      }
+      setStatus('Converting video to ' + fps + ' FPS...');
+      fetch('/media/convert_fps', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ folder: state.folder, fileName: mediaItem.fileName, fps: fps })
+      })
+        .then(function (resp) { return resp.json().then(function (data) { return { status: resp.status, data: data }; }); })
+        .then(function (res) {
+          if (res.status === 200 && res.data && res.data.ok) {
+            setStatus('Video converted to ' + res.data.fps + ' FPS.');
+            markMediaMutated(mediaItem.key, 'best_effort');
+            bumpMediaCacheBustToken(mediaItem.key);
+            saveFolderStateForCurrentRoot();
+            refreshMediaResolutionCache();
+            selectPathMedia(mediaItem).catch(function () {});
+          } else {
+            setStatus((res.data && res.data.error) ? res.data.error : 'FPS conversion failed');
+          }
+        })
+        .catch(function (err) {
+          setStatus('FPS conversion failed: ' + (err && err.message ? err.message : err));
+        });
+    }
+    actions.push({
+      label: 'Convert to 24 FPS',
+      run: function () { convertVideoToFps(24); }
+    });
     actions.push({
       label: 'Convert to...',
       run: function () {
         var fpsText = prompt('Convert video to FPS', '');
         if (fpsText === null) return;
-        var fps = Number(String(fpsText).trim());
-        if (!isFinite(fps) || fps <= 0) {
-          setStatus('FPS must be a finite number greater than zero.');
-          return;
-        }
-        if (!confirm('Convert this video to ' + fps + ' FPS?\n\nThis will overwrite the file and may discard or duplicate frames.')) return;
-        setStatus('Converting video to ' + fps + ' FPS...');
-        fetch('/media/convert_fps', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ folder: state.folder, fileName: mediaItem.fileName, fps: fps })
-        })
-          .then(function (resp) { return resp.json().then(function (data) { return { status: resp.status, data: data }; }); })
-          .then(function (res) {
-            if (res.status === 200 && res.data && res.data.ok) {
-              setStatus('Video converted to ' + res.data.fps + ' FPS.');
-              markMediaMutated(mediaItem.key, 'best_effort');
-              bumpMediaCacheBustToken(mediaItem.key);
-              saveFolderStateForCurrentRoot();
-              refreshMediaResolutionCache();
-              selectPathMedia(mediaItem).catch(function () {});
-            } else {
-              setStatus((res.data && res.data.error) ? res.data.error : 'FPS conversion failed');
-            }
-          })
-          .catch(function (err) {
-            setStatus('FPS conversion failed: ' + (err && err.message ? err.message : err));
-          });
+        convertVideoToFps(Number(String(fpsText).trim()));
       }
     });
     actions.push({
@@ -680,7 +685,7 @@ function buildMediaContextMenuActions(mediaItem, key) {
   var editLabels = new Set([
     'Blur Background', 'Remove Background', 'Deface', 'Deface...',
     'Rotate Left 90 deg', 'Rotate Right 90 deg', 'Flip Vertical',
-    'Flip Horizontal', 'Convert to PNG', 'Convert to...'
+    'Flip Horizontal', 'Convert to PNG', 'Convert to 24 FPS', 'Convert to...'
   ]);
   actions.forEach(function (action) {
     if (action && editLabels.has(action.label)) action.group = 'Edit Media';

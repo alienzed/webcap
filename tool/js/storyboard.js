@@ -547,8 +547,6 @@
         var savedScene = canonical && canonical.scenes ? canonical.scenes[sceneId] : null;
         var currentScene = storyState.story.scenes ? storyState.story.scenes[sceneId] : null;
         if (savedScene && currentScene) {
-          currentScene.entryState = savedScene.entryState;
-          currentScene.exitState = savedScene.exitState;
           currentScene.prompt = savedScene.prompt;
           currentScene.previousPrompt = savedScene.previousPrompt;
           currentScene.previousRevision = savedScene.previousRevision || null;
@@ -558,12 +556,8 @@
           currentScene.durationSeconds = savedScene.durationSeconds;
           currentScene.updatedAt = savedScene.updatedAt;
           var currentRoot = sceneElement(sceneId);
-          var currentEntry = currentRoot && currentRoot.querySelector('[data-scene-field="entryState"]');
-          var currentExit = currentRoot && currentRoot.querySelector('[data-scene-field="exitState"]');
           var currentPrompt = currentRoot && currentRoot.querySelector('[data-scene-field="prompt"]');
           var currentDuration = currentRoot && currentRoot.querySelector('[data-scene-field="durationSeconds"]');
-          if (currentEntry) currentEntry.value = savedScene.entryState || '';
-          if (currentExit) currentExit.value = savedScene.exitState || '';
           if (currentPrompt) currentPrompt.value = savedScene.prompt || '';
           if (currentDuration) currentDuration.value = savedScene.durationSeconds == null ? '' : savedScene.durationSeconds;
           if (operation === 'refine_prompt' && job.clearCorrection !== false) {
@@ -1516,12 +1510,8 @@
       if (!storyState.story || String(storyState.story.id || '') !== String(storyId)) return;
       storyState.story.scenes[sceneId] = payload.scene;
       var root = sceneElement(sceneId);
-      var entry = root && root.querySelector('[data-scene-field="entryState"]');
-      var exit = root && root.querySelector('[data-scene-field="exitState"]');
       var prompt = root && root.querySelector('[data-scene-field="prompt"]');
       var duration = root && root.querySelector('[data-scene-field="durationSeconds"]');
-      if (entry) entry.value = payload.scene.entryState || '';
-      if (exit) exit.value = payload.scene.exitState || '';
       if (prompt) prompt.value = payload.scene.prompt || '';
       if (duration) duration.value = payload.scene.durationSeconds == null ? '' : payload.scene.durationSeconds;
       syncSceneDirectorRestore(sceneId);

@@ -8,10 +8,32 @@
   var toolbar = null;
   var originalPaddingBottom = '';
   var showingPreview = false;
+  var applyingHistoryValue = false;
 
   // Explicit field types, shared by Settings and the live editor. New textareas
   // have no revision history until deliberately classified here.
   var fieldTypes = [
+    {
+      "group": "Studio — Project",
+      "id": "project.title",
+      "label": "Project title",
+      "selector": "#storyboard-story-title",
+      "enabled": true
+    },
+    {
+      "group": "Studio — Scenes",
+      "id": "scene.title",
+      "label": "Scene titles",
+      "selector": "input[data-scene-field=\"title\"]",
+      "enabled": true
+    },
+    {
+      "group": "Studio — Scenes",
+      "id": "scene.duration",
+      "label": "Scene durations",
+      "selector": "input[data-scene-field=\"durationSeconds\"]",
+      "enabled": true
+    },
     {
       "group": "Studio — Project",
       "id": "project.overview",
@@ -368,8 +390,9 @@
       project = String(nav && nav.projectId || '');
     }
     if (scene && scene.dataset && scene.dataset.sceneId && project &&
-        field.dataset.sceneField === 'prompt')
-      return 'project:' + project + ':scene:' + scene.dataset.sceneId + ':field:prompt';
+        field.dataset.sceneField)
+      return 'project:' + project + ':scene:' + scene.dataset.sceneId +
+        ':field:' + field.dataset.sceneField;
     var marker = field.id || field.getAttribute('name') ||
       (field.dataset.sceneField ? 'scene-field:' + field.dataset.sceneField :
        field.dataset.storyGuideline ? 'story-guideline:' + field.dataset.storyGuideline :
@@ -462,7 +485,7 @@
     var host = field.closest('dialog[open]') || document.body;
     if (toolbar.parentNode !== host) host.appendChild(toolbar);
     var h = histories.get(key);
-    if (h && h.versions[h.versions.length - 1] !== field.value) schedule(key,field.value);
+    if (h && h.versions[h.index] !== field.value) schedule(key,field.value);
     draw();
   }
 
@@ -471,18 +494,35 @@
     if (identity(active.field) !== active.key) attach(active.field);
     clearTimeout(timers.get(active.key));
     timers.delete(active.key);
-    if (!showingPreview) {
-      capture(active.key,active.field.value);
-      active.live = active.field.value;
-    }
     var h = histories.get(active.key);
+    if (!h) return;
+    if (h.versions[h.index] !== active.field.value) {
+      capture(active.key,active.field.value);
+      h = histories.get(active.key);
+    }
     var next = h.index + direction;
     if (next < 0 || next >= h.versions.length) {draw();return;}
     h.index = next;
     active.field.value = h.versions[next];
-    showingPreview = h.index !== h.versions.length-1;
-    if (!showingPreview) active.live = active.field.value;
+    active.live = active.field.value;
+    showingPreview = false;
+    // This is a real editor change, not a transient preview. Let the existing
+    // editor autosave it; suppress only our own duplicate history listener.
+    applyingHistoryValue = true;
+    try {active.field.dispatchEvent(new Event('input',{bubbles:true}));}
+    finally {applyingHistoryValue = false;}
     draw();
+  }
+
+  function recordFieldChange(key, before, after) {
+    if (!key || before === after) return;
+    capture(key,before);
+    capture(key,after);
+    if (active && active.key === key) {
+      showingPreview = false;
+      active.live = String(after == null ? '' : after);
+      draw();
+    }
   }
 
   function initialize() {
@@ -501,7 +541,7 @@
       if (prev || next) step(prev ? -1 : 1);
     });
     document.addEventListener('focusin',function (event) {
-      if (event.target.matches && event.target.matches('textarea') && enabledFor(event.target)) attach(event.target);
+      if (event.target.matches && event.target.matches('textarea, input[type="text"], input[type="number"]') && enabledFor(event.target)) attach(event.target);
       else if (!toolbar.contains(event.target)) detach();
     });
     document.addEventListener('focusout',function (event) {
@@ -513,7 +553,7 @@
       if (active && event.target === active.field && showingPreview) restorePreview();
     },true);
     document.addEventListener('input',function (event) {
-      if (!active || event.target !== active.field) return;
+      if (!active || event.target !== active.field || applyingHistoryValue) return;
       if (identity(event.target) !== active.key) attach(event.target);
       showingPreview = false;
       active.live = active.field.value;
@@ -524,7 +564,7 @@
     renderSettings();
   }
 
-  window.webcapTextareaRevisions = {identity:identity,capture:capture,history:function (key) {return histories.get(key);}, fieldTypes:fieldTypes, enabledFor:enabledFor, setEnabled:setEnabled, setMasterEnabled:setMasterEnabled, renderSettings:renderSettings};
+  window.webcapTextareaRevisions = {identity:identity,capture:capture,recordFieldChange:recordFieldChange,history:function (key) {return histories.get(key);}, fieldTypes:fieldTypes, enabledFor:enabledFor, setEnabled:setEnabled, setMasterEnabled:setMasterEnabled, renderSettings:renderSettings};
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded',initialize);
   else initialize();
 })();

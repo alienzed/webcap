@@ -357,10 +357,9 @@ def test_studio_project_extraction_schema_is_bounded(monkeypatch):
     assert result.status_code == 202
     schema = captured["contract"]["response_schema"]
     assert schema["additionalProperties"] is False
-    assert set(schema["required"]) == {"title", "concept", "style", "invariants", "rationale"}
+    assert set(schema["required"]) == {"title", "concept", "style", "invariants"}
     assert schema["properties"]["invariants"]["maxItems"] == 30
-    assert "initialScenes" in schema["properties"]
-    assert schema["properties"]["initialScenes"]["maxItems"] == 32
+    assert "initialScenes" not in schema["properties"]
     assert "firstScenes" not in schema["properties"]
 
 

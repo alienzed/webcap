@@ -451,7 +451,14 @@ def _advance_queue():
         if provider_runtime_pending and not _reconcile_live_provider_runtime_holds():
             return None
 
-        if snapshot.get("paused") or snapshot.get("activeJobId"):
+        if snapshot.get("paused"):
+            # Pausing dispatch must not strand ownership retained between
+            # foreground jobs. A live provider hold was reconciled above;
+            # an active claimed job will release at its normal boundary.
+            if not snapshot.get("activeJobId") and execution_resource_owner() == GPU_RESERVATION_OWNER:
+                _release_gpu()
+            return None
+        if snapshot.get("activeJobId"):
             return None
 
         jobs = snapshot.get("jobs", [])
@@ -655,7 +662,9 @@ def _monitor_has_work():
         if _provider_runtime_holds:
             return True
     if snapshot.get("paused"):
-        return False
+        # Keep the monitor alive for one more pass if a pause races with
+        # the post-job sticky-ownership decision.
+        return execution_resource_owner() == GPU_RESERVATION_OWNER
     drain_backlog = _backlog_drain_enabled.is_set()
     return any(
         str(job.get("status") or "") == "queued"
@@ -1082,6 +1091,9 @@ def action(operation, job_id="", direction="", position=None):
         return {"job": _job_view(execution_request_stop(job_id, requested_action="backlog"))}
     if operation == "pause_queue":
         execution_pause_lane(EXECUTION_LANE)
+        # Wake the normal dispatcher to reconcile idle ownership without
+        # blocking this action on a possibly long-running active render.
+        _ensure_monitor_started()
         return {"queue": snapshot()}
     if operation == "resume_queue":
         # Explicit Resume also clears execution-error pauses.

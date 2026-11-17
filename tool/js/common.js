@@ -465,8 +465,23 @@ function focusFirstModalTextField(modalEl) {
 }
 
 var workspaceWorkbenchRefreshFrame = 0;
+var workspaceWorkbenchRefreshAfterLoad = false;
 
 function requestWorkspaceWorkbenchRefresh() {
+  // This shared script loads before the item details and focused-annotation
+  // scripts. A frame scheduled during HTML parsing can run before those
+  // required globals exist. Defer the actual refresh until the initial
+  // document and all classic feature scripts have finished loading.
+  if (document.readyState === 'loading') {
+    if (!workspaceWorkbenchRefreshAfterLoad) {
+      workspaceWorkbenchRefreshAfterLoad = true;
+      document.addEventListener('DOMContentLoaded', function () {
+        workspaceWorkbenchRefreshAfterLoad = false;
+        requestWorkspaceWorkbenchRefresh();
+      }, {once:true});
+    }
+    return;
+  }
   if (workspaceWorkbenchRefreshFrame) return;
   var scheduleFrame = window.requestAnimationFrame || function (callback) {
     return setTimeout(callback, 0);

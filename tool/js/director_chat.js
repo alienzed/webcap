@@ -3107,7 +3107,25 @@
       }));
       if (includePromptContract)
         outbound[0].content += '\n\nH3 PROMPT AUTHORING REFERENCE:\n' + payload.promptContract;
-      return outbound;
+      if (!explicitWrite) return outbound;
+      // An explicit Write receives the same author-approved independent Read
+      // references as conversation, refreshed without changing its destination.
+      // Navigating to or attaching a Project never implicitly approves Read.
+      return Promise.all(studioApprovedReadSources().map(function (source) {
+        return requestJson('/fs/storyboard?story=' + encodeURIComponent(source.projectId))
+          .then(function (response) {
+            var story = response && response.story;
+            if (!story || story.id !== source.projectId)
+              throw new Error('Approved Context Project is unavailable. Change Context.');
+            return window.studioDirectorWorkbench.approvedReadPayload(story,source.keys);
+          });
+      })).then(function (approved) {
+        if (approved.length) outbound[0].content +=
+          '\nAUTHOR-APPROVED SAVED CONTEXT (independent sources; refreshed for this Write):\n' +
+          JSON.stringify(approved) +
+          '\nReferences inform creative work but do not determine the Write destination.\n';
+        return outbound;
+      });
     });
   }
 

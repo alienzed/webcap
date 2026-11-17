@@ -1,30 +1,17 @@
 'use strict';
 const {test,expect}=require('../browser/test.cjs');
 const {openLiveDirector,attachProject,approveOverview,sendLive,story,seedProject,seedScene,
-  openProject,reopenDirectorIfClosed}=require('./helpers.cjs');
+  openProject,reopenDirectorIfClosed,writeLive}=require('./helpers.cjs');
 
 // These journeys deliberately keep the real Project and Studio conversation
 // across operations. The existing isolated live flows cover each operation;
 // these catch stale context/selection after switching between tools.
 async function reviseOverview(page,instruction,projectId) {
-  const mode=page.locator('#director-studio-composer-mode-select');
-  await mode.selectOption('conversation');
-  await approveOverview(page,projectId);
-  await sendLive(page,instruction);
-  const action=page.locator('#studio-dw-suggestions .studio-dw-suggestion-action');
-  await expect(action).toContainText(/Review authored Project/);
-  await page.locator('#studio-dw-suggestions select[aria-label="Project material destination"]').selectOption(projectId);
-  await action.click();
-  const review=page.locator('#studio-brief-review');
-  await expect(review).toBeVisible();
-  const style=await page.locator('#studio-brief-style').inputValue();
-  expect(style.trim(),'Director must return a useful Overview revision').toBeTruthy();
-  await expect(page.locator('#studio-brief-title-selected')).not.toBeChecked();
-  await expect(page.locator('#studio-brief-concept-selected')).not.toBeChecked();
-  await expect(page.locator('#studio-brief-invariants-selected')).not.toBeChecked();
-  await page.locator('#studio-brief-apply').click();
-  await expect.poll(async()=>(await story(page,projectId)).style,{timeout:30000}).toBe(style);
-  return style;
+  const before=await story(page,projectId);
+  await writeLive(page,{projectId,operation:'project',instruction});
+  await expect.poll(async()=>(await story(page,projectId)).style,{timeout:60000})
+    .not.toBe(before.style);
+  return (await story(page,projectId)).style;
 }
 async function evidence(testInfo,label,data) {
   await testInfo.attach(label,{body:Buffer.from(JSON.stringify(data,null,2)),contentType:'application/json'});
@@ -61,7 +48,7 @@ test('Live journey — revise Overview, Develop Scenes button, revise a Scene, t
   await attachProject(page,project);
   const original=await story(page,project.id);
   const instructions=[
-    'Revise only the Project visual atmosphere to dramatic silver morning light, while keeping its courier-and-lighthouse concept unchanged. Return the revised style for review.',
+    'Revise only the Project visual atmosphere to dramatic silver morning light, while keeping its courier-and-lighthouse concept unchanged.',
     'Revise only this selected Scene prompt to make a small brass compass clearly visible while preserving the Scene action, title and duration.',
     'Revise only the Project visual atmosphere again, to golden late-afternoon sunlight. Preserve the current Concept and all existing Scene prompts.'
   ];

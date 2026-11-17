@@ -39,7 +39,7 @@ test('Read and the optional coherence utility stay separate from creative Write'
 });
 
 test('ordinary replies prioritize short exchanges rather than full assessments', () => {
-  assert.match(chat, /STUDIO CONVERSATION DELIVERY: Respond naturally/);
+  assert.match(chat, /STUDIO CONVERSATION DELIVERY: Answer the author in the JSON reply field on every turn/);
   assert.match(backend, /CONVERSATION: Respond naturally and concisely/);
   assert.match(backend, /CREATIVE WORK: When asked to create or revise material/);
 });

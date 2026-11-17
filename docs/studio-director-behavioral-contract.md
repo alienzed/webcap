@@ -154,3 +154,10 @@ These are deterministic application responsibilities, not tests of whether the s
 - Session serialization must preserve reviewed-action identity, completed status, edited review values, and the per-draft origin/baseline metadata already used by the frontend. Dropping any of them at the server boundary breaks recovery even if the current DOM seems correct.
 
 Targeted deterministic tests exercise the routing, partial-output retry, editable review lifecycle, and actual conversation-file round-trip. The live-model acceptance suite remains separate and cannot be inferred from those checks.
+
+
+## Real-model discussion reply contract (2026-11-17)
+
+A Studio conversation turn must answer the author's immediate question as a creative partner. The model-facing studio_chat response schema now **requests** a nonempty reply as its one universal field; optional changes and scenes carry independently authored material alongside that response. The discussion instruction explicitly maps alternative staging ideas, recommendations and reasons into reply. This is an output-format request, **not** a new WebCap acceptance gate: the frontend still shows plain prose and retains actual structured creative fields when a model fails to provide the requested wrapper.
+
+The real-model creative-partner test retains the observed outbound request, response schema, provider finish reason and full raw result. If a model returns structured JSON without reply, the assertion reports actual keys and the raw result rather than guessing whether its content was a useful recommendation. Real-model authoring reliability remains an empirical, per-model property. Do not weaken the test by treating an arbitrary JSON object or an action promise as evidence of creative discussion.

@@ -1416,6 +1416,13 @@
       var readReceipt = studioReply && previous && previous.role === 'user' &&
         previous.content.includes('[WEBCAP EXPLICIT READ]');
       var visibleText = studioReply ? studioReplyText(message.content) : message.content;
+      // Older saved conversations may contain the raw structured JSON as the
+      // visible chat message. Re-render that material as a factual draft
+      // summary without rewriting history or losing the original response.
+      if (studioReply && message.rawResponse &&
+          String(message.content || '').trim() === String(message.rawResponse).trim()) {
+        visibleText = studioReplyText(parseStudioChatResponse(message.rawResponse).reply);
+      }
       if (studioReply && !visibleText.trim() && !readReceipt)
         return;
       var row = document.createElement('div');
@@ -3265,8 +3272,9 @@
       // Do not leak the selected editor's creative content through automatic navigation context.
       return studioDirectorRequestMessages(messages, true, false,
         {projectId:'',projectTitle:'',sceneId:'',sceneNumber:0,sceneOrder:[]}).then(function (outbound) {
-        outbound[0].content += '\n\nSTUDIO CONVERSATION DELIVERY: Respond naturally to the author. ' +
-          'When there is useful Project or Scene material ready, deliver the actual content alongside the reply. ' +
+        outbound[0].content += '\n\nSTUDIO CONVERSATION DELIVERY: Answer the author in the JSON reply field on every turn. ' +
+          'For creative discussion, give concrete alternatives, your recommendation and why in reply. ' +
+          'When creating or revising Project or Scene material, include the actual authored fields alongside reply. ' +
           'Use changes.project for authored Project field values; changes.scene for changes to an existing Scene; ' +
           'and scenes for new Scene drafts. A creative Scene revision includes the complete replacement H3 prompt. ' +
           'Include every useful field or Scene that is ready, even when another part needs a question. ' +
@@ -3374,10 +3382,50 @@
     // prerequisite for a useful conversational answer.
     if (!value || typeof value !== 'object' || Array.isArray(value))
       return {reply:text,action:null,changes:null};
-    // A missing conversational wrapper must not discard independently usable
-    // structured fields. Keep the raw answer visible rather than inventing prose.
+    // The model may return useful authored fields without a conversational
+    // reply. Display a short factual inventory of what was actually authored,
+    // not raw JSON masquerading as creative conversation. The original result
+    // remains available in Director I/O and for independent Review actions.
     var reply = typeof value.reply === 'string' && value.reply.trim()
-      ? value.reply : text;
+      ? value.reply : '';
+    if (!reply) {
+      var summaries = [];
+      var changes = value.changes && typeof value.changes === 'object' ? value.changes : {};
+      function summaryFields(record, permitted) {
+        if (!record || typeof record !== 'object' || Array.isArray(record)) return [];
+        return permitted.filter(function (field) {
+          var current = record[field];
+          return typeof current === 'string' && !!current.trim() ||
+            field === 'invariants' && Array.isArray(current) && !!current.length ||
+            field === 'durationSeconds' && typeof current === 'number' && Number.isFinite(current);
+        });
+      }
+      function draftLabel(kind, record, permitted) {
+        var authored = summaryFields(record,permitted);
+        if (!authored.length) return;
+        var name = record && typeof record.title === 'string' && record.title.trim()
+          ? ' “' + record.title.trim().slice(0,100) + '”' : '';
+        var labels = {style:'visual style',prompt:'H3 prompt',durationSeconds:'duration',
+          invariants:'invariants'};
+        summaries.push(kind + name + ' — ' + authored.map(function (field) {
+          return labels[field] || field;
+        }).join(', ') + '.');
+      }
+      draftLabel('Project draft',changes.project,['title','concept','style','invariants']);
+      draftLabel('Scene revision draft',changes.scene,['title','prompt','durationSeconds']);
+      var scenes = Array.isArray(value.scenes) ? value.scenes.filter(function (scene) {
+        return !!summaryFields(scene,['title','prompt','durationSeconds']).length;
+      }) : [];
+      if (scenes.length) {
+        var sceneNames = scenes.slice(0,3).map(function (scene) {
+          return typeof scene.title === 'string' && scene.title.trim() ?
+            '“' + scene.title.trim().slice(0,80) + '”' : '';
+        }).filter(Boolean);
+        summaries.push(scenes.length + ' new Scene draft' + (scenes.length === 1 ? '' : 's') +
+          (sceneNames.length ? ': ' + sceneNames.join(', ') : '') + '.');
+      }
+      reply = summaries.length ? summaries.join(' ') + ' Review the proposed material below.' : text;
+    }
     var action = value.action;
     if (!action || typeof action !== 'object' || Array.isArray(action) ||
         !['create_project','write_project','create_scene','write_scenes'].includes(action.kind) ||

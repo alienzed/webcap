@@ -139,7 +139,15 @@ test('LIVE creative partner — discuss staging, make a recommendation, then aut
     outbound:observation.requests[0],raw:first.receipt.raw,parsed:first.parsed});
   expect(observation.requests).toHaveLength(1);
   expect(observation.requests[0].operation).toBe('studio_chat');
-  expect(typeof first.parsed.reply,'Director did not discuss the creative decision').toBe('string');
+  await expect.poll(()=>observation.schemas.length).toBe(1);
+  expect(observation.schemas[0].required,
+    'WebCap must request an author-facing answer, not merely optional structured fields')
+    .toContain('reply');
+  expect(typeof first.parsed.reply,
+    'Director did not discuss the creative decision in the JSON reply field. '+
+    'Actual response keys: '+Object.keys(first.parsed||{}).join(', ')+
+    '; finishReason: '+String(first.receipt.finishReason||'unreported')+
+    '\nRaw model response:\n'+first.receipt.raw.slice(0,5000)).toBe('string');
   expect(first.parsed.reply.trim().length,'Creative recommendation was not substantive')
     .toBeGreaterThan(75);
   expect(first.parsed.reply).toMatch(/crane|paper|porter|station|door/i);

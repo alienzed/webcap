@@ -77,10 +77,16 @@ def chat_response_schema():
     return {
         "type": "object",
         "additionalProperties": False,
-        "required": [],
+        # Every Studio chat turn addresses the author first. Creative fields
+        # remain independent extras; parsing still accepts useful incomplete
+        # model output when a provider ignores the requested response shape.
+        "required": ["reply"],
         "minProperties": 1,
         "properties": {
-            "reply": {"type": "string"},
+            "reply": {
+                "type": "string", "minLength": 1,
+                "description": "Direct answer to the author's current message. For discussion, include the creative options, recommendation and reasoning here. If also authoring Project/Scene fields, retain the response to the author here.",
+            },
             "changes": {
                 "type": "object", "additionalProperties": False,
                 "properties": {

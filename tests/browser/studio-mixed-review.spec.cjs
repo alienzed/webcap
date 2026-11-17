@@ -3,6 +3,27 @@ const {test,expect}=require('./test.cjs');
 const {resetModel,queueModel,observedModels,openDirector,say,story,stories,
   seedProject,seedScene,openProject,reopenDirectorIfClosed,ensureAttachedProject}=require('./helpers.cjs');
 
+test('usable Project draft without reply has a readable summary and remains reviewable',async({page,request})=>{
+  await resetModel(request);
+  await openDirector(page);
+  const draft={title:'Kitten Chaos',concept:'A succession of playful kitten mishaps.',
+    style:'Warm, soft-focus natural light.',invariants:[]};
+  await queueModel(request,{changes:{project:draft}});
+  await say(page,"Let's make a Project about cute kittens doing silly things.");
+  const reply=page.locator('#director-chat-messages .director-chat-message-assistant').last()
+    .locator('.director-chat-message-body');
+  await expect(reply).toContainText('Project draft “Kitten Chaos”');
+  await expect(reply).toContainText('Review the proposed material below.');
+  await expect(reply).not.toContainText('"changes":');
+  const action=page.locator('#studio-dw-suggestions .studio-dw-suggestion-action');
+  await expect(action).toContainText('Review authored Project');
+  await action.click();
+  await expect(page.locator('#studio-project-review')).toBeVisible();
+  await expect(page.locator('#studio-project-title')).toHaveValue('Kitten Chaos');
+  await expect(page.locator('#studio-project-concept')).toHaveValue(draft.concept);
+  expect((await observedModels(request)).calls).toHaveLength(1);
+});
+
 test('mixed Director response keeps both Project and Scene drafts independently reviewable',async({page,request})=>{
   await resetModel(request);
   const project=await seedProject(page,'Mixed Review Source '+Date.now(),{

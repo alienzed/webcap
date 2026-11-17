@@ -5,6 +5,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 const chat = fs.readFileSync(path.join(__dirname,'../tool/js/director_chat.js'),'utf8');
 const workbench = fs.readFileSync(path.join(__dirname,'../tool/js/studio_director_workbench.js'),'utf8');
+const html = fs.readFileSync(path.join(__dirname,'../tool/tool.html'),'utf8');
 function part(source,start,end) {
   const a=source.indexOf(start),b=source.indexOf(end,a+start.length);
   assert.ok(a>=0 && b>a,start);

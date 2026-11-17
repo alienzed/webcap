@@ -107,6 +107,79 @@ def test_complete_response_metadata_is_assistant_only(sessions, message):
         })
     assert history.open_chat(chat["id"])["revision"] == 0
 
+def test_mixed_director_deliverables_and_edited_scene_review_survive_session_reload(sessions):
+    chat = history.create_chat("storyboard")
+    raw = json.dumps({
+        "reply": "The visual style should be colder. Here is the new scene.",
+        "changes": {"project": {"style": "Moonlit blue haze"}},
+        "scenes": [{"title": "Night platform",
+                    "prompt": "Complete H3 scene with the approaching train.",
+                    "durationSeconds": 8}],
+    })
+    project_action = {
+        "kind": "create_project", "actionKey": "alternate-0",
+        "instruction": "Develop the project and scenes", "request": "Develop the project and scenes",
+        "projectId": "project-1", "fields": ["style"],
+        "authoredFields": {"style": "Moonlit blue haze"},
+        "completed": False,
+    }
+    scene_action = {
+        "kind": "write_scenes", "actionKey": "primary",
+        "instruction": "Develop the project and scenes", "request": "Develop the project and scenes",
+        "projectId": "project-1", "scene": {"projectId": "project-1", "sceneId": "scene-1"},
+        "fields": ["prompt"], "completed": False,
+        "reviewDraft": {
+            "projectId": "project-1", "sceneId": "scene-1",
+            "values": {"prompt": "My edited H3 Scene prompt.", "durationSeconds": "10"},
+        },
+    }
+    saved = history.save_chat(chat["id"], {
+        "expectedRevision": 0, "title": "Mixed creative work",
+        "messages": [{"role": "assistant", "content": "Here is the work.",
+                      "rawResponse": raw, "writeAction": scene_action,
+                      "otherWriteActions": [project_action]}],
+        "workingDraft": {
+            "projects": {"project-1": {"style": "Unsaved warmer look"}},
+            "scenes": {"scene-1": {"title": "Unsaved title"}},
+            "newProject": {}, "newScene": {},
+            "draftOrigins": {
+                "projects": {"project-1": {
+                    "request": "Revise atmosphere",
+                    "baseline": '{"style":"Original"}', "fields": ["style"]}},
+                "scenes": {"scene-1": {
+                    "projectId": "project-1", "request": "Revise the Scene",
+                    "baseline": '{"prompt":"Original"}', "fields": ["title"],
+                    "timingNeedsReview": False}},
+                "newProject": None, "newScene": None,
+            },
+        },
+    })
+    assert saved["revision"] == 1
+    restored = history.open_chat(chat["id"])
+    reply = restored["messages"][0]
+    assert reply["rawResponse"] == raw
+    assert reply["writeAction"]["reviewDraft"]["values"]["prompt"] == "My edited H3 Scene prompt."
+    assert reply["writeAction"]["actionKey"] == "primary"
+    assert reply["otherWriteActions"][0]["kind"] == "create_project"
+    assert reply["otherWriteActions"][0]["completed"] is False
+    assert "authoredFields" not in reply["otherWriteActions"][0], (
+        "model-authored fields come from rawResponse, not a second cached authority")
+    assert restored["workingDraft"]["draftOrigins"]["scenes"]["scene-1"]["fields"] == ["title"]
+    assert restored["workingDraft"]["draftOrigins"]["projects"]["project-1"]["baseline"] == (
+        '{"style":"Original"}')
+    assert restored["workingDraft"]["draftOrigins"]["scenes"]["scene-1"]["projectId"] == "project-1"
+
+    scene_action["completed"] = True
+    revision = history.save_chat(chat["id"], {
+        "expectedRevision": 1, "title": "Mixed creative work",
+        "messages": [{**reply, "writeAction": {**reply["writeAction"], "completed": True}}],
+        "workingDraft": restored["workingDraft"],
+    })
+    assert revision["messages"][0]["writeAction"]["completed"] is True
+    assert revision["messages"][0]["otherWriteActions"][0]["completed"] is False, (
+        "saving one deliverable must not complete or hide the other")
+
+
 def test_multiple_independent_conversations_and_active_history(sessions):
     first = history.create_chat("chat")
     storyboard = history.create_chat("storyboard")

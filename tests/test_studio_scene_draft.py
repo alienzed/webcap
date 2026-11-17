@@ -126,9 +126,8 @@ def test_new_scene_response_schemas_require_prompt_not_intent(monkeypatch):
         assert response.status_code == 202, response.json
     assert captured["studio_scene_field_draft"]["required"] == ["prompt"]
     assert captured["studio_scene_field_draft"]["properties"]["prompt"]["minLength"] == 1
-    initial = captured["studio_project_draft"]["properties"]["initialScenes"]["items"]
-    assert initial["required"] == ["title", "brief", "durationSeconds"]
-    assert "prompt" not in initial["properties"]
+    assert "initialScenes" not in captured["studio_project_draft"]["properties"]
+    assert "rationale" not in captured["studio_project_draft"]["properties"]
     assert "summary" not in captured["studio_scene_field_draft"]["properties"]
 
 def test_studio_brief_apply_is_field_scoped_and_undoable(isolated_storyboard):
@@ -352,10 +351,10 @@ def test_studio_project_extraction_schema_is_bounded(monkeypatch):
     assert result.status_code == 202
     schema = captured["contract"]["response_schema"]
     assert schema["additionalProperties"] is False
-    assert set(schema["required"]) == {"title", "concept", "style", "invariants", "rationale"}
+    assert set(schema["required"]) == {"title", "concept", "style", "invariants"}
     assert schema["properties"]["invariants"]["maxItems"] == 30
-    assert "initialScenes" in schema["properties"]
-    assert schema["properties"]["initialScenes"]["maxItems"] == 32
+    assert "initialScenes" not in schema["properties"]
+    assert "rationale" not in schema["properties"]
     assert "firstScenes" not in schema["properties"]
 
 

@@ -338,14 +338,15 @@ test('an unbound Scene revision never becomes a new-Scene creation draft', () =>
 });
 
 
-test('draft reuse is based on exact authored provenance, not linguistic heuristics',()=>{
-  assert.doesNotMatch(chat,/function studioRequestAppliesPreparedMaterial\(/);
-  assert.match(chat,/draftOrigin\.projectId === storyId/);
-  assert.match(chat,/draftOrigin\.baseline === baseline/);
-  assert.match(chat,/draftOrigins\.newScene/);
-  assert.match(chat,/sourceMessageIndex/);
-  assert.doesNotMatch(workbench,/literalTitleOnly/);
+test('an explicit Write always authors anew without previous draft-cache shortcuts',()=>{
+  const create=part(chat,'    writeNewScene: function (launch) {','    writeSelectedScene: function');
+  const revise=part(chat,'    writeSelectedScene: function (launch) {','    makeProposal: function');
+  assert.match(create,/studioDirectorBridge\.makeProposal\(/);
+  assert.match(revise,/studioDirectorBridge\.makeProposal\(/);
+  assert.doesNotMatch(create,/draftOrigin\.baseline === baseline|var reuse =/);
+  assert.doesNotMatch(revise,/applyExisting|completeDraft/);
 });
+
 test('Studio request transmits all original history without trimming or excerpts',async()=>{
   const request=new Function('state','window','requestJson',part(chat,
     '  function studioDirectorRequestMessages(messages, includePromptContract, explicitWrite, navigationSnapshot) {',

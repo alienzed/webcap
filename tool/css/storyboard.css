@@ -4364,26 +4364,19 @@ html[data-theme="dark"] .storyboard-prompt-take-status {
   white-space: nowrap;
 }
 .storyboard-tool-glyph { flex: 0 0 auto; }
+/* Project tools are specialized actions: keep their text labels visible alongside icons. */
 .storyboard-tool-label {
-  display: none;
-}
-#storyboard-project-tool-bar > .storyboard-tool-icon {
-  width: 36px;
-  min-width: 36px;
-  max-width: 36px;
-  padding: 0;
-  overflow: hidden;
+  display: inline;
+  font-size: 14px;
+  line-height: 1.2;
+  font-weight: 600;
 }
 #storyboard-project-tool-bar {
   flex: 0 0 auto;
   gap: 6px;
 }
 @container (max-width: 760px) {
-  #storyboard-project-tool-bar .storyboard-tool-label { display: none; }
-  #storyboard-project-tool-bar > .storyboard-tool-icon {
-    width: 36px;
-    padding: 0;
-  }
+  #storyboard-project-tool-bar { flex-wrap: wrap; }
 }
 @container (max-width: 540px) {
   .storyboard-scenes-heading { flex-wrap: wrap; }

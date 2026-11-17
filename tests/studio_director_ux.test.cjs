@@ -118,9 +118,10 @@ test('identical Invariants are not preselected because JSON properties arrived i
   assert.equal(checkbox.checked,true);
 });
 
-test('ordinary discussion asks for concise new decisions while complete creative fields remain complete',()=>{
-  assert.match(chat,/STUDIO CONVERSATION DELIVERY: Answer the author in the JSON reply field on every turn/);
-  assert.match(chat,/These are drafts; WebCap decides where and whether to save them/);
+test('ordinary discussion stays conversational with no automatic structured drafts',()=>{
+  assert.match(chat,/Answer the author conversationally/);
+  assert.doesNotMatch(chat,/STUDIO CONVERSATION DELIVERY: Answer the author in the JSON reply field/);
+  assert.doesNotMatch(chat,/These are drafts; WebCap decides where and whether to save them/);
 });
 
 test('compact Director replies keep the exact full text and leave General Chat alone',()=>{

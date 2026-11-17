@@ -4483,190 +4483,83 @@
       });
     },
     writeNewScene: function (launch) {
-      if (state.studioScenesProposal && !Number.isInteger(state.studioScenesProposal.sourceMessageIndex))
-        return Promise.reject(new Error('Finish the independent Scene review before authoring another.'));
-      var newSceneOrigin = state.studioWorkingDraft.draftOrigins &&
-        state.studioWorkingDraft.draftOrigins.newScene;
-      var prepared = launch && !launch.forceAuthor && newSceneOrigin &&
-        newSceneOrigin.projectId === launch.projectId &&
-        newSceneOrigin.request === String(launch.authorRequest || launch.instruction) &&
-        state.studioWorkingDraft.newScene &&
-        typeof state.studioWorkingDraft.newScene.prompt === 'string' &&
-        !!state.studioWorkingDraft.newScene.prompt.trim();
-      if (!this.isReady() && !(prepared && this.canReview()))
-        return Promise.reject(new Error(this.readinessMessage()));
+      if (!this.isReady()) return Promise.reject(new Error(this.readinessMessage()));
       if (!launch || !launch.projectId || !String(launch.instruction || '').trim())
-        return Promise.reject(new Error('A saved Project and agreed new-Scene brief are required.'));
+        return Promise.reject(new Error('Choose a Project and describe the Scene to write.'));
       var storyId = launch.projectId;
-      state.lastStudioIoRaw = '';
-      state.lastStudioIoError = '';
       state.pending = true;
+      state.jobId = '';
       syncControls();
       return window.flushStudioDirectorStoryEdits(storyId).then(function () {
         return requestJson('/fs/storyboard?story=' + encodeURIComponent(storyId));
       }).then(function (payload) {
-        var story = payload && payload.story;
-        if (!story || story.id !== storyId || !Array.isArray(story.sceneOrder) || !story.scenes)
-          throw new Error('The selected Project is no longer available.');
+        var story = payload.story;
+        if (!story || story.id !== storyId) throw new Error('The selected Project is no longer available.');
         var order = story.sceneOrder.slice();
-        var creativeContext = {
-          title:story.title,concept:story.concept,style:story.style,
-          invariants:story.invariants,
-          existingSceneTitles:order.map(function (id) {
-            var scene = story.scenes[id];
-            return scene && scene.title || '';
-          }),
-          previousScene:order.length ? (function () {
-            var prior = story.scenes[order[order.length - 1]];
-            return {title:prior.title,prompt:prior.prompt,durationSeconds:prior.durationSeconds};
-          })() : null
-        };
-        var baseline = JSON.stringify({sceneOrder:order,project:creativeContext});
-        var draftOrigin = state.studioWorkingDraft.draftOrigins &&
-          state.studioWorkingDraft.draftOrigins.newScene;
-        var sameSource = !!draftOrigin && draftOrigin.projectId === storyId &&
-          draftOrigin.request === String(launch.authorRequest || launch.instruction);
-        var reuse = !launch.forceAuthor && sameSource && draftOrigin.baseline === baseline &&
-          state.studioWorkingDraft.newScene &&
-          typeof state.studioWorkingDraft.newScene.prompt === 'string' &&
-          !!state.studioWorkingDraft.newScene.prompt.trim();
-        var instruction = JSON.stringify({
-          task:'Create the requested independently generatable H3 Scenes for this Project. ' +
-            'Give each Scene a useful title, complete H3 Prompt and durationSeconds ' +
-            '(4–15 seconds, default 6 when unspecified). Honor the author\'s creative direction, ' +
-            'specific titles and timings. Deliver every Scene you can usefully author now.',
+        var prior = order.length && story.scenes[order[order.length-1]];
+        var task = JSON.stringify({
+          task:'Write the requested new independently generatable H3 Scene or Scenes. Return the complete Scene records.',
           authorDirection:launch.authorRequest || launch.instruction,
-          project:Object.assign({},creativeContext,{
-            unsavedWorkingFields:sameSource ? (state.studioWorkingDraft.newScene || {}) : {}
-          })
-        });
-        var workingScene = state.studioWorkingDraft.newScene;
-        if (!reuse) state.pending = false;
-        var proposal = reuse ?
-          Promise.resolve(JSON.stringify(Object.fromEntries(
-            (draftOrigin.fields || []).filter(function (field) {
-              return Object.prototype.hasOwnProperty.call(workingScene,field);
-            }).map(function (field) {return [field,workingScene[field]];})))) :
-          window.studioDirectorBridge.makeProposal(instruction,
-            'studio_scenes_draft', true,
-            {projectId:storyId,projectTitle:story.title,sceneOrder:order});
-        return proposal.then(function (raw) {
-          state.lastStudioIoRaw = raw;
-          var fields;
-          try { fields = JSON.parse(raw); }
-          catch (error) { throw new Error('Director returned invalid Scene JSON.\nRaw response:\n' + raw); }
-          if (!fields || typeof fields !== 'object' || Array.isArray(fields))
-            throw new Error('Director returned no usable Scene fields.\\nRaw response:\\n' + raw);
-          // Accept both the current multi-Scene response and legacy single-Scene
-          // objects. The number of records returned is the only authored count.
-          var records = Array.isArray(fields.scenes) ? fields.scenes : [fields];
-          var drafts = records.filter(function (item) {
-            return item && typeof item === 'object' && !Array.isArray(item);
-          }).map(function (item) {
-            return {
-              title:typeof item.title === 'string' ? item.title : '',
-              prompt:typeof item.prompt === 'string' ? item.prompt : '',
-              durationSeconds:Object.prototype.hasOwnProperty.call(item,'durationSeconds')
-                ? item.durationSeconds : undefined
-            };
-          }).filter(function (item) {
-            return item.title.trim() || item.prompt.trim() ||
-              item.durationSeconds !== undefined;
-          });
-          if (!drafts.length)
-            throw new Error('Director returned no usable Scene fields.\\nRaw response:\\n' + raw);
-          var missingPrompt = drafts.some(function (item) {return !item.prompt.trim();});
-          var missingDuration = drafts.some(function (item) {
-            return item.durationSeconds === undefined;
-          });
-          var invalidDuration = drafts.some(function (item) {
-            return item.durationSeconds !== undefined &&
-              (!Number.isInteger(Number(item.durationSeconds)) ||
-              Number(item.durationSeconds) < 4 || Number(item.durationSeconds) > 15);
-          });
-          var draft = {scenes:drafts,rationale:typeof fields.rationale === 'string' ? fields.rationale : ''};
-          // The author's requested timing belongs in the actual authored Scene.
-          // A missing duration stays editable instead of silently becoming six seconds.
-          // Preserve the existing one-Scene working draft contract. Multi-Scene
-          // records belong to the multi-Scene review, not a singleton cache.
-          if (drafts.length === 1) {
-            state.studioWorkingDraft.newScene = Object.assign({},
-              state.studioWorkingDraft.newScene,
-              studioWorkingFieldChanges(drafts[0],['title','prompt','durationSeconds']));
-            state.studioWorkingDraft.draftOrigins =
-              state.studioWorkingDraft.draftOrigins || {projects:{},scenes:{}};
-            state.studioWorkingDraft.draftOrigins.newScene = {
-              projectId:storyId,
-              request:String(launch.authorRequest || launch.instruction),
-              baseline:baseline,
-              fields:Object.keys(studioWorkingFieldChanges(drafts[0],['title','prompt','durationSeconds']))
-            };
-            scheduleSessionSave();
+          project:{
+            title:story.title,concept:story.concept,style:story.style,
+            invariants:story.invariants,
+            existingSceneTitles:order.map(function (id) {return story.scenes[id].title;}),
+            previousScene:prior ? {
+              title:prior.title,prompt:prior.prompt,durationSeconds:prior.durationSeconds
+            } : null
           }
-          // Accept every independently savable Scene; a partial record is not
-          // authority to discard a different complete record.
-          var complete = drafts.filter(function (item) {
-            return item.prompt.trim() && Number.isInteger(Number(item.durationSeconds)) &&
-              Number(item.durationSeconds) >= 4 && Number(item.durationSeconds) <= 15;
-          });
-          var incompleteCount = drafts.length - complete.length;
-          if (!complete.length)
-            throw new Error('Director returned no complete savable Scenes. No Scene was saved. ' +
-              'The raw response and partial fields remain available in Director I/O.\\nRaw response:\\n' + raw);
-          var creations = complete.map(function (scene,index) {
-            return {title:String(scene.title || '').trim() || 'Scene ' + (order.length + index + 1),
-              prompt:scene.prompt, durationSeconds:Number(scene.durationSeconds)};
-          });
-          state.pending = true;
-          syncControls();
-          return requestJson('/fs/studio/director/scenes-draft', {
-            method:'POST', headers:{'Content-Type':'application/json'},
+        });
+        state.pending = false;
+        return window.studioDirectorBridge.makeProposal(task,'studio_scenes_draft',true,
+          {projectId:storyId,projectTitle:story.title,sceneOrder:order}).then(function (raw) {
+          state.lastStudioIoRaw = raw;
+          var authored;
+          try {authored = JSON.parse(raw);}
+          catch (error) {throw new Error('Scene Write JSON failed to parse: ' + error.message);}
+          if (!authored || !Array.isArray(authored.scenes))
+            throw new Error('Scene Write returned no Scenes array; full response is in Director I/O.');
+          // The model authors creative values; WebCap only transports records
+          // and binds the chosen destination. The server owns save integrity.
+          return requestJson('/fs/studio/director/scenes-draft',{
+            method:'POST',headers:{'Content-Type':'application/json'},
             body:JSON.stringify({
-              storyId:storyId, expectedSceneOrder:order, scenes:creations,
-              placement:'end', relativeSceneId:''
+              storyId:storyId,expectedSceneOrder:order,
+              scenes:authored.scenes.map(function (scene) {
+                return {
+                  title:scene.title,prompt:scene.prompt,
+                  durationSeconds:scene.durationSeconds
+                };
+              }),
+              placement:'end',relativeSceneId:''
             })
-          }).then(function (result) {
-            if (!result || !result.story || result.story.id !== storyId ||
-                !Array.isArray(result.scenes) || result.scenes.length !== creations.length ||
-                result.scenes.some(function (scene) {return !scene.id;}))
-              throw new Error('Scene creation returned no confirmed complete saved result. ' +
-                'Inspect the Project before retrying to avoid duplicates.');
-            // Clear only successfully persisted partial working material.
-            if (creations.length === 1 &&
-                state.studioWorkingDraft.newScene.prompt === result.scenes[0].prompt) {
-              state.studioWorkingDraft.newScene = {};
-              if (state.studioWorkingDraft.draftOrigins)
-                state.studioWorkingDraft.draftOrigins.newScene = null;
-              scheduleSessionSave();
-            }
-            return window.refreshStudioDirectorStoryIfOpen(storyId).then(function () {
-              return window.studioDirectorBridge.recordApplied('scene.create',result.story,{
-                scenes:result.scenes.map(function (saved) {
-                  return {id:saved.id,title:saved.title,prompt:saved.prompt,
-                    durationSeconds:saved.durationSeconds};
-                })
-              });
-            }).catch(function (error) {
-              error.saved = true;
-              throw error;
-            }).then(function () {
-              studioActionStatus(result.scenes.length + ' Scene(s) created and saved.' +
-                (incompleteCount ? ' ' + incompleteCount +
-                  ' incomplete returned record(s) were not saved; inspect Director I/O.' : ''),
-                !!incompleteCount);
-              return result;
+          });
+        }).then(function (result) {
+          if (!result || !result.story || result.story.id !== storyId ||
+              !Array.isArray(result.scenes))
+            throw new Error('Scene Write returned no authoritative saved result.');
+          return window.refreshStudioDirectorStoryIfOpen(storyId).then(function () {
+            return window.studioDirectorBridge.recordApplied('scene.create',result.story,{
+              scenes:result.scenes.map(function (scene) {
+                return {id:scene.id,title:scene.title,prompt:scene.prompt,
+                  durationSeconds:scene.durationSeconds};
+              })
             });
+          }).catch(function (error) {
+            error.saved = true;throw error;
+          }).then(function () {
+            studioActionStatus(result.scenes.length + ' Scene(s) saved.',false);
+            return result;
           });
         });
       }).catch(function (error) {
         state.lastStudioIoError = String(error.message || error);
-        studioActionStatus('New Scene draft failed: ' + state.lastStudioIoError, true);
-        window.reportConsoleError('Director new Scene', error);
+        el('studio-director-inspect').dataset.newResult = 'true';
+        studioActionStatus((error.saved ? 'Scenes saved but reporting failed: ' :
+          'Scene Write failed: ') + state.lastStudioIoError,true);
+        window.reportConsoleError('Studio Scene Write',error);
         throw error;
       }).finally(function () {
-        state.pending = false;
-        state.jobId = '';
-        syncControls();
+        state.pending = false;state.jobId = '';syncControls();
       });
     },
     writeSelectedScene: function (launch) {

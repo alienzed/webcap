@@ -15,60 +15,45 @@ function section(source, start, end) {
   return source.slice(first, last);
 }
 
-test('a selected Studio Project cannot silently authorize saved Read material', () => {
-  const body = section(chat, '  function studioDirectorChatRequestMessages(', '  // Retain available conversational work');
-  assert.match(body, /approved/);
-  assert.match(body, /No saved Project or Scene reference was supplied/);
-  assert.doesNotMatch(body, /studioActionFromExplicitRequest/);
+test('Chat does not automatically read the selected Project',()=>{
+  const body=section(chat,'  function studioDirectorChatRequestMessages(messages) {',
+    '  function storyboardRequestMessages(messages, includePrimer) {');
+  assert.match(body,/studioApprovedReadSources\(\)/);
+  assert.match(body,/No saved Project or Scene reference was supplied/);
+  assert.doesNotMatch(body,/getStudioDirectorNavigation/);
 });
 
-test('approved Read scope sends material from multiple Projects, not the open editor', async () => {
-  const body = section(chat, '  function studioApprovedReadSources() {',
-    '  // Retain available conversational work across ordinary follow-up questions.');
-  const saved = {
-    a:{id:'a',title:'Reference A',concept:'An archived pacing reference',scenes:{},sceneOrder:[]},
-    b:{id:'b',title:'Reference B',concept:'A character reference',scenes:{},sceneOrder:[]},
-    c:{id:'c',title:'Current open editor',concept:'PRIVATE OPEN PROJECT',scenes:{},sceneOrder:[]}
+test('approved Read scope sends multiple selected sources, never an unrelated open editor',async()=>{
+  const body=section(chat,'  function studioApprovedReadSources() {',
+    '  function storyboardRequestMessages(messages, includePrimer) {');
+  const stories={
+    a:{id:'a',title:'Reference A',concept:'Pacing reference'},
+    b:{id:'b',title:'Reference B',concept:'Character reference'},
+    c:{id:'c',title:'Current editor',concept:'Private current Project'}
   };
-  const requested=[];
-  const state={
-    studioApprovedRead:{sources:[
-      {projectId:'a',keys:['project.concept'],label:'Reference A · Overview'},
-      {projectId:'b',keys:['project.concept'],label:'Reference B · Overview'}
-    ]},
-    studioWorkingDraft:{newProject:{},newScene:{}}
-  };
+  const calls=[];
   const scope=vm.createContext({
-    state,Promise,JSON,Object,String,encodeURIComponent,
-    window:{
-      getStudioDirectorNavigation:()=>({projectId:'c'}),
-      studioDirectorWorkbench:{approvedReadPayload:(story,keys)=>({
-        projectId:story.id,projectTitle:story.title,
-        fields:keys.map(key=>({id:key,value:story[key.slice(8)]}))
-      })}
-    },
-    studioAttachedStoryId:()=>'',requestJson:async url=>{
-      requested.push(url);
-      return {story:saved[url.split('=')[1]]};
+    state:{studioApprovedRead:{sources:[
+      {projectId:'a',keys:['project.concept']},
+      {projectId:'b',keys:['project.concept']}
+    ]}},
+    Promise,JSON,Object,String,encodeURIComponent,
+    window:{studioDirectorWorkbench:{approvedReadPayload:(story,keys)=>({
+      projectId:story.id,fields:keys.map(id=>({id,value:story.concept}))
+    })}},
+    requestJson:async url=>{
+      calls.push(url);return {story:stories[url.split('=')[1]]};
     },
     studioDirectorRequestMessages:async messages=>[
-      {role:'system',content:'Creative guidance'},...messages
-    ],
-    parseStudioChatResponse:raw=>JSON.parse(raw)
+      {role:'system',content:'Creative conversation'},...messages]
   });
   vm.runInContext(body,scope);
-  const bound={};
-  const result=await scope.studioDirectorChatRequestMessages(
-    [{role:'user',content:'Use A for pacing and B for character, write elsewhere.'}],
-    null,{projectId:'c'},bound);
-  assert.equal(bound.projectId,'c','the selected editor is a potential destination only');
-  assert.deepEqual(requested,['/fs/storyboard?story=a','/fs/storyboard?story=b']);
-  assert.match(result[0].content,/An archived pacing reference/);
-  assert.match(result[0].content,/A character reference/);
-  assert.doesNotMatch(result[0].content,/PRIVATE OPEN PROJECT/);
-  assert.match(result[0].content,/independent sources/);
-  assert.match(workbench,/approveRead\(story\.id, keys\)/);
-  assert.match(html,/id="studio-dw-approved-sources"/);
+  const sent=await scope.studioDirectorChatRequestMessages([
+    {role:'user',content:'Discuss references'}]);
+  assert.deepEqual(calls,['/fs/storyboard?story=a','/fs/storyboard?story=b']);
+  assert.match(sent[0].content,/Pacing reference/);
+  assert.match(sent[0].content,/Character reference/);
+  assert.doesNotMatch(sent[0].content,/Private current Project/);
 });
 
 test('a single character Invariant can be supplied without the rest of its Overview',()=>{
@@ -97,53 +82,39 @@ test('one approved source can be removed without revoking unrelated sources',()=
   assert.match(workbench,/studioDirectorBridge\.removeApprovedRead\(source\.projectId\)/);
 });
 
-test('existing authored response fields are a session asset, not assigned to the open Project', () => {
-  const source = section(chat, '  function studioWorkingFieldChanges(source, names) {',
-    '  function parseStudioChatResponse(raw) {');
-  const state = {
-    studioWorkingDraft: {projects:{},scenes:{},newProject:{},newScene:{},sourceRequest:''},
-    sessionDirty: {storyboard:false}
-  };
-  const merge = new Function('state', source + 'return studioMergeWorkingChanges;')(state);
-  merge({project:{style:'A new idea from a reference, not an edit to the open Project'}},
-    {projectId:'project-a'}, null, 'Make the mood warmer');
-  assert.deepEqual(state.studioWorkingDraft.projects, {},
-    'creative material must not acquire a Project owner solely from navigation');
-  assert.deepEqual(state.studioWorkingDraft.scenes, {},
-    'creative material must not acquire a Scene owner solely from navigation');
+test('ordinary Chat owns no structured pending Project or Scene fields',()=>{
+  assert.doesNotMatch(chat,/studioMergeWorkingChanges|studioWorkingDraft/);
+  assert.doesNotMatch(chat,/studioAuthoredWriteActions/);
+  assert.match(chat,/studioDirectorChatRequestMessages\(messages\)/);
 });
 
-test('source material never determines a write destination and review uses returned fields', () => {
-  assert.match(workbench, /authoredFields/);
-  assert.match(workbench, /Review authored Project/);
-  assert.match(workbench, /Review authored Scene/);
-  assert.match(workbench, /chosenProjectId/);
-  assert.doesNotMatch(chat, /function studioActionFromExplicitRequest/);
+test('saved Read sources cannot determine an explicit Write destination',()=>{
+  const write=section(workbench,'  function writePrepare(options) {',
+    '  function prepareProjectCoherence(storyId) {');
+  assert.match(write,/var id = el\('studio-dw-write-project'\)\.value/);
+  assert.doesNotMatch(write,/readStory\.id|approvedReadSources/);
+  assert.match(write,/bridge\.prepareWrite/);
 });
 
-test('a destination cannot be inferred by parsing the author request', () => {
-  const body = section(workbench, '  function presentAction(action,', '  window.studioDirectorWorkbench = {');
-  assert.doesNotMatch(body, /studioActionFromExplicitRequest/);
-  assert.match(body, /sourceMessageIndex/);
-  assert.match(body, /reviewAuthoredScenes/);
+test('Write operation is selected by interface controls, not author prose',()=>{
+  const write=section(workbench,'  function writePrepare(options) {',
+    '  function prepareProjectCoherence(storyId) {');
+  assert.match(write,/studio-dw-write-operation/);
+  assert.match(write,/studio-dw-write-project/);
+  assert.doesNotMatch(write,/parseStudioChatResponse|studioActionFromExplicitRequest/);
 });
 
-test('saved Project and independent conversation response are separate persistence owners', () => {
-  assert.match(chat, /message\.rawResponse/);
-  assert.match(chat, /studioRestoreAuthoredAction/);
-  assert.match(chat, /sourceMessageIndex/);
-  assert.match(chat, /stored\.writeAction = message\.writeAction/);
+test('conversation stores Chat text and receipts, not structured Write actions',()=>{
+  assert.match(chat,/function persistSession\(mode\)/);
+  assert.doesNotMatch(chat,/stored\.writeAction|stored\.otherWriteActions/);
+  assert.match(chat,/\[WEBCAP APPLIED FIELD VALUES\]/);
 });
 
-test('multiple distinct scene records are retained as actual response material', () => {
-  const parsed = section(chat, '  function parseStudioChatResponse(raw) {',
-    '  function storyboardRequestMessages(');
-  const parse = new Function(parsed + 'return parseStudioChatResponse;')();
-  const result = parse(JSON.stringify({reply:'Authored actual records',scenes:[
-    {title:'First',prompt:'Complete first scene prompt',durationSeconds:8},
-    {title:'Second',prompt:'Complete second scene prompt',durationSeconds:12}
-  ]}));
-  assert.equal(result.scenes.length, 2);
-  assert.equal(result.scenes[1].durationSeconds,12);
-  assert.deepEqual(result.scenes.map(scene=>scene.title),['First','Second']);
+test('Scene Write maps actual returned records to its authoritative save route',()=>{
+  const scene=section(chat,'    writeNewScene: function (launch) {',
+    '    writeSelectedScene: function (launch) {');
+  assert.match(scene,/authored\.scenes\.map/);
+  assert.match(scene,/scenes:authored\.scenes\.map/);
+  assert.match(scene,/\/fs\/studio\/director\/scenes-draft/);
+  assert.doesNotMatch(scene,/parseStudioChatResponse|\.slice\(0,1\)/);
 });

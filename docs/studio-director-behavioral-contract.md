@@ -1,5 +1,8 @@
 # Studio Director — behavioral contract and hostile guidance audit
 
+> **Historical — superseded November 17, 2026.** This document describes experiments with implicit chat authoring, Studio Review and draft capture that are no longer active. The sole current requirements are [Studio Director functional contract](studio-director-contract.md) and [current user flows](studio-user-flows.md). Preserve this document only as diagnostic history; do not implement its old guidance, schemas or Review lifecycle.
+
+
 **Status:** Implementation plan and hostile pre-change audit, 2026-11-16. The core guidance and deterministic request changes are implemented on the companion branch; live-model acceptance remains unverified. [The functional contract](studio-director-contract.md) and [user flows](studio-user-flows.md) remain authoritative where this proposal has not been adopted. This document distinguishes verified code behavior from hypotheses about model performance.
 
 ## Vision and acceptance filter

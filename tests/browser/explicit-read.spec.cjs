@@ -57,7 +57,7 @@ test('Flow 4 — explicit Read persists immutable visible Project snapshots and 
   snapshots.forEach(snapshot=>expect(calls[0].messages.some(message=>message.role==='user' && message.content===snapshot)).toBe(true));
   expect(JSON.stringify(calls[0].messages)).not.toContain('new moon');
 
-  if(await details.locator('summary').getAttribute('aria-expanded')==='false') await details.locator('summary').click();
+  if(await details.getAttribute('open')===null) await details.locator('summary').click();
   await page.locator('#director-studio-access-field').selectOption('prompt');
   await page.locator('#director-studio-access-scene').selectOption(scene.id);
   await page.locator('#director-studio-access-read').click();

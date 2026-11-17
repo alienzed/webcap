@@ -1,4 +1,4 @@
-/* Browser-only, append-only revisions for editable textareas. */
+/* Browser-only, per-field revisions for configurable text inputs. */
 (function () {
   'use strict';
   var histories = new Map();
@@ -38,29 +38,22 @@
       "group": "Studio — Project",
       "id": "project.overview",
       "label": "Project overview / concept",
-      "selector": "#storyboard-story-concept, #studio-brief-concept, #studio-project-concept",
+      "selector": "#storyboard-story-concept",
       "enabled": true
     },
     {
       "group": "Studio — Project",
       "id": "project.style",
       "label": "Visual style / atmosphere",
-      "selector": "#storyboard-story-style, #studio-brief-style, #studio-project-style",
+      "selector": "#storyboard-story-style",
       "enabled": true
     },
     {
       "group": "Studio — Project",
       "id": "project.invariants",
       "label": "Project invariants / guidelines",
-      "selector": ".studio-project-invariant textarea, textarea[data-story-guideline]",
+      "selector": "textarea[data-story-guideline]",
       "enabled": true
-    },
-    {
-      "group": "Studio — Project",
-      "id": "project.sceneBrief",
-      "label": "Project creation Scene brief",
-      "selector": "#studio-project-scene-prompt",
-      "enabled": false
     },
     {
       "group": "Studio — Scenes",

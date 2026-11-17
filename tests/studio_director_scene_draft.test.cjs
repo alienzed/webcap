@@ -91,21 +91,13 @@ test('Only explicitly attached Story ID qualifies as a Scene target', () => {
   assert.equal(target(), '');
 });
 
-test('Studio project proposals remain separate from conversation and must be reviewed', () => {
-  for (const name of [
-    'director-studio-capture', 'studio-project-review', 'studio-project-concept',
-    'studio-project-style', 'studio-project-invariants', 'studio-project-include-scene',
-    'studio-project-create'
-  ]) assert.match(html, new RegExp('id="' + name + '"'));
-  const prep = part('  function prepareStudioProject(options) {', '  function applyStudioProject() {');
-  assert.match(prep, /operation: 'studio_project_draft'/);
-  assert.match(prep, /showStudioProjectReview\(\)/);
-  assert.doesNotMatch(prep, /\/fs\/studio\/director\/project-create/);
-  const apply = part('  function applyStudioProject() {', '  function parseStudioBriefDraft(raw) {');
-  assert.match(apply, /\/fs\/studio\/director\/project-create/);
-  assert.match(apply, /studioDirectorBridge\.recordApplied\(/);
-  assert.match(apply, /refreshStudioDirectorStoryIfOpen/);
-  assert.doesNotMatch(apply, /state\.storyboardAttachments\s*=/);
+test('explicit Project creation writes directly to the chosen destination without Review',()=>{
+  const prep=part('  function prepareStudioProject(options) {','  // The reviewed Project is saved before any Scene authoring.');
+  assert.match(prep,/operation:'studio_project_draft'/);
+  assert.match(prep,/\/fs\/studio\/director\/project-create/);
+  assert.match(prep,/recordApplied\('project.create'/);
+  assert.doesNotMatch(prep,/showStudioProjectReview\(\)/);
+  assert.match(prep,/state\.modeMessages\.storyboard/);
 });
 
 test('Unbound Project parser accepts zero Scenes and refuses invented or invalid structure', () => {
@@ -321,28 +313,15 @@ test('Apply with only empty prompts leaves the review intact without a save requ
   assert.match(status.textContent,/No Scenes are ready to save/);
 });
 
-test('Studio brief review limits Apply to explicitly checked Story fields', () => {
-  for (const id of [
-    'director-studio-capture', 'studio-brief-review',
-    'studio-brief-concept-selected', 'studio-brief-style-selected',
-    'studio-brief-invariants-selected', 'studio-brief-apply'
-  ]) assert.match(html, new RegExp('id="' + id + '"'));
-  const prep = part('  function prepareStudioBrief(', '  function applyStudioBrief() {');
-  assert.match(prep, /studioAttachedStoryId\(\)/);
-  assert.match(prep, /window\.flushStudioDirectorStoryEdits\(storyId\)/);
-  assert.match(prep, /operation: 'studio_brief_draft'/);
-  assert.doesNotMatch(prep, /\/fs\/studio\/director\/brief'/);
-  const apply = part('  function applyStudioBrief() {', '  function addStudioScenesRow(item) {');
-  assert.match(apply, /studio-brief-concept-selected/);
-  assert.match(apply, /studio-brief-style-selected/);
-  assert.match(apply, /studio-brief-invariants-selected/);
-  assert.match(apply, /expected: expected, changes: changes/);
-  assert.match(apply, /\/fs\/studio\/director\/brief'/);
-  assert.doesNotMatch(html, /id="studio-dw-undo-button"/);
-  assert.doesNotMatch(html, /id="director-studio-undo-brief"/,
-    'legacy direct Undo shortcut must not bypass reviewed confirmation');
+test('explicit Project field revision saves directly with its saved originals',()=>{
+  const prep=part('  function prepareStudioBrief(options) {','  function applyStudioBrief() {');
+  assert.match(prep,/studioAttachedStoryId\(\)/);
+  assert.match(prep,/flushStudioDirectorStoryEdits\(storyId\)/);
+  assert.match(prep,/\/fs\/studio\/director\/brief/);
+  assert.match(prep,/expected:expected,changes:changes/);
+  assert.match(prep,/state\.modeMessages\.storyboard/);
+  assert.doesNotMatch(prep,/showStudioBriefReview\(\)/);
 });
-
 
 test('Review Create Project persists explicit continuation without touching unbound conversations', async () => {
   const code = part('  function applyStudioProject() {', '  function parseStudioBriefDraft(raw) {');

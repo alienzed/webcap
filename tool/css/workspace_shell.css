@@ -4216,12 +4216,14 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
 .director-chat-drawer.studio-director #studio-dw-write-ready {display:grid;gap:10px;}
 .director-chat-drawer.studio-director #studio-dw-write-ready.hidden {display:none;}
 .director-chat-drawer.studio-director #studio-dw-write-ready-direction {white-space:pre-wrap;overflow-wrap:anywhere;max-height:200px;overflow:auto;}
-.director-chat-drawer.studio-director .studio-dw-actions {display:none;}
-.director-chat-drawer.studio-director #studio-dw-write-panel {border:0;padding:0;background:transparent;}
-.director-chat-drawer.studio-director #studio-dw-write-panel > :not(label):not(#studio-dw-batch-controls) {display:none!important;}
-.director-chat-drawer.studio-director #studio-dw-write-panel > label:not(:first-child) {display:none!important;}
-.director-chat-drawer.studio-director #studio-dw-write-panel.studio-dw-awaiting-project #studio-dw-batch-controls {display:none!important;}
-.director-chat-drawer.studio-director #studio-dw-write-panel.studio-dw-awaiting-scenes #studio-dw-batch-controls {display:block;}
+.director-chat-drawer.studio-director .studio-dw-actions {display:flex;gap:8px;flex-wrap:wrap;}
+/* Explicit Write owns its operation picker, instruction and save control.
+   The former chat-generated Review UI hid these controls entirely. */
+.director-chat-drawer.studio-director #studio-dw-write-panel {
+  display:flex;flex-direction:column;gap:12px;padding:14px;
+  border:1px solid var(--border);border-radius:12px;background:var(--panel);
+}
+.director-chat-drawer.studio-director #studio-dw-write-panel.hidden {display:none!important;}
 
 .director-chat-drawer.studio-director .studio-dw-scene-select-actions {display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;}
 .director-chat-drawer.studio-director .studio-dw-scene-select-actions button {min-height:32px;font-size:13px;padding:4px 9px;}

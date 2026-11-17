@@ -38,8 +38,10 @@ test('Read and the optional coherence utility stay separate from creative Write'
   assert.doesNotMatch(chat, /suggest coherence-check/);
 });
 
-test('ordinary replies prioritize short exchanges rather than full assessments', () => {
-  assert.match(chat, /STUDIO CONVERSATION DELIVERY: Answer the author in the JSON reply field on every turn/);
-  assert.match(backend, /CONVERSATION: Respond naturally and concisely/);
-  assert.match(backend, /CREATIVE WORK: When asked to create or revise material/);
+test('ordinary chat guidance is concise and has no H3 production or Write instructions',()=>{
+  assert.match(chat,/Answer the author conversationally/);
+  assert.match(backend,/CONVERSATION: Respond naturally and concisely/);
+  assert.doesNotMatch(backend,/CREATIVE WORK: When asked to create or revise material/);
+  assert.match(backend,/Explicit Write functions/);
 });
+

@@ -2289,8 +2289,8 @@ def director_chat_route():
         if operation not in {"freeform_chat", "studio_chat", "storyboard_workshop_shots", "studio_project_draft", "studio_brief_draft", "studio_scene_field_draft", "studio_scenes_draft"}:
             raise ValueError("Unsupported Director Chat operation.")
         contract = {"operation": operation, "messages": messages}
-        if operation == "studio_chat":
-            contract["response_schema"] = studio_chat_response_schema()
+        # Ordinary Studio conversation has no creative authoring response schema.
+        # A freeform reply is displayed verbatim; only explicit Writes ask for JSON.
         if operation == "studio_brief_draft":
             required_fields = data.get("requiredFields") or []
             if not isinstance(required_fields, list) or any(
@@ -2338,25 +2338,37 @@ def director_chat_route():
         if operation == "studio_scenes_draft":
             # New-Scene authoring is a sequence of *material*, not an action
             # promise or a requirement to match a guessed requested count.
-            # Request complete Scene records with the same contract as Studio
-            # conversation. Ingest still retains incomplete provider results.
+            # Explicit Scene writing owns this schema independently of
+            # ordinary freeform Studio chat. Ingest exposes actual provider output.
             contract["response_schema"] = {
                 "type": "object", "additionalProperties": False,
                 "required": ["scenes"],
                 "properties": {
-                    "scenes": studio_chat_response_schema()["properties"]["scenes"],
+                    "scenes": {
+                        "type": "array", "minItems": 1, "maxItems": 32,
+                        "items": {
+                            "type": "object", "additionalProperties": False,
+                            "required": ["title", "prompt", "durationSeconds"],
+                            "properties": {
+                                "title": {"type": "string", "maxLength": 240},
+                                "prompt": {"type": "string", "minLength": 1},
+                                "durationSeconds": {"type": "integer", "minimum": 4, "maximum": 15},
+                            },
+                        },
+                    },
                     "rationale": {"type": "string"},
                 },
             }
         if operation == "studio_project_draft":
+            # Project creation writes only Project fields. Scene creation has
+            # its own explicit Write, H3 reference and response contract.
             contract["response_schema"] = {
-                "type": "object",
-                "additionalProperties": False,
-                "required": ["title", "concept", "style", "invariants", "rationale"],
+                "type": "object", "additionalProperties": False,
+                "required": ["title", "concept", "style", "invariants"],
                 "properties": {
-                    "title": {"type": "string"},
-                    "concept": {"type": "string"},
-                    "style": {"type": "string"},
+                    "title": {"type": "string", "maxLength": 240},
+                    "concept": {"type": "string", "maxLength": 20000},
+                    "style": {"type": "string", "maxLength": 10000},
                     "invariants": {
                         "type": "array", "maxItems": 30,
                         "items": {
@@ -2368,19 +2380,6 @@ def director_chat_route():
                             },
                         },
                     },
-                    "initialScenes": {
-                        "type": "array", "maxItems": 32,
-                        "items": {
-                            "type": "object", "additionalProperties": False,
-                            "required": ["title", "brief", "durationSeconds"],
-                            "properties": {
-                                "title": {"type": "string", "maxLength": 240},
-                                "brief": {"type": "string", "minLength": 1, "maxLength": 4000},
-                                "durationSeconds": {"type": "integer", "minimum": 4, "maximum": 15},
-                            },
-                        },
-                    },
-                    "rationale": {"type": "string"},
                 },
             }
         if operation == "storyboard_workshop_shots":

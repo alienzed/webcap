@@ -2,6 +2,24 @@
 
 [Functional contract](studio-director-contract.md) is authoritative. This file tracks the three-operation implementation and evidence; it does not define a competing architecture. The earlier incremental plans and audits from November 14 were superseded by the three-operation cutover in PR #950. Consult the PR history for original gap analyses.
 
+## Task-scoped contract implementation — 2026-11-17
+
+**Active branch:** `codex/studio-director-task-scoped-contract-20261117` ([draft PR #1024](https://github.com/alienzed/webcap/pull/1024)). This section supersedes older Review/capture guidance below. The [functional contract](studio-director-contract.md) is the normative specification; old dated checkpoints are historical.
+
+Implemented on the branch, subject to CI and browser acceptance:
+
+- Ordinary Studio chat receives the short creative role, no H3 production reference or authoring response schema, and displays model text verbatim.
+- Model chat cannot silently author structured Project/Scene fields or create an actionable Write/Review suggestion. Previously stored metadata is not an active launcher.
+- The request builder preserves the entire available conversation (original messages in order, without last-N or long-text shortening). Explicit Write adds only the relevant task guidance, data and operation-specific schema.
+- Write → Project create and revise invoke a model for the explicit task and save directly against the selected destination, without Review. Relevant saved originals and save receipts remain available.
+- Write → Scene(s) uses task-specific H3 guidance. New Scenes save returned mechanically usable records directly, and existing selected-Scene revisions use the established direct-save path.
+- Field history and raw I/O are preserved; no model repair or hidden creative completeness judge is added.
+- No wholesale deletion of standalone Revise Scenes, First Cut, Scene development or coherence has been performed.
+
+**Verification:** the dedicated direct-Scene tests and JavaScript syntax checks have run on the branch, and the main Studio suite is being reconciled with the retired Review assumptions. GitHub Actions and real-browser completion must be confirmed from final PR check runs; do not cite historic CI runs as evidence of this revision. Keep the PR in draft and do not merge on failing or unverified acceptance.
+
+**Remaining cleanup before completion:** eliminate genuinely unreachable old Review/structured-chat helpers after tracing last callers, synchronize live-model/browser acceptance journeys with explicit Write and full passthrough, and ensure Project create/revise saved results and History pass real runtime checks. Old user-flow documents containing Review steps should be treated as historical until rewritten.
+
 ## Scope correction — session material and independent references (2026-11-16)
 
 The functional contract and [Studio user flows](studio-user-flows.md)

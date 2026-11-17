@@ -118,9 +118,10 @@ test('identical Invariants are not preselected because JSON properties arrived i
   assert.equal(checkbox.checked,true);
 });
 
-test('ordinary discussion asks for concise new decisions while complete creative fields remain complete',()=>{
-  assert.match(chat,/STUDIO CONVERSATION DELIVERY: Answer the author in the JSON reply field on every turn/);
-  assert.match(chat,/These are drafts; WebCap decides where and whether to save them/);
+test('ordinary discussion stays conversational with no automatic structured drafts',()=>{
+  assert.match(chat,/Answer the author conversationally/);
+  assert.doesNotMatch(chat,/STUDIO CONVERSATION DELIVERY: Answer the author in the JSON reply field/);
+  assert.doesNotMatch(chat,/These are drafts; WebCap decides where and whether to save them/);
 });
 
 test('compact Director replies keep the exact full text and leave General Chat alone',()=>{
@@ -266,23 +267,20 @@ test('Director reads Prompt even when a legacy Scene has no authored Prompt',()=
 });
 
 
-test('Director conversation preserves actual authored Scene records alongside prose',()=>{
+test('ordinary Director conversation displays raw structured output instead of drafting Scenes',()=>{
   const scope=vm.createContext({});
   vm.runInContext(part(chat,'  function parseStudioChatResponse(raw) {',
     '  function storyboardRequestMessages('),scope);
-  const response=scope.parseStudioChatResponse(JSON.stringify({
-    reply:'I authored one usable Scene.',
-    action:{kind:'create_scene',instruction:'Two eight-second Scenes'},
-    scenes:[{title:'First',prompt:'Complete H3 prompt',durationSeconds:8}]
-  }));
-  assert.equal(response.reply,'I authored one usable Scene.');
-  assert.equal(response.scenes.length,1,'requested quantity must not manufacture authored results');
-  assert.equal(response.scenes[0].durationSeconds,8);
+  const raw=JSON.stringify({reply:'A useful idea',scenes:[{prompt:'Unexpected content'}]});
+  const result=scope.parseStudioChatResponse(raw);
+  assert.equal(result.reply,raw);
+  assert.equal(result.scenes,null);
+  assert.equal(result.action,null);
 });
 
 test('new-Scene authoring preserves returned arrays and independently useful partial drafts',()=>{
   const body=part(chat,'          var records = Array.isArray(fields.scenes) ? fields.scenes : [fields];',
-    "          // The author's requested timing belongs in the actual authored Scene.");
+    '          // Persist each mechanically usable Scene returned by this explicit Write.');
   const normalize=vm.runInNewContext('(function(fields,raw){' + body +
     'return {drafts:drafts,missingPrompt:missingPrompt};})');
   const single=normalize({scenes:[{title:'Only',prompt:'One complete H3 Scene',durationSeconds:8}]},'');

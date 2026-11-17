@@ -1488,30 +1488,8 @@
         meta.textContent = formatResponseMetrics(metricsMap[index], elapsedMap[index]);
         row.appendChild(meta);
       }
-      // Every actual deliverable has its own launcher and completion state,
-      // including a Project and Scene returned together in one response.
-      if (studioReply) studioStoredActions(message).forEach(function (savedAction) {
-        if (savedAction.completed || (index === state.studioActionIndex &&
-            (savedAction.actionKey || 'primary') === (state.studioActionKey || 'primary')))
-          return;
-        if (!studioRestoreAuthoredAction(savedAction,message.rawResponse)) return;
-        var oldAction = document.createElement('button');
-        oldAction.type = 'button';
-        oldAction.className = 'studio-dw-suggestion-action';
-        oldAction.dataset.suggestionKind = 'write';
-        oldAction.textContent = savedAction.kind === 'create_scene' || savedAction.kind === 'write_scenes'
-          ? 'Review authored Scene(s)' : 'Review authored Project';
-        oldAction.onclick = function () {
-          var proposal = studioRestoreAuthoredAction(savedAction,message.rawResponse);
-          if (!proposal) return;
-          window.studioDirectorWorkbench.presentAction(proposal, proposal.scene,
-            {projectId:proposal.projectId}, proposal.request, index);
-          renderMessages();
-          var active = el('studio-dw-suggestions').querySelector('.studio-dw-suggestion-action');
-          if (active) active.click();
-        };
-        row.appendChild(oldAction);
-      });
+      // Saved historical action metadata remains readable, but conversation
+      // responses no longer launch implicit Write/Review operations.
       host.appendChild(row);
       if (studioReply && index === state.studioActionIndex) suggestionRow = row;
     });
@@ -1674,7 +1652,7 @@
 
   function syncStudioFlow() {
     var studio = state.activeMode === 'storyboard';
-    var discussed = (state.modeMessages.storyboard || []).some(function (message) {
+    var discussed = (state.modeMessages && state.modeMessages.storyboard || []).some(function (message) {
       return message && message.role === 'user' && String(message.content || '').trim();
     });
     var flow = el('director-studio-flow');
@@ -1968,107 +1946,77 @@
 
   function prepareStudioProject(options) {
     if (state.pending || state.activeMode !== 'storyboard' || !state.sessionReady) return;
-    if (options && options.authoredFields) {
-      // The chat response already authored this material; review the exact fields.
-      state.studioProjectProposal = parseStudioProjectDraft(JSON.stringify(Object.assign({
-        title:'',concept:'',style:'',invariants:[],initialScenes:[],
-        rationale:'Authored in this Director conversation; no second model call.'
-      },options.authoredFields)));
-      showStudioProjectReview();
+    if (!state.modelId) {
+      studioActionStatus('No Director model is available. Refresh models.', true);
       return;
     }
-    if (state.studioProjectProposal) { showStudioProjectReview(); return; }
-    var workingProject = state.studioWorkingDraft.newProject;
-    var authorRequest = String(options && options.authorRequest || options && options.instruction || '');
-    var manualReview = !String(options && options.instruction || '').trim();
-    var newProjectOrigin = state.studioWorkingDraft.draftOrigins &&
-      state.studioWorkingDraft.draftOrigins.newProject;
-    var sameWork = manualReview || !!newProjectOrigin &&
-      newProjectOrigin.request === authorRequest;
-    var retained = sameWork && workingProject
-      ? manualReview ? workingProject : Object.fromEntries(
-          (newProjectOrigin.fields || []).filter(function (field) {
-            return Object.prototype.hasOwnProperty.call(workingProject,field);
-          }).map(function (field) {return [field,workingProject[field]];}))
-      : {};
-    if (Object.keys(retained).length) {
-      state.studioProjectProposal = parseStudioProjectDraft(JSON.stringify(Object.assign({
-        title:'', concept:'', style:'', invariants:[], initialScenes:[],
-        rationale:'Structured Project material retained from Director conversation.'
-      },retained)));
-      studioActionStatus('Project fields ready for review, without another model call.',false);
-      showStudioProjectReview();
-      return;
-    }
-    if (!state.modelId) { studioActionStatus('No Director model is available. Refresh models.', true); return; }
-    var discussion = (state.modeMessages.storyboard || []).filter(function (message) {
-      return message && (message.role === 'assistant' || message.role === 'user');
-    }).filter(function (message) {
-      return !/\[WEBCAP APPLIED FIELD VALUES\]|\[WEBCAP EXPLICIT READ\]/.test(message.content);
-    }).slice(-8).map(function (message) {
-      return {role:message.role,content:message.content};
-    });
-    if (!discussion.some(function (message) { return message.role === 'user'; })) {
-      studioActionStatus('Discuss an idea first, then prepare a Project.', true);
-      return;
-    }
+    var instruction = String(options && options.instruction || '');
+    var saved = false;
+    state.lastStudioIoRaw = '';
+    state.lastStudioIoError = '';
+    var input = {
+      task:'Create one Project with its title, Concept, Visual / atmosphere and relevant Invariants. ' +
+        'Return complete Project field values in the supplied response format. ' +
+        'Scene writing is a separate Write → Scene(s) action.',
+      instruction:instruction
+    };
     state.pending = true;
     state.jobId = '';
-    studioActionStatus('Preparing a new Project for review…', false);
+    studioActionStatus('Writing Project…', false);
     startProgress();
     syncControls();
-    var input = {
-      task: 'Create one usable Project with a distinctive title, developed Concept and core appeal, ' +
-        'Visual / atmosphere, and Invariants only for relevant recurring facts. ' +
-        'When the author wants initial Scenes, include short titled Scene briefs with durations ' +
-        'for later individual Scene authoring. Otherwise return an empty initialScenes array. ' +
-        'Deliver the actual Project fields and a concise rationale now.',
-      instruction: String(options && options.instruction || '').trim(),
-      unsavedWorkingFields:workingProject || {},discussion: discussion
-    };
-    studioDirectorRequestMessages([{ role: 'user', content: JSON.stringify(input) }], false, true)
-      .then(function (messages) {
-        window.studioDirectorWorkbench.showSentWriteContext('studio_project_draft', messages);
-        return requestJson('/fs/director/chat', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ model: state.modelId, operation: 'studio_project_draft', messages: messages })
-        });
-      }).then(function (payload) {
-        if (!payload.job || !payload.job.jobId) throw new Error('Project extraction was not queued.');
-        state.jobId = String(payload.job.jobId);
-        state.requestDiagnostic = payload.job.request || null;
-        trackTransientLlmJob(payload.job);
-        return waitForJob(payload.job);
-      }).then(function (job) {
-        var result = job.result && typeof job.result === 'object' ? job.result : {};
-        state.studioProjectProposal = parseStudioProjectDraft(result.text);
-        state.studioWorkingDraft.newProject = Object.assign({},
-          state.studioWorkingDraft.newProject,
-          studioWorkingFieldChanges(state.studioProjectProposal,
-            ['title','concept','style','invariants']));
-        state.studioWorkingDraft.draftOrigins =
-          state.studioWorkingDraft.draftOrigins || {projects:{},scenes:{}};
-        state.studioWorkingDraft.draftOrigins.newProject = {
-          request:authorRequest,
-          fields:Object.keys(studioWorkingFieldChanges(state.studioProjectProposal,
-            ['title','concept','style','invariants']))
-        };
-        scheduleSessionSave();
-        finishProgress(null);
-        studioActionStatus('Project ready for review. Nothing has been created.', false);
-        showStudioProjectReview();
-      }).catch(function (error) {
-        finishProgress(error);
-        studioActionStatus('Project proposal failed: ' + String(error.message || error), true);
-        if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Studio Project proposal', error);
-        else throw error;
-      }).finally(function () {
-        state.pending = false;
-        state.jobId = '';
-        syncControls();
+    return studioDirectorRequestMessages((state.modeMessages && state.modeMessages.storyboard || []).concat([
+      {role:'user',content:JSON.stringify(input)}
+    ]), false, true).then(function (messages) {
+      window.studioDirectorWorkbench.showSentWriteContext('studio_project_draft', messages);
+      return requestJson('/fs/director/chat', {
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({model:state.modelId,operation:'studio_project_draft',messages:messages})
       });
+    }).then(function (payload) {
+      if (!payload.job || !payload.job.jobId) throw new Error('Project Write did not queue a job.');
+      state.jobId = String(payload.job.jobId);
+      state.requestDiagnostic = payload.job.request || null;
+      trackTransientLlmJob(payload.job);
+      return waitForJob(payload.job);
+    }).then(function (job) {
+      var raw = String(job.result && job.result.text || '');
+      state.lastStudioIoRaw = raw;
+      var proposal;
+      try { proposal = JSON.parse(raw); }
+      catch (error) { throw new Error('Director returned invalid Project JSON: '+error.message+'\\nRaw response:\\n'+raw); }
+      if (!proposal || typeof proposal !== 'object' || Array.isArray(proposal))
+        throw new Error('Director returned no Project object.\\nRaw response:\\n'+raw);
+      return requestJson('/fs/studio/director/project-create', {
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({proposal:{
+          title:proposal.title,concept:proposal.concept,
+          style:proposal.style,invariants:proposal.invariants
+        }})
+      });
+    }).then(function (payload) {
+      if (!payload.story || !payload.story.id) throw new Error('Project save returned no saved Project.');
+      var story = payload.story;
+      saved = true;
+      recordStudioOperation('project.create','Created Project: '+(story.title || story.id),story.id,[]);
+      studioActionStatus('Project saved: '+(story.title || story.id),false);
+      return window.studioDirectorBridge.recordApplied('project.create',story,{
+        title:story.title,concept:story.concept,style:story.style,invariants:story.invariants
+      }).then(function () {return window.refreshStudioDirectorStoryIfOpen(story.id);});
+    }).catch(function (error) {
+      state.lastStudioIoError = String(error.message || error);
+      studioActionStatus(saved ? 'Project saved, but reporting failed: '+state.lastStudioIoError :
+        'Project Write failed: '+state.lastStudioIoError,true);
+      if (typeof window.reportConsoleError === 'function')
+        window.reportConsoleError('Studio Project Write',error);
+      throw error;
+    }).finally(function () {
+      state.pending = false;
+      state.jobId = '';
+      finishProgress(null);
+      syncControls();
+    });
   }
-
 
   // The reviewed Project is saved before any Scene authoring. Each approved
   // brief uses the existing one-Scene writer schema and Studio insertion route.
@@ -2089,7 +2037,7 @@
         project:{title:current.title,concept:current.concept,style:current.style,
           invariants:current.invariants}
       };
-      return studioDirectorRequestMessages([{role:'user',content:JSON.stringify(input)}],
+      return studioDirectorRequestMessages((state.modeMessages && state.modeMessages.storyboard || []).concat([{role:'user',content:JSON.stringify(input)}]),
         true,true,{projectId:story.id,projectTitle:story.title,sceneOrder:current.sceneOrder})
         .then(function (messages) {
           window.studioDirectorWorkbench.showSentWriteContext('studio_scene_field_draft',messages);
@@ -2288,30 +2236,17 @@
 
 
   function parseStudioBriefDraft(raw) {
-    var value = String(raw || '').trim(), fence = String.fromCharCode(96).repeat(3);
-    if (value.startsWith(fence) && value.endsWith(fence)) {
-      var newline = value.indexOf('\n');
-      if (newline >= 0) value = value.slice(newline + 1, -3).trim();
-    }
     var result;
-    try { result = JSON.parse(value); }
-    catch (error) { throw new Error('Director returned invalid Project JSON: ' + error.message +
-      '\nRaw Director response:\n' + String(raw || '')); }
-    if (!result || typeof result !== 'object' || Array.isArray(result))
-      throw new Error('Director returned no Project field replacements.');
-    var fields = studioWorkingFieldChanges(result,['title','concept','style','invariants']);
-    if (Array.isArray(fields.invariants)) {
-      var kinds = ['character','location','visual','world','sound','custom'];
-      if (fields.invariants.length > 30 || fields.invariants.some(function (item) {
-        return !item || typeof item !== 'object' || Array.isArray(item) ||
-          !kinds.includes(item.kind) || typeof item.title !== 'string' ||
-          typeof item.text !== 'string';
-      })) delete fields.invariants; // Keep the original list; other fields survive.
+    try { result = JSON.parse(String(raw || '')); }
+    catch(error) {
+      throw new Error('Director returned invalid Project JSON: '+error.message+
+        '\\nRaw response:\\n'+String(raw || ''));
     }
-    if (!Object.keys(fields).length)
-      throw new Error('Director returned no usable Project field values.\nRaw response:\n' + String(raw || ''));
-    fields.rationale = typeof result.rationale === 'string' ? result.rationale : '';
-    return fields;
+    if (!result || typeof result !== 'object' || Array.isArray(result))
+      throw new Error('Director returned no Project field object.\\nRaw response:\\n'+raw);
+    // Do not silently reinterpret or discard field values. The save endpoint
+    // determines which values can be stored in the selected Project fields.
+    return result;
   }
 
   // A bounded, editable-review-only word comparison. No source text is rewritten.
@@ -2464,141 +2399,92 @@
 
   function prepareStudioBrief(options) {
     if (state.pending || state.activeMode !== 'storyboard' || !state.sessionReady) return;
-    var instruction = String(options && options.instruction || '').trim();
-    var manualReview = !instruction;
     var storyId = String(options && options.storyId || studioAttachedStoryId() || '');
-    if (!(options && options.authoredFields) && state.studioBriefProposal &&
-        state.studioBriefProposal.storyId === storyId &&
-        (!instruction || instruction === state.studioBriefProposal.instruction)) {
-      showStudioBriefReview(); return;
-    }
-    if (instruction || state.studioBriefProposal && state.studioBriefProposal.storyId !== storyId)
-      state.studioBriefProposal = null;
-    if (!storyId) {
-      studioActionStatus('Attach a Project explicitly before updating Concept, Style or Invariants.', true);
-      return;
-    }
-    var discussion = (state.modeMessages.storyboard || []).filter(function (message) {
-      return message && (message.role === 'assistant' || message.role === 'user');
-    }).filter(function (message) {
-      return !/\[WEBCAP APPLIED FIELD VALUES\]|\[WEBCAP EXPLICIT READ\]/.test(message.content);
-    }).slice(-8).map(function (message) {
-      return {role:message.role,content:message.content};
-    });
-    instruction = instruction || String((discussion.filter(function (message) {
-      return message.role === 'user' && !message.content.includes('[WEBCAP APPLIED FIELD VALUES]');
-    }).slice(-1)[0] || {}).content || '').trim();
+    if (!storyId) {studioActionStatus('Choose a Project destination before Write.',true);return;}
+    if (!state.modelId) {studioActionStatus('No Director model is available.',true);return;}
+    var instruction = String(options && options.instruction || '');
     var requestedFields = Array.isArray(options && options.requestedFields)
-      ? options.requestedFields.filter(function (field) {
+      ? options.requestedFields.filter(function(field) {
         return ['title','concept','style','invariants'].includes(field);
       }) : [];
     state.pending = true;
     state.jobId = '';
-    studioActionStatus('Preparing Project Overview for review…', false);
     startProgress();
     syncControls();
-    Promise.resolve().then(function () {
-      return window.flushStudioDirectorStoryEdits(storyId);
-    }).then(function () {
-      return requestJson('/fs/storyboard?story=' + encodeURIComponent(storyId));
-    }).then(function (payload) {
-      var story = payload.story;
-      if (!story || story.id !== storyId) throw new Error('Attached Project is unavailable.');
-      var expected = { title: story.title, concept: story.concept, style: story.style, invariants: story.invariants };
-      var workingProject = options && options.authoredFields || state.studioWorkingDraft.projects[storyId] || {};
-      var authorRequest = String(options && options.authorRequest || instruction);
-      var draftOrigin = state.studioWorkingDraft.draftOrigins &&
-        state.studioWorkingDraft.draftOrigins.projects &&
-        state.studioWorkingDraft.draftOrigins.projects[storyId];
-      // Explicit Review still presents any retained fields against the current
-      // saved baseline. Automatic reuse requires the same target and baseline.
-      var sameWork = !!(options && options.authoredFields) || manualReview ||
-        !!draftOrigin && draftOrigin.request === authorRequest &&
-          draftOrigin.baseline === JSON.stringify(expected);
-      var retained = sameWork
-        ? manualReview || options && options.authoredFields ? workingProject :
-          Object.fromEntries((draftOrigin.fields || []).filter(function (field) {
-            return Object.prototype.hasOwnProperty.call(workingProject,field);
-          }).map(function (field) {return [field,workingProject[field]];}))
-        : {};
-      var required = Object.keys(retained).filter(function (field) {
-        return ['title','concept','style','invariants'].includes(field);
-      });
-      if (required.length) {
-        var drafted = Object.assign({},expected,retained);
-        state.studioBriefProposal = {
-          storyId:storyId,storyTitle:story.title,expected:expected,draft:drafted,
-          instruction:instruction,requestedFields:required,
-          rationale:'Structured Director fields retained; no additional model request.'
-        };
-        finishProgress(null);
-        studioActionStatus('Project fields ready for review, without another model call.',false);
-        showStudioBriefReview();
-        return;
-      }
-      if (!state.modelId)
-        throw new Error('No Director model is available to author new Project fields.');
+    studioActionStatus('Writing Project fields…',false);
+    var original, saved = false;
+    state.lastStudioIoRaw = '';
+    state.lastStudioIoError = '';
+    return window.flushStudioDirectorStoryEdits(storyId).then(function () {
+      return requestJson('/fs/storyboard?story='+encodeURIComponent(storyId));
+    }).then(function (response) {
+      original = response.story;
+      if (!original || original.id !== storyId) throw new Error('Selected Project is unavailable.');
       var input = {
-        task: 'Revise the requested Project fields using the supplied saved Project as baseline. ' +
-          'Return complete replacement values for the fields you improve, preserving established ' +
-          'creative direction and all unaffected fields and Scenes.',
-        instruction: instruction, requestedFields: requestedFields,
-        // This explicit targeted Project revision authorizes its own saved baseline.
-        project: {id:story.id,title:story.title,concept:story.concept,
-          style:story.style,invariants:story.invariants},
-        unsavedWorkingFields:workingProject,discussion: discussion
+        task:'Revise the requested Project fields. Return complete replacement values for the fields you change. ' +
+          'Preserve unrelated saved Project fields and Scenes.',
+        instruction:instruction,
+        requestedFields:requestedFields,
+        project:{title:original.title,concept:original.concept,
+          style:original.style,invariants:original.invariants}
       };
-      return studioDirectorRequestMessages([{ role: 'user', content: JSON.stringify(input) }], false, true)
-        .then(function (messages) {
-          window.studioDirectorWorkbench.showSentWriteContext('studio_brief_draft', messages);
-          return requestJson('/fs/director/chat', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({model: state.modelId, operation: 'studio_brief_draft', messages: messages,
-              requiredFields:requestedFields})
-          });
-        }).then(function (result) {
-          if (!result.job || !result.job.jobId) throw new Error('Creative brief extraction was not queued.');
-          state.jobId = String(result.job.jobId);
-          state.requestDiagnostic = result.job.request || null;
-          trackTransientLlmJob(result.job);
-          return waitForJob(result.job);
-        }).then(function (job) {
-          var result = job.result && typeof job.result === 'object' ? job.result : {};
-          var changes = parseStudioBriefDraft(result.text);
-          state.studioWorkingDraft.projects[storyId] = Object.assign({},
-            state.studioWorkingDraft.projects[storyId],
-            studioWorkingFieldChanges(changes,['title','concept','style','invariants']));
-          state.studioWorkingDraft.draftOrigins =
-            state.studioWorkingDraft.draftOrigins || {projects:{},scenes:{}};
-          state.studioWorkingDraft.draftOrigins.projects =
-            state.studioWorkingDraft.draftOrigins.projects || {};
-          state.studioWorkingDraft.draftOrigins.projects[storyId] = {
-            request:authorRequest,baseline:JSON.stringify(expected),
-            fields:Object.keys(studioWorkingFieldChanges(changes,['title','concept','style','invariants']))
-          };
-          scheduleSessionSave();
-          var draft = Object.assign({},expected,changes);
-          state.studioBriefProposal = {
-            storyId: storyId, storyTitle: story.title, expected: expected, draft: draft,
-            instruction:instruction,
-            requestedFields:requestedFields.length ? requestedFields :
-              Object.keys(changes).filter(function (key) {
-                return ['title','concept','style','invariants'].includes(key);
-              }),
-            rationale: changes.rationale
-          };
-          finishProgress(null);
-          studioActionStatus('Project Overview ready for review. Nothing has changed.', false);
-          showStudioBriefReview();
-        });
+      return studioDirectorRequestMessages((state.modeMessages && state.modeMessages.storyboard || []).concat([
+        {role:'user',content:JSON.stringify(input)}
+      ]),false,true);
+    }).then(function (messages) {
+      window.studioDirectorWorkbench.showSentWriteContext('studio_brief_draft',messages);
+      return requestJson('/fs/director/chat',{
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({model:state.modelId,operation:'studio_brief_draft',
+          messages:messages,requiredFields:requestedFields})
+      });
+    }).then(function (payload) {
+      if (!payload.job || !payload.job.jobId) throw new Error('Project Write did not queue.');
+      state.jobId = String(payload.job.jobId);
+      state.requestDiagnostic = payload.job.request || null;
+      trackTransientLlmJob(payload.job);
+      return waitForJob(payload.job);
+    }).then(function (job) {
+      var raw = String(job.result && job.result.text || '');
+      state.lastStudioIoRaw = raw;
+      var authored = parseStudioBriefDraft(raw);
+      var changes = {},expected = {};
+      ['title','concept','style','invariants'].forEach(function (field) {
+        if (Object.prototype.hasOwnProperty.call(authored,field) &&
+            JSON.stringify(authored[field]) !== JSON.stringify(original[field])) {
+          changes[field] = authored[field];
+          expected[field] = original[field];
+        }
+      });
+      if (!Object.keys(changes).length) {
+        studioActionStatus('Director returned no Project field changes.',false);
+        return null;
+      }
+      return requestJson('/fs/studio/director/brief',{
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({storyId:storyId,expected:expected,changes:changes})
+      }).then(function (result) {
+        if (!result.story || !result.revisionId)
+          throw new Error('Project save returned no authoritative revision.');
+        saved = true;
+        recordStudioOperation('brief.apply','Updated '+Object.keys(changes).join(', '),storyId,[]);
+        studioActionStatus('Project fields saved.',false);
+        var values = {};
+        Object.keys(changes).forEach(function (key) {values[key]=result.story[key];});
+        return window.studioDirectorBridge.recordApplied('brief.apply',result.story,values)
+          .then(function () {return window.refreshStudioDirectorStoryIfOpen(storyId);});
+      });
     }).catch(function (error) {
-      finishProgress(error);
-      studioActionStatus('Creative brief proposal failed: ' + String(error.message || error), true);
-      if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Studio Brief proposal', error);
-      else throw error;
+      state.lastStudioIoError = String(error.message || error);
+      studioActionStatus(saved ? 'Project saved, but reporting failed: '+state.lastStudioIoError
+        : 'Project Write failed: '+state.lastStudioIoError,true);
+      if (typeof window.reportConsoleError === 'function')
+        window.reportConsoleError('Studio Project Write',error);
+      throw error;
     }).finally(function () {
       state.pending = false;
       state.jobId = '';
+      finishProgress(null);
       syncControls();
     });
   }
@@ -3214,17 +3100,10 @@
         throw new Error('Studio Director creative guidance is unavailable.');
       if (includePromptContract && (!payload.promptContract || typeof payload.promptContract !== 'string'))
         throw new Error('H3 prompt-authoring reference is unavailable.');
-      // Application receipts and restored inspection metadata are not user/LLM discussion.
-      var recent = messages.filter(function (message) {
-        return !/\[WEBCAP APPLIED FIELD VALUES\]|\[WEBCAP EXPLICIT READ\]/.test(
-          String(message.content || ''));
-      }).slice(-8);
-      var outbound = [{role:'system', content:payload.system}].concat(recent.map(function (message, index) {
-        var content = String(message.content || '');
-        if (index < recent.length - 1 && content.length > 3000)
-          content = content.slice(0,1800) + '\n[Earlier long message abbreviated]\n' +
-            content.slice(-900);
-        return {role:message.role,content:content};
+      // Preserve the complete actual conversation, including long messages.
+      // Task-specific Write material is supplied separately by the caller.
+      var outbound = [{role:'system', content:payload.system}].concat(messages.map(function(message) {
+        return {role:message.role, content:String(message.content || '')};
       }));
       if (includePromptContract)
         outbound[0].content += '\n\nH3 PROMPT AUTHORING REFERENCE:\n' + payload.promptContract;
@@ -3270,15 +3149,9 @@
         });
     })).then(function (approvedPayloads) {
       // Do not leak the selected editor's creative content through automatic navigation context.
-      return studioDirectorRequestMessages(messages, true, false,
+      return studioDirectorRequestMessages(messages, false, false,
         {projectId:'',projectTitle:'',sceneId:'',sceneNumber:0,sceneOrder:[]}).then(function (outbound) {
-        outbound[0].content += '\n\nSTUDIO CONVERSATION DELIVERY: Answer the author in the JSON reply field on every turn. ' +
-          'For creative discussion, give concrete alternatives, your recommendation and why in reply. ' +
-          'When creating or revising Project or Scene material, include the actual authored fields alongside reply. ' +
-          'Use changes.project for authored Project field values; changes.scene for changes to an existing Scene; ' +
-          'and scenes for new Scene drafts. A creative Scene revision includes the complete replacement H3 prompt. ' +
-          'Include every useful field or Scene that is ready, even when another part needs a question. ' +
-          'These are drafts; WebCap decides where and whether to save them.\n';
+        outbound[0].content += '\n\nAnswer the author conversationally. Project and Scene writing are explicit functions, not conversational output requirements.\n';
         if (approvedPayloads.length) {
           outbound[0].content += '\nAUTHOR-APPROVED SAVED CONTEXT (independent sources; refreshed for this request):\n' +
             JSON.stringify(approvedPayloads) +
@@ -3286,19 +3159,6 @@
         } else {
           outbound[0].content += '\nNo saved Project or Scene reference was supplied for this conversation.\n';
         }
-        // Earlier authored responses belong to this conversation, not any selected Project.
-        // Include actual structured fields, rather than only the visible prose summary.
-        var prior = messages.filter(function (message) {
-          return message.role === 'assistant' && typeof message.rawResponse === 'string';
-        }).slice(-3).map(function (message) {
-          var parsed = parseStudioChatResponse(message.rawResponse);
-          return {changes:parsed.changes,scenes:parsed.scenes};
-        }).filter(function (material) {
-          return material.changes || material.scenes && material.scenes.length;
-        });
-        if (prior.length)
-          outbound[0].content += '\nRECENT UNSAVED MATERIAL AUTHORED IN THIS CONVERSATION:\n' +
-            JSON.stringify(prior) + '\nSaved fields, if any, must still come from the approved references above.\n';
         return outbound;
       });
     });
@@ -3373,68 +3233,12 @@
   }
 
   function parseStudioChatResponse(raw) {
-    var text = String(raw || '').trim();
-    if (!text) throw new Error('Director returned no answer.');
-    var value;
-    try { value = JSON.parse(text); }
-    catch (_) { return {reply:text,action:null,changes:null}; }
-    // Accept structured action metadata when supplied, without making it a
-    // prerequisite for a useful conversational answer.
-    if (!value || typeof value !== 'object' || Array.isArray(value))
-      return {reply:text,action:null,changes:null};
-    // The model may return useful authored fields without a conversational
-    // reply. Display a short factual inventory of what was actually authored,
-    // not raw JSON masquerading as creative conversation. The original result
-    // remains available in Director I/O and for independent Review actions.
-    var reply = typeof value.reply === 'string' && value.reply.trim()
-      ? value.reply : '';
-    if (!reply) {
-      var summaries = [];
-      var changes = value.changes && typeof value.changes === 'object' ? value.changes : {};
-      function summaryFields(record, permitted) {
-        if (!record || typeof record !== 'object' || Array.isArray(record)) return [];
-        return permitted.filter(function (field) {
-          var current = record[field];
-          return typeof current === 'string' && !!current.trim() ||
-            field === 'invariants' && Array.isArray(current) && !!current.length ||
-            field === 'durationSeconds' && typeof current === 'number' && Number.isFinite(current);
-        });
-      }
-      function draftLabel(kind, record, permitted) {
-        var authored = summaryFields(record,permitted);
-        if (!authored.length) return;
-        var name = record && typeof record.title === 'string' && record.title.trim()
-          ? ' “' + record.title.trim().slice(0,100) + '”' : '';
-        var labels = {style:'visual style',prompt:'H3 prompt',durationSeconds:'duration',
-          invariants:'invariants'};
-        summaries.push(kind + name + ' — ' + authored.map(function (field) {
-          return labels[field] || field;
-        }).join(', ') + '.');
-      }
-      draftLabel('Project draft',changes.project,['title','concept','style','invariants']);
-      draftLabel('Scene revision draft',changes.scene,['title','prompt','durationSeconds']);
-      var scenes = Array.isArray(value.scenes) ? value.scenes.filter(function (scene) {
-        return !!summaryFields(scene,['title','prompt','durationSeconds']).length;
-      }) : [];
-      if (scenes.length) {
-        var sceneNames = scenes.slice(0,3).map(function (scene) {
-          return typeof scene.title === 'string' && scene.title.trim() ?
-            '“' + scene.title.trim().slice(0,80) + '”' : '';
-        }).filter(Boolean);
-        summaries.push(scenes.length + ' new Scene draft' + (scenes.length === 1 ? '' : 's') +
-          (sceneNames.length ? ': ' + sceneNames.join(', ') : '') + '.');
-      }
-      reply = summaries.length ? summaries.join(' ') + ' Review the proposed material below.' : text;
-    }
-    var action = value.action;
-    if (!action || typeof action !== 'object' || Array.isArray(action) ||
-        !['create_project','write_project','create_scene','write_scenes'].includes(action.kind) ||
-        typeof action.instruction !== 'string' || !action.instruction.trim())
-      action = null;
-    return {reply:reply,action:action,changes:value.changes || null,
-      scenes:Array.isArray(value.scenes) ? value.scenes : null};
+    // Ordinary Director is conversation only. Display exactly what the model
+    // returned; do not infer authoring fields, actions, or completion.
+    var text=String(raw == null ? '' : raw);
+    if (!text.trim()) throw new Error('Director returned no answer.');
+    return {reply:text,action:null,changes:null,scenes:null};
   }
-
 
   function storyboardRequestMessages(messages, includePrimer) {
     var context = includePrimer === false ? [] : [STORYBOARD_WORKSHOP_PRIMER];
@@ -3605,7 +3409,7 @@
     if (state.workshop.shotError) throw new Error(state.workshop.shotError);
     if (state.pending || !state.modelId) return;
     if (state.workshopProposal) { showWorkshopReview(); return; }
-    var decisions = (state.modeMessages.storyboard || []).filter(function (message) {
+    var decisions = (state.modeMessages && state.modeMessages.storyboard || []).filter(function (message) {
       return message && (message.role === 'assistant' || message.role === 'user');
     }).map(function (message) {
       return {role:message.role,content:message.content};
@@ -3824,34 +3628,6 @@
           sceneNumber:resolvedTarget.sceneNumber
         } : selectedScene;
         var targetProject = resolvedTarget.projectId ? {projectId:resolvedTarget.projectId} : selectedProject;
-        // Authored fields, never action hints or parsed author prose, own review affordances.
-        // Keep every independently authored result visible and reviewable.
-        var actions = studioAuthoredWriteActions(studioResponse,content,targetScene);
-        if (activeChatMode === 'storyboard' && studioResponse && studioResponse.changes)
-          window.studioDirectorWorkbench.updateWorkingWrite();
-        var nextAction = actions.pop() || null;
-        var otherActions = actions;
-        if (nextAction) {
-          var assistantIndex = messages.length - 1;
-          // Store alternate actions independently rather than overwriting
-          // their review paths with the last returned Scene.
-          if (otherActions.length)
-            messages[assistantIndex].otherWriteActions = otherActions.map(function (action, i) {
-              return Object.assign({},action,{
-                actionKey:'alternate-' + i,request:content,
-                sourceMessageIndex:assistantIndex,
-                projectId:String(targetProject && targetProject.projectId || ''),
-                scene:targetScene && Object.assign({},targetScene)
-              });
-            });
-          nextAction.actionKey = 'primary';
-          try {
-            messages[assistantIndex].writeAction = window.studioDirectorWorkbench.presentAction(
-              nextAction, targetScene, targetProject, content, assistantIndex);
-          } catch (processingError) {
-            window.reportConsoleError('Studio action suggestion', processingError);
-          }
-        }
         if (studioResponse) messages[messages.length - 1].rawResponse = String(result.text || '');
         if (activeChatMode === 'storyboard' && studioResponse) el('studio-director-inspect').dataset.newResult = 'true';
         var assistantIndex = messages.length - 1;
@@ -4447,7 +4223,7 @@
     },
     modelId: function () { return state.modelId; },
     messages: function () {
-      return (state.modeMessages.storyboard || []).map(function (message) {
+      return (state.modeMessages && state.modeMessages.storyboard || []).map(function (message) {
         return {role:message.role,content:message.content};
       });
     },
@@ -4799,18 +4575,9 @@
       });
     },
     writeNewScene: function (launch) {
-      if (state.studioScenesProposal && !Number.isInteger(state.studioScenesProposal.sourceMessageIndex))
-        return Promise.reject(new Error('Finish the independent Scene review before authoring another.'));
-      var newSceneOrigin = state.studioWorkingDraft.draftOrigins &&
-        state.studioWorkingDraft.draftOrigins.newScene;
-      var prepared = launch && !launch.forceAuthor && newSceneOrigin &&
-        newSceneOrigin.projectId === launch.projectId &&
-        newSceneOrigin.request === String(launch.authorRequest || launch.instruction) &&
-        state.studioWorkingDraft.newScene &&
-        typeof state.studioWorkingDraft.newScene.prompt === 'string' &&
-        !!state.studioWorkingDraft.newScene.prompt.trim();
-      if (!this.isReady() && !(prepared && this.canReview()))
-        return Promise.reject(new Error(this.readinessMessage()));
+      // Each explicit Write is a new model request. Historical draft caches are
+      // not an alternative authoring path and never suppress a Write.
+      if (!this.isReady()) return Promise.reject(new Error(this.readinessMessage()));
       if (!launch || !launch.projectId || !String(launch.instruction || '').trim())
         return Promise.reject(new Error('A saved Project and agreed new-Scene brief are required.'));
       var storyId = launch.projectId;
@@ -4832,41 +4599,33 @@
             var scene = story.scenes[id];
             return scene && scene.title || '';
           }),
+          // Give an explicit Scene Write all saved Scene continuity; never
+          // assume the most recent Scene is the only relevant reference.
+          existingScenes:order.map(function (id) {
+            var scene = story.scenes[id];
+            return {id:id,title:scene.title,prompt:scene.prompt,
+              durationSeconds:scene.durationSeconds};
+          }),
           previousScene:order.length ? (function () {
             var prior = story.scenes[order[order.length - 1]];
             return {title:prior.title,prompt:prior.prompt,durationSeconds:prior.durationSeconds};
           })() : null
         };
-        var baseline = JSON.stringify({sceneOrder:order,project:creativeContext});
-        var draftOrigin = state.studioWorkingDraft.draftOrigins &&
-          state.studioWorkingDraft.draftOrigins.newScene;
-        var sameSource = !!draftOrigin && draftOrigin.projectId === storyId &&
-          draftOrigin.request === String(launch.authorRequest || launch.instruction);
-        var reuse = !launch.forceAuthor && sameSource && draftOrigin.baseline === baseline &&
-          state.studioWorkingDraft.newScene &&
-          typeof state.studioWorkingDraft.newScene.prompt === 'string' &&
-          !!state.studioWorkingDraft.newScene.prompt.trim();
         var instruction = JSON.stringify({
           task:'Create the requested independently generatable H3 Scenes for this Project. ' +
             'Give each Scene a useful title, complete H3 Prompt and durationSeconds ' +
-            '(4–15 seconds, default 6 when unspecified). Honor the author\'s creative direction, ' +
-            'specific titles and timings. Deliver every Scene you can usefully author now.',
+            '(4–15 seconds). Follow any author-specified timing; when no duration is ' +
+            'specified, choose an appropriate duration from the authored action, rather ' +
+            'than using an implicit WebCap default. Deliver all useful Scenes now.',
           authorDirection:launch.authorRequest || launch.instruction,
-          project:Object.assign({},creativeContext,{
-            unsavedWorkingFields:sameSource ? (state.studioWorkingDraft.newScene || {}) : {}
-          })
+          project:creativeContext
         });
-        var workingScene = state.studioWorkingDraft.newScene;
-        if (!reuse) state.pending = false;
-        var proposal = reuse ?
-          Promise.resolve(JSON.stringify(Object.fromEntries(
-            (draftOrigin.fields || []).filter(function (field) {
-              return Object.prototype.hasOwnProperty.call(workingScene,field);
-            }).map(function (field) {return [field,workingScene[field]];})))) :
-          window.studioDirectorBridge.makeProposal(instruction,
-            'studio_scenes_draft', true,
-            {projectId:storyId,projectTitle:story.title,sceneOrder:order});
-        return proposal.then(function (raw) {
+        // The model, not an old single-Scene working draft, authors this request.
+        state.pending = false;
+        return window.studioDirectorBridge.makeProposal(instruction,
+          'studio_scenes_draft', true,
+          {projectId:storyId,projectTitle:story.title,sceneOrder:order})
+        .then(function (raw) {
           state.lastStudioIoRaw = raw;
           var fields;
           try { fields = JSON.parse(raw); }
@@ -4901,97 +4660,59 @@
               Number(item.durationSeconds) < 4 || Number(item.durationSeconds) > 15);
           });
           var draft = {scenes:drafts,rationale:typeof fields.rationale === 'string' ? fields.rationale : ''};
-          // The author's requested timing belongs in the actual authored Scene.
-          // A missing duration stays editable instead of silently becoming six seconds.
-          // Preserve the existing one-Scene working draft contract. Multi-Scene
-          // records belong to the multi-Scene review, not a singleton cache.
-          if (drafts.length === 1) {
-            state.studioWorkingDraft.newScene = Object.assign({},
-              state.studioWorkingDraft.newScene,
-              studioWorkingFieldChanges(drafts[0],['title','prompt','durationSeconds']));
-            state.studioWorkingDraft.draftOrigins =
-              state.studioWorkingDraft.draftOrigins || {projects:{},scenes:{}};
-            state.studioWorkingDraft.draftOrigins.newScene = {
-              projectId:storyId,
-              request:String(launch.authorRequest || launch.instruction),
-              baseline:baseline,
-              fields:Object.keys(studioWorkingFieldChanges(drafts[0],['title','prompt','durationSeconds']))
-            };
-            scheduleSessionSave();
-          }
-          // A missing Prompt retains an editable partial draft without
-          // attempting to persist an empty Scene.
-          if (drafts.length !== 1 || missingPrompt || missingDuration ||
-              invalidDuration || !launch.directSave) {
-            var priorReview = state.studioScenesProposal;
-            if (priorReview && Number.isInteger(priorReview.sourceMessageIndex)) {
-              rememberStudioScenesReview();
-              state.studioScenesReviewsByResponse[priorReview.sourceMessageIndex] = priorReview;
-            }
-            state.studioScenesProposal = {
-              storyId:storyId, storyTitle:story.title, sceneOrder:order,
-              scenes:story.scenes, drafts:draft.scenes, rationale:draft.rationale,
-              sourceMessageIndex:launch.sourceMessageIndex,
-              sourceScenesSignature:JSON.stringify(draft.scenes)
-            };
-            showStudioScenesReview();
-            studioActionStatus(missingPrompt
-              ? 'Scene fields retained. Complete the missing H3 Prompt in Review before saving.'
-              : missingDuration || invalidDuration
-                ? 'Scene duration needs review. Authored fields retained; nothing saved.'
-                : drafts.length + ' authored Scene' + (drafts.length === 1 ? '' : 's') +
-                  ' ready for review. Nothing has been saved.',
-              missingDuration || invalidDuration);
-            return {review:true};
-          }
-          var scene = draft.scenes[0];
-          if (!scene || typeof scene.prompt !== 'string' || !scene.prompt.trim())
-            throw new Error('Director returned no usable Scene Prompt.');
-          var validDuration = Number(scene.durationSeconds);
-          var creation = {
-            title:String(scene.title || '').trim() || 'Scene ' + (order.length + 1),
-            prompt:scene.prompt, durationSeconds:validDuration
-          };
+          // Persist each mechanically usable Scene returned by this explicit Write.
+          // Do not invent missing prompt text or duration values, or launch Review.
+          var valid = drafts.filter(function (item) {
+            return item.title.trim() && item.prompt.trim() &&
+              Number.isInteger(Number(item.durationSeconds)) &&
+              Number(item.durationSeconds)>=4 && Number(item.durationSeconds)<=15;
+          });
+          var omitted = drafts.length-valid.length;
+          if (!valid.length)
+            throw new Error('Director returned no Scene records with persistable fields.\\nRaw response:\\n'+raw);
+          var creations = valid.map(function (item,index) {
+            return {title:item.title.trim(),
+              prompt:item.prompt,durationSeconds:Number(item.durationSeconds)};
+          });
           state.pending = true;
           syncControls();
-          return requestJson('/fs/studio/director/scenes-draft', {
-            method:'POST', headers:{'Content-Type':'application/json'},
-            body:JSON.stringify({
-              storyId:storyId, expectedSceneOrder:order, scenes:[creation],
-              placement:'end', relativeSceneId:''
-            })
+          return requestJson('/fs/studio/director/scenes-draft',{
+            method:'POST',headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({storyId:storyId,expectedSceneOrder:order,
+              scenes:creations,placement:'end',relativeSceneId:''})
           }).then(function (result) {
             if (!result || !result.story || result.story.id !== storyId ||
-                !Array.isArray(result.scenes) || result.scenes.length !== 1 ||
-                !result.scenes[0].id)
-              throw new Error('Scene creation returned no confirmed saved result.');
-            var saved = result.scenes[0];
-            // The server has committed the new Scene. Clear a matching draft
-            // before refresh/receipt, so a later reporting failure cannot
-            // cause the same candidate to be inserted twice.
-            if (state.studioWorkingDraft.newScene.prompt === saved.prompt) {
-              state.studioWorkingDraft.newScene = {};
+                !Array.isArray(result.scenes) || result.scenes.length !== creations.length ||
+                result.scenes.some(function(item){return !item.id;}))
+              throw new Error('Scene save did not confirm the returned Scene records.');
+            var saved = result.scenes;
+            if (saved.length===1 && state.studioWorkingDraft.newScene.prompt===saved[0].prompt) {
+              state.studioWorkingDraft.newScene={};
               if (state.studioWorkingDraft.draftOrigins)
-                state.studioWorkingDraft.draftOrigins.newScene = null;
+                state.studioWorkingDraft.draftOrigins.newScene=null;
               scheduleSessionSave();
             }
-            return window.refreshStudioDirectorStoryIfOpen(storyId).then(function () {
-              return window.studioDirectorBridge.recordApplied('scene.create',result.story,{
-                scenes:[{id:saved.id,title:saved.title,prompt:saved.prompt,
-                  durationSeconds:saved.durationSeconds}]
+            recordStudioOperation('scenes.create','Created '+saved.length+' Scene(s)',storyId,
+              saved.map(function(item){return item.id;}));
+            return window.studioDirectorBridge.recordApplied('scenes.create',result.story,{
+              scenes:saved.map(function(item){
+                return {id:item.id,title:item.title,prompt:item.prompt,
+                  durationSeconds:item.durationSeconds};
+              })
+            }).then(function(){return window.refreshStudioDirectorStoryIfOpen(storyId);})
+              .catch(function(error){error.saved=true;throw error;})
+              .then(function(){
+                studioActionStatus(saved.length+' Scene(s) saved.'+
+                  (omitted ? ' '+omitted+' returned record(s) could not be stored; inspect raw I/O.' : ''),!!omitted);
+                return result;
               });
-            }).catch(function (error) {
-              error.saved = true;
-              throw error;
-            }).then(function () {
-              studioActionStatus('Scene created and saved: ' + saved.title, false);
-              return result;
-            });
           });
         });
       }).catch(function (error) {
         state.lastStudioIoError = String(error.message || error);
-        studioActionStatus('New Scene draft failed: ' + state.lastStudioIoError, true);
+        studioActionStatus(error.saved
+          ? 'Scenes saved, but recording or refreshing failed: ' + state.lastStudioIoError
+          : 'New Scene Write failed: ' + state.lastStudioIoError, true);
         window.reportConsoleError('Director new Scene', error);
         throw error;
       }).finally(function () {
@@ -5024,57 +4745,11 @@
             !story.sceneOrder.includes(sceneId) || !story.scenes || !story.scenes[sceneId])
           throw new Error('Selected Scene is no longer available in its saved Project.');
         var original = story.scenes[sceneId];
-        var workingScene = state.studioWorkingDraft.scenes[sceneId];
-        var draftOrigin = state.studioWorkingDraft.draftOrigins &&
-          state.studioWorkingDraft.draftOrigins.scenes &&
-          state.studioWorkingDraft.draftOrigins.scenes[sceneId];
         var baseline = JSON.stringify({
           title:original.title,prompt:original.prompt,durationSeconds:original.durationSeconds
         });
-        // A partial result remains available for Review, but cannot satisfy a
-        // later retry unless every requested field was actually authored.
-        // In particular, a title does not stand in for a requested H3 Prompt.
-        var completeDraft = !!draftOrigin && requestedFields.every(function (field) {
-          return Array.isArray(draftOrigin.fields) && draftOrigin.fields.includes(field) &&
-            workingScene && Object.prototype.hasOwnProperty.call(workingScene,field);
-        });
-        var applyExisting = !launch.forceAuthor && completeDraft &&
-          draftOrigin.projectId === storyId &&
-          draftOrigin.request === String(launch.authorRequest || launch.instruction) &&
-          draftOrigin.baseline === baseline;
-        if (workingScene && applyExisting) {
-          var pendingChanges = {};
-          fields.forEach(function (field) {
-            if (Array.isArray(draftOrigin.fields) && draftOrigin.fields.includes(field) &&
-                Object.prototype.hasOwnProperty.call(workingScene,field))
-              pendingChanges[field] = workingScene[field];
-          });
-          if (draftOrigin.timingNeedsReview) {
-            studioActionStatus('Scene timing still needs review; authored fields retained. Nothing saved.',true);
-            return {review:true};
-          }
-          if (Object.keys(pendingChanges).length) {
-            // A duration requested through an explicit Write must be supplied
-            // as a real, supported field before WebCap can save a timed revision.
-            if (wantsDuration && (!Number.isInteger(pendingChanges.durationSeconds) ||
-                pendingChanges.durationSeconds < 4 || pendingChanges.durationSeconds > 15)) {
-              studioActionStatus('Scene timing is missing or unsupported. Draft retained for review; nothing saved.',true);
-              return {review:true};
-            }
-            var prompt = Object.prototype.hasOwnProperty.call(pendingChanges,'prompt') ?
-              pendingChanges.prompt : null;
-            delete pendingChanges.prompt;
-            if (prompt === null && !Object.keys(pendingChanges).length)
-              return null;
-            var missing = wantsTitle && !pendingChanges.title ? ' Requested title was not updated.' : '';
-            return window.studioDirectorWorkbench.applyScenePrompt(story,sceneId,
-              prompt,pendingChanges).then(function (result) {
-                studioActionStatus('Scene ' + (story.sceneOrder.indexOf(sceneId) + 1) +
-                  ' saved from existing structured draft.' + missing,!!missing);
-                return result;
-              });
-          }
-        }
+        // An explicit selected-Scene Write always asks the model anew. Saved
+        // fields are the authoritative baseline; no Review cache can shortcut it.
         // Explicitly launching revision of this saved Scene authorizes its baseline.
         var context = window.studioDirectorWorkbench.sceneRead(story,sceneId).payload;
         var instruction = JSON.stringify({
@@ -5084,8 +4759,7 @@
             'Deliver the actual authored values in one JSON object.',
           authorDirection:launch.authorRequest || launch.instruction,
           requestedFields:requestedFields,
-          savedScene:context,
-          unsavedWorkingFields:workingScene || {}
+          savedScene:context
         });
         state.pending = false;
         return window.studioDirectorBridge.makeProposal(instruction, 'studio_scene_field_draft', wantsPrompt,
@@ -5109,37 +4783,16 @@
               if (Number.isInteger(proposed.durationSeconds) &&
                   proposed.durationSeconds >= 4 && proposed.durationSeconds <= 15)
                 extras.durationSeconds = proposed.durationSeconds;
-              else missing.push('duration');
+              else missing.push('durationSeconds');
             }
             var prompt = wantsPrompt && typeof proposed.prompt === 'string' && proposed.prompt.trim()
               ? proposed.prompt : null;
+            if (wantsPrompt && prompt === null) missing.push('prompt');
             var authored = Object.assign({},extras,prompt !== null ? {prompt:prompt} : {});
-            // Keep independent requested fields even when the model omits the
-            // required creative prompt. The missing prompt remains an error.
-            if (Object.keys(authored).length) {
-              state.studioWorkingDraft.scenes[sceneId] = Object.assign(
-                {},state.studioWorkingDraft.scenes[sceneId] || {},authored);
-              state.studioWorkingDraft.draftOrigins =
-                state.studioWorkingDraft.draftOrigins || {projects:{},scenes:{}};
-              state.studioWorkingDraft.draftOrigins.scenes =
-                state.studioWorkingDraft.draftOrigins.scenes || {};
-              state.studioWorkingDraft.draftOrigins.scenes[sceneId] = {
-                projectId:storyId,
-                request:String(launch.authorRequest || launch.instruction),
-                baseline:baseline,
-                fields:Object.keys(authored),
-                timingNeedsReview:wantsDuration && !Object.hasOwn(extras,'durationSeconds')
-              };
-              scheduleSessionSave();
-            }
-            if (wantsPrompt && prompt === null)
-              throw new Error('Director did not return the requested Scene prompt. Other usable requested fields are retained for review.\nRaw response:\n' + raw);
+            // An explicit Write has no Review cache. Save each mechanically
+            // usable requested field and report independently missing fields.
             if (!Object.keys(authored).length)
-              throw new Error('Director did not return the requested Scene fields.\nRaw response:\n' + raw);
-            if (wantsDuration && !Object.hasOwn(extras,'durationSeconds')) {
-              studioActionStatus('Scene timing is missing or unsupported. Authored fields retained for review; nothing saved.',true);
-              return {review:true};
-            }
+              throw new Error('Director did not return any usable requested Scene fields.\\nRaw response:\\n' + raw);
             if ((prompt === null || prompt.trim() === String(original.prompt || '').trim()) &&
                 (!Object.hasOwn(extras,'title') || extras.title === String(original.title || '').trim()) &&
                 (!Object.hasOwn(extras,'durationSeconds') || extras.durationSeconds === original.durationSeconds)) {
@@ -5153,7 +4806,7 @@
             return window.studioDirectorWorkbench.applyScenePrompt(story, sceneId, prompt, extras)
               .then(function (savedResult) {
                 studioActionStatus('Scene ' + (story.sceneOrder.indexOf(sceneId)+1) + ' saved.' +
-                   (missing.length ? ' Requested ' + missing.join(' and ') + ' not updated; inspect the saved Scene.' : ''),!!missing.length);
+                   (missing.length ? ' Requested ' + missing.join(' and ') + ' not supplied; inspect raw I/O.' : ''),!!missing.length);
                 return savedResult;
               });
           });
@@ -5181,7 +4834,7 @@
       state.pending = true;
       syncControls();
       startProgress();
-      return studioDirectorRequestMessages([{role:'user',content:instruction}], includePromptContract, true, navigationSnapshot).then(function (messages) {
+      return studioDirectorRequestMessages((state.modeMessages && state.modeMessages.storyboard || []).concat([{role:'user',content:instruction}]), includePromptContract, true, navigationSnapshot).then(function (messages) {
         window.studioDirectorWorkbench.showSentWriteContext(operation || 'studio_scene_field_draft', messages);
         return requestJson('/fs/director/chat', {
           method:'POST',headers:{'Content-Type':'application/json'},

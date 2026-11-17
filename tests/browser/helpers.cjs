@@ -101,4 +101,30 @@ async function ensureAttachedProject(page,expectedTitle) {
   if(await attach.isVisible()) await attach.click();
   await expect(label).toContainText(expectedTitle);
 }
-module.exports={reopenDirectorIfClosed,freshDirectorSession,ensureAttachedProject,resetModel,queueModel,observedModels,openDirector,say,stories,story,seedProject,seedScene,openProject};
+async function openWrite(page, {projectId, operation='project', sceneMode, instruction='', sceneIds=[]}={}) {
+  await reopenDirectorIfClosed(page);
+  const tools=page.locator('#studio-dw-open-tools');
+  if(await tools.getAttribute('aria-expanded')!=='true') await tools.click();
+  const panel=page.locator('#studio-dw-write-panel');
+  if(!(await panel.isVisible())) await page.locator('#studio-dw-write').click();
+  await expect(panel).toBeVisible();
+  const op=page.locator('#studio-dw-write-operation');
+  if(projectId) {
+    const select=page.locator('#studio-dw-write-project');
+    await expect(select.locator('option[value="'+projectId+'"]')).toHaveCount(1);
+    await select.selectOption(projectId);
+  }
+  await op.selectOption(operation);
+  if(operation==='scene-write') {
+    await page.locator('#studio-dw-scene-mode').selectOption(sceneMode || 'create');
+    if(sceneMode==='revise') {
+      for(const sceneId of sceneIds) await page.locator('#studio-dw-batch-scenes input[value="'+sceneId+'"]').check();
+    }
+  }
+  await page.locator('#studio-dw-write-instruction').fill(instruction);
+}
+async function runWrite(page, options) {
+  await openWrite(page,options);
+  await page.locator('#studio-dw-write-prepare').click();
+}
+module.exports={reopenDirectorIfClosed,freshDirectorSession,ensureAttachedProject,resetModel,queueModel,observedModels,openDirector,say,stories,story,seedProject,seedScene,openProject,openWrite,runWrite};

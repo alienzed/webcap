@@ -226,7 +226,7 @@
       }
       text='Current saved snapshot (reloaded before drafting):' +
         String.fromCharCode(10) + JSON.stringify(data,null,2) +
-        String.fromCharCode(10) + 'Recent conversation context is also supplied.';
+        String.fromCharCode(10) + 'The complete Studio conversation is supplied.';
     }
     el('studio-dw-write-context').querySelector('summary').textContent =
       'Inspect draft context';
@@ -251,7 +251,7 @@
     el('studio-dw-heading').textContent = 'Write';
     el('studio-dw-heading').title = mode === 'Read'
       ? 'Explicit source · nothing sent until Send'
-      : mode === 'Write' ? 'Reviewed destination · nothing saved until Apply'
+      : mode === 'Write' ? 'Explicit Write destination · save occurs when the model returns'
       : 'Conversation is independent of Studio navigation';
   }
   function manualSceneInstruction() {
@@ -272,12 +272,12 @@
     var sceneWrite = operation === 'scene-write';
     var revise = sceneWrite && el('studio-dw-scene-mode').value === 'revise';
     el('studio-dw-scene-mode-row').classList.toggle('hidden', !sceneWrite);
-    el('studio-dw-write-instruction-row').classList.toggle('hidden', !sceneWrite);
+    el('studio-dw-write-instruction-row').classList.remove('hidden');
     el('studio-dw-batch-controls').classList.toggle('hidden', !revise);
     el('studio-dw-write-project').disabled = operation === 'new-project';
     el('studio-dw-write-prepare').textContent = sceneWrite
-      ? (revise ? 'Revise selected Scenes · Save' : 'Create Scene · Review')
-      : (operation === 'new-project' ? 'Create Project · Review' : 'Revise Overview · Review');
+      ? (revise ? 'Revise selected Scenes · Save' : 'Create Scene(s) · Save')
+      : (operation === 'new-project' ? 'Create Project · Save' : 'Revise Overview · Save');
     showWriteContext();
     updateScope();
   }
@@ -459,23 +459,31 @@
     if (operation !== 'new-project' && !id) {status('Choose a destination Project.',true);return;}
     if (operation === 'scene-write') {
       if (el('studio-dw-scene-mode').value === 'revise') return prepareBatchScenes(id);
-      var instruction = manualSceneInstruction();
-      if (!instruction) {
-        status('Enter an instruction for the new Scene before launch.', true);
-        return;
-      }
+      var instruction = manualSceneInstruction() ||
+        'Create the Scene(s) we have developed in this Studio conversation.';
       return bridge.writeNewScene({
         projectId:id, instruction:instruction, authorRequest:instruction,
-        forceAuthor:true
+        forceAuthor:true, directSave:true
       });
     }
     if (operation !== 'new-project' && operation !== 'project')
       throw new Error('Unsupported Studio creative Write goal: ' + operation);
     try {
       var item = projects.find(function (p) {return p.id === id;});
-      bridge.prepareWrite(operation, id, item && storyName(item));
-      status('Preparing a reviewed proposal. No saved fields have changed.', false);
-    } catch (error) {status('Write failed: ' + error.message, true);}
+      return Promise.resolve(bridge.prepareWrite(operation, id, item && storyName(item),{
+        instruction:manualSceneInstruction()
+      })).catch(function (error) {
+        status('Write failed: ' + String(error.message || error), true);
+        if (typeof window.reportConsoleError === 'function')
+          window.reportConsoleError('Studio Project Write', error);
+        throw error;
+      });
+    } catch (error) {
+      status('Write failed: ' + String(error.message || error), true);
+      if (typeof window.reportConsoleError === 'function')
+        window.reportConsoleError('Studio Project Write', error);
+      throw error;
+    }
   }
   function prepareProjectCoherence(storyId) {
     var button = el('studio-dw-write-prepare');
@@ -587,11 +595,10 @@
       status('Choose one to 32 Scenes to revise.', true);
       return Promise.resolve();
     }
-    var instruction = manualSceneInstruction();
-    if (!instruction) {
-      status('Enter a revision instruction before launch.', true);
-      return Promise.resolve();
-    }
+    // An explicit Write selection provides the operation. Conversation
+    // history provides the creative brief even if this optional box is empty.
+    var instruction = manualSceneInstruction() ||
+      'Revise the selected Scene Prompts according to our Studio conversation.';
     // The existing batch authoring action revises Scene Prompts.
     // Additional title and duration drafts arrive as actual structured
     // content in conversation; never infer field mutations from prose.
@@ -811,35 +818,12 @@
   var pendingCreativeAction = null;
   // Write reflects an explicit conversational proposal, not a standalone operation picker.
   function showConversationWrite() {
-    var action = pendingCreativeAction;
-    var selectedDraft = !action || action.reviewReady
-      ? window.studioDirectorBridge.preparedWrite() : null;
-    var prepared = action && !(action.reviewReady && selectedDraft && selectedDraft.kind === 'scene')
-      ? null : selectedDraft;
-    var ready = !!(action || prepared);
-    var awaitingProject = !!(action && action.awaitingProject);
-    var awaitingScenes = !!(action && action.awaitingScenes);
-    el('studio-dw-write-empty').classList.toggle('hidden', ready);
-    el('studio-dw-write-ready').classList.toggle('hidden', !ready);
-    el('studio-dw-write-panel').classList.toggle('hidden', !(awaitingProject || awaitingScenes));
-    el('studio-dw-write-panel').classList.toggle('studio-dw-awaiting-project', awaitingProject);
-    el('studio-dw-write-panel').classList.toggle('studio-dw-awaiting-scenes', awaitingScenes);
-    if (!ready) return;
-    if (prepared) {
-      var fieldLabels = prepared.fields.map(function (field) {return labels[field] || field;});
-      var scope = ({scene:'Scene',project:'Project', 'new-project':'New Project',
-        'new-scene':'New Scene'})[prepared.kind];
-      el('studio-dw-write-ready-title').textContent = scope + ' draft prepared';
-      el('studio-dw-write-ready-direction').textContent = fieldLabels.join(' · ');
-      el('studio-dw-write-ready-launch').textContent = 'Review ' + scope;
-      return;
-    }
-    var title = ({create_project:'Create Project',write_project:'Revise Project',
-      create_scene:'Create Scenes',write_scenes:'Revise Scenes'})[action.kind];
-    el('studio-dw-write-ready-title').textContent = title;
-    el('studio-dw-write-ready-direction').textContent = action.instruction;
-    el('studio-dw-write-ready-launch').textContent = awaitingProject || awaitingScenes
-      ? 'Continue with selected target' : title;
+    // Write is an explicit user-selected function, not a suggested chat action.
+    // Never reopen old Review proposals as a substitute for the Write panel.
+    el('studio-dw-write-empty').classList.add('hidden');
+    el('studio-dw-write-ready').classList.add('hidden');
+    el('studio-dw-write-panel').classList.remove('studio-dw-awaiting-project');
+    el('studio-dw-write-panel').classList.remove('studio-dw-awaiting-scenes');
   }
 
   // Scene targets belong to the selected Studio context or the explicit Write
@@ -1303,9 +1287,11 @@
     function openDirectAction(which) {
       lastQuickAction = which;
       el('director-chat-drawer').classList.add('studio-actions-open');
-      if (which === 'write') showConversationWrite();
-      else if (el('studio-dw-' + which + '-panel').classList.contains('hidden'))
+      // Opening Write must actually reveal its operation picker. Merely
+      // updating conversation suggestions left the Write panel hidden.
+      if (el('studio-dw-' + which + '-panel').classList.contains('hidden'))
         el('studio-dw-' + which).click();
+      if (which === 'write') showConversationWrite();
       el('studio-dw-open-tools').setAttribute('aria-expanded','true');
       el('studio-dw-close-actions').focus();
     }

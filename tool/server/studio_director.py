@@ -1,4 +1,4 @@
-"""Concise, built-in WebCap Studio expertise for the H3 Writer's Workshop.
+"""Concise, built-in creative-partner guidance for Studio Director.
 
 The production-prompt shape is returned separately for prompt-authoring tasks,
 rather than spent on every open-ended brainstorm request.
@@ -29,116 +29,28 @@ _WORKSHOP = (
     "vision with meaningful ideas, sound creative judgment and compelling, coherent, "
     "producible results. The author sets the direction; develop it rather than replacing it. "
     "Bring expertise in storytelling, character, staging, camera, atmosphere, dialogue, "
-    "pacing and MiniMax H3 generation. Make meaningful actions visible, maintain clear "
+    "pacing and visual storytelling. Make meaningful actions visible, maintain clear "
     "physical continuity, and respect deliberately quiet or atmospheric pacing. "
     "CONVERSATION: Respond naturally and concisely to discussion. Explore alternatives "
     "when useful and make a recommendation when you can. "
-    "CREATIVE WORK: When asked to create or revise material, deliver the actual usable "
-    "work now. Choose sensible creative details where the direction leaves room for "
-    "judgment. Preserve established details outside the requested change. "
-    "If an essential creative decision is missing, ask one focused question while "
-    "providing any independently useful work that is already possible. "
-    "A partial, concrete result is more helpful than a promise to work later. "
+    "DISCUSSION: Develop ideas and make useful recommendations. Explicit Write functions "
+    "are separately launched by the author with their own task and format. "
     "Use the saved Project and Scene facts actually supplied as context; treat earlier "
     "unsaved ideas as proposals that the author may refine. "
     "Conversation can develop material, but only WebCap saves Project and Scene records.\n"
 )
 
 
-_H3_STUDIO_CORE = (
-    "STUDIO CREATIVE MATERIAL\n"
-    "A Project's Title identifies the work. Concept (story.concept) defines its premise, "
-    "core appeal and Scene relationships. Visual / atmosphere (story.style) establishes "
-    "shared mood, look and camera language. Invariants (story.invariants) record recurring "
-    "character, location or other continuity facts that should remain stable. "
-    "A Scene's Title identifies the clip, and its complete H3 Prompt (scene.prompt) "
-    "is the generatable creative content. Scenes are independently producible clips "
-    "lasting 4–15 seconds; durationSeconds is the saved duration setting. "
-    "Develop requested Project fields into complete, useful field values, adding "
-    "Invariants when stable recurring facts matter. "
-    "For Scene creation or creative revision, provide a complete standalone H3 Prompt "
-    "with clear starting conditions, visual actions, staging, timing and sound. "
-    "Revise the existing prompt rather than merely describing a change. "
-    "Keep unaffected titles, durations, creative decisions and continuity intact. "
-    "When several pieces are requested, deliver all the useful pieces you can. "
-    "For H3 writing, use the production reference supplied with that task. "
-    "Actual authored material can be offered for review or application by WebCap; "
-    "discussion and draft creation never imply a saved change.\n"
-)
-
-
 def chat_response_schema():
-    """A conversational answer or actual independently useful creative fields.
-
-    Transport shape only; a schema-valid reply is not evidence that an
-    authored Scene exists. Read can be plain prose, and model output never
-    supplies authoritative IDs, destinations or save actions.
-    """
+    """Ordinary Studio chat is conversation, not an implicit Write request."""
     return {
         "type": "object",
         "additionalProperties": False,
-        # Every Studio chat turn addresses the author first. Creative fields
-        # remain independent extras; parsing still accepts useful incomplete
-        # model output when a provider ignores the requested response shape.
         "required": ["reply"],
-        "minProperties": 1,
         "properties": {
-            "reply": {
-                "type": "string", "minLength": 1,
-                "description": "Direct answer to the author's current message. For discussion, include the creative options, recommendation and reasoning here. If also authoring Project/Scene fields, retain the response to the author here.",
-            },
-            "changes": {
-                "type": "object", "additionalProperties": False,
-                "properties": {
-                    "project": {
-                        "type": "object", "additionalProperties": False,
-                        "description": "Actual authored Project field values. For a partial revision, include the fields being changed and preserve all other fields by omitting them. Every included value is a complete replacement ready for review.",
-                        "properties": {
-                            "title": {"type": "string"},
-                            "concept": {"type": "string"},
-                            "style": {"type": "string"},
-                            "invariants": {
-                                "type": "array", "maxItems": 30,
-                                "items": {
-                                    "type": "object", "additionalProperties": False,
-                                    "required": ["kind", "title", "text"],
-                                    "properties": {
-                                        "kind": {"type": "string", "enum": ["character", "location", "visual", "world", "sound", "custom"]},
-                                        "title": {"type": "string"},
-                                        "text": {"type": "string"},
-                                    },
-                                },
-                            },
-                        },
-                    },
-                    "scene": {
-                        "type": "object", "additionalProperties": False,
-                        "description": "Actual requested replacements for an existing Scene. Include the fields being changed and preserve other fields by omitting them. Creative revisions include the complete replacement prompt; new Scene records belong in scenes.",
-                        "properties": {
-                            "title": {"type": "string"},
-                            "prompt": {"type": "string", "minLength": 1},
-                            "durationSeconds": {"type": "integer"},
-                        },
-                    },
-                },
-            },
-            "scenes": {
-                "type": "array", "maxItems": 32,
-                "description": "Actual new Scene drafts, each with a title, complete H3 prompt and durationSeconds. WebCap counts and reviews the returned records.",
-                "items": {
-                    "type": "object", "additionalProperties": False,
-                    "required": ["title", "prompt", "durationSeconds"],
-                    "properties": {
-                        "title": {"type": "string"},
-                        "prompt": {"type": "string", "minLength": 1},
-                        "durationSeconds": {"type": "number"},
-                    },
-                },
-            },
-
+            "reply": {"type": "string", "description": "Answer the author naturally."},
         },
     }
-
 
 def guidance(target_model="minimax_h3"):
     """Return concise Studio expertise plus the distinct prompt-authoring contract."""
@@ -152,7 +64,9 @@ def guidance(target_model="minimax_h3"):
     if not isinstance(configured, dict):
         raise RuntimeError("Generation model guidance must be an object.")
     lessons = str(configured.get(target_model) or "").strip()
-    system = _WORKSHOP + _H3_STUDIO_CORE
+    # Ordinary conversation receives the creative role, not Scene production guidance.
+    # The complete H3 reference is added exclusively by explicit Scene-writing callers.
+    system = _WORKSHOP
     if lessons:
         prompt_contract += "\n\nUSER'S H3 PRODUCTION PLAYBOOK (empirical methods):\n" + lessons
     return {

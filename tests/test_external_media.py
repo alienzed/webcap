@@ -302,6 +302,52 @@ def test_external_file_move_stays_under_root_and_refuses_collisions(tmp_path):
         })
 
 
+def test_move_keeps_caption_backup_and_analysis_with_media(tmp_path):
+    root = tmp_path / "external"
+    image = _file(root / "input" / "photo.png")
+    (root / "input" / "photo.txt").write_text("caption")
+    _file(root / "input" / "originals" / "photo.png")
+    (root / "input" / "originals" / "photo.txt").write_text("original caption")
+    (root / "input" / "media_metadata.json").write_text(
+        json.dumps({"photo.png": {"analysis": {"scene": "retained"}}}))
+    (root / "output").mkdir(parents=True)
+    (root / "output" / "media_metadata.json").write_text(
+        json.dumps({"untouched.png": {"custom": True}}))
+    moved = external_media.move_external_files({
+        "path": str(root), "files": ["input/photo.png"], "destination": "output"
+    })
+    assert moved == {"ok": True, "moved": ["input/photo.png"]}
+    assert not image.exists()
+    assert not (root / "input" / "photo.txt").exists()
+    assert not (root / "input" / "originals" / "photo.png").exists()
+    assert (root / "output" / "photo.png").exists()
+    assert (root / "output" / "photo.txt").read_text() == "caption"
+    assert (root / "output" / "originals" / "photo.png").exists()
+    assert (root / "output" / "originals" / "photo.txt").read_text() == "original caption"
+    old_cache = json.loads((root / "input" / "media_metadata.json").read_text())
+    new_cache = json.loads((root / "output" / "media_metadata.json").read_text())
+    assert "photo.png" not in old_cache
+    assert new_cache["photo.png"]["analysis"]["scene"] == "retained"
+    assert new_cache["untouched.png"]["custom"] is True
+
+
+def test_move_companion_collision_is_preflighted_without_partial_mutation(tmp_path):
+    import pytest
+    root = tmp_path / "source"
+    image = _file(root / "input" / "photo.png")
+    (root / "input" / "photo.txt").write_text("retain me")
+    (root / "target").mkdir()
+    (root / "target" / "photo.txt").write_text("existing")
+    with pytest.raises(ValueError, match="already contains"):
+        external_media.move_external_files({
+            "path": str(root), "files": ["input/photo.png"], "destination": "target"
+        })
+    assert image.exists()
+    assert (root / "input" / "photo.txt").read_text() == "retain me"
+    assert (root / "target" / "photo.txt").read_text() == "existing"
+    assert not (root / "target" / "photo.png").exists()
+
+
 def test_external_rename_preserves_media_and_metadata_and_refuses_collision(tmp_path):
     import pytest
     root = tmp_path / "external"

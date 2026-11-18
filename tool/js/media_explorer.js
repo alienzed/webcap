@@ -478,43 +478,78 @@
     });
     return links;
   }
-  function addToCollection(chosen) {
+  function collectionTag(view) {
+    return view && view.filters && String(view.filters.tag || '').startsWith('Collection · ')
+      ? view.filters.tag : '';
+  }
+  function collectionMatchesScope(view) {
+    if (!collectionTag(view)) return false;
+    return isExternal()
+      ? view.filters.source === 'external' && view.filters.externalPath === externalPath
+      : view.filters.source !== 'external';
+  }
+  function addToCollection(chosen, existingView) {
     if(!chosen.length)return;
-    promptMediaAction('Add '+chosen.length+' media item(s) to collection','','Add to collection',
-      function (name) {
-        if(name.length>(isExternal()?32:48) || name.includes(','))
-          throw Error('Use a shorter collection name without commas.');
-        var tag='Collection · '+name;
-        return Promise.allSettled(chosen.map(function (item) {
-          return saveCurationFor(item,{
-            tags:Array.from(new Set((item.tags || []).concat([tag])))
-          });
-        })).then(function (results) {
-          var successes=results.filter(function (result) {return result.status==='fulfilled';}).length;
-          var failed=results.length-successes;
-          if(!successes)throw Error('Could not add any media: '+results[0].reason.message);
-          var filters=currentViewFilters();
-          filters.source=isExternal()?'external':'';
-          filters.role='';filters.tag=tag;filters.search='';filters.rating='';
-          filters.kind='';filters.model='';filters.folder='';filters.date='';
-          filters.sort='newest';filters.direction='desc';
-          filters.full=!isExternal();filters.storyboardType='';
-          ['min-side','min-mp','min-duration','max-duration'].forEach(function (id) {filters[id]='';});
-          var viewName='Collection: '+name+(isExternal()?' · '+externalPath.slice(-24):'');
-          return fetch('/fs/media_explorer/views',{
-            method:'POST',headers:{'Content-Type':'application/json'},
-            body:JSON.stringify({name:viewName,filters:filters})
-          }).then(function (res) {return res.json().then(function (body) {
-            if(!res.ok || !body.ok)throw Error(body.error || 'Could not save collection view');
-            showSavedViews(body.views,viewName);
-            applySavedView({filters:filters});
-            if(failed)throw Error('Added '+successes+' of '+results.length+
-              ' items; '+failed+' failed: '+results.find(function (result) {
-                return result.status==='rejected';
-              }).reason.message);
-          });});
+    function apply(name,tag,view) {
+      return Promise.allSettled(chosen.map(function (item) {
+        return saveCurationFor(item,{
+          tags:Array.from(new Set((item.tags || []).concat([tag])))
         });
+      })).then(function (results) {
+        var successes=results.filter(function (result) {return result.status==='fulfilled';}).length;
+        var failed=results.length-successes;
+        if(!successes)throw Error('Could not add any media: '+results[0].reason.message);
+        if(view) {
+          load(true,{soft:true});
+          if(failed)throw Error('Added '+successes+' of '+results.length+' items; '+failed+' failed');
+          return;
+        }
+        var filters=currentViewFilters();
+        filters.source=isExternal()?'external':'';
+        filters.role='';filters.tag=tag;filters.search='';filters.rating='';
+        filters.kind='';filters.model='';filters.folder='';filters.date='';
+        filters.sort='newest';filters.direction='desc';
+        filters.full=!isExternal();filters.storyboardType='';
+        ['min-side','min-mp','min-duration','max-duration'].forEach(function (id) {filters[id]='';});
+        var viewName='Collection: '+name+(isExternal()?' · '+externalPath.slice(-24):'');
+        return fetch('/fs/media_explorer/views',{
+          method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({name:viewName,filters:filters})
+        }).then(function (res) {return res.json().then(function (body) {
+          if(!res.ok || !body.ok)throw Error(body.error || 'Could not save collection view');
+          showSavedViews(body.views,'');
+          load(true,{soft:true});
+          if(failed)throw Error('Added '+successes+' of '+results.length+' items; '+failed+' failed');
+        });});
       });
+    }
+    if(existingView) return apply(existingView.name,collectionTag(existingView),existingView).catch(report);
+    promptMediaAction('Create collection', '', 'Create and add', function (name) {
+      if(name.length>(isExternal()?32:48) || name.includes(','))
+        throw Error('Use a shorter collection name without commas.');
+      return apply(name,'Collection · '+name,null);
+    });
+  }
+  function chooseCollection(chosen) {
+    if(!chosen.length)return;
+    fetch('/fs/media_explorer/views').then(function (res) {
+      return res.json().then(function (body) {
+        if(!res.ok || !body.ok)throw Error(body.error || 'Could not list collections');
+        showSavedViews(body.views,el('media-explorer-view-select').value);
+        return body.views.filter(collectionMatchesScope);
+      });
+    }).then(function (collections) {
+      if(!collections.length) {addToCollection(chosen);return;}
+      var options=collections.map(function (view) {
+        return {label:view.name.replace(/^Collection: /,''),run:function () {
+          addToCollection(chosen,view);
+        }};
+      });
+      options.push({separator:true});
+      options.push({label:'New collection…',run:function () {addToCollection(chosen);}});
+      var box=el('media-explorer-selection').getBoundingClientRect();
+      showContextMenu(box.left,box.bottom,options);
+    }).catch(report);
   }
   function itemActions(item) {
     var current = function () { return items.findIndex(function (candidate) {return candidate.id===item.id;}); };
@@ -607,7 +642,7 @@
         (item.source==='epoch' && item.ownerFolder && item.storageId) ||
         (item.source==='storyboard' && item.storageId)) {
       actions.push({label:'Add to collection…',run:function () {
-        addToCollection(selected.has(item.id) && selectedCuratable().length ?
+        chooseCollection(selected.has(item.id) && selectedCuratable().length ?
           selectedCuratable() : [item]);
       }});
       var memberships=(item.tags || []).filter(function (tag) {
@@ -2025,7 +2060,7 @@
   var bulkCollectionButton=document.createElement('button');
   bulkCollectionButton.type='button';bulkCollectionButton.className='review-captions-btn';
   bulkCollectionButton.textContent='Add to collection…';
-  bulkCollectionButton.addEventListener('click',function () {addToCollection(selectedCuratable());});
+  bulkCollectionButton.addEventListener('click',function (event) {event.stopPropagation();chooseCollection(selectedCuratable());});
   var bulkRemoveCollectionButton = document.createElement('button');
   bulkRemoveCollectionButton.type = 'button';
   bulkRemoveCollectionButton.className = 'review-captions-btn';

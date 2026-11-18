@@ -133,6 +133,41 @@
     el('media-explorer-grid').setAttribute('aria-busy', 'false');
     el('media-explorer-more-btn').disabled = false;
   }
+  function refreshExternalFiles(editedItem) {
+    // Only rebuild the changed thumbnail. Stable cards keep their playback,
+    // selection and DOM identity through the authoritative listing refresh.
+    if (editedItem) {
+      editedMediaVersions.set(editedItem.id, Date.now());
+      var card = Array.from(el('media-explorer-grid').children).find(function (node) {
+        return node.dataset.id === editedItem.id;
+      });
+      if (card) card.remove();
+    }
+    selected.clear(); selectItem(-1);
+    mediaFacts.clear(); externalRevision = -1;
+    load(true, {refreshFilesystem:true});
+  }
+  function renameExternalFile(item) {
+    var name = window.prompt('Rename file', item.fileName);
+    if (name === null || !name.trim() || name.trim() === item.fileName) return;
+    externalAction('rename', {
+      path:externalPath,file:item.relativePath,newName:name.trim()
+    }, function (result) {
+      refreshExternalFiles();
+      if (result.warning) report(new Error(result.warning));
+    });
+  }
+  function transformExternalImage(item, operation, label) {
+    if (!window.confirm(label + ' ' + item.fileName + '?\\nThe original will be retained for restoration.')) return;
+    externalAction('image-edit', {
+      path:externalPath,file:item.relativePath,operation:operation
+    }, function () { refreshExternalFiles(item); });
+  }
+  function cropExternalImage(item) {
+    openExternalImageCropModal(item, {
+      path:externalPath,file:item.relativePath,mediaUrl:item.mediaUrl
+    }, function () { refreshExternalFiles(item); });
+  }
   function externalMutation(item, action) {
     var chosen = externalChoices(item);
     var names = chosen.map(function (candidate) { return candidate.relativePath; });
@@ -148,9 +183,8 @@
         removeTrashedItems(result.trashed || []);
         return;
       }
-      selected.clear(); selectItem(-1);
-      mediaFacts.clear(); externalRevision = -1;
-      load(true, {refreshFilesystem:true});
+      refreshExternalFiles();
+      if (result.warning) report(new Error(result.warning));
     });
   }
   function openExternalClipEditor(item) {
@@ -205,8 +239,23 @@
         externalAction('reveal', {path:externalPath, file:item.relativePath});
       }});
       actions.push({label:'Copy to Set', run:function () { chooseExport(externalChoices(item)); }});
-      if (item.mediaKind === 'video') actions.push({label:'Clip to Set', run:function () { openExternalClipEditor(item); }});
+      if (item.mediaKind === 'video') actions.push({label:'Edit video (Clip to Set)…', run:function () { openExternalClipEditor(item); }});
+      if (['.png','.jpg','.jpeg','.webp','.bmp'].some(function (ext) { return item.fileName.toLowerCase().endsWith(ext); })) {
+        actions.push({separator:true});
+        actions.push({label:'Crop image…', run:function () { cropExternalImage(item); }});
+        [
+          ['Rotate left 90°','rotate_left_90'],
+          ['Rotate right 90°','rotate_right_90'],
+          ['Flip horizontal','flip_horizontal'],
+          ['Flip vertical','flip_vertical']
+        ].forEach(function (transform) {
+          actions.push({label:transform[0],group:'Edit Media',run:function () {
+            transformExternalImage(item,transform[1],transform[0]);
+          }});
+        });
+      }
       actions.push({separator:true});
+      actions.push({label:'Rename…', run:function () { renameExternalFile(item); }});
       actions.push({label:'Move to Folder…', run:function () { externalMutation(item, 'move'); }});
       actions.push({label:'Move to Trash', run:function () { externalMutation(item, 'trash'); }});
     }
@@ -464,6 +513,7 @@
   var sourceNames = {generate: 'Generate', test: 'Test Generations', epoch: 'Campaigns', storyboard: 'Storyboard', external: 'External folders'};
   var roleNames = {generated: 'Generated', reference: 'Reference', source: 'Source media'};
   var mediaFacts = new Map();
+  var editedMediaVersions = new Map();
   var loupeReturn = null;
   var artifact = '', owner = '';
   function storyboardType() { return source === 'storyboard' ? el('media-explorer-storyboard-type').value : ''; }
@@ -809,9 +859,18 @@
         var choices = items.filter(function (candidate) { return selected.has(candidate.id); });
         chooseExport(choices.length ? choices : [item]);
       }; actions.appendChild(copy);
+      function externalInspectorAction(label, action) {
+        var button = document.createElement('button');
+        button.type = 'button'; button.className = 'review-captions-btn';
+        text(button,label); button.addEventListener('click',action); actions.appendChild(button);
+      }
+      externalInspectorAction('Rename…',function () { renameExternalFile(item); });
+      externalInspectorAction('Move to Folder…',function () { externalMutation(item,'move'); });
+      if (['.png','.jpg','.jpeg','.webp','.bmp'].some(function (ext) { return item.fileName.toLowerCase().endsWith(ext); }))
+        externalInspectorAction('Crop image…',function () { cropExternalImage(item); });
       if (item.mediaKind === 'video') {
         var clip = document.createElement('button'); clip.type = 'button'; clip.className = 'review-captions-btn';
-        clip.textContent = 'Clip to Set'; clip.onclick = function () { openExternalClipEditor(item); };
+        clip.textContent = 'Edit video (Clip to Set)…'; clip.onclick = function () { openExternalClipEditor(item); };
         actions.appendChild(clip);
       }
     }
@@ -1066,6 +1125,10 @@
         }
       }
       var incoming = data.items || [];
+      if (isExternal()) incoming.forEach(function (item) {
+        var version = editedMediaVersions.get(item.id);
+        if (version && item.mediaUrl) item.mediaUrl += '&edited=' + version;
+      });
       var host = el('media-explorer-grid');
       if (reset) {
         var previousItems = new Map(items.map(function (item) { return [item.id, item]; }));

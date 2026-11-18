@@ -446,20 +446,165 @@ def _external_target_folder(root, relative):
 
 
 def move_external_files(data):
+    """Move selected media and its adjacent authored/backup files together."""
     root, files = _external_sources(data)
     destination = _external_target_folder(root, data.get("destination"))
-    # Check all targets before moving so normal collisions never cause a partial batch.
     targets = [destination / source.name for source in files]
-    if len(set(targets)) != len(targets) or any(target.exists() for target in targets):
-        raise ValueError("Destination already contains a file with that name.")
-    moved = []
+
+    # Preflight every output, including captions and reversible edit backups,
+    # before moving anything. Several selected media can share a caption.
+    transfers = {}
     for source, target in zip(files, targets):
+        companions = [
+            (source.with_suffix(".txt"), target.with_suffix(".txt")),
+            (source.parent / "originals" / source.name,
+             destination / "originals" / source.name),
+            (source.parent / "originals" / (source.stem + ".txt"),
+             destination / "originals" / (source.stem + ".txt")),
+        ]
+        for old, new in [(source, target)] + companions:
+            if old != source and not old.exists() and not old.is_symlink():
+                continue
+            if old in transfers:
+                if transfers[old] != new:
+                    raise ValueError("A selected companion has incompatible destinations.")
+                continue
+            if old == new or old.is_symlink() or new.exists() or new.is_symlink():
+                raise ValueError("Destination already contains a file with that name.")
+            if new.parent.name == "originals" and new.parent.is_symlink():
+                raise ValueError("Destination originals folder cannot be a symlink.")
+            transfers[old] = new
+    if len(set(transfers.values())) != len(transfers):
+        raise ValueError("Selected files would overwrite each other in the destination.")
+
+    moved = []
+    # Filesystem movement is authoritative. Metadata is additional context:
+    # invalid caches are reported, rather than obstructing a valid file move.
+    from .media import _media_metadata_lock, write_media_metadata_file
+    warnings = []
+    with _media_metadata_lock:
+        source_directories = {source.parent for source in files}
+        caches = {}
+        for directory in source_directories | {destination}:
+            try:
+                caches[directory] = _read_cache(directory)
+            except (OSError, ValueError, json.JSONDecodeError) as exc:
+                caches[directory] = None
+                warnings.append(f"Could not read metadata for {directory}: {exc}")
         try:
-            shutil.move(str(source), str(target))
-        except OSError as exc:
-            raise RuntimeError(f"Moved {len(moved)} files before failing on {source.name}: {exc}") from exc
-        moved.append(source.relative_to(root).as_posix())
-    return {"ok": True, "moved": moved}
+            for old, new in transfers.items():
+                if new.parent.name == "originals":
+                    new.parent.mkdir(exist_ok=True)
+                shutil.move(str(old), str(new))
+                moved.append((old, new))
+        except Exception as exc:
+            rollback_errors = []
+            for old, new in reversed(moved):
+                try:
+                    shutil.move(str(new), str(old))
+                except Exception as rollback_exc:
+                    rollback_errors.append(str(rollback_exc))
+            details = ("; rollback errors: " + "; ".join(rollback_errors)) if rollback_errors else ""
+            raise RuntimeError(f"External move failed: {exc}{details}") from exc
+
+        for source in files:
+            origin_cache = caches[source.parent]
+            destination_cache = caches[destination]
+            if origin_cache is not None and destination_cache is not None:
+                # The target file was absent. A previously orphaned cache entry
+                # is stale and can be replaced by the moved file's actual data.
+                metadata = origin_cache.pop(source.name, None)
+                if metadata is not None:
+                    destination_cache[source.name] = metadata
+                else:
+                    destination_cache.pop(source.name, None)
+        for directory, cache in caches.items():
+            if cache is None:
+                continue
+            try:
+                if directory in source_directories or directory == destination:
+                    write_media_metadata_file(directory / "media_metadata.json", cache)
+            except (OSError, ValueError) as exc:
+                warnings.append(f"Files moved, but metadata for {directory} could not be saved: {exc}")
+
+    result = {"ok": True, "moved": [source.relative_to(root).as_posix() for source in files]}
+    if warnings:
+        result["warning"] = "; ".join(warnings)
+    return result
+
+
+def rename_external_file(data):
+    """Rename one external media file without moving it or overwriting a sibling."""
+    root = _root(data.get("path"))
+    source = _source_file(root, data.get("file"))
+    name = str(data.get("newName") or "").strip()
+    if (not name or name in {".", ".."} or Path(name).name != name
+            or "/" in name or "\\" in name or source.suffix.lower() != Path(name).suffix.lower()):
+        raise ValueError("Enter a filename in the same folder, keeping its media extension.")
+    target = source.with_name(name)
+    if source == target:
+        return {"ok": True, "oldPath": source.relative_to(root).as_posix(),
+                "newPath": source.relative_to(root).as_posix()}
+    if target.exists() or target.is_symlink():
+        raise ValueError("A file with that name already exists.")
+    # Keep paired captions and Prep's reversible originals in step with the
+    # media name, rather than orphaning them after an image edit.
+    originals = source.parent / "originals"
+    companions = [
+        (source.with_suffix(".txt"), target.with_suffix(".txt")),
+        (originals / source.name, originals / name),
+        (originals / (source.stem + ".txt"), originals / (target.stem + ".txt")),
+    ]
+    companions = [(old, new) for old, new in companions if old != new and old.exists()]
+    for old, new in companions:
+        if old.is_symlink() or new.exists() or new.is_symlink():
+            raise ValueError("A companion caption or original backup already occupies the new name.")
+    # Metadata is supplementary; a malformed cache must not block a normal
+    # filesystem rename. Report cache failures while preserving useful work.
+    from .media import _media_metadata_lock, write_media_metadata_file
+    warning = ""
+    with _media_metadata_lock:
+        try:
+            cache = _read_cache(source.parent)
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            cache = None
+            warning = "Could not read media metadata: " + str(exc)
+        renamed = []
+        try:
+            for old, new in [(source, target)] + companions:
+                old.rename(new)
+                renamed.append((old, new))
+        except Exception:
+            for old, new in reversed(renamed):
+                new.rename(old)
+            raise
+        if cache is not None and source.name in cache:
+            cache[name] = cache.pop(source.name)
+            try:
+                write_media_metadata_file(source.parent / "media_metadata.json", cache)
+            except (OSError, ValueError) as exc:
+                warning = "File renamed, but media metadata could not be updated: " + str(exc)
+    result = {"ok": True, "oldPath": source.relative_to(root).as_posix(),
+              "newPath": target.relative_to(root).as_posix()}
+    if warning:
+        result["warning"] = warning
+    return result
+
+
+def edit_external_image(data):
+    """Apply Prep's reversible still-image crop/transform to external media."""
+    root = _root(data.get("path"))
+    source = _source_file(root, data.get("file"))
+    from .crop_ops import CROPPABLE_IMAGE_EXTS, crop_image_data_url_in_place, transform_image_in_place
+    if source.suffix.lower() not in CROPPABLE_IMAGE_EXTS:
+        raise ValueError("This image format cannot be edited with the existing image tools.")
+    operation = str(data.get("operation") or "")
+    if operation == "crop":
+        result = crop_image_data_url_in_place(source.parent, source.name, data.get("imageDataUrl"))
+    else:
+        result = transform_image_in_place(source.parent, source.name, operation)
+    # A fresh Explorer discovery reads actual file bytes and technical facts.
+    return {"ok": True, "file": source.relative_to(root).as_posix(), **result}
 
 
 def trash_external_files(data):
@@ -509,6 +654,22 @@ def register_routes(app):
             return jsonify(move_external_files(request.get_json(silent=True) or {}))
         except Exception as exc:
             app.logger.exception("EXTERNAL MEDIA MOVE FAILED")
+            return jsonify({"ok": False, "error": str(exc)}), 400
+
+    @app.post("/fs/media_explorer/external/rename")
+    def external_rename():
+        try:
+            return jsonify(rename_external_file(request.get_json(silent=True) or {}))
+        except Exception as exc:
+            app.logger.exception("EXTERNAL MEDIA RENAME FAILED")
+            return jsonify({"ok": False, "error": str(exc)}), 400
+
+    @app.post("/fs/media_explorer/external/image-edit")
+    def external_image_edit():
+        try:
+            return jsonify(edit_external_image(request.get_json(silent=True) or {}))
+        except Exception as exc:
+            app.logger.exception("EXTERNAL IMAGE EDIT FAILED")
             return jsonify({"ok": False, "error": str(exc)}), 400
 
     @app.post("/fs/media_explorer/external/trash")

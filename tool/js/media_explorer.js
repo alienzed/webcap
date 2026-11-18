@@ -410,17 +410,7 @@
   function editMediaTags(item) {
     promptMediaAction('Edit tags (comma-separated)',(item.tags || []).join(', '),'Save tags',function (value) {
       var tags=value.split(',').map(function (tag) {return tag.trim();}).filter(Boolean);
-      var promise = item.source === 'external'
-        ? externalActionStrict('curate',{path:externalPath,file:item.relativePath,tags:tags})
-        : fetch('/fs/generate/result/tags',{method:'POST',
-            headers:{'Content-Type':'application/json'},
-            body:JSON.stringify({storageId:item.storageId,tags:tags})}).then(function (res) {
-              return res.json().then(function (payload) {
-                if(!res.ok || !payload.ok)throw Error(payload.error || 'Could not save tags');
-                return payload;
-              });
-            });
-      return promise.then(function (result) {
+      return saveCurationFor(item,{tags:tags}).then(function (result) {
         item.tags=result.tags;
         if(item.source==='external')item.rating=result.rating;
         load(true,{soft:true});
@@ -548,6 +538,8 @@
           return selected.has(entry.id) && entry.source==='generate' &&
             entry.role==='generated';
         }) : [item]);}});
+      actions.push({label:'Edit tags…',run:function () {editMediaTags(item);}});
+    } else if (item.source==='test' && item.ownerFolder && item.storageId) {
       actions.push({label:'Edit tags…',run:function () {editMediaTags(item);}});
     }
     if (item.mediaUrl) {
@@ -1724,7 +1716,8 @@
     var chosen=items.filter(function (item) {return selected.has(item.id);});
     if (!chosen.length || !chosen.every(function (item) {
       return item.source==='external' ||
-        (item.source==='generate' && item.role==='generated' && item.storageId);
+        (item.source==='generate' && item.role==='generated' && item.storageId) ||
+        (item.source==='test' && item.ownerFolder && item.storageId);
     })) return [];
     return chosen;
   }
@@ -1732,9 +1725,15 @@
     if (item.source==='external') return externalActionStrict('curate',
       Object.assign({path:externalPath,file:item.relativePath},change));
     var kind=Object.prototype.hasOwnProperty.call(change,'tags') ? 'tags' : 'rating';
-    return fetch('/fs/generate/result/'+kind,{
-      method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify(Object.assign({storageId:item.storageId},change))
+    var url=item.source==='test' ? '/fs/media_explorer/test/tags' :
+      '/fs/generate/result/'+kind;
+    if(item.source==='test' && kind!=='tags')
+      return Promise.reject(Error('Test rating uses its existing rating workflow.'));
+    var payload=item.source==='test'
+      ? Object.assign({folder:item.ownerFolder,session:item.storageId,mediaFile:item.fileName},change)
+      : Object.assign({storageId:item.storageId},change);
+    return fetch(url,{
+      method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)
     }).then(function (res) {return res.json().then(function (body) {
       if(!res.ok || !body.ok)throw Error(body.error || 'Curation failed');
       return body;

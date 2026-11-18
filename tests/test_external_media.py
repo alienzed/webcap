@@ -598,3 +598,36 @@ def test_move_folder_keeps_companions_and_rejects_recursive_target(tmp_path):
     with pytest.raises(ValueError):
         external_media.move_external_folder({
             "path": str(root), "folder": "destination/source", "destination": "destination"})
+
+
+def test_named_saved_views_persist_without_mutating_media(tmp_path, monkeypatch):
+    monkeypatch.setattr(external_media.app_config, "app_state_root",
+                        lambda: tmp_path / "state")
+    first = external_media.save_media_view({
+        "name": "Best clips",
+        "filters": {"source": "external", "tag": "keeper", "rating": "4",
+                    "search": "clip", "recursive": True}})
+    assert [item["name"] for item in first] == ["Best clips"]
+    assert external_media.list_saved_views()[0]["filters"]["rating"] == "4"
+    external_media.save_media_view({
+        "name": "best clips", "filters": {"source": "generate", "rating": "5"}})
+    assert len(external_media.list_saved_views()) == 1
+    assert external_media.list_saved_views()[0]["filters"]["source"] == "generate"
+    assert external_media.delete_media_view("BEST CLIPS") == []
+    assert external_media.list_saved_views() == []
+
+
+def test_named_saved_views_validate_names_filters_and_delete(tmp_path, monkeypatch):
+    import pytest
+    monkeypatch.setattr(external_media.app_config, "app_state_root",
+                        lambda: tmp_path / "state")
+    for payload in [
+        {"name": "", "filters": {}},
+        {"name": "bad", "filters": {"unexpected": "value"}},
+        {"name": "bad", "filters": {"search": 42}},
+        {"name": "bad", "filters": {"tag": "a" * 1025}},
+    ]:
+        with pytest.raises(ValueError):
+            external_media.save_media_view(payload)
+    with pytest.raises(ValueError):
+        external_media.delete_media_view("unknown")

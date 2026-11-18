@@ -884,3 +884,15 @@
   }
   .media-explorer-workspace .media-explorer-header-actions { margin-left: 0; }
 }
+
+/* Media management gestures are available in the existing browse surface. */
+.media-explorer-folder-drop.drag-over {
+  outline: 2px solid var(--accent-color, #7095d1);
+  outline-offset: -2px;
+  background: var(--surface-hover, rgba(100, 140, 200, .14));
+}
+.media-explorer-card[draggable="true"],
+.media-explorer-side-row[draggable="true"] { cursor: grab; }
+.media-explorer-card[draggable="true"]:active,
+.media-explorer-side-row[draggable="true"]:active { cursor: grabbing; }
+#media-explorer-new-folder { white-space: nowrap; }

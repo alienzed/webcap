@@ -538,7 +538,11 @@ def merge_technical_media_metadata(folder_path, results):
             same_file = (isinstance(previous, dict)
                          and previous.get("mtime") == details.get("mtime")
                          and previous.get("size") == details.get("size"))
-            metadata[name] = {**previous, **details} if same_file else dict(details)
+            # Curator-authored labels survive technical re-probes after media edits.
+            curated = {key: previous[key] for key in ("rating", "tags")
+                       if isinstance(previous, dict) and key in previous}
+            metadata[name] = ({**previous, **details} if same_file
+                              else {**details, **curated})
         if results:
             write_media_metadata_file(metadata_path, metadata)
     return len(results)

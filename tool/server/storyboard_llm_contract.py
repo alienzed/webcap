@@ -772,8 +772,8 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
         "output": "json",
         "prompt": "\n\n".join(blocks).strip() + "\n",
         "response_schema": _prompt_response_schema(
-            allow_duration=operation in {"refine_prompt", "visual_direction"},
-            allow_scene_fields=operation in {"refine_prompt", "visual_direction"},
+            allow_duration=operation == "refine_prompt",
+            allow_scene_fields=operation == "refine_prompt",
             allow_unchanged=operation in {"refine_prompt", "visual_direction"},
         ),
     }

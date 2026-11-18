@@ -460,6 +460,34 @@
       actions.push({label:'Rename…', run:function () { renameExternalFile(item); }});
       actions.push({label:'Move to Folder…', run:function () { externalMutation(item, 'move'); }});
     }
+    if (item.source === 'generate' && item.storageId) {
+      actions.push({label:'Open in Generate',run:function () {
+        window.openGenerateActivity({storageId:item.storageId});
+      }});
+    } else if (item.source === 'test' && item.ownerFolder && item.storageId) {
+      actions.push({label:'Open Test session',run:function () {
+        window.openTestBenchActivity({folder:item.ownerFolder,sessionId:item.storageId,
+          modelId:item.model || ''});
+      }});
+    } else if (item.source === 'epoch' && item.ownerFolder && item.storageId) {
+      actions.push({label:'Open Campaign',run:function () {
+        window.openTestBenchActivity({folder:item.ownerFolder,campaignId:item.storageId,
+          modelId:item.model || ''});
+      }});
+    } else if (item.source === 'storyboard' && item.storageId &&
+               (item.uses || []).length === 1) {
+      actions.push({label:'Manage in Storyboard',run:function () {
+        var use=item.uses[0];
+        window.openStoryboardActivity({storyId:item.storageId,sceneId:use.storageId,
+          takeId:use.takeId || ''});
+      }});
+    }
+    if (item.mediaUrl) {
+      actions.push({label:'Download original',run:function () {
+        var link=document.createElement('a');link.href=item.mediaUrl;
+        link.download=item.fileName || 'media';link.click();
+      }});
+    }
     if (item.source === 'external' ||
         (item.source === 'generate' && item.role === 'generated' && item.storageId) ||
         (item.source === 'test' && item.ownerFolder && item.storageId)) {

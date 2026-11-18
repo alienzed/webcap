@@ -395,6 +395,35 @@ def discover_storyboards():
 
 
 
+def tag_owned_media(data):
+    """Curate Campaign/Storyboard media using their existing owner resolver."""
+    from .folder_state_store import set_media_curation_tags
+    source = str(data.get("source") or "")
+    if source == "epoch":
+        from .epoch_finder import frame_path, storage_campaign_path
+        owner = app_config.safe_join_fs_root(data.get("folder"))
+        campaign = data.get("storageId")
+        name = str(data.get("mediaFile") or "")
+        frame_path(owner, campaign, name)
+        folder = storage_campaign_path(data.get("folder"), campaign)
+        state_key = name
+    elif source == "storyboard":
+        from .storyboard_store import resolve_story_media, _story_dir, load_story
+        story_id = data.get("storageId")
+        media_path = data.get("mediaPath")
+        load_story(story_id)
+        resolve_story_media(story_id, media_path)
+        folder = _story_dir(story_id)
+        state_key = str(media_path)
+    else:
+        raise ValueError("Unsupported producer for media curation.")
+    normalized = set_media_curation_tags(folder / ".webcap_state.json",
+                                         state_key, data.get("tags"))
+    return {"source": source, "storageId": data.get("storageId"),
+            "mediaKey": state_key, "tags": normalized}
+
+
+
 def list_media(limit=60, offset=0, role="", kind="", search="", sort="newest", full=False, source="",
                model="", folder="", rating="", tag="", artifact="", owner="", date="", storyboard_type="",
                min_side="", min_mp="", min_duration="", max_duration="", direction="desc"):

@@ -87,6 +87,7 @@
     var input = document.createElement('input'); input.type = 'text';
     input.value = initial || ''; input.setAttribute('aria-label',title);
     input.required = !options.allowEmpty;
+    if (options.tagSuggestions) input.setAttribute('list','media-explorer-known-tags');
     var status = document.createElement('p'); status.setAttribute('role','status');
     var buttons = document.createElement('div'); buttons.className = 'media-explorer-action-buttons';
     var cancel = document.createElement('button'); cancel.type = 'button'; cancel.textContent = 'Cancel';
@@ -203,6 +204,13 @@
               return externalActionStrict('create-folder',{path:externalPath,directory:destination,name:nextName})
                 .then(function () {load(true,{refreshFilesystem:true});});
             });
+          }},
+          {separator:true},
+          {label:'Move folder to Trash',run:function () {
+            if(!window.confirm('Move folder /'+destination+
+              ' and all its contents to the operating system Trash?'))return;
+            externalActionStrict('trash-folder',{path:externalPath,folder:destination})
+              .then(function () {load(true,{refreshFilesystem:true});}).catch(report);
           }}
         ]);
       });
@@ -416,7 +424,7 @@
         if(item.source==='external')item.rating=result.rating;
         load(true,{soft:true});
       });
-    },{allowEmpty:true});
+    },{allowEmpty:true,tagSuggestions:true});
   }
   function rateExplorerItem(item, value) {
     if (item.source === 'external') return curateExternal(item,{rating:value});
@@ -1995,7 +2003,7 @@
         return apply(function (item) {
           return {tags:Array.from(new Set((item.tags || []).concat(added)))};
         },'Tagged');
-      });
+      ,{tagSuggestions:true});
     } else {
       var entries=Array.from({length:6},function (_,rating) {
         return {label:rating?'★'.repeat(rating)+' ('+rating+'/5)':'Clear rating',run:function () {

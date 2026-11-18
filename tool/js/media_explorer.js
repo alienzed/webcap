@@ -498,7 +498,7 @@
           }).then(function (res) {return res.json().then(function (body) {
             if(!res.ok || !body.ok)throw Error(body.error || 'Could not save collection view');
             showSavedViews(body.views,viewName);
-            load(true,{soft:true});
+            applySavedView({filters:filters});
             if(failed)throw Error('Added '+successes+' of '+results.length+
               ' items; '+failed+' failed: '+results.find(function (result) {
                 return result.status==='rejected';
@@ -601,6 +601,18 @@
         addToCollection(selected.has(item.id) && selectedCuratable().length ?
           selectedCuratable() : [item]);
       }});
+      var memberships=(item.tags || []).filter(function (tag) {
+        return tag.startsWith('Collection · ');
+      });
+      if(memberships.length) actions.push({label:'Remove from collection',children:
+        memberships.map(function (tag) {
+          return {label:tag.slice('Collection · '.length),run:function () {
+            saveCurationFor(item,{tags:(item.tags || []).filter(function (value) {
+              return value!==tag;
+            })}).then(function () {load(true,{soft:true});}).catch(report);
+          }};
+        })
+      });
     }
     if (item.mediaUrl) {
       actions.push({label:'Download original',run:function () {

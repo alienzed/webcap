@@ -1705,35 +1705,51 @@
     var chosen = chosenExternalFiles();
     if (chosen.length) externalMutation(chosen[0], 'move');
   });
+  function selectedCuratable() {
+    var chosen=items.filter(function (item) {return selected.has(item.id);});
+    if (!chosen.length || !chosen.every(function (item) {
+      return item.source==='external' ||
+        (item.source==='generate' && item.role==='generated' && item.storageId);
+    })) return [];
+    return chosen;
+  }
+  function saveCurationFor(item, change) {
+    if (item.source==='external') return externalActionStrict('curate',
+      Object.assign({path:externalPath,file:item.relativePath},change));
+    var kind=Object.prototype.hasOwnProperty.call(change,'tags') ? 'tags' : 'rating';
+    return fetch('/fs/generate/result/'+kind,{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(Object.assign({storageId:item.storageId},change))
+    }).then(function (res) {return res.json().then(function (body) {
+      if(!res.ok || !body.ok)throw Error(body.error || 'Curation failed');
+      return body;
+    });});
+  }
   function bulkCurate(choice) {
-    var chosen = chosenExternalFiles();
-    if (!chosen.length) return;
-    if (choice === 'tags') {
+    var chosen=selectedCuratable();
+    if(!chosen.length)return;
+    function apply(changeForItem, verb) {
+      return Promise.allSettled(chosen.map(function (item) {
+        return saveCurationFor(item,changeForItem(item));
+      })).then(function (results) {
+        var failed=results.filter(function (result) {return result.status==='rejected';});
+        load(true,{soft:true});
+        if(failed.length)throw Error(verb+' '+(results.length-failed.length)+'/'+results.length+
+          ' files; '+failed.length+' failed: '+failed[0].reason.message);
+      });
+    }
+    if(choice==='tags') {
       promptMediaAction('Add tags to '+chosen.length+' files','','Add tags',function (value) {
-        var added = value.split(',').map(function (tag) {return tag.trim();}).filter(Boolean);
-        if (!added.length) return false;
-        return Promise.allSettled(chosen.map(function (item) {
-          var merged = Array.from(new Set((item.tags || []).concat(added)));
-          return externalActionStrict('curate',{
-            path:externalPath,file:item.relativePath,tags:merged});
-        })).then(function (results) {
-          var failed = results.filter(function (result) {return result.status==='rejected';});
-          load(true,{soft:true});
-          if (failed.length) throw Error('Tagged '+(results.length-failed.length)+'/'+results.length+
-            ' files; '+failed.length+' failed: '+failed[0].reason.message);
-        });
+        var added=value.split(',').map(function (tag) {return tag.trim();}).filter(Boolean);
+        if(!added.length)return false;
+        return apply(function (item) {
+          return {tags:Array.from(new Set((item.tags || []).concat(added)))};
+        },'Tagged');
       });
     } else {
-      var entries = Array.from({length:6},function (_,rating) {
+      var entries=Array.from({length:6},function (_,rating) {
         return {label:rating?'★'.repeat(rating)+' ('+rating+'/5)':'Clear rating',run:function () {
-          Promise.allSettled(chosen.map(function (item) {
-            return externalActionStrict('curate',{path:externalPath,file:item.relativePath,rating:rating});
-          })).then(function (results) {
-            load(true,{soft:true});
-            var failed=results.filter(function (result) {return result.status==='rejected';});
-            if(failed.length)report(new Error('Rated '+(results.length-failed.length)+'/'+results.length+
-              ' files; '+failed.length+' failed: '+failed[0].reason.message));
-          }).catch(report);
+          apply(function () {return {rating:rating};},'Rated').catch(report);
         }};
       });
       var anchor=bulkRateButton.getBoundingClientRect();
@@ -1763,8 +1779,9 @@
     var show = isExternal() && chosenExternalFiles().length > 0;
     bulkMoveButton.classList.toggle('hidden',!show);
     bulkTrashButton.classList.toggle('hidden',!show);
-    bulkTagsButton.classList.toggle('hidden',!show);
-    bulkRateButton.classList.toggle('hidden',!show);
+    var curation=selectedCuratable().length>0;
+    bulkTagsButton.classList.toggle('hidden',!curation);
+    bulkRateButton.classList.toggle('hidden',!curation);
   }
   el('media-explorer-up').addEventListener('click', function () { setExternalDirectory(externalDirectory.split('/').slice(0, -1).join('/')); });
   el('media-explorer-recursive').addEventListener('change', function () { renderExternalFolders(); load(true); });

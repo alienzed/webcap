@@ -519,3 +519,20 @@ def test_copy_generated_result_into_set_preserves_source(monkeypatch, tmp_path):
     assert result["ok"] and result["copied"][0]["name"] == "frame.png"
     assert (destination / "frame.png").read_bytes() == source.read_bytes()
     assert source.exists()
+
+
+def test_generation_curation_tags_persist_in_owner_state(monkeypatch, tmp_path):
+    import json
+    from tool.server import generate_store
+    output = tmp_path / "outputs"
+    generation = output / "generations" / "day" / "run"
+    generation.mkdir(parents=True)
+    (generation / "frame.png").write_bytes(b"sample")
+    (generation / "generation.json").write_text(json.dumps({
+        "mediaPath": "generations/day/run/frame.png", "createdAt": 100
+    }))
+    monkeypatch.setattr(generate_store.app_config, "output_root", lambda: output)
+    result = generate_store.tag_result("day/run", ["keeper", "portrait"])
+    assert result["tags"] == ["keeper", "portrait"]
+    assert generate_store.load_result("day/run")["tags"] == ["keeper", "portrait"]
+    assert (generation / "frame.png").read_bytes() == b"sample"

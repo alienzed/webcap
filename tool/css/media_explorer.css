@@ -947,3 +947,12 @@
   .media-explorer-quick-filters {flex:1 1 100%;order:2;flex-wrap:wrap;}
   .media-explorer-quick-filters input,.media-explorer-quick-filters select {flex:1 1 140px;}
 }
+
+.media-explorer-tag-links { display:flex;flex-wrap:wrap;gap:5px; }
+.media-explorer-tag-links button {
+  padding:3px 9px;min-height:29px;font-size:14px;
+  border:1px solid var(--border);border-radius:999px;
+  background:var(--panel);color:var(--text);cursor:pointer;
+}
+.media-explorer-tag-links button:hover,
+.media-explorer-tag-links button:focus-visible { background:var(--hover); }

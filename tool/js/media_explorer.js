@@ -820,7 +820,8 @@
     var panel = el('media-explorer-selection');
     panel.classList.toggle('hidden', !selected.size);
     text(el('media-explorer-selected-count'), selected.size + ' selected (loaded items)');
-    text(el('media-explorer-selection-hint'), selected.size > 4 ? 'Compare supports up to 4 selected items' : selected.size < 2 ? 'Select 2–4 to compare' : 'Ready to compare');
+    text(el('media-explorer-selection-hint'), selected.size > 4 ? 'Compare supports up to 4 selections' : '');
+    el('media-explorer-selection-hint').classList.toggle('hidden', selected.size <= 4);
     var chosen = items.filter(function (item) { return selected.has(item.id); });
     el('media-explorer-copy-selected').classList.toggle('hidden', !isExternal());
     el('media-explorer-compare').disabled = chosen.length < 2 || chosen.length > 4;
@@ -1641,7 +1642,7 @@
   var bulkRateButton = document.createElement('button');
   bulkRateButton.type = 'button';bulkRateButton.className = 'review-captions-btn';
   bulkRateButton.textContent = 'Rate ★';
-  bulkRateButton.addEventListener('click',function () {bulkCurate('rating');});
+  bulkRateButton.addEventListener('click',function (event) {event.stopPropagation();bulkCurate('rating');});
   var bulkTrashButton = document.createElement('button');
   bulkTrashButton.type = 'button'; bulkTrashButton.className = 'review-captions-btn';
   bulkTrashButton.textContent = 'Move to Trash';

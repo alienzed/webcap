@@ -469,6 +469,43 @@
     });
     return links;
   }
+  function addToCollection(chosen) {
+    if(!chosen.length)return;
+    promptMediaAction('Add '+chosen.length+' media item(s) to collection','','Add to collection',
+      function (name) {
+        if(name.length>48 || name.includes(','))throw Error('Use a collection name up to 48 characters without commas.');
+        var tag='Collection · '+name;
+        return Promise.allSettled(chosen.map(function (item) {
+          return saveCurationFor(item,{
+            tags:Array.from(new Set((item.tags || []).concat([tag])))
+          });
+        })).then(function (results) {
+          var successes=results.filter(function (result) {return result.status==='fulfilled';}).length;
+          var failed=results.length-successes;
+          if(!successes)throw Error('Could not add any media: '+results[0].reason.message);
+          var filters=currentViewFilters();
+          filters.source=isExternal()?'external':'';
+          filters.role='';filters.tag=tag;filters.search='';filters.rating='';
+          filters.kind='';filters.model='';filters.folder='';filters.date='';
+          filters.sort='newest';filters.direction='desc';
+          filters.full=!isExternal();filters.storyboardType='';
+          ['min-side','min-mp','min-duration','max-duration'].forEach(function (id) {filters[id]='';});
+          var viewName='Collection: '+name+(isExternal()?' · '+externalPath.slice(-24):'');
+          return fetch('/fs/media_explorer/views',{
+            method:'POST',headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({name:viewName,filters:filters})
+          }).then(function (res) {return res.json().then(function (body) {
+            if(!res.ok || !body.ok)throw Error(body.error || 'Could not save collection view');
+            showSavedViews(body.views,viewName);
+            load(true,{soft:true});
+            if(failed)throw Error('Added '+successes+' of '+results.length+
+              ' items; '+failed+' failed: '+results.find(function (result) {
+                return result.status==='rejected';
+              }).reason.message);
+          });});
+        });
+      });
+  }
   function itemActions(item) {
     var current = function () { return items.findIndex(function (candidate) {return candidate.id===item.id;}); };
     var actions = [
@@ -553,6 +590,13 @@
             (entry.source==='epoch' || entry.source==='storyboard');
         }) : [item]);}});
       actions.push({label:'Edit tags…',run:function () {editMediaTags(item);}});
+    }
+    if (['external','generate','test','epoch','storyboard'].includes(item.source) &&
+        (item.source==='external' || item.storageId)) {
+      actions.push({label:'Add to collection…',run:function () {
+        addToCollection(selected.has(item.id) && selectedCuratable().length ?
+          selectedCuratable() : [item]);
+      }});
     }
     if (item.mediaUrl) {
       actions.push({label:'Download original',run:function () {
@@ -1926,6 +1970,10 @@
   bulkRateButton.type = 'button';bulkRateButton.className = 'review-captions-btn';
   bulkRateButton.textContent = 'Rate ★';
   bulkRateButton.addEventListener('click',function (event) {event.stopPropagation();bulkCurate('rating');});
+  var bulkCollectionButton=document.createElement('button');
+  bulkCollectionButton.type='button';bulkCollectionButton.className='review-captions-btn';
+  bulkCollectionButton.textContent='Add to collection…';
+  bulkCollectionButton.addEventListener('click',function () {addToCollection(selectedCuratable());});
   var bulkTrashButton = document.createElement('button');
   bulkTrashButton.type = 'button'; bulkTrashButton.className = 'review-captions-btn';
   bulkTrashButton.textContent = 'Move to Trash';
@@ -1937,12 +1985,14 @@
   el('media-explorer-selection').insertBefore(bulkTrashButton, el('media-explorer-compare'));
   el('media-explorer-selection').insertBefore(bulkTagsButton, el('media-explorer-compare'));
   el('media-explorer-selection').insertBefore(bulkRateButton, el('media-explorer-compare'));
+  el('media-explorer-selection').insertBefore(bulkCollectionButton, el('media-explorer-compare'));
   function syncBulkActions() {
     var show = isExternal() && chosenExternalFiles().length > 0;
     bulkMoveButton.classList.toggle('hidden',!show);
     bulkTrashButton.classList.toggle('hidden',!show);
     var curation=selectedCuratable().length>0;
     bulkTagsButton.classList.toggle('hidden',!curation);
+    bulkCollectionButton.classList.toggle('hidden',!curation);
     bulkRateButton.classList.toggle('hidden',!curation ||
       !selectedCuratable().every(function (item) {return item.source==='external' ||
         item.source==='generate' || item.source==='test';}));

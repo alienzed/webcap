@@ -6240,12 +6240,18 @@
     run.disabled = true;
     status.textContent = 'Starting revision…';
     var storyId = storyState.story && storyState.story.id;
+    var selectedSceneIds = Array.from(el('storyboard-director-tools-scene-selection').querySelectorAll('[data-revise-scene]:checked'))
+      .map(function (input) { return input.dataset.reviseScene; });
+    if (!selectedSceneIds.length) {
+      status.textContent = 'Select at least one Scene.';
+      run.disabled = false;
+      return;
+    }
     var target = { kind: 'repair', storyId: storyId };
     var revision = reviseScenes(
       instruction, storyState.director.modelId, generateFreshTakes,
       el('storyboard-director-tools-preset').value === 'continuity',
-      el('storyboard-director-tools-instruction'),
-      Array.from(el('storyboard-director-tools-scene-selection').querySelectorAll('[data-revise-scene]:checked')).map(function (input) { return input.dataset.reviseScene; }),
+      el('storyboard-director-tools-instruction'), selectedSceneIds,
       el('storyboard-director-tools-preset').value === 'visual_direction' ? 'visual_direction' : 'standard'
     );
     // The target is registered synchronously once the operation has started.

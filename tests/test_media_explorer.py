@@ -536,3 +536,89 @@ def test_generation_curation_tags_persist_in_owner_state(monkeypatch, tmp_path):
     assert result["tags"] == ["keeper", "portrait"]
     assert generate_store.load_result("day/run")["tags"] == ["keeper", "portrait"]
     assert (generation / "frame.png").read_bytes() == b"sample"
+
+
+def test_test_result_curation_uses_session_owner_state(monkeypatch, tmp_path):
+    from tool.server import epoch_test_bench
+    from tool.server.folder_state_store import read_folder_state
+    session = tmp_path / "session"
+    session.mkdir()
+    media = session / "result.mp4"
+    _media(media)
+    monkeypatch.setattr(epoch_test_bench, "_session_directory",
+                        lambda owner, name: session)
+    monkeypatch.setattr(epoch_test_bench, "resolve_result_media",
+                        lambda owner, name, filename: media)
+    result = epoch_test_bench.tag_result(tmp_path, "session", "result.mp4", ["favorite"])
+    assert result["tags"] == ["favorite"]
+    stored = read_folder_state(session / ".webcap_state.json")
+    assert stored["curation_tags_by_media"]["result.mp4"] == ["favorite"]
+
+
+def test_owned_curation_validates_media_before_writing(monkeypatch, tmp_path):
+    from tool.server import media_explorer, epoch_finder
+    from tool.server.folder_state_store import read_folder_state
+    campaign = tmp_path / "campaign"
+    campaign.mkdir()
+    frame = campaign / "frame.png"
+    _media(frame)
+    monkeypatch.setattr(media_explorer.app_config, "safe_join_fs_root",
+                        lambda folder: tmp_path)
+    monkeypatch.setattr(epoch_finder, "frame_path",
+                        lambda owner, identifier, filename: frame)
+    monkeypatch.setattr(epoch_finder, "storage_campaign_path",
+                        lambda folder, identifier: campaign)
+    data = {"source": "epoch", "folder": "set", "storageId": "campaign-1",
+            "mediaFile": "frame.png", "tags": ["top"] }
+    assert media_explorer.tag_owned_media(data)["tags"] == ["top"]
+    assert read_folder_state(campaign / ".webcap_state.json")[
+        "curation_tags_by_media"]["frame.png"] == ["top"]
+    from pytest import raises
+    with raises(ValueError):
+        media_explorer.tag_owned_media({**data, "source": "unknown"})
+
+
+def test_copy_test_results_is_non_destructive(monkeypatch, tmp_path):
+    from tool.server import external_exports, epoch_test_bench
+    source = tmp_path / "source.mp4"
+    _media(source)
+    target = tmp_path / "set"
+    target.mkdir()
+    monkeypatch.setattr(external_exports.app_config, "FS_ROOT", tmp_path)
+    monkeypatch.setattr(external_exports.app_config, "safe_join_fs_root",
+                        lambda folder: tmp_path)
+    monkeypatch.setattr(epoch_test_bench, "resolve_result_media",
+                        lambda owner, session, name: source)
+    result = external_exports.copy_test_media({
+        "results": [{"folder":"owner","session":"session","mediaFile":"source.mp4"}],
+        "destination":"set"})
+    assert result["ok"]
+    assert (target / "source.mp4").read_bytes() == source.read_bytes()
+    assert source.exists()
+
+
+def test_copy_campaign_and_storyboard_results_from_owner_resolvers(monkeypatch, tmp_path):
+    from tool.server import external_exports, epoch_finder, storyboard_store
+    source = tmp_path / "frame.png"
+    _media(source)
+    target = tmp_path / "set"
+    target.mkdir()
+    monkeypatch.setattr(external_exports.app_config, "FS_ROOT", tmp_path)
+    monkeypatch.setattr(external_exports.app_config, "safe_join_fs_root",
+                        lambda folder: tmp_path)
+    monkeypatch.setattr(epoch_finder, "frame_path",
+                        lambda owner, campaign, name: source)
+    monkeypatch.setattr(storyboard_store, "load_story", lambda story: {})
+    monkeypatch.setattr(storyboard_store, "resolve_story_media",
+                        lambda story, path: source)
+    result = external_exports.copy_owned_media({
+        "destination":"set",
+        "results":[
+            {"source":"epoch","folder":"owner","storageId":"campaign",
+             "mediaFile":"frame.png"},
+            {"source":"storyboard","storageId":"story","mediaPath":"frame.png"}
+        ]})
+    assert result["ok"] and len(result["copied"]) == 2
+    assert (target / "frame.png").exists()
+    assert (target / "frame-2.png").exists()
+    assert source.exists()

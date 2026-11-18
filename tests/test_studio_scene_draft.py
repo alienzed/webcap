@@ -129,6 +129,32 @@ def test_new_scene_response_schemas_require_prompt_not_intent(monkeypatch):
     assert "rationale" not in captured["studio_project_draft"]["properties"]
     assert "summary" not in captured["studio_scene_field_draft"]["properties"]
 
+def test_selected_scene_save_accepts_authored_duration_and_long_title(isolated_storyboard):
+    client = isolated_storyboard
+    project = storyboard_store.create_story({"title": "Author choices"})
+    project, scene = storyboard_store.add_scene(project["id"], {
+        "title": "Original", "prompt": "A dancer crosses the floor.", "durationSeconds": 8
+    })
+    long_title = "Scene title " * 30
+    result = client.post("/fs/studio/director/scene-fields", json={
+        "storyId": project["id"], "sceneId": scene["id"],
+        "expected": {"title": scene["title"], "durationSeconds": scene["durationSeconds"]},
+        "changes": {"title": long_title, "durationSeconds": 18.5},
+    })
+    assert result.status_code == 200, result.json
+    assert result.json["scene"]["title"] == long_title.strip()
+    assert result.json["scene"]["durationSeconds"] == 18.5
+    assert result.json["scene"]["prompt"] == scene["prompt"]
+
+    invalid = client.post("/fs/studio/director/scene-fields", json={
+        "storyId": project["id"], "sceneId": scene["id"],
+        "expected": {"durationSeconds": 18.5},
+        "changes": {"durationSeconds": 0},
+    })
+    assert invalid.status_code == 400
+    assert storyboard_store.load_story(project["id"])["scenes"][scene["id"]]["durationSeconds"] == 18.5
+
+
 def test_studio_brief_apply_is_field_scoped_and_undoable(isolated_storyboard):
     client = isolated_storyboard
     story = storyboard_store.create_story({"title": "Brief", "concept": "Old", "style": "Original"})

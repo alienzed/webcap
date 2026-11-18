@@ -1763,17 +1763,14 @@
                             </dialog>
                             </div>
                             <aside class="generate-inspector" aria-label="Generation controls">
-                            <div class="generate-inspector-heading"><strong>Generation Settings</strong><span id="generate-status" class="generate-status-badge hidden" aria-live="polite"></span><button id="generate-advanced-toggle" type="button" class="review-captions-btn generate-advanced-toggle" aria-expanded="false" aria-controls="generate-advanced-panel">Advanced <span aria-hidden="true">⌄</span></button></div>
+                            <div class="generate-inspector-heading"><strong>Generation Settings</strong><span id="generate-status" class="generate-status-badge hidden" aria-live="polite"></span><label id="generate-field-samplingMode" class="generate-header-sampling generate-field" title="Choose Turbo or Quality sampling"><span>Sampling</span><select id="generate-sampling-mode" aria-label="Sampling mode"><option value="turbo">Turbo · 8 steps / 1.0</option><option value="quality">Quality · 20 steps / no Turbo</option></select></label></div>
                             <section class="generate-output-settings">
                             <div class="generate-settings-primary">
                                 <label id="generate-field-aspectRatio" class="generate-field" title="Output aspect ratio"><span>Aspect ratio</span><select id="generate-aspect"></select></label>
                                 <label id="generate-field-megapixels" class="generate-field" title="Output resolution in megapixels"><span>MP</span><input id="generate-megapixels" type="number" min="0.1" step="0.1"></label>
                                 <label id="generate-field-duration" class="generate-field" title="Clip duration in seconds"><span>Duration</span><input id="generate-duration" type="number" min="3" max="15" step="1"></label>
-                                <label id="generate-field-dimensions" class="generate-field hidden" title="Output dimensions"><span>Dimensions</span><select id="generate-dimensions"></select></label>
-                            </div>
-                            <div id="generate-advanced-panel" class="generate-settings-advanced hidden">
-                                <label id="generate-field-samplingMode" class="generate-field" title="Choose Turbo or Quality sampling"><span>Sampling mode</span><select id="generate-sampling-mode"><option value="turbo">Turbo · 8 steps / 1.0</option><option value="quality">Quality · 20 steps / no Turbo</option></select></label>
                                 <label id="generate-field-seed" class="generate-field" title="Seed (-1 for random)"><span>Seed</span><input id="generate-seed" type="number" min="-1" step="1" value="-1"></label>
+                                <label id="generate-field-dimensions" class="generate-field hidden" title="Output dimensions"><span>Dimensions</span><select id="generate-dimensions"></select></label>
                             </div>
                             </section>
                             <div class="generate-mode-row">

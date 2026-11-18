@@ -3076,12 +3076,6 @@ function sweepLoras(model, folder) {
       try { usePromptLibraryItem(generateState.promptLibrary.selectedId); }
       catch (err) { reportError(err, 'Use prompt failed'); }
     };
-    el('generate-advanced-toggle').onclick = function () {
-      var panel = el('generate-advanced-panel');
-      var expanded = this.getAttribute('aria-expanded') === 'true';
-      panel.classList.toggle('hidden', expanded);
-      this.setAttribute('aria-expanded', expanded ? 'false' : 'true');
-    };
     el('generate-lora-master-enabled').addEventListener('change', function () {
       generateState.lorasEnabledByModel[generateState.modelId] = this.checked;
       el('generate-lora-list').classList.toggle('generate-loras-bypassed', !this.checked);

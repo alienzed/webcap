@@ -1,0 +1,24 @@
+name: Generate settings layout regression
+
+on:
+  pull_request:
+    paths:
+      - 'tool/js/generate.js'
+      - 'tool/tool.html'
+      - 'tool/css/generate.css'
+      - 'tests/generate_settings_layout.test.cjs'
+      - '.github/workflows/generate-settings-layout.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  settings-layout:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --check tool/js/generate.js
+      - run: node --test tests/generate_settings_layout.test.cjs

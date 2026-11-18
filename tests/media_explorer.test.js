@@ -110,7 +110,9 @@ function fixture(hash = '#/media') {
     request.resolve({ok, status:ok ? 200 : 500, json:async () => ({ok, items, total:items.length, complete:true, error:ok ? undefined : 'owner discovery failed', ...extra})});
     await new Promise(resolve => setImmediate(resolve));
   };
-  const key = (target, key, extra = {}) => document.listeners.keydown({target, key, preventDefault() {}, ...extra});
+  const key = (target, key, extra = {}) => document.listeners.keydown({
+    target, key, preventDefault() {}, stopPropagation() {}, ...extra
+  });
   return {nodes, buttons, modeButtons, pending, errors, closed, menus, clipCalls, cropCalls, window, document, settle, key};
 }
 const media = (id, kind = 'image') => ({id, fileName:id + '.png', mediaKind:kind, mediaUrl:'/media/' + id, role:'generated', source:'generate', rating:null});
@@ -827,8 +829,8 @@ test('bulk Remove from collection only appears for shared memberships', async ()
   const first={...media('one'),storageId:'one',tags:['Collection · Keepers']};
   const second={...media('two'),storageId:'two',tags:['Collection · Keepers']};
   await f.settle(f.pending[0],[first,second]);
-  f.nodes['media-explorer-grid'].children[0].querySelector('.media-explorer-card-check').click();
-  f.nodes['media-explorer-grid'].children[1].querySelector('.media-explorer-card-check').click();
+  f.nodes['media-explorer-grid'].children[0].querySelector('.media-explorer-card-check').click({stopPropagation(){}});
+  f.nodes['media-explorer-grid'].children[1].querySelector('.media-explorer-card-check').click({stopPropagation(){}});
   const toolbar=f.nodes['media-explorer-selection'];
   const remove=toolbar.children.find(child=>child.textContent==='Remove from collection…');
   assert.ok(remove);

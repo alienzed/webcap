@@ -326,10 +326,10 @@
     try { parsed = JSON.parse(raw); }
     catch (error) {
       throw new Error('Action Advisor returned invalid JSON: ' + error.message +
-        '\\nRaw response:\\n' + String(raw || ''));
+        '\nRaw response:\n' + String(raw || ''));
     }
     if (!parsed || !Array.isArray(parsed.actions))
-      throw new Error('Action Advisor returned no actions list. Raw response:\\n' + String(raw || ''));
+      throw new Error('Action Advisor returned no actions list. Raw response:\n' + String(raw || ''));
     var out = [], validFields = ['title','concept','style','invariants'];
     parsed.actions.forEach(function (item) {
       if (out.length >= 3) return;

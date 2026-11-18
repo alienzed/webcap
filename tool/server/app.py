@@ -2346,36 +2346,37 @@ def director_chat_route():
                 {"title", "prompt", "durationSeconds"} for field in required_fields
             ):
                 raise ValueError("Invalid required Scene fields.")
+            # The schema asks for the selected fields, not a creative/renderer
+            # acceptability judgment. The actual response remains inspectable.
             contract["response_schema"] = {
-                "type": "object", "additionalProperties": False,
+                "type": "object",
                 "required": list(dict.fromkeys(required_fields)) or ["prompt"],
                 "properties": {
                     "title": {"type": "string"},
-                    "prompt": {"type": "string", "minLength": 1},
-                    "durationSeconds": {"type": "integer", "minimum": 4, "maximum": 15},
+                    "prompt": {"type": "string"},
+                    "durationSeconds": {"type": "number"},
                 },
             }
         if operation == "studio_scenes_draft":
-            # New-Scene authoring is a sequence of *material*, not an action
-            # promise or a requirement to match a guessed requested count.
-            # Explicit Scene writing owns this schema independently of
-            # ordinary freeform Studio chat. Ingest exposes actual provider output.
+            # Request complete Scenes while allowing the model to return material
+            # that WebCap can report or recover even when not all fields are usable.
             contract["response_schema"] = {
-                "type": "object", "additionalProperties": False,
+                "type": "object",
                 "required": ["scenes"],
                 "properties": {
                     "scenes": {
-                        "type": "array", "minItems": 1, "maxItems": 32,
+                        "type": "array", "minItems": 1,
                         "items": {
-                            "type": "object", "additionalProperties": False,
+                            "type": "object",
                             "required": ["title", "prompt", "durationSeconds"],
                             "properties": {
-                                "title": {"type": "string", "maxLength": 240},
-                                "prompt": {"type": "string", "minLength": 1},
-                                "durationSeconds": {"type": "integer", "minimum": 4, "maximum": 15},
+                                "title": {"type": "string"},
+                                "prompt": {"type": "string"},
+                                "durationSeconds": {"type": "number"},
                             },
                         },
                     },
+                    "rationale": {"type": "string"},
                 },
             }
         if operation == "studio_project_draft":

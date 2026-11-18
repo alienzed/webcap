@@ -39,12 +39,12 @@ test('New Scene Write freezes the selected destination and fresh saved Scene ord
 test('new Scene Write saves each actually usable record without invented titles or duration',()=>{
   const body=part(chat,'    writeNewScene: function (launch) {',
     '    writeSelectedScene: function');
-  assert.match(body,/var valid = drafts\.filter/);
-  assert.match(body,/item\.title\.trim\(\) && item\.prompt\.trim\(\)/);
-  assert.match(body,/Number\.isInteger\(Number\(item\.durationSeconds\)\)/);
+  assert.match(body,/var creations = \[\], incomplete = \[\]/);
+  assert.match(body,/if \(!prompt\.trim\(\)\) problems\.push\('missing Prompt'\)/);
+  assert.match(body,/typeof duration !== 'number' \|\| !Number\.isFinite\(duration\)/);
   assert.doesNotMatch(body,/Scene ' \+ \(order\.length\+index\+1\)/);
   assert.doesNotMatch(body,/durationSeconds:6/);
-  assert.match(body,/var omitted = drafts\.length-valid\.length/);
+  assert.match(body,/incomplete\.join\('; '\)/);
 });
 
 test('a failed Scene write exposes raw model content without implicit recovery',()=>{

@@ -78,7 +78,6 @@ def test_prompt_only_multi_scene_create_and_atomic_rejection(isolated_storyboard
     for scenes in (
         [], [{"title": "One", "summary": "Intent only"}],
         [{"title": "One", "prompt": ""}],
-        [{"title": "One", "prompt": "Valid", "summary": "Forbidden"}],
         [{"title": "One", "prompt": 42}],
         [{"title": "One", "prompt": "Valid", "durationSeconds": 0}],
     ):
@@ -125,10 +124,36 @@ def test_new_scene_response_schemas_require_prompt_not_intent(monkeypatch):
         })
         assert response.status_code == 202, response.json
     assert captured["studio_scene_field_draft"]["required"] == ["prompt"]
-    assert captured["studio_scene_field_draft"]["properties"]["prompt"]["minLength"] == 1
+    assert captured["studio_scene_field_draft"]["properties"]["prompt"]["type"] == "string"
     assert "initialScenes" not in captured["studio_project_draft"]["properties"]
     assert "rationale" not in captured["studio_project_draft"]["properties"]
     assert "summary" not in captured["studio_scene_field_draft"]["properties"]
+
+def test_selected_scene_save_accepts_authored_duration_and_long_title(isolated_storyboard):
+    client = isolated_storyboard
+    project = storyboard_store.create_story({"title": "Author choices"})
+    project, scene = storyboard_store.add_scene(project["id"], {
+        "title": "Original", "prompt": "A dancer crosses the floor.", "durationSeconds": 8
+    })
+    long_title = "Scene title " * 30
+    result = client.post("/fs/studio/director/scene-fields", json={
+        "storyId": project["id"], "sceneId": scene["id"],
+        "expected": {"title": scene["title"], "durationSeconds": scene["durationSeconds"]},
+        "changes": {"title": long_title, "durationSeconds": 18.5},
+    })
+    assert result.status_code == 200, result.json
+    assert result.json["scene"]["title"] == long_title.strip()
+    assert result.json["scene"]["durationSeconds"] == 18.5
+    assert result.json["scene"]["prompt"] == scene["prompt"]
+
+    invalid = client.post("/fs/studio/director/scene-fields", json={
+        "storyId": project["id"], "sceneId": scene["id"],
+        "expected": {"durationSeconds": 18.5},
+        "changes": {"durationSeconds": 0},
+    })
+    assert invalid.status_code == 400
+    assert storyboard_store.load_story(project["id"])["scenes"][scene["id"]]["durationSeconds"] == 18.5
+
 
 def test_studio_brief_apply_is_field_scoped_and_undoable(isolated_storyboard):
     client = isolated_storyboard
@@ -425,7 +450,7 @@ def test_multi_scene_invalid_proposals_and_atomic_failure(isolated_storyboard, m
     }
     for scenes in ([], [{"title": "", "prompt": ""}], [{"title": "", "summary": "Intent only"}],
                    [{"title": "", "prompt": 7}],
-                   [{"title": "", "prompt": "Full prompt", "durationSeconds": 0}], data["scenes"] * 17):
+                   [{"title": "", "prompt": "Full prompt", "durationSeconds": 0}]):
         response = client.post("/fs/studio/director/scenes-draft", json={**data, "scenes": scenes})
         assert response.status_code == 400
     def broken_writer(path, data):

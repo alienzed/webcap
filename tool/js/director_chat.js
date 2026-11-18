@@ -52,6 +52,7 @@
     studioScenesProposal: null,
     studioBriefProposal: null,
     studioOperations: [],
+    studioWriteIo: [],
     sceneRead: null,
     studioReadiness: {checks:[], readHints:[], writeHint:'', writeFields:[], sceneId:'', sceneNumber:0}
   };
@@ -739,6 +740,7 @@
     var attachments = mode === 'storyboard' ? JSON.parse(JSON.stringify(state.storyboardAttachments)) : {};
     var workshop = mode === 'storyboard' ? JSON.parse(JSON.stringify(state.workshop)) : null;
     var operations = mode === 'storyboard' ? state.studioOperations.slice() : [];
+    var writeIo = mode === 'storyboard' ? state.studioWriteIo.slice() : [];
     var storyAccess = mode === 'storyboard' ? state.studioStoryAccess : null;
     var readiness = mode === 'storyboard' ? state.studioReadiness : null;
     var workingDraft = mode === 'storyboard' ? JSON.parse(JSON.stringify(state.studioWorkingDraft)) : null;
@@ -766,7 +768,7 @@
           body: JSON.stringify({
             expectedRevision: current.revision, title: title,
             messages: messages, draft: draft, attachments: attachments, workshop: workshop,
-            operations: operations, storyAccess: storyAccess, readiness: readiness, workingDraft: workingDraft
+            operations: operations, writeIo: writeIo, storyAccess: storyAccess, readiness: readiness, workingDraft: workingDraft
           })
         });
       }).then(function (payload) {
@@ -834,6 +836,7 @@
       state.studioAccessIndex = null;
       state.workshop = chat.workshop || null;
       state.studioOperations = Array.isArray(chat.operations) ? chat.operations.slice() : [];
+      state.studioWriteIo = Array.isArray(chat.writeIo) ? chat.writeIo.slice() : [];
       if (window.studioDirectorWorkbench) {
         window.studioDirectorWorkbench.resetConversation();
         // Recover the last unsaved proposal with its original bound target.
@@ -1465,7 +1468,7 @@
   function recordStudioOperation(kind, label, storyId, sceneIds) {
     state.studioOperations.push({
       kind: kind, label: String(label || '').slice(0, 200), storyId: String(storyId || ''),
-      sceneIds: (sceneIds || []).slice(0, 32), at: new Date().toISOString()
+      sceneIds: (sceneIds || []).slice(), at: new Date().toISOString()
     });
     state.studioOperations = state.studioOperations.slice(-25);
     if (state.studioStoryAccess && state.studioStoryAccess.storyId === String(storyId || '')) {
@@ -3578,6 +3581,10 @@
   function studioDirectorOpenIo() {
     var dialog = el('studio-director-io-dialog'), chooser = el('studio-director-io-exchange');
     var responses = currentMessages().filter(function(m){return m.role === 'assistant';});
+    (state.studioWriteIo || []).forEach(function(entry) {
+      responses.push({content:'Write · ' + entry.operation + ' · ' + entry.at,
+        rawResponse:entry.rawResponse});
+    });
     if (state.lastStudioIoError && state.lastStudioIoRaw)
       responses.push({content:'Failed response',rawResponse:state.lastStudioIoRaw});
     chooser.replaceChildren();
@@ -4440,10 +4447,10 @@
         };
         var instruction = JSON.stringify({
           task:'Create the requested independently generatable H3 Scenes for this Project. ' +
-            'Give each Scene a useful title, complete H3 Prompt and durationSeconds ' +
-            '(4–15 seconds). Follow any author-specified timing; when no duration is ' +
-            'specified, choose an appropriate duration from the authored action, rather ' +
-            'than using an implicit WebCap default. Deliver all useful Scenes now.',
+            'Give each Scene a useful title, complete H3 Prompt and durationSeconds. ' +
+            'Follow the author\'s specified timing. When timing is unspecified, choose a ' +
+            'duration that supports the supplied actions, shot transitions and dialogue. ' +
+            'Deliver the authored Scenes now.',
           authorDirection:launch.authorRequest || launch.instruction,
           project:creativeContext
         });
@@ -4454,53 +4461,49 @@
           {projectId:storyId,projectTitle:story.title,sceneOrder:order})
         .then(function (raw) {
           state.lastStudioIoRaw = raw;
+          // Keep the exact model result inspectable after reload, even if
+          // parsing or persistence fails. This is diagnostics, not chat context.
+          state.studioWriteIo.push({operation:'studio_scenes_draft',projectId:storyId,
+            at:new Date().toISOString(),rawResponse:raw});
+          scheduleSessionSave();
           var fields;
           try { fields = JSON.parse(raw); }
-          catch (error) { throw new Error('Director returned invalid Scene JSON.\nRaw response:\n' + raw); }
+          catch (error) { throw new Error('Director returned invalid Scene JSON.\\nRaw response:\\n' + raw); }
           if (!fields || typeof fields !== 'object' || Array.isArray(fields))
-            throw new Error('Director returned no usable Scene fields.\\nRaw response:\\n' + raw);
-          // Accept both the current multi-Scene response and legacy single-Scene
-          // objects. The number of records returned is the only authored count.
+            throw new Error('Director returned no Scene object.\\nRaw response:\\n' + raw);
           var records = Array.isArray(fields.scenes) ? fields.scenes : [fields];
-          var drafts = records.filter(function (item) {
-            return item && typeof item === 'object' && !Array.isArray(item);
-          }).map(function (item) {
-            return {
-              title:typeof item.title === 'string' ? item.title : '',
-              prompt:typeof item.prompt === 'string' ? item.prompt : '',
-              durationSeconds:Object.prototype.hasOwnProperty.call(item,'durationSeconds')
-                ? item.durationSeconds : undefined
-            };
-          }).filter(function (item) {
-            return item.title.trim() || item.prompt.trim() ||
-              item.durationSeconds !== undefined;
+          if (!records.length)
+            throw new Error('Director returned zero Scenes.\\nRaw response:\\n' + raw);
+          // Preserve source order and report incomplete items explicitly. Only
+          // fields actually returned can be saved; never fabricate a duration.
+          var creations = [], incomplete = [], notMapped = [];
+          records.forEach(function (item, index) {
+            if (!item || typeof item !== 'object' || Array.isArray(item)) {
+              incomplete.push('Scene ' + (index + 1) + ': expected an object');
+              return;
+            }
+            var extras = Object.keys(item).filter(function (key) {
+              return !['title','prompt','durationSeconds'].includes(key);
+            });
+            if (extras.length)
+              notMapped.push('Scene ' + (index + 1) + ' additional properties in raw I/O: ' + extras.join(', '));
+            var title = typeof item.title === 'string' ? item.title : '';
+            var prompt = typeof item.prompt === 'string' ? item.prompt : '';
+            var duration = item.durationSeconds;
+            var problems = [];
+            if (!prompt.trim()) problems.push('missing Prompt');
+            if (duration === undefined || duration === null || duration === '' ||
+                typeof duration !== 'number' || !Number.isFinite(duration) || duration <= 0)
+              problems.push('missing or unusable durationSeconds');
+            if (problems.length) {
+              incomplete.push('Scene ' + (index + 1) + ': ' + problems.join(', '));
+              return;
+            }
+            creations.push({title:title,prompt:prompt,durationSeconds:duration});
           });
-          if (!drafts.length)
-            throw new Error('Director returned no usable Scene fields.\\nRaw response:\\n' + raw);
-          var missingPrompt = drafts.some(function (item) {return !item.prompt.trim();});
-          var missingDuration = drafts.some(function (item) {
-            return item.durationSeconds === undefined;
-          });
-          var invalidDuration = drafts.some(function (item) {
-            return item.durationSeconds !== undefined &&
-              (!Number.isInteger(Number(item.durationSeconds)) ||
-              Number(item.durationSeconds) < 4 || Number(item.durationSeconds) > 15);
-          });
-          var draft = {scenes:drafts,rationale:typeof fields.rationale === 'string' ? fields.rationale : ''};
-          // Persist each mechanically usable Scene returned by this explicit Write.
-          // Do not invent missing prompt text or duration values, or launch Review.
-          var valid = drafts.filter(function (item) {
-            return item.title.trim() && item.prompt.trim() &&
-              Number.isInteger(Number(item.durationSeconds)) &&
-              Number(item.durationSeconds)>=4 && Number(item.durationSeconds)<=15;
-          });
-          var omitted = drafts.length-valid.length;
-          if (!valid.length)
-            throw new Error('Director returned no Scene records with persistable fields.\\nRaw response:\\n'+raw);
-          var creations = valid.map(function (item,index) {
-            return {title:item.title.trim(),
-              prompt:item.prompt,durationSeconds:Number(item.durationSeconds)};
-          });
+          if (!creations.length)
+            throw new Error('Director returned no Scenes WebCap could save. ' +
+              incomplete.join('; ') + '\\nRaw response:\\n' + raw);
           state.pending = true;
           syncControls();
           return requestJson('/fs/studio/director/scenes-draft',{
@@ -4530,7 +4533,9 @@
               .catch(function(error){error.saved=true;throw error;})
               .then(function(){
                 studioActionStatus(saved.length+' Scene(s) saved.'+
-                  (omitted ? ' '+omitted+' returned record(s) could not be stored; inspect raw I/O.' : ''),!!omitted);
+                  (incomplete.length || notMapped.length
+                    ? ' ' + incomplete.concat(notMapped).join('; ') + '. Inspect raw I/O.' : ''),
+                  !!(incomplete.length || notMapped.length));
                 return result;
               });
           });
@@ -4595,6 +4600,9 @@
           requestedFields)
           .then(function (raw) {
             state.lastStudioIoRaw = raw;
+            state.studioWriteIo.push({operation:'studio_scene_field_draft',projectId:storyId,
+              at:new Date().toISOString(),rawResponse:raw});
+            scheduleSessionSave();
             var proposed;
             try {proposed = JSON.parse(raw);}
             catch (error) {throw new Error('Director returned invalid Scene JSON.\nRaw response:\n' + raw);}
@@ -4602,13 +4610,13 @@
               throw new Error('Director returned no usable Scene fields.\nRaw response:\n' + raw);
             var extras = {}, missing = [];
             if (wantsTitle) {
-              if (typeof proposed.title === 'string' && proposed.title.trim())
+              if (typeof proposed.title === 'string')
                 extras.title = proposed.title.trim();
               else missing.push('title');
             }
             if (wantsDuration) {
-              if (Number.isInteger(proposed.durationSeconds) &&
-                  proposed.durationSeconds >= 4 && proposed.durationSeconds <= 15)
+              if (typeof proposed.durationSeconds === 'number' &&
+                  Number.isFinite(proposed.durationSeconds) && proposed.durationSeconds > 0)
                 extras.durationSeconds = proposed.durationSeconds;
               else missing.push('durationSeconds');
             }

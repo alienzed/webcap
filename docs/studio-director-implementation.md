@@ -2,6 +2,34 @@
 
 [Functional contract](studio-director-contract.md) is authoritative. This file tracks the three-operation implementation and evidence; it does not define a competing architecture. The earlier incremental plans and audits from November 14 were superseded by the three-operation cutover in PR #950. Consult the PR history for original gap analyses.
 
+## Studio Scene Write response acceptance — November 17, 2026
+
+This focused change preserves the established H3 prompt sections and customized
+production playbook. It does not redesign Scene content or launch Review.
+
+- The Scene creation response contract requests `title`, `prompt`, and
+  `durationSeconds` but no longer specifies a 4–15-second creative range,
+  a 32-Scene ceiling, title-length limits, or a closed-property schema.
+  Selected-Scene revisions likewise no longer constrain authored duration
+  to an arbitrary range.
+- WebCap writes Scene records that contain a usable Prompt and a positive
+  numeric duration, including empty titles and durations outside the old
+  range. Missing/unusable records remain in the complete raw model response,
+  with an explicit per-record explanation. Extra model fields remain in raw
+  I/O and are reported when no matching stored Scene field exists.
+- New-Scene storage no longer rejects the old 32-record limit or a 240-character
+  title. Invalid actual persistence parameters still fail visibly.
+- The full raw Scene Write response is saved as separate diagnostic session
+  data (not added to LLM conversation context), and can be inspected after
+  reloading the conversation.
+- This is intentionally scoped to **Studio Scene Create and selected Scene
+  revision schemas**. Project-specific schema and backing-store limits need
+  their own contract-aligned inspection; legacy standalone Scene Review and
+  other tools remain unchanged.
+- Deterministic browser coverage was added for long titles, authored
+  fractional durations, missing titles, incomplete results, I/O persistence,
+  and batches exceeding 32. Live-model behavior still requires opt-in testing.
+
 ## One-time explicit Read snapshots — PR #1028
 
 The authoritative [Studio Director contract](studio-director-contract.md) now defines each Read as a single user action that copies the selected saved values into a full, visible, persisted user conversation message. The Read handler reads the chosen Project once, serializes the exact captured values, and saves the message without an LLM call. All later chat and explicit Write requests carry these same unchanged messages as part of complete history; neither request path refreshes a source or injects a hidden approved-context subscription. A subsequent Read is required to capture edits, and different Projects may be read into the same conversation.

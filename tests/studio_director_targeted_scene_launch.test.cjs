@@ -22,7 +22,7 @@ function sceneFixture(raw = '{"prompt":"Mara finishes quietly under a still came
       notes:'Keep this.',takeOrder:['take1']
     }}
   };
-  const state={pending:false,jobId:'',lastStudioIoRaw:'',lastStudioIoError:'',
+  const state={pending:false,jobId:'',lastStudioIoRaw:'',lastStudioIoError:'',studioWriteIo:[],
     studioApprovedRead:{projectId:'p1',keys:['project.title','project.concept','project.style','project.invariants',
       'scene:s1:title','scene:s1:prompt','scene:s1:durationSeconds']},
     modeMessages:{storyboard:[]},sessionDirty:{storyboard:false},studioWorkingDraft:{projects:{},scenes:{},newProject:{},newScene:{},sourceRequest:''}};
@@ -293,7 +293,7 @@ test('requested Scene duration comes from actual model-authored fields, not pars
   assert.match(request.authorDirection,/14 seconds/);
 });
 
-test('unsupported duration does not block a valid prompt and never changes saved timing',async()=>{
+test('authored positive twenty-second duration saves with the revised prompt',async()=>{
   const h=sceneFixture('{"prompt":"Twenty-second complete scene","durationSeconds":20}');
   await h.window.studioDirectorBridge.writeSelectedScene({
     ...h.launch,instruction:'Quiet scene',authorRequest:'Make it 20 seconds.',
@@ -301,8 +301,8 @@ test('unsupported duration does not block a valid prompt and never changes saved
   });
   assert.equal(h.events.filter(row=>row[0]==='save').length,1);
   assert.equal(h.saved.scenes.s1.prompt,'Twenty-second complete scene');
-  assert.equal(h.saved.scenes.s1.durationSeconds,12);
-  assert.ok(h.events.some(row=>row[0]==='status' && row[2] && /durationSeconds not supplied/.test(row[1])));
+  assert.equal(h.saved.scenes.s1.durationSeconds,20);
+  assert.ok(!h.events.some(row=>row[0]==='status' && row[2] && /durationSeconds not supplied/.test(row[1])));
 });
 test('an explicit Scene Write reauthors even when a complete earlier draft is cached',async()=>{
   const h=sceneFixture('{"prompt":"Fresh complete quiet H3 replacement","durationSeconds":14}');
@@ -320,8 +320,8 @@ test('an explicit Scene Write reauthors even when a complete earlier draft is ca
   assert.equal(h.saved.scenes.s1.durationSeconds,14);
 });
 
-test('a bad duration is excluded while the fresh prompt is saved',async()=>{
-  const h=sceneFixture('{"prompt":"Updated scene with no valid timing","durationSeconds":20}');
+test('a nonpositive duration is excluded while a fresh prompt still saves',async()=>{
+  const h=sceneFixture('{"prompt":"Updated scene with no valid timing","durationSeconds":0}');
   const launch={...h.launch,fields:['prompt','durationSeconds'],instruction:'Update Scene'};
   await h.window.studioDirectorBridge.writeSelectedScene(launch);
   assert.equal(h.events.filter(row=>row[0]==='model').length,1);
@@ -404,8 +404,8 @@ test('separate selected Scene Writes never apply another Scene response to the w
   assert.deepEqual(saves.map(row=>row.sceneId),['s1','s2']);
   assert.equal(h.saved.scenes.s1.prompt,'First rewrite.');
   assert.equal(h.saved.scenes.s2.prompt,'Second rewrite.');
-  assert.equal(h.saved.scenes.s1.durationSeconds,12);
-  assert.equal(h.saved.scenes.s2.durationSeconds,8);
+  assert.equal(h.saved.scenes.s1.durationSeconds,20);
+  assert.equal(h.saved.scenes.s2.durationSeconds,20);
 });
 test('a subsequent Scene Write uses the saved baseline without hidden unsaved draft injection',async()=>{
   const h=sceneFixture();

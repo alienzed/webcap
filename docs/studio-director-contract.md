@@ -16,7 +16,7 @@ Studio Director is an imaginative, capable creative partner. The author can disc
 
 ### Optional Action Advisor
 
-When explicitly enabled, a completed, saved Studio conversation reply may launch an **independent, model-selectable sidecar** to suggest zero to three next actions. It receives the conversation and known operation context under its own system prompt; its output is ephemeral UI advice, never a chat message, authoring result, saved Project field, or authorization. It may populate existing Read/Write controls only after the author clicks **Prepare**. The existing Read and Write buttons remain the sole execution triggers. Sidecar errors and incomplete suggestions must not interrupt conversation or manual workflows. See [Action Advisor MVP](studio-action-advisor-mvp.md).
+Unless disabled in Settings → Director, a completed, saved Studio conversation reply may launch an **independent sidecar on Director's selected model** to suggest zero to three next actions. It receives the conversation and known operation context under its own system prompt; its output is ephemeral UI advice, never a chat message, authoring result, saved Project field, or authorization. It may populate existing Read/Write controls only after the author clicks **Prepare**. The existing Read and Write buttons remain the sole execution triggers. Sidecar errors and incomplete suggestions must not interrupt conversation or manual workflows. See [Action Advisor MVP](studio-action-advisor-mvp.md).
 
 ### 2. Write functions
 

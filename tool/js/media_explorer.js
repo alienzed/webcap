@@ -540,6 +540,11 @@
         }) : [item]);}});
       actions.push({label:'Edit tags…',run:function () {editMediaTags(item);}});
     } else if (item.source==='test' && item.ownerFolder && item.storageId) {
+      actions.push({label:'Copy to Set…',run:function () {chooseExport(
+        selected.has(item.id) ? items.filter(function (entry) {
+          return selected.has(entry.id) && entry.source==='test' && entry.ownerFolder &&
+            entry.storageId;
+        }) : [item]);}});
       actions.push({label:'Edit tags…',run:function () {editMediaTags(item);}});
     }
     if (item.mediaUrl) {
@@ -922,9 +927,9 @@
     text(el('media-explorer-selection-hint'), selected.size > 4 ? 'Compare supports up to 4 selections' : '');
     el('media-explorer-selection-hint').classList.toggle('hidden', selected.size <= 4);
     var chosen = items.filter(function (item) { return selected.has(item.id); });
-    var copyable = chosen.length > 0 && (isExternal() || chosen.every(function (entry) {
-      return entry.source==='generate' && entry.role==='generated';
-    }));
+    var copyable = chosen.length > 0 && (isExternal() ||
+      chosen.every(function (entry) {return entry.source==='generate' && entry.role==='generated';}) ||
+      chosen.every(function (entry) {return entry.source==='test' && entry.ownerFolder && entry.storageId;}));
     el('media-explorer-copy-selected').classList.toggle('hidden', !copyable);
     el('media-explorer-compare').disabled = chosen.length < 2 || chosen.length > 4;
     text(el('media-explorer-compare'), chosen.length > 2 && chosen.length <= 4 ? 'Survey' : 'Compare');
@@ -1678,15 +1683,20 @@
     event.preventDefault();
     var submit = el('media-explorer-export-submit');
     var generated = exportItems[0] && exportItems[0].source === 'generate';
+    var testing = exportItems[0] && exportItems[0].source === 'test';
     var payload = {
       destination: el('media-explorer-export-destination').value.trim(),
       newSet: el('media-explorer-export-new-set').value.trim()
     };
     if (generated) payload.storageIds = Array.from(new Set(exportItems.map(function (item) {return item.storageId;})));
+    else if(testing) payload.results=exportItems.map(function (item) {
+      return {folder:item.ownerFolder,session:item.storageId,mediaFile:item.fileName};
+    });
     else {payload.path=externalPath;payload.files=exportItems.map(function (item) {return item.relativePath;});}
     submit.disabled = true;
     text(el('media-explorer-export-status'), 'Copying media…');
-    fetch(generated ? '/fs/media_explorer/generated/copy' : '/fs/media_explorer/external/copy', {
+    fetch(generated ? '/fs/media_explorer/generated/copy' :
+      (testing ? '/fs/media_explorer/test/copy' : '/fs/media_explorer/external/copy'), {
       method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)
     }).then(function (res) { return res.json().then(function (data) {
       if (!res.ok || !data.ok) throw Error(data.error || 'Export failed'); return data;

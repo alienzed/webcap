@@ -1131,6 +1131,31 @@
         text(relationshipsTitle, 'Choose owning scene · ' + uses.length);
       }
     }
+    if ((item.source==='test' && item.ownerFolder && item.storageId) ||
+        (item.source==='epoch' && item.ownerFolder && item.storageId) ||
+        (item.source==='storyboard' && item.storageId)) {
+      var copyOwned = document.createElement('button');
+      copyOwned.type='button';copyOwned.className='review-captions-btn';
+      text(copyOwned,'Copy to Set');
+      copyOwned.addEventListener('click',function () {chooseExport([item]);});
+      actions.appendChild(copyOwned);
+      var tagOwned = document.createElement('button');
+      tagOwned.type='button';tagOwned.className='review-captions-btn';
+      text(tagOwned,'Edit tags…');
+      tagOwned.addEventListener('click',function () {editMediaTags(item);});
+      actions.appendChild(tagOwned);
+    }
+    if (item.source==='external' ||
+        (item.source==='generate' && item.role==='generated' && item.storageId) ||
+        (item.source==='test' && item.ownerFolder && item.storageId) ||
+        (item.source==='epoch' && item.ownerFolder && item.storageId) ||
+        (item.source==='storyboard' && item.storageId)) {
+      var collect = document.createElement('button');
+      collect.type='button';collect.className='review-captions-btn';
+      text(collect,'Add to collection…');
+      collect.addEventListener('click',function () {chooseCollection([item]);});
+      actions.appendChild(collect);
+    }
     if (item.source === 'generate' && item.role === 'generated' && item.storageId) {
       var copyGenerated = document.createElement('button');
       copyGenerated.type='button';copyGenerated.className='review-captions-btn';
@@ -1839,6 +1864,7 @@
     if (!chooser.value) return;
     chooser.value = '';
     el('media-explorer-delete-view').disabled = true;
+    el('media-explorer-rename-view').disabled = true;
   }
   function currentViewFilters() {
     var filters = {source:source,role:role,search:el('media-explorer-search').value.trim(),
@@ -1869,6 +1895,7 @@
     });
     select.value=selectedName || '';
     el('media-explorer-delete-view').disabled=!select.value;
+    el('media-explorer-rename-view').disabled=!select.value;
   }
   function loadSavedViews() {
     return fetch('/fs/media_explorer/views').then(function (res) {
@@ -1930,6 +1957,7 @@
   el('media-explorer-view-select').addEventListener('focus',loadSavedViews);
   el('media-explorer-view-select').addEventListener('change',function () {
     el('media-explorer-delete-view').disabled=!this.value;
+    el('media-explorer-rename-view').disabled=!this.value;
     var view=savedMediaViews.find(function (entry) {
       return entry.name===el('media-explorer-view-select').value;
     });
@@ -1943,6 +1971,19 @@
       }).then(function (res) {return res.json().then(function (payload) {
         if(!res.ok || !payload.ok)throw Error(payload.error || 'Could not save view');
         showSavedViews(payload.views,name);
+      });});
+    });
+  });
+  el('media-explorer-rename-view').addEventListener('click',function () {
+    var current=el('media-explorer-view-select').value;
+    if(!current)return;
+    promptMediaAction('Rename saved view',current,'Rename',function (newName) {
+      return fetch('/fs/media_explorer/views/rename',{
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({name:current,newName:newName})
+      }).then(function (res) {return res.json().then(function (body) {
+        if(!res.ok || !body.ok)throw Error(body.error || 'Could not rename saved view');
+        showSavedViews(body.views,newName);
       });});
     });
   });

@@ -407,11 +407,24 @@
         load(true, {soft:true});
       });
   }
-  function editExternalTags(item) {
+  function editMediaTags(item) {
     promptMediaAction('Edit tags (comma-separated)',(item.tags || []).join(', '),'Save tags',function (value) {
-      return externalActionStrict('curate',{path:externalPath,file:item.relativePath,
-        tags:value.split(',').map(function (tag) {return tag.trim();}).filter(Boolean)})
-        .then(function (result) {item.tags=result.tags;item.rating=result.rating;load(true,{soft:true});});
+      var tags=value.split(',').map(function (tag) {return tag.trim();}).filter(Boolean);
+      var promise = item.source === 'external'
+        ? externalActionStrict('curate',{path:externalPath,file:item.relativePath,tags:tags})
+        : fetch('/fs/generate/result/tags',{method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({storageId:item.storageId,tags:tags})}).then(function (res) {
+              return res.json().then(function (payload) {
+                if(!res.ok || !payload.ok)throw Error(payload.error || 'Could not save tags');
+                return payload;
+              });
+            });
+      return promise.then(function (result) {
+        item.tags=result.tags;
+        if(item.source==='external')item.rating=result.rating;
+        load(true,{soft:true});
+      });
     },{allowEmpty:true});
   }
   function rateExplorerItem(item, value) {
@@ -474,7 +487,7 @@
     actions.push({separator:true});
     if (item.source === 'external') {
       actions.push({label:'Copy to Set…',run:function () {chooseExport(externalChoices(item));}});
-      actions.push({label:'Edit tags…',run:function () {editExternalTags(item);}});
+      actions.push({label:'Edit tags…',run:function () {editMediaTags(item);}});
       actions.push({label:'Rename…',run:function () {renameExternalFile(item);}});
       actions.push({label:'Move to folder…',run:function () {externalMutation(item,'move');}});
       var edit = [];
@@ -497,6 +510,9 @@
         });
       }
       if (edit.length) actions.push({label:'Edit media',children:edit});
+    }
+    if (item.source === 'generate' && item.role === 'generated') {
+      actions.push({label:'Edit tags…',run:function () {editMediaTags(item);}});
     }
     if (item.mediaUrl) {
       actions.push({label:'Download original',run:function () {
@@ -959,6 +975,11 @@
       }
     }
     if (item.source === 'generate' && item.role === 'generated' && item.storageId) {
+      var tagButton = document.createElement('button');
+      tagButton.type = 'button';tagButton.className='review-captions-btn';
+      tagButton.textContent='Edit tags…';
+      tagButton.addEventListener('click',function () {editMediaTags(item);});
+      actions.appendChild(tagButton);
       var ratingRow = document.createElement('div');
       ratingRow.className = 'media-explorer-rating';
       var ratingLabel = document.createElement('span');
@@ -1135,7 +1156,7 @@
         button.type = 'button'; button.className = 'review-captions-btn';
         text(button,label); button.addEventListener('click',action); actions.appendChild(button);
       }
-      externalInspectorAction('Edit Tags…',function () { editExternalTags(item); });
+      externalInspectorAction('Edit Tags…',function () { editMediaTags(item); });
       externalInspectorAction('Rename…',function () { renameExternalFile(item); });
       externalInspectorAction('Move to Folder…',function () { externalMutation(item,'move'); });
       if (['.png','.jpg','.jpeg','.webp','.bmp'].some(function (ext) { return item.fileName.toLowerCase().endsWith(ext); }))

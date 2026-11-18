@@ -956,3 +956,16 @@
 }
 .media-explorer-tag-links button:hover,
 .media-explorer-tag-links button:focus-visible { background:var(--hover); }
+
+.media-explorer-workspace .media-explorer-saved-views {
+  display:flex;align-items:center;gap:6px;order:2;flex:0 1 auto;
+}
+.media-explorer-saved-views select {
+  min-width:128px;max-width:195px;min-height:35px;padding:5px 8px;
+  background:var(--panel);color:var(--text);
+  border:1px solid var(--border);border-radius:6px;font-size:15px;
+}
+.media-explorer-saved-views .review-captions-btn {white-space:nowrap;font-size:15px;}
+@media(max-width:760px) {
+  .media-explorer-workspace .media-explorer-saved-views {order:3;flex:1 1 100%;}
+}

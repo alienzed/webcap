@@ -1429,6 +1429,9 @@
       var instruction = el('studio-dw-write-instruction');
       instruction.value = '';
       delete instruction.dataset.instructionSeeded;
+      el('studio-dw-write-project-fields').querySelectorAll('input').forEach(function (input) {
+        input.checked = true;
+      });
       pendingCreativeAction = null;
       el('studio-dw-suggestions').replaceChildren();
       showConversationWrite();

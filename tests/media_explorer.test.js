@@ -346,6 +346,7 @@ test('Generate trash operates on the owning result, not a saved reference', asyn
   reference.querySelector('.media-explorer-item-menu').click({preventDefault(){},stopPropagation(){}});
   assert.equal(f.menus.at(-1).some(action => action.label === 'Move to Trash'),false);
   trash.run();
+  await new Promise(resolve => setImmediate(resolve));
   const req = f.pending.at(-1);
   assert.equal(req.url, '/fs/generate/result/trash');
   assert.deepEqual(JSON.parse(req.options.body), {storageId:'2026-11-15/job-a'});
@@ -579,7 +580,9 @@ test('External media context menu exposes safe file actions without the inspecto
   card.querySelector('.media-explorer-item-menu').click({preventDefault(){}, stopPropagation(){}});
   const actions = f.menus.at(-1);
   assert.deepEqual(Array.from(actions.filter(action => action.label).map(action => action.label)),
-    ['View full size', 'Open in Explorer', 'Copy to Set', 'Move to Folder…', 'Move to Trash']);
+    ['View full size', 'Open in Explorer', 'Copy to Set', 'Crop image…',
+      'Rotate left 90°', 'Rotate right 90°', 'Flip horizontal', 'Flip vertical',
+      'Rename…', 'Move to Folder…', 'Move to Trash']);
   assert.equal(f.nodes['media-explorer-inspector'].classList.contains('hidden'), true);
   actions.find(action => action.label === 'Open in Explorer').run();
   const reveal = f.pending.at(-1);
@@ -609,7 +612,7 @@ test('External Clip to Set opens the shared clip editor without using the basic 
   const card = f.nodes['media-explorer-grid'].children[0];
   card.querySelector('.media-explorer-item-menu').click({preventDefault(){}, stopPropagation(){}});
   const before = f.pending.length;
-  f.menus.at(-1).find(action => action.label === 'Clip to Set').run();
+  f.menus.at(-1).find(action => action.label === 'Edit video (Clip to Set)…').run();
   assert.equal(f.clipCalls.length, 1);
   assert.equal(f.clipCalls[0][0].fileName, 'source.mp4');
   assert.equal(f.clipCalls[0][1], null);

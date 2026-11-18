@@ -838,6 +838,9 @@
     el('media-explorer-metadata-progress').classList.toggle('hidden', !external || !(externalOverview || externalJobSummary));
     el('media-explorer-stop-metadata').classList.toggle('hidden', !external || !externalJobRunning);
     el('media-explorer-search').placeholder = external ? 'Search files, paths and tags…' : 'Search generated media, prompts, models…';
+    el('media-explorer-search').title = external
+      ? 'Search the current folder; enable Subfolders to include nested files.'
+      : 'Search generated media, prompts, filenames, models and tags.';
     ['path', 'type', 'size', 'resolution', 'megapixels', 'duration'].forEach(function (value) {
       var option = el('media-explorer-sort').querySelector('option[value="' + value + '"]');
       option.hidden = false;
@@ -1989,7 +1992,12 @@
   });
   el('media-explorer-delete-view').addEventListener('click',function () {
     var name=el('media-explorer-view-select').value;
-    if(!name || !window.confirm('Delete saved view "'+name+'"? This does not delete media.'))return;
+    var selectedView=savedMediaViews.find(function (view) {return view.name===name;});
+    var isCollection=Boolean(collectionTag(selectedView));
+    var message=isCollection
+      ? 'Remove collection view "'+name+'"? Media and its tags are preserved.'
+      : 'Delete saved view "'+name+'"? This does not delete media.';
+    if(!name || !window.confirm(message))return;
     fetch('/fs/media_explorer/views',{
       method:'DELETE',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({name:name})

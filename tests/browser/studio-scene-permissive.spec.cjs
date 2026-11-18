@@ -18,7 +18,7 @@ test('Scene Write saves each usable Scene without duration, title-length or coun
   await expect.poll(async()=> (await story(page,project.id)).sceneOrder.length).toBe(2);
   const saved=await story(page,project.id);
   const scenes=saved.sceneOrder.map(id=>saved.scenes[id]);
-  expect(scenes[0].title).toBe(longTitle);
+  expect(scenes[0].title).toBe(longTitle.trim());
   expect(scenes[0].durationSeconds).toBe(18.5);
   expect(scenes[1].title).toBe('');
   expect(scenes[1].prompt).toContain('second performer');

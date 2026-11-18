@@ -133,6 +133,29 @@
     el('media-explorer-grid').setAttribute('aria-busy', 'false');
     el('media-explorer-more-btn').disabled = false;
   }
+  function refreshExternalFiles() {
+    selected.clear(); selectItem(-1);
+    mediaFacts.clear(); externalRevision = -1;
+    load(true, {refreshFilesystem:true});
+  }
+  function renameExternalFile(item) {
+    var name = window.prompt('Rename file', item.fileName);
+    if (name === null || !name.trim() || name.trim() === item.fileName) return;
+    externalAction('rename', {
+      path:externalPath,file:item.relativePath,newName:name.trim()
+    }, refreshExternalFiles);
+  }
+  function transformExternalImage(item, operation, label) {
+    if (!window.confirm(label + ' ' + item.fileName + '?\\nThe original will be retained for restoration.')) return;
+    externalAction('image-edit', {
+      path:externalPath,file:item.relativePath,operation:operation
+    }, refreshExternalFiles);
+  }
+  function cropExternalImage(item) {
+    openExternalImageCropModal(item, {
+      path:externalPath,file:item.relativePath,mediaUrl:item.mediaUrl
+    }, refreshExternalFiles);
+  }
   function externalMutation(item, action) {
     var chosen = externalChoices(item);
     var names = chosen.map(function (candidate) { return candidate.relativePath; });
@@ -148,9 +171,7 @@
         removeTrashedItems(result.trashed || []);
         return;
       }
-      selected.clear(); selectItem(-1);
-      mediaFacts.clear(); externalRevision = -1;
-      load(true, {refreshFilesystem:true});
+      refreshExternalFiles();
     });
   }
   function openExternalClipEditor(item) {
@@ -205,8 +226,23 @@
         externalAction('reveal', {path:externalPath, file:item.relativePath});
       }});
       actions.push({label:'Copy to Set', run:function () { chooseExport(externalChoices(item)); }});
-      if (item.mediaKind === 'video') actions.push({label:'Clip to Set', run:function () { openExternalClipEditor(item); }});
+      if (item.mediaKind === 'video') actions.push({label:'Edit video (Clip to Set)…', run:function () { openExternalClipEditor(item); }});
+      if (['.png','.jpg','.jpeg','.webp','.bmp'].some(function (ext) { return item.fileName.toLowerCase().endsWith(ext); })) {
+        actions.push({separator:true});
+        actions.push({label:'Crop image…', run:function () { cropExternalImage(item); }});
+        [
+          ['Rotate left 90°','rotate_left_90'],
+          ['Rotate right 90°','rotate_right_90'],
+          ['Flip horizontal','flip_horizontal'],
+          ['Flip vertical','flip_vertical']
+        ].forEach(function (transform) {
+          actions.push({label:transform[0],group:'Edit Media',run:function () {
+            transformExternalImage(item,transform[1],transform[0]);
+          }});
+        });
+      }
       actions.push({separator:true});
+      actions.push({label:'Rename…', run:function () { renameExternalFile(item); }});
       actions.push({label:'Move to Folder…', run:function () { externalMutation(item, 'move'); }});
       actions.push({label:'Move to Trash', run:function () { externalMutation(item, 'trash'); }});
     }
@@ -809,9 +845,18 @@
         var choices = items.filter(function (candidate) { return selected.has(candidate.id); });
         chooseExport(choices.length ? choices : [item]);
       }; actions.appendChild(copy);
+      function externalInspectorAction(label, action) {
+        var button = document.createElement('button');
+        button.type = 'button'; button.className = 'review-captions-btn';
+        text(button,label); button.addEventListener('click',action); actions.appendChild(button);
+      }
+      externalInspectorAction('Rename…',function () { renameExternalFile(item); });
+      externalInspectorAction('Move to Folder…',function () { externalMutation(item,'move'); });
+      if (['.png','.jpg','.jpeg','.webp','.bmp'].some(function (ext) { return item.fileName.toLowerCase().endsWith(ext); }))
+        externalInspectorAction('Crop image…',function () { cropExternalImage(item); });
       if (item.mediaKind === 'video') {
         var clip = document.createElement('button'); clip.type = 'button'; clip.className = 'review-captions-btn';
-        clip.textContent = 'Clip to Set'; clip.onclick = function () { openExternalClipEditor(item); };
+        clip.textContent = 'Edit video (Clip to Set)…'; clip.onclick = function () { openExternalClipEditor(item); };
         actions.appendChild(clip);
       }
     }

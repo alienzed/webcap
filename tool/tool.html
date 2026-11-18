@@ -1697,7 +1697,7 @@
                                 <button id="generate-editor-use-working" type="button" class="review-captions-btn hidden" title="Copy this Loaded configuration into Working">Use as Working</button>
                                 <div class="generate-prompt-heading-actions">
                                     <button id="generate-prompt-save" type="button" class="review-captions-btn">Save Prompt</button>
-                                    <button id="generate-prompt-library-open" type="button" class="review-captions-btn" aria-pressed="false">Library</button>
+                                    <button id="generate-prompt-library-open" type="button" class="review-captions-btn" aria-haspopup="dialog" aria-controls="generate-prompt-library" aria-pressed="false">Library</button>
                                 </div>
                             </div>
                             <div id="generate-editor-loaded-caption" class="generate-editor-loaded-caption hidden" aria-live="polite"></div>
@@ -1740,13 +1740,27 @@
                             </div>
                             </details>
                             </div>
-                            <div id="generate-prompt-library" class="generate-prompt-library hidden">
+                            <dialog id="generate-prompt-library" class="generate-prompt-library" aria-labelledby="generate-prompt-library-heading">
+                            <div class="generate-prompt-library-header">
+                            <h2 id="generate-prompt-library-heading">Prompt Library</h2>
+                            <button id="generate-prompt-library-back" type="button" class="review-captions-btn">Close</button>
+                            </div>
+                            <div class="generate-prompt-library-body">
+                            <div class="generate-prompt-library-browser">
                             <div class="generate-prompt-library-toolbar">
-                            <button id="generate-prompt-library-back" type="button" class="review-captions-btn">Back to Prompt</button>
                             <input id="generate-prompt-library-search" type="search" placeholder="Search saved prompts…" aria-label="Search saved prompts">
                             </div>
-                            <div id="generate-prompt-library-list" class="generate-prompt-library-list"></div>
+                            <div id="generate-prompt-library-list" class="generate-prompt-library-list" role="group" aria-label="Saved prompts"></div>
                             </div>
+                            <section class="generate-prompt-library-preview" aria-label="Saved prompt preview">
+                            <strong id="generate-prompt-library-preview-title">Select a prompt</strong>
+                            <pre id="generate-prompt-library-preview-content">Choose a saved prompt to preview its full text.</pre>
+                            <div class="generate-prompt-library-preview-actions">
+                            <button id="generate-prompt-library-preview-use" type="button" class="review-captions-btn" disabled>Use Prompt</button>
+                            </div>
+                            </section>
+                            </div>
+                            </dialog>
                             </div>
                             <aside class="generate-inspector" aria-label="Generation controls">
                             <div class="generate-inspector-heading"><strong>Generation Settings</strong><span id="generate-status" class="generate-status-badge hidden" aria-live="polite"></span><button id="generate-advanced-toggle" type="button" class="review-captions-btn generate-advanced-toggle" aria-expanded="false" aria-controls="generate-advanced-panel">Advanced <span aria-hidden="true">⌄</span></button></div>

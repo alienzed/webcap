@@ -1,0 +1,24 @@
+name: Generate Prompt Library modal regression
+
+on:
+  pull_request:
+    paths:
+      - 'tool/js/generate.js'
+      - 'tool/tool.html'
+      - 'tool/css/generate.css'
+      - 'tests/generate_prompt_library_modal.test.cjs'
+      - '.github/workflows/generate-prompt-library.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  prompt-library:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --check tool/js/generate.js
+      - run: node --test tests/generate_prompt_library_modal.test.cjs

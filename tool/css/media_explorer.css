@@ -896,3 +896,30 @@
 .media-explorer-card[draggable="true"]:active,
 .media-explorer-side-row[draggable="true"]:active { cursor: grabbing; }
 #media-explorer-new-folder { white-space: nowrap; }
+
+.media-explorer-action-dialog {
+  width: min(92vw, 520px);
+  max-height: 80vh;
+  background: var(--panel, #252525);
+  color: var(--text, #fff);
+  border: 1px solid var(--border, #666);
+  border-radius: 12px;
+  padding: 22px;
+  box-shadow: 0 14px 50px rgba(0,0,0,.32);
+}
+.media-explorer-action-dialog::backdrop { background: rgba(0,0,0,.55); }
+.media-explorer-action-dialog form { display:flex; flex-direction:column; gap:12px; }
+.media-explorer-action-dialog h3 { font-size:21px; margin:0; }
+.media-explorer-action-dialog input {
+  width:100%; min-height:40px; padding:8px 10px; border-radius:6px;
+  background:var(--input-bg, var(--surface, #333)); color:inherit;
+  border:1px solid var(--border, #777); font-size:16px;
+}
+.media-explorer-action-dialog [role="status"] { margin:0; min-height:1em; }
+.media-explorer-action-buttons { display:flex; justify-content:flex-end; gap:8px; }
+.media-explorer-action-buttons button,.media-explorer-dialog-folders button {
+  font-size:16px; padding:7px 12px; border:1px solid var(--border,#666);
+  border-radius:6px; color:inherit; background:var(--panel,#333); cursor:pointer;
+}
+.media-explorer-dialog-folders { display:flex; flex-direction:column; max-height:220px; overflow:auto; gap:4px; }
+.media-explorer-dialog-folders button { text-align:left; }

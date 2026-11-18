@@ -2003,7 +2003,7 @@
         return apply(function (item) {
           return {tags:Array.from(new Set((item.tags || []).concat(added)))};
         },'Tagged');
-      ,{tagSuggestions:true});
+      },{tagSuggestions:true});
     } else {
       var entries=Array.from({length:6},function (_,rating) {
         return {label:rating?'★'.repeat(rating)+' ('+rating+'/5)':'Clear rating',run:function () {

@@ -440,32 +440,11 @@
       }).catch(report);
   }
   function itemActions(item) {
-    var actions = [{label:'View full size', run:function () { openLoupe(items.findIndex(function (x) { return x.id === item.id; })); }}];
-    if (item.source === 'external') {
-      actions.push({label:'Open in Explorer', run:function () {
-        externalAction('reveal', {path:externalPath, file:item.relativePath});
-      }});
-      actions.push({label:'Copy to Set', run:function () { chooseExport(externalChoices(item)); }});
-      actions.push({label:'Edit Tags…', run:function () { editExternalTags(item); }});
-      if (item.mediaKind === 'video') actions.push({label:'Edit video (Clip to Set)…', run:function () { openExternalClipEditor(item); }});
-      if (['.png','.jpg','.jpeg','.webp','.bmp'].some(function (ext) { return item.fileName.toLowerCase().endsWith(ext); })) {
-        actions.push({separator:true});
-        actions.push({label:'Crop image…', run:function () { cropExternalImage(item); }});
-        [
-          ['Rotate left 90°','rotate_left_90'],
-          ['Rotate right 90°','rotate_right_90'],
-          ['Flip horizontal','flip_horizontal'],
-          ['Flip vertical','flip_vertical']
-        ].forEach(function (transform) {
-          actions.push({label:transform[0],group:'Edit Media',run:function () {
-            transformExternalImage(item,transform[1],transform[0]);
-          }});
-        });
-      }
-      actions.push({separator:true});
-      actions.push({label:'Rename…', run:function () { renameExternalFile(item); }});
-      actions.push({label:'Move to Folder…', run:function () { externalMutation(item, 'move'); }});
-    }
+    var current = function () { return items.findIndex(function (candidate) {return candidate.id===item.id;}); };
+    var actions = [
+      {label:'View full size',run:function () {openLoupe(current());}},
+      {label:'Show details',run:function () {selectItem(current());}}
+    ];
     if (item.source === 'generate' && item.storageId) {
       actions.push({label:'Open in Generate',run:function () {
         window.openGenerateActivity({storageId:item.storageId});
@@ -487,6 +466,37 @@
         window.openStoryboardActivity({storyId:item.storageId,sceneId:use.storageId,
           takeId:use.takeId || ''});
       }});
+    } else if (item.source === 'external') {
+      actions.push({label:'Show in file browser',run:function () {
+        externalAction('reveal',{path:externalPath,file:item.relativePath});
+      }});
+    }
+    actions.push({separator:true});
+    if (item.source === 'external') {
+      actions.push({label:'Copy to Set…',run:function () {chooseExport(externalChoices(item));}});
+      actions.push({label:'Edit tags…',run:function () {editExternalTags(item);}});
+      actions.push({label:'Rename…',run:function () {renameExternalFile(item);}});
+      actions.push({label:'Move to folder…',run:function () {externalMutation(item,'move');}});
+      var edit = [];
+      if (item.mediaKind === 'video') {
+        edit.push({label:'Clip video to Set…',run:function () {openExternalClipEditor(item);}});
+      }
+      if (['.png','.jpg','.jpeg','.webp','.bmp'].some(function (ext) {
+        return item.fileName.toLowerCase().endsWith(ext);
+      })) {
+        edit.push({label:'Crop image…',run:function () {cropExternalImage(item);}});
+        [
+          ['Rotate left 90°','rotate_left_90'],
+          ['Rotate right 90°','rotate_right_90'],
+          ['Flip horizontal','flip_horizontal'],
+          ['Flip vertical','flip_vertical']
+        ].forEach(function (transform) {
+          edit.push({label:transform[0],run:function () {
+            transformExternalImage(item,transform[1],transform[0]);
+          }});
+        });
+      }
+      if (edit.length) actions.push({label:'Edit media',children:edit});
     }
     if (item.mediaUrl) {
       actions.push({label:'Download original',run:function () {
@@ -497,20 +507,19 @@
     if (item.source === 'external' ||
         (item.source === 'generate' && item.role === 'generated' && item.storageId) ||
         (item.source === 'test' && item.ownerFolder && item.storageId)) {
-      actions.push({separator:true});
-      var ratingActions = [];
-      for (var stars = 0; stars <= 5; stars++) (function (value) {
-        ratingActions.push({label: value ? '★'.repeat(value) + ' ('+value+'/5)' : 'Clear rating',
-          run:function () {rateExplorerItem(item,value);}});
-      })(stars);
-      actions.push({label:'Rate' + (item.rating ? ' · '+item.rating+'/5' : ''),children:ratingActions});
+      var ratings=[];
+      for(var value=0;value<=5;value++)(function (rating) {
+        ratings.push({label:rating?'★'.repeat(rating)+' ('+rating+'/5)':'Clear rating',
+          run:function () {rateExplorerItem(item,rating);}});
+      })(value);
+      actions.push({label:'Rate'+(item.rating?' · '+item.rating+'/5':''),children:ratings});
     }
     if (item.source === 'external') {
       actions.push({separator:true});
       actions.push({label:'Move to Trash',run:function () {externalMutation(item,'trash');}});
     } else if (item.source === 'generate' && item.role === 'generated' && item.storageId) {
       actions.push({separator:true});
-      actions.push({label:'Move to Trash', run:function () { trashGenerations(item); }});
+      actions.push({label:'Move to Trash',run:function () {trashGenerations(item);}});
     }
     return actions;
   }

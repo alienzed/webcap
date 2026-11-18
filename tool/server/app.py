@@ -2867,6 +2867,21 @@ def generate_result_rating_route():
         return jsonify({"ok": False, "error": str(exc)}), 400
 
 
+@app.route("/fs/media_explorer/test/tags", methods=["POST"])
+def media_explorer_test_tags_route():
+    try:
+        from .epoch_test_bench import tag_result
+        data = request.get_json(silent=True) or {}
+        folder = app_config.safe_join_fs_root(data.get("folder"))
+        result = tag_result(folder, data.get("session"), data.get("mediaFile"), data.get("tags"))
+        return jsonify({"ok": True, **result})
+    except (FileNotFoundError, ValueError) as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    except Exception as exc:
+        app.logger.exception("TEST MEDIA CURATION FAILED")
+        return jsonify({"ok": False, "error": str(exc)}), 500
+
+
 @app.route("/fs/generate/result/tags", methods=["POST"])
 def generate_result_tags_route():
     try:

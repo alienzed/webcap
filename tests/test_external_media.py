@@ -541,3 +541,36 @@ def test_external_curation_rejects_invalid_rating_and_tags(tmp_path):
         with pytest.raises(ValueError):
             external_media.curate_external_file({
                 "path": str(root), "file": "frame.png", **payload})
+
+
+def test_folder_rename_retains_media_and_authored_metadata(tmp_path):
+    root = tmp_path / "library"
+    _file(root / "portraits" / "face.png")
+    external_media.curate_external_file({
+        "path": str(root), "file": "portraits/face.png",
+        "rating": 5, "tags": ["keeper"]})
+    response = external_media.rename_external_folder({
+        "path": str(root), "folder": "portraits", "name": "favorites"})
+    assert response == {"ok": True, "folder": "favorites"}
+    assert (root / "favorites" / "face.png").exists()
+    cache = json.loads((root / "favorites" / "media_metadata.json").read_text())
+    assert cache["face.png"]["tags"] == ["keeper"]
+    assert cache["face.png"]["rating"] == 5
+
+
+def test_folder_rename_rejects_escape_collision_and_symlinks(tmp_path):
+    import pytest
+    root = tmp_path / "library"
+    (root / "first").mkdir(parents=True)
+    (root / "taken").mkdir()
+    for folder, name in [
+        ("", "new"), ("../library", "new"), ("first", "../escape"),
+        ("first", "taken"), ("first", "/absolute")
+    ]:
+        with pytest.raises(ValueError):
+            external_media.rename_external_folder({
+                "path": str(root), "folder": folder, "name": name})
+    (root / "linked").symlink_to(root / "first", target_is_directory=True)
+    with pytest.raises(ValueError):
+        external_media.rename_external_folder({
+            "path": str(root), "folder": "linked", "name": "other"})

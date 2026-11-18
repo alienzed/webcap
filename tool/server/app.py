@@ -2867,6 +2867,18 @@ def generate_result_rating_route():
         return jsonify({"ok": False, "error": str(exc)}), 400
 
 
+@app.route("/fs/media_explorer/owned/tags", methods=["POST"])
+def media_explorer_owned_tags_route():
+    try:
+        from .media_explorer import tag_owned_media
+        return jsonify({"ok": True, **tag_owned_media(request.get_json(silent=True) or {})})
+    except (FileNotFoundError, ValueError, RuntimeError) as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    except Exception as exc:
+        app.logger.exception("OWNED MEDIA CURATION FAILED")
+        return jsonify({"ok": False, "error": str(exc)}), 500
+
+
 @app.route("/fs/media_explorer/test/tags", methods=["POST"])
 def media_explorer_test_tags_route():
     try:

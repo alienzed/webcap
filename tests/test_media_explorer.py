@@ -502,3 +502,20 @@ def test_generation_curation_tags_search_and_exact_filter(monkeypatch, tmp_path)
     assert result["items"][0]["tags"] == ["keeper", "character-A"]
     assert media_explorer.list_media(search="character-A")["total"] == 1
     assert media_explorer.list_media(tag="not-found")["total"] == 0
+
+
+def test_copy_generated_result_into_set_preserves_source(monkeypatch, tmp_path):
+    from tool.server import external_exports, generate_store
+    source = tmp_path / "outputs" / "generations" / "day" / "run" / "frame.png"
+    _media(source)
+    destination = tmp_path / "sets"
+    destination.mkdir()
+    monkeypatch.setattr(external_exports.app_config, "FS_ROOT", tmp_path)
+    monkeypatch.setattr(generate_store, "load_result",
+                        lambda storage_id: {"mediaPath": "generations/day/run/frame.png"})
+    monkeypatch.setattr(generate_store, "resolve_result_media", lambda media_path: source)
+    result = external_exports.copy_generated_media({
+        "storageIds": ["day/run"], "destination": "sets"})
+    assert result["ok"] and result["copied"][0]["name"] == "frame.png"
+    assert (destination / "frame.png").read_bytes() == source.read_bytes()
+    assert source.exists()

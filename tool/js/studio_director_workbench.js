@@ -178,13 +178,15 @@
   function readSend(instruction) {
     var id = el('studio-dw-read-project').value, keys = selectedPaths();
     if (!id || !keys.length) { status('Choose a Project and at least one field.', true); return; }
+    var readConversationId = window.studioDirectorBridge.readConversationId();
     el('studio-dw-read-send').disabled = true;
     window.studioDirectorWorkbench.setReadStatus('working','Preparing saved context selection…');
     // Same exact serializer drives the inspector and the outbound LLM message.
     loadStory(id).then(function (story) {
+      window.studioDirectorBridge.assertReadConversation(readConversationId);
       var payload = readPayload(story, keys);
       el('studio-dw-read-preview-data').textContent = JSON.stringify(payload, null, 2);
-      return window.studioDirectorBridge.appendReadSnapshot(payload).then(function () {
+      return window.studioDirectorBridge.appendReadSnapshot(payload, readConversationId).then(function () {
         status('Read snapshot saved in conversation. No model request sent.', false, true);
         el('studio-dw-read-panel').classList.add('hidden');
         el('studio-dw-read').setAttribute('aria-expanded', 'false');

@@ -145,14 +145,14 @@ test('Read preview and persisted chat use the same validated serializer', () => 
   assert.equal(result.fields[1].value,'Close-up');
   assert.throws(()=>scope.readPayload(story,['scene:missing:prompt']),/not in this Project/);
   assert.match(rail,/readPayload\(story, keys\)/);
-  assert.match(rail,/studioDirectorBridge\.appendReadSnapshot\(payload\)/);
+  assert.match(rail,/studioDirectorBridge\.appendReadSnapshot\(payload, readConversationId\)/);
   assert.match(html,/id="studio-dw-read" type="button"/);
   assert.match(html,/Read into conversation<\/button>/);
   assert.doesNotMatch(html,/id="studio-dw-read-clear"/);
 });
 
 test('Read receipt reflects confirmed persistence rather than model acknowledgment',()=>{
-  const append=section(chat,'    appendReadSnapshot: function (payload) {',
+  const append=section(chat,'    appendReadSnapshot: function (payload, conversationId) {',
     '    selectWriteProject: function (');
   assert.match(append,/renderMessages\(\)/);
   assert.match(append,/return persistSession\('storyboard'\)/);

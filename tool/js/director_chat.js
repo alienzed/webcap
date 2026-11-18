@@ -1525,19 +1525,24 @@
     syncModeUi();
   }
 
-  function readStudioStoryScope(field, sceneId) {
+  function readStudioStoryScope(field, sceneId, readConversationId) {
+    if (readConversationId) window.studioDirectorBridge.assertReadConversation(readConversationId);
     var chat = state.sessionByMode.storyboard;
     if (!chat || !state.studioStoryAccess || !chat.id) {
       return Promise.reject(new Error('Connect a Project in this Studio conversation first.'));
     }
     var url = '/fs/studio/director/story-read?chatId=' + encodeURIComponent(chat.id) +
       '&field=' + encodeURIComponent(field) + '&sceneId=' + encodeURIComponent(sceneId || '');
-    return flushSessionSave().then(function () { return requestJson(url); });
+    return flushSessionSave().then(function () {
+      if (readConversationId) window.studioDirectorBridge.assertReadConversation(readConversationId);
+      return requestJson(url);
+    });
   }
 
-  function loadStudioAccessIndex() {
+  function loadStudioAccessIndex(readConversationId) {
     if (!state.studioStoryAccess || state.studioAccessIndex) return Promise.resolve();
-    return readStudioStoryScope('index', '').then(function (result) {
+    return readStudioStoryScope('index', '', readConversationId).then(function (result) {
+      if (readConversationId) window.studioDirectorBridge.assertReadConversation(readConversationId);
       if (!Array.isArray(result.data)) throw new Error('Story index returned invalid data.');
       state.studioAccessIndex = result.data;
       var scene = el('director-studio-access-scene');
@@ -1557,15 +1562,19 @@
   }
 
   function inspectStudioStoryScope() {
+    // Capture ownership before even the optional Scene-index fetch.
+    var readConversationId = window.studioDirectorBridge.readConversationId();
     var field = el('director-studio-access-field').value;
     var needsScene = ['scene', 'prompt', 'takes'].indexOf(field) !== -1;
     var scene = el('director-studio-access-scene');
     var storyId = state.studioStoryAccess && state.studioStoryAccess.storyId;
     if (!storyId) throw new Error('Choose a Story to inspect.');
-    return (needsScene ? loadStudioAccessIndex() : Promise.resolve()).then(function () {
+    return (needsScene ? loadStudioAccessIndex(readConversationId) : Promise.resolve()).then(function () {
+      window.studioDirectorBridge.assertReadConversation(readConversationId);
       if (needsScene && !scene.value) throw new Error('Select a Scene first.');
-      return readStudioStoryScope(field, needsScene ? scene.value : '');
+      return readStudioStoryScope(field, needsScene ? scene.value : '', readConversationId);
     }).then(function (result) {
+      window.studioDirectorBridge.assertReadConversation(readConversationId);
       if (result.storyId !== storyId) throw new Error('Project changed while reading fields.');
       var output = el('director-studio-access-data');
       output.textContent = JSON.stringify(result.data, null, 2);
@@ -1573,7 +1582,7 @@
       return window.studioDirectorBridge.appendReadSnapshot({
         projectId: result.storyId, sceneId: result.sceneId || null,
         field: result.field, savedAt: result.storyUpdatedAt, content: result.data
-      });
+      }, readConversationId);
     }).catch(function (error) {
       el('director-studio-access-status').textContent = 'Read failed: ' + String(error.message || error);
       if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Studio Story read', error);
@@ -4069,9 +4078,18 @@
         return {role:message.role,content:message.content};
       });
     },
-    appendReadSnapshot: function (payload) {
-      if (state.activeMode !== 'storyboard' || !state.sessionReady || state.pending || state.attachmentPending)
-        throw new Error('Open an idle Studio Director conversation before Read.');
+    readConversationId: function () {
+      if (state.activeMode !== 'storyboard' || !state.sessionReady || state.pending || state.attachmentPending ||
+          !state.sessionByMode.storyboard || !state.sessionByMode.storyboard.id)
+        throw new Error('Open an idle saved Studio Director conversation before Read.');
+      return state.sessionByMode.storyboard.id;
+    },
+    assertReadConversation: function (conversationId) {
+      if (!conversationId || this.readConversationId() !== conversationId)
+        throw new Error('Conversation changed during Read. Return to the originating conversation and Read again.');
+    },
+    appendReadSnapshot: function (payload, conversationId) {
+      this.assertReadConversation(conversationId);
       if (!payload || !payload.projectId) throw new Error('Read requires a saved Project snapshot.');
       var content = '[WEBCAP EXPLICIT READ — SAVED SNAPSHOT]\n' +
         JSON.stringify(payload, null, 2) + '\n[END WEBCAP READ]';

@@ -376,6 +376,10 @@
       advisorStatus('That conversation is no longer active.');
       return Promise.resolve();
     }
+    if (!window.studioDirectorBridge.isReady()) {
+      advisorStatus(window.studioDirectorBridge.readinessMessage());
+      return Promise.resolve();
+    }
     var reading = action.kind === 'read';
     var which = reading ? 'read' : 'write';
     return revealAdvisorPanel(which).then(function () {
@@ -399,6 +403,7 @@
                 paths.add('scene:' + scope.sceneId + ':' + key);
               });
           });
+          if (!paths.size) throw new Error('The suggested saved Read fields are no longer available.');
           readChoices[story.id] = paths;
           renderReadStory(story);
           advisorStatus('Read selection prepared. Choose Read into conversation to capture it.');
@@ -423,6 +428,8 @@
             input.checked = action.sceneIds.includes(input.value);
           });
           sceneSelectionManual = true;
+          if (!Array.from(el('studio-dw-batch-scenes').querySelectorAll('input:checked')).length)
+            throw new Error('The suggested Scene no longer exists in this Project.');
         }
         el('studio-dw-write-instruction').value = action.instruction;
         el('studio-dw-write-instruction').dataset.instructionSeeded = 'true';

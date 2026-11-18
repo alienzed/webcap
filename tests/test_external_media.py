@@ -302,6 +302,80 @@ def test_external_file_move_stays_under_root_and_refuses_collisions(tmp_path):
         })
 
 
+def test_external_rename_preserves_media_and_metadata_and_refuses_collision(tmp_path):
+    import pytest
+    root = tmp_path / "external"
+    original = _file(root / "shots" / "old.png")
+    existing = _file(root / "shots" / "taken.png")
+    cache = original.parent / "media_metadata.json"
+    cache.write_text(json.dumps({"old.png": {"resolution": "640x480",
+                            "analysis": {"caption": "keep"}}, "taken.png": {"resolution": "12x12"}}))
+    result = external_media.rename_external_file({
+        "path": str(root), "file": "shots/old.png", "newName": "new.png"
+    })
+    assert result == {"ok": True, "oldPath": "shots/old.png", "newPath": "shots/new.png"}
+    assert not original.exists() and (root / "shots" / "new.png").read_bytes() == b"test-media"
+    updated = json.loads(cache.read_text())
+    assert "old.png" not in updated and updated["new.png"]["analysis"]["caption"] == "keep"
+    assert existing.exists()
+    with pytest.raises(ValueError, match="already exists"):
+        external_media.rename_external_file({
+            "path": str(root), "file": "shots/new.png", "newName": "taken.png"})
+    for target in ("../escape.png", "nested/nope.png", "wrong.jpg"):
+        with pytest.raises(ValueError, match="filename"):
+            external_media.rename_external_file({
+                "path": str(root), "file": "shots/new.png", "newName": target})
+    assert (root / "shots" / "new.png").exists()
+
+
+def test_external_image_edit_reuses_originals_and_keeps_video_source_untouched(tmp_path):
+    import base64
+    from io import BytesIO
+    from PIL import Image
+    import pytest
+    root = tmp_path / "gallery"
+    root.mkdir()
+    image = root / "photo.png"
+    Image.new("RGB", (18, 12), "red").save(image)
+    result = external_media.edit_external_image({
+        "path": str(root), "file": "photo.png", "operation": "rotate_right_90"
+    })
+    assert result["ok"] and result["width"] == 12 and result["height"] == 18
+    assert Image.open(image).size == (12, 18)
+    assert list((root / "originals").iterdir()), "Prep's original backup must be retained"
+    crop = BytesIO()
+    Image.new("RGB", (8, 6), "blue").save(crop, format="PNG")
+    result = external_media.edit_external_image({
+        "path": str(root), "file": "photo.png", "operation": "crop",
+        "imageDataUrl": "data:image/png;base64," + base64.b64encode(crop.getvalue()).decode()
+    })
+    assert result["ok"] and Image.open(image).size == (8, 6)
+    video = _file(root / "clip.mp4")
+    with pytest.raises(ValueError, match="cannot be edited"):
+        external_media.edit_external_image({
+            "path": str(root), "file": "clip.mp4", "operation": "crop",
+            "imageDataUrl": "data:image/png;base64," + base64.b64encode(crop.getvalue()).decode()
+        })
+    assert video.read_bytes() == b"test-media"
+
+
+def test_external_media_rename_and_edit_routes(tmp_path):
+    from flask import Flask
+    root = tmp_path / "source"
+    _file(root / "first.jpg")
+    app = Flask(__name__)
+    external_media.register_routes(app)
+    client = app.test_client()
+    renamed = client.post("/fs/media_explorer/external/rename", json={
+        "path": str(root), "file": "first.jpg", "newName": "second.jpg"
+    })
+    assert renamed.status_code == 200 and renamed.json["newPath"] == "second.jpg"
+    denied = client.post("/fs/media_explorer/external/image-edit", json={
+        "path": str(root), "file": "../outside.jpg", "operation": "flip_horizontal"
+    })
+    assert denied.status_code == 400 and not denied.json["ok"]
+
+
 def test_external_trash_uses_system_trash_not_permanent_delete(tmp_path, monkeypatch):
     root = tmp_path / "source"
     _file(root / "one.png")

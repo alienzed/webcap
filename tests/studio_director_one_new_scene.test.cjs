@@ -22,7 +22,7 @@ const studioWorkingFieldChanges=new Function(part(
 function harness(options={}) {
   const story=options.story || {id:'p1',title:'Project',concept:'Evening',style:'Warm light',
     invariants:[],sceneOrder:[],scenes:{}};
-  const state={pending:false,jobId:'',studioScenesProposal:null,
+  const state={pending:false,jobId:'',studioScenesProposal:null,studioWriteIo:[],
     studioWorkingDraft:{projects:{},scenes:{},newProject:{},newScene:{},
       draftOrigins:{projects:{},scenes:{}}}};
   const saves=[],requests=[],proposals=[],statuses=[],receipts=[],operations=[],errors=[];
@@ -124,7 +124,7 @@ test('non-JSON response remains visible and never triggers an automatic repair c
 
 test('absent mechanically required Scene fields are reported, not silently invented',async()=>{
   const h=harness({reply:JSON.stringify({title:'Missing Prompt',durationSeconds:8})});
-  await assert.rejects(h.run(),/no Scene records with persistable fields/i);
+  await assert.rejects(h.run(),/no Scenes WebCap could save/i);
   assert.equal(h.saves.length,0);
   assert.equal(h.modelCalls(),1);
   assert.equal(h.state.studioScenesProposal,null);
@@ -139,7 +139,7 @@ test('independent valid Scene results save even if another record is unusable',a
   await h.run();
   assert.equal(h.saves[0].scenes.length,1);
   assert.equal(h.saves[0].scenes[0].title,'Valid');
-  assert.match(h.statuses.at(-1).message,/1 returned record/);
+  assert.match(h.statuses.at(-1).message,/Scene 2: missing Prompt/);
   assert.equal(h.modelCalls(),1);
 });
 

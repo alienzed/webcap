@@ -306,7 +306,7 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
         }
 
     director_context = _read_text(DIRECTOR_CONTEXT_PATH, "Storyboard director context")
-    if operation in {"expand_concept", "develop_story", "develop_story_outline", "develop_story_scene", "insert_scene", "extend_story", "write_prompt", "repair_scenes"}:
+    if operation in {"expand_concept", "develop_story", "develop_story_outline", "develop_story_scene", "insert_scene", "extend_story", "write_prompt", "repair_scenes", "visual_direction"}:
         guidance = _story_guidelines_text(story)
         if guidance:
             director_context += "\n\n[STORY DIRECTING GUIDELINES - AUTHOR INTENT]\n" + guidance
@@ -699,8 +699,8 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
         blocks.append("[SCENE]\n" + scene_context)
     if vocabulary:
         blocks.append(vocabulary)
-    if operation == "write_prompt":
-        blocks.append("[H3 GUIDANCE]\n" + h3_runtime_context)
+    if operation in {"write_prompt", "visual_direction"}:
+        blocks.append("[H3 PROMPTING GUIDANCE]\n" + h3_runtime_context)
     _add_model_limitations(blocks, "minimax_h3")
     blocks.append("[REFERENCE MODE]\n" + h3_mode)
 

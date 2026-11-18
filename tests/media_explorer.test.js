@@ -47,6 +47,7 @@ function fixture(hash = '#/media') {
     close() { this.open = false; this.emit('close'); }
     pause() { this.paused = true; }
     focus() { document.activeElement = this; }
+    select() { this.selectedText = true; }
     hasAttribute(k) { return Object.hasOwn(this.attrs, k); }
     getBoundingClientRect() { return {left: 0, right: 1600, width: 1600}; }
   }

@@ -122,6 +122,28 @@ def set_media_rating(state_path, media_key, rating):
 
 
 
+def set_media_curation_tags(state_path, media_key, tags):
+    """Keep browsing labels separate from Set caption annotations."""
+    key = str(media_key or "").strip()
+    if not key or not isinstance(tags, list) or len(tags) > 40:
+        raise ValueError("Media curation requires a key and up to 40 tags.")
+    if any(not isinstance(tag, str) or not tag.strip() or len(tag.strip()) > 64 for tag in tags):
+        raise ValueError("Invalid media curation tag.")
+    normalized = list(dict.fromkeys(tag.strip() for tag in tags))
+    path = Path(state_path)
+    with _folder_state_mutation_lock:
+        state = read_folder_state(path)
+        mapping = state.get("curation_tags_by_media")
+        mapping = dict(mapping) if isinstance(mapping, dict) else {}
+        if normalized:
+            mapping[key] = normalized
+        else:
+            mapping.pop(key, None)
+        state["curation_tags_by_media"] = mapping
+        write_folder_state_atomic(path, state)
+    return normalized
+
+
 def add_set_rating_dimension(state_path, dimension):
     """Append one Set-specific dimension without rewriting other user-authored state."""
     path = Path(state_path)
@@ -210,6 +232,7 @@ def reject_wholesale_state_map_clear(previous_state, next_state):
     """Reject an ordinary save that would erase a populated protected map."""
     protected_maps = (
         "ratings_by_media",
+        "curation_tags_by_media",
         "ratings_by_dimension",
         "caption_tags_by_media",
         "caption_group_tags_by_media",

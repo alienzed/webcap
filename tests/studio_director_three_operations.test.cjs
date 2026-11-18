@@ -117,7 +117,7 @@ test('WebCap binds explicit Scene destination by actual saved ID, not author pro
 test('explicit Scene writes rely on authored duration values rather than guessing from prose',()=>{
   assert.doesNotMatch(chat,/function studioRequestedDuration\(|function studioMentionedDuration\(/);
   assert.match(chat,/Number\.isInteger\(proposed\.durationSeconds\)/);
-  assert.match(chat,/missingDuration/);
+  assert.match(chat,/missing or unusable durationSeconds/);
   assert.doesNotMatch(chat,/draft\.scenes\[0\]\.durationSeconds = requestedDuration/);
 });
 test('manual multi-Scene Prompt Write does not classify the author request with prose regexes',async()=>{
@@ -215,7 +215,7 @@ test('new Scene Write creates actual returned records with direct persistence, n
   const writer=part(chat,'    writeNewScene: function (launch) {','    writeSelectedScene: function');
   assert.match(writer,/studioDirectorBridge\.makeProposal\(/);
   assert.match(writer,/\/fs\/studio\/director\/scenes-draft/);
-  assert.match(writer,/var valid = drafts\.filter/);
+  assert.match(writer,/var creations = \[\], incomplete = \[\]/);
   assert.doesNotMatch(writer,/showStudioScenesReview|reviewPendingScenes|reviewAuthoredScenes/);
 });
 test('Project Write loads a fresh explicit target and saves changed fields without a proposal',()=>{
@@ -305,8 +305,8 @@ test('Studio request transmits all original history without trimming or excerpts
 
 test('unsupported Scene timing cannot silently become a saved default',()=>{
   const create=part(chat,'    writeNewScene: function (launch) {','    writeSelectedScene: function');
-  assert.match(create,/Number\.isInteger\(Number\(item\.durationSeconds\)\)/);
-  assert.match(create,/no Scene records with persistable fields/);
+  assert.match(create,/typeof duration !== 'number' \|\| !Number\.isFinite\(duration\)/);
+  assert.match(create,/no Scenes WebCap could save/);
   assert.doesNotMatch(create,/durationSeconds:6/);
   assert.doesNotMatch(create,/showStudioScenesReview\(\)/);
 });

@@ -87,6 +87,7 @@
     var input = document.createElement('input'); input.type = 'text';
     input.value = initial || ''; input.setAttribute('aria-label',title);
     input.required = !options.allowEmpty;
+    if (options.tagSuggestions) input.setAttribute('list','media-explorer-known-tags');
     var status = document.createElement('p'); status.setAttribute('role','status');
     var buttons = document.createElement('div'); buttons.className = 'media-explorer-action-buttons';
     var cancel = document.createElement('button'); cancel.type = 'button'; cancel.textContent = 'Cancel';
@@ -203,6 +204,13 @@
               return externalActionStrict('create-folder',{path:externalPath,directory:destination,name:nextName})
                 .then(function () {load(true,{refreshFilesystem:true});});
             });
+          }},
+          {separator:true},
+          {label:'Move folder to Trash',run:function () {
+            if(!window.confirm('Move folder /'+destination+
+              ' and all its contents to the operating system Trash?'))return;
+            externalActionStrict('trash-folder',{path:externalPath,folder:destination})
+              .then(function () {load(true,{refreshFilesystem:true});}).catch(report);
           }}
         ]);
       });
@@ -416,7 +424,7 @@
         if(item.source==='external')item.rating=result.rating;
         load(true,{soft:true});
       });
-    },{allowEmpty:true});
+    },{allowEmpty:true,tagSuggestions:true});
   }
   function rateExplorerItem(item, value) {
     if (item.source === 'external') return curateExternal(item,{rating:value});
@@ -470,43 +478,78 @@
     });
     return links;
   }
-  function addToCollection(chosen) {
+  function collectionTag(view) {
+    return view && view.filters && String(view.filters.tag || '').startsWith('Collection · ')
+      ? view.filters.tag : '';
+  }
+  function collectionMatchesScope(view) {
+    if (!collectionTag(view)) return false;
+    return isExternal()
+      ? view.filters.source === 'external' && view.filters.externalPath === externalPath
+      : view.filters.source !== 'external';
+  }
+  function addToCollection(chosen, existingView) {
     if(!chosen.length)return;
-    promptMediaAction('Add '+chosen.length+' media item(s) to collection','','Add to collection',
-      function (name) {
-        if(name.length>(isExternal()?32:48) || name.includes(','))
-          throw Error('Use a shorter collection name without commas.');
-        var tag='Collection · '+name;
-        return Promise.allSettled(chosen.map(function (item) {
-          return saveCurationFor(item,{
-            tags:Array.from(new Set((item.tags || []).concat([tag])))
-          });
-        })).then(function (results) {
-          var successes=results.filter(function (result) {return result.status==='fulfilled';}).length;
-          var failed=results.length-successes;
-          if(!successes)throw Error('Could not add any media: '+results[0].reason.message);
-          var filters=currentViewFilters();
-          filters.source=isExternal()?'external':'';
-          filters.role='';filters.tag=tag;filters.search='';filters.rating='';
-          filters.kind='';filters.model='';filters.folder='';filters.date='';
-          filters.sort='newest';filters.direction='desc';
-          filters.full=!isExternal();filters.storyboardType='';
-          ['min-side','min-mp','min-duration','max-duration'].forEach(function (id) {filters[id]='';});
-          var viewName='Collection: '+name+(isExternal()?' · '+externalPath.slice(-24):'');
-          return fetch('/fs/media_explorer/views',{
-            method:'POST',headers:{'Content-Type':'application/json'},
-            body:JSON.stringify({name:viewName,filters:filters})
-          }).then(function (res) {return res.json().then(function (body) {
-            if(!res.ok || !body.ok)throw Error(body.error || 'Could not save collection view');
-            showSavedViews(body.views,viewName);
-            applySavedView({filters:filters});
-            if(failed)throw Error('Added '+successes+' of '+results.length+
-              ' items; '+failed+' failed: '+results.find(function (result) {
-                return result.status==='rejected';
-              }).reason.message);
-          });});
+    function apply(name,tag,view) {
+      return Promise.allSettled(chosen.map(function (item) {
+        return saveCurationFor(item,{
+          tags:Array.from(new Set((item.tags || []).concat([tag])))
         });
+      })).then(function (results) {
+        var successes=results.filter(function (result) {return result.status==='fulfilled';}).length;
+        var failed=results.length-successes;
+        if(!successes)throw Error('Could not add any media: '+results[0].reason.message);
+        if(view) {
+          load(true,{soft:true});
+          if(failed)throw Error('Added '+successes+' of '+results.length+' items; '+failed+' failed');
+          return;
+        }
+        var filters=currentViewFilters();
+        filters.source=isExternal()?'external':'';
+        filters.role='';filters.tag=tag;filters.search='';filters.rating='';
+        filters.kind='';filters.model='';filters.folder='';filters.date='';
+        filters.sort='newest';filters.direction='desc';
+        filters.full=!isExternal();filters.storyboardType='';
+        ['min-side','min-mp','min-duration','max-duration'].forEach(function (id) {filters[id]='';});
+        var viewName='Collection: '+name+(isExternal()?' · '+externalPath.slice(-24):'');
+        return fetch('/fs/media_explorer/views',{
+          method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({name:viewName,filters:filters})
+        }).then(function (res) {return res.json().then(function (body) {
+          if(!res.ok || !body.ok)throw Error(body.error || 'Could not save collection view');
+          showSavedViews(body.views,'');
+          load(true,{soft:true});
+          if(failed)throw Error('Added '+successes+' of '+results.length+' items; '+failed+' failed');
+        });});
       });
+    }
+    if(existingView) return apply(existingView.name,collectionTag(existingView),existingView).catch(report);
+    promptMediaAction('Create collection', '', 'Create and add', function (name) {
+      if(name.length>(isExternal()?32:48) || name.includes(','))
+        throw Error('Use a shorter collection name without commas.');
+      return apply(name,'Collection · '+name,null);
+    });
+  }
+  function chooseCollection(chosen) {
+    if(!chosen.length)return;
+    fetch('/fs/media_explorer/views').then(function (res) {
+      return res.json().then(function (body) {
+        if(!res.ok || !body.ok)throw Error(body.error || 'Could not list collections');
+        showSavedViews(body.views,el('media-explorer-view-select').value);
+        return body.views.filter(collectionMatchesScope);
+      });
+    }).then(function (collections) {
+      if(!collections.length) {addToCollection(chosen);return;}
+      var options=collections.map(function (view) {
+        return {label:view.name.replace(/^Collection: /,''),run:function () {
+          addToCollection(chosen,view);
+        }};
+      });
+      options.push({separator:true});
+      options.push({label:'New collection…',run:function () {addToCollection(chosen);}});
+      var box=el('media-explorer-selection').getBoundingClientRect();
+      showContextMenu(box.left,box.bottom,options);
+    }).catch(report);
   }
   function itemActions(item) {
     var current = function () { return items.findIndex(function (candidate) {return candidate.id===item.id;}); };
@@ -599,7 +642,7 @@
         (item.source==='epoch' && item.ownerFolder && item.storageId) ||
         (item.source==='storyboard' && item.storageId)) {
       actions.push({label:'Add to collection…',run:function () {
-        addToCollection(selected.has(item.id) && selectedCuratable().length ?
+        chooseCollection(selected.has(item.id) && selectedCuratable().length ?
           selectedCuratable() : [item]);
       }});
       var memberships=(item.tags || []).filter(function (tag) {
@@ -795,6 +838,9 @@
     el('media-explorer-metadata-progress').classList.toggle('hidden', !external || !(externalOverview || externalJobSummary));
     el('media-explorer-stop-metadata').classList.toggle('hidden', !external || !externalJobRunning);
     el('media-explorer-search').placeholder = external ? 'Search files, paths and tags…' : 'Search generated media, prompts, models…';
+    el('media-explorer-search').title = external
+      ? 'Search the current folder; enable Subfolders to include nested files.'
+      : 'Search generated media, prompts, filenames, models and tags.';
     ['path', 'type', 'size', 'resolution', 'megapixels', 'duration'].forEach(function (value) {
       var option = el('media-explorer-sort').querySelector('option[value="' + value + '"]');
       option.hidden = false;
@@ -1087,6 +1133,31 @@
       if (item.source === 'storyboard' && uses.length > 1) {
         text(relationshipsTitle, 'Choose owning scene · ' + uses.length);
       }
+    }
+    if ((item.source==='test' && item.ownerFolder && item.storageId) ||
+        (item.source==='epoch' && item.ownerFolder && item.storageId) ||
+        (item.source==='storyboard' && item.storageId)) {
+      var copyOwned = document.createElement('button');
+      copyOwned.type='button';copyOwned.className='review-captions-btn';
+      text(copyOwned,'Copy to Set');
+      copyOwned.addEventListener('click',function () {chooseExport([item]);});
+      actions.appendChild(copyOwned);
+      var tagOwned = document.createElement('button');
+      tagOwned.type='button';tagOwned.className='review-captions-btn';
+      text(tagOwned,'Edit tags…');
+      tagOwned.addEventListener('click',function () {editMediaTags(item);});
+      actions.appendChild(tagOwned);
+    }
+    if (item.source==='external' ||
+        (item.source==='generate' && item.role==='generated' && item.storageId) ||
+        (item.source==='test' && item.ownerFolder && item.storageId) ||
+        (item.source==='epoch' && item.ownerFolder && item.storageId) ||
+        (item.source==='storyboard' && item.storageId)) {
+      var collect = document.createElement('button');
+      collect.type='button';collect.className='review-captions-btn';
+      text(collect,'Add to collection…');
+      collect.addEventListener('click',function () {chooseCollection([item]);});
+      actions.appendChild(collect);
     }
     if (item.source === 'generate' && item.role === 'generated' && item.storageId) {
       var copyGenerated = document.createElement('button');
@@ -1796,6 +1867,7 @@
     if (!chooser.value) return;
     chooser.value = '';
     el('media-explorer-delete-view').disabled = true;
+    el('media-explorer-rename-view').disabled = true;
   }
   function currentViewFilters() {
     var filters = {source:source,role:role,search:el('media-explorer-search').value.trim(),
@@ -1826,6 +1898,7 @@
     });
     select.value=selectedName || '';
     el('media-explorer-delete-view').disabled=!select.value;
+    el('media-explorer-rename-view').disabled=!select.value;
   }
   function loadSavedViews() {
     return fetch('/fs/media_explorer/views').then(function (res) {
@@ -1887,6 +1960,7 @@
   el('media-explorer-view-select').addEventListener('focus',loadSavedViews);
   el('media-explorer-view-select').addEventListener('change',function () {
     el('media-explorer-delete-view').disabled=!this.value;
+    el('media-explorer-rename-view').disabled=!this.value;
     var view=savedMediaViews.find(function (entry) {
       return entry.name===el('media-explorer-view-select').value;
     });
@@ -1903,9 +1977,27 @@
       });});
     });
   });
+  el('media-explorer-rename-view').addEventListener('click',function () {
+    var current=el('media-explorer-view-select').value;
+    if(!current)return;
+    promptMediaAction('Rename saved view',current,'Rename',function (newName) {
+      return fetch('/fs/media_explorer/views/rename',{
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({name:current,newName:newName})
+      }).then(function (res) {return res.json().then(function (body) {
+        if(!res.ok || !body.ok)throw Error(body.error || 'Could not rename saved view');
+        showSavedViews(body.views,newName);
+      });});
+    });
+  });
   el('media-explorer-delete-view').addEventListener('click',function () {
     var name=el('media-explorer-view-select').value;
-    if(!name || !window.confirm('Delete saved view "'+name+'"? This does not delete media.'))return;
+    var selectedView=savedMediaViews.find(function (view) {return view.name===name;});
+    var isCollection=Boolean(collectionTag(selectedView));
+    var message=isCollection
+      ? 'Remove collection view "'+name+'"? Media and its tags are preserved.'
+      : 'Delete saved view "'+name+'"? This does not delete media.';
+    if(!name || !window.confirm(message))return;
     fetch('/fs/media_explorer/views',{
       method:'DELETE',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({name:name})
@@ -1995,7 +2087,7 @@
         return apply(function (item) {
           return {tags:Array.from(new Set((item.tags || []).concat(added)))};
         },'Tagged');
-      });
+      },{tagSuggestions:true});
     } else {
       var entries=Array.from({length:6},function (_,rating) {
         return {label:rating?'★'.repeat(rating)+' ('+rating+'/5)':'Clear rating',run:function () {
@@ -2017,7 +2109,7 @@
   var bulkCollectionButton=document.createElement('button');
   bulkCollectionButton.type='button';bulkCollectionButton.className='review-captions-btn';
   bulkCollectionButton.textContent='Add to collection…';
-  bulkCollectionButton.addEventListener('click',function () {addToCollection(selectedCuratable());});
+  bulkCollectionButton.addEventListener('click',function (event) {event.stopPropagation();chooseCollection(selectedCuratable());});
   var bulkRemoveCollectionButton = document.createElement('button');
   bulkRemoveCollectionButton.type = 'button';
   bulkRemoveCollectionButton.className = 'review-captions-btn';

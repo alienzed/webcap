@@ -838,3 +838,54 @@ test('bulk Remove from collection only appears for shared memberships', async ()
   remove.click({stopPropagation(){}});
   assert.ok(f.menus.at(-1).some(action=>action.label==='Keepers'));
 });
+
+
+test('folder context menu offers reversible folder trash', async () => {
+  const f=fixture();
+  f.window.openMediaExplorerActivity();
+  await f.settle(f.pending[0],[]);
+  f.buttons.find(button=>button.dataset.mediaSource==='external').click();
+  f.nodes['media-explorer-external-path'].value='/tmp/media';
+  f.nodes['media-explorer-open-path'].click();
+  await f.settle(f.pending.at(-1),[],true,{folders:['curated']});
+  const folder=f.nodes['media-explorer-folder-rows'].children[0];
+  const open=folder.children[0];
+  open.emit('contextmenu',{preventDefault(){},stopPropagation(){},clientX:0,clientY:0});
+  assert.ok(f.menus.at(-1).some(action=>action.label==='Move folder to Trash'));
+});
+
+test('Inspector provides owned media Copy to Set and tag actions', async () => {
+  const f=fixture();
+  f.window.openMediaExplorerActivity();
+  const item={...media('test'),source:'test',role:'test',ownerFolder:'set',
+    storageId:'session-1',tags:[]};
+  await f.settle(f.pending[0],[item]);
+  f.nodes['media-explorer-grid'].children[0].click({stopPropagation(){}});
+  const labels=f.nodes['media-explorer-inspector-body'].querySelectorAll('button')
+    .map(button=>button.textContent);
+  assert.ok(labels.includes('Copy to Set'));
+  assert.ok(labels.includes('Edit tags…'));
+  assert.ok(labels.includes('Add to collection…'));
+});
+
+test('collection choice reuses existing view tag instead of creating another view', async () => {
+  const f=fixture();
+  f.window.openMediaExplorerActivity();
+  const item={...media('a'),storageId:'abc',tags:[]};
+  await f.settle(f.pending[0],[item]);
+  f.nodes['media-explorer-grid'].children[0].querySelector('.media-explorer-item-menu')
+    .click({preventDefault(){},stopPropagation(){}});
+  f.menus.at(-1).find(action=>action.label==='Add to collection…').run();
+  const load=f.pending.at(-1);
+  assert.equal(load.url,'/fs/media_explorer/views');
+  await f.settle(load,[],true,{views:[{name:'Collection: Favorites',
+    filters:{tag:'Collection · Favorites',source:''}}]});
+  assert.ok(f.menus.at(-1).some(action=>action.label==='Favorites'));
+  f.menus.at(-1).find(action=>action.label==='Favorites').run();
+  const curate=f.pending.at(-1);
+  assert.equal(curate.url,'/fs/generate/result/tags');
+  assert.deepEqual(JSON.parse(curate.options.body).tags,['Collection · Favorites']);
+  await f.settle(curate,[],true,{tags:['Collection · Favorites']});
+  assert.ok(!f.pending.some(request=>request.url==='/fs/media_explorer/views' &&
+    request.options?.method==='POST'));
+});

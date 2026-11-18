@@ -75,6 +75,26 @@ def save_media_view(data):
         return sorted(views, key=lambda entry: entry["name"].casefold())
 
 
+def rename_media_view(data):
+    """Rename the saved view without changing any source-media tags or filters."""
+    old = str(data.get("name") or "").strip()
+    next_name = str(data.get("newName") or "").strip()
+    if not old or not next_name or len(next_name) > 80:
+        raise ValueError("Provide existing and new saved-view names.")
+    with _LOCK:
+        views = list_saved_views()
+        match = next((entry for entry in views if entry["name"].casefold() == old.casefold()), None)
+        if match is None:
+            raise ValueError("Saved view does not exist.")
+        if any(entry is not match and entry["name"].casefold() == next_name.casefold()
+               for entry in views):
+            raise ValueError("A saved view already uses that name.")
+        match["name"] = next_name
+        _write_views(views)
+        return sorted(views, key=lambda entry: entry["name"].casefold())
+
+
+
 def delete_media_view(name):
     key = str(name or "").strip().casefold()
     if not key:
@@ -593,6 +613,29 @@ def move_external_folder(data):
     return {"ok": True, "folder": target.relative_to(root).as_posix()}
 
 
+def trash_external_folder(data):
+    """Move an entire chosen external subfolder to OS Trash, keeping its contents."""
+    from send2trash import send2trash
+    root = _root(data.get("path"))
+    relative = str(data.get("folder") or "").strip().replace("\\", "/")
+    if not relative or Path(relative).is_absolute() or ".." in Path(relative).parts:
+        raise ValueError("Select a folder beneath the external root.")
+    raw = root / relative
+    if raw.is_symlink():
+        raise ValueError("Cannot trash a linked folder.")
+    source = raw.resolve()
+    if source == root or not source.is_relative_to(root) or not source.is_dir():
+        raise ValueError("External folder does not exist.")
+    send2trash(str(source))
+    with _LOCK:
+        global _index
+        if _index is not None and _index["root"] == root:
+            # Invalidate the source snapshot: its folder and child paths moved.
+            _index = None
+    return {"ok": True, "folder": relative}
+
+
+
 def move_external_files(data):
     """Move selected media and its adjacent authored/backup files together."""
     root, files = _external_sources(data)
@@ -840,6 +883,14 @@ def register_routes(app):
             app.logger.exception("EXTERNAL MEDIA REVEAL FAILED")
             return jsonify({"ok": False, "error": str(exc)}), 400
 
+    @app.post("/fs/media_explorer/external/trash-folder")
+    def external_trash_folder():
+        try:
+            return jsonify(trash_external_folder(request.get_json(silent=True) or {}))
+        except Exception as exc:
+            app.logger.exception("EXTERNAL FOLDER TRASH FAILED")
+            return jsonify({"ok": False, "error": str(exc)}), 400
+
     @app.post("/fs/media_explorer/external/move-folder")
     def external_move_folder():
         try:
@@ -916,6 +967,13 @@ def register_routes(app):
     def media_save_view():
         try:
             return jsonify({"ok": True, "views": save_media_view(request.get_json(silent=True) or {})})
+        except (ValueError, OSError) as exc:
+            return jsonify({"ok": False, "error": str(exc)}), 400
+
+    @app.post("/fs/media_explorer/views/rename")
+    def media_rename_view():
+        try:
+            return jsonify({"ok": True, "views": rename_media_view(request.get_json(silent=True) or {})})
         except (ValueError, OSError) as exc:
             return jsonify({"ok": False, "error": str(exc)}), 400
 

@@ -278,27 +278,28 @@ test('ordinary Director conversation displays raw structured output instead of d
   assert.equal(result.action,null);
 });
 
-test('new-Scene authoring preserves returned arrays and independently useful partial drafts',()=>{
+test('new-Scene authoring saves usable records and reports incomplete model material',()=>{
   const body=part(chat,'          var records = Array.isArray(fields.scenes) ? fields.scenes : [fields];',
-    '          // Persist each mechanically usable Scene returned by this explicit Write.');
+    "          state.pending = true;\n          syncControls();\n          return requestJson('/fs/studio/director/scenes-draft'");
   const normalize=vm.runInNewContext('(function(fields,raw){' + body +
-    'return {drafts:drafts,missingPrompt:missingPrompt};})');
+    'return {creations:creations,incomplete:incomplete};})');
   const single=normalize({scenes:[{title:'Only',prompt:'One complete H3 Scene',durationSeconds:8}]},'');
-  assert.equal(single.drafts.length,1);
-  assert.equal(single.missingPrompt,false);
+  assert.equal(single.creations.length,1);
+  assert.equal(single.incomplete.length,0);
   const partial=normalize({scenes:[
     {title:'Complete',prompt:'H3 prompt',durationSeconds:8},
     {title:'Useful partial title',durationSeconds:8},
     null,
     {title:'',prompt:'',durationSeconds:undefined}
   ]},'');
-  assert.equal(partial.drafts.length,2);
-  assert.equal(partial.missingPrompt,true);
-  assert.equal(partial.drafts[1].title,'Useful partial title');
-  assert.equal(partial.drafts[0].durationSeconds,8);
-  assert.equal(normalize({prompt:'Legacy complete prompt'},'').drafts.length,1,
+  assert.equal(partial.creations.length,1);
+  assert.equal(partial.incomplete.length,3);
+  assert.match(partial.incomplete[0],/missing Prompt/);
+  assert.equal(partial.creations[0].durationSeconds,8);
+  assert.equal(normalize({prompt:'Legacy complete prompt',durationSeconds:12},'').creations.length,1,
     'existing callers with a single Scene object remain supported');
 });
+
 
 test('Scene creation presents authored results rather than scheduling from prose counts',()=>{
   const action=part(workbench,"        if (frozen.kind === 'create_scene') {",

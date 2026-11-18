@@ -134,6 +134,39 @@ def copy_test_media(data):
     return {"ok": True, "destination": str(destination), "copied": copied}
 
 
+def copy_owned_media(data):
+    """Copy Campaign/Storyboard media through the producing tool's resolver."""
+    from .epoch_finder import frame_path
+    from .storyboard_store import resolve_story_media, load_story
+    entries = data.get("results")
+    if not isinstance(entries, list) or not entries or len(entries) > 120:
+        raise ValueError("Select 1–120 owned media items.")
+    sources = []
+    for item in entries:
+        if not isinstance(item, dict):
+            raise ValueError("Invalid owned-media item.")
+        source = str(item.get("source") or "")
+        storage_id = item.get("storageId")
+        if source == "epoch":
+            folder = app_config.safe_join_fs_root(item.get("folder"))
+            media_file = item.get("mediaFile")
+            path = frame_path(folder, storage_id, media_file)
+        elif source == "storyboard":
+            load_story(storage_id)
+            path = resolve_story_media(storage_id, item.get("mediaPath"))
+        else:
+            raise ValueError("Unsupported media producer.")
+        sources.append((path, source))
+    destination = _destination(data)
+    copied = []
+    for source, producer in sources:
+        target = _unique_path(destination, source.name)
+        shutil.copy2(source, target)
+        normalize_path_permissions(target)
+        copied.append({"source": producer, "name": target.name})
+    return {"ok": True, "destination": str(destination), "copied": copied}
+
+
 def export_clip(data):
     sources = _validated_sources(data)
     if len(sources) != 1:
@@ -167,6 +200,14 @@ def export_clip(data):
 
 
 def register_routes(app):
+    @app.post("/fs/media_explorer/owned/copy")
+    def explorer_owned_copy():
+        try:
+            return jsonify(copy_owned_media(request.get_json(silent=True) or {}))
+        except (ValueError, OSError, RuntimeError, FileNotFoundError) as exc:
+            app.logger.exception("EXPLORER OWNED COPY FAILED")
+            return jsonify({"ok": False, "error": str(exc)}), 400
+
     @app.post("/fs/media_explorer/test/copy")
     def explorer_test_copy():
         try:

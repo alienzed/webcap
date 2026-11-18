@@ -883,7 +883,19 @@
     detail('File size', bytes(item.fileSize), dl);
     detail('Seed', item.seed, dl); detail('Epoch', item.epoch, dl);
     if (item.rating !== null) detail('Rating', item.rating ? item.rating + ' / 5' : 'Unrated', dl);
-    if (item.tags && item.tags.length) detail('Tags', item.tags.join(', '), dl);
+    if (item.tags && item.tags.length) {
+      var term=document.createElement('dt');text(term,'Tags');dl.appendChild(term);
+      var tags=document.createElement('dd');tags.className='media-explorer-tag-links';
+      item.tags.forEach(function (tag) {
+        var button=document.createElement('button');button.type='button';
+        button.textContent=tag;button.title='Filter media by tag: '+tag;
+        button.addEventListener('click',function () {
+          el('media-explorer-tag').value=tag;load(true);
+        });
+        tags.appendChild(button);
+      });
+      dl.appendChild(tags);
+    }
     detail('Date', item.createdAt ? new Date(item.createdAt).toLocaleString() : '', dl);
     detail('LoRAs', (item.loras || []).map(function (lora) { return lora.name + (lora.strength != null ? ' × ' + lora.strength : ''); }).join(', '), dl);
   }

@@ -331,3 +331,33 @@ def test_director_scene_index_is_lightweight_and_selected_scene_reads_full_promp
     assert "summary" not in selected
     assert "entryState" not in selected and "exitState" not in selected
     assert "durationSeconds" in selected
+
+
+def test_studio_action_advisor_is_an_isolated_optional_llm_operation(monkeypatch):
+    from tool.server import app as server
+    captured = {}
+
+    def enqueue(client, model, contract, context, label):
+        captured.update({"client": client, "model": model, "contract": contract})
+        return {"jobId": "sidecar-advisor-job", "status": "queued"}
+
+    monkeypatch.setattr(server, "enqueue_llm", enqueue)
+    response = server.app.test_client().post("/fs/director/chat", json={
+        "model": "inexpensive-sidecar-model",
+        "operation": "studio_action_advisor",
+        "messages": [{"role": "user", "content": '{"conversation":[{"role":"assistant","content":"A quiet opening"}],"actionContext":{"projectId":"p1","sceneId":""}}'}],
+    })
+    assert response.status_code == 202
+    assert response.get_json()["job"]["jobId"] == "sidecar-advisor-job"
+    assert captured["client"] == "chat"
+    assert captured["model"] == "inexpensive-sidecar-model"
+    contract = captured["contract"]
+    assert contract["operation"] == "studio_action_advisor"
+    assert contract["messages"][0]["role"] == "system"
+    assert "Action Advisor" in contract["messages"][0]["content"]
+    assert "not commands" in contract["messages"][0]["content"]
+    assert len(contract["messages"]) == 2
+    assert contract["messages"][1]["role"] == "user"
+    assert contract["response_schema"]["properties"]["actions"]["items"]["properties"]["kind"]["enum"] == [
+        "create_project", "revise_project", "create_scene", "revise_scenes", "read"
+    ]

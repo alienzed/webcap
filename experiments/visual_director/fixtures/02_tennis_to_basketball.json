@@ -1,0 +1,17 @@
+{
+  "id": "tennis_to_basketball",
+  "project_overview": "A short sports-fashion montage follows one athlete through tennis, basketball and hockey, with each sport shown in a separate cut and its own appropriate visual setup.",
+  "visual_direction": "Energetic sportswear campaign, realistic athletic movement.",
+  "invariants": [
+    "The same adult athlete appears in each cut.",
+    "Each sport is shown as a distinct activity."
+  ],
+  "scene_description": "The athlete is now playing basketball on an indoor court, dribbling toward the basket and preparing to shoot. The preceding cut showed the athlete playing tennis.",
+  "existing_h3_prompt": "The athlete dribbles a basketball toward the hoop and prepares to shoot. They now wear basketball shoes. The camera follows at court level.",
+  "expected_findings": [
+    "Basketball activity and shoes are specified.",
+    "Tennis clothing/accessories may carry over because only shoes changed.",
+    "Basketball-specific clothing and any relevant equipment/setting details need explicit treatment if intended; do not prescribe arbitrary uniform details.",
+    "Court, hoop, ball and action are already explicit."
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "id": "negative_control",
+  "project_overview": "A product shot of a red ceramic coffee mug on a white seamless tabletop.",
+  "visual_direction": "Clean commercial studio lighting, neutral background.",
+  "invariants": [
+    "The mug is a single red ceramic mug with a curved handle.",
+    "The background is white and featureless."
+  ],
+  "scene_description": "A single mug remains stationary in the center of the frame for the entire shot.",
+  "existing_h3_prompt": "A single glossy red ceramic coffee mug with a rounded body and one curved handle sits perfectly still, centered on a clean white seamless tabletop. Soft diffused studio light creates a subtle shadow beneath it. The camera holds a locked-off medium close-up for the full shot.",
+  "expected_findings": [
+    "The prompt is already sufficiently explicit.",
+    "A strong candidate should make no meaningful change.",
+    "Do not add unrelated props, camera moves, actions or decorative elements."
+  ]
+}

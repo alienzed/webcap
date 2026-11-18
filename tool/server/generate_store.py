@@ -9,7 +9,7 @@ import uuid
 from pathlib import Path
 
 from . import config as app_config
-from .folder_state_store import read_folder_state, set_media_rating
+from .folder_state_store import read_folder_state, set_media_rating, set_media_curation_tags
 from .media_embedded_metadata import write_webcap_metadata
 
 
@@ -360,6 +360,10 @@ def _listed_result_payload(manifest, payload):
     listed["references"] = normalized_references
     listed["storageId"] = manifest.parent.parent.name + "/" + manifest.parent.name
     state = read_folder_state(directory / ".webcap_state.json")
+    tags_by_media = state.get("curation_tags_by_media")
+    tags_by_media = tags_by_media if isinstance(tags_by_media, dict) else {}
+    tags = tags_by_media.get(media_name)
+    listed["tags"] = tags if isinstance(tags, list) else []
     ratings = state.get("ratings_by_media") if isinstance(state.get("ratings_by_media"), dict) else {}
     try:
         listed["rating"] = max(0, min(5, int(ratings.get(media_name, 0) or 0)))
@@ -388,6 +392,20 @@ def rate_result(storage_id, rating):
         "mediaKey": media_name,
         "rating": normalized,
     }
+
+
+def tag_result(storage_id, tags):
+    directory = _result_directory(storage_id)
+    manifest_path = directory / MANIFEST_NAME
+    payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError("Generation manifest is invalid.")
+    media_name = Path(str(payload.get("mediaPath") or "")).name
+    if not media_name or not (directory / media_name).is_file():
+        raise FileNotFoundError("Generation output is unavailable.")
+    normalized = set_media_curation_tags(directory / ".webcap_state.json", media_name, tags)
+    return {"storageId": str(storage_id or "").strip().replace("\\", "/"),
+            "mediaKey": media_name, "tags": normalized}
 
 
 def load_result(storage_id):

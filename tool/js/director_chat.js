@@ -424,6 +424,7 @@
     }
 
     var studio = state.activeMode === 'storyboard';
+    el('studio-action-advisor').classList.toggle('hidden', !studio);
     var contextButton = el('director-chat-context-approve');
     contextButton.classList.toggle('hidden', !studio || studioRevisionActive());
     contextButton.textContent = 'Read…';

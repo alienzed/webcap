@@ -107,21 +107,16 @@ test('Director chat invokes sidecar after successful conversation save, not in i
 test('Advisor ignores a late response after another turn, conversation switch, or opt-out',()=>{
   const status={textContent:'',classList:{toggle(){}}};
   const actions={replaceChildren(){},classList:{add(){}}};
-  const enabled={checked:true};
-  const model={value:'',options:[],replaceChildren(){}};
-  const primary={options:[]};
+  let enabled=true;
   let conversation='chat-one';
   const el=id=>({
     'studio-action-advisor-status':status,
     'studio-action-advisor-actions':actions,
-    'studio-action-advisor-enabled':enabled,
-    'studio-action-advisor-model':model,
-    'director-chat-model':primary
-  })[id];
-  const partSource=part(bench,'  var advisorTurn = 0;','  function advisorCandidates(raw,scope) {');
-  const guards=new Function('el','window','option',partSource+
+   })[id];
+  const partSource=part(bench,'  // Browser-wide Studio preference; enabled by default, shared by all conversations.','  function advisorCandidates(raw,scope) {');
+  const guards=new Function('el','window','localStorage',partSource+
     'return {current:advisorCurrent,clear:clearActionAdvice};')(
-      el,{studioDirectorBridge:{isCurrentConversation:id=>id===conversation}},()=>{});
+      el,{studioDirectorBridge:{isCurrentConversation:id=>id===conversation}},{getItem:()=>enabled?'true':'false'});
   const scope={conversationId:'chat-one'};
   assert.equal(guards.current(0,scope),true);
   guards.clear();
@@ -130,6 +125,18 @@ test('Advisor ignores a late response after another turn, conversation switch, o
   conversation='chat-two';
   assert.equal(guards.current(1,scope),false,'a switched conversation cannot receive results');
   conversation='chat-one';
-  enabled.checked=false;
-  assert.equal(guards.current(1,scope),false,'opt-out stops presentation');
+  enabled=false;
+  assert.equal(guards.current(1,scope),false,'global opt-out stops presentation');
+});
+
+
+test('Advisor uses the selected warm Director model and global setting, without a chat model selector',()=>{
+  const html=fs.readFileSync('tool/tool.html','utf8');
+  const settings=fs.readFileSync('tool/js/app_settings.js','utf8');
+  assert.match(bench,/var token = advisorTurn, model = scope\.modelId;/);
+  assert.doesNotMatch(bench,/studio-action-advisor-model|studio-action-advisor-enabled/);
+  assert.doesNotMatch(html,/id="studio-action-advisor-model"|id="studio-action-advisor-enabled"/);
+  assert.match(html,/id="app-settings-studio-action-advisor"/);
+  assert.match(settings,/localStorage\.setItem\('webcap\.studio\.actionAdvisor\.enabled'/);
+  assert.match(bench,/localStorage\.getItem\('webcap\.studio\.actionAdvisor\.enabled'\) !== 'false'/);
 });

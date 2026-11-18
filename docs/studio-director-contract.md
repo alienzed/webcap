@@ -64,6 +64,10 @@ If JSON cannot be parsed or cannot be assigned mechanically to the requested fie
 
 Keep only the mechanical requirements necessary to store values in the real data format. Project Create and Revise response schemas have no arbitrary character, count, or completeness limits: Project Create accepts useful non-Concept material; Revise requests only chosen fields and preserves absent fields. Ignore unusable individual entries with a visible explanation while saving independent usable values; keep raw output in I/O. Real persistence failures remain errors. A model response with fewer creative details than the author wanted is not for WebCap to judge. When multiple independent records can be persisted, preserve actual successes and accurately report real per-record failures.
 
+### Visual Direction pass
+
+Revise Scenes includes an explicitly selected **Visual Direction** pass. It processes each selected Scene independently, supplying the Project overview, invariants, H3 prompting guidance, and that Scene's existing prompt. The specialist improves renderability by making consequential visual state changes and their visible consequences explicit, while preserving the Scene's creative scope. It may add a missing visual beat when that is a direct realization of the established Scene purpose. It does not receive the Director chat history or the other selected Scene prompts. Scene selection is enforced by the backend; existing prompt revision persistence and History remain authoritative. First Cut is unchanged.
+
 ### 6. Existing specialist tools
 
 Preserve useful standalone Scene development, Revise Scenes, First Cut and optional coherence functions, and their own necessary context and response contracts. They are not implicitly launched by conversation and are not discarded merely because older Director orchestration called them. Retire redundant authoring paths only after tracing the last real caller. Continue loading old Project/Scene data without destructive migrations.

@@ -1081,7 +1081,7 @@ function sweepLoras(model, folder) {
     var query = String(generateState.promptLibrary.query || '').trim().toLowerCase();
     var items = generateState.promptLibrary.items.filter(function (item) {
       if (!query) return true;
-      return (String(item.name || '') + '\\n' + String(item.prompt || '')).toLowerCase().indexOf(query) !== -1;
+      return (String(item.name || '') + '\n' + String(item.prompt || '')).toLowerCase().indexOf(query) !== -1;
     });
     if (!items.some(function (item) { return String(item.id) === generateState.promptLibrary.selectedId; }))
       generateState.promptLibrary.selectedId = '';
@@ -1092,7 +1092,7 @@ function sweepLoras(model, folder) {
     }
     host.innerHTML = items.map(function (item) {
       var selected = String(item.id) === generateState.promptLibrary.selectedId;
-      var preview = String(item.prompt || '').replace(/\\s+/g, ' ').trim();
+      var preview = String(item.prompt || '').replace(/\s+/g, ' ').trim();
       if (preview.length > 150) preview = preview.slice(0, 147) + '…';
       return '<article class="generate-prompt-library-item' + (selected ? ' is-selected' : '') + '">' +
         '<button type="button" class="generate-prompt-library-use" data-generate-prompt-preview="' + escapeHtml(item.id) +

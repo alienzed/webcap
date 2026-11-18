@@ -61,7 +61,8 @@ test('Prepare Write preloads existing operation, target, field scope and instruc
   const node=()=>({value:'',dataset:{},setAttribute(){},classList:{add(){},contains(){return false;}}});
   const elements={
     'director-chat-drawer':node(),'studio-dw-open-tools':node(),
-    'studio-dw-write-panel':node(),'studio-dw-write-project':Object.assign(node(),{options:[{value:'project-one'}]}),
+    'studio-dw-write-panel':Object.assign(node(),{classList:{contains:()=>true}}),
+    'studio-dw-write-project':Object.assign(node(),{options:[{value:'project-one'}]}),
     'studio-dw-write-operation':node(),'studio-dw-scene-mode':node(),
     'studio-dw-write-project-fields':{querySelectorAll:()=>fields},
     'studio-dw-write-instruction':node()

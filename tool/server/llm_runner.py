@@ -537,7 +537,7 @@ def _client_result(client, context, llm_result, job_id="", frozen_contract=None)
             "timings": llm_result.get("timings"),
         }
 
-    if operation in {"write_prompt", "refine_prompt"}:
+    if operation in {"write_prompt", "refine_prompt", "visual_direction"}:
         scene_id = str(context.get("sceneId") or "").strip()
         if not scene_id:
             raise RuntimeError("Storyboard Scene Director job is missing its Scene ID.")
@@ -546,7 +546,7 @@ def _client_result(client, context, llm_result, job_id="", frozen_contract=None)
         if not isinstance(data, dict):
             raise ValueError("Storyboard Director returned invalid structured Scene prompt data.")
 
-        if operation == "refine_prompt" and data.get("changed") is False:
+        if operation in {"refine_prompt", "visual_direction"} and data.get("changed") is False:
             from .storyboard_store import load_story
             story = load_story(story_id)
             scene = (story.get("scenes") or {}).get(scene_id)

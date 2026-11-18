@@ -357,8 +357,7 @@
       }
       if (action.kind === 'read') {
         action.fields = action.fields.filter(function (f) {
-          return f.startsWith('project.') && validFields.includes(f.slice(8)) ||
-            scope.sceneId && f === 'scene:' + scope.sceneId + ':prompt';
+          return f === 'overview' || (f === 'scene' && !!scope.sceneId);
         });
         if (!action.fields.length) return;
       }
@@ -393,11 +392,10 @@
           if (!window.studioDirectorBridge.isCurrentConversation(scope.conversationId)) return;
           var paths = new Set();
           action.fields.forEach(function (field) {
-            if (field.startsWith('project.')) projectFields.forEach(function (key) {
+            if (field === 'overview') projectFields.forEach(function (key) {
               paths.add('project.' + key);
             });
-            else if (field.startsWith('scene:') &&
-                story.sceneOrder.includes(scope.sceneId))
+            else if (field === 'scene' && story.sceneOrder.includes(scope.sceneId))
               ['title','prompt','durationSeconds'].forEach(function (key) {
                 paths.add('scene:' + scope.sceneId + ':' + key);
               });

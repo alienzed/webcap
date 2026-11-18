@@ -1724,6 +1724,108 @@
   var quickFilters = el('media-explorer-quick-filters');
   quickFilters.appendChild(el('media-explorer-tag'));
   quickFilters.appendChild(el('media-explorer-rating'));
+  var savedMediaViews = [];
+  function currentViewFilters() {
+    var filters = {source:source,role:role,search:el('media-explorer-search').value.trim(),
+      tag:el('media-explorer-tag').value.trim(),rating:el('media-explorer-rating').value,
+      kind:el('media-explorer-kind').value,model:el('media-explorer-model').value,
+      folder:el('media-explorer-folder').value,date:el('media-explorer-date').value,
+      sort:el('media-explorer-sort').value,direction:reverseSort?'asc':'desc',
+      full:full,recursive:el('media-explorer-recursive').checked,
+      storyboardType:storyboardType()};
+    ['min-side','min-mp','min-duration','max-duration'].forEach(function (id) {
+      filters[id]=el('media-explorer-'+id).value;
+    });
+    if(isExternal()) {
+      filters.externalPath=externalPath;
+      filters.externalDirectory=externalDirectory;
+    }
+    return filters;
+  }
+  function showSavedViews(views, selectedName) {
+    savedMediaViews=views || [];
+    var select=el('media-explorer-view-select');
+    select.replaceChildren();
+    var placeholder=document.createElement('option');placeholder.value='';
+    placeholder.textContent='Saved views…';select.appendChild(placeholder);
+    savedMediaViews.forEach(function (view) {
+      var option=document.createElement('option');option.value=view.name;
+      option.textContent=view.name;select.appendChild(option);
+    });
+    select.value=selectedName || '';
+    el('media-explorer-delete-view').disabled=!select.value;
+  }
+  function loadSavedViews() {
+    return fetch('/fs/media_explorer/views').then(function (res) {
+      return res.json().then(function (payload) {
+        if(!res.ok || !payload.ok)throw Error(payload.error || 'Could not load saved views');
+        showSavedViews(payload.views,el('media-explorer-view-select').value);
+      });
+    }).catch(report);
+  }
+  function applySavedView(view) {
+    if(!view || !view.filters)return;
+    var f=view.filters;
+    source=f.source || '';role=f.role || '';
+    artifact='';owner='';
+    full=Boolean(f.full);
+    ['search','tag','rating','kind','model','folder','date','sort'].forEach(function (id) {
+      var key=id==='search'?'search':id;
+      el('media-explorer-'+id).value=f[key] || (id==='sort'?'newest':'');
+    });
+    ['min-side','min-mp','min-duration','max-duration'].forEach(function (id) {
+      el('media-explorer-'+id).value=f[id] || '';
+    });
+    el('media-explorer-storyboard-type').value=f.storyboardType || '';
+    reverseSort=f.direction==='asc';
+    el('media-explorer-sort-reverse').setAttribute('aria-pressed',String(reverseSort));
+    externalPath=source==='external' ? f.externalPath || '' : externalPath;
+    externalDirectory=source==='external' ? f.externalDirectory || '' : '';
+    el('media-explorer-external-path').value=externalPath;
+    el('media-explorer-recursive').checked=Boolean(f.recursive);
+    sourceButtons.forEach(function (button,index) {
+      var match=source ? button.dataset.mediaSource===source :
+        button.dataset.mediaRole===role;
+      button.classList.toggle('active',match);
+      if(match)el('media-explorer-source-chooser').value=index;
+    });
+    selected.clear();anchor=-1;selectItem(-1);
+    if(source==='external') {
+      externalRevision=-1;externalPendingRefresh=false;
+      stopExternalTimers();
+    }
+    load(true,{refreshFilesystem:source==='external'});
+  }
+  el('media-explorer-view-select').addEventListener('focus',loadSavedViews);
+  el('media-explorer-view-select').addEventListener('change',function () {
+    el('media-explorer-delete-view').disabled=!this.value;
+    var view=savedMediaViews.find(function (entry) {
+      return entry.name===el('media-explorer-view-select').value;
+    });
+    if(view)applySavedView(view);
+  });
+  el('media-explorer-save-view').addEventListener('click',function () {
+    promptMediaAction('Save current view','','Save view',function (name) {
+      return fetch('/fs/media_explorer/views',{
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({name:name,filters:currentViewFilters()})
+      }).then(function (res) {return res.json().then(function (payload) {
+        if(!res.ok || !payload.ok)throw Error(payload.error || 'Could not save view');
+        showSavedViews(payload.views,name);
+      });});
+    });
+  });
+  el('media-explorer-delete-view').addEventListener('click',function () {
+    var name=el('media-explorer-view-select').value;
+    if(!name || !window.confirm('Delete saved view "'+name+'"? This does not delete media.'))return;
+    fetch('/fs/media_explorer/views',{
+      method:'DELETE',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({name:name})
+    }).then(function (res) {return res.json().then(function (payload) {
+      if(!res.ok || !payload.ok)throw Error(payload.error || 'Could not delete view');
+      showSavedViews(payload.views,'');
+    });}).catch(report);
+  });
   var newFolderButton = document.createElement('button');
   newFolderButton.type = 'button'; newFolderButton.className = 'review-captions-btn';
   newFolderButton.id = 'media-explorer-new-folder'; newFolderButton.textContent = '+ New folder';

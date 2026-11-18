@@ -1727,8 +1727,15 @@
     var kind=Object.prototype.hasOwnProperty.call(change,'tags') ? 'tags' : 'rating';
     var url=item.source==='test' ? '/fs/media_explorer/test/tags' :
       '/fs/generate/result/'+kind;
-    if(item.source==='test' && kind!=='tags')
-      return Promise.reject(Error('Test rating uses its existing rating workflow.'));
+    if(item.source==='test' && kind==='rating')
+      return fetch('/fs/test_generations',{
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({folder:item.ownerFolder,operation:'test_rate_result',
+          criteria:{session:item.storageId,mediaFile:item.fileName,rating:change.rating}})
+      }).then(function (res) {return res.json().then(function (body) {
+        if(!res.ok || body.ok===false)throw Error(body.error || 'Could not rate Test result');
+        return body;
+      });});
     var payload=item.source==='test'
       ? Object.assign({folder:item.ownerFolder,session:item.storageId,mediaFile:item.fileName},change)
       : Object.assign({storageId:item.storageId},change);

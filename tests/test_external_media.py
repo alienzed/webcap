@@ -574,3 +574,27 @@ def test_folder_rename_rejects_escape_collision_and_symlinks(tmp_path):
     with pytest.raises(ValueError):
         external_media.rename_external_folder({
             "path": str(root), "folder": "linked", "name": "other"})
+
+
+def test_move_folder_keeps_companions_and_rejects_recursive_target(tmp_path):
+    import pytest
+    root = tmp_path / "library"
+    _file(root / "source" / "clip.mp4")
+    _file(root / "source" / "originals" / "clip.mp4")
+    (root / "destination").mkdir(parents=True)
+    external_media.curate_external_file({
+        "path": str(root), "file": "source/clip.mp4",
+        "tags": ["training"], "rating": 3})
+    with pytest.raises(ValueError):
+        external_media.move_external_folder({
+            "path": str(root), "folder": "source", "destination": "source/originals"})
+    response = external_media.move_external_folder({
+        "path": str(root), "folder": "source", "destination": "destination"})
+    assert response["folder"] == "destination/source"
+    assert (root / "destination" / "source" / "clip.mp4").exists()
+    assert (root / "destination" / "source" / "originals" / "clip.mp4").exists()
+    metadata = json.loads((root / "destination" / "source" / "media_metadata.json").read_text())
+    assert metadata["clip.mp4"]["tags"] == ["training"]
+    with pytest.raises(ValueError):
+        external_media.move_external_folder({
+            "path": str(root), "folder": "destination/source", "destination": "destination"})

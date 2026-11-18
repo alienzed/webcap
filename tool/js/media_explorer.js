@@ -137,6 +137,7 @@
     // Only rebuild the changed thumbnail. Stable cards keep their playback,
     // selection and DOM identity through the authoritative listing refresh.
     if (editedItem) {
+      editedMediaVersions.set(editedItem.id, Date.now());
       var card = Array.from(el('media-explorer-grid').children).find(function (node) {
         return node.dataset.id === editedItem.id;
       });
@@ -512,6 +513,7 @@
   var sourceNames = {generate: 'Generate', test: 'Test Generations', epoch: 'Campaigns', storyboard: 'Storyboard', external: 'External folders'};
   var roleNames = {generated: 'Generated', reference: 'Reference', source: 'Source media'};
   var mediaFacts = new Map();
+  var editedMediaVersions = new Map();
   var loupeReturn = null;
   var artifact = '', owner = '';
   function storyboardType() { return source === 'storyboard' ? el('media-explorer-storyboard-type').value : ''; }
@@ -1123,6 +1125,10 @@
         }
       }
       var incoming = data.items || [];
+      if (isExternal()) incoming.forEach(function (item) {
+        var version = editedMediaVersions.get(item.id);
+        if (version && item.mediaUrl) item.mediaUrl += '&edited=' + version;
+      });
       var host = el('media-explorer-grid');
       if (reset) {
         var previousItems = new Map(items.map(function (item) { return [item.id, item]; }));

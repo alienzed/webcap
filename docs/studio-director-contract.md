@@ -20,8 +20,8 @@ Studio Director is an imaginative, capable creative partner. The author can disc
 
 | Explicit action | Supplied task context | Expected model material |
 | --- | --- | --- |
-| Write → Project → Create | Conversation and the author's Write instruction; no unrelated saved Project | Actual Project title, Concept, Visual / atmosphere and relevant Invariants |
-| Write → Project → Revise | Conversation, selected saved Project fields and author instruction | Complete replacement values for the changed Project fields |
+| Write → Project → Create | Conversation and the author's Write instruction; no unrelated saved Project | Any usable authored Project title, Concept, Visual / atmosphere or Invariants; absent fields stay empty |
+| Write → Project → Revise | Conversation, selected saved Project fields and author instruction | Replacement values only for requested Project fields; Invariants are individual additions/updates, never deletion by omission |
 | Write → Scene(s) → Create | Conversation, selected Project direction, relevant Scene continuity, author instruction and H3 reference | One or more independently usable complete H3 prompts with titles and durations |
 | Write → Scene(s) → Revise | Conversation, exact selected saved Scene prompt(s), relevant continuity, author instruction and H3 reference | Revised full prompts for requested creative changes, and requested title/duration values |
 
@@ -46,7 +46,7 @@ Changing navigation, opening a chat, performing a Read or selecting a Write targ
 
 - **There is no Director Review stage.** Explicit Write is the user's save instruction. Save returned fields directly to the frozen selected destination using existing deterministic file-backed operations.
 - No extra consent, edit-preview or review gate between a successful explicit Write response and save.
-- Save only fields actually supplied for the selected operation; preserve unrelated saved fields.
+- Save only supported values actually returned within the explicitly selected Project fields; preserve unrelated saved fields. A scoped Revise with one requested field cannot write other fields, even if the model returns them. Invariant suggestions match saved entries by category and title and apply as atomic add/update operations; omissions never delete unrelated entries. Explicit user-authored removals remain separate intentional operations.
 - The system's existing field-scoped History/Undo/Redo is the user recovery mechanism. Do not create parallel model-repair or proposal-management systems.
 - A title-only literal edit need not invoke a creative model; a creative prompt revision returns the full new prompt.
 - Use current authoritative saved values to address actual mechanical write conflicts. Report what saved and what did not; never claim success based on an action hint, a promise, or an unconfirmed receipt.
@@ -58,7 +58,7 @@ WebCap assembles the explicit request, passes the unabridged conversation, parse
 
 If JSON cannot be parsed or cannot be assigned mechanically to the requested fields, display the raw response and actual error. If a provider returns gibberish, display it. Do not add synthetic defaults, recovery prompts, heuristics, extra grading, retries, or speculative gates to compensate for model behavior. A bad request/guidance/schema may be the real fault; diagnose its outbound form rather than assuming the model needs supervision.
 
-Keep only the mechanical requirements necessary to store values in the real data format. A model response with fewer creative details than the author wanted is not for WebCap to judge. When multiple independent records can be persisted, preserve actual successes and accurately report real per-record failures.
+Keep only the mechanical requirements necessary to store values in the real data format. Project Create and Revise response schemas have no arbitrary character, count, or completeness limits: Project Create accepts useful non-Concept material; Revise requests only chosen fields and preserves absent fields. Ignore unusable individual entries with a visible explanation while saving independent usable values; keep raw output in I/O. Real persistence failures remain errors. A model response with fewer creative details than the author wanted is not for WebCap to judge. When multiple independent records can be persisted, preserve actual successes and accurately report real per-record failures.
 
 ### 6. Existing specialist tools
 
@@ -66,7 +66,7 @@ Preserve useful standalone Scene development, Revise Scenes, First Cut and optio
 
 ### 7. Verification
 
-Evaluate actual outbound request messages and schemas, raw provider responses, confirmed saved values, History and the browser interaction separately. Tests must cover normal conversation without H3 guidance or implicit writes; explicit Project/Scene writing with full conversation; navigation/attachment/Read/destination independence; exact visible Read payload equals LLM history after reload and source mutation; new and revised Scenes; multi-Scene partial failure; raw JSON/model error visibility; and working standalone specialist tools.
+Evaluate actual outbound request messages and schemas, raw provider responses, confirmed saved values, History and the browser interaction separately. Tests must cover normal conversation without H3 guidance or implicit writes; explicit Project/Scene writing with full conversation; navigation/attachment/Read/destination independence; exact visible Read payload equals LLM history after reload and source mutation; new and revised Scenes; multi-Scene partial failure; raw JSON/model error visibility; Concept-empty Project creation; unrestricted Project text and Invariant counts; single-field Project Revise with off-scope model output; omitted or invalid Invariants not deleting saved entries; and working standalone specialist tools.
 
 Static and mocked tests do not establish live-model reliability. Do not weaken a failed test simply to align with a new string or accepted output format. A verified defect in request assembly or saving is a WebCap defect; model creativity is not a WebCap gate.
 

@@ -593,6 +593,29 @@ def move_external_folder(data):
     return {"ok": True, "folder": target.relative_to(root).as_posix()}
 
 
+def trash_external_folder(data):
+    """Move an entire chosen external subfolder to OS Trash, keeping its contents."""
+    from send2trash import send2trash
+    root = _root(data.get("path"))
+    relative = str(data.get("folder") or "").strip().replace("\\", "/")
+    if not relative or Path(relative).is_absolute() or ".." in Path(relative).parts:
+        raise ValueError("Select a folder beneath the external root.")
+    raw = root / relative
+    if raw.is_symlink():
+        raise ValueError("Cannot trash a linked folder.")
+    source = raw.resolve()
+    if source == root or not source.is_relative_to(root) or not source.is_dir():
+        raise ValueError("External folder does not exist.")
+    send2trash(str(source))
+    with _LOCK:
+        global _index
+        if _index is not None and _index["root"] == root:
+            # Invalidate the source snapshot: its folder and child paths moved.
+            _index = None
+    return {"ok": True, "folder": relative}
+
+
+
 def move_external_files(data):
     """Move selected media and its adjacent authored/backup files together."""
     root, files = _external_sources(data)
@@ -838,6 +861,14 @@ def register_routes(app):
             return open_path_in_explorer_response(_source_file(root, data.get("file")))
         except Exception as exc:
             app.logger.exception("EXTERNAL MEDIA REVEAL FAILED")
+            return jsonify({"ok": False, "error": str(exc)}), 400
+
+    @app.post("/fs/media_explorer/external/trash-folder")
+    def external_trash_folder():
+        try:
+            return jsonify(trash_external_folder(request.get_json(silent=True) or {}))
+        except Exception as exc:
+            app.logger.exception("EXTERNAL FOLDER TRASH FAILED")
             return jsonify({"ok": False, "error": str(exc)}), 400
 
     @app.post("/fs/media_explorer/external/move-folder")

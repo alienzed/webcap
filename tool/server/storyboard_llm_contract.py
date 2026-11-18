@@ -686,8 +686,8 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
 
     blocks = ["[DIRECTOR CONTEXT]\n" + director_context] if operation == "write_prompt" else []
     concept = _clean(story.get("concept"))
-    if concept and operation == "write_prompt":
-        blocks.append("[STORY CONCEPT / OVERVIEW]\n" + concept)
+    if concept and operation in {"write_prompt", "visual_direction"}:
+        blocks.append("[PROJECT OVERVIEW]\n" + concept)
     if style:
         blocks.append("[STORY VISUAL / ATMOSPHERE]\n" + style)
     if story_invariants:

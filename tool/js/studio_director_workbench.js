@@ -293,6 +293,11 @@
       return poll(response.job);
     });
   }
+  // Browser-wide Studio preference; enabled by default, shared by all conversations.
+  function advisorEnabled() {
+    return typeof localStorage === 'undefined' ||
+      localStorage.getItem('webcap.studio.actionAdvisor.enabled') !== 'false';
+  }
   var advisorTurn = 0;
   var allowedAdvisorKinds = ['create_project','revise_project','create_scene','revise_scenes','read'];
   function advisorStatus(message) {
@@ -306,19 +311,8 @@
     el('studio-action-advisor-actions').classList.add('hidden');
     advisorStatus('');
   }
-  function refreshAdvisorModels() {
-    var target = el('studio-action-advisor-model'), selected = target.value;
-    var primary = el('director-chat-model');
-    target.replaceChildren();
-    option(target,'','Same model as Director');
-    Array.from(primary.options).forEach(function (item) {
-      if (item.value) option(target,item.value,item.textContent);
-    });
-    if (Array.from(target.options).some(function (item) {return item.value === selected;}))
-      target.value = selected;
-  }
   function advisorCurrent(token,scope) {
-    return token === advisorTurn && el('studio-action-advisor-enabled').checked &&
+    return token === advisorTurn && advisorEnabled() &&
       window.studioDirectorBridge.isCurrentConversation(scope.conversationId);
   }
   function advisorCandidates(raw,scope) {
@@ -449,10 +443,9 @@
   }
   function offerActionAdvice(scope) {
     clearActionAdvice();
-    if (!el('studio-action-advisor-enabled').checked || !scope || !scope.conversationId ||
+    if (!advisorEnabled() || !scope || !scope.conversationId ||
         !window.studioDirectorBridge.isCurrentConversation(scope.conversationId)) return;
-    refreshAdvisorModels();
-    var token = advisorTurn, model = el('studio-action-advisor-model').value || scope.modelId;
+    var token = advisorTurn, model = scope.modelId;
     advisorStatus('Finding next actions…');
     var request = {
       conversation:scope.messages, actionContext:{
@@ -1460,11 +1453,6 @@
 
   function bind() {
     var rail = el('studio-director-workbench');if (!rail) return;
-    el('studio-action-advisor-enabled').onchange=function () {
-      el('studio-action-advisor-model').classList.toggle('hidden',!this.checked);
-      if (!this.checked) clearActionAdvice();
-      else refreshAdvisorModels();
-    };
 
     el('studio-dw-read').onclick=function () { lastQuickAction='read'; return toggle('read'); };
     el('studio-dw-write').onclick=function () { lastQuickAction='write'; return toggle('write'); };

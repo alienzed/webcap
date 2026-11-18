@@ -269,11 +269,231 @@
     });
     input.value = String(messages.length && messages[messages.length - 1].content || '').trim();
   }
+  // Each optional advisor is an ordinary, isolated LLM job. This helper never
+  // participates in the Director conversation's pending/job state.
+  function runSidecar(operation, model, message) {
+    return api('/fs/director/chat', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({operation:operation,model:model,messages:[
+        {role:'user',content:JSON.stringify(message)}
+      ]})
+    }).then(function (response) {
+      if (!response.job || !response.job.jobId) throw new Error('Action Advisor did not queue.');
+      function poll(job) {
+        var state = String(job.status || '');
+        if (state === 'completed') return job.result && String(job.result.text || '');
+        if (['failed','cancelled','stopped','interrupted'].includes(state))
+          throw new Error(job.error || 'Action Advisor job ' + state);
+        return new Promise(function (resolve) {
+          setTimeout(resolve,state === 'queued' ? 4000 : 2500);
+        }).then(function () {
+          return api('/fs/director/job?job=' + encodeURIComponent(job.jobId) + '&consume=1');
+        }).then(function (result) {return poll(result.job);});
+      }
+      return poll(response.job);
+    });
+  }
+  var advisorTurn = 0;
+  var allowedAdvisorKinds = ['create_project','revise_project','create_scene','revise_scenes','read'];
+  function advisorStatus(message) {
+    var node = el('studio-action-advisor-status');
+    node.textContent = message || '';
+    node.classList.toggle('hidden',!message);
+  }
+  function clearActionAdvice() {
+    advisorTurn++;
+    el('studio-action-advisor-actions').replaceChildren();
+    el('studio-action-advisor-actions').classList.add('hidden');
+    advisorStatus('');
+  }
+  function refreshAdvisorModels() {
+    var target = el('studio-action-advisor-model'), selected = target.value;
+    var primary = el('director-chat-model');
+    target.replaceChildren();
+    option(target,'','Same model as Director');
+    Array.from(primary.options).forEach(function (item) {
+      if (item.value) option(target,item.value,item.textContent);
+    });
+    if (Array.from(target.options).some(function (item) {return item.value === selected;}))
+      target.value = selected;
+  }
+  function advisorCurrent(token,scope) {
+    return token === advisorTurn && el('studio-action-advisor-enabled').checked &&
+      window.studioDirectorBridge.isCurrentConversation(scope.conversationId);
+  }
+  function advisorCandidates(raw,scope) {
+    var parsed;
+    try { parsed = JSON.parse(raw); }
+    catch (error) {
+      throw new Error('Action Advisor returned invalid JSON: ' + error.message +
+        '\nRaw response:\n' + String(raw || ''));
+    }
+    if (!parsed || !Array.isArray(parsed.actions))
+      throw new Error('Action Advisor returned no actions list. Raw response:\n' + String(raw || ''));
+    var out = [], validFields = ['title','concept','style','invariants'];
+    parsed.actions.forEach(function (item) {
+      if (out.length >= 3) return;
+      if (!item || !allowedAdvisorKinds.includes(item.kind) ||
+          typeof item.label !== 'string' || !item.label.trim()) return;
+      var action = {
+        kind:item.kind,label:item.label.trim(),
+        instruction:typeof item.instruction === 'string' ? item.instruction.trim() : '',
+        projectId:typeof item.projectId === 'string' ? item.projectId : '',
+        fields:Array.isArray(item.fields) ? item.fields.filter(function (f) {
+          return typeof f === 'string';
+        }) : [],
+        sceneIds:Array.isArray(item.sceneIds) ? item.sceneIds.filter(function (f) {
+          return typeof f === 'string';
+        }) : []
+      };
+      if (action.kind !== 'create_project' &&
+          (!scope.projectId || action.projectId !== scope.projectId)) return;
+      if (action.kind !== 'read' && !action.instruction) return;
+      if (action.kind === 'revise_project') {
+        action.fields = action.fields.filter(function (f) {return validFields.includes(f);});
+        if (!action.fields.length) return;
+      }
+      if (action.kind === 'revise_scenes') {
+        // Only explicitly known Scene identity may be preselected.
+        action.sceneIds = action.sceneIds.filter(function (id) {
+          return id === scope.sceneId;
+        });
+        if (!action.sceneIds.length) return;
+      }
+      if (action.kind === 'read') {
+        action.fields = action.fields.filter(function (f) {
+          return f === 'overview' || (f === 'scene' && !!scope.sceneId);
+        });
+        if (!action.fields.length) return;
+      }
+      out.push(action);
+    });
+    return out;
+  }
+  function revealAdvisorPanel(which) {
+    el('director-chat-drawer').classList.add('studio-actions-open');
+    el('studio-dw-open-tools').setAttribute('aria-expanded','true');
+    if (el('studio-dw-' + which + '-panel').classList.contains('hidden'))
+      return Promise.resolve(toggle(which));
+    return Promise.resolve();
+  }
+  function prepareAdvisorAction(action,scope) {
+    if (!window.studioDirectorBridge.isCurrentConversation(scope.conversationId)) {
+      advisorStatus('That conversation is no longer active.');
+      return Promise.resolve();
+    }
+    if (!window.studioDirectorBridge.isReady()) {
+      advisorStatus(window.studioDirectorBridge.readinessMessage());
+      return Promise.resolve();
+    }
+    var reading = action.kind === 'read';
+    var which = reading ? 'read' : 'write';
+    return revealAdvisorPanel(which).then(function () {
+      if (!window.studioDirectorBridge.isCurrentConversation(scope.conversationId)) return;
+      var select = el('studio-dw-' + which + '-project');
+      if (reading || action.kind !== 'create_project') {
+        if (!Array.from(select.options).some(function (node) {return node.value === action.projectId;}))
+          throw new Error('The suggested Project is no longer available.');
+        select.value = action.projectId;
+      }
+      if (reading) {
+        return loadStory(action.projectId).then(function (story) {
+          if (!window.studioDirectorBridge.isCurrentConversation(scope.conversationId)) return;
+          var paths = new Set();
+          action.fields.forEach(function (field) {
+            if (field === 'overview') projectFields.forEach(function (key) {
+              paths.add('project.' + key);
+            });
+            else if (field === 'scene' && story.sceneOrder.includes(scope.sceneId))
+              ['title','prompt','durationSeconds'].forEach(function (key) {
+                paths.add('scene:' + scope.sceneId + ':' + key);
+              });
+          });
+          if (!paths.size) throw new Error('The suggested saved Read fields are no longer available.');
+          readChoices[story.id] = paths;
+          renderReadStory(story);
+          advisorStatus('Read selection prepared. Choose Read into conversation to capture it.');
+        });
+      }
+      var op = action.kind === 'create_project' ? 'new-project' :
+        action.kind === 'revise_project' ? 'project' : 'scene-write';
+      writeOperationChosen = true;
+      el('studio-dw-write-operation').value = op;
+      if (op === 'scene-write')
+        el('studio-dw-scene-mode').value =
+          action.kind === 'revise_scenes' ? 'revise' : 'create';
+      return refreshWrite().then(function (ready) {
+        if (!ready || !window.studioDirectorBridge.isCurrentConversation(scope.conversationId)) return;
+        if (action.kind === 'revise_project') {
+          el('studio-dw-write-project-fields').querySelectorAll('input').forEach(function (input) {
+            input.checked = action.fields.includes(input.value);
+          });
+        }
+        if (action.kind === 'revise_scenes') {
+          el('studio-dw-batch-scenes').querySelectorAll('input').forEach(function (input) {
+            input.checked = action.sceneIds.includes(input.value);
+          });
+          sceneSelectionManual = true;
+          if (!Array.from(el('studio-dw-batch-scenes').querySelectorAll('input:checked')).length)
+            throw new Error('The suggested Scene no longer exists in this Project.');
+        }
+        el('studio-dw-write-instruction').value = action.instruction;
+        el('studio-dw-write-instruction').dataset.instructionSeeded = 'true';
+        setOperation();
+        advisorStatus('Write prepared. Review the selected scope and use Write · Save.');
+      });
+    }).catch(function (error) {
+      advisorStatus('Unable to prepare suggestion: ' + String(error.message || error));
+      window.reportConsoleError('Studio Action Advisor handoff',error);
+    });
+  }
+  function offerActionAdvice(scope) {
+    clearActionAdvice();
+    if (!el('studio-action-advisor-enabled').checked || !scope || !scope.conversationId ||
+        !window.studioDirectorBridge.isCurrentConversation(scope.conversationId)) return;
+    refreshAdvisorModels();
+    var token = advisorTurn, model = el('studio-action-advisor-model').value || scope.modelId;
+    advisorStatus('Finding next actions…');
+    var request = {
+      conversation:scope.messages, actionContext:{
+        projectId:scope.projectId || '', sceneId:scope.sceneId || '',
+        supportedActions:allowedAdvisorKinds,
+        projectFields:projectFields
+      }
+    };
+    // No pending flag, no conversation mutation, no model retry, no UI lock.
+    runSidecar('studio_action_advisor',model,request).then(function (raw) {
+      if (!advisorCurrent(token,scope)) return;
+      var actions = advisorCandidates(raw,scope);
+      var host = el('studio-action-advisor-actions');
+      host.replaceChildren();
+      actions.forEach(function (action) {
+        var row = document.createElement('div'), label = document.createElement('strong');
+        var button = document.createElement('button'), detail = document.createElement('p');
+        row.className = 'studio-action-advisor-item';
+        label.textContent = action.label;
+        detail.textContent = action.instruction || (action.kind === 'read' ?
+          'Prepare selected saved material for Read.' : '');
+        button.type = 'button';
+        button.textContent = action.kind === 'read' ? 'Prepare Read' : 'Prepare Write';
+        button.onclick = function () {return prepareAdvisorAction(action,scope);};
+        row.append(label,detail,button);
+        host.appendChild(row);
+      });
+      host.classList.toggle('hidden',!actions.length);
+      advisorStatus(actions.length ? '' : 'No suggested next action.');
+    }).catch(function (error) {
+      if (!advisorCurrent(token,scope)) return;
+      advisorStatus('Suggestions unavailable; Director and manual actions still work.');
+      window.reportConsoleError('Studio Action Advisor',error);
+    });
+  }
   function setOperation() {
     var operation = el('studio-dw-write-operation').value;
     var sceneWrite = operation === 'scene-write';
     var revise = sceneWrite && el('studio-dw-scene-mode').value === 'revise';
     el('studio-dw-scene-mode-row').classList.toggle('hidden', !sceneWrite);
+    el('studio-dw-write-project-fields').classList.toggle('hidden', operation !== 'project');
     el('studio-dw-write-instruction-row').classList.remove('hidden');
     el('studio-dw-batch-controls').classList.toggle('hidden', !revise);
     el('studio-dw-write-project').disabled = operation === 'new-project';
@@ -450,8 +670,15 @@
       throw new Error('Unsupported Studio creative Write goal: ' + operation);
     try {
       var item = projects.find(function (p) {return p.id === id;});
+      var selectedProjectFields = operation === 'project' ? Array.from(
+        el('studio-dw-write-project-fields').querySelectorAll('input:checked')
+      ).map(function (input) {return input.value;}) : [];
+      if (operation === 'project' && !selectedProjectFields.length) {
+        status('Select at least one Project field to revise.',true);
+        return;
+      }
       return Promise.resolve(bridge.prepareWrite(operation, id, item && storyName(item),{
-        instruction:manualSceneInstruction()
+        instruction:manualSceneInstruction(),requestedFields:selectedProjectFields
       })).catch(function (error) {
         status('Write failed: ' + String(error.message || error), true);
         if (typeof window.reportConsoleError === 'function')
@@ -1076,6 +1303,8 @@
   }
 
   window.studioDirectorWorkbench = {
+    offerActionAdvice:offerActionAdvice,
+    clearActionAdvice:clearActionAdvice,
     approvedReadPayload:readPayload,
     approvedReadLabel:function (projectId,keys) {
       var name = readStory && readStory.id === projectId ? storyName(readStory) : projectId;
@@ -1202,9 +1431,13 @@
       }, null, 2);
     },
     resetConversation: function () {
+      clearActionAdvice();
       var instruction = el('studio-dw-write-instruction');
       instruction.value = '';
       delete instruction.dataset.instructionSeeded;
+      el('studio-dw-write-project-fields').querySelectorAll('input').forEach(function (input) {
+        input.checked = true;
+      });
       pendingCreativeAction = null;
       el('studio-dw-suggestions').replaceChildren();
       showConversationWrite();
@@ -1227,6 +1460,12 @@
 
   function bind() {
     var rail = el('studio-director-workbench');if (!rail) return;
+    el('studio-action-advisor-enabled').onchange=function () {
+      el('studio-action-advisor-model').classList.toggle('hidden',!this.checked);
+      if (!this.checked) clearActionAdvice();
+      else refreshAdvisorModels();
+    };
+
     el('studio-dw-read').onclick=function () { lastQuickAction='read'; return toggle('read'); };
     el('studio-dw-write').onclick=function () { lastQuickAction='write'; return toggle('write'); };
     el('studio-dw-read-project').onchange=function () {

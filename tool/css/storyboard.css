@@ -4238,6 +4238,33 @@ html[data-theme="dark"] .storyboard-prompt-take-status {
 #director-chat-story-prepare:not(.hidden) { font-weight: 700; min-height: 36px; }
 
 
+/* Action Advisor is optional, compact and independent of the chat composer. */
+.studio-action-advisor {
+  display:grid; gap:10px; margin:10px 0 12px; padding:10px 12px;
+  border:1px solid var(--border); border-radius:10px; background:var(--panel-soft);
+  color:var(--text); font-size:16px;
+}
+.studio-action-advisor.hidden, .studio-action-advisor .hidden { display:none; }
+.studio-action-advisor-toolbar { display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; }
+.studio-action-advisor-toolbar label { display:flex; align-items:center; gap:8px; font-size:15px; font-weight:600; }
+.studio-action-advisor-toolbar input { width:17px; height:17px; }
+.studio-action-advisor-toolbar select { min-width:120px; max-width:100%; font:inherit; font-size:14px; }
+#studio-action-advisor-status { color:var(--muted); font-size:14px; }
+#studio-action-advisor-actions { display:grid; gap:8px; }
+.studio-action-advisor-item { display:grid; gap:6px; border-top:1px solid var(--border); padding-top:10px; }
+.studio-action-advisor-item strong { font-size:16px; }
+.studio-action-advisor-item p { margin:0; font-size:14px; line-height:1.5; overflow-wrap:anywhere; }
+.studio-action-advisor-item button {
+  justify-self:start; font:inherit; font-size:15px; font-weight:650;
+  border:1px solid var(--border); border-radius:7px; padding:8px 12px;
+  background:var(--panel); color:var(--text); cursor:pointer;
+}
+.studio-action-advisor-item button:hover { border-color:var(--accent); }
+#studio-dw-write-project-fields { border:1px solid var(--border); border-radius:8px; padding:10px; }
+#studio-dw-write-project-fields.hidden { display:none; }
+#studio-dw-write-project-fields legend { font-size:15px; font-weight:600; padding:0 4px; }
+#studio-dw-write-project-fields label { display:inline-flex; align-items:center; gap:5px; margin:4px 10px 4px 0; font-size:15px; }
+
 /* Director guidance: surface only concrete field materialization opportunities. */
 .studio-dw-suggestions { display:grid; gap:8px; margin:10px 0 12px; }
 .studio-dw-suggestion-action {

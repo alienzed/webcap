@@ -424,6 +424,7 @@
     }
 
     var studio = state.activeMode === 'storyboard';
+    el('studio-action-advisor').classList.toggle('hidden', !studio);
     var contextButton = el('director-chat-context-approve');
     contextButton.classList.toggle('hidden', !studio || studioRevisionActive());
     contextButton.textContent = 'Read…';
@@ -3501,7 +3502,10 @@
     var metricsMap = currentMetricsMap();
     var mode = activeContextMode();
     messages.push({ role: 'user', content: content });
-    if (activeChatMode === 'storyboard') markStudioReadinessOutdated();
+    if (activeChatMode === 'storyboard') {
+      markStudioReadinessOutdated();
+      window.studioDirectorWorkbench.clearActionAdvice();
+    }
     input.value = '';
     state.draftByMode[activeChatMode] = '';
     if (persistentMode(activeChatMode)) {
@@ -3599,6 +3603,23 @@
       renderMessages();
       syncControls();
       if (input) input.focus();
+      if (!requestError && activeChatMode === 'storyboard' && state.sessionByMode.storyboard) {
+        // Sidecar has its own job and UI; it cannot delay or fail this chat turn.
+        var scope = {
+          conversationId:state.sessionByMode.storyboard.id,
+          modelId:state.modelId,
+          messages:messages.map(function (message) {
+            return {role:message.role,content:String(message.content || '')};
+          }),
+          projectId:selectedProjectId,
+          sceneId:selectedScene && selectedScene.sceneId || ''
+        };
+        Promise.resolve().then(function () {
+          window.studioDirectorWorkbench.offerActionAdvice(scope);
+        }).catch(function (error) {
+          window.reportConsoleError('Studio Action Advisor',error);
+        });
+      }
     });
   }
 
@@ -4167,6 +4188,10 @@
       return (state.modeMessages && state.modeMessages.storyboard || []).map(function (message) {
         return {role:message.role,content:message.content};
       });
+    },
+    isCurrentConversation: function (conversationId) {
+      return !!(conversationId && state.activeMode === 'storyboard' && state.sessionReady &&
+        state.sessionByMode.storyboard && state.sessionByMode.storyboard.id === conversationId);
     },
     readConversationId: function () {
       if (state.activeMode !== 'storyboard' || !state.sessionReady || state.pending || state.attachmentPending ||

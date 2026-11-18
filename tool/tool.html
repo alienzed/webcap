@@ -2183,7 +2183,19 @@
                     <div class="director-chat-progress-track" aria-hidden="true"><span></span></div>
                 </div>
                 <div id="studio-dw-suggestions" class="studio-dw-suggestions hidden" aria-label="Suggested next action"></div>
+
+
                 <div id="director-chat-messages" class="director-chat-messages" aria-live="polite"></div>
+                <section id="studio-action-advisor" class="studio-action-advisor" aria-label="Optional action suggestions">
+                    <div class="studio-action-advisor-toolbar">
+                        <label><input id="studio-action-advisor-enabled" type="checkbox"> Suggest next actions</label>
+                        <select id="studio-action-advisor-model" class="hidden" aria-label="Action Advisor model" title="Choose a smaller model to reduce the cost of suggestions">
+                            <option value="">Same model as Director</option>
+                        </select>
+                    </div>
+                    <div id="studio-action-advisor-status" class="hidden" role="status" aria-live="polite"></div>
+                    <div id="studio-action-advisor-actions" class="hidden"></div>
+                </section>
                 <div id="director-chat-empty" class="director-chat-empty">
                     <strong id="director-chat-empty-title">Your creative workshop</strong>
                     <p id="director-chat-empty-description">Tell Director what interests you. You can start with a single moment, a feeling, or nothing at all.</p>
@@ -2258,6 +2270,13 @@
                         <option value="revise">Revise Scenes</option>
                       </select>
                     </label>
+                    <fieldset id="studio-dw-write-project-fields" class="hidden" aria-label="Project fields to revise">
+                      <legend>Revise fields</legend>
+                      <label><input type="checkbox" value="title" checked> Title</label>
+                      <label><input type="checkbox" value="concept" checked> Concept</label>
+                      <label><input type="checkbox" value="style" checked> Visual / atmosphere</label>
+                      <label><input type="checkbox" value="invariants" checked> Invariants</label>
+                    </fieldset>
                     <label id="studio-dw-write-instruction-row" class="hidden" for="studio-dw-write-instruction">Instruction<textarea id="studio-dw-write-instruction" rows="4" placeholder="Optional instruction for this Write; the full conversation is also included."></textarea></label>
                     <div id="studio-dw-batch-controls" class="hidden">
                       <div class="studio-dw-scene-select-actions"><button id="studio-dw-scenes-select-all" type="button">Select all</button><button id="studio-dw-scenes-select-none" type="button">Deselect all</button></div>

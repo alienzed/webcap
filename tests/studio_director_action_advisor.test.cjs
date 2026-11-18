@@ -106,13 +106,15 @@ test('Director chat invokes sidecar after successful conversation save, not in i
 
 test('Advisor ignores a late response after another turn, conversation switch, or opt-out',()=>{
   const status={textContent:'',classList:{toggle(){}}};
-  const actions={replaceChildren(){},classList:{add(){}}};
+  const actions={replaceChildren(){},classList:{add(){},contains(){return true;}}};
+  const panel={classList:{toggle(){}}};
   let enabled=true;
   let conversation='chat-one';
   const el=id=>({
     'studio-action-advisor-status':status,
     'studio-action-advisor-actions':actions,
-   })[id];
+    'studio-action-advisor':panel
+  })[id];
   const partSource=part(bench,'  // Browser-wide Studio preference; enabled by default, shared by all conversations.','  function advisorCandidates(raw,scope) {');
   const guards=new Function('el','window','localStorage',partSource+
     'return {current:advisorCurrent,clear:clearActionAdvice};')(

@@ -486,3 +486,19 @@ def test_recorded_dimensions_and_duration_are_normalized_without_probing_files()
     unknown = media_explorer._record_details({"megapixels": 0.8})
     assert unknown["resolution"] == ""
     assert media_explorer._metric(unknown, "megapixels") == 0
+
+
+def test_generation_curation_tags_search_and_exact_filter(monkeypatch, tmp_path):
+    monkeypatch.setattr(media_explorer.app_config, "output_root", lambda: tmp_path)
+    _media(tmp_path / "generations/day/job/result.png")
+    monkeypatch.setattr(media_explorer, "list_results", lambda limit: [{
+        "storageId": "day/job", "createdAt": 100,
+        "mediaPath": "generations/day/job/result.png",
+        "modelId": "krea2", "rating": 5,
+        "tags": ["keeper", "character-A"], "references": {}
+    }])
+    result = media_explorer.list_media(tag="KEEPER")
+    assert result["total"] == 1
+    assert result["items"][0]["tags"] == ["keeper", "character-A"]
+    assert media_explorer.list_media(search="character-A")["total"] == 1
+    assert media_explorer.list_media(tag="not-found")["total"] == 0

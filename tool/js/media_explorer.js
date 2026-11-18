@@ -452,6 +452,33 @@
         }
       }).catch(report);
   }
+  function provenanceLinks(item) {
+    var links = [], seen = new Set();
+    (item.uses || []).forEach(function (use) {
+      var label = (use.label || use.storageId || use.role || 'Source');
+      var key = [use.source,use.storageId,use.takeId || ''].join(':');
+      if (seen.has(key)) return;
+      seen.add(key);
+      var run = null;
+      if (use.source === 'storyboard' && item.storageId && use.storageId) {
+        run = function () {window.openStoryboardActivity({
+          storyId:item.storageId,sceneId:use.storageId,takeId:use.takeId || ''
+        });};
+      } else if (use.source === 'generate' && use.storageId) {
+        run = function () {window.openGenerateActivity({storageId:use.storageId});};
+      } else if (use.source === 'test' && item.ownerFolder && use.storageId) {
+        run = function () {window.openTestBenchActivity({
+          folder:item.ownerFolder,sessionId:use.storageId,modelId:item.model || ''
+        });};
+      } else if (use.source === 'epoch' && item.ownerFolder && use.storageId) {
+        run = function () {window.openTestBenchActivity({
+          folder:item.ownerFolder,campaignId:use.storageId,modelId:item.model || ''
+        });};
+      }
+      if (run) links.push({label:label+' · '+(use.role || use.source),run:run});
+    });
+    return links;
+  }
   function itemActions(item) {
     var current = function () { return items.findIndex(function (candidate) {return candidate.id===item.id;}); };
     var actions = [
@@ -483,6 +510,10 @@
       actions.push({label:'Show in file browser',run:function () {
         externalAction('reveal',{path:externalPath,file:item.relativePath});
       }});
+    }
+    var provenanceActions = provenanceLinks(item);
+    if (provenanceActions.length) {
+      actions.push({label:'Used by · '+provenanceActions.length,children:provenanceActions});
     }
     actions.push({separator:true});
     if (item.source === 'external') {
@@ -954,20 +985,12 @@
       var relationships = document.createElement('details'), relationshipsTitle = document.createElement('summary');
       relationships.className = 'media-explorer-inspector-section'; relationships.open = true;
       text(relationshipsTitle, 'Used by · ' + uses.length); relationships.appendChild(relationshipsTitle);
-      uses.forEach(function (use) {
-        var canOpen = ['generate', 'storyboard', 'test', 'epoch'].indexOf(use.source) !== -1;
-        var row = document.createElement(canOpen ? 'button' : 'p');
-        text(row, (use.label || use.storageId) + ' · ' + use.role);
-        if (canOpen) {
-          row.type = 'button'; row.className = 'media-explorer-use-link';
-          row.addEventListener('click', function () {
-            if (use.source === 'generate') window.openGenerateActivity({storageId: use.storageId});
-            else if (use.source === 'storyboard') window.openStoryboardActivity({storyId: item.storageId, sceneId: use.storageId, takeId: use.takeId || ''});
-            else if (use.source === 'test') window.openTestBenchActivity({folder: item.ownerFolder, sessionId: item.storageId, modelId: item.model || ''});
-            else if (use.source === 'epoch') window.openTestBenchActivity({folder: item.ownerFolder, campaignId: item.storageId, modelId: item.model || ''});
-          });
-        }
-        relationships.appendChild(row);
+      provenanceLinks(item).forEach(function (link) {
+        var button=document.createElement('button');
+        button.type='button';button.className='media-explorer-use-link';
+        text(button,link.label);
+        button.addEventListener('click',link.run);
+        relationships.appendChild(button);
       });
       host.appendChild(relationships);
       if (item.source === 'storyboard' && uses.length > 1) {

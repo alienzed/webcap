@@ -478,6 +478,29 @@ def create_external_folder(data):
     return {"ok": True, "folder": target.relative_to(root).as_posix()}
 
 
+def rename_external_folder(data):
+    """Rename an existing folder without touching media or companion paths."""
+    root = _root(data.get("path"))
+    relative = str(data.get("folder") or "").strip().replace("\\", "/")
+    if not relative or Path(relative).is_absolute() or ".." in Path(relative).parts:
+        raise ValueError("Select a folder beneath the external root.")
+    source = (root / relative).resolve()
+    if not source.is_relative_to(root) or source == root or not source.is_dir():
+        raise ValueError("Folder does not exist inside the external root.")
+    if (root / relative).is_symlink():
+        raise ValueError("Cannot rename a linked folder.")
+    name = str(data.get("name") or "").strip()
+    if not name or name in {".", ".."} or "/" in name or "\\" in name or Path(name).name != name:
+        raise ValueError("Enter a single folder name.")
+    target = source.with_name(name)
+    if source == target:
+        return {"ok": True, "folder": relative}
+    if target.exists() or target.is_symlink():
+        raise ValueError("A file or folder already uses that name.")
+    source.rename(target)
+    return {"ok": True, "folder": target.relative_to(root).as_posix()}
+
+
 def move_external_files(data):
     """Move selected media and its adjacent authored/backup files together."""
     root, files = _external_sources(data)
@@ -723,6 +746,14 @@ def register_routes(app):
             return open_path_in_explorer_response(_source_file(root, data.get("file")))
         except Exception as exc:
             app.logger.exception("EXTERNAL MEDIA REVEAL FAILED")
+            return jsonify({"ok": False, "error": str(exc)}), 400
+
+    @app.post("/fs/media_explorer/external/rename-folder")
+    def external_rename_folder():
+        try:
+            return jsonify(rename_external_folder(request.get_json(silent=True) or {}))
+        except Exception as exc:
+            app.logger.exception("EXTERNAL FOLDER RENAME FAILED")
             return jsonify({"ok": False, "error": str(exc)}), 400
 
     @app.post("/fs/media_explorer/external/create-folder")

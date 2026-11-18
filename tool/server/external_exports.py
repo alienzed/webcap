@@ -101,6 +101,39 @@ def copy_generated_media(data):
     return {"ok": True, "destination": str(destination), "copied": copied}
 
 
+def copy_test_media(data):
+    """Copy owner-validated Test session media into a Set, keeping originals."""
+    from .epoch_test_bench import resolve_result_media
+    files = data.get("results")
+    if not isinstance(files, list) or not files or len(files) > 120:
+        raise ValueError("Select 1–120 Test results.")
+    sources = []
+    seen = set()
+    for record in files:
+        if not isinstance(record, dict):
+            raise ValueError("Invalid Test result.")
+        folder = str(record.get("folder") or "")
+        session = str(record.get("session") or "")
+        name = str(record.get("mediaFile") or "")
+        if not folder or not session or not name:
+            raise ValueError("Test result requires a Set, session and filename.")
+        key = (folder, session, name)
+        if key in seen:
+            continue
+        seen.add(key)
+        owner = app_config.safe_join_fs_root(folder)
+        source = resolve_result_media(owner, session, name)
+        sources.append((source, key))
+    destination = _destination(data)
+    copied = []
+    for source, key in sources:
+        target = _unique_path(destination, source.name)
+        shutil.copy2(source, target)
+        normalize_path_permissions(target)
+        copied.append({"source": "/".join(key), "name": target.name})
+    return {"ok": True, "destination": str(destination), "copied": copied}
+
+
 def export_clip(data):
     sources = _validated_sources(data)
     if len(sources) != 1:
@@ -134,6 +167,14 @@ def export_clip(data):
 
 
 def register_routes(app):
+    @app.post("/fs/media_explorer/test/copy")
+    def explorer_test_copy():
+        try:
+            return jsonify(copy_test_media(request.get_json(silent=True) or {}))
+        except (ValueError, OSError, RuntimeError, FileNotFoundError) as exc:
+            app.logger.exception("EXPLORER TEST COPY FAILED")
+            return jsonify({"ok": False, "error": str(exc)}), 400
+
     @app.post("/fs/media_explorer/generated/copy")
     def explorer_generated_copy():
         try:

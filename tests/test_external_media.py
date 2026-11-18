@@ -307,6 +307,11 @@ def test_external_rename_preserves_media_and_metadata_and_refuses_collision(tmp_
     root = tmp_path / "external"
     original = _file(root / "shots" / "old.png")
     existing = _file(root / "shots" / "taken.png")
+    caption = (root / "shots" / "old.txt")
+    caption.write_text("original caption")
+    originals = root / "shots" / "originals"
+    originals.mkdir()
+    (originals / "old.png").write_bytes(b"backup")
     cache = original.parent / "media_metadata.json"
     cache.write_text(json.dumps({"old.png": {"resolution": "640x480",
                             "analysis": {"caption": "keep"}}, "taken.png": {"resolution": "12x12"}}))
@@ -315,6 +320,8 @@ def test_external_rename_preserves_media_and_metadata_and_refuses_collision(tmp_
     })
     assert result == {"ok": True, "oldPath": "shots/old.png", "newPath": "shots/new.png"}
     assert not original.exists() and (root / "shots" / "new.png").read_bytes() == b"test-media"
+    assert not caption.exists() and (root / "shots" / "new.txt").read_text() == "original caption"
+    assert not (originals / "old.png").exists() and (originals / "new.png").read_bytes() == b"backup"
     updated = json.loads(cache.read_text())
     assert "old.png" not in updated and updated["new.png"]["analysis"]["caption"] == "keep"
     assert existing.exists()

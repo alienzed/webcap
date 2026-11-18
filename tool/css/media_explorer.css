@@ -933,3 +933,17 @@
 }
 .media-explorer-folder-row > .media-explorer-folder-menu:hover,
 .media-explorer-folder-row > .media-explorer-folder-menu:focus-visible { opacity:1; }
+
+.media-explorer-quick-filters {
+  display:flex;align-items:center;gap:7px;flex:0 1 auto;min-width:0;
+  order:1;
+}
+.media-explorer-quick-filters input,.media-explorer-quick-filters select {
+  font-size:16px;min-height:35px;max-width:175px;min-width:115px;
+  border:1px solid var(--border);border-radius:6px;
+  background:var(--panel);color:var(--text);padding:5px 8px;
+}
+@media(max-width:760px){
+  .media-explorer-quick-filters {flex:1 1 100%;order:2;flex-wrap:wrap;}
+  .media-explorer-quick-filters input,.media-explorer-quick-filters select {flex:1 1 140px;}
+}

@@ -631,3 +631,47 @@ def test_named_saved_views_validate_names_filters_and_delete(tmp_path, monkeypat
             external_media.save_media_view(payload)
     with pytest.raises(ValueError):
         external_media.delete_media_view("unknown")
+
+
+def test_trash_subfolder_uses_system_trash_and_preserves_contents(tmp_path, monkeypatch):
+    import send2trash
+    root = tmp_path / "library"
+    _file(root / "nested" / "image.png")
+    _file(root / "nested" / "originals" / "image.png")
+    recycle = tmp_path / "recycle"
+    recycle.mkdir()
+    monkeypatch.setattr(send2trash, "send2trash",
+                        lambda path: __import__("pathlib").Path(path).rename(recycle / "nested"))
+    result = external_media.trash_external_folder({
+        "path": str(root), "folder": "nested"})
+    assert result == {"ok": True, "folder": "nested"}
+    assert (recycle / "nested" / "image.png").is_file()
+    assert (recycle / "nested" / "originals" / "image.png").is_file()
+    assert root.exists() and not (root / "nested").exists()
+
+
+def test_trash_subfolder_rejects_root_escape_and_symlink(tmp_path, monkeypatch):
+    import pytest
+    root = tmp_path / "library"
+    (root / "sub").mkdir(parents=True)
+    (root / "linked").symlink_to(root / "sub", target_is_directory=True)
+    for folder in ("", ".", "..", "../elsewhere", "linked", "missing"):
+        with pytest.raises(ValueError):
+            external_media.trash_external_folder({"path": str(root), "folder": folder})
+    assert (root / "sub").exists()
+
+
+def test_saved_view_rename_preserves_tag_identity_and_filters(tmp_path, monkeypatch):
+    import pytest
+    monkeypatch.setattr(external_media.app_config, "app_state_root", lambda: tmp_path / "state")
+    external_media.save_media_view({"name": "Collection: Old",
+                                   "filters": {"tag": "Collection · Old", "source": ""}})
+    external_media.save_media_view({"name": "Other", "filters": {"search": "abc"}})
+    entries = external_media.rename_media_view({
+        "name": "Collection: Old", "newName": "Collection: New"})
+    assert [entry["name"] for entry in entries] == ["Collection: New", "Other"]
+    assert entries[0]["filters"]["tag"] == "Collection · Old"
+    with pytest.raises(ValueError):
+        external_media.rename_media_view({"name": "Collection: New", "newName": "Other"})
+    with pytest.raises(ValueError):
+        external_media.rename_media_view({"name": "Missing", "newName": "New"})

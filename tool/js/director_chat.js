@@ -1733,15 +1733,14 @@
       : storyId;
   }
 
-  function studioActionStatus(message, error) {
+  function studioActionStatus(message, error, showPartial) {
     var status = el('director-studio-action-status');
-    // Routine operation receipts belong on their controls and in Console.
-    // Preserve conspicuous feedback for real errors.
-    status.classList.toggle('hidden', !message || !error);
-    status.textContent = error ? (message || '') : '';
+    // Routine receipts stay quiet; incomplete saved results remain visibly explained.
+    status.classList.toggle('hidden', !message || (!error && !showPartial));
+    status.textContent = error || showPartial ? (message || '') : '';
     status.dataset.error = error ? 'true' : 'false';
     if (state.activeMode === 'storyboard' && window.studioDirectorWorkbench) {
-      window.studioDirectorWorkbench.setStatus(String(message || ''), !!error);
+      window.studioDirectorWorkbench.setStatus(String(message || ''), !!error, !!showPartial);
     }
   }
 
@@ -1887,6 +1886,62 @@
     dialog.showModal();
   }
 
+  // Project Writes accept usable model material without manufacturing missing fields.
+  // Invariants are identified by their existing (kind, title) identity.
+  function studioProjectFieldsFromModel(authored) {
+    var values = {}, skipped = [];
+    ['title','concept','style'].forEach(function (field) {
+      if (!Object.prototype.hasOwnProperty.call(authored,field)) return;
+      if (typeof authored[field] === 'string') values[field] = authored[field];
+      else skipped.push(field + ' (not text)');
+    });
+    if (Object.prototype.hasOwnProperty.call(authored,'invariants')) {
+      if (!Array.isArray(authored.invariants)) skipped.push('Invariants (not a list)');
+      else {
+        values.invariants = authored.invariants.filter(function (item,index) {
+          var valid = item && typeof item === 'object' && !Array.isArray(item) &&
+            ['character','location','visual','world','sound','custom'].includes(item.kind) &&
+            typeof item.title === 'string' &&
+            typeof item.text === 'string' && item.text.trim();
+          if (!valid) skipped.push('Invariant ' + (index+1) + ' (incomplete or invalid)');
+          return valid;
+        });
+      }
+    }
+    Object.keys(authored).forEach(function (field) {
+      if (!['title','concept','style','invariants'].includes(field))
+        skipped.push(field + ' (not a Project field)');
+    });
+    return {values:values,skipped:skipped};
+  }
+
+  function studioProjectInvariantChanges(original, suggested) {
+    var operations = [], skipped = [], seen = new Set();
+    var existing = original || [];
+    suggested.forEach(function (item,index) {
+      if (!item.title.trim()) {
+        skipped.push('Invariant ' + (index+1) + ' (a name is required for individual updates)');
+        return;
+      }
+      var key = item.kind + '\\u0000' + item.title.trim().toLowerCase();
+      if (seen.has(key)) {
+        skipped.push('Invariant ' + (index+1) + ' (duplicate identity)');
+        return;
+      }
+      seen.add(key);
+      var matches = existing.filter(function (saved) {
+        return saved.kind === item.kind && saved.title.trim().toLowerCase() === item.title.trim().toLowerCase();
+      });
+      if (matches.length > 1) {
+        skipped.push('Invariant ' + (index+1) + ' (ambiguous saved identity)');
+      } else if (matches.length === 1) {
+        if (JSON.stringify(matches[0]) !== JSON.stringify(item))
+          operations.push({op:'update',before:matches[0],after:item});
+      } else operations.push({op:'add',after:item});
+    });
+    return {operations:operations,skipped:skipped};
+  }
+
   function prepareStudioProject(options) {
     if (state.pending || state.activeMode !== 'storyboard' || !state.sessionReady) return;
     if (!state.modelId) {
@@ -1894,7 +1949,7 @@
       return;
     }
     var instruction = String(options && options.instruction || '');
-    var saved = false;
+    var saved = false, skippedCreate = [];
     state.lastStudioIoRaw = '';
     state.lastStudioIoError = '';
     var input = {
@@ -1930,19 +1985,25 @@
       catch (error) { throw new Error('Director returned invalid Project JSON: '+error.message+'\\nRaw response:\\n'+raw); }
       if (!proposal || typeof proposal !== 'object' || Array.isArray(proposal))
         throw new Error('Director returned no Project object.\\nRaw response:\\n'+raw);
+      var material = studioProjectFieldsFromModel(proposal);
+      if (!Object.keys(material.values).some(function (field) {
+        return field === 'invariants' ? material.values.invariants.length :
+          material.values[field].trim().length;
+      })) throw new Error('Director returned no usable Project fields. Raw response remains available in I/O.');
+      skippedCreate = material.skipped;
+      if (skippedCreate.length)
+        studioActionStatus('Saving usable Project fields; skipped: ' + skippedCreate.join(', '),false,true);
       return requestJson('/fs/studio/director/project-create', {
         method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({proposal:{
-          title:proposal.title,concept:proposal.concept,
-          style:proposal.style,invariants:proposal.invariants
-        }})
+        body:JSON.stringify({proposal:material.values})
       });
     }).then(function (payload) {
       if (!payload.story || !payload.story.id) throw new Error('Project save returned no saved Project.');
       var story = payload.story;
       saved = true;
       recordStudioOperation('project.create','Created Project: '+(story.title || story.id),story.id,[]);
-      studioActionStatus('Project saved: '+(story.title || story.id),false);
+      studioActionStatus('Project saved: '+(story.title || story.id) +
+        (skippedCreate.length ? '. Skipped: ' + skippedCreate.join(', ') + '. Raw output is in I/O.' : ''),false,!!skippedCreate.length);
       return window.studioDirectorBridge.recordApplied('project.create',story,{
         title:story.title,concept:story.concept,style:story.style,invariants:story.invariants
       }).then(function () {return window.refreshStudioDirectorStoryIfOpen(story.id);});
@@ -2094,8 +2155,8 @@
       el('studio-project-error').textContent = 'One new Project review can include up to 32 Scenes.';
       return;
     }
-    if (!proposal.concept || !proposal.style) {
-      el('studio-project-error').textContent = 'Complete Concept and Visual / atmosphere to create the Project.';
+    if (!proposal.title && !proposal.concept && !proposal.style && !proposal.invariants.length && !firstScenes.length) {
+      el('studio-project-error').textContent = 'Add some Project material before creating.';
       return;
     }
     state.pending = true;
@@ -2347,15 +2408,16 @@
     if (!state.modelId) {studioActionStatus('No Director model is available.',true);return;}
     var instruction = String(options && options.instruction || '');
     var requestedFields = Array.isArray(options && options.requestedFields)
-      ? options.requestedFields.filter(function(field) {
-        return ['title','concept','style','invariants'].includes(field);
-      }) : [];
+      ? options.requestedFields.slice() : [];
+    if (requestedFields.some(function (field) {
+      return !['title','concept','style','invariants'].includes(field);
+    })) throw new Error('Project Write includes an unsupported requested field.');
     state.pending = true;
     state.jobId = '';
     startProgress();
     syncControls();
     studioActionStatus('Writing Project fields…',false);
-    var original, saved = false;
+    var original, saved = false, skippedRevise = [];
     state.lastStudioIoRaw = '';
     state.lastStudioIoError = '';
     return window.flushStudioDirectorStoryEdits(storyId).then(function () {
@@ -2364,9 +2426,9 @@
       original = response.story;
       if (!original || original.id !== storyId) throw new Error('Selected Project is unavailable.');
       var input = {
-        task:'Revise the Project in the author’s direction. Return the complete current values ' +
-          'of title, concept, style and invariants. Preserve unrequested saved Project ' +
-          'fields exactly as supplied, and never change Scenes.',
+        task:'Revise only the requested Project fields in the author’s direction. ' +
+          'Return changed values for those fields; preserve all other Project and Scene content. ' +
+          'For Invariants, return additions or updates identified by kind and title; omissions do not delete saved Invariants.',
         instruction:instruction,
         requestedFields:requestedFields,
         project:{title:original.title,concept:original.concept,
@@ -2392,16 +2454,32 @@
       var raw = String(job.result && job.result.text || '');
       state.lastStudioIoRaw = raw;
       var authored = parseStudioBriefDraft(raw);
-      var changes = {},expected = {};
-      ['title','concept','style','invariants'].forEach(function (field) {
-        if (Object.prototype.hasOwnProperty.call(authored,field) &&
-            JSON.stringify(authored[field]) !== JSON.stringify(original[field])) {
-          changes[field] = authored[field];
+      var material = studioProjectFieldsFromModel(authored), changes = {}, expected = {};
+      var permitted = requestedFields.length ? requestedFields : ['title','concept','style','invariants'];
+      var ignored = Object.keys(authored).filter(function (field) {
+        return ['title','concept','style','invariants'].includes(field) && !permitted.includes(field);
+      });
+      permitted.forEach(function (field) {
+        if (!Object.prototype.hasOwnProperty.call(material.values,field)) return;
+        if (field === 'invariants') {
+          var delta = studioProjectInvariantChanges(original.invariants,material.values.invariants);
+          if (delta.operations.length) changes.invariantOps = delta.operations;
+          material.skipped.push.apply(material.skipped,delta.skipped);
+        } else if (material.values[field] !== original[field]) {
+          changes[field] = material.values[field];
           expected[field] = original[field];
         }
       });
+      skippedRevise = ignored.map(function (field) {return field + ' (outside Write scope)';})
+        .concat(material.skipped,requestedFields.filter(function (field) {
+          return !Object.prototype.hasOwnProperty.call(authored,field);
+        }).map(function (field) {return field + ' (not returned)';}));
+      if (skippedRevise.length)
+        studioActionStatus('Director response ignored: ' + skippedRevise.join(', ') +
+          '. Raw output is available in I/O.',false,true);
       if (!Object.keys(changes).length) {
-        studioActionStatus('Director returned no Project field changes.',false);
+        studioActionStatus('Director returned no usable changes for the requested Project fields.' +
+          (skippedRevise.length ? ' Inspect raw output in I/O.' : ''),false,true);
         return null;
       }
       return requestJson('/fs/studio/director/brief',{
@@ -2412,9 +2490,10 @@
           throw new Error('Project save returned no authoritative revision.');
         saved = true;
         recordStudioOperation('brief.apply','Updated '+Object.keys(changes).join(', '),storyId,[]);
-        studioActionStatus('Project fields saved.',false);
+        studioActionStatus('Project fields saved.' + (skippedRevise.length ?
+          ' Ignored: ' + skippedRevise.join(', ') + '. Raw output is in I/O.' : ''),false,!!skippedRevise.length);
         var values = {};
-        Object.keys(changes).forEach(function (key) {values[key]=result.story[key];});
+        Object.keys(changes).forEach(function (key) {values[key === 'invariantOps' ? 'invariants' : key]=result.story[key === 'invariantOps' ? 'invariants' : key];});
         return window.studioDirectorBridge.recordApplied('brief.apply',result.story,values)
           .then(function () {return window.refreshStudioDirectorStoryIfOpen(storyId);});
       });
@@ -2551,7 +2630,6 @@
     title.setAttribute('aria-label', 'Scene title');
     title.dataset.field = 'title';
     title.placeholder = 'Working title (optional)';
-    title.maxLength = 240;
     title.value = item.title || '';
     var durationLabel = document.createElement('label');
     durationLabel.textContent = 'Duration (s)';

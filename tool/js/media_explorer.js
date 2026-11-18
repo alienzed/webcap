@@ -183,6 +183,7 @@
         return;
       }
       refreshExternalFiles();
+      if (result.warning) report(new Error(result.warning));
     });
   }
   function openExternalClipEditor(item) {

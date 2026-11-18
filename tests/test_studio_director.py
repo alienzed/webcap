@@ -188,7 +188,7 @@ def test_retired_director_model_operations_are_not_queued(monkeypatch, operation
     ("studio_brief_draft", {"title", "concept", "style", "invariants"}),
     ("studio_project_draft", {"title", "concept", "style", "invariants"}),
     ("studio_scene_field_draft", {"title", "prompt", "durationSeconds"}),
-    ("studio_scenes_draft", {"scenes"}),
+    ("studio_scenes_draft", {"scenes", "rationale"}),
     ("storyboard_workshop_shots", {"summary", "shots"}),
     ("freeform_chat", None),
     ("studio_chat", None),
@@ -217,10 +217,13 @@ def test_director_chat_route_preserves_all_structured_schemas(monkeypatch, opera
     else:
         assert captured["schema"]["type"] == "object"
         assert set(captured["schema"]["properties"]) == expected_fields
-        assert captured["schema"]["additionalProperties"] is False
+        if operation not in {"studio_scene_field_draft", "studio_scenes_draft"}:
+            assert captured["schema"]["additionalProperties"] is False
+        else:
+            assert "additionalProperties" not in captured["schema"]
         if operation == "studio_scene_field_draft":
             assert captured["schema"]["required"] == ["prompt"]
-            assert captured["schema"]["properties"]["prompt"]["minLength"] == 1
+            assert captured["schema"]["properties"]["prompt"]["type"] == "string"
             assert "title" not in captured["schema"]["required"]
             assert "durationSeconds" not in captured["schema"]["required"]
         if operation == "studio_scenes_draft":
@@ -230,7 +233,8 @@ def test_director_chat_route_preserves_all_structured_schemas(monkeypatch, opera
         if operation == "studio_scenes_draft":
             record = captured["schema"]["properties"]["scenes"]["items"]
             assert record["required"] == ["title", "prompt", "durationSeconds"]
-            assert record["properties"]["prompt"]["minLength"] == 1
+            assert record["properties"]["prompt"]["type"] == "string"
+            assert "maximum" not in record["properties"]["durationSeconds"]
         if operation == "studio_project_draft":
             assert captured["schema"]["required"] == ["title", "concept", "style", "invariants"]
         if operation == "studio_brief_draft":

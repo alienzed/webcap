@@ -78,12 +78,81 @@
       moveExternalTo(typeof destination === 'function' ? destination() : destination, chosen);
     });
   }
+  function promptMediaAction(title, initial, confirmText, onSubmit, options) {
+    options = options || {};
+    var dialog = document.createElement('dialog');
+    dialog.className = 'media-explorer-action-dialog';
+    var form = document.createElement('form'); form.method = 'dialog';
+    var heading = document.createElement('h3'); heading.textContent = title;
+    var input = document.createElement('input'); input.type = 'text';
+    input.value = initial || ''; input.setAttribute('aria-label',title);
+    input.required = !options.allowEmpty;
+    var status = document.createElement('p'); status.setAttribute('role','status');
+    var buttons = document.createElement('div'); buttons.className = 'media-explorer-action-buttons';
+    var cancel = document.createElement('button'); cancel.type = 'button'; cancel.textContent = 'Cancel';
+    var submit = document.createElement('button'); submit.type = 'submit'; submit.textContent = confirmText;
+    buttons.appendChild(cancel); buttons.appendChild(submit);
+    form.appendChild(heading); form.appendChild(input);
+    var folderHost = null;
+    if (options.folders) {
+      folderHost = document.createElement('div'); folderHost.className = 'media-explorer-dialog-folders';
+      form.appendChild(folderHost);
+      var sequence = 0;
+      function renderChoices() {
+        var path = input.value.trim();
+        var call = ++sequence;
+        fetch('/fs/media_explorer/external?'+new URLSearchParams({
+          path:externalPath,directory:path,recursive:'0',limit:'1',offset:'0'
+        })).then(function (res) {return res.json().then(function (data) {
+          if (!res.ok || !data.ok) throw Error(data.error || 'Cannot browse destination');
+          if (call !== sequence) return;
+          folderHost.replaceChildren();
+          var up = document.createElement('button'); up.type='button';
+          up.textContent = '↑ Parent'; up.disabled = !path;
+          up.addEventListener('click',function () {
+            input.value=path.split('/').slice(0,-1).join('/');renderChoices();
+          });folderHost.appendChild(up);
+          (data.folders || []).forEach(function (name) {
+            var next=document.createElement('button');next.type='button';
+            next.textContent='📁 '+name;
+            next.addEventListener('click',function () {input.value=[path,name].filter(Boolean).join('/');renderChoices();});
+            folderHost.appendChild(next);
+          });
+          status.textContent = '';
+        });}).catch(function (err) {if(call===sequence)status.textContent=err.message;});
+      }
+      input.addEventListener('change',renderChoices);
+      renderChoices();
+    }
+    form.appendChild(status);form.appendChild(buttons);dialog.appendChild(form);
+    document.body.appendChild(dialog);
+    cancel.addEventListener('click',function () {dialog.close();});
+    dialog.addEventListener('close',function () {dialog.remove();});
+    form.addEventListener('submit',function (event) {
+      event.preventDefault();
+      var value=input.value.trim();
+      if (!value && !options.allowEmpty) return;
+      submit.disabled = true;
+      Promise.resolve(onSubmit(value)).then(function (result) {
+        if (result === false) {submit.disabled=false;return;}
+        dialog.close();
+      }).catch(function (err) {status.textContent=err.message;submit.disabled=false;report(err);});
+    });
+    dialog.showModal();input.focus();input.select();
+  }
+  function externalActionStrict(endpoint, data) {
+    return fetch('/fs/media_explorer/external/'+endpoint,{
+      method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)
+    }).then(function (res) {return res.json().then(function (body) {
+      if(!res.ok || !body.ok)throw Error(body.error || endpoint+' failed');
+      return body;
+    });});
+  }
   function createExternalFolder() {
     if (!isExternal() || !externalPath) return;
-    var name = window.prompt('New folder name');
-    if (name === null || !name.trim()) return;
-    externalAction('create-folder', {path: externalPath, directory: externalDirectory, name: name.trim()}, function () {
-      load(true, {refreshFilesystem:true});
+    promptMediaAction('Create folder in /'+externalDirectory, '', 'Create folder', function (name) {
+      return externalActionStrict('create-folder', {path:externalPath,directory:externalDirectory,name:name})
+        .then(function () {load(true,{refreshFilesystem:true});});
     });
   }
   var needsLoad = true;
@@ -104,6 +173,24 @@
       button.type = 'button'; button.textContent = '📁 ' + name;
       var destination = [externalDirectory, name].filter(Boolean).join('/');
       button.onclick = function () { setExternalDirectory(destination); };
+      button.addEventListener('contextmenu',function (event) {
+        event.preventDefault();event.stopPropagation();
+        showContextMenu(event.clientX,event.clientY,[
+          {label:'Open folder',run:function () {setExternalDirectory(destination);}},
+          {label:'Rename folder…',run:function () {
+            promptMediaAction('Rename folder',name,'Rename',function (nextName) {
+              return externalActionStrict('rename-folder',{path:externalPath,folder:destination,name:nextName})
+                .then(function () {load(true,{refreshFilesystem:true});});
+            });
+          }},
+          {label:'New subfolder…',run:function () {
+            promptMediaAction('Create folder in /'+destination,'','Create folder',function (nextName) {
+              return externalActionStrict('create-folder',{path:externalPath,directory:destination,name:nextName})
+                .then(function () {load(true,{refreshFilesystem:true});});
+            });
+          }}
+        ]);
+      });
       allowFolderDrop(button, destination);
       host.appendChild(button);
     });
@@ -201,13 +288,10 @@
     load(true, {refreshFilesystem:true});
   }
   function renameExternalFile(item) {
-    var name = window.prompt('Rename file', item.fileName);
-    if (name === null || !name.trim() || name.trim() === item.fileName) return;
-    externalAction('rename', {
-      path:externalPath,file:item.relativePath,newName:name.trim()
-    }, function (result) {
-      refreshExternalFiles();
-      if (result.warning) report(new Error(result.warning));
+    promptMediaAction('Rename file',item.fileName,'Rename',function (name) {
+      if(name===item.fileName)return;
+      return externalActionStrict('rename',{path:externalPath,file:item.relativePath,newName:name})
+        .then(function (result) {refreshExternalFiles();if(result.warning)report(new Error(result.warning));});
     });
   }
   function transformExternalImage(item, operation, label) {
@@ -226,9 +310,10 @@
     var names = chosen.map(function (candidate) { return candidate.relativePath; });
     var destination = '';
     if (action === 'move') {
-      destination = window.prompt('Move ' + chosen.length + ' file(s) to which folder inside the external root?\\nUse a relative folder path (empty for root).', externalDirectory);
-      if (destination === null) return;
-      moveExternalTo(destination, chosen); return;
+      promptMediaAction('Move '+chosen.length+' file(s) to folder',externalDirectory,'Move files',function (path) {
+        return externalActionStrict('move',{path:externalPath,files:names,destination:path})
+          .then(function (result) {refreshExternalFiles();if(result.warning)report(new Error(result.warning));});
+      },{allowEmpty:true,folders:true});return;
     } else if (!window.confirm('Move ' + chosen.length + ' file(s) to the operating system Trash?')) return;
     externalAction(action, {path: externalPath, files:names, destination:destination}, function (result) {
       if (action === 'trash') {
@@ -295,9 +380,11 @@
       });
   }
   function editExternalTags(item) {
-    var value = window.prompt('Tags (comma-separated)', (item.tags || []).join(', '));
-    if (value === null) return;
-    curateExternal(item,{tags:value.split(',').map(function (tag) {return tag.trim();}).filter(Boolean)});
+    promptMediaAction('Edit tags (comma-separated)',(item.tags || []).join(', '),'Save tags',function (value) {
+      return externalActionStrict('curate',{path:externalPath,file:item.relativePath,
+        tags:value.split(',').map(function (tag) {return tag.trim();}).filter(Boolean)})
+        .then(function (result) {item.tags=result.tags;item.rating=result.rating;load(true,{soft:true});});
+    },{allowEmpty:true});
   }
   function rateExplorerItem(item, value) {
     if (item.source === 'external') return curateExternal(item,{rating:value});

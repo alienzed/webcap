@@ -547,6 +547,11 @@
         }) : [item]);}});
       actions.push({label:'Edit tags…',run:function () {editMediaTags(item);}});
     } else if (item.source==='epoch' || item.source==='storyboard') {
+      actions.push({label:'Copy to Set…',run:function () {chooseExport(
+        selected.has(item.id) ? items.filter(function (entry) {
+          return selected.has(entry.id) &&
+            (entry.source==='epoch' || entry.source==='storyboard');
+        }) : [item]);}});
       actions.push({label:'Edit tags…',run:function () {editMediaTags(item);}});
     }
     if (item.mediaUrl) {
@@ -931,7 +936,8 @@
     var chosen = items.filter(function (item) { return selected.has(item.id); });
     var copyable = chosen.length > 0 && (isExternal() ||
       chosen.every(function (entry) {return entry.source==='generate' && entry.role==='generated';}) ||
-      chosen.every(function (entry) {return entry.source==='test' && entry.ownerFolder && entry.storageId;}));
+      chosen.every(function (entry) {return entry.source==='test' && entry.ownerFolder && entry.storageId;}) ||
+      chosen.every(function (entry) {return entry.source==='epoch' || entry.source==='storyboard';}));
     el('media-explorer-copy-selected').classList.toggle('hidden', !copyable);
     el('media-explorer-compare').disabled = chosen.length < 2 || chosen.length > 4;
     text(el('media-explorer-compare'), chosen.length > 2 && chosen.length <= 4 ? 'Survey' : 'Compare');
@@ -1686,6 +1692,8 @@
     var submit = el('media-explorer-export-submit');
     var generated = exportItems[0] && exportItems[0].source === 'generate';
     var testing = exportItems[0] && exportItems[0].source === 'test';
+    var owned = exportItems[0] &&
+      (exportItems[0].source === 'epoch' || exportItems[0].source === 'storyboard');
     var payload = {
       destination: el('media-explorer-export-destination').value.trim(),
       newSet: el('media-explorer-export-new-set').value.trim()
@@ -1694,11 +1702,16 @@
     else if(testing) payload.results=exportItems.map(function (item) {
       return {folder:item.ownerFolder,session:item.storageId,mediaFile:item.fileName};
     });
+    else if(owned) payload.results=exportItems.map(function (item) {
+      return {source:item.source,folder:item.ownerFolder,storageId:item.storageId,
+        mediaFile:item.fileName,mediaPath:item.mediaPath};
+    });
     else {payload.path=externalPath;payload.files=exportItems.map(function (item) {return item.relativePath;});}
     submit.disabled = true;
     text(el('media-explorer-export-status'), 'Copying media…');
     fetch(generated ? '/fs/media_explorer/generated/copy' :
-      (testing ? '/fs/media_explorer/test/copy' : '/fs/media_explorer/external/copy'), {
+      (testing ? '/fs/media_explorer/test/copy' :
+        (owned ? '/fs/media_explorer/owned/copy' : '/fs/media_explorer/external/copy')), {
       method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)
     }).then(function (res) { return res.json().then(function (data) {
       if (!res.ok || !data.ok) throw Error(data.error || 'Export failed'); return data;

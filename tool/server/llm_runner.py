@@ -569,7 +569,7 @@ def _client_result(client, context, llm_result, job_id="", frozen_contract=None)
                 prompt,
                 model_id=llm_result["model"],
                 job_id=job_id,
-                operation=operation,
+                operation="refine_prompt" if operation == "visual_direction" else operation,
                 duration_override=duration_override,
                 scene_fields=scene_fields,
             )

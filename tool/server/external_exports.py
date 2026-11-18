@@ -62,9 +62,7 @@ def _validated_sources(data):
 
 
 def _destination_response(destination, copied):
-    return {"ok": True, "destination": str(destination),
-            "destinationRelative": destination.relative_to(app_config.FS_ROOT.resolve()).as_posix(),
-            "copied": copied}
+    return {"ok": True, "destination": str(destination), "copied": copied}
 
 
 def copy_media(data):

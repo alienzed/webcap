@@ -236,6 +236,9 @@ def discover_tests(full=False):
                 continue
             seen_sessions.add(session.resolve())
             ratings = _session_rating_map(session)
+            session_state = read_folder_state(session / ".webcap_state.json")
+            all_tags = session_state.get("curation_tags_by_media") or {}
+            all_tags = all_tags if isinstance(all_tags, dict) else {}
             assessments = _session_vision_state(session).get("byMedia") or {}
             for record in status.get("results") or []:
                 if not isinstance(record, dict):
@@ -257,7 +260,8 @@ def discover_tests(full=False):
                     "mediaKind": _kind(file), "fileName": name,
                     "mediaPath": relative, "mediaUrl": url,
                     "createdAt": int(status.get("startedAt") or 0),
-                    "rating": ratings.get(name), "model": str(status.get("modelId") or ""),
+                    "rating": ratings.get(name), "tags": all_tags.get(name, []),
+                    "model": str(status.get("modelId") or ""),
                     "contextLabel": str(status.get("name") or session.name),
                     "fileSize": file.stat().st_size,
                     "assessment": _assessment(assessments.get(name)),

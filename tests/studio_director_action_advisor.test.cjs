@@ -103,3 +103,33 @@ test('Director chat invokes sidecar after successful conversation save, not in i
   assert.match(bridge,/isCurrentConversation/);
   assert.doesNotMatch(send,/operation:\s*'studio_action_advisor'/);
 });
+
+test('Advisor ignores a late response after another turn, conversation switch, or opt-out',()=>{
+  const status={textContent:'',classList:{toggle(){}}};
+  const actions={replaceChildren(){},classList:{add(){}}};
+  const enabled={checked:true};
+  const model={value:'',options:[],replaceChildren(){}};
+  const primary={options:[]};
+  let conversation='chat-one';
+  const el=id=>({
+    'studio-action-advisor-status':status,
+    'studio-action-advisor-actions':actions,
+    'studio-action-advisor-enabled':enabled,
+    'studio-action-advisor-model':model,
+    'director-chat-model':primary
+  })[id];
+  const partSource=part(bench,'  var advisorTurn = 0;','  function advisorCandidates(raw,scope) {');
+  const guards=new Function('el','window','option',partSource+
+    'return {current:advisorCurrent,clear:clearActionAdvice};')(
+      el,{studioDirectorBridge:{isCurrentConversation:id=>id===conversation}},()=>{});
+  const scope={conversationId:'chat-one'};
+  assert.equal(guards.current(0,scope),true);
+  guards.clear();
+  assert.equal(guards.current(0,scope),false,'a newer turn invalidates old responses');
+  assert.equal(guards.current(1,scope),true);
+  conversation='chat-two';
+  assert.equal(guards.current(1,scope),false,'a switched conversation cannot receive results');
+  conversation='chat-one';
+  enabled.checked=false;
+  assert.equal(guards.current(1,scope),false,'opt-out stops presentation');
+});

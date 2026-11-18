@@ -1599,6 +1599,49 @@
     var chosen = chosenExternalFiles();
     if (chosen.length) externalMutation(chosen[0], 'move');
   });
+  function bulkCurate(choice) {
+    var chosen = chosenExternalFiles();
+    if (!chosen.length) return;
+    if (choice === 'tags') {
+      promptMediaAction('Add tags to '+chosen.length+' files','','Add tags',function (value) {
+        var added = value.split(',').map(function (tag) {return tag.trim();}).filter(Boolean);
+        if (!added.length) return false;
+        return Promise.allSettled(chosen.map(function (item) {
+          var merged = Array.from(new Set((item.tags || []).concat(added)));
+          return externalActionStrict('curate',{
+            path:externalPath,file:item.relativePath,tags:merged});
+        })).then(function (results) {
+          var failed = results.filter(function (result) {return result.status==='rejected';});
+          load(true,{soft:true});
+          if (failed.length) throw Error('Tagged '+(results.length-failed.length)+'/'+results.length+
+            ' files; '+failed.length+' failed: '+failed[0].reason.message);
+        });
+      });
+    } else {
+      var entries = Array.from({length:6},function (_,rating) {
+        return {label:rating?'★'.repeat(rating)+' ('+rating+'/5)':'Clear rating',run:function () {
+          Promise.allSettled(chosen.map(function (item) {
+            return externalActionStrict('curate',{path:externalPath,file:item.relativePath,rating:rating});
+          })).then(function (results) {
+            load(true,{soft:true});
+            var failed=results.filter(function (result) {return result.status==='rejected';});
+            if(failed.length)report(new Error('Rated '+(results.length-failed.length)+'/'+results.length+
+              ' files; '+failed.length+' failed: '+failed[0].reason.message));
+          }).catch(report);
+        }};
+      });
+      var anchor=bulkRateButton.getBoundingClientRect();
+      showContextMenu(anchor.left,anchor.bottom,entries);
+    }
+  }
+  var bulkTagsButton = document.createElement('button');
+  bulkTagsButton.type = 'button';bulkTagsButton.className = 'review-captions-btn';
+  bulkTagsButton.textContent = 'Add tags…';
+  bulkTagsButton.addEventListener('click',function () {bulkCurate('tags');});
+  var bulkRateButton = document.createElement('button');
+  bulkRateButton.type = 'button';bulkRateButton.className = 'review-captions-btn';
+  bulkRateButton.textContent = 'Rate ★';
+  bulkRateButton.addEventListener('click',function () {bulkCurate('rating');});
   var bulkTrashButton = document.createElement('button');
   bulkTrashButton.type = 'button'; bulkTrashButton.className = 'review-captions-btn';
   bulkTrashButton.textContent = 'Move to Trash';
@@ -1608,10 +1651,14 @@
   });
   el('media-explorer-selection').insertBefore(bulkMoveButton, el('media-explorer-compare'));
   el('media-explorer-selection').insertBefore(bulkTrashButton, el('media-explorer-compare'));
+  el('media-explorer-selection').insertBefore(bulkTagsButton, el('media-explorer-compare'));
+  el('media-explorer-selection').insertBefore(bulkRateButton, el('media-explorer-compare'));
   function syncBulkActions() {
     var show = isExternal() && chosenExternalFiles().length > 0;
     bulkMoveButton.classList.toggle('hidden',!show);
     bulkTrashButton.classList.toggle('hidden',!show);
+    bulkTagsButton.classList.toggle('hidden',!show);
+    bulkRateButton.classList.toggle('hidden',!show);
   }
   el('media-explorer-up').addEventListener('click', function () { setExternalDirectory(externalDirectory.split('/').slice(0, -1).join('/')); });
   el('media-explorer-recursive').addEventListener('change', function () { renderExternalFolders(); load(true); });

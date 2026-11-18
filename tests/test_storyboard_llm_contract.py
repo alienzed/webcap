@@ -551,3 +551,23 @@ def test_new_scene_authoring_uses_five_fields_without_new_guideline_values():
     assert "EXISTING SECOND PROMPT" in request["prompt"]
     assert "[STORY DIRECTING GUIDELINES" not in request["prompt"]
     assert request["response_schema"]["required"] == ["prompt"]
+
+
+def test_visual_direction_is_a_scene_scoped_renderability_pass():
+    request = storyboard_llm_contract.build_request(
+        _story(), "scene-2", "visual_direction",
+        instruction="Check the activity change.",
+    )
+    prompt = request["prompt"]
+
+    assert request["operation"] == "visual_direction"
+    assert request["output"] == "json"
+    assert request["response_schema"]["required"] == ["prompt"]
+    assert "[PROJECT OVERVIEW]" in prompt
+    assert "[STORY INVARIANTS]" in prompt
+    assert "[H3 PROMPTING GUIDANCE]" in prompt
+    assert "[EXISTING H3 PROMPT]\nEXISTING SECOND PROMPT" in prompt
+    assert "activity-specific equipment" in prompt
+    assert "facial expression or action" not in prompt
+    assert "changed=false" in prompt
+    assert "OLD FIRST PROMPT" not in prompt

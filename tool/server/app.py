@@ -2309,35 +2309,32 @@ def director_chat_route():
         contract = {"operation": operation, "messages": messages}
         # Ordinary Studio conversation has no creative authoring response schema.
         # A freeform reply is displayed verbatim; only explicit Writes ask for JSON.
+        project_fields = {
+            "title": {"type": "string"},
+            "concept": {"type": "string"},
+            "style": {"type": "string"},
+            "invariants": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "kind": {"type": "string", "enum": ["character", "location", "visual", "world", "sound", "custom"]},
+                        "title": {"type": "string"},
+                        "text": {"type": "string"},
+                    },
+                },
+            },
+        }
         if operation == "studio_brief_draft":
             required_fields = data.get("requiredFields") or []
             if not isinstance(required_fields, list) or any(
-                not isinstance(field, str) or field not in
-                {"title", "concept", "style", "invariants"} for field in required_fields
+                not isinstance(field, str) or field not in project_fields for field in required_fields
             ):
-                raise ValueError("Invalid required Project fields.")
+                raise ValueError("Invalid requested Project fields.")
             contract["response_schema"] = {
-                "type": "object", "additionalProperties": False,
-                # Revise a complete baseline deterministically: the model must
-                # return every Project field, preserving unchanged values.
-                # Optional fields were routinely omitted by structured models.
-                "required": ["title", "concept", "style", "invariants"],
-                "properties": {
-                    "title": {"type": "string", "maxLength": 240},
-                    "concept": {"type": "string"},
-                    "style": {"type": "string"},
-                    "invariants": {
-                        "type": "array", "maxItems": 30,
-                        "items": {
-                            "type": "object", "additionalProperties": False,
-                            "required": ["kind", "title", "text"],
-                            "properties": {
-                                "kind": {"type": "string", "enum": ["character", "location", "visual", "world", "sound", "custom"]},
-                                "title": {"type": "string"}, "text": {"type": "string"},
-                            },
-                        },
-                    },
-                },
+                "type": "object",
+                "properties": {field: project_fields[field] for field in
+                               (dict.fromkeys(required_fields) if required_fields else project_fields)},
             }
         if operation == "studio_scene_field_draft":
             required_fields = data.get("requiredFields") or []
@@ -2380,27 +2377,11 @@ def director_chat_route():
                 },
             }
         if operation == "studio_project_draft":
-            # Project creation writes only Project fields. Scene creation has
-            # its own explicit Write, H3 reference and response contract.
+            # A Project may start from any useful authored field, not just Concept.
+            # The save path validates the actual fields that can be persisted.
             contract["response_schema"] = {
-                "type": "object", "additionalProperties": False,
-                "required": ["title", "concept", "style", "invariants"],
-                "properties": {
-                    "title": {"type": "string", "maxLength": 240},
-                    "concept": {"type": "string", "maxLength": 20000},
-                    "style": {"type": "string", "maxLength": 10000},
-                    "invariants": {
-                        "type": "array", "maxItems": 30,
-                        "items": {
-                            "type": "object", "additionalProperties": False,
-                            "required": ["kind", "title", "text"],
-                            "properties": {
-                                "kind": {"type": "string", "enum": ["character", "location", "visual", "world", "sound", "custom"]},
-                                "title": {"type": "string"}, "text": {"type": "string"},
-                            },
-                        },
-                    },
-                },
+                "type": "object",
+                "properties": project_fields,
             }
         if operation == "storyboard_workshop_shots":
             contract["response_schema"] = {

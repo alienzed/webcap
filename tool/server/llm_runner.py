@@ -832,8 +832,10 @@ def _execute_claimed(job_id, gpu_reserved):
                         "phase": "Revising Scenes", "sceneId": scene_id,
                     }
                 story = load_story(str(context.get("storyId") or ""))
+                pass_type = str(context.get("passType") or "standard")
+                scene_operation = "visual_direction" if pass_type == "visual_direction" else "refine_prompt"
                 scene_contract = build_request(
-                    story, scene_id, "refine_prompt", instruction=instruction,
+                    story, scene_id, scene_operation, instruction=instruction,
                     continuity_context=context.get("continuityContext") is True,
                 )
                 result = run_contract(model_id, scene_contract, gpu_reserved=bool(gpu_reserved), thinking=context.get("thinking") is True)
@@ -843,7 +845,7 @@ def _execute_claimed(job_id, gpu_reserved):
                             error="Revise Scenes stopped after " + str(completed) + " Scenes.")
                     _client_result("storyboard", {
                         "storyId": context["storyId"], "sceneId": scene_id,
-                        "operation": "refine_prompt", "sourceInstruction": instruction,
+                        "operation": scene_operation, "sourceInstruction": instruction,
                     }, result, job_id=job_id, frozen_contract=scene_contract)
                 completed += 1
                 with _revision_progress_lock:

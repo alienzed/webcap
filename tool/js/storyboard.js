@@ -6041,8 +6041,10 @@
   }
 
   function syncDirectorToolsRunLabel() {
-    var coherence = el('storyboard-director-tools-preset').value === 'coherence';
+    var preset = el('storyboard-director-tools-preset').value;
+    var coherence = preset === 'coherence';
     el('storyboard-director-tools-run').textContent = coherence ? 'Check Coherence' :
+      preset === 'visual_direction' ? 'Run Visual Direction' :
       el('storyboard-director-tools-generate-takes').checked ? 'Revise & Generate Takes' : 'Revise Scenes';
   }
 
@@ -6432,6 +6434,7 @@
       if (!input) return;
       if (this.value === 'continuity') input.value = DIRECTOR_PASS_PRESETS.continuity.instruction;
       if (this.value === 'coherence') input.value = DIRECTOR_PASS_PRESETS.coherence.instruction;
+      if (this.value === 'visual_direction') input.value = 'Improve visual specificity and renderability, resolving consequential omissions while preserving the intended creative direction.';
       if (this.value === 'visual_direction') input.value = 'Improve visual specificity and renderability, resolving consequential omissions while preserving the intended creative direction.';
       sceneRevisionHistory.reset(input);
       var coherence = this.value === 'coherence';

@@ -447,6 +447,49 @@ function openImageCropModal(mediaItem) {
   });
 }
 
+// Media Explorer edits the selected external source with the same cropper as Prep.
+// The server reuses Prep's originals backup and in-place crop implementation.
+function openExternalImageCropModal(mediaItem, externalSource, onSaved) {
+  if (!mediaItem || !mediaItem.fileName || !externalSource ||
+      !externalSource.path || !externalSource.file || !externalSource.mediaUrl) {
+    throw new Error('External image crop needs a selected file and source.');
+  }
+  if (!isCroppableImageFile(mediaItem.fileName)) {
+    throw new Error('Crop supports JPG, PNG, WebP and BMP images.');
+  }
+  setupCropModal(externalSource.mediaUrl + '&t=' + Date.now(), 1, function () {
+    getCropEl('crop-modal-title').textContent = 'Crop image: ' + mediaItem.fileName;
+  }, function () {
+    if (cropBusy || !cropperInstance) return;
+    var rendered;
+    try {
+      rendered = buildCroppedImageDataUrl();
+    } catch (error) {
+      setCropStatus(String(error.message || error), true);
+      window.reportConsoleError('Media Explorer image crop', error);
+      return;
+    }
+    setCropBusy(true);
+    setCropStatus('Saving crop...', false);
+    fetch('/fs/media_explorer/external/image-edit', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({path:externalSource.path,file:externalSource.file,
+        operation:'crop',imageDataUrl:rendered.dataUrl})
+    }).then(function (response) {
+      return response.json().then(function (body) {
+        if (!response.ok || !body.ok) throw new Error(body.error || 'Image crop failed.');
+        return body;
+      });
+    }).then(function (result) {
+      closeCropModal();
+      onSaved(result);
+    }).catch(function (error) {
+      setCropStatus(String(error.message || error), true);
+      window.reportConsoleError('Media Explorer image crop', error);
+    }).finally(function () { setCropBusy(false); });
+  }, {rotationEnabled:true, initialAngle:0});
+}
+
 // --- Video crop entry point ---
 function openVideoCropModal(dataUrl, aspect, initialCrop, onCrop) {
   setupCropModal(dataUrl, aspect, function() {

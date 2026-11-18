@@ -41,19 +41,26 @@ test('Cross-Project Read sources inform explicit Write but never redirect its de
   await openProject(page,b.id);
   await reopenDirectorIfClosed(page);
   const share=page.locator('#director-chat-context-approve');
-  await share.click();
+  if (!(await page.locator('#studio-dw-read-panel').isVisible())) await share.click();
   await page.locator('#studio-dw-read-project').selectOption(a.id);
+  if (!(await page.locator('#studio-dw-read-panel').isVisible())) await share.click();
+  await expect(page.locator('#studio-dw-read-panel')).toBeVisible();
   await page.locator('#studio-dw-read-send').click();
-  await share.click();
+  if (!(await page.locator('#studio-dw-read-panel').isVisible())) await share.click();
   await page.locator('#studio-dw-read-project').selectOption(b.id);
-  await page.locator('#studio-dw-read-selection summary').click();
+  if (await page.locator('#studio-dw-read-selection').getAttribute('open')===null)
+    await page.locator('#studio-dw-read-selection summary').click();
   await page.locator('#studio-dw-project-fields input[data-group-select]').first().uncheck();
   await page.locator('#studio-dw-scene-fields input[data-group-select]').first().check();
+  if (!(await page.locator('#studio-dw-read-panel').isVisible())) await share.click();
+  await expect(page.locator('#studio-dw-read-panel')).toBeVisible();
   await page.locator('#studio-dw-read-send').click();
-  await share.click();
+  if (!(await page.locator('#studio-dw-read-panel').isVisible())) await share.click();
   await page.locator('#studio-dw-read-project').selectOption(c.id);
   await page.locator('#studio-dw-project-fields input[data-group-select]').first().uncheck();
   await page.locator('#studio-dw-project-fields input[data-group-select]').last().check();
+  if (!(await page.locator('#studio-dw-read-panel').isVisible())) await share.click();
+  await expect(page.locator('#studio-dw-read-panel')).toBeVisible();
   await page.locator('#studio-dw-read-send').click();
 
   await queueModel(request,'We can use the pacing and character details as references.');

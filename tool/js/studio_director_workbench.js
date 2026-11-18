@@ -300,10 +300,17 @@
   }
   var advisorTurn = 0;
   var allowedAdvisorKinds = ['create_project','revise_project','create_scene','revise_scenes','read'];
+  function syncAdvisorVisibility() {
+    var panel = el('studio-action-advisor');
+    var hasStatus = !!el('studio-action-advisor-status').textContent;
+    var hasActions = !el('studio-action-advisor-actions').classList.contains('hidden');
+    panel.classList.toggle('hidden', !hasStatus && !hasActions);
+  }
   function advisorStatus(message) {
     var node = el('studio-action-advisor-status');
     node.textContent = message || '';
     node.classList.toggle('hidden',!message);
+    syncAdvisorVisibility();
   }
   function clearActionAdvice() {
     advisorTurn++;
@@ -474,7 +481,7 @@
         host.appendChild(row);
       });
       host.classList.toggle('hidden',!actions.length);
-      advisorStatus(actions.length ? '' : 'No suggested next action.');
+      advisorStatus(actions.length ? '' : '');
     }).catch(function (error) {
       if (!advisorCurrent(token,scope)) return;
       advisorStatus('Suggestions unavailable; Director and manual actions still work.');

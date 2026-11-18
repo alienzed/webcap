@@ -110,7 +110,9 @@ function fixture(hash = '#/media') {
     request.resolve({ok, status:ok ? 200 : 500, json:async () => ({ok, items, total:items.length, complete:true, error:ok ? undefined : 'owner discovery failed', ...extra})});
     await new Promise(resolve => setImmediate(resolve));
   };
-  const key = (target, key, extra = {}) => document.listeners.keydown({target, key, preventDefault() {}, ...extra});
+  const key = (target, key, extra = {}) => document.listeners.keydown({
+    target, key, preventDefault() {}, stopPropagation() {}, ...extra
+  });
   return {nodes, buttons, modeButtons, pending, errors, closed, menus, clipCalls, cropCalls, window, document, settle, key};
 }
 const media = (id, kind = 'image') => ({id, fileName:id + '.png', mediaKind:kind, mediaUrl:'/media/' + id, role:'generated', source:'generate', rating:null});
@@ -791,4 +793,48 @@ test('saved views restore tag, rating, source and sort in one action', async () 
   assert.equal(listing.searchParams.get('tag'),'keeper');
   assert.equal(listing.searchParams.get('rating'),'4');
   assert.equal(listing.searchParams.get('sort'),'rating');
+});
+
+
+test('changing a saved view clears its active label and disables deletion', async () => {
+  const f=fixture();
+  f.window.openMediaExplorerActivity();
+  await f.settle(f.pending[0],[]);
+  f.nodes['media-explorer-view-select'].emit('focus');
+  await f.settle(f.pending.at(-1),[],true,{views:[{
+    name:'Favorites',filters:{source:'generate',tag:'keeper',rating:'4',sort:'rating'}
+  }]});
+  f.nodes['media-explorer-view-select'].value='Favorites';
+  f.nodes['media-explorer-view-select'].emit('change');
+  assert.equal(f.nodes['media-explorer-view-select'].value,'Favorites');
+  assert.equal(f.nodes['media-explorer-delete-view'].disabled,false);
+  f.nodes['media-explorer-rating'].value='5';
+  f.nodes['media-explorer-rating'].emit('change');
+  assert.equal(f.nodes['media-explorer-view-select'].value,'');
+  assert.equal(f.nodes['media-explorer-delete-view'].disabled,true);
+});
+
+test('keyboard context-menu shortcut exposes selected card actions', async () => {
+  const f=fixture();
+  f.window.openMediaExplorerActivity();
+  await f.settle(f.pending[0],[media('keyboard')]);
+  const button=f.nodes['media-explorer-grid'].children[0].querySelector('.media-explorer-card-open');
+  f.key(button,'F10',{shiftKey:true});
+  assert.ok(f.menus.at(-1).some(action=>action.label==='Show details'));
+});
+
+test('bulk Remove from collection only appears for shared memberships', async () => {
+  const f=fixture();
+  f.window.openMediaExplorerActivity();
+  const first={...media('one'),storageId:'one',tags:['Collection · Keepers']};
+  const second={...media('two'),storageId:'two',tags:['Collection · Keepers']};
+  await f.settle(f.pending[0],[first,second]);
+  f.nodes['media-explorer-grid'].children[0].querySelector('.media-explorer-card-check').click({stopPropagation(){}});
+  f.nodes['media-explorer-grid'].children[1].querySelector('.media-explorer-card-check').click({stopPropagation(){}});
+  const toolbar=f.nodes['media-explorer-selection'];
+  const remove=toolbar.children.find(child=>child.textContent==='Remove from collection…');
+  assert.ok(remove);
+  assert.equal(remove.classList.contains('hidden'),false);
+  remove.click({stopPropagation(){}});
+  assert.ok(f.menus.at(-1).some(action=>action.label==='Keepers'));
 });

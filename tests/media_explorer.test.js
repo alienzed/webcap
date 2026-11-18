@@ -5,7 +5,7 @@ const vm = require('node:vm');
 
 // Minimal DOM fixture: exercise the actual classic script and its async requests.
 function fixture(hash = '#/media') {
-  const nodes = {}, pending = [], errors = [], closed = [], menus = [], clipCalls = [];
+  const nodes = {}, pending = [], errors = [], closed = [], menus = [], clipCalls = [], cropCalls = [];
   let document;
   class Element {
     constructor(tag = 'div') {
@@ -101,6 +101,7 @@ function fixture(hash = '#/media') {
     getComputedStyle: () => ({gridTemplateColumns:'240px 240px'}),
     showContextMenu: (x, y, actions) => menus.push(actions),
     openVideoClipModal: (...args) => clipCalls.push(args),
+    openExternalImageCropModal: (...args) => cropCalls.push(args),
     fetch: (url, options) => new Promise((resolve, reject) => pending.push({url, options, resolve, reject}))
   });
   const settle = async (request, items, ok = true, extra = {}) => {
@@ -108,7 +109,7 @@ function fixture(hash = '#/media') {
     await new Promise(resolve => setImmediate(resolve));
   };
   const key = (target, key, extra = {}) => document.listeners.keydown({target, key, preventDefault() {}, ...extra});
-  return {nodes, buttons, modeButtons, pending, errors, closed, menus, clipCalls, window, settle, key};
+  return {nodes, buttons, modeButtons, pending, errors, closed, menus, clipCalls, cropCalls, window, settle, key};
 }
 const media = (id, kind = 'image') => ({id, fileName:id + '.png', mediaKind:kind, mediaUrl:'/media/' + id, role:'generated', source:'generate', rating:null});
 
@@ -398,6 +399,50 @@ test('External browsing is folder-first, keeps media list in Grid and never auto
   assert.equal(new URL(folderRequest.url,'http://localhost').searchParams.get('directory'), 'child');
   await f.settle(folderRequest, [], true, {folders:[]});
   assert.equal(f.nodes['media-explorer-side-list'].children.length, 0);
+});
+
+test('External item actions expose Rename, Move and Edit consistently in Grid and List', async () => {
+  const f = fixture();
+  f.window.openMediaExplorerActivity();
+  await f.settle(f.pending[0], []);
+  f.buttons.find(button => button.dataset.mediaSource === 'external').click();
+  f.nodes['media-explorer-external-path'].value = '/tmp/external';
+  f.nodes['media-explorer-open-path'].click();
+  const image = {...media('image'),id:'external:image',source:'external',
+    role:'source',fileName:'image.jpg',relativePath:'image.jpg',mediaUrl:'/external/image.jpg'};
+  await f.settle(f.pending.at(-1), [image]);
+
+  for (const mode of ['grid','list']) {
+    f.modeButtons.find(button => button.dataset.explorerMode === mode).click();
+    const item = f.nodes['media-explorer-grid'].children[0];
+    item.querySelector('.media-explorer-item-menu').click({
+      preventDefault() {}, stopPropagation() {}
+    });
+    const actions = f.menus.at(-1);
+    assert.ok(actions.some(action => action.label === 'Rename…'), mode);
+    assert.ok(actions.some(action => action.label === 'Move to Folder…'), mode);
+    assert.ok(actions.some(action => action.label === 'Crop image…'), mode);
+    assert.ok(actions.some(action => action.label === 'Rotate left 90°'), mode);
+    actions.find(action => action.label === 'Crop image…').run();
+    assert.equal(f.cropCalls.at(-1)[1].file, 'image.jpg');
+  }
+
+  f.window.prompt = () => 'renamed.jpg';
+  const rename = f.menus.at(-1).find(action => action.label === 'Rename…');
+  rename.run();
+  const req = f.pending.at(-1);
+  assert.equal(req.url, '/fs/media_explorer/external/rename');
+  assert.deepEqual(JSON.parse(req.options.body), {
+    path:'/tmp/external',file:'image.jpg',newName:'renamed.jpg'
+  });
+  req.resolve({ok:true,json:async()=>({ok:true,newPath:'renamed.jpg'})});
+  await new Promise(resolve => setImmediate(resolve));
+  assert.match(f.pending.at(-1).url, /\/fs\/media_explorer\/external\?/);
+
+  const rotate = f.menus.at(-1).find(action => action.label === 'Rotate left 90°');
+  rotate.run();
+  assert.equal(f.pending.at(-1).url, '/fs/media_explorer/external/image-edit');
+  assert.equal(JSON.parse(f.pending.at(-1).options.body).operation, 'rotate_left_90');
 });
 
 test('External subfolder checkbox broadens scope only when selected', async () => {

@@ -9,7 +9,7 @@ test('Action Advisor is opt-in and cannot independently issue a Write',async({pa
   });
   await openDirector(page);
   await openProject(page,project.id);
-  await expect(page.locator('#studio-action-advisor-enabled')).not.toBeChecked();
+  await page.evaluate(()=>localStorage.setItem('webcap.studio.actionAdvisor.enabled','false'));
   await queueModel(request,'We could make the lighting warmer.');
   await say(page,'Discuss the lighting for this Project.');
   await expect(page.locator('#director-chat-messages')).toContainText('We could make the lighting warmer.');
@@ -25,7 +25,7 @@ test('Advisor prepares a field-scoped Project Write but only the normal Write bu
   });
   await openDirector(page);
   await openProject(page,project.id);
-  await page.locator('#studio-action-advisor-enabled').check();
+  await page.evaluate(()=>localStorage.setItem('webcap.studio.actionAdvisor.enabled','true'));
   await queueModel(request,'I recommend warmer lighting for the opening.');
   await queueModel(request,{actions:[{
     kind:'revise_project',label:'Revise the lighting',
@@ -64,7 +64,7 @@ test('Advisor prepares a field-scoped Project Write but only the normal Write bu
 test('A failed optional advisor does not interrupt Director chat or a subsequent manual Write',async({page,request})=>{
   await resetModel(request);
   await openDirector(page);
-  await page.locator('#studio-action-advisor-enabled').check();
+  await page.evaluate(()=>localStorage.setItem('webcap.studio.actionAdvisor.enabled','true'));
   await queueModel(request,'The lantern in the doorway would make a good opening image.');
   await queueModel(request,'not a JSON action response');
   await say(page,'Explore a lantern-lit opening.');
@@ -85,7 +85,7 @@ test('Advisor Read suggestion selects the existing Overview without reading unti
   });
   await openDirector(page);
   await openProject(page,project.id);
-  await page.locator('#studio-action-advisor-enabled').check();
+  await page.evaluate(()=>localStorage.setItem('webcap.studio.actionAdvisor.enabled','true'));
   await queueModel(request,'We should check the saved Project Overview next.');
   await queueModel(request,{actions:[{
     kind:'read',label:'Read saved Overview',
@@ -103,4 +103,17 @@ test('Advisor Read suggestion selects the existing Overview without reading unti
   await page.locator('#studio-dw-read-send').click();
   await expect(page.locator('#director-chat-messages')).toContainText('The compass points toward a red tower.');
   expect((await observedModels(request)).calls).toHaveLength(2);
+});
+
+
+test('Advisor setting is global and the model selector is absent',async({page,request})=>{
+  await resetModel(request);
+  await openDirector(page);
+  await expect(page.locator('#studio-action-advisor-model, #studio-action-advisor-enabled')).toHaveCount(0);
+  await page.locator('#shell-settings-btn').click();
+  await page.locator('#app-settings-tab-director').click();
+  await expect(page.locator('#app-settings-studio-action-advisor')).toBeChecked();
+  await page.locator('#app-settings-studio-action-advisor').uncheck();
+  await page.locator('#app-settings-save-btn').click();
+  await expect.poll(()=>page.evaluate(()=>localStorage.getItem('webcap.studio.actionAdvisor.enabled'))).toBe('false');
 });

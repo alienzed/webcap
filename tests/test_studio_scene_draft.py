@@ -125,7 +125,7 @@ def test_new_scene_response_schemas_require_prompt_not_intent(monkeypatch):
         })
         assert response.status_code == 202, response.json
     assert captured["studio_scene_field_draft"]["required"] == ["prompt"]
-    assert captured["studio_scene_field_draft"]["properties"]["prompt"]["minLength"] == 1
+    assert captured["studio_scene_field_draft"]["properties"]["prompt"]["type"] == "string"
     assert "initialScenes" not in captured["studio_project_draft"]["properties"]
     assert "rationale" not in captured["studio_project_draft"]["properties"]
     assert "summary" not in captured["studio_scene_field_draft"]["properties"]

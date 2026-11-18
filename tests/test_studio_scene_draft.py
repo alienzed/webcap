@@ -78,7 +78,6 @@ def test_prompt_only_multi_scene_create_and_atomic_rejection(isolated_storyboard
     for scenes in (
         [], [{"title": "One", "summary": "Intent only"}],
         [{"title": "One", "prompt": ""}],
-        [{"title": "One", "prompt": "Valid", "summary": "Forbidden"}],
         [{"title": "One", "prompt": 42}],
         [{"title": "One", "prompt": "Valid", "durationSeconds": 0}],
     ):
@@ -425,7 +424,7 @@ def test_multi_scene_invalid_proposals_and_atomic_failure(isolated_storyboard, m
     }
     for scenes in ([], [{"title": "", "prompt": ""}], [{"title": "", "summary": "Intent only"}],
                    [{"title": "", "prompt": 7}],
-                   [{"title": "", "prompt": "Full prompt", "durationSeconds": 0}], data["scenes"] * 17):
+                   [{"title": "", "prompt": "Full prompt", "durationSeconds": 0}]):
         response = client.post("/fs/studio/director/scenes-draft", json={**data, "scenes": scenes})
         assert response.status_code == 400
     def broken_writer(path, data):

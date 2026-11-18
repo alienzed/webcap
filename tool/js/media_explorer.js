@@ -1006,6 +1006,11 @@
       }
     }
     if (item.source === 'generate' && item.role === 'generated' && item.storageId) {
+      var copyGenerated = document.createElement('button');
+      copyGenerated.type='button';copyGenerated.className='review-captions-btn';
+      copyGenerated.textContent='Copy to Set';
+      copyGenerated.addEventListener('click',function () {chooseExport([item]);});
+      actions.appendChild(copyGenerated);
       var tagButton = document.createElement('button');
       tagButton.type = 'button';tagButton.className='review-captions-btn';
       tagButton.textContent='Edit tags…';

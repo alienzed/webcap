@@ -445,6 +445,21 @@ def _external_target_folder(root, relative):
     return target
 
 
+def create_external_folder(data):
+    """Create a folder beneath the explicitly opened external root."""
+    root = _root(data.get("path"))
+    parent = _external_target_folder(root, data.get("directory"))
+    name = str(data.get("name") or "").strip()
+    if (not name or name in {".", ".."} or "/" in name or "\\" in name
+            or Path(name).name != name):
+        raise ValueError("Enter a single folder name.")
+    target = parent / name
+    if target.exists() or target.is_symlink():
+        raise ValueError("A folder or file with that name already exists.")
+    target.mkdir()
+    return {"ok": True, "folder": target.relative_to(root).as_posix()}
+
+
 def move_external_files(data):
     """Move selected media and its adjacent authored/backup files together."""
     root, files = _external_sources(data)
@@ -646,6 +661,14 @@ def register_routes(app):
             return open_path_in_explorer_response(_source_file(root, data.get("file")))
         except Exception as exc:
             app.logger.exception("EXTERNAL MEDIA REVEAL FAILED")
+            return jsonify({"ok": False, "error": str(exc)}), 400
+
+    @app.post("/fs/media_explorer/external/create-folder")
+    def external_create_folder():
+        try:
+            return jsonify(create_external_folder(request.get_json(silent=True) or {}))
+        except Exception as exc:
+            app.logger.exception("EXTERNAL FOLDER CREATE FAILED")
             return jsonify({"ok": False, "error": str(exc)}), 400
 
     @app.post("/fs/media_explorer/external/move")

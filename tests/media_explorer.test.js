@@ -822,6 +822,6 @@ test('Copy to Set offers explicit Prep handoff only after backend-confirmed succ
   assert.equal(f.prepCalls.length,0,'copy does not unexpectedly navigate away');
   f.nodes['media-explorer-export-open-prep'].click();
   assert.equal(f.prepState.folder,'sets/new-set');
-  assert.deepEqual(f.prepState.dirStack.map(entry=>entry.name),['','sets','new-set']);
+  assert.deepEqual(Array.from(f.prepState.dirStack, entry=>entry.name),['','sets','new-set']);
   assert.deepEqual(f.prepCalls,['open','clear','filters','refresh']);
 });

@@ -476,24 +476,28 @@ def rename_external_file(data):
                 "newPath": source.relative_to(root).as_posix()}
     if target.exists() or target.is_symlink():
         raise ValueError("A file with that name already exists.")
-    # Preserve source-local analysis and technical metadata across a filename
-    # change; the metadata writer uses the same lock as Prep's metadata merges.
+    # Metadata is supplementary; a malformed cache must not block a normal
+    # filesystem rename. Report cache failures while preserving useful work.
     from .media import _media_metadata_lock, write_media_metadata_file
+    warning = ""
     with _media_metadata_lock:
-        cache = _read_cache(source.parent)
-        previous = cache.get(source.name)
-        source.rename(target)
         try:
-            if previous is not None:
-                if name in cache:
-                    raise ValueError("Destination metadata entry already exists.")
-                cache[name] = cache.pop(source.name)
+            cache = _read_cache(source.parent)
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            cache = None
+            warning = "Could not read media metadata: " + str(exc)
+        source.rename(target)
+        if cache is not None and source.name in cache:
+            cache[name] = cache.pop(source.name)
+            try:
                 write_media_metadata_file(source.parent / "media_metadata.json", cache)
-        except Exception:
-            target.rename(source)
-            raise
-    return {"ok": True, "oldPath": source.relative_to(root).as_posix(),
-            "newPath": target.relative_to(root).as_posix()}
+            except (OSError, ValueError) as exc:
+                warning = "File renamed, but media metadata could not be updated: " + str(exc)
+    result = {"ok": True, "oldPath": source.relative_to(root).as_posix(),
+              "newPath": target.relative_to(root).as_posix()}
+    if warning:
+        result["warning"] = warning
+    return result
 
 
 def edit_external_image(data):

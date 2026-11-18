@@ -104,6 +104,7 @@ def _item(path, role, storage_id, created_at, rating=0, model="", uses=None):
         "model": model,
         "uses": uses or [],
         "fileSize": candidate.stat().st_size,
+        "tags": [],
     }
 
 
@@ -119,6 +120,7 @@ def discover_generate(limit=500):
                        record.get("rating", 0), model)
         if output:
             output.update(_record_details(record))
+            output["tags"] = record.get("tags") if isinstance(record.get("tags"), list) else []
             output["contextLabel"] = storage_id
             items[output["id"]] = output
         references = record.get("references") or {}
@@ -379,7 +381,7 @@ def discover_storyboards():
 
 
 def list_media(limit=60, offset=0, role="", kind="", search="", sort="newest", full=False, source="",
-               model="", folder="", rating="", artifact="", owner="", date="", storyboard_type="",
+               model="", folder="", rating="", tag="", artifact="", owner="", date="", storyboard_type="",
                min_side="", min_mp="", min_duration="", max_duration="", direction="desc"):
     limit = max(1, min(int(limit), 120))
     offset = max(0, int(offset))
@@ -398,6 +400,7 @@ def list_media(limit=60, offset=0, role="", kind="", search="", sort="newest", f
     facets = {
         "models": sorted({item["model"] for item in results if item["model"]}),
         "folders": sorted({item.get("ownerFolder", "") for item in results if item.get("ownerFolder")}),
+        "tags": sorted({tag for item in results for tag in (item.get("tags") or [])}),
     }
     results.sort(key=lambda item: (item['createdAt'], item['id']), reverse=True)
     if source == "storyboard" and storyboard_type:
@@ -413,11 +416,15 @@ def list_media(limit=60, offset=0, role="", kind="", search="", sort="newest", f
     if search:
         query = search.casefold()
         results = [item for item in results if query in " ".join(str(item.get(key) or "") for key in
-                   ("fileName", "model", "prompt", "sourcePrompt", "contextLabel", "ownerFolder")).casefold()]
+                   ("fileName", "model", "prompt", "sourcePrompt", "contextLabel", "ownerFolder", "tags")).casefold()]
     if model:
         results = [item for item in results if item["model"] == model]
     if folder:
         results = [item for item in results if item.get("ownerFolder") == folder]
+    if tag:
+        exact = str(tag).strip().casefold()
+        results = [item for item in results
+                   if exact in {value.casefold() for value in (item.get("tags") or [])}]
     if rating:
         if rating == "unrated":
             results = [item for item in results if not item.get("rating")]

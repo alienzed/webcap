@@ -241,6 +241,7 @@ def test_director_chat_route_preserves_all_structured_schemas(monkeypatch, opera
                 assert "maxLength" not in captured["schema"]["properties"][field]
             invariant_schema = captured["schema"]["properties"]["invariants"]
             assert "maxItems" not in invariant_schema
+            assert invariant_schema["items"]["required"] == ["kind", "title", "text"]
             assert invariant_schema["items"]["properties"]["kind"]["enum"] == [
                 "character", "location", "visual", "world", "sound", "custom"
             ]

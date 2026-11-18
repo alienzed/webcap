@@ -1898,7 +1898,12 @@
     if (Object.prototype.hasOwnProperty.call(authored,'invariants')) {
       if (!Array.isArray(authored.invariants)) skipped.push('Invariants (not a list)');
       else {
-        values.invariants = authored.invariants.filter(function (item,index) {
+        values.invariants = authored.invariants.map(function (item) {
+          if (!item || typeof item !== 'object' || Array.isArray(item)) return item;
+          return Object.assign({},item,{
+            kind:item.kind || 'custom',title:item.title == null ? '' : item.title
+          });
+        }).filter(function (item,index) {
           var valid = item && typeof item === 'object' && !Array.isArray(item) &&
             ['character','location','visual','world','sound','custom'].includes(item.kind) &&
             typeof item.title === 'string' &&

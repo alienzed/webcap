@@ -2317,6 +2317,7 @@ def director_chat_route():
                 "type": "array",
                 "items": {
                     "type": "object",
+                    "required": ["kind", "title", "text"],
                     "properties": {
                         "kind": {"type": "string", "enum": ["character", "location", "visual", "world", "sound", "custom"]},
                         "title": {"type": "string"},

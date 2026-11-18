@@ -25,6 +25,11 @@ test('partial Create accepts complete usable fields, does not invent missing val
   assert.equal(usable({style:'Useful atmosphere'}).values.style,'Useful atmosphere');
   assert.deepEqual(usable({invariants:[{kind:'sound',title:'',text:'A low hum'}]}).values.invariants,
     [{kind:'sound',title:'',text:'A low hum'}], 'Project creation preserves unnamed useful material');
+  const textOnly={text:'The bird has a copper beak.'};
+  assert.deepEqual(usable({invariants:[textOnly]}),{
+    values:{invariants:[{kind:'custom',title:'',text:textOnly.text}]},skipped:[]
+  },'Project creation uses the store defaults for missing Invariant metadata');
+  assert.deepEqual(textOnly,{text:'The bird has a copper beak.'});
   assert.deepEqual(delta([], [{kind:'sound',title:'',text:'A low hum'}]).operations,[],
     'Individual Revise cannot target an unnamed Invariant without inventing an identity');
 });

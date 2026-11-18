@@ -174,3 +174,39 @@ The live assertions target **actual returned data, selected destination, editabl
 **New run evidence:** `tests/browser/test.cjs` now captures the actual browser → WebCap `/fs/director/chat` messages and WebCap → browser job results, including raw terminal model text, to `live-studio-exchanges` for **every local live test**, including failures. The outgoing provider payload uses the production backend schema; inspect `test-results/studio-backend.log` for backend diagnostics. These recorded bytes are needed to distinguish a true model omission from WebCap mishandling on the next run.
 
 **Still unverified:** A fresh local real-model Flow 2 and Flow 6 run is required to establish whether this simpler schema yields usable actual Scene drafts, whether both independent review surfaces reopen, and whether changes persist. No live result is marked complete. Flow 6 also previously exposed a separate browser regression (`An independent Scene review is still open`) when opening another reply despite closing the dialog; that behavior remains under test, not silently worked around or changed in Studio UI. The application was not modified to mine prose, invent missing Scene records, force extra inference calls, or silently save.
+
+## Local traced run — 2026-11-17
+
+Ran `npx playwright test --config=playwright.live.config.cjs --trace=on` against
+the configured `remote-1::mo-shakib/gemma4-e4b-uncensored:q4_k_m` Director in the
+disposable browser-test backend: **19 passed, 4 failed, 1 skipped** (13.2 minutes).
+This is actual model/browser execution, not evidence about training-machine runs.
+
+Two failures were harness defects: the required-prompt test expected a retired
+schema `minLength`, and the creative-partnership test compared unescaped reply
+text against JSON-escaped messages. The assertions now check the required string
+field and the exact assistant message, retaining actual-output and persistence checks.
+
+Both Project-creation failures exposed discarded useful Invariants. Captured
+model responses contained Invariant text but omitted kind and sometimes title;
+the frontend rejected these although the store supports `custom` and an empty
+title. Project material now uses those existing metadata defaults. The model
+schema requests kind, title and text for each returned Invariant. Invalid records
+remain reported independently, and named revision targeting is unchanged.
+
+All **four affected live cases passed** in a fresh isolated run (3.1 minutes),
+using `--grep 'full nonoptional prompt|LIVE creative partnership|LIVE Project pivot|real Project Write'`
+and `--output=test-results/studio-live-verified-artifacts`. The other 19 cases
+were not rerun after these fixes. The focused deterministic Project browser
+suite also passed **3/3**, including exact persistence of a text-only Invariant;
+focused JavaScript checks passed **40/40** and Python checks **56/56**.
+
+Initial traces remain in `test-results/studio-live-artifacts/`, the initial HTML
+report in `test-results/studio-live-initial-html/`, and the verified HTML report
+in `test-results/studio-live-html/`. Backend logs are preserved as
+`test-results/studio-backend-initial.log` and `test-results/studio-backend-verified.log`.
+Recorded live traces contained no browser console errors or page errors.
+
+The provider did not report a token/context cutoff, so that conditional boundary
+was **skipped, not verified**. These runs do not establish a broad creative-quality
+or first-attempt usability rate. No automatic model repair or retry was added.

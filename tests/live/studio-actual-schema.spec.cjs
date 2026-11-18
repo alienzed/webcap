@@ -57,7 +57,7 @@ test('LIVE contract — explicitly requested Scene revision must return a full n
   expect(schema,'The real Director job did not expose its operation-specific schema').toBeTruthy();
   expect(schema.required,'WebCap sent prompt as optional on an explicitly requested Scene rewrite')
     .toContain('prompt');
-  expect(schema.properties.prompt.minLength).toBe(1);
+  expect(schema.properties.prompt.type).toBe('string');
   let terminal;
   await expect.poll(async()=>{
     const poll=await page.request.get('/fs/director/job?job='+encodeURIComponent(initial.jobId));
@@ -115,7 +115,8 @@ test('LIVE creative partnership — chat recommends staging, explicit Write auth
   expect(observed.requests).toHaveLength(2);
   expect(writeRequest.operation).toBe('studio_scenes_draft');
   expect(JSON.stringify(writeRequest.messages)).toContain(discussion);
-  expect(JSON.stringify(writeRequest.messages)).toContain(discussionReceipt.raw);
+  expect(writeRequest.messages.some(message=>message.role==='assistant' &&
+    message.content===discussionReceipt.raw)).toBe(true);
   expect(JSON.stringify(writeRequest.messages)).toContain('H3 PROMPT AUTHORING REFERENCE');
   const parsed=decoded(writeReceipt,'Scene Write');
   expect(Array.isArray(parsed.scenes)).toBe(true);

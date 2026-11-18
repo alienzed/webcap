@@ -59,7 +59,8 @@ test('Flow 1 partial Create — Concept can be empty when useful Style and Invar
   const prior=(await stories(page)).map(item=>item.id);
   await openDirector(page);
   await queueModel(request,{concept:'',style:'A storm of blue light.',invariants:[
-    {kind:'sound',title:'',text:'Low distant thunder'}
+    {kind:'sound',title:'',text:'Low distant thunder'},
+    {text:'The bird has a copper beak.'}
   ]});
   await runWrite(page,{operation:'new-project',instruction:'Create the atmosphere-first Project.'});
   await expect.poll(async()=>{
@@ -70,7 +71,10 @@ test('Flow 1 partial Create — Concept can be empty when useful Style and Invar
   const saved=await story(page,created.id);
   expect(saved.concept).toBe('');
   expect(saved.style).toBe('A storm of blue light.');
-  expect(saved.invariants).toEqual([{kind:'sound',title:'',text:'Low distant thunder'}]);
+  expect(saved.invariants).toEqual([
+    {kind:'sound',title:'',text:'Low distant thunder'},
+    {kind:'custom',title:'',text:'The bird has a copper beak.'}
+  ]);
   expect(saved.sceneOrder).toHaveLength(0);
   expect((await observedModels(request)).calls).toHaveLength(1);
   await expect(page.locator('#studio-project-review')).not.toBeVisible();

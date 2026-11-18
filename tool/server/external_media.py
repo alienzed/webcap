@@ -501,6 +501,28 @@ def rename_external_folder(data):
     return {"ok": True, "folder": target.relative_to(root).as_posix()}
 
 
+def move_external_folder(data):
+    """Move an external folder atomically while keeping its contents together."""
+    root = _root(data.get("path"))
+    relative = str(data.get("folder") or "").strip().replace("\\", "/")
+    if not relative or Path(relative).is_absolute() or ".." in Path(relative).parts:
+        raise ValueError("Select a folder beneath the external root.")
+    raw_source = root / relative
+    if raw_source.is_symlink():
+        raise ValueError("Cannot move a linked folder.")
+    source = raw_source.resolve()
+    if not source.is_relative_to(root) or source == root or not source.is_dir():
+        raise ValueError("Folder does not exist inside the external root.")
+    destination = _external_target_folder(root, data.get("destination"))
+    if destination == source or destination.is_relative_to(source):
+        raise ValueError("Cannot move a folder inside itself.")
+    target = destination / source.name
+    if target.exists() or target.is_symlink():
+        raise ValueError("Destination already contains a file or folder with that name.")
+    source.rename(target)
+    return {"ok": True, "folder": target.relative_to(root).as_posix()}
+
+
 def move_external_files(data):
     """Move selected media and its adjacent authored/backup files together."""
     root, files = _external_sources(data)
@@ -746,6 +768,14 @@ def register_routes(app):
             return open_path_in_explorer_response(_source_file(root, data.get("file")))
         except Exception as exc:
             app.logger.exception("EXTERNAL MEDIA REVEAL FAILED")
+            return jsonify({"ok": False, "error": str(exc)}), 400
+
+    @app.post("/fs/media_explorer/external/move-folder")
+    def external_move_folder():
+        try:
+            return jsonify(move_external_folder(request.get_json(silent=True) or {}))
+        except Exception as exc:
+            app.logger.exception("EXTERNAL FOLDER MOVE FAILED")
             return jsonify({"ok": False, "error": str(exc)}), 400
 
     @app.post("/fs/media_explorer/external/rename-folder")

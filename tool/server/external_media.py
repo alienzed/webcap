@@ -476,6 +476,18 @@ def rename_external_file(data):
                 "newPath": source.relative_to(root).as_posix()}
     if target.exists() or target.is_symlink():
         raise ValueError("A file with that name already exists.")
+    # Keep paired captions and Prep's reversible originals in step with the
+    # media name, rather than orphaning them after an image edit.
+    originals = source.parent / "originals"
+    companions = [
+        (source.with_suffix(".txt"), target.with_suffix(".txt")),
+        (originals / source.name, originals / name),
+        (originals / (source.stem + ".txt"), originals / (target.stem + ".txt")),
+    ]
+    companions = [(old, new) for old, new in companions if old != new and old.exists()]
+    for old, new in companions:
+        if old.is_symlink() or new.exists() or new.is_symlink():
+            raise ValueError("A companion caption or original backup already occupies the new name.")
     # Metadata is supplementary; a malformed cache must not block a normal
     # filesystem rename. Report cache failures while preserving useful work.
     from .media import _media_metadata_lock, write_media_metadata_file
@@ -486,7 +498,15 @@ def rename_external_file(data):
         except (OSError, ValueError, json.JSONDecodeError) as exc:
             cache = None
             warning = "Could not read media metadata: " + str(exc)
-        source.rename(target)
+        renamed = []
+        try:
+            for old, new in [(source, target)] + companions:
+                old.rename(new)
+                renamed.append((old, new))
+        except Exception:
+            for old, new in reversed(renamed):
+                new.rename(old)
+            raise
         if cache is not None and source.name in cache:
             cache[name] = cache.pop(source.name)
             try:

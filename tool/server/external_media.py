@@ -75,6 +75,26 @@ def save_media_view(data):
         return sorted(views, key=lambda entry: entry["name"].casefold())
 
 
+def rename_media_view(data):
+    """Rename the saved view without changing any source-media tags or filters."""
+    old = str(data.get("name") or "").strip()
+    next_name = str(data.get("newName") or "").strip()
+    if not old or not next_name or len(next_name) > 80:
+        raise ValueError("Provide existing and new saved-view names.")
+    with _LOCK:
+        views = list_saved_views()
+        match = next((entry for entry in views if entry["name"].casefold() == old.casefold()), None)
+        if match is None:
+            raise ValueError("Saved view does not exist.")
+        if any(entry is not match and entry["name"].casefold() == next_name.casefold()
+               for entry in views):
+            raise ValueError("A saved view already uses that name.")
+        match["name"] = next_name
+        _write_views(views)
+        return sorted(views, key=lambda entry: entry["name"].casefold())
+
+
+
 def delete_media_view(name):
     key = str(name or "").strip().casefold()
     if not key:
@@ -947,6 +967,13 @@ def register_routes(app):
     def media_save_view():
         try:
             return jsonify({"ok": True, "views": save_media_view(request.get_json(silent=True) or {})})
+        except (ValueError, OSError) as exc:
+            return jsonify({"ok": False, "error": str(exc)}), 400
+
+    @app.post("/fs/media_explorer/views/rename")
+    def media_rename_view():
+        try:
+            return jsonify({"ok": True, "views": rename_media_view(request.get_json(silent=True) or {})})
         except (ValueError, OSError) as exc:
             return jsonify({"ok": False, "error": str(exc)}), 400
 

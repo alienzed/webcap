@@ -646,6 +646,9 @@ def curate_external_file(data):
         previous = cache.get(source.name)
         entry = dict(previous) if isinstance(previous, dict) else {}
         stat = source.stat()
+        if entry.get("size") != stat.st_size or entry.get("mtime") != int(stat.st_mtime):
+            for key in ("resolution", "duration"):
+                entry.pop(key, None)
         entry["size"] = stat.st_size
         entry["mtime"] = int(stat.st_mtime)
         if rating is not None:

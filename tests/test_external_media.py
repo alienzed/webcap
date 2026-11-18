@@ -481,3 +481,28 @@ def test_recent_external_folders_do_not_save_invalid_paths(tmp_path, monkeypatch
     else:
         raise AssertionError("Missing directory must fail without saving it")
     assert external_media._recent_paths() == []
+
+
+def test_create_folder_inside_external_root(tmp_path):
+    root = tmp_path / "library"
+    (root / "existing").mkdir(parents=True)
+    result = external_media.create_external_folder({
+        "path": str(root), "directory": "existing", "name": "Curated"})
+    assert result == {"ok": True, "folder": "existing/Curated"}
+    assert (root / "existing" / "Curated").is_dir()
+
+
+def test_create_folder_rejects_escape_collisions_and_missing_parent(tmp_path):
+    import pytest
+    root = tmp_path / "library"
+    root.mkdir()
+    (root / "taken").mkdir()
+    for directory, name in [
+        ("", "../outside"), ("", "/absolute"), ("", "taken"),
+        ("missing", "new"), ("../", "outside"), ("", "."),
+        ("", "nested/child"), ("", "nested\\\\child"),
+    ]:
+        with pytest.raises(ValueError):
+            external_media.create_external_folder({
+                "path": str(root), "directory": directory, "name": name})
+    assert not (tmp_path / "outside").exists()

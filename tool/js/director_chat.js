@@ -4582,6 +4582,9 @@
           requestedFields)
           .then(function (raw) {
             state.lastStudioIoRaw = raw;
+            state.studioWriteIo.push({operation:'studio_scene_field_draft',projectId:storyId,
+              at:new Date().toISOString(),rawResponse:raw});
+            scheduleSessionSave();
             var proposed;
             try {proposed = JSON.parse(raw);}
             catch (error) {throw new Error('Director returned invalid Scene JSON.\nRaw response:\n' + raw);}
@@ -4589,13 +4592,13 @@
               throw new Error('Director returned no usable Scene fields.\nRaw response:\n' + raw);
             var extras = {}, missing = [];
             if (wantsTitle) {
-              if (typeof proposed.title === 'string' && proposed.title.trim())
+              if (typeof proposed.title === 'string')
                 extras.title = proposed.title.trim();
               else missing.push('title');
             }
             if (wantsDuration) {
-              if (Number.isInteger(proposed.durationSeconds) &&
-                  proposed.durationSeconds >= 4 && proposed.durationSeconds <= 15)
+              if (typeof proposed.durationSeconds === 'number' &&
+                  Number.isFinite(proposed.durationSeconds) && proposed.durationSeconds > 0)
                 extras.durationSeconds = proposed.durationSeconds;
               else missing.push('durationSeconds');
             }

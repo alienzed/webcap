@@ -133,7 +133,15 @@
     el('media-explorer-grid').setAttribute('aria-busy', 'false');
     el('media-explorer-more-btn').disabled = false;
   }
-  function refreshExternalFiles() {
+  function refreshExternalFiles(editedItem) {
+    // Only rebuild the changed thumbnail. Stable cards keep their playback,
+    // selection and DOM identity through the authoritative listing refresh.
+    if (editedItem) {
+      var card = Array.from(el('media-explorer-grid').children).find(function (node) {
+        return node.dataset.id === editedItem.id;
+      });
+      if (card) card.remove();
+    }
     selected.clear(); selectItem(-1);
     mediaFacts.clear(); externalRevision = -1;
     load(true, {refreshFilesystem:true});
@@ -152,12 +160,12 @@
     if (!window.confirm(label + ' ' + item.fileName + '?\\nThe original will be retained for restoration.')) return;
     externalAction('image-edit', {
       path:externalPath,file:item.relativePath,operation:operation
-    }, refreshExternalFiles);
+    }, function () { refreshExternalFiles(item); });
   }
   function cropExternalImage(item) {
     openExternalImageCropModal(item, {
       path:externalPath,file:item.relativePath,mediaUrl:item.mediaUrl
-    }, refreshExternalFiles);
+    }, function () { refreshExternalFiles(item); });
   }
   function externalMutation(item, action) {
     var chosen = externalChoices(item);

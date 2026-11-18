@@ -506,3 +506,38 @@ def test_create_folder_rejects_escape_collisions_and_missing_parent(tmp_path):
             external_media.create_external_folder({
                 "path": str(root), "directory": directory, "name": name})
     assert not (tmp_path / "outside").exists()
+
+
+def test_external_curation_persists_and_filters_after_move_and_rename(tmp_path):
+    root = tmp_path / "library"
+    source = _file(root / "incoming" / "frame.png")
+    (root / "selected").mkdir()
+    saved = external_media.curate_external_file({
+        "path": str(root), "file": "incoming/frame.png",
+        "rating": 4, "tags": ["portrait", "favorite"]})
+    assert saved == {"ok": True, "rating": 4, "tags": ["portrait", "favorite"]}
+    snapshot = _finished_snapshot(root)
+    result = external_media._query_items(snapshot, {
+        "recursive": "1", "tag": "portrait", "rating": "4"})
+    assert [item["relativePath"] for item in result] == ["incoming/frame.png"]
+    assert len(external_media._query_items(snapshot, {
+        "recursive": "1", "search": "favorite"})) == 1
+    external_media.move_external_files({
+        "path": str(root), "files": ["incoming/frame.png"], "destination": "selected"})
+    external_media.rename_external_file({
+        "path": str(root), "file": "selected/frame.png", "newName": "frame2.png"})
+    cache = json.loads((root / "selected" / "media_metadata.json").read_text())
+    assert cache["frame2.png"]["rating"] == 4
+    assert cache["frame2.png"]["tags"] == ["portrait", "favorite"]
+    assert source.exists() is False
+
+
+def test_external_curation_rejects_invalid_rating_and_tags(tmp_path):
+    import pytest
+    root = tmp_path / "library"
+    _file(root / "frame.png")
+    for payload in [{"rating": 6}, {"rating": True}, {"tags": [""]},
+                    {"tags": ["x" * 65]}, {"tags": "portrait"}]:
+        with pytest.raises(ValueError):
+            external_media.curate_external_file({
+                "path": str(root), "file": "frame.png", **payload})

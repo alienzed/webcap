@@ -481,3 +481,153 @@ def test_recent_external_folders_do_not_save_invalid_paths(tmp_path, monkeypatch
     else:
         raise AssertionError("Missing directory must fail without saving it")
     assert external_media._recent_paths() == []
+
+
+def test_create_folder_inside_external_root(tmp_path):
+    root = tmp_path / "library"
+    (root / "existing").mkdir(parents=True)
+    result = external_media.create_external_folder({
+        "path": str(root), "directory": "existing", "name": "Curated"})
+    assert result == {"ok": True, "folder": "existing/Curated"}
+    assert (root / "existing" / "Curated").is_dir()
+
+
+def test_create_folder_rejects_escape_collisions_and_missing_parent(tmp_path):
+    import pytest
+    root = tmp_path / "library"
+    root.mkdir()
+    (root / "taken").mkdir()
+    for directory, name in [
+        ("", "../outside"), ("", "/absolute"), ("", "taken"),
+        ("missing", "new"), ("../", "outside"), ("", "."),
+        ("", "nested/child"), ("", "nested\\\\child"),
+    ]:
+        with pytest.raises(ValueError):
+            external_media.create_external_folder({
+                "path": str(root), "directory": directory, "name": name})
+    assert not (tmp_path / "outside").exists()
+
+
+def test_external_curation_persists_and_filters_after_move_and_rename(tmp_path):
+    root = tmp_path / "library"
+    source = _file(root / "incoming" / "frame.png")
+    (root / "selected").mkdir()
+    saved = external_media.curate_external_file({
+        "path": str(root), "file": "incoming/frame.png",
+        "rating": 4, "tags": ["portrait", "favorite"]})
+    assert saved == {"ok": True, "rating": 4, "tags": ["portrait", "favorite"]}
+    snapshot = _finished_snapshot(root)
+    result = external_media._query_items(snapshot, {
+        "recursive": "1", "tag": "portrait", "rating": "4"})
+    assert [item["relativePath"] for item in result] == ["incoming/frame.png"]
+    assert len(external_media._query_items(snapshot, {
+        "recursive": "1", "search": "favorite"})) == 1
+    external_media.move_external_files({
+        "path": str(root), "files": ["incoming/frame.png"], "destination": "selected"})
+    external_media.rename_external_file({
+        "path": str(root), "file": "selected/frame.png", "newName": "frame2.png"})
+    cache = json.loads((root / "selected" / "media_metadata.json").read_text())
+    assert cache["frame2.png"]["rating"] == 4
+    assert cache["frame2.png"]["tags"] == ["portrait", "favorite"]
+    assert source.exists() is False
+
+
+def test_external_curation_rejects_invalid_rating_and_tags(tmp_path):
+    import pytest
+    root = tmp_path / "library"
+    _file(root / "frame.png")
+    for payload in [{"rating": 6}, {"rating": True}, {"tags": [""]},
+                    {"tags": ["x" * 65]}, {"tags": "portrait"}]:
+        with pytest.raises(ValueError):
+            external_media.curate_external_file({
+                "path": str(root), "file": "frame.png", **payload})
+
+
+def test_folder_rename_retains_media_and_authored_metadata(tmp_path):
+    root = tmp_path / "library"
+    _file(root / "portraits" / "face.png")
+    external_media.curate_external_file({
+        "path": str(root), "file": "portraits/face.png",
+        "rating": 5, "tags": ["keeper"]})
+    response = external_media.rename_external_folder({
+        "path": str(root), "folder": "portraits", "name": "favorites"})
+    assert response == {"ok": True, "folder": "favorites"}
+    assert (root / "favorites" / "face.png").exists()
+    cache = json.loads((root / "favorites" / "media_metadata.json").read_text())
+    assert cache["face.png"]["tags"] == ["keeper"]
+    assert cache["face.png"]["rating"] == 5
+
+
+def test_folder_rename_rejects_escape_collision_and_symlinks(tmp_path):
+    import pytest
+    root = tmp_path / "library"
+    (root / "first").mkdir(parents=True)
+    (root / "taken").mkdir()
+    for folder, name in [
+        ("", "new"), ("../library", "new"), ("first", "../escape"),
+        ("first", "taken"), ("first", "/absolute")
+    ]:
+        with pytest.raises(ValueError):
+            external_media.rename_external_folder({
+                "path": str(root), "folder": folder, "name": name})
+    (root / "linked").symlink_to(root / "first", target_is_directory=True)
+    with pytest.raises(ValueError):
+        external_media.rename_external_folder({
+            "path": str(root), "folder": "linked", "name": "other"})
+
+
+def test_move_folder_keeps_companions_and_rejects_recursive_target(tmp_path):
+    import pytest
+    root = tmp_path / "library"
+    _file(root / "source" / "clip.mp4")
+    _file(root / "source" / "originals" / "clip.mp4")
+    (root / "destination").mkdir(parents=True)
+    external_media.curate_external_file({
+        "path": str(root), "file": "source/clip.mp4",
+        "tags": ["training"], "rating": 3})
+    with pytest.raises(ValueError):
+        external_media.move_external_folder({
+            "path": str(root), "folder": "source", "destination": "source/originals"})
+    response = external_media.move_external_folder({
+        "path": str(root), "folder": "source", "destination": "destination"})
+    assert response["folder"] == "destination/source"
+    assert (root / "destination" / "source" / "clip.mp4").exists()
+    assert (root / "destination" / "source" / "originals" / "clip.mp4").exists()
+    metadata = json.loads((root / "destination" / "source" / "media_metadata.json").read_text())
+    assert metadata["clip.mp4"]["tags"] == ["training"]
+    with pytest.raises(ValueError):
+        external_media.move_external_folder({
+            "path": str(root), "folder": "destination/source", "destination": "destination"})
+
+
+def test_named_saved_views_persist_without_mutating_media(tmp_path, monkeypatch):
+    monkeypatch.setattr(external_media.app_config, "app_state_root",
+                        lambda: tmp_path / "state")
+    first = external_media.save_media_view({
+        "name": "Best clips",
+        "filters": {"source": "external", "tag": "keeper", "rating": "4",
+                    "search": "clip", "recursive": True}})
+    assert [item["name"] for item in first] == ["Best clips"]
+    assert external_media.list_saved_views()[0]["filters"]["rating"] == "4"
+    external_media.save_media_view({
+        "name": "best clips", "filters": {"source": "generate", "rating": "5"}})
+    assert len(external_media.list_saved_views()) == 1
+    assert external_media.list_saved_views()[0]["filters"]["source"] == "generate"
+    assert external_media.delete_media_view("BEST CLIPS") == []
+    assert external_media.list_saved_views() == []
+
+
+def test_named_saved_views_validate_names_filters_and_delete(tmp_path, monkeypatch):
+    import pytest
+    monkeypatch.setattr(external_media.app_config, "app_state_root",
+                        lambda: tmp_path / "state")
+    for payload in [
+        {"name": "", "filters": {}},
+        {"name": "bad", "filters": {"unexpected": "value"}},
+        {"name": "bad", "filters": {"search": 42}},
+        {"name": "bad", "filters": {"tag": "a" * 1025}},
+    ]:
+        with pytest.raises(ValueError):
+            external_media.save_media_view(payload)
+    with pytest.raises(ValueError):
+        external_media.delete_media_view("unknown")

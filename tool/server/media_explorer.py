@@ -104,6 +104,7 @@ def _item(path, role, storage_id, created_at, rating=0, model="", uses=None):
         "model": model,
         "uses": uses or [],
         "fileSize": candidate.stat().st_size,
+        "tags": [],
     }
 
 
@@ -119,6 +120,7 @@ def discover_generate(limit=500):
                        record.get("rating", 0), model)
         if output:
             output.update(_record_details(record))
+            output["tags"] = record.get("tags") if isinstance(record.get("tags"), list) else []
             output["contextLabel"] = storage_id
             items[output["id"]] = output
         references = record.get("references") or {}
@@ -234,6 +236,9 @@ def discover_tests(full=False):
                 continue
             seen_sessions.add(session.resolve())
             ratings = _session_rating_map(session)
+            session_state = read_folder_state(session / ".webcap_state.json")
+            all_tags = session_state.get("curation_tags_by_media") or {}
+            all_tags = all_tags if isinstance(all_tags, dict) else {}
             assessments = _session_vision_state(session).get("byMedia") or {}
             for record in status.get("results") or []:
                 if not isinstance(record, dict):
@@ -255,7 +260,8 @@ def discover_tests(full=False):
                     "mediaKind": _kind(file), "fileName": name,
                     "mediaPath": relative, "mediaUrl": url,
                     "createdAt": int(status.get("startedAt") or 0),
-                    "rating": ratings.get(name), "model": str(status.get("modelId") or ""),
+                    "rating": ratings.get(name), "tags": all_tags.get(name, []),
+                    "model": str(status.get("modelId") or ""),
                     "contextLabel": str(status.get("name") or session.name),
                     "fileSize": file.stat().st_size,
                     "assessment": _assessment(assessments.get(name)),
@@ -268,6 +274,7 @@ def discover_tests(full=False):
 def discover_epoch_frames():
     """Read retained campaign frames only, via Epoch Finder's owner contract."""
     from .epoch_finder import storage_campaigns, frame_path
+    from .folder_state_store import read_folder_state
     frames = []
     for campaign in storage_campaigns():
         folder = str(campaign["folder"])
@@ -275,6 +282,9 @@ def discover_epoch_frames():
         manifest = Path(campaign["path"]) / "campaign.json"
         payload = json.loads(manifest.read_text(encoding="utf-8"))
         owner = app_config.safe_join_fs_root(folder)
+        campaign_state = read_folder_state(Path(campaign["path"]) / ".webcap_state.json")
+        tag_map = campaign_state.get("curation_tags_by_media") or {}
+        tag_map = tag_map if isinstance(tag_map, dict) else {}
         for unit in payload.get("units") or []:
             if not isinstance(unit, dict):
                 continue
@@ -296,7 +306,8 @@ def discover_epoch_frames():
                             + "&campaign=" + quote(campaign_id, safe="")
                             + "&frame=" + quote(name, safe=""),
                 "createdAt": int(payload.get("createdAt") or 0),
-                "rating": None, "model": str(payload.get("modelId") or ""),
+                "rating": None, "tags": tag_map.get(name, []),
+                "model": str(payload.get("modelId") or ""),
                 "contextLabel": str(payload.get("name") or campaign_id),
                 "epoch": unit.get("epoch"), "fileSize": file.stat().st_size,
                 "assessment": _assessment(unit.get("assessment")),
@@ -310,10 +321,15 @@ def discover_storyboards():
     """Story-owned takes and references, served only by Storyboard's media route."""
     from .storyboard_store import list_stories, load_story, resolve_story_media
     from .storyboard_assembly import current_export
+    from .folder_state_store import read_folder_state
+    from .storyboard_store import _story_dir
     found = {}
     for summary in list_stories():
         story_id = str(summary.get("id") or "")
         story = load_story(story_id)
+        state = read_folder_state(_story_dir(story_id) / ".webcap_state.json")
+        tag_map = state.get("curation_tags_by_media") or {}
+        tag_map = tag_map if isinstance(tag_map, dict) else {}
         exported = current_export(story_id)
         if exported:
             path = exported["mediaPath"]
@@ -326,7 +342,7 @@ def discover_storyboards():
                 "mediaUrl": "/fs/storyboard/media?story=" + quote(story_id, safe="")
                             + "&path=" + quote(path, safe=""),
                 "createdAt": int(datetime.fromisoformat(exported["createdAt"].replace("Z", "+00:00")).timestamp() * 1000) if exported.get("createdAt") else 0,
-                "rating": None, "model": "",
+                "rating": None, "tags": tag_map.get(path, []), "model": "",
                 "contextLabel": str(story.get("title") or story_id) + " / Sequence export",
                 "roles": ["export"],
                 "fileSize": file.stat().st_size,
@@ -366,7 +382,8 @@ def discover_storyboards():
                     "mediaUrl": "/fs/storyboard/media?story=" + quote(story_id, safe="")
                                 + "&path=" + quote(path, safe=""),
                     "createdAt": int(datetime.fromisoformat(entry["createdAt"]).timestamp() * 1000) if entry.get("createdAt") else 0,
-                    "rating": None, "model": str(entry.get("modelId") or ""),
+                    "rating": None, "tags": tag_map.get(path, []),
+                    "model": str(entry.get("modelId") or ""),
                     "contextLabel": str(story.get("title") or story_id) + " / " + str(scene.get("title") or scene_id),
                     "roles": [role], "fileSize": file.stat().st_size,
                     "uses": [use],
@@ -378,8 +395,37 @@ def discover_storyboards():
 
 
 
+def tag_owned_media(data):
+    """Curate Campaign/Storyboard media using their existing owner resolver."""
+    from .folder_state_store import set_media_curation_tags
+    source = str(data.get("source") or "")
+    if source == "epoch":
+        from .epoch_finder import frame_path, storage_campaign_path
+        owner = app_config.safe_join_fs_root(data.get("folder"))
+        campaign = data.get("storageId")
+        name = str(data.get("mediaFile") or "")
+        frame_path(owner, campaign, name)
+        folder = storage_campaign_path(data.get("folder"), campaign)
+        state_key = name
+    elif source == "storyboard":
+        from .storyboard_store import resolve_story_media, _story_dir, load_story
+        story_id = data.get("storageId")
+        media_path = data.get("mediaPath")
+        load_story(story_id)
+        resolve_story_media(story_id, media_path)
+        folder = _story_dir(story_id)
+        state_key = str(media_path)
+    else:
+        raise ValueError("Unsupported producer for media curation.")
+    normalized = set_media_curation_tags(folder / ".webcap_state.json",
+                                         state_key, data.get("tags"))
+    return {"source": source, "storageId": data.get("storageId"),
+            "mediaKey": state_key, "tags": normalized}
+
+
+
 def list_media(limit=60, offset=0, role="", kind="", search="", sort="newest", full=False, source="",
-               model="", folder="", rating="", artifact="", owner="", date="", storyboard_type="",
+               model="", folder="", rating="", tag="", artifact="", owner="", date="", storyboard_type="",
                min_side="", min_mp="", min_duration="", max_duration="", direction="desc"):
     limit = max(1, min(int(limit), 120))
     offset = max(0, int(offset))
@@ -398,6 +444,7 @@ def list_media(limit=60, offset=0, role="", kind="", search="", sort="newest", f
     facets = {
         "models": sorted({item["model"] for item in results if item["model"]}),
         "folders": sorted({item.get("ownerFolder", "") for item in results if item.get("ownerFolder")}),
+        "tags": sorted({tag for item in results for tag in (item.get("tags") or [])}),
     }
     results.sort(key=lambda item: (item['createdAt'], item['id']), reverse=True)
     if source == "storyboard" and storyboard_type:
@@ -413,11 +460,15 @@ def list_media(limit=60, offset=0, role="", kind="", search="", sort="newest", f
     if search:
         query = search.casefold()
         results = [item for item in results if query in " ".join(str(item.get(key) or "") for key in
-                   ("fileName", "model", "prompt", "sourcePrompt", "contextLabel", "ownerFolder")).casefold()]
+                   ("fileName", "model", "prompt", "sourcePrompt", "contextLabel", "ownerFolder", "tags")).casefold()]
     if model:
         results = [item for item in results if item["model"] == model]
     if folder:
         results = [item for item in results if item.get("ownerFolder") == folder]
+    if tag:
+        exact = str(tag).strip().casefold()
+        results = [item for item in results
+                   if exact in {value.casefold() for value in (item.get("tags") or [])}]
     if rating:
         if rating == "unrated":
             results = [item for item in results if not item.get("rating")]

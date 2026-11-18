@@ -9,7 +9,7 @@
     if (!chosen.length) return;
     var dialog = el('media-explorer-export-dialog');
     text(el('media-explorer-export-heading'), 'Copy to Set');
-    text(el('media-explorer-export-count'), chosen.length + ' source file' + (chosen.length === 1 ? '' : 's'));
+    text(el('media-explorer-export-count'), chosen.length + ' media file' + (chosen.length === 1 ? '' : 's'));
     el('media-explorer-export-submit').textContent = 'Copy to Set';
     el('media-explorer-export-status').textContent = '';
     el('media-explorer-export-new-set').value = '';
@@ -35,6 +35,134 @@
         el('media-explorer-export-status').textContent = err.message; report(err);
       });
   }
+  // Native drag state is scoped to this workspace; no filesystem writes occur until drop.
+  var draggedExternalIds = [];
+  function setupMediaDrag(host, item) {
+    if (item.source !== 'external') return;
+    host.draggable = true;
+    host.addEventListener('dragstart', function (event) {
+      var chosen = selected.has(item.id) ? chosenExternalFiles() : [item];
+      draggedExternalIds = chosen.map(function (entry) {return entry.id;});
+      event.dataTransfer.effectAllowed = 'move';
+      event.dataTransfer.setData('text/plain', chosen.map(function (entry) {return entry.relativePath;}).join('\\n'));
+    });
+    host.addEventListener('dragend', function () {draggedExternalIds = [];});
+  }
+  function chosenExternalFiles() {
+    return items.filter(function (item) { return item.source === 'external' && selected.has(item.id); });
+  }
+  function moveExternalTo(destination, chosen) {
+    if (!chosen.length) return;
+    var names = chosen.map(function (item) { return item.relativePath; });
+    if (!window.confirm('Move ' + names.length + ' file(s) to /' + destination + '?')) return;
+    externalAction('move', {path: externalPath, files: names, destination: destination}, function (result) {
+      refreshExternalFiles();
+      if (result.warning) report(new Error(result.warning));
+    });
+  }
+  function allowFolderDrop(button, destination) {
+    button.classList.add('media-explorer-folder-drop');
+    button.addEventListener('dragover', function (event) {
+      if (!draggedExternalIds.length) return;
+      event.preventDefault(); event.dataTransfer.dropEffect = 'move';
+      button.classList.add('drag-over');
+    });
+    button.addEventListener('dragleave', function () { button.classList.remove('drag-over'); });
+    button.addEventListener('drop', function (event) {
+      button.classList.remove('drag-over');
+      if (!draggedExternalIds.length) return;
+      event.preventDefault(); event.stopPropagation();
+      var ids = new Set(draggedExternalIds);
+      var chosen = items.filter(function (item) { return item.source === 'external' && ids.has(item.id); });
+      draggedExternalIds = [];
+      moveExternalTo(typeof destination === 'function' ? destination() : destination, chosen);
+    });
+  }
+  function promptMediaAction(title, initial, confirmText, onSubmit, options) {
+    options = options || {};
+    var dialog = document.createElement('dialog');
+    dialog.className = 'media-explorer-action-dialog';
+    var form = document.createElement('form'); form.method = 'dialog';
+    var heading = document.createElement('h3'); heading.textContent = title;
+    var input = document.createElement('input'); input.type = 'text';
+    input.value = initial || ''; input.setAttribute('aria-label',title);
+    input.required = !options.allowEmpty;
+    var status = document.createElement('p'); status.setAttribute('role','status');
+    var buttons = document.createElement('div'); buttons.className = 'media-explorer-action-buttons';
+    var cancel = document.createElement('button'); cancel.type = 'button'; cancel.textContent = 'Cancel';
+    var submit = document.createElement('button'); submit.type = 'submit'; submit.textContent = confirmText;
+    buttons.appendChild(cancel); buttons.appendChild(submit);
+    form.appendChild(heading); form.appendChild(input);
+    var folderHost = null;
+    if (options.folders) {
+      folderHost = document.createElement('div'); folderHost.className = 'media-explorer-dialog-folders';
+      form.appendChild(folderHost);
+      var sequence = 0;
+      function renderChoices() {
+        var path = input.value.trim();
+        var call = ++sequence;
+        fetch('/fs/media_explorer/external?'+new URLSearchParams({
+          path:externalPath,directory:path,recursive:'0',limit:'1',offset:'0'
+        })).then(function (res) {return res.json().then(function (data) {
+          if (!res.ok || !data.ok) throw Error(data.error || 'Cannot browse destination');
+          if (call !== sequence) return;
+          folderHost.replaceChildren();
+          var up = document.createElement('button'); up.type='button';
+          up.textContent = '↑ Parent'; up.disabled = !path;
+          up.addEventListener('click',function () {
+            input.value=path.split('/').slice(0,-1).join('/');renderChoices();
+          });folderHost.appendChild(up);
+          var create = document.createElement('button');create.type='button';
+          create.textContent = '+ New folder here';
+          create.addEventListener('click',function () {
+            promptMediaAction('Create folder in /'+path,'','Create folder',function (name) {
+              return externalActionStrict('create-folder',{path:externalPath,directory:path,name:name})
+                .then(function () {renderChoices();});
+            });
+          });folderHost.appendChild(create);
+          (data.folders || []).forEach(function (name) {
+            var next=document.createElement('button');next.type='button';
+            next.textContent='📁 '+name;
+            next.addEventListener('click',function () {input.value=[path,name].filter(Boolean).join('/');renderChoices();});
+            folderHost.appendChild(next);
+          });
+          status.textContent = '';
+        });}).catch(function (err) {if(call===sequence)status.textContent=err.message;});
+      }
+      input.addEventListener('change',renderChoices);
+      renderChoices();
+    }
+    form.appendChild(status);form.appendChild(buttons);dialog.appendChild(form);
+    document.body.appendChild(dialog);
+    cancel.addEventListener('click',function () {dialog.close();});
+    dialog.addEventListener('close',function () {dialog.remove();});
+    form.addEventListener('submit',function (event) {
+      event.preventDefault();
+      var value=input.value.trim();
+      if (!value && !options.allowEmpty) return;
+      submit.disabled = true;
+      Promise.resolve(onSubmit(value)).then(function (result) {
+        if (result === false) {submit.disabled=false;return;}
+        dialog.close();
+      }).catch(function (err) {status.textContent=err.message;submit.disabled=false;report(err);});
+    });
+    dialog.showModal();input.focus();input.select();
+  }
+  function externalActionStrict(endpoint, data) {
+    return fetch('/fs/media_explorer/external/'+endpoint,{
+      method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)
+    }).then(function (res) {return res.json().then(function (body) {
+      if(!res.ok || !body.ok)throw Error(body.error || endpoint+' failed');
+      return body;
+    });});
+  }
+  function createExternalFolder() {
+    if (!isExternal() || !externalPath) return;
+    promptMediaAction('Create folder in /'+externalDirectory, '', 'Create folder', function (name) {
+      return externalActionStrict('create-folder', {path:externalPath,directory:externalDirectory,name:name})
+        .then(function () {load(true,{refreshFilesystem:true});});
+    });
+  }
   var needsLoad = true;
   var externalDirectory = '', externalFolders = [], reverseSort = false, galleryHome = null;
   function setExternalDirectory(path) {
@@ -51,8 +179,48 @@
     externalFolders.forEach(function (name) {
       var button = document.createElement('button');
       button.type = 'button'; button.textContent = '📁 ' + name;
-      button.onclick = function () { setExternalDirectory([externalDirectory, name].filter(Boolean).join('/')); };
-      host.appendChild(button);
+      var destination = [externalDirectory, name].filter(Boolean).join('/');
+      button.onclick = function () { setExternalDirectory(destination); };
+      button.addEventListener('contextmenu',function (event) {
+        event.preventDefault();event.stopPropagation();
+        showContextMenu(event.clientX,event.clientY,[
+          {label:'Open folder',run:function () {setExternalDirectory(destination);}},
+          {label:'Rename folder…',run:function () {
+            promptMediaAction('Rename folder',name,'Rename',function (nextName) {
+              return externalActionStrict('rename-folder',{path:externalPath,folder:destination,name:nextName})
+                .then(function () {load(true,{refreshFilesystem:true});});
+            });
+          }},
+          {label:'Move folder…',run:function () {
+            promptMediaAction('Move folder '+name,externalDirectory,'Move folder',function (path) {
+              return externalActionStrict('move-folder',{path:externalPath,folder:destination,destination:path})
+                .then(function () {load(true,{refreshFilesystem:true});});
+            },{allowEmpty:true,folders:true});
+          }},
+          {label:'New subfolder…',run:function () {
+            promptMediaAction('Create folder in /'+destination,'','Create folder',function (nextName) {
+              return externalActionStrict('create-folder',{path:externalPath,directory:destination,name:nextName})
+                .then(function () {load(true,{refreshFilesystem:true});});
+            });
+          }}
+        ]);
+      });
+      var row = document.createElement('div');
+      row.className = 'media-explorer-folder-row';
+      var more = document.createElement('button'); more.type = 'button';
+      more.textContent = '⋯'; more.className = 'media-explorer-folder-menu';
+      more.title = 'Folder actions for ' + name;
+      more.setAttribute('aria-label', 'Folder actions for '+name);
+      more.addEventListener('click',function (event) {
+        event.preventDefault();event.stopPropagation();
+        button.dispatchEvent(new MouseEvent('contextmenu',{
+          bubbles:true,cancelable:true,clientX:more.getBoundingClientRect().left,
+          clientY:more.getBoundingClientRect().bottom
+        }));
+      });
+      allowFolderDrop(row, destination);
+      row.appendChild(button);row.appendChild(more);
+      host.appendChild(row);
     });
   }
   function renderMainPreview() {
@@ -148,13 +316,10 @@
     load(true, {refreshFilesystem:true});
   }
   function renameExternalFile(item) {
-    var name = window.prompt('Rename file', item.fileName);
-    if (name === null || !name.trim() || name.trim() === item.fileName) return;
-    externalAction('rename', {
-      path:externalPath,file:item.relativePath,newName:name.trim()
-    }, function (result) {
-      refreshExternalFiles();
-      if (result.warning) report(new Error(result.warning));
+    promptMediaAction('Rename file',item.fileName,'Rename',function (name) {
+      if(name===item.fileName)return;
+      return externalActionStrict('rename',{path:externalPath,file:item.relativePath,newName:name})
+        .then(function (result) {refreshExternalFiles();if(result.warning)report(new Error(result.warning));});
     });
   }
   function transformExternalImage(item, operation, label) {
@@ -173,9 +338,10 @@
     var names = chosen.map(function (candidate) { return candidate.relativePath; });
     var destination = '';
     if (action === 'move') {
-      destination = window.prompt('Move ' + chosen.length + ' file(s) to which folder inside the external root?\\nUse a relative folder path (empty for root).', externalDirectory);
-      if (destination === null) return;
-      if (!window.confirm('Move ' + chosen.length + ' file(s) to ' + (destination || '/') + '?')) return;
+      promptMediaAction('Move '+chosen.length+' file(s) to folder',externalDirectory,'Move files',function (path) {
+        return externalActionStrict('move',{path:externalPath,files:names,destination:path})
+          .then(function (result) {refreshExternalFiles();if(result.warning)report(new Error(result.warning));});
+      },{allowEmpty:true,folders:true});return;
     } else if (!window.confirm('Move ' + chosen.length + ' file(s) to the operating system Trash?')) return;
     externalAction(action, {path: externalPath, files:names, destination:destination}, function (result) {
       if (action === 'trash') {
@@ -232,36 +398,244 @@
       }
     });
   }
+  function curateExternal(item, change) {
+    return externalAction('curate', Object.assign({path:externalPath,file:item.relativePath},change),
+      function (result) {
+        item.rating = result.rating; item.tags = result.tags;
+        if (active >= 0 && items[active] && items[active].id === item.id)
+          selectItem(-1), selectItem(items.findIndex(function (entry) {return entry.id === item.id;}));
+        load(true, {soft:true});
+      });
+  }
+  function editMediaTags(item) {
+    promptMediaAction('Edit tags (comma-separated)',(item.tags || []).join(', '),'Save tags',function (value) {
+      var tags=value.split(',').map(function (tag) {return tag.trim();}).filter(Boolean);
+      return saveCurationFor(item,{tags:tags}).then(function (result) {
+        item.tags=result.tags;
+        if(item.source==='external')item.rating=result.rating;
+        load(true,{soft:true});
+      });
+    },{allowEmpty:true});
+  }
+  function rateExplorerItem(item, value) {
+    if (item.source === 'external') return curateExternal(item,{rating:value});
+    var url, payload;
+    if (item.source === 'generate' && item.role === 'generated' && item.storageId) {
+      url = '/fs/generate/result/rating';
+      payload = {storageId:item.storageId, rating:value};
+    } else if (item.source === 'test' && item.ownerFolder && item.storageId) {
+      url = '/fs/test_generations';
+      payload = {folder:item.ownerFolder, operation:'test_rate_result',
+        criteria:{session:item.storageId, mediaFile:item.fileName, rating:value}};
+    } else return;
+    fetch(url, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})
+      .then(function (res) { return res.json().then(function (body) {
+        if (!res.ok || body.ok === false) throw Error(body.error || 'Rating failed');
+        return body;
+      }); }).then(function (result) {
+        item.rating = result.rating;
+        if (active >= 0 && items[active] && items[active].id === item.id) selectItem(active);
+        if (el('media-explorer-rating').value || el('media-explorer-sort').value === 'rating') load(true);
+        else {
+          var card = Array.from(el('media-explorer-grid').children).find(function (node) {return node.dataset.id === item.id;});
+          if (card) text(card.querySelector('.media-explorer-card-sub'),cardSummary(item));
+        }
+      }).catch(report);
+  }
+  function provenanceLinks(item) {
+    var links = [], seen = new Set();
+    (item.uses || []).forEach(function (use) {
+      var label = (use.label || use.storageId || use.role || 'Source');
+      var key = [use.source,use.storageId,use.takeId || ''].join(':');
+      if (seen.has(key)) return;
+      seen.add(key);
+      var run = null;
+      if (use.source === 'storyboard' && item.storageId && use.storageId) {
+        run = function () {window.openStoryboardActivity({
+          storyId:item.storageId,sceneId:use.storageId,takeId:use.takeId || ''
+        });};
+      } else if (use.source === 'generate' && use.storageId) {
+        run = function () {window.openGenerateActivity({storageId:use.storageId});};
+      } else if (use.source === 'test' && item.ownerFolder && use.storageId) {
+        run = function () {window.openTestBenchActivity({
+          folder:item.ownerFolder,sessionId:use.storageId,modelId:item.model || ''
+        });};
+      } else if (use.source === 'epoch' && item.ownerFolder && use.storageId) {
+        run = function () {window.openTestBenchActivity({
+          folder:item.ownerFolder,campaignId:use.storageId,modelId:item.model || ''
+        });};
+      }
+      if (run) links.push({label:label+' · '+(use.role || use.source),run:run});
+    });
+    return links;
+  }
+  function addToCollection(chosen) {
+    if(!chosen.length)return;
+    promptMediaAction('Add '+chosen.length+' media item(s) to collection','','Add to collection',
+      function (name) {
+        if(name.length>(isExternal()?32:48) || name.includes(','))
+          throw Error('Use a shorter collection name without commas.');
+        var tag='Collection · '+name;
+        return Promise.allSettled(chosen.map(function (item) {
+          return saveCurationFor(item,{
+            tags:Array.from(new Set((item.tags || []).concat([tag])))
+          });
+        })).then(function (results) {
+          var successes=results.filter(function (result) {return result.status==='fulfilled';}).length;
+          var failed=results.length-successes;
+          if(!successes)throw Error('Could not add any media: '+results[0].reason.message);
+          var filters=currentViewFilters();
+          filters.source=isExternal()?'external':'';
+          filters.role='';filters.tag=tag;filters.search='';filters.rating='';
+          filters.kind='';filters.model='';filters.folder='';filters.date='';
+          filters.sort='newest';filters.direction='desc';
+          filters.full=!isExternal();filters.storyboardType='';
+          ['min-side','min-mp','min-duration','max-duration'].forEach(function (id) {filters[id]='';});
+          var viewName='Collection: '+name+(isExternal()?' · '+externalPath.slice(-24):'');
+          return fetch('/fs/media_explorer/views',{
+            method:'POST',headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({name:viewName,filters:filters})
+          }).then(function (res) {return res.json().then(function (body) {
+            if(!res.ok || !body.ok)throw Error(body.error || 'Could not save collection view');
+            showSavedViews(body.views,viewName);
+            applySavedView({filters:filters});
+            if(failed)throw Error('Added '+successes+' of '+results.length+
+              ' items; '+failed+' failed: '+results.find(function (result) {
+                return result.status==='rejected';
+              }).reason.message);
+          });});
+        });
+      });
+  }
   function itemActions(item) {
-    var actions = [{label:'View full size', run:function () { openLoupe(items.findIndex(function (x) { return x.id === item.id; })); }}];
-    if (item.source === 'external') {
-      actions.push({label:'Open in Explorer', run:function () {
-        externalAction('reveal', {path:externalPath, file:item.relativePath});
+    var current = function () { return items.findIndex(function (candidate) {return candidate.id===item.id;}); };
+    var actions = [
+      {label:'View full size',run:function () {openLoupe(current());}},
+      {label:'Show details',run:function () {selectItem(current());}}
+    ];
+    if (item.source === 'generate' && item.storageId) {
+      actions.push({label:'Open in Generate',run:function () {
+        window.openGenerateActivity({storageId:item.storageId});
       }});
-      actions.push({label:'Copy to Set', run:function () { chooseExport(externalChoices(item)); }});
-      if (item.mediaKind === 'video') actions.push({label:'Edit video (Clip to Set)…', run:function () { openExternalClipEditor(item); }});
-      if (['.png','.jpg','.jpeg','.webp','.bmp'].some(function (ext) { return item.fileName.toLowerCase().endsWith(ext); })) {
-        actions.push({separator:true});
-        actions.push({label:'Crop image…', run:function () { cropExternalImage(item); }});
+    } else if (item.source === 'test' && item.ownerFolder && item.storageId) {
+      actions.push({label:'Open Test session',run:function () {
+        window.openTestBenchActivity({folder:item.ownerFolder,sessionId:item.storageId,
+          modelId:item.model || ''});
+      }});
+    } else if (item.source === 'epoch' && item.ownerFolder && item.storageId) {
+      actions.push({label:'Open Campaign',run:function () {
+        window.openTestBenchActivity({folder:item.ownerFolder,campaignId:item.storageId,
+          modelId:item.model || ''});
+      }});
+    } else if (item.source === 'storyboard' && item.storageId &&
+               (item.uses || []).length === 1) {
+      actions.push({label:'Manage in Storyboard',run:function () {
+        var use=item.uses[0];
+        window.openStoryboardActivity({storyId:item.storageId,sceneId:use.storageId,
+          takeId:use.takeId || ''});
+      }});
+    } else if (item.source === 'external') {
+      actions.push({label:'Show in file browser',run:function () {
+        externalAction('reveal',{path:externalPath,file:item.relativePath});
+      }});
+    }
+    var provenanceActions = provenanceLinks(item);
+    if (provenanceActions.length) {
+      actions.push({label:'Used by · '+provenanceActions.length,children:provenanceActions});
+    }
+    actions.push({separator:true});
+    if (item.source === 'external') {
+      actions.push({label:'Copy to Set…',run:function () {chooseExport(externalChoices(item));}});
+      actions.push({label:'Edit tags…',run:function () {editMediaTags(item);}});
+      actions.push({label:'Rename…',run:function () {renameExternalFile(item);}});
+      actions.push({label:'Move to folder…',run:function () {externalMutation(item,'move');}});
+      var edit = [];
+      if (item.mediaKind === 'video') {
+        edit.push({label:'Clip video to Set…',run:function () {openExternalClipEditor(item);}});
+      }
+      if (['.png','.jpg','.jpeg','.webp','.bmp'].some(function (ext) {
+        return item.fileName.toLowerCase().endsWith(ext);
+      })) {
+        edit.push({label:'Crop image…',run:function () {cropExternalImage(item);}});
         [
           ['Rotate left 90°','rotate_left_90'],
           ['Rotate right 90°','rotate_right_90'],
           ['Flip horizontal','flip_horizontal'],
           ['Flip vertical','flip_vertical']
         ].forEach(function (transform) {
-          actions.push({label:transform[0],group:'Edit Media',run:function () {
+          edit.push({label:transform[0],run:function () {
             transformExternalImage(item,transform[1],transform[0]);
           }});
         });
       }
-      actions.push({separator:true});
-      actions.push({label:'Rename…', run:function () { renameExternalFile(item); }});
-      actions.push({label:'Move to Folder…', run:function () { externalMutation(item, 'move'); }});
-      actions.push({label:'Move to Trash', run:function () { externalMutation(item, 'trash'); }});
+      if (edit.length) actions.push({label:'Edit media',children:edit});
     }
-    if (item.source === 'generate' && item.role === 'generated' && item.storageId) {
+    if (item.source === 'generate' && item.role === 'generated') {
+      actions.push({label:'Copy to Set…',run:function () {chooseExport(
+        selected.has(item.id) ? items.filter(function (entry) {
+          return selected.has(entry.id) && entry.source==='generate' &&
+            entry.role==='generated';
+        }) : [item]);}});
+      actions.push({label:'Edit tags…',run:function () {editMediaTags(item);}});
+    } else if (item.source==='test' && item.ownerFolder && item.storageId) {
+      actions.push({label:'Copy to Set…',run:function () {chooseExport(
+        selected.has(item.id) ? items.filter(function (entry) {
+          return selected.has(entry.id) && entry.source==='test' && entry.ownerFolder &&
+            entry.storageId;
+        }) : [item]);}});
+      actions.push({label:'Edit tags…',run:function () {editMediaTags(item);}});
+    } else if (item.source==='epoch' || item.source==='storyboard') {
+      actions.push({label:'Copy to Set…',run:function () {chooseExport(
+        selected.has(item.id) ? items.filter(function (entry) {
+          return selected.has(entry.id) &&
+            (entry.source==='epoch' || entry.source==='storyboard');
+        }) : [item]);}});
+      actions.push({label:'Edit tags…',run:function () {editMediaTags(item);}});
+    }
+    if (item.source==='external' ||
+        (item.source==='generate' && item.role==='generated' && item.storageId) ||
+        (item.source==='test' && item.ownerFolder && item.storageId) ||
+        (item.source==='epoch' && item.ownerFolder && item.storageId) ||
+        (item.source==='storyboard' && item.storageId)) {
+      actions.push({label:'Add to collection…',run:function () {
+        addToCollection(selected.has(item.id) && selectedCuratable().length ?
+          selectedCuratable() : [item]);
+      }});
+      var memberships=(item.tags || []).filter(function (tag) {
+        return tag.startsWith('Collection · ');
+      });
+      if(memberships.length) actions.push({label:'Remove from collection',children:
+        memberships.map(function (tag) {
+          return {label:tag.slice('Collection · '.length),run:function () {
+            saveCurationFor(item,{tags:(item.tags || []).filter(function (value) {
+              return value!==tag;
+            })}).then(function () {load(true,{soft:true});}).catch(report);
+          }};
+        })
+      });
+    }
+    if (item.mediaUrl) {
+      actions.push({label:'Download original',run:function () {
+        var link=document.createElement('a');link.href=item.mediaUrl;
+        link.download=item.fileName || 'media';link.click();
+      }});
+    }
+    if (item.source === 'external' ||
+        (item.source === 'generate' && item.role === 'generated' && item.storageId) ||
+        (item.source === 'test' && item.ownerFolder && item.storageId)) {
+      var ratings=[];
+      for(var value=0;value<=5;value++)(function (rating) {
+        ratings.push({label:rating?'★'.repeat(rating)+' ('+rating+'/5)':'Clear rating',
+          run:function () {rateExplorerItem(item,rating);}});
+      })(value);
+      actions.push({label:'Rate'+(item.rating?' · '+item.rating+'/5':''),children:ratings});
+    }
+    if (item.source === 'external') {
       actions.push({separator:true});
-      actions.push({label:'Move to Trash', run:function () { trashGenerations(item); }});
+      actions.push({label:'Move to Trash',run:function () {externalMutation(item,'trash');}});
+    } else if (item.source === 'generate' && item.role === 'generated' && item.storageId) {
+      actions.push({separator:true});
+      actions.push({label:'Move to Trash',run:function () {trashGenerations(item);}});
     }
     return actions;
   }
@@ -302,6 +676,7 @@
           if (next >= 0) { selectItem(next); openLoupe(); }
         });
         row.appendChild(check); row.appendChild(button); addItemMenu(row, item);
+        setupMediaDrag(row, item);
       }
       row.dataset.mediaKind = item.mediaKind;
       row.querySelector('button').textContent = item.fileName;
@@ -405,19 +780,20 @@
     if (external) el('media-explorer-scope').classList.add('hidden');
     el('media-explorer-model').classList.toggle('hidden', external);
     el('media-explorer-folder').classList.toggle('hidden', external);
-    el('media-explorer-rating').classList.toggle('hidden', external);
+    el('media-explorer-rating').classList.toggle('hidden', false);
+    el('media-explorer-tag').classList.toggle('hidden', false);
     el('media-explorer-date').classList.toggle('hidden', false);
     el('media-explorer-size').disabled = explorerMode !== 'grid';
     el('media-explorer-workspace').querySelector('.media-explorer-size-label').classList.toggle('hidden', explorerMode !== 'grid');
     el('media-explorer-workspace').querySelector('.media-explorer-fit-controls').classList.toggle('hidden', explorerMode !== 'grid');
     el('media-explorer-metadata-progress').classList.toggle('hidden', !external || !(externalOverview || externalJobSummary));
     el('media-explorer-stop-metadata').classList.toggle('hidden', !external || !externalJobRunning);
-    el('media-explorer-search').placeholder = external ? 'Search filenames and relative paths…' : 'Search generated media, prompts, models…';
+    el('media-explorer-search').placeholder = external ? 'Search files, paths and tags…' : 'Search generated media, prompts, models…';
     ['path', 'type', 'size', 'resolution', 'megapixels', 'duration'].forEach(function (value) {
       var option = el('media-explorer-sort').querySelector('option[value="' + value + '"]');
       option.hidden = false;
     });
-    el('media-explorer-sort').querySelector('option[value="rating"]').hidden = external;
+    el('media-explorer-sort').querySelector('option[value="rating"]').hidden = false;
     el('media-explorer-sort-reverse').classList.remove('hidden');
   }
   function setExplorerMode(next) {
@@ -531,6 +907,14 @@
     var dt = document.createElement('dt'), dd = document.createElement('dd');
     text(dt, label); text(dd, value); dl.appendChild(dt); dl.appendChild(dd);
   }
+  function externalCardSummary(item) {
+    var meta = item.metadata || {};
+    var summary = (meta.resolution || 'Metadata unknown') +
+      (meta.duration != null ? ' · ' + duration(meta.duration) : '');
+    if (item.rating) summary += ' · ★ ' + item.rating;
+    if (item.tags && item.tags.length) summary += ' · ' + item.tags.join(', ');
+    return summary;
+  }
   function cardSummary(item) {
     return ((item.source === 'generate' && item.role !== 'reference' ? item.model : item.contextLabel) || item.model || sourceNames[item.source]) +
       (item.rating ? ' · ★ ' + item.rating : '');
@@ -563,6 +947,19 @@
     detail('File size', bytes(item.fileSize), dl);
     detail('Seed', item.seed, dl); detail('Epoch', item.epoch, dl);
     if (item.rating !== null) detail('Rating', item.rating ? item.rating + ' / 5' : 'Unrated', dl);
+    if (item.tags && item.tags.length) {
+      var term=document.createElement('dt');text(term,'Tags');dl.appendChild(term);
+      var tags=document.createElement('dd');tags.className='media-explorer-tag-links';
+      item.tags.forEach(function (tag) {
+        var button=document.createElement('button');button.type='button';
+        button.textContent=tag;button.title='Filter media by tag: '+tag;
+        button.addEventListener('click',function () {
+          el('media-explorer-tag').value=tag;load(true);
+        });
+        tags.appendChild(button);
+      });
+      dl.appendChild(tags);
+    }
     detail('Date', item.createdAt ? new Date(item.createdAt).toLocaleString() : '', dl);
     detail('LoRAs', (item.loras || []).map(function (lora) { return lora.name + (lora.strength != null ? ' × ' + lora.strength : ''); }).join(', '), dl);
   }
@@ -594,13 +991,19 @@
     var panel = el('media-explorer-selection');
     panel.classList.toggle('hidden', !selected.size);
     text(el('media-explorer-selected-count'), selected.size + ' selected (loaded items)');
-    text(el('media-explorer-selection-hint'), selected.size > 4 ? 'Compare supports up to 4 selected items' : selected.size < 2 ? 'Select 2–4 to compare' : 'Ready to compare');
+    text(el('media-explorer-selection-hint'), selected.size > 4 ? 'Compare supports up to 4 selections' : '');
+    el('media-explorer-selection-hint').classList.toggle('hidden', selected.size <= 4);
     var chosen = items.filter(function (item) { return selected.has(item.id); });
-    el('media-explorer-copy-selected').classList.toggle('hidden', !isExternal());
+    var copyable = chosen.length > 0 && (isExternal() ||
+      chosen.every(function (entry) {return entry.source==='generate' && entry.role==='generated';}) ||
+      chosen.every(function (entry) {return entry.source==='test' && entry.ownerFolder && entry.storageId;}) ||
+      chosen.every(function (entry) {return entry.source==='epoch' || entry.source==='storyboard';}));
+    el('media-explorer-copy-selected').classList.toggle('hidden', !copyable);
     el('media-explorer-compare').disabled = chosen.length < 2 || chosen.length > 4;
     text(el('media-explorer-compare'), chosen.length > 2 && chosen.length <= 4 ? 'Survey' : 'Compare');
     el('media-explorer-compare').title = 'Compare 2–4 media; videos play independently';
     syncSideListSelection();
+    syncBulkActions();
     Array.prototype.forEach.call(el('media-explorer-grid').children, function (card, i) {
       card.classList.toggle('selected', selected.has(items[i].id));
       card.querySelector('.media-explorer-card-check').checked = selected.has(items[i].id);
@@ -667,20 +1070,12 @@
       var relationships = document.createElement('details'), relationshipsTitle = document.createElement('summary');
       relationships.className = 'media-explorer-inspector-section'; relationships.open = true;
       text(relationshipsTitle, 'Used by · ' + uses.length); relationships.appendChild(relationshipsTitle);
-      uses.forEach(function (use) {
-        var canOpen = ['generate', 'storyboard', 'test', 'epoch'].indexOf(use.source) !== -1;
-        var row = document.createElement(canOpen ? 'button' : 'p');
-        text(row, (use.label || use.storageId) + ' · ' + use.role);
-        if (canOpen) {
-          row.type = 'button'; row.className = 'media-explorer-use-link';
-          row.addEventListener('click', function () {
-            if (use.source === 'generate') window.openGenerateActivity({storageId: use.storageId});
-            else if (use.source === 'storyboard') window.openStoryboardActivity({storyId: item.storageId, sceneId: use.storageId, takeId: use.takeId || ''});
-            else if (use.source === 'test') window.openTestBenchActivity({folder: item.ownerFolder, sessionId: item.storageId, modelId: item.model || ''});
-            else if (use.source === 'epoch') window.openTestBenchActivity({folder: item.ownerFolder, campaignId: item.storageId, modelId: item.model || ''});
-          });
-        }
-        relationships.appendChild(row);
+      provenanceLinks(item).forEach(function (link) {
+        var button=document.createElement('button');
+        button.type='button';button.className='media-explorer-use-link';
+        text(button,link.label);
+        button.addEventListener('click',link.run);
+        relationships.appendChild(button);
       });
       host.appendChild(relationships);
       if (item.source === 'storyboard' && uses.length > 1) {
@@ -688,6 +1083,16 @@
       }
     }
     if (item.source === 'generate' && item.role === 'generated' && item.storageId) {
+      var copyGenerated = document.createElement('button');
+      copyGenerated.type='button';copyGenerated.className='review-captions-btn';
+      copyGenerated.textContent='Copy to Set';
+      copyGenerated.addEventListener('click',function () {chooseExport([item]);});
+      actions.appendChild(copyGenerated);
+      var tagButton = document.createElement('button');
+      tagButton.type = 'button';tagButton.className='review-captions-btn';
+      tagButton.textContent='Edit tags…';
+      tagButton.addEventListener('click',function () {editMediaTags(item);});
+      actions.appendChild(tagButton);
       var ratingRow = document.createElement('div');
       ratingRow.className = 'media-explorer-rating';
       var ratingLabel = document.createElement('span');
@@ -725,7 +1130,7 @@
               var card = el('media-explorer-grid').children[items.indexOf(item)];
               if (card) {
                 var sub = card.querySelector('.media-explorer-card-sub');
-                text(sub, isExternal() ? ((item.metadata && item.metadata.resolution) || 'Metadata unknown') + (item.metadata && item.metadata.duration != null ? ' · ' + duration(item.metadata.duration) : '') : cardSummary(item));
+                text(sub, isExternal() ? externalCardSummary(item) : cardSummary(item));
               }
               if (visible && (el('media-explorer-rating').value || el('media-explorer-sort').value === 'rating')) load(true);
             }).catch(report).finally(function () {
@@ -864,6 +1269,7 @@
         button.type = 'button'; button.className = 'review-captions-btn';
         text(button,label); button.addEventListener('click',action); actions.appendChild(button);
       }
+      externalInspectorAction('Edit Tags…',function () { editMediaTags(item); });
       externalInspectorAction('Rename…',function () { renameExternalFile(item); });
       externalInspectorAction('Move to Folder…',function () { externalMutation(item,'move'); });
       if (['.png','.jpg','.jpeg','.webp','.bmp'].some(function (ext) { return item.fileName.toLowerCase().endsWith(ext); }))
@@ -910,6 +1316,7 @@
     card.dataset.id = item.id;
     card.dataset.mediaKind = item.mediaKind;
     card.dataset.index = index;
+    setupMediaDrag(card, item);
     var open = document.createElement('button'); open.type = 'button'; open.className = 'media-explorer-card-open';
     open.tabIndex = index === 0 ? 0 : -1;
     open.setAttribute('aria-label', item.fileName + ', ' + item.role);
@@ -926,7 +1333,7 @@
     text(name, item.fileName); meta.appendChild(name);
     if (item.relativePath) { var relative = document.createElement('div'); relative.className = 'media-explorer-card-path'; text(relative, item.relativePath); meta.appendChild(relative); }
     var sub = document.createElement('div'); sub.className = 'media-explorer-card-sub';
-    text(sub, isExternal() ? ((item.metadata && item.metadata.resolution) || 'Metadata unknown') + (item.metadata && item.metadata.duration != null ? ' · ' + duration(item.metadata.duration) : '') : cardSummary(item));
+    text(sub, isExternal() ? externalCardSummary(item) : cardSummary(item));
     meta.appendChild(sub); open.appendChild(meta);
     var check = document.createElement('input'); check.type = 'checkbox'; check.className = 'media-explorer-card-check';
     check.tabIndex = index === 0 ? 0 : -1;
@@ -977,9 +1384,11 @@
   function hasFilters() {
     if (isExternal()) return el('media-explorer-search').value.trim() ||
       el('media-explorer-kind').value || el('media-explorer-date').value ||
+      el('media-explorer-rating').value || el('media-explorer-tag').value.trim() ||
       ['min-side', 'min-mp', 'min-duration', 'max-duration'].some(function (name) { return el('media-explorer-' + name).value; });
     return artifact || owner || role || source || storyboardType() || el('media-explorer-search').value.trim() ||
       facetIds.some(function (id) { return el('media-explorer-' + id).value; }) ||
+      el('media-explorer-tag').value.trim() ||
       ['min-side', 'min-mp', 'min-duration', 'max-duration'].some(function (id) { return el('media-explorer-' + id).value; });
   }
   function emptyState() {
@@ -1013,12 +1422,15 @@
     if (storyboardType()) chip(storyboardType() === 'exports' ? 'Exported Sequences' : 'Scenes', function () { el('media-explorer-storyboard-type').value = ''; load(true); });
     if (search.value.trim()) chip('“' + search.value.trim() + '”', function () { search.value = ''; load(true); });
     if (isExternal()) {
+      if (el('media-explorer-tag').value.trim()) chip('Tag: ' + el('media-explorer-tag').value.trim(), function () {el('media-explorer-tag').value = '';load(true);});
+      if (el('media-explorer-rating').value) chip('Rating: ' + el('media-explorer-rating').value, function () {el('media-explorer-rating').value='';load(true);});
       if (el('media-explorer-date').value) chip('Date ' + el('media-explorer-date').value + ' days', function () { el('media-explorer-date').value = ''; load(true); });
       ['min-side', 'min-mp', 'min-duration', 'max-duration'].forEach(function (name) {
         var input = el('media-explorer-' + name);
         if (input.value) chip(technicalNames[name] + ' ' + input.value, function () { input.value = ''; load(true); });
       });
     } else {
+      if (el('media-explorer-tag').value.trim()) chip('Tag: '+el('media-explorer-tag').value.trim(),function () {el('media-explorer-tag').value='';load(true);});
       facetIds.slice(1).forEach(function (id) {
         var select = el('media-explorer-' + id);
         if (select.value) chip(select.options[select.selectedIndex].textContent, function () { select.value = ''; load(true); });
@@ -1089,7 +1501,7 @@
     var qs = new URLSearchParams({limit:pageSize, offset:reset ? 0 : offset, role:role,
       kind:el('media-explorer-kind').value, search:el('media-explorer-search').value.trim(),
       sort:el('media-explorer-sort').value, source:source, full:full ? '1' : '0',
-      storyboard_type:storyboardType(), model:el('media-explorer-model').value, folder:el('media-explorer-folder').value, rating:el('media-explorer-rating').value, date:el('media-explorer-date').value, artifact:artifact, owner:owner});
+      storyboard_type:storyboardType(), model:el('media-explorer-model').value, folder:el('media-explorer-folder').value, rating:el('media-explorer-rating').value, tag:el('media-explorer-tag').value.trim(), date:el('media-explorer-date').value, artifact:artifact, owner:owner});
     ['min-side', 'min-mp', 'min-duration', 'max-duration'].forEach(function (id) {
       qs.set(id.replace(/-/g, '_'), el('media-explorer-' + id).value);
     });
@@ -1143,7 +1555,7 @@
           if (card) item = Object.assign(previousItems.get(item.id), item);
           items.push(item);
           if (!card) card = renderCard(item, index);
-          text(card.querySelector('.media-explorer-card-sub'), isExternal() ? ((item.metadata && item.metadata.resolution) || 'Metadata unknown') + (item.metadata && item.metadata.duration != null ? ' · ' + duration(item.metadata.duration) : '') : cardSummary(item));
+          text(card.querySelector('.media-explorer-card-sub'), isExternal() ? externalCardSummary(item) : cardSummary(item));
           text(card.querySelector('.media-explorer-card-badge'), badgeText(item));
           card.querySelector('.media-explorer-card-open').setAttribute('aria-label', item.fileName + ', ' + item.role);
           card.dataset.index = index;
@@ -1163,6 +1575,14 @@
           var index = items.length; items.push(item); host.appendChild(renderCard(item, index));
         });
         offset += incoming.length;
+      }
+      {
+        var known = new Set(data.facets && data.facets.tags || []);
+        items.forEach(function (item) {(item.tags || []).forEach(function (tag) {known.add(tag);});});
+        var datalist = el('media-explorer-known-tags'); datalist.replaceChildren();
+        Array.from(known).sort().forEach(function (tag) {
+          var option = document.createElement('option'); option.value = tag; datalist.appendChild(option);
+        });
       }
       count(); renderSideList(); updateSelection(); renderMainPreview();
       if (!isExternal()) facets(data.facets);
@@ -1192,6 +1612,7 @@
         artifact = params.get('artifact') || ''; owner = params.get('owner') || '';
         full = params.get('full') === '1';
         el('media-explorer-search').value = params.get('q') || '';
+        el('media-explorer-tag').value = params.get('tag') || '';
         el('media-explorer-kind').value = params.get('kind') || '';
         el('media-explorer-sort').value = params.get('sort') || 'newest';
         facetIds.slice(1).forEach(function (id) {
@@ -1273,6 +1694,7 @@
         requestRecentFolders();
         externalDirectory = ''; externalFolders = [];
         ['model', 'folder', 'rating'].forEach(function (id) { el('media-explorer-' + id).value = ''; });
+        el('media-explorer-tag').value = '';
         if (el('media-explorer-sort').value === 'rating') el('media-explorer-sort').value = 'newest';
       }
       setExplorerMode(explorerMode);
@@ -1328,14 +1750,28 @@
   el('media-explorer-export-form').addEventListener('submit', function (event) {
     event.preventDefault();
     var submit = el('media-explorer-export-submit');
+    var generated = exportItems[0] && exportItems[0].source === 'generate';
+    var testing = exportItems[0] && exportItems[0].source === 'test';
+    var owned = exportItems[0] &&
+      (exportItems[0].source === 'epoch' || exportItems[0].source === 'storyboard');
     var payload = {
-      path: externalPath, files: exportItems.map(function (item) { return item.relativePath; }),
       destination: el('media-explorer-export-destination').value.trim(),
       newSet: el('media-explorer-export-new-set').value.trim()
     };
+    if (generated) payload.storageIds = Array.from(new Set(exportItems.map(function (item) {return item.storageId;})));
+    else if(testing) payload.results=exportItems.map(function (item) {
+      return {folder:item.ownerFolder,session:item.storageId,mediaFile:item.fileName};
+    });
+    else if(owned) payload.results=exportItems.map(function (item) {
+      return {source:item.source,folder:item.ownerFolder,storageId:item.storageId,
+        mediaFile:item.fileName,mediaPath:item.mediaPath};
+    });
+    else {payload.path=externalPath;payload.files=exportItems.map(function (item) {return item.relativePath;});}
     submit.disabled = true;
     text(el('media-explorer-export-status'), 'Copying media…');
-    fetch('/fs/media_explorer/external/copy', {
+    fetch(generated ? '/fs/media_explorer/generated/copy' :
+      (testing ? '/fs/media_explorer/test/copy' :
+        (owned ? '/fs/media_explorer/owned/copy' : '/fs/media_explorer/external/copy')), {
       method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)
     }).then(function (res) { return res.json().then(function (data) {
       if (!res.ok || !data.ok) throw Error(data.error || 'Export failed'); return data;
@@ -1345,6 +1781,238 @@
     }).catch(function (err) { text(el('media-explorer-export-status'), err.message); report(err); })
       .finally(function () { submit.disabled = false; });
   });
+  var quickFilters = el('media-explorer-quick-filters');
+  quickFilters.appendChild(el('media-explorer-tag'));
+  quickFilters.appendChild(el('media-explorer-rating'));
+  var savedMediaViews = [];
+  function currentViewFilters() {
+    var filters = {source:source,role:role,search:el('media-explorer-search').value.trim(),
+      tag:el('media-explorer-tag').value.trim(),rating:el('media-explorer-rating').value,
+      kind:el('media-explorer-kind').value,model:el('media-explorer-model').value,
+      folder:el('media-explorer-folder').value,date:el('media-explorer-date').value,
+      sort:el('media-explorer-sort').value,direction:reverseSort?'asc':'desc',
+      full:full,recursive:el('media-explorer-recursive').checked,
+      storyboardType:storyboardType()};
+    ['min-side','min-mp','min-duration','max-duration'].forEach(function (id) {
+      filters[id]=el('media-explorer-'+id).value;
+    });
+    if(isExternal()) {
+      filters.externalPath=externalPath;
+      filters.externalDirectory=externalDirectory;
+    }
+    return filters;
+  }
+  function showSavedViews(views, selectedName) {
+    savedMediaViews=views || [];
+    var select=el('media-explorer-view-select');
+    select.replaceChildren();
+    var placeholder=document.createElement('option');placeholder.value='';
+    placeholder.textContent='Saved views…';select.appendChild(placeholder);
+    savedMediaViews.forEach(function (view) {
+      var option=document.createElement('option');option.value=view.name;
+      option.textContent=view.name;select.appendChild(option);
+    });
+    select.value=selectedName || '';
+    el('media-explorer-delete-view').disabled=!select.value;
+  }
+  function loadSavedViews() {
+    return fetch('/fs/media_explorer/views').then(function (res) {
+      return res.json().then(function (payload) {
+        if(!res.ok || !payload.ok)throw Error(payload.error || 'Could not load saved views');
+        showSavedViews(payload.views,el('media-explorer-view-select').value);
+      });
+    }).catch(report);
+  }
+  function applySavedView(view) {
+    if(!view || !view.filters)return;
+    var f=view.filters;
+    source=f.source || '';role=f.role || '';
+    artifact='';owner='';
+    full=Boolean(f.full);
+    ['search','tag','rating','kind','model','folder','date','sort'].forEach(function (id) {
+      var key=id==='search'?'search':id;
+      el('media-explorer-'+id).value=f[key] || (id==='sort'?'newest':'');
+    });
+    ['min-side','min-mp','min-duration','max-duration'].forEach(function (id) {
+      el('media-explorer-'+id).value=f[id] || '';
+    });
+    el('media-explorer-storyboard-type').value=f.storyboardType || '';
+    reverseSort=f.direction==='asc';
+    el('media-explorer-sort-reverse').setAttribute('aria-pressed',String(reverseSort));
+    externalPath=source==='external' ? f.externalPath || '' : externalPath;
+    externalDirectory=source==='external' ? f.externalDirectory || '' : '';
+    el('media-explorer-external-path').value=externalPath;
+    el('media-explorer-recursive').checked=Boolean(f.recursive);
+    sourceButtons.forEach(function (button,index) {
+      var match=source ? button.dataset.mediaSource===source :
+        button.dataset.mediaRole===role;
+      button.classList.toggle('active',match);
+      if(match)el('media-explorer-source-chooser').value=index;
+    });
+    selected.clear();anchor=-1;selectItem(-1);
+    if(source==='external') {
+      externalRevision=-1;externalPendingRefresh=false;
+      stopExternalTimers();
+    }
+    load(true,{refreshFilesystem:source==='external'});
+  }
+  el('media-explorer-view-select').addEventListener('focus',loadSavedViews);
+  el('media-explorer-view-select').addEventListener('change',function () {
+    el('media-explorer-delete-view').disabled=!this.value;
+    var view=savedMediaViews.find(function (entry) {
+      return entry.name===el('media-explorer-view-select').value;
+    });
+    if(view)applySavedView(view);
+  });
+  el('media-explorer-save-view').addEventListener('click',function () {
+    promptMediaAction('Save current view','','Save view',function (name) {
+      return fetch('/fs/media_explorer/views',{
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({name:name,filters:currentViewFilters()})
+      }).then(function (res) {return res.json().then(function (payload) {
+        if(!res.ok || !payload.ok)throw Error(payload.error || 'Could not save view');
+        showSavedViews(payload.views,name);
+      });});
+    });
+  });
+  el('media-explorer-delete-view').addEventListener('click',function () {
+    var name=el('media-explorer-view-select').value;
+    if(!name || !window.confirm('Delete saved view "'+name+'"? This does not delete media.'))return;
+    fetch('/fs/media_explorer/views',{
+      method:'DELETE',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({name:name})
+    }).then(function (res) {return res.json().then(function (payload) {
+      if(!res.ok || !payload.ok)throw Error(payload.error || 'Could not delete view');
+      showSavedViews(payload.views,'');
+    });}).catch(report);
+  });
+  var newFolderButton = document.createElement('button');
+  newFolderButton.type = 'button'; newFolderButton.className = 'review-captions-btn';
+  newFolderButton.id = 'media-explorer-new-folder'; newFolderButton.textContent = '+ New folder';
+  newFolderButton.addEventListener('click', createExternalFolder);
+  el('media-explorer-external-navigation').appendChild(newFolderButton);
+  allowFolderDrop(el('media-explorer-up'), function () {return externalDirectory.split('/').slice(0,-1).join('/');});
+  var bulkMoveButton = document.createElement('button');
+  bulkMoveButton.type = 'button'; bulkMoveButton.className = 'review-captions-btn';
+  bulkMoveButton.textContent = 'Move to Folder…';
+  bulkMoveButton.addEventListener('click', function () {
+    var chosen = chosenExternalFiles();
+    if (chosen.length) externalMutation(chosen[0], 'move');
+  });
+  function selectedCuratable() {
+    var chosen=items.filter(function (item) {return selected.has(item.id);});
+    if (!chosen.length || !chosen.every(function (item) {
+      return item.source==='external' ||
+        (item.source==='generate' && item.role==='generated' && item.storageId) ||
+        (item.source==='test' && item.ownerFolder && item.storageId) ||
+        (item.source==='epoch' && item.ownerFolder && item.storageId) ||
+        (item.source==='storyboard' && item.storageId);
+    })) return [];
+    return chosen;
+  }
+  function saveCurationFor(item, change) {
+    if (item.source==='external') return externalActionStrict('curate',
+      Object.assign({path:externalPath,file:item.relativePath},change));
+    var kind=Object.prototype.hasOwnProperty.call(change,'tags') ? 'tags' : 'rating';
+    var url=item.source==='test' ? '/fs/media_explorer/test/tags' :
+      '/fs/generate/result/'+kind;
+    if(item.source==='epoch' || item.source==='storyboard') {
+      if(kind!=='tags')return Promise.reject(Error('Ratings are not supported for this producer.'));
+      return fetch('/fs/media_explorer/owned/tags',{
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({source:item.source,folder:item.ownerFolder || '',
+          storageId:item.storageId,mediaFile:item.fileName,
+          mediaPath:item.mediaPath,tags:change.tags})
+      }).then(function (res) {return res.json().then(function (body) {
+        if(!res.ok || !body.ok)throw Error(body.error || 'Could not save tags');
+        return body;
+      });});
+    }
+    if(item.source==='test' && kind==='rating')
+      return fetch('/fs/test_generations',{
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({folder:item.ownerFolder,operation:'test_rate_result',
+          criteria:{session:item.storageId,mediaFile:item.fileName,rating:change.rating}})
+      }).then(function (res) {return res.json().then(function (body) {
+        if(!res.ok || body.ok===false)throw Error(body.error || 'Could not rate Test result');
+        return body;
+      });});
+    var payload=item.source==='test'
+      ? Object.assign({folder:item.ownerFolder,session:item.storageId,mediaFile:item.fileName},change)
+      : Object.assign({storageId:item.storageId},change);
+    return fetch(url,{
+      method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)
+    }).then(function (res) {return res.json().then(function (body) {
+      if(!res.ok || !body.ok)throw Error(body.error || 'Curation failed');
+      return body;
+    });});
+  }
+  function bulkCurate(choice) {
+    var chosen=selectedCuratable();
+    if(!chosen.length)return;
+    function apply(changeForItem, verb) {
+      return Promise.allSettled(chosen.map(function (item) {
+        return saveCurationFor(item,changeForItem(item));
+      })).then(function (results) {
+        var failed=results.filter(function (result) {return result.status==='rejected';});
+        load(true,{soft:true});
+        if(failed.length)throw Error(verb+' '+(results.length-failed.length)+'/'+results.length+
+          ' files; '+failed.length+' failed: '+failed[0].reason.message);
+      });
+    }
+    if(choice==='tags') {
+      promptMediaAction('Add tags to '+chosen.length+' files','','Add tags',function (value) {
+        var added=value.split(',').map(function (tag) {return tag.trim();}).filter(Boolean);
+        if(!added.length)return false;
+        return apply(function (item) {
+          return {tags:Array.from(new Set((item.tags || []).concat(added)))};
+        },'Tagged');
+      });
+    } else {
+      var entries=Array.from({length:6},function (_,rating) {
+        return {label:rating?'★'.repeat(rating)+' ('+rating+'/5)':'Clear rating',run:function () {
+          apply(function () {return {rating:rating};},'Rated').catch(report);
+        }};
+      });
+      var anchor=bulkRateButton.getBoundingClientRect();
+      showContextMenu(anchor.left,anchor.bottom,entries);
+    }
+  }
+  var bulkTagsButton = document.createElement('button');
+  bulkTagsButton.type = 'button';bulkTagsButton.className = 'review-captions-btn';
+  bulkTagsButton.textContent = 'Add tags…';
+  bulkTagsButton.addEventListener('click',function () {bulkCurate('tags');});
+  var bulkRateButton = document.createElement('button');
+  bulkRateButton.type = 'button';bulkRateButton.className = 'review-captions-btn';
+  bulkRateButton.textContent = 'Rate ★';
+  bulkRateButton.addEventListener('click',function (event) {event.stopPropagation();bulkCurate('rating');});
+  var bulkCollectionButton=document.createElement('button');
+  bulkCollectionButton.type='button';bulkCollectionButton.className='review-captions-btn';
+  bulkCollectionButton.textContent='Add to collection…';
+  bulkCollectionButton.addEventListener('click',function () {addToCollection(selectedCuratable());});
+  var bulkTrashButton = document.createElement('button');
+  bulkTrashButton.type = 'button'; bulkTrashButton.className = 'review-captions-btn';
+  bulkTrashButton.textContent = 'Move to Trash';
+  bulkTrashButton.addEventListener('click', function () {
+    var chosen = chosenExternalFiles();
+    if (chosen.length) externalMutation(chosen[0], 'trash');
+  });
+  el('media-explorer-selection').insertBefore(bulkMoveButton, el('media-explorer-compare'));
+  el('media-explorer-selection').insertBefore(bulkTrashButton, el('media-explorer-compare'));
+  el('media-explorer-selection').insertBefore(bulkTagsButton, el('media-explorer-compare'));
+  el('media-explorer-selection').insertBefore(bulkRateButton, el('media-explorer-compare'));
+  el('media-explorer-selection').insertBefore(bulkCollectionButton, el('media-explorer-compare'));
+  function syncBulkActions() {
+    var show = isExternal() && chosenExternalFiles().length > 0;
+    bulkMoveButton.classList.toggle('hidden',!show);
+    bulkTrashButton.classList.toggle('hidden',!show);
+    var curation=selectedCuratable().length>0;
+    bulkTagsButton.classList.toggle('hidden',!curation);
+    bulkCollectionButton.classList.toggle('hidden',!curation);
+    bulkRateButton.classList.toggle('hidden',!curation ||
+      !selectedCuratable().every(function (item) {return item.source==='external' ||
+        item.source==='generate' || item.source==='test';}));
+  }
   el('media-explorer-up').addEventListener('click', function () { setExternalDirectory(externalDirectory.split('/').slice(0, -1).join('/')); });
   el('media-explorer-recursive').addEventListener('change', function () { renderExternalFolders(); load(true); });
   el('media-explorer-sort-reverse').addEventListener('click', function () {
@@ -1408,6 +2076,10 @@
     clearTimeout(debounce); debounce = setTimeout(function () { load(true); }, 250);
   });
   el('media-explorer-kind').addEventListener('change', function () { load(true); });
+  el('media-explorer-tag').addEventListener('input', function () {
+    clearTimeout(debounce);
+    debounce=setTimeout(function () {load(true);},250);
+  });
   el('media-explorer-storyboard-type').addEventListener('change', function () { load(true); });
   facetIds.slice(1).forEach(function (id) { el('media-explorer-' + id).addEventListener('change', function () { load(true); }); });
   el('media-explorer-sort').addEventListener('change', function () { load(true); });
@@ -1426,6 +2098,7 @@
     el('media-explorer-search').value = ''; el('media-explorer-sort').value = 'newest';
     reverseSort = false; el('media-explorer-sort-reverse').setAttribute('aria-pressed', 'false');
     facetIds.forEach(function (id) { el('media-explorer-' + id).value = ''; });
+    el('media-explorer-tag').value = '';
     el('media-explorer-storyboard-type').value = '';
     if (isExternal()) {
       ['min-side', 'min-mp', 'min-duration', 'max-duration'].forEach(function (name) {
@@ -1529,6 +2202,7 @@
     if (owner) params.set('owner', owner);
     if (full) params.set('full', '1');
     if (el('media-explorer-search').value.trim()) params.set('q', el('media-explorer-search').value.trim());
+    if (el('media-explorer-tag').value.trim()) params.set('tag', el('media-explorer-tag').value.trim());
     if (el('media-explorer-kind').value) params.set('kind', el('media-explorer-kind').value);
     facetIds.slice(1).forEach(function (id) { if (el('media-explorer-' + id).value) params.set(id === 'folder' ? 'mediaSet' : id, el('media-explorer-' + id).value); });
     ['min-side', 'min-mp', 'min-duration', 'max-duration'].forEach(function (id) { if (el('media-explorer-' + id).value) params.set(id, el('media-explorer-' + id).value); });

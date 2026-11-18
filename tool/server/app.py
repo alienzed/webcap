@@ -88,7 +88,7 @@ from .generate_generation import capabilities as generate_capabilities, prepare_
 from .media_explorer import list_media as media_explorer_list_media
 from .external_media import register_routes as register_external_media_routes
 from .generate_store import load_result as generate_load_result
-from .generate_store import cleanup_references as generate_cleanup_references, delete_prompt as generate_delete_prompt, list_prompts as generate_list_prompts, list_results as generate_list_results, rate_result as generate_rate_result, resolve_result_media as generate_resolve_result_media, save_prompt as generate_save_prompt, save_reference as generate_save_reference
+from .generate_store import cleanup_references as generate_cleanup_references, delete_prompt as generate_delete_prompt, list_prompts as generate_list_prompts, list_results as generate_list_results, rate_result as generate_rate_result, tag_result as generate_tag_result, resolve_result_media as generate_resolve_result_media, save_prompt as generate_save_prompt, save_reference as generate_save_reference
 from .generation_director_contract import build_request as generate_build_director_request
 from .test_wildcard_contract import build_request as test_wildcard_build_request
 from .inference_runner import action as inference_action, cancel_storyboard_pending_jobs, enqueue_generate, job_status as inference_job_status, prepare_startup_backlog as prepare_inference_startup_backlog, snapshot as inference_snapshot, stop_storyboard_jobs
@@ -2791,6 +2791,7 @@ def media_explorer_route():
             model=request.args.get("model", ""),
             folder=request.args.get("folder", ""),
             rating=request.args.get("rating", ""),
+            tag=request.args.get("tag", ""),
             date=request.args.get("date", ""),
             artifact=request.args.get("artifact", ""),
             owner=request.args.get("owner", ""),
@@ -2864,6 +2865,46 @@ def generate_result_rating_route():
     except Exception as exc:
         app.logger.exception("GENERATE RESULT RATING FAILED: %s", exc)
         return jsonify({"ok": False, "error": str(exc)}), 400
+
+
+@app.route("/fs/media_explorer/owned/tags", methods=["POST"])
+def media_explorer_owned_tags_route():
+    try:
+        from .media_explorer import tag_owned_media
+        return jsonify({"ok": True, **tag_owned_media(request.get_json(silent=True) or {})})
+    except (FileNotFoundError, ValueError, RuntimeError) as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    except Exception as exc:
+        app.logger.exception("OWNED MEDIA CURATION FAILED")
+        return jsonify({"ok": False, "error": str(exc)}), 500
+
+
+@app.route("/fs/media_explorer/test/tags", methods=["POST"])
+def media_explorer_test_tags_route():
+    try:
+        from .epoch_test_bench import tag_result
+        data = request.get_json(silent=True) or {}
+        folder = app_config.safe_join_fs_root(data.get("folder"))
+        result = tag_result(folder, data.get("session"), data.get("mediaFile"), data.get("tags"))
+        return jsonify({"ok": True, **result})
+    except (FileNotFoundError, ValueError) as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    except Exception as exc:
+        app.logger.exception("TEST MEDIA CURATION FAILED")
+        return jsonify({"ok": False, "error": str(exc)}), 500
+
+
+@app.route("/fs/generate/result/tags", methods=["POST"])
+def generate_result_tags_route():
+    try:
+        data = request.get_json(silent=True) or {}
+        result = generate_tag_result(data.get("storageId"), data.get("tags"))
+        return jsonify({"ok": True, **result})
+    except (FileNotFoundError, ValueError) as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    except Exception as exc:
+        app.logger.exception("GENERATE RESULT TAGS FAILED: %s", exc)
+        return jsonify({"ok": False, "error": str(exc)}), 500
 
 
 @app.route("/fs/generate/media", methods=["GET"])

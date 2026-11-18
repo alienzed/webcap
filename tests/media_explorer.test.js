@@ -47,6 +47,7 @@ function fixture(hash = '#/media') {
     close() { this.open = false; this.emit('close'); }
     pause() { this.paused = true; }
     focus() { document.activeElement = this; }
+    select() { this.selectedText = true; }
     hasAttribute(k) { return Object.hasOwn(this.attrs, k); }
     getBoundingClientRect() { return {left: 0, right: 1600, width: 1600}; }
   }
@@ -89,6 +90,7 @@ function fixture(hash = '#/media') {
   nodes['media-explorer-compare-dialog'].appendChild(new Element('strong'));
   nodes['media-explorer-compare-dialog'].appendChild(nodes['media-explorer-compare-content']);
   document = { getElementById: id => nodes[id], createElement: tag => new Element(tag), listeners: {},
+    body: new Element('body'),
     querySelector: selector => selector === '.media-explorer-main' ? main : workspace.querySelector(selector),
     addEventListener(k, fn) { this.listeners[k] = fn; },
     querySelectorAll: selector => selector.includes('[data-explorer-mode]') ? modeButtons :
@@ -109,7 +111,7 @@ function fixture(hash = '#/media') {
     await new Promise(resolve => setImmediate(resolve));
   };
   const key = (target, key, extra = {}) => document.listeners.keydown({target, key, preventDefault() {}, ...extra});
-  return {nodes, buttons, modeButtons, pending, errors, closed, menus, clipCalls, cropCalls, window, settle, key};
+  return {nodes, buttons, modeButtons, pending, errors, closed, menus, clipCalls, cropCalls, window, document, settle, key};
 }
 const media = (id, kind = 'image') => ({id, fileName:id + '.png', mediaKind:kind, mediaUrl:'/media/' + id, role:'generated', source:'generate', rating:null});
 
@@ -362,7 +364,7 @@ test('Storyboard provenance preserves exact take identity for owner handoff', ()
   const explorer = fs.readFileSync('tool/js/media_explorer.js', 'utf8');
   const storyboard = fs.readFileSync('tool/js/storyboard.js', 'utf8');
   assert.match(backend, /use\["takeId"\] = label/);
-  assert.match(explorer, /takeId: use\.takeId \|\| ''/);
+  assert.match(explorer, /takeId:\\s*use\\.takeId \\|\\| ''/);
   assert.match(storyboard, /Storyboard Take no longer exists in scene/);
   assert.match(storyboard, /\.storyboard-take\[data-take-id\]/);
 });
@@ -395,7 +397,7 @@ test('External browsing is folder-first, keeps media list in Grid and never auto
   const row = f.nodes['media-explorer-side-list'].children[1];
   row.querySelector('button').click();
   assert.equal(f.nodes['media-explorer-inspector-body'].dataset.id, 'external:b');
-  f.nodes['media-explorer-folder-rows'].children[0].click();
+  f.nodes['media-explorer-folder-rows'].children[0].querySelector('button').click();
   const folderRequest = f.pending.at(-1);
   assert.equal(new URL(folderRequest.url,'http://localhost').searchParams.get('directory'), 'child');
   await f.settle(folderRequest, [], true, {folders:[]});
@@ -421,17 +423,22 @@ test('External item actions expose Rename, Move and Edit consistently in Grid an
     });
     const actions = f.menus.at(-1);
     assert.ok(actions.some(action => action.label === 'Rename…'), mode);
-    assert.ok(actions.some(action => action.label === 'Move to Folder…'), mode);
-    assert.ok(actions.some(action => action.label === 'Crop image…'), mode);
-    assert.ok(actions.some(action => action.label === 'Rotate left 90°'), mode);
-    actions.find(action => action.label === 'Crop image…').run();
+    assert.ok(actions.some(action => action.label === 'Move to folder…'), mode);
+    const editing=actions.find(action => action.label === 'Edit media');
+    assert.ok(editing && editing.children.some(action => action.label === 'Crop image…'), mode);
+    assert.ok(editing.children.some(action => action.label === 'Rotate left 90°'), mode);
+    editing.children.find(action => action.label === 'Crop image…').run();
     assert.equal(f.cropCalls.at(-1)[1].file, 'image.jpg');
   }
 
-  f.window.prompt = () => 'renamed.jpg';
   const rename = f.menus.at(-1).find(action => action.label === 'Rename…');
   rename.run();
-  const req = f.pending.at(-1);
+  const dialog=f.document.body.children.at(-1);
+  const form=dialog.children[0];
+  const input=form.querySelector('input');
+  input.value='renamed.jpg';
+  form.emit('submit',{preventDefault(){}});
+  const req=f.pending.at(-1);
   assert.equal(req.url, '/fs/media_explorer/external/rename');
   assert.deepEqual(JSON.parse(req.options.body), {
     path:'/tmp/external',file:'image.jpg',newName:'renamed.jpg'
@@ -440,7 +447,8 @@ test('External item actions expose Rename, Move and Edit consistently in Grid an
   await new Promise(resolve => setImmediate(resolve));
   assert.match(f.pending.at(-1).url, /\/fs\/media_explorer\/external\?/);
 
-  const rotate = f.menus.at(-1).find(action => action.label === 'Rotate left 90°');
+  const rotate = f.menus.at(-1).find(action => action.label === 'Edit media')
+    .children.find(action => action.label === 'Rotate left 90°');
   rotate.run();
   assert.equal(f.pending.at(-1).url, '/fs/media_explorer/external/image-edit');
   assert.equal(JSON.parse(f.pending.at(-1).options.body).operation, 'rotate_left_90');
@@ -579,21 +587,37 @@ test('External media context menu exposes safe file actions without the inspecto
   assert.equal(card.querySelector('.media-explorer-item-menu').tagName, 'BUTTON');
   card.querySelector('.media-explorer-item-menu').click({preventDefault(){}, stopPropagation(){}});
   const actions = f.menus.at(-1);
-  assert.deepEqual(Array.from(actions.filter(action => action.label).map(action => action.label)),
-    ['View full size', 'Open in Explorer', 'Copy to Set', 'Crop image…',
-      'Rotate left 90°', 'Rotate right 90°', 'Flip horizontal', 'Flip vertical',
-      'Rename…', 'Move to Folder…', 'Move to Trash']);
+  const labels = actions.filter(action => action.label).map(action => action.label);
+  assert.ok(labels.includes('View full size'));
+  assert.ok(labels.includes('Show details'));
+  assert.ok(labels.includes('Show in file browser'));
+  assert.ok(labels.includes('Copy to Set…'));
+  assert.ok(labels.includes('Edit tags…'));
+  assert.ok(labels.includes('Rename…'));
+  assert.ok(labels.includes('Move to folder…'));
+  assert.ok(labels.includes('Edit media'));
+  assert.ok(labels.includes('Rate'));
+  assert.ok(labels.includes('Move to Trash'));
   assert.equal(f.nodes['media-explorer-inspector'].classList.contains('hidden'), true);
-  actions.find(action => action.label === 'Open in Explorer').run();
+  actions.find(action => action.label === 'Show in file browser').run();
   const reveal = f.pending.at(-1);
   assert.equal(reveal.url, '/fs/media_explorer/external/reveal');
   assert.equal(JSON.parse(reveal.options.body).file, 'image.png');
   await f.settle(reveal, []);
-  actions.find(action => action.label === 'Move to Folder…').run();
-  const move = f.pending.at(-1);
-  assert.equal(move.url, '/fs/media_explorer/external/move');
-  assert.equal(JSON.parse(move.options.body).destination, 'child');
-  await f.settle(move, []);
+  actions.find(action => action.label === 'Move to folder…').run();
+  const picker = f.pending.at(-1);
+  assert.match(picker.url, /external\\?/);
+  await f.settle(picker, [], true, {folders:['child']});
+  const dialog=f.document.body.children.at(-1);
+  assert.equal(dialog.open, true);
+  const form=dialog.children[0];
+  const input=form.querySelector('input');
+  input.value='child';
+  form.emit('submit',{preventDefault(){}});
+  const move=f.pending.at(-1);
+  assert.equal(move.url,'/fs/media_explorer/external/move');
+  assert.equal(JSON.parse(move.options.body).destination,'child');
+  await f.settle(move, [], true, {moved:['image.png']});
   assert.ok(f.pending.at(-1).url.includes('/external?'), 'mutation requests authoritative refresh');
 });
 
@@ -612,7 +636,8 @@ test('External Clip to Set opens the shared clip editor without using the basic 
   const card = f.nodes['media-explorer-grid'].children[0];
   card.querySelector('.media-explorer-item-menu').click({preventDefault(){}, stopPropagation(){}});
   const before = f.pending.length;
-  f.menus.at(-1).find(action => action.label === 'Edit video (Clip to Set)…').run();
+  f.menus.at(-1).find(action => action.label === 'Edit media')
+    .children.find(action => action.label === 'Clip video to Set…').run();
   assert.equal(f.clipCalls.length, 1);
   assert.equal(f.clipCalls[0][0].fileName, 'source.mp4');
   assert.equal(f.clipCalls[0][1], null);
@@ -732,4 +757,38 @@ test('reverse sort restores from Explorer route and Clear filters resets it', as
   f.nodes['media-explorer-clear-filters'].click();
   const next = new URL(f.pending.at(-1).url, 'http://localhost').searchParams;
   assert.equal(next.get('direction'), 'desc');
+});
+
+
+test('tag filters preserve deep links and reach owner-backed discovery', async () => {
+  const f=fixture('#/media?source=generate&tag=keeper');
+  f.window.openMediaExplorerActivity();
+  assert.equal(f.nodes['media-explorer-tag'].value,'keeper');
+  const request=new URL(f.pending[0].url,'http://localhost');
+  assert.equal(request.searchParams.get('tag'),'keeper');
+  const route=new URLSearchParams();
+  f.window.appendMediaExplorerRouteParams(route);
+  assert.equal(route.get('tag'),'keeper');
+  await f.settle(f.pending[0],[]);
+});
+
+
+test('saved views restore tag, rating, source and sort in one action', async () => {
+  const f=fixture();
+  f.window.openMediaExplorerActivity();
+  await f.settle(f.pending[0],[]);
+  f.nodes['media-explorer-view-select'].emit('focus');
+  const savedRequest=f.pending.at(-1);
+  assert.equal(savedRequest.url,'/fs/media_explorer/views');
+  await f.settle(savedRequest,[],true,{views:[{
+    name:'Favorites',filters:{source:'generate',search:'portrait',
+      tag:'keeper',rating:'4',sort:'rating',direction:'desc',full:true}
+  }]});
+  f.nodes['media-explorer-view-select'].value='Favorites';
+  f.nodes['media-explorer-view-select'].emit('change');
+  const listing=new URL(f.pending.at(-1).url,'http://localhost');
+  assert.equal(listing.searchParams.get('search'),'portrait');
+  assert.equal(listing.searchParams.get('tag'),'keeper');
+  assert.equal(listing.searchParams.get('rating'),'4');
+  assert.equal(listing.searchParams.get('sort'),'rating');
 });

@@ -26,6 +26,76 @@ _index = None
 _metadata_job = None
 
 
+
+_VIEW_FIELDS = {
+    "source", "role", "search", "tag", "rating", "kind", "model", "folder",
+    "date", "sort", "direction", "full", "recursive", "externalPath",
+    "externalDirectory", "min-side", "min-mp", "min-duration", "max-duration",
+    "storyboardType",
+}
+
+
+def _views_file():
+    return app_config.app_state_root() / "media_explorer_views.json"
+
+
+def list_saved_views():
+    path = _views_file()
+    if not path.exists():
+        return []
+    data = json.loads(path.read_text(encoding="utf-8"))
+    if (not isinstance(data, list) or len(data) > 60 or
+            any(not isinstance(entry, dict) or not isinstance(entry.get("name"), str)
+                or not isinstance(entry.get("filters"), dict) for entry in data)):
+        raise ValueError("Saved Media Explorer views are invalid.")
+    return data
+
+
+def save_media_view(data):
+    name = str(data.get("name") or "").strip()
+    filters = data.get("filters")
+    if not name or len(name) > 80 or not isinstance(filters, dict):
+        raise ValueError("A name and valid view filters are required.")
+    if any(key not in _VIEW_FIELDS or not isinstance(value, (str, bool))
+           or (isinstance(value, str) and len(value) > 1024)
+           for key, value in filters.items()):
+        raise ValueError("Unsupported saved-view filter.")
+    with _LOCK:
+        views = list_saved_views()
+        match = next((i for i, entry in enumerate(views)
+                      if entry["name"].casefold() == name.casefold()), -1)
+        record = {"name": name, "filters": filters}
+        if match < 0:
+            if len(views) >= 60:
+                raise ValueError("Maximum number of saved views reached.")
+            views.append(record)
+        else:
+            views[match] = record
+        _write_views(views)
+        return sorted(views, key=lambda entry: entry["name"].casefold())
+
+
+def delete_media_view(name):
+    key = str(name or "").strip().casefold()
+    if not key:
+        raise ValueError("Choose a saved view to delete.")
+    with _LOCK:
+        views = list_saved_views()
+        remaining = [entry for entry in views if entry["name"].casefold() != key]
+        if len(remaining) == len(views):
+            raise ValueError("Saved view does not exist.")
+        _write_views(remaining)
+        return sorted(remaining, key=lambda entry: entry["name"].casefold())
+
+
+def _write_views(views):
+    from .media import write_media_metadata_file
+    path = _views_file()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    # This shared atomic JSON writer accepts a JSON list as well as a dict.
+    write_media_metadata_file(path, views)
+
+
 def _recent_paths_file():
     return app_config.app_state_root() / "media_explorer_folders.json"
 
@@ -175,9 +245,12 @@ def _discover(snapshot):
                     "mediaKind": "video" if file_path.suffix.lower() in VIDEO_EXTS else "image",
                     "fileName": name, "relativePath": relative,
                     "fileSize": stat.st_size, "mtime": int(stat.st_mtime),
-                    "createdAt": int(stat.st_mtime * 1000), "rating": None,
+                    "createdAt": int(stat.st_mtime * 1000), "rating": None, "tags": [],
                 }
                 previous = cache.get(name)
+                if isinstance(previous, dict):
+                    entry["rating"] = previous.get("rating")
+                    entry["tags"] = previous.get("tags") if isinstance(previous.get("tags"), list) else []
                 if _fresh(entry, previous):
                     entry["metadata"] = {k: previous[k] for k in ("size", "mtime", "resolution", "duration") if k in previous}
                     entry["metadataCached"] = True
@@ -239,8 +312,21 @@ def _query_items(snapshot, args, *, ignore_metadata=False):
             raise ValueError("Unknown media type filter.")
         items = [item for item in items if item["mediaKind"] == kind]
     if query:
+        items = [item for item in items if all(
+            term in (item["relativePath"] + " " + " ".join(item.get("tags") or [])).casefold()
+            for term in query)]
+    tag_filter = str(args.get("tag") or "").strip().casefold()
+    if tag_filter:
         items = [item for item in items
-                 if all(term in item["relativePath"].casefold() for term in query)]
+                 if tag_filter in {tag.casefold() for tag in item.get("tags") or []}]
+    rating = str(args.get("rating") or "")
+    if rating:
+        if rating == "unrated":
+            items = [item for item in items if not item.get("rating")]
+        elif rating in ("1", "2", "3", "4", "5"):
+            items = [item for item in items if (item.get("rating") or 0) >= int(rating)]
+        else:
+            raise ValueError("Unknown media rating filter.")
     date = str(args.get("date") or "")
     if date:
         if date not in ("7", "30", "90"):
@@ -292,6 +378,8 @@ def _query_items(snapshot, args, *, ignore_metadata=False):
             width, height = dimensions
             return min(width, height) if sort == "resolution" else width * height
         items.sort(key=lambda item: (-metric(item), item["relativePath"]))
+    elif sort == "rating":
+        items.sort(key=lambda item: (-(item.get("rating") or 0), item["relativePath"]))
     elif sort == "size":
         items.sort(key=lambda item: (-item["fileSize"], item["relativePath"]))
     elif sort == "newest":
@@ -445,6 +533,66 @@ def _external_target_folder(root, relative):
     return target
 
 
+def create_external_folder(data):
+    """Create a folder beneath the explicitly opened external root."""
+    root = _root(data.get("path"))
+    parent = _external_target_folder(root, data.get("directory"))
+    name = str(data.get("name") or "").strip()
+    if (not name or name in {".", ".."} or "/" in name or "\\" in name
+            or Path(name).name != name):
+        raise ValueError("Enter a single folder name.")
+    target = parent / name
+    if target.exists() or target.is_symlink():
+        raise ValueError("A folder or file with that name already exists.")
+    target.mkdir()
+    return {"ok": True, "folder": target.relative_to(root).as_posix()}
+
+
+def rename_external_folder(data):
+    """Rename an existing folder without touching media or companion paths."""
+    root = _root(data.get("path"))
+    relative = str(data.get("folder") or "").strip().replace("\\", "/")
+    if not relative or Path(relative).is_absolute() or ".." in Path(relative).parts:
+        raise ValueError("Select a folder beneath the external root.")
+    source = (root / relative).resolve()
+    if not source.is_relative_to(root) or source == root or not source.is_dir():
+        raise ValueError("Folder does not exist inside the external root.")
+    if (root / relative).is_symlink():
+        raise ValueError("Cannot rename a linked folder.")
+    name = str(data.get("name") or "").strip()
+    if not name or name in {".", ".."} or "/" in name or "\\" in name or Path(name).name != name:
+        raise ValueError("Enter a single folder name.")
+    target = source.with_name(name)
+    if source == target:
+        return {"ok": True, "folder": relative}
+    if target.exists() or target.is_symlink():
+        raise ValueError("A file or folder already uses that name.")
+    source.rename(target)
+    return {"ok": True, "folder": target.relative_to(root).as_posix()}
+
+
+def move_external_folder(data):
+    """Move an external folder atomically while keeping its contents together."""
+    root = _root(data.get("path"))
+    relative = str(data.get("folder") or "").strip().replace("\\", "/")
+    if not relative or Path(relative).is_absolute() or ".." in Path(relative).parts:
+        raise ValueError("Select a folder beneath the external root.")
+    raw_source = root / relative
+    if raw_source.is_symlink():
+        raise ValueError("Cannot move a linked folder.")
+    source = raw_source.resolve()
+    if not source.is_relative_to(root) or source == root or not source.is_dir():
+        raise ValueError("Folder does not exist inside the external root.")
+    destination = _external_target_folder(root, data.get("destination"))
+    if destination == source or destination.is_relative_to(source):
+        raise ValueError("Cannot move a folder inside itself.")
+    target = destination / source.name
+    if target.exists() or target.is_symlink():
+        raise ValueError("Destination already contains a file or folder with that name.")
+    source.rename(target)
+    return {"ok": True, "folder": target.relative_to(root).as_posix()}
+
+
 def move_external_files(data):
     """Move selected media and its adjacent authored/backup files together."""
     root, files = _external_sources(data)
@@ -591,6 +739,50 @@ def rename_external_file(data):
     return result
 
 
+def curate_external_file(data):
+    """Persist human-authored rating and tags beside source media."""
+    root = _root(data.get("path"))
+    source = _source_file(root, data.get("file"))
+    rating = data.get("rating")
+    tags = data.get("tags")
+    if rating is not None and (type(rating) is not int or rating < 0 or rating > 5):
+        raise ValueError("Rating must be an integer from 0 to 5.")
+    if tags is not None:
+        if (not isinstance(tags, list) or len(tags) > 40 or
+                any(not isinstance(tag, str) or not tag.strip() or len(tag.strip()) > 64
+                    for tag in tags)):
+            raise ValueError("Tags must be a list of up to 40 labels (64 characters each).")
+        tags = list(dict.fromkeys(tag.strip() for tag in tags))
+    if rating is None and tags is None:
+        raise ValueError("Provide a rating or tags.")
+    from .media import _media_metadata_lock, write_media_metadata_file
+    with _media_metadata_lock:
+        cache = _read_cache(source.parent)
+        previous = cache.get(source.name)
+        entry = dict(previous) if isinstance(previous, dict) else {}
+        stat = source.stat()
+        if entry.get("size") != stat.st_size or entry.get("mtime") != int(stat.st_mtime):
+            for key in ("resolution", "duration"):
+                entry.pop(key, None)
+        entry["size"] = stat.st_size
+        entry["mtime"] = int(stat.st_mtime)
+        if rating is not None:
+            entry["rating"] = rating or None
+        if tags is not None:
+            entry["tags"] = tags
+        cache[source.name] = entry
+        write_media_metadata_file(source.parent / "media_metadata.json", cache)
+    with _LOCK:
+        if _index is not None and _index["root"] == root:
+            live = _index["by_path"].get(source.relative_to(root).as_posix())
+            if live:
+                live["rating"] = entry.get("rating")
+                live["tags"] = entry.get("tags") or []
+                _index["revision"] += 1
+    return {"ok": True, "rating": entry.get("rating"),
+            "tags": entry.get("tags") or []}
+
+
 def edit_external_image(data):
     """Apply Prep's reversible still-image crop/transform to external media."""
     root = _root(data.get("path"))
@@ -648,6 +840,30 @@ def register_routes(app):
             app.logger.exception("EXTERNAL MEDIA REVEAL FAILED")
             return jsonify({"ok": False, "error": str(exc)}), 400
 
+    @app.post("/fs/media_explorer/external/move-folder")
+    def external_move_folder():
+        try:
+            return jsonify(move_external_folder(request.get_json(silent=True) or {}))
+        except Exception as exc:
+            app.logger.exception("EXTERNAL FOLDER MOVE FAILED")
+            return jsonify({"ok": False, "error": str(exc)}), 400
+
+    @app.post("/fs/media_explorer/external/rename-folder")
+    def external_rename_folder():
+        try:
+            return jsonify(rename_external_folder(request.get_json(silent=True) or {}))
+        except Exception as exc:
+            app.logger.exception("EXTERNAL FOLDER RENAME FAILED")
+            return jsonify({"ok": False, "error": str(exc)}), 400
+
+    @app.post("/fs/media_explorer/external/create-folder")
+    def external_create_folder():
+        try:
+            return jsonify(create_external_folder(request.get_json(silent=True) or {}))
+        except Exception as exc:
+            app.logger.exception("EXTERNAL FOLDER CREATE FAILED")
+            return jsonify({"ok": False, "error": str(exc)}), 400
+
     @app.post("/fs/media_explorer/external/move")
     def external_move():
         try:
@@ -664,6 +880,14 @@ def register_routes(app):
             app.logger.exception("EXTERNAL MEDIA RENAME FAILED")
             return jsonify({"ok": False, "error": str(exc)}), 400
 
+    @app.post("/fs/media_explorer/external/curate")
+    def external_curate():
+        try:
+            return jsonify(curate_external_file(request.get_json(silent=True) or {}))
+        except Exception as exc:
+            app.logger.exception("EXTERNAL MEDIA CURATION FAILED")
+            return jsonify({"ok": False, "error": str(exc)}), 400
+
     @app.post("/fs/media_explorer/external/image-edit")
     def external_image_edit():
         try:
@@ -678,6 +902,28 @@ def register_routes(app):
             return jsonify(trash_external_files(request.get_json(silent=True) or {}))
         except Exception as exc:
             app.logger.exception("EXTERNAL MEDIA TRASH FAILED")
+            return jsonify({"ok": False, "error": str(exc)}), 400
+
+    @app.get("/fs/media_explorer/views")
+    def media_saved_views():
+        try:
+            return jsonify({"ok": True, "views": list_saved_views()})
+        except Exception as exc:
+            app.logger.exception("MEDIA VIEWS LOAD FAILED")
+            return jsonify({"ok": False, "error": str(exc)}), 500
+
+    @app.post("/fs/media_explorer/views")
+    def media_save_view():
+        try:
+            return jsonify({"ok": True, "views": save_media_view(request.get_json(silent=True) or {})})
+        except (ValueError, OSError) as exc:
+            return jsonify({"ok": False, "error": str(exc)}), 400
+
+    @app.delete("/fs/media_explorer/views")
+    def media_delete_view():
+        try:
+            return jsonify({"ok": True, "views": delete_media_view((request.get_json(silent=True) or {}).get("name"))})
+        except (ValueError, OSError) as exc:
             return jsonify({"ok": False, "error": str(exc)}), 400
 
     @app.get("/fs/media_explorer/external/folders")

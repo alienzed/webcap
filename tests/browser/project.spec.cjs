@@ -52,3 +52,26 @@ test('Flow 1 — chat with Project-like fields is inert until explicit Project W
   expect((await story(page,saved.id)).concept).toBe('A lantern sways outside the bookshop.');
   expect((await observedModels(request)).calls).toHaveLength(2);
 });
+
+
+test('Flow 1 partial Create — Concept can be empty when useful Style and Invariants are returned',async({page,request})=>{
+  await resetModel(request);
+  const prior=(await stories(page)).map(item=>item.id);
+  await openDirector(page);
+  await queueModel(request,{concept:'',style:'A storm of blue light.',invariants:[
+    {kind:'sound',title:'',text:'Low distant thunder'}
+  ]});
+  await runWrite(page,{operation:'new-project',instruction:'Create the atmosphere-first Project.'});
+  await expect.poll(async()=>{
+    const current=await stories(page);
+    return current.filter(item=>!prior.includes(item.id)).length;
+  }).toBe(1);
+  const created=(await stories(page)).find(item=>!prior.includes(item.id));
+  const saved=await story(page,created.id);
+  expect(saved.concept).toBe('');
+  expect(saved.style).toBe('A storm of blue light.');
+  expect(saved.invariants).toEqual([{kind:'sound',title:'',text:'Low distant thunder'}]);
+  expect(saved.sceneOrder).toHaveLength(0);
+  expect((await observedModels(request)).calls).toHaveLength(1);
+  await expect(page.locator('#studio-project-review')).not.toBeVisible();
+});

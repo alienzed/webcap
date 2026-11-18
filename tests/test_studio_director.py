@@ -217,7 +217,7 @@ def test_director_chat_route_preserves_all_structured_schemas(monkeypatch, opera
     else:
         assert captured["schema"]["type"] == "object"
         assert set(captured["schema"]["properties"]) == expected_fields
-        if operation not in {"studio_scene_field_draft", "studio_scenes_draft"}:
+        if operation not in {"studio_scene_field_draft", "studio_scenes_draft", "studio_project_draft", "studio_brief_draft"}:
             assert captured["schema"]["additionalProperties"] is False
         else:
             assert "additionalProperties" not in captured["schema"]
@@ -235,16 +235,20 @@ def test_director_chat_route_preserves_all_structured_schemas(monkeypatch, opera
             assert record["required"] == ["title", "prompt", "durationSeconds"]
             assert record["properties"]["prompt"]["type"] == "string"
             assert "maximum" not in record["properties"]["durationSeconds"]
-        if operation == "studio_project_draft":
-            assert captured["schema"]["required"] == ["title", "concept", "style", "invariants"]
-        if operation == "studio_brief_draft":
-            assert captured["schema"]["required"] == ["title", "concept", "style", "invariants"], "The model returns a full Project baseline so unrelated fields can be preserved"
-            assert captured["schema"]["properties"]["invariants"]["items"]["required"] == ["kind", "title", "text"]
+        if operation in {"studio_project_draft", "studio_brief_draft"}:
+            assert "required" not in captured["schema"]
+            for field in ("title", "concept", "style"):
+                assert "maxLength" not in captured["schema"]["properties"][field]
+            invariant_schema = captured["schema"]["properties"]["invariants"]
+            assert "maxItems" not in invariant_schema
+            assert invariant_schema["items"]["properties"]["kind"]["enum"] == [
+                "character", "location", "visual", "world", "sound", "custom"
+            ]
 
 
 @pytest.mark.parametrize("operation, required_fields, expected", [
-    ("studio_brief_draft", ["style"], ["title", "concept", "style", "invariants"]),
-    ("studio_brief_draft", ["concept", "invariants"], ["title", "concept", "style", "invariants"]),
+    ("studio_brief_draft", ["style"], ["style"]),
+    ("studio_brief_draft", ["concept", "invariants"], ["concept", "invariants"]),
     ("studio_scene_field_draft", ["prompt", "title"], ["prompt", "title"]),
     ("studio_scene_field_draft", ["prompt", "durationSeconds"], ["prompt", "durationSeconds"]),
     ("studio_scene_field_draft", ["title"], ["title"]),
@@ -265,7 +269,11 @@ def test_explicit_studio_authoring_requires_each_requested_field(
         "messages": [{"role": "user", "content": "Return complete requested fields."}],
     })
     assert response.status_code == 202
-    assert captured["response_schema"]["required"] == expected
+    if operation == "studio_brief_draft":
+        assert list(captured["response_schema"]["properties"]) == expected
+        assert "required" not in captured["response_schema"], "Missing requested fields remain inspectable rather than invalidating useful output"
+    else:
+        assert captured["response_schema"]["required"] == expected
 
 
 def test_studio_chat_is_conversation_only_without_writing_schema():

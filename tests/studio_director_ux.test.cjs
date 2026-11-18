@@ -209,7 +209,7 @@ test('routine operation feedback does not leave a separate status card in the ch
   const messages=[];
   const scope=vm.createContext({state:{activeMode:'storyboard'},
     el:()=>status,window:{studioDirectorWorkbench:{setStatus:(text,error)=>messages.push([text,error])}}});
-  vm.runInContext(part(chat,'  function studioActionStatus(message, error) {',
+  vm.runInContext(part(chat,'  function studioActionStatus(message, error, showPartial) {',
     '  function parseStudioProjectDraft(raw) {'),scope);
   scope.studioActionStatus('Director acknowledged selected fields.',false);
   assert.equal(status.classList.hidden,true);
@@ -218,6 +218,9 @@ test('routine operation feedback does not leave a separate status card in the ch
   scope.studioActionStatus('Director read failed.',true);
   assert.equal(status.classList.hidden,false);
   assert.equal(status.textContent,'Director read failed.');
+  scope.studioActionStatus('Project saved with one skipped Invariant.',false,true);
+  assert.equal(status.classList.hidden,false);
+  assert.equal(status.textContent,'Project saved with one skipped Invariant.');
 });
 
 test('field update indication clears when the Storyboard opens another Project',()=>{

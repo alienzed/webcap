@@ -713,10 +713,8 @@ def create_studio_project(proposal):
     invariants = proposal.get("invariants", [])
     if any(not isinstance(value, str) for value in (title, concept, style)):
         raise ValueError("Studio project title, concept and style must be text.")
-    if len(title) > 240 or len(concept) > 20000 or len(style) > 10000:
-        raise ValueError("Studio project text is too long.")
-    if not isinstance(invariants, list) or len(invariants) > 30:
-        raise ValueError("Studio project supports at most 30 invariants.")
+    if not isinstance(invariants, list):
+        raise ValueError("Studio project Invariants must be a list.")
 
     first = proposal.get("firstScene")
     many = proposal.get("firstScenes")
@@ -732,8 +730,8 @@ def create_studio_project(proposal):
             raise ValueError("Initial Scene title and description must be text.")
         if not item["prompt"].strip() or len(item["prompt"]) > 60000 or len(item["title"]) > 240:
             raise ValueError("Each initial Scene needs a complete prompt.")
-    if not concept.strip() and not initial:
-        raise ValueError("Describe the idea or an initial Scene before creating a project.")
+    if not any((title.strip(), concept.strip(), style.strip(), invariants, initial)):
+        raise ValueError("Project creation returned no usable material.")
 
     story = _normalize_story({
         "title": title, "concept": concept, "style": style,
@@ -995,8 +993,8 @@ def _studio_valid_invariant(item):
 
 def _apply_studio_invariant_ops(story, operations):
     """Apply only reviewed entities; never accept a model's whole-list omission as deletion."""
-    if not isinstance(operations, list) or not 1 <= len(operations) <= 60:
-        raise ValueError("Review between one and 60 individual Invariant changes.")
+    if not isinstance(operations, list) or not operations:
+        raise ValueError("Provide at least one individual Invariant change.")
     result = copy.deepcopy(story.get("invariants") or [])
     renames = {}
     for action in operations:
@@ -1053,8 +1051,6 @@ def _apply_studio_invariant_ops(story, operations):
             scene["invariantRefs"] = checked
             reference_changes[scene_id] = {"before": copy.deepcopy(old_refs),
                                            "after": copy.deepcopy(checked)}
-    if len(result) > 30:
-        raise ValueError("Project supports at most 30 Invariants.")
     _studio_invariant_links_preserved(updated, result)
     return result, reference_changes
 
@@ -1089,13 +1085,12 @@ def apply_studio_brief(story_id, expected, changes):
         if before != expected[field]:
             raise RuntimeError("Project " + field + " changed since review. Prepare again.")
         if field in {"title", "concept", "style"}:
-            limit = 240 if field == "title" else (10000 if field == "style" else 20000)
-            if not isinstance(value, str) or len(value) > limit:
-                raise ValueError("Reviewed Project " + field + " text is too long.")
-            after = value.strip()
+            if not isinstance(value, str):
+                raise ValueError("Project " + field + " must be text.")
+            after = value.strip() if field == "title" else value
         else:
-            if not isinstance(value, list) or len(value) > 30:
-                raise ValueError("Project supports at most 30 Invariants.")
+            if not isinstance(value, list):
+                raise ValueError("Project Invariants must be a list.")
             if any(not isinstance(x, dict) or not isinstance(x.get("text"), str)
                    or not x["text"].strip() for x in value):
                 raise ValueError("Every retained Invariant needs a description.")

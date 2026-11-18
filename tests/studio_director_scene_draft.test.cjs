@@ -60,8 +60,9 @@ test('explicit Project creation persists only Project fields and never silently 
   const body=part(chat,'  function prepareStudioProject(options) {',
     '  // The reviewed Project is saved before any Scene authoring.');
   assert.match(body,/\/fs\/studio\/director\/project-create/);
-  assert.match(body,/title:proposal\.title,concept:proposal\.concept/);
-  assert.match(body,/style:proposal\.style,invariants:proposal\.invariants/);
+  assert.match(body,/studioProjectFieldsFromModel\(proposal\)/);
+  assert.match(body,/proposal:material\.values/);
+  assert.match(body,/Raw output is in I\/O/);
   assert.doesNotMatch(body,/initialScenes|writeInitialProjectScenes|showStudioProjectReview/);
 });
 

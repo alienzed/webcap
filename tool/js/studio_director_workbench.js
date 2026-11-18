@@ -1452,6 +1452,7 @@
   function bind() {
     var rail = el('studio-director-workbench');if (!rail) return;
     el('studio-action-advisor-enabled').onchange=function () {
+      el('studio-action-advisor-model').classList.toggle('hidden',!this.checked);
       if (!this.checked) clearActionAdvice();
       else refreshAdvisorModels();
     };

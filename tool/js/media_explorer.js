@@ -143,7 +143,10 @@
     if (name === null || !name.trim() || name.trim() === item.fileName) return;
     externalAction('rename', {
       path:externalPath,file:item.relativePath,newName:name.trim()
-    }, refreshExternalFiles);
+    }, function (result) {
+      refreshExternalFiles();
+      if (result.warning) report(new Error(result.warning));
+    });
   }
   function transformExternalImage(item, operation, label) {
     if (!window.confirm(label + ' ' + item.fileName + '?\\nThe original will be retained for restoration.')) return;

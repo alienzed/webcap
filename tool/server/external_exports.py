@@ -78,6 +78,29 @@ def copy_media(data):
     return {"ok": True, "destination": str(dest), "copied": created}
 
 
+def copy_generated_media(data):
+    """Copy owner-validated Generate results into a Set without moving originals."""
+    from .generate_store import load_result, resolve_result_media
+    storage_ids = data.get("storageIds")
+    if not isinstance(storage_ids, list) or not storage_ids or len(storage_ids) != len(set(storage_ids)):
+        raise ValueError("Select one or more unique generated results.")
+    sources = []
+    for storage_id in storage_ids:
+        if not isinstance(storage_id, str) or not storage_id.strip():
+            raise ValueError("Invalid generation identifier.")
+        result = load_result(storage_id)
+        source = resolve_result_media(result.get("mediaPath"))
+        sources.append((source, storage_id))
+    destination = _destination(data)
+    copied = []
+    for source, storage_id in sources:
+        target = _unique_path(destination, source.name)
+        shutil.copy2(source, target)
+        normalize_path_permissions(target)
+        copied.append({"source": storage_id, "name": target.name})
+    return {"ok": True, "destination": str(destination), "copied": copied}
+
+
 def export_clip(data):
     sources = _validated_sources(data)
     if len(sources) != 1:
@@ -111,6 +134,14 @@ def export_clip(data):
 
 
 def register_routes(app):
+    @app.post("/fs/media_explorer/generated/copy")
+    def explorer_generated_copy():
+        try:
+            return jsonify(copy_generated_media(request.get_json(silent=True) or {}))
+        except (ValueError, OSError, RuntimeError, FileNotFoundError) as exc:
+            app.logger.exception("EXPLORER GENERATED COPY FAILED")
+            return jsonify({"ok": False, "error": str(exc)}), 400
+
     @app.post("/fs/media_explorer/external/copy")
     def explorer_copy():
         try:

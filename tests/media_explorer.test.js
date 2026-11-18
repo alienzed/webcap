@@ -758,3 +758,16 @@ test('reverse sort restores from Explorer route and Clear filters resets it', as
   const next = new URL(f.pending.at(-1).url, 'http://localhost').searchParams;
   assert.equal(next.get('direction'), 'desc');
 });
+
+
+test('tag filters preserve deep links and reach owner-backed discovery', async () => {
+  const f=fixture('#/media?source=generate&tag=keeper');
+  f.window.openMediaExplorerActivity();
+  assert.equal(f.nodes['media-explorer-tag'].value,'keeper');
+  const request=new URL(f.pending[0].url,'http://localhost');
+  assert.equal(request.searchParams.get('tag'),'keeper');
+  const route=new URLSearchParams();
+  f.window.appendMediaExplorerRouteParams(route);
+  assert.equal(route.get('tag'),'keeper');
+  await f.settle(f.pending[0],[]);
+});

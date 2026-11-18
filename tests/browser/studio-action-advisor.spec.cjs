@@ -77,3 +77,30 @@ test('A failed optional advisor does not interrupt Director chat or a subsequent
   await expect.poll(async()=> (await stories(page)).some(p=>p.title===title)).toBe(true);
   expect((await observedModels(request)).calls).toHaveLength(3);
 });
+
+test('Advisor Read suggestion selects the existing Overview without reading until the author clicks Read',async({page,request})=>{
+  await resetModel(request);
+  const project=await seedProject(page,'Advisor Read '+Date.now(),{
+    concept:'The compass points toward a red tower.',style:'Overcast daylight.'
+  });
+  await openDirector(page);
+  await openProject(page,project.id);
+  await page.locator('#studio-action-advisor-enabled').check();
+  await queueModel(request,'We should check the saved Project Overview next.');
+  await queueModel(request,{actions:[{
+    kind:'read',label:'Read saved Overview',
+    projectId:project.id,fields:['overview']
+  }]});
+  await say(page,'What should we confirm before revising the Project?');
+  const advice=page.locator('#studio-action-advisor-actions');
+  await expect(advice.locator('button')).toHaveCount(1,{timeout:30000});
+  await advice.locator('button').click();
+  await expect(page.locator('#studio-dw-read-panel')).toBeVisible();
+  await expect(page.locator('#studio-dw-read-project')).toHaveValue(project.id);
+  await expect(page.locator('#studio-dw-project-fields input[data-group-select]').first()).toBeChecked();
+  await expect(page.locator('#director-chat-messages')).not.toContainText('The compass points toward a red tower.');
+  await expect.poll(async()=> (await observedModels(request)).calls.length).toBe(2);
+  await page.locator('#studio-dw-read-send').click();
+  await expect(page.locator('#director-chat-messages')).toContainText('The compass points toward a red tower.');
+  expect((await observedModels(request)).calls).toHaveLength(2);
+});

@@ -112,6 +112,14 @@
           up.addEventListener('click',function () {
             input.value=path.split('/').slice(0,-1).join('/');renderChoices();
           });folderHost.appendChild(up);
+          var create = document.createElement('button');create.type='button';
+          create.textContent = '+ New folder here';
+          create.addEventListener('click',function () {
+            promptMediaAction('Create folder in /'+path,'','Create folder',function (name) {
+              return externalActionStrict('create-folder',{path:externalPath,directory:path,name:name})
+                .then(function () {renderChoices();});
+            });
+          });folderHost.appendChild(create);
           (data.folders || []).forEach(function (name) {
             var next=document.createElement('button');next.type='button';
             next.textContent='📁 '+name;

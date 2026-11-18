@@ -1,6 +1,6 @@
 'use strict';
 const {test,expect}=require('./test.cjs');
-const {resetModel,queueModel,observedModels,openDirector,say,seedProject,story,openProject}=require('./helpers.cjs');
+const {resetModel,queueModel,observedModels,openDirector,say,seedProject,story,stories,openProject,runWrite}=require('./helpers.cjs');
 
 test('Action Advisor is opt-in and cannot independently issue a Write',async({page,request})=>{
   await resetModel(request);
@@ -59,4 +59,21 @@ test('Advisor prepares a field-scoped Project Write but only the normal Write bu
   const calls=(await observedModels(request)).calls;
   expect(JSON.stringify(calls[1].messages)).toContain('Action Advisor');
   expect(JSON.stringify(calls[2].messages)).not.toContain('You are WebCap');
+});
+
+test('A failed optional advisor does not interrupt Director chat or a subsequent manual Write',async({page,request})=>{
+  await resetModel(request);
+  await openDirector(page);
+  await page.locator('#studio-action-advisor-enabled').check();
+  await queueModel(request,'The lantern in the doorway would make a good opening image.');
+  await queueModel(request,'not a JSON action response');
+  await say(page,'Explore a lantern-lit opening.');
+  await expect(page.locator('#director-chat-messages')).toContainText('The lantern in the doorway');
+  await expect(page.locator('#studio-action-advisor-status')).toContainText('Suggestions unavailable',{timeout:30000});
+  const title='Manual after advisor failure '+Date.now();
+  await queueModel(request,{title,concept:'A lantern lights the doorway.',
+    style:'Warm amber lighting.',invariants:[]});
+  await runWrite(page,{operation:'new-project',instruction:'Create a lantern-lit Project.'});
+  await expect.poll(async()=> (await stories(page)).some(p=>p.title===title)).toBe(true);
+  expect((await observedModels(request)).calls).toHaveLength(3);
 });

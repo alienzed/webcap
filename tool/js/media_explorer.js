@@ -2022,7 +2022,8 @@
   bulkRemoveCollectionButton.type = 'button';
   bulkRemoveCollectionButton.className = 'review-captions-btn';
   bulkRemoveCollectionButton.textContent = 'Remove from collection…';
-  bulkRemoveCollectionButton.addEventListener('click',function () {
+  bulkRemoveCollectionButton.addEventListener('click',function (event) {
+    event.stopPropagation();
     var chosen = selectedCuratable();
     if (!chosen.length) return;
     var common = (chosen[0].tags || []).filter(function (tag) {

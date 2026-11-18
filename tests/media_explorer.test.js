@@ -446,7 +446,8 @@ test('External item actions expose Rename, Move and Edit consistently in Grid an
   await new Promise(resolve => setImmediate(resolve));
   assert.match(f.pending.at(-1).url, /\/fs\/media_explorer\/external\?/);
 
-  const rotate = f.menus.at(-1).find(action => action.label === 'Rotate left 90°');
+  const rotate = f.menus.at(-1).find(action => action.label === 'Edit media')
+    .children.find(action => action.label === 'Rotate left 90°');
   rotate.run();
   assert.equal(f.pending.at(-1).url, '/fs/media_explorer/external/image-edit');
   assert.equal(JSON.parse(f.pending.at(-1).options.body).operation, 'rotate_left_90');

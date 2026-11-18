@@ -1547,6 +1547,7 @@
         artifact = params.get('artifact') || ''; owner = params.get('owner') || '';
         full = params.get('full') === '1';
         el('media-explorer-search').value = params.get('q') || '';
+        el('media-explorer-tag').value = params.get('tag') || '';
         el('media-explorer-kind').value = params.get('kind') || '';
         el('media-explorer-sort').value = params.get('sort') || 'newest';
         facetIds.slice(1).forEach(function (id) {
@@ -1860,7 +1861,10 @@
     clearTimeout(debounce); debounce = setTimeout(function () { load(true); }, 250);
   });
   el('media-explorer-kind').addEventListener('change', function () { load(true); });
-  el('media-explorer-tag').addEventListener('change', function () {load(true);});
+  el('media-explorer-tag').addEventListener('input', function () {
+    clearTimeout(debounce);
+    debounce=setTimeout(function () {load(true);},250);
+  });
   el('media-explorer-storyboard-type').addEventListener('change', function () { load(true); });
   facetIds.slice(1).forEach(function (id) { el('media-explorer-' + id).addEventListener('change', function () { load(true); }); });
   el('media-explorer-sort').addEventListener('change', function () { load(true); });
@@ -1983,6 +1987,7 @@
     if (owner) params.set('owner', owner);
     if (full) params.set('full', '1');
     if (el('media-explorer-search').value.trim()) params.set('q', el('media-explorer-search').value.trim());
+    if (el('media-explorer-tag').value.trim()) params.set('tag', el('media-explorer-tag').value.trim());
     if (el('media-explorer-kind').value) params.set('kind', el('media-explorer-kind').value);
     facetIds.slice(1).forEach(function (id) { if (el('media-explorer-' + id).value) params.set(id === 'folder' ? 'mediaSet' : id, el('media-explorer-' + id).value); });
     ['min-side', 'min-mp', 'min-duration', 'max-duration'].forEach(function (id) { if (el('media-explorer-' + id).value) params.set(id, el('media-explorer-' + id).value); });

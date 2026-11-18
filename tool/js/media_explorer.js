@@ -191,8 +191,22 @@
           }}
         ]);
       });
-      allowFolderDrop(button, destination);
-      host.appendChild(button);
+      var row = document.createElement('div');
+      row.className = 'media-explorer-folder-row';
+      var more = document.createElement('button'); more.type = 'button';
+      more.textContent = '⋯'; more.className = 'media-explorer-folder-menu';
+      more.title = 'Folder actions for ' + name;
+      more.setAttribute('aria-label', 'Folder actions for '+name);
+      more.addEventListener('click',function (event) {
+        event.preventDefault();event.stopPropagation();
+        button.dispatchEvent(new MouseEvent('contextmenu',{
+          bubbles:true,cancelable:true,clientX:more.getBoundingClientRect().left,
+          clientY:more.getBoundingClientRect().bottom
+        }));
+      });
+      allowFolderDrop(row, destination);
+      row.appendChild(button);row.appendChild(more);
+      host.appendChild(row);
     });
   }
   function renderMainPreview() {

@@ -35,6 +35,46 @@
         el('media-explorer-export-status').textContent = err.message; report(err);
       });
   }
+  // Native drag state is scoped to this workspace; no filesystem writes occur until drop.
+  var draggedExternalIds = [];
+  function chosenExternalFiles() {
+    return items.filter(function (item) { return item.source === 'external' && selected.has(item.id); });
+  }
+  function moveExternalTo(destination, chosen) {
+    if (!chosen.length) return;
+    var names = chosen.map(function (item) { return item.relativePath; });
+    if (!window.confirm('Move ' + names.length + ' file(s) to /' + destination + '?')) return;
+    externalAction('move', {path: externalPath, files: names, destination: destination}, function (result) {
+      refreshExternalFiles();
+      if (result.warning) report(new Error(result.warning));
+    });
+  }
+  function allowFolderDrop(button, destination) {
+    button.classList.add('media-explorer-folder-drop');
+    button.addEventListener('dragover', function (event) {
+      if (!draggedExternalIds.length) return;
+      event.preventDefault(); event.dataTransfer.dropEffect = 'move';
+      button.classList.add('drag-over');
+    });
+    button.addEventListener('dragleave', function () { button.classList.remove('drag-over'); });
+    button.addEventListener('drop', function (event) {
+      button.classList.remove('drag-over');
+      if (!draggedExternalIds.length) return;
+      event.preventDefault(); event.stopPropagation();
+      var ids = new Set(draggedExternalIds);
+      var chosen = items.filter(function (item) { return item.source === 'external' && ids.has(item.id); });
+      draggedExternalIds = [];
+      moveExternalTo(destination, chosen);
+    });
+  }
+  function createExternalFolder() {
+    if (!isExternal() || !externalPath) return;
+    var name = window.prompt('New folder name');
+    if (name === null || !name.trim()) return;
+    externalAction('create-folder', {path: externalPath, directory: externalDirectory, name: name.trim()}, function () {
+      load(true, {refreshFilesystem:true});
+    });
+  }
   var needsLoad = true;
   var externalDirectory = '', externalFolders = [], reverseSort = false, galleryHome = null;
   function setExternalDirectory(path) {
@@ -51,7 +91,9 @@
     externalFolders.forEach(function (name) {
       var button = document.createElement('button');
       button.type = 'button'; button.textContent = '📁 ' + name;
-      button.onclick = function () { setExternalDirectory([externalDirectory, name].filter(Boolean).join('/')); };
+      var destination = [externalDirectory, name].filter(Boolean).join('/');
+      button.onclick = function () { setExternalDirectory(destination); };
+      allowFolderDrop(button, destination);
       host.appendChild(button);
     });
   }
@@ -175,7 +217,7 @@
     if (action === 'move') {
       destination = window.prompt('Move ' + chosen.length + ' file(s) to which folder inside the external root?\\nUse a relative folder path (empty for root).', externalDirectory);
       if (destination === null) return;
-      if (!window.confirm('Move ' + chosen.length + ' file(s) to ' + (destination || '/') + '?')) return;
+      moveExternalTo(destination, chosen); return;
     } else if (!window.confirm('Move ' + chosen.length + ' file(s) to the operating system Trash?')) return;
     externalAction(action, {path: externalPath, files:names, destination:destination}, function (result) {
       if (action === 'trash') {
@@ -232,6 +274,30 @@
       }
     });
   }
+  function rateExplorerItem(item, value) {
+    var url, payload;
+    if (item.source === 'generate' && item.role === 'generated' && item.storageId) {
+      url = '/fs/generate/result/rating';
+      payload = {storageId:item.storageId, rating:value};
+    } else if (item.source === 'test' && item.ownerFolder && item.storageId) {
+      url = '/fs/test_generations';
+      payload = {folder:item.ownerFolder, operation:'test_rate_result',
+        criteria:{session:item.storageId, mediaFile:item.fileName, rating:value}};
+    } else return;
+    fetch(url, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})
+      .then(function (res) { return res.json().then(function (body) {
+        if (!res.ok || body.ok === false) throw Error(body.error || 'Rating failed');
+        return body;
+      }); }).then(function (result) {
+        item.rating = result.rating;
+        if (active >= 0 && items[active] && items[active].id === item.id) selectItem(active);
+        if (el('media-explorer-rating').value || el('media-explorer-sort').value === 'rating') load(true);
+        else {
+          var card = Array.from(el('media-explorer-grid').children).find(function (node) {return node.dataset.id === item.id;});
+          if (card) text(card.querySelector('.media-explorer-card-sub'),cardSummary(item));
+        }
+      }).catch(report);
+  }
   function itemActions(item) {
     var actions = [{label:'View full size', run:function () { openLoupe(items.findIndex(function (x) { return x.id === item.id; })); }}];
     if (item.source === 'external') {
@@ -258,6 +324,14 @@
       actions.push({label:'Rename…', run:function () { renameExternalFile(item); }});
       actions.push({label:'Move to Folder…', run:function () { externalMutation(item, 'move'); }});
       actions.push({label:'Move to Trash', run:function () { externalMutation(item, 'trash'); }});
+    }
+    if ((item.source === 'generate' && item.role === 'generated' && item.storageId) ||
+        (item.source === 'test' && item.ownerFolder && item.storageId)) {
+      actions.push({separator:true});
+      for (var stars = 0; stars <= 5; stars++) (function (value) {
+        actions.push({label: value ? 'Rate ' + value + ' ★' : 'Clear rating',group:'Rating',
+          run:function () {rateExplorerItem(item,value);}});
+      })(stars);
     }
     if (item.source === 'generate' && item.role === 'generated' && item.storageId) {
       actions.push({separator:true});
@@ -601,6 +675,7 @@
     text(el('media-explorer-compare'), chosen.length > 2 && chosen.length <= 4 ? 'Survey' : 'Compare');
     el('media-explorer-compare').title = 'Compare 2–4 media; videos play independently';
     syncSideListSelection();
+    syncBulkActions();
     Array.prototype.forEach.call(el('media-explorer-grid').children, function (card, i) {
       card.classList.toggle('selected', selected.has(items[i].id));
       card.querySelector('.media-explorer-card-check').checked = selected.has(items[i].id);
@@ -910,6 +985,16 @@
     card.dataset.id = item.id;
     card.dataset.mediaKind = item.mediaKind;
     card.dataset.index = index;
+    if (item.source === 'external') {
+      card.draggable = true;
+      card.addEventListener('dragstart', function (event) {
+        var chosen = selected.has(item.id) ? chosenExternalFiles() : [item];
+        draggedExternalIds = chosen.map(function (entry) {return entry.id;});
+        event.dataTransfer.effectAllowed = 'move';
+        event.dataTransfer.setData('text/plain', chosen.map(function (entry) {return entry.relativePath;}).join('\\n'));
+      });
+      card.addEventListener('dragend', function () {draggedExternalIds = [];});
+    }
     var open = document.createElement('button'); open.type = 'button'; open.className = 'media-explorer-card-open';
     open.tabIndex = index === 0 ? 0 : -1;
     open.setAttribute('aria-label', item.fileName + ', ' + item.role);
@@ -1345,6 +1430,33 @@
     }).catch(function (err) { text(el('media-explorer-export-status'), err.message); report(err); })
       .finally(function () { submit.disabled = false; });
   });
+  var newFolderButton = document.createElement('button');
+  newFolderButton.type = 'button'; newFolderButton.className = 'review-captions-btn';
+  newFolderButton.id = 'media-explorer-new-folder'; newFolderButton.textContent = '+ New folder';
+  newFolderButton.addEventListener('click', createExternalFolder);
+  el('media-explorer-external-navigation').appendChild(newFolderButton);
+  allowFolderDrop(el('media-explorer-up'), externalDirectory.split('/').slice(0,-1).join('/'));
+  var bulkMoveButton = document.createElement('button');
+  bulkMoveButton.type = 'button'; bulkMoveButton.className = 'review-captions-btn';
+  bulkMoveButton.textContent = 'Move to Folder…';
+  bulkMoveButton.addEventListener('click', function () {
+    var chosen = chosenExternalFiles();
+    if (chosen.length) externalMutation(chosen[0], 'move');
+  });
+  var bulkTrashButton = document.createElement('button');
+  bulkTrashButton.type = 'button'; bulkTrashButton.className = 'review-captions-btn';
+  bulkTrashButton.textContent = 'Move to Trash';
+  bulkTrashButton.addEventListener('click', function () {
+    var chosen = chosenExternalFiles();
+    if (chosen.length) externalMutation(chosen[0], 'trash');
+  });
+  el('media-explorer-selection').insertBefore(bulkMoveButton, el('media-explorer-compare'));
+  el('media-explorer-selection').insertBefore(bulkTrashButton, el('media-explorer-compare'));
+  function syncBulkActions() {
+    var show = isExternal() && chosenExternalFiles().length > 0;
+    bulkMoveButton.classList.toggle('hidden',!show);
+    bulkTrashButton.classList.toggle('hidden',!show);
+  }
   el('media-explorer-up').addEventListener('click', function () { setExternalDirectory(externalDirectory.split('/').slice(0, -1).join('/')); });
   el('media-explorer-recursive').addEventListener('change', function () { renderExternalFolders(); load(true); });
   el('media-explorer-sort-reverse').addEventListener('click', function () {

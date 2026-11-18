@@ -4,18 +4,18 @@ This is an implementation supplement to [Studio Director's functional contract](
 
 ## Outcome
 
-After a completed Director chat reply, an **opt-in**, independent, model-selectable sidecar can suggest up to three relevant actions. Each suggestion prepares existing **Read** or **Write** controls. Only the author clicks the existing action to execute it; sidecar output is not authority or saved Project data.
+After a completed Director chat reply, an **enabled-by-default**, independent sidecar using Director's selected model can suggest up to three relevant actions. Each suggestion prepares existing **Read** or **Write** controls. Only the author clicks the existing action to execute it; sidecar output is not authority or saved Project data.
 
 ## Phase 1 — Isolate the advisor request
 
 - Reuse `/fs/director/chat`, the existing queued-job endpoint and polling API under a distinct `studio_action_advisor` operation.
 - Supply an independent concise system prompt and a minimal action schema.
 - Supply the actual conversation and known selected Project/Scene IDs; do not silently fetch saved creative material.
-- Allow a different model selection from Director. No new provider, GPU queue, config root or background worker.
+- Always use the already-selected Director model to avoid cold model loads. No new provider, GPU queue, config root or background worker.
 
 ## Phase 2 — Make independent suggestions
 
-- Sidecar is **off by default** and starts only after a successfully saved, user-initiated Director reply.
+- Sidecar is **enabled by default**, controlled by a browser-wide toggle in Settings → Director and starts only after a successfully saved, user-initiated Director reply.
 - Run it without changing Director's pending flag, job ID, messages, request/response I/O, or Read/Write history.
 - Show up to three applicable actions, validating exact supported operation names, allowed Project field scopes and known destination IDs.
 - Keep transient advisor output separate from the conversation. Clear it when a new chat turn or conversation begins; ignore late responses from previous turns/conversations.

@@ -1877,7 +1877,7 @@
     'media-explorer-min-duration','media-explorer-max-duration'].forEach(function (id) {
     el(id).addEventListener('change', markSavedViewModified);
   });
-  sourceButtons.forEach(function (button) {
+  document.querySelectorAll('.media-explorer-source').forEach(function (button) {
     button.addEventListener('click',markSavedViewModified);
   });
   el('media-explorer-sort-reverse').addEventListener('click',markSavedViewModified);

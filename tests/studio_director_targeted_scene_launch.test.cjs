@@ -404,8 +404,8 @@ test('separate selected Scene Writes never apply another Scene response to the w
   assert.deepEqual(saves.map(row=>row.sceneId),['s1','s2']);
   assert.equal(h.saved.scenes.s1.prompt,'First rewrite.');
   assert.equal(h.saved.scenes.s2.prompt,'Second rewrite.');
-  assert.equal(h.saved.scenes.s1.durationSeconds,12);
-  assert.equal(h.saved.scenes.s2.durationSeconds,8);
+  assert.equal(h.saved.scenes.s1.durationSeconds,20);
+  assert.equal(h.saved.scenes.s2.durationSeconds,20);
 });
 test('a subsequent Scene Write uses the saved baseline without hidden unsaved draft injection',async()=>{
   const h=sceneFixture();

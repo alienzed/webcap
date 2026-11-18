@@ -1468,7 +1468,7 @@
   function recordStudioOperation(kind, label, storyId, sceneIds) {
     state.studioOperations.push({
       kind: kind, label: String(label || '').slice(0, 200), storyId: String(storyId || ''),
-      sceneIds: (sceneIds || []).slice(0, 32), at: new Date().toISOString()
+      sceneIds: (sceneIds || []).slice(), at: new Date().toISOString()
     });
     state.studioOperations = state.studioOperations.slice(-25);
     if (state.studioStoryAccess && state.studioStoryAccess.storyId === String(storyId || '')) {

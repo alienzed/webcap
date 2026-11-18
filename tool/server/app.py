@@ -2321,8 +2321,8 @@ def director_chat_route():
                     "for the existing Writer to follow; for Read identify the requested saved fields. "
                     "Use only the exact Project and Scene IDs given in the action context; "
                     "for Project revisions specify precisely which of title, concept, style, "
-                    "invariants should change. Use project.title, project.concept, project.style, "
-                    "project.invariants, or scene:<ID>:prompt for Read selections. "
+                    "invariants should change. For Read, choose 'overview' (the complete saved "
+                    "Project Overview) or 'scene' (the currently selected Scene) in fields. "
                     "Keep instructions concise and preserve the author's creative intent. "
                     "Your suggestions are optional UI shortcuts, not commands or saved content."
                 ),

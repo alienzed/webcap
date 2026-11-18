@@ -166,6 +166,7 @@
   var needsLoad = true;
   var externalDirectory = '', externalFolders = [], reverseSort = false, galleryHome = null;
   function setExternalDirectory(path) {
+    markSavedViewModified();
     externalDirectory = path; selected.clear(); anchor = -1;
     el('media-explorer-recursive').checked = false; selectItem(-1); load(true);
   }
@@ -1882,6 +1883,7 @@
   });
   el('media-explorer-sort-reverse').addEventListener('click',markSavedViewModified);
   el('media-explorer-clear-filters').addEventListener('click',markSavedViewModified);
+  el('media-explorer-external-path').addEventListener('input',markSavedViewModified);
   el('media-explorer-view-select').addEventListener('focus',loadSavedViews);
   el('media-explorer-view-select').addEventListener('change',function () {
     el('media-explorer-delete-view').disabled=!this.value;

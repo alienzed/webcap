@@ -274,6 +274,7 @@ def discover_tests(full=False):
 def discover_epoch_frames():
     """Read retained campaign frames only, via Epoch Finder's owner contract."""
     from .epoch_finder import storage_campaigns, frame_path
+    from .folder_state_store import read_folder_state
     frames = []
     for campaign in storage_campaigns():
         folder = str(campaign["folder"])
@@ -281,6 +282,9 @@ def discover_epoch_frames():
         manifest = Path(campaign["path"]) / "campaign.json"
         payload = json.loads(manifest.read_text(encoding="utf-8"))
         owner = app_config.safe_join_fs_root(folder)
+        campaign_state = read_folder_state(Path(campaign["path"]) / ".webcap_state.json")
+        tag_map = campaign_state.get("curation_tags_by_media") or {}
+        tag_map = tag_map if isinstance(tag_map, dict) else {}
         for unit in payload.get("units") or []:
             if not isinstance(unit, dict):
                 continue
@@ -302,7 +306,8 @@ def discover_epoch_frames():
                             + "&campaign=" + quote(campaign_id, safe="")
                             + "&frame=" + quote(name, safe=""),
                 "createdAt": int(payload.get("createdAt") or 0),
-                "rating": None, "model": str(payload.get("modelId") or ""),
+                "rating": None, "tags": tag_map.get(name, []),
+                "model": str(payload.get("modelId") or ""),
                 "contextLabel": str(payload.get("name") or campaign_id),
                 "epoch": unit.get("epoch"), "fileSize": file.stat().st_size,
                 "assessment": _assessment(unit.get("assessment")),
@@ -316,10 +321,15 @@ def discover_storyboards():
     """Story-owned takes and references, served only by Storyboard's media route."""
     from .storyboard_store import list_stories, load_story, resolve_story_media
     from .storyboard_assembly import current_export
+    from .folder_state_store import read_folder_state
+    from .storyboard_store import _story_dir
     found = {}
     for summary in list_stories():
         story_id = str(summary.get("id") or "")
         story = load_story(story_id)
+        state = read_folder_state(_story_dir(story_id) / ".webcap_state.json")
+        tag_map = state.get("curation_tags_by_media") or {}
+        tag_map = tag_map if isinstance(tag_map, dict) else {}
         exported = current_export(story_id)
         if exported:
             path = exported["mediaPath"]
@@ -332,7 +342,7 @@ def discover_storyboards():
                 "mediaUrl": "/fs/storyboard/media?story=" + quote(story_id, safe="")
                             + "&path=" + quote(path, safe=""),
                 "createdAt": int(datetime.fromisoformat(exported["createdAt"].replace("Z", "+00:00")).timestamp() * 1000) if exported.get("createdAt") else 0,
-                "rating": None, "model": "",
+                "rating": None, "tags": tag_map.get(path, []), "model": "",
                 "contextLabel": str(story.get("title") or story_id) + " / Sequence export",
                 "roles": ["export"],
                 "fileSize": file.stat().st_size,
@@ -372,7 +382,8 @@ def discover_storyboards():
                     "mediaUrl": "/fs/storyboard/media?story=" + quote(story_id, safe="")
                                 + "&path=" + quote(path, safe=""),
                     "createdAt": int(datetime.fromisoformat(entry["createdAt"]).timestamp() * 1000) if entry.get("createdAt") else 0,
-                    "rating": None, "model": str(entry.get("modelId") or ""),
+                    "rating": None, "tags": tag_map.get(path, []),
+                    "model": str(entry.get("modelId") or ""),
                     "contextLabel": str(story.get("title") or story_id) + " / " + str(scene.get("title") or scene_id),
                     "roles": [role], "fileSize": file.stat().st_size,
                     "uses": [use],

@@ -61,6 +61,12 @@ def _validated_sources(data):
     return [(_source_file(root, relative), str(relative)) for relative in paths]
 
 
+def _destination_response(destination, copied):
+    return {"ok": True, "destination": str(destination),
+            "destinationRelative": destination.relative_to(app_config.FS_ROOT.resolve()).as_posix(),
+            "copied": copied}
+
+
 def copy_media(data):
     sources = _validated_sources(data)
     dest = _destination(data)
@@ -98,7 +104,7 @@ def copy_generated_media(data):
         shutil.copy2(source, target)
         normalize_path_permissions(target)
         copied.append({"source": storage_id, "name": target.name})
-    return {"ok": True, "destination": str(destination), "copied": copied}
+    return _destination_response(destination, copied)
 
 
 def copy_test_media(data):
@@ -131,7 +137,7 @@ def copy_test_media(data):
         shutil.copy2(source, target)
         normalize_path_permissions(target)
         copied.append({"source": "/".join(key), "name": target.name})
-    return {"ok": True, "destination": str(destination), "copied": copied}
+    return _destination_response(destination, copied)
 
 
 def copy_owned_media(data):
@@ -164,7 +170,7 @@ def copy_owned_media(data):
         shutil.copy2(source, target)
         normalize_path_permissions(target)
         copied.append({"source": producer, "name": target.name})
-    return {"ok": True, "destination": str(destination), "copied": copied}
+    return _destination_response(destination, copied)
 
 
 def export_clip(data):

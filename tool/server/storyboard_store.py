@@ -1243,8 +1243,8 @@ def add_tentative_scenes_at(story_id, expected_scene_order, drafts, placement, r
         title, prompt = item.get("title", ""), item.get("prompt")
         if not isinstance(title, str) or not isinstance(prompt, str) or not prompt.strip():
             raise ValueError("A Scene needs a usable prompt to save.")
-        if "durationSeconds" not in item:
-            raise ValueError("A Scene duration is missing; the original model response must be retained.")
+        # Legacy manual Scene review may omit duration and uses its established
+        # storage default. Studio Director Write supplies only authored durations.
         # Preserve all received Scene fields supported by storage. Unknown model
         # properties are reported by the caller rather than rejecting the prompt.
         new_scenes.append(_normalize_scene(_new_id("scene"), item))

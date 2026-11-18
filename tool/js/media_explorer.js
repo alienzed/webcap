@@ -681,7 +681,7 @@
     el('media-explorer-model').classList.toggle('hidden', external);
     el('media-explorer-folder').classList.toggle('hidden', external);
     el('media-explorer-rating').classList.toggle('hidden', false);
-    el('media-explorer-tag').classList.toggle('hidden', !external);
+    el('media-explorer-tag').classList.toggle('hidden', false);
     el('media-explorer-date').classList.toggle('hidden', false);
     el('media-explorer-size').disabled = explorerMode !== 'grid';
     el('media-explorer-workspace').querySelector('.media-explorer-size-label').classList.toggle('hidden', explorerMode !== 'grid');
@@ -1275,6 +1275,7 @@
       ['min-side', 'min-mp', 'min-duration', 'max-duration'].some(function (name) { return el('media-explorer-' + name).value; });
     return artifact || owner || role || source || storyboardType() || el('media-explorer-search').value.trim() ||
       facetIds.some(function (id) { return el('media-explorer-' + id).value; }) ||
+      el('media-explorer-tag').value.trim() ||
       ['min-side', 'min-mp', 'min-duration', 'max-duration'].some(function (id) { return el('media-explorer-' + id).value; });
   }
   function emptyState() {
@@ -1316,6 +1317,7 @@
         if (input.value) chip(technicalNames[name] + ' ' + input.value, function () { input.value = ''; load(true); });
       });
     } else {
+      if (el('media-explorer-tag').value.trim()) chip('Tag: '+el('media-explorer-tag').value.trim(),function () {el('media-explorer-tag').value='';load(true);});
       facetIds.slice(1).forEach(function (id) {
         var select = el('media-explorer-' + id);
         if (select.value) chip(select.options[select.selectedIndex].textContent, function () { select.value = ''; load(true); });
@@ -1386,7 +1388,7 @@
     var qs = new URLSearchParams({limit:pageSize, offset:reset ? 0 : offset, role:role,
       kind:el('media-explorer-kind').value, search:el('media-explorer-search').value.trim(),
       sort:el('media-explorer-sort').value, source:source, full:full ? '1' : '0',
-      storyboard_type:storyboardType(), model:el('media-explorer-model').value, folder:el('media-explorer-folder').value, rating:el('media-explorer-rating').value, tag: isExternal() ? el('media-explorer-tag').value.trim() : '', date:el('media-explorer-date').value, artifact:artifact, owner:owner});
+      storyboard_type:storyboardType(), model:el('media-explorer-model').value, folder:el('media-explorer-folder').value, rating:el('media-explorer-rating').value, tag:el('media-explorer-tag').value.trim(), date:el('media-explorer-date').value, artifact:artifact, owner:owner});
     ['min-side', 'min-mp', 'min-duration', 'max-duration'].forEach(function (id) {
       qs.set(id.replace(/-/g, '_'), el('media-explorer-' + id).value);
     });
@@ -1461,8 +1463,8 @@
         });
         offset += incoming.length;
       }
-      if (isExternal()) {
-        var known = new Set();
+      {
+        var known = new Set(data.facets && data.facets.tags || []);
         items.forEach(function (item) {(item.tags || []).forEach(function (tag) {known.add(tag);});});
         var datalist = el('media-explorer-known-tags'); datalist.replaceChildren();
         Array.from(known).sort().forEach(function (tag) {

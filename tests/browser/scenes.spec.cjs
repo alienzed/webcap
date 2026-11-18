@@ -73,7 +73,7 @@ test('usable returned Scene survives invalid sibling without inventing a repair'
   const saved=await story(page,project.id);
   expect(saved.scenes[saved.sceneOrder[0]].title).toBe('Complete');
   expect((await observedModels(request)).calls).toHaveLength(1);
-  await expect(page.locator('#studio-dw-status')).toContainText('1 returned record');
+  await expect(page.locator('#studio-dw-status')).toContainText('Scene 2: missing Prompt');
 });
 
 test('unusable Scene result is exposed but does not create default titles or durations',async({page,request})=>{
@@ -86,7 +86,7 @@ test('unusable Scene result is exposed but does not create default titles or dur
   ]});
   await runWrite(page,{projectId:project.id,operation:'scene-write',sceneMode:'create',
     instruction:'Write the invalid Scene only if it has persistable fields.'});
-  await expect(page.locator('#studio-dw-status')).toContainText('no Scene records with persistable fields');
+  await expect(page.locator('#studio-dw-status')).toContainText('no Scenes WebCap could save');
   expect((await story(page,project.id)).sceneOrder).toHaveLength(0);
   expect((await observedModels(request)).calls).toHaveLength(1);
 });

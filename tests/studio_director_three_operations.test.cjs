@@ -116,7 +116,7 @@ test('WebCap binds explicit Scene destination by actual saved ID, not author pro
 });
 test('explicit Scene writes rely on authored duration values rather than guessing from prose',()=>{
   assert.doesNotMatch(chat,/function studioRequestedDuration\(|function studioMentionedDuration\(/);
-  assert.match(chat,/Number\.isInteger\(proposed\.durationSeconds\)/);
+  assert.match(chat,/Number\.isFinite\(proposed\.durationSeconds\)/);
   assert.match(chat,/missing or unusable durationSeconds/);
   assert.doesNotMatch(chat,/draft\.scenes\[0\]\.durationSeconds = requestedDuration/);
 });

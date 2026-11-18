@@ -294,7 +294,6 @@
     });
   }
   var advisorTurn = 0;
-  var advisorScope = null;
   var allowedAdvisorKinds = ['create_project','revise_project','create_scene','revise_scenes','read'];
   function advisorStatus(message) {
     var node = el('studio-action-advisor-status');
@@ -303,7 +302,6 @@
   }
   function clearActionAdvice() {
     advisorTurn++;
-    advisorScope = null;
     el('studio-action-advisor-actions').replaceChildren();
     el('studio-action-advisor-actions').classList.add('hidden');
     advisorStatus('');
@@ -442,7 +440,6 @@
         !window.studioDirectorBridge.isCurrentConversation(scope.conversationId)) return;
     refreshAdvisorModels();
     var token = advisorTurn, model = el('studio-action-advisor-model').value || scope.modelId;
-    advisorScope = scope;
     advisorStatus('Finding next actions…');
     var request = {
       conversation:scope.messages, actionContext:{

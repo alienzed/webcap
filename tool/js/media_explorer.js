@@ -37,6 +37,17 @@
   }
   // Native drag state is scoped to this workspace; no filesystem writes occur until drop.
   var draggedExternalIds = [];
+  function setupMediaDrag(host, item) {
+    if (item.source !== 'external') return;
+    host.draggable = true;
+    host.addEventListener('dragstart', function (event) {
+      var chosen = selected.has(item.id) ? chosenExternalFiles() : [item];
+      draggedExternalIds = chosen.map(function (entry) {return entry.id;});
+      event.dataTransfer.effectAllowed = 'move';
+      event.dataTransfer.setData('text/plain', chosen.map(function (entry) {return entry.relativePath;}).join('\\n'));
+    });
+    host.addEventListener('dragend', function () {draggedExternalIds = [];});
+  }
   function chosenExternalFiles() {
     return items.filter(function (item) { return item.source === 'external' && selected.has(item.id); });
   }
@@ -376,6 +387,7 @@
           if (next >= 0) { selectItem(next); openLoupe(); }
         });
         row.appendChild(check); row.appendChild(button); addItemMenu(row, item);
+        setupMediaDrag(row, item);
       }
       row.dataset.mediaKind = item.mediaKind;
       row.querySelector('button').textContent = item.fileName;
@@ -985,16 +997,7 @@
     card.dataset.id = item.id;
     card.dataset.mediaKind = item.mediaKind;
     card.dataset.index = index;
-    if (item.source === 'external') {
-      card.draggable = true;
-      card.addEventListener('dragstart', function (event) {
-        var chosen = selected.has(item.id) ? chosenExternalFiles() : [item];
-        draggedExternalIds = chosen.map(function (entry) {return entry.id;});
-        event.dataTransfer.effectAllowed = 'move';
-        event.dataTransfer.setData('text/plain', chosen.map(function (entry) {return entry.relativePath;}).join('\\n'));
-      });
-      card.addEventListener('dragend', function () {draggedExternalIds = [];});
-    }
+    setupMediaDrag(card, item);
     var open = document.createElement('button'); open.type = 'button'; open.className = 'media-explorer-card-open';
     open.tabIndex = index === 0 ? 0 : -1;
     open.setAttribute('aria-label', item.fileName + ', ' + item.role);

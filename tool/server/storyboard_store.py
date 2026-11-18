@@ -1545,10 +1545,9 @@ def apply_studio_scene_fields(story_id, scene_id, expected, changes):
     for key, value in changes.items():
         if key == "durationSeconds":
             if (type(value) not in (int, float) or type(expected[key]) not in (int, float)
-                    or not 4 <= value <= 15 or int(value) != value):
-                raise ValueError("Scene duration must be a whole number from 4 to 15 seconds.")
-        elif (not isinstance(value, str) or len(value) > 60000
-              or not isinstance(expected[key], str)):
+                    or not 0 < value < float("inf")):
+                raise ValueError("Scene duration must be a positive finite number.")
+        elif (not isinstance(value, str) or not isinstance(expected[key], str)):
             raise ValueError("Reviewed Scene field values must be text with saved originals.")
 
     story = load_story(story_id)
@@ -1561,8 +1560,6 @@ def apply_studio_scene_fields(story_id, scene_id, expected, changes):
             raise RuntimeError("Scene " + key + " changed since review. Read the current value and review again.")
     clean = {key: value if key == "durationSeconds" else value.strip()
              for key, value in changes.items()}
-    if "title" in clean and len(clean["title"]) > 240:
-        raise ValueError("Scene title is too long.")
     revised = _normalize_scene(scene_id, clean, existing=current)
     story["scenes"][scene_id] = revised
     story["updatedAt"] = _utc_now()

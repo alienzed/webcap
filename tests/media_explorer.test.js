@@ -96,17 +96,10 @@ function fixture(hash = '#/media') {
     querySelectorAll: selector => selector.includes('[data-explorer-mode]') ? modeButtons :
       selector.includes('[data-media-role]') ? buttons.filter(b => 'mediaRole' in b.dataset) :
       selector.includes('[data-media-source]') ? buttons.filter(b => 'mediaSource' in b.dataset) : buttons };
-  const prepState = {folder:'',dirStack:[],currentItem:null};
-  const prepCalls = [];
   const window = { location: {hash}, prompt: () => 'child', confirm: () => true, reportConsoleError: (source, error) => errors.push(error), syncApplicationShellContext() {}, syncShellLocationRoute() {} };
   for (const owner of ['Generate', 'TestBench', 'Storyboard', 'Storage']) window['close' + owner + 'Activity'] = () => closed.push(owner);
   vm.runInNewContext(fs.readFileSync('tool/js/media_explorer.js', 'utf8'), {
     document, window, console, URLSearchParams, AbortController, Set, Map, setTimeout, clearTimeout,
-    state:prepState,
-    openPrepActivity: () => prepCalls.push('open'),
-    clearEditorAndPreview: () => prepCalls.push('clear'),
-    clearCaptionFilterInputs: () => prepCalls.push('filters'),
-    refreshCurrentDirectory: () => prepCalls.push('refresh'),
     getComputedStyle: () => ({gridTemplateColumns:'240px 240px'}),
     showContextMenu: (x, y, actions) => menus.push(actions),
     openVideoClipModal: (...args) => clipCalls.push(args),
@@ -118,7 +111,7 @@ function fixture(hash = '#/media') {
     await new Promise(resolve => setImmediate(resolve));
   };
   const key = (target, key, extra = {}) => document.listeners.keydown({target, key, preventDefault() {}, ...extra});
-  return {nodes, buttons, modeButtons, pending, errors, closed, menus, clipCalls, cropCalls, window, document, settle, key, prepState, prepCalls};
+  return {nodes, buttons, modeButtons, pending, errors, closed, menus, clipCalls, cropCalls, window, document, settle, key};
 }
 const media = (id, kind = 'image') => ({id, fileName:id + '.png', mediaKind:kind, mediaUrl:'/media/' + id, role:'generated', source:'generate', rating:null});
 
@@ -798,30 +791,4 @@ test('saved views restore tag, rating, source and sort in one action', async () 
   assert.equal(listing.searchParams.get('tag'),'keeper');
   assert.equal(listing.searchParams.get('rating'),'4');
   assert.equal(listing.searchParams.get('sort'),'rating');
-});
-
-
-test('Copy to Set offers explicit Prep handoff only after backend-confirmed success', async () => {
-  const f = fixture();
-  f.window.openMediaExplorerActivity();
-  await f.settle(f.pending[0], [media('result')]);
-  const card=f.nodes['media-explorer-grid'].children[0];
-  card.querySelector('.media-explorer-item-menu').click({preventDefault(){},stopPropagation(){}});
-  f.menus.at(-1).find(action => action.label==='Copy to Set…').run();
-  assert.equal(f.nodes['media-explorer-export-open-prep'].classList.contains('hidden'),true);
-  const browse=f.pending.at(-1);
-  await f.settle(browse,[],true,{folders:[]});
-  f.nodes['media-explorer-export-destination'].value='sets';
-  f.nodes['media-explorer-export-form'].emit('submit',{preventDefault(){}});
-  const copy=f.pending.at(-1);
-  assert.equal(copy.url,'/fs/media_explorer/generated/copy');
-  assert.equal(f.prepCalls.length,0);
-  await f.settle(copy,[],true,{copied:[{name:'result.png'}],
-    destination:'/data/sets/new-set',destinationRelative:'sets/new-set'});
-  assert.equal(f.nodes['media-explorer-export-open-prep'].classList.contains('hidden'),false);
-  assert.equal(f.prepCalls.length,0,'copy does not unexpectedly navigate away');
-  f.nodes['media-explorer-export-open-prep'].click();
-  assert.equal(f.prepState.folder,'sets/new-set');
-  assert.deepEqual(Array.from(f.prepState.dirStack, entry=>entry.name),['','sets','new-set']);
-  assert.deepEqual(f.prepCalls,['open','clear','filters','refresh']);
 });

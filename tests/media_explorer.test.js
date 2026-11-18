@@ -771,3 +771,24 @@ test('tag filters preserve deep links and reach owner-backed discovery', async (
   assert.equal(route.get('tag'),'keeper');
   await f.settle(f.pending[0],[]);
 });
+
+
+test('saved views restore tag, rating, source and sort in one action', async () => {
+  const f=fixture();
+  f.window.openMediaExplorerActivity();
+  await f.settle(f.pending[0],[]);
+  f.nodes['media-explorer-view-select'].emit('focus');
+  const savedRequest=f.pending.at(-1);
+  assert.equal(savedRequest.url,'/fs/media_explorer/views');
+  await f.settle(savedRequest,[],true,{views:[{
+    name:'Favorites',filters:{source:'generate',search:'portrait',
+      tag:'keeper',rating:'4',sort:'rating',direction:'desc',full:true}
+  }]});
+  f.nodes['media-explorer-view-select'].value='Favorites';
+  f.nodes['media-explorer-view-select'].emit('change');
+  const listing=new URL(f.pending.at(-1).url,'http://localhost');
+  assert.equal(listing.searchParams.get('search'),'portrait');
+  assert.equal(listing.searchParams.get('tag'),'keeper');
+  assert.equal(listing.searchParams.get('rating'),'4');
+  assert.equal(listing.searchParams.get('sort'),'rating');
+});

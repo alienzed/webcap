@@ -327,7 +327,8 @@
     var parsed = JSON.parse(raw);
     if (!parsed || !Array.isArray(parsed.actions)) throw new Error('Advisor returned no actions list.');
     var out = [], validFields = ['title','concept','style','invariants'];
-    parsed.actions.slice(0,3).forEach(function (item) {
+    parsed.actions.forEach(function (item) {
+      if (out.length >= 3) return;
       if (!item || !allowedAdvisorKinds.includes(item.kind) ||
           typeof item.label !== 'string' || !item.label.trim()) return;
       var action = {

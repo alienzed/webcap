@@ -2304,9 +2304,54 @@ def director_chat_route():
         if not isinstance(messages, list) or not messages:
             raise ValueError("Director Chat messages are required.")
         operation = str(data.get("operation") or "freeform_chat").strip()
-        if operation not in {"freeform_chat", "studio_chat", "storyboard_workshop_shots", "studio_project_draft", "studio_brief_draft", "studio_scene_field_draft", "studio_scenes_draft"}:
+        if operation not in {"freeform_chat", "studio_chat", "studio_action_advisor", "storyboard_workshop_shots", "studio_project_draft", "studio_brief_draft", "studio_scene_field_draft", "studio_scenes_draft"}:
             raise ValueError("Unsupported Director Chat operation.")
         contract = {"operation": operation, "messages": messages}
+        if operation == "studio_action_advisor":
+            # Separate, optional sidecar job. Never adds a message to Director's
+            # conversation or authorizes a Read/Write on the author's behalf.
+            contract["messages"] = [{
+                "role": "system",
+                "content": (
+                    "You are WebCap's Action Advisor, a concise interface assistant. "
+                    "Review the supplied conversation and action context and suggest zero to three "
+                    "useful NEXT actions. Return actionable suggestions only when the conversation "
+                    "supports them. Choose one of: create_project, revise_project, create_scene, "
+                    "revise_scenes, read. For create/revise actions write a concrete instruction "
+                    "for the existing Writer to follow; for Read identify the requested saved fields. "
+                    "Use only the exact Project and Scene IDs given in the action context; "
+                    "for Project revisions specify precisely which of title, concept, style, "
+                    "invariants should change. Use project.title, project.concept, project.style, "
+                    "project.invariants, or scene:<ID>:prompt for Read selections. "
+                    "Keep instructions concise and preserve the author's creative intent. "
+                    "Your suggestions are optional UI shortcuts, not commands or saved content."
+                ),
+            }] + [
+                {"role": "user", "content": str(message["content"])}
+                for message in messages
+                if isinstance(message, dict) and isinstance(message.get("content"), str)
+            ]
+            contract["response_schema"] = {
+                "type": "object",
+                "properties": {
+                    "actions": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "kind": {"type": "string", "enum": [
+                                    "create_project", "revise_project", "create_scene", "revise_scenes", "read"
+                                ]},
+                                "label": {"type": "string"},
+                                "instruction": {"type": "string"},
+                                "projectId": {"type": "string"},
+                                "fields": {"type": "array", "items": {"type": "string"}},
+                                "sceneIds": {"type": "array", "items": {"type": "string"}},
+                            },
+                        },
+                    },
+                },
+            }
         # Ordinary Studio conversation has no creative authoring response schema.
         # A freeform reply is displayed verbatim; only explicit Writes ask for JSON.
         project_fields = {

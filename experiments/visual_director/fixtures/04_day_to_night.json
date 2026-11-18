@@ -1,0 +1,16 @@
+{
+  "id": "day_to_night",
+  "project_overview": "A quiet exterior sequence shows the same street first in late afternoon and then after nightfall.",
+  "visual_direction": "Grounded cinematic realism, static wide framing.",
+  "invariants": [
+    "The same street and buildings remain.",
+    "The camera position and framing remain fixed."
+  ],
+  "scene_description": "The second shot takes place after nightfall on the same street. Streetlights are on and passing cars move through the frame.",
+  "existing_h3_prompt": "Night has fallen. Streetlights illuminate the road as cars pass through the frame. The camera remains in the same fixed wide position.",
+  "expected_findings": [
+    "Night and streetlight consequences are already explicit.",
+    "Check whether remaining ambient/daylight appearance is contradictory or underspecified; avoid needless rewriting.",
+    "Same location and fixed framing are explicit."
+  ]
+}

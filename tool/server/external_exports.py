@@ -81,7 +81,7 @@ def copy_media(data):
                 f"Copied {len(created)} files into {dest} before failing on {relative}: {exc}"
             ) from exc
         created.append({"source": relative, "name": target.name})
-    return {"ok": True, "destination": str(dest), "copied": created}
+    return _destination_response(dest, created)
 
 
 def copy_generated_media(data):

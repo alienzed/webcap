@@ -1443,6 +1443,7 @@
   min-width: 0;
 }
 .generate-inspector-heading .generate-header-sampling.hidden { display: none; }
+.generate-inspector-heading .generate-status-badge.hidden + .generate-header-sampling { margin-left: auto; }
 .generate-inspector-heading .generate-header-sampling > span {
   flex: 0 0 auto;
   color: var(--muted);

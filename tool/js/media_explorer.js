@@ -437,18 +437,22 @@
       actions.push({separator:true});
       actions.push({label:'Rename…', run:function () { renameExternalFile(item); }});
       actions.push({label:'Move to Folder…', run:function () { externalMutation(item, 'move'); }});
-      actions.push({label:'Move to Trash', run:function () { externalMutation(item, 'trash'); }});
     }
     if (item.source === 'external' ||
         (item.source === 'generate' && item.role === 'generated' && item.storageId) ||
         (item.source === 'test' && item.ownerFolder && item.storageId)) {
       actions.push({separator:true});
+      var ratingActions = [];
       for (var stars = 0; stars <= 5; stars++) (function (value) {
-        actions.push({label: value ? 'Rate ' + value + ' ★' : 'Clear rating',group:'Rating',
+        ratingActions.push({label: value ? '★'.repeat(value) + ' ('+value+'/5)' : 'Clear rating',
           run:function () {rateExplorerItem(item,value);}});
       })(stars);
+      actions.push({label:'Rate' + (item.rating ? ' · '+item.rating+'/5' : ''),children:ratingActions});
     }
-    if (item.source === 'generate' && item.role === 'generated' && item.storageId) {
+    if (item.source === 'external') {
+      actions.push({separator:true});
+      actions.push({label:'Move to Trash',run:function () {externalMutation(item,'trash');}});
+    } else if (item.source === 'generate' && item.role === 'generated' && item.storageId) {
       actions.push({separator:true});
       actions.push({label:'Move to Trash', run:function () { trashGenerations(item); }});
     }

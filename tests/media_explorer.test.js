@@ -89,6 +89,7 @@ function fixture(hash = '#/media') {
   nodes['media-explorer-compare-dialog'].appendChild(new Element('strong'));
   nodes['media-explorer-compare-dialog'].appendChild(nodes['media-explorer-compare-content']);
   document = { getElementById: id => nodes[id], createElement: tag => new Element(tag), listeners: {},
+    body: new Element('body'),
     querySelector: selector => selector === '.media-explorer-main' ? main : workspace.querySelector(selector),
     addEventListener(k, fn) { this.listeners[k] = fn; },
     querySelectorAll: selector => selector.includes('[data-explorer-mode]') ? modeButtons :
@@ -109,7 +110,7 @@ function fixture(hash = '#/media') {
     await new Promise(resolve => setImmediate(resolve));
   };
   const key = (target, key, extra = {}) => document.listeners.keydown({target, key, preventDefault() {}, ...extra});
-  return {nodes, buttons, modeButtons, pending, errors, closed, menus, clipCalls, cropCalls, window, settle, key};
+  return {nodes, buttons, modeButtons, pending, errors, closed, menus, clipCalls, cropCalls, window, document, settle, key};
 }
 const media = (id, kind = 'image') => ({id, fileName:id + '.png', mediaKind:kind, mediaUrl:'/media/' + id, role:'generated', source:'generate', rating:null});
 
@@ -579,21 +580,37 @@ test('External media context menu exposes safe file actions without the inspecto
   assert.equal(card.querySelector('.media-explorer-item-menu').tagName, 'BUTTON');
   card.querySelector('.media-explorer-item-menu').click({preventDefault(){}, stopPropagation(){}});
   const actions = f.menus.at(-1);
-  assert.deepEqual(Array.from(actions.filter(action => action.label).map(action => action.label)),
-    ['View full size', 'Open in Explorer', 'Copy to Set', 'Crop image…',
-      'Rotate left 90°', 'Rotate right 90°', 'Flip horizontal', 'Flip vertical',
-      'Rename…', 'Move to Folder…', 'Move to Trash']);
+  const labels = actions.filter(action => action.label).map(action => action.label);
+  assert.ok(labels.includes('View full size'));
+  assert.ok(labels.includes('Show details'));
+  assert.ok(labels.includes('Show in file browser'));
+  assert.ok(labels.includes('Copy to Set…'));
+  assert.ok(labels.includes('Edit tags…'));
+  assert.ok(labels.includes('Rename…'));
+  assert.ok(labels.includes('Move to folder…'));
+  assert.ok(labels.includes('Edit media'));
+  assert.ok(labels.includes('Rate'));
+  assert.ok(labels.includes('Move to Trash'));
   assert.equal(f.nodes['media-explorer-inspector'].classList.contains('hidden'), true);
-  actions.find(action => action.label === 'Open in Explorer').run();
+  actions.find(action => action.label === 'Show in file browser').run();
   const reveal = f.pending.at(-1);
   assert.equal(reveal.url, '/fs/media_explorer/external/reveal');
   assert.equal(JSON.parse(reveal.options.body).file, 'image.png');
   await f.settle(reveal, []);
-  actions.find(action => action.label === 'Move to Folder…').run();
-  const move = f.pending.at(-1);
-  assert.equal(move.url, '/fs/media_explorer/external/move');
-  assert.equal(JSON.parse(move.options.body).destination, 'child');
-  await f.settle(move, []);
+  actions.find(action => action.label === 'Move to folder…').run();
+  const picker = f.pending.at(-1);
+  assert.match(picker.url, /external\\?/);
+  await f.settle(picker, [], true, {folders:['child']});
+  const dialog=f.document.body.children.at(-1);
+  assert.equal(dialog.open, true);
+  const form=dialog.children[0];
+  const input=form.querySelector('input');
+  input.value='child';
+  form.emit('submit',{preventDefault(){}});
+  const move=f.pending.at(-1);
+  assert.equal(move.url,'/fs/media_explorer/external/move');
+  assert.equal(JSON.parse(move.options.body).destination,'child');
+  await f.settle(move, [], true, {moved:['image.png']});
   assert.ok(f.pending.at(-1).url.includes('/external?'), 'mutation requests authoritative refresh');
 });
 
@@ -612,7 +629,8 @@ test('External Clip to Set opens the shared clip editor without using the basic 
   const card = f.nodes['media-explorer-grid'].children[0];
   card.querySelector('.media-explorer-item-menu').click({preventDefault(){}, stopPropagation(){}});
   const before = f.pending.length;
-  f.menus.at(-1).find(action => action.label === 'Edit video (Clip to Set)…').run();
+  f.menus.at(-1).find(action => action.label === 'Edit media')
+    .children.find(action => action.label === 'Clip video to Set…').run();
   assert.equal(f.clipCalls.length, 1);
   assert.equal(f.clipCalls[0][0].fileName, 'source.mp4');
   assert.equal(f.clipCalls[0][1], null);

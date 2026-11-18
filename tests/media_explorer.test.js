@@ -363,7 +363,7 @@ test('Storyboard provenance preserves exact take identity for owner handoff', ()
   const explorer = fs.readFileSync('tool/js/media_explorer.js', 'utf8');
   const storyboard = fs.readFileSync('tool/js/storyboard.js', 'utf8');
   assert.match(backend, /use\["takeId"\] = label/);
-  assert.match(explorer, /takeId: use\.takeId \|\| ''/);
+  assert.match(explorer, /takeId:\\s*use\\.takeId \\|\\| ''/);
   assert.match(storyboard, /Storyboard Take no longer exists in scene/);
   assert.match(storyboard, /\.storyboard-take\[data-take-id\]/);
 });
@@ -396,7 +396,7 @@ test('External browsing is folder-first, keeps media list in Grid and never auto
   const row = f.nodes['media-explorer-side-list'].children[1];
   row.querySelector('button').click();
   assert.equal(f.nodes['media-explorer-inspector-body'].dataset.id, 'external:b');
-  f.nodes['media-explorer-folder-rows'].children[0].click();
+  f.nodes['media-explorer-folder-rows'].children[0].querySelector('button').click();
   const folderRequest = f.pending.at(-1);
   assert.equal(new URL(folderRequest.url,'http://localhost').searchParams.get('directory'), 'child');
   await f.settle(folderRequest, [], true, {folders:[]});
@@ -422,17 +422,22 @@ test('External item actions expose Rename, Move and Edit consistently in Grid an
     });
     const actions = f.menus.at(-1);
     assert.ok(actions.some(action => action.label === 'Rename…'), mode);
-    assert.ok(actions.some(action => action.label === 'Move to Folder…'), mode);
-    assert.ok(actions.some(action => action.label === 'Crop image…'), mode);
-    assert.ok(actions.some(action => action.label === 'Rotate left 90°'), mode);
-    actions.find(action => action.label === 'Crop image…').run();
+    assert.ok(actions.some(action => action.label === 'Move to folder…'), mode);
+    const editing=actions.find(action => action.label === 'Edit media');
+    assert.ok(editing && editing.children.some(action => action.label === 'Crop image…'), mode);
+    assert.ok(editing.children.some(action => action.label === 'Rotate left 90°'), mode);
+    editing.children.find(action => action.label === 'Crop image…').run();
     assert.equal(f.cropCalls.at(-1)[1].file, 'image.jpg');
   }
 
-  f.window.prompt = () => 'renamed.jpg';
   const rename = f.menus.at(-1).find(action => action.label === 'Rename…');
   rename.run();
-  const req = f.pending.at(-1);
+  const dialog=f.document.body.children.at(-1);
+  const form=dialog.children[0];
+  const input=form.querySelector('input');
+  input.value='renamed.jpg';
+  form.emit('submit',{preventDefault(){}});
+  const req=f.pending.at(-1);
   assert.equal(req.url, '/fs/media_explorer/external/rename');
   assert.deepEqual(JSON.parse(req.options.body), {
     path:'/tmp/external',file:'image.jpg',newName:'renamed.jpg'

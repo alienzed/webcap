@@ -462,6 +462,56 @@ def move_external_files(data):
     return {"ok": True, "moved": moved}
 
 
+def rename_external_file(data):
+    """Rename one external media file without moving it or overwriting a sibling."""
+    root = _root(data.get("path"))
+    source = _source_file(root, data.get("file"))
+    name = str(data.get("newName") or "").strip()
+    if (not name or name in {".", ".."} or Path(name).name != name
+            or "/" in name or "\\" in name or source.suffix.lower() != Path(name).suffix.lower()):
+        raise ValueError("Enter a filename in the same folder, keeping its media extension.")
+    target = source.with_name(name)
+    if source == target:
+        return {"ok": True, "oldPath": source.relative_to(root).as_posix(),
+                "newPath": source.relative_to(root).as_posix()}
+    if target.exists() or target.is_symlink():
+        raise ValueError("A file with that name already exists.")
+    # Preserve source-local analysis and technical metadata across a filename
+    # change; the metadata writer uses the same lock as Prep's metadata merges.
+    from .media import _media_metadata_lock, write_media_metadata_file
+    with _media_metadata_lock:
+        cache = _read_cache(source.parent)
+        previous = cache.get(source.name)
+        source.rename(target)
+        try:
+            if previous is not None:
+                if name in cache:
+                    raise ValueError("Destination metadata entry already exists.")
+                cache[name] = cache.pop(source.name)
+                write_media_metadata_file(source.parent / "media_metadata.json", cache)
+        except Exception:
+            target.rename(source)
+            raise
+    return {"ok": True, "oldPath": source.relative_to(root).as_posix(),
+            "newPath": target.relative_to(root).as_posix()}
+
+
+def edit_external_image(data):
+    """Apply Prep's reversible still-image crop/transform to external media."""
+    root = _root(data.get("path"))
+    source = _source_file(root, data.get("file"))
+    from .crop_ops import CROPPABLE_IMAGE_EXTS, crop_image_data_url_in_place, transform_image_in_place
+    if source.suffix.lower() not in CROPPABLE_IMAGE_EXTS:
+        raise ValueError("This image format cannot be edited with the existing image tools.")
+    operation = str(data.get("operation") or "")
+    if operation == "crop":
+        result = crop_image_data_url_in_place(source.parent, source.name, data.get("imageDataUrl"))
+    else:
+        result = transform_image_in_place(source.parent, source.name, operation)
+    # A fresh Explorer discovery reads actual file bytes and technical facts.
+    return {"ok": True, "file": source.relative_to(root).as_posix(), **result}
+
+
 def trash_external_files(data):
     from send2trash import send2trash
     root, files = _external_sources(data)
@@ -509,6 +559,22 @@ def register_routes(app):
             return jsonify(move_external_files(request.get_json(silent=True) or {}))
         except Exception as exc:
             app.logger.exception("EXTERNAL MEDIA MOVE FAILED")
+            return jsonify({"ok": False, "error": str(exc)}), 400
+
+    @app.post("/fs/media_explorer/external/rename")
+    def external_rename():
+        try:
+            return jsonify(rename_external_file(request.get_json(silent=True) or {}))
+        except Exception as exc:
+            app.logger.exception("EXTERNAL MEDIA RENAME FAILED")
+            return jsonify({"ok": False, "error": str(exc)}), 400
+
+    @app.post("/fs/media_explorer/external/image-edit")
+    def external_image_edit():
+        try:
+            return jsonify(edit_external_image(request.get_json(silent=True) or {}))
+        except Exception as exc:
+            app.logger.exception("EXTERNAL IMAGE EDIT FAILED")
             return jsonify({"ok": False, "error": str(exc)}), 400
 
     @app.post("/fs/media_explorer/external/trash")

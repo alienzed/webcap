@@ -22,7 +22,7 @@ function sceneFixture(raw = '{"prompt":"Mara finishes quietly under a still came
       notes:'Keep this.',takeOrder:['take1']
     }}
   };
-  const state={pending:false,jobId:'',lastStudioIoRaw:'',lastStudioIoError:'',
+  const state={pending:false,jobId:'',lastStudioIoRaw:'',lastStudioIoError:'',studioWriteIo:[],
     studioApprovedRead:{projectId:'p1',keys:['project.title','project.concept','project.style','project.invariants',
       'scene:s1:title','scene:s1:prompt','scene:s1:durationSeconds']},
     modeMessages:{storyboard:[]},sessionDirty:{storyboard:false},studioWorkingDraft:{projects:{},scenes:{},newProject:{},newScene:{},sourceRequest:''}};

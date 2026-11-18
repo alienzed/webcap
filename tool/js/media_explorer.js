@@ -1703,12 +1703,9 @@
     }).catch(function (err) { text(el('media-explorer-export-status'), err.message); report(err); })
       .finally(function () { submit.disabled = false; });
   });
-  var quickFilters = document.createElement('div');
-  quickFilters.className = 'media-explorer-quick-filters';
-  quickFilters.setAttribute('aria-label','Quick filters');
+  var quickFilters = el('media-explorer-quick-filters');
   quickFilters.appendChild(el('media-explorer-tag'));
   quickFilters.appendChild(el('media-explorer-rating'));
-  el('media-explorer-search').closest('.media-explorer-searchbar').after(quickFilters);
   var newFolderButton = document.createElement('button');
   newFolderButton.type = 'button'; newFolderButton.className = 'review-captions-btn';
   newFolderButton.id = 'media-explorer-new-folder'; newFolderButton.textContent = '+ New folder';

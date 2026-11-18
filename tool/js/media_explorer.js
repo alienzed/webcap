@@ -473,7 +473,8 @@
     if(!chosen.length)return;
     promptMediaAction('Add '+chosen.length+' media item(s) to collection','','Add to collection',
       function (name) {
-        if(name.length>48 || name.includes(','))throw Error('Use a collection name up to 48 characters without commas.');
+        if(name.length>(isExternal()?32:48) || name.includes(','))
+          throw Error('Use a shorter collection name without commas.');
         var tag='Collection · '+name;
         return Promise.allSettled(chosen.map(function (item) {
           return saveCurationFor(item,{
@@ -591,8 +592,11 @@
         }) : [item]);}});
       actions.push({label:'Edit tags…',run:function () {editMediaTags(item);}});
     }
-    if (['external','generate','test','epoch','storyboard'].includes(item.source) &&
-        (item.source==='external' || item.storageId)) {
+    if (item.source==='external' ||
+        (item.source==='generate' && item.role==='generated' && item.storageId) ||
+        (item.source==='test' && item.ownerFolder && item.storageId) ||
+        (item.source==='epoch' && item.ownerFolder && item.storageId) ||
+        (item.source==='storyboard' && item.storageId)) {
       actions.push({label:'Add to collection…',run:function () {
         addToCollection(selected.has(item.id) && selectedCuratable().length ?
           selectedCuratable() : [item]);

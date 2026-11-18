@@ -1,0 +1,16 @@
+{
+  "id": "emotional_transition",
+  "project_overview": "An intimate dramatic scene follows a character receiving difficult news. Their emotional response changes from initial relief to grief.",
+  "visual_direction": "Naturalistic close-up, restrained performance, soft window light.",
+  "invariants": [
+    "The same character remains present.",
+    "The scene is a continuous close-up in the same room."
+  ],
+  "scene_description": "After reading the message, the character's relief gives way to sadness. The shot stays on their face.",
+  "existing_h3_prompt": "The character reads the message. Their mood changes from relieved to sad as the camera slowly pushes closer.",
+  "expected_findings": [
+    "Emotional labels are present but visible expression and physical behavior are not specified.",
+    "The agent should describe observable expression/body language only where reasonably supported, avoiding melodramatic invention.",
+    "Same room and close-up are already specified."
+  ]
+}

@@ -53,7 +53,7 @@ test('Advisor only offers applicable existing actions, exact IDs and explicit Pr
   ]);
   assert.deepEqual(candidates('{"actions":[{"kind":"revise_project","label":"Change","projectId":"project-one","instruction":"Do it","fields":[]}] }',scope),[]);
   assert.deepEqual(candidates('{"actions":[]}',scope),[]);
-  assert.throws(()=>candidates('broken',scope),/invalid JSON:[\\s\\S]*Raw response:[\\s\\S]*broken/);
+  assert.throws(()=>candidates('broken',scope),/invalid JSON:[\s\S]*Raw response:[\s\S]*broken/);
 });
 
 test('Prepare Write preloads existing operation, target, field scope and instruction without saving',async()=>{

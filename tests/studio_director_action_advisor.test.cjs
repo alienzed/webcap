@@ -72,7 +72,8 @@ test('Prepare Write preloads existing operation, target, field scope and instruc
   const prepare=new Function('el','window','toggle','refreshWrite','setOperation','advisorStatus','loadStory',
     'readChoices','renderReadStory','projectFields','sceneSelectionManual',
     functions+'return prepareAdvisorAction;')(
-      id=>elements[id],{studioDirectorBridge:{isCurrentConversation:id=>id==='chat-one'},
+      id=>elements[id],{studioDirectorBridge:{
+        isCurrentConversation:id=>id==='chat-one',isReady:()=>true},
         reportConsoleError:()=>assert.fail('Should not log an error')},
       which=>{calls.toggle.push(which);return Promise.resolve();},
       async()=>{calls.refresh++;return true;},

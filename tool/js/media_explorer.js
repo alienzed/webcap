@@ -546,6 +546,8 @@
             entry.storageId;
         }) : [item]);}});
       actions.push({label:'Edit tags…',run:function () {editMediaTags(item);}});
+    } else if (item.source==='epoch' || item.source==='storyboard') {
+      actions.push({label:'Edit tags…',run:function () {editMediaTags(item);}});
     }
     if (item.mediaUrl) {
       actions.push({label:'Download original',run:function () {
@@ -1727,7 +1729,9 @@
     if (!chosen.length || !chosen.every(function (item) {
       return item.source==='external' ||
         (item.source==='generate' && item.role==='generated' && item.storageId) ||
-        (item.source==='test' && item.ownerFolder && item.storageId);
+        (item.source==='test' && item.ownerFolder && item.storageId) ||
+        (item.source==='epoch' && item.ownerFolder && item.storageId) ||
+        (item.source==='storyboard' && item.storageId);
     })) return [];
     return chosen;
   }
@@ -1737,6 +1741,18 @@
     var kind=Object.prototype.hasOwnProperty.call(change,'tags') ? 'tags' : 'rating';
     var url=item.source==='test' ? '/fs/media_explorer/test/tags' :
       '/fs/generate/result/'+kind;
+    if(item.source==='epoch' || item.source==='storyboard') {
+      if(kind!=='tags')return Promise.reject(Error('Ratings are not supported for this producer.'));
+      return fetch('/fs/media_explorer/owned/tags',{
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({source:item.source,folder:item.ownerFolder || '',
+          storageId:item.storageId,mediaFile:item.fileName,
+          mediaPath:item.mediaPath,tags:change.tags})
+      }).then(function (res) {return res.json().then(function (body) {
+        if(!res.ok || !body.ok)throw Error(body.error || 'Could not save tags');
+        return body;
+      });});
+    }
     if(item.source==='test' && kind==='rating')
       return fetch('/fs/test_generations',{
         method:'POST',headers:{'Content-Type':'application/json'},
@@ -1812,7 +1828,9 @@
     bulkTrashButton.classList.toggle('hidden',!show);
     var curation=selectedCuratable().length>0;
     bulkTagsButton.classList.toggle('hidden',!curation);
-    bulkRateButton.classList.toggle('hidden',!curation);
+    bulkRateButton.classList.toggle('hidden',!curation ||
+      !selectedCuratable().every(function (item) {return item.source==='external' ||
+        item.source==='generate' || item.source==='test';}));
   }
   el('media-explorer-up').addEventListener('click', function () { setExternalDirectory(externalDirectory.split('/').slice(0, -1).join('/')); });
   el('media-explorer-recursive').addEventListener('change', function () { renderExternalFolders(); load(true); });

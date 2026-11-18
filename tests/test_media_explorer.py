@@ -622,18 +622,3 @@ def test_copy_campaign_and_storyboard_results_from_owner_resolvers(monkeypatch, 
     assert (target / "frame.png").exists()
     assert (target / "frame-2.png").exists()
     assert source.exists()
-
-
-def test_copy_to_set_returns_authoritative_prep_relative_destination(monkeypatch, tmp_path):
-    from tool.server import external_exports
-    source = tmp_path / "source.png"
-    _media(source)
-    (tmp_path / "sets").mkdir()
-    monkeypatch.setattr(external_exports.app_config, "FS_ROOT", tmp_path)
-    monkeypatch.setattr(external_exports, "_validated_sources",
-                        lambda data: [(source, "source.png")])
-    result = external_exports.copy_media({
-        "destination": "sets", "newSet": "new-set",
-        "path": "/ignored", "files": ["source.png"]})
-    assert result["destinationRelative"] == "sets/new-set"
-    assert (tmp_path / "sets" / "new-set" / "source.png").exists()

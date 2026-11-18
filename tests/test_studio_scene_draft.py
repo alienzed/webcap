@@ -250,8 +250,10 @@ def test_studio_brief_extraction_schema(monkeypatch):
     })
     assert response.status_code == 202
     schema = result["contract"]["response_schema"]
-    assert schema["additionalProperties"] is False
-    assert schema["properties"]["invariants"]["maxItems"] == 30
+    assert "required" not in schema
+    assert "additionalProperties" not in schema
+    assert "maxItems" not in schema["properties"]["invariants"]
+    assert "maxLength" not in schema["properties"]["concept"]
 
 
 def test_studio_read_access_is_explicit_and_scoped(isolated_storyboard):
@@ -360,7 +362,7 @@ def test_studio_project_validation_and_atomic_pre_publish_failure(isolated_story
     assert not list(storyboard_store.storyboard_root().glob(".studio-create-*"))
 
 
-def test_studio_project_extraction_schema_is_bounded(monkeypatch):
+def test_studio_project_extraction_schema_accepts_usable_partial_material(monkeypatch):
     from tool.server import app as application
     captured = {}
 
@@ -375,9 +377,11 @@ def test_studio_project_extraction_schema_is_bounded(monkeypatch):
     })
     assert result.status_code == 202
     schema = captured["contract"]["response_schema"]
-    assert schema["additionalProperties"] is False
-    assert set(schema["required"]) == {"title", "concept", "style", "invariants"}
-    assert schema["properties"]["invariants"]["maxItems"] == 30
+    assert "additionalProperties" not in schema
+    assert "required" not in schema
+    assert "maxItems" not in schema["properties"]["invariants"]
+    for field in ("title", "concept", "style"):
+        assert "maxLength" not in schema["properties"][field]
     assert "initialScenes" not in schema["properties"]
     assert "rationale" not in schema["properties"]
     assert "firstScenes" not in schema["properties"]
@@ -474,3 +478,68 @@ def test_old_bulk_scene_extractor_is_not_an_active_director_operation(monkeypatc
     assert result.status_code == 400
     assert "Unsupported Director Chat operation" in result.get_json()["error"]
 
+
+
+def test_studio_project_create_accepts_useful_material_without_concept_or_size_caps(isolated_storyboard):
+    items = [{"kind": "visual", "title": "Motif " + str(i), "text": "A repeated motif."}
+             for i in range(35)]
+    story = storyboard_store.create_studio_project({
+        "title": "Long title " + "x" * 300,
+        "concept": "",
+        "style": "Copper light. " * 1800,
+        "invariants": items,
+    })
+    persisted = storyboard_store.load_story(story["id"])
+    assert len(persisted["title"]) > 240
+    assert persisted["concept"] == ""
+    assert len(persisted["style"]) > 10000
+    assert len(persisted["invariants"]) == 35
+    story_from_style = storyboard_store.create_studio_project({"style": "A storm of orange light."})
+    assert story_from_style["concept"] == ""
+    assert story_from_style["style"] == "A storm of orange light."
+    with pytest.raises(ValueError, match="no usable material"):
+        storyboard_store.create_studio_project({})
+
+
+def test_studio_project_revise_updates_only_authorized_field_without_limits(isolated_storyboard):
+    original = storyboard_store.create_story({
+        "title": "Untouched title",
+        "concept": "Original concept",
+        "style": "Warm light",
+        "invariants": [{"kind": "character", "title": "Mara", "text": "Copper hairpin"}],
+    })
+    new_style = "Blue dusk " * 1800
+    updated, revision_id = storyboard_store.apply_studio_brief(
+        original["id"], {"style": original["style"]}, {"style": new_style}
+    )
+    assert revision_id
+    assert updated["style"] == new_style
+    assert updated["title"] == original["title"]
+    assert updated["concept"] == original["concept"]
+    assert updated["invariants"] == original["invariants"]
+    assert set(updated["studioRevisions"][-1]["fields"]) == {"style"}
+    with pytest.raises(RuntimeError, match="changed since review"):
+        storyboard_store.apply_studio_brief(
+            original["id"], {"style": original["style"]}, {"style": "Stale edit"}
+        )
+
+
+def test_studio_invariant_ops_preserve_unmentioned_entries_beyond_30(isolated_storyboard):
+    invariants = [{"kind": "visual", "title": f"Motif {i}", "text": f"Earlier {i}"}
+                  for i in range(34)]
+    original = storyboard_store.create_story({
+        "title": "Invariants", "concept": "Shared identity", "invariants": invariants
+    })
+    changes = [
+        {"op": "update", "before": invariants[0],
+         "after": {**invariants[0], "text": "Revised only first motif"}},
+        {"op": "add", "after": {"kind": "sound", "title": "Rain", "text": "Distant rain"}},
+    ]
+    updated, _ = storyboard_store.apply_studio_brief(
+        original["id"], {}, {"invariantOps": changes}
+    )
+    assert len(updated["invariants"]) == 35
+    assert updated["invariants"][0]["text"] == "Revised only first motif"
+    assert updated["invariants"][1:34] == invariants[1:]
+    assert updated["invariants"][-1]["title"] == "Rain"
+    assert set(updated["studioRevisions"][-1]["fields"]) == {"invariants"}

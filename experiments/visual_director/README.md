@@ -2,28 +2,40 @@
 
 This is a disposable, test-only experiment. It does not change WebCap production behavior.
 
+## Simplest execution path: existing Director Chat API
+
+Do **not** build a UI, modify production code, add an endpoint, or create a new runtime.
+
+WebCap already exposes `POST /fs/director/chat`. Its `freeform_chat` operation passes the supplied message array to the existing queued Director runtime. The runtime accepts ordinary `system` and `user` messages, uses the requested configured model, and runs through the existing LLM queue/GPU ownership path.
+
+Use that exact mechanism. Each candidate/fixture pair must be a fresh request with:
+- `operation: "freeform_chat"`
+- the same currently configured Director model ID
+- `messages: [{role:"system", content:<candidate prompt>}, {role:"user", content:<fixture task>}]`
+
+The user message should contain the fixture's Project overview, visual direction, invariants, Scene description and existing H3 prompt. Ask for only the complete revised H3 prompt (or an explicit unchanged result), not an explanation. Do not include other candidates or prior outputs in the conversation.
+
+Post to the local WebCap server, then poll the existing Director job status endpoint until completion. Codex must inspect the existing route/status contract rather than inventing a polling URL or response shape. Save raw request, response, job metadata and timings locally under `experiments/visual_director/results/` (keep results untracked/ignored). Never apply output to a real Project.
+
+If the API cannot be reached because WebCap is not running, stop and ask the user to open WebCap; do not substitute another model or runtime.
+
 ## Goal
+
 Compare four role-instruction strategies for improving standalone MiniMax H3 Scene prompt renderability, especially implied-but-unspecified visual details.
 
-## Run contract
-Use the existing configured Storyboard Director model/runtime and its normal H3 context, schema, and sampling settings. Change only the candidate role instruction. Do not load a new model, add a new model dependency, or change production code to run an experiment.
+## Candidates and fixtures
 
-Codex: inspect the existing runtime and implement the smallest local runner needed to:
-- load candidate prompts from `prompts/*.txt`
-- load fixtures from `fixtures/*.json`
-- build equivalent requests for every candidate/fixture pair
-- submit through the already configured Director runtime
-- save raw request/response and timing/model metadata under an ignored local results directory
-- never apply results to a Storyboard Project
+- Four candidate role prompts are in `prompts/*.txt`.
+- Five fixed fixtures are in `fixtures/*.json`.
 
-If the configured runtime cannot be called without changing production code, report the precise blocker and use the smallest test-only adapter. Do not build a UI.
-
-Run 4 candidates x 5 fixtures = 20 calls. Keep model, settings, schema and all non-candidate context identical. Do not add self-critique or extra repair calls.
+Run 4 candidates x 5 fixtures = 20 calls. Use identical fixture content and model/runtime settings for every candidate. Do not add self-critique, retries, or extra repair calls.
 
 ## Evaluation
+
 Score each output against the fixture's expected findings and this rubric: consequential omission detection, completeness of visual consequences, concrete H3-ready wording, restraint against invented details, preservation of creative intent, and unnecessary changes to already-complete prompts.
 
 Evaluate the revised prompt, not the agent's explanation. Hide candidate identity during qualitative comparison where practical. Report per-fixture results, candidate totals, raw outputs, and a recommendation. Do not merge experimental prompts into production.
 
 ## Timebox
-Aim for one short setup pass and one 20-call run. No UI, no broad refactor, no multi-round optimization. If all candidates fail similarly, diagnose the shared failure rather than expanding the prompts.
+
+Aim for one short setup pass and one 20-call run. No UI, no broad refactor, no production code changes, no multi-round optimization. If all candidates fail similarly, diagnose the shared failure rather than expanding the prompts.

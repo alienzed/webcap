@@ -191,6 +191,12 @@
                 .then(function () {load(true,{refreshFilesystem:true});});
             });
           }},
+          {label:'Move folder…',run:function () {
+            promptMediaAction('Move folder '+name,externalDirectory,'Move folder',function (path) {
+              return externalActionStrict('move-folder',{path:externalPath,folder:destination,destination:path})
+                .then(function () {load(true,{refreshFilesystem:true});});
+            },{allowEmpty:true,folders:true});
+          }},
           {label:'New subfolder…',run:function () {
             promptMediaAction('Create folder in /'+destination,'','Create folder',function (nextName) {
               return externalActionStrict('create-folder',{path:externalPath,directory:destination,name:nextName})

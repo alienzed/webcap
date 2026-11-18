@@ -2184,12 +2184,6 @@
 
                 <div id="director-chat-messages" class="director-chat-messages" aria-live="polite"></div>
                 <section id="studio-action-advisor" class="studio-action-advisor" aria-label="Optional action suggestions">
-                    <div class="studio-action-advisor-toolbar">
-                        <label><input id="studio-action-advisor-enabled" type="checkbox"> Suggest next actions</label>
-                        <select id="studio-action-advisor-model" class="hidden" aria-label="Action Advisor model" title="Choose a smaller model to reduce the cost of suggestions">
-                            <option value="">Same model as Director</option>
-                        </select>
-                    </div>
                     <div id="studio-action-advisor-status" class="hidden" role="status" aria-live="polite"></div>
                     <div id="studio-action-advisor-actions" class="hidden"></div>
                 </section>
@@ -3311,6 +3305,17 @@
                     </div>
 
                     <div id="app-settings-panel-director" class="app-settings-panel hidden" data-app-settings-panel="director" role="tabpanel" aria-labelledby="app-settings-tab-director">
+                        <section class="app-settings-section">
+                            <div class="app-settings-section-header">
+                                <div class="app-settings-section-title">Studio Action Advisor</div>
+                                <div class="app-settings-section-copy">Suggest useful next actions after Studio chat replies using Director's already-selected model.</div>
+                            </div>
+                            <label class="app-settings-toggle">
+                                <input id="app-settings-studio-action-advisor" type="checkbox" checked>
+                                <span>Suggest next actions automatically</span>
+                            </label>
+                            <p class="app-settings-help">Only suggestions appear in chat. Read and Write still require your explicit action. This preference applies to all Studio conversations in this browser.</p>
+                        </section>
                         <section class="app-settings-section">
                             <div class="app-settings-section-header">
                                 <div class="app-settings-section-title">Director Runtimes</div>

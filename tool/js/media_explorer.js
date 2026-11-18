@@ -64,7 +64,7 @@
       var ids = new Set(draggedExternalIds);
       var chosen = items.filter(function (item) { return item.source === 'external' && ids.has(item.id); });
       draggedExternalIds = [];
-      moveExternalTo(destination, chosen);
+      moveExternalTo(typeof destination === 'function' ? destination() : destination, chosen);
     });
   }
   function createExternalFolder() {
@@ -1435,7 +1435,7 @@
   newFolderButton.id = 'media-explorer-new-folder'; newFolderButton.textContent = '+ New folder';
   newFolderButton.addEventListener('click', createExternalFolder);
   el('media-explorer-external-navigation').appendChild(newFolderButton);
-  allowFolderDrop(el('media-explorer-up'), externalDirectory.split('/').slice(0,-1).join('/'));
+  allowFolderDrop(el('media-explorer-up'), function () {return externalDirectory.split('/').slice(0,-1).join('/');});
   var bulkMoveButton = document.createElement('button');
   bulkMoveButton.type = 'button'; bulkMoveButton.className = 'review-captions-btn';
   bulkMoveButton.textContent = 'Move to Folder…';

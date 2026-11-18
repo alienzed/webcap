@@ -9,7 +9,7 @@
     if (!chosen.length) return;
     var dialog = el('media-explorer-export-dialog');
     text(el('media-explorer-export-heading'), 'Copy to Set');
-    text(el('media-explorer-export-count'), chosen.length + ' source file' + (chosen.length === 1 ? '' : 's'));
+    text(el('media-explorer-export-count'), chosen.length + ' media file' + (chosen.length === 1 ? '' : 's'));
     el('media-explorer-export-submit').textContent = 'Copy to Set';
     el('media-explorer-export-status').textContent = '';
     el('media-explorer-export-new-set').value = '';
@@ -543,6 +543,11 @@
       if (edit.length) actions.push({label:'Edit media',children:edit});
     }
     if (item.source === 'generate' && item.role === 'generated') {
+      actions.push({label:'Copy to Set…',run:function () {chooseExport(
+        selected.has(item.id) ? items.filter(function (entry) {
+          return selected.has(entry.id) && entry.source==='generate' &&
+            entry.role==='generated';
+        }) : [item]);}});
       actions.push({label:'Edit tags…',run:function () {editMediaTags(item);}});
     }
     if (item.mediaUrl) {
@@ -913,7 +918,10 @@
     text(el('media-explorer-selection-hint'), selected.size > 4 ? 'Compare supports up to 4 selections' : '');
     el('media-explorer-selection-hint').classList.toggle('hidden', selected.size <= 4);
     var chosen = items.filter(function (item) { return selected.has(item.id); });
-    el('media-explorer-copy-selected').classList.toggle('hidden', !isExternal());
+    var copyable = chosen.length > 0 && (isExternal() || chosen.every(function (entry) {
+      return entry.source==='generate' && entry.role==='generated';
+    }));
+    el('media-explorer-copy-selected').classList.toggle('hidden', !copyable);
     el('media-explorer-compare').disabled = chosen.length < 2 || chosen.length > 4;
     text(el('media-explorer-compare'), chosen.length > 2 && chosen.length <= 4 ? 'Survey' : 'Compare');
     el('media-explorer-compare').title = 'Compare 2–4 media; videos play independently';
@@ -1659,14 +1667,16 @@
   el('media-explorer-export-form').addEventListener('submit', function (event) {
     event.preventDefault();
     var submit = el('media-explorer-export-submit');
+    var generated = exportItems[0] && exportItems[0].source === 'generate';
     var payload = {
-      path: externalPath, files: exportItems.map(function (item) { return item.relativePath; }),
       destination: el('media-explorer-export-destination').value.trim(),
       newSet: el('media-explorer-export-new-set').value.trim()
     };
+    if (generated) payload.storageIds = Array.from(new Set(exportItems.map(function (item) {return item.storageId;})));
+    else {payload.path=externalPath;payload.files=exportItems.map(function (item) {return item.relativePath;});}
     submit.disabled = true;
     text(el('media-explorer-export-status'), 'Copying media…');
-    fetch('/fs/media_explorer/external/copy', {
+    fetch(generated ? '/fs/media_explorer/generated/copy' : '/fs/media_explorer/external/copy', {
       method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)
     }).then(function (res) { return res.json().then(function (data) {
       if (!res.ok || !data.ok) throw Error(data.error || 'Export failed'); return data;

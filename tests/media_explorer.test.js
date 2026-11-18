@@ -835,6 +835,6 @@ test('bulk Remove from collection only appears for shared memberships', async ()
   const remove=toolbar.children.find(child=>child.textContent==='Remove from collection…');
   assert.ok(remove);
   assert.equal(remove.classList.contains('hidden'),false);
-  remove.click();
+  remove.click({stopPropagation(){}});
   assert.ok(f.menus.at(-1).some(action=>action.label==='Keepers'));
 });

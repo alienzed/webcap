@@ -26,6 +26,76 @@ _index = None
 _metadata_job = None
 
 
+
+_VIEW_FIELDS = {
+    "source", "role", "search", "tag", "rating", "kind", "model", "folder",
+    "date", "sort", "direction", "full", "recursive", "externalPath",
+    "externalDirectory", "min-side", "min-mp", "min-duration", "max-duration",
+    "storyboardType",
+}
+
+
+def _views_file():
+    return app_config.app_state_root() / "media_explorer_views.json"
+
+
+def list_saved_views():
+    path = _views_file()
+    if not path.exists():
+        return []
+    data = json.loads(path.read_text(encoding="utf-8"))
+    if (not isinstance(data, list) or len(data) > 60 or
+            any(not isinstance(entry, dict) or not isinstance(entry.get("name"), str)
+                or not isinstance(entry.get("filters"), dict) for entry in data)):
+        raise ValueError("Saved Media Explorer views are invalid.")
+    return data
+
+
+def save_media_view(data):
+    name = str(data.get("name") or "").strip()
+    filters = data.get("filters")
+    if not name or len(name) > 80 or not isinstance(filters, dict):
+        raise ValueError("A name and valid view filters are required.")
+    if any(key not in _VIEW_FIELDS or not isinstance(value, (str, bool))
+           or (isinstance(value, str) and len(value) > 1024)
+           for key, value in filters.items()):
+        raise ValueError("Unsupported saved-view filter.")
+    with _LOCK:
+        views = list_saved_views()
+        match = next((i for i, entry in enumerate(views)
+                      if entry["name"].casefold() == name.casefold()), -1)
+        record = {"name": name, "filters": filters}
+        if match < 0:
+            if len(views) >= 60:
+                raise ValueError("Maximum number of saved views reached.")
+            views.append(record)
+        else:
+            views[match] = record
+        _write_views(views)
+        return sorted(views, key=lambda entry: entry["name"].casefold())
+
+
+def delete_media_view(name):
+    key = str(name or "").strip().casefold()
+    if not key:
+        raise ValueError("Choose a saved view to delete.")
+    with _LOCK:
+        views = list_saved_views()
+        remaining = [entry for entry in views if entry["name"].casefold() != key]
+        if len(remaining) == len(views):
+            raise ValueError("Saved view does not exist.")
+        _write_views(remaining)
+        return sorted(remaining, key=lambda entry: entry["name"].casefold())
+
+
+def _write_views(views):
+    from .media import write_media_metadata_file
+    path = _views_file()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    # This shared atomic JSON writer accepts a JSON list as well as a dict.
+    write_media_metadata_file(path, views)
+
+
 def _recent_paths_file():
     return app_config.app_state_root() / "media_explorer_folders.json"
 
@@ -832,6 +902,28 @@ def register_routes(app):
             return jsonify(trash_external_files(request.get_json(silent=True) or {}))
         except Exception as exc:
             app.logger.exception("EXTERNAL MEDIA TRASH FAILED")
+            return jsonify({"ok": False, "error": str(exc)}), 400
+
+    @app.get("/fs/media_explorer/views")
+    def media_saved_views():
+        try:
+            return jsonify({"ok": True, "views": list_saved_views()})
+        except Exception as exc:
+            app.logger.exception("MEDIA VIEWS LOAD FAILED")
+            return jsonify({"ok": False, "error": str(exc)}), 500
+
+    @app.post("/fs/media_explorer/views")
+    def media_save_view():
+        try:
+            return jsonify({"ok": True, "views": save_media_view(request.get_json(silent=True) or {})})
+        except (ValueError, OSError) as exc:
+            return jsonify({"ok": False, "error": str(exc)}), 400
+
+    @app.delete("/fs/media_explorer/views")
+    def media_delete_view():
+        try:
+            return jsonify({"ok": True, "views": delete_media_view((request.get_json(silent=True) or {}).get("name"))})
+        except (ValueError, OSError) as exc:
             return jsonify({"ok": False, "error": str(exc)}), 400
 
     @app.get("/fs/media_explorer/external/folders")

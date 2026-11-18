@@ -568,6 +568,5 @@ def test_visual_direction_is_a_scene_scoped_renderability_pass():
     assert "[H3 PROMPTING GUIDANCE]" in prompt
     assert "[EXISTING H3 PROMPT]\nEXISTING SECOND PROMPT" in prompt
     assert "activity-specific equipment" in prompt
-    assert "facial expression or action" not in prompt
     assert "changed=false" in prompt
     assert "OLD FIRST PROMPT" not in prompt

@@ -340,6 +340,8 @@ function fillAppSettingsForm(cfg) {
   });
   ['minimax_h3', 'krea2_raw'].forEach(function (id) { var el = document.getElementById('app-settings-model-guidance-' + id); if (el) el.value = c.generation_model_guidance[id] || ''; });
   renderAppSettingsDirectorEndpoints(c.storyboard.director.remote_endpoints || []);
+  var advisorToggle = document.getElementById('app-settings-studio-action-advisor');
+  if (advisorToggle) advisorToggle.checked = localStorage.getItem('webcap.studio.actionAdvisor.enabled') !== 'false';
   if (ui.appSettingsStoryboardLlamaServerEl) ui.appSettingsStoryboardLlamaServerEl.value = c.storyboard.director.llama_server || '';
   if (ui.appSettingsStoryboardPortEl) ui.appSettingsStoryboardPortEl.value = c.storyboard.director.port;
   if (ui.appSettingsStoryboardContextSizeEl) ui.appSettingsStoryboardContextSizeEl.value = c.storyboard.director.context_size == null ? '' : c.storyboard.director.context_size;
@@ -516,6 +518,11 @@ function saveAppSettings(opts) {
       saved = normalizeAppConfigShape(parsed.config || payload);
     } catch (e) {
       saved = normalizeAppConfigShape(payload);
+    }
+    var advisorToggle = document.getElementById('app-settings-studio-action-advisor');
+    if (advisorToggle) {
+      localStorage.setItem('webcap.studio.actionAdvisor.enabled', advisorToggle.checked ? 'true' : 'false');
+      if (!advisorToggle.checked && window.studioDirectorWorkbench) window.studioDirectorWorkbench.clearActionAdvice();
     }
     appSettingsLoadedConfig = saved;
     setRuntimeAppConfig(saved);
@@ -751,6 +758,7 @@ function wireAppSettingsUi() {
     ui.appSettingsStoryboardPortEl,
     ui.appSettingsStoryboardContextSizeEl,
     ui.appSettingsStoryboardMaxTokensEl,
+    document.getElementById('app-settings-studio-action-advisor'),
     ui.appSettingsPrimerTemplateEl,
     ui.appSettingsVisionModelEl,
     ui.appSettingsEnableFaceAnalysisEl,

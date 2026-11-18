@@ -175,9 +175,12 @@ def _discover(snapshot):
                     "mediaKind": "video" if file_path.suffix.lower() in VIDEO_EXTS else "image",
                     "fileName": name, "relativePath": relative,
                     "fileSize": stat.st_size, "mtime": int(stat.st_mtime),
-                    "createdAt": int(stat.st_mtime * 1000), "rating": None,
+                    "createdAt": int(stat.st_mtime * 1000), "rating": None, "tags": [],
                 }
                 previous = cache.get(name)
+                if isinstance(previous, dict):
+                    entry["rating"] = previous.get("rating")
+                    entry["tags"] = previous.get("tags") if isinstance(previous.get("tags"), list) else []
                 if _fresh(entry, previous):
                     entry["metadata"] = {k: previous[k] for k in ("size", "mtime", "resolution", "duration") if k in previous}
                     entry["metadataCached"] = True
@@ -239,8 +242,21 @@ def _query_items(snapshot, args, *, ignore_metadata=False):
             raise ValueError("Unknown media type filter.")
         items = [item for item in items if item["mediaKind"] == kind]
     if query:
+        items = [item for item in items if all(
+            term in (item["relativePath"] + " " + " ".join(item.get("tags") or [])).casefold()
+            for term in query)]
+    tag_filter = str(args.get("tag") or "").strip().casefold()
+    if tag_filter:
         items = [item for item in items
-                 if all(term in item["relativePath"].casefold() for term in query)]
+                 if tag_filter in {tag.casefold() for tag in item.get("tags") or []}]
+    rating = str(args.get("rating") or "")
+    if rating:
+        if rating == "unrated":
+            items = [item for item in items if not item.get("rating")]
+        elif rating in ("1", "2", "3", "4", "5"):
+            items = [item for item in items if (item.get("rating") or 0) >= int(rating)]
+        else:
+            raise ValueError("Unknown media rating filter.")
     date = str(args.get("date") or "")
     if date:
         if date not in ("7", "30", "90"):
@@ -292,6 +308,8 @@ def _query_items(snapshot, args, *, ignore_metadata=False):
             width, height = dimensions
             return min(width, height) if sort == "resolution" else width * height
         items.sort(key=lambda item: (-metric(item), item["relativePath"]))
+    elif sort == "rating":
+        items.sort(key=lambda item: (-(item.get("rating") or 0), item["relativePath"]))
     elif sort == "size":
         items.sort(key=lambda item: (-item["fileSize"], item["relativePath"]))
     elif sort == "newest":
@@ -606,6 +624,47 @@ def rename_external_file(data):
     return result
 
 
+def curate_external_file(data):
+    """Persist human-authored rating and tags beside source media."""
+    root = _root(data.get("path"))
+    source = _source_file(root, data.get("file"))
+    rating = data.get("rating")
+    tags = data.get("tags")
+    if rating is not None and (type(rating) is not int or rating < 0 or rating > 5):
+        raise ValueError("Rating must be an integer from 0 to 5.")
+    if tags is not None:
+        if (not isinstance(tags, list) or len(tags) > 40 or
+                any(not isinstance(tag, str) or not tag.strip() or len(tag.strip()) > 64
+                    for tag in tags)):
+            raise ValueError("Tags must be a list of up to 40 labels (64 characters each).")
+        tags = list(dict.fromkeys(tag.strip() for tag in tags))
+    if rating is None and tags is None:
+        raise ValueError("Provide a rating or tags.")
+    from .media import _media_metadata_lock, write_media_metadata_file
+    with _media_metadata_lock:
+        cache = _read_cache(source.parent)
+        previous = cache.get(source.name)
+        entry = dict(previous) if isinstance(previous, dict) else {}
+        stat = source.stat()
+        entry["size"] = stat.st_size
+        entry["mtime"] = int(stat.st_mtime)
+        if rating is not None:
+            entry["rating"] = rating or None
+        if tags is not None:
+            entry["tags"] = tags
+        cache[source.name] = entry
+        write_media_metadata_file(source.parent / "media_metadata.json", cache)
+    with _LOCK:
+        if _index is not None and _index["root"] == root:
+            live = _index["by_path"].get(source.relative_to(root).as_posix())
+            if live:
+                live["rating"] = entry.get("rating")
+                live["tags"] = entry.get("tags") or []
+                _index["revision"] += 1
+    return {"ok": True, "rating": entry.get("rating"),
+            "tags": entry.get("tags") or []}
+
+
 def edit_external_image(data):
     """Apply Prep's reversible still-image crop/transform to external media."""
     root = _root(data.get("path"))
@@ -685,6 +744,14 @@ def register_routes(app):
             return jsonify(rename_external_file(request.get_json(silent=True) or {}))
         except Exception as exc:
             app.logger.exception("EXTERNAL MEDIA RENAME FAILED")
+            return jsonify({"ok": False, "error": str(exc)}), 400
+
+    @app.post("/fs/media_explorer/external/curate")
+    def external_curate():
+        try:
+            return jsonify(curate_external_file(request.get_json(silent=True) or {}))
+        except Exception as exc:
+            app.logger.exception("EXTERNAL MEDIA CURATION FAILED")
             return jsonify({"ok": False, "error": str(exc)}), 400
 
     @app.post("/fs/media_explorer/external/image-edit")

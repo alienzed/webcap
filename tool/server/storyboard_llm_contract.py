@@ -26,7 +26,7 @@ H3_RUNTIME_CONTEXT_PATH = DOCS_ROOT / "mmh3-prompt-runtime-context.txt"
 SCENE_PLAN_SCHEMA_PATH = DOCS_ROOT / "storyboard-scene-plan.schema.json"
 INVARIANT_SCHEMA_PATH = DOCS_ROOT / "storyboard-invariants.schema.json"
 SCENE_REPAIR_SCHEMA_PATH = DOCS_ROOT / "storyboard-scene-repair.schema.json"
-VALID_OPERATIONS = {"interpret_atmosphere", "expand_concept", "define_invariants", "develop_story", "develop_story_outline", "develop_story_scene", "insert_scene", "extend_story", "repair_scenes", "write_prompt", "refine_prompt", "check_coherence"}
+VALID_OPERATIONS = {"interpret_atmosphere", "expand_concept", "define_invariants", "develop_story", "develop_story_outline", "develop_story_scene", "insert_scene", "extend_story", "repair_scenes", "write_prompt", "refine_prompt", "visual_direction", "check_coherence"}
 
 
 def _read_text(path, label):
@@ -708,6 +708,38 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
         blocks.append(
             "[CURRENT TASK]\nWrite the complete MiniMax H3 generation prompt for this Scene exactly as it should be used, following the supplied guidance and Scene context."
         )
+    elif operation == "visual_direction":
+        existing_prompt = _clean(scene.get("prompt"))
+        if not existing_prompt:
+            raise ValueError("Scene generation prompt is required for Visual Direction.")
+        correction = _clean(instruction)
+        if correction:
+            blocks.append("[AUTHOR'S ADDITIONAL DIRECTION]\n" + correction)
+        blocks.append("[EXISTING H3 PROMPT]\n" + existing_prompt)
+        blocks.append(
+            "[VISUAL DIRECTOR ROLE]\n"
+            "You are the Visual Director: a specialist responsible for closing the gap between the author's intended visuals and what a text-to-video model can reliably render. "
+            "Think like a production-minded visual director who understands that the model only has the explicit instructions in the prompt and may otherwise preserve, infer, or default visual details unpredictably. "
+            "Inspect this one Scene as an independently generatable clip, using the Project overview and invariants as context for its purpose and established constraints. "
+            "The Scene prompt itself defines the scope of what belongs in this clip. Apply only contextual details that are relevant to this Scene."
+        )
+        blocks.append(
+            "[VISUAL DIRECTION REVIEW]\n"
+            "Identify what the viewer is meant to see and whether the prompt makes those visuals sufficiently explicit for generation. "
+            "Pay particular attention to meaningful state changes and their visible consequences: wardrobe and accessories, activity-specific equipment, location and environment, subject position and interaction, facial expression and emotion, body posture, and changes in the scene's physical setup. "
+            "When an activity or setting changes, establish the visual details that must change with it rather than assuming the model will infer them. "
+            "When an emotional or physical state changes, state the resulting visible expression or action. "
+            "Check that the prompt describes the actual visible result, not merely the abstract intention or the preceding overview. "
+            "Use the Project overview and invariants to understand context, not as instructions to import every Project element into every Scene."
+        )
+        blocks.append(
+            "[CURRENT TASK]\n"
+            "Improve this Scene's renderability. Make the existing prompt more visually explicit, concrete, and executable while preserving its creative direction, intended subjects, actions, tone, and scope. "
+            "Resolve consequential omissions where the intended visual result is clear from the Scene and Project context. "
+            "Where an existing Scene is materially incomplete relative to its stated purpose, add the missing visual beat or cut only when it is a direct and necessary realization of that purpose. "
+            "Do not make arbitrary wardrobe, prop, casting, location, or story choices where the source material does not establish them; retain the author's ambiguity when it is genuinely intentional. "
+            "Return the complete revised prompt, or changed=false if no meaningful improvement is needed."
+        )
     else:
         existing_prompt = _clean(scene.get("prompt"))
         correction = _clean(instruction)
@@ -740,8 +772,8 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
         "output": "json",
         "prompt": "\n\n".join(blocks).strip() + "\n",
         "response_schema": _prompt_response_schema(
-            allow_duration=operation == "refine_prompt",
-            allow_scene_fields=operation == "refine_prompt",
-            allow_unchanged=operation == "refine_prompt",
+            allow_duration=operation in {"refine_prompt", "visual_direction"},
+            allow_scene_fields=operation in {"refine_prompt", "visual_direction"},
+            allow_unchanged=operation in {"refine_prompt", "visual_direction"},
         ),
     }

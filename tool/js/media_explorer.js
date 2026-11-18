@@ -4,8 +4,25 @@
   var selected = new Set(), anchor = -1;
   var source = '', pageSize = 60, serial = 0, full = false, complete = false, activeRequest = null;
   var exportItems = [];
+  var lastExportDestination = null;
+  function openCopiedSetInPrep() {
+    if (lastExportDestination === null) return;
+    var destination = lastExportDestination;
+    el('media-explorer-export-dialog').close();
+    openPrepActivity();
+    state.folder = destination;
+    state.dirStack = [{name:''}].concat(destination.split('/').filter(Boolean).map(function (name) {
+      return {name:name};
+    }));
+    state.currentItem = null;
+    clearEditorAndPreview();
+    clearCaptionFilterInputs();
+    refreshCurrentDirectory();
+  }
   function chooseExport(chosen) {
     exportItems = chosen;
+    lastExportDestination = null;
+    el('media-explorer-export-open-prep').classList.add('hidden');
     if (!chosen.length) return;
     var dialog = el('media-explorer-export-dialog');
     text(el('media-explorer-export-heading'), 'Copy to Set');
@@ -1746,6 +1763,7 @@
     var field = el('media-explorer-export-destination');
     field.value = field.value.trim().split('/').slice(0,-1).join('/'); browseDestinations();
   });
+  el('media-explorer-export-open-prep').addEventListener('click',openCopiedSetInPrep);
   el('media-explorer-export-cancel').addEventListener('click', function () { el('media-explorer-export-dialog').close(); });
   el('media-explorer-export-form').addEventListener('submit', function (event) {
     event.preventDefault();
@@ -1778,6 +1796,10 @@
     }); }).then(function (data) {
       var count = data.copied.length + ' files copied';
       text(el('media-explorer-export-status'), count + ' to ' + data.destination);
+      if (typeof data.destinationRelative !== 'string')
+        throw Error('Copy completed, but the destination was not returned for Prep navigation.');
+      lastExportDestination = data.destinationRelative === '.' ? '' : data.destinationRelative;
+      el('media-explorer-export-open-prep').classList.remove('hidden');
     }).catch(function (err) { text(el('media-explorer-export-status'), err.message); report(err); })
       .finally(function () { submit.disabled = false; });
   });

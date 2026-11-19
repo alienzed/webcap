@@ -109,10 +109,10 @@
     state.deepQaStatus = status || null;
     el('prompt-assist-deep-qa-status').textContent = deepQaStatusText(status);
     el('prompt-assist-deep-qa-run').textContent = status && status.projectFresh ? 'Refresh Project Intelligence' : 'Prepare Project Intelligence';
+    var host = el('prompt-assist-project-context-content');
+    var existing = host.querySelector('.prompt-assist-deep-qa-summary');
+    if (existing) existing.remove();
     if (status && status.project && status.project.summary) {
-      var host = el('prompt-assist-project-context-content');
-      var existing = host.querySelector('.prompt-assist-deep-qa-summary');
-      if (existing) existing.remove();
       var section = document.createElement('section');
       section.className = 'prompt-assist-deep-qa-summary';
       var title = document.createElement('strong');

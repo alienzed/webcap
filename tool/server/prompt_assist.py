@@ -547,7 +547,7 @@ def build_deep_qa_project_contract(context, scene_results):
     }
 
 
-def validate_deep_qa_scene(result, scene_id, valid_shots):
+def validate_deep_qa_scene(result, scene_id, valid_shots, source_prompt=None):
     required = ("summary", "purpose", "keyVisualMoments", "cuts")
     if (not isinstance(result, dict) or str(result.get("sceneId") or "") != str(scene_id)
             or any(not isinstance(result.get(key), expected) for key, expected in (
@@ -567,6 +567,11 @@ def validate_deep_qa_scene(result, scene_id, valid_shots):
         for key in ("sourceEvidence", "stateChanges", "inferences", "carryForward", "physicalInteractions", "concerns"):
             if not isinstance(cut.get(key), list) or any(not isinstance(value, str) for value in cut[key]):
                 raise ValueError("Project Deep QA cut has invalid " + key + ".")
+        if source_prompt is not None:
+            if not cut["sourceEvidence"] or any(
+                not evidence.strip() or evidence not in source_prompt for evidence in cut["sourceEvidence"]
+            ):
+                raise ValueError("Project Deep QA source evidence must quote the exact saved prompt.")
     if any(not isinstance(value, str) for value in result["keyVisualMoments"]):
         raise ValueError("Project Deep QA key visual moments must be strings.")
     expected_cuts = valid - {0}

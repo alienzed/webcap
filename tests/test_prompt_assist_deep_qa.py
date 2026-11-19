@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 
 from tool.server import app as app_module
+from tool.server.storyboard_store import _write_json_atomic
 from tool.server.prompt_assist import build_context, scene_source_fingerprint, source_fingerprint
 from tool.server.storyboard_store import _write_json_atomic
 

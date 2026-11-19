@@ -1603,7 +1603,7 @@ def test_legacy_workshop_context_uses_saved_prompt_without_scene_intent(storyboa
 
 def test_project_deep_qa_cache_is_separate_and_invalidates_on_prompt_changes(storyboard_fs):
     story = storyboard_store.create_story({"title": "Deep QA", "concept": "A short test."})
-    scene = storyboard_store.add_scene(story["id"], {"title": "Arrival", "prompt": "A person enters."})
+    _, scene = storyboard_store.add_scene(story["id"], {"title": "Arrival", "prompt": "A person enters."})
     story = storyboard_store.load_story(story["id"])
     record = storyboard_store.save_project_deep_qa(
         story["id"],
@@ -1653,7 +1653,7 @@ def test_project_deep_qa_rejects_results_when_project_changes_during_analysis(st
 
 def test_prompt_assist_patch_is_independent_and_conflict_safe(storyboard_fs):
     story = storyboard_store.create_story({"title": "Prompt Assist"})
-    scene = storyboard_store.add_scene(story["id"], {
+    _, scene = storyboard_store.add_scene(story["id"], {
         "title": "Action",
         "prompt": "A woman enters. She wears a blue coat. The camera follows her.",
     })

@@ -72,7 +72,7 @@ For this pass, relevant visible details from invariants must be included in the 
 
 The operation processes only the selected Scenes, one request per Scene, through the existing Director model selection, queue and GPU coordination. The target picker defaults to all Scenes and supports selecting one or more individual Scenes. It does not receive Director chat history or other Scene prompts. It may make context-grounded creative decisions to complete the intended visuals; its boundary is staying focused on the current Scene rather than adding its own story or unrelated developments.
 
-Successful prompt revisions use the existing Scene prompt persistence and History mechanism. An unchanged result does not rewrite the Scene. Fresh Take generation remains optional and applies only to the selected Scenes. First Cut and the existing standard/continuity/coherence paths remain unchanged.
+Successful prompt revisions use the existing Scene prompt persistence and History mechanism. An unchanged result does not rewrite the Scene. Each Scene is isolated: a failure is recorded against that Scene and does not roll back or prevent later selected Scenes from running. The job result reports named successful and failed Scenes; the UI summarizes both. Optional fresh Takes are queued only for prompts that actually changed successfully, and a Take-queue failure is reported separately without undoing the saved prompt. First Cut and the existing standard/continuity/coherence paths remain unchanged.
 
 ### 6. Existing specialist tools
 

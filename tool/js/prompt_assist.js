@@ -183,16 +183,17 @@
         }).then(nextScene);
       }
       return nextScene().then(function () {
-        setStatus('Project Deep QA · building cross-Scene intelligence…');
-        return runDeepQaJob('deep_qa_project', '', 'project');
-      }).then(function (preparedProject) {
-        return api('/fs/storyboard/prompt-assist/deep-qa', {
-          storyId: state.storyId, kind: 'project',
-          sourceFingerprint: preparedProject.sourceFingerprint,
-          result: preparedProject.result
-        });
-      }).then(function () {
         return loadDeepQaStatus();
+      }).then(function (latest) {
+        if (latest && latest.projectFresh) return latest;
+        setStatus('Project Deep QA · building cross-Scene intelligence…');
+        return runDeepQaJob('deep_qa_project', '', 'project').then(function (preparedProject) {
+          return api('/fs/storyboard/prompt-assist/deep-qa', {
+            storyId: state.storyId, kind: 'project',
+            sourceFingerprint: preparedProject.sourceFingerprint,
+            result: preparedProject.result
+          });
+        }).then(loadDeepQaStatus);
       }).then(function () {
         setStatus('Project Deep QA is complete. Fresh intelligence will be included in specialist reviews.');
       });

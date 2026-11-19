@@ -2472,6 +2472,125 @@ def director_chat_route():
         return jsonify({"ok": False, "error": str(exc)}), 400
 
 
+
+
+@app.route("/fs/storyboard/prompt-assist", methods=["POST"])
+def storyboard_prompt_assist_route():
+    """Run one independent Prompt Assist analysis/synthesis pass on saved Studio material."""
+    try:
+        from .prompt_assist import build_context, build_contract
+        data = request.get_json(silent=True) or {}
+        story_id = str(data.get("storyId") or "").strip()
+        model_id = str(data.get("model") or "").strip()
+        operation = str(data.get("operation") or "").strip().lower()
+        role = str(data.get("role") or "").strip().lower()
+        if not story_id:
+            raise ValueError("Open a Project before using Prompt Assist.")
+        if not model_id:
+            raise ValueError("Choose a Director model.")
+        story = storyboard_load_story(story_id)
+        context = build_context(
+            story,
+            scope=str(data.get("scope") or "scene"),
+            scene_id=str(data.get("sceneId") or ""),
+        )
+        if operation == "review":
+            contract = build_contract("review", context, role=role)
+            label = "Prompt Assist: " + role + " review"
+        elif operation == "synthesize":
+            reviews = data.get("reviews")
+            if not isinstance(reviews, list):
+                raise ValueError("Independent specialist reviews are required for synthesis.")
+            contract = build_contract("synthesize", context, role="editor", findings=reviews)
+            label = "Prompt Assist: Creative Editor synthesis"
+        elif operation == "revise":
+            accepted = data.get("accepted")
+            if not isinstance(accepted, list):
+                raise ValueError("Accepted recommendations are required for revision.")
+            contract = build_contract("revise", context, role="editor", accepted=accepted)
+            label = "Prompt Assist: Prepare revised prompts"
+        elif operation == "followup":
+            conversation = data.get("conversation")
+            if not isinstance(conversation, list):
+                conversation = []
+            contract = build_contract(
+                "followup", context, role=role,
+                findings=data.get("findings"),
+                conversation=conversation,
+                question=str(data.get("question") or ""),
+            )
+            label = "Prompt Assist: " + role + " discussion"
+        else:
+            raise ValueError("Unsupported Prompt Assist operation.")
+
+        job = enqueue_llm(
+            "chat", model_id, contract,
+            context={
+                "storyId": story_id,
+                "storyTitle": str(story.get("title") or "Untitled Project"),
+                "operation": "prompt_assist_" + operation,
+                "modelLabel": model_id.split("::", 1)[-1],
+            },
+            label=label,
+        )
+        return jsonify({
+            "ok": True,
+            "job": job,
+            "scope": context["scope"],
+            "sourceUpdatedAt": context["sourceUpdatedAt"],
+        }), 202
+    except FileNotFoundError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 404
+    except Exception as exc:
+        app.logger.exception("PROMPT ASSIST REQUEST FAILED: %s", exc)
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
+@app.route("/fs/storyboard/prompt-assist/apply", methods=["POST"])
+def storyboard_prompt_assist_apply_route():
+    """Apply explicitly selected complete prompt revisions against their exact originals."""
+    try:
+        data = request.get_json(silent=True) or {}
+        story_id = str(data.get("storyId") or "").strip()
+        revisions = data.get("revisions")
+        if not story_id or not isinstance(revisions, list) or not revisions:
+            raise ValueError("Prompt Assist requires a Project and at least one revised Scene.")
+        prepared = []
+        seen = set()
+        for item in revisions:
+            if not isinstance(item, dict):
+                raise ValueError("Prompt Assist revision is invalid.")
+            scene_id = str(item.get("sceneId") or "")
+            expected = item.get("expectedPrompt")
+            prompt = item.get("prompt")
+            if not scene_id or scene_id in seen:
+                raise ValueError("Prompt Assist revisions must have unique Scene targets.")
+            if not isinstance(expected, str) or not isinstance(prompt, str) or not prompt.strip():
+                raise ValueError("Each Prompt Assist revision needs its original and complete replacement prompt.")
+            seen.add(scene_id)
+            prepared.append({
+                "sceneId": scene_id,
+                "expected": {"prompt": expected},
+                "changes": {"prompt": prompt},
+            })
+        with storyboard_mutation_lock:
+            if any(
+                llm_storyboard_target_busy(story_id, target_kind, target_scene)
+                for target_kind, target_scene in (
+                    [( "scene-prompt", scene_id) for scene_id in seen]
+                    + [("scenes", ""), ("repair", "")]
+                )
+            ):
+                raise ValueError("Wait for pending Director work on this Project before applying Prompt Assist.")
+            updated_story, changed = storyboard_apply_studio_scene_fields_batch(story_id, prepared)
+        return jsonify({"ok": True, "story": updated_story, "changed": changed})
+    except FileNotFoundError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 404
+    except Exception as exc:
+        app.logger.exception("PROMPT ASSIST APPLY FAILED: %s", exc)
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
 @app.route("/fs/storyboard/director", methods=["GET", "POST"])
 def storyboard_director_route():
     try:

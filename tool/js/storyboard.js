@@ -6073,6 +6073,7 @@
       sceneSelection.querySelectorAll('[data-revise-scene]').forEach(function (input) {
         input.checked = allToggle.checked;
       });
+      allToggle.indeterminate = false;
     };
     sceneSelection.querySelectorAll('[data-revise-scene]').forEach(function (input) {
       input.onchange = function () {
@@ -6083,6 +6084,9 @@
     });
     preset.value = '';
     input.value = '';
+    var instructionLabel = document.querySelector('label[for="storyboard-director-tools-instruction"]');
+    if (instructionLabel) instructionLabel.textContent = 'Revise Scenes';
+    input.placeholder = 'Describe what should be revised across these Scenes.';
     sceneRevisionHistory.reset(input);
     input.readOnly = false;
     el('storyboard-director-tools-generate-takes').closest('label').classList.remove('hidden');
@@ -6440,6 +6444,10 @@
       if (this.value === 'coherence') input.value = DIRECTOR_PASS_PRESETS.coherence.instruction;
       if (this.value === 'visual_direction') input.value =
         'Make this Scene fully and explicitly describable as a standalone H3 generation prompt.';
+      var visualDirection = this.value === 'visual_direction';
+      var instructionLabel = document.querySelector('label[for="storyboard-director-tools-instruction"]');
+      if (instructionLabel) instructionLabel.textContent = visualDirection ? 'Additional direction (optional)' : 'Revise Scenes';
+      input.placeholder = visualDirection ? 'Optional direction for this Visual Direction pass.' : 'Describe what should be revised across these Scenes.';
       sceneRevisionHistory.reset(input);
       var coherence = this.value === 'coherence';
       syncDirectorToolsRunLabel();

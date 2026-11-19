@@ -666,7 +666,17 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
             blocks.append("[STORY INVARIANTS]\n" + invariants)
         blocks.append("[H3 GUIDANCE]\n" + h3_runtime_context)
         _add_model_limitations(blocks, "minimax_h3")
-        blocks.append("[COMPLETE SCENE OUTLINE]\n" + json.dumps(outline, indent=2, ensure_ascii=False))
+        # Old saved outlines may contain retired Scene metadata. Only feed
+        # the live authoring fields to the model.
+        active_outline = {
+            "scenes": [
+                {key: item[key] for key in ("title", "prompt", "suggestedDurationSeconds") if key in item}
+                if isinstance(item, dict) else item
+                for item in outline["scenes"]
+            ]
+        }
+        planned_scene = active_outline["scenes"][scene_index]
+        blocks.append("[COMPLETE SCENE OUTLINE]\n" + json.dumps(active_outline, indent=2, ensure_ascii=False))
         blocks.append(
             "[CURRENT PLANNED SCENE]\nScene "
             + str(scene_index + 1)

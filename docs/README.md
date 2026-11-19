@@ -1,6 +1,6 @@
 # WebCap Docs Map
 
-Documentation index updated: 2026-11-06. Current README/Studio descriptions were compared with the UI markup, Director guidance, request construction, Apply paths and runtime configuration. The earlier repository-wide audit is recorded below; neither pass is a line-by-line verification of every historical plan.
+Documentation index updated: 2026-11-18 (Studio Director references reconciled with the current role split, explicit Read/Write source and Action Advisor). Other feature areas and historical plans have not been re-audited line by line.
 
 This folder mixes three different kinds of documents:
 
@@ -32,11 +32,13 @@ Start here when you need to know what the app does today:
 - `docs/primer_mappings_v2.md` - structured mappings/rules storage and UI contract
 - `docs/execution_queue.md` - shared inference/LLM scheduling, backlog, GPU arbitration, and Activity/queue boundaries; state path reconciled 2026-10-18
 - `docs/gpu_coordination_invariants.md` - authoritative local-GPU coordination invariants; runtime truth, ownership, restart, and deterministic dispatch
-- `docs/storyboard.md` - broader Storyboard storage/production architecture and phased history; its underlying legacy LLM operations are **not** the active Studio Director field contract
-- `docs/studio-director-useful-functions-consolidation.md` - current Studio Director capability scope: explicit Read; Create Project, Revise Project Overview and Write Scenes; coherent creative units, editable Review, explicit Apply and acceptance boundaries. Later phased retirement work remains labeled as such.
+- `docs/storyboard.md` - broad Storyboard storage and production reference, including historical pipeline sections; the current Director contract is documented separately
+- `docs/studio-director-contract.md` - **authoritative Studio Director behaviour**: conversational role, visible explicit Read snapshots, direct Project/Scene Write, optional Action Advisor, History and verification
+- `docs/studio-user-flows.md` - current Studio Director acceptance journeys and role boundaries
+- `docs/studio-director-implementation.md` - dated implementation evidence; older phases in the same file are historical
 - `docs/storyboard_llm_guidance.md` - underlying Storyboard authoring/generation boundaries and legacy operations; distinguished from current Studio controls
 - `docs/studio-blocks.md` - current standalone Studio Blocks library and explicit `/` insertion workflow
-- `docs/mmh3-prompt-runtime-context.txt` - **active H3 model-facing prompt shape** used by Studio Director and legacy prompt authoring
+- `docs/mmh3-prompt-runtime-context.txt` - **active H3 prompt-authoring reference for explicit Scene Write and specialist H3 operations**, not ordinary Studio Director chat or Project Write
 - `docs/mmh3-prompt-guidelines.md` - human-readable H3 guidance and distinctions between active Studio and legacy Storyboard requests
 - `INSTALLATION.md` - current installation/bootstrap and environment-diagnostics guide
 
@@ -58,6 +60,7 @@ These describe implemented features, but they are narrower than `README.md` / `d
 - `docs/frame-scrubbing.md` - authoritative decoded-frame navigation and exact clip starts
 - `docs/vision_schema_assist.md` - active Structured Sight / vocabulary discovery and guided tagging boundaries
 - `docs/progressive_deep_qa.md` - implemented Deep QA behavior with dated implementation-plan history; current per-item retries differ from its original phase text
+- `docs/studio-action-advisor-mvp.md` - shipped independent Action Advisor, enabled by default and configurable in Settings → Director; dated MVP rollout notes remain below
 
 ## Planning / Direction Docs
 
@@ -67,8 +70,8 @@ These are useful product notes, not authoritative implementation references:
 
 - `docs/model-modules.md` - North Star for model-owned training configuration and policy boundaries
 - `docs/queue-semantics.md` - product queue-semantics North Star, **not** a claim that every fine-grained behavior is implemented
-- `docs/studio-director-materialization-contract.md` - staged Studio intention-to-reviewed-Apply implementation record; distinguish historical checkpoints from shipped code
-- `docs/studio-director-revamp.md` - historical evolution/design plan, not the present Studio Director primer
+- `docs/studio-director-materialization-contract.md` - **historical** staged Studio intention-to-reviewed-Apply record; not the current contract
+- `docs/studio-director-revamp.md` - **historical** evolution/design plan, not the present Studio Director primer or Write path
 - `docs/filesystem_state_contract.md` - authoritative filesystem lifecycle rules (partially migrated; contains historical/planned sections)
 - `docs/ui_gold_master.md`
 - `docs/workspace_shell_architecture_audit.md` - pre-refactor shell audit retained as architecture history; superseded by the completed shell
@@ -86,6 +89,7 @@ These are useful product notes, not authoritative implementation references:
 
 These are intentionally retained for context. Some have a current-status preface because later implementation superseded part of their original design:
 
+- `docs/studio-director-useful-functions-consolidation.md` - historical scoped-workflow plan: its reviewed Write/Apply description is superseded by direct Write
 - `docs/studio-director-expertise.md` - historical expertise audit baseline; its older operation matrix is not the active capability catalog
 - `docs/studio-director-coherence-consolidation.md` - historical migration phases; coherence is now a separate explicit Project utility, outside the creative Write catalog; legacy tool retirement remains deferred
 
@@ -105,7 +109,7 @@ Additional superseded references:
 - `docs/caption_requirements.md`
 - `docs/train_execution_preflight.md`
 
-## November 6 follow-up
+## November 6 follow-up (historical checkpoint; Studio Review/Apply subsequently retired)
 
 - **Verified against source:** Studio/Evaluation navigation labels; Project Overview/Scene units; explicit Read and receipts; advisory suggestions and captured values; full discussion handoff for Scene and Overview revisions; editable Review, selected-field conflict checks and atomic Scene-batch Apply; retained production shortcuts; local/remote runtime identity and current configuration defaults.
 - **Corrected:** README's retired entry/exit and Overview/Focus instructions, implication that First Cut waits for chat-style Review, old 8K/4K runtime defaults, missing Studio Director/Blocks introduction, and conflicting legacy/current prompt-context descriptions in the Storyboard reference.

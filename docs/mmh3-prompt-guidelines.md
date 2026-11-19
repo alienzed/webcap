@@ -1,6 +1,6 @@
 # MiniMax H3 Prompt Guidance Reference
 
-This document is reference material for WebCap's Director.
+This document is reference material for explicit H3 Scene Write and standalone H3 prompt-authoring functions. Ordinary Studio Director chat and Project Write use separate, non-H3 instructions.
 
 The active runtime guidance is:
 
@@ -47,7 +47,7 @@ Scene-level sections establish defaults for the generation.
 
 Shots inherit those defaults and focus on what occurs at particular times: action, performance, framing, perspective, camera movement, synchronized events, dialogue, and changes in physical state.
 
-Current H3 Storyboard clips use the saved 4–15-second duration. For active Studio authoring, supplied Project Concept, Visual / atmosphere, relevant Invariants, and Scene Intent guide shot count, timing, and treatment. Older Storyboard requests may additionally supply legacy Story Directing Guidelines.
+Current H3 Storyboard clips use the saved duration in their supported range. For explicit Studio Scene authoring, the supplied Project Concept, Visual / atmosphere, relevant Invariants, current Scene Prompt (when revising), and the author's Write task guide shot count, timing and treatment. Older Storyboard requests may additionally supply legacy Story Directing Guidelines or Scene Intent.
 
 ## Camera and motion
 
@@ -77,7 +77,7 @@ Shot-level audio carries synchronized sound tied to a particular moment.
 
 ## Continuity and evolving state
 
-Existing-Scene Studio Write requests supply selected Project/Scene context and Invariant references; ordinary Studio conversation sees saved values only when explicitly Read or included in a reviewed Apply receipt.
+Existing-Scene Studio Write requests supply the selected Scene's authoritative saved baseline and relevant Project context. Ordinary Studio conversation receives saved values only from explicit, visible Read snapshots that persist in the conversation; it does not receive hidden saved-field context.
 
 Scene-level Environment / Continuity Anchors are useful for current spatial state, location identity, props and prop state, lighting, time, weather, and other visible conditions that carry through the generation.
 
@@ -85,7 +85,7 @@ Shots describe coherent changes to those conditions over time.
 
 When Scenes are connected, relevant shared facts and evolving state can carry across them. Independent or variation-based Scenes carry only the shared elements the concept calls for.
 
-Legacy stored Entry/Exit state may still inform older Storyboard workflows. These fields are **retired from active Studio Director authoring**; use Concept, Scene Intent, and relevant Invariants for current relationship and continuity decisions.
+Legacy stored Entry/Exit state may still inform older Storyboard workflows. These fields are **retired from active Studio Director authoring**; express required continuity through relevant Project Concept/Invariants and visible initial, changing and final states in the complete Scene Prompt.
 
 ## Exact frame grounding
 
@@ -101,7 +101,7 @@ WebCap may add the exact MiniMax alignment statement derived from the selected r
 
 Prompt refinement applies the requested change while preserving unrelated authored details.
 
-Previous-Scene facts may be used for a user-requested continuity review. Current Studio Concept and explicitly supplied Scene Intent establish that relationship; legacy Story Directing Guidelines apply only when present in an older request.
+Previous-Scene facts may be used for a requested continuity review. Current Studio Scene Write uses the saved Scene Prompt and explicitly supplied Project/continuity context; legacy Story Directing Guidelines apply only to older requests that supply them.
 
 ## Runtime scope
 

@@ -1,6 +1,17 @@
 # Studio Director — implementation and acceptance
 
-[Functional contract](studio-director-contract.md) is authoritative. This file tracks the three-operation implementation and evidence; it does not define a competing architecture. The earlier incremental plans and audits from November 14 were superseded by the three-operation cutover in PR #950. Consult the PR history for original gap analyses.
+[Functional contract](studio-director-contract.md) is authoritative, with [current user flows](studio-user-flows.md) as acceptance journeys. This file records dated implementation checkpoints and evidence, not a second architecture or a current backlog. The November 14 reviewed-Apply plans were superseded by the November 17 explicit Read/direct Write cutover; their original claims below are historical.
+
+## Current Studio Director boundaries — documentation reconciliation, November 18, 2026
+
+- **Chat Director:** concise creative collaboration with response length proportionate to the author's request; brief remarks usually merit one or two short paragraphs, while requested complete Scene content remains welcome. This was reinforced in [PR #1050](https://github.com/alienzed/webcap/pull/1050); it introduces neither H3 production guidance nor structured authoring fields into chat.
+- **Read:** one user-initiated visible snapshot, persisted as a conversation message, with no model request or automatic reread. Separate navigation, association and Write destination do not grant chat access.
+- **Write:** explicitly chosen Project/Scene operation, full conversation history, task-specific instructions and schema. Project Revise saves selected fields only; Scene Write alone receives H3 authoring reference. Mechanically usable output saves directly, not through Director Review/Apply.
+- **Action Advisor:** optional independent sidecar, enabled by default unless disabled in Settings → Director; it may suggest and prepare manual actions but cannot execute them (see [MVP record](studio-action-advisor-mvp.md)).
+- **Specialist functions:** Develop Scenes, Revise Scenes, Visual Direction, Revise & Generate, First Cut and Coherence maintain their own contracts and any distinct specialist review UI.
+- **Evidence limit:** the documentation reconciliation is static inspection of current source and contracts. Model response quality and real-browser acceptance require observed runs; do not treat historic CI or this prose update as a live pass.
+
+The dated implementation and acceptance notes that follow retain their original dates and verification limits.
 
 ## Studio Scene Write response acceptance — November 17, 2026
 
@@ -125,7 +136,9 @@ LLM output can be useful even when its wrapper, action hint, rationale, title or
 - Model adherence, UI correctness, and complete end-to-end creative preservation require real-browser/selected-model checks. Passing CI is evidence for deterministic logic, not a guarantee about model behavior.
 - README describes the intended merged behavior after #950; older releases still expose their older workflow.
 
-## Focused acceptance checklist
+## Historical #950 acceptance checklist (superseded; use current user flows above)
+
+The following 2026-11-14 checklist captures the old reviewed-draft design. It is **not** the current test plan: explicit Read does not call the model, and Director Write no longer restores and Applies chat-created drafts. Use [current user flows](studio-user-flows.md) and [live acceptance](studio-director-live-acceptance.md).
 
 1. **Read:** Ask for exact saved Project title and selected Scene constraints. Confirm the current Project/Scene is used, answer is visible, no write occurs and one conversation model call is made.
 2. **Write Project:** Create then revise Project fields. Inspect actual persisted values, unrelated fields and existing Scenes.

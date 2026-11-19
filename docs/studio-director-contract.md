@@ -8,11 +8,11 @@ Studio Director is an imaginative, capable creative partner. The author can disc
 
 ### 1. Ordinary conversation
 
-- Open Studio Director as a normal, continuous conversation. Answer questions, challenge ideas constructively, and make useful recommendations.
+- Open Studio Director as a normal, continuous conversation. Answer questions, challenge ideas constructively, and make useful recommendations. Match response depth to the author's request: a brief remark or straightforward question usually warrants one or two short paragraphs, while a requested detailed critique or complete Scene can be shown in full. This is guidance for proportional dialogue, **not** a hard word/token limit or an excuse to withhold requested material.
 - Read is a one-time user action, not an LLM call. The complete snapshot visible in chat is byte-for-byte the user-message content delivered to subsequent LLM requests; a reload preserves it. Chat **does not author application fields, invoke Write, offer structured draft captures, or save**. Any proposed Project or Scene work is discussion until the author clicks an explicit Write function.
 - New Read snapshots group selected values under `project` and `scenes`, with direct keys such as `prompt` and `durationSeconds` and the saved Scene `number`. Storage IDs and selection paths stay in application targeting, outside the submitted content. Existing conversation snapshots remain unchanged.
 - Chat receives only the concise creative-partner role and the complete persisted conversation, including past explicit Read snapshots. It receives **no H3 production reference, no Project/Scene writing schema, no model-facing capability catalog, and no save/review workflow instructions**.
-- WebCap does not infer the author's intent from prose to choose a function. No hidden staging, readiness scoring, planning, repair, model action prediction, or permission to write follows from conversation.
+- WebCap does not infer the author's intent from prose to choose a function. Ordinary Chat Director cannot stage, initiate or authorize Writes or perform hidden readiness/repair steps. The optional independent Action Advisor may recommend and prefill manual controls, never execute them.
 - The original model output, including malformed or unexpected responses, and outbound request remain inspectable in I/O. No hidden rewrite, semantic grading, recovery or automatic retry.
 
 ### Optional Action Advisor

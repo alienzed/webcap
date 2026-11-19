@@ -1860,7 +1860,6 @@ def apply_director_prompt(
     job_id="",
     operation="",
     duration_override=None,
-    scene_fields=None,
     expected_prompt=None,
 ):
     story = load_story(story_id)
@@ -1890,13 +1889,6 @@ def apply_director_prompt(
         "promptDirectorJobId": str(job_id or "").strip(),
         "refineComplete": operation == "refine_prompt",
     }
-    if scene_fields:
-        if operation != "refine_prompt":
-            raise ValueError("Only Scene refinement may revise Scene authoring fields.")
-        if not isinstance(scene_fields, dict):
-            raise ValueError("Refined Scene fields must be an object.")
-        # Legacy Scene metadata in old model responses is deliberately ignored.
-
     if duration_override is not None:
         if operation != "refine_prompt":
             raise ValueError("Only Scene refinement may return a duration override.")

@@ -1,0 +1,9 @@
+{
+  "id":"selective_physical_continuity",
+  "project_overview":"A courier enters a building immediately after walking through heavy rain. This is a continuous moment: entering shelter changes the environment but does not dry the courier or their belongings.",
+  "visual_direction":"Grounded realism, restrained movement, warm interior contrasted with cool rainy exterior.",
+  "invariants":["One adult courier wears the same dark-blue raincoat, hood down, and carries the same black shoulder bag.","Hair, coat and bag remain visibly wet throughout this Scene.","The courier stays just inside the glass entrance; no time jump or clothing change occurs."],
+  "scene_description":"Now inside a dry, warmly lit lobby, the courier pauses by the glass entrance and catches their breath. Rain remains outside, visible through the glass. Their soaked hair clings to their forehead and water drips from coat and bag onto the floor.",
+  "existing_h3_prompt":"The courier pauses in the lobby, catching their breath. Warm light fills the interior. The camera holds a steady medium shot.",
+  "expected_findings":["Establish dry warm lobby, rainy exterior through glass, and steady medium framing.","Carry over wet hair, dark-blue coat with hood down, black shoulder bag and dripping water.","Entering indoors must not reset the person to dry or make rain fall inside.","Keep the pause/breathing action; no undressing, towel, staff interaction or new destination."]
+}

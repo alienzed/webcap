@@ -1,0 +1,9 @@
+{
+  "id":"two_person_prop_handoff",
+  "project_overview":"A simple workshop demonstration shows one adult passing a single empty yellow ceramic mug to another. The purpose is a clearly readable transfer of possession in one continuous shot.",
+  "visual_direction":"Naturalistic movement, neutral workshop lighting, uncluttered view of both people's hands.",
+  "invariants":["Exactly two adults: the giver in blue coveralls stays frame-left; the receiver in an orange apron stays frame-right.","Exactly one empty yellow ceramic mug exists, with one handle.","A locked-off medium two-shot keeps the transfer and both people's hands visible."],
+  "scene_description":"Facing one another across a clear workbench, the giver extends the mug in their right hand. The receiver takes its weight with their left hand before the giver releases it. The mug ends securely in the receiver's hand. Choose a physically coherent grip and transfer motion.",
+  "existing_h3_prompt":"One worker hands a cup to the other over the workbench. The camera watches them.",
+  "expected_findings":["Establish distinct adults, clothing, left/right screen positions, one yellow mug and clear workbench.","Specify giver's right hand, receiver's left hand, a coherent grip, weight transfer before release, and final possession.","Maintain locked framing and visible hands; do not duplicate the mug or swap identities/screen positions.","No pouring, drinking, conversation, extra tools or subsequent task."]
+}

@@ -1,0 +1,9 @@
+{
+  "id":"complete_motion_control",
+  "project_overview":"An instructional studio insert shows a single deliberate quarter-turn of a wooden cube. The shot is already fully specified; all relevant action and visual details are established.",
+  "visual_direction":"Clean instructional realism, neutral gray backdrop, soft diffused studio lighting.",
+  "invariants":["One matte red wooden cube remains on one plain light-wood plinth.","Only one adult's right hand and teal sweater cuff enter the frame; the person is cropped at the wrist and their face is outside the shot.","The camera stays locked off in a medium close-up during one continuous five-second take."],
+  "scene_description":"The right hand turns the cube exactly one quarter-turn clockwise on the plinth, releases it and withdraws. The cube remains stationary afterward. Preserve the established shot.",
+  "existing_h3_prompt":"In one continuous five-second take, a locked-off medium close-up shows a single matte red wooden cube centered on a plain light-wood plinth against a featureless neutral gray backdrop. Soft diffused studio light casts a gentle shadow beneath the cube. An adult's right hand with a teal sweater cuff enters from frame-right; the framing ends at the wrist, leaving the person's face outside the shot. The fingers grip the cube's sides and rotate it exactly 90 degrees clockwise as viewed from above, keeping its base on the plinth. The hand releases the cube and withdraws to frame-right. The cube remains still for the rest of the take.",
+  "expected_findings":["An unchanged result is appropriate; a verbatim complete prompt is also appropriate.","Retain exact quarter-turn, clockwise direction, base contact, release and withdrawal, and final stillness.","Retain single right hand, wrist crop, cuff, cube/plinth, lighting, camera and duration.","Avoid extra rotations, lifting the cube, second hand, face/body description, new props, camera moves or stylized effects."]
+}

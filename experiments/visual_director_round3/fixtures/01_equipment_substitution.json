@@ -1,0 +1,9 @@
+{
+  "id":"equipment_substitution",
+  "project_overview":"A sportswear montage follows one adult athlete through separate tennis and ice-hockey cuts. Each cut has a complete sport-appropriate outfit and equipment. Choose coherent practical hockey clothing and equipment to complete this cut.",
+  "visual_direction":"Realistic athletic movement, clean sports campaign photography.",
+  "invariants":["The same adult athlete appears throughout.","This is a separate ice-hockey cut on an indoor ice rink, rather than a transformation during the shot.","The action ends with preparation for a wrist shot; the shot itself is not taken."],
+  "scene_description":"The athlete now skates toward the hockey goal while controlling a puck, then prepares for a wrist shot. The previous tennis cut showed a white polo, tennis shorts, court shoes, a tennis racket and ball.",
+  "existing_h3_prompt":"The athlete moves toward the goal, controlling the puck and preparing to shoot. They now wear ice skates. The camera follows at ice level.",
+  "expected_findings":["Establish a complete practical hockey outfit, including jersey, hockey pants, gloves and helmet/protective equipment as visually relevant.","Specify hockey stick, puck, ice, rink and hockey net/goal; ice skates stay explicit.","Replace tennis visual state rather than retain polo, shorts, racket or ball.","Preserve preparation without shooting, scoring, opponents or a new competition story."]
+}

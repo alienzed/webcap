@@ -1,0 +1,9 @@
+{
+  "id":"camera_continuity",
+  "project_overview":"A single continuous five-second observation of an adult painter working at an easel. The intended camera move is a simple physical push forward while the painter keeps working.",
+  "visual_direction":"Natural studio light and unshowy observational realism.",
+  "invariants":["One continuous take uses a fixed 50mm focal length throughout, with no optical zoom, dolly zoom, orbit or cuts.","The camera moves straight forward from a medium shot to a tighter view of the painter's face and working right hand, keeping the same three-quarter angle.","The painter remains seated at the same easel, holding the same brush in their right hand and continuing small strokes on the same canvas."],
+  "scene_description":"During these five seconds the camera gently pushes closer. The seated painter continues painting. The Scene ends while the brush is still making small strokes, rather than adding a reveal or a reaction.",
+  "existing_h3_prompt":"An adult painter works at an easel. The camera moves closer as they paint.",
+  "expected_findings":["Specify a physical straight push-in, fixed focal length, unchanged three-quarter angle and continuous five-second action.","Keep seated painter, right-hand brush strokes, same canvas/easel, and face plus hand in the tighter framing.","Avoid dolly-zoom synonyms, opposing zoom/framing instructions, cuts, rack-focus detours or orbiting.","Do not invent a completed painting, dramatic revelation, standing up or stopping work."]
+}

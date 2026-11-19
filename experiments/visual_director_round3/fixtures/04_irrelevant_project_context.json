@@ -1,0 +1,9 @@
+{
+  "id":"irrelevant_project_context",
+  "project_overview":"A day-in-the-life montage follows one adult woman: a quiet breakfast at home, a later boxing workout with red gloves, and a rooftop celebration with fireworks at night. Those later activities are separate Scenes, not visible in the breakfast shot.",
+  "visual_direction":"The breakfast Scene is calm, naturalistic and softly lit by morning window light.",
+  "invariants":["In this breakfast Scene she wears a red cardigan and sits at a small wooden kitchen table.","Her breakfast is oatmeal in one plain white bowl, eaten with a metal spoon.","The Scene stays in the kitchen with one seated woman and a locked-off medium shot."],
+  "scene_description":"She quietly lifts one spoonful of oatmeal toward her mouth while seated at the table. This Scene contains only the breakfast moment.",
+  "existing_h3_prompt":"The same woman eats breakfast at the table. The camera remains still.",
+  "expected_findings":["Import relevant cardigan, oatmeal/bowl/spoon, kitchen/table, morning light and seated framing.","Make the spoon-lifting motion concrete and local.","Filter boxing gloves, gym, rooftop, fireworks and night context out of the rendered breakfast Scene.","Avoid adding planning for later events, other people, cuts, or an invented emotional arc."]
+}

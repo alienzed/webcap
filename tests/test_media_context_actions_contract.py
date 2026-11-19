@@ -17,7 +17,9 @@ def test_video_context_actions_include_fps_conversion():
     convert_action = script.index("label: 'Convert to...'")
 
     assert convert_action > video_block_start
-    assert "/media/convert_fps" in script[convert_action:]
+    conversion = script[convert_action:script.index("label: 'Clip...'", convert_action)]
+    assert "prompt('Convert video to FPS', '')" in conversion
+    assert "convertVideoToFps(Number(String(fpsText).trim()))" in conversion
 
 
 def test_webp_context_action_exposes_png_conversion_without_menu_grouping():

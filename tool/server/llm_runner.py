@@ -578,7 +578,6 @@ def _client_result(client, context, llm_result, job_id="", frozen_contract=None)
             "sceneId": scene_id,
             "sourcePrompt": source_prompt,
             "findings": findings,
-            "jobId": job_id,
             "model": llm_result["model"],
             "finishReason": llm_result.get("finishReason"),
             "usage": llm_result.get("usage"),

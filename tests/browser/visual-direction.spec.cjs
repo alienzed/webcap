@@ -22,10 +22,15 @@ test('Visual Direction defaults to all Scenes and submits only explicitly select
   });
   await openProject(page,project.id);
 
+  // Enter through the actual Storyboard toolbar, not the retired modal.
+  // Close the already-open Director drawer first so Playwright exercises the
+  // visible user action and does not click through an overlay.
+  await page.locator('#director-chat-rail-btn').click();
+  await expect(page.locator('#director-chat-drawer')).toBeHidden();
   await page.locator('#storyboard-director-tools-btn').click();
-  const modal=page.locator('#storyboard-director-tools-modal');
-  await expect(modal).toBeVisible();
-  const selection=modal.locator('#storyboard-director-tools-scene-selection');
+  const composer=page.locator('#director-studio-revision-controls');
+  await expect(composer).toBeVisible();
+  const selection=composer.locator('#director-studio-revision-scenes');
   const all=selection.locator('[data-revise-scene-all]');
   const sceneChecks=selection.locator('[data-revise-scene]');
   await expect(sceneChecks).toHaveCount(3);
@@ -38,13 +43,14 @@ test('Visual Direction defaults to all Scenes and submits only explicitly select
   expect(await all.evaluate(node=>node.indeterminate)).toBe(true);
   await expect(sceneChecks.nth(1)).toBeChecked();
 
-  await modal.locator('#storyboard-director-tools-preset').selectOption('visual_direction');
-  await expect(modal.locator('#storyboard-director-tools-instruction')).toHaveValue('');
+  await composer.locator('#director-studio-revision-preset').selectOption('visual_direction');
+  await expect(composer.locator('#director-studio-revision-input')).toHaveValue('');
+  await expect(page.locator('#director-chat-send')).toBeEnabled();
   await queueModel(request,{
     changed:true,
     prompt:'The model walks toward camera in a complete relaxed denim outfit, wearing a fitted cream knit top, blue jeans and white sneakers.'
   });
-  await modal.locator('#storyboard-director-tools-run').click();
+  await page.locator('#director-chat-send').click();
 
   await expect.poll(async()=> (await story(page,project.id)).scenes[selected.id].prompt)
     .toBe('The model walks toward camera in a complete relaxed denim outfit, wearing a fitted cream knit top, blue jeans and white sneakers.');
@@ -60,4 +66,5 @@ test('Visual Direction defaults to all Scenes and submits only explicitly select
   expect(calls[0].messages[1].content).toContain('The model walks toward camera in blue jeans.');
   expect(calls[0].messages[1].content).not.toContain('First look');
   expect(calls[0].messages[1].content).not.toContain('Third look');
+  expect(saved.scenes[selected.id].previousPrompt).toBe('The model walks toward camera in blue jeans.');
 });

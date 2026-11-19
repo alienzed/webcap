@@ -38,9 +38,9 @@ def test_link_existing_character_to_selected_scenes_atomically(project):
         expected = [{"kind": "character", "title": "Alice"}] if scene_id in saved else []
         assert current["invariantRefs"] == expected
         assert current["prompt"] == original["prompt"]
-        assert current["summary"] == original["summary"]
+        assert "summary" not in current and "summary" not in original
         assert current["takes"] == original["takes"]
-        assert current["entryState"] == original["entryState"]
+        assert "entryState" not in current and "entryState" not in original
     assert story["sceneOrder"] == before["sceneOrder"]
     assert story["invariants"] == before["invariants"]
 

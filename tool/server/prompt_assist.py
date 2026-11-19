@@ -396,13 +396,15 @@ def source_fingerprint(context):
 
 _DEEP_QA_CUT = {
     "type": "object", "additionalProperties": False,
-    "required": ["shotNumber", "visualIntent", "focalElement", "action", "stateChanges", "carryForward", "physicalInteractions", "concerns"],
+    "required": ["shotNumber", "visualIntent", "focalElement", "action", "sourceEvidence", "stateChanges", "inferences", "carryForward", "physicalInteractions", "concerns"],
     "properties": {
         "shotNumber": {"type": "integer", "minimum": 0},
         "visualIntent": {"type": "string"},
         "focalElement": {"type": "string"},
         "action": {"type": "string"},
+        "sourceEvidence": {"type": "array", "items": {"type": "string"}},
         "stateChanges": {"type": "array", "items": {"type": "string"}},
+        "inferences": {"type": "array", "items": {"type": "string"}},
         "carryForward": {"type": "array", "items": {"type": "string"}},
         "physicalInteractions": {"type": "array", "items": {"type": "string"}},
         "concerns": {"type": "array", "items": {"type": "string"}},
@@ -560,7 +562,7 @@ def validate_deep_qa_scene(result, scene_id, valid_shots):
         for key in ("visualIntent", "focalElement", "action"):
             if not isinstance(cut.get(key), str):
                 raise ValueError("Project Deep QA cut is missing " + key + ".")
-        for key in ("stateChanges", "carryForward", "physicalInteractions", "concerns"):
+        for key in ("sourceEvidence", "stateChanges", "inferences", "carryForward", "physicalInteractions", "concerns"):
             if not isinstance(cut.get(key), list) or any(not isinstance(value, str) for value in cut[key]):
                 raise ValueError("Project Deep QA cut has invalid " + key + ".")
     if any(not isinstance(value, str) for value in result["keyVisualMoments"]):

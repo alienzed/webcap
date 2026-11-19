@@ -47,7 +47,7 @@
     if (message) setStatus(message);
     if (!state.busy) {
       if (state.snapshot && state.sourcePrompt && state.synthesis) {
-        var sceneColumn = el('prompt-assist-scene-column');
+        var sceneColumn = document.querySelector('.prompt-assist-scene-column');
         var scrollTop = sceneColumn ? sceneColumn.scrollTop : 0;
         renderSceneSource();
         if (sceneColumn) sceneColumn.scrollTop = scrollTop;

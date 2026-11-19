@@ -26,9 +26,7 @@ def test_atomic_prompt_revisions_preserve_legacy_summary_and_other_scenes(story)
     assert changed["scenes"][ids[1]]["prompt"] == "B revised"
     assert changed["scenes"][ids[2]] == story["scenes"][ids[2]]
     for sid in ids:
-        assert changed["scenes"][sid]["summary"] == story["scenes"][sid]["summary"]
-        assert changed["scenes"][sid]["entryState"] == "Legacy entry"
-        assert changed["scenes"][sid]["exitState"] == "Legacy exit"
+        assert all(key not in changed["scenes"][sid] for key in ("summary", "entryState", "exitState"))
         assert changed["scenes"][sid]["takes"] == story["scenes"][sid]["takes"]
     assert changed["concept"] == story["concept"]
     assert changed["sceneOrder"] == ids
@@ -49,7 +47,7 @@ def test_intent_only_revision_is_rejected(story):
     entry = {"sceneId": sid, "expected": {"summary": "A legacy outline"}, "changes": {"summary": "New Intent"}}
     with pytest.raises(ValueError, match="supported"):
         storyboard_store.apply_studio_scene_fields_batch(story["id"], [entry])
-    assert storyboard_store.load_story(story["id"])["scenes"][sid]["summary"] == "A legacy outline"
+    assert "summary" not in storyboard_store.load_story(story["id"])["scenes"][sid]
 
 def test_duplicate_targets_are_rejected(story):
     sid = story["sceneOrder"][0]

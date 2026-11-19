@@ -734,7 +734,7 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
             blocks.append("[SCENE DETAILS]\n" + "\n".join(scene_details))
         blocks.append("[EXISTING H3 PROMPT]\n" + existing_prompt)
         blocks.append(
-            "[OUTPUT]\nReturn changed=false with the original prompt if no meaningful visual improvement is needed; otherwise return the complete revised H3 prompt."
+            "[CURRENT TASK]\nImprove this Scene's existing H3 prompt using the supplied Project and Scene context."
         )
     else:
         existing_prompt = _clean(scene.get("prompt"))
@@ -769,12 +769,13 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
         "prompt": "\n\n".join(blocks).strip() + "\n",
         **({
             "system_prompt": (
-                "Be exceptionally thorough and specific when describing anything that will be visually rendered. "
-                "Explicitly establish all relevant visual details, including details implied by context but missing from the existing Scene prompt, and details that have not yet been specified. "
-                "Make appropriate creative decisions to complete the intended visuals, consistent with the Project's intent and context. "
+                "Be exceptionally thorough and specific about the visuals that will actually be rendered. "
+                "Explicitly establish relevant visual details that are implied by context or not yet specified. "
+                "Prioritize details that materially affect what the viewer will see or how the intended actions will be rendered. "
+                "Make appropriate creative decisions to complete the intended visuals, consistent with the established creative direction. "
                 "Make the Scene prompt sufficiently complete to guide the intended render on its own. "
                 "Keep your work focused on this Scene; do not introduce your own story, narrative direction, or unrelated creative developments. "
-                "Return the complete revised H3 prompt."
+                "Return the complete revised H3 prompt; if no meaningful improvement is needed, return changed=false with the original prompt."
             )
         } if operation == "visual_direction" else {}),
         "response_schema": _prompt_response_schema(

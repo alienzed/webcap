@@ -1624,8 +1624,16 @@ def test_project_deep_qa_cache_is_separate_and_invalidates_on_prompt_changes(sto
     assert cached["current"] is True
     assert cached["findings"][0]["sceneId"] == scene["id"]
     assert record["sourceSignature"] == cached["record"]["sourceSignature"]
-    assert (storyboard_store._story_dir(story["id"]) / "deep-qa.json").is_file()
+    cache_path = storyboard_store._story_dir(story["id"]) / "deep-qa.json"
+    assert cache_path.is_file()
     assert "deepQa" not in storyboard_store.load_story(story["id"])
+
+    cache_payload = json.loads(cache_path.read_text(encoding="utf-8"))
+    cache_payload["storyId"] = "another-project"
+    cache_path.write_text(json.dumps(cache_payload), encoding="utf-8")
+    assert storyboard_store.load_project_deep_qa(story["id"])["current"] is False
+    cache_payload["storyId"] = story["id"]
+    cache_path.write_text(json.dumps(cache_payload), encoding="utf-8")
 
     current = storyboard_store.load_story(story["id"])
     scene_data = current["scenes"][scene["id"]]

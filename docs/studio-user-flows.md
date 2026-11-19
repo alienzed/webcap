@@ -4,9 +4,9 @@
 
 ## Universal pass criteria
 
-- Chat is conversational and does not author structured saved fields, create action suggestions, or save. Unexpected structured text is shown verbatim; malformed text remains inspectable.
+- Chat is conversational: short remarks and straightforward questions usually receive one or two short paragraphs, with greater detail or complete creative material when requested. Chat can discuss draft ideas but does not create structured saved application fields, trigger Write or save. Unexpected structured text is shown verbatim; malformed output remains inspectable.
 - An author explicitly chooses **Write → Project** (Create/Revise) or **Write → Scene(s)** (Create/Revise) and a destination. Each Write is a fresh, task-scoped model request using the **complete conversation history**, not a cached reply or shortened transcript.
-- Ordinary chat and Project Write never receive H3 production reference instructions. Scene writing receives the H3 reference and the operation-specific response schema.
+- Ordinary chat and Project Write never receive H3 production reference instructions. Scene writing receives the H3 reference and the operation-specific response schema. The optional Action Advisor is a separate, default-enabled, settings-controlled sidecar that can prefill manual actions only after Prepare.
 - Only explicit Read captures saved material. Each complete snapshot is visible and persisted as a user conversation message; subsequent requests transmit the unchanged message, without rereading or hidden system context. Project navigation, attachment and Write destination remain independent.
 - Saves occur directly, without a Studio Review/Apply stage. Verify actual persisted values after reload; do not infer saves from model prose, UI status or job completion.
 - WebCap displays real errors/raw I/O rather than making creative-completeness judgments, inventing missing values or automatically repairing model output.
@@ -28,7 +28,7 @@ Select one Scene, write a creative revision and verify `studio_scene_field_draft
 
 ### 4. Revise a Project independently
 
-Choose a Project Write destination independently of navigation/attachment. Revise the atmosphere only. The model should return a complete Project baseline while preserving unrelated fields; WebCap compares with current saved values and writes only actual changes. Confirm Scenes remain untouched. Test another destination without changing conversation attachment.
+Choose a Project Write destination independently of navigation/attachment. Revise the atmosphere only. The model receives the current Project baseline but is requested to return **only** the selected replacement field(s); WebCap applies only values in scope and ignores returned off-scope fields. Confirm saved unrelated Project fields and Scenes remain untouched. Test another destination without changing conversation attachment.
 
 ### 5. Explicit cross-Project Read
 

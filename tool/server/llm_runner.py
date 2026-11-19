@@ -986,7 +986,13 @@ def _execute_claimed(job_id, gpu_reserved):
                     })
             with _revision_progress_lock:
                 _revision_progress.pop(job_id, None)
-        return execution_finish_job_transient(job_id, status="completed", result={
+        all_failed = bool(scene_ids) and not succeeded_scene_ids
+        return execution_finish_job_transient(
+            job_id, status="failed" if all_failed else "completed",
+            error=("All " + str(len(scene_ids)) + " Scene revisions failed: " +
+                   "; ".join(str(item.get("title") or item.get("sceneId")) + ": " + str(item.get("error"))
+                             for item in failures)) if all_failed else None,
+            result={
             "storyId": context["storyId"],
             "revisedSceneCount": len(changed_scene_ids),
             "completedSceneCount": len(succeeded_scene_ids),

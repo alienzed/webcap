@@ -141,7 +141,8 @@ test('a failed Director chat does not dispatch the optional advisor',async({page
   });
   expect(mainFailure.ok()).toBeTruthy();
   await say(page,'Discuss a quiet opening.');
-  await expect(page.locator('#director-chat-progress')).toBeHidden({timeout:30000});
+  // A failed chat keeps its visible error progress state for diagnosis.
+  await expect(page.locator('#director-chat-progress')).toHaveAttribute('data-phase','error',{timeout:30000});
   await expect(page.locator('#director-chat-input')).toBeEnabled();
   await expect(advice(page)).toBeHidden();
   await expect(page.locator('#studio-action-advisor-status')).toBeHidden();

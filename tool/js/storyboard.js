@@ -6338,6 +6338,82 @@
           openPromptAssist(sceneId);
         });
       };
+      if (typeof finding.proposedPrompt === "string" && finding.proposedPrompt.trim() &&
+          typeof scene.prompt === "string" && scene.prompt.trim()) {
+        var proposed = document.createElement("textarea");
+        proposed.className = "storyboard-assist-replacement";
+        proposed.value = finding.proposedPrompt;
+        proposed.setAttribute("aria-label", "Editable proposed Scene prompt");
+        proposed.rows = 7;
+        var apply = document.createElement("button");
+        apply.type = "button";
+        apply.className = "review-captions-btn";
+        apply.textContent = "Apply prepared correction";
+        var applyStatus = document.createElement("span");
+        applyStatus.className = "storyboard-assist-patch-status";
+        apply.onclick = function () {
+          var original = String(scene.prompt || "");
+          var current = storyState.story && storyState.story.scenes &&
+            storyState.story.scenes[sceneId];
+          var replacement = proposed.value;
+          if (!current || String(current.prompt || "") !== original) {
+            applyStatus.textContent = "Scene changed. Refresh Deep QA before applying.";
+            return;
+          }
+          if (!replacement.trim() || replacement === original) {
+            applyStatus.textContent = "Edit the proposed prompt before applying.";
+            return;
+          }
+          var target = {kind:"scene-prompt", storyId:storyState.story.id, sceneId:sceneId};
+          if (directorTargetBlocked(target)) {
+            applyStatus.textContent = "Scene work is pending.";
+            return;
+          }
+          apply.disabled = true;
+          applyStatus.textContent = "Applying…";
+          setDirectorPending(target, true);
+          fetch("/fs/storyboard/prompt-assist/apply", {
+            method:"POST",
+            headers:{"Content-Type":"application/json"},
+            body:JSON.stringify({
+              storyId:storyState.story.id,
+              sceneId:sceneId,
+              expectedPrompt:original,
+              targetText:original,
+              replacementText:replacement
+            })
+          }).then(function (response) {
+            return response.json().then(function (payload) {
+              if (!response.ok || !payload || !payload.ok)
+                throw new Error(payload && payload.error || "Could not apply Deep QA correction.");
+              return payload;
+            });
+          }).then(function (payload) {
+            storyState.story.scenes[sceneId] = payload.scene;
+            storyState.story.updatedAt = payload.story.updatedAt;
+            var root = sceneElement(sceneId);
+            var editor = root && root.querySelector('[data-scene-field="prompt"]');
+            if (editor) editor.value = payload.scene.prompt;
+            clearSceneDirectorCompletion(storyState.story.id, sceneId);
+            syncPromptTakeStatus(sceneId);
+            syncSceneDirectorRestore(sceneId);
+            syncSceneRefineState(sceneId);
+            setSaveState("Saved");
+            card.classList.add("is-applied");
+            apply.textContent = "Applied";
+            applyStatus.textContent = "Saved";
+            return refreshLibrary();
+          }).catch(function (error) {
+            applyStatus.textContent = String(error && error.message || error);
+            apply.disabled = false;
+            reportError(error);
+          }).finally(function () {
+            setDirectorPending(target, false);
+          });
+        };
+        main.appendChild(proposed);
+        actions.append(apply, applyStatus);
+      }
       actions.appendChild(open);
       card.append(main, actions);
       host.appendChild(card);

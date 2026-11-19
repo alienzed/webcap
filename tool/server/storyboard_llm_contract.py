@@ -770,7 +770,7 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
         **({
             "system_prompt": (
                 "Be exceptionally thorough and specific when describing anything that will be visually rendered. "
-                "Explicitly establish all relevant visual details, including details implied by the Project context but missing from the existing Scene prompt, and details that have not yet been specified. "
+                "Explicitly establish all relevant visual details, including details implied by context but missing from the existing Scene prompt, and details that have not yet been specified. "
                 "Make appropriate creative decisions to complete the intended visuals, consistent with the Project's intent and context. "
                 "Make the Scene prompt sufficiently complete to guide the intended render on its own. "
                 "Keep your work focused on this Scene; do not introduce your own story, narrative direction, or unrelated creative developments. "

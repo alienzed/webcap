@@ -462,9 +462,15 @@
       instruction:instruction,preset:preset,modelId:state.modelId,
       projectId:scope.projectId,sceneIds:sceneIds,
       generateFreshTakes:el('director-studio-revision-fresh').checked
-    })).then(function () {
+    })).then(function (outcome) {
+      var failures = outcome && outcome.result && outcome.result.failedScenes || [];
+      if (failures.length) {
+        status.textContent = outcome.text || 'Scene revision had failures.';
+        window.reportConsoleError('Studio revision', new Error(status.textContent));
+        return;
+      }
       status.textContent = preset === 'coherence'
-        ? 'Coherence review completed.' : 'Scene revision completed.';
+        ? 'Coherence review completed.' : (outcome && outcome.text || 'Scene revision completed.');
       if (studioRevisionActive()) {
         setOpen(false);
         studioComposerMode = 'conversation';

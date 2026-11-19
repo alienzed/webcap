@@ -2040,7 +2040,7 @@
       return Promise.reject(new Error('Enter what should be revised across these Scenes.'));
 
     if (instruction) sceneRevisionHistory.remember(instruction, sourceInput || el('storyboard-director-tools-instruction'));
-    storyState.story.repairInstruction = instruction;
+    if (instruction) storyState.story.repairInstruction = instruction;
     storyState.story.repairComplete = false;
 
     var saveBarrier = flushPendingSaves();
@@ -6442,8 +6442,7 @@
       if (!input) return;
       if (this.value === 'continuity') input.value = DIRECTOR_PASS_PRESETS.continuity.instruction;
       if (this.value === 'coherence') input.value = DIRECTOR_PASS_PRESETS.coherence.instruction;
-      if (this.value === 'visual_direction') input.value =
-        'Make this Scene fully and explicitly describable as a standalone H3 generation prompt.';
+      if (this.value === 'visual_direction') input.value = '';
       var visualDirection = this.value === 'visual_direction';
       var instructionLabel = document.querySelector('label[for="storyboard-director-tools-instruction"]');
       if (instructionLabel) instructionLabel.textContent = visualDirection ? 'Additional direction (optional)' : 'Revise Scenes';

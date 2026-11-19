@@ -28,7 +28,8 @@ function observeRealDirectorJobs(page) {
       if(!job?.jobId)return;
       if(path==='/fs/director/chat'&&response.request().method()==='POST')
         queued.set(job.jobId,response.request().postDataJSON());
-      if(path==='/fs/director/job'&&terminalStates.has(job.status))
+      // A very fast model may already be terminal in the initial POST receipt.
+      if(terminalStates.has(job.status))
         terminal.set(job.jobId,job);
     }).catch(error=>observationErrors.push(path+': '+String(error)));
     pending.add(task);

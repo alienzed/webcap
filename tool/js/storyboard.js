@@ -7384,6 +7384,20 @@
 
   window.openStoryboardActivity = openStoryboardActivity;
 
+  window.setPromptAssistScene = function (sceneId) {
+    var id = String(sceneId || "");
+    if (!storyState.story || !(storyState.story.sceneOrder || []).includes(id) ||
+        !storyState.story.scenes || !storyState.story.scenes[id]) {
+      return Promise.reject(new Error("The selected Scene is no longer in this Project."));
+    }
+    storyState.activeSceneId = id;
+    storyState.sceneViewMode = "focus";
+    clearSceneNewTakeCount(id);
+    renderScenes();
+    if (typeof window.syncShellLocationRoute === "function") window.syncShellLocationRoute();
+    return Promise.resolve(true);
+  };
+
   window.getPromptAssistSnapshot = function (scope) {
     var storyId = String(storyState.story && storyState.story.id || "");
     if (!storyId) return Promise.reject(new Error("Open a Project before using Prompt Assist."));

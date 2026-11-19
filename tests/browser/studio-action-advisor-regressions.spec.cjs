@@ -112,7 +112,11 @@ test('an inference-provider failure is local to advisor; existing manual Write r
   await openDirector(page);
   await openProject(page,project.id);
   await queueModel(request,'The scene could benefit from a more deliberate opening.');
-  await queueModel(request,{httpError:503,message:'Controlled advisor unavailable'});
+  // Return an actual HTTP failure from the controlled provider boundary.
+  const providerFailure=await request.post('http://127.0.0.1:4211/__acceptance/queue',{
+    data:{httpError:503,message:'Controlled advisor unavailable'}
+  });
+  expect(providerFailure.ok()).toBeTruthy();
   await say(page,'Discuss the opening without changing saved content.');
 
   await expect(page.locator('#director-chat-messages'))
@@ -132,7 +136,10 @@ test('an inference-provider failure is local to advisor; existing manual Write r
 test('a failed Director chat does not dispatch the optional advisor',async({page,request})=>{
   await resetModel(request);
   await openDirector(page);
-  await queueModel(request,{httpError:503,message:'Controlled main chat failure'});
+  const mainFailure=await request.post('http://127.0.0.1:4211/__acceptance/queue',{
+    data:{httpError:503,message:'Controlled main chat failure'}
+  });
+  expect(mainFailure.ok()).toBeTruthy();
   await say(page,'Discuss a quiet opening.');
   await expect(page.locator('#director-chat-progress')).toBeHidden({timeout:30000});
   await expect(page.locator('#director-chat-input')).toBeEnabled();

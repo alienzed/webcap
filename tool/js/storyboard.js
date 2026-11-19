@@ -6000,7 +6000,13 @@
       sceneId: target.sceneId,
       sceneNumber: story && target.sceneId ? story.sceneOrder.indexOf(target.sceneId) + 1 : 0,
       sceneTitle: story && target.sceneId && story.scenes[target.sceneId] ? story.scenes[target.sceneId].title || '' : '',
-      sceneOrder: story ? story.sceneOrder.slice() : []
+      sceneOrder: story ? story.sceneOrder.slice() : [],
+      // Labels and IDs for the explicit revision picker; saved creative content still
+      // enters the model only through the requested Storyboard contract.
+      sceneChoices: story ? story.sceneOrder.map(function (id, index) {
+        var scene = story.scenes[id] || {};
+        return {id: id, title: scene.title || 'Scene ' + (index + 1)};
+      }) : []
     };
   }
 
@@ -6333,7 +6339,8 @@
     if (options.preset === 'coherence') return runDirectorToolsCoherence(options.modelId, true);
     return reviseScenes(options.instruction, options.modelId,
       options.generateFreshTakes === true, options.preset === 'continuity',
-      el('director-studio-revision-input'));
+      el('director-studio-revision-input'), options.sceneIds,
+      options.preset === 'visual_direction' ? 'visual_direction' : 'standard');
   };
 
   function projectReplaceText(text, find, replacement, caseSensitive) {

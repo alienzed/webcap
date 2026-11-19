@@ -77,7 +77,7 @@ test('LIVE Prompt Assist runs independent specialists, discusses findings, and a
   }
   await dialog.locator('#prompt-assist-synthesize').click();
   await expect(dialog.locator('#prompt-assist-status'))
-    .toHaveText('Recommendations are ready for your review.',{timeout:240000});
+    .toHaveText('Recommendations are ready. Accept or reject them individually.',{timeout:240000});
   const editorCount=await dialog.locator('#prompt-assist-editor-count').textContent();
   expect(editorCount).not.toBe('Waiting');
   const recommendationCount=Number((editorCount.match(/\d+/)||[])[0]||0);

@@ -2476,6 +2476,127 @@ def director_chat_route():
 
 
 
+
+
+def _prompt_assist_deep_qa_path(story_id):
+    from .storyboard_store import _story_dir
+    return _story_dir(story_id) / ".prompt_assist_deep_qa.json"
+
+
+def _prompt_assist_deep_qa_read(story_id):
+    path = _prompt_assist_deep_qa_path(story_id)
+    if not path.exists():
+        return {"version": 1, "scenes": {}, "project": None}
+    try:
+        saved = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise RuntimeError("Could not read Project Deep QA intelligence.") from exc
+    if not isinstance(saved, dict) or saved.get("version") != 1:
+        raise RuntimeError("Unsupported Project Deep QA intelligence format.")
+    if not isinstance(saved.get("scenes"), dict):
+        saved["scenes"] = {}
+    return saved
+
+
+@app.route("/fs/storyboard/prompt-assist/deep-qa", methods=["GET", "POST"])
+def storyboard_prompt_assist_deep_qa_route():
+    """Read current Project Deep QA receipts or persist a source-verified result."""
+    try:
+        from .prompt_assist import (
+            build_context, source_fingerprint, scene_source_fingerprint,
+            validate_deep_qa_scene, validate_deep_qa_project,
+        )
+        from .storyboard_store import _write_json_atomic
+        if request.method == "GET":
+            story_id = str(request.args.get("storyId") or "").strip()
+            if not story_id:
+                raise ValueError("Project ID is required.")
+            story = storyboard_load_story(story_id)
+            project_context = build_context(story, scope="project")
+            saved = _prompt_assist_deep_qa_read(story_id)
+            current_project_fp = source_fingerprint(project_context)
+            scene_status = {}
+            fresh_results = []
+            for scene in project_context["scenes"]:
+                scene_id = scene["sceneId"]
+                scene_context = build_context(story, scope="scene", scene_id=scene_id)
+                current_fp = scene_source_fingerprint(scene_context, scene_id)
+                entry = saved["scenes"].get(scene_id)
+                fresh = isinstance(entry, dict) and entry.get("sourceFingerprint") == current_fp
+                scene_status[scene_id] = {
+                    "fresh": bool(fresh),
+                    "preparedAt": entry.get("preparedAt") if isinstance(entry, dict) else None,
+                    "summary": (entry.get("result") or {}).get("summary", "") if fresh else "",
+                }
+                if fresh:
+                    fresh_results.append(entry["result"])
+            project_entry = saved.get("project")
+            project_fresh = (
+                isinstance(project_entry, dict)
+                and project_entry.get("sourceFingerprint") == current_project_fp
+                and len(fresh_results) == len(project_context["scenes"])
+            )
+            return jsonify({
+                "ok": True,
+                "sceneStatus": scene_status,
+                "preparedScenes": sum(1 for item in scene_status.values() if item["fresh"]),
+                "totalScenes": len(scene_status),
+                "projectFresh": bool(project_fresh),
+                "projectPreparedAt": project_entry.get("preparedAt") if isinstance(project_entry, dict) else None,
+                "project": project_entry.get("result") if project_fresh else None,
+                "projectSourceFingerprint": current_project_fp,
+            })
+
+        data = request.get_json(silent=True) or {}
+        story_id = str(data.get("storyId") or "").strip()
+        scene_id = str(data.get("sceneId") or "").strip()
+        kind = str(data.get("kind") or "").strip().lower()
+        result = data.get("result")
+        if not story_id or not isinstance(result, dict):
+            raise ValueError("Project Deep QA requires a Project and structured result.")
+        story = storyboard_load_story(story_id)
+        project_context = build_context(story, scope="project")
+        saved = _prompt_assist_deep_qa_read(story_id)
+        now = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        if kind == "scene":
+            context = build_context(story, scope="scene", scene_id=scene_id)
+            fingerprint = scene_source_fingerprint(context, scene_id)
+            if str(data.get("sourceFingerprint") or "") != fingerprint:
+                raise RuntimeError("Scene changed while Project Deep QA was running. Prepare this Scene again.")
+            scene = context["scenes"][0]
+            valid_shots = [0] + [int(item["shotNumber"]) for item in scene["shots"]]
+            clean = validate_deep_qa_scene(result, scene_id, valid_shots)
+            saved["scenes"][scene_id] = {
+                "sourceFingerprint": fingerprint, "preparedAt": now, "result": clean,
+            }
+        elif kind == "project":
+            fingerprint = source_fingerprint(project_context)
+            if str(data.get("sourceFingerprint") or "") != fingerprint:
+                raise RuntimeError("Project changed while Project Deep QA was running. Prepare it again.")
+            scene_results = []
+            for scene in project_context["scenes"]:
+                entry = saved["scenes"].get(scene["sceneId"])
+                scene_context = build_context(story, scope="scene", scene_id=scene["sceneId"])
+                expected = scene_source_fingerprint(scene_context, scene["sceneId"])
+                if not isinstance(entry, dict) or entry.get("sourceFingerprint") != expected:
+                    raise ValueError("Prepare every current Scene before building the Project intelligence index.")
+                scene_results.append(entry["result"])
+            clean = validate_deep_qa_project(result, [scene["sceneId"] for scene in project_context["scenes"]])
+            saved["project"] = {
+                "sourceFingerprint": fingerprint, "preparedAt": now, "result": clean,
+            }
+        else:
+            raise ValueError("Project Deep QA result kind must be scene or project.")
+        saved["version"] = 1
+        _write_json_atomic(_prompt_assist_deep_qa_path(story_id), saved)
+        return jsonify({"ok": True, "savedAt": now})
+    except FileNotFoundError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 404
+    except Exception as exc:
+        app.logger.exception("PROJECT DEEP QA STATE FAILED: %s", exc)
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
 @app.route("/fs/storyboard/prompt-assist", methods=["POST"])
 def storyboard_prompt_assist_route():
     """Run one independent Prompt Assist analysis/synthesis pass on saved Studio material."""

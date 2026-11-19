@@ -848,6 +848,9 @@ def _execute_claimed(job_id, gpu_reserved):
                     }
                 try:
                     story = load_story(str(context.get("storyId") or ""))
+                    scene = (story.get("scenes") or {}).get(scene_id)
+                    if not isinstance(scene, dict):
+                        raise FileNotFoundError("Scene does not exist.")
                     pass_type = str(context.get("passType") or "standard")
                     scene_operation = "visual_direction" if pass_type == "visual_direction" else "refine_prompt"
                     scene_contract = build_request(

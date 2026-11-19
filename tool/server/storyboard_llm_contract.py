@@ -686,8 +686,8 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
 
     blocks = ["[DIRECTOR CONTEXT]\n" + director_context] if operation == "write_prompt" else []
     concept = _clean(story.get("concept"))
-    if concept and operation == "write_prompt":
-        blocks.append("[STORY CONCEPT / OVERVIEW]\n" + concept)
+    if concept and operation in {"write_prompt", "visual_direction"}:
+        blocks.append("[PROJECT OVERVIEW]\n" + concept)
     if style:
         blocks.append("[STORY VISUAL / ATMOSPHERE]\n" + style)
     if story_invariants:
@@ -695,12 +695,12 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
             "[STORY INVARIANTS]\n" + story_invariants
             + "\n\nTreat these as established constraints, not material to add to this Scene."
         )
-    if scene_context:
+    if scene_context and operation != "visual_direction":
         blocks.append("[SCENE]\n" + scene_context)
     if vocabulary:
         blocks.append(vocabulary)
-    if operation == "write_prompt":
-        blocks.append("[H3 GUIDANCE]\n" + h3_runtime_context)
+    if operation in {"write_prompt", "visual_direction"}:
+        blocks.append("[H3 PROMPTING GUIDANCE]\n" + h3_runtime_context)
     _add_model_limitations(blocks, "minimax_h3")
     blocks.append("[REFERENCE MODE]\n" + h3_mode)
 

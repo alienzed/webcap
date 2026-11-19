@@ -2544,7 +2544,7 @@ def storyboard_prompt_assist_apply_route():
                 raise ValueError("Wait for pending Director work before applying a Prompt Assist suggestion.")
             from .storyboard_store import apply_prompt_assist
             story, scene = apply_prompt_assist(
-                story_id, scene_id, data.get("expectedPrompt"), data.get("prompt"),
+                story_id, scene_id, data.get("expectedPrompt"), data.get("targetText"), data.get("replacementText"),
                 model_id=str(data.get("model") or ""), job_id=str(data.get("jobId") or ""),
             )
         return jsonify({"ok": True, "story": story, "scene": scene})

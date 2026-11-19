@@ -520,6 +520,22 @@
   position: relative;
   min-width: 0;
 }
+.generate-take-organize {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 1;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+.generate-take-organize:hover,
+.generate-take-organize:focus-visible { border-color: var(--accent); background: var(--hover); }
 .generate-take-delete,
 .generate-take-job-action {
   position: absolute;

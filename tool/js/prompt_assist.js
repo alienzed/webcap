@@ -157,14 +157,24 @@
     }
   }
   function loadDeepQaStatus() {
-    return api('/fs/storyboard/prompt-assist/deep-qa?storyId=' + encodeURIComponent(state.storyId) + '&sceneId=' + encodeURIComponent(state.sceneId) + '&model=' + encodeURIComponent(state.modelId))
-      .then(function (status) { renderDeepQaStatus(status); return status; })
-      .catch(function (error) {
-        renderDeepQaStatus({error: 'Project intelligence unavailable: ' + (error.message || String(error))});
-        if (!/requires saved prompts|no saved Scene prompts/i.test(String(error.message || error)) && window.reportConsoleError)
-          window.reportConsoleError('Project Deep QA status', error);
+    var requestedStoryId = state.storyId;
+    var requestedSceneId = state.sceneId;
+    var requestedModelId = state.modelId;
+    var url = '/fs/storyboard/prompt-assist/deep-qa?storyId=' + encodeURIComponent(requestedStoryId) +
+      '&sceneId=' + encodeURIComponent(requestedSceneId) + '&model=' + encodeURIComponent(requestedModelId);
+    return api(url).then(function (status) {
+      if (state.storyId !== requestedStoryId || state.sceneId !== requestedSceneId || state.modelId !== requestedModelId)
         return null;
-      });
+      renderDeepQaStatus(status);
+      return status;
+    }).catch(function (error) {
+      if (state.storyId !== requestedStoryId || state.sceneId !== requestedSceneId || state.modelId !== requestedModelId)
+        return null;
+      renderDeepQaStatus({error: 'Project intelligence unavailable: ' + (error.message || String(error))});
+      if (!/requires saved prompts|no saved Scene prompts/i.test(String(error.message || error)) && window.reportConsoleError)
+        window.reportConsoleError('Project Deep QA status', error);
+      return null;
+    });
   }
   function runDeepQaJob(operation, sceneId, scope) {
     return api('/fs/storyboard/prompt-assist', {

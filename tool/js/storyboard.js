@@ -7404,7 +7404,7 @@
     });
   };
 
-  window.applyPromptAssistRevisions = function (storyId, revisions) {
+  window.applyPromptAssistRevisions = function (storyId, revisions, scope, sceneId, expectedSourceFingerprint) {
     if (!storyState.story || storyState.story.id !== storyId) {
       return Promise.reject(new Error("Open the original Project before applying Prompt Assist revisions."));
     }
@@ -7415,7 +7415,7 @@
       return fetch("/fs/storyboard/prompt-assist/apply", {
         method: "POST",
         headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({storyId: storyId, revisions: revisions})
+        body: JSON.stringify({storyId: storyId, revisions: revisions, scope: scope, sceneId: sceneId, expectedSourceFingerprint: expectedSourceFingerprint})
       }).then(function (response) {
         return response.json().then(function (payload) {
           if (!response.ok || !payload || !payload.ok || !payload.story) {

@@ -365,6 +365,10 @@ def test_generate_compact_navigation_with_legacy_library_compatibility():
     assert 'id="generate-takes-explore-btn"' in html
     assert "window.openMediaExplorerActivity({source: 'generate', id: ''});" in script
     assert "exploreButton.textContent = 'Organize'" in script
+    assert "organize.dataset.generateTakeOrganizePath = String(result.mediaPath || '');" in script
+    assert "event.target.closest('[data-generate-take-organize-path]')" in script
+    assert 'Organize Renders</button>' in html
+    assert '.generate-take-organize' in css
     assert "window.openMediaExplorerActivity({source: 'generate', id: 'generate:' + explore.dataset.generateExplorePath})" in script
     assert ".generate-view-toggle.hidden { display: none; }" in css
     assert ".generate-create-view.takes-collapsed .generate-takes-heading > div:first-child," in css

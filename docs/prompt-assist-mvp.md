@@ -22,7 +22,7 @@ Prompt Assist uses deterministic, source-addressable extraction for its immediat
 ### Project Deep QA
 
 - Explicitly prepare each Scene in Project order, one Director job at a time, using the selected Director model and the existing chat queue.
-- Each Scene receipt records cut-level visual intent, focal element, action and source evidence. Explicit state changes are kept separate from possible inferences; carry-forward expectations, physical interactions and potential concerns are also recorded.
+- Each Scene receipt records cut-level visual intent, focal element, action and verbatim source excerpts, which the server verifies against the saved prompt. Explicit state changes are kept separate from possible inferences; carry-forward expectations, physical interactions and potential concerns are also recorded.
 - After all current Scenes are prepared, a compact cross-Scene pass builds a Project index of recurring elements, supported Scene relationships and Project continuity principles.
 - Scene receipts and the Project index are stored in the Project's Storyboard data directory in `.prompt_assist_deep_qa.json`; they do not modify prompts, Takes, generation settings or other Project fields.
 - Each Scene receipt has its own source fingerprint. Editing one Scene invalidates only that Scene's receipt; the Project index becomes stale when any Scene or Project-level source changes.

@@ -1842,8 +1842,6 @@ def apply_prompt_assist(story_id, scene_id, expected_prompt, target_text, replac
             "prompt": expected_prompt,
             "durationSeconds": current.get("durationSeconds"),
         },
-        "promptAssistModel": str(model_id or "").strip(),
-        "promptAssistJobId": str(job_id or "").strip(),
         "refineComplete": False,
     }
     scene = _normalize_scene(scene_id, patch, existing=current)

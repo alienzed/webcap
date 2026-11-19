@@ -68,7 +68,7 @@ test('LIVE Prompt Assist runs independent specialists, discusses findings, and a
   await dialog.locator('#prompt-assist-run').click();
 
   await expect(dialog.locator('#prompt-assist-status'))
-    .toHaveText('All three independent reviews are complete.',{timeout:480000});
+    .toHaveText('All three specialist reviews are complete.',{timeout:480000});
   const counts={};
   for(const role of ['visual','continuity','sequence']) {
     counts[role]=await dialog.locator('#prompt-assist-'+role+'-count').textContent();
@@ -90,10 +90,10 @@ test('LIVE Prompt Assist runs independent specialists, discusses findings, and a
   await expect(dialog.locator('#prompt-assist-chat .assistant').last())
     .not.toBeEmpty({timeout:240000});
 
-  await dialog.locator('[data-pa-recommendation]').first().check();
+  await dialog.locator('[data-pa-rec]').first().locator('..').locator('[data-pa-decision="accepted"]').click();
   await dialog.locator('#prompt-assist-prepare-revision').click();
   await expect(dialog.locator('#prompt-assist-revisions')).toBeVisible({timeout:240000});
-  const revised=dialog.locator('#prompt-assist-revision-list textarea').first();
+  const revised=dialog.locator('#prompt-assist-revision-prompt');
   await expect(revised).toBeVisible();
   const proposedPrompt=await revised.inputValue();
   expect(proposedPrompt.trim().length).toBeGreaterThan(0);
@@ -112,7 +112,7 @@ test('LIVE Prompt Assist runs independent specialists, discusses findings, and a
 
   await dialog.locator('#prompt-assist-apply').click();
   await expect(dialog.locator('#prompt-assist-status'))
-    .toContainText('Selected prompts applied',{timeout:120000});
+    .toContainText('Scene prompt applied',{timeout:120000});
   await expect.poll(async()=>(await story(page,project.id)).scenes[first.id].prompt,{timeout:120000})
     .toBe(proposedPrompt);
   const afterApply=await story(page,project.id);

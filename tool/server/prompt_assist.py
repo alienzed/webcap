@@ -4,6 +4,7 @@ The context builder is deliberately deterministic: it extracts authored H3
 sections and timed shots, preserving Scene IDs and shot numbers. It does not
 invent a second creative summary or silently discard source material.
 """
+import hashlib
 import json
 import re
 
@@ -368,9 +369,6 @@ def build_contract(operation, context, role="", findings=None, accepted=None, co
         return {"operation": "prompt_assist_followup", "messages": messages}
 
     raise ValueError("Unsupported Prompt Assist operation.")
-
-
-import hashlib
 
 
 def source_fingerprint(context):

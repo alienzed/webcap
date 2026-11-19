@@ -574,6 +574,7 @@ def test_visual_direction_uses_winning_complete_visual_exhaustiveness_system_pro
     prompt = request["prompt"]
     assert "[STORY VISUAL / ATMOSPHERE]" in prompt
     assert "[STORY INVARIANTS]" in prompt
+    assert "Include relevant visible details in this Scene's prompt when needed for a complete standalone render" in prompt
     assert "[H3 PROMPTING GUIDANCE]" in prompt
     assert "[SCENE DETAILS]" in prompt
     assert "[EXISTING H3 PROMPT]\nEXISTING SECOND PROMPT" in prompt

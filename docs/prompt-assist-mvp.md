@@ -6,7 +6,6 @@ Prompt Assist is a review and improvement workspace for existing Studio Project 
 
 It supports two review scopes:
 
-- **Current Scene:** examines the selected Scene's cuts and local state progression.
 - **One Scene at a time:** navigate between Scenes in the Project; each review remains scoped to the selected Scene.
 
 ## Context preparation
@@ -69,13 +68,13 @@ Discussion is scoped to the current Prompt Assist session. It does not silently 
 
 ## Live acceptance
 
-\`tests/live/prompt-assist.spec.cjs\` uses the actual configured Director model. It covers independent specialist calls, Editor synthesis, a specialist follow-up, proposed prompt review, no mutation before Apply, and preservation of the prior prompt, Takes and unrelated Scenes.
+`tests/live/prompt-assist.spec.cjs` uses the actual configured Director model. It covers independent specialist calls, Editor synthesis, a specialist follow-up, proposed prompt review, no mutation before Apply, and preservation of the prior prompt, Takes and unrelated Scenes.
 
 Run with the configured live model:
 
-\`\`\`bash
+```bash
 WEBCAP_TEST_DIRECTOR_MODEL='remote-1::your-real-model-id' \\
 npx playwright test --config=playwright.live.config.cjs tests/live/prompt-assist.spec.cjs
-\`\`\`
+```
 
 This suite is opt-in and must not be represented as passing based on mocked model output.

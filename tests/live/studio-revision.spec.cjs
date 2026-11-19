@@ -15,7 +15,7 @@ async function reviseUsingRealModel(page,instruction) {
   // This path uses Storyboard's actual per-Scene execution/save machinery,
   // not a conversation promise or a prefilled review with no saved result.
   await expect(page.locator('#director-studio-revision-status'))
-    .toContainText('Scene revision completed.',{timeout:300000});
+    .toContainText('Revise Scenes:',{timeout:300000});
 }
 
 test('Live Flow 3 — single existing Scene revision persists without changing title, duration or Takes',async({page},testInfo)=>{
@@ -74,4 +74,51 @@ test('Live Flow 3 — multi-Scene revision saves each real result without rewrit
   await testInfo.attach('studio-live-revision-evidence',{body:Buffer.from(JSON.stringify({model,instruction,projectId:project.id,
     before:[first.prompt,second.prompt],
     after:saved.sceneOrder.map(id=>saved.scenes[id].prompt)},null,2)),contentType:'application/json'});
+});
+
+
+test('LIVE Visual Direction — selected Scene is rewritten by the real model with a complete look',async({page},testInfo)=>{
+  const project=await seedProject(page,'Live Visual Direction '+Date.now(),{
+    concept:'A fashion film presents distinct complete outfits with one adult model.',
+    style:'Contemporary editorial, clear natural daylight.',
+    invariants:[{kind:'character',title:'Model',text:'The same adult model appears in each Scene.'}]
+  });
+  const first=await seedScene(page,project.id,{
+    title:'Denim look',prompt:'A model walks toward camera wearing blue jeans.',durationSeconds:8
+  });
+  const second=await seedScene(page,project.id,{
+    title:'Evening look',prompt:'A model stands in a silver evening dress under soft studio lights.',durationSeconds:8
+  });
+  const model=await openLiveDirector(page);
+  await attachProject(page,project);
+  await page.locator('#director-studio-composer-mode-select').selectOption('revision');
+  const selection=page.locator('#director-studio-revision-scenes');
+  await expect(selection.locator('[data-revise-scene]')).toHaveCount(2);
+  await expect(selection.locator('[data-revise-scene-all]')).toBeChecked();
+  await selection.locator('[data-revise-scene]').nth(1).uncheck();
+  await page.locator('#director-studio-revision-preset').selectOption('visual_direction');
+  await page.locator('#director-studio-revision-input').fill(
+    'Establish a complete denim outfit, including the fitted cream knit top, blue jeans and white sneakers; preserve the walking action.'
+  );
+  await page.locator('#director-studio-revision-fresh').uncheck();
+  await expect(page.locator('#director-chat-send')).toHaveText('Run Visual Direction');
+  await page.locator('#director-chat-send').click();
+
+  await expect.poll(async()=>{
+    const saved=await story(page,project.id);
+    return saved.scenes[first.id].prompt !== first.prompt;
+  },{timeout:300000,intervals:[1000,3000,5000]}).toBe(true);
+  const saved=await story(page,project.id);
+  await testInfo.attach('live-visual-direction-result',{
+    body:Buffer.from(JSON.stringify({model,projectId:project.id,
+      target:first.id,unselected:second.id,
+      previousPrompt:first.prompt,revisedPrompt:saved.scenes[first.id].prompt},null,2)),
+    contentType:'application/json'
+  });
+  expect(saved.scenes[first.id].previousPrompt).toBe(first.prompt);
+  expect(saved.scenes[first.id].prompt).toMatch(/cream/i);
+  expect(saved.scenes[first.id].prompt).toMatch(/jeans|denim/i);
+  expect(saved.scenes[second.id].prompt).toBe(second.prompt);
+  expect(Object.keys(saved.scenes[first.id].takes||{})).toHaveLength(0);
+  expect(Object.keys(saved.scenes[second.id].takes||{})).toHaveLength(0);
 });

@@ -21,7 +21,28 @@ def test_atomic_prompt_revisions_preserve_legacy_summary_and_other_scenes(story)
         {"sceneId": ids[1], "expected": {"prompt": "B prompt"}, "changes": {"prompt": "B revised"}},
     ]
     changed, saved = storyboard_store.apply_studio_scene_fields_batch(story["id"], revisions)
-    assert saved == {ids[0]: {"prompt": "A revised"}, ids[1]: {"prompt": "B revised"}}
+    assert saved[ids[0]] == {
+        "prompt": "A revised",
+        "previousPrompt": "A prompt",
+        "previousRevision": {
+            "entryState": "Legacy entry", "exitState": "Legacy exit",
+            "prompt": "A prompt", "durationSeconds": 6.0,
+        },
+        "refineComplete": False,
+        "promptDirectorModel": "",
+        "promptDirectorJobId": "",
+    }
+    assert saved[ids[1]] == {
+        "prompt": "B revised",
+        "previousPrompt": "B prompt",
+        "previousRevision": {
+            "entryState": "Legacy entry", "exitState": "Legacy exit",
+            "prompt": "B prompt", "durationSeconds": 6.0,
+        },
+        "refineComplete": False,
+        "promptDirectorModel": "",
+        "promptDirectorJobId": "",
+    }
     assert changed["scenes"][ids[0]]["prompt"] == "A revised"
     assert changed["scenes"][ids[1]]["prompt"] == "B revised"
     assert changed["scenes"][ids[2]] == story["scenes"][ids[2]]

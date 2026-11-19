@@ -46,7 +46,7 @@ def _scene_result(scene_id):
             "visualIntent": "Establish the action.",
             "focalElement": "Courier",
             "action": "Courier enters." if number == 1 else "Courier removes the coat.",
-            "sourceEvidence": ["[Shot " + str(number) + "] Source action."],
+            "sourceEvidence": [("[Shot 1] The courier enters an apartment lobby during a storm." if scene_id == "scene-1" and number == 1 else "[Shot 2] The courier removes the coat and hangs it on a hook." if scene_id == "scene-1" else "[Shot 1] The colleague accepts the bag.")],
             "stateChanges": ["Courier enters the lobby."],
                 "inferences": [],
             "carryForward": ["Courier remains in the lobby."],

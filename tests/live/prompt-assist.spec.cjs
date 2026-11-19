@@ -194,7 +194,12 @@ test('LIVE Project Deep QA prepares reusable Scene and cross-Scene intelligence 
   test.setTimeout(900_000);
   const project=await seedProject(page,'Live Project Deep QA '+Date.now(),{
     concept:'A courier arrives during a storm, removes a wet coat, and later hands a delivery bag to a colleague.',
-    style:'Grounded cinematic realism with natural light.'
+    style:'Grounded cinematic realism with natural light.',
+    guidelines:{
+      visualFocus:'Keep the handoff and delivery bag clearly visible.',
+      pacing:'Build from the arrival to the later handoff without irrelevant cuts.',
+      sceneRelationships:'Morning Handoff follows Rainy Arrival.'
+    }
   });
   const arrival=await seedScene(page,project.id,{
     title:'Rainy Arrival',
@@ -289,6 +294,8 @@ test('LIVE Project Deep QA prepares reusable Scene and cross-Scene intelligence 
   await dialog.locator('#prompt-assist-project-context').locator('summary').click();
   await expect(dialog.locator('#prompt-assist-project-context-content'))
     .toContainText(prepared.project.summary);
+  await expect(dialog.locator('#prompt-assist-project-context-content'))
+    .toContainText('Keep the handoff and delivery bag clearly visible.');
   await expect(dialog.locator('#prompt-assist-cuts')).toContainText('Prepared Deep QA');
   await expect(dialog.locator('#prompt-assist-cuts')).toContainText('Prompt evidence');
 

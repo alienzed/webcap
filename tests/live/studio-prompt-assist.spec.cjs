@@ -1,13 +1,34 @@
 'use strict';
 
 const {test,expect}=require('../browser/test.cjs');
-const {openLiveDirector,waitForLiveJob,seedProject,seedScene,openProject,story}=require('./helpers.cjs');
+const {openLiveDirector,seedProject,seedScene,openProject,story}=require('./helpers.cjs');
 
 async function evidence(info,name,value){
   await info.attach(name,{
     body:Buffer.from(JSON.stringify(value,null,2)),
     contentType:'application/json'
   });
+}
+
+async function waitForStoryboardJob(page,trigger){
+  const terminal=page.waitForResponse(async response=>{
+    if(!response.url().includes('/fs/director/job?')) return false;
+    try{
+      const payload=await response.json();
+      return ['completed','failed','cancelled','stopped','interrupted']
+        .includes(String(payload.job?.status||''));
+    }catch{return false;}
+  },{timeout:300000});
+  await trigger();
+  const response=await terminal;
+  const payload=await response.json();
+  await test.info().attach('studio-qa-job-'+payload.job.jobId,{
+    body:Buffer.from(JSON.stringify(payload.job,null,2)),
+    contentType:'application/json'
+  });
+  if(payload.job.status!=='completed')
+    throw new Error('Studio QA job '+payload.job.status+': '+String(payload.job.error||'No diagnostic provided'));
+  return payload.job;
 }
 
 test('LIVE Prompt Assist — standalone Scene text analysis proposes and applies one targeted correction',async({page},info)=>{
@@ -34,7 +55,7 @@ test('LIVE Prompt Assist — standalone Scene text analysis proposes and applies
   await openProject(page,project.id);
   const button=page.locator('.storyboard-scene[data-scene-id="'+scene.id+'"] [data-prompt-assist-open]');
   await expect(button).toBeVisible();
-  await waitForLiveJob(page,()=>button.click());
+  await waitForStoryboardJob(page,()=>button.click());
   await expect(page.locator('#storyboard-prompt-assist-modal')).toBeVisible();
   const cards=page.locator('#storyboard-prompt-assist-findings .storyboard-assist-finding');
   await expect.poll(()=>cards.count(),{timeout:30000}).toBeGreaterThan(0);
@@ -86,7 +107,7 @@ test('LIVE Project Deep QA — scans Scene prompts and cross-Scene continuity, p
   await openProject(page,project.id);
   const run=page.locator('#storyboard-project-deep-qa-btn');
   await expect(run).toBeVisible();
-  await waitForLiveJob(page,()=>run.click());
+  await waitForStoryboardJob(page,()=>run.click());
   await expect(page.locator('#storyboard-project-deep-qa-modal')).toBeVisible();
   const cards=page.locator('#storyboard-project-deep-qa-findings .storyboard-assist-finding');
   await expect.poll(()=>cards.count(),{timeout:30000}).toBeGreaterThan(0);

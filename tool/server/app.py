@@ -2651,8 +2651,12 @@ def storyboard_prompt_assist_route():
                 if isinstance(entry, dict) and entry.get("sourceFingerprint") == expected:
                     contract["messages"][1]["content"] += "\n\n[CURRENT PROJECT DEEP QA SCENE INTELLIGENCE]\n" + json.dumps(entry.get("result") or {}, ensure_ascii=False)
                 project_entry = cached.get("project")
-                project_context = build_context(story, scope="project")
-                if isinstance(project_entry, dict) and project_entry.get("sourceFingerprint") == source_fingerprint(project_context):
+                try:
+                    project_context = build_context(story, scope="project")
+                except ValueError:
+                    project_context = None
+                if (isinstance(project_entry, dict) and project_context
+                        and project_entry.get("sourceFingerprint") == source_fingerprint(project_context)):
                     contract["messages"][1]["content"] += "\n\n[CURRENT PROJECT DEEP QA INDEX]\n" + json.dumps(project_entry.get("result") or {}, ensure_ascii=False)
             label = "Prompt Assist: " + role + " review"
         elif operation == "synthesize":

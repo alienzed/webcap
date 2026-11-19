@@ -4574,3 +4574,21 @@ html[data-theme="dark"] .storyboard-prompt-take-status {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+
+.storyboard-assist-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.storyboard-assist-context > div:first-child span,
+.storyboard-assist-location,
+.storyboard-assist-patch label,
+.storyboard-assist-patch textarea {
+  font-size: 14px;
+}
+
+.storyboard-assist-finding-main p {
+  font-size: 15px;
+}

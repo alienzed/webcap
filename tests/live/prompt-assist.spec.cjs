@@ -50,6 +50,7 @@ async function chooseStoryboardModel(page,model) {
 }
 
 test('LIVE Prompt Assist runs independent specialists, discusses findings, and applies only an approved revision',async({page},testInfo)=>{
+  test.setTimeout(900_000);
   const project=await seedProject(page,'Live Prompt Assist Review '+Date.now(),{
     concept:'A concise sports highlight showing one decisive baseball hit and its immediate aftermath.',
     style:'Photorealistic sports cinematography; clear, purposeful framing.'
@@ -131,6 +132,7 @@ test('LIVE Prompt Assist runs independent specialists, discusses findings, and a
 });
 
 test('LIVE Prompt Assist keeps one Scene in focus and preserves inline decisions while navigating',async({page},testInfo)=>{
+  test.setTimeout(900_000);
   const project=await seedProject(page,'Live Prompt Assist Scene Navigation '+Date.now(),{
     concept:'A short sports highlight showing one decisive baseball hit and its immediate aftermath.',
     style:'Photorealistic sports cinematography; clear, purposeful framing.'

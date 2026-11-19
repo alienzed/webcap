@@ -725,8 +725,6 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
         for label, value in (
             ("Title", scene.get("title")),
             ("Summary", scene.get("summary")),
-            ("Entry state", scene.get("entryState")),
-            ("Exit state", scene.get("exitState")),
             ("Duration seconds", scene.get("durationSeconds")),
         ):
             text = _clean(value)

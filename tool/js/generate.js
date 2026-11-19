@@ -1645,7 +1645,16 @@ function sweepLoras(model, folder) {
     card.appendChild(media);
     card.appendChild(copy);
     entry.appendChild(card);
-  
+
+    var organize = document.createElement('button');
+    organize.type = 'button';
+    organize.className = 'generate-take-organize';
+    organize.dataset.generateTakeOrganizePath = String(result.mediaPath || '');
+    organize.textContent = 'Organize';
+    organize.title = 'Rate, tag or collect this Take in Media Explorer';
+    organize.setAttribute('aria-label', 'Organize this Take in Media Explorer');
+    entry.appendChild(organize);
+
     var remove = document.createElement('button');
     remove.type = 'button';
     remove.className = 'generate-take-delete';
@@ -1928,8 +1937,8 @@ function sweepLoras(model, folder) {
     utility.appendChild(rating);
     utility.appendChild(openButton);
     var exploreButton = document.createElement('button'); exploreButton.type = 'button';
-    exploreButton.className = 'review-captions-btn'; exploreButton.textContent = 'Explore';
-    exploreButton.title = 'View in Media Explorer'; exploreButton.setAttribute('aria-label', 'View in Media Explorer');
+    exploreButton.className = 'review-captions-btn'; exploreButton.textContent = 'Organize';
+    exploreButton.title = 'Organize this render in Media Explorer'; exploreButton.setAttribute('aria-label', 'Organize this render in Media Explorer');
     exploreButton.dataset.generateExplorePath = result.mediaPath;
     utility.appendChild(exploreButton);
     primary.appendChild(model);
@@ -3005,6 +3014,12 @@ function sweepLoras(model, folder) {
     });
     el('generate-takes').addEventListener('click', function (event) {
       if (handleGenerationJobAction(event)) return;
+      var organizeButton = event.target.closest('[data-generate-take-organize-path]');
+      if (organizeButton) {
+        window.openMediaExplorerActivity({source: 'generate',
+          id: 'generate:' + organizeButton.dataset.generateTakeOrganizePath});
+        return;
+      }
       var deleteButton = event.target.closest('[data-generate-delete-storage-id]');
       if (deleteButton) {
         deleteGenerationResult(String(deleteButton.dataset.generateDeleteStorageId || '').trim(), deleteButton);

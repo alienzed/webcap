@@ -21,6 +21,14 @@
 .media-explorer-source:hover { background: var(--bg); }
 .media-explorer-source.active { background: color-mix(in srgb, var(--explorer-accent) 10%, var(--panel)); color: var(--text); border-color: color-mix(in srgb, var(--explorer-accent) 22%, var(--border)); font-weight: 700; }
 .media-explorer-source.active::before { color: var(--explorer-accent); opacity: 1; }
+.media-explorer-collections-section { margin-top: 18px; border-top: 1px solid var(--border); padding-top: 16px; }
+.media-explorer-collections-section .media-explorer-rail-title { padding-bottom: 8px; }
+.media-explorer-collections { display: grid; gap: 3px; }
+.media-explorer-collection { width: 100%; border: 1px solid transparent; border-radius: 7px; background: transparent; color: var(--text); padding: 9px 11px; font-size: 14px; text-align: left; overflow-wrap: anywhere; cursor: pointer; }
+.media-explorer-collection:hover { background: var(--bg); }
+.media-explorer-collection[aria-pressed='true'] { border-color: var(--explorer-accent); background: color-mix(in srgb, var(--explorer-accent) 10%, var(--panel)); font-weight: 650; }
+.media-explorer-workspace #media-explorer-unsorted { font-size: 14px; }
+.media-explorer-workspace #media-explorer-unsorted[aria-pressed='true'] { border-color: var(--explorer-accent); background: color-mix(in srgb, var(--explorer-accent) 12%, var(--panel)); font-weight: 650; }
 .media-explorer-source-note { margin-top: auto; padding: 28px 11px 0; font-size: 11px; color: var(--muted); line-height: 2.2; }
 .media-explorer-source-note kbd { color: inherit; background: var(--bg); border: 1px solid var(--border); border-radius: 3px; padding: 1px 4px; font: inherit; }
 .media-explorer-main { min-width: 0; min-height: 0; overflow: auto; scrollbar-gutter: stable; scroll-padding-top: 240px; }
@@ -97,6 +105,7 @@
 .media-explorer-inspector-section p { font-size: 12px; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; margin: 10px 0 0; }
 .media-explorer-provenance { margin: 14px 0 8px; font-size: 11px; color: var(--muted); overflow-wrap: anywhere; line-height: 1.6; }
 .media-explorer-inspector-actions { display: flex; flex-wrap: wrap; gap: 7px; margin: 14px 0; }
+.media-explorer-inspector-actions > .media-explorer-rating { flex-basis: 100%; }
 .media-explorer-rating { display: flex; gap: 5px; flex-wrap: wrap; align-items: center; padding: 14px 0; border-bottom: 1px solid var(--border); }
 .media-explorer-rating > span { width: 100%; font-size: 11px; color: var(--muted); margin-bottom: 4px; }
 .media-explorer-rating button[aria-pressed='true'] { border-color: var(--explorer-accent); color: var(--explorer-accent); }

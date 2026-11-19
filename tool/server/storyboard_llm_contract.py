@@ -399,7 +399,6 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
                 "saved Project and Scene text, including entry and exit states, as the evidence for your assessment."
             ),
             "response_schema": _project_deep_qa_response_schema(),
-            "source_scene_ids": [row["sceneId"] for row in rows],
         }
 
     if operation == "prompt_assist":

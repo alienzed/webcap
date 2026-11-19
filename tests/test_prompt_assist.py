@@ -131,3 +131,10 @@ def test_context_preserves_exact_saved_prompt_for_compare_and_apply():
     story["scenes"]["scene-1"]["prompt"] += "  \n"
     context = build_context(story, "scene", "scene-1")
     assert context["sourcePrompts"]["scene-1"] == story["scenes"]["scene-1"]["prompt"]
+
+
+def test_scene_context_keeps_soundscape_and_music_direction():
+    context = build_context(_story(), "scene", "scene-1")
+    scene = context["scenes"][0]
+    assert scene["overallSoundscape"] == "Rain patters against the glass."
+    assert scene["nonDiegeticMusic"] == "A restrained piano motif."

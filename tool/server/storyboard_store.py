@@ -19,6 +19,7 @@ from .storyboard_workshop import proposed_shot_prompt, timed_shot_bounds, worksh
 
 STORYBOARD_VERSION = 1
 # Bump when the analysis contract changes so old persisted findings are rechecked.
+# The version participates in both the source signature and persisted cache record.
 PROJECT_DEEP_QA_VERSION = 1
 STORYBOARD_DIRNAME = "storyboards"
 STORY_FILE = "story.json"

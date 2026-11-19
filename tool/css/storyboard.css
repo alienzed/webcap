@@ -4405,3 +4405,28 @@ html[data-theme="dark"] .storyboard-prompt-take-status {
   .storyboard-scenes-heading { flex-wrap: wrap; }
   .storyboard-scenes-heading-actions { flex: 0 0 auto; }
 }
+
+
+/* Revise Scenes target picker */
+.storyboard-director-tools-scene-selection {
+    display: grid;
+    gap: 6px;
+    max-height: 220px;
+    overflow-y: auto;
+    padding: 9px 11px;
+    border: 1px solid var(--border-color, #444);
+    border-radius: 8px;
+}
+.storyboard-director-tools-scene-selection label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 24px;
+    font-size: 14px;
+}
+.storyboard-director-tools-scene-selection .storyboard-director-scene-select-all {
+    padding-bottom: 6px;
+    margin-bottom: 2px;
+    border-bottom: 1px solid var(--border-color, #444);
+    font-weight: 600;
+}

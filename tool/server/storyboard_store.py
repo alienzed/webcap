@@ -912,7 +912,10 @@ def load_project_deep_qa(story_id):
     if not path.is_file():
         return {"available": False, "current": False, "findings": []}
     record = _read_json(path)
-    current = record.get("sourceSignature") == project_deep_qa_signature(story)
+    current = (
+        str(record.get("storyId") or "") == str(story["id"])
+        and record.get("sourceSignature") == project_deep_qa_signature(story)
+    )
     return {
         "available": True,
         "current": current,

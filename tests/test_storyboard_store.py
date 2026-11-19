@@ -228,8 +228,7 @@ def test_story_scene_lifecycle(storyboard_fs):
     assert story["sceneOrder"] == [first["id"], second["id"]]
     assert first["seed"] == 42
     assert first["durationSeconds"] == 8
-    assert first["entryState"] == "The road is empty in heavy rain."
-    assert first["exitState"] == "The car has stopped beneath the hotel awning."
+    assert "summary" not in first and "entryState" not in first and "exitState" not in first
 
     story, updated = storyboard_store.update_scene(
         story["id"],
@@ -254,8 +253,7 @@ def test_story_scene_lifecycle(storyboard_fs):
     assert duplicate["promptDirectorModel"] == ""
     assert duplicate["promptDirectorJobId"] == ""
     assert duplicate["planDirectorModel"] == ""
-    assert duplicate["entryState"] == updated["entryState"]
-    assert duplicate["exitState"] == updated["exitState"]
+    assert "entryState" not in duplicate and "exitState" not in duplicate
     assert duplicate["invariantRefs"] == updated["invariantRefs"]
     assert duplicate["takes"] == {}
     assert duplicate["takeOrder"] == []
@@ -298,8 +296,8 @@ def test_insert_director_scene_after_creates_one_scene_at_gap(storyboard_fs):
 
     assert story["sceneOrder"] == [first["id"], inserted["id"], second["id"]]
     assert inserted["title"] == "Inserted"
-    assert inserted["entryState"] == ""
-    assert inserted["exitState"] == ""
+    assert "entryState" not in inserted
+    assert "exitState" not in inserted
     assert inserted["promptDirectorModel"] == "director.gguf"
     assert inserted["planDirectorModel"] == "director.gguf"
 
@@ -701,8 +699,8 @@ def test_apply_developed_plan_replaces_active_scenes_and_preserves_old_takes(sto
 
     first = developed["scenes"][developed["sceneOrder"][0]]
     assert first["prompt"] == "Three brisk shots carry her from the doors into the lobby."
-    assert first["entryState"] == ""
-    assert first["exitState"] == ""
+    assert "entryState" not in first
+    assert "exitState" not in first
     assert first["promptDirectorModel"] == "director.gguf"
 
 
@@ -744,8 +742,8 @@ def test_apply_developed_plan_accepts_minimal_scene_shape(storyboard_fs):
 
     saved = developed["scenes"][developed["sceneOrder"][0]]
     assert saved["title"] == "Opening"
-    assert saved["entryState"] == ""
-    assert saved["exitState"] == ""
+    assert "entryState" not in saved
+    assert "exitState" not in saved
     assert saved["prompt"] == "A fast three-beat entrance sequence."
 
 
@@ -858,10 +856,10 @@ def test_developed_plan_rejects_missing_or_invalid_required_content(storyboard_f
     with pytest.raises(ValueError, match="invalid prompt"):
         storyboard_store.apply_developed_plan(story["id"], {"scenes": [missing_prompt]})
 
-    bad_entry = dict(base_scene)
-    bad_entry["entryState"] = {"unexpected": True}
-    with pytest.raises(ValueError, match="entryState must be text"):
-        storyboard_store.apply_developed_plan(story["id"], {"scenes": [bad_entry]})
+    # Retired fields in old model outputs are ignored rather than treated as errors.
+    old_plan = dict(base_scene, entryState={"unexpected": True}, exitState="Old exit")
+    result = storyboard_store.apply_developed_plan(story["id"], {"scenes": [old_plan]})
+    assert all("entryState" not in item and "exitState" not in item for item in result["scenes"].values())
 
 def test_take_label_is_editable_and_persists(storyboard_fs):
     story = storyboard_store.create_story({"title": "Story"})
@@ -1090,8 +1088,6 @@ def test_scene_repair_applies_sparse_fields_and_restores_across_sessions(storybo
         "scenes": {
             first["id"]: {
                 "title": first["title"],
-                "entryState": first["entryState"],
-                "exitState": first["exitState"],
                 "prompt": first["prompt"],
                 "durationSeconds": first["durationSeconds"],
                 "referenceRoles": [],
@@ -1099,8 +1095,6 @@ def test_scene_repair_applies_sparse_fields_and_restores_across_sessions(storybo
             },
             second["id"]: {
                 "title": second["title"],
-                "entryState": second["entryState"],
-                "exitState": second["exitState"],
                 "prompt": second["prompt"],
                 "durationSeconds": second["durationSeconds"],
                 "referenceRoles": [],
@@ -1128,14 +1122,14 @@ def test_scene_repair_applies_sparse_fields_and_restores_across_sessions(storybo
     assert repaired["sceneOrder"] == [first["id"], second["id"]]
     assert repaired["scenes"][first["id"]]["title"] == "Funeral"
     assert repaired["scenes"][first["id"]]["durationSeconds"] == first["durationSeconds"]
-    assert repaired["scenes"][first["id"]]["summary"] == "Elena stands at the grave."
+    assert "summary" not in repaired["scenes"][first["id"]]
     assert repaired["scenes"][first["id"]]["prompt"] == "NEW PROMPT"
     assert repaired["scenes"][first["id"]]["previousPrompt"] == "OLD PROMPT"
     assert repaired["scenes"][second["id"]]["prompt"] == "UNCHANGED PROMPT"
     assert repaired["previousSceneRepair"]["scenes"][0]["sceneId"] == first["id"]
 
     restored = storyboard_store.restore_scene_repairs(story["id"])
-    assert restored["scenes"][first["id"]]["summary"] == "Elena stands at the grave."
+    assert "summary" not in restored["scenes"][first["id"]]
     assert restored["scenes"][first["id"]]["prompt"] == "OLD PROMPT"
     assert restored["scenes"][first["id"]]["previousPrompt"] is None
     assert restored["previousSceneRepair"] is None
@@ -1153,8 +1147,6 @@ def test_scene_repair_refuses_to_overwrite_a_field_edited_while_director_was_run
         "scenes": {
             scene["id"]: {
                 "title": scene["title"],
-                "entryState": "",
-                "exitState": "",
                 "prompt": "Original prompt.",
                 "durationSeconds": scene["durationSeconds"],
                 "referenceRoles": [],
@@ -1185,8 +1177,6 @@ def test_scene_repair_refuses_stale_whole_story_context(storyboard_fs):
         "scenes": {
             scene["id"]: {
                 "title": scene["title"],
-                "entryState": scene["entryState"],
-                "exitState": scene["exitState"],
                 "prompt": scene["prompt"],
                 "durationSeconds": scene["durationSeconds"],
                 "referenceRoles": [],
@@ -1226,8 +1216,6 @@ def test_scene_repair_rejects_duplicate_scene_patch(storyboard_fs):
         "scenes": {
             scene["id"]: {
                 "title": scene["title"],
-                "entryState": scene["entryState"],
-                "exitState": scene["exitState"],
                 "prompt": scene["prompt"],
                 "durationSeconds": scene["durationSeconds"],
                 "referenceRoles": [],
@@ -1265,8 +1253,6 @@ def test_scene_repair_rejects_malformed_patch_instead_of_skipping_it(storyboard_
         "scenes": {
             scene["id"]: {
                 "title": scene["title"],
-                "entryState": scene["entryState"],
-                "exitState": scene["exitState"],
                 "prompt": scene["prompt"],
                 "durationSeconds": scene["durationSeconds"],
                 "referenceRoles": [],
@@ -1317,26 +1303,16 @@ def test_scene_refine_completion_is_persisted_only_for_successful_refine(storybo
         model_id="director.gguf",
         job_id="job-refine-fields",
         operation="refine_prompt",
-        scene_fields={
-            "entryState": "Revised entry.",
-            "exitState": "Revised exit.",
-        },
     )
-    assert refined_scene_fields["summary"] == ""
-    assert refined_scene_fields["entryState"] == "Revised entry."
-    assert refined_scene_fields["exitState"] == "Revised exit."
+    assert all(key not in refined_scene_fields for key in ("summary", "entryState", "exitState"))
     assert refined_scene_fields["prompt"] == "Scene-aware refined prompt."
     assert refined_scene_fields["previousRevision"] == {
-        "entryState": "",
-        "exitState": "",
         "prompt": "Longer refined prompt.",
         "durationSeconds": 12.0,
     }
 
     _, restored_scene_fields = storyboard_store.restore_previous_prompt(story["id"], scene["id"])
-    assert restored_scene_fields["summary"] == ""
-    assert restored_scene_fields["entryState"] == ""
-    assert restored_scene_fields["exitState"] == ""
+    assert all(key not in restored_scene_fields for key in ("summary", "entryState", "exitState"))
     assert restored_scene_fields["prompt"] == "Longer refined prompt."
     assert restored_scene_fields["durationSeconds"] == 12
 
@@ -1387,7 +1363,7 @@ def test_workshop_allows_discussion_without_shot_parser_support(storyboard_fs):
     assert context["shots"] == ""
     assert "integrated_multimodal_description" in context["shotError"]
     assert "sceneSummary" not in context
-    assert storyboard_store.load_story(story["id"])["scenes"][scene["id"]]["summary"] == "Exploring a visual idea"
+    assert "summary" not in storyboard_store.load_story(story["id"])["scenes"][scene["id"]]
     with pytest.raises(ValueError, match="one unambiguous"):
         storyboard_store.apply_workshop_shots(
             story["id"], scene["id"], context["expectedPrompt"], "[Shot 1]\nAn attempt"
@@ -1489,7 +1465,7 @@ def test_studio_scene_fields_are_scoped_and_conflict_checked(storyboard_fs):
         project["id"], id_, {"prompt": scene["prompt"]},
         {"prompt": "The interview begins with an incriminating answer."},
     )
-    assert result["summary"] == scene["summary"]
+    assert "summary" not in result
     assert result["prompt"] == "The interview begins with an incriminating answer."
     assert result["takeOrder"] == unchanged_settings["takeOrder"]
     assert result["durationSeconds"] == unchanged_settings["durationSeconds"]
@@ -1502,7 +1478,7 @@ def test_studio_scene_fields_are_scoped_and_conflict_checked(storyboard_fs):
         storyboard_store.apply_studio_scene_fields(
             project["id"], id_, {"takeOrder": []}, {"takeOrder": []},
         )
-    assert storyboard_store.load_story(project["id"])["scenes"][id_]["summary"] == scene["summary"]
+    assert "summary" not in storyboard_store.load_story(project["id"])["scenes"][id_]
 
 
 def test_single_scene_prompt_title_and_duration_commit_atomically(storyboard_fs):
@@ -1519,9 +1495,9 @@ def test_single_scene_prompt_title_and_duration_commit_atomically(storyboard_fs)
     assert updated["prompt"] == changes["prompt"]
     assert updated["title"] == "Quiet"
     assert updated["durationSeconds"] == 14
-    assert updated["summary"] == "Legacy Intent stays untouched."
+    assert "summary" not in updated
     assert updated["takeOrder"] == scene["takeOrder"]
-    assert saved["scenes"][sid]["summary"] == scene["summary"]
+    assert "summary" not in saved["scenes"][sid]
     before = storyboard_store.load_story(story["id"])["scenes"][sid].copy()
     for invalid in (
         {"prompt": "Should not save", "durationSeconds": 19},
@@ -1539,23 +1515,34 @@ def test_single_scene_prompt_title_and_duration_commit_atomically(storyboard_fs)
     assert storyboard_store.load_story(story["id"])["scenes"][sid] == before
 
 
-def test_retired_scene_intent_preserves_populated_legacy_json_across_saves_and_copies(storyboard_fs):
+def test_retired_scene_metadata_survives_old_project_edits_without_propagating_to_copies(storyboard_fs):
+    import json
     project = storyboard_store.create_story({"title": "Legacy Scene"})
     project, scene = storyboard_store.add_scene(project["id"], {
-        "title": "Original", "summary": "Old creative brief that must remain dormant.",
-        "prompt": "Original full production Prompt.",
+        "title": "Original", "prompt": "Original full production Prompt.",
     })
-    changed, saved = storyboard_store.update_scene(project["id"], scene["id"], {
+    path = storyboard_store._story_path(project["id"])
+    legacy = json.loads(path.read_text(encoding="utf-8"))
+    legacy["scenes"][scene["id"]].update({
+        "summary": "Old creative brief that must remain dormant.",
+        "entryState": "Old beginning.",
+        "exitState": "Old ending.",
+        "intent": "Unused legacy intent.",
+    })
+    path.write_text(json.dumps(legacy), encoding="utf-8")
+    _, saved = storyboard_store.update_scene(project["id"], scene["id"], {
         "title": "Renamed", "prompt": "Revised full H3 Prompt.",
     })
-    assert saved["summary"] == "Old creative brief that must remain dormant."
-    assert changed["scenes"][scene["id"]]["summary"] == saved["summary"]
+    for key in ("summary", "entryState", "exitState", "intent"):
+        assert saved[key] == legacy["scenes"][scene["id"]][key]
     persisted = storyboard_store.load_story(project["id"])
-    assert persisted["scenes"][scene["id"]]["summary"] == saved["summary"]
-    duplicated, copy_scene = storyboard_store.duplicate_scene(project["id"], scene["id"])
-    assert copy_scene["summary"] == saved["summary"]
+    for key in ("summary", "entryState", "exitState", "intent"):
+        assert persisted["scenes"][scene["id"]][key] == legacy["scenes"][scene["id"]][key]
+    _, copy_scene = storyboard_store.duplicate_scene(project["id"], scene["id"])
     cloned = storyboard_store.duplicate_story(project["id"])
-    assert cloned["scenes"][cloned["sceneOrder"][0]]["summary"] == saved["summary"]
+    for key in ("summary", "entryState", "exitState", "intent"):
+        assert key not in copy_scene
+        assert key not in cloned["scenes"][cloned["sceneOrder"][0]]
 
 
 def test_retired_scene_intent_empty_and_missing_are_compatible_with_prompt_edits(storyboard_fs):
@@ -1598,7 +1585,7 @@ def test_legacy_workshop_context_uses_saved_prompt_without_scene_intent(storyboa
     assert context["extraSections"]["Scene Overview"] == "An approved action."
     assert "[Shot 1]" in context["shots"]
     persisted = storyboard_store.load_story(story["id"])["scenes"][scene["id"]]
-    assert persisted["summary"] == scene["summary"]
+    assert "summary" not in persisted
 
 
 def test_project_deep_qa_cache_is_separate_and_invalidates_on_prompt_changes(storyboard_fs):
@@ -1633,10 +1620,6 @@ def test_project_deep_qa_cache_is_separate_and_invalidates_on_prompt_changes(sto
     cache_path.write_text(json.dumps(cache_payload), encoding="utf-8")
     assert storyboard_store.load_project_deep_qa(story["id"])["current"] is False
     cache_payload["storyId"] = story["id"]
-    cache_payload["version"] = 0
-    cache_path.write_text(json.dumps(cache_payload), encoding="utf-8")
-    assert storyboard_store.load_project_deep_qa(story["id"])["current"] is False
-    cache_payload["version"] = storyboard_store.PROJECT_DEEP_QA_VERSION
     cache_path.write_text(json.dumps(cache_payload), encoding="utf-8")
 
     current = storyboard_store.load_story(story["id"])

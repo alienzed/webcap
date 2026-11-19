@@ -820,6 +820,7 @@ def _execute_claimed(job_id, gpu_reserved):
         instruction = str(context.get("sourceInstruction") or "")
         completed = 0
         succeeded_scene_ids = []
+        succeeded_scenes = []
         changed_scene_ids = []
         failures = []
         with _revision_progress_lock:
@@ -834,6 +835,7 @@ def _execute_claimed(job_id, gpu_reserved):
                                 "storyId": context["storyId"],
                                 "revisedSceneCount": completed,
                                 "succeededSceneIds": succeeded_scene_ids,
+                                "succeededScenes": succeeded_scenes,
                                 "changedSceneIds": changed_scene_ids,
                                 "failedScenes": failures,
                                 "stopped": True,
@@ -868,6 +870,11 @@ def _execute_claimed(job_id, gpu_reserved):
                             "operation": scene_operation, "sourceInstruction": instruction,
                         }, result, job_id=job_id, frozen_contract=scene_contract)
                     succeeded_scene_ids.append(scene_id)
+                    succeeded_scenes.append({
+                        "sceneId": scene_id,
+                        "title": str(scene.get("title") or scene_id),
+                        "changed": applied.get("changed") is True,
+                    })
                     if applied.get("changed") is True:
                         changed_scene_ids.append(scene_id)
                     completed += 1
@@ -913,6 +920,7 @@ def _execute_claimed(job_id, gpu_reserved):
             "revisedSceneCount": len(changed_scene_ids),
             "completedSceneCount": len(succeeded_scene_ids),
             "succeededSceneIds": succeeded_scene_ids,
+            "succeededScenes": succeeded_scenes,
             "changedSceneIds": changed_scene_ids,
             "failedScenes": failures,
             "freshTakesQueued": generated,

@@ -2172,6 +2172,14 @@ def test_visual_direction_continues_after_scene_failure_and_reports_exact_outcom
         calls.append(prompt)
         if len(calls) == 2:
             raise RuntimeError("Simulated model timeout")
+        if len(calls) == 3:
+            return {
+                "text": '{"changed":false,"prompt":"The model presents third look."}',
+                "data": {"changed": False, "prompt": "The model presents third look."},
+                "model": model_id,
+                "usage": None,
+                "timings": None,
+            }
         return {
             "text": '{"changed":true,"prompt":"Revised " + str(len(calls)) + " complete visual prompt."}',
             "data": {"changed": True, "prompt": "Revised " + str(len(calls)) + " complete visual prompt."},
@@ -2207,13 +2215,13 @@ def test_visual_direction_continues_after_scene_failure_and_reports_exact_outcom
     assert finished["status"] == "completed"
     assert result["requestedSceneCount"] == 3
     assert result["completedSceneCount"] == 2
-    assert result["revisedSceneCount"] == 2
+    assert result["revisedSceneCount"] == 1
     assert result["succeededSceneIds"] == [scene_ids[0], scene_ids[2]]
     assert result["succeededScenes"] == [
         {"sceneId": scene_ids[0], "title": "First look", "changed": True},
-        {"sceneId": scene_ids[2], "title": "Third look", "changed": True},
+        {"sceneId": scene_ids[2], "title": "Third look", "changed": False},
     ]
-    assert result["changedSceneIds"] == [scene_ids[0], scene_ids[2]]
+    assert result["changedSceneIds"] == [scene_ids[0]]
     assert result["failedScenes"] == [{
         "sceneId": scene_ids[1],
         "title": "Second look",
@@ -2221,5 +2229,5 @@ def test_visual_direction_continues_after_scene_failure_and_reports_exact_outcom
     }]
     assert saved[scene_ids[0]]["prompt"] == "Revised 1 complete visual prompt."
     assert saved[scene_ids[1]]["prompt"] == "The model presents second look."
-    assert saved[scene_ids[2]]["prompt"] == "Revised 3 complete visual prompt."
-    assert take_requests == [(story["id"], scene_ids[0]), (story["id"], scene_ids[2])]
+    assert saved[scene_ids[2]]["prompt"] == "The model presents third look."
+    assert take_requests == [(story["id"], scene_ids[0])]

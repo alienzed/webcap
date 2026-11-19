@@ -1,0 +1,17 @@
+{
+  "id": "fashion_transition",
+  "project_overview": "A high-fashion runway film. One model appears in successive editorial looks, each presented in its own distinct cut. The second look is a deliberate new outfit, not a continuation of the first.",
+  "visual_direction": "Luxury fashion-film aesthetic, polished runway staging.",
+  "invariants": [
+    "The same adult model appears throughout.",
+    "Each cut presents a distinct complete outfit."
+  ],
+  "scene_description": "The model walks toward camera in the second runway look. The cut follows a previous look consisting of a black fitted blazer, white blouse, black tailored trousers and black heels. The new look is intended to have relaxed denim styling.",
+  "existing_h3_prompt": "The same model walks confidently toward the camera on the runway. In this second look, she wears blue jeans instead of the black tailored trousers. The camera tracks backward smoothly as she approaches.",
+  "expected_findings": [
+    "The prompt explicitly changes trousers but leaves the rest of the new outfit underspecified.",
+    "A complete new relaxed denim look is intended; choose a coherent top, footwear and relevant accessories.",
+    "Do not carry over the previous blazer, blouse or heels by omission.",
+    "Keep choices consistent with relaxed denim styling and the Project's fashion direction; do not invent unrelated story material."
+  ]
+}

@@ -576,6 +576,8 @@ def test_visual_direction_uses_winning_complete_visual_exhaustiveness_system_pro
     assert "[H3 PROMPTING GUIDANCE]" in prompt
     assert "[SCENE DETAILS]" in prompt
     assert "[EXISTING H3 PROMPT]\nEXISTING SECOND PROMPT" in prompt
+    assert "[OUTPUT]" in prompt
+    assert "changed=false" in prompt
     assert "OLD FIRST PROMPT" not in prompt
     assert "[PREVIOUS SCENE" not in prompt
     assert "DIRECTOR CONTEXT" not in prompt

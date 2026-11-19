@@ -332,3 +332,54 @@ def test_prompt_assist_review_fingerprint_drops_stale_project_index(tmp_path, mo
     assert scene_entry_after is not None
     assert project_entry_after is None
     assert after != before
+
+
+
+def test_prompt_assist_apply_rejects_stale_project_deep_qa_evidence(tmp_path, monkeypatch):
+    story = _story()
+    project_dir = tmp_path / "project"
+    project_dir.mkdir()
+    monkeypatch.setattr(app_module, "storyboard_load_story", lambda story_id: story)
+    monkeypatch.setattr("tool.server.storyboard_store._story_dir", lambda story_id: project_dir)
+    project_context = build_context(story, "project")
+    _write_json_atomic(project_dir / ".prompt_assist_deep_qa.json", {
+        "version": 1,
+        "scenes": {"scene-1": _receipt(story, "scene-1")},
+        "project": {
+            "version": 1,
+            "modelId": MODEL,
+            "sourceFingerprint": project_deep_qa_fingerprint(project_context, MODEL),
+            "preparedAt": "2026-11-19T12:05:00Z",
+            "result": _project_result(),
+        },
+    })
+    scene_context = build_context(story, "scene", "scene-1")
+    expected_fingerprint, _, project_entry = app_module._prompt_assist_review_inputs(
+        story["id"], story, scene_context, "scene-1", MODEL
+    )
+    assert project_entry is not None
+
+    story["scenes"]["scene-2"]["prompt"] += "\n[Shot 2] The colleague waves."
+    applied = {"called": False}
+
+    def fake_apply(*args, **kwargs):
+        applied["called"] = True
+        raise AssertionError("Apply must not run with stale Project Deep QA evidence.")
+
+    monkeypatch.setattr(app_module, "storyboard_apply_studio_scene_fields_batch", fake_apply)
+    monkeypatch.setattr(app_module, "llm_storyboard_target_busy", lambda *args: False)
+    response = app_module.app.test_client().post("/fs/storyboard/prompt-assist/apply", json={
+        "storyId": story["id"],
+        "scope": "scene",
+        "sceneId": "scene-1",
+        "model": MODEL,
+        "expectedSourceFingerprint": expected_fingerprint,
+        "revisions": [{
+            "sceneId": "scene-1",
+            "expectedPrompt": story["scenes"]["scene-1"]["prompt"],
+            "prompt": story["scenes"]["scene-1"]["prompt"] + "\nAn approved addition.",
+        }],
+    })
+    assert response.status_code == 400
+    assert "Deep QA context changed" in response.get_json()["error"]
+    assert applied["called"] is False

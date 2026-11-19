@@ -20,6 +20,7 @@
   var lastPublishedPreviewKey = '';
   var resultsView = 'grid';
   var previewSort = 'original';
+  var previewColumns = 2;
   var compareIndex = 0;
   var reviewSession = '';
   var reviewKey = '';
@@ -4532,8 +4533,17 @@
     });
   }
 
+  function syncPreviewColumns() {
+    var host = el('test-generations-results');
+    var picker = el('test-generations-preview-columns');
+    if (!host || !picker) throw new Error('Test Generations requires its preview grid column control.');
+    picker.value = String(previewColumns);
+    host.dataset.columns = String(previewColumns);
+  }
+
   function setResultsView(mode) {
     resultsView = ['grid','compare','matrix'].includes(mode) ? mode : 'grid';
+    el('test-generations-preview-columns-control').classList.toggle('hidden', resultsView !== 'grid');
     var gridBtn = el('test-generations-view-grid-btn');
     var compareBtn = el('test-generations-view-compare-btn');
     var matrixBtn = el('test-generations-view-matrix-btn');
@@ -6155,6 +6165,11 @@
       shuffleWildcardPreview(null);
     };
     el('test-generations-rail-toggle-btn').onclick = toggleTestRailCollapsed;
+    el('test-generations-preview-columns').onchange = function () {
+      previewColumns = Number(this.value);
+      syncPreviewColumns();
+    };
+    syncPreviewColumns();
     el('test-generations-clear-queue-btn').onclick = function () { var button = this; button.disabled = true; clearQueuedTests().catch(showError).then(function () { button.disabled = false; }); };
     el('test-generations-clear-sessions-btn').onclick = function () {
       var button = this;

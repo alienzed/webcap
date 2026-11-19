@@ -99,7 +99,7 @@ test('LIVE Prompt Assist runs independent specialists, discusses findings, and a
   const model=await openLiveDirector(page);
   await chooseStoryboardModel(page,model);
   await openProject(page,project.id);
-  await page.locator('[data-scene-progress]').filter({hasText:'The Hit'}).locator('[data-scene-progress]').click();
+  await page.locator('.storyboard-scene-progress-card[data-scene-id="'+first.id+'"] [data-scene-progress]').click();
   await page.locator('#storyboard-prompt-assist-btn').click();
   const dialog=page.locator('#prompt-assist-dialog');
   await expect(dialog).toBeVisible();

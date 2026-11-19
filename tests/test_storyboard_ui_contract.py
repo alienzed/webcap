@@ -1611,25 +1611,21 @@ def test_define_invariants_does_not_generate_new_guidelines_and_preserves_legacy
 def test_visual_direction_scene_picker_defaults_to_all_and_posts_only_selected_ids():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+    director = (ROOT / "tool" / "js" / "director_chat.js").read_text(encoding="utf-8")
     app = (ROOT / "tool" / "server" / "app.py").read_text(encoding="utf-8")
 
-    assert 'id="storyboard-director-tools-scene-selection"' in html
-    assert '<option value="visual_direction">Visual Direction</option>' in html
-    open_modal = storyboard.split("function openDirectorTools()", 1)[1].split("\n  function ", 1)[0]
-    assert "data-revise-scene-all checked" in open_modal
-    assert "data-revise-scene=" in open_modal
-    assert "input.checked = allToggle.checked" in open_modal
-    assert "allToggle.indeterminate" in open_modal
-
-    run_revision = storyboard.split("function runDirectorToolsRevision()", 1)[1].split("\n  // The Studio composer", 1)[0]
-    assert "querySelectorAll('[data-revise-scene]:checked')" in run_revision
-    assert "selectedSceneIds" in run_revision
-    assert "selectedSceneIds, preset === 'visual_direction' ? 'visual_direction' : 'standard'" in run_revision
-    assert "sceneIds: sceneIds" in storyboard
-    assert "result.failedScenes" in storyboard
-    assert "result.succeededScenes" in storyboard
-    assert "Completed: " in storyboard
-    assert "Failed: " in storyboard
+    # The Studio composer, not the old Storyboard modal, owns the visible UI.
+    active = html.split('id="director-studio-revision-controls"', 1)[1].split('id="director-chat-input"', 1)[0]
+    assert '<option value="visual_direction">Visual Direction</option>' in active
+    assert 'id="director-studio-revision-scenes"' in active
+    assert 'data-revise-scene-all' in director
+    assert 'box.checked = previous.has(choice.id)' in director
+    assert 'all.indeterminate = count > 0 && count < boxes.length' in director
+    assert "sceneIds:sceneIds" in director
+    assert "preset !== 'visual_direction'" in director
+    assert "selectedStudioRevisionScenes().length === 0" in director
+    assert "options.sceneIds" in storyboard
+    assert "options.preset === 'visual_direction' ? 'visual_direction' : 'standard'" in storyboard
 
     route = app.split('if operation == "revise_scenes_sequence":', 1)[1].split('if operation == "check_coherence_sequence":', 1)[0]
     assert 'requested_scene_ids = data.get("sceneIds")' in route

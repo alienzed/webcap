@@ -2,7 +2,13 @@
 const {test:base,expect}=require('@playwright/test');
 // Keep failures self-diagnosing without changing WebCap routes or DOM.
 const test=base.extend({
-  page:async({page},use,testInfo)=>{
+  // General Studio tests control their own inference responses. The optional
+  // Action Advisor is exercised explicitly by its own browser suites.
+  advisorEnabled:[false,{option:true}],
+  page:async({page,advisorEnabled},use,testInfo)=>{
+    if (!advisorEnabled) await page.addInitScript(() => {
+      localStorage.setItem('webcap.studio.actionAdvisor.enabled','false');
+    });
     const problems=[];
     const live=process.env.WEBCAP_ACCEPTANCE_MODE==='live';
     const exchanges=[];

@@ -41,27 +41,39 @@ test('Cross-Project Read sources inform explicit Write but never redirect its de
   await openProject(page,b.id);
   await reopenDirectorIfClosed(page);
   const share=page.locator('#director-chat-context-approve');
-  if (!(await page.locator('#studio-dw-read-panel').isVisible())) await share.click();
-  await page.locator('#studio-dw-read-project').selectOption(a.id);
-  if (!(await page.locator('#studio-dw-read-panel').isVisible())) await share.click();
-  await expect(page.locator('#studio-dw-read-panel')).toBeVisible();
-  await page.locator('#studio-dw-read-send').click();
-  if (!(await page.locator('#studio-dw-read-panel').isVisible())) await share.click();
-  await page.locator('#studio-dw-read-project').selectOption(b.id);
+  const readPanel=page.locator('#studio-dw-read-panel');
+  const readProject=page.locator('#studio-dw-read-project');
+  const messages=page.locator('#director-chat-messages');
+  async function openRead() {
+    if (!(await readPanel.isVisible())) await share.click();
+    await expect(readPanel).toBeVisible();
+  }
+  async function sendRead(expectedText) {
+    await expect(readPanel).toBeVisible();
+    await page.locator('#studio-dw-read-send').click();
+    // Read capture is async and closes its own panel only after the snapshot
+    // is saved. Reopening before that point races the closing callback.
+    await expect(messages).toContainText(expectedText);
+    await expect(readPanel).toBeHidden();
+  }
+
+  await openRead();
+  await readProject.selectOption(a.id);
+  await sendRead('A sequence of rapid linked actions.');
+
+  await openRead();
+  await readProject.selectOption(b.id);
   if (await page.locator('#studio-dw-read-selection').getAttribute('open')===null)
     await page.locator('#studio-dw-read-selection summary').click();
   await page.locator('#studio-dw-project-fields input[data-group-select]').first().uncheck();
   await page.locator('#studio-dw-scene-fields input[data-group-select]').first().check();
-  if (!(await page.locator('#studio-dw-read-panel').isVisible())) await share.click();
-  await expect(page.locator('#studio-dw-read-panel')).toBeVisible();
-  await page.locator('#studio-dw-read-send').click();
-  if (!(await page.locator('#studio-dw-read-panel').isVisible())) await share.click();
-  await page.locator('#studio-dw-read-project').selectOption(c.id);
+  await sendRead('A violin maker enters through a red doorway.');
+
+  await openRead();
+  await readProject.selectOption(c.id);
   await page.locator('#studio-dw-project-fields input[data-group-select]').first().uncheck();
   await page.locator('#studio-dw-project-fields input[data-group-select]').last().check();
-  if (!(await page.locator('#studio-dw-read-panel').isVisible())) await share.click();
-  await expect(page.locator('#studio-dw-read-panel')).toBeVisible();
-  await page.locator('#studio-dw-read-send').click();
+  await sendRead('Mara has a silver hairpin.');
 
   await queueModel(request,'We can use the pacing and character details as references.');
   await say(page,'Discuss a tighter atmosphere using the shared sources.');

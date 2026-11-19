@@ -48,3 +48,40 @@ Creative quality is partly qualitative: raw requests and outputs are retained fo
 Playwright writes traces, screenshots on failure and attached raw model result evidence under `test-results/studio-live-artifacts/` and `test-results/studio-live-html/`. Do not replace missing model fields with test-generated text, quietly retry with a changed creative request, or treat an action promise as a successful result.
 
 The controlled-model `playwright.config.cjs` suite tests plumbing and persistence, but is NOT live-model functional acceptance. CI checks live-test syntax, not actual live inference, which must be run locally with an available configured model.
+
+## Action Advisor: real-model acceptance
+
+The side-channel agent's acceptance tests are in
+`tests/live/studio-action-advisor.spec.cjs`. They explicitly enable the
+optional advisor (the general browser fixture disables it for unrelated tests)
+and **use a configured real LLM**, not the controlled inference server.
+
+From a machine with the actual Director endpoint available, choose an explicit
+model ID and run:
+
+```bash
+WEBCAP_TEST_DIRECTOR_MODEL='remote-1::your-real-model-id' \
+  npx playwright test tests/live/studio-action-advisor.spec.cjs \
+  --config=playwright.live.config.cjs --headed
+```
+
+The three journeys require meaningful, independently authored suggestions:
+1. A saved-Overview Read recommendation, followed by an explicit Read into the
+   conversation, without an advisor-initiated snapshot or extra LLM call.
+2. A Style-only Project revision recommendation, followed by a prefilled Write
+   and an explicit real-model save, preserving all other Project fields.
+3. A new Scene recommendation followed by an explicitly approved real-model
+   Scene Write and persistent Scene data.
+
+The tests inspect the actual `studio_action_advisor` response and assert
+the proposed operation, exact destination, requested field scope, and UI
+handoff. They capture both chat and advisor requests, full model receipts,
+and saved results as Playwright attachments. Missing suggestions, incorrectly
+scoped fields, unexpected extra actions, unusable JSON, and bad creative results
+fail visibly; they are not substituted, manually repaired, or silently retried.
+
+**Not a mock CI pass:** GitHub Actions validates the syntax of live specs but
+does not have access to your configured model. Record the selected model ID,
+commit SHA, test output, and raw attached receipts for any claim of live success.
+A live failure should be diagnosed as model output versus WebCap handoff using
+those receipts, not reclassified as a pass.

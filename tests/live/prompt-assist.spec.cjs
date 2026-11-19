@@ -99,6 +99,10 @@ test('LIVE Prompt Assist runs independent specialists, discusses findings, and a
   const proposedPrompt=await revised.inputValue();
   expect(proposedPrompt.trim().length).toBeGreaterThan(0);
   expect(proposedPrompt).not.toBe(promptOne);
+  await revised.fill(proposedPrompt + '\\nTemporary review edit.');
+  await dialog.locator('#prompt-assist-restore').click();
+  await expect(revised).toHaveValue(promptOne);
+  await revised.fill(proposedPrompt);
 
   const beforeApply=await story(page,project.id);
   expect(beforeApply.scenes[first.id].prompt).toBe(promptOne);
@@ -152,6 +156,11 @@ test('LIVE Prompt Assist keeps one Scene in focus and preserves inline decisions
   await expect(dialog.locator('#prompt-assist-scene-progress')).toContainText('1 of 2 Scenes reviewed');
   const recs=dialog.locator('.prompt-assist-recommendation');
   await expect(recs).not.toHaveCount(0);
+  await dialog.locator('#prompt-assist-accept-all').click();
+  await expect(dialog.locator('#prompt-assist-decision-summary')).toContainText(recommendationCount + ' accepted');
+  await dialog.locator('#prompt-assist-reject-all').click();
+  await expect(dialog.locator('#prompt-assist-decision-summary')).toContainText(recommendationCount + ' rejected');
+  await recs.first().locator('[data-pa-decision="pending"]').click();
   await recs.first().locator('[data-pa-decision="accepted"]').click();
   await expect(dialog.locator('#prompt-assist-decision-summary')).toContainText('1 accepted');
 
@@ -230,6 +239,15 @@ test('LIVE Project Deep QA prepares reusable Scene and cross-Scene intelligence 
   });
 
   const model=await openLiveDirector(page);
+  const deepQaRequests=[];
+  const visionRequests=[];
+  page.on('request',request=>{
+    const url=new URL(request.url());
+    if(url.pathname==='/fs/storyboard/prompt-assist') {
+      try { deepQaRequests.push(request.postDataJSON().operation); } catch {}
+    }
+    if(/vision|sight/i.test(url.pathname)) visionRequests.push(url.pathname);
+  });
   await openProject(page,project.id);
   await chooseStoryboardModel(page,model);
   await page.locator('.storyboard-scene-progress-card[data-scene-id="'+arrival.id+'"] [data-scene-progress]').click();
@@ -250,6 +268,20 @@ test('LIVE Project Deep QA prepares reusable Scene and cross-Scene intelligence 
   expect(prepared.sceneStatus[handoff.id].fresh).toBe(true);
   expect(prepared.project.summary).toBeTruthy();
   expect(Array.isArray(prepared.project.sceneRelationships)).toBe(true);
+  expect(visionRequests).toEqual([]);
+  for(const sceneId of [arrival.id,handoff.id]) {
+    const receiptResponse=await page.request.get('/fs/storyboard/prompt-assist/deep-qa?storyId='+encodeURIComponent(project.id)+'&sceneId='+encodeURIComponent(sceneId)+'&model='+encodeURIComponent(model));
+    expect(receiptResponse.ok()).toBeTruthy();
+    const receipt=await receiptResponse.json();
+    const source=(await story(page,project.id)).scenes[sceneId].prompt;
+    expect(receipt.sceneIntelligence.sceneId).toBe(sceneId);
+    for(const cut of receipt.sceneIntelligence.cuts) {
+      expect(cut.sourceEvidence.length).toBeGreaterThan(0);
+      for(const evidence of cut.sourceEvidence) expect(source).toContain(evidence);
+    }
+  }
+  const otherModelStatus=await page.request.get('/fs/storyboard/prompt-assist/deep-qa?storyId='+encodeURIComponent(project.id)+'&model=local::different-model');
+  expect((await otherModelStatus.json()).projectFresh).toBe(false);
 
   await dialog.locator('#prompt-assist-project-context').locator('summary').click();
   await expect(dialog.locator('#prompt-assist-project-context-content'))
@@ -272,6 +304,33 @@ test('LIVE Project Deep QA prepares reusable Scene and cross-Scene intelligence 
   const unchanged=await story(page,project.id);
   expect(unchanged.scenes[arrival.id].prompt).toContain('raincoat');
   expect(unchanged.scenes[handoff.id].prompt).toContain('delivery bag');
+
+  const changedHandoff=unchanged.scenes[handoff.id].prompt + '\\n[Shot 3] The colleague places the delivery bag on a table.';
+  const update=await page.request.post('/fs/storyboard',{data:{
+    operation:'update_scene',storyId:project.id,sceneId:handoff.id,scene:{prompt:changedHandoff}
+  }});
+  expect(update.ok()).toBeTruthy();
+  await dialog.locator('#prompt-assist-done').click();
+  await page.locator('#storyboard-prompt-assist-btn').click();
+  await expect(dialog).toBeVisible();
+  await expect(dialog.locator('#prompt-assist-deep-qa-status')).toContainText('1 of 2 Scenes prepared');
+  deepQaRequests.length=0;
+  await dialog.locator('#prompt-assist-deep-qa-run').click();
+  await expect(dialog.locator('#prompt-assist-deep-qa-status'))
+    .toHaveText('Project intelligence ready',{timeout:900000});
+  expect(deepQaRequests).toEqual(['deep_qa_scene','deep_qa_project']);
+  const refreshed=await page.request.get('/fs/storyboard/prompt-assist/deep-qa?storyId='+encodeURIComponent(project.id)+'&model='+encodeURIComponent(model));
+  const refreshedStatus=await refreshed.json();
+  expect(refreshedStatus.projectFresh).toBe(true);
+  expect(refreshedStatus.sceneStatus[arrival.id].fresh).toBe(true);
+  expect(refreshedStatus.sceneStatus[handoff.id].fresh).toBe(true);
+  await testInfo.attach('project-deep-qa-live.json',{
+    body:Buffer.from(JSON.stringify({model,projectId:project.id,initial:prepared,refreshed:refreshedStatus,operations:deepQaRequests},null,2)),
+    contentType:'application/json'
+  });
+  const finalStory=await story(page,project.id);
+  expect(finalStory.scenes[arrival.id].prompt).toContain('raincoat');
+  expect(finalStory.scenes[handoff.id].prompt).toBe(changedHandoff);
   await dialog.locator('#prompt-assist-done').click();
 });
 

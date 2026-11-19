@@ -37,21 +37,22 @@ def _story():
 
 
 def _scene_result(scene_id):
+    shot_numbers = [1, 2] if scene_id == "scene-1" else [1]
     return {
         "sceneId": scene_id,
         "summary": "A courier arrives and completes the Scene action.",
         "purpose": "Establish the Scene's visual purpose.",
         "keyVisualMoments": ["Courier enters", "Courier completes the action"],
         "cuts": [{
-            "shotNumber": 1,
+            "shotNumber": number,
             "visualIntent": "Establish the action.",
             "focalElement": "Courier",
-            "action": "Courier enters.",
+            "action": "Courier enters." if number == 1 else "Courier removes the coat.",
             "stateChanges": ["Courier enters the lobby."],
             "carryForward": ["Courier remains in the lobby."],
             "physicalInteractions": [],
             "concerns": [],
-        }],
+        } for number in shot_numbers],
     }
 
 

@@ -2079,6 +2079,7 @@
                                     <div id="storyboard-project-tool-bar" class="storyboard-project-tool-bar" role="group" aria-label="Project Tools">
                                         <button id="storyboard-generate-scenes-btn" type="button" class="review-captions-btn storyboard-tool-icon" aria-label="Generate Takes" title="Generate Takes — queue one new Take per Scene"><span class="storyboard-tool-glyph" aria-hidden="true">▶</span><span class="storyboard-tool-label" aria-hidden="true">Generate Takes</span></button>
                                         <button id="storyboard-cancel-takes-btn" type="button" class="review-captions-btn storyboard-tool-icon" aria-label="Cancel Takes" title="Cancel queued Takes for this Project; a running Take will finish." disabled><span class="storyboard-tool-glyph" aria-hidden="true">×</span><span class="storyboard-tool-label" aria-hidden="true">Cancel Takes</span></button>
+                                        <button id="storyboard-prompt-assist-btn" type="button" class="review-captions-btn storyboard-tool-icon" aria-label="Prompt Assist" title="Review cuts, continuity and sequence quality with specialist analysis"><span class="storyboard-tool-glyph" aria-hidden="true">✧</span><span class="storyboard-tool-label" aria-hidden="true">Prompt Assist</span></button>
                                         <button id="storyboard-director-tools-btn" type="button" class="review-captions-btn storyboard-tool-icon" aria-label="Scene Revision" title="Scene Revision — revise Project Scenes, optionally generate Takes, or check coherence"><span class="storyboard-tool-glyph" aria-hidden="true">✦</span><span class="storyboard-tool-label" aria-hidden="true">Scene Revision</span></button>
                                         <button id="storyboard-find-replace-btn" type="button" class="review-captions-btn storyboard-tool-icon" aria-label="Find &amp; Replace" title="Find &amp; Replace text across Project Scenes"><span class="storyboard-tool-glyph" aria-hidden="true">⌕</span><span class="storyboard-tool-label" aria-hidden="true">Find &amp; Replace</span></button>
                                         
@@ -4103,6 +4104,48 @@
         <script src="/static/js/storyboard.js"></script>
         <script src="/static/js/set_dashboard.js"></script>
         <script src="/static/js/main.js"></script>
+
+<dialog id="prompt-assist-dialog" class="prompt-assist-dialog" aria-labelledby="prompt-assist-title">
+  <header class="prompt-assist-header">
+    <div><h2 id="prompt-assist-title">Prompt Assist</h2><p id="prompt-assist-subtitle">Independent reviews of your creative material</p></div>
+    <div class="prompt-assist-header-actions">
+      <label>Scope<select id="prompt-assist-scope"><option value="scene">Current Scene</option><option value="project">Entire Project</option></select></label>
+      <button id="prompt-assist-close" type="button" class="review-captions-btn">Close</button>
+    </div>
+  </header>
+  <div class="prompt-assist-toolbar">
+    <div id="prompt-assist-deep-qa-state" role="status">Project intelligence not prepared</div>
+    <button id="prompt-assist-deep-qa" type="button" class="review-captions-btn">Prepare Project Intelligence</button>
+    <button id="prompt-assist-run" type="button" class="storyboard-primary-btn">Run specialist reviews</button>
+  </div>
+  <div class="prompt-assist-layout">
+    <nav class="prompt-assist-rail" aria-label="Prompt Assist specialists">
+      <button type="button" data-pa-tab="visual" class="is-active"><strong>Visual Director</strong><span>Shot focus and visual clarity</span><em id="prompt-assist-visual-count">Not run</em></button>
+      <button type="button" data-pa-tab="continuity"><strong>Continuity &amp; State</strong><span>Changes and physical relationships</span><em id="prompt-assist-continuity-count">Not run</em></button>
+      <button type="button" data-pa-tab="sequence"><strong>Sequence Director</strong><span>Cut selection and pacing</span><em id="prompt-assist-sequence-count">Not run</em></button>
+      <button type="button" data-pa-tab="editor"><strong>Creative Editor</strong><span>Consolidated recommendations</span><em id="prompt-assist-editor-count">Waiting</em></button>
+    </nav>
+    <main class="prompt-assist-main">
+      <section id="prompt-assist-review-panel">
+        <div class="prompt-assist-panel-head"><div><h3 id="prompt-assist-panel-title">Visual Director</h3><p id="prompt-assist-panel-description">Does each cut actually show what you want the viewer to see?</p></div><span id="prompt-assist-panel-status" role="status">Ready</span></div>
+        <div id="prompt-assist-findings" class="prompt-assist-findings"><div class="prompt-assist-empty">Run the specialist reviews to inspect your prompts.</div></div>
+      </section>
+      <section id="prompt-assist-editor-panel" class="hidden">
+        <div class="prompt-assist-panel-head"><div><h3>Creative Editor</h3><p>Consolidated recommendations, with disagreements retained.</p></div><span id="prompt-assist-editor-status" role="status">Waiting</span></div>
+        <div id="prompt-assist-recommendations" class="prompt-assist-findings"><div class="prompt-assist-empty">Run the reviews, then consolidate their findings.</div></div>
+        <div class="prompt-assist-revision-actions"><button id="prompt-assist-prepare-revision" type="button" class="storyboard-primary-btn" disabled>Prepare revised prompts</button></div>
+        <div id="prompt-assist-revisions" class="prompt-assist-revisions hidden"><h3>Proposed revisions</h3><p>Edit complete prompts before applying. Only selected Scenes will change.</p><div id="prompt-assist-revision-list"></div><button id="prompt-assist-apply" type="button" class="storyboard-primary-btn">Apply selected prompts</button></div>
+      </section>
+      <section class="prompt-assist-discussion">
+        <div class="prompt-assist-discussion-head"><h3>Discuss</h3><label>Ask<select id="prompt-assist-ask-role"><option value="editor">Creative Editor</option><option value="visual">Visual Director</option><option value="continuity">Continuity &amp; State</option><option value="sequence">Sequence Director</option></select></label></div>
+        <div id="prompt-assist-chat" class="prompt-assist-chat" aria-live="polite"></div>
+        <div class="prompt-assist-chat-compose"><textarea id="prompt-assist-question" rows="3" placeholder="Ask a question, challenge a finding, or request another opinion…"></textarea><button id="prompt-assist-ask" type="button" class="review-captions-btn">Ask</button></div>
+      </section>
+    </main>
+  </div>
+  <footer class="prompt-assist-footer"><span id="prompt-assist-status" role="status">Nothing has been changed.</span><button id="prompt-assist-done" type="button" class="review-captions-btn">Done</button></footer>
+</dialog>
+
 <dialog id="studio-blocks-dialog" class="studio-blocks-dialog" aria-labelledby="studio-blocks-heading">
   <div class="studio-blocks-head"><h2 id="studio-blocks-heading">Studio Blocks</h2><button id="studio-blocks-close" type="button" class="review-captions-btn">Close</button></div>
   <div class="studio-blocks-layout">

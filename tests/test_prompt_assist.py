@@ -235,3 +235,17 @@ def test_deep_qa_scene_validator_requires_every_source_cut():
     result = _deep_qa_scene_result("scene-1")
     with pytest.raises(ValueError, match="every source cut"):
         validate_deep_qa_scene(result, "scene-1", [0, 1, 2, 3])
+
+
+
+def test_deep_qa_scene_validator_rejects_fabricated_source_evidence():
+    context = build_context(_story(), "scene", "scene-1")
+    result = _deep_qa_scene_result("scene-1")
+    validate_deep_qa_scene(
+        result, "scene-1", [0, 1, 3], context["sourcePrompts"]["scene-1"]
+    )
+    result["cuts"][0]["sourceEvidence"] = ["The prompt says something else."]
+    with pytest.raises(ValueError, match="exact saved prompt"):
+        validate_deep_qa_scene(
+            result, "scene-1", [0, 1, 3], context["sourcePrompts"]["scene-1"]
+        )

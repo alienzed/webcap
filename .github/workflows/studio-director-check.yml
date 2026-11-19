@@ -21,7 +21,7 @@ on:
       - 'tool/css/workspace_shell.css'
       - 'tool/css/storyboard.css'
       - 'tests/test_storyboard_llm_contract.py'
-      - 'tests/live/studio-prompt-assist.spec.cjs'
+      - 'tests/live/studio-prompt-assist-deep-qa.spec.cjs'
       - 'tests/studio_director_design_fixes.test.cjs'
       - 'tests/studio_director_flexibility.test.cjs'
       - 'tests/studio_director_ownership_boundaries.test.cjs'

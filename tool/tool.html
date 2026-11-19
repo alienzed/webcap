@@ -4107,43 +4107,74 @@
 
 <dialog id="prompt-assist-dialog" class="prompt-assist-dialog" aria-labelledby="prompt-assist-title">
   <header class="prompt-assist-header">
-    <div><h2 id="prompt-assist-title">Prompt Assist</h2><p id="prompt-assist-subtitle">Independent reviews of your creative material</p></div>
-    <div class="prompt-assist-header-actions">
-      <label>Scope<select id="prompt-assist-scope"><option value="scene">Current Scene</option><option value="project">Entire Project</option></select></label>
-      <button id="prompt-assist-close" type="button" class="review-captions-btn">Close</button>
+    <div class="prompt-assist-brand">
+      <span class="prompt-assist-mark" aria-hidden="true">✧</span>
+      <div><h2 id="prompt-assist-title">Prompt Assist</h2><p id="prompt-assist-subtitle">Review one Scene with your specialist team</p></div>
+    </div>
+    <div class="prompt-assist-scene-nav">
+      <button id="prompt-assist-scene-prev" type="button" class="review-captions-btn" aria-label="Previous Scene">←</button>
+      <label for="prompt-assist-scene-select">Scene</label>
+      <select id="prompt-assist-scene-select" aria-label="Choose Scene"></select>
+      <button id="prompt-assist-scene-next" type="button" class="review-captions-btn" aria-label="Next Scene">→</button>
+      <button id="prompt-assist-close" type="button" class="training-review-modal-close" aria-label="Close Prompt Assist">&times;</button>
     </div>
   </header>
   <div class="prompt-assist-toolbar">
-    <button id="prompt-assist-run" type="button" class="storyboard-primary-btn">Run specialist reviews</button>
+    <div class="prompt-assist-progress-copy"><strong id="prompt-assist-scene-position">Scene 1 of 1</strong><span id="prompt-assist-scene-progress">Not reviewed</span></div>
+    <div class="prompt-assist-toolbar-actions">
+      <button id="prompt-assist-run" type="button" class="storyboard-primary-btn">Review this Scene</button>
+      <button id="prompt-assist-synthesize" type="button" class="review-captions-btn" disabled>Consolidate findings</button>
+    </div>
   </div>
   <div class="prompt-assist-layout">
-    <nav class="prompt-assist-rail" aria-label="Prompt Assist specialists">
-      <button type="button" data-pa-tab="visual" class="is-active"><strong>Visual Director</strong><span>Shot focus and visual clarity</span><em id="prompt-assist-visual-count">Not run</em></button>
-      <button type="button" data-pa-tab="continuity"><strong>Continuity &amp; State</strong><span>Changes and physical relationships</span><em id="prompt-assist-continuity-count">Not run</em></button>
-      <button type="button" data-pa-tab="sequence"><strong>Sequence Director</strong><span>Cut selection and pacing</span><em id="prompt-assist-sequence-count">Not run</em></button>
-      <button type="button" data-pa-tab="editor"><strong>Creative Editor</strong><span>Consolidated recommendations</span><em id="prompt-assist-editor-count">Waiting</em></button>
-    </nav>
-    <main class="prompt-assist-main">
-      <details id="prompt-assist-source" class="prompt-assist-source">
-        <summary id="prompt-assist-source-summary">Source prompts</summary>
-        <div id="prompt-assist-source-list"></div>
-      </details>
-      <section id="prompt-assist-review-panel">
-        <div class="prompt-assist-panel-head"><div><h3 id="prompt-assist-panel-title">Visual Director</h3><p id="prompt-assist-panel-description">Does each cut actually show what you want the viewer to see?</p></div><span id="prompt-assist-panel-status" role="status">Ready</span></div>
-        <div id="prompt-assist-findings" class="prompt-assist-findings"><div class="prompt-assist-empty">Run the specialist reviews to inspect your prompts.</div></div>
+    <main class="prompt-assist-scene-column">
+      <section class="prompt-assist-scene-heading">
+        <div><span class="prompt-assist-eyebrow">CURRENT SCENE</span><h3 id="prompt-assist-scene-title">Scene</h3><p id="prompt-assist-scene-overview"></p></div>
+        <details id="prompt-assist-project-context" class="prompt-assist-context">
+          <summary>Project context</summary>
+          <div id="prompt-assist-project-context-content"></div>
+        </details>
       </section>
-      <section id="prompt-assist-editor-panel" class="hidden">
-        <div class="prompt-assist-panel-head"><div><h3>Creative Editor</h3><p>Consolidated recommendations, with disagreements retained.</p></div><span id="prompt-assist-editor-status" role="status">Waiting</span></div>
-        <div id="prompt-assist-recommendations" class="prompt-assist-findings"><div class="prompt-assist-empty">Run the reviews, then consolidate their findings.</div></div>
-        <div class="prompt-assist-revision-actions"><button id="prompt-assist-prepare-revision" type="button" class="storyboard-primary-btn" disabled>Prepare revised prompts</button></div>
-        <div id="prompt-assist-revisions" class="prompt-assist-revisions hidden"><h3>Proposed revisions</h3><p>Edit complete prompts before applying. Only selected Scenes will change.</p><div id="prompt-assist-revision-list"></div><button id="prompt-assist-apply" type="button" class="storyboard-primary-btn" disabled>Apply selected prompts</button></div>
-      </section>
-      <section class="prompt-assist-discussion">
-        <div class="prompt-assist-discussion-head"><h3>Discuss</h3><label>Ask<select id="prompt-assist-ask-role"><option value="editor">Creative Editor</option><option value="visual">Visual Director</option><option value="continuity">Continuity &amp; State</option><option value="sequence">Sequence Director</option></select></label></div>
-        <div id="prompt-assist-chat" class="prompt-assist-chat" aria-live="polite"></div>
-        <div class="prompt-assist-chat-compose"><textarea id="prompt-assist-question" rows="3" placeholder="Ask a question, challenge a finding, or request another opinion…"></textarea><button id="prompt-assist-ask" type="button" class="review-captions-btn">Ask</button></div>
-      </section>
+      <div id="prompt-assist-scene-findings" class="prompt-assist-scene-findings"></div>
+      <div id="prompt-assist-cuts" class="prompt-assist-cuts">
+        <div class="prompt-assist-empty">Review this Scene to see cut-level findings and recommendations.</div>
+      </div>
     </main>
+    <aside class="prompt-assist-inspector" aria-label="Prompt Assist review dashboard">
+      <section class="prompt-assist-team">
+        <div class="prompt-assist-section-heading"><h3>Specialist review</h3><span id="prompt-assist-team-status">Not started</span></div>
+        <article class="prompt-assist-specialist" data-pa-specialist="visual"><div class="prompt-assist-specialist-top"><strong>Visual Director</strong><span id="prompt-assist-visual-count">Waiting</span></div><p id="prompt-assist-visual-summary">Checks focal subject, action visibility and framing.</p></article>
+        <article class="prompt-assist-specialist" data-pa-specialist="continuity"><div class="prompt-assist-specialist-top"><strong>Continuity &amp; State</strong><span id="prompt-assist-continuity-count">Waiting</span></div><p id="prompt-assist-continuity-summary">Checks state progression and physical relationships between cuts.</p></article>
+        <article class="prompt-assist-specialist" data-pa-specialist="sequence"><div class="prompt-assist-specialist-top"><strong>Sequence Director</strong><span id="prompt-assist-sequence-count">Waiting</span></div><p id="prompt-assist-sequence-summary">Checks whether the cuts belong and the sequence flows.</p></article>
+      </section>
+      <section class="prompt-assist-editor">
+        <div class="prompt-assist-section-heading"><h3>Creative Editor</h3><span id="prompt-assist-editor-count">Waiting</span></div>
+        <p id="prompt-assist-editor-summary" class="prompt-assist-editor-summary">The Editor will consolidate independent findings without hiding disagreements.</p>
+        <div id="prompt-assist-disagreements"></div>
+        <div class="prompt-assist-suggestion-actions">
+          <button id="prompt-assist-accept-all" type="button" class="review-captions-btn" disabled>Accept all</button>
+          <button id="prompt-assist-reject-all" type="button" class="review-captions-btn" disabled>Reject all</button>
+        </div>
+        <div id="prompt-assist-decision-summary" class="prompt-assist-decision-summary">No recommendations yet.</div>
+        <button id="prompt-assist-prepare-revision" type="button" class="storyboard-primary-btn" disabled>Prepare revised prompt</button>
+      </section>
+      <section class="prompt-assist-revisions hidden" id="prompt-assist-revisions">
+        <div class="prompt-assist-section-heading"><h3>Proposed prompt</h3><span>Draft only</span></div>
+        <details class="studio-director-diff" open><summary>Compare with original</summary><div id="prompt-assist-revision-diff" class="studio-director-diff-content"></div></details>
+        <textarea id="prompt-assist-revision-prompt" rows="12" aria-label="Proposed complete Scene prompt"></textarea>
+        <div class="prompt-assist-revision-buttons">
+          <button id="prompt-assist-restore" type="button" class="review-captions-btn">Restore original</button>
+          <button id="prompt-assist-apply" type="button" class="storyboard-primary-btn" disabled>Apply to Scene</button>
+        </div>
+      </section>
+      <details class="prompt-assist-discussion" open>
+        <summary><strong>Discuss with a specialist</strong><span id="prompt-assist-chat-count">0 messages</span></summary>
+        <label for="prompt-assist-ask-role">Ask</label>
+        <select id="prompt-assist-ask-role"><option value="editor">Creative Editor</option><option value="visual">Visual Director</option><option value="continuity">Continuity &amp; State</option><option value="sequence">Sequence Director</option></select>
+        <div id="prompt-assist-chat" class="prompt-assist-chat" aria-live="polite"><div class="prompt-assist-empty">Ask why a finding matters, challenge a recommendation, or request another opinion.</div></div>
+        <div class="prompt-assist-chat-compose"><textarea id="prompt-assist-question" rows="2" placeholder="Ask a question…"></textarea><button id="prompt-assist-ask" type="button" class="review-captions-btn">Ask</button></div>
+      </details>
+    </aside>
   </div>
   <footer class="prompt-assist-footer"><span id="prompt-assist-status" role="status">Nothing has been changed.</span><button id="prompt-assist-done" type="button" class="review-captions-btn">Done</button></footer>
 </dialog>

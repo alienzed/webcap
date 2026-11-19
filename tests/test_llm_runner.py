@@ -2083,3 +2083,58 @@ def test_only_ask_and_describe_vl_skip_configured_output_cap(llm_root, monkeypat
     assert llm_runner.job_status(job["jobId"])["status"] == "completed"
     assert (captured.get("use_configured_max_tokens") is False) is expected_uncapped
     assert captured.get("max_tokens") == (192 if operation == "vision_caption_extras" else None)
+
+
+def test_visual_direction_revision_uses_system_prompt_and_preserves_prompt_history(llm_root, monkeypatch):
+    story = storyboard_store.create_story({
+        "title": "Fashion Film",
+        "concept": "A model presents distinct complete fashion looks.",
+        "style": "Contemporary fashion editorial.",
+        "invariants": [{"kind": "character", "title": "Model", "text": "The same adult model appears throughout."}],
+    })
+    story, scene = storyboard_store.add_scene(story["id"], {
+        "title": "Denim look",
+        "summary": "The model presents a complete relaxed denim outfit.",
+        "prompt": "The model walks toward camera in blue jeans.",
+        "durationSeconds": 10,
+    })
+    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda *_args: False)
+    captured = {}
+
+    def fake_run(model_id, contract, gpu_reserved=False, thinking=False):
+        captured["contract"] = contract
+        return {
+            "text": '{"changed":true,"prompt":"The model walks toward camera in a complete relaxed denim look, wearing a fitted cream knit top, blue jeans and white leather sneakers."}',
+            "data": {
+                "changed": True,
+                "prompt": "The model walks toward camera in a complete relaxed denim look, wearing a fitted cream knit top, blue jeans and white leather sneakers.",
+            },
+            "model": model_id,
+            "usage": None,
+            "timings": None,
+        }
+
+    monkeypatch.setattr(storyboard_llm_runtime, "run_contract", fake_run)
+    job = llm_runner.enqueue(
+        "storyboard",
+        "qwen",
+        {"operation": "revise_scenes_sequence"},
+        context={
+            "storyId": story["id"],
+            "operation": "revise_scenes_sequence",
+            "sceneIds": [scene["id"]],
+            "sourceInstruction": "",
+            "passType": "visual_direction",
+        },
+    )
+    llm_runner._advance_queue()
+
+    finished = llm_runner.job_status(job["jobId"])
+    revised = storyboard_store.load_story(story["id"])["scenes"][scene["id"]]
+    assert finished["status"] == "completed"
+    assert captured["contract"]["operation"] == "visual_direction"
+    assert captured["contract"]["system_prompt"].startswith("Be exceptionally thorough")
+    assert revised["prompt"].startswith("The model walks toward camera in a complete relaxed denim look")
+    assert revised["previousPrompt"] == "The model walks toward camera in blue jeans."
+    assert revised["previousRevision"]["prompt"] == "The model walks toward camera in blue jeans."
+    assert revised["refineComplete"] is True

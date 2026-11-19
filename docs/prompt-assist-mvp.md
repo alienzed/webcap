@@ -14,7 +14,7 @@ It supports two review scopes:
 The MVP uses deterministic, source-addressable preparation rather than a separate Deep QA dependency.
 
 - Read the saved Project overview, visual atmosphere and typed invariants.
-- Extract established H3 sections and numbered \`[Shot N]\` entries when present.
+- Extract established H3 sections and numbered **[Shot N]** entries when present.
 - Preserve each Scene ID, order, title, duration, exact prompt and cut number.
 - For older/custom prompts without standard H3 shot sections, pass the complete prompt as one source-addressable unit rather than silently dropping it.
 - Keep exact source prompts server-side for revision preparation and compare/apply.
@@ -30,7 +30,7 @@ The three reviewers are independent analytical passes using the selected Directo
 2. **Continuity & State Analyst:** checks chronological state progression between cuts within a Scene, including regressions, props, clothing changes, positions and physical interactions. Independently rendered Scenes are not assumed to preserve exact appearance.
 3. **Sequence Director:** checks cut selection, pacing, repetition, coverage and whether each shot contributes meaningfully to the sequence.
 
-Each pass returns structured findings with a Scene ID, cut number, priority, source evidence and a concrete recommendation. A Scene-level finding uses cut number \`0\`.
+Each pass returns structured findings with a Scene ID, cut number, priority, source evidence and a concrete recommendation. A Scene-level finding uses cut number **0**.
 
 ## Synthesis and collaboration
 

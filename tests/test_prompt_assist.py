@@ -207,8 +207,11 @@ def test_deep_qa_validators_reject_unknown_scene_and_cut_references():
         validate_deep_qa_scene(_deep_qa_scene_result(), "scene-1", [0, 1, 2])
     with pytest.raises(ValueError, match="unknown Scene"):
         validate_deep_qa_project({
+            "summary": "Project summary.",
             "recurringElements": [{"element": "Courier", "scenes": ["not-a-scene"], "basis": "guess"}],
             "sceneRelationships": [],
+            "projectContinuityPrinciples": [],
+            "concerns": [],
         }, ["scene-1", "scene-2"])
 
 

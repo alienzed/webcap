@@ -614,7 +614,7 @@ def test_prompt_assist_is_scene_specific_text_only_and_returns_individual_action
     assert "exact unique excerpt" in request["prompt"]
     assert "targetText" in finding_schema["properties"]
     assert "replacementText" in finding_schema["properties"]
-    assert "individually" in request["prompt"]
+    assert "one at a time" in request["prompt"]
     assert "You receive no generated Takes, images" in request["system_prompt"]
     assert "standalone Visual Direction agent" in request["system_prompt"]
     assert "EXISTING FIRST PROMPT" not in request["prompt"]

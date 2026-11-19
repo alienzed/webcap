@@ -1682,7 +1682,7 @@ def test_prompt_assist_patch_is_independent_and_conflict_safe(storyboard_fs):
             "The camera follows her.", "The camera tracks her.",
         )
 
-    duplicate_prompt = second["prompt"] + "\\nA woman enters through the glass doors."
+    duplicate_prompt = second["prompt"] + "\nA woman enters through the glass doors."
     current_story = storyboard_store.load_story(story["id"])
     storyboard_store.update_scene(story["id"], scene["id"], {
         **current_story["scenes"][scene["id"]],

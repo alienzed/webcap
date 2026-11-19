@@ -26,7 +26,7 @@ def test_retired_intent_split_endpoint_is_unavailable_and_preserves_project(scen
         "storyId": story["id"],
         "sceneId": first["id"],
         "expectedSceneOrder": story["sceneOrder"],
-        "expectedSummary": first["summary"],
+        "expectedSummary": "Historical Scene Intent must remain intact.",
         "firstSummary": "Old Intent changed",
         "secondScene": {"title": "Escape", "summary": "Second Intent"},
     })

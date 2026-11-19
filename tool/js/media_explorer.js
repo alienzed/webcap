@@ -1496,6 +1496,14 @@
       text(el('media-explorer-empty-description'), 'Your filters are kept. Try again, or open the Console for the full error.');
       text(el('media-explorer-empty-action'), 'Try again'); return;
     }
+    if (curation === 'unsorted') {
+      text(el('media-explorer-empty-title'), full ? 'No unsorted Generations found' : 'Recent Generations are sorted');
+      text(el('media-explorer-empty-description'), full
+        ? 'Every discovered Generation has a rating or a tag. All renders remain in the library.'
+        : 'No unrated, untagged Generations in recent results. Scan full history to check older renders.');
+      text(el('media-explorer-empty-action'), full ? 'Browse all media' : 'Scan full history');
+      return;
+    }
     text(el('media-explorer-empty-title'), isExternal() && !externalPath ? 'Choose an external folder' :
       isExternal() && !complete ? 'Discovering files…' : filtered ? 'No matching media' :
       (isExternal() ? 'No media in this folder' : 'Generated media, in one place'));

@@ -266,7 +266,7 @@
       '<div class="prompt-assist-finding-meta"><span>' + esc(labels[row.role]) + '</span><em>' +
       esc(finding.priority || 'useful') + '</em></div><strong>' + esc(finding.issue) + '</strong>' +
       '<p class="prompt-assist-finding-evidence">' + esc(finding.evidence) + '</p>' +
-      '<p>' + esc(finding.recommendation) + '</p></article>';
+      '<p>' + esc(finding.recommendation) + '</p><div class="prompt-assist-recommendation-actions"><button type="button" data-pa-ask-role="' + esc(row.role) + '" data-pa-ask="' + esc('Explain or reconsider this finding: ' + finding.issue + ' Evidence: ' + finding.evidence) + '">Discuss this</button></div></article>';
   }
   function recommendationKey(item, index) {
     return String(index) + ':' + String(item.sceneId) + ':' + String(item.shotNumber) + ':' + String(item.issue || '');
@@ -283,6 +283,7 @@
       '<strong>' + esc(item.issue) + '</strong><p>' + esc(item.rationale) + '</p>' +
       '<p class="prompt-assist-recommendation-change">' + esc(item.recommendation) + '</p>' +
       '<small>Sources: ' + esc((item.sources || []).map(sourceLabel).join(' · ')) + '</small>' +
+      '<div class="prompt-assist-recommendation-actions"><button type="button" data-pa-ask-role="editor" data-pa-ask="' + esc('Explain the trade-offs behind this recommendation: ' + item.issue + ' Recommendation: ' + item.recommendation) + '">Discuss this</button></div>' +
       actions + '</article>';
   }
   function sourceLabel(id) {
@@ -598,6 +599,17 @@
       if (window.reportConsoleError) window.reportConsoleError('Prompt Assist discussion', error);
     }).finally(function () { setBusy(false); });
   }
+  function handleContextAsk(event) {
+    var button = event.target.closest('[data-pa-ask-role]');
+    if (!button) return;
+    var role = button.dataset.paAskRole;
+    if (!labels[role]) return;
+    el('prompt-assist-ask-role').value = role;
+    renderChat();
+    el('prompt-assist-question').value = button.dataset.paAsk || '';
+    el('prompt-assist-discussion').open = true;
+    el('prompt-assist-question').focus();
+  }
   function close() {
     if (state.busy) return;
     saveSession();
@@ -636,10 +648,12 @@
     if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); ask(); }
   });
   el('prompt-assist-cuts').addEventListener('click', function (event) {
+    handleContextAsk(event);
     var button = event.target.closest('[data-pa-rec][data-pa-decision]');
     if (button) setDecision(Number(button.dataset.paRec), button.dataset.paDecision);
   });
   el('prompt-assist-scene-findings').addEventListener('click', function (event) {
+    handleContextAsk(event);
     var button = event.target.closest('[data-pa-rec][data-pa-decision]');
     if (button) setDecision(Number(button.dataset.paRec), button.dataset.paDecision);
   });

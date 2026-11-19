@@ -430,6 +430,8 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
         scene_details = []
         for label, value in (
             ("Scene title", scene.get("title")),
+            ("Entry state", scene.get("entryState")),
+            ("Exit state", scene.get("exitState")),
             ("Duration seconds", scene.get("durationSeconds")),
             ("Scene notes", scene.get("notes")),
         ):

@@ -2666,6 +2666,9 @@ def storyboard_prompt_assist_route():
         review_fingerprint, fresh_scene_qa, fresh_project_qa = _prompt_assist_review_inputs(
             story_id, story, context, scene_id, model_id
         )
+        expected_review_fingerprint = str(data.get("expectedSourceFingerprint") or "")
+        if operation in {"synthesize", "revise", "followup"} and expected_review_fingerprint and expected_review_fingerprint != review_fingerprint:
+            raise RuntimeError("Project, Scene, model, or prepared Deep QA context changed during Prompt Assist. Rerun the specialist review.")
         if operation == "deep_qa_scene":
             if scope != "scene":
                 raise ValueError("Prepare Project Deep QA one Scene at a time.")

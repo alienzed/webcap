@@ -64,6 +64,14 @@ If JSON cannot be parsed or cannot be assigned mechanically to the requested fie
 
 Keep only the mechanical requirements necessary to store values in the real data format. Project Create and Revise response schemas have no arbitrary character, count, or completeness limits: Project Create accepts useful non-Concept material; Revise requests only chosen fields and preserves absent fields. Ignore unusable individual entries with a visible explanation while saving independent usable values; keep raw output in I/O. Real persistence failures remain errors. A model response with fewer creative details than the author wanted is not for WebCap to judge. When multiple independent records can be persisted, preserve actual successes and accurately report real per-record failures.
 
+### Visual Direction in Revise Scenes
+
+Visual Direction is an explicit preset in the Storyboard Revise & Generate workflow. It uses the empirically selected complete-visual-exhaustiveness instruction as an actual LLM system message, with the Project overview, visual atmosphere, invariants, H3 prompting guidance, reference mode, and one Scene's details and existing prompt supplied separately as user context.
+
+The operation processes only the selected Scenes, one request per Scene, through the existing Director model selection, queue and GPU coordination. The target picker defaults to all Scenes and supports selecting one or more individual Scenes. It does not receive Director chat history or other Scene prompts. It may make context-grounded creative decisions to complete the intended visuals; its boundary is staying focused on the current Scene rather than adding its own story or unrelated developments.
+
+Successful prompt revisions use the existing Scene prompt persistence and History mechanism. An unchanged result does not rewrite the Scene. Fresh Take generation remains optional and applies only to the selected Scenes. First Cut and the existing standard/continuity/coherence paths remain unchanged.
+
 ### 6. Existing specialist tools
 
 Preserve useful standalone Scene development, Revise Scenes, First Cut and optional coherence functions, and their own necessary context and response contracts. They are not implicitly launched by conversation and are not discarded merely because older Director orchestration called them. Retire redundant authoring paths only after tracing the last real caller. Continue loading old Project/Scene data without destructive migrations.

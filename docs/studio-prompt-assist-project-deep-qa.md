@@ -68,7 +68,7 @@ Use the interaction principles established by Caption Assist rather than inventi
 - keep the correction scoped to the relevant prompt/cut material;
 - make the actual resulting text visible and editable.
 
-The expected unit of assistance is one problem and one practical adjustment. Multiple alternative solutions are generally unnecessary; prefer one best, sufficiently grounded recommendation. A larger rewrite may be appropriate only when the problem cannot be solved locally, not as the default.
+The expected unit of assistance is one problem and one practical adjustment. Each suggestion uses an exact, unique excerpt from the saved prompt and a focused replacement, so corrections can be applied independently and successively without overwriting earlier accepted changes. Multiple alternative solutions are generally unnecessary; prefer one best, sufficiently grounded recommendation. A larger rewrite may be appropriate only when the problem cannot be solved locally, not as the default.
 
 ### Independence and optional context
 
@@ -94,13 +94,13 @@ Verify the real user workflow, not just helper functions or mocked model output.
 
 - Project Deep QA covers both per-Scene/per-cut issues and cross-cut/cross-Scene relationships.
 - Findings identify their affected Project, Scene, and cut where applicable.
-- Findings and candidate fixes remain available across reloads according to the established analysis lifecycle.
+- Project Deep QA findings and candidate fixes remain available across reloads according to the established analysis lifecycle; freshness includes Project context, Scene order, Scene entry/exit states, durations, and saved prompts.
 - Changing relevant source text invalidates only the affected analysis scope where the implementation can determine that safely; unchanged analysis is reused.
 - Explicit rerun refreshes analysis without mutating authored prompts.
 - Prompt Assist works on a Scene without any Deep QA history.
 - Prompt Assist can use relevant current Deep QA findings when present, without triggering a Deep QA run or hidden refresh.
 - Prompt Assist does not inspect Takes, images, videos, or visual references.
-- A proposed correction is editable and can be applied independently; accepting one correction does not overwrite unrelated prompt/cut text.
+- A proposed correction is editable and can be applied independently; accepting one correction does not overwrite unrelated prompt/cut text or earlier accepted corrections. Stale source text is rejected rather than silently overwritten.
 - No finding or model failure blocks ordinary Scene editing, explicit Write, or generation.
 - Exercise real browser interactions and live model behavior with Playwright coverage. Keep deterministic contract tests as supporting coverage; they do not substitute for live tests.
 

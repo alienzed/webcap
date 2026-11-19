@@ -455,12 +455,24 @@ _DEEP_QA_PROJECT_SCHEMA = {
 }
 
 
-def scene_source_fingerprint(context, scene_id):
-    """Fingerprint one Scene plus project context that can affect its interpretation."""
+def scene_source_fingerprint(context, scene_id, model_id=""):
+    """Fingerprint one Scene, relevant Project context, and the model used to prepare it."""
     scene = next((item for item in context["scenes"] if item["sceneId"] == str(scene_id)), None)
     if not scene:
         raise ValueError("Deep QA Scene is not present in the source context.")
-    payload = {"project": context["project"], "scene": scene, "sourcePrompt": context["sourcePrompts"][str(scene_id)]}
+    payload = {
+        "project": context["project"],
+        "scene": scene,
+        "sourcePrompt": context["sourcePrompts"][str(scene_id)],
+        "model": str(model_id or ""),
+    }
+    encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+
+
+def project_deep_qa_fingerprint(context, model_id=""):
+    """Fingerprint the ordered Project source and model used for cross-Scene synthesis."""
+    payload = {"sourceFingerprint": source_fingerprint(context), "model": str(model_id or "")}
     encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 

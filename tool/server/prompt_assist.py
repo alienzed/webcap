@@ -93,6 +93,12 @@ def build_context(story, scope="scene", scene_id=""):
             raise ValueError("Project Scene index contains a missing Scene: " + str(current_id))
         prompt = _text(scene.get("prompt"))
         if not prompt:
+            if scope == "project":
+                raise ValueError(
+                    "Project Prompt Assist requires saved prompts. Scene "
+                    + (_text(scene.get("title")) or str(current_id))
+                    + " has no saved prompt yet."
+                )
             continue
         sections = _sections(prompt)
         shots = _shots(sections.get("integrated_multimodal_description", ""), prompt)

@@ -355,6 +355,8 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
                 "sceneId": str(target_id),
                 "sceneNumber": index,
                 "title": _clean(scene.get("title")),
+                "entryState": _clean(scene.get("entryState")),
+                "exitState": _clean(scene.get("exitState")),
                 "durationSeconds": scene.get("durationSeconds"),
                 "prompt": prompt,
             })
@@ -394,12 +396,11 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
             "output": "json",
             "prompt": "\n\n".join(blocks).strip() + "\n",
             "system_prompt": (
-                "You are Project Deep QA for a text-to-video production project. Be a practical production "
-                "assistant: find preventable prompt failures and give the author useful, specific corrections. "
-                "Be generous with relevant visual specificity; never assume the generation model will infer "
-                "appearance, action, continuity, or transitions correctly. Keep every finding grounded in the "
-                "supplied Project text and preserve the author's creative intent. Do not inspect or claim to "
-                "inspect generated Takes, images, video, or external references."
+                "You are Project Deep QA for a text-to-video production project. Help the author avoid preventable "
+                "prompt failures with useful, specific corrections. Make relevant appearance, action, continuity, "
+                "and transitions explicit wherever the supplied Project text leaves them under-specified. Ground "
+                "every finding in the supplied Project text and preserve the author's creative intent. Use the "
+                "saved Project and Scene text, including entry and exit states, as the evidence for your assessment."
             ),
             "response_schema": _project_deep_qa_response_schema(),
             "source_scene_ids": [row["sceneId"] for row in rows],
@@ -463,14 +464,12 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
             "output": "json",
             "prompt": "\n\n".join(blocks).strip() + "\n",
             "system_prompt": (
-                "You are Prompt Assist, a text-only production helper for one Scene. The standalone Visual "
-                "Direction agent is a separate capability and remains the primary visual-completeness pass. "
-                "Help the author only with practical issues that remain in the written prompt. Be generous with "
-                "useful visual specificity: explicitly describe relevant appearance, action, state changes, "
-                "continuity, and framing rather than relying on inference. Every suggestion must be one problem "
-                "and one small, actionable correction. Keep explanations short, provide one best fix, and preserve "
-                "the author's intent and all unrelated prompt material. You receive no generated Takes, images, "
-                "video, or visual references."
+                "You are Prompt Assist, a text-only production helper for one Scene. Visual Direction is a separate "
+                "capability and the primary visual-completeness pass. Improve practical issues that remain in the "
+                "written prompt. Make relevant appearance, action, state changes, continuity, and framing explicit "
+                "rather than relying on inference. Each suggestion is one problem and one small, actionable "
+                "correction. Keep explanations short, provide one best fix, and preserve the author's intent and "
+                "all unrelated prompt material. Work only from the supplied Project and Scene text."
             ),
             "response_schema": _prompt_assist_response_schema(),
         }

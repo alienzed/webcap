@@ -33,7 +33,7 @@
       });
     });
   }
-  function setStatus(message) { el('prompt-assist-status').textContent = message || ''; }
+  function setStatus(message) { el('prompt-assist-status').textContent = message || ''; if (/^Project Deep QA/.test(String(message || ''))) el('prompt-assist-deep-qa-status').textContent = message; }
   function setBusy(value, message) {
     state.busy = value === true;
     ['prompt-assist-run', 'prompt-assist-deep-qa-run', 'prompt-assist-synthesize', 'prompt-assist-accept-all',
@@ -102,6 +102,7 @@
     if (status.projectFresh) return 'Project intelligence ready';
     var done = Number(status.preparedScenes || 0);
     var total = Number(status.totalScenes || 0);
+    if (done && done === total) return 'All Scenes prepared · Project index needs refresh';
     return done ? 'Project intelligence partial · ' + done + ' of ' + total + ' Scenes prepared' :
       'Project intelligence not prepared';
   }

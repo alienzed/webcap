@@ -2039,7 +2039,7 @@
     if (!instruction && passType !== 'visual_direction')
       return Promise.reject(new Error('Enter what should be revised across these Scenes.'));
 
-    sceneRevisionHistory.remember(instruction, sourceInput || el('storyboard-director-tools-instruction'));
+    if (instruction) sceneRevisionHistory.remember(instruction, sourceInput || el('storyboard-director-tools-instruction'));
     storyState.story.repairInstruction = instruction;
     storyState.story.repairComplete = false;
 
@@ -6238,7 +6238,8 @@
     if (!input || !run || !status) throw new Error('Director Tools modal markup is missing.');
     var generateFreshTakes = el('storyboard-director-tools-generate-takes').checked;
     var instruction = String(input.value || '').trim();
-    if (!instruction) {
+    var preset = el('storyboard-director-tools-preset').value;
+    if (!instruction && preset !== 'visual_direction') {
       status.textContent = 'Enter a revision instruction or choose a preset.';
       input.focus();
       return;
@@ -6254,7 +6255,6 @@
       run.disabled = false;
       return;
     }
-    var preset = el('storyboard-director-tools-preset').value;
     var revision = reviseScenes(
       instruction, storyState.director.modelId, generateFreshTakes,
       preset === 'continuity', el('storyboard-director-tools-instruction'),

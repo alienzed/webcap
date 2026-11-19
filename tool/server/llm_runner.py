@@ -537,7 +537,7 @@ def _client_result(client, context, llm_result, job_id="", frozen_contract=None)
             "timings": llm_result.get("timings"),
         }
 
-    if operation in {"write_prompt", "refine_prompt"}:
+    if operation in {"write_prompt", "refine_prompt", "visual_direction"}
         scene_id = str(context.get("sceneId") or "").strip()
         if not scene_id:
             raise RuntimeError("Storyboard Scene Director job is missing its Scene ID.")
@@ -546,7 +546,7 @@ def _client_result(client, context, llm_result, job_id="", frozen_contract=None)
         if not isinstance(data, dict):
             raise ValueError("Storyboard Director returned invalid structured Scene prompt data.")
 
-        if operation == "refine_prompt" and data.get("changed") is False:
+        if operation in {"refine_prompt", "visual_direction"} and data.get("changed") is False:
             from .storyboard_store import load_story
             story = load_story(story_id)
             scene = (story.get("scenes") or {}).get(scene_id)
@@ -569,7 +569,7 @@ def _client_result(client, context, llm_result, job_id="", frozen_contract=None)
                 prompt,
                 model_id=llm_result["model"],
                 job_id=job_id,
-                operation=operation,
+                operation="refine_prompt" if operation == "visual_direction" else operation,
                 duration_override=duration_override,
                 scene_fields=scene_fields,
             )
@@ -832,8 +832,10 @@ def _execute_claimed(job_id, gpu_reserved):
                         "phase": "Revising Scenes", "sceneId": scene_id,
                     }
                 story = load_story(str(context.get("storyId") or ""))
+                pass_type = str(context.get("passType") or "standard")
+                scene_operation = "visual_direction" if pass_type == "visual_direction" else "refine_prompt"
                 scene_contract = build_request(
-                    story, scene_id, "refine_prompt", instruction=instruction,
+                    story, scene_id, scene_operation, instruction=instruction,
                     continuity_context=context.get("continuityContext") is True,
                 )
                 result = run_contract(model_id, scene_contract, gpu_reserved=bool(gpu_reserved), thinking=context.get("thinking") is True)
@@ -843,7 +845,7 @@ def _execute_claimed(job_id, gpu_reserved):
                             error="Revise Scenes stopped after " + str(completed) + " Scenes.")
                     _client_result("storyboard", {
                         "storyId": context["storyId"], "sceneId": scene_id,
-                        "operation": "refine_prompt", "sourceInstruction": instruction,
+                        "operation": scene_operation, "sourceInstruction": instruction,
                     }, result, job_id=job_id, frozen_contract=scene_contract)
                 completed += 1
                 with _revision_progress_lock:

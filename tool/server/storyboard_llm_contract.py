@@ -387,9 +387,9 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
             "would likely direct attention away from the intended action. Treat the Project's own stated intent "
             "as authoritative. Return only actionable findings tied to an exact Scene ID and a useful cut, "
             "timestamp, or prompt-section location. Each finding must describe one concrete problem and one "
-            "practical correction; avoid theory, scores, generic advice, duplicate findings, and speculative "
-            "nitpicks. Include a proposed complete Scene prompt only when a single targeted correction can be "
-            "made confidently. Do not rewrite or mutate any saved content."
+            "practical correction. Prioritize concrete, high-value problems and concise fixes. Include a proposed "
+            "complete Scene prompt when one targeted correction can be made confidently. Leave saved Project "
+            "content unchanged."
         )
         return {
             "operation": operation,
@@ -458,8 +458,8 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
             "independently applicable so the author can accept several findings one at a time without overwriting "
             "earlier accepted corrections. "
             "Preserve unrelated text and creative intent. Return an empty findings array when no meaningful "
-            "improvement is warranted. Do not provide alternative solutions, academic explanation, generic "
-            "prompting advice, or a broad rewrite."
+            "improvement is warranted. Keep the response practical, concise, and focused on one best correction "
+            "per finding."
         )
         return {
             "operation": operation,

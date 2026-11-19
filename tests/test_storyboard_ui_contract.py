@@ -1615,13 +1615,13 @@ def test_visual_direction_scene_picker_defaults_to_all_and_posts_only_selected_i
 
     assert 'id="storyboard-director-tools-scene-selection"' in html
     assert '<option value="visual_direction">Visual Direction</option>' in html
-    open_modal = storyboard.split("function openDirectorTools()", 1)[1].split("\\n  function ", 1)[0]
+    open_modal = storyboard.split("function openDirectorTools()", 1)[1].split("\n  function ", 1)[0]
     assert "data-revise-scene-all checked" in open_modal
     assert "data-revise-scene=" in open_modal
     assert "input.checked = allToggle.checked" in open_modal
     assert "allToggle.indeterminate" in open_modal
 
-    run_revision = storyboard.split("function runDirectorToolsRevision()", 1)[1].split("\\n  // The Studio composer", 1)[0]
+    run_revision = storyboard.split("function runDirectorToolsRevision()", 1)[1].split("\n  // The Studio composer", 1)[0]
     assert "querySelectorAll('[data-revise-scene]:checked')" in run_revision
     assert "selectedSceneIds" in run_revision
     assert "selectedSceneIds, preset === 'visual_direction' ? 'visual_direction' : 'standard'" in run_revision

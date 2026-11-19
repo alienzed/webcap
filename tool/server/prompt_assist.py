@@ -370,3 +370,14 @@ def build_contract(operation, context, role="", findings=None, accepted=None, co
 
 
 import hashlib
+
+
+def source_fingerprint(context):
+    """Stable fingerprint of the exact Project/Scene material used for review."""
+    payload = {
+        "project": context["project"],
+        "scenes": context["scenes"],
+        "sourcePrompts": context["sourcePrompts"],
+    }
+    encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()

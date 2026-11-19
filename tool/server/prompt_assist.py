@@ -367,3 +367,80 @@ def build_contract(operation, context, role="", findings=None, accepted=None, co
         return {"operation": "prompt_assist_followup", "messages": messages}
 
     raise ValueError("Unsupported Prompt Assist operation.")
+
+
+import hashlib
+
+
+_DEEP_QA_SCHEMA = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["summary", "sceneBriefs", "stateLedger", "sequenceObservations"],
+    "properties": {
+        "summary": {"type": "string"},
+        "sceneBriefs": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["sceneId", "purpose", "keyVisualMoments"],
+                "properties": {
+                    "sceneId": {"type": "string"},
+                    "purpose": {"type": "string"},
+                    "keyVisualMoments": {"type": "array", "items": {"type": "string"}},
+                },
+            },
+        },
+        "stateLedger": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["sceneId", "shotNumber", "subjectOrObject", "state", "sourceBasis"],
+                "properties": {
+                    "sceneId": {"type": "string"},
+                    "shotNumber": {"type": "integer", "minimum": 0},
+                    "subjectOrObject": {"type": "string"},
+                    "state": {"type": "string"},
+                    "sourceBasis": {"type": "string"},
+                },
+            },
+        },
+        "sequenceObservations": {"type": "array", "items": {"type": "string"}},
+    },
+}
+
+
+def source_fingerprint(context):
+    payload = {
+        "project": context["project"],
+        "scenes": context["scenes"],
+        "sourcePrompts": context["sourcePrompts"],
+    }
+    encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+
+
+def build_deep_qa_contract(context):
+    system = (
+        "You are WebCap Project Deep QA. Prepare reusable, source-grounded creative intelligence "
+        "for later specialist reviews. This is preparation, not a critique or rewrite. Read the "
+        "ordered Scene and cut inventory. Summarize each Scene's apparent purpose and key visual "
+        "moments. Build a chronological state ledger for explicitly described changes to people, "
+        "clothing, props, objects, positions and physical relationships. Record only states supported "
+        "by source text; distinguish an explicit state from a cautious inference in sourceBasis. "
+        "Track within-Scene cut progression carefully, especially changes that should persist into "
+        "later cuts. Do not assume independently rendered Scenes preserve exact appearance or clothing "
+        "unless Project invariants or Scene text explicitly require it. Identify sequence-level "
+        "observations about coverage, repetition, pacing and scene relationships without inventing "
+        "intent. Keep every item tied to a valid Scene ID and shot number (0 means Scene-level). "
+        "Do not produce recommendations or rewrite prompts. Empty arrays are valid when evidence is absent."
+    )
+    return {
+        "operation": "prompt_assist_deep_qa",
+        "messages": [
+            {"role": "system", "content": system},
+            {"role": "user", "content": "Prepare reusable intelligence from this ordered source inventory:\n" + _json(review_context(context))},
+        ],
+        "response_schema": _DEEP_QA_SCHEMA,
+    }

@@ -563,12 +563,13 @@ def test_visual_direction_uses_winning_complete_visual_exhaustiveness_system_pro
     assert request["response_schema"]["required"] == ["changed", "prompt"]
     assert request["response_schema"]["properties"]["changed"]["type"] == "boolean"
     assert request["system_prompt"] == (
-        "Be exceptionally thorough and specific when describing anything that will be visually rendered. "
-        "Explicitly establish all relevant visual details, including details implied by the Project context but missing from the existing Scene prompt, and details that have not yet been specified. "
-        "Make appropriate creative decisions to complete the intended visuals, consistent with the Project's intent and context. "
+        "Be exceptionally thorough and specific about the visuals that will actually be rendered. "
+        "Explicitly establish relevant visual details that are implied by context or not yet specified. "
+        "Prioritize details that materially affect what the viewer will see or how the intended actions will be rendered. "
+        "Make appropriate creative decisions to complete the intended visuals, consistent with the established creative direction. "
         "Make the Scene prompt sufficiently complete to guide the intended render on its own. "
         "Keep your work focused on this Scene; do not introduce your own story, narrative direction, or unrelated creative developments. "
-        "Return the complete revised H3 prompt."
+        "Return the complete revised H3 prompt; if no meaningful improvement is needed, return changed=false with the original prompt."
     )
     prompt = request["prompt"]
     assert "[STORY VISUAL / ATMOSPHERE]" in prompt
@@ -576,8 +577,10 @@ def test_visual_direction_uses_winning_complete_visual_exhaustiveness_system_pro
     assert "[H3 PROMPTING GUIDANCE]" in prompt
     assert "[SCENE DETAILS]" in prompt
     assert "[EXISTING H3 PROMPT]\nEXISTING SECOND PROMPT" in prompt
-    assert "[OUTPUT]" in prompt
-    assert "changed=false" in prompt
+    assert "[CURRENT TASK]\nImprove this Scene's existing H3 prompt using the supplied Project and Scene context." in prompt
+    assert "[OUTPUT]" not in prompt
+    assert "changed=false" not in prompt
+    assert "Return the complete revised H3 prompt" not in prompt
     assert "OLD FIRST PROMPT" not in prompt
     assert "[PREVIOUS SCENE" not in prompt
     assert "DIRECTOR CONTEXT" not in prompt

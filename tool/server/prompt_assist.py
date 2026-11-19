@@ -122,10 +122,16 @@ def build_context(story, scope="scene", scene_id=""):
         raise ValueError("The selected scope has no saved Scene prompts to review.")
 
     invariants = story.get("invariants") if isinstance(story.get("invariants"), list) else []
+    raw_guidelines = story.get("guidelines") if isinstance(story.get("guidelines"), dict) else {}
+    guideline_keys = ("visualFocus", "creativeDirection", "variation", "pacing", "sceneRelationships")
     project = {
         "title": _text(story.get("title")),
         "concept": _text(story.get("concept")),
         "visualAtmosphere": _text(story.get("style")),
+        "guidelines": {
+            key: _text(raw_guidelines.get(key))
+            for key in guideline_keys if _text(raw_guidelines.get(key))
+        },
         "invariants": [
             {
                 "kind": _text(item.get("kind")),

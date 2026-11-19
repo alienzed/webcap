@@ -33,7 +33,7 @@
       });
     });
   }
-  function setStatus(message) { el('prompt-assist-status').textContent = message || ''; if (/^Project Deep QA/.test(String(message || ''))) el('prompt-assist-deep-qa-status').textContent = message; }
+  function setStatus(message) { el('prompt-assist-status').textContent = message || ''; if (/^Project Deep QA ·/.test(String(message || ''))) el('prompt-assist-deep-qa-status').textContent = message; }
   function setBusy(value, message) {
     state.busy = value === true;
     ['prompt-assist-run', 'prompt-assist-deep-qa-run', 'prompt-assist-synthesize', 'prompt-assist-accept-all',

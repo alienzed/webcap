@@ -1648,6 +1648,7 @@ def _sampling_profile(operation):
         "develop_story": {"temperature": 0.3, "top_p": 0.9},
         "write_prompt": {"temperature": 0.15, "top_p": 0.85},
         "refine_prompt": {"temperature": 0.1, "top_p": 0.8},
+        "visual_direction": {"temperature": 0.1, "top_p": 0.8},
     }
     profile = profiles.get(operation, {"temperature": 0.2, "top_p": 0.85})
     return {

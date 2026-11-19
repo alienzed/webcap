@@ -1,0 +1,102 @@
+import json
+
+import pytest
+
+from tool.server.prompt_assist import build_context, build_contract, review_context
+
+
+def _story():
+    first = (
+        "Subject:\nA courier in a dark-blue raincoat.\n\n"
+        "Scene Overview:\nThe courier enters the lobby after heavy rain.\n\n"
+        "Environment / Continuity Anchors:\nThe lobby is dry; rain remains outside.\n\n"
+        "Style / Visual Treatment:\nGrounded realism.\n\n"
+        "integrated_multimodal_description:\n"
+        "[Shot 1] The courier enters, coat and bag soaked.\n"
+        "[Shot 2] The courier pauses by the glass door, still dripping.\n"
+        "[Shot 3] The courier removes the raincoat and hangs it on a hook.\n"
+    )
+    second = (
+        "Subject:\nThe same courier.\n\n"
+        "Scene Overview:\nThe courier meets a colleague the next morning.\n\n"
+        "integrated_multimodal_description:\n"
+        "[Shot 1] The courier greets the colleague in a dry lobby.\n"
+    )
+    return {
+        "id": "project-1",
+        "title": "Rainy Arrival",
+        "concept": "A courier arrives after a storm.",
+        "style": "Grounded realism.",
+        "invariants": [{"kind": "character", "title": "Courier", "text": "A dark-blue raincoat."}],
+        "updatedAt": "rev-1",
+        "sceneOrder": ["scene-1", "scene-2"],
+        "scenes": {
+            "scene-1": {"title": "Arrival", "durationSeconds": 8, "prompt": first},
+            "scene-2": {"title": "Morning", "durationSeconds": 6, "prompt": second},
+        },
+    }
+
+
+def test_scene_scope_extracts_timed_cuts_and_keeps_exact_source_prompt():
+    story = _story()
+    context = build_context(story, "scene", "scene-1")
+    assert [shot["shotNumber"] for shot in context["scenes"][0]["shots"]] == [1, 2, 3]
+    assert "still dripping" in context["scenes"][0]["shots"][1]["text"]
+    assert context["sourcePrompts"]["scene-1"] == story["scenes"]["scene-1"]["prompt"]
+    assert "sourcePrompts" not in review_context(context)
+
+
+def test_project_scope_preserves_scene_order_without_comparing_rendered_identity():
+    context = build_context(_story(), "project")
+    assert [scene["sceneId"] for scene in context["scenes"]] == ["scene-1", "scene-2"]
+    assert context["scenes"][0]["shots"][2]["shotNumber"] == 3
+    assert context["scenes"][1]["shots"][0]["shotNumber"] == 1
+
+
+def test_scene_scope_requires_a_valid_scene():
+    with pytest.raises(ValueError, match="Select an existing Scene"):
+        build_context(_story(), "scene", "missing")
+
+
+def test_review_contracts_have_distinct_role_instructions_and_structured_findings():
+    context = build_context(_story(), "project")
+    visual = build_contract("review", context, role="visual")
+    continuity = build_contract("review", context, role="continuity")
+    sequence = build_contract("review", context, role="sequence")
+    assert "focal element" in visual["messages"][0]["content"]
+    assert "reverts" in continuity["messages"][0]["content"]
+    assert "ceiling-fan" in sequence["messages"][0]["content"]
+    assert visual["response_schema"]["required"] == ["summary", "findings"]
+
+
+def test_revision_contract_includes_only_scenes_with_accepted_recommendations():
+    context = build_context(_story(), "project")
+    contract = build_contract(
+        "revise",
+        context,
+        role="editor",
+        accepted=[{
+            "sceneId": "scene-1",
+            "shotNumber": 3,
+            "recommendation": "Preserve the raincoat removal in subsequent cuts.",
+        }],
+    )
+    payload = contract["messages"][1]["content"]
+    assert "scene-1" in payload
+    assert "scene-2" not in payload
+    assert "complete replacement prompt" in contract["messages"][0]["content"]
+
+
+def test_followup_keeps_selected_specialist_and_conversation_history():
+    context = build_context(_story(), "scene", "scene-1")
+    contract = build_contract(
+        "followup",
+        context,
+        role="continuity",
+        findings=[{"issue": "State regression"}],
+        conversation=[{"role": "user", "content": "Why?"}, {"role": "assistant", "content": "Because..."}],
+        question="Would you still flag this if the coat is intentionally removed?",
+    )
+    assert contract["messages"][0]["content"].startswith("You are Continuity")
+    assert contract["messages"][-3]["content"] == "Why?"
+    assert contract["messages"][-1]["content"].startswith("Would you still flag")

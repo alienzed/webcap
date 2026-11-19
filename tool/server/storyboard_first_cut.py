@@ -20,12 +20,6 @@ _BATCHES = []
 _WORKER_RUNNING = False
 _FINISHED = {"complete", "failed", "stopped"}
 _LLM_FINISHED = {"completed", "failed", "cancelled", "stopped", "interrupted"}
-_CONTINUITY_INSTRUCTION = (
-    "Review this Scene prompt for concrete audiovisual contradictions, timing problems, "
-    "and missing details necessary for generation. Preserve the established creative choices "
-    "and surrounding authored text. Make only the corrections needed for a coherent Scene; "
-    "return it unchanged when it is already coherent."
-)
 
 
 class _Stopped(Exception):
@@ -82,8 +76,8 @@ def run_director_steps(batch_id, apply_step):
     with _LOCK:
         batch["sceneCount"] = len(scene_ids)
     for index, scene_id in enumerate(scene_ids):
-        _stage(batch, "Refining Scenes", str(index + 1) + " / " + str(len(scene_ids)))
-        step("refine_prompt", scene_id, _CONTINUITY_INSTRUCTION)
+        _stage(batch, "Visual Direction", str(index + 1) + " / " + str(len(scene_ids)))
+        step("visual_direction", scene_id)
     return len(scene_ids)
 
 

@@ -889,3 +889,40 @@ test('collection choice reuses existing view tag instead of creating another vie
   assert.ok(!f.pending.some(request=>request.url==='/fs/media_explorer/views' &&
     request.options?.method==='POST'));
 });
+
+
+test('External Explorer requests bounded detail analysis without changing technical scan', async () => {
+  const f = fixture();
+  f.window.openMediaExplorerActivity();
+  await f.settle(f.pending[0], []);
+  f.buttons.find(button => button.dataset.mediaSource === 'external').click();
+  const path = f.nodes['media-explorer-external-path'];
+  path.value = '/sample-library';
+  f.nodes['media-explorer-open-path'].click();
+  await f.settle(f.pending[f.pending.length - 1], [], true, {folders:[], discovered:0, analyzed:0, revision:1});
+  const before = f.pending.length;
+  f.nodes['media-explorer-analyze-quality'].click();
+  assert.equal(f.pending.length, before + 1);
+  assert.match(f.pending.at(-1).url, /external\\/metadata/);
+  assert.equal(JSON.parse(f.pending.at(-1).options.body).mode, 'quality');
+  assert.equal(JSON.parse(f.pending.at(-1).options.body).scope, 'filtered');
+  f.nodes['media-explorer-generate-metadata'].click();
+  assert.equal(JSON.parse(f.pending.at(-1).options.body).mode, 'technical');
+});
+
+test('External measured detail filter and sorting use existing controls and persisted views', async () => {
+  const f = fixture();
+  f.window.openMediaExplorerActivity();
+  await f.settle(f.pending[0], []);
+  f.buttons.find(button => button.dataset.mediaSource === 'external').click();
+  f.nodes['media-explorer-external-path'].value = '/sample-library';
+  f.nodes['media-explorer-open-path'].click();
+  await f.settle(f.pending.at(-1), [], true, {folders:[], discovered:0, analyzed:0, revision:1});
+  f.nodes['media-explorer-quality'].value = 'measured';
+  f.nodes['media-explorer-quality'].emit('change');
+  assert.equal(new URL(f.pending.at(-1).url, 'http://localhost').searchParams.get('quality'), 'measured');
+  await f.settle(f.pending.at(-1), []);
+  f.nodes['media-explorer-sort'].value = 'detail';
+  f.nodes['media-explorer-sort'].emit('change');
+  assert.equal(new URL(f.pending.at(-1).url, 'http://localhost').searchParams.get('sort'), 'detail');
+});

@@ -1928,8 +1928,8 @@ function sweepLoras(model, folder) {
     utility.appendChild(rating);
     utility.appendChild(openButton);
     var exploreButton = document.createElement('button'); exploreButton.type = 'button';
-    exploreButton.className = 'review-captions-btn'; exploreButton.textContent = 'Explore';
-    exploreButton.title = 'View in Media Explorer'; exploreButton.setAttribute('aria-label', 'View in Media Explorer');
+    exploreButton.className = 'review-captions-btn'; exploreButton.textContent = 'Organize';
+    exploreButton.title = 'Organize this render in Media Explorer'; exploreButton.setAttribute('aria-label', 'Organize this render in Media Explorer');
     exploreButton.dataset.generateExplorePath = result.mediaPath;
     utility.appendChild(exploreButton);
     primary.appendChild(model);

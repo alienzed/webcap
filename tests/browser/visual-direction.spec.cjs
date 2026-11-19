@@ -22,6 +22,8 @@ test('Visual Direction defaults to all Scenes and submits only explicitly select
   });
   await openProject(page,project.id);
 
+  // The unpinned Director drawer overlays Studio toolbar actions when open.
+  await page.locator('#director-chat-close').click();
   await page.locator('#storyboard-director-tools-btn').click();
   const modal=page.locator('#storyboard-director-tools-modal');
   await expect(modal).toBeVisible();

@@ -1656,6 +1656,8 @@ def test_prompt_assist_patch_is_independent_and_conflict_safe(storyboard_fs):
     _, scene = storyboard_store.add_scene(story["id"], {
         "title": "Action",
         "prompt": "A woman enters. She wears a blue coat. The camera follows her.",
+        "promptDirectorModel": "previous-visual-direction-model",
+        "promptDirectorJobId": "previous-visual-direction-job",
     })
     original = storyboard_store.load_story(story["id"])["scenes"][scene["id"]]["prompt"]
 
@@ -1666,6 +1668,8 @@ def test_prompt_assist_patch_is_independent_and_conflict_safe(storyboard_fs):
     after_first = first["prompt"]
     assert "red coat" in after_first
     assert first["previousPrompt"] == original
+    assert first["promptDirectorModel"] == ""
+    assert first["promptDirectorJobId"] == ""
 
     updated, second = storyboard_store.apply_prompt_assist(
         story["id"], scene["id"], after_first,

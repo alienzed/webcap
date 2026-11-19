@@ -4796,3 +4796,12 @@ html[data-theme="dark"] .storyboard-prompt-take-status {
 .prompt-assist-cut-deep-qa > summary { font-size:14px; }
 .prompt-assist-cut-deep-qa p { font-size:14px; }
 .prompt-assist-footer span { font-size:13px; }
+
+
+.prompt-assist-deep-qa-scene-summary {
+  margin:0 0 14px; padding:12px 14px; border:1px solid var(--border);
+  border-radius:9px; background:var(--panel-soft);
+}
+.prompt-assist-deep-qa-scene-summary > strong { font-size:14px; }
+.prompt-assist-deep-qa-scene-summary p { margin:6px 0 0; font-size:14px; line-height:1.5; }
+.prompt-assist-deep-qa-summary > strong + ul { margin-bottom:10px; }

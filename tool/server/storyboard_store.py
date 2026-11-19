@@ -1,4 +1,5 @@
 import copy
+import hashlib
 import json
 import logging
 import os
@@ -834,6 +835,94 @@ def load_story(story_id):
     if story.get("id") != _safe_story_id(story_id):
         raise RuntimeError("Story metadata ID does not match its folder.")
     return story
+
+
+def _project_deep_qa_source(story):
+    scenes = story.get("scenes") if isinstance(story.get("scenes"), dict) else {}
+    order = story.get("sceneOrder") if isinstance(story.get("sceneOrder"), list) else []
+    return {
+        "title": str(story.get("title") or ""),
+        "concept": str(story.get("concept") or ""),
+        "style": str(story.get("style") or ""),
+        "invariants": story.get("invariants") if isinstance(story.get("invariants"), list) else [],
+        "guidelines": story.get("guidelines") if isinstance(story.get("guidelines"), dict) else {},
+        "sceneOrder": order,
+        "scenes": {
+            scene_id: {
+                "title": str((scenes.get(scene_id) or {}).get("title") or ""),
+                "durationSeconds": (scenes.get(scene_id) or {}).get("durationSeconds"),
+                "prompt": str((scenes.get(scene_id) or {}).get("prompt") or ""),
+            }
+            for scene_id in order if isinstance(scenes.get(scene_id), dict)
+        },
+    }
+
+
+def project_deep_qa_signature(story):
+    source = json.dumps(_project_deep_qa_source(story), ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(source.encode("utf-8")).hexdigest()
+
+
+@_serialized_mutation
+def save_project_deep_qa(story_id, findings, model_id="", job_id="", expected_signature=""):
+    story = load_story(story_id)
+    current_signature = project_deep_qa_signature(story)
+    if expected_signature and current_signature != str(expected_signature):
+        raise RuntimeError("Project changed during Deep QA. Rerun the analysis to refresh its findings.")
+    if not isinstance(findings, list):
+        raise ValueError("Project Deep QA findings must be a list.")
+    allowed = set((story.get("sceneOrder") or []))
+    normalized = []
+    for item in findings:
+        if not isinstance(item, dict):
+            continue
+        scene_id = str(item.get("sceneId") or "").strip()
+        if scene_id not in allowed:
+            continue
+        row = {
+            "id": str(item.get("id") or _new_id("finding")),
+            "sceneId": scene_id,
+            "location": str(item.get("location") or "").strip(),
+            "problem": str(item.get("problem") or "").strip(),
+            "whyItMatters": str(item.get("whyItMatters") or "").strip(),
+            "suggestedFix": str(item.get("suggestedFix") or "").strip(),
+        }
+        proposed = item.get("proposedPrompt")
+        if isinstance(proposed, str) and proposed.strip():
+            row["proposedPrompt"] = proposed
+        if all(row[key] for key in ("location", "problem", "whyItMatters", "suggestedFix")):
+            normalized.append(row)
+    record = {
+        "version": 1,
+        "storyId": story["id"],
+        "sourceSignature": current_signature,
+        "sourceUpdatedAt": str(story.get("updatedAt") or ""),
+        "model": str(model_id or ""),
+        "jobId": str(job_id or ""),
+        "findings": normalized,
+        "createdAt": _utc_now(),
+    }
+    _write_json_atomic(_story_dir(story_id) / "deep-qa.json", record)
+    return record
+
+
+def load_project_deep_qa(story_id):
+    story = load_story(story_id)
+    path = _story_dir(story_id) / "deep-qa.json"
+    if not path.is_file():
+        return {"available": False, "current": False, "findings": []}
+    record = _read_json(path)
+    current = (
+        str(record.get("storyId") or "") == str(story["id"])
+        and record.get("sourceSignature") == project_deep_qa_signature(story)
+    )
+    return {
+        "available": True,
+        "current": current,
+        "findings": record.get("findings", []) if current else [],
+        "record": record if current else None,
+        "staleAt": record.get("createdAt") if not current else None,
+    }
 
 
 
@@ -1724,6 +1813,43 @@ def apply_workshop_shots(story_id, scene_id, expected_prompt, replacement):
         "promptDirectorJobId": "",
         "refineComplete": False,
     }, existing=current)
+    scenes[scene_id] = scene
+    story["scenes"] = scenes
+    story["updatedAt"] = _utc_now()
+    _write_json_atomic(_story_path(story_id), story)
+    return story, scene
+
+
+@_serialized_mutation
+def apply_prompt_assist(story_id, scene_id, expected_prompt, target_text, replacement_text):
+    story = load_story(story_id)
+    scenes = story.get("scenes") if isinstance(story.get("scenes"), dict) else {}
+    current = scenes.get(scene_id)
+    if not isinstance(current, dict) or scene_id not in (story.get("sceneOrder") or []):
+        raise FileNotFoundError("Prompt Assist target Scene does not exist.")
+    if not isinstance(expected_prompt, str) or str(current.get("prompt") or "") != expected_prompt:
+        raise RuntimeError("Scene prompt changed since Prompt Assist opened. Refresh the suggestion before applying.")
+    target = str(target_text or "")
+    replacement = str(replacement_text or "")
+    if not target or not replacement or target == replacement:
+        raise ValueError("Prompt Assist requires a non-empty, changed text replacement.")
+    if expected_prompt.count(target) != 1:
+        raise RuntimeError("The suggested text no longer appears exactly once in the Scene prompt. Refresh Prompt Assist before applying.")
+    revised = expected_prompt.replace(target, replacement, 1)
+    patch = {
+        "prompt": revised,
+        "previousPrompt": expected_prompt,
+        "previousRevision": {
+            "entryState": str(current.get("entryState") or ""),
+            "exitState": str(current.get("exitState") or ""),
+            "prompt": expected_prompt,
+            "durationSeconds": current.get("durationSeconds"),
+        },
+        "promptDirectorModel": "",
+        "promptDirectorJobId": "",
+        "refineComplete": False,
+    }
+    scene = _normalize_scene(scene_id, patch, existing=current)
     scenes[scene_id] = scene
     story["scenes"] = scenes
     story["updatedAt"] = _utc_now()

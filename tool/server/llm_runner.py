@@ -523,6 +523,68 @@ def _client_result(client, context, llm_result, job_id="", frozen_contract=None)
             "timings": llm_result.get("timings"),
         }
 
+    if operation == "project_deep_qa":
+        data = llm_result.get("data")
+        if not isinstance(data, dict) or not isinstance(data.get("findings"), list):
+            raise ValueError("Project Deep QA returned an invalid findings list.")
+        from .storyboard_store import save_project_deep_qa
+        record = save_project_deep_qa(
+            story_id, data["findings"], model_id=llm_result.get("model", ""), job_id=job_id,
+            expected_signature=str(context.get("sourceSignature") or ""),
+        )
+        return {
+            "storyId": story_id,
+            "findings": record["findings"],
+            "sourceSignature": record["sourceSignature"],
+            "createdAt": record["createdAt"],
+            "model": llm_result["model"],
+            "finishReason": llm_result.get("finishReason"),
+            "usage": llm_result.get("usage"),
+            "timings": llm_result.get("timings"),
+        }
+
+    if operation == "prompt_assist":
+        # Return proposals only; the separate guarded apply endpoint owns mutation.
+        scene_id = str(context.get("sceneId") or "").strip()
+        if not scene_id:
+            raise RuntimeError("Prompt Assist job is missing its Scene ID.")
+        data = llm_result.get("data")
+        if not isinstance(data, dict) or not isinstance(data.get("findings"), list):
+            raise ValueError("Prompt Assist returned an invalid findings list.")
+        from .storyboard_store import load_story
+        story = load_story(story_id)
+        scene = (story.get("scenes") or {}).get(scene_id)
+        if not isinstance(scene, dict):
+            raise FileNotFoundError("Prompt Assist target Scene no longer exists.")
+        source_prompt = str(context.get("sourcePrompt") or "")
+        if str(scene.get("prompt") or "") != source_prompt:
+            raise RuntimeError("Scene prompt changed while Prompt Assist was running. Rerun against the current prompt.")
+        findings = []
+        for index, item in enumerate(data["findings"]):
+            if not isinstance(item, dict):
+                continue
+            finding = {
+                "id": "prompt-assist-" + str(index + 1),
+                "problem": str(item.get("problem") or "").strip(),
+                "location": str(item.get("location") or "").strip(),
+                "suggestedFix": str(item.get("suggestedFix") or "").strip(),
+                "targetText": str(item.get("targetText") or ""),
+                "replacementText": str(item.get("replacementText") or ""),
+            }
+            if all(finding[key] for key in ("problem", "location", "suggestedFix", "targetText", "replacementText")):
+                if source_prompt.count(finding["targetText"]) == 1 and finding["targetText"] != finding["replacementText"]:
+                    findings.append(finding)
+        return {
+            "storyId": story_id,
+            "sceneId": scene_id,
+            "sourcePrompt": source_prompt,
+            "findings": findings,
+            "model": llm_result["model"],
+            "finishReason": llm_result.get("finishReason"),
+            "usage": llm_result.get("usage"),
+            "timings": llm_result.get("timings"),
+        }
+
     if operation == "check_coherence":
         data = llm_result.get("data")
         if not isinstance(data, dict) or not str(data.get("prompt") or "").strip():
@@ -1180,9 +1242,9 @@ def _storyboard_target(context, operation):
         return {"kind": "scenes", "storyId": story_id, "sceneId": ""}
     if operation == "first_cut_sequence":
         return {"kind": "first-cut", "storyId": story_id, "sceneId": ""}
-    if operation in {"repair_scenes", "revise_scenes_sequence", "check_coherence_sequence"}:
+    if operation in {"repair_scenes", "revise_scenes_sequence", "check_coherence_sequence", "project_deep_qa"}:
         return {"kind": "repair", "storyId": story_id, "sceneId": ""}
-    if operation in {"write_prompt", "refine_prompt", "check_coherence"} and scene_id:
+    if operation in {"write_prompt", "refine_prompt", "check_coherence", "prompt_assist"} and scene_id:
         return {"kind": "scene-prompt", "storyId": story_id, "sceneId": scene_id}
     return None
 

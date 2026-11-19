@@ -522,8 +522,8 @@
     if (!job || job.client !== 'storyboard' || !job.storyId) return null;
     if (job.operation === 'interpret_atmosphere' || job.operation === 'expand_concept' || job.operation === 'define_invariants') return { kind: 'concept', storyId: job.storyId };
     if (job.operation === 'develop_scenes_sequence' || job.operation === 'develop_story' || job.operation === 'develop_story_outline' || job.operation === 'develop_story_scene' || job.operation === 'insert_scene' || job.operation === 'extend_story') return { kind: 'scenes', storyId: job.storyId };
-    if (job.operation === 'repair_scenes' || job.operation === 'revise_scenes_sequence' || job.operation === 'check_coherence_sequence') return { kind: 'repair', storyId: job.storyId };
-    if ((job.operation === 'write_prompt' || job.operation === 'refine_prompt') && job.sceneId) {
+    if (job.operation === 'repair_scenes' || job.operation === 'revise_scenes_sequence' || job.operation === 'check_coherence_sequence' || job.operation === 'project_deep_qa') return { kind: 'repair', storyId: job.storyId };
+    if ((job.operation === 'write_prompt' || job.operation === 'refine_prompt' || job.operation === 'prompt_assist') && job.sceneId) {
       return { kind: 'scene-prompt', storyId: job.storyId, sceneId: job.sceneId, operation: job.operation };
     }
     return null;
@@ -4212,6 +4212,7 @@
                 '<button type="button" class="review-captions-btn storyboard-director-action" data-director-refine title="' +
                   'Revise this prompt with Director and apply the result.' +
                   '"><span class="storyboard-director-wand" aria-hidden="true">✦</span><span data-director-refine-label>Revise</span></button>' +
+                '<button type="button" class="review-captions-btn storyboard-director-action" data-prompt-assist-open title="Find practical omissions and apply targeted prompt fixes.">Prompt Assist</button>' +
                 '<span class="storyboard-save-state" data-director-status></span>' +
               '</div>' +
               '<details class="storyboard-scene-disclosure storyboard-prompt-pipeline-details">' +
@@ -6079,6 +6080,8 @@
 
     var run = el('storyboard-director-tools-run');
     if (run) run.disabled = !directorToolsAvailable();
+    var deepQa = el('storyboard-project-deep-qa-btn');
+    if (deepQa) deepQa.disabled = !directorToolsAvailable();
   }
 
   function syncDirectorToolsRunLabel() {
@@ -6088,6 +6091,327 @@
     el('storyboard-director-tools-run').textContent = coherence ? 'Check Coherence' :
       preset === 'visual_direction' ? (generateTakes ? 'Visual Direction & Generate Takes' : 'Run Visual Direction') :
       generateTakes ? 'Revise & Generate Takes' : 'Revise Scenes';
+  }
+
+  var promptAssistSession = null;
+  function openAssistModal(id) {
+    var modal = el(id);
+    if (!modal) throw new Error("Studio Assist modal is missing: " + id);
+    modal.classList.remove("hidden");
+    modal.setAttribute("aria-hidden", "false");
+  }
+
+  function closeAssistModal(id) {
+    var modal = el(id);
+    if (!modal) return;
+    modal.classList.add("hidden");
+    modal.setAttribute("aria-hidden", "true");
+  }
+
+  function renderPromptAssistFindings() {
+    var host = el("storyboard-prompt-assist-findings");
+    var findings = promptAssistSession && promptAssistSession.findings || [];
+    host.innerHTML = "";
+    el("storyboard-prompt-assist-count").textContent = findings.length
+      ? findings.length + " targeted suggestions"
+      : "No corrections suggested";
+    if (!findings.length) {
+      var empty = document.createElement("p");
+      empty.className = "storyboard-assist-empty";
+      empty.textContent = "This Scene has no meaningful text corrections to suggest.";
+      host.appendChild(empty);
+      return;
+    }
+    findings.forEach(function (finding, index) {
+      var card = document.createElement("article");
+      card.className = "storyboard-assist-finding";
+      card.dataset.findingId = finding.id;
+      var main = document.createElement("div");
+      main.className = "storyboard-assist-finding-main";
+      var location = document.createElement("span");
+      location.className = "storyboard-assist-location";
+      location.textContent = finding.location || "Prompt";
+      var problem = document.createElement("p");
+      problem.textContent = finding.problem;
+      var fix = document.createElement("p");
+      fix.textContent = finding.suggestedFix;
+      main.append(location, problem, fix);
+      var patch = document.createElement("div");
+      patch.className = "storyboard-assist-patch";
+      var targetLabel = document.createElement("label");
+      targetLabel.textContent = "Exact prompt text";
+      var target = document.createElement("textarea");
+      target.readOnly = true;
+      target.value = finding.targetText;
+      targetLabel.appendChild(target);
+      var replacementLabel = document.createElement("label");
+      replacementLabel.textContent = "Suggested replacement (editable)";
+      var replacement = document.createElement("textarea");
+      replacement.value = finding.replacementText;
+      replacement.dataset.assistReplacement = "1";
+      replacementLabel.appendChild(replacement);
+      var actions = document.createElement("div");
+      actions.className = "storyboard-assist-patch-actions";
+      var status = document.createElement("span");
+      status.className = "keep-lora-source";
+      status.setAttribute("role", "status");
+      var apply = document.createElement("button");
+      apply.type = "button";
+      apply.className = "review-captions-btn";
+      apply.textContent = "Apply correction";
+      apply.onclick = function () {
+        applyPromptAssistFinding(finding, replacement.value, card, apply, status);
+      };
+      actions.append(status, apply);
+      patch.append(targetLabel, replacementLabel, actions);
+      card.append(main, patch);
+      host.appendChild(card);
+    });
+  }
+
+  function openPromptAssist(sceneId) {
+    if (!storyState.story) return;
+    var storyId = storyState.story.id;
+    var target = {kind:"scene-prompt", storyId:storyId, sceneId:sceneId};
+    if (directorTargetBlocked(target)) {
+      reportError(new Error("This Scene already has Director work pending."));
+      return;
+    }
+    if (!storyState.director.modelId) {
+      reportError(new Error("Choose a Director model first."));
+      return;
+    }
+    var root = sceneElement(sceneId);
+    if (!root) throw new Error("Prompt Assist Scene editor is missing.");
+    var status = el("storyboard-prompt-assist-status");
+    status.textContent = "Preparing Scene context…";
+    el("storyboard-prompt-assist-target").textContent =
+      String(storyState.story.title || "Project") + " · " +
+      String(storyState.story.scenes[sceneId] && storyState.story.scenes[sceneId].title || "Scene");
+    var button = root.querySelector("[data-prompt-assist-open]");
+    if (button) button.disabled = true;
+    setDirectorPending(target, true);
+    startDirectorActivity();
+    flushPendingSaves().then(function () {
+      var prompt = String((sceneElement(sceneId).querySelector('[data-scene-field="prompt"]') || {}).value || "");
+      if (!prompt.trim()) throw new Error("Save a Scene prompt before using Prompt Assist.");
+      return fetch("/fs/storyboard/deep-qa?storyId=" + encodeURIComponent(storyId))
+        .then(function (response) {
+          return response.json().then(function (body) {
+            if (!response.ok || !body || !body.ok) throw new Error(body && body.error || "Could not load Project Deep QA findings.");
+            return {prompt:prompt, deepQa:body.current ? body.findings || [] : []};
+          });
+        }).catch(function (error) {
+          console.warn("Prompt Assist could not load optional Project Deep QA context; continuing standalone.", error);
+          return {prompt:prompt, deepQa:[]};
+        });
+    }).then(function (context) {
+      status.textContent = "Prompt Assist is reviewing this Scene…";
+      return directorRequest({
+        storyId:storyId,
+        sceneId:sceneId,
+        operation:"prompt_assist",
+        model:storyState.director.modelId,
+        deepQaFindings:context.deepQa.filter(function (finding) {
+          return String(finding.sceneId || "") === String(sceneId);
+        })
+      }).then(function (result) {
+        return consumeDirectorJob(result.jobId).then(function () {
+          if (!storyState.story || String(storyState.story.id) !== String(storyId)) return;
+          promptAssistSession = {
+            storyId:storyId,
+            sceneId:sceneId,
+            sourcePrompt:context.prompt,
+            findings:Array.isArray(result.findings) ? result.findings : []
+          };
+          el("storyboard-prompt-assist-source").textContent = context.prompt;
+          renderPromptAssistFindings();
+          status.textContent = "Suggestions are optional. Apply each correction independently.";
+          openAssistModal("storyboard-prompt-assist-modal");
+        });
+      });
+    }).catch(reportError).finally(function () {
+      setDirectorPending(target, false);
+      if (button) button.disabled = false;
+      finishDirectorActivity();
+    });
+  }
+
+  function applyPromptAssistFinding(finding, replacement, card, button, status) {
+    if (!promptAssistSession || !storyState.story ||
+        String(storyState.story.id) !== promptAssistSession.storyId) return;
+    var root = sceneElement(promptAssistSession.sceneId);
+    var editor = root && root.querySelector('[data-scene-field="prompt"]');
+    if (!editor) return reportError(new Error("Prompt Assist Scene editor is no longer available."));
+    var expectedPrompt = String(editor.value || "");
+    if (expectedPrompt !== promptAssistSession.sourcePrompt) {
+      status.textContent = "The Scene prompt has changed. Close and reopen Prompt Assist to refresh its suggestions.";
+      button.disabled = false;
+      return;
+    }
+    var target = {kind:"scene-prompt", storyId:promptAssistSession.storyId, sceneId:promptAssistSession.sceneId};
+    if (directorTargetBlocked(target)) return reportError(new Error("Wait for pending Scene work before applying this correction."));
+    if (!replacement.trim() || replacement === finding.targetText) {
+      status.textContent = "Enter a different replacement first.";
+      return;
+    }
+    button.disabled = true;
+    status.textContent = "Applying correction…";
+    setDirectorPending(target, true);
+    fetch("/fs/storyboard/prompt-assist/apply", {
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({
+        storyId:promptAssistSession.storyId,
+        sceneId:promptAssistSession.sceneId,
+        expectedPrompt:expectedPrompt,
+        targetText:finding.targetText,
+        replacementText:replacement
+      })
+    }).then(function (response) {
+      return response.json().then(function (payload) {
+        if (!response.ok || !payload || !payload.ok) throw new Error(payload && payload.error || "Could not apply Prompt Assist correction.");
+        return payload;
+      });
+    }).then(function (payload) {
+      storyState.story.scenes[promptAssistSession.sceneId] = payload.scene;
+      storyState.story.updatedAt = payload.story.updatedAt;
+      editor.value = payload.scene.prompt;
+      clearSceneDirectorCompletion(promptAssistSession.storyId, promptAssistSession.sceneId);
+      promptAssistSession.sourcePrompt = payload.scene.prompt;
+      el("storyboard-prompt-assist-source").textContent = payload.scene.prompt;
+      syncPromptTakeStatus(promptAssistSession.sceneId);
+      syncSceneDirectorRestore(promptAssistSession.sceneId);
+      syncSceneRefineState(promptAssistSession.sceneId);
+      setSaveState("Saved");
+      card.classList.add("is-applied");
+      status.textContent = "Applied";
+      button.textContent = "Applied";
+      button.disabled = true;
+      return refreshLibrary();
+    }).catch(function (error) {
+      status.textContent = String(error && error.message || error);
+      button.disabled = false;
+    }).finally(function () {
+      setDirectorPending(target, false);
+    });
+  }
+
+  function renderProjectDeepQaFindings(findings) {
+    var host = el("storyboard-project-deep-qa-findings");
+    host.innerHTML = "";
+    var rows = Array.isArray(findings) ? findings : [];
+    el("storyboard-project-deep-qa-count").textContent =
+      rows.length + (rows.length === 1 ? " finding" : " findings");
+    if (!rows.length) {
+      var empty = document.createElement("p");
+      empty.className = "storyboard-assist-empty";
+      empty.textContent = "No actionable prompt problems were found in the saved Project text.";
+      host.appendChild(empty);
+      return;
+    }
+    var order = storyState.story && storyState.story.sceneOrder || [];
+    rows.forEach(function (finding) {
+      var sceneId = String(finding.sceneId || "");
+      var scene = storyState.story && storyState.story.scenes && storyState.story.scenes[sceneId] || {};
+      var card = document.createElement("article");
+      card.className = "storyboard-assist-finding";
+      var main = document.createElement("div");
+      main.className = "storyboard-assist-finding-main";
+      var location = document.createElement("span");
+      location.className = "storyboard-assist-location";
+      location.textContent = "Scene " + (order.indexOf(sceneId) + 1) + " · " +
+        String(scene.title || "Untitled Scene") + " · " + String(finding.location || "Prompt");
+      var problem = document.createElement("p");
+      problem.textContent = finding.problem || "";
+      var why = document.createElement("p");
+      why.textContent = finding.whyItMatters || "";
+      var fix = document.createElement("p");
+      fix.textContent = "Suggested fix: " + String(finding.suggestedFix || "");
+      main.append(location, problem, why, fix);
+      var actions = document.createElement("div");
+      actions.className = "storyboard-assist-patch-actions";
+      var open = document.createElement("button");
+      open.type = "button";
+      open.className = "review-captions-btn";
+      open.textContent = "Open Prompt Assist";
+      open.onclick = function () {
+        closeAssistModal("storyboard-project-deep-qa-modal");
+        setSceneViewMode("focus", sceneId).then(function () {
+          openPromptAssist(sceneId);
+        });
+      };
+      actions.appendChild(open);
+      card.append(main, actions);
+      host.appendChild(card);
+    });
+  }
+
+  function showProjectDeepQa(record) {
+    el("storyboard-project-deep-qa-target").textContent =
+      String(storyState.story && storyState.story.title || "Current Project") +
+      (record && record.createdAt ? " · analyzed " + new Date(record.createdAt).toLocaleString() : "");
+    renderProjectDeepQaFindings(record && record.findings || []);
+    el("storyboard-project-deep-qa-status").textContent =
+      "Findings are advisory and never change saved prompts automatically.";
+    openAssistModal("storyboard-project-deep-qa-modal");
+  }
+
+  function runProjectDeepQa(force) {
+    if (!storyState.story) return;
+    var storyId = storyState.story.id;
+    var target = {kind:"repair", storyId:storyId};
+    if (directorTargetBlocked(target)) {
+      reportError(new Error("This Project already has Director work pending."));
+      return;
+    }
+    if (!storyState.director.modelId) {
+      reportError(new Error("Choose a Director model first."));
+      return;
+    }
+    var button = el("storyboard-project-deep-qa-btn");
+    var status = el("storyboard-project-deep-qa-status");
+    button.disabled = true;
+    el("storyboard-project-deep-qa-target").textContent =
+      String(storyState.story.title || "Current Project");
+    status.textContent = "Checking saved Project prompts…";
+    openAssistModal("storyboard-project-deep-qa-modal");
+    setDirectorPending(target, true);
+    startDirectorActivity();
+    flushPendingSaves().then(function () {
+      return fetch("/fs/storyboard/deep-qa?storyId=" + encodeURIComponent(storyId))
+        .then(function (response) {
+          return response.json().then(function (body) {
+            if (!response.ok || !body || !body.ok) throw new Error(body && body.error || "Could not load Deep QA status.");
+            if (body.current && force !== true) return body.record;
+            return directorRequest({
+              storyId:storyId,
+              operation:"project_deep_qa",
+              model:storyState.director.modelId
+            }).then(function (result) {
+              return consumeDirectorJob(result.jobId).then(function () {
+                return fetch("/fs/storyboard/deep-qa?storyId=" + encodeURIComponent(storyId))
+                  .then(function (freshResponse) {
+                    return freshResponse.json().then(function (fresh) {
+                      if (!freshResponse.ok || !fresh || !fresh.ok || !fresh.current)
+                        throw new Error(fresh && fresh.error || "Deep QA completed but its saved findings are not current.");
+                      return fresh.record;
+                    });
+                  });
+              });
+            });
+          });
+        });
+    }).then(function (record) {
+      if (storyState.story && String(storyState.story.id) === String(storyId)) showProjectDeepQa(record);
+    }).catch(function (error) {
+      status.textContent = "Deep QA failed: " + String(error && error.message || error);
+      reportError(error);
+    }).finally(function () {
+      setDirectorPending(target, false);
+      button.disabled = false;
+      finishDirectorActivity();
+    });
   }
 
   function openDirectorTools() {
@@ -6469,6 +6793,11 @@
     el('storyboard-director-tools-btn').onclick = function () {
       window.openStudioDirectorRevision();
     };
+    el('storyboard-project-deep-qa-btn').onclick = function () { runProjectDeepQa(false); };
+    el('storyboard-project-deep-qa-refresh').onclick = function () { runProjectDeepQa(true); };
+    el('storyboard-prompt-assist-close').onclick = function () { closeAssistModal('storyboard-prompt-assist-modal'); };
+    el('storyboard-project-deep-qa-close').onclick = function () { closeAssistModal('storyboard-project-deep-qa-modal'); };
+    el('storyboard-project-deep-qa-rerun').onclick = function () { runProjectDeepQa(true); };
     el('storyboard-find-replace-btn').onclick = openProjectReplace;
     el('storyboard-find-replace-find').addEventListener('input', previewProjectReplacement);
     el('storyboard-find-replace-with').addEventListener('input', previewProjectReplacement);
@@ -6982,6 +7311,13 @@
         if (!removeRow) throw new Error('LoRA row is missing.');
         removeRow.remove();
         scheduleSceneSave(removeLoraScene.dataset.sceneId);
+        return;
+      }
+      var promptAssistButton = event.target.closest('[data-prompt-assist-open]');
+      if (promptAssistButton) {
+        var assistScene = promptAssistButton.closest('.storyboard-scene[data-scene-id]');
+        if (!assistScene) throw new Error('Prompt Assist Scene is missing.');
+        openPromptAssist(assistScene.dataset.sceneId);
         return;
       }
       var directorPreview = event.target.closest('[data-director-preview]');

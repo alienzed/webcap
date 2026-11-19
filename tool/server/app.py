@@ -2516,6 +2516,44 @@ def director_chat_route():
         return jsonify({"ok": False, "error": str(exc)}), 400
 
 
+@app.route("/fs/storyboard/deep-qa", methods=["GET"])
+def storyboard_deep_qa_route():
+    story_id = str(request.args.get("storyId") or "").strip()
+    try:
+        from .storyboard_store import load_project_deep_qa
+        return jsonify({"ok": True, **load_project_deep_qa(story_id)})
+    except FileNotFoundError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 404
+    except Exception as exc:
+        app.logger.exception("STORYBOARD DEEP QA READ FAILED: %s", exc)
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
+@app.route("/fs/storyboard/prompt-assist/apply", methods=["POST"])
+def storyboard_prompt_assist_apply_route():
+    data = request.get_json(silent=True) or {}
+    story_id = str(data.get("storyId") or "").strip()
+    scene_id = str(data.get("sceneId") or "").strip()
+    try:
+        if not story_id or not scene_id:
+            raise ValueError("Prompt Assist requires a Project and Scene.")
+        with storyboard_mutation_lock:
+            if (llm_storyboard_target_busy(story_id, "scene-prompt", scene_id)
+                    or llm_storyboard_target_busy(story_id, "scenes")
+                    or llm_storyboard_target_busy(story_id, "repair")):
+                raise ValueError("Wait for pending Director work before applying a Prompt Assist suggestion.")
+            from .storyboard_store import apply_prompt_assist
+            story, scene = apply_prompt_assist(
+                story_id, scene_id, data.get("expectedPrompt"), data.get("targetText"), data.get("replacementText"),
+            )
+        return jsonify({"ok": True, "story": story, "scene": scene})
+    except FileNotFoundError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 404
+    except Exception as exc:
+        app.logger.exception("PROMPT ASSIST APPLY FAILED: %s", exc)
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
 @app.route("/fs/storyboard/director", methods=["GET", "POST"])
 def storyboard_director_route():
     try:
@@ -2531,6 +2569,11 @@ def storyboard_director_route():
         development = data.get("development") if isinstance(data.get("development"), dict) else None
 
         story = storyboard_load_story(story_id)
+        if operation == "project_deep_qa":
+            from .storyboard_store import project_deep_qa_signature
+            deep_qa_source_signature = project_deep_qa_signature(story)
+        else:
+            deep_qa_source_signature = ""
         replace_existing = bool(data.get("replaceExisting"))
         if operation in {"develop_story", "develop_story_outline", "develop_scenes_sequence"}:
             if story.get("sceneOrder") and not replace_existing:
@@ -2579,6 +2622,17 @@ def storyboard_director_route():
                     operation="refine_prompt", expected_prompt=original,
                 )
             return jsonify({"ok": True, "story": applied_story, "scene": applied_scene})
+
+        if operation in {"prompt_assist", "project_deep_qa"} and not model_id:
+            raise ValueError("Choose a Director model.")
+        if operation == "prompt_assist":
+            if not scene_id:
+                raise ValueError("Prompt Assist requires a selected Scene.")
+            scene = (story.get("scenes") or {}).get(scene_id)
+            if not isinstance(scene, dict) or not str(scene.get("prompt") or "").strip():
+                raise ValueError("Prompt Assist requires a saved Scene prompt.")
+        if operation == "project_deep_qa" and not (story.get("sceneOrder") or []):
+            raise ValueError("Project Deep QA requires at least one Scene.")
 
         scene_order = list(story.get("sceneOrder") or [])
         scene_number = scene_order.index(scene_id) + 1 if scene_id in scene_order else 0
@@ -2665,6 +2719,11 @@ def storyboard_director_route():
             contract_kwargs["refresh_guidelines"] = data.get("refreshGuidelines") is True
         if operation == "extend_story":
             contract_kwargs["scene_count"] = data.get("sceneCount")
+        if operation == "prompt_assist":
+            deep_findings = data.get("deepQaFindings")
+            if deep_findings is not None and not isinstance(deep_findings, list):
+                raise ValueError("Prompt Assist Deep QA context must be a findings list.")
+            contract_kwargs["deep_qa_findings"] = deep_findings
         if development is not None:
             contract_kwargs["development"] = development
         contract = storyboard_build_llm_request(
@@ -2737,6 +2796,12 @@ def storyboard_director_route():
                 "operation": operation,
                 "replaceExisting": replace_existing,
                 "sourceInstruction": instruction,
+                **({
+                    "sourcePrompt": str(((story.get("scenes") or {}).get(scene_id) or {}).get("prompt") or "")
+                } if operation == "prompt_assist" else {}),
+                **({
+                    "sourceSignature": deep_qa_source_signature
+                } if operation == "project_deep_qa" else {}),
                 **({"refreshGuidelines": data.get("refreshGuidelines") is True} if operation == "define_invariants" else {}),
                 **({"sceneCount": data.get("sceneCount")} if operation == "extend_story" else {}),
                 "thinking": data.get("thinking") is True,

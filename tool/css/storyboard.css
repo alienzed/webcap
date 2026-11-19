@@ -4430,3 +4430,165 @@ html[data-theme="dark"] .storyboard-prompt-take-status {
     border-bottom: 1px solid var(--border-color, #444);
     font-weight: 600;
 }
+
+
+/* Optional Prompt Assist / Project Deep QA workspaces. Kept separate from
+   the existing Director and Visual Direction surfaces. */
+.storyboard-assist-dialog {
+  width: min(1180px, 84vw);
+  max-width: 1180px;
+  max-height: 88vh;
+}
+
+.storyboard-assist-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: calc(88vh - 90px);
+  overflow: auto;
+}
+
+.storyboard-assist-context {
+  display: grid;
+  grid-template-columns: minmax(180px, .7fr) minmax(0, 1.3fr);
+  gap: 12px;
+  min-height: 110px;
+}
+
+.storyboard-assist-context > div:first-child {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.storyboard-assist-context > div:first-child span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.storyboard-assist-context pre {
+  max-height: 180px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  margin: 0;
+  padding: 9px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--input-bg, var(--panel));
+  font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.storyboard-assist-findings-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 7px;
+}
+
+.storyboard-assist-findings {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.storyboard-assist-finding {
+  display: grid;
+  grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr);
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel);
+}
+
+.storyboard-assist-finding-main {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 0;
+}
+
+.storyboard-assist-finding-main p {
+  margin: 0;
+  line-height: 1.45;
+}
+
+.storyboard-assist-location {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.storyboard-assist-patch {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 0;
+}
+
+.storyboard-assist-patch label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.storyboard-assist-patch textarea {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 82px;
+  resize: vertical;
+  font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.storyboard-assist-patch-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 7px;
+  align-items: center;
+}
+
+.storyboard-assist-finding.is-applied {
+  opacity: .62;
+}
+
+.storyboard-assist-empty {
+  color: var(--muted);
+  padding: 20px 4px;
+}
+
+@media (max-width: 760px) {
+  .storyboard-assist-dialog {
+    width: 96vw;
+    max-height: 94vh;
+  }
+  .storyboard-assist-content {
+    max-height: calc(94vh - 90px);
+  }
+  .storyboard-assist-context,
+  .storyboard-assist-finding {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+
+.storyboard-assist-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.storyboard-assist-context > div:first-child span,
+.storyboard-assist-location,
+.storyboard-assist-patch label,
+.storyboard-assist-patch textarea {
+  font-size: 14px;
+}
+
+.storyboard-assist-finding-main p {
+  font-size: 15px;
+}

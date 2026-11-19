@@ -2080,6 +2080,7 @@
                                         <button id="storyboard-generate-scenes-btn" type="button" class="review-captions-btn storyboard-tool-icon" aria-label="Generate Takes" title="Generate Takes — queue one new Take per Scene"><span class="storyboard-tool-glyph" aria-hidden="true">▶</span><span class="storyboard-tool-label" aria-hidden="true">Generate Takes</span></button>
                                         <button id="storyboard-cancel-takes-btn" type="button" class="review-captions-btn storyboard-tool-icon" aria-label="Cancel Takes" title="Cancel queued Takes for this Project; a running Take will finish." disabled><span class="storyboard-tool-glyph" aria-hidden="true">×</span><span class="storyboard-tool-label" aria-hidden="true">Cancel Takes</span></button>
                                         <button id="storyboard-director-tools-btn" type="button" class="review-captions-btn storyboard-tool-icon" aria-label="Scene Revision" title="Scene Revision — revise Project Scenes, optionally generate Takes, or check coherence"><span class="storyboard-tool-glyph" aria-hidden="true">✦</span><span class="storyboard-tool-label" aria-hidden="true">Scene Revision</span></button>
+                                        <button id="storyboard-project-deep-qa-btn" type="button" class="review-captions-btn storyboard-tool-icon" aria-label="Project Deep QA" title="Inspect saved Scene prompts for actionable visual and continuity problems"><span class="storyboard-tool-glyph" aria-hidden="true">⌕</span><span class="storyboard-tool-label" aria-hidden="true">Project Deep QA</span></button>
                                         <button id="storyboard-find-replace-btn" type="button" class="review-captions-btn storyboard-tool-icon" aria-label="Find &amp; Replace" title="Find &amp; Replace text across Project Scenes"><span class="storyboard-tool-glyph" aria-hidden="true">⌕</span><span class="storyboard-tool-label" aria-hidden="true">Find &amp; Replace</span></button>
                                         
                                     </div>
@@ -2855,6 +2856,52 @@
                     <button id="storyboard-find-replace-cancel" type="button" class="review-captions-btn">Cancel</button>
                     <button id="storyboard-find-replace-apply" type="button" class="training-btn" disabled>Replace All</button>
                 </footer>
+            </section>
+        </div>
+        <div id="storyboard-prompt-assist-modal" class="keep-lora-modal hidden" aria-hidden="true" data-escape-close-id="storyboard-prompt-assist-close">
+            <section class="keep-lora-dialog storyboard-assist-dialog" role="dialog" aria-modal="true" aria-labelledby="storyboard-prompt-assist-title">
+                <header class="keep-lora-header">
+                    <div>
+                        <h2 id="storyboard-prompt-assist-title">Prompt Assist</h2>
+                        <p id="storyboard-prompt-assist-target" class="keep-lora-source">Current Scene</p>
+                    </div>
+                    <button id="storyboard-prompt-assist-close" type="button" class="training-review-modal-close" aria-label="Close Prompt Assist">&times;</button>
+                </header>
+                <div class="keep-lora-content storyboard-assist-content">
+                    <div class="storyboard-assist-context">
+                        <div><strong>Scene prompt</strong><span>Text-only review; no generated Takes or visual claims.</span></div>
+                        <pre id="storyboard-prompt-assist-source"></pre>
+                    </div>
+                    <div class="storyboard-assist-findings-heading">
+                        <strong>Suggested corrections</strong>
+                        <span id="storyboard-prompt-assist-count" class="keep-lora-source"></span>
+                    </div>
+                    <div id="storyboard-prompt-assist-findings" class="storyboard-assist-findings"></div>
+                    <p id="storyboard-prompt-assist-status" class="training-history-summary" role="status"></p>
+                </div>
+            </section>
+        </div>
+        <div id="storyboard-project-deep-qa-modal" class="keep-lora-modal hidden" aria-hidden="true" data-escape-close-id="storyboard-project-deep-qa-close">
+            <section class="keep-lora-dialog storyboard-assist-dialog" role="dialog" aria-modal="true" aria-labelledby="storyboard-project-deep-qa-title">
+                <header class="keep-lora-header">
+                    <div>
+                        <h2 id="storyboard-project-deep-qa-title">Project Deep QA</h2>
+                        <p id="storyboard-project-deep-qa-target" class="keep-lora-source">Current Project</p>
+                    </div>
+                    <button id="storyboard-project-deep-qa-refresh" type="button" class="review-captions-btn" title="Run Project Deep QA again">Run again</button>
+                    <div class="storyboard-assist-header-actions">
+                        <button id="storyboard-project-deep-qa-rerun" type="button" class="review-captions-btn">Re-run analysis</button>
+                        <button id="storyboard-project-deep-qa-close" type="button" class="training-review-modal-close" aria-label="Close Project Deep QA">&times;</button>
+                    </div>
+                </header>
+                <div class="keep-lora-content storyboard-assist-content">
+                    <div class="storyboard-assist-findings-heading">
+                        <strong>Actionable findings</strong>
+                        <span id="storyboard-project-deep-qa-count" class="keep-lora-source"></span>
+                    </div>
+                    <div id="storyboard-project-deep-qa-findings" class="storyboard-assist-findings"></div>
+                    <p id="storyboard-project-deep-qa-status" class="training-history-summary" role="status"></p>
+                </div>
             </section>
         </div>
         <div id="storyboard-director-tools-modal" class="keep-lora-modal hidden" aria-hidden="true" data-escape-close-id="storyboard-director-tools-close">

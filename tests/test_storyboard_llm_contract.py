@@ -616,7 +616,7 @@ def test_prompt_assist_is_scene_specific_text_only_and_returns_individual_action
     assert "replacementText" in finding_schema["properties"]
     assert "one at a time" in request["prompt"]
     assert "text-only production helper" in request["system_prompt"]
-    assert "standalone Visual Direction agent" in request["system_prompt"]
+    assert "Visual Direction is a separate capability" in request["system_prompt"]
     assert "EXISTING FIRST PROMPT" not in request["prompt"]
 
 

@@ -2829,6 +2829,7 @@ def media_explorer_route():
             folder=request.args.get("folder", ""),
             rating=request.args.get("rating", ""),
             tag=request.args.get("tag", ""),
+            curation=request.args.get("curation", ""),
             date=request.args.get("date", ""),
             artifact=request.args.get("artifact", ""),
             owner=request.args.get("owner", ""),

@@ -1,10 +1,10 @@
-# Studio Director Action Advisor — MVP implementation plan
+# Studio Director Action Advisor — MVP implementation record
 
-This is an implementation supplement to [Studio Director's functional contract](studio-director-contract.md) and [AGENTS.md](../AGENTS.md), not a new authoring contract.
+This is a shipped-MVP implementation supplement to [Studio Director's functional contract](studio-director-contract.md) and [AGENTS.md](../AGENTS.md), not a second authoring contract. The phases below record the work introduced in PR #1035 and subsequent Settings/global-toggle integration; their checklists are historical verification targets, not evidence of a live-model pass.
 
 ## Outcome
 
-After a completed Director chat reply, an **enabled-by-default**, independent sidecar using Director's selected model can suggest up to three relevant actions. Each suggestion prepares existing **Read** or **Write** controls. Only the author clicks the existing action to execute it; sidecar output is not authority or saved Project data.
+After a completed, successfully saved Director chat reply, an **enabled-by-default** independent sidecar on the selected Director model may suggest zero to three actions. Settings → Director provides a browser-wide on/off preference (disabled only when explicitly switched off). Each suggestion can prepare existing **Read** or **Write** controls; only the author can click Read or Write to execute it. The sidecar is never saved Project data or a chat message.
 
 ## Phase 1 — Isolate the advisor request
 
@@ -33,7 +33,7 @@ After a completed Director chat reply, an **enabled-by-default**, independent si
 
 - Backend tests cover independent system prompt, separate operation, schema and model selection.
 - JS tests cover independent polling, out-of-scope suggestions, no fabricated targets, and prefill-without-save.
-- Browser tests cover disabled-by-default/no extra call, opt-in suggestions, correctly preselected destination and fields, and explicit save as the only mutation.
+- Browser tests cover default-enabled behaviour, disabling the preference without extra advisor calls, re-enabling suggestions, correctly preselected destination/fields, and explicit Read or Write as the only execution.
 - Run Studio Director checks, Storyboard regression and Studio browser acceptance; distinguish unrelated failing workflows and unavailable live-model evidence.
 
 ## Deliberately deferred

@@ -166,6 +166,13 @@
     }
   }
   function populateSceneNavigation() {
+    if (!state.snapshot || !state.snapshot.story) {
+      el('prompt-assist-scene-select').innerHTML = '';
+      el('prompt-assist-scene-position').textContent = 'No Project selected';
+      el('prompt-assist-scene-prev').disabled = true;
+      el('prompt-assist-scene-next').disabled = true;
+      return;
+    }
     var story = state.snapshot.story;
     var select = el('prompt-assist-scene-select');
     select.innerHTML = '';

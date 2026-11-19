@@ -452,6 +452,7 @@
       if (['failed', 'cancelled', 'stopped', 'interrupted'].indexOf(status) !== -1) {
         var terminalError = new Error(current.error || ('Storyboard Director job ' + status + '.'));
         terminalError.jobStatus = status;
+        terminalError.result = current.result || {};
         var recovered = current.result && String(current.result.rawText || '');
         if (status === 'failed' && recovered) {
           var dialog = document.querySelector('[data-director-recovered-output]');
@@ -2074,20 +2075,41 @@
           return consumeDirectorJob(payload.jobId);
         });
       });
-    }).then(function () {
+    }).then(function (completedJob) {
+      var result = completedJob && completedJob.result || {};
+      var succeeded = Array.isArray(result.succeededSceneIds) ? result.succeededSceneIds.length :
+        Number(result.revisedSceneCount || sceneIds.length);
+      var failures = Array.isArray(result.failedScenes) ? result.failedScenes : [];
+      var summary = (passType === 'visual_direction' ? 'Visual Direction: ' : 'Revise Scenes: ') +
+        succeeded + ' of ' + String(sceneIds.length) + ' Scenes revised.';
+      if (failures.length) {
+        summary += ' Failed: ' + failures.map(function (failure) {
+          return String(failure.title || failure.sceneId || 'Scene') + ' (' + String(failure.error || 'unknown error') + ')';
+        }).join('; ');
+      }
+      if (Number(result.freshTakesQueued || 0) > 0)
+        summary += ' Queued ' + String(result.freshTakesQueued) + ' fresh Takes.';
       if (storyState.story && String(storyState.story.id || '') === String(storyId)) {
-        storyState.story.repairComplete = true;
+        storyState.story.repairComplete = failures.length === 0;
         scheduleStorySave();
       }
-      setRepairStatus('Revised ' + String(sceneIds.length) + ' Scenes.');
-      if (storyState.story && storyState.story.id === storyId &&
+      setRepairStatus(summary);
+      if (succeeded > 0 && storyState.story && storyState.story.id === storyId &&
           storyState.story.directorLoraPlanning === true) {
         suggestStoryboardLoras().catch(reportError);
       }
-      return { text: 'Revised ' + String(sceneIds.length) + ' Scenes.' };
+      return { text: summary, result: result };
     }).catch(function (err) {
-      if (directorWasStopped(err)) setRepairStatus('Revise Scenes stopped.');
-      else setRepairStatus('Revise Scenes failed.');
+      var partial = err && err.result || {};
+      var partialSucceeded = Array.isArray(partial.succeededSceneIds) ? partial.succeededSceneIds.length : 0;
+      var partialFailures = Array.isArray(partial.failedScenes) ? partial.failedScenes : [];
+      if (directorWasStopped(err)) {
+        var stoppedSummary = 'Visual Direction stopped after ' + partialSucceeded + ' Scenes.';
+        if (partialFailures.length) stoppedSummary += ' Failed: ' + partialFailures.map(function (failure) {
+          return String(failure.title || failure.sceneId || 'Scene') + ' (' + String(failure.error || 'unknown error') + ')';
+        }).join('; ');
+        setRepairStatus(stoppedSummary);
+      } else setRepairStatus('Revise Scenes failed.');
       // Earlier Scenes may have been saved before a later Scene failed.
       return flushPendingSaves().then(function () {
         return request(null, 'story=' + encodeURIComponent(storyId));

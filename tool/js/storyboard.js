@@ -7383,6 +7383,57 @@
   };
 
   window.openStoryboardActivity = openStoryboardActivity;
+
+  window.getPromptAssistSnapshot = function (scope) {
+    var storyId = String(storyState.story && storyState.story.id || "");
+    if (!storyId) return Promise.reject(new Error("Open a Project before using Prompt Assist."));
+    var sceneId = String(storyState.activeSceneId || "");
+    return flushPendingSaves().then(function () {
+      if (!storyState.story || storyState.story.id !== storyId) {
+        throw new Error("The Project changed while preparing Prompt Assist.");
+      }
+      if (scope === "scene" && (!sceneId || !(storyState.story.sceneOrder || []).includes(sceneId))) {
+        throw new Error("Select a Scene before running Scene-level Prompt Assist.");
+      }
+      return {
+        story: JSON.parse(JSON.stringify(storyState.story)),
+        storyId: storyId,
+        sceneId: sceneId,
+        modelId: String(storyState.director.modelId || getDirectorModelPreference("webcap.storyboard.directorModel") || "")
+      };
+    });
+  };
+
+  window.applyPromptAssistRevisions = function (storyId, revisions) {
+    if (!storyState.story || storyState.story.id !== storyId) {
+      return Promise.reject(new Error("Open the original Project before applying Prompt Assist revisions."));
+    }
+    if (!Array.isArray(revisions) || !revisions.length) {
+      return Promise.reject(new Error("Select at least one revised Scene."));
+    }
+    return flushPendingSaves().then(function () {
+      return fetch("/fs/storyboard/prompt-assist/apply", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({storyId: storyId, revisions: revisions})
+      }).then(function (response) {
+        return response.json().then(function (payload) {
+          if (!response.ok || !payload || !payload.ok || !payload.story) {
+            throw new Error((payload && payload.error) || "Prompt Assist Apply failed.");
+          }
+          if (!storyState.story || storyState.story.id !== storyId) {
+            throw new Error("The Project changed before Prompt Assist could refresh the editor.");
+          }
+          storyState.story = payload.story;
+          renderStory();
+          setSaveState("Saved");
+          refreshLibrary();
+          return payload;
+        });
+      });
+    });
+  };
+
   window.getStoryboardRouteTarget = getStoryboardRouteTarget;
   window.getStudioDirectorNavigation = getStudioDirectorNavigation;
   window.closeStoryboardActivity = closeStoryboardActivity;

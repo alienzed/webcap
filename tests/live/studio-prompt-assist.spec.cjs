@@ -59,7 +59,7 @@ test('LIVE Prompt Assist — standalone Scene text analysis proposes and applies
   const updated=saved.scenes[scene.id].prompt;
   expect(updated).toContain(proposed);
   expect(updated).not.toBe(original);
-  expect(updated.replace(proposed,target)).toBe(original);
+  expect(updated).toBe(original.replace(target,proposed));
   await evidence(info,'prompt-assist-applied-scene',{saved:saved.scenes[scene.id]});
 });
 

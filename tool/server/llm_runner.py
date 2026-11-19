@@ -523,6 +523,61 @@ def _client_result(client, context, llm_result, job_id="", frozen_contract=None)
             "timings": llm_result.get("timings"),
         }
 
+    if operation == "project_deep_qa":
+        data = llm_result.get("data")
+        if not isinstance(data, dict) or not isinstance(data.get("findings"), list):
+            raise ValueError("Project Deep QA returned an invalid findings list.")
+        from .storyboard_store import save_project_deep_qa
+        record = save_project_deep_qa(
+            story_id, data["findings"], model_id=llm_result.get("model", ""), job_id=job_id
+        )
+        return {
+            "storyId": story_id,
+            "findings": record["findings"],
+            "sourceSignature": record["sourceSignature"],
+            "createdAt": record["createdAt"],
+            "model": llm_result["model"],
+            "finishReason": llm_result.get("finishReason"),
+            "usage": llm_result.get("usage"),
+            "timings": llm_result.get("timings"),
+        }
+
+    if operation == "prompt_assist":
+        scene_id = str(context.get("sceneId") or "").strip()
+        if not scene_id:
+            raise RuntimeError("Prompt Assist job is missing its Scene ID.")
+        data = llm_result.get("data")
+        if not isinstance(data, dict) or not isinstance(data.get("findings"), list):
+            raise ValueError("Prompt Assist returned an invalid findings list.")
+        from .storyboard_store import load_story
+        story = load_story(story_id)
+        scene = (story.get("scenes") or {}).get(scene_id)
+        if not isinstance(scene, dict):
+            raise FileNotFoundError("Prompt Assist target Scene no longer exists.")
+        findings = []
+        for index, item in enumerate(data["findings"]):
+            if not isinstance(item, dict):
+                continue
+            finding = {
+                "id": "prompt-assist-" + str(index + 1),
+                "problem": str(item.get("problem") or "").strip(),
+                "location": str(item.get("location") or "").strip(),
+                "suggestedFix": str(item.get("suggestedFix") or "").strip(),
+                "prompt": str(item.get("prompt") or "").strip(),
+            }
+            if all(finding[key] for key in ("problem", "location", "suggestedFix", "prompt")):
+                findings.append(finding)
+        return {
+            "storyId": story_id,
+            "sceneId": scene_id,
+            "sourcePrompt": str(scene.get("prompt") or ""),
+            "findings": findings,
+            "model": llm_result["model"],
+            "finishReason": llm_result.get("finishReason"),
+            "usage": llm_result.get("usage"),
+            "timings": llm_result.get("timings"),
+        }
+
     if operation == "check_coherence":
         data = llm_result.get("data")
         if not isinstance(data, dict) or not str(data.get("prompt") or "").strip():

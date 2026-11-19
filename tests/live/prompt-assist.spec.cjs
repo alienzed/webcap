@@ -64,7 +64,7 @@ test('LIVE Prompt Assist runs independent specialists, discusses findings, and a
   await page.locator('#storyboard-prompt-assist-btn').click();
   const dialog=page.locator('#prompt-assist-dialog');
   await expect(dialog).toBeVisible();
-  await expect(dialog.locator('#prompt-assist-scope')).toHaveValue('scene');
+  await expect(dialog.locator('#prompt-assist-scene-select')).toHaveValue(first.id);
   await dialog.locator('#prompt-assist-run').click();
 
   await expect(dialog.locator('#prompt-assist-status'))
@@ -123,9 +123,9 @@ test('LIVE Prompt Assist runs independent specialists, discusses findings, and a
   await dialog.locator('#prompt-assist-done').click();
 });
 
-test('LIVE Prompt Assist Project scope reviews the ordered Scenes together without changing saved prompts',async({page},testInfo)=>{
-  const project=await seedProject(page,'Live Prompt Assist Project Scope '+Date.now(),{
-    concept:'A two-part visual sequence showing a courier arriving after a storm and meeting a colleague the next morning.',
+test('LIVE Prompt Assist keeps one Scene in focus and preserves its review while navigating Scenes',async({page},testInfo)=>{
+  const project=await seedProject(page,'Live Prompt Assist Scene Navigation '+Date.now(),{
+    concept:'A courier arrives during a storm and meets a colleague the following morning.',
     style:'Grounded cinematic realism with natural light.'
   });
   const arrival=await seedScene(page,project.id,{
@@ -174,38 +174,38 @@ test('LIVE Prompt Assist Project scope reviews the ordered Scenes together witho
   const model=await openLiveDirector(page);
   await openProject(page,project.id);
   await chooseStoryboardModel(page,model);
+  await page.locator('.storyboard-scene-progress-card[data-scene-id="'+arrival.id+'"] [data-scene-progress]').click();
   await page.locator('#storyboard-prompt-assist-btn').click();
   const dialog=page.locator('#prompt-assist-dialog');
   await expect(dialog).toBeVisible();
-  await dialog.locator('#prompt-assist-scope').selectOption('project');
+  await expect(dialog.locator('#prompt-assist-scene-select')).toHaveValue(arrival.id);
   await dialog.locator('#prompt-assist-run').click();
   await expect(dialog.locator('#prompt-assist-status'))
-    .toHaveText('All three independent reviews are complete.',{timeout:480000});
-  for(const role of ['visual','continuity','sequence']) {
-    await expect(dialog.locator('#prompt-assist-'+role+'-count')).not.toHaveText('Not run');
-  }
+    .toHaveText('All three specialist reviews are complete.',{timeout:480000});
   await dialog.locator('#prompt-assist-synthesize').click();
   await expect(dialog.locator('#prompt-assist-status'))
-    .toHaveText('Recommendations are ready for your review.',{timeout:240000});
+    .toHaveText('Recommendations are ready. Accept or reject them individually.',{timeout:240000});
+  const firstReviewCount=await dialog.locator('#prompt-assist-visual-count').textContent();
 
-  const before=await story(page,project.id);
-  expect(before.scenes[arrival.id].prompt).toBeTruthy();
-  expect(before.scenes[morning.id].prompt).toBeTruthy();
-  await testInfo.attach('prompt-assist-project-scope-live.json',{
-    body:Buffer.from(JSON.stringify({
-      model,projectId:project.id,sceneIds:[arrival.id,morning.id],
-      specialistCounts:{
-        visual:await dialog.locator('#prompt-assist-visual-count').textContent(),
-        continuity:await dialog.locator('#prompt-assist-continuity-count').textContent(),
-        sequence:await dialog.locator('#prompt-assist-sequence-count').textContent()
-      },
-      editorCount:await dialog.locator('#prompt-assist-editor-count').textContent(),
-      recommendations:await dialog.locator('#prompt-assist-recommendations').innerText()
-    },null,2)),contentType:'application/json'
+  await dialog.locator('#prompt-assist-scene-select').selectOption(morning.id);
+  await expect(dialog.locator('#prompt-assist-scene-title')).toHaveText('Morning Meeting');
+  await expect(dialog.locator('#prompt-assist-visual-count')).toHaveText('Waiting');
+  await expect(dialog.locator('#prompt-assist-cuts')).toContainText('The colleague accepts the canvas delivery bag');
+  await expect(dialog.locator('#prompt-assist-cuts')).not.toContainText('removes the wet coat');
+
+  await dialog.locator('#prompt-assist-scene-select').selectOption(arrival.id);
+  await expect(dialog.locator('#prompt-assist-scene-title')).toHaveText('Rainy Arrival');
+  await expect(dialog.locator('#prompt-assist-visual-count')).toHaveText(firstReviewCount);
+  await expect(dialog.locator('#prompt-assist-editor-count')).not.toHaveText('Waiting');
+
+  const saved=await story(page,project.id);
+  expect(saved.scenes[arrival.id].prompt).toContain('removes the wet coat');
+  expect(saved.scenes[morning.id].prompt).toContain('accepts the canvas delivery bag');
+  await testInfo.attach('prompt-assist-scene-navigation-live.json',{
+    body:Buffer.from(JSON.stringify({model,projectId:project.id,sceneIds:[arrival.id,morning.id],
+      restoredVisualReview:firstReviewCount,
+      editorRecommendations:await dialog.locator('#prompt-assist-decision-summary').textContent()},null,2)),
+    contentType:'application/json'
   });
-  const after=await story(page,project.id);
-  expect(after.scenes[arrival.id].prompt).toBe(before.scenes[arrival.id].prompt);
-  expect(after.scenes[morning.id].prompt).toBe(before.scenes[morning.id].prompt);
   await dialog.locator('#prompt-assist-done').click();
 });
-

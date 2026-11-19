@@ -1818,19 +1818,23 @@ def apply_workshop_shots(story_id, scene_id, expected_prompt, replacement):
 
 
 @_serialized_mutation
-def apply_prompt_assist(story_id, scene_id, expected_prompt, revised_prompt, model_id="", job_id=""):
+def apply_prompt_assist(story_id, scene_id, expected_prompt, target_text, replacement_text, model_id="", job_id=""):
     story = load_story(story_id)
     scenes = story.get("scenes") if isinstance(story.get("scenes"), dict) else {}
     current = scenes.get(scene_id)
     if not isinstance(current, dict) or scene_id not in (story.get("sceneOrder") or []):
         raise FileNotFoundError("Prompt Assist target Scene does not exist.")
     if not isinstance(expected_prompt, str) or str(current.get("prompt") or "") != expected_prompt:
-        raise RuntimeError("Scene prompt changed since Prompt Assist prepared this suggestion. Reopen Prompt Assist and review the current prompt.")
-    prompt = str(revised_prompt or "")
-    if not prompt.strip() or prompt == expected_prompt:
-        raise ValueError("Prompt Assist requires a changed, non-empty complete prompt.")
+        raise RuntimeError("Scene prompt changed since Prompt Assist opened. Refresh the suggestion before applying.")
+    target = str(target_text or "")
+    replacement = str(replacement_text or "")
+    if not target or not replacement or target == replacement:
+        raise ValueError("Prompt Assist requires a non-empty, changed text replacement.")
+    if expected_prompt.count(target) != 1:
+        raise RuntimeError("The suggested text no longer appears exactly once in the Scene prompt. Refresh Prompt Assist before applying.")
+    revised = expected_prompt.replace(target, replacement, 1)
     patch = {
-        "prompt": prompt,
+        "prompt": revised,
         "previousPrompt": expected_prompt,
         "previousRevision": {
             "entryState": str(current.get("entryState") or ""),

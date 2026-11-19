@@ -2636,6 +2636,15 @@ def storyboard_prompt_assist_apply_route():
         revisions = data.get("revisions")
         if not story_id or not isinstance(revisions, list) or not revisions:
             raise ValueError("Prompt Assist requires a Project and at least one revised Scene.")
+        from .prompt_assist import build_context, source_fingerprint
+        current_story = storyboard_load_story(story_id)
+        current_context = build_context(
+            current_story,
+            scope=str(data.get("scope") or "scene"),
+            scene_id=str(data.get("sceneId") or ""),
+        )
+        if str(data.get("expectedSourceFingerprint") or "") != source_fingerprint(current_context):
+            raise RuntimeError("Project or Scene source changed since Prompt Assist review. Rerun the review before applying.")
         prepared = []
         seen = set()
         for item in revisions:

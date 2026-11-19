@@ -59,7 +59,7 @@ def test_duplicate_preserves_original_and_does_not_copy_takes(scenes):
     assert len(story["sceneOrder"]) == 4
     assert story["sceneOrder"][2] == copy["id"]
     assert copy["prompt"] == original["prompt"]
-    assert copy["summary"] == original["summary"]
+    assert "summary" not in copy
     assert copy["takes"] == {}
     assert copy["takeOrder"] == []
     assert story["scenes"][order[1]] == original
@@ -73,7 +73,7 @@ def test_duplicate_preserves_original_and_does_not_copy_takes(scenes):
 def test_duplicate_stale_source_rejected_without_new_scene(scenes):
     order = scenes["sceneOrder"]
     original = scenes["scenes"][order[0]]
-    storyboard_store.update_scene(scenes["id"], order[0], {"summary": "New direction"})
+    storyboard_store.update_scene(scenes["id"], order[0], {"prompt": "New direction"})
     with pytest.raises(RuntimeError, match="Source Scene changed"):
         storyboard_store.apply_studio_scene_structure(
             scenes["id"], "duplicate", order[0], order,

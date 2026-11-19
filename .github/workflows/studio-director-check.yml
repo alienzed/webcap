@@ -72,5 +72,7 @@ jobs:
           python -m pytest -q tests/test_studio_invariant_ops.py tests/test_studio_director.py tests/test_studio_scene_draft.py tests/test_studio_scene_structure.py tests/test_studio_scene_batch.py tests/test_studio_scene_split.py tests/test_studio_scene_invariant_links.py
           python -m pytest -q tests/test_storyboard_llm_contract.py
           python -m pytest -q tests/test_storyboard_ui_contract.py -k "entry_and_exit_states"
+      - name: Studio Project Take controls
+        run: node --test tests/studio_batch_takes_toggle.test.cjs tests/storyboard_project_tools.test.cjs
       - name: Existing Blocks slash checks
         run: node --test tests/studio_blocks_slash.test.cjs

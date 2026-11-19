@@ -351,8 +351,6 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
                 "sceneId": str(target_id),
                 "sceneNumber": index,
                 "title": _clean(scene.get("title")),
-                "entryState": _clean(scene.get("entryState")),
-                "exitState": _clean(scene.get("exitState")),
                 "durationSeconds": scene.get("durationSeconds"),
                 "prompt": prompt,
             })
@@ -396,7 +394,7 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
                 "prompt failures with useful, specific corrections. Make relevant appearance, action, continuity, "
                 "and transitions explicit wherever the supplied Project text leaves them under-specified. Ground "
                 "every finding in the supplied Project text and preserve the author's creative intent. Use the "
-                "saved Project and Scene text, including entry and exit states, as the evidence for your assessment."
+                "saved Project and Scene prompt text as the evidence for your assessment."
             ),
             "response_schema": _project_deep_qa_response_schema(),
         }
@@ -425,8 +423,6 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
         scene_details = []
         for label, value in (
             ("Scene title", scene.get("title")),
-            ("Entry state", scene.get("entryState")),
-            ("Exit state", scene.get("exitState")),
             ("Duration seconds", scene.get("durationSeconds")),
             ("Scene notes", scene.get("notes")),
         ):

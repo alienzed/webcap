@@ -905,7 +905,6 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
         scene_details = []
         for label, value in (
             ("Title", scene.get("title")),
-            ("Summary", scene.get("summary")),
             ("Duration seconds", scene.get("durationSeconds")),
         ):
             text = _clean(value)

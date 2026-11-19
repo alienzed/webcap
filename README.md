@@ -110,6 +110,8 @@ This section is a task-oriented quick start, not a substitute for the in-app con
 
 **Browse generated media.** Open **Media Explorer** from the activity rail. Choose **All media**, **Generations**, **References**, or a source such as Generate, Test Generations, Campaigns, or Storyboard. Search by name, prompt, model, or Set; narrow by media-type filters. Select an item to inspect its details, provenance, and navigation links to its owning workflow.
 
+**Organize renders.** In **Generations**, choose **Organize** on a recent Take or a Library result to open that exact render in Media Explorer, or use **Organize Renders** to browse them together. In Explorer, rate, tag and add to collections through the item actions or Inspector; collections are saved views over owner-backed tags, not moved/copied files. **Unsorted Generations** shows results with neither a rating nor tags so you can triage optionally. Unorganized renders remain available; the recent scan can be extended using **Scan full history**.
+
 **Compare or remove output.** Select media and use **Compare** when available; inspect the full viewer before acting. Deletion rules depend on the artifact's owner and dependencies—sometimes removal is deliberately directed back to the original feature. Do not treat output cleanup as the same operation as pruning source Set files.
 
 **Inspect disk usage.** Open **Storage** to review tracked WebCap storage, refresh its inventory, and follow the relevant navigation or cleanup action for the selected category. The source **training/Set root** and the **generated output root** have distinct ownership; avoid relocating generated media into source Sets. [Filesystem ownership](docs/filesystem_state_contract.md).

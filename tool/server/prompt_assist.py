@@ -559,6 +559,10 @@ def validate_deep_qa_scene(result, scene_id, valid_shots):
                 raise ValueError("Project Deep QA cut has invalid " + key + ".")
     if any(not isinstance(value, str) for value in result["keyVisualMoments"]):
         raise ValueError("Project Deep QA key visual moments must be strings.")
+    expected_cuts = valid - {0}
+    if not expected_cuts.issubset(seen):
+        missing = sorted(expected_cuts - seen)
+        raise ValueError("Project Deep QA did not prepare every source cut: " + ", ".join(str(value) for value in missing))
     return result
 
 

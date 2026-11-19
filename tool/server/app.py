@@ -2570,7 +2570,7 @@ def storyboard_prompt_assist_deep_qa_route():
                 raise RuntimeError("Scene changed while Project Deep QA was running. Prepare this Scene again.")
             scene = context["scenes"][0]
             valid_shots = [0] + [int(item["shotNumber"]) for item in scene["shots"]]
-            clean = validate_deep_qa_scene(result, scene_id, valid_shots)
+            clean = validate_deep_qa_scene(result, scene_id, valid_shots, context["sourcePrompts"][scene_id])
             saved["scenes"][scene_id] = {
                 "sourceFingerprint": fingerprint, "preparedAt": now, "result": clean,
             }

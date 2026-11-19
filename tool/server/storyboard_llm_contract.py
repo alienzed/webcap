@@ -686,6 +686,9 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
 
     blocks = ["[DIRECTOR CONTEXT]\n" + director_context] if operation == "write_prompt" else []
     concept = _clean(story.get("concept"))
+    title = _clean(story.get("title"))
+    if title and operation == "visual_direction":
+        blocks.append("[PROJECT TITLE]\n" + title)
     if concept and operation in {"write_prompt", "visual_direction"}:
         blocks.append("[PROJECT OVERVIEW]\n" + concept)
     if style:
@@ -728,14 +731,6 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
         if scene_details:
             blocks.append("[SCENE DETAILS]\n" + "\n".join(scene_details))
         blocks.append("[EXISTING H3 PROMPT]\n" + existing_prompt)
-        blocks.append(
-            "[CURRENT TASK]\n"
-            "Revise the existing H3 prompt so this Scene's intended visuals are fully and explicitly described. "
-            "Complete missing visual details, including details implied by the Project context and details that have not yet been specified. "
-            "Make appropriate creative decisions to complete the intended visuals, consistent with the Project's intent and context. "
-            "Keep the work focused on this Scene; do not introduce your own story, narrative direction, or unrelated creative developments. "
-            "Return the complete revised H3 prompt, or changed=false if no meaningful improvement is needed."
-        )
     else:
         existing_prompt = _clean(scene.get("prompt"))
         correction = _clean(instruction)

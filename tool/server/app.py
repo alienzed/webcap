@@ -2601,7 +2601,7 @@ def storyboard_prompt_assist_deep_qa_route():
 def storyboard_prompt_assist_route():
     """Run one independent Prompt Assist analysis/synthesis pass on saved Studio material."""
     try:
-        from .prompt_assist import build_context, build_contract, source_fingerprint
+        from .prompt_assist import (build_context, build_contract, source_fingerprint, scene_source_fingerprint, build_deep_qa_scene_contract, build_deep_qa_project_contract)
         data = request.get_json(silent=True) or {}
         story_id = str(data.get("storyId") or "").strip()
         model_id = str(data.get("model") or "").strip()
@@ -2615,13 +2615,40 @@ def storyboard_prompt_assist_route():
         expected_updated_at = str(data.get("expectedUpdatedAt") or "").strip()
         if expected_updated_at and expected_updated_at != str(story.get("updatedAt") or ""):
             raise RuntimeError("Project changed since Prompt Assist began. Reopen the review to use current material.")
-        context = build_context(
-            story,
-            scope=str(data.get("scope") or "scene"),
-            scene_id=str(data.get("sceneId") or ""),
-        )
-        if operation == "review":
+        scope = str(data.get("scope") or "scene")
+        scene_id = str(data.get("sceneId") or "")
+        context = build_context(story, scope=scope, scene_id=scene_id)
+        if operation == "deep_qa_scene":
+            if scope != "scene":
+                raise ValueError("Prepare Project Deep QA one Scene at a time.")
+            contract = build_deep_qa_scene_contract(context, scene_id)
+            label = "Project Deep QA: " + str(context["scenes"][0]["title"])
+        elif operation == "deep_qa_project":
+            if scope != "project":
+                raise ValueError("Project Deep QA index requires Project scope.")
+            saved = _prompt_assist_deep_qa_read(story_id)
+            scene_results = []
+            for scene in context["scenes"]:
+                entry = saved["scenes"].get(scene["sceneId"])
+                scene_context = build_context(story, scope="scene", scene_id=scene["sceneId"])
+                expected = scene_source_fingerprint(scene_context, scene["sceneId"])
+                if not isinstance(entry, dict) or entry.get("sourceFingerprint") != expected:
+                    raise ValueError("Prepare every current Scene before building the Project index.")
+                scene_results.append(entry["result"])
+            contract = build_deep_qa_project_contract(context, scene_results)
+            label = "Project Deep QA: cross-Scene index"
+        elif operation == "review":
             contract = build_contract("review", context, role=role)
+            if scope == "scene":
+                cached = _prompt_assist_deep_qa_read(story_id)
+                entry = cached["scenes"].get(scene_id)
+                expected = scene_source_fingerprint(context, scene_id)
+                if isinstance(entry, dict) and entry.get("sourceFingerprint") == expected:
+                    contract["messages"][1]["content"] += "\n\n[CURRENT PROJECT DEEP QA SCENE INTELLIGENCE]\n" + json.dumps(entry.get("result") or {}, ensure_ascii=False)
+                project_entry = cached.get("project")
+                project_context = build_context(story, scope="project")
+                if isinstance(project_entry, dict) and project_entry.get("sourceFingerprint") == source_fingerprint(project_context):
+                    contract["messages"][1]["content"] += "\n\n[CURRENT PROJECT DEEP QA INDEX]\n" + json.dumps(project_entry.get("result") or {}, ensure_ascii=False)
             label = "Prompt Assist: " + role + " review"
         elif operation == "synthesize":
             reviews = data.get("reviews")
@@ -2664,7 +2691,10 @@ def storyboard_prompt_assist_route():
             "job": job,
             "scope": context["scope"],
             "sourceUpdatedAt": context["sourceUpdatedAt"],
-            "sourceFingerprint": source_fingerprint(context),
+            "sourceFingerprint": (
+                scene_source_fingerprint(context, scene_id)
+                if operation == "deep_qa_scene" else source_fingerprint(context)
+            ),
         }), 202
     except FileNotFoundError as exc:
         return jsonify({"ok": False, "error": str(exc)}), 404

@@ -2013,7 +2013,7 @@
     });
   }
 
-  function reviseScenes(instruction, modelId, generateFreshTakes, continuityContext, sourceInput) {
+  function reviseScenes(instruction, modelId, generateFreshTakes, continuityContext, sourceInput, selectedSceneIds, passType) {
     if (!storyState.story) return Promise.reject(new Error('Choose a Story first.'));
     var storyId = storyState.story.id;
     var directorTarget = { kind: 'repair', storyId: storyId };
@@ -2027,9 +2027,17 @@
       ? storyState.story.sceneOrder.slice()
       : [];
     if (!sceneIds.length) return Promise.reject(new Error('Develop Scenes first.'));
+    if (Array.isArray(selectedSceneIds)) {
+      if (!selectedSceneIds.length) return Promise.reject(new Error('Select at least one Scene.'));
+      var selected = new Set(selectedSceneIds);
+      if (selectedSceneIds.some(function (id) { return !sceneIds.includes(id); }))
+        return Promise.reject(new Error('A selected Scene no longer exists in this Project.'));
+      sceneIds = sceneIds.filter(function (id) { return selected.has(id); });
+    }
 
     instruction = String(instruction || '').trim();
-    if (!instruction) return Promise.reject(new Error('Enter what should be revised across these Scenes.'));
+    if (!instruction && passType !== 'visual_direction')
+      return Promise.reject(new Error('Enter what should be revised across these Scenes.'));
 
     sceneRevisionHistory.remember(instruction, sourceInput || el('storyboard-director-tools-instruction'));
     storyState.story.repairInstruction = instruction;
@@ -2044,6 +2052,8 @@
         operation: 'revise_scenes_sequence',
         instruction: instruction,
         model: modelId,
+        sceneIds: sceneIds,
+        passType: passType || 'standard',
         generateFreshTakes: generateFreshTakes === true,
         continuityContext: continuityContext === true
       }).then(function (payload) {
@@ -6032,8 +6042,10 @@
   }
 
   function syncDirectorToolsRunLabel() {
-    var coherence = el('storyboard-director-tools-preset').value === 'coherence';
+    var preset = el('storyboard-director-tools-preset').value;
+    var coherence = preset === 'coherence';
     el('storyboard-director-tools-run').textContent = coherence ? 'Check Coherence' :
+      preset === 'visual_direction' ? 'Run Visual Direction' :
       el('storyboard-director-tools-generate-takes').checked ? 'Revise & Generate Takes' : 'Revise Scenes';
   }
 
@@ -6048,8 +6060,27 @@
     var status = el('storyboard-director-tools-status');
     if (!modal || !input || !preset || !status) throw new Error('Revise & Generate modal markup is missing.');
     el('storyboard-director-tools-target').textContent =
-      'Current Project: ' + String(storyState.story.title || storyState.story.name || storyState.story.id) +
-      ' · all ' + storyState.story.sceneOrder.length + ' Scenes';
+      'Current Project: ' + String(storyState.story.title || storyState.story.name || storyState.story.id);
+    var sceneSelection = el('storyboard-director-tools-scene-selection');
+    sceneSelection.innerHTML = '<label class="storyboard-director-scene-select-all"><input type="checkbox" data-revise-scene-all checked> All Scenes</label>' +
+      storyState.story.sceneOrder.map(function (sceneId, index) {
+        var scene = storyState.story.scenes[sceneId] || {};
+        return '<label><input type="checkbox" data-revise-scene="' + escapeHtml(sceneId) + '" checked> ' +
+          (index + 1) + '. ' + escapeHtml(scene.title || 'Untitled Scene') + '</label>';
+      }).join('');
+    var allToggle = sceneSelection.querySelector('[data-revise-scene-all]');
+    allToggle.onchange = function () {
+      sceneSelection.querySelectorAll('[data-revise-scene]').forEach(function (input) {
+        input.checked = allToggle.checked;
+      });
+    };
+    sceneSelection.querySelectorAll('[data-revise-scene]').forEach(function (input) {
+      input.onchange = function () {
+        var boxes = Array.from(sceneSelection.querySelectorAll('[data-revise-scene]'));
+        allToggle.checked = boxes.every(function (box) { return box.checked; });
+        allToggle.indeterminate = boxes.some(function (box) { return box.checked; }) && !allToggle.checked;
+      };
+    });
     preset.value = '';
     input.value = '';
     sceneRevisionHistory.reset(input);
@@ -6216,9 +6247,18 @@
     status.textContent = 'Starting revision…';
     var storyId = storyState.story && storyState.story.id;
     var target = { kind: 'repair', storyId: storyId };
+    var selectedSceneIds = Array.from(el('storyboard-director-tools-scene-selection').querySelectorAll('[data-revise-scene]:checked'))
+      .map(function (input) { return input.dataset.reviseScene; });
+    if (!selectedSceneIds.length) {
+      status.textContent = 'Select at least one Scene.';
+      run.disabled = false;
+      return;
+    }
+    var preset = el('storyboard-director-tools-preset').value;
     var revision = reviseScenes(
       instruction, storyState.director.modelId, generateFreshTakes,
-      el('storyboard-director-tools-preset').value === 'continuity'
+      preset === 'continuity', el('storyboard-director-tools-instruction'),
+      selectedSceneIds, preset === 'visual_direction' ? 'visual_direction' : 'standard'
     );
     // The target is registered synchronously once the operation has started.
     // Dismiss the input modal now so its activity card is not obscured.
@@ -6398,6 +6438,8 @@
       if (!input) return;
       if (this.value === 'continuity') input.value = DIRECTOR_PASS_PRESETS.continuity.instruction;
       if (this.value === 'coherence') input.value = DIRECTOR_PASS_PRESETS.coherence.instruction;
+      if (this.value === 'visual_direction') input.value =
+        'Make this Scene fully and explicitly describable as a standalone H3 generation prompt.';
       sceneRevisionHistory.reset(input);
       var coherence = this.value === 'coherence';
       syncDirectorToolsRunLabel();

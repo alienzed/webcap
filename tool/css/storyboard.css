@@ -4759,3 +4759,15 @@ html[data-theme="dark"] .storyboard-prompt-take-status {
   .prompt-assist-deep-qa > span { flex:1; max-width:none; }
   .prompt-assist-deep-qa > button { flex:0 0 auto; }
 }
+
+
+.prompt-assist-cut-deep-qa {
+  margin:0 14px 12px; padding:9px 11px; border:1px solid var(--border);
+  border-radius:7px; background:var(--panel-soft);
+}
+.prompt-assist-cut-deep-qa > summary {
+  cursor:pointer; color:var(--muted); font-size:12px; font-weight:650;
+}
+.prompt-assist-cut-deep-qa p {
+  margin:7px 0 0; font-size:12px; line-height:1.45; white-space:pre-wrap;
+}

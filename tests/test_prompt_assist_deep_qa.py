@@ -298,3 +298,37 @@ def test_project_deep_qa_index_uses_only_current_saved_scene_receipts(tmp_path, 
     assert received["contract"]["operation"] == "prompt_assist_deep_qa_project"
     assert "scene-1" in received["contract"]["messages"][1]["content"]
     assert "scene-2" in received["contract"]["messages"][1]["content"]
+
+
+
+def test_prompt_assist_review_fingerprint_drops_stale_project_index(tmp_path, monkeypatch):
+    story = _story()
+    project_dir = tmp_path / "project"
+    project_dir.mkdir()
+    monkeypatch.setattr("tool.server.storyboard_store._story_dir", lambda story_id: project_dir)
+    project_context = build_context(story, "project")
+    _write_json_atomic(project_dir / ".prompt_assist_deep_qa.json", {
+        "version": 1,
+        "scenes": {"scene-1": _receipt(story, "scene-1")},
+        "project": {
+            "version": 1,
+            "modelId": MODEL,
+            "sourceFingerprint": project_deep_qa_fingerprint(project_context, MODEL),
+            "preparedAt": "2026-11-19T12:05:00Z",
+            "result": _project_result(),
+        },
+    })
+    scene_context = build_context(story, "scene", "scene-1")
+    before, scene_entry, project_entry = app_module._prompt_assist_review_inputs(
+        story["id"], story, scene_context, "scene-1", MODEL
+    )
+    assert scene_entry is not None
+    assert project_entry is not None
+
+    story["scenes"]["scene-2"]["prompt"] += "\n[Shot 2] The colleague waves."
+    after, scene_entry_after, project_entry_after = app_module._prompt_assist_review_inputs(
+        story["id"], story, build_context(story, "scene", "scene-1"), "scene-1", MODEL
+    )
+    assert scene_entry_after is not None
+    assert project_entry_after is None
+    assert after != before

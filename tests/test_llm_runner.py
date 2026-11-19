@@ -2098,6 +2098,12 @@ def test_visual_direction_revision_uses_system_prompt_and_preserves_prompt_histo
         "prompt": "The model walks toward camera in blue jeans.",
         "durationSeconds": 10,
     })
+    story, untouched_scene = storyboard_store.add_scene(story["id"], {
+        "title": "Next look",
+        "summary": "A separate outfit appears in the next Scene.",
+        "prompt": "The model wears a silver evening dress.",
+        "durationSeconds": 10,
+    })
     monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda *_args: False)
     captured = {}
 
@@ -2138,3 +2144,5 @@ def test_visual_direction_revision_uses_system_prompt_and_preserves_prompt_histo
     assert revised["previousPrompt"] == "The model walks toward camera in blue jeans."
     assert revised["previousRevision"]["prompt"] == "The model walks toward camera in blue jeans."
     assert revised["refineComplete"] is True
+    untouched = storyboard_store.load_story(story["id"])["scenes"][untouched_scene["id"]]
+    assert untouched["prompt"] == "The model wears a silver evening dress."

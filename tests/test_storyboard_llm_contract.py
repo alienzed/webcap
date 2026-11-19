@@ -589,3 +589,66 @@ def test_visual_direction_uses_winning_complete_visual_exhaustiveness_system_pro
     assert "OLD FIRST PROMPT" not in prompt
     assert "[PREVIOUS SCENE" not in prompt
     assert "DIRECTOR CONTEXT" not in prompt
+
+
+def test_prompt_assist_is_scene_specific_text_only_and_returns_individual_actionable_fixes():
+    story = _story()
+    findings = [{
+        "sceneId": "scene-2",
+        "problem": "The wardrobe change is incomplete.",
+        "suggestedFix": "State the complete outfit after the change.",
+    }]
+    request = storyboard_llm_contract.build_request(
+        story, "scene-2", "prompt_assist", deep_qa_findings=findings
+    )
+
+    assert request["operation"] == "prompt_assist"
+    assert request["response_schema"]["required"] == ["findings"]
+    finding_schema = request["response_schema"]["properties"]["findings"]["items"]
+    assert finding_schema["required"] == ["problem", "location", "suggestedFix", "prompt"]
+    assert "[EXISTING SCENE PROMPT]\nEXISTING SECOND PROMPT" in request["prompt"]
+    assert "[PROJECT INVARIANTS]" in request["prompt"]
+    assert "CURRENT PROJECT DEEP QA FINDINGS" in request["prompt"]
+    assert "wardrobe change is incomplete" in request["prompt"]
+    assert "one practical fix" in request["prompt"]
+    assert "individually" in request["prompt"]
+    assert "You receive no generated Takes, images" in request["system_prompt"]
+    assert "standalone Visual Direction agent" in request["system_prompt"]
+    assert "EXISTING FIRST PROMPT" not in request["prompt"]
+
+
+def test_prompt_assist_does_not_require_or_invoke_project_deep_qa():
+    request = storyboard_llm_contract.build_request(_story(), "scene-2", "prompt_assist")
+
+    assert request["operation"] == "prompt_assist"
+    assert "CURRENT PROJECT DEEP QA FINDINGS" not in request["prompt"]
+    assert request["response_schema"]["required"] == ["findings"]
+
+
+def test_project_deep_qa_scans_all_saved_scene_prompts_and_relationships_without_takes():
+    story = _story()
+    request = storyboard_llm_contract.build_request(story, "", "project_deep_qa")
+
+    assert request["operation"] == "project_deep_qa"
+    assert request["source_scene_ids"] == ["scene-1", "scene-2"]
+    assert request["response_schema"]["required"] == ["findings"]
+    finding_schema = request["response_schema"]["properties"]["findings"]["items"]
+    assert finding_schema["required"] == [
+        "sceneId", "location", "problem", "whyItMatters", "suggestedFix"
+    ]
+    assert "[COMPLETE PROJECT SCENE TEXT]" in request["prompt"]
+    assert "OLD FIRST PROMPT" in request["prompt"]
+    assert "EXISTING SECOND PROMPT" in request["prompt"]
+    assert "timed cuts individually" in request["prompt"]
+    assert "continuity and progression across cuts and between Scenes" in request["prompt"]
+    assert "Do not inspect or claim to inspect generated Takes" in request["system_prompt"]
+    assert "scene-1" in request["prompt"] and "scene-2" in request["prompt"]
+
+
+def test_project_deep_qa_requires_saved_scene_prompts():
+    story = _story()
+    story["scenes"] = {"scene-1": {"title": "Empty", "prompt": ""}}
+    story["sceneOrder"] = ["scene-1"]
+
+    with pytest.raises(ValueError, match="at least one saved Scene prompt"):
+        storyboard_llm_contract.build_request(story, "", "project_deep_qa")

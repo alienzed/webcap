@@ -4805,3 +4805,11 @@ html[data-theme="dark"] .storyboard-prompt-take-status {
 .prompt-assist-deep-qa-scene-summary > strong { font-size:14px; }
 .prompt-assist-deep-qa-scene-summary p { margin:6px 0 0; font-size:14px; line-height:1.5; }
 .prompt-assist-deep-qa-summary > strong + ul { margin-bottom:10px; }
+
+
+/* Let the dashboard allocate its own remaining height instead of relying on fixed header arithmetic. */
+.prompt-assist-dialog { display:flex; flex-direction:column; }
+.prompt-assist-layout { flex:1 1 auto; height:auto; min-height:0; }
+@media (max-width:760px) {
+  .prompt-assist-scene-column { overflow:auto; }
+}

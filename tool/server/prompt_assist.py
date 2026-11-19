@@ -389,3 +389,173 @@ def source_fingerprint(context):
     }
     encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+
+
+_DEEP_QA_CUT = {
+    "type": "object", "additionalProperties": False,
+    "required": ["shotNumber", "visualIntent", "focalElement", "action", "stateChanges", "carryForward", "physicalInteractions", "concerns"],
+    "properties": {
+        "shotNumber": {"type": "integer", "minimum": 0},
+        "visualIntent": {"type": "string"},
+        "focalElement": {"type": "string"},
+        "action": {"type": "string"},
+        "stateChanges": {"type": "array", "items": {"type": "string"}},
+        "carryForward": {"type": "array", "items": {"type": "string"}},
+        "physicalInteractions": {"type": "array", "items": {"type": "string"}},
+        "concerns": {"type": "array", "items": {"type": "string"}},
+    },
+}
+_DEEP_QA_SCENE_SCHEMA = {
+    "type": "object", "additionalProperties": False,
+    "required": ["sceneId", "summary", "purpose", "keyVisualMoments", "cuts"],
+    "properties": {
+        "sceneId": {"type": "string"},
+        "summary": {"type": "string"},
+        "purpose": {"type": "string"},
+        "keyVisualMoments": {"type": "array", "items": {"type": "string"}},
+        "cuts": {"type": "array", "items": _DEEP_QA_CUT},
+    },
+}
+_DEEP_QA_PROJECT_SCHEMA = {
+    "type": "object", "additionalProperties": False,
+    "required": ["summary", "recurringElements", "sceneRelationships", "projectContinuityPrinciples", "concerns"],
+    "properties": {
+        "summary": {"type": "string"},
+        "recurringElements": {
+            "type": "array", "items": {
+                "type": "object", "additionalProperties": False,
+                "required": ["element", "scenes", "basis"],
+                "properties": {
+                    "element": {"type": "string"},
+                    "scenes": {"type": "array", "items": {"type": "string"}},
+                    "basis": {"type": "string"},
+                },
+            },
+        },
+        "sceneRelationships": {
+            "type": "array", "items": {
+                "type": "object", "additionalProperties": False,
+                "required": ["fromSceneId", "toSceneId", "relationship", "basis"],
+                "properties": {
+                    "fromSceneId": {"type": "string"},
+                    "toSceneId": {"type": "string"},
+                    "relationship": {"type": "string"},
+                    "basis": {"type": "string"},
+                },
+            },
+        },
+        "projectContinuityPrinciples": {"type": "array", "items": {"type": "string"}},
+        "concerns": {"type": "array", "items": {"type": "string"}},
+    },
+}
+
+
+def scene_source_fingerprint(context, scene_id):
+    """Fingerprint one Scene plus project context that can affect its interpretation."""
+    scene = next((item for item in context["scenes"] if item["sceneId"] == str(scene_id)), None)
+    if not scene:
+        raise ValueError("Deep QA Scene is not present in the source context.")
+    payload = {"project": context["project"], "scene": scene, "sourcePrompt": context["sourcePrompts"][str(scene_id)]}
+    encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+
+
+def build_deep_qa_scene_contract(context, scene_id):
+    scene_id = str(scene_id or "")
+    scene = next((item for item in context["scenes"] if item["sceneId"] == scene_id), None)
+    if not scene:
+        raise ValueError("Select a Scene for Project Deep QA.")
+    system = (
+        "You are Project Deep QA preparing reusable, source-grounded intelligence for WebCap Prompt Assist. "
+        "Analyze this ONE Scene, cut by cut. This is preparation, not a critique, rewrite, or approval. "
+        "For each cut identify its apparent visual purpose, focal element, defining action, explicit state "
+        "changes, and state that should carry into later cuts. Pay special attention to regressions: if a "
+        "cut changes clothing, prop state, position, or an interaction, record what later cuts should retain "
+        "unless an explicit new change is described. Note physical interactions that may produce ambiguous "
+        "or entangled bodies, but do not invent problems. Distinguish what the prompt explicitly says from "
+        "what is merely implied in the wording. Do not treat independent Project Scenes as continuous renders. "
+        "Do not demand identical character appearance between independently generated Scenes. "
+        "Only use supplied Scene IDs and actual cut numbers; use 0 for Scene-level facts. "
+        "Return concise, reusable facts. Empty arrays are appropriate when nothing is specified."
+    )
+    return {
+        "operation": "prompt_assist_deep_qa_scene",
+        "messages": [
+            {"role": "system", "content": system},
+            {"role": "user", "content": "Prepare reusable intelligence for this Scene:\n" + _json({
+                "project": context["project"],
+                "scene": scene,
+            })},
+        ],
+        "response_schema": _DEEP_QA_SCENE_SCHEMA,
+    }
+
+
+def build_deep_qa_project_contract(context, scene_results):
+    allowed = {scene["sceneId"] for scene in context["scenes"]}
+    compact = []
+    for item in scene_results if isinstance(scene_results, list) else []:
+        if not isinstance(item, dict) or str(item.get("sceneId") or "") not in allowed:
+            continue
+        compact.append({
+            "sceneId": item["sceneId"],
+            "summary": str(item.get("summary") or "")[:900],
+            "purpose": str(item.get("purpose") or "")[:500],
+            "keyVisualMoments": [str(x)[:240] for x in (item.get("keyVisualMoments") or [])[:8]],
+            "cuts": [{
+                "shotNumber": cut.get("shotNumber"),
+                "visualIntent": str(cut.get("visualIntent") or "")[:240],
+                "focalElement": str(cut.get("focalElement") or "")[:160],
+                "stateChanges": [str(x)[:180] for x in (cut.get("stateChanges") or [])[:5]],
+                "carryForward": [str(x)[:180] for x in (cut.get("carryForward") or [])[:5]],
+            } for cut in (item.get("cuts") or [])[:12] if isinstance(cut, dict)],
+        })
+    if len(compact) != len(context["scenes"]):
+        raise ValueError("Project Deep QA needs a completed Scene preparation for every Scene.")
+    system = (
+        "You are Project Deep QA preparing a compact cross-Scene intelligence index for WebCap Prompt Assist. "
+        "Use only the supplied ordered Scene briefs and Project context. Identify recurring people, places, "
+        "props, visual motifs, and explicit project-level continuity requirements. Describe relationships "
+        "between Scenes only when supported by their descriptions or Project invariants. Distinguish an "
+        "explicit continuity requirement from a thematic resemblance or inference. Crucially, Scenes are "
+        "independently generated: do not assume a character's face, clothing, or exact appearance persists "
+        "between Scenes unless the Project context or Scene descriptions explicitly establish it. Do not "
+        "invent a narrative, missing transition, or inconsistency. This is a reusable index, not a critique "
+        "or prompt rewrite. Use only supplied Scene IDs."
+    )
+    return {
+        "operation": "prompt_assist_deep_qa_project",
+        "messages": [
+            {"role": "system", "content": system},
+            {"role": "user", "content": "Build the cross-Scene intelligence index:\n" + _json({
+                "project": context["project"],
+                "sceneOrder": [scene["sceneId"] for scene in context["scenes"]],
+                "sceneBriefs": compact,
+            })},
+        ],
+        "response_schema": _DEEP_QA_PROJECT_SCHEMA,
+    }
+
+
+def validate_deep_qa_scene(result, scene_id, valid_shots):
+    if not isinstance(result, dict) or str(result.get("sceneId") or "") != str(scene_id):
+        raise ValueError("Project Deep QA returned an invalid Scene reference.")
+    valid = set(int(value) for value in valid_shots)
+    for cut in result.get("cuts") or []:
+        if not isinstance(cut, dict) or type(cut.get("shotNumber")) is not int or cut["shotNumber"] not in valid:
+            raise ValueError("Project Deep QA returned an unknown cut reference.")
+    return result
+
+
+def validate_deep_qa_project(result, scene_ids):
+    if not isinstance(result, dict):
+        raise ValueError("Project Deep QA returned an invalid project index.")
+    allowed = set(str(value) for value in scene_ids)
+    for item in result.get("recurringElements") or []:
+        if not isinstance(item, dict) or any(str(value) not in allowed for value in (item.get("scenes") or [])):
+            raise ValueError("Project Deep QA returned an unknown Scene in a recurring element.")
+    for item in result.get("sceneRelationships") or []:
+        if (not isinstance(item, dict) or str(item.get("fromSceneId") or "") not in allowed
+                or str(item.get("toSceneId") or "") not in allowed):
+            raise ValueError("Project Deep QA returned an unknown Scene relationship.")
+    return result

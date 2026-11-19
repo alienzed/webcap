@@ -109,7 +109,7 @@
   function renderDeepQaStatus(status) {
     state.deepQaStatus = status || null;
     el('prompt-assist-deep-qa-status').textContent = deepQaStatusText(status);
-    el('prompt-assist-deep-qa-run').textContent = status && status.projectFresh ? 'Refresh Project Intelligence' : 'Prepare Project Intelligence';
+    el('prompt-assist-deep-qa-run').textContent = 'Update Project Intelligence';
     if (state.sourcePrompt) renderSceneSource();
     var host = el('prompt-assist-project-context-content');
     var existing = host.querySelector('.prompt-assist-deep-qa-summary');

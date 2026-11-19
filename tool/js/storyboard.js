@@ -6203,6 +6203,9 @@
             if (!response.ok || !body || !body.ok) throw new Error(body && body.error || "Could not load Project Deep QA findings.");
             return {prompt:prompt, deepQa:body.current ? body.findings || [] : []};
           });
+        }).catch(function (error) {
+          console.warn("Prompt Assist could not load optional Project Deep QA context; continuing standalone.", error);
+          return {prompt:prompt, deepQa:[]};
         });
     }).then(function (context) {
       status.textContent = "Prompt Assist is reviewing this Scene…";

@@ -94,7 +94,7 @@ Verify the real user workflow, not just helper functions or mocked model output.
 
 - Project Deep QA covers both per-Scene/per-cut issues and cross-cut/cross-Scene relationships.
 - Findings identify their affected Project, Scene, and cut where applicable.
-- Project Deep QA findings and candidate fixes remain available across reloads according to the established analysis lifecycle; freshness includes Project context, Scene order, Scene entry/exit states, durations, and saved prompts.
+- Project Deep QA findings and candidate fixes remain available across reloads according to the established analysis lifecycle; freshness includes active Project context, Scene order, durations, and saved Scene prompts; retired Scene state fields are excluded.
 - Changing relevant source text invalidates only the affected analysis scope where the implementation can determine that safely; unchanged analysis is reused.
 - Explicit rerun refreshes analysis without mutating authored prompts.
 - Prompt Assist works on a Scene without any Deep QA history.

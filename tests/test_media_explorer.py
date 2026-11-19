@@ -241,6 +241,50 @@ def test_explorer_normalizes_recorded_facts_and_filters_before_paging(monkeypatc
         media_explorer.list_media(rating='imaginary')
 
 
+def test_unsorted_generate_curation_keeps_only_unrated_untagged_outputs(monkeypatch, tmp_path):
+    monkeypatch.setattr(media_explorer.app_config, "output_root", lambda: tmp_path)
+    records = []
+    for name, rating, tags in (
+        ("pending", 0, []),
+        ("rated", 4, []),
+        ("tagged", 0, ["promising"]),
+        ("collected", 0, ["Collection · Keepers"]),
+    ):
+        path = f"generations/day/{name}/result.png"
+        _media(tmp_path / path)
+        records.append({"storageId": f"day/{name}", "mediaPath": path,
+                        "createdAt": len(records) + 1, "rating": rating,
+                        "tags": tags, "references": {}})
+    _media(tmp_path / "generations/day/pending/reference.png")
+    records[0]["references"] = {"image": "generations/day/pending/reference.png"}
+    monkeypatch.setattr(media_explorer, "list_results", lambda limit: records)
+    result = media_explorer.list_media(source="generate", curation="unsorted", full="1")
+    assert result["total"] == 1
+    assert [(item["storageId"], item["role"]) for item in result["items"]] == [
+        ("day/pending", "generated")
+    ]
+    assert media_explorer.list_media(source="generate", curation="unsorted", limit=1, offset=1)["items"] == []
+    with pytest.raises(ValueError, match="curation"):
+        media_explorer.list_media(source="generate", curation="unknown")
+    with pytest.raises(ValueError, match="curation"):
+        media_explorer.list_media(curation="unsorted")
+
+
+def test_unsorted_curation_is_forwarded_through_explorer_route(monkeypatch):
+    from tool.server import app as server
+    seen = {}
+
+    def record(**kwargs):
+        seen.update(kwargs)
+        return {"ok": True, "items": [], "total": 0}
+
+    monkeypatch.setattr(server, "media_explorer_list_media", record)
+    response = server.app.test_client().get("/fs/media_explorer?source=generate&curation=unsorted")
+    assert response.status_code == 200
+    assert seen["source"] == "generate"
+    assert seen["curation"] == "unsorted"
+
+
 def test_storyboard_same_file_can_be_generated_and_a_reference(monkeypatch, tmp_path):
     from tool.server import storyboard_store, storyboard_assembly
     monkeypatch.setattr(storyboard_assembly, 'current_export', lambda story_id: None)

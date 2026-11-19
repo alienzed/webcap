@@ -6000,13 +6000,7 @@
       sceneId: target.sceneId,
       sceneNumber: story && target.sceneId ? story.sceneOrder.indexOf(target.sceneId) + 1 : 0,
       sceneTitle: story && target.sceneId && story.scenes[target.sceneId] ? story.scenes[target.sceneId].title || '' : '',
-      sceneOrder: story ? story.sceneOrder.slice() : [],
-      // Labels and IDs for the explicit revision picker; saved creative content still
-      // enters the model only through the requested Storyboard contract.
-      sceneChoices: story ? story.sceneOrder.map(function (id, index) {
-        var scene = story.scenes[id] || {};
-        return {id: id, title: scene.title || 'Scene ' + (index + 1)};
-      }) : []
+      sceneOrder: story ? story.sceneOrder.slice() : []
     };
   }
 
@@ -7392,6 +7386,15 @@
   window.openStoryboardActivity = openStoryboardActivity;
   window.getStoryboardRouteTarget = getStoryboardRouteTarget;
   window.getStudioDirectorNavigation = getStudioDirectorNavigation;
+  // Explicit UI-only picker metadata. Do not add every Scene title to the
+  // Director navigation/Read context; those ownership boundaries stay distinct.
+  window.getStoryboardRevisionScenes = function () {
+    var story = storyState.story;
+    return story ? story.sceneOrder.map(function (id, index) {
+      var scene = story.scenes[id] || {};
+      return {id: id, title: scene.title || 'Scene ' + (index + 1)};
+    }) : [];
+  };
   window.closeStoryboardActivity = closeStoryboardActivity;
 
   el('storyboard-guidelines-review-close').onclick = function () { el('storyboard-guidelines-review').close(); };

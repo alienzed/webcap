@@ -176,3 +176,97 @@ test('LIVE Prompt Assist keeps one Scene in focus and preserves inline decisions
   });
   await dialog.locator('#prompt-assist-done').click();
 });
+
+test('LIVE Project Deep QA prepares reusable Scene and cross-Scene intelligence for Prompt Assist',async({page},testInfo)=>{
+  const project=await seedProject(page,'Live Project Deep QA '+Date.now(),{
+    concept:'A courier arrives during a storm, removes a wet coat, and later hands a delivery bag to a colleague.',
+    style:'Grounded cinematic realism with natural light.'
+  });
+  const arrival=await seedScene(page,project.id,{
+    title:'Rainy Arrival',
+    prompt:[
+      'Subject:',
+      'A courier in a dark-blue raincoat carrying a canvas delivery bag.',
+      '',
+      'Scene Overview:',
+      'The courier enters an apartment lobby during a storm, removes the wet coat and hangs it on a hook.',
+      '',
+      'Environment / Continuity Anchors:',
+      'Rain remains outside; the lobby floor is dry.',
+      '',
+      'Style / Visual Treatment:',
+      'Grounded cinematic realism.',
+      '',
+      'integrated_multimodal_description:',
+      '[Shot 1] Wide view of the courier entering through the glass doors, rain visible outside.',
+      '[Shot 2] Medium shot as the courier removes the wet raincoat and hangs it on a hook.',
+      '[Shot 3] The courier is no longer wearing the raincoat; it remains hanging on the hook.'
+    ].join('\n'),
+    durationSeconds:9
+  });
+  const handoff=await seedScene(page,project.id,{
+    title:'Morning Handoff',
+    prompt:[
+      'Subject:',
+      'The courier meets a colleague in the apartment lobby the following morning.',
+      '',
+      'Scene Overview:',
+      'The courier hands the canvas delivery bag to the colleague.',
+      '',
+      'Environment / Continuity Anchors:',
+      'Morning light enters through the same glass doors.',
+      '',
+      'Style / Visual Treatment:',
+      'Grounded cinematic realism.',
+      '',
+      'integrated_multimodal_description:',
+      '[Shot 1] The courier approaches the colleague without the raincoat.',
+      '[Shot 2] The colleague accepts the canvas delivery bag from the courier.'
+    ].join('\n'),
+    durationSeconds:7
+  });
+
+  const model=await openLiveDirector(page);
+  await openProject(page,project.id);
+  await chooseStoryboardModel(page,model);
+  await page.locator('.storyboard-scene-progress-card[data-scene-id="'+arrival.id+'"] [data-scene-progress]').click();
+  await page.locator('#storyboard-prompt-assist-btn').click();
+  const dialog=page.locator('#prompt-assist-dialog');
+  await expect(dialog).toBeVisible();
+  await dialog.locator('#prompt-assist-deep-qa-run').click();
+  await expect(dialog.locator('#prompt-assist-deep-qa-status'))
+    .toHaveText('Project intelligence ready',{timeout:900000});
+
+  const statusResponse=await page.request.get('/fs/storyboard/prompt-assist/deep-qa?storyId='+encodeURIComponent(project.id));
+  expect(statusResponse.ok()).toBeTruthy();
+  const prepared=await statusResponse.json();
+  expect(prepared.projectFresh).toBe(true);
+  expect(prepared.preparedScenes).toBe(2);
+  expect(prepared.totalScenes).toBe(2);
+  expect(prepared.sceneStatus[arrival.id].fresh).toBe(true);
+  expect(prepared.sceneStatus[handoff.id].fresh).toBe(true);
+  expect(prepared.project.summary).toBeTruthy();
+  expect(Array.isArray(prepared.project.sceneRelationships)).toBe(true);
+
+  await dialog.locator('#prompt-assist-project-context').locator('summary').click();
+  await expect(dialog.locator('#prompt-assist-project-context-content'))
+    .toContainText(prepared.project.summary);
+
+  await dialog.locator('#prompt-assist-run').click();
+  await expect(dialog.locator('#prompt-assist-status'))
+    .toHaveText('All three specialist reviews are complete.',{timeout:480000});
+  for(const role of ['visual','continuity','sequence']) {
+    const count=await dialog.locator('#prompt-assist-'+role+'-count').textContent();
+    expect(count).not.toBe('Waiting');
+    expect(count).not.toBe('Failed');
+  }
+  await testInfo.attach('project-deep-qa-live.json',{
+    body:Buffer.from(JSON.stringify({model,projectId:project.id,prepared},null,2)),
+    contentType:'application/json'
+  });
+  const unchanged=await story(page,project.id);
+  expect(unchanged.scenes[arrival.id].prompt).toContain('raincoat');
+  expect(unchanged.scenes[handoff.id].prompt).toContain('delivery bag');
+  await dialog.locator('#prompt-assist-done').click();
+});
+

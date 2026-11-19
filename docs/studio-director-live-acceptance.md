@@ -35,7 +35,7 @@ The API smoke test is opt-in and skips without `WEBCAP_LIVE_MODEL`. The Playwrig
 
 `tests/live/studio-actual-schema.spec.cjs` specifically inspects real operations, outgoing requests, job receipts and saved values. `tests/live/studio-authoring.spec.cjs`, `studio-continuity.spec.cjs` and the other live files cover cross-operation flows and specialist functions. Attach raw evidence for failed runs to diagnose model format, request composition and persistence separately.
 
-- `tests/live/prompt-assist.spec.cjs` exercises Prompt Assist with the actual configured Director model: independent Visual / Continuity / Sequence reviews, Creative Editor synthesis, a specialist follow-up, per-cut inline accept/reject decisions, contextual specialist discussion, proposed prompt diffs, explicit Apply, source freshness, preservation of Takes and unrelated Scenes, and one-Scene-at-a-time navigation with review decisions restored when returning to a Scene.
+- `tests/live/prompt-assist.spec.cjs` exercises Prompt Assist with the actual configured Director model: independent Visual / Continuity / Sequence reviews, Creative Editor synthesis, a specialist follow-up, per-cut inline accept/reject decisions, contextual specialist discussion, proposed prompt diffs, explicit Apply, source freshness, preservation of Takes and unrelated Scenes, one-Scene-at-a-time navigation with review decisions restored when returning to a Scene, and real-model Project Deep QA preparation with persisted Scene receipts, cross-Scene index and fresh-intelligence consumption.
 
 ## Results policy
 

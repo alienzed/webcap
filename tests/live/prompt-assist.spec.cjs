@@ -147,6 +147,7 @@ test('LIVE Prompt Assist keeps one Scene in focus and preserves inline decisions
   await expect(dialog.locator('#prompt-assist-status'))
     .toHaveText('Recommendations are ready. Accept or reject them individually.',{timeout:240000});
   const firstReviewCount=await dialog.locator('#prompt-assist-visual-count').textContent();
+  await expect(dialog.locator('#prompt-assist-scene-progress')).toContainText('1 of 2 Scenes reviewed');
   const recs=dialog.locator('.prompt-assist-recommendation');
   await expect(recs).not.toHaveCount(0);
   await recs.first().locator('[data-pa-decision="accepted"]').click();

@@ -107,10 +107,21 @@
       'Project intelligence not prepared';
   }
   function renderDeepQaStatus(status) {
+    var previous = state.deepQaStatus;
+    var previousScene = previous && previous.sceneStatus && previous.sceneStatus[state.sceneId];
+    var nextScene = status && status.sceneStatus && status.sceneStatus[state.sceneId];
+    var sceneEvidenceChanged = !previous ||
+      (previousScene && previousScene.preparedAt || '') !== (nextScene && nextScene.preparedAt || '') ||
+      !!(previous && previous.sceneIntelligence) !== !!(status && status.sceneIntelligence);
     state.deepQaStatus = status || null;
     el('prompt-assist-deep-qa-status').textContent = deepQaStatusText(status);
     el('prompt-assist-deep-qa-run').textContent = 'Update Project Intelligence';
-    if (state.sourcePrompt) renderSceneSource();
+    if (state.sourcePrompt && sceneEvidenceChanged) {
+      var column = document.querySelector('.prompt-assist-scene-column');
+      var scrollTop = column ? column.scrollTop : 0;
+      renderSceneSource();
+      if (column) column.scrollTop = scrollTop;
+    }
     var host = el('prompt-assist-project-context-content');
     var existing = host.querySelector('.prompt-assist-deep-qa-summary');
     if (existing) existing.remove();

@@ -624,11 +624,6 @@ def _client_result(client, context, llm_result, job_id="", frozen_contract=None)
             if not prompt:
                 raise ValueError("Storyboard Director returned an empty Scene prompt.")
             from .storyboard_store import apply_director_prompt
-            scene_fields = {}
-            if operation == "refine_prompt":
-                for key in ("summary", "entryState", "exitState"):
-                    if key in data:
-                        scene_fields[key] = data[key]
             duration_override = data.get("durationSeconds") if operation == "refine_prompt" else None
             story, scene = apply_director_prompt(
                 story_id,
@@ -638,7 +633,6 @@ def _client_result(client, context, llm_result, job_id="", frozen_contract=None)
                 job_id=job_id,
                 operation="refine_prompt" if operation == "visual_direction" else operation,
                 duration_override=duration_override,
-                scene_fields=scene_fields,
             )
         return {
             "storyId": story["id"],
@@ -1247,6 +1241,7 @@ def _storyboard_target(context, operation):
         return {"kind": "scenes", "storyId": story_id, "sceneId": ""}
     if operation == "first_cut_sequence":
         return {"kind": "first-cut", "storyId": story_id, "sceneId": ""}
+    # Keep new QA operations visible to the same backend conflict checks as existing Director work.
     if operation in {"repair_scenes", "revise_scenes_sequence", "check_coherence_sequence", "project_deep_qa"}:
         return {"kind": "repair", "storyId": story_id, "sceneId": ""}
     if operation in {"write_prompt", "refine_prompt", "check_coherence", "prompt_assist"} and scene_id:

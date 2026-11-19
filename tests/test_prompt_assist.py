@@ -124,3 +124,10 @@ def test_project_scope_reports_scenes_without_saved_prompts():
     story["scenes"]["scene-2"]["prompt"] = ""
     with pytest.raises(ValueError, match="Scene Morning has no saved prompt"):
         build_context(story, "project")
+
+
+def test_context_preserves_exact_saved_prompt_for_compare_and_apply():
+    story = _story()
+    story["scenes"]["scene-1"]["prompt"] += "  \n"
+    context = build_context(story, "scene", "scene-1")
+    assert context["sourcePrompts"]["scene-1"] == story["scenes"]["scene-1"]["prompt"]

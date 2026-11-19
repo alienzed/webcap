@@ -1189,9 +1189,10 @@ def test_scene_entry_and_exit_states_are_retired_from_authoring_but_preserved_in
     assert "field('entryState')" not in payload
     assert "field('exitState')" not in payload
 
-    # Existing authored values remain readable and retained by normal edits.
-    assert 'value.get("entryState", current.get("entryState", ""))' in store
-    assert 'value.get("exitState", current.get("exitState", ""))' in store
+    # Legacy values survive normal edits without active authoring dependencies.
+    assert 'for key in ("summary", "entryState", "exitState", "intent"):' in store
+    assert 'value.get("entryState", current.get("entryState", ""))' not in store
+    assert 'value.get("exitState", current.get("exitState", ""))' not in store
 
 
 def test_storyboard_scene_uses_large_visible_generation_and_conditioning_inspector():

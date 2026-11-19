@@ -736,7 +736,7 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
             blocks.append("[SCENE DETAILS]\n" + "\n".join(scene_details))
         blocks.append("[EXISTING H3 PROMPT]\n" + existing_prompt)
         blocks.append(
-            "[CURRENT TASK]\nImprove this Scene's existing H3 prompt using the supplied Project and Scene context."
+            "[CURRENT TASK]\nImprove this Scene's existing H3 prompt using the supplied context."
         )
     else:
         existing_prompt = _clean(scene.get("prompt"))

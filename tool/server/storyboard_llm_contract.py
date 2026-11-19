@@ -85,15 +85,24 @@ def _prompt_assist_response_schema():
     finding = {
         "type": "object",
         "additionalProperties": False,
-        "required": ["problem", "location", "suggestedFix", "prompt"],
+        "required": ["problem", "location", "suggestedFix", "targetText", "replacementText"],
         "properties": {
             "problem": {"type": "string", "minLength": 1},
             "location": {"type": "string", "minLength": 1},
             "suggestedFix": {"type": "string", "minLength": 1},
-            "prompt": {
+            "targetText": {
                 "type": "string",
                 "minLength": 1,
-                "description": "The complete Scene prompt with this one targeted correction applied and unrelated text preserved.",
+                "description": "An exact, contiguous excerpt copied from the existing prompt, unique within that prompt.",
+            },
+            "replacementText": {
+                "type": "string",
+                "minLength": 1,
+                "description": "A focused replacement for targetText, preserving unrelated prompt material.",
+            },
+            "prompt": {
+                "type": "string",
+                "description": "Optional full prompt preview after applying only this correction.",
             },
         },
     }
@@ -441,8 +450,10 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
             "ambiguous states, incomplete changes between timed cuts, continuity details that may revert, and "
             "camera/framing/focus instructions that do not emphasize the intended action. Return a concise set "
             "of actionable findings. Each finding must identify one problem, its cut/timestamp/section location, "
-            "one practical fix, and a complete revised Scene prompt applying only that fix. Make each proposed "
-            "prompt independently based on the original prompt so the author can accept findings individually. "
+            "one practical fix, and an exact unique excerpt plus its focused replacement. The excerpt must be "
+            "copied verbatim from the existing prompt and must occur exactly once. Make each replacement "
+            "independently applicable so the author can accept several findings one at a time without overwriting "
+            "earlier accepted corrections. "
             "Preserve unrelated text and creative intent. Return an empty findings array when no meaningful "
             "improvement is warranted. Do not provide alternative solutions, academic explanation, generic "
             "prompting advice, or a broad rewrite."

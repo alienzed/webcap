@@ -689,7 +689,9 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
     title = _clean(story.get("title"))
     if title and operation == "visual_direction":
         blocks.append("[PROJECT TITLE]\n" + title)
-    if concept and operation in {"write_prompt", "visual_direction"}:
+    if concept and operation == "write_prompt":
+        blocks.append("[STORY CONCEPT / OVERVIEW]\n" + concept)
+    elif concept and operation == "visual_direction":
         blocks.append("[PROJECT OVERVIEW]\n" + concept)
     if style:
         blocks.append("[STORY VISUAL / ATMOSPHERE]\n" + style)

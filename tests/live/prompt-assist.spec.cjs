@@ -90,7 +90,7 @@ test('LIVE Prompt Assist runs independent specialists, discusses findings, and a
   await expect(dialog.locator('#prompt-assist-chat .assistant').last())
     .not.toBeEmpty({timeout:240000});
 
-  await dialog.locator('[data-pa-rec]').first().locator('..').locator('[data-pa-decision="accepted"]').click();
+  await dialog.locator('.prompt-assist-recommendation').first().locator('[data-pa-decision="accepted"]').click();
   await dialog.locator('#prompt-assist-prepare-revision').click();
   await expect(dialog.locator('#prompt-assist-revisions')).toBeVisible({timeout:240000});
   const revised=dialog.locator('#prompt-assist-revision-prompt');

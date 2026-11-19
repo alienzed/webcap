@@ -554,8 +554,11 @@ def test_new_scene_authoring_uses_five_fields_without_new_guideline_values():
 
 
 def test_visual_direction_uses_winning_complete_visual_exhaustiveness_system_prompt():
+    story = _story()
+    story["scenes"]["scene-2"]["entryState"] = "RETIRED ENTRY STATE"
+    story["scenes"]["scene-2"]["exitState"] = "RETIRED EXIT STATE"
     request = storyboard_llm_contract.build_request(
-        _story(), "scene-2", "visual_direction"
+        story, "scene-2", "visual_direction"
     )
 
     assert request["operation"] == "visual_direction"
@@ -589,3 +592,5 @@ def test_visual_direction_uses_winning_complete_visual_exhaustiveness_system_pro
     assert "OLD FIRST PROMPT" not in prompt
     assert "[PREVIOUS SCENE" not in prompt
     assert "DIRECTOR CONTEXT" not in prompt
+    assert "RETIRED ENTRY STATE" not in prompt
+    assert "RETIRED EXIT STATE" not in prompt

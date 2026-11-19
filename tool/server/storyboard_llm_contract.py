@@ -26,7 +26,7 @@ H3_RUNTIME_CONTEXT_PATH = DOCS_ROOT / "mmh3-prompt-runtime-context.txt"
 SCENE_PLAN_SCHEMA_PATH = DOCS_ROOT / "storyboard-scene-plan.schema.json"
 INVARIANT_SCHEMA_PATH = DOCS_ROOT / "storyboard-invariants.schema.json"
 SCENE_REPAIR_SCHEMA_PATH = DOCS_ROOT / "storyboard-scene-repair.schema.json"
-VALID_OPERATIONS = {"interpret_atmosphere", "expand_concept", "define_invariants", "develop_story", "develop_story_outline", "develop_story_scene", "insert_scene", "extend_story", "repair_scenes", "write_prompt", "refine_prompt", "check_coherence"}
+VALID_OPERATIONS = {"interpret_atmosphere", "expand_concept", "define_invariants", "develop_story", "develop_story_outline", "develop_story_scene", "insert_scene", "extend_story", "repair_scenes", "write_prompt", "refine_prompt", "visual_direction", "check_coherence"}
 
 
 def _read_text(path, label):
@@ -708,6 +708,34 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
         blocks.append(
             "[CURRENT TASK]\nWrite the complete MiniMax H3 generation prompt for this Scene exactly as it should be used, following the supplied guidance and Scene context."
         )
+    elif operation == "visual_direction":
+        existing_prompt = _clean(scene.get("prompt"))
+        if not existing_prompt:
+            raise ValueError("Scene generation prompt is required for Visual Direction.")
+        if _clean(instruction):
+            blocks.append("[AUTHOR'S ADDITIONAL DIRECTION]\n" + _clean(instruction))
+        scene_details = []
+        for label, value in (
+            ("Title", scene.get("title")),
+            ("Summary", scene.get("summary")),
+            ("Entry state", scene.get("entryState")),
+            ("Exit state", scene.get("exitState")),
+            ("Duration seconds", scene.get("durationSeconds")),
+        ):
+            text = _clean(value)
+            if text:
+                scene_details.append(label + ": " + text)
+        if scene_details:
+            blocks.append("[SCENE DETAILS]\n" + "\n".join(scene_details))
+        blocks.append("[EXISTING H3 PROMPT]\n" + existing_prompt)
+        blocks.append(
+            "[CURRENT TASK]\n"
+            "Revise the existing H3 prompt so this Scene's intended visuals are fully and explicitly described. "
+            "Complete missing visual details, including details implied by the Project context and details that have not yet been specified. "
+            "Make appropriate creative decisions to complete the intended visuals, consistent with the Project's intent and context. "
+            "Keep the work focused on this Scene; do not introduce your own story, narrative direction, or unrelated creative developments. "
+            "Return the complete revised H3 prompt, or changed=false if no meaningful improvement is needed."
+        )
     else:
         existing_prompt = _clean(scene.get("prompt"))
         correction = _clean(instruction)
@@ -739,9 +767,19 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
         "operation": operation,
         "output": "json",
         "prompt": "\n\n".join(blocks).strip() + "\n",
+        **({
+            "system_prompt": (
+                "Be exceptionally thorough and specific when describing anything that will be visually rendered. "
+                "Explicitly establish all relevant visual details, including details implied by the Project context but missing from the existing Scene prompt, and details that have not yet been specified. "
+                "Make appropriate creative decisions to complete the intended visuals, consistent with the Project's intent and context. "
+                "Make the Scene prompt sufficiently complete to guide the intended render on its own. "
+                "Keep your work focused on this Scene; do not introduce your own story, narrative direction, or unrelated creative developments. "
+                "Return the complete revised H3 prompt."
+            )
+        } if operation == "visual_direction" else {}),
         "response_schema": _prompt_response_schema(
             allow_duration=operation == "refine_prompt",
             allow_scene_fields=operation == "refine_prompt",
-            allow_unchanged=operation == "refine_prompt",
+            allow_unchanged=operation in {"refine_prompt", "visual_direction"},
         ),
     }

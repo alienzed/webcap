@@ -8,19 +8,6 @@ async function attachEvidence(info,name,value){
     contentType:'application/json'
   });
 }
-async function waitForDirectorJob(page,jobId){
-  let terminal;
-  await expect.poll(async()=>{
-    const response=await page.request.get('/fs/director/job?job='+encodeURIComponent(jobId));
-    if(!response.ok())throw new Error('Director job poll failed: '+await response.text());
-    terminal=(await response.json()).job;
-    return ['completed','failed','cancelled','stopped','interrupted'].includes(String(terminal?.status||''));
-  },{timeout:300000,intervals:[600,1200,2500]}).toBe(true);
-  if(terminal.status!=='completed')
-    throw new Error('Live Studio job '+terminal.status+': '+String(terminal.error||'No diagnostic'));
-  return terminal;
-}
-
 test('LIVE Project Deep QA -> Prompt Assist: whole-project findings feed focused, composable Scene corrections',async({page},info)=>{
   test.setTimeout(600000);
   const model=await openLiveDirector(page);
@@ -48,6 +35,8 @@ test('LIVE Project Deep QA -> Prompt Assist: whole-project findings feed focused
   const cached=await deepQa.json();
   expect(cached.current).toBe(true);
   expect(Array.isArray(cached.findings)).toBe(true);
+  expect(cached.findings.length).toBeGreaterThan(0);
+  expect(cached.findings.some(item=>item.sceneId===first.id)).toBe(true);
   expect(cached.record.sourceSignature).toBeTruthy();
   for(const finding of cached.findings){
     expect([first.id,second.id]).toContain(finding.sceneId);
@@ -67,29 +56,24 @@ test('LIVE Project Deep QA -> Prompt Assist: whole-project findings feed focused
   expect(source).toContain('red baseball jacket');
   const cards=page.locator('#storyboard-prompt-assist-findings .storyboard-assist-finding');
   const count=await cards.count();
+  expect(count).toBeGreaterThan(0);
   const savedBefore=await story(page,project.id);
   expect(savedBefore.scenes[first.id].prompt).toBe(source);
 
-  if(count){
-    const card=cards.first();
-    const target=await card.locator('textarea').nth(0).inputValue();
-    const replacement=await card.locator('[data-assist-replacement]').inputValue();
-    expect(target).toBeTruthy();
-    expect(replacement).toBeTruthy();
-    expect(source.split(target)).toHaveLength(2);
-    await card.getByRole('button',{name:'Apply correction'}).click();
-    await expect(card.getByRole('button',{name:'Applied'})).toBeDisabled({timeout:30000});
-    const savedAfter=await story(page,project.id);
-    expect(savedAfter.scenes[first.id].prompt).toContain(replacement);
-    expect(savedAfter.scenes[first.id].previousPrompt).toBe(source);
-    expect(savedAfter.scenes[second.id].prompt).toBe(savedBefore.scenes[second.id].prompt);
-    const stale=await page.request.get('/fs/storyboard/deep-qa?storyId='+encodeURIComponent(project.id));
-    expect((await stale.json()).current).toBe(false);
-  } else {
-    // A model may correctly find no actionable patch; that must remain a
-    // successful no-op and must never mutate the saved prompt.
-    expect((await story(page,project.id)).scenes[first.id].prompt).toBe(source);
-  }
+  const card=cards.first();
+  const target=await card.locator('textarea').nth(0).inputValue();
+  const replacement=await card.locator('[data-assist-replacement]').inputValue();
+  expect(target).toBeTruthy();
+  expect(replacement).toBeTruthy();
+  expect(source.split(target)).toHaveLength(2);
+  await card.getByRole('button',{name:'Apply correction'}).click();
+  await expect(card.getByRole('button',{name:'Applied'})).toBeDisabled({timeout:30000});
+  const savedAfter=await story(page,project.id);
+  expect(savedAfter.scenes[first.id].prompt).toContain(replacement);
+  expect(savedAfter.scenes[first.id].previousPrompt).toBe(source);
+  expect(savedAfter.scenes[second.id].prompt).toBe(savedBefore.scenes[second.id].prompt);
+  const stale=await page.request.get('/fs/storyboard/deep-qa?storyId='+encodeURIComponent(project.id));
+  expect((await stale.json()).current).toBe(false);
 
   await attachEvidence(info,'live-prompt-assist',{
     model,projectId:project.id,sceneId:first.id,sourcePrompt:source,

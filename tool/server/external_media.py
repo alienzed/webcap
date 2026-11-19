@@ -29,7 +29,7 @@ _metadata_job = None
 
 
 _VIEW_FIELDS = {
-    "source", "role", "search", "tag", "rating", "kind", "model", "folder",
+    "source", "role", "search", "tag", "rating", "curation", "kind", "model", "folder",
     "date", "sort", "direction", "full", "recursive", "externalPath",
     "externalDirectory", "min-side", "min-mp", "min-duration", "max-duration",
     "storyboardType", "quality",

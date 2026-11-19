@@ -96,13 +96,13 @@ test('Scene title stays compact and wide Takes aligns with Generation without an
   assert.match(takes,/margin-top: 0/);
   assert.match(takes,/border: 0/);
   assert.match(takes,/background: transparent/);
-  assert.match(focus,/\.storyboard-scenes-list\.is-focus \.storyboard-scene:has\(> \.storyboard-takes\[open\]\) \.storyboard-takes-summary \{\s*padding: 0;/);
+  assert.match(focus,/\.storyboard-scenes-list\.is-focus \.storyboard-scene:has\(> \.storyboard-takes\[open\]\) \.storyboard-takes-summary \{\s*min-height: 0;\s*padding: 16px 14px 12px;/);
 });
 
 test('Scenes toolbar keeps distinct labeled buttons visible with responsive wrapping',()=>{
   const labelRule=css.split('.storyboard-tool-label {').at(-1).split('}',1)[0];
   assert.match(labelRule,/display:\s*inline/);
-  const buttons=css.split('#storyboard-project-tool-bar > .storyboard-tool-icon {').at(-1).split('}',1)[0];
+  const buttons=css.split('#storyboard-project-tool-bar > .storyboard-tool-icon,').at(-1).split('}',1)[0];
   assert.match(buttons,/width:\s*auto/);
   assert.match(buttons,/min-width:\s*36px/);
   assert.match(buttons,/white-space:\s*nowrap/);

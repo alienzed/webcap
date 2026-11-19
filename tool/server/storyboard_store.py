@@ -850,8 +850,6 @@ def _project_deep_qa_source(story):
         "scenes": {
             scene_id: {
                 "title": str((scenes.get(scene_id) or {}).get("title") or ""),
-                "entryState": str((scenes.get(scene_id) or {}).get("entryState") or ""),
-                "exitState": str((scenes.get(scene_id) or {}).get("exitState") or ""),
                 "durationSeconds": (scenes.get(scene_id) or {}).get("durationSeconds"),
                 "prompt": str((scenes.get(scene_id) or {}).get("prompt") or ""),
             }

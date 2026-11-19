@@ -426,7 +426,7 @@ def tag_owned_media(data):
 
 def list_media(limit=60, offset=0, role="", kind="", search="", sort="newest", full=False, source="",
                model="", folder="", rating="", tag="", artifact="", owner="", date="", storyboard_type="",
-               min_side="", min_mp="", min_duration="", max_duration="", direction="desc"):
+               min_side="", min_mp="", min_duration="", max_duration="", direction="desc", curation=""):
     limit = max(1, min(int(limit), 120))
     offset = max(0, int(offset))
     full = str(full).strip().lower() in ("1", "true", "yes")
@@ -434,6 +434,8 @@ def list_media(limit=60, offset=0, role="", kind="", search="", sort="newest", f
         raise ValueError("Unknown Storyboard media filter.")
     if source not in ('', 'generate', 'test', 'epoch', 'storyboard'):
         raise ValueError('Unknown Media Explorer source.')
+    if curation not in ("", "unsorted") or (curation and source != "generate"):
+        raise ValueError("Unknown Media Explorer curation filter.")
     results = (discover_generate(limit=None if full else 500) if source in ('', 'generate') else [])
     if source in ('', 'test'):
         results.extend(discover_tests(full=full))
@@ -469,6 +471,12 @@ def list_media(limit=60, offset=0, role="", kind="", search="", sort="newest", f
         exact = str(tag).strip().casefold()
         results = [item for item in results
                    if exact in {value.casefold() for value in (item.get("tags") or [])}]
+    if curation == "unsorted":
+        # A render enters curation through an explicit rating or any owner-backed tag.
+        # Only Generate results participate; references are never an unsorted render.
+        results = [item for item in results if item["source"] == "generate"
+                   and item["role"] == "generated"
+                   and not item.get("rating") and not item.get("tags")]
     if rating:
         if rating == "unrated":
             results = [item for item in results if not item.get("rating")]

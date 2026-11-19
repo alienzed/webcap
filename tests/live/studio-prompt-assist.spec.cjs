@@ -90,8 +90,9 @@ test('LIVE Project Deep QA — scans Scene prompts and cross-Scene continuity, p
   await expect(page.locator('#storyboard-project-deep-qa-modal')).toBeVisible();
   const cards=page.locator('#storyboard-project-deep-qa-findings .storyboard-assist-finding');
   await expect.poll(()=>cards.count(),{timeout:30000}).toBeGreaterThan(0);
-  const text=await cards.first().innerText();
-  expect(text).toContain(second.title);
+  const continuityFinding=cards.filter({hasText:second.title}).first();
+  await expect(continuityFinding).toBeVisible();
+  const text=await continuityFinding.innerText();
   expect(text.toLowerCase()).toContain('red wool coat');
   const cache=await page.request.get('/fs/storyboard/deep-qa?storyId='+encodeURIComponent(project.id));
   expect(cache.ok()).toBeTruthy();

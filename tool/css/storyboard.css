@@ -4771,3 +4771,28 @@ html[data-theme="dark"] .storyboard-prompt-take-status {
 .prompt-assist-cut-deep-qa p {
   margin:7px 0 0; font-size:12px; line-height:1.45; white-space:pre-wrap;
 }
+
+
+/* Keep the dashboard's supporting information readable at normal zoom. */
+.prompt-assist-deep-qa > span { font-size:14px; }
+.prompt-assist-deep-qa > button { font-size:14px; }
+.prompt-assist-specialist-top span { font-size:12px; }
+.prompt-assist-specialist p { font-size:14px; }
+.prompt-assist-editor-summary { font-size:14px; }
+.prompt-assist-disagreement { font-size:14px; }
+.prompt-assist-decision-summary { font-size:14px; }
+.prompt-assist-recommendation-meta span { font-size:12px; }
+.prompt-assist-recommendation-meta em { font-size:12px; }
+.prompt-assist-recommendation p { font-size:14px; }
+.prompt-assist-recommendation small { font-size:12px; }
+.prompt-assist-recommendation-actions button { font-size:14px; }
+.prompt-assist-recommendation-actions span { font-size:14px; }
+.prompt-assist-discussion > summary { font-size:15px; }
+.prompt-assist-discussion > summary span { font-size:12px; }
+.prompt-assist-discussion > label { font-size:12px; }
+.prompt-assist-chat-message { font-size:14px; }
+.prompt-assist-chat-compose textarea { font-size:14px; }
+.prompt-assist-chat-compose button { font-size:14px; }
+.prompt-assist-cut-deep-qa > summary { font-size:14px; }
+.prompt-assist-cut-deep-qa p { font-size:14px; }
+.prompt-assist-footer span { font-size:13px; }

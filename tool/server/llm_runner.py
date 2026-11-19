@@ -1242,9 +1242,9 @@ def _storyboard_target(context, operation):
         return {"kind": "scenes", "storyId": story_id, "sceneId": ""}
     if operation == "first_cut_sequence":
         return {"kind": "first-cut", "storyId": story_id, "sceneId": ""}
-    if operation in {"repair_scenes", "revise_scenes_sequence", "check_coherence_sequence"}:
+    if operation in {"repair_scenes", "revise_scenes_sequence", "check_coherence_sequence", "project_deep_qa"}:
         return {"kind": "repair", "storyId": story_id, "sceneId": ""}
-    if operation in {"write_prompt", "refine_prompt", "check_coherence"} and scene_id:
+    if operation in {"write_prompt", "refine_prompt", "check_coherence", "prompt_assist"} and scene_id:
         return {"kind": "scene-prompt", "storyId": story_id, "sceneId": scene_id}
     return None
 

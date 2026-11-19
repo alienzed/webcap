@@ -6,7 +6,7 @@ const vm = require('node:vm');
 // Minimal DOM fixture: exercise the actual classic script and its async requests.
 function fixture(hash = '#/media') {
   const nodes = {}, pending = [], errors = [], closed = [], menus = [], clipCalls = [], cropCalls = [];
-  let document;
+  let document, initialViews = true;
   class Element {
     constructor(tag = 'div') {
       this.tagName = tag.toUpperCase(); this.children = []; this.dataset = {}; this.attrs = {};
@@ -104,7 +104,15 @@ function fixture(hash = '#/media') {
     showContextMenu: (x, y, actions) => menus.push(actions),
     openVideoClipModal: (...args) => clipCalls.push(args),
     openExternalImageCropModal: (...args) => cropCalls.push(args),
-    fetch: (url, options) => new Promise((resolve, reject) => pending.push({url, options, resolve, reject}))
+    fetch: (url, options) => {
+      // Collections load once on Explorer entry; keep owner-media request ordering
+      // explicit for existing navigation/refresh tests.
+      if (url === '/fs/media_explorer/views' && initialViews) {
+        initialViews = false;
+        return Promise.resolve({ok:true, json:async () => ({ok:true, views:[]})});
+      }
+      return new Promise((resolve, reject) => pending.push({url, options, resolve, reject}));
+    }
   });
   const settle = async (request, items, ok = true, extra = {}) => {
     request.resolve({ok, status:ok ? 200 : 500, json:async () => ({ok, items, total:items.length, complete:true, error:ok ? undefined : 'owner discovery failed', ...extra})});
@@ -925,4 +933,60 @@ test('External measured detail filter and sorting use existing controls and pers
   f.nodes['media-explorer-sort'].value = 'detail';
   f.nodes['media-explorer-sort'].emit('change');
   assert.equal(new URL(f.pending.at(-1).url, 'http://localhost').searchParams.get('sort'), 'detail');
+});
+
+
+test('Unsorted Generations filters unorganized renders without moving or deleting them', async () => {
+  const f = fixture();
+  f.window.openMediaExplorerActivity();
+  await f.settle(f.pending[0], []);
+  f.nodes['media-explorer-unsorted'].click();
+  const request = f.pending.at(-1);
+  const filters = new URL(request.url, 'http://localhost').searchParams;
+  assert.equal(filters.get('source'), 'generate');
+  assert.equal(filters.get('curation'), 'unsorted');
+  assert.equal(f.nodes['media-explorer-unsorted'].getAttribute('aria-pressed'), 'true');
+  await f.settle(request, [{...media('candidate'), storageId:'day/candidate', rating:0, tags:[]}]);
+  const menu = f.nodes['media-explorer-grid'].children[0].querySelector('.media-explorer-item-menu');
+  menu.click({preventDefault(){},stopPropagation(){}});
+  const ratings = f.menus.at(-1).find(action => action.label === 'Rate').children;
+  ratings.find(entry => entry.label.includes('(4/5)')).run();
+  const rating = f.pending.at(-1);
+  assert.equal(rating.url, '/fs/generate/result/rating');
+  await f.settle(rating, [], true, {rating:4});
+  assert.equal(new URL(f.pending.at(-1).url,'http://localhost').searchParams.get('curation'), 'unsorted',
+    'a rated item is removed by a refreshed unsorted listing');
+  f.nodes['media-explorer-unsorted'].click();
+  assert.equal(new URL(f.pending.at(-1).url,'http://localhost').searchParams.get('curation'), '');
+  assert.equal(f.nodes['media-explorer-unsorted'].getAttribute('aria-pressed'), 'false');
+});
+
+test('Saved collections appear directly in Explorer navigation and use existing saved views', async () => {
+  const f = fixture();
+  f.window.openMediaExplorerActivity();
+  await f.settle(f.pending[0], []);
+  f.nodes['media-explorer-view-select'].emit('focus');
+  const catalog = f.pending.at(-1);
+  assert.equal(catalog.url, '/fs/media_explorer/views');
+  await f.settle(catalog, [], true, {views:[
+    {name:'Collection: Keepers', filters:{source:'',role:'',tag:'Collection · Keepers',sort:'newest',full:true}},
+    {name:'Custom search', filters:{search:'other'}}
+  ]});
+  const section = f.nodes['media-explorer-collections-section'];
+  const buttons = f.nodes['media-explorer-collections'].children;
+  assert.equal(section.classList.contains('hidden'), false);
+  assert.equal(buttons.length, 1);
+  assert.equal(buttons[0].textContent, 'Keepers');
+  buttons[0].click();
+  assert.equal(f.nodes['media-explorer-view-select'].value, 'Collection: Keepers');
+  assert.equal(buttons[0].getAttribute('aria-pressed'), 'true');
+  assert.equal(new URL(f.pending.at(-1).url,'http://localhost').searchParams.get('tag'), 'Collection · Keepers');
+  f.buttons.find(button => button.dataset.mediaSource === 'external').click();
+  assert.equal(section.classList.contains('hidden'), true);
+});
+
+test('Organize handoff text and preserved owner routing are visible in Generations', () => {
+  const generate = fs.readFileSync('tool/js/generate.js', 'utf8');
+  assert.match(generate, /exploreButton\.textContent = 'Organize'/);
+  assert.match(generate, /window\.openMediaExplorerActivity\(\{source: 'generate', id: 'generate:' \+ explore\.dataset\.generateExplorePath\}\)/);
 });

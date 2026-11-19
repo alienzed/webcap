@@ -156,7 +156,7 @@
     }
   }
   function loadDeepQaStatus() {
-    return api('/fs/storyboard/prompt-assist/deep-qa?storyId=' + encodeURIComponent(state.storyId) + '&sceneId=' + encodeURIComponent(state.sceneId))
+    return api('/fs/storyboard/prompt-assist/deep-qa?storyId=' + encodeURIComponent(state.storyId) + '&sceneId=' + encodeURIComponent(state.sceneId) + '&model=' + encodeURIComponent(state.modelId))
       .then(function (status) { renderDeepQaStatus(status); return status; })
       .catch(function (error) {
         renderDeepQaStatus({error: 'Project intelligence unavailable: ' + (error.message || String(error))});
@@ -202,7 +202,7 @@
         setStatus('Project Deep QA · preparing Scene ' + index + ' of ' + queue.length + ': ' + sceneTitle(sceneId));
         return runDeepQaJob('deep_qa_scene', sceneId, 'scene').then(function (prepared) {
           return api('/fs/storyboard/prompt-assist/deep-qa', {
-            storyId: state.storyId, kind: 'scene', sceneId: sceneId,
+            storyId: state.storyId, kind: 'scene', sceneId: sceneId, model: state.modelId,
             sourceFingerprint: prepared.sourceFingerprint, result: prepared.result
           });
         }).then(function () {
@@ -216,7 +216,7 @@
         setStatus('Project Deep QA · building cross-Scene intelligence…');
         return runDeepQaJob('deep_qa_project', '', 'project').then(function (preparedProject) {
           return api('/fs/storyboard/prompt-assist/deep-qa', {
-            storyId: state.storyId, kind: 'project',
+            storyId: state.storyId, kind: 'project', model: state.modelId,
             sourceFingerprint: preparedProject.sourceFingerprint,
             result: preparedProject.result
           });

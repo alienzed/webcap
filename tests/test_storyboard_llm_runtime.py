@@ -2590,3 +2590,7 @@ def test_run_contract_keeps_existing_user_only_contracts_unchanged(monkeypatch):
     )
     storyboard_llm_runtime.run_contract("director", {"operation": "refine_prompt", "prompt": "Revise."})
     assert captured["messages"] == [{"role": "user", "content": "Revise."}]
+
+
+def test_visual_direction_uses_the_existing_prompt_refinement_sampling_profile():
+    assert storyboard_llm_runtime._sampling_profile("visual_direction") == storyboard_llm_runtime._sampling_profile("refine_prompt")

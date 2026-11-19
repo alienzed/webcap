@@ -733,6 +733,9 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
         if scene_details:
             blocks.append("[SCENE DETAILS]\n" + "\n".join(scene_details))
         blocks.append("[EXISTING H3 PROMPT]\n" + existing_prompt)
+        blocks.append(
+            "[OUTPUT]\nReturn changed=false with the original prompt if no meaningful visual improvement is needed; otherwise return the complete revised H3 prompt."
+        )
     else:
         existing_prompt = _clean(scene.get("prompt"))
         correction = _clean(instruction)

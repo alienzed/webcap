@@ -2049,7 +2049,7 @@
       return Promise.reject(new Error('Enter what should be revised across these Scenes.'));
 
     if (instruction) sceneRevisionHistory.remember(instruction, sourceInput || el('storyboard-director-tools-instruction'));
-    if (instruction) storyState.story.repairInstruction = instruction;
+    storyState.story.repairInstruction = instruction || (passType === 'visual_direction' ? 'Visual Direction' : '');
     storyState.story.repairComplete = false;
 
     var saveBarrier = flushPendingSaves();

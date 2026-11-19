@@ -90,7 +90,8 @@
       scope: 'scene',
       model: state.modelId,
       operation: operation,
-      expectedUpdatedAt: state.snapshot.story.updatedAt
+      expectedUpdatedAt: state.snapshot.story.updatedAt,
+      expectedSourceFingerprint: state.sourceFingerprint || ''
     }, extra || {})).then(function (body) {
       if (body.sourceFingerprint) state.sourceFingerprint = body.sourceFingerprint;
       return runJob(body.job);

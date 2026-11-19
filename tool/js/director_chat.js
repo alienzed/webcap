@@ -329,7 +329,7 @@
   }
   function syncStudioRevisionScenes(scope) {
     var host = el('director-studio-revision-scenes');
-    var choices = scope.sceneChoices || [];
+    var choices = window.getStoryboardRevisionScenes();
     var ids = choices.map(function (choice) { return choice.id; });
     var previous = studioRevisionSelectionProject === scope.projectId
       ? new Set(selectedStudioRevisionScenes()) : new Set(ids);

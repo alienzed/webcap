@@ -100,10 +100,6 @@ def _prompt_assist_response_schema():
                 "minLength": 1,
                 "description": "A focused replacement for targetText, preserving unrelated prompt material.",
             },
-            "prompt": {
-                "type": "string",
-                "description": "Optional full prompt preview after applying only this correction.",
-            },
         },
     }
     return {

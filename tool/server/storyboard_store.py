@@ -18,6 +18,7 @@ from .storyboard_workshop import proposed_shot_prompt, timed_shot_bounds, worksh
 
 
 STORYBOARD_VERSION = 1
+PROJECT_DEEP_QA_VERSION = 1
 STORYBOARD_DIRNAME = "storyboards"
 STORY_FILE = "story.json"
 VALID_STATUSES = {"active", "complete", "archived"}
@@ -841,6 +842,7 @@ def _project_deep_qa_source(story):
     scenes = story.get("scenes") if isinstance(story.get("scenes"), dict) else {}
     order = story.get("sceneOrder") if isinstance(story.get("sceneOrder"), list) else []
     return {
+        "analysisVersion": PROJECT_DEEP_QA_VERSION,
         "title": str(story.get("title") or ""),
         "concept": str(story.get("concept") or ""),
         "style": str(story.get("style") or ""),
@@ -893,7 +895,7 @@ def save_project_deep_qa(story_id, findings, model_id="", job_id="", expected_si
         if all(row[key] for key in ("location", "problem", "whyItMatters", "suggestedFix")):
             normalized.append(row)
     record = {
-        "version": 1,
+        "version": PROJECT_DEEP_QA_VERSION,
         "storyId": story["id"],
         "sourceSignature": current_signature,
         "sourceUpdatedAt": str(story.get("updatedAt") or ""),
@@ -913,7 +915,8 @@ def load_project_deep_qa(story_id):
         return {"available": False, "current": False, "findings": []}
     record = _read_json(path)
     current = (
-        str(record.get("storyId") or "") == str(story["id"])
+        int(record.get("version") or 0) == PROJECT_DEEP_QA_VERSION
+        and str(record.get("storyId") or "") == str(story["id"])
         and record.get("sourceSignature") == project_deep_qa_signature(story)
     )
     return {

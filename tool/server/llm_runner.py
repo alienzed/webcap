@@ -560,6 +560,7 @@ def _client_result(client, context, llm_result, job_id="", frozen_contract=None)
         if str(scene.get("prompt") or "") != source_prompt:
             raise RuntimeError("Scene prompt changed while Prompt Assist was running. Rerun against the current prompt.")
         findings = []
+        seen_targets = set()
         for index, item in enumerate(data["findings"]):
             if not isinstance(item, dict):
                 continue
@@ -571,9 +572,13 @@ def _client_result(client, context, llm_result, job_id="", frozen_contract=None)
                 "targetText": str(item.get("targetText") or ""),
                 "replacementText": str(item.get("replacementText") or ""),
             }
-            if all(finding[key] for key in ("problem", "location", "suggestedFix", "targetText", "replacementText")):
-                if source_prompt.count(finding["targetText"]) == 1 and finding["targetText"] != finding["replacementText"]:
-                    findings.append(finding)
+            target_key = finding["targetText"]
+            if (all(finding[key] for key in ("problem", "location", "suggestedFix", "targetText", "replacementText"))
+                    and target_key not in seen_targets
+                    and source_prompt.count(target_key) == 1
+                    and target_key != finding["replacementText"]):
+                findings.append(finding)
+                seen_targets.add(target_key)
         return {
             "storyId": story_id,
             "sceneId": scene_id,

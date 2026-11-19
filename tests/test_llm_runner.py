@@ -2288,6 +2288,12 @@ def test_storyboard_prompt_assist_returns_independent_text_patches_without_mutat
                 "suggestedFix": "State the new coat color.",
                 "targetText": "She wears a blue coat.",
                 "replacementText": "She wears a red coat.",
+            }, {
+                "problem": "The coat change is not explicit.",
+                "location": "Cut 2",
+                "suggestedFix": "State the new coat color.",
+                "targetText": "She wears a blue coat.",
+                "replacementText": "She wears a green coat.",
             }]},
             "model": "test-model", "finishReason": "stop",
         },
@@ -2297,6 +2303,7 @@ def test_storyboard_prompt_assist_returns_independent_text_patches_without_mutat
 
     assert result["findings"][0]["targetText"] == "She wears a blue coat."
     assert result["findings"][0]["replacementText"] == "She wears a red coat."
+    assert len(result["findings"]) == 1
     assert storyboard_store.load_story(story["id"])["scenes"][scene["id"]]["prompt"] == (
         "A woman enters. She wears a blue coat."
     )

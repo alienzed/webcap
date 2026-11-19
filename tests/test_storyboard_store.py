@@ -1633,6 +1633,10 @@ def test_project_deep_qa_cache_is_separate_and_invalidates_on_prompt_changes(sto
     cache_path.write_text(json.dumps(cache_payload), encoding="utf-8")
     assert storyboard_store.load_project_deep_qa(story["id"])["current"] is False
     cache_payload["storyId"] = story["id"]
+    cache_payload["version"] = 0
+    cache_path.write_text(json.dumps(cache_payload), encoding="utf-8")
+    assert storyboard_store.load_project_deep_qa(story["id"])["current"] is False
+    cache_payload["version"] = storyboard_store.PROJECT_DEEP_QA_VERSION
     cache_path.write_text(json.dumps(cache_payload), encoding="utf-8")
 
     current = storyboard_store.load_story(story["id"])

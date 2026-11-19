@@ -6797,7 +6797,6 @@
     el('storyboard-project-deep-qa-refresh').onclick = function () { runProjectDeepQa(true); };
     el('storyboard-prompt-assist-close').onclick = function () { closeAssistModal('storyboard-prompt-assist-modal'); };
     el('storyboard-project-deep-qa-close').onclick = function () { closeAssistModal('storyboard-project-deep-qa-modal'); };
-    el('storyboard-project-deep-qa-rerun').onclick = function () { runProjectDeepQa(true); };
     el('storyboard-find-replace-btn').onclick = openProjectReplace;
     el('storyboard-find-replace-find').addEventListener('input', previewProjectReplacement);
     el('storyboard-find-replace-with').addEventListener('input', previewProjectReplacement);

@@ -42,6 +42,16 @@ def test_studio_guidance_teaches_only_focused_creative_workflows():
     assert "CURRENT WEBCAP CAPABILITIES" not in result["system"]
     assert len(result["system"]) < 4000
 
+def test_chat_director_matches_reply_depth_without_hiding_requested_scene_material():
+    system = guidance("minimax_h3")["system"]
+    assert "matching depth and length to the author's request" in system
+    assert "one or two short paragraphs" in system
+    assert "structured formatting when it adds clarity" in system
+    assert "rather than defaulting to complete Scene drafts" in system
+    assert "asks to draft or see Scene material" in system
+    assert "only WebCap saves Project and Scene records" in system
+
+
 def test_director_role_is_creative_partner_not_webcap_workflow_engine():
     system = guidance("minimax_h3")["system"]
     assert "elevate the author's" in system

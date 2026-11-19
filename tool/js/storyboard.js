@@ -2013,7 +2013,11 @@
     });
   }
 
-  function reviseScenes(instruction, modelId, generateFreshTakes, continuityContext, sourceInput, selectedSceneIds, passType) {
+  function reviseScenes(instruction, modelId, generateFreshTakes, continuityContext, sourceInput) {
+    return reviseScenesWithOptions(instruction, modelId, generateFreshTakes, continuityContext, sourceInput);
+  }
+
+  function reviseScenesWithOptions(instruction, modelId, generateFreshTakes, continuityContext, sourceInput, selectedSceneIds, passType) {
     if (!storyState.story) return Promise.reject(new Error('Choose a Story first.'));
     var storyId = storyState.story.id;
     var directorTarget = { kind: 'repair', storyId: storyId };
@@ -6061,7 +6065,7 @@
     if (!modal || !input || !preset || !status) throw new Error('Revise & Generate modal markup is missing.');
     el('storyboard-director-tools-target').textContent =
       'Current Project: ' + String(storyState.story.title || storyState.story.name || storyState.story.id) +
-      ' · ' + storyState.story.sceneOrder.length + ' Scenes available';
+      ' · all ' + storyState.story.sceneOrder.length + ' Scenes';
     var sceneSelection = el('storyboard-director-tools-scene-selection');
     sceneSelection.innerHTML = '<label class="storyboard-director-scene-select-all"><input type="checkbox" data-revise-scene-all checked> All Scenes</label>' +
       storyState.story.sceneOrder.map(function (sceneId, index) {
@@ -6260,7 +6264,7 @@
       run.disabled = false;
       return;
     }
-    var revision = reviseScenes(
+    var revision = reviseScenesWithOptions(
       instruction, storyState.director.modelId, generateFreshTakes,
       preset === 'continuity', el('storyboard-director-tools-instruction'),
       selectedSceneIds, preset === 'visual_direction' ? 'visual_direction' : 'standard'

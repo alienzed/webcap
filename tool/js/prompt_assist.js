@@ -440,6 +440,7 @@
     var sceneId = snapshot.sceneId;
     var scene = snapshot.story.scenes && snapshot.story.scenes[sceneId];
     if (!scene) throw new Error('The selected Scene no longer exists in this Project.');
+    if (state.storyId && state.storyId !== snapshot.storyId) state.sessions = {};
     state.snapshot = snapshot;
     state.storyId = snapshot.storyId;
     state.sceneId = sceneId;

@@ -2514,9 +2514,11 @@ def storyboard_prompt_assist_deep_qa_route():
             story = storyboard_load_story(story_id)
             project_context = build_context(story, scope="project")
             saved = _prompt_assist_deep_qa_read(story_id)
+            selected_scene_id = str(request.args.get("sceneId") or "").strip()
             current_project_fp = source_fingerprint(project_context)
             scene_status = {}
             fresh_results = []
+            selected_scene_intelligence = None
             for scene in project_context["scenes"]:
                 scene_id = scene["sceneId"]
                 scene_context = build_context(story, scope="scene", scene_id=scene_id)
@@ -2530,6 +2532,8 @@ def storyboard_prompt_assist_deep_qa_route():
                 }
                 if fresh:
                     fresh_results.append(entry["result"])
+                    if scene_id == selected_scene_id:
+                        selected_scene_intelligence = entry["result"]
             project_entry = saved.get("project")
             project_fresh = (
                 isinstance(project_entry, dict)
@@ -2544,6 +2548,7 @@ def storyboard_prompt_assist_deep_qa_route():
                 "projectFresh": bool(project_fresh),
                 "projectPreparedAt": project_entry.get("preparedAt") if isinstance(project_entry, dict) else None,
                 "project": project_entry.get("result") if project_fresh else None,
+                "sceneIntelligence": selected_scene_intelligence,
                 "projectSourceFingerprint": current_project_fp,
             })
 

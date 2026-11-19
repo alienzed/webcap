@@ -751,7 +751,7 @@
     setBusy(true, 'Applying the reviewed prompt to this Scene…');
     return window.applyPromptAssistRevisions(state.storyId, [{
       sceneId: state.sceneId, expectedPrompt: state.sourcePrompt, prompt: proposed
-    }], 'scene', state.sceneId, state.sourceFingerprint).then(function () {
+    }], 'scene', state.sceneId, state.sourceFingerprint, state.modelId).then(function () {
       return window.getPromptAssistSnapshot('scene');
     }).then(function (snapshot) {
       updateScene(snapshot, false);

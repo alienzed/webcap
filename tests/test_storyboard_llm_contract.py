@@ -103,10 +103,8 @@ def test_refine_prompt_preserves_existing_prompt_and_keeps_scene_fields_optional
     assert "smallest relevant edit" in prompt
     assert "Keep the camera behind her" in prompt
     assert schema["required"] == ["changed", "prompt"]
-    assert {"entryState", "exitState", "durationSeconds"}.issubset(schema["properties"])
-    assert "summary" not in schema["properties"]
-    assert "entryState" not in schema["required"]
-    assert "exitState" not in schema["required"]
+    assert "durationSeconds" in schema["properties"]
+    assert not {"summary", "entryState", "exitState"} & set(schema["properties"])
     assert schema["properties"]["durationSeconds"]["minimum"] == 6
     assert schema["properties"]["durationSeconds"]["maximum"] == 15
     assert "result_renderer" not in request
@@ -140,10 +138,7 @@ def test_develop_story_uses_simple_scene_schema_and_dense_scene_guidance():
     assert request["response_schema"]["required"] == ["scenes"]
     assert set(scene_schema["required"]) == {"title", "prompt", "suggestedDurationSeconds"}
     assert scene_schema["properties"]["prompt"]["type"] == "string"
-    assert "entryState" in scene_schema["properties"]
-    assert "exitState" in scene_schema["properties"]
-    assert "entryState" not in scene_schema["required"]
-    assert "exitState" not in scene_schema["required"]
+    assert not {"summary", "entryState", "exitState"} & set(scene_schema["properties"])
     assert "continuity" not in scene_schema["properties"]
     assert "invariantRefs" not in scene_schema["properties"]
     assert "sharedContextRefs" not in scene_schema["properties"]
@@ -243,7 +238,7 @@ def test_repair_scenes_is_sparse_and_prompt_is_complete_string():
     prompt = request["prompt"]
     fields = request["response_schema"]["properties"]["changes"]["items"]["properties"]["fields"]
 
-    assert set(fields["properties"]) == {"entryState", "exitState", "prompt"}
+    assert set(fields["properties"]) == {"prompt"}
     assert fields["properties"]["prompt"]["type"] == "string"
     assert "complete revised H3 prompt" in prompt
     assert "Return sparse updates to existing Scenes" in prompt
@@ -395,7 +390,9 @@ def test_individual_development_scene_uses_whole_outline_and_previous_authored_s
     assert "[COMPLETE SCENE OUTLINE]" in prompt
     assert "[CURRENT PLANNED SCENE]" in prompt
     assert "[PREVIOUS AUTHORED SCENE - RELATIONSHIP CONTEXT]" in prompt
-    assert "She reaches the station." in prompt
+    assert "She reaches the station." not in prompt
+    assert "She sees the platform." not in prompt
+    assert "A train appears." not in prompt
     assert "PREVIOUS FULL H3 PROMPT" in prompt
     assert "Scene 2 of 2" in prompt
     assert "Author exactly this one planned Scene" in prompt
@@ -480,11 +477,12 @@ def test_model_guidance_only_for_h3_authoring(monkeypatch):
 
 
 
-def test_extend_story_uses_only_last_exit_state_as_continuity_handoff():
+def test_extend_story_uses_saved_prompts_and_ignores_legacy_exit_state():
     story = _story()
     story["scenes"]["scene-2"]["exitState"] = "Mara reaches the locked lift."
     prompt = storyboard_llm_contract.build_request(story, "", "extend_story", scene_count=2)["prompt"]
-    assert "[LAST SCENE EXIT STATE]\nMara reaches the locked lift." in prompt
+    assert "LAST SCENE EXIT STATE" not in prompt
+    assert "Mara reaches the locked lift." not in prompt
     assert "EXISTING SECOND PROMPT" in prompt
 
 
@@ -655,3 +653,36 @@ def test_project_deep_qa_requires_saved_scene_prompts():
 
     with pytest.raises(ValueError, match="at least one saved Scene prompt"):
         storyboard_llm_contract.build_request(story, "", "project_deep_qa")
+
+
+def test_retired_scene_metadata_never_enters_active_prompt_contracts():
+    story = _story()
+    for scene in story["scenes"].values():
+        scene.update({
+            "summary": "OLD_SCENE_INTENT_MARKER",
+            "entryState": "OLD_SCENE_ENTRY_MARKER",
+            "exitState": "OLD_SCENE_EXIT_MARKER",
+            "intent": "OLD_SCENE_INTENT_FIELD_MARKER",
+        })
+    for operation, scene_id, instruction in (
+        ("write_prompt", "scene-2", ""),
+        ("refine_prompt", "scene-2", "Improve the camera framing."),
+        ("visual_direction", "scene-2", ""),
+        ("extend_story", "", ""),
+        ("repair_scenes", "", "Improve the timing of each Scene."),
+        ("project_deep_qa", "", ""),
+        ("prompt_assist", "scene-2", ""),
+    ):
+        kwargs = {"scene_count": 1} if operation == "extend_story" else {}
+        kwargs.update({"continuity_context": True} if operation == "refine_prompt" else {})
+        request = storyboard_llm_contract.build_request(
+            story, scene_id, operation, instruction, **kwargs,
+        )
+        prompt = request["prompt"]
+        for marker in (
+            "OLD_SCENE_INTENT_MARKER",
+            "OLD_SCENE_ENTRY_MARKER",
+            "OLD_SCENE_EXIT_MARKER",
+            "OLD_SCENE_INTENT_FIELD_MARKER",
+        ):
+            assert marker not in prompt, (operation, marker)

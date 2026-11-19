@@ -159,3 +159,80 @@ def test_project_deep_qa_status_marks_changed_scene_stale(tmp_path, monkeypatch)
     assert payload["sceneStatus"]["scene-1"]["fresh"] is False
     assert payload["preparedScenes"] == 0
     assert payload["projectFresh"] is False
+
+
+
+def test_prompt_assist_deep_qa_scene_uses_existing_director_chat_queue(monkeypatch):
+    story = _story()
+    monkeypatch.setattr(app_module, "storyboard_load_story", lambda story_id: story)
+    received = {}
+
+    def fake_enqueue(client, model, contract, context=None, label=""):
+        received.update(client=client, model=model, contract=contract, context=context, label=label)
+        return {"jobId": "deep-qa-scene-job", "status": "queued"}
+
+    monkeypatch.setattr(app_module, "enqueue_llm", fake_enqueue)
+    response = app_module.app.test_client().post("/fs/storyboard/prompt-assist", json={
+        "storyId": story["id"],
+        "sceneId": "scene-1",
+        "scope": "scene",
+        "model": "local::director-test",
+        "operation": "deep_qa_scene",
+        "expectedUpdatedAt": "rev-1",
+    })
+    payload = response.get_json()
+    assert response.status_code == 202
+    assert payload["job"]["jobId"] == "deep-qa-scene-job"
+    assert payload["sourceFingerprint"]
+    assert received["client"] == "chat"
+    assert received["model"] == "local::director-test"
+    assert received["contract"]["operation"] == "prompt_assist_deep_qa_scene"
+    assert "removes the coat" in received["contract"]["messages"][1]["content"]
+
+
+def test_prompt_assist_review_includes_only_fresh_deep_qa_intelligence(tmp_path, monkeypatch):
+    from tool.server.prompt_assist import scene_source_fingerprint
+
+    story = _story()
+    project_dir = tmp_path / "project"
+    project_dir.mkdir()
+    monkeypatch.setattr(app_module, "storyboard_load_story", lambda story_id: story)
+    monkeypatch.setattr("tool.server.storyboard_store._story_dir", lambda story_id: project_dir)
+    context = build_context(story, "scene", "scene-1")
+    scene_result = _scene_result("scene-1")
+    _write_json_atomic(project_dir / ".prompt_assist_deep_qa.json", {
+        "version": 1,
+        "scenes": {
+            "scene-1": {
+                "sourceFingerprint": scene_source_fingerprint(context, "scene-1"),
+                "preparedAt": "2026-11-19T12:00:00Z",
+                "result": scene_result,
+            }
+        },
+        "project": None,
+    })
+    received = {}
+
+    def fake_enqueue(client, model, contract, context=None, label=""):
+        received.update(client=client, model=model, contract=contract, context=context, label=label)
+        return {"jobId": "prompt-review-job", "status": "queued"}
+
+    monkeypatch.setattr(app_module, "enqueue_llm", fake_enqueue)
+    response = app_module.app.test_client().post("/fs/storyboard/prompt-assist", json={
+        "storyId": story["id"], "sceneId": "scene-1", "scope": "scene",
+        "model": "local::director-test", "operation": "review", "role": "continuity",
+        "expectedUpdatedAt": "rev-1",
+    })
+    assert response.status_code == 202
+    assert "CURRENT PROJECT DEEP QA SCENE INTELLIGENCE" in received["contract"]["messages"][1]["content"]
+    assert "raincoat" in received["contract"]["messages"][1]["content"]
+
+    story["scenes"]["scene-1"]["prompt"] += "\n[Shot 3] A new detail."
+    received.clear()
+    response = app_module.app.test_client().post("/fs/storyboard/prompt-assist", json={
+        "storyId": story["id"], "sceneId": "scene-1", "scope": "scene",
+        "model": "local::director-test", "operation": "review", "role": "continuity",
+        "expectedUpdatedAt": "rev-1",
+    })
+    assert response.status_code == 202
+    assert "CURRENT PROJECT DEEP QA SCENE INTELLIGENCE" not in received["contract"]["messages"][1]["content"]

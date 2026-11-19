@@ -383,3 +383,85 @@ def test_prompt_assist_apply_rejects_stale_project_deep_qa_evidence(tmp_path, mo
     assert response.status_code == 400
     assert "Deep QA context changed" in response.get_json()["error"]
     assert applied["called"] is False
+
+
+
+def test_project_deep_qa_status_reads_fresh_model_bound_receipts(tmp_path, monkeypatch):
+    story = _story()
+    project_dir = tmp_path / "project"
+    project_dir.mkdir()
+    monkeypatch.setattr(app_module, "storyboard_load_story", lambda story_id: story)
+    monkeypatch.setattr("tool.server.storyboard_store._story_dir", lambda story_id: project_dir)
+    receipts = {scene_id: _receipt(story, scene_id) for scene_id in story["sceneOrder"]}
+    project_context = build_context(story, "project")
+    _write_json_atomic(project_dir / ".prompt_assist_deep_qa.json", {
+        "version": 1,
+        "scenes": receipts,
+        "project": {
+            "version": 1,
+            "modelId": MODEL,
+            "sourceFingerprint": project_deep_qa_fingerprint(project_context, MODEL),
+            "preparedAt": "2026-11-19T12:05:00Z",
+            "result": _project_result(),
+        },
+    })
+    response = app_module.app.test_client().get(
+        "/fs/storyboard/prompt-assist/deep-qa",
+        query_string={"storyId": story["id"], "sceneId": "scene-1", "model": MODEL},
+    )
+    payload = response.get_json()
+    assert response.status_code == 200
+    assert payload["projectFresh"] is True
+    assert payload["sceneStatus"]["scene-1"]["fresh"] is True
+    assert payload["sceneIntelligence"]["sceneId"] == "scene-1"
+
+
+def test_project_deep_qa_status_does_not_break_when_another_scene_has_no_prompt(tmp_path, monkeypatch):
+    story = _story()
+    story["scenes"]["scene-2"]["prompt"] = ""
+    project_dir = tmp_path / "project"
+    project_dir.mkdir()
+    monkeypatch.setattr(app_module, "storyboard_load_story", lambda story_id: story)
+    monkeypatch.setattr("tool.server.storyboard_store._story_dir", lambda story_id: project_dir)
+    context = build_context(story, "scene", "scene-1")
+    _write_json_atomic(project_dir / ".prompt_assist_deep_qa.json", {
+        "version": 1,
+        "scenes": {"scene-1": _receipt(story, "scene-1")},
+        "project": None,
+    })
+    response = app_module.app.test_client().get(
+        "/fs/storyboard/prompt-assist/deep-qa",
+        query_string={"storyId": story["id"], "sceneId": "scene-1", "model": MODEL},
+    )
+    payload = response.get_json()
+    assert response.status_code == 200
+    assert payload["preparedScenes"] == 1
+    assert payload["totalScenes"] == 2
+    assert payload["sceneStatus"]["scene-2"]["reason"] == "No saved prompt"
+    assert payload["projectFresh"] is False
+
+
+def test_project_deep_qa_save_requires_and_binds_selected_model(tmp_path, monkeypatch):
+    story = _story()
+    project_dir = tmp_path / "project"
+    project_dir.mkdir()
+    monkeypatch.setattr(app_module, "storyboard_load_story", lambda story_id: story)
+    monkeypatch.setattr("tool.server.storyboard_store._story_dir", lambda story_id: project_dir)
+    context = build_context(story, "scene", "scene-1")
+    client = app_module.app.test_client()
+    missing_model = client.post("/fs/storyboard/prompt-assist/deep-qa", json={
+        "storyId": story["id"], "kind": "scene", "sceneId": "scene-1",
+        "sourceFingerprint": scene_source_fingerprint(context, "scene-1", MODEL),
+        "result": _scene_result("scene-1"),
+    })
+    assert missing_model.status_code == 400
+    assert "selected Director model" in missing_model.get_json()["error"]
+
+    saved = client.post("/fs/storyboard/prompt-assist/deep-qa", json={
+        "storyId": story["id"], "kind": "scene", "sceneId": "scene-1", "model": MODEL,
+        "sourceFingerprint": scene_source_fingerprint(context, "scene-1", MODEL),
+        "result": _scene_result("scene-1"),
+    })
+    assert saved.status_code == 200
+    receipt = json.loads((project_dir / ".prompt_assist_deep_qa.json").read_text(encoding="utf-8"))
+    assert receipt["scenes"]["scene-1"]["modelId"] == MODEL

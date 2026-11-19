@@ -2139,7 +2139,7 @@ def test_visual_direction_revision_uses_system_prompt_and_preserves_prompt_histo
     revised = storyboard_store.load_story(story["id"])["scenes"][scene["id"]]
     assert finished["status"] == "completed"
     assert captured["contract"]["operation"] == "visual_direction"
-    assert captured["contract"]["system_prompt"].startswith("Be exceptionally thorough")
+    assert captured["contract"]["system_prompt"].startswith("You are refining prompts for a text-to-video model.")
     assert revised["prompt"].startswith("The model walks toward camera in a complete relaxed denim look")
     assert revised["previousPrompt"] == "The model walks toward camera in blue jeans."
     assert revised["previousRevision"]["prompt"] == "The model walks toward camera in blue jeans."

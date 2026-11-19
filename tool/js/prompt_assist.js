@@ -102,14 +102,6 @@
       ? state.snapshot.story.scenes[id] : null;
     return scene && scene.title || id || 'Scene';
   }
-  function sourcePromptsForStory(story) {
-    var result = {};
-    (story.sceneOrder || []).forEach(function (id) {
-      var scene = story.scenes && story.scenes[id];
-      if (scene && typeof scene.prompt === 'string' && scene.prompt.trim()) result[id] = scene.prompt;
-    });
-    return result;
-  }
   function parsePrompt(prompt) {
     var headings = /^(Subject|Scene Overview|Environment \/ Continuity Anchors|Style \/ Visual Treatment|integrated_multimodal_description|overall_soundscape|non_diegetic_music):\s*$/gim;
     var matches = Array.from(String(prompt || '').matchAll(headings));
@@ -258,7 +250,6 @@
       el('prompt-assist-cuts').insertAdjacentHTML('beforeend',
         '<div class="prompt-assist-empty">Run the specialist review to see findings attached to the relevant cuts.</div>');
     }
-    el('prompt-assist-project-context').open = false;
   }
   function renderFindingCard(row) {
     var finding = row.finding;
@@ -276,8 +267,8 @@
     var decision = state.decisions[key] || 'pending';
     var label = decision === 'accepted' ? 'Accepted' : decision === 'rejected' ? 'Rejected' : 'Needs your decision';
     var actions = decision === 'pending'
-      ? '<div class="prompt-assist-recommendation-actions"><button type="button" data-pa-decision="accepted" data-pa-rec="' + index + '">Accept</button><button type="button" data-pa-decision="rejected" data-pa-rec="' + index + '">Reject</button></div>'
-      : '<div class="prompt-assist-recommendation-actions"><span>' + label + '</span><button type="button" class="prompt-assist-undo" data-pa-decision="pending" data-pa-rec="' + index + '">Undo</button></div>';
+      ? '<div class="prompt-assist-recommendation-actions"><button type="button" data-pa-decision="accepted" data-pa-rec="' + index + '"' + (state.busy ? ' disabled' : '') + '>Accept</button><button type="button" data-pa-decision="rejected" data-pa-rec="' + index + '"' + (state.busy ? ' disabled' : '') + '>Reject</button></div>'
+      : '<div class="prompt-assist-recommendation-actions"><span>' + label + '</span><button type="button" class="prompt-assist-undo" data-pa-decision="pending" data-pa-rec="' + index + '"' + (state.busy ? ' disabled' : '') + '>Undo</button></div>';
     return '<article class="prompt-assist-recommendation ' + decision + '">' +
       '<div class="prompt-assist-recommendation-meta"><span>Creative Editor</span><em>' + esc(item.priority || 'useful') + '</em></div>' +
       '<strong>' + esc(item.issue) + '</strong><p>' + esc(item.rationale) + '</p>' +
@@ -333,7 +324,7 @@
     el('prompt-assist-accept-all').disabled = state.busy || !recommendations.length;
     el('prompt-assist-reject-all').disabled = state.busy || !recommendations.length;
     el('prompt-assist-prepare-revision').disabled = state.busy || !accepted;
-    el('prompt-assist-apply').disabled = state.busy || !state.revisions;
+    el('prompt-assist-apply').disabled = state.busy || !state.revisions || !el('prompt-assist-revision-prompt').value.trim() || el('prompt-assist-revision-prompt').value === state.sourcePrompt;
     el('prompt-assist-decision-summary').textContent = recommendations.length
       ? accepted + ' accepted · ' + rejected + ' rejected · ' + (recommendations.length - accepted - rejected) + ' pending'
       : 'No recommendations yet.';
@@ -475,11 +466,9 @@
     setBusy(true, 'Running three independent specialist reviews…');
     resetSession();
     renderAll();
-    var completed = [];
     return Promise.all(roles.map(function (role) {
       return request('review', {role: role}).then(function (result) {
         state.reviews[role] = validateReview(role, parseStructured(result, labels[role]));
-        completed.push(role);
       }).catch(function (error) {
         state.reviewErrors[role] = String(error && error.message || error);
         if (window.reportConsoleError) window.reportConsoleError('Prompt Assist · ' + labels[role], error);
@@ -621,8 +610,9 @@
     if (!state.revisions) return;
     el('prompt-assist-revision-prompt').value = state.sourcePrompt;
     renderRevisionDiff();
+    syncActions();
   });
-  el('prompt-assist-revision-prompt').addEventListener('input', renderRevisionDiff);
+  el('prompt-assist-revision-prompt').addEventListener('input', function () { renderRevisionDiff(); syncActions(); });
   el('prompt-assist-scene-select').addEventListener('change', function () { switchScene(this.value); });
   el('prompt-assist-scene-prev').addEventListener('click', function () {
     var order = state.snapshot.story.sceneOrder, index = order.indexOf(state.sceneId);

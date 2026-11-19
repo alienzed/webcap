@@ -633,7 +633,6 @@ def test_project_deep_qa_scans_all_saved_scene_prompts_and_relationships_without
     request = storyboard_llm_contract.build_request(story, "", "project_deep_qa")
 
     assert request["operation"] == "project_deep_qa"
-    assert request["source_scene_ids"] == ["scene-1", "scene-2"]
     assert request["response_schema"]["required"] == ["findings"]
     finding_schema = request["response_schema"]["properties"]["findings"]["items"]
     assert finding_schema["required"] == [

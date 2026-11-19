@@ -2,9 +2,15 @@
 
 **Status:** Product/behavior contract for the Prompt Assist and Project Deep QA work. This document records the agreed direction; it is not a claim that every described behavior is already implemented. Verify concrete data fields, persistence, cache invalidation, and UI wiring against the current code before implementation. Follow `AGENTS.md`.
 
+## Vision
+
+Help authors get better renders sooner by catching preventable prompting problems and offering practical, specific improvements—without adding another review process or making creative work heavier.
+
+The goal is to save time and reduce trial and error, not create new work for the author.
+
 ## Purpose
 
-These are complementary, independently usable tools for improving the written instructions that drive Scene generation.
+These are complementary, independently usable tools for improving the written instructions that drive Scene generation. They are time-saving assistance within existing workflows, not new mandatory stages or heavyweight workspaces.
 
 - **Project Deep QA** looks across an entire Project. It finds potential weaknesses in individual Scene/cut instructions and problems that emerge from relationships across cuts and Scenes. It should make findings actionable and prepare a practical candidate fix where the evidence supports one.
 - **Prompt Assist** works on one selected Scene at a time. It helps the author identify practical weaknesses in that Scene's written prompt/cut instructions and prepare targeted improvements.
@@ -47,7 +53,9 @@ Before implementation, trace the existing Deep QA implementation and its actual 
 
 Prompt Assist is a standalone, Scene-specific assistant. It focuses on one selected Scene per working session/modal and the text that defines that Scene's intended result, including its cut instructions. It does not inspect generated Takes, images, video, or visual references.
 
-Its purpose is practical improvement: detect a meaningful weakness, explain it briefly in terms of the expected result, and prepare a concrete, editable correction that the author can apply. Avoid academic explanations, speculative theory, long lists of alternatives, or broad prompt rewrites.
+Prompt Assist complements, rather than replaces, the standalone visual agent. The visual agent remains its own capability and is the primary route for visual assessment. Prompt Assist is a practical text-focused fallback when the visual agent misses an issue, cannot resolve it, or the author wants to improve the written instructions directly. The two capabilities must not be collapsed into one workflow or made dependent on each other.
+
+Its purpose is practical improvement: detect a meaningful weakness, explain it briefly in terms of the expected result, and prepare a concrete, editable correction that the author can apply. Be generous with useful specificity, following the spirit of Enrich Sight: spell out the relevant details explicitly rather than relying on the generation model to infer them. Keep that specificity grounded in the author's intent and the supplied text. Avoid academic explanations, speculative theory, long lists of alternatives, or broad prompt rewrites.
 
 Use the interaction principles established by Caption Assist rather than inventing a new review paradigm:
 

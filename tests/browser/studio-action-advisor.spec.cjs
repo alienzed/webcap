@@ -2,6 +2,8 @@
 const {test,expect}=require('./test.cjs');
 const {resetModel,queueModel,observedModels,openDirector,say,seedProject,story,stories,openProject,runWrite}=require('./helpers.cjs');
 
+test.use({advisorEnabled:true});
+
 test('Action Advisor is opt-in and cannot independently issue a Write',async({page,request})=>{
   await resetModel(request);
   const project=await seedProject(page,'Advisor opt out '+Date.now(),{
@@ -110,6 +112,7 @@ test('Advisor setting is global and the model selector is absent',async({page,re
   await resetModel(request);
   await openDirector(page);
   await expect(page.locator('#studio-action-advisor-model, #studio-action-advisor-enabled')).toHaveCount(0);
+  await page.locator('#director-chat-close').click();
   await page.locator('#shell-settings-btn').click();
   await page.locator('#app-settings-tab-director').click();
   await expect(page.locator('#app-settings-studio-action-advisor')).toBeChecked();

@@ -1662,7 +1662,6 @@ def test_prompt_assist_patch_is_independent_and_conflict_safe(storyboard_fs):
     updated, first = storyboard_store.apply_prompt_assist(
         story["id"], scene["id"], original,
         "She wears a blue coat.", "She wears a red coat.",
-        model_id="test-model", job_id="assist-1",
     )
     after_first = first["prompt"]
     assert "red coat" in after_first
@@ -1671,7 +1670,6 @@ def test_prompt_assist_patch_is_independent_and_conflict_safe(storyboard_fs):
     updated, second = storyboard_store.apply_prompt_assist(
         story["id"], scene["id"], after_first,
         "A woman enters.", "A woman enters through the glass doors.",
-        model_id="test-model", job_id="assist-2",
     )
     assert "red coat" in second["prompt"]
     assert "through the glass doors" in second["prompt"]

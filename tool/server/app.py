@@ -2601,7 +2601,7 @@ def storyboard_prompt_assist_route():
         if operation not in {"deep_qa"}:
             cached = _prompt_assist_deep_qa_read(story_id)
             if cached and cached.get("sourceFingerprint") == project_fingerprint:
-                contract["messages"][1]["content"] += "\\n\\n[CURRENT PROJECT DEEP QA INTELLIGENCE]\\n" + json.dumps(cached.get("intelligence") or {}, ensure_ascii=False)
+                contract["messages"][1]["content"] += "\n\n[CURRENT PROJECT DEEP QA INTELLIGENCE]\n" + json.dumps(cached.get("intelligence") or {}, ensure_ascii=False)
 
         job = enqueue_llm(
             "chat", model_id, contract,

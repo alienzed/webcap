@@ -577,6 +577,7 @@ def _client_result(client, context, llm_result, job_id="", frozen_contract=None)
             "storyId": story["id"],
             "sceneId": scene["id"],
             "result": scene["prompt"],
+            "changed": data.get("changed") is not False,
             "model": llm_result["model"],
             "finishReason": llm_result.get("finishReason"),
             "usage": llm_result.get("usage"),
@@ -819,6 +820,7 @@ def _execute_claimed(job_id, gpu_reserved):
         instruction = str(context.get("sourceInstruction") or "")
         completed = 0
         succeeded_scene_ids = []
+        changed_scene_ids = []
         failures = []
         with _revision_progress_lock:
             _revision_progress[job_id] = {"completed": 0, "total": len(scene_ids), "phase": "Revising Scenes"}
@@ -832,6 +834,7 @@ def _execute_claimed(job_id, gpu_reserved):
                                 "storyId": context["storyId"],
                                 "revisedSceneCount": completed,
                                 "succeededSceneIds": succeeded_scene_ids,
+                                "changedSceneIds": changed_scene_ids,
                                 "failedScenes": failures,
                                 "stopped": True,
                             })
@@ -865,6 +868,8 @@ def _execute_claimed(job_id, gpu_reserved):
                             "operation": scene_operation, "sourceInstruction": instruction,
                         }, result, job_id=job_id, frozen_contract=scene_contract)
                     succeeded_scene_ids.append(scene_id)
+                    if applied.get("changed") is True:
+                        changed_scene_ids.append(scene_id)
                     completed += 1
                 except Exception as exc:
                     story = load_story(str(context.get("storyId") or ""))
@@ -885,12 +890,12 @@ def _execute_claimed(job_id, gpu_reserved):
             with _revision_progress_lock:
                 _revision_progress.pop(job_id, None)
         generated = 0
-        if context.get("generateFreshTakes") is True and succeeded_scene_ids:
+        if context.get("generateFreshTakes") is True and changed_scene_ids:
             from .storyboard_generation import start_generation
             # Only successfully revised Scenes receive Takes. The handoff is server-owned.
             with _revision_progress_lock:
                 _revision_progress[job_id] = {"completed": completed, "total": len(scene_ids), "phase": "Queuing fresh Takes"}
-            for scene_id in succeeded_scene_ids:
+            for scene_id in changed_scene_ids:
                 try:
                     start_generation(str(context["storyId"]), scene_id)
                     generated += 1
@@ -905,8 +910,10 @@ def _execute_claimed(job_id, gpu_reserved):
                     })
         return execution_finish_job_transient(job_id, status="completed", result={
             "storyId": context["storyId"],
-            "revisedSceneCount": len(succeeded_scene_ids),
+            "revisedSceneCount": len(changed_scene_ids),
+            "completedSceneCount": len(succeeded_scene_ids),
             "succeededSceneIds": succeeded_scene_ids,
+            "changedSceneIds": changed_scene_ids,
             "failedScenes": failures,
             "freshTakesQueued": generated,
             "requestedSceneCount": len(scene_ids),

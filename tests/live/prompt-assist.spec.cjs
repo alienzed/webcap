@@ -123,62 +123,22 @@ test('LIVE Prompt Assist runs independent specialists, discusses findings, and a
   await dialog.locator('#prompt-assist-done').click();
 });
 
-test('LIVE Prompt Assist keeps one Scene in focus and preserves its review while navigating Scenes',async({page},testInfo)=>{
+test('LIVE Prompt Assist keeps one Scene in focus and preserves inline decisions while navigating',async({page},testInfo)=>{
   const project=await seedProject(page,'Live Prompt Assist Scene Navigation '+Date.now(),{
-    concept:'A courier arrives during a storm and meets a colleague the following morning.',
-    style:'Grounded cinematic realism with natural light.'
+    concept:'A short sports highlight showing one decisive baseball hit and its immediate aftermath.',
+    style:'Photorealistic sports cinematography; clear, purposeful framing.'
   });
-  const arrival=await seedScene(page,project.id,{
-    title:'Rainy Arrival',
-    prompt:[
-      'Subject:',
-      'A courier in a dark-blue raincoat carrying a canvas delivery bag.',
-      '',
-      'Scene Overview:',
-      'The courier arrives at an apartment lobby during a storm.',
-      '',
-      'Environment / Continuity Anchors:',
-      'The rain remains outside; the lobby floor is dry.',
-      '',
-      'Style / Visual Treatment:',
-      'Grounded cinematic realism.',
-      '',
-      'integrated_multimodal_description:',
-      '[Shot 1] Wide view of the courier entering through the glass doors, rain visible outside.',
-      '[Shot 2] Medium shot as the courier removes the wet coat and hangs it on a hook.'
-    ].join('\n'),
-    durationSeconds:8
-  });
-  const morning=await seedScene(page,project.id,{
-    title:'Morning Meeting',
-    prompt:[
-      'Subject:',
-      'The courier meets a colleague in the same apartment lobby the following morning.',
-      '',
-      'Scene Overview:',
-      'The colleague receives the delivery bag.',
-      '',
-      'Environment / Continuity Anchors:',
-      'Morning light enters through the same glass doors.',
-      '',
-      'Style / Visual Treatment:',
-      'Grounded cinematic realism.',
-      '',
-      'integrated_multimodal_description:',
-      '[Shot 1] The courier, now without the raincoat, approaches the colleague.',
-      '[Shot 2] The colleague accepts the canvas delivery bag and they exchange a greeting.'
-    ].join('\n'),
-    durationSeconds:7
-  });
+  const first=await seedScene(page,project.id,{title:'The Hit',prompt:promptOne,durationSeconds:8});
+  const second=await seedScene(page,project.id,{title:'After the Hit',prompt:promptTwo,durationSeconds:6});
 
   const model=await openLiveDirector(page);
   await openProject(page,project.id);
   await chooseStoryboardModel(page,model);
-  await page.locator('.storyboard-scene-progress-card[data-scene-id="'+arrival.id+'"] [data-scene-progress]').click();
+  await page.locator('.storyboard-scene-progress-card[data-scene-id="'+first.id+'"] [data-scene-progress]').click();
   await page.locator('#storyboard-prompt-assist-btn').click();
   const dialog=page.locator('#prompt-assist-dialog');
   await expect(dialog).toBeVisible();
-  await expect(dialog.locator('#prompt-assist-scene-select')).toHaveValue(arrival.id);
+  await expect(dialog.locator('#prompt-assist-scene-select')).toHaveValue(first.id);
   await dialog.locator('#prompt-assist-run').click();
   await expect(dialog.locator('#prompt-assist-status'))
     .toHaveText('All three specialist reviews are complete.',{timeout:480000});
@@ -186,25 +146,30 @@ test('LIVE Prompt Assist keeps one Scene in focus and preserves its review while
   await expect(dialog.locator('#prompt-assist-status'))
     .toHaveText('Recommendations are ready. Accept or reject them individually.',{timeout:240000});
   const firstReviewCount=await dialog.locator('#prompt-assist-visual-count').textContent();
+  const recs=dialog.locator('.prompt-assist-recommendation');
+  await expect(recs).not.toHaveCount(0);
+  await recs.first().locator('[data-pa-decision="accepted"]').click();
+  await expect(dialog.locator('#prompt-assist-decision-summary')).toContainText('1 accepted');
 
-  await dialog.locator('#prompt-assist-scene-select').selectOption(morning.id);
-  await expect(dialog.locator('#prompt-assist-scene-title')).toHaveText('Morning Meeting');
+  await dialog.locator('#prompt-assist-scene-select').selectOption(second.id);
+  await expect(dialog.locator('#prompt-assist-scene-title')).toHaveText('After the Hit');
   await expect(dialog.locator('#prompt-assist-visual-count')).toHaveText('Waiting');
-  await expect(dialog.locator('#prompt-assist-cuts')).toContainText('The colleague accepts the canvas delivery bag');
-  await expect(dialog.locator('#prompt-assist-cuts')).not.toContainText('removes the wet coat');
+  await expect(dialog.locator('#prompt-assist-cuts')).toContainText('retrieves the baseball');
+  await expect(dialog.locator('#prompt-assist-cuts')).not.toContainText('ceiling fan');
 
-  await dialog.locator('#prompt-assist-scene-select').selectOption(arrival.id);
-  await expect(dialog.locator('#prompt-assist-scene-title')).toHaveText('Rainy Arrival');
+  await dialog.locator('#prompt-assist-scene-select').selectOption(first.id);
+  await expect(dialog.locator('#prompt-assist-scene-title')).toHaveText('The Hit');
   await expect(dialog.locator('#prompt-assist-visual-count')).toHaveText(firstReviewCount);
   await expect(dialog.locator('#prompt-assist-editor-count')).not.toHaveText('Waiting');
+  await expect(dialog.locator('#prompt-assist-decision-summary')).toContainText('1 accepted');
 
   const saved=await story(page,project.id);
-  expect(saved.scenes[arrival.id].prompt).toContain('removes the wet coat');
-  expect(saved.scenes[morning.id].prompt).toContain('accepts the canvas delivery bag');
+  expect(saved.scenes[first.id].prompt).toBe(promptOne);
+  expect(saved.scenes[second.id].prompt).toBe(promptTwo);
   await testInfo.attach('prompt-assist-scene-navigation-live.json',{
-    body:Buffer.from(JSON.stringify({model,projectId:project.id,sceneIds:[arrival.id,morning.id],
+    body:Buffer.from(JSON.stringify({model,projectId:project.id,sceneIds:[first.id,second.id],
       restoredVisualReview:firstReviewCount,
-      editorRecommendations:await dialog.locator('#prompt-assist-decision-summary').textContent()},null,2)),
+      editorDecisions:await dialog.locator('#prompt-assist-decision-summary').textContent()},null,2)),
     contentType:'application/json'
   });
   await dialog.locator('#prompt-assist-done').click();

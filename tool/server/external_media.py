@@ -197,6 +197,8 @@ def _fresh(entry, meta):
     return (isinstance(meta, dict)
             and meta.get("size") == entry["fileSize"]
             and meta.get("mtime") == entry["mtime"]
+            and (not current_quality(meta)
+                 or (meta["quality"].get("sourceMtimeNs") == entry.get("mtimeNs")))
             and _dimensions(meta.get("resolution")) is not None
             and not meta.get("error"))
 
@@ -265,7 +267,7 @@ def _discover(snapshot):
                     "id": "external:" + str(root) + "/" + relative, "source": "external", "role": "source",
                     "mediaKind": "video" if file_path.suffix.lower() in VIDEO_EXTS else "image",
                     "fileName": name, "relativePath": relative,
-                    "fileSize": stat.st_size, "mtime": int(stat.st_mtime),
+                    "fileSize": stat.st_size, "mtime": int(stat.st_mtime), "mtimeNs": stat.st_mtime_ns,
                     "createdAt": int(stat.st_mtime * 1000), "rating": None, "tags": [],
                 }
                 previous = cache.get(name)
@@ -528,15 +530,19 @@ def _metadata_worker(snapshot, job):
                     if fresh and current_quality(cached):
                         continue
                     details = dict(cached) if fresh else _technical_probe(path)
+                    source_stat = path.stat()
                     details["quality"] = analyze_media_quality(
                         path, details, cancel=job["cancel"])
+                    details["quality"]["sourceMtimeNs"] = source_stat.st_mtime_ns
                 else:
                     if item.get("metadataCached") and fresh:
                         continue
                     details = cached if fresh else _technical_probe(path)
                 # Source may have changed between indexing and probing.
                 stat = path.stat()
-                if details["size"] != stat.st_size or details["mtime"] != int(stat.st_mtime):
+                if (details["size"] != stat.st_size or details["mtime"] != int(stat.st_mtime)
+                        or (job.get("mode") == "quality" and
+                            details["quality"]["sourceMtimeNs"] != stat.st_mtime_ns)):
                     raise RuntimeError("Source changed; refresh the external folder: " + relative)
                 with _LOCK:
                     if not item.get("metadata"):
@@ -848,7 +854,9 @@ def curate_external_file(data):
         previous = cache.get(source.name)
         entry = dict(previous) if isinstance(previous, dict) else {}
         stat = source.stat()
-        if entry.get("size") != stat.st_size or entry.get("mtime") != int(stat.st_mtime):
+        if (entry.get("size") != stat.st_size or entry.get("mtime") != int(stat.st_mtime)
+                or (current_quality(entry) and
+                    entry["quality"].get("sourceMtimeNs") != stat.st_mtime_ns)):
             for key in ("resolution", "duration", "quality"):
                 entry.pop(key, None)
         entry["size"] = stat.st_size

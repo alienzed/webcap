@@ -2320,3 +2320,28 @@ def test_storyboard_prompt_assist_rejects_stale_scene_prompt(llm_root):
             job_id="assist-job",
             frozen_contract={"operation": "prompt_assist"},
         )
+
+
+def test_prompt_assist_and_project_deep_qa_participate_in_backend_target_locking(llm_root):
+    story = storyboard_store.create_story({"title": "QA target locks"})
+    _, scene = storyboard_store.add_scene(story["id"], {
+        "title": "One Scene", "prompt": "A person crosses the room."
+    })
+
+    assist = llm_runner.enqueue(
+        "storyboard",
+        "qwen",
+        {"operation": "prompt_assist", "prompt": "Review one Scene.", "output": "json"},
+        context={"storyId": story["id"], "sceneId": scene["id"], "operation": "prompt_assist"},
+    )
+    deep_qa = llm_runner.enqueue(
+        "storyboard",
+        "qwen",
+        {"operation": "project_deep_qa", "prompt": "Review the Project.", "output": "json"},
+        context={"storyId": story["id"], "sceneId": "", "operation": "project_deep_qa"},
+    )
+
+    assert assist["status"] == "queued"
+    assert deep_qa["status"] == "queued"
+    assert llm_runner.storyboard_target_busy(story["id"], "scene-prompt", scene["id"]) is True
+    assert llm_runner.storyboard_target_busy(story["id"], "repair") is True

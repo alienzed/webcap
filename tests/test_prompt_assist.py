@@ -185,6 +185,9 @@ def test_deep_qa_scene_contract_prepares_cut_level_state_and_visual_intent():
     assert contract["response_schema"]["required"] == [
         "sceneId", "summary", "purpose", "keyVisualMoments", "cuts"
     ]
+    cut_schema = contract["response_schema"]["properties"]["cuts"]["items"]
+    assert "sourceEvidence" in cut_schema["required"]
+    assert "inferences" in cut_schema["required"]
 
 
 def test_deep_qa_project_contract_uses_compact_scene_intelligence_and_order():

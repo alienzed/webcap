@@ -6270,9 +6270,7 @@
         sceneId:promptAssistSession.sceneId,
         expectedPrompt:expectedPrompt,
         targetText:finding.targetText,
-        replacementText:replacement,
-        model:promptAssistSession.model,
-        jobId:promptAssistSession.jobId
+        replacementText:replacement
       })
     }).then(function (response) {
       return response.json().then(function (payload) {

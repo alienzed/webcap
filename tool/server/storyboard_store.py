@@ -1820,7 +1820,7 @@ def apply_workshop_shots(story_id, scene_id, expected_prompt, replacement):
 
 
 @_serialized_mutation
-def apply_prompt_assist(story_id, scene_id, expected_prompt, target_text, replacement_text, model_id="", job_id=""):
+def apply_prompt_assist(story_id, scene_id, expected_prompt, target_text, replacement_text):
     story = load_story(story_id)
     scenes = story.get("scenes") if isinstance(story.get("scenes"), dict) else {}
     current = scenes.get(scene_id)

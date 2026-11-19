@@ -4,6 +4,8 @@
 
 ## Current Studio Director workflow
 
+For the Prompt Assist review workspace, specialist responsibilities, source-context rules, Apply behavior and live acceptance coverage, see [Prompt Assist MVP](prompt-assist-mvp.md).
+
 Director collaborates on Projects (Title, Concept / overview, Visual / atmosphere, Invariants) and Scenes (Title, complete H3 Prompt, duration). Legacy Scene Intent remains stored for compatibility, not as an active Director authoring field.
 
 - **Chat** is ordinary creative dialogue, with response depth proportionate to the question. It can discuss or show creative material on request, but it does not create structured saved fields or invoke Write.

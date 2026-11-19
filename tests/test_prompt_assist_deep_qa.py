@@ -144,6 +144,7 @@ def test_project_deep_qa_status_marks_changed_scene_stale(tmp_path, monkeypatch)
         "version": 1,
         "scenes": {
             "scene-1": {
+                "version": 1,
                 "sourceFingerprint": fingerprint,
                 "preparedAt": "2026-11-19T12:00:00Z",
                 "result": _scene_result("scene-1"),
@@ -206,6 +207,7 @@ def test_prompt_assist_review_includes_only_fresh_deep_qa_intelligence(tmp_path,
         "version": 1,
         "scenes": {
             "scene-1": {
+                "version": 1,
                 "sourceFingerprint": scene_source_fingerprint(context, "scene-1"),
                 "preparedAt": "2026-11-19T12:00:00Z",
                 "result": scene_result,
@@ -253,6 +255,7 @@ def test_project_deep_qa_index_uses_only_current_saved_scene_receipts(tmp_path, 
     for scene_id in story["sceneOrder"]:
         context = build_context(story, "scene", scene_id)
         receipts[scene_id] = {
+            "version": 1,
             "sourceFingerprint": scene_source_fingerprint(context, scene_id),
             "preparedAt": "2026-11-19T12:00:00Z",
             "result": _scene_result(scene_id),

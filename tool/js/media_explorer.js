@@ -816,6 +816,7 @@
   function externalParams() { return {directory:externalDirectory, recursive:el('media-explorer-recursive').checked ? '1' : '0', path:externalPath, min_side:el('media-explorer-min-side').value, min_mp:el('media-explorer-min-mp').value, min_duration:el('media-explorer-min-duration').value, max_duration:el('media-explorer-max-duration').value, quality:el('media-explorer-quality').value}; }
   function syncExternalControls() {
     var external = isExternal();
+    if (!external && el('media-explorer-sort').value === 'detail') el('media-explorer-sort').value = 'newest';
     el('media-explorer-sort').querySelector('option[value="detail"]').hidden = !external;
     el('media-explorer-analyze-quality').classList.toggle('hidden', !external);
     el('media-explorer-external-path-bar').classList.toggle('hidden', !external);
@@ -914,9 +915,9 @@
       }
     }).catch(report);
   }
-  function requestExternalMetadata(scope, files) {
+  function requestExternalMetadata(scope, files, mode) {
     var payload = Object.assign(externalParams(), {
-      scope:scope, files:files || [], mode:arguments.length > 2 ? arguments[2] : 'technical', kind:el('media-explorer-kind').value,
+      scope:scope, files:files || [], mode:mode || 'technical', kind:el('media-explorer-kind').value,
       search:el('media-explorer-search').value.trim()
     });
     return fetch('/fs/media_explorer/external/metadata', {

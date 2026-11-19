@@ -2209,6 +2209,10 @@ def test_visual_direction_continues_after_scene_failure_and_reports_exact_outcom
     assert result["completedSceneCount"] == 2
     assert result["revisedSceneCount"] == 2
     assert result["succeededSceneIds"] == [scene_ids[0], scene_ids[2]]
+    assert result["succeededScenes"] == [
+        {"sceneId": scene_ids[0], "title": "First look", "changed": True},
+        {"sceneId": scene_ids[2], "title": "Third look", "changed": True},
+    ]
     assert result["changedSceneIds"] == [scene_ids[0], scene_ids[2]]
     assert result["failedScenes"] == [{
         "sceneId": scene_ids[1],

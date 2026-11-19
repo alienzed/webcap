@@ -2014,7 +2014,12 @@
   }
 
   function reviseScenes(instruction, modelId, generateFreshTakes, continuityContext, sourceInput) {
-    return reviseScenesWithOptions(instruction, modelId, generateFreshTakes, continuityContext, sourceInput);
+    // Preserve the established five-argument entrypoint; scoped callers may
+    // optionally supply selected Scene IDs and a pass type as trailing arguments.
+    return reviseScenesWithOptions(
+      instruction, modelId, generateFreshTakes, continuityContext, sourceInput,
+      arguments[5], arguments[6]
+    );
   }
 
   function reviseScenesWithOptions(instruction, modelId, generateFreshTakes, continuityContext, sourceInput, selectedSceneIds, passType) {
@@ -6264,7 +6269,7 @@
       run.disabled = false;
       return;
     }
-    var revision = reviseScenesWithOptions(
+    var revision = reviseScenes(
       instruction, storyState.director.modelId, generateFreshTakes,
       preset === 'continuity', el('storyboard-director-tools-instruction'),
       selectedSceneIds, preset === 'visual_direction' ? 'visual_direction' : 'standard'

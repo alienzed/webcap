@@ -6224,8 +6224,6 @@
             storyId:storyId,
             sceneId:sceneId,
             sourcePrompt:context.prompt,
-            jobId:result.jobId,
-            model:result.model || storyState.director.modelId,
             findings:Array.isArray(result.findings) ? result.findings : []
           };
           el("storyboard-prompt-assist-source").textContent = context.prompt;

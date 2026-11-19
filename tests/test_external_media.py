@@ -675,3 +675,89 @@ def test_saved_view_rename_preserves_tag_identity_and_filters(tmp_path, monkeypa
         external_media.rename_media_view({"name": "Collection: New", "newName": "Other"})
     with pytest.raises(ValueError):
         external_media.rename_media_view({"name": "Missing", "newName": "New"})
+
+
+def test_quality_scan_keeps_technical_metadata_and_curated_fields(tmp_path, monkeypatch):
+    root = tmp_path / "quality"
+    file = _file(root / "scene.mp4")
+    snapshot = _finished_snapshot(root)
+    monkeypatch.setattr(external_media, "_technical_probe", _probe)
+    calls = []
+    def analyze(path, details, *, cancel):
+        calls.append(path)
+        assert details["resolution"] == "1920x1080"
+        return {"version": 1, "method": "multiscale-detail", "detailSignal": 24.3,
+                "sampleCount": 3, "measurableCount": 3, "failedSamples": 0,
+                "samples": [{"seconds": 0.3, "detailSignal": 24.3}]}
+    monkeypatch.setattr(external_media, "analyze_media_quality", analyze)
+    job = _job(snapshot, ["scene.mp4"])
+    job["mode"] = "quality"
+    external_media._metadata_worker(snapshot, job)
+    assert calls == [file]
+    assert job["failed"] == 0 and job["completed"] == 1
+    record = snapshot["items"][0]["metadata"]
+    assert record["resolution"] == "1920x1080"
+    assert record["quality"]["detailSignal"] == 24.3
+    assert external_media._query_items(snapshot, {"quality": "measured"}) == snapshot["items"]
+    assert external_media._query_items(snapshot, {"quality": "unscanned"}) == []
+    assert external_media._query_items(snapshot, {"sort": "detail"}) == snapshot["items"]
+    persisted = json.loads((root / "media_metadata.json").read_text())
+    assert persisted["scene.mp4"]["quality"]["version"] == 1
+
+    # A current scan doesn't decode unchanged material a second time.
+    job = _job(snapshot, ["scene.mp4"])
+    job["mode"] = "quality"
+    external_media._metadata_worker(snapshot, job)
+    assert calls == [file]
+    assert job["failed"] == 0
+
+
+def test_quality_sort_unknown_last_in_both_directions(tmp_path):
+    root = tmp_path / "detail-sort"
+    _file(root / "a.mp4")
+    _file(root / "b.mp4")
+    _file(root / "unknown.mp4")
+    snapshot = _finished_snapshot(root)
+    for name, signal in (("a.mp4", 40.0), ("b.mp4", 12.0)):
+        item = snapshot["by_path"][name]
+        item["metadata"] = {"quality": {"version": 1, "method": "multiscale-detail",
+                                          "sampleCount": 6, "detailSignal": signal}}
+    assert [item["fileName"] for item in external_media._query_items(
+        snapshot, {"sort": "detail"})] == ["a.mp4", "b.mp4", "unknown.mp4"]
+    assert [item["fileName"] for item in external_media._query_items(
+        snapshot, {"sort": "detail", "direction": "asc"})] == ["b.mp4", "a.mp4", "unknown.mp4"]
+
+
+def test_quality_cache_visible_only_for_matching_source(tmp_path):
+    root = tmp_path / "stale-quality"
+    file = _file(root / "scene.mp4")
+    stat = file.stat()
+    old = {"size": stat.st_size + 1, "mtime": int(stat.st_mtime),
+           "resolution": "3840x2160",
+           "quality": {"version": 1, "method": "multiscale-detail",
+                       "sampleCount": 4, "detailSignal": 42.0}}
+    (root / "media_metadata.json").write_text(json.dumps({"scene.mp4": old}))
+    snapshot = _finished_snapshot(root)
+    assert "quality" not in snapshot["items"][0].get("metadata", {})
+    assert len(external_media._query_items(snapshot, {"quality": "unscanned"})) == 1
+
+
+def test_quality_scan_cancellation_skips_remaining_items(tmp_path, monkeypatch):
+    import threading
+    root = tmp_path / "quality-cancel"
+    _file(root / "one.mp4")
+    _file(root / "two.mp4")
+    snapshot = _finished_snapshot(root)
+    monkeypatch.setattr(external_media, "_technical_probe", _probe)
+    event = threading.Event()
+    seen = []
+    def analyze(path, details, *, cancel):
+        seen.append(path.name)
+        cancel.set()
+        raise InterruptedError("stopped")
+    monkeypatch.setattr(external_media, "analyze_media_quality", analyze)
+    job = _job(snapshot, ["one.mp4", "two.mp4"])
+    job["mode"] = "quality"
+    external_media._metadata_worker(snapshot, job)
+    assert seen == ["one.mp4"]
+    assert job["canceled"] and job["completed"] == 1 and job["failed"] == 0

@@ -538,24 +538,49 @@ def build_deep_qa_project_contract(context, scene_results):
 
 
 def validate_deep_qa_scene(result, scene_id, valid_shots):
-    if not isinstance(result, dict) or str(result.get("sceneId") or "") != str(scene_id):
-        raise ValueError("Project Deep QA returned an invalid Scene reference.")
+    required = ("summary", "purpose", "keyVisualMoments", "cuts")
+    if (not isinstance(result, dict) or str(result.get("sceneId") or "") != str(scene_id)
+            or any(not isinstance(result.get(key), expected) for key, expected in (
+                ("summary", str), ("purpose", str), ("keyVisualMoments", list), ("cuts", list)
+            ))):
+        raise ValueError("Project Deep QA returned an invalid Scene result.")
     valid = set(int(value) for value in valid_shots)
-    for cut in result.get("cuts") or []:
-        if not isinstance(cut, dict) or type(cut.get("shotNumber")) is not int or cut["shotNumber"] not in valid:
-            raise ValueError("Project Deep QA returned an unknown cut reference.")
+    seen = set()
+    for cut in result["cuts"]:
+        if (not isinstance(cut, dict) or type(cut.get("shotNumber")) is not int
+                or cut["shotNumber"] not in valid or cut["shotNumber"] in seen):
+            raise ValueError("Project Deep QA returned an unknown or duplicate cut reference.")
+        seen.add(cut["shotNumber"])
+        for key in ("visualIntent", "focalElement", "action"):
+            if not isinstance(cut.get(key), str):
+                raise ValueError("Project Deep QA cut is missing " + key + ".")
+        for key in ("stateChanges", "carryForward", "physicalInteractions", "concerns"):
+            if not isinstance(cut.get(key), list) or any(not isinstance(value, str) for value in cut[key]):
+                raise ValueError("Project Deep QA cut has invalid " + key + ".")
+    if any(not isinstance(value, str) for value in result["keyVisualMoments"]):
+        raise ValueError("Project Deep QA key visual moments must be strings.")
     return result
 
 
 def validate_deep_qa_project(result, scene_ids):
-    if not isinstance(result, dict):
+    required = ("summary", "recurringElements", "sceneRelationships", "projectContinuityPrinciples", "concerns")
+    if (not isinstance(result, dict)
+            or any(not isinstance(result.get(key), expected) for key, expected in (
+                ("summary", str), ("recurringElements", list), ("sceneRelationships", list),
+                ("projectContinuityPrinciples", list), ("concerns", list)
+            ))):
         raise ValueError("Project Deep QA returned an invalid project index.")
     allowed = set(str(value) for value in scene_ids)
-    for item in result.get("recurringElements") or []:
-        if not isinstance(item, dict) or any(str(value) not in allowed for value in (item.get("scenes") or [])):
-            raise ValueError("Project Deep QA returned an unknown Scene in a recurring element.")
-    for item in result.get("sceneRelationships") or []:
+    for item in result["recurringElements"]:
+        if (not isinstance(item, dict) or not isinstance(item.get("element"), str)
+                or not isinstance(item.get("basis"), str) or not isinstance(item.get("scenes"), list)
+                or any(str(value) not in allowed for value in item["scenes"])):
+            raise ValueError("Project Deep QA returned an unknown or invalid Scene in a recurring element.")
+    for item in result["sceneRelationships"]:
         if (not isinstance(item, dict) or str(item.get("fromSceneId") or "") not in allowed
-                or str(item.get("toSceneId") or "") not in allowed):
-            raise ValueError("Project Deep QA returned an unknown Scene relationship.")
+                or str(item.get("toSceneId") or "") not in allowed
+                or not isinstance(item.get("relationship"), str) or not isinstance(item.get("basis"), str)):
+            raise ValueError("Project Deep QA returned an unknown or invalid Scene relationship.")
+    if any(not isinstance(value, str) for key in ("projectContinuityPrinciples", "concerns") for value in result[key]):
+        raise ValueError("Project Deep QA index lists must contain strings.")
     return result

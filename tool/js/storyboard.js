@@ -6277,6 +6277,7 @@
       storyState.story.scenes[promptAssistSession.sceneId] = payload.scene;
       storyState.story.updatedAt = payload.story.updatedAt;
       editor.value = payload.scene.prompt;
+      clearSceneDirectorCompletion(promptAssistSession.storyId, promptAssistSession.sceneId);
       promptAssistSession.sourcePrompt = payload.scene.prompt;
       el("storyboard-prompt-assist-source").textContent = payload.scene.prompt;
       syncPromptTakeStatus(promptAssistSession.sceneId);

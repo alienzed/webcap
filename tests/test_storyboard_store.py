@@ -1599,3 +1599,92 @@ def test_legacy_workshop_context_uses_saved_prompt_without_scene_intent(storyboa
     assert "[Shot 1]" in context["shots"]
     persisted = storyboard_store.load_story(story["id"])["scenes"][scene["id"]]
     assert persisted["summary"] == scene["summary"]
+
+
+def test_project_deep_qa_cache_is_separate_and_invalidates_on_prompt_changes(storyboard_fs):
+    story = storyboard_store.create_story({"title": "Deep QA", "concept": "A short test."})
+    scene = storyboard_store.add_scene(story["id"], {"title": "Arrival", "prompt": "A person enters."})
+    story = storyboard_store.load_story(story["id"])
+    record = storyboard_store.save_project_deep_qa(
+        story["id"],
+        [{
+            "sceneId": scene["id"],
+            "location": "Cut 1",
+            "problem": "The action is vague.",
+            "whyItMatters": "The model may omit the action.",
+            "suggestedFix": "Specify the visible movement.",
+        }],
+        model_id="test-model",
+        job_id="deep-qa-job",
+        expected_signature=storyboard_store.project_deep_qa_signature(story),
+    )
+
+    cached = storyboard_store.load_project_deep_qa(story["id"])
+    assert cached["available"] is True
+    assert cached["current"] is True
+    assert cached["findings"][0]["sceneId"] == scene["id"]
+    assert record["sourceSignature"] == cached["record"]["sourceSignature"]
+    assert (storyboard_store._story_dir(story["id"]) / "deep-qa.json").is_file()
+    assert "deepQa" not in storyboard_store.load_story(story["id"])
+
+    current = storyboard_store.load_story(story["id"])
+    scene_data = current["scenes"][scene["id"]]
+    scene_data["prompt"] = "A person slowly enters through the doorway."
+    storyboard_store.update_scene(story["id"], scene["id"], scene_data)
+    stale = storyboard_store.load_project_deep_qa(story["id"])
+    assert stale["available"] is True
+    assert stale["current"] is False
+    assert stale["findings"] == []
+
+
+def test_project_deep_qa_rejects_results_when_project_changes_during_analysis(storyboard_fs):
+    story = storyboard_store.create_story({"title": "Deep QA", "concept": "Original."})
+    scene = storyboard_store.add_scene(story["id"], {"title": "Arrival", "prompt": "A person enters."})
+    original = storyboard_store.load_story(story["id"])
+    signature = storyboard_store.project_deep_qa_signature(original)
+    storyboard_store.update_scene(story["id"], scene["id"], {
+        **original["scenes"][scene["id"]],
+        "prompt": "The person runs inside.",
+    })
+
+    with pytest.raises(RuntimeError, match="Project changed during Deep QA"):
+        storyboard_store.save_project_deep_qa(story["id"], [], expected_signature=signature)
+
+
+def test_prompt_assist_patch_is_independent_and_conflict_safe(storyboard_fs):
+    story = storyboard_store.create_story({"title": "Prompt Assist"})
+    scene = storyboard_store.add_scene(story["id"], {
+        "title": "Action",
+        "prompt": "A woman enters. She wears a blue coat. The camera follows her.",
+    })
+    original = storyboard_store.load_story(story["id"])["scenes"][scene["id"]]["prompt"]
+
+    updated, first = storyboard_store.apply_prompt_assist(
+        story["id"], scene["id"], original,
+        "She wears a blue coat.", "She wears a red coat.",
+        model_id="test-model", job_id="assist-1",
+    )
+    after_first = first["prompt"]
+    assert "red coat" in after_first
+    assert first["previousPrompt"] == original
+    assert first["promptAssistModel"] == "test-model"
+
+    updated, second = storyboard_store.apply_prompt_assist(
+        story["id"], scene["id"], after_first,
+        "A woman enters.", "A woman enters through the glass doors.",
+        model_id="test-model", job_id="assist-2",
+    )
+    assert "red coat" in second["prompt"]
+    assert "through the glass doors" in second["prompt"]
+
+    with pytest.raises(RuntimeError, match="changed since Prompt Assist"):
+        storyboard_store.apply_prompt_assist(
+            story["id"], scene["id"], original,
+            "The camera follows her.", "The camera tracks her.",
+        )
+
+    with pytest.raises(RuntimeError, match="appears exactly once"):
+        storyboard_store.apply_prompt_assist(
+            story["id"], scene["id"], second["prompt"],
+            "the", "a",
+        )

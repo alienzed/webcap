@@ -544,6 +544,7 @@ def _client_result(client, context, llm_result, job_id="", frozen_contract=None)
         }
 
     if operation == "prompt_assist":
+        # Return proposals only; the separate guarded apply endpoint owns mutation.
         scene_id = str(context.get("sceneId") or "").strip()
         if not scene_id:
             raise RuntimeError("Prompt Assist job is missing its Scene ID.")

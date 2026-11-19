@@ -117,3 +117,10 @@ def test_source_fingerprint_is_scope_specific_for_scene_reviews():
     story["scenes"]["scene-2"]["prompt"] += "\\n[Shot 2] An unrelated action."
     assert source_fingerprint(build_context(story, "scene", "scene-1")) == first
     assert source_fingerprint(build_context(story, "project")) != source_fingerprint(build_context(_story(), "project"))
+
+
+def test_project_scope_reports_scenes_without_saved_prompts():
+    story = _story()
+    story["scenes"]["scene-2"]["prompt"] = ""
+    with pytest.raises(ValueError, match="Scene Morning has no saved prompt"):
+        build_context(story, "project")

@@ -355,8 +355,21 @@
     var story = state.snapshot.story;
     var host = el('prompt-assist-project-context-content');
     var invariants = Array.isArray(story.invariants) ? story.invariants : [];
+    var guidelines = story.guidelines && typeof story.guidelines === 'object' ? story.guidelines : {};
+    var guidelineLabels = {
+      visualFocus: 'Visual focus',
+      creativeDirection: 'Creative direction',
+      variation: 'Variation',
+      pacing: 'Pacing',
+      sceneRelationships: 'Scene relationships'
+    };
+    var guidelineHtml = Object.keys(guidelineLabels).filter(function (key) {
+      return !!String(guidelines[key] || '').trim();
+    }).map(function (key) {
+      return '<p><strong>' + esc(guidelineLabels[key]) + '</strong><br>' + esc(guidelines[key]) + '</p>';
+    }).join('');
     host.innerHTML = '<p><strong>Concept</strong><br>' + esc(story.concept || 'Not specified') + '</p>' +
-      '<p><strong>Visual direction</strong><br>' + esc(story.style || 'Not specified') + '</p>' +
+      '<p><strong>Visual direction</strong><br>' + esc(story.style || 'Not specified') + '</p>' + guidelineHtml +
       (invariants.length ? '<div><strong>Project invariants</strong><ul>' + invariants.map(function (item) {
         return '<li>' + esc((item.title || item.kind || 'Invariant') + ': ' + (item.text || '')) + '</li>';
       }).join('') + '</ul></div>' : '');

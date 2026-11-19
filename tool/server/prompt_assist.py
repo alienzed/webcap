@@ -1,0 +1,369 @@
+"""Prompt Assist context preparation and task contracts.
+
+The context builder is deliberately deterministic: it extracts authored H3
+sections and timed shots, preserving Scene IDs and shot numbers. It does not
+invent a second creative summary or silently discard source material.
+"""
+import json
+import re
+
+
+_ROLE_NAMES = {
+    "visual": "Visual Director",
+    "continuity": "Continuity & State Analyst",
+    "sequence": "Sequence Director",
+    "editor": "Creative Editor",
+}
+_REVIEW_ROLES = {"visual", "continuity", "sequence"}
+_FOLLOWUP_ROLES = set(_ROLE_NAMES)
+
+_SECTION = re.compile(
+    r"^[ \t]*(Subject|Scene Overview|Environment / Continuity Anchors|"
+    r"Style / Visual Treatment|integrated_multimodal_description|"
+    r"overall_soundscape|non_diegetic_music)[ \t]*:[ \t]*\r?$",
+    re.I | re.M,
+)
+_SHOT = re.compile(r"^[ \t]*\[Shot[ \t]+(\d+)\][^\r\n]*", re.I | re.M)
+
+
+def _text(value):
+    return str(value or "").strip()
+
+
+def _sections(prompt):
+    headings = list(_SECTION.finditer(prompt))
+    result = {}
+    for index, heading in enumerate(headings):
+        key = heading.group(1).lower()
+        end = headings[index + 1].start() if index + 1 < len(headings) else len(prompt)
+        line_end = prompt.find("\n", heading.end())
+        start = line_end + 1 if line_end >= 0 else heading.end()
+        result[key] = prompt[start:end].strip()
+    return result
+
+
+def _shots(timed_text, prompt):
+    if not timed_text:
+        # Older or custom prompts may not use the standard timed-shot section.
+        # Keep the complete prompt as one source-addressable unit.
+        return [{"shotNumber": 1, "text": prompt, "source": "complete_prompt"}]
+    matches = list(_SHOT.finditer(timed_text))
+    if not matches:
+        return [{"shotNumber": 1, "text": timed_text, "source": "timed_shots"}]
+    shots = []
+    for index, match in enumerate(matches):
+        end = matches[index + 1].start() if index + 1 < len(matches) else len(timed_text)
+        shots.append({
+            "shotNumber": int(match.group(1)),
+            "text": timed_text[match.start():end].strip(),
+            "source": "timed_shots",
+        })
+    return shots
+
+
+def build_context(story, scope="scene", scene_id=""):
+    """Build a compact, source-addressable review context from saved Story data."""
+    if not isinstance(story, dict):
+        raise ValueError("Project data is required.")
+    scope = _text(scope).lower()
+    if scope not in {"scene", "project"}:
+        raise ValueError("Prompt Assist scope must be Scene or Project.")
+
+    order = story.get("sceneOrder") if isinstance(story.get("sceneOrder"), list) else []
+    scenes_by_id = story.get("scenes") if isinstance(story.get("scenes"), dict) else {}
+    if not order:
+        raise ValueError("Develop at least one Scene before using Prompt Assist.")
+
+    if scope == "scene":
+        scene_id = _text(scene_id)
+        if not scene_id or scene_id not in order:
+            raise ValueError("Select an existing Scene for Prompt Assist.")
+        selected_ids = [scene_id]
+    else:
+        selected_ids = list(order)
+
+    scene_contexts = []
+    source_prompts = {}
+    for scene_number, current_id in enumerate(order, start=1):
+        if current_id not in selected_ids:
+            continue
+        scene = scenes_by_id.get(current_id)
+        if not isinstance(scene, dict):
+            raise ValueError("Project Scene index contains a missing Scene: " + str(current_id))
+        prompt = _text(scene.get("prompt"))
+        if not prompt:
+            continue
+        sections = _sections(prompt)
+        shots = _shots(sections.get("integrated_multimodal_description", ""), prompt)
+        scene_contexts.append({
+            "sceneId": str(current_id),
+            "sceneNumber": scene_number,
+            "title": _text(scene.get("title")) or ("Scene " + str(scene_number)),
+            "durationSeconds": scene.get("durationSeconds"),
+            "subject": sections.get("subject", ""),
+            "sceneOverview": sections.get("scene overview", ""),
+            "continuityAnchors": sections.get("environment / continuity anchors", ""),
+            "visualTreatment": sections.get("style / visual treatment", ""),
+            "shots": shots,
+        })
+        source_prompts[str(current_id)] = prompt
+
+    if not scene_contexts:
+        raise ValueError("The selected scope has no saved Scene prompts to review.")
+
+    invariants = story.get("invariants") if isinstance(story.get("invariants"), list) else []
+    project = {
+        "title": _text(story.get("title")),
+        "concept": _text(story.get("concept")),
+        "visualAtmosphere": _text(story.get("style")),
+        "invariants": [
+            {
+                "kind": _text(item.get("kind")),
+                "title": _text(item.get("title")),
+                "text": _text(item.get("text")),
+            }
+            for item in invariants
+            if isinstance(item, dict) and _text(item.get("text"))
+        ],
+    }
+    return {
+        "scope": scope,
+        "project": project,
+        "scenes": scene_contexts,
+        "sourcePrompts": source_prompts,
+        "sourceUpdatedAt": _text(story.get("updatedAt")),
+    }
+
+
+def review_context(context):
+    """Exclude full source prompts while retaining exact extracted shot evidence."""
+    return {
+        "scope": context["scope"],
+        "project": context["project"],
+        "scenes": context["scenes"],
+    }
+
+
+_FINDING = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["sceneId", "shotNumber", "priority", "issue", "evidence", "recommendation"],
+    "properties": {
+        "sceneId": {"type": "string"},
+        "shotNumber": {"type": "integer", "minimum": 0},
+        "priority": {"type": "string", "enum": ["important", "useful", "optional"]},
+        "issue": {"type": "string"},
+        "evidence": {"type": "string"},
+        "recommendation": {"type": "string"},
+    },
+}
+_REVIEW_SCHEMA = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["summary", "findings"],
+    "properties": {
+        "summary": {"type": "string"},
+        "findings": {"type": "array", "items": _FINDING},
+    },
+}
+_EDITOR_RECOMMENDATION = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["sceneId", "shotNumber", "priority", "issue", "rationale", "recommendation", "sources"],
+    "properties": {
+        "sceneId": {"type": "string"},
+        "shotNumber": {"type": "integer", "minimum": 0},
+        "priority": {"type": "string", "enum": ["important", "useful", "optional"]},
+        "issue": {"type": "string"},
+        "rationale": {"type": "string"},
+        "recommendation": {"type": "string"},
+        "sources": {"type": "array", "items": {"type": "string"}},
+    },
+}
+_EDITOR_SCHEMA = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["summary", "recommendations", "disagreements"],
+    "properties": {
+        "summary": {"type": "string"},
+        "recommendations": {"type": "array", "items": _EDITOR_RECOMMENDATION},
+        "disagreements": {"type": "array", "items": {"type": "string"}},
+    },
+}
+_REVISION_SCHEMA = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["revisions"],
+    "properties": {
+        "revisions": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["sceneId", "prompt"],
+                "properties": {
+                    "sceneId": {"type": "string"},
+                    "prompt": {"type": "string", "minLength": 1},
+                },
+            },
+        },
+    },
+}
+
+
+def _json(value):
+    return json.dumps(value, ensure_ascii=False, indent=2)
+
+
+def _role_instruction(role):
+    if role == "visual":
+        return (
+            "Review each cut independently for visual communication. Determine whether the intended "
+            "subject, action and most important focal element will actually be visible and legible. "
+            "Check camera framing, angle, focus and shot description against the action. A slow-motion "
+            "bat striking a ball should make the bat-ball contact and ball trajectory visually legible; "
+            "a close-up of hands that hides the defining action is a failure of visual emphasis. "
+            "Report only concrete issues grounded in the supplied shot text. Do not rewrite the prompt."
+        )
+    if role == "continuity":
+        return (
+            "Review chronological state progression between cuts within each Scene. Track relevant "
+            "clothing, props, object states, positions and physical relationships. Catch regressions "
+            "where a later cut reverts to a state that was explicitly changed earlier, unless a new "
+            "change is described. Check physical interactions for implausible positioning, ambiguous "
+            "hand-offs, merged or entangled bodies, and missing state transitions. Treat each Project "
+            "Scene as independently rendered: do not flag ordinary differences in a person's generated "
+            "appearance between separate Scenes as continuity failures. Do not demand identical faces "
+            "or pixel-level consistency. Do not rewrite the prompt."
+        )
+    if role == "sequence":
+        return (
+            "Review the complete ordered sequence of cuts for creative usefulness. Ask why each cut "
+            "exists, whether it contributes meaningful visual information, whether the selected subject "
+            "and moment deserve the viewer's attention, and whether pacing, repetition and transitions "
+            "make sense. Flag irrelevant or poorly selected shots (for example, an unexplained ceiling-fan "
+            "close-up in a sequence about a decisive baseball hit). Do not duplicate the Visual Director's "
+            "camera-detail audit or the Continuity Analyst's state tracking. Do not rewrite the prompt."
+        )
+    raise ValueError("Unknown Prompt Assist specialist.")
+
+
+def build_contract(operation, context, role="", findings=None, accepted=None, conversation=None, question=""):
+    """Return a chat-client contract for one isolated analytical or conversational pass."""
+    operation = _text(operation).lower()
+    role = _text(role).lower()
+    if operation == "review":
+        if role not in _REVIEW_ROLES:
+            raise ValueError("Select a supported Prompt Assist specialist.")
+        system = (
+            "You are " + _ROLE_NAMES[role] + " in WebCap Prompt Assist. "
+            + _role_instruction(role)
+            + " Return a concise summary and only actionable findings. Each finding must cite a valid "
+            "sceneId from the supplied context, use shotNumber 0 for a Scene-level issue, and include "
+            "a short evidence excerpt from the source. If no meaningful issue exists, return an empty "
+            "findings array. Do not invent missing story facts or manufacture criticism."
+        )
+        return {
+            "operation": "prompt_assist_review",
+            "messages": [
+                {"role": "system", "content": system},
+                {"role": "user", "content": "Review this source-addressable creative context:\n" + _json(review_context(context))},
+            ],
+            "response_schema": _REVIEW_SCHEMA,
+        }
+
+    if operation == "synthesize":
+        if role != "editor":
+            raise ValueError("Creative Editor is required for synthesis.")
+        system = (
+            "You are WebCap's Creative Editor. Synthesize independent specialist findings into a "
+            "small, coherent set of useful recommendations. Merge duplicates, preserve distinct "
+            "issues, identify genuine disagreements, and retain each recommendation's source finding "
+            "IDs. Prioritize problems that materially affect the intended visuals. Do not invent new "
+            "issues, silently discard minority concerns, or rewrite the prompts. Return empty arrays "
+            "when there are no useful recommendations."
+        )
+        user = {
+            "sourceContext": review_context(context),
+            "independentReviews": findings if isinstance(findings, list) else [],
+        }
+        return {
+            "operation": "prompt_assist_synthesis",
+            "messages": [
+                {"role": "system", "content": system},
+                {"role": "user", "content": "Synthesize these independent reviews:\n" + _json(user)},
+            ],
+            "response_schema": _EDITOR_SCHEMA,
+        }
+
+    if operation == "revise":
+        if role != "editor":
+            raise ValueError("Creative Editor must prepare the revised prompts.")
+        source_prompts = context["sourcePrompts"]
+        selected = accepted if isinstance(accepted, list) else []
+        selected_ids = {str(item.get("sceneId") or "") for item in selected if isinstance(item, dict)}
+        revisions = [
+            {"sceneId": scene_id, "title": scene["title"], "originalPrompt": source_prompts[scene_id]}
+            for scene in context["scenes"]
+            for scene_id in [scene["sceneId"]]
+            if scene_id in selected_ids
+        ]
+        if not revisions:
+            raise ValueError("Accept at least one recommendation before preparing revised prompts.")
+        system = (
+            "You are WebCap's Creative Editor preparing complete revised H3 prompts from explicitly "
+            "accepted recommendations. Apply only the accepted recommendations to the corresponding "
+            "Scene. Preserve all unaffected creative decisions, H3 section structure, timing, audio and "
+            "other prompt content. Resolve accepted state regressions by describing the correct resulting "
+            "state in each later cut. Make the intended focal action visible through appropriate framing "
+            "and focus. Return one complete replacement prompt for each supplied Scene ID. Never invent "
+            "additional story events or alter a Scene that has no accepted recommendation."
+        )
+        return {
+            "operation": "prompt_assist_revision",
+            "messages": [
+                {"role": "system", "content": system},
+                {"role": "user", "content": "Original prompts and accepted recommendations:\n" + _json({
+                    "scenes": revisions,
+                    "acceptedRecommendations": selected,
+                })},
+            ],
+            "response_schema": _REVISION_SCHEMA,
+        }
+
+    if operation == "followup":
+        if role not in _FOLLOWUP_ROLES:
+            raise ValueError("Select a supported specialist for discussion.")
+        question = _text(question)
+        if not question:
+            raise ValueError("Enter a question for the selected specialist.")
+        if role == "editor":
+            instruction = (
+                "You are the Creative Editor. Discuss the consolidated recommendations, trade-offs and "
+                "disagreements. Be concise, answer the author's actual question, and do not revise or "
+                "apply prompts unless explicitly asked."
+            )
+        else:
+            instruction = (
+                "You are " + _ROLE_NAMES[role] + ". Continue as the same specialist who produced the "
+                "supplied findings. Answer the author's question directly, explain or reconsider your "
+                "own findings when asked, and distinguish source facts from your interpretation. Be "
+                "concise. Do not rewrite or apply prompts unless explicitly asked."
+            )
+        history = []
+        for item in conversation if isinstance(conversation, list) else []:
+            if not isinstance(item, dict):
+                continue
+            message_role = _text(item.get("role")).lower()
+            content = item.get("content")
+            if message_role in {"user", "assistant"} and isinstance(content, str) and content.strip():
+                history.append({"role": message_role, "content": content})
+        messages = [
+            {"role": "system", "content": instruction},
+            {"role": "user", "content": "Relevant source context:\n" + _json(review_context(context))},
+            {"role": "user", "content": "Available specialist findings:\n" + _json(findings if findings is not None else [])},
+        ] + history
+        messages.append({"role": "user", "content": question})
+        return {"operation": "prompt_assist_followup", "messages": messages}
+
+    raise ValueError("Unsupported Prompt Assist operation.")

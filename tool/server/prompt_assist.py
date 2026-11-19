@@ -510,16 +510,9 @@ def build_deep_qa_project_contract(context, scene_results):
         seen_scene_ids.add(scene_id)
         compact.append({
             "sceneId": item["sceneId"],
-            "summary": str(item.get("summary") or "")[:900],
-            "purpose": str(item.get("purpose") or "")[:500],
-            "keyVisualMoments": [str(x)[:240] for x in (item.get("keyVisualMoments") or [])[:8]],
-            "cuts": [{
-                "shotNumber": cut.get("shotNumber"),
-                "visualIntent": str(cut.get("visualIntent") or "")[:240],
-                "focalElement": str(cut.get("focalElement") or "")[:160],
-                "stateChanges": [str(x)[:180] for x in (cut.get("stateChanges") or [])[:5]],
-                "carryForward": [str(x)[:180] for x in (cut.get("carryForward") or [])[:5]],
-            } for cut in (item.get("cuts") or [])[:12] if isinstance(cut, dict)],
+            "summary": str(item.get("summary") or "")[:600],
+            "purpose": str(item.get("purpose") or "")[:300],
+            "keyVisualMoments": [str(x)[:180] for x in (item.get("keyVisualMoments") or [])[:5]],
         })
     if seen_scene_ids != allowed:
         raise ValueError("Project Deep QA needs one current preparation for every Scene.")

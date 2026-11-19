@@ -2757,15 +2757,21 @@ def storyboard_prompt_assist_apply_route():
         revisions = data.get("revisions")
         if not story_id or not isinstance(revisions, list) or not revisions:
             raise ValueError("Prompt Assist requires a Project and at least one revised Scene.")
-        from .prompt_assist import build_context, source_fingerprint
+        from .prompt_assist import build_context
         current_story = storyboard_load_story(story_id)
+        model_id = str(data.get("model") or "").strip()
+        if not model_id:
+            raise ValueError("The Director model used for Prompt Assist review is required.")
         current_context = build_context(
             current_story,
             scope=str(data.get("scope") or "scene"),
             scene_id=str(data.get("sceneId") or ""),
         )
-        if str(data.get("expectedSourceFingerprint") or "") != source_fingerprint(current_context):
-            raise RuntimeError("Project or Scene source changed since Prompt Assist review. Rerun the review before applying.")
+        current_review_fingerprint, _, _ = _prompt_assist_review_inputs(
+            story_id, current_story, current_context, str(data.get("sceneId") or ""), model_id
+        )
+        if str(data.get("expectedSourceFingerprint") or "") != current_review_fingerprint:
+            raise RuntimeError("Project, Scene, model, or prepared Deep QA context changed since review. Rerun Prompt Assist before applying.")
         prepared = []
         seen = set()
         for item in revisions:
@@ -2793,8 +2799,11 @@ def storyboard_prompt_assist_apply_route():
                 scope=str(data.get("scope") or "scene"),
                 scene_id=str(data.get("sceneId") or ""),
             )
-            if str(data.get("expectedSourceFingerprint") or "") != source_fingerprint(latest_context):
-                raise RuntimeError("Project or Scene changed while Prompt Assist was preparing to apply. Rerun the review.")
+            latest_review_fingerprint, _, _ = _prompt_assist_review_inputs(
+                story_id, latest_story, latest_context, str(data.get("sceneId") or ""), model_id
+            )
+            if str(data.get("expectedSourceFingerprint") or "") != latest_review_fingerprint:
+                raise RuntimeError("Project, Scene, model, or prepared Deep QA context changed while Prompt Assist was preparing to apply. Rerun the review.")
             if any(
                 llm_storyboard_target_busy(story_id, target_kind, target_scene)
                 for target_kind, target_scene in (

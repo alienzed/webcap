@@ -6053,9 +6053,10 @@
   function syncDirectorToolsRunLabel() {
     var preset = el('storyboard-director-tools-preset').value;
     var coherence = preset === 'coherence';
+    var generateTakes = el('storyboard-director-tools-generate-takes').checked;
     el('storyboard-director-tools-run').textContent = coherence ? 'Check Coherence' :
-      preset === 'visual_direction' ? 'Run Visual Direction' :
-      el('storyboard-director-tools-generate-takes').checked ? 'Revise & Generate Takes' : 'Revise Scenes';
+      preset === 'visual_direction' ? (generateTakes ? 'Visual Direction & Generate Takes' : 'Run Visual Direction') :
+      generateTakes ? 'Revise & Generate Takes' : 'Revise Scenes';
   }
 
   function openDirectorTools() {

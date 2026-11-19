@@ -116,7 +116,12 @@
       !!(previous && previous.sceneIntelligence) !== !!(status && status.sceneIntelligence);
     state.deepQaStatus = status || null;
     el('prompt-assist-deep-qa-status').textContent = deepQaStatusText(status);
-    el('prompt-assist-deep-qa-run').textContent = 'Update Project Intelligence';
+    var prepared = Number(status && status.preparedScenes || 0);
+    var total = Number(status && status.totalScenes || 0);
+    el('prompt-assist-deep-qa-run').textContent = status && status.projectFresh
+      ? 'Project Intelligence Ready'
+      : prepared === total && total > 0 ? 'Build Project Index'
+      : prepared > 0 ? 'Continue Project Intelligence' : 'Prepare Project Intelligence';
     if (state.sourcePrompt && sceneEvidenceChanged) {
       var column = document.querySelector('.prompt-assist-scene-column');
       var scrollTop = column ? column.scrollTop : 0;
@@ -531,6 +536,7 @@
     el('prompt-assist-reject-all').disabled = state.busy || !recommendations.length;
     el('prompt-assist-prepare-revision').disabled = state.busy || !accepted;
     el('prompt-assist-apply').disabled = state.busy || !state.revisions || !el('prompt-assist-revision-prompt').value.trim() || el('prompt-assist-revision-prompt').value === state.sourcePrompt;
+    el('prompt-assist-deep-qa-run').disabled = state.busy || !!(state.deepQaStatus && state.deepQaStatus.projectFresh);
     el('prompt-assist-decision-summary').textContent = recommendations.length
       ? accepted + ' accepted · ' + rejected + ' rejected · ' + (recommendations.length - accepted - rejected) + ' pending'
       : 'No recommendations yet.';

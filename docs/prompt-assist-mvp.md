@@ -60,7 +60,7 @@ Discussion is scoped to the current Prompt Assist session. It does not silently 
 
 - Reviews, synthesis and proposed revisions are drafts in the modal.
 - Applying a revision is a separate explicit operation.
-- Apply verifies the source fingerprint and exact original prompt before writing.
+- Apply verifies the source fingerprint, selected model, exact fresh Deep QA receipts supplied to the review, and exact original prompt before writing.
 - The existing field-scoped batch mutation changes only selected Scene prompts.
 - Existing Takes, titles, duration, generation settings, references and other Scene fields are preserved.
 - Previous prompt and revision state are recorded so the existing Restore Previous Prompt workflow remains available.

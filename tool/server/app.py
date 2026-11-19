@@ -2503,7 +2503,7 @@ def storyboard_prompt_assist_deep_qa_route():
     """Read current Project Deep QA receipts or persist a source-verified result."""
     try:
         from .prompt_assist import (
-            build_context, source_fingerprint, scene_source_fingerprint,
+            build_context, source_fingerprint, scene_source_fingerprint, project_deep_qa_fingerprint,
             validate_deep_qa_scene, validate_deep_qa_project,
         )
         from .storyboard_store import _write_json_atomic
@@ -2511,18 +2511,22 @@ def storyboard_prompt_assist_deep_qa_route():
             story_id = str(request.args.get("storyId") or "").strip()
             if not story_id:
                 raise ValueError("Project ID is required.")
+            model_id = str(data.get("model") or "").strip()
+            if not model_id:
+                raise ValueError("Choose a Director model before saving Project Deep QA.")
             story = storyboard_load_story(story_id)
             project_context = build_context(story, scope="project")
             saved = _prompt_assist_deep_qa_read(story_id)
             selected_scene_id = str(request.args.get("sceneId") or "").strip()
-            current_project_fp = source_fingerprint(project_context)
+            model_id = str(request.args.get("model") or "").strip()
+            current_project_fp = project_deep_qa_fingerprint(project_context, model_id)
             scene_status = {}
             fresh_results = []
             selected_scene_intelligence = None
             for scene in project_context["scenes"]:
                 scene_id = scene["sceneId"]
                 scene_context = build_context(story, scope="scene", scene_id=scene_id)
-                current_fp = scene_source_fingerprint(scene_context, scene_id)
+                current_fp = scene_source_fingerprint(scene_context, scene_id, model_id)
                 entry = saved["scenes"].get(scene_id)
                 fresh = isinstance(entry, dict) and entry.get("version") == 1 and entry.get("sourceFingerprint") == current_fp
                 scene_status[scene_id] = {
@@ -2566,24 +2570,24 @@ def storyboard_prompt_assist_deep_qa_route():
         now = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
         if kind == "scene":
             context = build_context(story, scope="scene", scene_id=scene_id)
-            fingerprint = scene_source_fingerprint(context, scene_id)
+            fingerprint = scene_source_fingerprint(context, scene_id, model_id)
             if str(data.get("sourceFingerprint") or "") != fingerprint:
                 raise RuntimeError("Scene changed while Project Deep QA was running. Prepare this Scene again.")
             scene = context["scenes"][0]
             valid_shots = [0] + [int(item["shotNumber"]) for item in scene["shots"]]
             clean = validate_deep_qa_scene(result, scene_id, valid_shots, context["sourcePrompts"][scene_id])
             saved["scenes"][scene_id] = {
-                "version": 1, "sourceFingerprint": fingerprint, "preparedAt": now, "result": clean,
+                "version": 1, "modelId": model_id, "sourceFingerprint": fingerprint, "preparedAt": now, "result": clean,
             }
         elif kind == "project":
-            fingerprint = source_fingerprint(project_context)
+            fingerprint = project_deep_qa_fingerprint(project_context, model_id)
             if str(data.get("sourceFingerprint") or "") != fingerprint:
                 raise RuntimeError("Project changed while Project Deep QA was running. Prepare it again.")
             scene_results = []
             for scene in project_context["scenes"]:
                 entry = saved["scenes"].get(scene["sceneId"])
                 scene_context = build_context(story, scope="scene", scene_id=scene["sceneId"])
-                expected = scene_source_fingerprint(scene_context, scene["sceneId"])
+                expected = scene_source_fingerprint(scene_context, scene["sceneId"], model_id)
                 if not isinstance(entry, dict) or entry.get("version") != 1 or entry.get("sourceFingerprint") != expected:
                     raise ValueError("Prepare every current Scene before building the Project intelligence index.")
                 scene_results.append(entry["result"])
@@ -2607,7 +2611,7 @@ def storyboard_prompt_assist_deep_qa_route():
 def storyboard_prompt_assist_route():
     """Run one independent Prompt Assist analysis/synthesis pass on saved Studio material."""
     try:
-        from .prompt_assist import (build_context, build_contract, source_fingerprint, scene_source_fingerprint, build_deep_qa_scene_contract, build_deep_qa_project_contract)
+        from .prompt_assist import (build_context, build_contract, source_fingerprint, scene_source_fingerprint, project_deep_qa_fingerprint, build_deep_qa_scene_contract, build_deep_qa_project_contract)
         data = request.get_json(silent=True) or {}
         story_id = str(data.get("storyId") or "").strip()
         model_id = str(data.get("model") or "").strip()
@@ -2657,7 +2661,7 @@ def storyboard_prompt_assist_route():
                 except ValueError:
                     project_context = None
                 if (isinstance(project_entry, dict) and project_entry.get("version") == 1 and project_context
-                        and project_entry.get("sourceFingerprint") == source_fingerprint(project_context)):
+                        and project_entry.get("sourceFingerprint") == project_deep_qa_fingerprint(project_context, model_id)):
                     contract["messages"][1]["content"] += "\n\n[CURRENT PROJECT DEEP QA INDEX]\n" + json.dumps(project_entry.get("result") or {}, ensure_ascii=False)
             label = "Prompt Assist: " + role + " review"
         elif operation == "synthesize":
@@ -2702,8 +2706,11 @@ def storyboard_prompt_assist_route():
             "scope": context["scope"],
             "sourceUpdatedAt": context["sourceUpdatedAt"],
             "sourceFingerprint": (
-                scene_source_fingerprint(context, scene_id)
-                if operation == "deep_qa_scene" else source_fingerprint(context)
+                scene_source_fingerprint(context, scene_id, model_id)
+                if operation == "deep_qa_scene" else (
+                    project_deep_qa_fingerprint(context, model_id)
+                    if operation == "deep_qa_project" else source_fingerprint(context)
+                )
             ),
         }), 202
     except FileNotFoundError as exc:

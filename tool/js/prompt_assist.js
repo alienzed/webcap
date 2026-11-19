@@ -399,7 +399,9 @@
           esc(deepCut.focalElement || deepCut.visualIntent || 'Cut intelligence') + '</summary>' +
           (deepCut.visualIntent ? '<p><strong>Visual intent:</strong> ' + esc(deepCut.visualIntent) + '</p>' : '') +
           (deepCut.action ? '<p><strong>Action:</strong> ' + esc(deepCut.action) + '</p>' : '') +
-          (deepCut.stateChanges && deepCut.stateChanges.length ? '<p><strong>State changes:</strong> ' + esc(deepCut.stateChanges.join(' · ')) + '</p>' : '') +
+          (deepCut.sourceEvidence && deepCut.sourceEvidence.length ? '<p><strong>Prompt evidence:</strong> ' + esc(deepCut.sourceEvidence.join(' · ')) + '</p>' : '') +
+          (deepCut.stateChanges && deepCut.stateChanges.length ? '<p><strong>Explicit state changes:</strong> ' + esc(deepCut.stateChanges.join(' · ')) + '</p>' : '') +
+          (deepCut.inferences && deepCut.inferences.length ? '<p><strong>Possible inferences (not explicit):</strong> ' + esc(deepCut.inferences.join(' · ')) + '</p>' : '') +
           (deepCut.carryForward && deepCut.carryForward.length ? '<p><strong>Carry forward:</strong> ' + esc(deepCut.carryForward.join(' · ')) + '</p>' : '') +
           (deepCut.physicalInteractions && deepCut.physicalInteractions.length ? '<p><strong>Physical interactions:</strong> ' + esc(deepCut.physicalInteractions.join(' · ')) + '</p>' : '') +
           (deepCut.concerns && deepCut.concerns.length ? '<p><strong>Potential concerns:</strong> ' + esc(deepCut.concerns.join(' · ')) + '</p>' : '') +

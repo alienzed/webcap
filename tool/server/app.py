@@ -2751,10 +2751,18 @@ def storyboard_prompt_assist_apply_route():
                 "changes": {"prompt": prompt},
             })
         with storyboard_mutation_lock:
+            latest_story = storyboard_load_story(story_id)
+            latest_context = build_context(
+                latest_story,
+                scope=str(data.get("scope") or "scene"),
+                scene_id=str(data.get("sceneId") or ""),
+            )
+            if str(data.get("expectedSourceFingerprint") or "") != source_fingerprint(latest_context):
+                raise RuntimeError("Project or Scene changed while Prompt Assist was preparing to apply. Rerun the review.")
             if any(
                 llm_storyboard_target_busy(story_id, target_kind, target_scene)
                 for target_kind, target_scene in (
-                    [( "scene-prompt", scene_id) for scene_id in seen]
+                    [("scene-prompt", scene_id) for scene_id in seen]
                     + [("scenes", ""), ("repair", "")]
                 )
             ):

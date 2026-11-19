@@ -2519,6 +2519,8 @@ def storyboard_prompt_assist_deep_qa_route():
             saved = _prompt_assist_deep_qa_read(story_id)
             selected_scene_id = str(request.args.get("sceneId") or "").strip()
             model_id = str(request.args.get("model") or "").strip()
+            if not model_id:
+                raise ValueError("Choose a Director model to check Project Deep QA freshness.")
             current_project_fp = project_deep_qa_fingerprint(project_context, model_id)
             scene_status = {}
             fresh_results = []
@@ -2641,7 +2643,7 @@ def storyboard_prompt_assist_route():
             for scene in context["scenes"]:
                 entry = saved["scenes"].get(scene["sceneId"])
                 scene_context = build_context(story, scope="scene", scene_id=scene["sceneId"])
-                expected = scene_source_fingerprint(scene_context, scene["sceneId"])
+                expected = scene_source_fingerprint(scene_context, scene["sceneId"], model_id)
                 if not isinstance(entry, dict) or entry.get("sourceFingerprint") != expected:
                     raise ValueError("Prepare every current Scene before building the Project index.")
                 scene_results.append(entry["result"])
@@ -2652,7 +2654,7 @@ def storyboard_prompt_assist_route():
             if scope == "scene":
                 cached = _prompt_assist_deep_qa_read(story_id)
                 entry = cached["scenes"].get(scene_id)
-                expected = scene_source_fingerprint(context, scene_id)
+                expected = scene_source_fingerprint(context, scene_id, model_id)
                 if isinstance(entry, dict) and entry.get("version") == 1 and entry.get("sourceFingerprint") == expected:
                     contract["messages"][1]["content"] += "\n\n[CURRENT PROJECT DEEP QA SCENE INTELLIGENCE]\n" + json.dumps(entry.get("result") or {}, ensure_ascii=False)
                 project_entry = cached.get("project")

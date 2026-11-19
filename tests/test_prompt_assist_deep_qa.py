@@ -238,3 +238,41 @@ def test_prompt_assist_review_includes_only_fresh_deep_qa_intelligence(tmp_path,
     })
     assert response.status_code == 202
     assert "CURRENT PROJECT DEEP QA SCENE INTELLIGENCE" not in received["contract"]["messages"][1]["content"]
+
+
+
+def test_project_deep_qa_index_uses_only_current_saved_scene_receipts(tmp_path, monkeypatch):
+    from tool.server.prompt_assist import build_context, scene_source_fingerprint
+
+    story = _story()
+    project_dir = tmp_path / "project"
+    project_dir.mkdir()
+    monkeypatch.setattr(app_module, "storyboard_load_story", lambda story_id: story)
+    monkeypatch.setattr("tool.server.storyboard_store._story_dir", lambda story_id: project_dir)
+    receipts = {}
+    for scene_id in story["sceneOrder"]:
+        context = build_context(story, "scene", scene_id)
+        receipts[scene_id] = {
+            "sourceFingerprint": scene_source_fingerprint(context, scene_id),
+            "preparedAt": "2026-11-19T12:00:00Z",
+            "result": _scene_result(scene_id),
+        }
+    _write_json_atomic(project_dir / ".prompt_assist_deep_qa.json", {
+        "version": 1, "scenes": receipts, "project": None,
+    })
+    received = {}
+
+    def fake_enqueue(client, model, contract, context=None, label=""):
+        received.update(client=client, model=model, contract=contract, label=label)
+        return {"jobId": "deep-qa-project-job", "status": "queued"}
+
+    monkeypatch.setattr(app_module, "enqueue_llm", fake_enqueue)
+    response = app_module.app.test_client().post("/fs/storyboard/prompt-assist", json={
+        "storyId": story["id"], "scope": "project", "model": "local::director-test",
+        "operation": "deep_qa_project", "expectedUpdatedAt": "rev-1",
+    })
+    assert response.status_code == 202
+    assert received["client"] == "chat"
+    assert received["contract"]["operation"] == "prompt_assist_deep_qa_project"
+    assert "scene-1" in received["contract"]["messages"][1]["content"]
+    assert "scene-2" in received["contract"]["messages"][1]["content"]

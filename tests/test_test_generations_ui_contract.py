@@ -104,15 +104,36 @@ def test_test_generations_uses_training_pane_and_core_controls():
     assert ".test-generations-result-card video" in css
     assert ".test-generations-result-card img" in css
 
-def test_test_generation_previews_keep_stable_width_and_natural_height():
+def test_test_generation_previews_are_fluid_with_natural_media_height():
     css = (ROOT / "tool/css/styles.css").read_text(encoding="utf-8")
     results_rule = css.split(".test-generations-results {", 1)[1].split("}", 1)[0]
     assert "display: grid;" in results_rule
-    assert "grid-template-columns: repeat(auto-fill, 500px);" in results_rule
+    assert "grid-template-columns: repeat(2, minmax(0, 1fr));" in results_rule
+    assert 'data-columns="3"' in css
+    assert 'data-columns="4"' in css
+    assert "@container test-preview (max-width: 780px)" in css
+    assert "@container test-preview (max-width: 530px)" in css
     assert "grid-auto-rows: max-content;" in results_rule
     video_rule = css.split(".test-generations-result-card video,\n.test-generations-result-card img {", 1)[1].split("}", 1)[0]
     assert "width: 100%;" in video_rule
     assert "height: auto;" in video_rule
+
+
+
+def test_test_generation_preview_density_is_live_and_grid_only():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "styles.css").read_text(encoding="utf-8")
+    assert 'id="test-generations-preview-columns"' in html
+    for count in (2, 3, 4):
+        assert f'<option value="{count}"' in html
+        assert f'repeat({count}, minmax(0, 1fr))' in css
+    assert "function syncPreviewColumns()" in script
+    assert "host.dataset.columns = String(previewColumns);" in script
+    assert "el('test-generations-preview-columns').onchange" in script
+    assert "el('test-generations-preview-columns-control').classList.toggle('hidden', resultsView !== 'grid');" in script
+    assert "host.replaceChildren()" not in script.split("function syncPreviewColumns()", 1)[1].split("function setResultsView", 1)[0]
+    assert "grid-template-columns: minmax(460px, 30%) minmax(0, 1fr);" in css
 
 def test_test_generations_uses_explicit_workspace_root():
     shell_css = (ROOT / "tool" / "css" / "workspace_shell.css").read_text(encoding="utf-8")

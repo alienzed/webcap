@@ -6338,8 +6338,9 @@
       open.textContent = "Open Prompt Assist";
       open.onclick = function () {
         closeAssistModal("storyboard-project-deep-qa-modal");
-        setSceneViewMode("focus", sceneId);
-        openPromptAssist(sceneId);
+        setSceneViewMode("focus", sceneId).then(function () {
+          openPromptAssist(sceneId);
+        });
       };
       actions.appendChild(open);
       card.append(main, actions);

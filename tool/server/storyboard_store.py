@@ -864,8 +864,11 @@ def project_deep_qa_signature(story):
 
 
 @_serialized_mutation
-def save_project_deep_qa(story_id, findings, model_id="", job_id=""):
+def save_project_deep_qa(story_id, findings, model_id="", job_id="", expected_signature=""):
     story = load_story(story_id)
+    current_signature = project_deep_qa_signature(story)
+    if expected_signature and current_signature != str(expected_signature):
+        raise RuntimeError("Project changed during Deep QA. Rerun the analysis to refresh its findings.")
     if not isinstance(findings, list):
         raise ValueError("Project Deep QA findings must be a list.")
     allowed = set((story.get("sceneOrder") or []))
@@ -892,7 +895,7 @@ def save_project_deep_qa(story_id, findings, model_id="", job_id=""):
     record = {
         "version": 1,
         "storyId": story["id"],
-        "sourceSignature": project_deep_qa_signature(story),
+        "sourceSignature": current_signature,
         "sourceUpdatedAt": str(story.get("updatedAt") or ""),
         "model": str(model_id or ""),
         "jobId": str(job_id or ""),
@@ -1807,6 +1810,39 @@ def apply_workshop_shots(story_id, scene_id, expected_prompt, replacement):
         "promptDirectorJobId": "",
         "refineComplete": False,
     }, existing=current)
+    scenes[scene_id] = scene
+    story["scenes"] = scenes
+    story["updatedAt"] = _utc_now()
+    _write_json_atomic(_story_path(story_id), story)
+    return story, scene
+
+
+@_serialized_mutation
+def apply_prompt_assist(story_id, scene_id, expected_prompt, revised_prompt, model_id="", job_id=""):
+    story = load_story(story_id)
+    scenes = story.get("scenes") if isinstance(story.get("scenes"), dict) else {}
+    current = scenes.get(scene_id)
+    if not isinstance(current, dict) or scene_id not in (story.get("sceneOrder") or []):
+        raise FileNotFoundError("Prompt Assist target Scene does not exist.")
+    if not isinstance(expected_prompt, str) or str(current.get("prompt") or "") != expected_prompt:
+        raise RuntimeError("Scene prompt changed since Prompt Assist prepared this suggestion. Reopen Prompt Assist and review the current prompt.")
+    prompt = str(revised_prompt or "")
+    if not prompt.strip() or prompt == expected_prompt:
+        raise ValueError("Prompt Assist requires a changed, non-empty complete prompt.")
+    patch = {
+        "prompt": prompt,
+        "previousPrompt": expected_prompt,
+        "previousRevision": {
+            "entryState": str(current.get("entryState") or ""),
+            "exitState": str(current.get("exitState") or ""),
+            "prompt": expected_prompt,
+            "durationSeconds": current.get("durationSeconds"),
+        },
+        "promptAssistModel": str(model_id or "").strip(),
+        "promptAssistJobId": str(job_id or "").strip(),
+        "refineComplete": False,
+    }
+    scene = _normalize_scene(scene_id, patch, existing=current)
     scenes[scene_id] = scene
     story["scenes"] = scenes
     story["updatedAt"] = _utc_now()

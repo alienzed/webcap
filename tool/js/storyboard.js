@@ -5352,8 +5352,8 @@
       throw new Error('Studio Generate/Cancel Takes controls are missing.');
     var generating = generateButton.dataset.takesBusy === 'generate';
     var cancelling = cancelButton.dataset.takesBusy === 'cancel';
-    var activeFirstCut = storyState.storyAction && storyState.storyAction.active &&
-      String(storyState.storyAction.storyId || '') === storyId;
+    var activeFirstCut = !!(storyState.storyAction && storyState.storyAction.active &&
+      String(storyState.storyAction.storyId || '') === storyId);
 
     generateButton.disabled = generating || cancelling || generationBlocked ||
       queuedFirstCut || activeFirstCut;

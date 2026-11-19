@@ -1,18 +1,18 @@
 # Storyboard
 
-> **Documentation status (updated 2026-11-06):** Studio is the current workspace label; Storyboard and Story remain internal route/storage names. This reference covers production behavior and dated implementation phases. The [Studio Director useful-function consolidation](studio-director-useful-functions-consolidation.md) owns the current creative capability scope and acceptance boundaries. Historical/backend capabilities below are not additional Director operations.
+> **Current Director contract (reconciled 2026-11-18):** Studio is the workspace label; Storyboard/Story remain internal storage and route names. This reference includes dated production and implementation history. For the current chat and Write rules, use the [Studio Director functional contract](studio-director-contract.md), [user flows](studio-user-flows.md) and [implementation evidence](studio-director-implementation.md). Historical operations below are not additional Chat Director capabilities.
 
 ## Current Studio Director workflow
 
-Director develops two creative units: **Project Overview** (Concept, Visual / atmosphere, Invariants) and **Scene** (Title, Intent, H3 Prompt). Individual stored parts remain distinct; a coherent revision can change only the parts that need it.
+Director collaborates on Projects (Title, Concept / overview, Visual / atmosphere, Invariants) and Scenes (Title, complete H3 Prompt, duration). Legacy Scene Intent remains stored for compatibility, not as an active Director authoring field.
 
-- **Read** sends the explicitly selected saved Overview and/or complete Scenes, with exact field IDs for acknowledgment. Navigating or choosing a Write destination does not automatically Read its creative data into Chat.
-- **Chat** develops the idea and may suggest a useful action. Suggestions are advisory, not a readiness gate or model-controlled execution permission.
-- **Write** offers Create Project, Revise Project Overview, or Write Scenes. Existing-Scene revision uses the author-selected Scenes and saved baseline, Project context, and full user/assistant discussion; Overview revision likewise receives the discussion. Frontend message-count/character clipping is absent, while runtime context capacity still limits inference.
-- A suggested Write prepares **editable Review** directly after destination setup. A complete captured value can open Review without another model request. Partial captures leave broader recommended changes available.
-- **Apply** saves only selected changes with conflict checks against their saved values. Scene revisions in one batch are atomic. New-Scene insertion and existing-Scene revision remain separate transactions. Chat alone never saves creative state.
+- **Chat** is ordinary creative dialogue, with response depth proportionate to the question. It can discuss or show creative material on request, but it does not create structured saved fields or invoke Write.
+- **Read** is an explicit, one-time capture of chosen saved Overview, Invariant and/or complete Scene units. The exact snapshot appears as a persisted user message in the conversation. Read itself makes no model request; navigation and selecting a Write target do not inject saved material into chat.
+- **Write → Project / Scene(s)** is an explicit author action with the complete available conversation, selected destination, current saved baseline when needed, and an operation-specific response schema. Scene Write additionally receives H3 production guidance; chat and Project Write do not.
+- **Save and recovery:** Director Write saves supported returned values directly without the retired Studio Review/Apply stage. WebCap preserves unrelated fields, reports independently saved records and failures, and uses the existing field History/Undo/Redo for recovery.
+- **Optional Action Advisor** independently suggests up to three preparable Read/Write actions after a saved chat reply when enabled. A suggestion may prefill controls after **Prepare**; only clicking Read or Write executes an operation.
 
-Production controls, Take generation, references, LoRAs, seeds and sampling stay outside these creative Read/Write operations. The retained **Revise & Generate…** tool and **Queue First Cut** are separate production paths that can commit authoring changes and queue Takes. They do not share Director Chat's editable Review-before-Apply contract. Legacy tool retirement awaits demonstrated replacement parity.
+Generation settings, Take creation, references, LoRAs, seeds and sampling remain outside Director's conversational Read/Write functions. **Develop Scenes**, **Revise Scenes**, **Revise & Generate…**, **Queue First Cut**, and **Coherence** are distinct specialist operations; their own review/production surfaces must not be confused with the retired Director Write Review.
 
 Storyboard is a first-class WebCap workspace for building longer-form visual sequences from ordered scene generations and selected takes.
 
@@ -148,11 +148,11 @@ Status is one of:
 
 Pinned is separate from status because an archived/completed Story may still be worth pinning.
 
-`style` is the Project's persistent visual/atmosphere block. `invariants` are typed facts that should remain stable across relevant independently generated Scenes, such as recurring characters, world rules, or soundtrack language. Older Storyboard production requests use compact task-specific context. Current Studio Director receives saved material through explicit Read or a chosen Write request and uses the discussion for revisions. The five optional Directing Guidelines remain compatible with older production paths; active Director develops creative priorities in Concept, Intent and relevant Invariants.
+`style` is the Project's persistent visual/atmosphere block. `invariants` are typed facts that should remain stable across relevant independently generated Scenes, such as recurring characters, world rules, or soundtrack language. Older Storyboard production requests use compact task-specific context. Current Studio Director receives saved material through explicit Read or a chosen Write request and uses the full conversation for writing. The five optional Directing Guidelines remain compatible with older production paths; active Director develops creative priorities through Concept / overview, Visual / atmosphere, Invariants and each Scene's complete H3 Prompt.
 
 The Story authoring panel is a dedicated, wide middle column between the Story library and Scene workspace, and is explicitly collapsible. The desktop target is a large production workspace: Story uses a comfortable authoring width rather than sidebar proportions, with readable helper text and Concept actions attached directly to the Concept field. Story and Scene are independent full-height panes rather than one long document.
 
-Scene authoring uses a persistent horizontal Scene progression strip to select the Scene being edited. Title, Intent and the H3 Prompt are the creative fields; duration, aspect ratio, megapixels, seed and Conditioning remain production controls. Deeper reference editing and optional Notes use disclosures. Entry/Exit state remain compatible saved fields for older production requests, with no active authoring controls. **Workshop** opens Studio Director for discussion and reviewed revision; saved context is supplied through explicit Read or the chosen Write request.
+Scene authoring uses a persistent horizontal Scene progression strip to select the Scene being edited. Title and the complete H3 Prompt are the active Scene creative fields, with duration and other generation controls nearby. Legacy Intent and Entry/Exit state remain compatible saved data for older production requests, without active Director authoring controls. **Workshop** opens Studio Director for discussion; saved data reaches chat by explicit Read and reaches Write via the selected operation's current baseline.
 
 The selected Scene's Takes occupy a substantial bottom evaluation dock. Take cards expand to consume available width up to a sensible maximum and only become horizontally scrollable once there are enough results to require it.
 
@@ -265,7 +265,7 @@ LLM context stays deliberately bounded and task-specific:
 - Normal whole-Story development may author the complete Scene plan in one structured response.
 - **One at a time** development is an explicit alternate strategy: Director first returns a concise complete Story outline, then WebCap authors each full H3 Scene in a separate request using the Story overview/style/invariants, the complete outline, and the immediately previous authored Scene when available.
 - The staged outline/Scene responses are session work only. They do not mutate `story.json`; WebCap assembles the normal Scene-plan shape and calls the existing atomic plan application once after every Scene succeeds and the Story revision still matches the frozen source revision.
-- These production requests use task-specific context rather than a chat transcript. Studio Director Chat is separate: it persists conversations and supplies the user/assistant discussion to reviewed revisions. Neither runtime residency nor model cache is durable Project memory.
+- These production requests use task-specific context rather than a chat transcript. Studio Director Chat is separate: it persists the full conversation; explicit Write receives that history plus its specific saved baseline and task instruction. Neither runtime residency nor model cache is durable Project memory.
 - ComfyUI inference calls are treated as stateless; WebCap owns any continuity worth preserving.
 
 Early authoring operations should be explicit functions rather than a general agent framework:
@@ -355,7 +355,7 @@ The MVP is successful if a real Story can be created, authored over time, closed
 
 ### Phase 2 - Takes and manual media continuity
 
-Current Focus IA keeps the Scene form as a naturally scrolling authoring page: Scene intent/prompt remain primary, Entry/Exit live under a **Continuity** disclosure, Generation/Conditioning remain alongside the form, and Takes can be temporarily collapsed. When the Scene workspace itself is sufficiently wide, CSS docks the same expanded Takes section as a vertical media rail; there is no JavaScript DOM relocation or dock state.
+**Historical Phase 2 Focus IA (superseded for active Studio authoring):** This older layout placed Scene Intent and Entry/Exit controls beside Prompt and generation options, with Takes that could be collapsed or docked. Intent and Entry/Exit are no longer active Director authoring fields; this paragraph is design history, not a present-day UI requirement.
 
 
 Goal: make Storyboard useful for supervised production before automated intelligence.
@@ -458,7 +458,7 @@ Historical candidates from this implementation phase (some superseded by current
 - AI-assisted split/insert/merge operations for evolving creative structure;
 - one semantic audit using `docs/storyboard-plan-audit.schema.json` and at most one bounded repair pass if quality warrants the extra inference;
 - branching/version UX only if actual production use proves simple recoverable replacement is insufficient;
-- lightweight conversational UI only if explicit bounded actions stop being enough. **Superseded for Studio:** the current Studio Director already has conversation, explicit Read and reviewed Write; do not treat this historical candidate as unimplemented.
+- lightweight conversational UI only if explicit bounded actions stop being enough. **Superseded for Studio:** the current Studio Director already has persistent conversation, explicit Read, direct Write, and an optional independent Action Advisor; this is not an open task.
 
 Manual editing remains available everywhere except the exact field or active Scene plan currently owned by a pending Director job. A sequential Director pass protects the Story/Scene context it is actively reviewing, and First Cut protects its Story for the duration of the orchestration. Other Stories and app activities remain usable.
 
@@ -506,7 +506,7 @@ The architecture should leave obvious seams for later provider integration, but 
 
 ## Underlying legacy Storyboard LLM contract slice
 
-**Scope (updated 2026-11-06):** These named backend operations describe the older Storyboard LLM pipeline, not Studio Director's current unit-based Read/Write surface. The current reviewed actions live in `tool/server/studio_director.py`, `tool/js/studio_director_workbench.js`, and [the useful-function consolidation](studio-director-useful-functions-consolidation.md). Saved older fields and requests remain compatible.
+**Historical backend scope:** These named operations describe the older Storyboard LLM pipeline, not current Studio Director Chat/Read/Write. For the current feature contract, see [Studio Director functional contract](studio-director-contract.md); implementation is in `tool/server/studio_director.py`, `tool/js/director_chat.js`, and `tool/js/studio_director_workbench.js`. Saved older fields and standalone specialist requests remain compatible.
 
 Storyboard keeps request meaning separate from execution. `tool/server/storyboard_llm_contract.py` remains the pure request-assembly boundary, while `tool/server/storyboard_llm_runtime.py` owns the llama.cpp process/model lifecycle and HTTP transport.
 

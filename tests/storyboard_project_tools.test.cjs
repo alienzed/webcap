@@ -29,7 +29,7 @@ test('Scenes header keeps context left and four responsive actions right',()=>{
   for(const id of ['storyboard-generate-scenes-btn','storyboard-director-tools-btn','storyboard-find-replace-btn','storyboard-cancel-takes-btn'])
     assert.equal((html.match(new RegExp('id="'+id+'"','g'))||[]).length,1);
   assert.match(css,/@container \(max-width: 760px\)/);
-  assert.match(css,/#storyboard-project-tool-bar \.storyboard-tool-label \{ display: none; \}/);
+  assert.match(css,/\.storyboard-tool-label \{\s*display:\s*inline;/);
   assert.match(html,/<button id="storyboard-scenes-sequence-btn"/);
 });
 

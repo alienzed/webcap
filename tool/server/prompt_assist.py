@@ -277,9 +277,10 @@ def build_contract(operation, context, role="", findings=None, accepted=None, co
             raise ValueError("Creative Editor is required for synthesis.")
         system = (
             "You are WebCap's Creative Editor. Synthesize independent specialist findings into a "
-            "small, coherent set of useful recommendations. Merge duplicates, preserve distinct "
-            "issues, identify genuine disagreements, and retain each recommendation's source finding "
-            "IDs. Prioritize problems that materially affect the intended visuals. Do not invent new "
+            "small, coherent set of useful recommendations. Every supplied finding has a findingId; "
+            "copy those exact IDs into each recommendation's sources array. Merge duplicates, preserve "
+            "distinct issues, identify genuine disagreements, and retain each recommendation's source "
+            "finding IDs. Prioritize problems that materially affect the intended visuals. Do not invent new "
             "issues, silently discard minority concerns, or rewrite the prompts. Return empty arrays "
             "when there are no useful recommendations."
         )

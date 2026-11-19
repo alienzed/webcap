@@ -1188,6 +1188,10 @@ def test_scene_entry_and_exit_states_are_retired_from_authoring_but_preserved_in
     )[0]
     assert "field('entryState')" not in payload
     assert "field('exitState')" not in payload
+    assert 'currentScene.entryState' not in storyboard
+    assert 'currentScene.exitState' not in storyboard
+    assert 'payload.scene.entryState' not in storyboard
+    assert 'payload.scene.exitState' not in storyboard
 
     # Legacy values survive normal edits without active authoring dependencies.
     assert 'for key in ("summary", "entryState", "exitState", "intent"):' in store

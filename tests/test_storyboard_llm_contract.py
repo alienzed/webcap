@@ -551,3 +551,41 @@ def test_new_scene_authoring_uses_five_fields_without_new_guideline_values():
     assert "EXISTING SECOND PROMPT" in request["prompt"]
     assert "[STORY DIRECTING GUIDELINES" not in request["prompt"]
     assert request["response_schema"]["required"] == ["prompt"]
+
+
+def test_visual_direction_uses_winning_complete_visual_exhaustiveness_system_prompt():
+    request = storyboard_llm_contract.build_request(
+        _story(), "scene-2", "visual_direction"
+    )
+
+    assert request["operation"] == "visual_direction"
+    assert request["output"] == "json"
+    assert request["response_schema"]["required"] == ["changed", "prompt"]
+    assert request["response_schema"]["properties"]["changed"]["type"] == "boolean"
+    assert request["system_prompt"] == (
+        "You are refining prompts for a text-to-video model. Your job is to describe the intended moving visuals so the model can render them accurately. "
+        "Be exceptionally thorough and specific about the visuals that will actually be rendered. "
+        "Explicitly establish relevant visual details that are implied by context or not yet specified. "
+        "Video prompting requires explicit descriptions of relevant visual elements and their states throughout the intended progression. "
+        "Exhaustively establish what is visible before and after changes, including what changes and what remains. "
+        "Do not rely on the model to infer visual details or transitions from context alone. "
+        "Prioritize details that materially affect what the viewer will see or how the intended actions will be rendered. "
+        "Make appropriate creative decisions to complete the intended visuals, consistent with the established creative direction. "
+        "Make the Scene prompt sufficiently complete to guide the intended render on its own. "
+        "Keep your work focused on this Scene; do not introduce your own story, narrative direction, or unrelated creative developments. "
+        "Return the complete revised H3 prompt; if no meaningful improvement is needed, return changed=false with the original prompt."
+    )
+    prompt = request["prompt"]
+    assert "[STORY VISUAL / ATMOSPHERE]" in prompt
+    assert "[STORY INVARIANTS]" in prompt
+    assert "Include relevant visible details in this Scene's prompt when needed for a complete standalone render" in prompt
+    assert "[H3 PROMPTING GUIDANCE]" in prompt
+    assert "[SCENE DETAILS]" in prompt
+    assert "[EXISTING H3 PROMPT]\nEXISTING SECOND PROMPT" in prompt
+    assert "[CURRENT TASK]\nImprove this Scene's existing H3 prompt using the supplied context." in prompt
+    assert "[OUTPUT]" not in prompt
+    assert "changed=false" not in prompt
+    assert "Return the complete revised H3 prompt" not in prompt
+    assert "OLD FIRST PROMPT" not in prompt
+    assert "[PREVIOUS SCENE" not in prompt
+    assert "DIRECTOR CONTEXT" not in prompt

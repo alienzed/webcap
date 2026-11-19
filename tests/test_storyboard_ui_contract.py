@@ -1606,3 +1606,32 @@ def test_define_invariants_does_not_generate_new_guidelines_and_preserves_legacy
     assert "openDefinedGuidelineDraft(storyId)" not in current_define
     assert "payload.guidelineSuggestions" not in current_define
     assert "reportConsoleInfo('Storyboard'" in current_define
+
+
+def test_visual_direction_scene_picker_defaults_to_all_and_posts_only_selected_ids():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+    app = (ROOT / "tool" / "server" / "app.py").read_text(encoding="utf-8")
+
+    assert 'id="storyboard-director-tools-scene-selection"' in html
+    assert '<option value="visual_direction">Visual Direction</option>' in html
+    open_modal = storyboard.split("function openDirectorTools()", 1)[1].split("\n  function ", 1)[0]
+    assert "data-revise-scene-all checked" in open_modal
+    assert "data-revise-scene=" in open_modal
+    assert "input.checked = allToggle.checked" in open_modal
+    assert "allToggle.indeterminate" in open_modal
+
+    run_revision = storyboard.split("function runDirectorToolsRevision()", 1)[1].split("\n  // The Studio composer", 1)[0]
+    assert "querySelectorAll('[data-revise-scene]:checked')" in run_revision
+    assert "selectedSceneIds" in run_revision
+    assert "selectedSceneIds, preset === 'visual_direction' ? 'visual_direction' : 'standard'" in run_revision
+    assert "sceneIds: sceneIds" in storyboard
+    assert "result.failedScenes" in storyboard
+    assert "result.succeededScenes" in storyboard
+    assert "Completed: " in storyboard
+    assert "Failed: " in storyboard
+
+    route = app.split('if operation == "revise_scenes_sequence":', 1)[1].split('if operation == "check_coherence_sequence":', 1)[0]
+    assert 'requested_scene_ids = data.get("sceneIds")' in route
+    assert "unknown = [item for item in requested_scene_ids if item not in scene_ids]" in route
+    assert "scene_ids = [item for item in scene_ids if item in selected]" in route

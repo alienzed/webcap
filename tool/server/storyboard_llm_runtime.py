@@ -1648,6 +1648,7 @@ def _sampling_profile(operation):
         "develop_story": {"temperature": 0.3, "top_p": 0.9},
         "write_prompt": {"temperature": 0.15, "top_p": 0.85},
         "refine_prompt": {"temperature": 0.1, "top_p": 0.8},
+        "visual_direction": {"temperature": 0.1, "top_p": 0.8},
     }
     profile = profiles.get(operation, {"temperature": 0.2, "top_p": 0.85})
     return {
@@ -2102,9 +2103,14 @@ def run_contract(model_id, contract, gpu_reserved=False, thinking=None):
                 chat_kwargs["gpu_reserved"] = True
             if contract.get("max_tokens") is not None:
                 chat_kwargs["max_tokens"] = int(contract["max_tokens"])
+            messages = []
+            system_prompt = str(contract.get("system_prompt") or "").strip()
+            if system_prompt:
+                messages.append({"role": "system", "content": system_prompt})
+            messages.append({"role": "user", "content": prompt})
             result = chat(
                 model_id,
-                [{"role": "user", "content": prompt}],
+                messages,
                 **chat_kwargs,
             )
             if contract.get("output") == "json":

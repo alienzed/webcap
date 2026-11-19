@@ -537,7 +537,7 @@ def _client_result(client, context, llm_result, job_id="", frozen_contract=None)
             "timings": llm_result.get("timings"),
         }
 
-    if operation in {"write_prompt", "refine_prompt"}:
+    if operation in {"write_prompt", "refine_prompt", "visual_direction"}:
         scene_id = str(context.get("sceneId") or "").strip()
         if not scene_id:
             raise RuntimeError("Storyboard Scene Director job is missing its Scene ID.")
@@ -546,7 +546,7 @@ def _client_result(client, context, llm_result, job_id="", frozen_contract=None)
         if not isinstance(data, dict):
             raise ValueError("Storyboard Director returned invalid structured Scene prompt data.")
 
-        if operation == "refine_prompt" and data.get("changed") is False:
+        if operation in {"refine_prompt", "visual_direction"} and data.get("changed") is False:
             from .storyboard_store import load_story
             story = load_story(story_id)
             scene = (story.get("scenes") or {}).get(scene_id)
@@ -569,7 +569,7 @@ def _client_result(client, context, llm_result, job_id="", frozen_contract=None)
                 prompt,
                 model_id=llm_result["model"],
                 job_id=job_id,
-                operation=operation,
+                operation="refine_prompt" if operation == "visual_direction" else operation,
                 duration_override=duration_override,
                 scene_fields=scene_fields,
             )
@@ -577,6 +577,7 @@ def _client_result(client, context, llm_result, job_id="", frozen_contract=None)
             "storyId": story["id"],
             "sceneId": scene["id"],
             "result": scene["prompt"],
+            "changed": data.get("changed") is not False,
             "model": llm_result["model"],
             "finishReason": llm_result.get("finishReason"),
             "usage": llm_result.get("usage"),
@@ -818,6 +819,10 @@ def _execute_claimed(job_id, gpu_reserved):
         scene_ids = list(context.get("sceneIds") or [])
         instruction = str(context.get("sourceInstruction") or "")
         completed = 0
+        succeeded_scene_ids = []
+        succeeded_scenes = []
+        changed_scene_ids = []
+        failures = []
         with _revision_progress_lock:
             _revision_progress[job_id] = {"completed": 0, "total": len(scene_ids), "phase": "Revising Scenes"}
         try:
@@ -825,51 +830,110 @@ def _execute_claimed(job_id, gpu_reserved):
                 with _enqueue_lock:
                     if execution_get_job(job_id).get("status") == "stopping":
                         return execution_finish_job_transient(job_id, status="stopped",
-                            error="Revise Scenes stopped after " + str(completed) + " Scenes.")
+                            error="Visual Direction stopped after " + str(completed) + " of " + str(len(scene_ids)) + " Scenes.",
+                            result={
+                                "storyId": context["storyId"],
+                                "revisedSceneCount": len(changed_scene_ids),
+                                "completedSceneCount": len(succeeded_scene_ids),
+                                "succeededSceneIds": succeeded_scene_ids,
+                                "succeededScenes": succeeded_scenes,
+                                "changedSceneIds": changed_scene_ids,
+                                "failedScenes": failures,
+                                "stopped": True,
+                            })
                 with _revision_progress_lock:
                     _revision_progress[job_id] = {
                         "completed": completed, "total": len(scene_ids),
                         "phase": "Revising Scenes", "sceneId": scene_id,
                     }
-                story = load_story(str(context.get("storyId") or ""))
-                scene_contract = build_request(
-                    story, scene_id, "refine_prompt", instruction=instruction,
-                    continuity_context=context.get("continuityContext") is True,
-                )
-                result = run_contract(model_id, scene_contract, gpu_reserved=bool(gpu_reserved), thinking=context.get("thinking") is True)
-                with _enqueue_lock:
-                    if execution_get_job(job_id).get("status") == "stopping":
-                        return execution_finish_job_transient(job_id, status="stopped",
-                            error="Revise Scenes stopped after " + str(completed) + " Scenes.")
-                    _client_result("storyboard", {
-                        "storyId": context["storyId"], "sceneId": scene_id,
-                        "operation": "refine_prompt", "sourceInstruction": instruction,
-                    }, result, job_id=job_id, frozen_contract=scene_contract)
-                completed += 1
+                try:
+                    story = load_story(str(context.get("storyId") or ""))
+                    scene = (story.get("scenes") or {}).get(scene_id)
+                    if not isinstance(scene, dict):
+                        raise FileNotFoundError("Scene does not exist.")
+                    pass_type = str(context.get("passType") or "standard")
+                    scene_operation = "visual_direction" if pass_type == "visual_direction" else "refine_prompt"
+                    scene_contract = build_request(
+                        story, scene_id, scene_operation, instruction=instruction,
+                        continuity_context=context.get("continuityContext") is True,
+                    )
+                    result = run_contract(model_id, scene_contract, gpu_reserved=bool(gpu_reserved), thinking=context.get("thinking") is True)
+                    with _enqueue_lock:
+                        if execution_get_job(job_id).get("status") == "stopping":
+                            return execution_finish_job_transient(job_id, status="stopped",
+                                error="Visual Direction stopped after " + str(completed) + " of " + str(len(scene_ids)) + " Scenes.",
+                                result={
+                                    "storyId": context["storyId"],
+                                    "revisedSceneCount": len(changed_scene_ids),
+                                    "completedSceneCount": len(succeeded_scene_ids),
+                                    "succeededSceneIds": succeeded_scene_ids,
+                                    "succeededScenes": succeeded_scenes,
+                                    "changedSceneIds": changed_scene_ids,
+                                    "failedScenes": failures,
+                                    "stopped": True,
+                                })
+                        applied = _client_result("storyboard", {
+                            "storyId": context["storyId"], "sceneId": scene_id,
+                            "operation": scene_operation, "sourceInstruction": instruction,
+                        }, result, job_id=job_id, frozen_contract=scene_contract)
+                    succeeded_scene_ids.append(scene_id)
+                    succeeded_scenes.append({
+                        "sceneId": scene_id,
+                        "title": str(scene.get("title") or scene_id),
+                        "changed": applied.get("changed") is True,
+                    })
+                    if applied.get("changed") is True:
+                        changed_scene_ids.append(scene_id)
+                    completed += 1
+                except Exception as exc:
+                    story = load_story(str(context.get("storyId") or ""))
+                    scene = (story.get("scenes") or {}).get(scene_id, {})
+                    failures.append({
+                        "sceneId": scene_id,
+                        "title": str(scene.get("title") or scene_id),
+                        "error": str(exc),
+                    })
+                    completed += 1
                 with _revision_progress_lock:
                     _revision_progress[job_id] = {
                         "completed": completed, "total": len(scene_ids),
                         "phase": "Revising Scenes", "sceneId": scene_id,
+                        "failed": len(failures),
                     }
-        except Exception as exc:
-            raise RuntimeError("Revise Scenes failed after " + str(completed) +
-                " of " + str(len(scene_ids)) + " Scenes: " + str(exc)) from exc
         finally:
             with _revision_progress_lock:
                 _revision_progress.pop(job_id, None)
         generated = 0
-        if context.get("generateFreshTakes") is True:
+        if context.get("generateFreshTakes") is True and changed_scene_ids:
             from .storyboard_generation import start_generation
-            # The revised Scenes are committed before Take submission.
-            # This handoff is server-owned and survives browser navigation.
+            # Only successfully revised Scenes receive Takes. The handoff is server-owned.
             with _revision_progress_lock:
                 _revision_progress[job_id] = {"completed": completed, "total": len(scene_ids), "phase": "Queuing fresh Takes"}
-            for scene_id in scene_ids:
-                start_generation(str(context["storyId"]), scene_id)
-                generated += 1
+            for scene_id in changed_scene_ids:
+                try:
+                    start_generation(str(context["storyId"]), scene_id)
+                    generated += 1
+                except Exception as exc:
+                    story = load_story(str(context.get("storyId") or ""))
+                    scene = (story.get("scenes") or {}).get(scene_id, {})
+                    failures.append({
+                        "sceneId": scene_id,
+                        "title": str(scene.get("title") or scene_id),
+                        "error": "Prompt saved, but fresh Take could not be queued: " + str(exc),
+                        "stage": "take_generation",
+                    })
+            with _revision_progress_lock:
+                _revision_progress.pop(job_id, None)
         return execution_finish_job_transient(job_id, status="completed", result={
-            "storyId": context["storyId"], "revisedSceneCount": completed,
+            "storyId": context["storyId"],
+            "revisedSceneCount": len(changed_scene_ids),
+            "completedSceneCount": len(succeeded_scene_ids),
+            "succeededSceneIds": succeeded_scene_ids,
+            "succeededScenes": succeeded_scenes,
+            "changedSceneIds": changed_scene_ids,
+            "failedScenes": failures,
             "freshTakesQueued": generated,
+            "requestedSceneCount": len(scene_ids),
         })
     try:
         if client in {"chat", "caption"}:

@@ -452,6 +452,7 @@
       if (['failed', 'cancelled', 'stopped', 'interrupted'].indexOf(status) !== -1) {
         var terminalError = new Error(current.error || ('Storyboard Director job ' + status + '.'));
         terminalError.jobStatus = status;
+        terminalError.result = current.result || {};
         var recovered = current.result && String(current.result.rawText || '');
         if (status === 'failed' && recovered) {
           var dialog = document.querySelector('[data-director-recovered-output]');
@@ -2014,6 +2015,15 @@
   }
 
   function reviseScenes(instruction, modelId, generateFreshTakes, continuityContext, sourceInput) {
+    // Preserve the established five-argument entrypoint; scoped callers may
+    // optionally supply selected Scene IDs and a pass type as trailing arguments.
+    return reviseScenesWithOptions(
+      instruction, modelId, generateFreshTakes, continuityContext, sourceInput,
+      arguments[5], arguments[6]
+    );
+  }
+
+  function reviseScenesWithOptions(instruction, modelId, generateFreshTakes, continuityContext, sourceInput, selectedSceneIds, passType) {
     if (!storyState.story) return Promise.reject(new Error('Choose a Story first.'));
     var storyId = storyState.story.id;
     var directorTarget = { kind: 'repair', storyId: storyId };
@@ -2027,12 +2037,20 @@
       ? storyState.story.sceneOrder.slice()
       : [];
     if (!sceneIds.length) return Promise.reject(new Error('Develop Scenes first.'));
+    if (Array.isArray(selectedSceneIds)) {
+      if (!selectedSceneIds.length) return Promise.reject(new Error('Select at least one Scene.'));
+      var selected = new Set(selectedSceneIds);
+      if (selectedSceneIds.some(function (id) { return !sceneIds.includes(id); }))
+        return Promise.reject(new Error('A selected Scene no longer exists in this Project.'));
+      sceneIds = sceneIds.filter(function (id) { return selected.has(id); });
+    }
 
     instruction = String(instruction || '').trim();
-    if (!instruction) return Promise.reject(new Error('Enter what should be revised across these Scenes.'));
+    if (!instruction && passType !== 'visual_direction')
+      return Promise.reject(new Error('Enter what should be revised across these Scenes.'));
 
-    sceneRevisionHistory.remember(instruction, sourceInput || el('storyboard-director-tools-instruction'));
-    storyState.story.repairInstruction = instruction;
+    if (instruction) sceneRevisionHistory.remember(instruction, sourceInput || el('storyboard-director-tools-instruction'));
+    storyState.story.repairInstruction = instruction || (passType === 'visual_direction' ? 'Visual Direction' : '');
     storyState.story.repairComplete = false;
 
     var saveBarrier = flushPendingSaves();
@@ -2044,6 +2062,8 @@
         operation: 'revise_scenes_sequence',
         instruction: instruction,
         model: modelId,
+        sceneIds: sceneIds,
+        passType: passType || 'standard',
         generateFreshTakes: generateFreshTakes === true,
         continuityContext: continuityContext === true
       }).then(function (payload) {
@@ -2055,20 +2075,51 @@
           return consumeDirectorJob(payload.jobId);
         });
       });
-    }).then(function () {
+    }).then(function (completedJob) {
+      var result = completedJob && completedJob.result || {};
+      var succeeded = Number(result.completedSceneCount != null ? result.completedSceneCount :
+        (Array.isArray(result.succeededSceneIds) ? result.succeededSceneIds.length : sceneIds.length));
+      var changed = Array.isArray(result.changedSceneIds) ? result.changedSceneIds.length :
+        Number(result.revisedSceneCount != null ? result.revisedSceneCount : succeeded);
+      var failures = Array.isArray(result.failedScenes) ? result.failedScenes : [];
+      var summary = (passType === 'visual_direction' ? 'Visual Direction: ' : 'Revise Scenes: ') +
+        succeeded + ' of ' + String(sceneIds.length) + ' Scenes processed; ' + changed + ' prompts updated.';
+      if (failures.length) {
+        var successfulNames = Array.isArray(result.succeededScenes) ? result.succeededScenes.map(function (scene) {
+          return String(scene.title || scene.sceneId || 'Scene');
+        }) : [];
+        if (successfulNames.length) summary += ' Completed: ' + successfulNames.join(', ') + '.';
+        summary += ' Failed: ' + failures.map(function (failure) {
+          return String(failure.title || failure.sceneId || 'Scene') + ' (' + String(failure.error || 'unknown error') + ')';
+        }).join('; ');
+      }
+      if (Number(result.freshTakesQueued || 0) > 0)
+        summary += ' Queued ' + String(result.freshTakesQueued) + ' fresh Takes.';
       if (storyState.story && String(storyState.story.id || '') === String(storyId)) {
-        storyState.story.repairComplete = true;
+        storyState.story.repairComplete = failures.length === 0;
         scheduleStorySave();
       }
-      setRepairStatus('Revised ' + String(sceneIds.length) + ' Scenes.');
-      if (storyState.story && storyState.story.id === storyId &&
+      setRepairStatus(summary);
+      if (succeeded > 0 && storyState.story && storyState.story.id === storyId &&
           storyState.story.directorLoraPlanning === true) {
         suggestStoryboardLoras().catch(reportError);
       }
-      return { text: 'Revised ' + String(sceneIds.length) + ' Scenes.' };
+      return { text: summary, result: result };
     }).catch(function (err) {
-      if (directorWasStopped(err)) setRepairStatus('Revise Scenes stopped.');
-      else setRepairStatus('Revise Scenes failed.');
+      var partial = err && err.result || {};
+      var partialSucceeded = Array.isArray(partial.succeededSceneIds) ? partial.succeededSceneIds.length : 0;
+      var partialFailures = Array.isArray(partial.failedScenes) ? partial.failedScenes : [];
+      if (directorWasStopped(err)) {
+        var stoppedSummary = 'Visual Direction stopped after ' + partialSucceeded + ' Scenes.';
+        var stoppedSuccessNames = Array.isArray(partial.succeededScenes) ? partial.succeededScenes.map(function (scene) {
+          return String(scene.title || scene.sceneId || 'Scene');
+        }) : [];
+        if (stoppedSuccessNames.length) stoppedSummary += ' Completed: ' + stoppedSuccessNames.join(', ') + '.';
+        if (partialFailures.length) stoppedSummary += ' Failed: ' + partialFailures.map(function (failure) {
+          return String(failure.title || failure.sceneId || 'Scene') + ' (' + String(failure.error || 'unknown error') + ')';
+        }).join('; ');
+        setRepairStatus(stoppedSummary);
+      } else setRepairStatus('Revise Scenes failed.');
       // Earlier Scenes may have been saved before a later Scene failed.
       return flushPendingSaves().then(function () {
         return request(null, 'story=' + encodeURIComponent(storyId));
@@ -6032,9 +6083,12 @@
   }
 
   function syncDirectorToolsRunLabel() {
-    var coherence = el('storyboard-director-tools-preset').value === 'coherence';
+    var preset = el('storyboard-director-tools-preset').value;
+    var coherence = preset === 'coherence';
+    var generateTakes = el('storyboard-director-tools-generate-takes').checked;
     el('storyboard-director-tools-run').textContent = coherence ? 'Check Coherence' :
-      el('storyboard-director-tools-generate-takes').checked ? 'Revise & Generate Takes' : 'Revise Scenes';
+      preset === 'visual_direction' ? (generateTakes ? 'Visual Direction & Generate Takes' : 'Run Visual Direction') :
+      generateTakes ? 'Revise & Generate Takes' : 'Revise Scenes';
   }
 
   function openDirectorTools() {
@@ -6050,8 +6104,32 @@
     el('storyboard-director-tools-target').textContent =
       'Current Project: ' + String(storyState.story.title || storyState.story.name || storyState.story.id) +
       ' · all ' + storyState.story.sceneOrder.length + ' Scenes';
+    var sceneSelection = el('storyboard-director-tools-scene-selection');
+    sceneSelection.innerHTML = '<label class="storyboard-director-scene-select-all"><input type="checkbox" data-revise-scene-all checked> All Scenes</label>' +
+      storyState.story.sceneOrder.map(function (sceneId, index) {
+        var scene = storyState.story.scenes[sceneId] || {};
+        return '<label><input type="checkbox" data-revise-scene="' + escapeHtml(sceneId) + '" checked> ' +
+          (index + 1) + '. ' + escapeHtml(scene.title || 'Untitled Scene') + '</label>';
+      }).join('');
+    var allToggle = sceneSelection.querySelector('[data-revise-scene-all]');
+    allToggle.onchange = function () {
+      sceneSelection.querySelectorAll('[data-revise-scene]').forEach(function (input) {
+        input.checked = allToggle.checked;
+      });
+      allToggle.indeterminate = false;
+    };
+    sceneSelection.querySelectorAll('[data-revise-scene]').forEach(function (input) {
+      input.onchange = function () {
+        var boxes = Array.from(sceneSelection.querySelectorAll('[data-revise-scene]'));
+        allToggle.checked = boxes.every(function (box) { return box.checked; });
+        allToggle.indeterminate = boxes.some(function (box) { return box.checked; }) && !allToggle.checked;
+      };
+    });
     preset.value = '';
     input.value = '';
+    var instructionLabel = document.querySelector('label[for="storyboard-director-tools-instruction"]');
+    if (instructionLabel) instructionLabel.textContent = 'Revise Scenes';
+    input.placeholder = 'Describe what should be revised across these Scenes.';
     sceneRevisionHistory.reset(input);
     input.readOnly = false;
     el('storyboard-director-tools-generate-takes').closest('label').classList.remove('hidden');
@@ -6207,7 +6285,8 @@
     if (!input || !run || !status) throw new Error('Director Tools modal markup is missing.');
     var generateFreshTakes = el('storyboard-director-tools-generate-takes').checked;
     var instruction = String(input.value || '').trim();
-    if (!instruction) {
+    var preset = el('storyboard-director-tools-preset').value;
+    if (!instruction && preset !== 'visual_direction') {
       status.textContent = 'Enter a revision instruction or choose a preset.';
       input.focus();
       return;
@@ -6216,9 +6295,18 @@
     status.textContent = 'Starting revision…';
     var storyId = storyState.story && storyState.story.id;
     var target = { kind: 'repair', storyId: storyId };
+    var selectedSceneIds = Array.from(el('storyboard-director-tools-scene-selection').querySelectorAll('[data-revise-scene]:checked'))
+      .map(function (input) { return input.dataset.reviseScene; });
+    if (!selectedSceneIds.length) {
+      status.textContent = 'Select at least one Scene.';
+      run.disabled = false;
+      return;
+    }
+    var continuityContext = el('storyboard-director-tools-preset').value === 'continuity';
     var revision = reviseScenes(
       instruction, storyState.director.modelId, generateFreshTakes,
-      el('storyboard-director-tools-preset').value === 'continuity'
+      continuityContext, el('storyboard-director-tools-instruction'),
+      selectedSceneIds, preset === 'visual_direction' ? 'visual_direction' : 'standard'
     );
     // The target is registered synchronously once the operation has started.
     // Dismiss the input modal now so its activity card is not obscured.
@@ -6398,6 +6486,11 @@
       if (!input) return;
       if (this.value === 'continuity') input.value = DIRECTOR_PASS_PRESETS.continuity.instruction;
       if (this.value === 'coherence') input.value = DIRECTOR_PASS_PRESETS.coherence.instruction;
+      if (this.value === 'visual_direction') input.value = '';
+      var visualDirection = this.value === 'visual_direction';
+      var instructionLabel = document.querySelector('label[for="storyboard-director-tools-instruction"]');
+      if (instructionLabel) instructionLabel.textContent = visualDirection ? 'Additional direction (optional)' : 'Revise Scenes';
+      input.placeholder = visualDirection ? 'Optional direction for this Visual Direction pass.' : 'Describe what should be revised across these Scenes.';
       sceneRevisionHistory.reset(input);
       var coherence = this.value === 'coherence';
       syncDirectorToolsRunLabel();

@@ -2083,3 +2083,151 @@ def test_only_ask_and_describe_vl_skip_configured_output_cap(llm_root, monkeypat
     assert llm_runner.job_status(job["jobId"])["status"] == "completed"
     assert (captured.get("use_configured_max_tokens") is False) is expected_uncapped
     assert captured.get("max_tokens") == (192 if operation == "vision_caption_extras" else None)
+
+
+def test_visual_direction_revision_uses_system_prompt_and_preserves_prompt_history(llm_root, monkeypatch):
+    story = storyboard_store.create_story({
+        "title": "Fashion Film",
+        "concept": "A model presents distinct complete fashion looks.",
+        "style": "Contemporary fashion editorial.",
+        "invariants": [{"kind": "character", "title": "Model", "text": "The same adult model appears throughout."}],
+    })
+    story, scene = storyboard_store.add_scene(story["id"], {
+        "title": "Denim look",
+        "summary": "The model presents a complete relaxed denim outfit.",
+        "prompt": "The model walks toward camera in blue jeans.",
+        "durationSeconds": 10,
+    })
+    story, untouched_scene = storyboard_store.add_scene(story["id"], {
+        "title": "Next look",
+        "summary": "A separate outfit appears in the next Scene.",
+        "prompt": "The model wears a silver evening dress.",
+        "durationSeconds": 10,
+    })
+    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda *_args: False)
+    captured = {}
+
+    def fake_run(model_id, contract, gpu_reserved=False, thinking=False):
+        captured["contract"] = contract
+        return {
+            "text": '{"changed":true,"prompt":"The model walks toward camera in a complete relaxed denim look, wearing a fitted cream knit top, blue jeans and white leather sneakers."}',
+            "data": {
+                "changed": True,
+                "prompt": "The model walks toward camera in a complete relaxed denim look, wearing a fitted cream knit top, blue jeans and white leather sneakers.",
+            },
+            "model": model_id,
+            "usage": None,
+            "timings": None,
+        }
+
+    monkeypatch.setattr(storyboard_llm_runtime, "run_contract", fake_run)
+    job = llm_runner.enqueue(
+        "storyboard",
+        "qwen",
+        {"operation": "revise_scenes_sequence"},
+        context={
+            "storyId": story["id"],
+            "operation": "revise_scenes_sequence",
+            "sceneIds": [scene["id"]],
+            "sourceInstruction": "",
+            "passType": "visual_direction",
+        },
+    )
+    llm_runner._advance_queue()
+
+    finished = llm_runner.job_status(job["jobId"])
+    revised = storyboard_store.load_story(story["id"])["scenes"][scene["id"]]
+    assert finished["status"] == "completed"
+    assert captured["contract"]["operation"] == "visual_direction"
+    assert captured["contract"]["system_prompt"].startswith("You are refining prompts for a text-to-video model.")
+    assert revised["prompt"].startswith("The model walks toward camera in a complete relaxed denim look")
+    assert revised["previousPrompt"] == "The model walks toward camera in blue jeans."
+    assert revised["previousRevision"]["prompt"] == "The model walks toward camera in blue jeans."
+    assert revised["refineComplete"] is True
+    untouched = storyboard_store.load_story(story["id"])["scenes"][untouched_scene["id"]]
+    assert untouched["prompt"] == "The model wears a silver evening dress."
+
+
+def test_visual_direction_continues_after_scene_failure_and_reports_exact_outcomes(llm_root, monkeypatch):
+    story = storyboard_store.create_story({
+        "title": "Three Looks",
+        "concept": "A model presents three distinct fashion looks.",
+        "style": "Contemporary fashion editorial.",
+    })
+    scene_ids = []
+    for title in ("First look", "Second look", "Third look"):
+        story, scene = storyboard_store.add_scene(story["id"], {
+            "title": title,
+            "prompt": "The model presents " + title.lower() + ".",
+            "durationSeconds": 8,
+        })
+        scene_ids.append(scene["id"])
+
+    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda *_args: False)
+    calls = []
+    take_requests = []
+
+    def fake_run(model_id, contract, gpu_reserved=False, thinking=False):
+        prompt = contract["prompt"]
+        calls.append(prompt)
+        if len(calls) == 2:
+            raise RuntimeError("Simulated model timeout")
+        if len(calls) == 3:
+            return {
+                "text": '{"changed":false,"prompt":"The model presents third look."}',
+                "data": {"changed": False, "prompt": "The model presents third look."},
+                "model": model_id,
+                "usage": None,
+                "timings": None,
+            }
+        return {
+            "text": '{"changed":true,"prompt":"Revised " + str(len(calls)) + " complete visual prompt."}',
+            "data": {"changed": True, "prompt": "Revised " + str(len(calls)) + " complete visual prompt."},
+            "model": model_id,
+            "usage": None,
+            "timings": None,
+        }
+
+    monkeypatch.setattr(storyboard_llm_runtime, "run_contract", fake_run)
+    monkeypatch.setattr(
+        "tool.server.storyboard_generation.start_generation",
+        lambda story_id, scene_id: take_requests.append((story_id, scene_id)),
+    )
+    job = llm_runner.enqueue(
+        "storyboard",
+        "gemma",
+        {"operation": "revise_scenes_sequence"},
+        context={
+            "storyId": story["id"],
+            "operation": "revise_scenes_sequence",
+            "sceneIds": scene_ids,
+            "sourceInstruction": "",
+            "passType": "visual_direction",
+            "generateFreshTakes": True,
+        },
+    )
+    llm_runner._advance_queue()
+
+    finished = llm_runner.job_status(job["jobId"])
+    result = finished["result"]
+    saved = storyboard_store.load_story(story["id"])["scenes"]
+
+    assert finished["status"] == "completed"
+    assert result["requestedSceneCount"] == 3
+    assert result["completedSceneCount"] == 2
+    assert result["revisedSceneCount"] == 1
+    assert result["succeededSceneIds"] == [scene_ids[0], scene_ids[2]]
+    assert result["succeededScenes"] == [
+        {"sceneId": scene_ids[0], "title": "First look", "changed": True},
+        {"sceneId": scene_ids[2], "title": "Third look", "changed": False},
+    ]
+    assert result["changedSceneIds"] == [scene_ids[0]]
+    assert result["failedScenes"] == [{
+        "sceneId": scene_ids[1],
+        "title": "Second look",
+        "error": "Simulated model timeout",
+    }]
+    assert saved[scene_ids[0]]["prompt"] == "Revised 1 complete visual prompt."
+    assert saved[scene_ids[1]]["prompt"] == "The model presents second look."
+    assert saved[scene_ids[2]]["prompt"] == "The model presents third look."
+    assert take_requests == [(story["id"], scene_ids[0])]

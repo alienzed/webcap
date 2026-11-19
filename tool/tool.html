@@ -2876,14 +2876,19 @@
                         <select id="storyboard-director-tools-preset">
                             <option value="">Custom revision</option>
                             <option value="continuity">Continuity pass</option>
+                            <option value="visual_direction">Visual Direction</option>
                             <option value="coherence">Check Project coherence</option>
                         </select>
                     </div>
                     <div class="keep-lora-field">
+                        <label>Scenes to revise</label>
+                        <div id="storyboard-director-tools-scene-selection" class="storyboard-director-tools-scene-selection"></div>
+                    </div>
+                    <div class="keep-lora-field">
                         <div class="storyboard-director-tools-instruction-heading">
                             <label for="storyboard-director-tools-instruction">Revise Scenes</label>
-                            <label class="storyboard-director-tools-fresh-takes" title="After successful revision, queues new Takes for every revised Scene; existing Takes are kept."><input id="storyboard-director-tools-generate-takes" type="checkbox"> Generate fresh Takes</label>
-                            <small>Presets prime this instruction; edit it freely before running.</small>
+                            <label class="storyboard-director-tools-fresh-takes" title="After successful revision, queues new Takes only for Scenes whose prompts changed; existing Takes are kept."><input id="storyboard-director-tools-generate-takes" type="checkbox"> Generate fresh Takes</label>
+                            <small>Add any extra direction; selected presets provide their own guidance.</small>
                         </div>
                         <textarea id="storyboard-director-tools-instruction" rows="7" placeholder="Describe what should be revised across these Scenes."></textarea>
                     </div>

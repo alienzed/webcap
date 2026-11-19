@@ -2558,11 +2558,27 @@ def storyboard_director_route():
             return jsonify({"ok": True, "job": job}), 202
 
         if operation == "revise_scenes_sequence":
-            if not instruction:
-                raise ValueError("Enter a Revise Scenes instruction.")
             scene_ids = list(story.get("sceneOrder") or [])
             if not scene_ids:
                 raise ValueError("Develop Scenes before revising.")
+            pass_type = str(data.get("passType") or "standard").strip()
+            if pass_type not in {"standard", "visual_direction"}:
+                raise ValueError("Unsupported Revise Scenes pass.")
+            if not instruction and pass_type != "visual_direction":
+                raise ValueError("Enter a Revise Scenes instruction.")
+            requested_scene_ids = data.get("sceneIds")
+            if requested_scene_ids is not None:
+                if not isinstance(requested_scene_ids, list) or not requested_scene_ids:
+                    raise ValueError("Select at least one Scene to revise.")
+                if any(not isinstance(item, str) for item in requested_scene_ids):
+                    raise ValueError("Revise Scenes targets must be Scene IDs.")
+                if len(set(requested_scene_ids)) != len(requested_scene_ids):
+                    raise ValueError("Revise Scenes targets must be unique.")
+                unknown = [item for item in requested_scene_ids if item not in scene_ids]
+                if unknown:
+                    raise ValueError("A selected Scene no longer exists in this Project.")
+                selected = set(requested_scene_ids)
+                scene_ids = [item for item in scene_ids if item in selected]
             if not model_id:
                 raise ValueError("Choose a Director model.")
             job = enqueue_llm(
@@ -2571,11 +2587,12 @@ def storyboard_director_route():
                     "storyId": story_id, "operation": operation,
                     **job_display_context,
                     "sceneIds": scene_ids, "sourceInstruction": instruction,
+                    "passType": pass_type,
                     "continuityContext": data.get("continuityContext") is True,
                     "generateFreshTakes": data.get("generateFreshTakes") is True,
                     "thinking": data.get("thinking") is True,
                 },
-                label="Story: Revise Scenes",
+                label="Story: " + ("Visual Direction" if pass_type == "visual_direction" else "Revise Scenes"),
             )
             return jsonify({"ok": True, "job": job}), 202
 

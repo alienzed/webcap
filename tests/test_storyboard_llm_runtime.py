@@ -2550,3 +2550,47 @@ def test_manual_local_runtime_rejects_stop_while_director_owns_gpu(monkeypatch):
     monkeypatch.setattr(execution_queue, "resource_owner", lambda: "llm")
     with pytest.raises(RuntimeError, match="currently owns the GPU"):
         storyboard_llm_runtime.manual_local_runtime("stop")
+
+
+def test_run_contract_passes_visual_director_as_actual_system_message(monkeypatch):
+    captured = {}
+
+    def fake_chat(model_id, messages, **kwargs):
+        captured["messages"] = messages
+        return {"text": '{"changed":false,"prompt":"Keep this prompt."}', "model": model_id}
+
+    monkeypatch.setattr(storyboard_llm_runtime, "chat", fake_chat)
+    result = storyboard_llm_runtime.run_contract("director", {
+        "operation": "visual_direction",
+        "system_prompt": "Be visually exhaustive.",
+        "prompt": "Project context and existing Scene prompt.",
+        "output": "json",
+        "response_schema": {
+            "type": "object",
+            "required": ["changed", "prompt"],
+            "properties": {"changed": {"type": "boolean"}, "prompt": {"type": "string"}},
+        },
+    })
+
+    assert captured["messages"] == [
+        {"role": "system", "content": "Be visually exhaustive."},
+        {"role": "user", "content": "Project context and existing Scene prompt."},
+    ]
+    assert result["data"]["changed"] is False
+
+
+def test_run_contract_keeps_existing_user_only_contracts_unchanged(monkeypatch):
+    captured = {}
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "chat",
+        lambda model_id, messages, **kwargs: captured.update({"messages": messages}) or {
+            "text": "done", "model": model_id,
+        },
+    )
+    storyboard_llm_runtime.run_contract("director", {"operation": "refine_prompt", "prompt": "Revise."})
+    assert captured["messages"] == [{"role": "user", "content": "Revise."}]
+
+
+def test_visual_direction_uses_the_existing_prompt_refinement_sampling_profile():
+    assert storyboard_llm_runtime._sampling_profile("visual_direction") == storyboard_llm_runtime._sampling_profile("refine_prompt")

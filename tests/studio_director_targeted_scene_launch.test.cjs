@@ -102,9 +102,9 @@ test('one click runs one Scene writer with fresh saved context, saves a full pro
   const request=JSON.parse(model[0][1]);
   assert.equal(request.sceneId,undefined,'WebCap, not the model, owns the target ID');
   assert.equal(request.authorDirection,'Make the ending quieter.');
-  assert.equal(request.savedScene.fields.find(row=>row.id==='scene:s1:prompt').value,
+  assert.equal(request.savedScene.scenes[0].prompt,
     'Mara shouts at the rover.');
-  assert.equal(request.savedScene.fields.find(row=>row.id==='scene:s1:durationSeconds').value,12);
+  assert.equal(request.savedScene.scenes[0].durationSeconds,12);
   assert.doesNotMatch(JSON.stringify(request),/Dormant legacy Intent/);
   assert.equal(h.events.filter(row=>row[0]==='save').length,1);
   const save=h.events.find(row=>row[0]==='save')[1];
@@ -136,7 +136,7 @@ test('second revision reads updated saved prompt, not the earlier conversation b
   assert.equal(models.length,2);
   const second=JSON.parse(models[1][1]);
   assert.equal(second.authorDirection,'Let the silence hang at the end.');
-  assert.equal(second.savedScene.fields.find(row=>row.id==='scene:s1:prompt').value,
+  assert.equal(second.savedScene.scenes[0].prompt,
     'Mara finishes quietly under a still camera.');
   assert.equal(h.saved.scenes.s1.prompt,'The rover stops; the silence hangs.');
 });
@@ -222,7 +222,7 @@ test('a subsequent Write uses the saved title and authors the missing prompt afr
   assert.equal(requests.length,2);
   const second=JSON.parse(requests[1][1]);
   assert.ok(!Object.hasOwn(second,'unsavedWorkingFields'));
-  assert.equal(second.savedScene.fields.find(item=>item.id==='scene:s1:title').value,'Quiet arrival');
+  assert.equal(second.savedScene.scenes[0].title,'Quiet arrival');
   assert.equal(h.saved.scenes.s1.prompt,'The camera stays wide while Mara settles beside the rover.');
   assert.equal(h.saved.scenes.s1.title,'Quiet arrival');
 });
@@ -419,6 +419,6 @@ test('a subsequent Scene Write uses the saved baseline without hidden unsaved dr
   assert.ok(call,'the distinct new change should still author once');
   const input=JSON.parse(call[1]);
   assert.ok(!Object.hasOwn(input,'unsavedWorkingFields'));
-  assert.equal(input.savedScene.fields.find(field=>field.id==='scene:s1:prompt').value,
+  assert.equal(input.savedScene.scenes[0].prompt,
     'Mara shouts at the rover.');
 });

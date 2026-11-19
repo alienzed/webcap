@@ -154,7 +154,7 @@ test('selected list binds destination before issuing each per-Scene write',()=>{
 });
 
 test('explicit Read saves one visible snapshot without a model request',()=>{
-  assert.match(workbench,/studioDirectorBridge\.appendReadSnapshot\(payload, readConversationId\)/);
+  assert.match(workbench,/studioDirectorBridge\.appendReadSnapshot\(payload, readConversationId, story.id\)/);
   assert.doesNotMatch(workbench,/sendRead\(payload, keys, typeof instruction/);
   assert.match(html,/id="studio-dw-read-send"[^>]*>Read into conversation/);
 });
@@ -315,7 +315,7 @@ test('large explicit Read selections are sent intact, with no arbitrary client c
     window:{
       studioDirectorBridge:{readConversationId:()=> 'session-A',
         assertReadConversation:owner=>assert.equal(owner,'session-A'),
-        appendReadSnapshot:async (payload,owner)=>{assert.equal(owner,'session-A');sent=payload;}},
+        appendReadSnapshot:async (payload,owner,projectId)=>{assert.equal(owner,'session-A');assert.equal(projectId,'project-1');sent=payload;}},
       studioDirectorWorkbench:{setReadStatus:(_state,message)=>{readStatus=message;}}
     }
   });
@@ -323,11 +323,12 @@ test('large explicit Read selections are sent intact, with no arbitrary client c
   scope.readSend();
   await new Promise(resolve=>setImmediate(resolve));
   assert.ok(sent,'the selected saved fields must reach Director');
-  assert.equal(sent.projectId,'project-1');
-  assert.deepEqual(Array.from(sent.fields,field=>field.id),['scene:scene-a:prompt']);
+  assert.equal(sent.project.title,'Long Project');
+  assert.equal(sent.scenes.length,1);
+  assert.equal(sent.scenes[0].number,1);
   assert.ok(el('studio-dw-read-preview-data').textContent.length>48000,
     'the preview retains the entire saved field payload');
-  assert.equal(JSON.parse(el('studio-dw-read-preview-data').textContent).fields[0].value,prompt,
+  assert.equal(JSON.parse(el('studio-dw-read-preview-data').textContent).scenes[0].prompt,prompt,
     'no approved Read field is truncated');
   assert.ok(readStatus.includes('Preparing saved context selection'));
   assert.ok(updates>0,'existing selection UI still refreshes');

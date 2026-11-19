@@ -2085,6 +2085,10 @@
       var summary = (passType === 'visual_direction' ? 'Visual Direction: ' : 'Revise Scenes: ') +
         succeeded + ' of ' + String(sceneIds.length) + ' Scenes processed; ' + changed + ' prompts updated.';
       if (failures.length) {
+        var successfulNames = Array.isArray(result.succeededScenes) ? result.succeededScenes.map(function (scene) {
+          return String(scene.title || scene.sceneId || 'Scene');
+        }) : [];
+        if (successfulNames.length) summary += ' Completed: ' + successfulNames.join(', ') + '.';
         summary += ' Failed: ' + failures.map(function (failure) {
           return String(failure.title || failure.sceneId || 'Scene') + ' (' + String(failure.error || 'unknown error') + ')';
         }).join('; ');
@@ -2107,6 +2111,10 @@
       var partialFailures = Array.isArray(partial.failedScenes) ? partial.failedScenes : [];
       if (directorWasStopped(err)) {
         var stoppedSummary = 'Visual Direction stopped after ' + partialSucceeded + ' Scenes.';
+        var stoppedSuccessNames = Array.isArray(partial.succeededScenes) ? partial.succeededScenes.map(function (scene) {
+          return String(scene.title || scene.sceneId || 'Scene');
+        }) : [];
+        if (stoppedSuccessNames.length) stoppedSummary += ' Completed: ' + stoppedSuccessNames.join(', ') + '.';
         if (partialFailures.length) stoppedSummary += ' Failed: ' + partialFailures.map(function (failure) {
           return String(failure.title || failure.sceneId || 'Scene') + ' (' + String(failure.error || 'unknown error') + ')';
         }).join('; ');

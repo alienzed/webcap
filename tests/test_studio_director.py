@@ -371,3 +371,25 @@ def test_studio_action_advisor_is_an_isolated_optional_llm_operation(monkeypatch
     assert contract["response_schema"]["properties"]["actions"]["items"]["properties"]["kind"]["enum"] == [
         "create_project", "revise_project", "create_scene", "revise_scenes", "read"
     ]
+    # The live Gemma failures returned syntactically valid but unusable actions
+    # because all fields in the old response schema were optional.
+    schema = contract["response_schema"]
+    assert schema["required"] == ["actions"]
+    assert schema["additionalProperties"] is False
+    actions = schema["properties"]["actions"]
+    assert actions["maxItems"] == 3
+    item = actions["items"]
+    assert item["additionalProperties"] is False
+    assert set(item["required"]) == {
+        "kind", "label", "instruction", "projectId", "fields", "sceneIds"
+    }
+    assert item["properties"]["label"]["minLength"] == 1
+    assert set(item["properties"]["fields"]["items"]["enum"]) == {
+        "title", "concept", "style", "invariants", "overview", "scene"
+    }
+    prompt = contract["messages"][0]["content"]
+    assert "Copy actionContext.projectId exactly" in prompt
+    assert "all six keys" in prompt
+    assert "props, and timing" in prompt
+    assert "if none apply return" in prompt
+

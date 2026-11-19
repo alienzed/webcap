@@ -2314,16 +2314,25 @@ def director_chat_route():
                 "role": "system",
                 "content": (
                     "You are WebCap's Action Advisor, a concise interface assistant. "
-                    "Review the supplied conversation and action context and suggest zero to three "
-                    "useful NEXT actions. Return actionable suggestions only when the conversation "
-                    "supports them. Choose one of: create_project, revise_project, create_scene, "
-                    "revise_scenes, read. For create/revise actions write a concrete instruction "
-                    "for the existing Writer to follow; for Read identify the requested saved fields. "
-                    "Use only the exact Project and Scene IDs given in the action context; "
-                    "for Project revisions specify precisely which of title, concept, style, "
-                    "invariants should change. For Read, choose 'overview' (the complete saved "
-                    "Project Overview) or 'scene' (the currently selected Scene) in fields. "
-                    "Keep instructions concise and preserve the author's creative intent. "
+                    "Review the supplied conversation and actionContext to suggest zero to three "
+                    "useful next UI actions. Return a JSON object with an actions array. "
+                    "Each action must contain all six keys: kind, label, instruction, projectId, "
+                    "fields, sceneIds. Use kind create_project, revise_project, create_scene, "
+                    "revise_scenes, or read. Use a short, meaningful label for the UI button. "
+                    "Copy actionContext.projectId exactly for every action targeting the current "
+                    "Project; use an empty projectId only for create_project. "
+                    "For read, set instruction to an empty string, fields to ['overview'] for the "
+                    "saved Project Overview or ['scene'] for the selected Scene, and sceneIds to []. "
+                    "For revise_project, select only the requested fields from title, concept, "
+                    "style, invariants. For create_scene, set fields and sceneIds to []. "
+                    "For revise_scenes, set sceneIds to [actionContext.sceneId] and fields to []. "
+                    "When the latest user request specifies an action, prioritize its explicit "
+                    "intent over alternatives proposed in earlier conversation. "
+                    "For creative actions, write a concrete instruction for the existing Writer "
+                    "that faithfully carries the author's requested subjects, action, setting, "
+                    "props, and timing rather than replacing them with another idea. "
+                    "Use [] for unused arrays. Suggest only actions supported by the conversation "
+                    "and available actionContext IDs; if none apply return {\"actions\":[]}. "
                     "Your suggestions are optional UI shortcuts, not commands or saved content."
                 ),
             }] + [
@@ -2333,19 +2342,30 @@ def director_chat_route():
             ]
             contract["response_schema"] = {
                 "type": "object",
+                "additionalProperties": False,
+                "required": ["actions"],
                 "properties": {
                     "actions": {
                         "type": "array",
+                        "maxItems": 3,
                         "items": {
                             "type": "object",
+                            "additionalProperties": False,
+                            "required": [
+                                "kind", "label", "instruction", "projectId", "fields", "sceneIds"
+                            ],
                             "properties": {
                                 "kind": {"type": "string", "enum": [
                                     "create_project", "revise_project", "create_scene", "revise_scenes", "read"
                                 ]},
-                                "label": {"type": "string"},
+                                "label": {"type": "string", "minLength": 1},
                                 "instruction": {"type": "string"},
                                 "projectId": {"type": "string"},
-                                "fields": {"type": "array", "items": {"type": "string"}},
+                                "fields": {"type": "array", "items": {
+                                    "type": "string", "enum": [
+                                        "title", "concept", "style", "invariants", "overview", "scene"
+                                    ]
+                                }},
                                 "sceneIds": {"type": "array", "items": {"type": "string"}},
                             },
                         },

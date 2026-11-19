@@ -482,7 +482,8 @@ def build_deep_qa_scene_contract(context, scene_id):
         "Do not demand identical character appearance between independently generated Scenes. "
         "Put only explicitly stated changes in stateChanges; put uncertain or inferred transitions in the "
         "separate inferences list and label them as inferences. Include short sourceEvidence excerpts for "
-        "action and state claims. Only use supplied Scene IDs and actual cut numbers; use 0 for Scene-level facts. "
+        "action and state claims, copied verbatim from the prompt with original wording and punctuation. "
+        "Only use supplied Scene IDs and actual cut numbers; use 0 for Scene-level facts. "
         "Return concise, reusable facts. Empty arrays are appropriate when nothing is specified."
     )
     return {

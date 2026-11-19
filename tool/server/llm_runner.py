@@ -529,7 +529,8 @@ def _client_result(client, context, llm_result, job_id="", frozen_contract=None)
             raise ValueError("Project Deep QA returned an invalid findings list.")
         from .storyboard_store import save_project_deep_qa
         record = save_project_deep_qa(
-            story_id, data["findings"], model_id=llm_result.get("model", ""), job_id=job_id
+            story_id, data["findings"], model_id=llm_result.get("model", ""), job_id=job_id,
+            expected_signature=str(context.get("sourceSignature") or ""),
         )
         return {
             "storyId": story_id,
@@ -554,6 +555,9 @@ def _client_result(client, context, llm_result, job_id="", frozen_contract=None)
         scene = (story.get("scenes") or {}).get(scene_id)
         if not isinstance(scene, dict):
             raise FileNotFoundError("Prompt Assist target Scene no longer exists.")
+        source_prompt = str(context.get("sourcePrompt") or "")
+        if str(scene.get("prompt") or "") != source_prompt:
+            raise RuntimeError("Scene prompt changed while Prompt Assist was running. Rerun against the current prompt.")
         findings = []
         for index, item in enumerate(data["findings"]):
             if not isinstance(item, dict):
@@ -570,8 +574,9 @@ def _client_result(client, context, llm_result, job_id="", frozen_contract=None)
         return {
             "storyId": story_id,
             "sceneId": scene_id,
-            "sourcePrompt": str(scene.get("prompt") or ""),
+            "sourcePrompt": source_prompt,
             "findings": findings,
+            "jobId": job_id,
             "model": llm_result["model"],
             "finishReason": llm_result.get("finishReason"),
             "usage": llm_result.get("usage"),

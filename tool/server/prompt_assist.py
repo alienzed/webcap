@@ -268,6 +268,9 @@ def build_contract(operation, context, role="", findings=None, accepted=None, co
         system = (
             "You are " + _ROLE_NAMES[role] + " in WebCap Prompt Assist. "
             + _role_instruction(role)
+            + " Prepared Project Deep QA intelligence, when supplied, is secondary derived context, not ground truth. "
+            + "Verify its observations against the original source prompt; the prompt remains authoritative. "
+            + "If prepared intelligence conflicts with the source, flag the conflict rather than repeating it as fact. "
             + " Return a concise summary and only actionable findings. Each finding must cite a valid "
             "sceneId from the supplied context, use shotNumber 0 for a Scene-level issue, and include "
             "a short evidence excerpt from the source. If no meaningful issue exists, return an empty "

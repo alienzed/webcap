@@ -515,6 +515,8 @@
     var item = state.synthesis && state.synthesis.recommendations[index];
     if (!item) return;
     state.decisions[recommendationKey(item, index)] = decision;
+    state.revisions = null;
+    el('prompt-assist-revisions').classList.add('hidden');
     renderSceneSource();
     renderTeam();
     saveSession();
@@ -523,6 +525,8 @@
     (state.synthesis && state.synthesis.recommendations || []).forEach(function (item, index) {
       state.decisions[recommendationKey(item, index)] = decision;
     });
+    state.revisions = null;
+    el('prompt-assist-revisions').classList.add('hidden');
     renderSceneSource();
     renderTeam();
     saveSession();

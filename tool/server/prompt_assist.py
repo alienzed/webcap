@@ -91,8 +91,9 @@ def build_context(story, scope="scene", scene_id=""):
         scene = scenes_by_id.get(current_id)
         if not isinstance(scene, dict):
             raise ValueError("Project Scene index contains a missing Scene: " + str(current_id))
-        prompt = _text(scene.get("prompt"))
-        if not prompt:
+        raw_prompt = scene.get("prompt")
+        prompt = raw_prompt if isinstance(raw_prompt, str) else ""
+        if not prompt.strip():
             if scope == "project":
                 raise ValueError(
                     "Project Prompt Assist requires saved prompts. Scene "

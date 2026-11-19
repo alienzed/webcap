@@ -195,6 +195,13 @@
   }
   function renderSceneSource() {
     var scene = currentScene();
+    if (!state.sourcePrompt) {
+      el('prompt-assist-scene-title').textContent = scene.title || 'Untitled Scene';
+      el('prompt-assist-scene-overview').textContent = 'This Scene does not have a saved prompt yet.';
+      el('prompt-assist-scene-findings').replaceChildren();
+      el('prompt-assist-cuts').innerHTML = '<div class="prompt-assist-empty">Write a prompt for this Scene before running specialist review.</div>';
+      return;
+    }
     var parsed = parsePrompt(state.sourcePrompt);
     el('prompt-assist-scene-title').textContent = scene.title || 'Untitled Scene';
     el('prompt-assist-scene-overview').textContent =
@@ -322,6 +329,7 @@
     var rejected = recommendations.filter(function (item, index) {
       return state.decisions[recommendationKey(item, index)] === 'rejected';
     }).length;
+    el('prompt-assist-run').disabled = state.busy || !state.sourcePrompt;
     el('prompt-assist-synthesize').disabled = state.busy || !allReviewed;
     el('prompt-assist-accept-all').disabled = state.busy || !recommendations.length;
     el('prompt-assist-reject-all').disabled = state.busy || !recommendations.length;
@@ -418,9 +426,7 @@
   function updateScene(snapshot, preserve) {
     var sceneId = snapshot.sceneId;
     var scene = snapshot.story.scenes && snapshot.story.scenes[sceneId];
-    if (!scene || typeof scene.prompt !== 'string' || !scene.prompt.trim()) {
-      throw new Error('This Scene has no saved prompt yet. Write its prompt before reviewing it.');
-    }
+    if (!scene) throw new Error('The selected Scene no longer exists in this Project.');
     state.snapshot = snapshot;
     state.storyId = snapshot.storyId;
     state.sceneId = sceneId;

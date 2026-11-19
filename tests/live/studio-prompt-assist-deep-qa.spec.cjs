@@ -23,7 +23,7 @@ test('LIVE Project Deep QA -> Prompt Assist: whole-project findings feed focused
   const second=await seedScene(page,project.id,{
     title:'The Walk Away',
     durationSeconds:8,
-    prompt:'[00:00-00:04] The same woman leaves the batting area wearing a red baseball jacket, white shirt, blue jeans and white sneakers. She carries the wooden bat over her shoulder.\n\n[00:04-00:08] She reaches the park gate and looks back toward the field. Keep her outfit and the bat unchanged.'
+    prompt:'[00:00-00:04] The same woman leaves the batting area wearing a bright blue leather jacket, white shirt, blue jeans and white sneakers. She carries the wooden bat over her shoulder.\n\n[00:04-00:08] She reaches the park gate and looks back toward the field. Keep her outfit and the bat unchanged.'
   });
 
   await openProject(page,project.id);
@@ -42,6 +42,7 @@ test('LIVE Project Deep QA -> Prompt Assist: whole-project findings feed focused
   expect(Array.isArray(cached.findings)).toBe(true);
   expect(cached.findings.length).toBeGreaterThan(0);
   expect(cached.findings.some(item=>item.sceneId===first.id)).toBe(true);
+  expect(cached.findings.some(item=>item.sceneId===second.id)).toBe(true);
   expect(cached.record.sourceSignature).toBeTruthy();
   for(const finding of cached.findings){
     expect([first.id,second.id]).toContain(finding.sceneId);

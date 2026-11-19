@@ -6269,9 +6269,10 @@
       run.disabled = false;
       return;
     }
+    var continuityContext = el('storyboard-director-tools-preset').value === 'continuity';
     var revision = reviseScenes(
       instruction, storyState.director.modelId, generateFreshTakes,
-      preset === 'continuity', el('storyboard-director-tools-instruction'),
+      continuityContext, el('storyboard-director-tools-instruction'),
       selectedSceneIds, preset === 'visual_direction' ? 'visual_direction' : 'standard'
     );
     // The target is registered synchronously once the operation has started.

@@ -6727,9 +6727,10 @@
     if (!storyState.story || storyState.story.id !== options.projectId)
       return Promise.reject(new Error('Revision destination changed. Reopen Revise Scenes.'));
     if (options.preset === 'coherence') return runDirectorToolsCoherence(options.modelId, true);
-    return reviseScenes(options.instruction, options.modelId,
+    return reviseScenesWithOptions(options.instruction, options.modelId,
       options.generateFreshTakes === true, options.preset === 'continuity',
-      el('director-studio-revision-input'));
+      el('director-studio-revision-input'), null,
+      options.preset === 'visual_direction' ? 'visual_direction' : 'standard');
   };
 
   function projectReplaceText(text, find, replacement, caseSensitive) {

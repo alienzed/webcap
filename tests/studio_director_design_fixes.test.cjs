@@ -326,7 +326,7 @@ test('Studio Revise Scenes launcher uses the common Director composer', () => {
   const storyboard=fs.readFileSync(path.join(base,'tool/js/storyboard.js'),'utf8');
   assert.match(storyboard,/storyboard-director-tools-btn'\)\.onclick = function \(\) \{\s*window\.openStudioDirectorRevision\(\)/);
   assert.match(storyboard,/window\.startStudioRevision = function \(options\)/);
-  assert.match(storyboard,/return reviseScenes\(options\.instruction, options\.modelId/);
+  assert.match(storyboard,/return reviseScenesWithOptions\(options\.instruction, options\.modelId/);
   assert.match(html,/id="director-studio-composer-mode-select"/);
   assert.match(html,/id="director-studio-revision-fresh"/);
 });

@@ -6361,6 +6361,73 @@
         menu._closeBulkMenu = close;
         var outside = function (e) { if (!menu.contains(e.target)) close(); };
         var keydown = function (e) { if (e.key === 'Escape') { close(); heading.focus(); } };
+        function syncBulkSelection() {
+          var available = prepared.files;
+          // Reuse existing candidate selection; avoid recreating all staged rows.
+          var host = el('test-generations-files');
+          host.querySelectorAll('[data-candidate-select]').forEach(function (checkbox) {
+            checkbox.checked = selectedCandidates.has(String(checkbox.dataset.candidateSelect || ''));
+          });
+          syncCandidateMasterSelect(available);
+          syncSweepControls();
+          saveTestBenchState();
+          syncActiveRunControls(currentStatus);
+          syncMatrixCandidateSelection();
+          syncGridCandidateSelection();
+        }
+        function addAction(label, run) {
+          var action = document.createElement('button');
+          action.type = 'button';
+          action.setAttribute('role', 'menuitem');
+          action.textContent = label;
+          action.style.cssText = 'display:block;width:100%;text-align:left;padding:8px 10px;border:0;background:transparent;color:inherit;cursor:pointer;';
+          action.addEventListener('click', function () {
+            run();
+            syncBulkSelection();
+            close();
+          });
+          menu.appendChild(action);
+        }
+        function epochOrderedCandidates() {
+          // Epoch metadata is authoritative for numeric order; preserve staged order for ties
+          // and candidates without an epoch, rather than deriving epoch numbers from filenames.
+          var metadata = prepared.candidateMetadata || {};
+          return prepared.files.map(function (file, index) {
+            var raw = metadata[file] && metadata[file].epoch;
+            var epoch = raw !== undefined && raw !== null && String(raw).trim() !== '' ? Number(raw) : NaN;
+            return { file: file, index: index, epoch: epoch };
+          }).sort(function (a, b) {
+            var aKnown = Number.isFinite(a.epoch), bKnown = Number.isFinite(b.epoch);
+            if (aKnown && bKnown && a.epoch !== b.epoch) return a.epoch - b.epoch;
+            if (aKnown !== bKnown) return aKnown ? -1 : 1;
+            return a.index - b.index;
+          }).map(function (item) { return item.file; });
+        }
+        function selectFirst(percent) {
+          var files = epochOrderedCandidates();
+          // Replace selection with earliest epochs; independent of visible Rating/VL sort.
+          var count = Math.ceil(files.length * percent / 100);
+          selectedCandidates = new Set(files.slice(0, count));
+        }
+        [25, 50, 60, 75].forEach(function (percent) {
+          addAction('Select first ' + percent + '%', function () { selectFirst(percent); });
+        });
+        addAction('Select all', function () { selectedCandidates = new Set(prepared.files); });
+        addAction('Select next 20%', function () {
+          var files = epochOrderedCandidates();
+          var count = Math.ceil(files.length * 0.2);
+          var added = 0;
+          files.forEach(function (file) {
+            if (added < count && !selectedCandidates.has(file)) {
+              selectedCandidates.add(file);
+              added += 1;
+            }
+          });
+        });
+        var separator = document.createElement('div');
+        separator.setAttribute('role', 'separator');
+        separator.style.cssText = 'height:1px;margin:5px 2px;background:var(--border-color,#526071);';
+        menu.appendChild(separator);
         [25, 50, 75].forEach(function (percent) {
           var action = document.createElement('button');
           action.type = 'button';
@@ -6387,12 +6454,7 @@
             var removeCount = Math.floor(files.length * percent / 100);
             files.slice(files.length - removeCount).forEach(function (file) { selectedCandidates.delete(file); });
             if (removeCount) {
-              renderStagedFiles(prepared);
-              syncSweepControls();
-              saveTestBenchState();
-              syncActiveRunControls(currentStatus);
-              syncMatrixCandidateSelection();
-              syncGridCandidateSelection();
+              syncBulkSelection();
             }
             close();
           });

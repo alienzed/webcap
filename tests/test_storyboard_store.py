@@ -1639,7 +1639,7 @@ def test_project_deep_qa_cache_is_separate_and_invalidates_on_prompt_changes(sto
 
 def test_project_deep_qa_rejects_results_when_project_changes_during_analysis(storyboard_fs):
     story = storyboard_store.create_story({"title": "Deep QA", "concept": "Original."})
-    scene = storyboard_store.add_scene(story["id"], {"title": "Arrival", "prompt": "A person enters."})
+    _, scene = storyboard_store.add_scene(story["id"], {"title": "Arrival", "prompt": "A person enters."})
     original = storyboard_store.load_story(story["id"])
     signature = storyboard_store.project_deep_qa_signature(original)
     storyboard_store.update_scene(story["id"], scene["id"], {
@@ -1682,8 +1682,14 @@ def test_prompt_assist_patch_is_independent_and_conflict_safe(storyboard_fs):
             "The camera follows her.", "The camera tracks her.",
         )
 
+    duplicate_prompt = second["prompt"] + "\\nA woman enters through the glass doors."
+    current_story = storyboard_store.load_story(story["id"])
+    storyboard_store.update_scene(story["id"], scene["id"], {
+        **current_story["scenes"][scene["id"]],
+        "prompt": duplicate_prompt,
+    })
     with pytest.raises(RuntimeError, match="appears exactly once"):
         storyboard_store.apply_prompt_assist(
-            story["id"], scene["id"], second["prompt"],
-            "the", "a",
+            story["id"], scene["id"], duplicate_prompt,
+            "A woman enters through the glass doors.", "A woman steps inside.",
         )

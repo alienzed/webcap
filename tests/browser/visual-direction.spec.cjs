@@ -4,12 +4,12 @@ const {resetModel,queueModel,observedModels,openDirector,seedProject,seedScene,o
 
 test('Visual Direction defaults to all Scenes and submits only explicitly selected Scenes',async({page,request})=>{
   await resetModel(request);
-  await openDirector(page);
   const project=await seedProject(page,'Visual Direction selection '+Date.now(),{
     concept:'A fashion film presents three distinct complete looks.',
     style:'Contemporary fashion editorial.',
     invariants:[{kind:'character',title:'Model',text:'The same adult model appears throughout.'}]
   });
+  await openDirector(page);
   const first=await seedScene(page,project.id,{
     title:'First look',prompt:'The model wears a red jacket.',durationSeconds:8
   });

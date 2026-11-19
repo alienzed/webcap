@@ -18,7 +18,7 @@
     snapshot: null, sourcePrompt: '', sourceFingerprint: '',
     reviews: {}, reviewErrors: {}, synthesis: null, decisions: {},
     revisions: null, conversations: {visual: [], continuity: [], sequence: [], editor: []},
-    sessions: {}
+    sessions: {}, deepQaStatus: null, deepQaRunning: false
   };
 
   function el(id) { return document.getElementById(id); }
@@ -36,7 +36,7 @@
   function setStatus(message) { el('prompt-assist-status').textContent = message || ''; }
   function setBusy(value, message) {
     state.busy = value === true;
-    ['prompt-assist-run', 'prompt-assist-synthesize', 'prompt-assist-accept-all',
+    ['prompt-assist-run', 'prompt-assist-deep-qa-run', 'prompt-assist-synthesize', 'prompt-assist-accept-all',
       'prompt-assist-reject-all', 'prompt-assist-prepare-revision',
       'prompt-assist-apply', 'prompt-assist-restore', 'prompt-assist-ask',
       'prompt-assist-scene-prev', 'prompt-assist-scene-next'].forEach(function (id) {
@@ -94,6 +94,114 @@
     }, extra || {})).then(function (body) {
       if (body.sourceFingerprint) state.sourceFingerprint = body.sourceFingerprint;
       return runJob(body.job);
+    });
+  }
+  function deepQaStatusText(status) {
+    if (!status) return 'Project intelligence not prepared';
+    if (status.error) return status.error;
+    if (status.projectFresh) return 'Project intelligence ready';
+    var done = Number(status.preparedScenes || 0);
+    var total = Number(status.totalScenes || 0);
+    return done ? 'Project intelligence partial · ' + done + ' of ' + total + ' Scenes prepared' :
+      'Project intelligence not prepared';
+  }
+  function renderDeepQaStatus(status) {
+    state.deepQaStatus = status || null;
+    el('prompt-assist-deep-qa-status').textContent = deepQaStatusText(status);
+    el('prompt-assist-deep-qa-run').textContent = status && status.projectFresh ? 'Refresh Project Intelligence' : 'Prepare Project Intelligence';
+    if (status && status.project && status.project.summary) {
+      var host = el('prompt-assist-project-context-content');
+      var existing = host.querySelector('.prompt-assist-deep-qa-summary');
+      if (existing) existing.remove();
+      var section = document.createElement('section');
+      section.className = 'prompt-assist-deep-qa-summary';
+      var title = document.createElement('strong');
+      title.textContent = 'Prepared Project intelligence';
+      var summary = document.createElement('p');
+      summary.textContent = status.project.summary;
+      section.append(title, summary);
+      if ((status.project.projectContinuityPrinciples || []).length) {
+        var list = document.createElement('ul');
+        status.project.projectContinuityPrinciples.forEach(function (item) {
+          var li = document.createElement('li'); li.textContent = item; list.appendChild(li);
+        });
+        section.appendChild(list);
+      }
+      host.appendChild(section);
+    }
+  }
+  function loadDeepQaStatus() {
+    return api('/fs/storyboard/prompt-assist/deep-qa?storyId=' + encodeURIComponent(state.storyId))
+      .then(function (status) { renderDeepQaStatus(status); return status; })
+      .catch(function (error) {
+        renderDeepQaStatus({error: 'Project intelligence unavailable: ' + (error.message || String(error))});
+        return null;
+      });
+  }
+  function runDeepQaJob(operation, sceneId, scope) {
+    return api('/fs/storyboard/prompt-assist', {
+      storyId: state.storyId, sceneId: sceneId || '', scope: scope,
+      model: state.modelId, operation: operation,
+      expectedUpdatedAt: state.snapshot.story.updatedAt
+    }).then(function (body) {
+      return runJob(body.job).then(function (result) {
+        return {result: parseStructured(result, operation === 'deep_qa_project' ? 'Project Deep QA index' : 'Project Deep QA Scene'),
+          sourceFingerprint: body.sourceFingerprint};
+      });
+    });
+  }
+  function prepareProjectDeepQa() {
+    if (state.busy || state.deepQaRunning) return;
+    state.deepQaRunning = true;
+    setBusy(true, 'Preparing reusable Project intelligence…');
+    var scenes = (state.snapshot.story.sceneOrder || []).filter(function (id) {
+      var scene = state.snapshot.story.scenes && state.snapshot.story.scenes[id];
+      return scene && typeof scene.prompt === 'string' && scene.prompt.trim();
+    });
+    if (!scenes.length || scenes.length !== (state.snapshot.story.sceneOrder || []).length) {
+      state.deepQaRunning = false;
+      setBusy(false);
+      setStatus('Project Deep QA needs a saved prompt in every Scene. Complete missing prompts first.');
+      return;
+    }
+    var statusPromise = loadDeepQaStatus();
+    statusPromise.then(function (saved) {
+      var sceneStatus = saved && saved.sceneStatus || {};
+      var queue = scenes.filter(function (id) { return !(sceneStatus[id] && sceneStatus[id].fresh); });
+      var index = 0;
+      function nextScene() {
+        if (index >= queue.length) return Promise.resolve();
+        var sceneId = queue[index++];
+        setStatus('Project Deep QA · preparing Scene ' + index + ' of ' + queue.length + ': ' + sceneTitle(sceneId));
+        return runDeepQaJob('deep_qa_scene', sceneId, 'scene').then(function (prepared) {
+          return api('/fs/storyboard/prompt-assist/deep-qa', {
+            storyId: state.storyId, kind: 'scene', sceneId: sceneId,
+            sourceFingerprint: prepared.sourceFingerprint, result: prepared.result
+          });
+        }).then(function () {
+          return loadDeepQaStatus();
+        }).then(nextScene);
+      }
+      return nextScene().then(function () {
+        setStatus('Project Deep QA · building cross-Scene intelligence…');
+        return runDeepQaJob('deep_qa_project', '', 'project');
+      }).then(function (preparedProject) {
+        return api('/fs/storyboard/prompt-assist/deep-qa', {
+          storyId: state.storyId, kind: 'project',
+          sourceFingerprint: preparedProject.sourceFingerprint,
+          result: preparedProject.result
+        });
+      }).then(function () {
+        return loadDeepQaStatus();
+      }).then(function () {
+        setStatus('Project Deep QA is complete. Fresh intelligence will be included in specialist reviews.');
+      });
+    }).catch(function (error) {
+      setStatus(error.message || String(error));
+      if (window.reportConsoleError) window.reportConsoleError('Project Deep QA', error);
+    }).finally(function () {
+      state.deepQaRunning = false;
+      setBusy(false);
     });
   }
   function esc(value) {
@@ -477,6 +585,7 @@
       updateScene(snapshot, true);
       state.open = true;
       setStatus('Nothing has been changed.');
+      loadDeepQaStatus();
     }).catch(function (error) {
       setStatus(error.message || String(error));
       if (window.reportConsoleError) window.reportConsoleError('Prompt Assist', error);
@@ -493,6 +602,7 @@
     }).then(function (snapshot) {
       updateScene(snapshot, true);
       setStatus('Reviewing ' + sceneTitle(sceneId) + '.');
+      loadDeepQaStatus();
     }).catch(function (error) {
       setStatus(error.message || String(error));
       if (window.reportConsoleError) window.reportConsoleError('Prompt Assist Scene navigation', error);
@@ -653,6 +763,7 @@
   el('prompt-assist-close').addEventListener('click', close);
   el('prompt-assist-done').addEventListener('click', close);
   el('prompt-assist-run').addEventListener('click', runReviews);
+  el('prompt-assist-deep-qa-run').addEventListener('click', prepareProjectDeepQa);
   el('prompt-assist-synthesize').addEventListener('click', synthesize);
   el('prompt-assist-accept-all').addEventListener('click', function () { setAllDecisions('accepted'); });
   el('prompt-assist-reject-all').addEventListener('click', function () { setAllDecisions('rejected'); });

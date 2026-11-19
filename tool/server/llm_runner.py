@@ -919,6 +919,8 @@ def _execute_claimed(job_id, gpu_reserved):
                         "error": "Prompt saved, but fresh Take could not be queued: " + str(exc),
                         "stage": "take_generation",
                     })
+            with _revision_progress_lock:
+                _revision_progress.pop(job_id, None)
         return execution_finish_job_transient(job_id, status="completed", result={
             "storyId": context["storyId"],
             "revisedSceneCount": len(changed_scene_ids),

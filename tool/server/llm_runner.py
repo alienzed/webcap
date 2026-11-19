@@ -537,7 +537,7 @@ def _client_result(client, context, llm_result, job_id="", frozen_contract=None)
             "timings": llm_result.get("timings"),
         }
 
-    if operation in {"write_prompt", "refine_prompt", "visual_direction"}
+    if operation in {"write_prompt", "refine_prompt", "visual_direction"}:
         scene_id = str(context.get("sceneId") or "").strip()
         if not scene_id:
             raise RuntimeError("Storyboard Scene Director job is missing its Scene ID.")

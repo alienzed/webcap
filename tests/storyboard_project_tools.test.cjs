@@ -99,13 +99,14 @@ test('Scene title stays compact and wide Takes aligns with Generation without an
   assert.match(focus,/\.storyboard-scenes-list\.is-focus \.storyboard-scene:has\(> \.storyboard-takes\[open\]\) \.storyboard-takes-summary \{\s*padding: 0;/);
 });
 
-test('Scenes toolbar uses fixed icon actions without visible overlapping labels',()=>{
-  const rule=css.split('.storyboard-tool-label {').at(-1).split('}',1)[0];
-  assert.match(rule,/display:\s*none/);
+test('Scenes toolbar keeps distinct labeled buttons visible with responsive wrapping',()=>{
+  const labelRule=css.split('.storyboard-tool-label {').at(-1).split('}',1)[0];
+  assert.match(labelRule,/display:\s*inline/);
   const buttons=css.split('#storyboard-project-tool-bar > .storyboard-tool-icon {').at(-1).split('}',1)[0];
-  assert.match(buttons,/width:\s*36px/);
-  assert.match(buttons,/max-width:\s*36px/);
-  assert.match(buttons,/padding:\s*0/);
+  assert.match(buttons,/width:\s*auto/);
+  assert.match(buttons,/min-width:\s*36px/);
+  assert.match(buttons,/white-space:\s*nowrap/);
+  assert.match(css,/@container \(max-width: 760px\)\s*\{\s*#storyboard-project-tool-bar \{ flex-wrap: wrap; \}/);
   for(const id of ['storyboard-generate-scenes-btn','storyboard-cancel-takes-btn','storyboard-director-tools-btn','storyboard-find-replace-btn'])
     assert.match(html,new RegExp('id="'+id+'"[^>]*aria-label="[^"]+"'));
 });

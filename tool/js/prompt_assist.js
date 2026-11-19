@@ -122,13 +122,25 @@
       var summary = document.createElement('p');
       summary.textContent = status.project.summary;
       section.append(title, summary);
-      if ((status.project.projectContinuityPrinciples || []).length) {
+      [
+        ['Project continuity', status.project.projectContinuityPrinciples || []],
+        ['Recurring elements', (status.project.recurringElements || []).map(function (item) {
+          return item.element + ' · ' + (item.scenes || []).map(sceneTitle).join(', ') + ' — ' + item.basis;
+        })],
+        ['Scene relationships', (status.project.sceneRelationships || []).map(function (item) {
+          return sceneTitle(item.fromSceneId) + ' → ' + sceneTitle(item.toSceneId) + ': ' + item.relationship + ' (' + item.basis + ')';
+        })],
+        ['Potential concerns', status.project.concerns || []]
+      ].forEach(function (group) {
+        if (!group[1].length) return;
+        var heading = document.createElement('strong');
+        heading.textContent = group[0];
         var list = document.createElement('ul');
-        status.project.projectContinuityPrinciples.forEach(function (item) {
+        group[1].forEach(function (item) {
           var li = document.createElement('li'); li.textContent = item; list.appendChild(li);
         });
-        section.appendChild(list);
-      }
+        section.append(heading, list);
+      });
       host.appendChild(section);
     }
   }
@@ -341,6 +353,7 @@
       ['Music', parsed.sections.non_diegetic_music]
     ].filter(function (row) { return !!row[1]; });
     var sceneFindings = [];
+    var deepScene = state.deepQaStatus && state.deepQaStatus.sceneIntelligence;
     roles.forEach(function (role) {
       (state.reviews[role] && state.reviews[role].findings || []).forEach(function (finding) {
         if (Number(finding.shotNumber) === 0) sceneFindings.push({role: role, finding: finding});
@@ -350,6 +363,12 @@
       .map(function (item, index) { return {item: item, index: index}; })
       .filter(function (row) { return Number(row.item.shotNumber) === 0; });
     var html = '';
+    if (deepScene && (deepScene.summary || deepScene.purpose)) {
+      html += '<section class="prompt-assist-deep-qa-scene-summary"><strong>Prepared Scene intelligence</strong>' +
+        (deepScene.summary ? '<p>' + esc(deepScene.summary) + '</p>' : '') +
+        (deepScene.purpose ? '<p><strong>Purpose:</strong> ' + esc(deepScene.purpose) + '</p>' : '') +
+        '</section>';
+    }
     if (sectionRows.length) {
       html += '<div class="prompt-assist-scene-facts">' + sectionRows.map(function (row) {
         return '<div><span>' + esc(row[0]) + '</span><p>' + esc(row[1]) + '</p></div>';

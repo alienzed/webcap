@@ -522,8 +522,8 @@
     if (!job || job.client !== 'storyboard' || !job.storyId) return null;
     if (job.operation === 'interpret_atmosphere' || job.operation === 'expand_concept' || job.operation === 'define_invariants') return { kind: 'concept', storyId: job.storyId };
     if (job.operation === 'develop_scenes_sequence' || job.operation === 'develop_story' || job.operation === 'develop_story_outline' || job.operation === 'develop_story_scene' || job.operation === 'insert_scene' || job.operation === 'extend_story') return { kind: 'scenes', storyId: job.storyId };
-    if (job.operation === 'repair_scenes' || job.operation === 'revise_scenes_sequence' || job.operation === 'check_coherence_sequence') return { kind: 'repair', storyId: job.storyId };
-    if ((job.operation === 'write_prompt' || job.operation === 'refine_prompt') && job.sceneId) {
+    if (job.operation === 'repair_scenes' || job.operation === 'revise_scenes_sequence' || job.operation === 'check_coherence_sequence' || job.operation === 'project_deep_qa') return { kind: 'repair', storyId: job.storyId };
+    if ((job.operation === 'write_prompt' || job.operation === 'refine_prompt' || job.operation === 'prompt_assist') && job.sceneId) {
       return { kind: 'scene-prompt', storyId: job.storyId, sceneId: job.sceneId, operation: job.operation };
     }
     return null;
@@ -6080,6 +6080,8 @@
 
     var run = el('storyboard-director-tools-run');
     if (run) run.disabled = !directorToolsAvailable();
+    var deepQa = el('storyboard-project-deep-qa-btn');
+    if (deepQa) deepQa.disabled = !directorToolsAvailable();
   }
 
   function syncDirectorToolsRunLabel() {
@@ -6780,6 +6782,9 @@
     el('storyboard-director-tools-btn').onclick = function () {
       window.openStudioDirectorRevision();
     };
+    el('storyboard-project-deep-qa-btn').onclick = runProjectDeepQa;
+    el('storyboard-prompt-assist-close').onclick = function () { closeAssistModal('storyboard-prompt-assist-modal'); };
+    el('storyboard-project-deep-qa-close').onclick = function () { closeAssistModal('storyboard-project-deep-qa-modal'); };
     el('storyboard-find-replace-btn').onclick = openProjectReplace;
     el('storyboard-find-replace-find').addEventListener('input', previewProjectReplacement);
     el('storyboard-find-replace-with').addEventListener('input', previewProjectReplacement);
@@ -7293,6 +7298,13 @@
         if (!removeRow) throw new Error('LoRA row is missing.');
         removeRow.remove();
         scheduleSceneSave(removeLoraScene.dataset.sceneId);
+        return;
+      }
+      var promptAssistButton = event.target.closest('[data-prompt-assist-open]');
+      if (promptAssistButton) {
+        var assistScene = promptAssistButton.closest('.storyboard-scene[data-scene-id]');
+        if (!assistScene) throw new Error('Prompt Assist Scene is missing.');
+        openPromptAssist(assistScene.dataset.sceneId);
         return;
       }
       var directorPreview = event.target.closest('[data-director-preview]');

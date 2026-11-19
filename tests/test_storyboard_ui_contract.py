@@ -1624,6 +1624,8 @@ def test_visual_direction_scene_picker_defaults_to_all_and_posts_only_selected_i
     assert "sceneIds:sceneIds" in director
     assert "preset !== 'visual_direction'" in director
     assert "selectedStudioRevisionScenes().length === 0" in director
+    assert "window.getStoryboardRevisionScenes = function ()" in storyboard
+    assert "window.getStoryboardRevisionScenes()" in director
     assert "options.sceneIds" in storyboard
     assert "options.preset === 'visual_direction' ? 'visual_direction' : 'standard'" in storyboard
 

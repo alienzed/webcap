@@ -990,3 +990,23 @@ test('Organize handoff text and preserved owner routing are visible in Generatio
   assert.match(generate, /exploreButton\.textContent = 'Organize'/);
   assert.match(generate, /window\.openMediaExplorerActivity\(\{source: 'generate', id: 'generate:' \+ explore\.dataset\.generateExplorePath\}\)/);
 });
+
+
+test('Saved Unsorted view restores the optional triage filter without changing owner state', async () => {
+  const f = fixture('#/media?source=generate&curation=unsorted');
+  f.window.openMediaExplorerActivity();
+  const first = new URL(f.pending[0].url,'http://localhost').searchParams;
+  assert.equal(first.get('curation'), 'unsorted', 'deep links retain the triage view');
+  await f.settle(f.pending[0], []);
+  f.nodes['media-explorer-view-select'].emit('focus');
+  const catalog = f.pending.at(-1);
+  await f.settle(catalog, [], true, {views:[{
+    name:'To sort', filters:{source:'generate',curation:'unsorted',sort:'newest',full:true}
+  }]});
+  f.nodes['media-explorer-view-select'].value = 'To sort';
+  f.nodes['media-explorer-view-select'].emit('change');
+  const restored = new URL(f.pending.at(-1).url,'http://localhost').searchParams;
+  assert.equal(restored.get('source'), 'generate');
+  assert.equal(restored.get('curation'), 'unsorted');
+  assert.equal(restored.get('full'), '1');
+});

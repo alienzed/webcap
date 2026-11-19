@@ -68,7 +68,7 @@ Discussion is scoped to the current Prompt Assist session. It does not silently 
 
 ## Live acceptance
 
-`tests/live/prompt-assist.spec.cjs` uses the actual configured Director model. It covers independent specialist calls, Editor synthesis, a specialist follow-up, proposed prompt review, no mutation before Apply, and preservation of the prior prompt, Takes and unrelated Scenes.
+`tests/live/prompt-assist.spec.cjs` uses the actual configured Director model and exercises three end-to-end journeys: (1) all three independent specialists, Creative Editor synthesis, specialist discussion, individual and bulk accept/reject/undo, complete prompt revision, Restore Original, and explicit Apply with prompt/Takes/other-Scene preservation; (2) one-Scene-at-a-time navigation with review and decision state restored; and (3) Project Deep QA across multiple Scenes, exact source-evidence verification, model-bound freshness, specialist consumption, and incremental re-preparation after one Scene changes. The Deep QA journey also asserts that preparation does not launch media Sight.
 
 Run with the configured live model:
 

@@ -1,4 +1,5 @@
 import copy
+import hashlib
 import json
 import logging
 import os
@@ -834,6 +835,88 @@ def load_story(story_id):
     if story.get("id") != _safe_story_id(story_id):
         raise RuntimeError("Story metadata ID does not match its folder.")
     return story
+
+
+def _project_deep_qa_source(story):
+    scenes = story.get("scenes") if isinstance(story.get("scenes"), dict) else {}
+    order = story.get("sceneOrder") if isinstance(story.get("sceneOrder"), list) else []
+    return {
+        "title": str(story.get("title") or ""),
+        "concept": str(story.get("concept") or ""),
+        "style": str(story.get("style") or ""),
+        "invariants": story.get("invariants") if isinstance(story.get("invariants"), list) else [],
+        "guidelines": story.get("guidelines") if isinstance(story.get("guidelines"), dict) else {},
+        "sceneOrder": order,
+        "scenes": {
+            scene_id: {
+                "title": str((scenes.get(scene_id) or {}).get("title") or ""),
+                "durationSeconds": (scenes.get(scene_id) or {}).get("durationSeconds"),
+                "prompt": str((scenes.get(scene_id) or {}).get("prompt") or ""),
+            }
+            for scene_id in order if isinstance(scenes.get(scene_id), dict)
+        },
+    }
+
+
+def project_deep_qa_signature(story):
+    source = json.dumps(_project_deep_qa_source(story), ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(source.encode("utf-8")).hexdigest()
+
+
+@_serialized_mutation
+def save_project_deep_qa(story_id, findings, model_id="", job_id=""):
+    story = load_story(story_id)
+    if not isinstance(findings, list):
+        raise ValueError("Project Deep QA findings must be a list.")
+    allowed = set((story.get("sceneOrder") or []))
+    normalized = []
+    for item in findings:
+        if not isinstance(item, dict):
+            continue
+        scene_id = str(item.get("sceneId") or "").strip()
+        if scene_id not in allowed:
+            continue
+        row = {
+            "id": str(item.get("id") or _new_id("finding")),
+            "sceneId": scene_id,
+            "location": str(item.get("location") or "").strip(),
+            "problem": str(item.get("problem") or "").strip(),
+            "whyItMatters": str(item.get("whyItMatters") or "").strip(),
+            "suggestedFix": str(item.get("suggestedFix") or "").strip(),
+        }
+        proposed = item.get("proposedPrompt")
+        if isinstance(proposed, str) and proposed.strip():
+            row["proposedPrompt"] = proposed
+        if all(row[key] for key in ("location", "problem", "whyItMatters", "suggestedFix")):
+            normalized.append(row)
+    record = {
+        "version": 1,
+        "storyId": story["id"],
+        "sourceSignature": project_deep_qa_signature(story),
+        "sourceUpdatedAt": str(story.get("updatedAt") or ""),
+        "model": str(model_id or ""),
+        "jobId": str(job_id or ""),
+        "findings": normalized,
+        "createdAt": _utc_now(),
+    }
+    _write_json_atomic(_story_dir(story_id) / "deep-qa.json", record)
+    return record
+
+
+def load_project_deep_qa(story_id):
+    story = load_story(story_id)
+    path = _story_dir(story_id) / "deep-qa.json"
+    if not path.is_file():
+        return {"available": False, "current": False, "findings": []}
+    record = _read_json(path)
+    current = record.get("sourceSignature") == project_deep_qa_signature(story)
+    return {
+        "available": True,
+        "current": current,
+        "findings": record.get("findings", []) if current else [],
+        "record": record if current else None,
+        "staleAt": record.get("createdAt") if not current else None,
+    }
 
 
 

@@ -2595,7 +2595,7 @@ def storyboard_prompt_assist_deep_qa_route():
                 scene_results.append(entry["result"])
             clean = validate_deep_qa_project(result, [scene["sceneId"] for scene in project_context["scenes"]])
             saved["project"] = {
-                "version": 1, "sourceFingerprint": fingerprint, "preparedAt": now, "result": clean,
+                "version": 1, "modelId": model_id, "sourceFingerprint": fingerprint, "preparedAt": now, "result": clean,
             }
         else:
             raise ValueError("Project Deep QA result kind must be scene or project.")

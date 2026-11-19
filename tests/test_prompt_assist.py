@@ -1,5 +1,3 @@
-import json
-
 import pytest
 
 from tool.server.prompt_assist import (build_context, build_contract, review_context, source_fingerprint, scene_source_fingerprint, build_deep_qa_scene_contract, build_deep_qa_project_contract, validate_deep_qa_scene, validate_deep_qa_project)

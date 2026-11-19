@@ -44,6 +44,8 @@ Start here when you need to know what the app does today:
 
 ## Shipped Feature Notes
 
+- `docs/studio-prompt-assist-project-deep-qa.md` - implemented standalone Scene Prompt Assist and whole-Project Deep QA; the behavior contract also records future efficiency improvements.
+
 These describe implemented features, but they are narrower than `README.md` / `docs/spec.md` and may lag if the UI is rearranged:
 
 - `docs/create_set_from_results.md`
@@ -67,8 +69,6 @@ These describe implemented features, but they are narrower than `README.md` / `d
 These are useful product notes, not authoritative implementation references:
 
 - `docs/live_activity_panel.md` - design history for Activity presentation; verify shipped behavior in the app and execution queue reference
-- `docs/studio-prompt-assist-project-deep-qa.md` - behavior contract and implementation boundaries for standalone Scene Prompt Assist and whole-Project Deep QA
-
 - `docs/model-modules.md` - North Star for model-owned training configuration and policy boundaries
 - `docs/queue-semantics.md` - product queue-semantics North Star, **not** a claim that every fine-grained behavior is implemented
 - `docs/studio-director-materialization-contract.md` - **historical** staged Studio intention-to-reviewed-Apply record; not the current contract

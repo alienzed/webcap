@@ -17,6 +17,7 @@ from urllib.parse import quote
 from flask import jsonify, request, send_file
 
 from .media import merge_technical_media_metadata
+from .media_quality import analyze_media_quality, current_quality
 
 IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".avif"}
 VIDEO_EXTS = {".mp4", ".webm", ".mov", ".mkv", ".avi", ".m4v", ".ogg", ".wmv", ".mpg", ".mpeg"}
@@ -31,7 +32,7 @@ _VIEW_FIELDS = {
     "source", "role", "search", "tag", "rating", "kind", "model", "folder",
     "date", "sort", "direction", "full", "recursive", "externalPath",
     "externalDirectory", "min-side", "min-mp", "min-duration", "max-duration",
-    "storyboardType",
+    "storyboardType", "quality",
 }
 
 
@@ -272,7 +273,7 @@ def _discover(snapshot):
                     entry["rating"] = previous.get("rating")
                     entry["tags"] = previous.get("tags") if isinstance(previous.get("tags"), list) else []
                 if _fresh(entry, previous):
-                    entry["metadata"] = {k: previous[k] for k in ("size", "mtime", "resolution", "duration") if k in previous}
+                    entry["metadata"] = {k: previous[k] for k in ("size", "mtime", "resolution", "duration", "quality") if k in previous and (k != "quality" or current_quality(previous))}
                     entry["metadataCached"] = True
                 batch.append(entry)
                 if len(batch) >= 64:
@@ -354,6 +355,24 @@ def _query_items(snapshot, args, *, ignore_metadata=False):
         cutoff = (datetime.now(timezone.utc) - timedelta(days=int(date))).timestamp() * 1000
         items = [item for item in items if item["createdAt"] >= cutoff]
     if not ignore_metadata:
+        quality = str(args.get("quality") or "")
+        if quality:
+            if quality not in ("measured", "unmeasurable", "unscanned", "incomplete"):
+                raise ValueError("Unsupported detail analysis filter.")
+            def matches_quality(item):
+                meta = item.get("metadata") or {}
+                known = current_quality(meta)
+                block = meta.get("quality") or {}
+                if quality == "unscanned":
+                    return not known
+                if not known:
+                    return False
+                if quality == "measured":
+                    return block.get("detailSignal") is not None
+                if quality == "unmeasurable":
+                    return block.get("detailSignal") is None
+                return block.get("failedSamples", 0) > 0
+            items = [item for item in items if matches_quality(item)]
         min_side = int(args.get("min_side") or 0)
         min_mp = float(args.get("min_mp") or 0)
         min_duration = float(args.get("min_duration") or 0)
@@ -398,6 +417,13 @@ def _query_items(snapshot, args, *, ignore_metadata=False):
             width, height = dimensions
             return min(width, height) if sort == "resolution" else width * height
         items.sort(key=lambda item: (-metric(item), item["relativePath"]))
+    elif sort == "detail":
+        # Unknown/unmeasurable measurements always sort last, in either direction.
+        items.sort(key=lambda item: (
+            not current_quality(item.get("metadata") or {})
+            or (item.get("metadata") or {}).get("quality", {}).get("detailSignal") is None,
+            -((item.get("metadata") or {}).get("quality", {}).get("detailSignal") or 0),
+            item["relativePath"]))
     elif sort == "rating":
         items.sort(key=lambda item: (-(item.get("rating") or 0), item["relativePath"]))
     elif sort == "size":
@@ -407,7 +433,13 @@ def _query_items(snapshot, args, *, ignore_metadata=False):
     else:
         raise ValueError("Unsupported external media sort: " + sort)
     if str(args.get("direction") or "desc") == "asc":
-        items.reverse()
+        if sort == "detail":
+            measured = [item for item in items if current_quality(item.get("metadata") or {})
+                        and (item.get("metadata") or {}).get("quality", {}).get("detailSignal") is not None]
+            unknown = [item for item in items if item not in measured]
+            items = list(reversed(measured)) + unknown
+        else:
+            items.reverse()
     return items
 
 
@@ -490,9 +522,18 @@ def _metadata_worker(snapshot, job):
                 item = snapshot["by_path"].get(relative)
                 if item is None:
                     raise ValueError("External media no longer indexed: " + relative)
-                if item.get("metadataCached") and _fresh(item, item.get("metadata")):
-                    continue
-                details = item.get("metadata") if _fresh(item, item.get("metadata")) else _technical_probe(path)
+                cached = item.get("metadata") or {}
+                fresh = _fresh(item, cached)
+                if job.get("mode") == "quality":
+                    if fresh and current_quality(cached):
+                        continue
+                    details = dict(cached) if fresh else _technical_probe(path)
+                    details["quality"] = analyze_media_quality(
+                        path, details, cancel=job["cancel"])
+                else:
+                    if item.get("metadataCached") and fresh:
+                        continue
+                    details = cached if fresh else _technical_probe(path)
                 # Source may have changed between indexing and probing.
                 stat = path.stat()
                 if details["size"] != stat.st_size or details["mtime"] != int(stat.st_mtime):
@@ -508,6 +549,9 @@ def _metadata_worker(snapshot, job):
                 batch[path.name] = details
                 if len(batch) >= 256:
                     flush()
+            except InterruptedError:
+                with _LOCK:
+                    job["cancel"].set()
             except Exception as exc:
                 with _LOCK:
                     job["failed"] += 1
@@ -1073,18 +1117,28 @@ def register_routes(app):
                     source = _query_items(snapshot, data, ignore_metadata=True)
                 else:
                     raise ValueError("Unknown metadata scan scope.")
+                mode = str(data.get("mode") or "technical")
+                if mode not in ("technical", "quality"):
+                    raise ValueError("Unknown metadata analysis mode.")
                 paths = sorted((item["relativePath"] for item in source
-                               if not (item.get("metadataCached") and _fresh(item, item.get("metadata")))),
+                               if not (_fresh(item, item.get("metadata"))
+                                       and (current_quality(item.get("metadata"))
+                                            if mode == "quality" else item.get("metadataCached")))),
                                key=lambda name: (str(Path(name).parent), name))
                 if (_metadata_job and _metadata_job["running"] and
-                        not _metadata_job["cancel"].is_set() and _metadata_job["snapshot"] is snapshot):
+                        not _metadata_job["cancel"].is_set() and
+                        _metadata_job["snapshot"] is snapshot and
+                        _metadata_job.get("mode", "technical") == mode):
                     job = _metadata_job
                     additions = [name for name in paths if name not in job["seen"]]
                     job["pending"].extend(additions)
                     job["seen"].update(additions)
                     job["total"] += len(additions)
                 else:
-                    job = {"snapshot": snapshot, "pending": deque(paths), "seen": set(paths),
+                    if (_metadata_job and _metadata_job["running"] and
+                            not _metadata_job["cancel"].is_set()):
+                        raise ValueError("Finish or stop the active metadata scan before starting a different scan.")
+                    job = {"snapshot": snapshot, "mode": mode, "pending": deque(paths), "seen": set(paths),
                            "total": len(paths), "completed": 0, "failed": 0,
                            "uncached": 0, "running": bool(paths), "canceled": False,
                            "current": "", "lastError": "", "cancel": threading.Event()}

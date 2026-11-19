@@ -254,6 +254,7 @@ test('LIVE Project Deep QA prepares reusable Scene and cross-Scene intelligence 
   await expect(dialog.locator('#prompt-assist-project-context-content'))
     .toContainText(prepared.project.summary);
   await expect(dialog.locator('#prompt-assist-cuts')).toContainText('Prepared Deep QA');
+  await expect(dialog.locator('#prompt-assist-cuts')).toContainText('Prompt evidence');
 
   await dialog.locator('#prompt-assist-run').click();
   await expect(dialog.locator('#prompt-assist-status'))

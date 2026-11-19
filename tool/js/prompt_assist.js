@@ -137,6 +137,7 @@
       .then(function (status) { renderDeepQaStatus(status); return status; })
       .catch(function (error) {
         renderDeepQaStatus({error: 'Project intelligence unavailable: ' + (error.message || String(error))});
+        if (window.reportConsoleError) window.reportConsoleError('Project Deep QA status', error);
         return null;
       });
   }

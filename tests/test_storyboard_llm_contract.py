@@ -390,7 +390,9 @@ def test_individual_development_scene_uses_whole_outline_and_previous_authored_s
     assert "[COMPLETE SCENE OUTLINE]" in prompt
     assert "[CURRENT PLANNED SCENE]" in prompt
     assert "[PREVIOUS AUTHORED SCENE - RELATIONSHIP CONTEXT]" in prompt
-    assert "She reaches the station." in prompt
+    assert "She reaches the station." not in prompt
+    assert "She sees the platform." not in prompt
+    assert "A train appears." not in prompt
     assert "PREVIOUS FULL H3 PROMPT" in prompt
     assert "Scene 2 of 2" in prompt
     assert "Author exactly this one planned Scene" in prompt

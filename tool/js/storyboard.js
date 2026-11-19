@@ -4212,6 +4212,7 @@
                 '<button type="button" class="review-captions-btn storyboard-director-action" data-director-refine title="' +
                   'Revise this prompt with Director and apply the result.' +
                   '"><span class="storyboard-director-wand" aria-hidden="true">✦</span><span data-director-refine-label>Revise</span></button>' +
+                '<button type="button" class="review-captions-btn storyboard-director-action" data-prompt-assist-open title="Find practical omissions and apply targeted prompt fixes.">Prompt Assist</button>' +
                 '<span class="storyboard-save-state" data-director-status></span>' +
               '</div>' +
               '<details class="storyboard-scene-disclosure storyboard-prompt-pipeline-details">' +

@@ -6105,10 +6105,16 @@
     el("storyboard-prompt-assist-count").textContent = findings.length
       ? findings.length + " targeted suggestions"
       : "No corrections suggested";
+    if (promptAssistSession && promptAssistSession.discardedFindingCount) {
+      el("storyboard-prompt-assist-count").textContent +=
+        " · " + promptAssistSession.discardedFindingCount + " unusable model suggestion(s) omitted";
+    }
     if (!findings.length) {
       var empty = document.createElement("p");
       empty.className = "storyboard-assist-empty";
-      empty.textContent = "This Scene has no meaningful text corrections to suggest.";
+      empty.textContent = promptAssistSession && promptAssistSession.discardedFindingCount
+        ? "The model returned suggestions, but none had a unique, usable text replacement. Review the model output or retry."
+        : "This Scene has no meaningful text corrections to suggest.";
       host.appendChild(empty);
       return;
     }
@@ -6212,7 +6218,8 @@
             storyId:storyId,
             sceneId:sceneId,
             sourcePrompt:context.prompt,
-            findings:Array.isArray(result.findings) ? result.findings : []
+            findings:Array.isArray(result.findings) ? result.findings : [],
+            discardedFindingCount:Number(result.discardedFindingCount || 0)
           };
           el("storyboard-prompt-assist-source").textContent = context.prompt;
           renderPromptAssistFindings();
@@ -6787,7 +6794,6 @@
     el('storyboard-project-deep-qa-refresh').onclick = function () { runProjectDeepQa(true); };
     el('storyboard-prompt-assist-close').onclick = function () { closeAssistModal('storyboard-prompt-assist-modal'); };
     el('storyboard-project-deep-qa-close').onclick = function () { closeAssistModal('storyboard-project-deep-qa-modal'); };
-    el('storyboard-project-deep-qa-rerun').onclick = function () { runProjectDeepQa(true); };
     el('storyboard-find-replace-btn').onclick = openProjectReplace;
     el('storyboard-find-replace-find').addEventListener('input', previewProjectReplacement);
     el('storyboard-find-replace-with').addEventListener('input', previewProjectReplacement);

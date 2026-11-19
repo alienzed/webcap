@@ -103,9 +103,9 @@ When stronger continuity is genuinely needed, the human can make it explicit thr
 
 ### Entry and exit state — historical compatibility only
 
-`entryState` and `exitState` were retired from active Scene authoring in PR #792. The current Studio Director must **not propose or require** these fields; moving Scenes should not require maintaining cross-Scene state bookkeeping. Describe an actual on-screen initial condition or necessary handoff in the Scene Intent and relevant Project Concept/Invariants instead.
+`entryState` and `exitState` were retired from active Scene authoring in PR #792. The current Studio Director must **not propose or require** these fields; moving Scenes should not require maintaining cross-Scene state bookkeeping. Describe an actual on-screen initial condition or necessary handoff in the Scene Prompt and relevant Project Concept/Invariants instead.
 
-Existing saved values remain in `storyboard_store.py` and are still consumed by older `storyboard_llm_contract.py` planning/refinement paths and stored Take provenance. Preserve those values for compatibility, but do not revive their controls or mistake their backend presence for an active Studio Director requirement. The H3 workflow renders the saved Prompt, not separate entry/exit-state text.
+Existing saved values remain in `storyboard_store.py` for compatibility, but active `storyboard_llm_contract.py` planning/refinement and new Take provenance no longer consume these fields. Preserve legacy JSON values without reviving controls. The H3 workflow renders the saved Prompt, not separate entry/exit-state text.
 
 ### Previous-Scene context during refinement
 

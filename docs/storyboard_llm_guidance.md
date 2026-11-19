@@ -1,6 +1,6 @@
 # Storyboard LLM Guidance
 
-> **Scope note (updated 2026-11-06):** This document describes the underlying **Storyboard LLM/generation pipeline**, including historical operations still supported for old Projects. The current **Studio Director authoring experience**, its Project Overview/Scene creative units, and the exclusion of reference media/LoRA/sampling/seed controls are defined in [Studio Director useful-function consolidation](studio-director-useful-functions-consolidation.md). Director proposes creative material; WebCap targets, reviews and saves it with the author. The legacy operations below are not additional Studio Director fields or feature-completeness requirements.
+> **Scope note (reconciled 2026-11-18):** This document describes the underlying Storyboard LLM/generation pipeline, including legacy and specialist operations. For current Studio Director Chat, explicit Read and direct Project/Scene Write, use the [functional contract](studio-director-contract.md) and [user flows](studio-user-flows.md). Ordinary chat has no H3 writing reference or implicit Write; specialist Scene authoring gets its own task-scoped context and schema. Older Review/Apply and Scene Intent material below is historical, not a second Studio Director contract.
 
 ## Core vision
 
@@ -69,7 +69,7 @@ The human remains the editor/director. Every Scene and prompt remains directly e
 
 ## Story authoring authority
 
-**Current Studio Director:** Project Concept governs Scene relationships, variation, pacing and emphasis; shared visual treatment belongs in Visual / atmosphere, reusable fixed details in Invariants, and local creative action in Scene Intent. **Legacy Storyboard operations:** populated saved Directing Guidelines continue to be passed as previously authored context where the older request contract expects them. Do not create new Guidelines through the current Director or discard saved historical values.
+**Current Studio Director:** Project Concept governs Scene relationships, variation, pacing and emphasis; shared visual treatment belongs in Visual / atmosphere, reusable fixed details in Invariants, and the full saved Scene Prompt owns that Scene's creative instructions. **Legacy Storyboard operations:** populated saved Directing Guidelines and older Scene Intent are passed only where an older request explicitly needs them. Do not create new Guidelines or Intent through Chat Director or discard saved historical values.
 
 Auto Scene count is a Director decision. Explicit Scene counts are requested in the output contract; WebCap preserves the authored Scene records.
 
@@ -228,9 +228,9 @@ The active model-facing guidance is:
 
 - `docs/mmh3-prompt-runtime-context.txt`
 
-That file is intentionally concise and is what Director should use for ordinary H3 prompt writing.
+That file is the active H3 reference for explicit Scene Write and specialist H3 prompt-authoring requests; ordinary Studio chat and Project Write do not load it.
 
-Director authors observable, timed audiovisual content from the context **actually supplied**. Current Studio uses Concept, Style, relevant Invariants and Scene Intent; older Storyboard operations may also provide saved Story Guidelines. H3 guidance supplies section headings, timestamp notation, dialogue syntax, and exact reference-frame alignment.
+Director authors observable, timed audiovisual content from the context **actually supplied**. Current Studio Scene Write uses relevant Project Concept, Visual / atmosphere, Invariants, saved Scene baseline where appropriate, and the explicit task; older Storyboard operations may also provide saved Guidelines and legacy Scene Intent. H3 guidance supplies section headings, timestamp notation, dialogue syntax, and exact reference-frame alignment.
 
 WebCap stores the complete authored H3 prompt unchanged. The Workshop can selectively revise the timed-shot section when an unambiguous `integrated_multimodal_description` heading is present; other prompt shapes remain available for discussion and manual editing.
 

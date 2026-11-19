@@ -105,6 +105,7 @@
 .media-explorer-inspector-section p { font-size: 12px; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; margin: 10px 0 0; }
 .media-explorer-provenance { margin: 14px 0 8px; font-size: 11px; color: var(--muted); overflow-wrap: anywhere; line-height: 1.6; }
 .media-explorer-inspector-actions { display: flex; flex-wrap: wrap; gap: 7px; margin: 14px 0; }
+.media-explorer-inspector-actions > .media-explorer-rating { flex-basis: 100%; }
 .media-explorer-rating { display: flex; gap: 5px; flex-wrap: wrap; align-items: center; padding: 14px 0; border-bottom: 1px solid var(--border); }
 .media-explorer-rating > span { width: 100%; font-size: 11px; color: var(--muted); margin-bottom: 4px; }
 .media-explorer-rating button[aria-pressed='true'] { border-color: var(--explorer-accent); color: var(--explorer-accent); }

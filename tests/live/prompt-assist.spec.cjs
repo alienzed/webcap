@@ -100,7 +100,7 @@ test('LIVE Prompt Assist runs independent specialists, discusses findings, and a
   const proposedPrompt=await revised.inputValue();
   expect(proposedPrompt.trim().length).toBeGreaterThan(0);
   expect(proposedPrompt).not.toBe(promptOne);
-  await revised.fill(proposedPrompt + '\\nTemporary review edit.');
+  await revised.fill(proposedPrompt + '\nTemporary review edit.');
   await dialog.locator('#prompt-assist-restore').click();
   await expect(revised).toHaveValue(promptOne);
   await revised.fill(proposedPrompt);
@@ -308,7 +308,7 @@ test('LIVE Project Deep QA prepares reusable Scene and cross-Scene intelligence 
   expect(unchanged.scenes[arrival.id].prompt).toContain('raincoat');
   expect(unchanged.scenes[handoff.id].prompt).toContain('delivery bag');
 
-  const changedHandoff=unchanged.scenes[handoff.id].prompt + '\\n[Shot 3] The colleague places the delivery bag on a table.';
+  const changedHandoff=unchanged.scenes[handoff.id].prompt + '\n[Shot 3] The colleague places the delivery bag on a table.';
   const update=await page.request.post('/fs/storyboard',{data:{
     operation:'update_scene',storyId:project.id,sceneId:handoff.id,scene:{prompt:changedHandoff}
   }});

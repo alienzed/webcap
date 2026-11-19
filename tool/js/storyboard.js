@@ -6245,6 +6245,11 @@
     var editor = root && root.querySelector('[data-scene-field="prompt"]');
     if (!editor) return reportError(new Error("Prompt Assist Scene editor is no longer available."));
     var expectedPrompt = String(editor.value || "");
+    if (expectedPrompt !== promptAssistSession.sourcePrompt) {
+      status.textContent = "The Scene prompt has changed. Close and reopen Prompt Assist to refresh its suggestions.";
+      button.disabled = false;
+      return;
+    }
     var target = {kind:"scene-prompt", storyId:promptAssistSession.storyId, sceneId:promptAssistSession.sceneId};
     if (directorTargetBlocked(target)) return reportError(new Error("Wait for pending Scene work before applying this correction."));
     if (!replacement.trim() || replacement === finding.targetText) {
@@ -6367,7 +6372,10 @@
     var button = el("storyboard-project-deep-qa-btn");
     var status = el("storyboard-project-deep-qa-status");
     button.disabled = true;
+    el("storyboard-project-deep-qa-target").textContent =
+      String(storyState.story.title || "Current Project");
     status.textContent = "Checking saved Project prompts…";
+    openAssistModal("storyboard-project-deep-qa-modal");
     setDirectorPending(target, true);
     startDirectorActivity();
     flushPendingSaves().then(function () {
@@ -6786,6 +6794,7 @@
     el('storyboard-project-deep-qa-refresh').onclick = function () { runProjectDeepQa(true); };
     el('storyboard-prompt-assist-close').onclick = function () { closeAssistModal('storyboard-prompt-assist-modal'); };
     el('storyboard-project-deep-qa-close').onclick = function () { closeAssistModal('storyboard-project-deep-qa-modal'); };
+    el('storyboard-project-deep-qa-rerun').onclick = function () { runProjectDeepQa(true); };
     el('storyboard-find-replace-btn').onclick = openProjectReplace;
     el('storyboard-find-replace-find').addEventListener('input', previewProjectReplacement);
     el('storyboard-find-replace-with').addEventListener('input', previewProjectReplacement);

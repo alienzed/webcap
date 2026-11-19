@@ -569,7 +569,6 @@ def _client_result(client, context, llm_result, job_id="", frozen_contract=None)
                 "suggestedFix": str(item.get("suggestedFix") or "").strip(),
                 "targetText": str(item.get("targetText") or ""),
                 "replacementText": str(item.get("replacementText") or ""),
-                "prompt": str(item.get("prompt") or "").strip(),
             }
             if all(finding[key] for key in ("problem", "location", "suggestedFix", "targetText", "replacementText")):
                 if source_prompt.count(finding["targetText"]) == 1 and finding["targetText"] != finding["replacementText"]:

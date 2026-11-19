@@ -2077,11 +2077,13 @@
       });
     }).then(function (completedJob) {
       var result = completedJob && completedJob.result || {};
-      var succeeded = Array.isArray(result.succeededSceneIds) ? result.succeededSceneIds.length :
-        Number(result.revisedSceneCount || sceneIds.length);
+      var succeeded = Number(result.completedSceneCount != null ? result.completedSceneCount :
+        (Array.isArray(result.succeededSceneIds) ? result.succeededSceneIds.length : sceneIds.length));
+      var changed = Array.isArray(result.changedSceneIds) ? result.changedSceneIds.length :
+        Number(result.revisedSceneCount != null ? result.revisedSceneCount : succeeded);
       var failures = Array.isArray(result.failedScenes) ? result.failedScenes : [];
       var summary = (passType === 'visual_direction' ? 'Visual Direction: ' : 'Revise Scenes: ') +
-        succeeded + ' of ' + String(sceneIds.length) + ' Scenes revised.';
+        succeeded + ' of ' + String(sceneIds.length) + ' Scenes processed; ' + changed + ' prompts updated.';
       if (failures.length) {
         summary += ' Failed: ' + failures.map(function (failure) {
           return String(failure.title || failure.sceneId || 'Scene') + ' (' + String(failure.error || 'unknown error') + ')';

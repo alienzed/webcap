@@ -2564,14 +2564,13 @@ def storyboard_prompt_assist_route():
             scope=str(data.get("scope") or "scene"),
             scene_id=str(data.get("sceneId") or ""),
         )
+        project_context = build_context(story, scope="project")
+        project_fingerprint = source_fingerprint(project_context)
         if operation == "deep_qa":
             contract = build_deep_qa_contract(context)
             label = "Project Deep QA: prepare creative intelligence"
         elif operation == "review":
             contract = build_contract("review", context, role=role)
-            cached = _prompt_assist_deep_qa_read(story_id)
-            if cached and cached.get("sourceFingerprint") == source_fingerprint(context):
-                contract["messages"][1]["content"] += "\\n\\n[CURRENT PROJECT DEEP QA INTELLIGENCE]\\n" + json.dumps(cached.get("intelligence") or {}, ensure_ascii=False)
             label = "Prompt Assist: " + role + " review"
         elif operation == "synthesize":
             reviews = data.get("reviews")
@@ -2599,6 +2598,11 @@ def storyboard_prompt_assist_route():
         else:
             raise ValueError("Unsupported Prompt Assist operation.")
 
+        if operation not in {"deep_qa"}:
+            cached = _prompt_assist_deep_qa_read(story_id)
+            if cached and cached.get("sourceFingerprint") == project_fingerprint:
+                contract["messages"][1]["content"] += "\\n\\n[CURRENT PROJECT DEEP QA INTELLIGENCE]\\n" + json.dumps(cached.get("intelligence") or {}, ensure_ascii=False)
+
         job = enqueue_llm(
             "chat", model_id, contract,
             context={
@@ -2614,6 +2618,7 @@ def storyboard_prompt_assist_route():
             "job": job,
             "scope": context["scope"],
             "sourceUpdatedAt": context["sourceUpdatedAt"],
+            "sourceFingerprint": source_fingerprint(context),
         }), 202
     except FileNotFoundError as exc:
         return jsonify({"ok": False, "error": str(exc)}), 404

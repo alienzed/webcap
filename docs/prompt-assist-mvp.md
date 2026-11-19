@@ -12,7 +12,7 @@ It supports two review scopes:
 
 Prompt Assist uses deterministic, source-addressable extraction for its immediate review. Project Deep QA is an optional preparation layer that enriches those reviews with reusable, persisted intelligence.
 
-- Read the saved Project overview, visual atmosphere and typed invariants.
+- Read the saved Project overview, visual atmosphere, authored guidelines (visual focus, creative direction, variation, pacing and Scene relationships), and typed invariants.
 - Extract established H3 sections and numbered **[Shot N]** entries when present.
 - Preserve each Scene ID, order, title, duration, exact prompt and cut number.
 - For older/custom prompts without standard H3 shot sections, pass the complete prompt as one source-addressable unit rather than silently dropping it.

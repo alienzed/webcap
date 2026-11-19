@@ -1963,7 +1963,9 @@ def apply_scene_repairs(story_id, payload, repair_base, model_id="", job_id=""):
             ],
             "invariantRefs": current.get("invariantRefs") if isinstance(current.get("invariantRefs"), list) else [],
         }
-        if current_context != base_scene:
+        # Earlier queued repair snapshots may contain retired Scene metadata.
+        # Compare active fields only, so an old Project never becomes unreadable.
+        if any(current_context.get(key) != base_scene.get(key) for key in current_context):
             raise RuntimeError(
                 "Scene context changed while Check & Repair was running. Run Check & Repair again so newer edits are preserved."
             )
@@ -1983,12 +1985,11 @@ def apply_scene_repairs(story_id, payload, repair_base, model_id="", job_id=""):
         fields = raw.get("fields")
         if not isinstance(fields, dict) or not fields:
             raise ValueError("Storyboard Scene repair fields must be a non-empty object.")
-        unknown_fields = set(fields) - set(allowed_fields)
-        if unknown_fields:
-            raise ValueError(
-                "Storyboard Scene repair contains unsupported fields: "
-                + ", ".join(sorted(unknown_fields))
-            )
+        # Older Director responses may include entry/exit-state patches.
+        # Ignore retired keys while retaining any useful prompt correction.
+        fields = {key: value for key, value in fields.items() if key in allowed_fields}
+        if not fields:
+            continue
         if scene_number in seen_numbers:
             raise ValueError("Storyboard Scene repair returned Scene " + str(scene_number) + " more than once.")
 
@@ -2093,6 +2094,8 @@ def restore_scene_repairs(story_id):
         if not isinstance(current, dict) or not isinstance(before, dict) or not isinstance(after, dict):
             raise RuntimeError("Stored Scene repair snapshot no longer matches the Story.")
         for key, value in after.items():
+            if key != "prompt":
+                continue
             if str(current.get(key) or "") != str(value or ""):
                 raise RuntimeError(
                     "A repaired Scene has changed since the repair. Restore Last Repair was not applied so newer edits are preserved."
@@ -2103,7 +2106,10 @@ def restore_scene_repairs(story_id):
         scene_id = str(item["sceneId"])
         current = new_scenes[scene_id]
         before = item["before"]
-        restored = _normalize_scene(scene_id, before, existing=current)
+        restored = _normalize_scene(
+            scene_id, {key: value for key, value in before.items() if key == "prompt"},
+            existing=current,
+        )
         if "prompt" in before:
             meta = item.get("promptMetaBefore") if isinstance(item.get("promptMetaBefore"), dict) else {}
             restored["previousPrompt"] = meta.get("previousPrompt") if isinstance(meta.get("previousPrompt"), str) else None

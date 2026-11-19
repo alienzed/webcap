@@ -653,3 +653,36 @@ def test_project_deep_qa_requires_saved_scene_prompts():
 
     with pytest.raises(ValueError, match="at least one saved Scene prompt"):
         storyboard_llm_contract.build_request(story, "", "project_deep_qa")
+
+
+def test_retired_scene_metadata_never_enters_active_prompt_contracts():
+    story = _story()
+    for scene in story["scenes"].values():
+        scene.update({
+            "summary": "OLD_SCENE_INTENT_MARKER",
+            "entryState": "OLD_SCENE_ENTRY_MARKER",
+            "exitState": "OLD_SCENE_EXIT_MARKER",
+            "intent": "OLD_SCENE_INTENT_FIELD_MARKER",
+        })
+    for operation, scene_id, instruction in (
+        ("write_prompt", "scene-2", ""),
+        ("refine_prompt", "scene-2", "Improve the camera framing."),
+        ("visual_direction", "scene-2", ""),
+        ("extend_story", "", ""),
+        ("repair_scenes", "", "Improve the timing of each Scene."),
+        ("project_deep_qa", "", ""),
+        ("prompt_assist", "scene-2", ""),
+    ):
+        kwargs = {"scene_count": 1} if operation == "extend_story" else {}
+        kwargs.update({"continuity_context": True} if operation == "refine_prompt" else {})
+        request = storyboard_llm_contract.build_request(
+            story, scene_id, operation, instruction, **kwargs,
+        )
+        prompt = request["prompt"]
+        for marker in (
+            "OLD_SCENE_INTENT_MARKER",
+            "OLD_SCENE_ENTRY_MARKER",
+            "OLD_SCENE_EXIT_MARKER",
+            "OLD_SCENE_INTENT_FIELD_MARKER",
+        ):
+            assert marker not in prompt, (operation, marker)

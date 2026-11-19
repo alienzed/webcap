@@ -7,7 +7,7 @@ Prompt Assist is a review and improvement workspace for existing Studio Project 
 It supports two review scopes:
 
 - **Current Scene:** examines the selected Scene's cuts and local state progression.
-- **Entire Project:** examines all saved Scenes in Project order and their relationships.
+- **One Scene at a time:** navigate between Scenes in the Project; each review remains scoped to the selected Scene.
 
 ## Context preparation
 
@@ -36,11 +36,11 @@ Each pass returns structured findings with a Scene ID, cut number, priority, sou
 
 The Creative Editor receives the independent reviews and source context. It consolidates overlapping findings, preserves meaningful disagreements, and cites the exact specialist finding IDs behind each recommendation.
 
-The user can:
+The user works in a Scene-focused dashboard, with the selected Scene's source cuts in the main column and specialist status, Editor decisions and discussion visible together in the inspector. The user can:
 
-- Inspect each specialist's findings separately.
+- Inspect all three specialists' findings together, anchored to their relevant cut or Scene-level context.
 - Ask a follow-up question of the Editor or any specialist.
-- Accept or reject individual Editor recommendations.
+- Accept or reject individual Editor recommendations inline, or accept/reject all; decisions remain reversible during the session.
 - Ask the Editor to prepare revised complete prompts from accepted recommendations.
 - Inspect and edit each proposed prompt with a live original-versus-proposed diff.
 - Apply selected Scene prompts explicitly.

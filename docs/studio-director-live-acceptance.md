@@ -24,7 +24,7 @@ The API smoke test is opt-in and skips without `WEBCAP_LIVE_MODEL`. The Playwrig
 
 ## What real-model tests verify
 
-- Ordinary `studio_chat` produces a useful conversational answer without a response schema, H3 writing reference or implicit authoring action.
+- Ordinary `studio_chat` produces an appropriate conversational answer without a response schema, H3 writing reference or implicit authoring action. Manually compare a short observation/question (normally a concise reply) with a request to show or critique a full Scene (the model should elaborate rather than refuse). No automatic Scene dump after a casual remark.
 - Project creation/revision are **explicit** Write functions with Project schemas, full history and correct destination; no Studio Review/Apply.
 - New Scene batches and selected-Scene revision are explicit H3-guided operations. Inspect actual returned JSON and saved fields; allow independently useful results rather than requiring an invented result count.
 - Explicit saved Read snapshots from unrelated Projects persist as visible conversation turns and reach later chat and Write requests unchanged without redirecting the destination; source edits require a second explicit Read.

@@ -537,9 +537,6 @@ def _normalize_scene(scene_id, value, existing=None):
     normalized = {
         "id": scene_id,
         "title": str(value.get("title", current.get("title", "")) or "").strip(),
-        "summary": str(value.get("summary", current.get("summary", "")) or "").strip(),
-        "entryState": str(value.get("entryState", current.get("entryState", "")) or "").strip(),
-        "exitState": str(value.get("exitState", current.get("exitState", "")) or "").strip(),
         "prompt": str(value.get("prompt", current.get("prompt", "")) or ""),
         "previousPrompt": (
             str(value.get("previousPrompt"))
@@ -593,6 +590,11 @@ def _normalize_scene(scene_id, value, existing=None):
     }
     if isinstance(current.get("_restoreOrder"), dict):
         normalized["_restoreOrder"] = copy.deepcopy(current["_restoreOrder"])
+    # Legacy Scene metadata remains readable and survives ordinary saves, but
+    # no new Scene writes or model operations author or consult these fields.
+    for key in ("summary", "entryState", "exitState", "intent"):
+        if key in current:
+            normalized[key] = copy.deepcopy(current[key])
     return normalized
 
 
@@ -793,7 +795,7 @@ def duplicate_story(story_id):
     duplicate["development"] = copy.deepcopy(source.get("development")) if isinstance(source.get("development"), dict) else None
 
     scene_fields = (
-        "title", "summary", "entryState", "exitState", "prompt", "invariantRefs", "sharedContextRefs",
+        "title", "prompt", "invariantRefs", "sharedContextRefs",
         "durationSeconds", "samplingMode", "aspectRatio", "megapixels", "seed", "seedMode",
         "loras", "storyLoraOverrides", "notes",
     )
@@ -1487,17 +1489,8 @@ def _validate_developed_plan(plan, target_scene_count=None, story_invariants=Non
         if duration < 6 or duration > 15:
             raise ValueError("Developed Story Scene " + str(index) + " duration must be between 6 and 15 seconds.")
 
-        entry_state = item.get("entryState", "")
-        exit_state = item.get("exitState", "")
-        if not isinstance(entry_state, str):
-            raise ValueError("Developed Story Scene " + str(index) + " entryState must be text when supplied.")
-        if not isinstance(exit_state, str):
-            raise ValueError("Developed Story Scene " + str(index) + " exitState must be text when supplied.")
-
         normalized.append({
             "title": title.strip(),
-            "entryState": entry_state.strip(),
-            "exitState": exit_state.strip(),
             "prompt": prompt.strip(),
             "durationSeconds": duration,
         })
@@ -1843,8 +1836,6 @@ def apply_prompt_assist(story_id, scene_id, expected_prompt, target_text, replac
         "prompt": revised,
         "previousPrompt": expected_prompt,
         "previousRevision": {
-            "entryState": str(current.get("entryState") or ""),
-            "exitState": str(current.get("exitState") or ""),
             "prompt": expected_prompt,
             "durationSeconds": current.get("durationSeconds"),
         },
@@ -1869,7 +1860,6 @@ def apply_director_prompt(
     job_id="",
     operation="",
     duration_override=None,
-    scene_fields=None,
     expected_prompt=None,
 ):
     story = load_story(story_id)
@@ -1889,8 +1879,6 @@ def apply_director_prompt(
         "previousPrompt": str(current.get("prompt") or ""),
         "previousRevision": (
             {
-                "entryState": str(current.get("entryState") or ""),
-                "exitState": str(current.get("exitState") or ""),
                 "prompt": str(current.get("prompt") or ""),
                 "durationSeconds": current.get("durationSeconds"),
             }
@@ -1901,19 +1889,6 @@ def apply_director_prompt(
         "promptDirectorJobId": str(job_id or "").strip(),
         "refineComplete": operation == "refine_prompt",
     }
-    if scene_fields:
-        if operation != "refine_prompt":
-            raise ValueError("Only Scene refinement may revise Scene authoring fields.")
-        if not isinstance(scene_fields, dict):
-            raise ValueError("Refined Scene fields must be an object.")
-        for key in ("entryState", "exitState"):
-            if key not in scene_fields:
-                continue
-            value = scene_fields[key]
-            if not isinstance(value, str):
-                raise ValueError("Refined Scene " + key + " must be text.")
-            scene_patch[key] = value
-
     if duration_override is not None:
         if operation != "refine_prompt":
             raise ValueError("Only Scene refinement may return a duration override.")
@@ -1971,8 +1946,6 @@ def apply_scene_repairs(story_id, payload, repair_base, model_id="", job_id=""):
             raise RuntimeError("A Scene changed structurally while Check & Repair was running. Run Check & Repair again.")
         current_context = {
             "title": str(current.get("title") or ""),
-            "entryState": str(current.get("entryState") or ""),
-            "exitState": str(current.get("exitState") or ""),
             "prompt": str(current.get("prompt") or ""),
             "durationSeconds": current.get("durationSeconds"),
             "referenceRoles": [
@@ -1982,12 +1955,14 @@ def apply_scene_repairs(story_id, payload, repair_base, model_id="", job_id=""):
             ],
             "invariantRefs": current.get("invariantRefs") if isinstance(current.get("invariantRefs"), list) else [],
         }
-        if current_context != base_scene:
+        # Earlier queued repair snapshots may contain retired Scene metadata.
+        # Compare active fields only, so an old Project never becomes unreadable.
+        if any(current_context.get(key) != base_scene.get(key) for key in current_context):
             raise RuntimeError(
                 "Scene context changed while Check & Repair was running. Run Check & Repair again so newer edits are preserved."
             )
 
-    allowed_fields = ("entryState", "exitState", "prompt")
+    allowed_fields = ("prompt",)
     prepared = []
     seen_numbers = set()
 
@@ -2002,12 +1977,11 @@ def apply_scene_repairs(story_id, payload, repair_base, model_id="", job_id=""):
         fields = raw.get("fields")
         if not isinstance(fields, dict) or not fields:
             raise ValueError("Storyboard Scene repair fields must be a non-empty object.")
-        unknown_fields = set(fields) - set(allowed_fields)
-        if unknown_fields:
-            raise ValueError(
-                "Storyboard Scene repair contains unsupported fields: "
-                + ", ".join(sorted(unknown_fields))
-            )
+        # Older Director responses may include entry/exit-state patches.
+        # Ignore retired keys while retaining any useful prompt correction.
+        fields = {key: value for key, value in fields.items() if key in allowed_fields}
+        if not fields:
+            continue
         if scene_number in seen_numbers:
             raise ValueError("Storyboard Scene repair returned Scene " + str(scene_number) + " more than once.")
 
@@ -2112,6 +2086,8 @@ def restore_scene_repairs(story_id):
         if not isinstance(current, dict) or not isinstance(before, dict) or not isinstance(after, dict):
             raise RuntimeError("Stored Scene repair snapshot no longer matches the Story.")
         for key, value in after.items():
+            if key != "prompt":
+                continue
             if str(current.get(key) or "") != str(value or ""):
                 raise RuntimeError(
                     "A repaired Scene has changed since the repair. Restore Last Repair was not applied so newer edits are preserved."
@@ -2122,7 +2098,10 @@ def restore_scene_repairs(story_id):
         scene_id = str(item["sceneId"])
         current = new_scenes[scene_id]
         before = item["before"]
-        restored = _normalize_scene(scene_id, before, existing=current)
+        restored = _normalize_scene(
+            scene_id, {key: value for key, value in before.items() if key == "prompt"},
+            existing=current,
+        )
         if "prompt" in before:
             meta = item.get("promptMetaBefore") if isinstance(item.get("promptMetaBefore"), dict) else {}
             restored["previousPrompt"] = meta.get("previousPrompt") if isinstance(meta.get("previousPrompt"), str) else None
@@ -2149,13 +2128,11 @@ def restore_previous_prompt(story_id, scene_id):
     previous_revision = current.get("previousRevision")
     if isinstance(previous_revision, dict):
         current_revision = {
-            "entryState": str(current.get("entryState") or ""),
-            "exitState": str(current.get("exitState") or ""),
             "prompt": str(current.get("prompt") or ""),
             "durationSeconds": current.get("durationSeconds"),
         }
         scene = _normalize_scene(scene_id, {
-            **{key: value for key, value in previous_revision.items() if key != "summary"},
+            **{key: value for key, value in previous_revision.items() if key in ("prompt", "durationSeconds")},
             "previousPrompt": str(current.get("prompt") or ""),
             "previousRevision": current_revision,
             "promptDirectorModel": "",
@@ -2194,9 +2171,6 @@ def duplicate_scene(story_id, scene_id):
     new_id = _new_id("scene")
     copied = {
         "title": (str(current.get("title") or "").strip() + " Copy").strip(),
-        "summary": current.get("summary") or "",
-        "entryState": current.get("entryState") or "",
-        "exitState": current.get("exitState") or "",
         "prompt": current.get("prompt") or "",
         "invariantRefs": copy.deepcopy(current.get("invariantRefs") or []),
         "sharedContextRefs": copy.deepcopy(current.get("sharedContextRefs") or []),
@@ -2476,8 +2450,6 @@ def add_take_upload(
         "mediaPath": "takes/" + scene_id + "/" + stored_name,
         "sourceFilename": safe_name,
         "prompt": str(scene.get("prompt") or ""),
-        "entryState": str(scene.get("entryState") or ""),
-        "exitState": str(scene.get("exitState") or ""),
         "durationSeconds": scene.get("durationSeconds", 6),
         "samplingMode": scene.get("samplingMode", "current"),
         "seed": scene.get("seed"),
@@ -2493,8 +2465,6 @@ def add_take_upload(
     if generated_provenance is not None:
         for key in (
             "prompt",
-            "entryState",
-            "exitState",
             "sourcePrompt",
             "durationSeconds",
             "samplingMode",
@@ -2913,8 +2883,6 @@ def finalize_generated_take(story_id, scene_id, take_id, provenance):
 
     for key in (
         "prompt",
-        "entryState",
-        "exitState",
         "sourcePrompt",
         "durationSeconds",
         "samplingMode",

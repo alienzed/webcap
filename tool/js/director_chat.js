@@ -341,9 +341,10 @@
     el('director-chat-scene-context').classList.add('hidden');
     el('studio-director-inspect').classList.toggle('hidden', revision || !studio);
     var preset = el('director-studio-revision-preset').value;
-    el('director-studio-revision-fresh-label').classList.toggle('hidden', !revision || preset === 'coherence');
+    el('director-studio-revision-fresh-label').classList.toggle('hidden', !revision || preset === 'coherence' || preset === 'visual_direction');
     var input = el('director-studio-revision-input');
     input.readOnly = preset === 'coherence';
+    input.placeholder = preset === 'visual_direction' ? 'Additional visual direction (optional)' : 'Describe what should be revised across these Scenes.';
     el('director-chat-composer-hint').textContent = revision
       ? 'Ctrl+Enter to run' : 'Enter to send · Shift+Enter for newline';
     var target = el('director-studio-revision-target');
@@ -371,7 +372,7 @@
     var input = el('director-studio-revision-input');
     var instruction = input.value.trim();
     var status = el('director-studio-revision-status');
-    if (!instruction && preset !== 'coherence') {
+    if (!instruction && preset !== 'coherence' && preset !== 'visual_direction') {
       status.textContent = 'Enter a revision instruction or choose a preset.';
       input.focus();
       return;

@@ -26,7 +26,7 @@ H3_RUNTIME_CONTEXT_PATH = DOCS_ROOT / "mmh3-prompt-runtime-context.txt"
 SCENE_PLAN_SCHEMA_PATH = DOCS_ROOT / "storyboard-scene-plan.schema.json"
 INVARIANT_SCHEMA_PATH = DOCS_ROOT / "storyboard-invariants.schema.json"
 SCENE_REPAIR_SCHEMA_PATH = DOCS_ROOT / "storyboard-scene-repair.schema.json"
-VALID_OPERATIONS = {"interpret_atmosphere", "expand_concept", "define_invariants", "develop_story", "develop_story_outline", "develop_story_scene", "insert_scene", "extend_story", "repair_scenes", "write_prompt", "refine_prompt", "visual_direction", "check_coherence"}
+VALID_OPERATIONS = {"interpret_atmosphere", "expand_concept", "define_invariants", "develop_story", "develop_story_outline", "develop_story_scene", "insert_scene", "extend_story", "repair_scenes", "write_prompt", "refine_prompt", "visual_direction", "check_coherence", "prompt_assist", "project_deep_qa"}
 
 
 def _read_text(path, label):
@@ -79,6 +79,59 @@ def _prompt_response_schema(allow_duration=False, allow_scene_fields=False, allo
             ),
         }
     return schema
+
+
+def _prompt_assist_response_schema():
+    finding = {
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["problem", "location", "suggestedFix", "prompt"],
+        "properties": {
+            "problem": {"type": "string", "minLength": 1},
+            "location": {"type": "string", "minLength": 1},
+            "suggestedFix": {"type": "string", "minLength": 1},
+            "prompt": {
+                "type": "string",
+                "minLength": 1,
+                "description": "The complete Scene prompt with this one targeted correction applied and unrelated text preserved.",
+            },
+        },
+    }
+    return {
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["findings"],
+        "properties": {
+            "findings": {"type": "array", "items": finding},
+        },
+    }
+
+
+def _project_deep_qa_response_schema():
+    finding = {
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["sceneId", "location", "problem", "whyItMatters", "suggestedFix"],
+        "properties": {
+            "sceneId": {"type": "string", "minLength": 1},
+            "location": {"type": "string", "minLength": 1},
+            "problem": {"type": "string", "minLength": 1},
+            "whyItMatters": {"type": "string", "minLength": 1},
+            "suggestedFix": {"type": "string", "minLength": 1},
+            "proposedPrompt": {
+                "type": "string",
+                "description": "Optional complete prompt for the affected Scene with this one targeted correction applied.",
+            },
+        },
+    }
+    return {
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["findings"],
+        "properties": {
+            "findings": {"type": "array", "items": finding},
+        },
+    }
 
 
 def _single_scene_response_schema():
@@ -269,12 +322,147 @@ def approved_lora_vocabulary(story, scene_id):
             "with the Scene: " + ", ".join(chosen) + "\nNever write loader syntax.") if chosen else ""
 
 
-def build_request(story, scene_id, operation, instruction="", development=None, scene_count=1, continuity_context=False, refresh_guidelines=False):
+def build_request(story, scene_id, operation, instruction="", development=None, scene_count=1, continuity_context=False, refresh_guidelines=False, deep_qa_findings=None):
     if not isinstance(story, dict):
         raise ValueError("Story data must be an object.")
     operation = _clean(operation).lower()
     if operation not in VALID_OPERATIONS:
         raise ValueError("Unsupported Storyboard LLM operation.")
+
+    if operation == "project_deep_qa":
+        scenes = story.get("scenes") if isinstance(story.get("scenes"), dict) else {}
+        order = story.get("sceneOrder") if isinstance(story.get("sceneOrder"), list) else []
+        if not order:
+            raise ValueError("Project Deep QA requires at least one Scene.")
+        rows = []
+        for index, target_id in enumerate(order, start=1):
+            scene = scenes.get(target_id)
+            if not isinstance(scene, dict):
+                continue
+            prompt = _clean(scene.get("prompt"))
+            if not prompt:
+                continue
+            rows.append({
+                "sceneId": str(target_id),
+                "sceneNumber": index,
+                "title": _clean(scene.get("title")),
+                "durationSeconds": scene.get("durationSeconds"),
+                "prompt": prompt,
+            })
+        if not rows:
+            raise ValueError("Project Deep QA requires at least one saved Scene prompt.")
+        blocks = []
+        title = _clean(story.get("title"))
+        concept = _clean(story.get("concept"))
+        style = _clean(story.get("style"))
+        if title:
+            blocks.append("[PROJECT TITLE]\n" + title)
+        if concept:
+            blocks.append("[PROJECT CONCEPT / OVERVIEW]\n" + concept)
+        if style:
+            blocks.append("[PROJECT VISUAL / ATMOSPHERE]\n" + style)
+        invariants = _story_invariants_text(story)
+        if invariants:
+            blocks.append("[PROJECT INVARIANTS]\n" + invariants)
+        guidelines = _story_guidelines_text(story)
+        if guidelines:
+            blocks.append("[PROJECT DIRECTING GUIDELINES]\n" + guidelines)
+        blocks.append("[COMPLETE PROJECT SCENE TEXT]\n" + json.dumps(rows, ensure_ascii=False, separators=(",", ":")))
+        blocks.append(
+            "[CURRENT TASK]\nInspect the complete Project for practical prompt problems. Review each Scene and its "
+            "timed cuts individually, then check continuity and progression across cuts and between Scenes. "
+            "Look for missing explicit visual details, incomplete changes, accidental reversion of established "
+            "states, contradictions, unclear action progression, and camera/framing/focus instructions that "
+            "would likely direct attention away from the intended action. Treat the Project's own stated intent "
+            "as authoritative. Return only actionable findings tied to an exact Scene ID and a useful cut, "
+            "timestamp, or prompt-section location. Each finding must describe one concrete problem and one "
+            "practical correction; avoid theory, scores, generic advice, duplicate findings, and speculative "
+            "nitpicks. Include a proposed complete Scene prompt only when a single targeted correction can be "
+            "made confidently. Do not rewrite or mutate any saved content."
+        )
+        return {
+            "operation": operation,
+            "output": "json",
+            "prompt": "\n\n".join(blocks).strip() + "\n",
+            "system_prompt": (
+                "You are Project Deep QA for a text-to-video production project. Be a practical production "
+                "assistant: find preventable prompt failures and give the author useful, specific corrections. "
+                "Be generous with relevant visual specificity; never assume the generation model will infer "
+                "appearance, action, continuity, or transitions correctly. Keep every finding grounded in the "
+                "supplied Project text and preserve the author's creative intent. Do not inspect or claim to "
+                "inspect generated Takes, images, video, or external references."
+            ),
+            "response_schema": _project_deep_qa_response_schema(),
+            "source_scene_ids": [row["sceneId"] for row in rows],
+        }
+
+    if operation == "prompt_assist":
+        scenes = story.get("scenes") if isinstance(story.get("scenes"), dict) else {}
+        scene = scenes.get(_clean(scene_id))
+        if not isinstance(scene, dict):
+            raise FileNotFoundError("Scene does not exist.")
+        original = _clean(scene.get("prompt"))
+        if not original:
+            raise ValueError("Scene generation prompt is required for Prompt Assist.")
+        blocks = []
+        title = _clean(story.get("title"))
+        concept = _clean(story.get("concept"))
+        style = _clean(story.get("style"))
+        if title:
+            blocks.append("[PROJECT TITLE]\n" + title)
+        if concept:
+            blocks.append("[PROJECT CONCEPT / OVERVIEW]\n" + concept)
+        if style:
+            blocks.append("[PROJECT VISUAL / ATMOSPHERE]\n" + style)
+        invariants = _story_invariants_text(story)
+        if invariants:
+            blocks.append("[PROJECT INVARIANTS]\n" + invariants)
+        scene_details = []
+        for label, value in (
+            ("Scene title", scene.get("title")),
+            ("Duration seconds", scene.get("durationSeconds")),
+            ("Scene notes", scene.get("notes")),
+        ):
+            text = _clean(value)
+            if text:
+                scene_details.append(label + ": " + text)
+        if scene_details:
+            blocks.append("[SCENE DETAILS]\n" + "\n".join(scene_details))
+        blocks.append("[EXISTING SCENE PROMPT]\n" + original)
+        if isinstance(deep_qa_findings, list) and deep_qa_findings:
+            blocks.append(
+                "[CURRENT PROJECT DEEP QA FINDINGS - OPTIONAL CONTEXT]\n"
+                + json.dumps(deep_qa_findings, ensure_ascii=False, separators=(",", ":"))
+            )
+        blocks.append(
+            "[CURRENT TASK]\nFind practical weaknesses in this one Scene's written instructions that could "
+            "cause the rendered result to differ from the author's intent. Treat this as focused text assistance, "
+            "not a repeat of the standalone Visual Direction pass. Be especially useful for specific omissions, "
+            "ambiguous states, incomplete changes between timed cuts, continuity details that may revert, and "
+            "camera/framing/focus instructions that do not emphasize the intended action. Return a concise set "
+            "of actionable findings. Each finding must identify one problem, its cut/timestamp/section location, "
+            "one practical fix, and a complete revised Scene prompt applying only that fix. Make each proposed "
+            "prompt independently based on the original prompt so the author can accept findings individually. "
+            "Preserve unrelated text and creative intent. Return an empty findings array when no meaningful "
+            "improvement is warranted. Do not provide alternative solutions, academic explanation, generic "
+            "prompting advice, or a broad rewrite."
+        )
+        return {
+            "operation": operation,
+            "output": "json",
+            "prompt": "\n\n".join(blocks).strip() + "\n",
+            "system_prompt": (
+                "You are Prompt Assist, a text-only production helper for one Scene. The standalone Visual "
+                "Direction agent is a separate capability and remains the primary visual-completeness pass. "
+                "Help the author only with practical issues that remain in the written prompt. Be generous with "
+                "useful visual specificity: explicitly describe relevant appearance, action, state changes, "
+                "continuity, and framing rather than relying on inference. Every suggestion must be one problem "
+                "and one small, actionable correction. Keep explanations short, provide one best fix, and preserve "
+                "the author's intent and all unrelated prompt material. You receive no generated Takes, images, "
+                "video, or visual references."
+            ),
+            "response_schema": _prompt_assist_response_schema(),
+        }
 
     if operation == "check_coherence":
         scenes = story.get("scenes") if isinstance(story.get("scenes"), dict) else {}

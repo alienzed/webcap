@@ -833,7 +833,8 @@ def _execute_claimed(job_id, gpu_reserved):
                             error="Visual Direction stopped after " + str(completed) + " of " + str(len(scene_ids)) + " Scenes.",
                             result={
                                 "storyId": context["storyId"],
-                                "revisedSceneCount": completed,
+                                "revisedSceneCount": len(changed_scene_ids),
+                                "completedSceneCount": len(succeeded_scene_ids),
                                 "succeededSceneIds": succeeded_scene_ids,
                                 "succeededScenes": succeeded_scenes,
                                 "changedSceneIds": changed_scene_ids,

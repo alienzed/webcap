@@ -1,0 +1,18 @@
+{
+  "id": "denim_look_completion",
+  "project_overview": "A high-fashion editorial runway presents a sequence of complete, distinct looks. This look is a relaxed denim ensemble with a youthful, contemporary styling, presented as a deliberate outfit change.",
+  "visual_direction": "Premium fashion editorial, clean runway staging, confident model movement.",
+  "invariants": [
+    "The same adult model appears throughout.",
+    "Each runway look is a complete outfit.",
+    "Styling is contemporary, cohesive and intentional."
+  ],
+  "scene_description": "The model walks the runway in the new relaxed denim look. The preceding look was a formal tailored suit. The new look should read clearly as relaxed denim styling.",
+  "existing_h3_prompt": "The model walks confidently toward the camera. She now wears relaxed blue jeans instead of the tailored suit trousers. The camera tracks backward smoothly.",
+  "expected_findings": [
+    "Explicitly replace the previous formal outfit with a coherent complete relaxed denim look.",
+    "Choose a suitable top, footwear and accessories rather than retaining the previous suit elements by omission.",
+    "Choices should be plausible for relaxed contemporary denim styling, not arbitrary costume design.",
+    "Do not add new runway events, models, locations or narrative beats."
+  ]
+}

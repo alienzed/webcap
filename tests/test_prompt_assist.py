@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from tool.server.prompt_assist import build_context, build_contract, review_context
+from tool.server.prompt_assist import build_context, build_contract, review_context, source_fingerprint
 
 
 def _story():
@@ -100,3 +100,20 @@ def test_followup_keeps_selected_specialist_and_conversation_history():
     assert contract["messages"][0]["content"].startswith("You are Continuity")
     assert contract["messages"][-3]["content"] == "Why?"
     assert contract["messages"][-1]["content"].startswith("Would you still flag")
+
+
+def test_source_fingerprint_changes_when_reviewed_prompt_changes():
+    story = _story()
+    original = source_fingerprint(build_context(story, "project"))
+    story["scenes"]["scene-1"]["prompt"] += "\\n[Shot 4] A new action."
+    revised = source_fingerprint(build_context(story, "project"))
+    assert revised != original
+    assert source_fingerprint(build_context(_story(), "project")) == original
+
+
+def test_source_fingerprint_is_scope_specific_for_scene_reviews():
+    story = _story()
+    first = source_fingerprint(build_context(story, "scene", "scene-1"))
+    story["scenes"]["scene-2"]["prompt"] += "\\n[Shot 2] An unrelated action."
+    assert source_fingerprint(build_context(story, "scene", "scene-1")) == first
+    assert source_fingerprint(build_context(story, "project")) != source_fingerprint(build_context(_story(), "project"))

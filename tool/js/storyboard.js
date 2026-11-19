@@ -6094,8 +6094,6 @@
   }
 
   var promptAssistSession = null;
-  var projectDeepQaSession = null;
-
   function openAssistModal(id) {
     var modal = el(id);
     if (!modal) throw new Error("Studio Assist modal is missing: " + id);
@@ -6349,7 +6347,6 @@
   }
 
   function showProjectDeepQa(record) {
-    projectDeepQaSession = record || null;
     el("storyboard-project-deep-qa-target").textContent =
       String(storyState.story && storyState.story.title || "Current Project") +
       (record && record.createdAt ? " · analyzed " + new Date(record.createdAt).toLocaleString() : "");

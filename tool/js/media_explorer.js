@@ -2449,6 +2449,7 @@
   window.appendMediaExplorerRouteParams = function (params) {
     if (role) params.set('role', role);
     if (source) params.set('source', source);
+    if (curation) params.set('curation', curation);
     if (artifact) params.set('artifact', artifact);
     if (owner) params.set('owner', owner);
     if (full) params.set('full', '1');

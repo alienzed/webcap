@@ -1,0 +1,18 @@
+{
+  "id": "casual_to_evening",
+  "project_overview": "A fashion film follows one adult woman through three distinct looks during an evening in the city: casual daytime streetwear, a polished cocktail look for an upscale lounge, and a dramatic evening look for a rooftop event. Each cut is a complete outfit change.",
+  "visual_direction": "Contemporary luxury fashion editorial, tasteful styling, realistic fabrics and fit.",
+  "invariants": [
+    "The same adult woman appears throughout.",
+    "Each look is a complete, coherent outfit appropriate to its setting.",
+    "The film retains a refined, contemporary fashion aesthetic."
+  ],
+  "scene_description": "This Scene shows her arriving at the upscale lounge in the second, cocktail look. It follows the daytime streetwear look. The intended change is from casual daytime clothing to polished evening cocktail attire.",
+  "existing_h3_prompt": "She enters the upscale lounge and walks toward the bar. She has changed into a black satin midi skirt. The camera tracks beside her as warm light reflects across the room.",
+  "expected_findings": [
+    "A complete cocktail outfit is required, not just a skirt substitution.",
+    "Choose a coherent top, footwear and relevant accessories appropriate to the upscale lounge and black satin midi skirt.",
+    "Do not carry over casual streetwear elements unless deliberately restyled.",
+    "Keep it a focused arrival-at-lounge scene; do not invent conversations, plot events or new cuts."
+  ]
+}

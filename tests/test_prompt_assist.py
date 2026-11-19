@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from tool.server.prompt_assist import build_context, build_contract, review_context, source_fingerprint
+from tool.server.prompt_assist import (build_context, build_contract, review_context, source_fingerprint, scene_source_fingerprint, build_deep_qa_scene_contract, build_deep_qa_project_contract, validate_deep_qa_scene, validate_deep_qa_project)
 
 
 def _story():
@@ -140,3 +140,83 @@ def test_scene_context_keeps_soundscape_and_music_direction():
     scene = context["scenes"][0]
     assert scene["overallSoundscape"] == "Rain patters against the glass."
     assert scene["nonDiegeticMusic"] == "A restrained piano motif."
+
+
+
+def _deep_qa_scene_result(scene_id="scene-1"):
+    return {
+        "sceneId": scene_id,
+        "summary": "The courier arrives wet, removes the raincoat, and hangs it by the door.",
+        "purpose": "Establish the courier's arrival and transition into the lobby.",
+        "keyVisualMoments": ["Wet coat on arrival", "Raincoat removed and hung on hook"],
+        "cuts": [
+            {
+                "shotNumber": 1,
+                "visualIntent": "Establish the courier entering the lobby.",
+                "focalElement": "Courier and wet delivery bag",
+                "action": "Courier enters through the glass door.",
+                "stateChanges": ["Coat and bag are wet."],
+                "carryForward": ["Courier remains in the same raincoat until it is removed."],
+                "physicalInteractions": [],
+                "concerns": [],
+            },
+            {
+                "shotNumber": 3,
+                "visualIntent": "Show the courier hanging the removed coat.",
+                "focalElement": "Raincoat and hook",
+                "action": "Courier hangs the raincoat on the hook.",
+                "stateChanges": ["Raincoat is no longer being worn."],
+                "carryForward": ["Raincoat remains on the hook in subsequent cuts unless moved."],
+                "physicalInteractions": ["Courier's hand places coat on hook."],
+                "concerns": [],
+            },
+        ],
+    }
+
+
+def test_deep_qa_scene_contract_prepares_cut_level_state_and_visual_intent():
+    context = build_context(_story(), "scene", "scene-1")
+    contract = build_deep_qa_scene_contract(context, "scene-1")
+    assert contract["operation"] == "prompt_assist_deep_qa_scene"
+    assert "regressions" in contract["messages"][0]["content"]
+    assert "independently generated Scenes" in contract["messages"][0]["content"]
+    assert contract["response_schema"]["required"] == [
+        "sceneId", "summary", "purpose", "keyVisualMoments", "cuts"
+    ]
+
+
+def test_deep_qa_project_contract_uses_compact_scene_intelligence_and_order():
+    context = build_context(_story(), "project")
+    results = [_deep_qa_scene_result("scene-1"), _deep_qa_scene_result("scene-2")]
+    contract = build_deep_qa_project_contract(context, results)
+    assert contract["operation"] == "prompt_assist_deep_qa_project"
+    assert "sceneOrder" in contract["messages"][1]["content"]
+    assert "scene-1" in contract["messages"][1]["content"]
+    assert "scene-2" in contract["messages"][1]["content"]
+    assert "independently generated" in contract["messages"][0]["content"]
+
+
+def test_deep_qa_requires_every_scene_result_before_project_index():
+    context = build_context(_story(), "project")
+    with pytest.raises(ValueError, match="every Scene"):
+        build_deep_qa_project_contract(context, [_deep_qa_scene_result("scene-1")])
+
+
+def test_deep_qa_validators_reject_unknown_scene_and_cut_references():
+    with pytest.raises(ValueError, match="unknown cut"):
+        validate_deep_qa_scene(_deep_qa_scene_result(), "scene-1", [0, 1, 2])
+    with pytest.raises(ValueError, match="unknown Scene"):
+        validate_deep_qa_project({
+            "recurringElements": [{"element": "Courier", "scenes": ["not-a-scene"], "basis": "guess"}],
+            "sceneRelationships": [],
+        }, ["scene-1", "scene-2"])
+
+
+def test_scene_deep_qa_fingerprint_isolated_to_scene_and_project_context():
+    story = _story()
+    context = build_context(story, "scene", "scene-1")
+    original = scene_source_fingerprint(context, "scene-1")
+    story["scenes"]["scene-2"]["prompt"] += "\n[Shot 2] Unrelated."
+    assert scene_source_fingerprint(build_context(story, "scene", "scene-1"), "scene-1") == original
+    story["invariants"].append({"kind": "character", "title": "Courier", "text": "Carries a canvas bag."})
+    assert scene_source_fingerprint(build_context(story, "scene", "scene-1"), "scene-1") != original

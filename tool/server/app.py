@@ -2474,11 +2474,81 @@ def director_chat_route():
 
 
 
+
+
+def _prompt_assist_deep_qa_path(story_id):
+    from .storyboard_store import _story_dir
+    return _story_dir(story_id) / "prompt_assist_deep_qa.json"
+
+
+def _prompt_assist_deep_qa_read(story_id):
+    path = _prompt_assist_deep_qa_path(story_id)
+    if not path.exists():
+        return None
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise RuntimeError("Could not read saved Project Deep QA intelligence: " + str(exc)) from exc
+    if not isinstance(value, dict) or value.get("version") != 1:
+        raise RuntimeError("Saved Project Deep QA intelligence has an unsupported format.")
+    return value
+
+
+@app.route("/fs/storyboard/prompt-assist/deep-qa", methods=["GET", "POST"])
+def storyboard_prompt_assist_deep_qa_route():
+    """Read or persist source-versioned Project Deep QA intelligence."""
+    try:
+        from .prompt_assist import build_context, source_fingerprint
+        from .storyboard_store import _write_json_atomic
+        data = request.args if request.method == "GET" else (request.get_json(silent=True) or {})
+        story_id = str(data.get("storyId") or "").strip()
+        if not story_id:
+            raise ValueError("Project ID is required.")
+        story = storyboard_load_story(story_id)
+        context = build_context(story, scope="project")
+        current_fingerprint = source_fingerprint(context)
+        if request.method == "GET":
+            saved = _prompt_assist_deep_qa_read(story_id)
+            if not saved:
+                return jsonify({"ok": True, "available": False, "fresh": False})
+            return jsonify({
+                "ok": True, "available": True,
+                "fresh": saved.get("sourceFingerprint") == current_fingerprint,
+                "deepQa": saved,
+            })
+        intelligence = data.get("intelligence")
+        if not isinstance(intelligence, dict):
+            raise ValueError("Project Deep QA intelligence must be a structured object.")
+        if str(data.get("sourceFingerprint") or "") != current_fingerprint:
+            raise RuntimeError("Project prompts changed while Deep QA was running. Prepare the current Project again.")
+        expected_scene_ids = set(context["sourcePrompts"])
+        for item in intelligence.get("sceneBriefs") or []:
+            if not isinstance(item, dict) or str(item.get("sceneId") or "") not in expected_scene_ids:
+                raise ValueError("Deep QA returned an unknown Scene reference.")
+        for item in intelligence.get("stateLedger") or []:
+            if not isinstance(item, dict) or str(item.get("sceneId") or "") not in expected_scene_ids:
+                raise ValueError("Deep QA returned an unknown Scene state reference.")
+        saved = {
+            "version": 1,
+            "sourceFingerprint": current_fingerprint,
+            "sourceUpdatedAt": context["sourceUpdatedAt"],
+            "preparedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "intelligence": intelligence,
+        }
+        _write_json_atomic(_prompt_assist_deep_qa_path(story_id), saved)
+        return jsonify({"ok": True, "deepQa": saved})
+    except FileNotFoundError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 404
+    except Exception as exc:
+        app.logger.exception("PROJECT DEEP QA FAILED: %s", exc)
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
 @app.route("/fs/storyboard/prompt-assist", methods=["POST"])
 def storyboard_prompt_assist_route():
     """Run one independent Prompt Assist analysis/synthesis pass on saved Studio material."""
     try:
-        from .prompt_assist import build_context, build_contract
+        from .prompt_assist import build_context, build_contract, build_deep_qa_contract, source_fingerprint
         data = request.get_json(silent=True) or {}
         story_id = str(data.get("storyId") or "").strip()
         model_id = str(data.get("model") or "").strip()
@@ -2494,8 +2564,14 @@ def storyboard_prompt_assist_route():
             scope=str(data.get("scope") or "scene"),
             scene_id=str(data.get("sceneId") or ""),
         )
-        if operation == "review":
+        if operation == "deep_qa":
+            contract = build_deep_qa_contract(context)
+            label = "Project Deep QA: prepare creative intelligence"
+        elif operation == "review":
             contract = build_contract("review", context, role=role)
+            cached = _prompt_assist_deep_qa_read(story_id)
+            if cached and cached.get("sourceFingerprint") == source_fingerprint(context):
+                contract["messages"][1]["content"] += "\\n\\n[CURRENT PROJECT DEEP QA INTELLIGENCE]\\n" + json.dumps(cached.get("intelligence") or {}, ensure_ascii=False)
             label = "Prompt Assist: " + role + " review"
         elif operation == "synthesize":
             reviews = data.get("reviews")

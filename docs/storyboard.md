@@ -152,7 +152,7 @@ Pinned is separate from status because an archived/completed Story may still be 
 
 The Story authoring panel is a dedicated, wide middle column between the Story library and Scene workspace, and is explicitly collapsible. The desktop target is a large production workspace: Story uses a comfortable authoring width rather than sidebar proportions, with readable helper text and Concept actions attached directly to the Concept field. Story and Scene are independent full-height panes rather than one long document.
 
-Scene authoring uses a persistent horizontal Scene progression strip to select the Scene being edited. Title and the complete H3 Prompt are the active Scene creative fields, with duration and other generation controls nearby. Legacy Intent and Entry/Exit state remain compatible saved data for older production requests, without active Director authoring controls. **Workshop** opens Studio Director for discussion; saved data reaches chat by explicit Read and reaches Write via the selected operation's current baseline.
+Scene authoring uses a persistent horizontal Scene progression strip to select the Scene being edited. Title and the complete H3 Prompt are the active Scene creative fields, with duration and other generation controls nearby. Old Scene Intent/Summary and Entry/Exit state values remain readable in existing Project JSON but are inert and are not authored into new Scenes, supplied to models, or copied to new Projects. **Workshop** opens Studio Director for discussion; saved data reaches chat by explicit Read and reaches Write via the selected operation's current baseline.
 
 The selected Scene's Takes occupy a substantial bottom evaluation dock. Take cards expand to consume available width up to a sensible maximum and only become horizontally scrollable once there are enough results to require it.
 
@@ -166,9 +166,6 @@ The schema should support future providers without forcing Phase 1 to implement 
 {
   "id": "stable-scene-id",
   "title": "Entering the lobby",
-  "summary": "Alice enters and notices wet footprints.",
-  "entryState": "Alice is outside the closed lobby door in the rain.",
-  "exitState": "Alice is inside beside the closed door, focused on wet footprints.",
   "prompt": "Full model-facing prompt, manually authored or pasted.",
   "durationSeconds": 6,
   "seed": null,
@@ -271,7 +268,7 @@ LLM context stays deliberately bounded and task-specific:
 Early authoring operations should be explicit functions rather than a general agent framework:
 
 - develop Story into candidate Scenes
-- expand a Scene summary into a model-facing prompt
+- expand a Scene's authored prompt into more explicit model-facing instructions
 - revise a Scene from a correction
 - inspect Story continuity
 - optionally return structured JSON
@@ -514,12 +511,12 @@ The current operations are deliberately explicit rather than chat-like:
 
 - `expand_concept`: Story title + current concept + style; returns richer concept prose and does not create Scenes.
 - `develop_story`: Story concept + style + concise H3 rules; returns schema-constrained JSON containing the complete ordered Scene structure and initial H3 prompt for every Scene.
-- `write_prompt`: Story style + current Scene + only a useful previous exit-state handoff + the concise H3 output contract.
-- `refine_prompt`: Story concept, visual atmosphere, relevant continuity, the current Scene, and compact previous-Scene context plus the existing prompt and one explicit correction. Only the current Scene may change. The Director may revise its intent, entry/exit state, prompt, or duration when the instruction requires it, and can explicitly return no change.
+- `write_prompt`: Story style + current Scene prompt + relevant previous-Scene prompt context and the concise H3 output contract.
+- `refine_prompt`: Story concept, visual atmosphere, relevant continuity, the current Scene, and compact previous-Scene prompt context plus the existing prompt and one explicit correction. Only the current Scene prompt and optional duration may change; the Director can explicitly return no change.
 
 The contract module does not call a provider. The llama.cpp runtime consumes its returned prompt, so context assembly and leakage boundaries stay testable independently from model quality/runtime behavior.
 
-Entry and exit state remain in saved Story/Scene data and some **legacy** planning/refinement contracts. They are **retired from active Studio Director authoring**; current Studio Intent/Concept/Invariants carry necessary state and handoffs without reintroducing those fields.
+Scene Intent/Summary and Entry/Exit state are retired from active contracts. Existing JSON values may be retained unchanged for compatibility, but the active Creative inputs are Project Concept/Visual/Invariants and each Scene's full H3 Prompt; the old fields do not influence generation or prompt analysis.
 
 **Director passes** use the same Scene refinement primitive sequentially rather than sending the whole plan through a second repair mechanism. WebCap walks Scene order, sends the same pass instruction to each Scene, waits for that Scene to commit, then builds the next request from the updated Story. The LLM decides whether the instruction applies to the current Scene; WebCap does not interpret the instruction. Custom repair and continuity/prompt refinement are presets over this same mechanism. These passes are client-side orchestration: if LLM Stop/reset occurs, the pass ends and does not submit another Scene request. The same rule applies to staged **One at a time** development and other multi-call Storyboard Director workflows.
 

@@ -849,6 +849,7 @@ def _execute_claimed(job_id, gpu_reserved):
                         "phase": "Revising Scenes", "sceneId": scene_id,
                     }
                 try:
+                    scene = None
                     story = load_story(str(context.get("storyId") or ""))
                     scene = (story.get("scenes") or {}).get(scene_id)
                     if not isinstance(scene, dict):

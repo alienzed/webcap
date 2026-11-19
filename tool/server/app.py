@@ -2491,6 +2491,9 @@ def storyboard_prompt_assist_route():
         if not model_id:
             raise ValueError("Choose a Director model.")
         story = storyboard_load_story(story_id)
+        expected_updated_at = str(data.get("expectedUpdatedAt") or "").strip()
+        if expected_updated_at and expected_updated_at != str(story.get("updatedAt") or ""):
+            raise RuntimeError("Project changed since Prompt Assist began. Reopen the review to use current material.")
         context = build_context(
             story,
             scope=str(data.get("scope") or "scene"),

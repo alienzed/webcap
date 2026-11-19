@@ -2498,6 +2498,39 @@ def _prompt_assist_deep_qa_read(story_id):
     return saved
 
 
+
+
+def _prompt_assist_review_inputs(story_id, story, context, scene_id, model_id):
+    """Return only fresh prepared intelligence and a fingerprint bound to what the review receives."""
+    from .prompt_assist import (
+        build_context, source_fingerprint, scene_source_fingerprint,
+        project_deep_qa_fingerprint, prompt_assist_review_fingerprint,
+    )
+    saved = _prompt_assist_deep_qa_read(story_id)
+    scene_entry = None
+    if context.get("scope") == "scene" and scene_id:
+        expected_scene = scene_source_fingerprint(context, scene_id, model_id)
+        candidate = saved["scenes"].get(scene_id)
+        if (isinstance(candidate, dict) and candidate.get("version") == 1
+                and candidate.get("sourceFingerprint") == expected_scene):
+            scene_entry = candidate
+    project_entry = None
+    try:
+        project_context = context if context.get("scope") == "project" else build_context(story, scope="project")
+    except ValueError:
+        project_context = None
+    if project_context:
+        expected_project = project_deep_qa_fingerprint(project_context, model_id)
+        candidate = saved.get("project")
+        if (isinstance(candidate, dict) and candidate.get("version") == 1
+                and candidate.get("sourceFingerprint") == expected_project):
+            project_entry = candidate
+    fingerprint = prompt_assist_review_fingerprint(
+        context, model_id, scene_entry, project_entry
+    )
+    return fingerprint, scene_entry, project_entry
+
+
 @app.route("/fs/storyboard/prompt-assist/deep-qa", methods=["GET", "POST"])
 def storyboard_prompt_assist_deep_qa_route():
     """Read current Project Deep QA receipts or persist a source-verified result."""
@@ -2630,6 +2663,9 @@ def storyboard_prompt_assist_route():
         scope = str(data.get("scope") or "scene")
         scene_id = str(data.get("sceneId") or "")
         context = build_context(story, scope=scope, scene_id=scene_id)
+        review_fingerprint, fresh_scene_qa, fresh_project_qa = _prompt_assist_review_inputs(
+            story_id, story, context, scene_id, model_id
+        )
         if operation == "deep_qa_scene":
             if scope != "scene":
                 raise ValueError("Prepare Project Deep QA one Scene at a time.")
@@ -2651,20 +2687,10 @@ def storyboard_prompt_assist_route():
             label = "Project Deep QA: cross-Scene index"
         elif operation == "review":
             contract = build_contract("review", context, role=role)
-            if scope == "scene":
-                cached = _prompt_assist_deep_qa_read(story_id)
-                entry = cached["scenes"].get(scene_id)
-                expected = scene_source_fingerprint(context, scene_id, model_id)
-                if isinstance(entry, dict) and entry.get("version") == 1 and entry.get("sourceFingerprint") == expected:
-                    contract["messages"][1]["content"] += "\n\n[CURRENT PROJECT DEEP QA SCENE INTELLIGENCE]\n" + json.dumps(entry.get("result") or {}, ensure_ascii=False)
-                project_entry = cached.get("project")
-                try:
-                    project_context = build_context(story, scope="project")
-                except ValueError:
-                    project_context = None
-                if (isinstance(project_entry, dict) and project_entry.get("version") == 1 and project_context
-                        and project_entry.get("sourceFingerprint") == project_deep_qa_fingerprint(project_context, model_id)):
-                    contract["messages"][1]["content"] += "\n\n[CURRENT PROJECT DEEP QA INDEX]\n" + json.dumps(project_entry.get("result") or {}, ensure_ascii=False)
+            if fresh_scene_qa:
+                contract["messages"][1]["content"] += "\n\n[CURRENT PROJECT DEEP QA SCENE INTELLIGENCE]\n" + json.dumps(fresh_scene_qa.get("result") or {}, ensure_ascii=False)
+            if fresh_project_qa:
+                contract["messages"][1]["content"] += "\n\n[CURRENT PROJECT DEEP QA INDEX]\n" + json.dumps(fresh_project_qa.get("result") or {}, ensure_ascii=False)
             label = "Prompt Assist: " + role + " review"
         elif operation == "synthesize":
             reviews = data.get("reviews")
@@ -2711,7 +2737,7 @@ def storyboard_prompt_assist_route():
                 scene_source_fingerprint(context, scene_id, model_id)
                 if operation == "deep_qa_scene" else (
                     project_deep_qa_fingerprint(context, model_id)
-                    if operation == "deep_qa_project" else source_fingerprint(context)
+                    if operation == "deep_qa_project" else review_fingerprint
                 )
             ),
         }), 202

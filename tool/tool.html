@@ -2201,8 +2201,13 @@
                         <select id="director-studio-revision-preset">
                             <option value="">Custom revision</option>
                             <option value="continuity">Continuity pass</option>
+                            <option value="visual_direction">Visual Direction</option>
                             <option value="coherence">Check Project coherence</option>
                         </select>
+                        <div id="director-studio-revision-selection" class="director-studio-revision-selection">
+                            <strong>Scenes to revise</strong>
+                            <div id="director-studio-revision-scenes" class="storyboard-director-tools-scene-selection" role="group" aria-label="Scenes to revise"></div>
+                        </div>
                         <label id="director-studio-revision-fresh-label" title="Queues new Takes after revision; existing Takes remain."><input id="director-studio-revision-fresh" type="checkbox"> Generate fresh Takes</label>
                         <label for="director-studio-revision-input" class="director-studio-revision-instruction-label">Revision instruction</label>
                         <textarea id="director-studio-revision-input" data-no-revision-history="true" rows="6" placeholder="Describe what should be revised across these Scenes."></textarea>

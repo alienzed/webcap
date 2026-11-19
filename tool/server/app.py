@@ -271,6 +271,15 @@ def fs_root():
 
 def _system_gpu_status():
     """Read host NVIDIA telemetry independently of the training environment."""
+    if sys.platform == "darwin":
+        return {
+            "available": False,
+            "unsupported": True,
+            "label": "Apple GPU" if os.uname().machine == "arm64" else "macOS GPU",
+            "error": "Live GPU utilization is currently available only through NVIDIA telemetry.",
+            "gpus": [],
+            "checkedAt": time.time(),
+        }
     fields = ("index", "name", "utilization", "memoryUsed", "memoryTotal", "temperature", "powerDraw")
     try:
         result = subprocess.run(
@@ -328,6 +337,36 @@ def _system_ram_status():
         if "MemTotal" not in meminfo or "MemAvailable" not in meminfo:
             raise OSError("Linux /proc/meminfo is missing MemTotal or MemAvailable.")
         total, available = meminfo["MemTotal"], meminfo["MemAvailable"]
+    elif sys.platform == "darwin":
+        total_result = subprocess.run(
+            ["/usr/sbin/sysctl", "-n", "hw.memsize"],
+            capture_output=True, text=True, timeout=2, check=False,
+        )
+        if total_result.returncode != 0:
+            raise OSError((total_result.stderr or total_result.stdout or "sysctl hw.memsize failed").strip())
+        total = int(total_result.stdout.strip())
+
+        vm_result = subprocess.run(
+            ["/usr/bin/vm_stat"],
+            capture_output=True, text=True, timeout=2, check=False,
+        )
+        if vm_result.returncode != 0:
+            raise OSError((vm_result.stderr or vm_result.stdout or "vm_stat failed").strip())
+        page_size_match = re.search(r"page size of (\d+) bytes", vm_result.stdout)
+        if not page_size_match:
+            raise OSError("macOS vm_stat did not report its page size.")
+        page_counts = {}
+        for line in vm_result.stdout.splitlines()[1:]:
+            key, separator, value = line.partition(":")
+            if not separator:
+                continue
+            cleaned = value.strip().rstrip(".")
+            if cleaned.isdigit():
+                page_counts[key.strip()] = int(cleaned)
+        required = ("Pages free", "Pages inactive", "Pages speculative")
+        if any(key not in page_counts for key in required):
+            raise OSError("macOS vm_stat is missing free, inactive, or speculative pages.")
+        available = sum(page_counts[key] for key in required) * int(page_size_match.group(1))
     else:
         page_size = int(os.sysconf("SC_PAGE_SIZE"))
         total = page_size * int(os.sysconf("SC_PHYS_PAGES"))
@@ -348,13 +387,18 @@ def fs_system_status():
     gpu = _system_gpu_status()
     try:
         ram = _system_ram_status()
-    except (OSError, ValueError, AttributeError) as exc:
+    except (OSError, ValueError, AttributeError, subprocess.SubprocessError) as exc:
         ram = {"available": False, "error": str(exc)}
     try:
-        usage = shutil.disk_usage(app_config.FS_ROOT)
+        configured_disk_path = Path(app_config.FS_ROOT).expanduser()
+        measured_disk_path = configured_disk_path
+        while not measured_disk_path.exists() and measured_disk_path.parent != measured_disk_path:
+            measured_disk_path = measured_disk_path.parent
+        usage = shutil.disk_usage(measured_disk_path)
         disk = {
             "available": True,
-            "path": str(app_config.FS_ROOT),
+            "path": str(configured_disk_path),
+            "measuredPath": str(measured_disk_path),
             "total": int(usage.total),
             "used": int(usage.used),
             "free": int(usage.free),

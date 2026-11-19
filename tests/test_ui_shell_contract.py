@@ -635,7 +635,8 @@ def test_phase_40_shell_owns_global_presentation_not_training_internals():
     assert "function refreshShellSystemStatus()" in shell
     assert "fetch('/fs/system_status')" in shell
     assert 'route("/fs/system_status"' in app
-    assert "shutil.disk_usage(app_config.FS_ROOT)" in app
+    assert "shutil.disk_usage(measured_disk_path)" in app
+    assert "gpu && gpu.unsupported" in shell
     assert "if (trainingWorkspaceState.runnerStatusPending) return;" in runner
     assert ".shell-status-bar {" in css
     assert ".shell-gpu-status {" in css

@@ -503,6 +503,16 @@ def validate_config_payload(payload):
     return out
 
 def load_config_from_disk():
+    if not CONFIG_PATH.exists():
+        with open(CONFIG_EXAMPLE_PATH, 'r', encoding='utf-8') as f:
+            defaults = apply_requirement_defaults(validate_config_payload(json.load(f)))
+        try:
+            with open(CONFIG_PATH, 'x', encoding='utf-8') as f:
+                json.dump(defaults, f, indent=2)
+                f.write("\n")
+        except FileExistsError:
+            # Another startup created the file after the existence check.
+            pass
     with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
         raw = json.load(f)
     return apply_requirement_defaults(validate_config_payload(raw))

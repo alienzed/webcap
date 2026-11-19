@@ -87,25 +87,13 @@ The same install can later be attempted from **Settings → Advanced → Install
 
 ## 3. Configure WebCap
 
-Copy the example configuration:
-
-Linux / WSL:
-
-```bash
-cp tool/config.example.json tool/config.json
-```
-
-Windows:
-
-```text
-copy tool\config.example.json tool\config.json
-```
+WebCap creates `tool/config.json` from `tool/config.example.json` the first time it starts.
 
 At minimum, configure `filesystem.root` to the directory that will contain your working sets and WebCap output.
 
 `tool/config.json` is intentionally ignored by Git.
 
-You can edit configuration directly or use **App Settings** after WebCap starts.
+You can then edit configuration directly or use **App Settings**.
 
 ## 4. Start WebCap
 
@@ -643,7 +631,7 @@ Version differences alone should not produce **Incompatible** when the actual fu
 
 These are deterministic and easy to validate afterward:
 
-- copy `config.example.json` to `config.json`;
+- initialize a missing `config.json` from `config.example.json`;
 - create WebCap directories;
 - create a WebCap virtual environment;
 - install/repair `requirements.txt`;

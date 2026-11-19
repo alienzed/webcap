@@ -197,13 +197,7 @@ cd webcap
 python -m pip install -r requirements.txt
 ```
 
-Copy the example configuration and edit it for the local machine:
-
-```bash
-cp tool/config.example.json tool/config.json
-```
-
-On Windows, the equivalent is simply to copy `tool\config.example.json` to `tool\config.json`.
+On first start, WebCap creates `tool/config.json` from the example configuration. Edit it for the local machine directly or use **App Settings** after WebCap starts.
 
 `tool/config.json` is intentionally ignored by Git.
 
@@ -215,7 +209,7 @@ The main configuration file is:
 tool/config.json
 ```
 
-Start from [`tool/config.example.json`](tool/config.example.json). The important sections are:
+The generated file starts from [`tool/config.example.json`](tool/config.example.json). The important sections are:
 
 - `filesystem.root` — source Set / training root; required. Generated output has a separate configured root (see Settings → Workspace → Storage).
 - `filesystem.models` — optional shared model root.

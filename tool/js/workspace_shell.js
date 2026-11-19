@@ -503,6 +503,9 @@ function renderShellSystemStatus() {
           : '');
       parts.push('<span class="shell-system-gpu" title="Live GPU utilization and VRAM use.">' + gpuSummary + '</span>');
     }
+  } else if (gpu && gpu.unsupported) {
+    parts.push('<span class="shell-system-gpu" title="' + escapeHtml(gpu.error || 'Live GPU telemetry is unsupported on this system.') + '">' +
+      '<span class="shell-system-label">GPU</span> <strong>' + escapeHtml(gpu.label || 'Telemetry unavailable') + '</strong></span>');
   } else if (gpu && !gpu.available) {
     parts.push('<span class="is-warning" title="' + escapeHtml(gpu.error || 'GPU telemetry unavailable.') + '">GPU telemetry unavailable</span>');
   }
@@ -532,7 +535,7 @@ function renderShellSystemStatus() {
     var free = Number(disk.free);
     var total = Number(disk.total);
     var low = isFinite(free) && isFinite(total) && total > 0 && (free / total) < 0.10;
-    var diskTitle = 'Free space on ' + String(disk.path || 'WebCap filesystem') +
+    var diskTitle = 'Free space on the volume containing ' + String(disk.path || 'WebCap filesystem') +
       (totalText ? ' · ' + totalText + ' total' : '');
     parts.push('<span class="shell-system-disk' + (low ? ' is-warning' : '') + '" title="' + escapeHtml(diskTitle) + '"><span class="shell-system-label">Disk</span> ' +
       '<strong class="shell-system-value">' + escapeHtml(freeText || '—') + ' free</strong></span>');

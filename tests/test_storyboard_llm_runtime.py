@@ -23,6 +23,46 @@ def test_director_capacity_defaults_defer_to_runtime():
     assert storyboard_llm_runtime.LOCAL_MODEL_FIT_TARGET_MIB == 1024
 
 
+def test_director_uses_native_model_path_on_macos(monkeypatch):
+    monkeypatch.setattr(storyboard_llm_runtime.sys, "platform", "darwin")
+    monkeypatch.setattr(storyboard_llm_runtime.app_config, "config", {
+        "filesystem": {"models": "local-models"},
+        "training": {"wsl_distribution": "Ubuntu"},
+        "storyboard": {"director": {}},
+    })
+
+    config = storyboard_llm_runtime._director_base_config()
+
+    assert config["models_dir"] == storyboard_llm_runtime.Path("local-models/text_encoders")
+
+
+def test_director_preserves_wsl_model_path_conversion_off_macos(monkeypatch):
+    from tool.server import training_runtime
+
+    captured = {}
+    monkeypatch.setattr(storyboard_llm_runtime.sys, "platform", "win32")
+    monkeypatch.setattr(storyboard_llm_runtime.app_config, "config", {
+        "filesystem": {"models": "C:\\models"},
+        "training": {"wsl_distribution": "Ubuntu_W"},
+        "storyboard": {"director": {}},
+    })
+
+    def convert(path, distribution=""):
+        captured["path"] = path
+        captured["distribution"] = distribution
+        return "/mnt/c/models/text_encoders"
+
+    monkeypatch.setattr(training_runtime, "to_wsl_path", convert)
+
+    config = storyboard_llm_runtime._director_base_config()
+
+    assert captured == {
+        "path": "C:\\models\\text_encoders",
+        "distribution": "Ubuntu_W",
+    }
+    assert config["models_dir"] == storyboard_llm_runtime.Path("/mnt/c/models/text_encoders")
+
+
 def test_server_signature_includes_media_root_and_local_router_policy(monkeypatch, tmp_path):
     monkeypatch.setattr(storyboard_llm_runtime.app_config, "FS_ROOT", tmp_path / "training")
     settings = {

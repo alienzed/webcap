@@ -11,6 +11,7 @@ import re
 import shutil
 import socket
 import subprocess
+import sys
 import threading
 import time
 import urllib.error
@@ -189,7 +190,7 @@ def _director_base_config():
     models_dir = None
     models_root = str(app_config.config.get("filesystem", {}).get("models") or "").strip()
     if models_root:
-        if models_root.startswith("/"):
+        if sys.platform == "darwin" or models_root.startswith("/"):
             models_dir = Path(models_root) / "text_encoders"
         else:
             from .training_runtime import to_wsl_path

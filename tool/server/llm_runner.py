@@ -818,6 +818,8 @@ def _execute_claimed(job_id, gpu_reserved):
         from .storyboard_llm_contract import build_request
         scene_ids = list(context.get("sceneIds") or [])
         instruction = str(context.get("sourceInstruction") or "")
+        pass_type = str(context.get("passType") or "standard")
+        operation_label = "Visual Direction" if pass_type == "visual_direction" else "Revise Scenes"
         completed = 0
         succeeded_scene_ids = []
         succeeded_scenes = []
@@ -830,7 +832,7 @@ def _execute_claimed(job_id, gpu_reserved):
                 with _enqueue_lock:
                     if execution_get_job(job_id).get("status") == "stopping":
                         return execution_finish_job_transient(job_id, status="stopped",
-                            error="Visual Direction stopped after " + str(completed) + " of " + str(len(scene_ids)) + " Scenes.",
+                            error=operation_label + " stopped after " + str(completed) + " of " + str(len(scene_ids)) + " Scenes.",
                             result={
                                 "storyId": context["storyId"],
                                 "revisedSceneCount": len(changed_scene_ids),
@@ -851,7 +853,6 @@ def _execute_claimed(job_id, gpu_reserved):
                     scene = (story.get("scenes") or {}).get(scene_id)
                     if not isinstance(scene, dict):
                         raise FileNotFoundError("Scene does not exist.")
-                    pass_type = str(context.get("passType") or "standard")
                     scene_operation = "visual_direction" if pass_type == "visual_direction" else "refine_prompt"
                     scene_contract = build_request(
                         story, scene_id, scene_operation, instruction=instruction,
@@ -861,7 +862,7 @@ def _execute_claimed(job_id, gpu_reserved):
                     with _enqueue_lock:
                         if execution_get_job(job_id).get("status") == "stopping":
                             return execution_finish_job_transient(job_id, status="stopped",
-                                error="Visual Direction stopped after " + str(completed) + " of " + str(len(scene_ids)) + " Scenes.",
+                                error=operation_label + " stopped after " + str(completed) + " of " + str(len(scene_ids)) + " Scenes.",
                                 result={
                                     "storyId": context["storyId"],
                                     "revisedSceneCount": len(changed_scene_ids),
@@ -886,11 +887,10 @@ def _execute_claimed(job_id, gpu_reserved):
                         changed_scene_ids.append(scene_id)
                     completed += 1
                 except Exception as exc:
-                    story = load_story(str(context.get("storyId") or ""))
-                    scene = (story.get("scenes") or {}).get(scene_id, {})
+                    _logger.exception("%s failed for Scene %s", operation_label, scene_id)
                     failures.append({
                         "sceneId": scene_id,
-                        "title": str(scene.get("title") or scene_id),
+                        "title": str(scene.get("title") or scene_id) if isinstance(scene, dict) else scene_id,
                         "error": str(exc),
                     })
                     completed += 1
@@ -904,12 +904,16 @@ def _execute_claimed(job_id, gpu_reserved):
             with _revision_progress_lock:
                 _revision_progress.pop(job_id, None)
         generated = 0
-        if context.get("generateFreshTakes") is True and changed_scene_ids:
+        # Preserve standard/continuity behavior: a requested fresh Take applies
+        # to each successfully processed Scene. Visual Direction generates only
+        # for prompts it actually changed.
+        take_scene_ids = changed_scene_ids if pass_type == "visual_direction" else succeeded_scene_ids
+        if context.get("generateFreshTakes") is True and take_scene_ids:
             from .storyboard_generation import start_generation
             # Only successfully revised Scenes receive Takes. The handoff is server-owned.
             with _revision_progress_lock:
                 _revision_progress[job_id] = {"completed": completed, "total": len(scene_ids), "phase": "Queuing fresh Takes"}
-            for scene_id in changed_scene_ids:
+            for scene_id in take_scene_ids:
                 try:
                     start_generation(str(context["storyId"]), scene_id)
                     generated += 1
@@ -924,6 +928,23 @@ def _execute_claimed(job_id, gpu_reserved):
                     })
             with _revision_progress_lock:
                 _revision_progress.pop(job_id, None)
+        if not succeeded_scene_ids:
+            # A wholly failed request is not a successful revision, even though
+            # failures were collected independently for diagnosis.
+            return execution_finish_job_transient(job_id, status="failed",
+                error=operation_label + " failed for all " + str(len(scene_ids)) + " selected Scenes: " +
+                    "; ".join(item["title"] + " (" + item["error"] + ")" for item in failures),
+                result={
+                    "storyId": context["storyId"],
+                    "requestedSceneCount": len(scene_ids),
+                    "completedSceneCount": 0,
+                    "revisedSceneCount": 0,
+                    "succeededSceneIds": [],
+                    "succeededScenes": [],
+                    "changedSceneIds": [],
+                    "failedScenes": failures,
+                    "freshTakesQueued": 0,
+                })
         return execution_finish_job_transient(job_id, status="completed", result={
             "storyId": context["storyId"],
             "revisedSceneCount": len(changed_scene_ids),

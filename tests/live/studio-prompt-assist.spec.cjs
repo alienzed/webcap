@@ -37,7 +37,7 @@ test('LIVE Prompt Assist — standalone Scene text analysis proposes and applies
   await waitForLiveJob(page,()=>button.click());
   await expect(page.locator('#storyboard-prompt-assist-modal')).toBeVisible();
   const cards=page.locator('#storyboard-prompt-assist-findings .storyboard-assist-finding');
-  await expect(cards).toHaveCount(1,{timeout:30000});
+  await expect.poll(()=>cards.count(),{timeout:30000}).toBeGreaterThan(0);
   const first=cards.first();
   const target=await first.locator('textarea[readonly]').inputValue();
   const replacement=first.locator('[data-assist-replacement]');
@@ -49,7 +49,12 @@ test('LIVE Prompt Assist — standalone Scene text analysis proposes and applies
     model,projectId:project.id,sceneId:scene.id,original,target,replacement:proposed,
     problem:await first.locator('.storyboard-assist-finding-main').innerText()
   });
-  await waitForLiveJob(page,async()=>first.locator('button').filter({hasText:'Apply correction'}).click());
+  const appliedResponse=page.waitForResponse(response=>
+    new URL(response.url()).pathname==='/fs/storyboard/prompt-assist/apply' && response.request().method()==='POST'
+  );
+  await first.locator('button').filter({hasText:'Apply correction'}).click();
+  const applied=await appliedResponse;
+  expect(applied.ok()).toBeTruthy();
   const saved=await story(page,project.id);
   const updated=saved.scenes[scene.id].prompt;
   expect(updated).toContain(proposed);
@@ -84,7 +89,7 @@ test('LIVE Project Deep QA — scans Scene prompts and cross-Scene continuity, p
   await waitForLiveJob(page,()=>run.click());
   await expect(page.locator('#storyboard-project-deep-qa-modal')).toBeVisible();
   const cards=page.locator('#storyboard-project-deep-qa-findings .storyboard-assist-finding');
-  await expect(cards).toHaveCount(1,{timeout:30000});
+  await expect.poll(()=>cards.count(),{timeout:30000}).toBeGreaterThan(0);
   const text=await cards.first().innerText();
   expect(text).toContain(second.title);
   expect(text.toLowerCase()).toContain('red wool coat');

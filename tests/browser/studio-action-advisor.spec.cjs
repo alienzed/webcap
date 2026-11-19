@@ -113,6 +113,8 @@ test('Advisor setting is global and the model selector is absent',async({page,re
   await openDirector(page);
   await expect(page.locator('#studio-action-advisor-model, #studio-action-advisor-enabled')).toHaveCount(0);
   await page.locator('#director-chat-close').click();
+  await page.locator('#shell-more-btn').click();
+  await expect(page.locator('#shell-settings-btn')).toBeVisible();
   await page.locator('#shell-settings-btn').click();
   await page.locator('#app-settings-tab-director').click();
   await expect(page.locator('#app-settings-studio-action-advisor')).toBeChecked();

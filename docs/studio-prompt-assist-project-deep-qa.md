@@ -1,6 +1,6 @@
 # Studio Prompt Assist and Project Deep QA
 
-**Status:** Product/behavior contract for the Prompt Assist and Project Deep QA work. This document records the agreed direction; it is not a claim that every described behavior is already implemented. Verify concrete data fields, persistence, cache invalidation, and UI wiring against the current code before implementation. Follow `AGENTS.md`.
+**Status:** Product/behavior contract for Prompt Assist and Project Deep QA. Implementation is in progress; this document defines intended behavior, while the current code and tests define what is actually implemented. Keep the two aligned as the work evolves. Follow `AGENTS.md`.
 
 ## Vision
 

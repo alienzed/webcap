@@ -1650,6 +1650,17 @@ def apply_studio_scene_fields_batch(story_id, revisions):
         clean = {key: value.strip() for key, value in changes.items()}
         if all(str(current.get(key) or "") == value for key, value in clean.items()):
             continue
+        if "prompt" in clean:
+            clean["previousPrompt"] = str(current.get("prompt") or "")
+            clean["previousRevision"] = {
+                "entryState": str(current.get("entryState") or ""),
+                "exitState": str(current.get("exitState") or ""),
+                "prompt": str(current.get("prompt") or ""),
+                "durationSeconds": current.get("durationSeconds"),
+            }
+            clean["refineComplete"] = True
+            clean["promptDirectorModel"] = ""
+            clean["promptDirectorJobId"] = ""
         updated["scenes"][scene_id] = _normalize_scene(scene_id, clean, existing=current)
         changed[scene_id] = copy.deepcopy(clean)
     if not changed:

@@ -202,7 +202,9 @@
     var sectionRows = [
       ['Subject', parsed.sections.subject],
       ['Environment / continuity', parsed.sections['environment / continuity anchors']],
-      ['Visual treatment', parsed.sections['style / visual treatment']]
+      ['Visual treatment', parsed.sections['style / visual treatment']],
+      ['Soundscape', parsed.sections.overall_soundscape],
+      ['Music', parsed.sections.non_diegetic_music]
     ].filter(function (row) { return !!row[1]; });
     var sceneFindings = [];
     roles.forEach(function (role) {

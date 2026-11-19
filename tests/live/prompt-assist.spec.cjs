@@ -180,6 +180,7 @@ test('LIVE Prompt Assist keeps one Scene in focus and preserves inline decisions
 });
 
 test('LIVE Project Deep QA prepares reusable Scene and cross-Scene intelligence for Prompt Assist',async({page},testInfo)=>{
+  test.setTimeout(900_000);
   const project=await seedProject(page,'Live Project Deep QA '+Date.now(),{
     concept:'A courier arrives during a storm, removes a wet coat, and later hands a delivery bag to a colleague.',
     style:'Grounded cinematic realism with natural light.'

@@ -1303,10 +1303,6 @@ def test_scene_refine_completion_is_persisted_only_for_successful_refine(storybo
         model_id="director.gguf",
         job_id="job-refine-fields",
         operation="refine_prompt",
-        scene_fields={
-            "entryState": "Revised entry.",
-            "exitState": "Revised exit.",
-        },
     )
     assert all(key not in refined_scene_fields for key in ("summary", "entryState", "exitState"))
     assert refined_scene_fields["prompt"] == "Scene-aware refined prompt."

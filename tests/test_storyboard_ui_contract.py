@@ -1626,6 +1626,10 @@ def test_visual_direction_scene_picker_defaults_to_all_and_posts_only_selected_i
     assert "selectedSceneIds" in run_revision
     assert "selectedSceneIds, preset === 'visual_direction' ? 'visual_direction' : 'standard'" in run_revision
     assert "sceneIds: sceneIds" in storyboard
+    assert "result.failedScenes" in storyboard
+    assert "result.succeededScenes" in storyboard
+    assert "Completed: " in storyboard
+    assert "Failed: " in storyboard
 
     route = app.split('if operation == "revise_scenes_sequence":', 1)[1].split('if operation == "check_coherence_sequence":', 1)[0]
     assert 'requested_scene_ids = data.get("sceneIds")' in route

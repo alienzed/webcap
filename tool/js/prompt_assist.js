@@ -109,6 +109,7 @@
     state.deepQaStatus = status || null;
     el('prompt-assist-deep-qa-status').textContent = deepQaStatusText(status);
     el('prompt-assist-deep-qa-run').textContent = status && status.projectFresh ? 'Refresh Project Intelligence' : 'Prepare Project Intelligence';
+    if (state.sourcePrompt) renderSceneSource();
     var host = el('prompt-assist-project-context-content');
     var existing = host.querySelector('.prompt-assist-deep-qa-summary');
     if (existing) existing.remove();
@@ -131,7 +132,7 @@
     }
   }
   function loadDeepQaStatus() {
-    return api('/fs/storyboard/prompt-assist/deep-qa?storyId=' + encodeURIComponent(state.storyId))
+    return api('/fs/storyboard/prompt-assist/deep-qa?storyId=' + encodeURIComponent(state.storyId) + '&sceneId=' + encodeURIComponent(state.sceneId))
       .then(function (status) { renderDeepQaStatus(status); return status; })
       .catch(function (error) {
         renderDeepQaStatus({error: 'Project intelligence unavailable: ' + (error.message || String(error))});
@@ -369,10 +370,22 @@
       var recs = (state.synthesis && state.synthesis.recommendations || [])
         .map(function (item, index) { return {item: item, index: index}; })
         .filter(function (row) { return Number(row.item.shotNumber) === shot.number; });
+      var deepCut = state.deepQaStatus && state.deepQaStatus.sceneIntelligence &&
+        (state.deepQaStatus.sceneIntelligence.cuts || []).find(function (item) { return Number(item.shotNumber) === shot.number; });
+      var deepHtml = deepCut
+        ? '<details class="prompt-assist-cut-deep-qa"><summary>Prepared Deep QA · ' +
+          esc(deepCut.focalElement || deepCut.visualIntent || 'Cut intelligence') + '</summary>' +
+          (deepCut.visualIntent ? '<p><strong>Visual intent:</strong> ' + esc(deepCut.visualIntent) + '</p>' : '') +
+          (deepCut.action ? '<p><strong>Action:</strong> ' + esc(deepCut.action) + '</p>' : '') +
+          (deepCut.stateChanges && deepCut.stateChanges.length ? '<p><strong>State changes:</strong> ' + esc(deepCut.stateChanges.join(' · ')) + '</p>' : '') +
+          (deepCut.carryForward && deepCut.carryForward.length ? '<p><strong>Carry forward:</strong> ' + esc(deepCut.carryForward.join(' · ')) + '</p>' : '') +
+          (deepCut.physicalInteractions && deepCut.physicalInteractions.length ? '<p><strong>Physical interactions:</strong> ' + esc(deepCut.physicalInteractions.join(' · ')) + '</p>' : '') +
+          (deepCut.concerns && deepCut.concerns.length ? '<p><strong>Potential concerns:</strong> ' + esc(deepCut.concerns.join(' · ')) + '</p>' : '') +
+          '</details>' : '';
       return '<article class="prompt-assist-cut" id="prompt-assist-cut-' + shot.number + '">' +
         '<header><span class="prompt-assist-cut-number">CUT ' + shot.number + '</span><span>' +
         (findings.length + recs.length ? findings.length + ' findings · ' + recs.length + ' suggestions' : 'Source prompt') +
-        '</span></header><div class="prompt-assist-cut-source">' + esc(shot.text) + '</div>' +
+        '</span></header><div class="prompt-assist-cut-source">' + esc(shot.text) + '</div>' + deepHtml +
         (findings.length ? '<div class="prompt-assist-cut-findings"><h4>Specialist observations</h4>' +
           findings.map(renderFindingCard).join('') + '</div>' : '') +
         (recs.length ? '<div class="prompt-assist-cut-suggestions"><h4>Editor suggestions</h4>' +

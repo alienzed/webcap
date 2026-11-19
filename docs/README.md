@@ -67,6 +67,7 @@ These describe implemented features, but they are narrower than `README.md` / `d
 These are useful product notes, not authoritative implementation references:
 
 - `docs/live_activity_panel.md` - design history for Activity presentation; verify shipped behavior in the app and execution queue reference
+- `docs/studio-prompt-assist-project-deep-qa.md` - agreed behavior contract for standalone, Scene-specific Prompt Assist and whole-Project Deep QA; implementation direction, not a claim of shipped behavior
 
 - `docs/model-modules.md` - North Star for model-owned training configuration and policy boundaries
 - `docs/queue-semantics.md` - product queue-semantics North Star, **not** a claim that every fine-grained behavior is implemented

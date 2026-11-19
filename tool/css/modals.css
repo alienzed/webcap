@@ -696,6 +696,7 @@
   font-size: 12px;
 }
 .model-assessment-progress-card { padding: 22px; margin: 18px 0; gap: 16px; }
+.model-assessment-progress-card > #diagnostics-assessment-stop { grid-column: 2; justify-self: start; }
 .model-assessment-progress-card .activity-monitor-copy { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .model-assessment-progress-card .activity-monitor-copy strong { font-size: 18px; }
 .model-assessment-progress-card .activity-monitor-copy span { font-size: 14px; white-space: normal; overflow-wrap: anywhere; }

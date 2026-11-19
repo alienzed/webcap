@@ -494,9 +494,12 @@ def build_deep_qa_scene_contract(context, scene_id):
 def build_deep_qa_project_contract(context, scene_results):
     allowed = {scene["sceneId"] for scene in context["scenes"]}
     compact = []
+    seen_scene_ids = set()
     for item in scene_results if isinstance(scene_results, list) else []:
-        if not isinstance(item, dict) or str(item.get("sceneId") or "") not in allowed:
+        scene_id = str(item.get("sceneId") or "") if isinstance(item, dict) else ""
+        if scene_id not in allowed or scene_id in seen_scene_ids:
             continue
+        seen_scene_ids.add(scene_id)
         compact.append({
             "sceneId": item["sceneId"],
             "summary": str(item.get("summary") or "")[:900],
@@ -510,8 +513,8 @@ def build_deep_qa_project_contract(context, scene_results):
                 "carryForward": [str(x)[:180] for x in (cut.get("carryForward") or [])[:5]],
             } for cut in (item.get("cuts") or [])[:12] if isinstance(cut, dict)],
         })
-    if len(compact) != len(context["scenes"]):
-        raise ValueError("Project Deep QA needs a completed Scene preparation for every Scene.")
+    if seen_scene_ids != allowed:
+        raise ValueError("Project Deep QA needs one current preparation for every Scene.")
     system = (
         "You are Project Deep QA preparing a compact cross-Scene intelligence index for WebCap Prompt Assist. "
         "Use only the supplied ordered Scene briefs and Project context. Identify recurring people, places, "

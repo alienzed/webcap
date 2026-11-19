@@ -11,7 +11,7 @@ It supports two review scopes:
 
 ## Context preparation
 
-The MVP uses deterministic, source-addressable preparation rather than a separate Deep QA dependency.
+Prompt Assist uses deterministic, source-addressable extraction for its immediate review. Project Deep QA is an optional preparation layer that enriches those reviews with reusable, persisted intelligence.
 
 - Read the saved Project overview, visual atmosphere and typed invariants.
 - Extract established H3 sections and numbered **[Shot N]** entries when present.
@@ -20,7 +20,17 @@ The MVP uses deterministic, source-addressable preparation rather than a separat
 - Keep exact source prompts server-side for revision preparation and compare/apply.
 - Fingerprint the review source and bind each model pass to the Project revision observed when Prompt Assist opened.
 
-Project Deep QA and persistent reusable creative intelligence are intentionally deferred until after the core Prompt Assist workflow is proven useful.
+### Project Deep QA
+
+- Explicitly prepare each Scene in Project order, one Director job at a time, using the selected Director model and the existing chat queue.
+- Each Scene receipt records cut-level visual intent, focal element, action, explicit state changes, carry-forward expectations, physical interactions and potential concerns.
+- After all current Scenes are prepared, a compact cross-Scene pass builds a Project index of recurring elements, supported Scene relationships and Project continuity principles.
+- Scene receipts and the Project index are stored in the Project's Storyboard data directory in `.prompt_assist_deep_qa.json`; they do not modify prompts, Takes, generation settings or other Project fields.
+- Each Scene receipt has its own source fingerprint. Editing one Scene invalidates only that Scene's receipt; the Project index becomes stale when any Scene or Project-level source changes.
+- Re-running preparation skips fresh Scene receipts and rebuilds only stale work. If a job fails, completed receipts remain saved and a later run resumes from the remaining Scenes.
+- Prompt Assist displays fresh cut-level Deep QA evidence beside its source cut and the cross-Scene summary in Project context. Specialist calls receive only fresh relevant evidence; stale receipts are never supplied as current.
+- Deep QA does not launch image/video Sight or infer visual facts from generated media. It prepares intelligence from saved Project prompts and Project context only.
+- Project Deep QA is separate from the existing Set/media Deep QA workflow in the QA workspace; it reuses the Director queue pattern, not the media QA data or review files.
 
 ## Analytical responsibilities
 

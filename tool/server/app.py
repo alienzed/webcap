@@ -2326,6 +2326,8 @@ def director_chat_route():
                     "For revise_project, select only the requested fields from title, concept, "
                     "style, invariants. For create_scene, set fields and sceneIds to []. "
                     "For revise_scenes, set sceneIds to [actionContext.sceneId] and fields to []. "
+                    "When the latest user request specifies an action, prioritize its explicit "
+                    "intent over alternatives proposed in earlier conversation. "
                     "For creative actions, write a concrete instruction for the existing Writer "
                     "that faithfully carries the author's requested subjects, action, setting, "
                     "props, and timing rather than replacing them with another idea. "

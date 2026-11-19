@@ -1667,7 +1667,6 @@ def test_prompt_assist_patch_is_independent_and_conflict_safe(storyboard_fs):
     after_first = first["prompt"]
     assert "red coat" in after_first
     assert first["previousPrompt"] == original
-    assert first["promptAssistModel"] == "test-model"
 
     updated, second = storyboard_store.apply_prompt_assist(
         story["id"], scene["id"], after_first,

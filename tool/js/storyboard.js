@@ -6352,7 +6352,7 @@
     openAssistModal("storyboard-project-deep-qa-modal");
   }
 
-  function runProjectDeepQa() {
+  function runProjectDeepQa(force) {
     if (!storyState.story) return;
     var storyId = storyState.story.id;
     var target = {kind:"repair", storyId:storyId};
@@ -6375,7 +6375,7 @@
         .then(function (response) {
           return response.json().then(function (body) {
             if (!response.ok || !body || !body.ok) throw new Error(body && body.error || "Could not load Deep QA status.");
-            if (body.current) return body.record;
+            if (body.current && force !== true) return body.record;
             return directorRequest({
               storyId:storyId,
               operation:"project_deep_qa",
@@ -6782,7 +6782,8 @@
     el('storyboard-director-tools-btn').onclick = function () {
       window.openStudioDirectorRevision();
     };
-    el('storyboard-project-deep-qa-btn').onclick = runProjectDeepQa;
+    el('storyboard-project-deep-qa-btn').onclick = function () { runProjectDeepQa(false); };
+    el('storyboard-project-deep-qa-refresh').onclick = function () { runProjectDeepQa(true); };
     el('storyboard-prompt-assist-close').onclick = function () { closeAssistModal('storyboard-prompt-assist-modal'); };
     el('storyboard-project-deep-qa-close').onclick = function () { closeAssistModal('storyboard-project-deep-qa-modal'); };
     el('storyboard-find-replace-btn').onclick = openProjectReplace;

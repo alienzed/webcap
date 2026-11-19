@@ -476,6 +476,24 @@ def project_deep_qa_fingerprint(context, model_id=""):
     encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 
+def prompt_assist_review_fingerprint(context, model_id="", scene_deep_qa=None, project_deep_qa=None):
+    """Bind a review to its exact source, model, and prepared intelligence actually supplied."""
+    payload = {
+        "sourceFingerprint": source_fingerprint(context),
+        "model": str(model_id or ""),
+        "sceneDeepQa": {
+            "sourceFingerprint": scene_deep_qa.get("sourceFingerprint"),
+            "preparedAt": scene_deep_qa.get("preparedAt"),
+        } if isinstance(scene_deep_qa, dict) else None,
+        "projectDeepQa": {
+            "sourceFingerprint": project_deep_qa.get("sourceFingerprint"),
+            "preparedAt": project_deep_qa.get("preparedAt"),
+        } if isinstance(project_deep_qa, dict) else None,
+    }
+    encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+
+
 
 def build_deep_qa_scene_contract(context, scene_id):
     scene_id = str(scene_id or "")

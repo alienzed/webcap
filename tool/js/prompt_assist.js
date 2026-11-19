@@ -45,7 +45,15 @@
     });
     el('prompt-assist-scene-select').disabled = state.busy;
     if (message) setStatus(message);
-    if (!state.busy) syncActions();
+    if (!state.busy) {
+      if (state.snapshot && state.sourcePrompt && state.synthesis) {
+        var sceneColumn = el('prompt-assist-scene-column');
+        var scrollTop = sceneColumn ? sceneColumn.scrollTop : 0;
+        renderSceneSource();
+        if (sceneColumn) sceneColumn.scrollTop = scrollTop;
+      }
+      syncActions();
+    }
   }
   function parseStructured(result, label) {
     var raw = String(result && (result.text || result.rawText) || '').trim();

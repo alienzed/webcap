@@ -41,10 +41,12 @@ const promptTwo = [
 
 async function chooseStoryboardModel(page,model) {
   const select=page.locator('#storyboard-director-model');
+  if(!(await select.isVisible())) await page.locator('#storyboard-director-tools-btn').click();
   await expect(select).toBeVisible();
   await expect.poll(async()=>select.locator('option').evaluateAll(nodes=>nodes.map(n=>n.value).filter(Boolean)))
     .toContain(model);
   await select.selectOption(model);
+  await page.locator('#storyboard-director-tools-close').click();
 }
 
 test('LIVE Prompt Assist runs independent specialists, discusses findings, and applies only an approved revision',async({page},testInfo)=>{
@@ -56,8 +58,8 @@ test('LIVE Prompt Assist runs independent specialists, discusses findings, and a
   const second=await seedScene(page,project.id,{title:'After the Hit',prompt:promptTwo,durationSeconds:6});
 
   const model=await openLiveDirector(page);
-  await chooseStoryboardModel(page,model);
   await openProject(page,project.id);
+  await chooseStoryboardModel(page,model);
   await page.locator('.storyboard-scene-progress-card[data-scene-id="'+first.id+'"] [data-scene-progress]').click();
   await page.locator('#storyboard-prompt-assist-btn').click();
   const dialog=page.locator('#prompt-assist-dialog');

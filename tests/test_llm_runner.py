@@ -2231,3 +2231,92 @@ def test_visual_direction_continues_after_scene_failure_and_reports_exact_outcom
     assert saved[scene_ids[1]]["prompt"] == "The model presents second look."
     assert saved[scene_ids[2]]["prompt"] == "The model presents third look."
     assert take_requests == [(story["id"], scene_ids[0])]
+
+
+def test_storyboard_project_deep_qa_result_persists_with_frozen_source_signature(llm_root, monkeypatch):
+    story = storyboard_store.create_story({"title": "QA"})
+    _, scene = storyboard_store.add_scene(story["id"], {
+        "title": "Arrival", "prompt": "A woman enters the room."
+    })
+    saved = {}
+
+    def save(story_id, findings, model_id="", job_id="", expected_signature=""):
+        saved.update({
+            "storyId": story_id,
+            "findings": findings,
+            "model": model_id,
+            "jobId": job_id,
+            "signature": expected_signature,
+        })
+        return {"findings": findings, "sourceSignature": expected_signature, "createdAt": "now"}
+
+    monkeypatch.setattr(storyboard_store, "save_project_deep_qa", save)
+    result = llm_runner._client_result(
+        "storyboard",
+        {"storyId": story["id"], "operation": "project_deep_qa", "sourceSignature": "frozen"},
+        {
+            "data": {"findings": [{
+                "sceneId": scene["id"], "location": "Cut 1",
+                "problem": "The action is unclear.", "suggestedFix": "Specify the movement.",
+            }]},
+            "model": "test-model", "finishReason": "stop",
+        },
+        job_id="qa-job",
+        frozen_contract={"operation": "project_deep_qa"},
+    )
+
+    assert saved["storyId"] == story["id"]
+    assert saved["signature"] == "frozen"
+    assert saved["model"] == "test-model"
+    assert result["findings"][0]["sceneId"] == scene["id"]
+
+
+def test_storyboard_prompt_assist_returns_independent_text_patches_without_mutating_scene(llm_root):
+    story = storyboard_store.create_story({"title": "Assist"})
+    _, scene = storyboard_store.add_scene(story["id"], {
+        "title": "Arrival",
+        "prompt": "A woman enters. She wears a blue coat.",
+    })
+    result = llm_runner._client_result(
+        "storyboard",
+        {"storyId": story["id"], "sceneId": scene["id"], "operation": "prompt_assist",
+         "sourcePrompt": "A woman enters. She wears a blue coat."},
+        {
+            "data": {"findings": [{
+                "problem": "The coat change is not explicit.",
+                "location": "Cut 2",
+                "suggestedFix": "State the new coat color.",
+                "targetText": "She wears a blue coat.",
+                "replacementText": "She wears a red coat.",
+            }]},
+            "model": "test-model", "finishReason": "stop",
+        },
+        job_id="assist-job",
+        frozen_contract={"operation": "prompt_assist"},
+    )
+
+    assert result["findings"][0]["targetText"] == "She wears a blue coat."
+    assert result["findings"][0]["replacementText"] == "She wears a red coat."
+    assert storyboard_store.load_story(story["id"])["scenes"][scene["id"]]["prompt"] == (
+        "A woman enters. She wears a blue coat."
+    )
+
+
+def test_storyboard_prompt_assist_rejects_stale_scene_prompt(llm_root):
+    story = storyboard_store.create_story({"title": "Assist"})
+    _, scene = storyboard_store.add_scene(story["id"], {
+        "title": "Arrival", "prompt": "The original prompt."
+    })
+    storyboard_store.update_scene(story["id"], scene["id"], {
+        **scene, "prompt": "The updated prompt.",
+    })
+
+    with pytest.raises(RuntimeError, match="changed while Prompt Assist was running"):
+        llm_runner._client_result(
+            "storyboard",
+            {"storyId": story["id"], "sceneId": scene["id"], "operation": "prompt_assist",
+             "sourcePrompt": "The original prompt."},
+            {"data": {"findings": []}, "model": "test-model"},
+            job_id="assist-job",
+            frozen_contract={"operation": "prompt_assist"},
+        )

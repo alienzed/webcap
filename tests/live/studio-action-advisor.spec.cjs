@@ -159,6 +159,7 @@ test('LIVE advisor — scopes a suggested Overview revision and saves only after
     expect(item.fields,'Advisor must not broaden the explicitly requested Style-only revision')
       .toEqual(['style']);
     expect(item.instruction?.trim().length).toBeGreaterThan(15);
+    expect(item.instruction).toMatch(/amber|gold|warm/i);
 
     await chooseSuggestion(page,item,'Prepare Write');
     await expect(page.locator('#studio-dw-write-panel')).toBeVisible();

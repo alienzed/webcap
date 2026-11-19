@@ -259,6 +259,7 @@ test('LIVE Project Deep QA prepares reusable Scene and cross-Scene intelligence 
   await dialog.locator('#prompt-assist-deep-qa-run').click();
   await expect(dialog.locator('#prompt-assist-deep-qa-status'))
     .toHaveText('Project intelligence ready',{timeout:900000});
+  await expect(dialog.locator('#prompt-assist-deep-qa-run')).toBeDisabled();
 
   const statusResponse=await page.request.get('/fs/storyboard/prompt-assist/deep-qa?storyId='+encodeURIComponent(project.id)+'&model='+encodeURIComponent(model));
   expect(statusResponse.ok()).toBeTruthy();
@@ -316,6 +317,7 @@ test('LIVE Project Deep QA prepares reusable Scene and cross-Scene intelligence 
   await page.locator('#storyboard-prompt-assist-btn').click();
   await expect(dialog).toBeVisible();
   await expect(dialog.locator('#prompt-assist-deep-qa-status')).toContainText('1 of 2 Scenes prepared');
+  await expect(dialog.locator('#prompt-assist-deep-qa-run')).toBeEnabled();
   deepQaRequests.length=0;
   await dialog.locator('#prompt-assist-deep-qa-run').click();
   await expect(dialog.locator('#prompt-assist-deep-qa-status'))

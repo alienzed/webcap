@@ -112,6 +112,8 @@ def build_context(story, scope="scene", scene_id=""):
             "sceneOverview": sections.get("scene overview", ""),
             "continuityAnchors": sections.get("environment / continuity anchors", ""),
             "visualTreatment": sections.get("style / visual treatment", ""),
+            "overallSoundscape": sections.get("overall_soundscape", ""),
+            "nonDiegeticMusic": sections.get("non_diegetic_music", ""),
             "shots": shots,
         })
         source_prompts[str(current_id)] = prompt

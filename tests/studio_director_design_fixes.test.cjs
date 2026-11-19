@@ -283,7 +283,11 @@ test('Studio Revision mode dispatches the existing Storyboard revision operation
   const el=id=>{
     if (!nodes.has(id)) nodes.set(id,{
       value:'',checked:false,focus(){},classList:{toggle(){}},textContent:'',
-      dispatchEvent(){},readOnly:false
+      dispatchEvent(){},readOnly:false,
+      querySelectorAll(selector){
+        return id==='director-studio-revision-scenes' && selector==='[data-revise-scene]:checked'
+          ? [{value:'scene-a'},{value:'scene-b'}] : [];
+      }
     });
     return nodes.get(id);
   };

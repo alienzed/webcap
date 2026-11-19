@@ -153,7 +153,7 @@ def _deep_qa_scene_result(scene_id="scene-1"):
                 "visualIntent": "Establish the courier entering the lobby.",
                 "focalElement": "Courier and wet delivery bag",
                 "action": "Courier enters through the glass door.",
-                "sourceEvidence": ["[Shot 1] The courier enters through the glass door."],
+                "sourceEvidence": ["[Shot 1] The courier enters, coat and bag soaked."],
                 "stateChanges": ["Coat and bag are wet."],
                 "inferences": [],
                 "carryForward": ["Courier remains in the same raincoat until it is removed."],

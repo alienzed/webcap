@@ -4088,6 +4088,11 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
   box-sizing:border-box;width:100%;min-width:0;min-height:44px;padding:8px 12px;
   border:1px solid var(--border);border-radius:6px;background:var(--panel);color:var(--text);font:inherit;font-size:16px;
 }
+.director-studio-revision-selection {display:grid;gap:8px;flex-basis:100%;}
+.director-studio-revision-selection > strong {font-size:16px;font-weight:600;}
+.studio-revision-mode #director-studio-revision-scenes {max-height:220px;}
+.studio-revision-mode #director-studio-revision-scenes label {font-size:16px;min-height:32px;overflow-wrap:anywhere;}
+.studio-revision-mode #director-studio-revision-scenes input {width:18px;height:18px;flex:0 0 auto;}
 .studio-revision-mode #director-studio-revision-fresh-label {display:flex;align-items:center;gap:10px;margin:4px 0 12px;font-size:16px;font-weight:400;}
 .studio-revision-mode #director-studio-revision-fresh {flex:0 0 auto;width:18px;height:18px;margin:0;}
 .director-chat-drawer.studio-director.studio-revision-mode #director-studio-revision-input {

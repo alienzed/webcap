@@ -1976,6 +1976,7 @@
     renderCollections();
   }
   function loadSavedViews() {
+    savedViewsLoaded = true;
     return fetch('/fs/media_explorer/views').then(function (res) {
       return res.json().then(function (payload) {
         if(!res.ok || !payload.ok)throw Error(payload.error || 'Could not load saved views');

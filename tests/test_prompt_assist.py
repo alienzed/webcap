@@ -203,7 +203,7 @@ def test_deep_qa_requires_every_scene_result_before_project_index():
 
 
 def test_deep_qa_validators_reject_unknown_scene_and_cut_references():
-    with pytest.raises(ValueError, match="unknown cut"):
+    with pytest.raises(ValueError, match="unknown or duplicate cut"):
         validate_deep_qa_scene(_deep_qa_scene_result(), "scene-1", [0, 1, 2])
     with pytest.raises(ValueError, match="unknown Scene"):
         validate_deep_qa_project({

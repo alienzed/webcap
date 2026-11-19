@@ -43,6 +43,9 @@ A finding is not permission to change saved Project content. Proposed fixes rema
 
 ### Analysis lifecycle
 
+Deep QA can display its persisted `proposedPrompt` directly as an editable candidate and save it using the existing guarded Scene prompt apply route, without another model request. This is an entire Scene prompt candidate, not a localized patch; authors should inspect the complete candidate before applying. Changing a Scene invalidates the current whole-Project analysis signature.
+
+
 Use the mature Deep QA lifecycle as the reference model: persisted analysis, freshness tied to the inputs that materially affect the result, reuse of current findings, and explicit reruns/reanalysis when inputs are stale or the author requests a fresh run. Avoid rerunning unchanged analysis unnecessarily.
 
 Before implementation, trace the existing Deep QA implementation and its actual signature, persistence, resume/retry, progress, and invalidation behavior. Reuse the established pattern where it fits; do not assume the Prep implementation's data model, UI, or routes can be copied directly into Studio. Project Deep QA must use Project/Scene-owned state and must not create a dependency on Prep Sets, captions, media metadata, or QA state.

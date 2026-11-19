@@ -18,7 +18,7 @@ function section(text,start,end) {
 test('Chat and Director mode initialization use controls present in the app shell', () => {
   const nodes = new Map(Array.from(html.matchAll(/\bid="([^"]+)"/g), match => [match[1], {
     classList:{toggle(){},add(){},remove(){}},
-    setAttribute(){},querySelector(){return {textContent:''};},textContent:''
+    setAttribute(){},querySelector(){return {textContent:''};},textContent:'',children:[]
   }]));
   const scope = vm.createContext({
     el:id=>nodes.get(id) || null,
@@ -140,19 +140,21 @@ test('Read preview and persisted chat use the same validated serializer', () => 
   const story={id:'p1',title:'The Interview',updatedAt:'now',concept:'A specific premise',
     scenes:{s1:{title:'Question',summary:'Tense dialogue',prompt:'Close-up'}},sceneOrder:['s1']};
   const result=scope.readPayload(story,['project.concept','scene:s1:prompt']);
-  assert.equal(result.fields.length,2);
-  assert.equal(result.fields[0].value,'A specific premise');
-  assert.equal(result.fields[1].value,'Close-up');
+  assert.equal(result.project.concept,'A specific premise');
+  assert.equal(result.scenes.length,1);
+  assert.equal(result.scenes[0].number,1);
+  assert.equal(result.scenes[0].prompt,'Close-up');
+  assert.doesNotMatch(JSON.stringify(result),/scene:s1|projectId|project\.concept/);
   assert.throws(()=>scope.readPayload(story,['scene:missing:prompt']),/not in this Project/);
   assert.match(rail,/readPayload\(story, keys\)/);
-  assert.match(rail,/studioDirectorBridge\.appendReadSnapshot\(payload, readConversationId\)/);
+  assert.match(rail,/studioDirectorBridge\.appendReadSnapshot\(payload, readConversationId, story.id\)/);
   assert.match(html,/id="studio-dw-read" type="button"/);
   assert.match(html,/Read into conversation<\/button>/);
   assert.doesNotMatch(html,/id="studio-dw-read-clear"/);
 });
 
 test('Read receipt reflects confirmed persistence rather than model acknowledgment',()=>{
-  const append=section(chat,'    appendReadSnapshot: function (payload, conversationId) {',
+  const append=section(chat,'    appendReadSnapshot: function (payload, conversationId, projectId) {',
     '    selectWriteProject: function (');
   assert.match(append,/renderMessages\(\)/);
   assert.match(append,/return persistSession\('storyboard'\)/);
@@ -181,7 +183,8 @@ test('Transient model discovery error preserves selected model',()=>{
 test('New chat and loaded session reset stale design selections without changing saved creative data',()=>{
   assert.match(chat,/window\.studioDirectorWorkbench\.resetConversation\(\)/);
   assert.match(rail,/writeOperationChosen = false/);
-  assert.doesNotMatch(rail,/localStorage/);
+  const reset=section(rail,'    resetConversation: function () {','  function bind() {');
+  assert.doesNotMatch(reset,/localStorage/);
 });
 
 

@@ -1582,13 +1582,23 @@
     }).then(function (result) {
       window.studioDirectorBridge.assertReadConversation(readConversationId);
       if (result.storyId !== storyId) throw new Error('Project changed while reading fields.');
+      var payload = {project: {title: state.studioStoryAccess.label}, savedAt: result.storyUpdatedAt};
+      if (field === 'brief') Object.assign(payload.project, result.data);
+      else if (field === 'index') payload.scenes = result.data.map(function (item) {
+        return {number: item.position, title: item.title};
+      });
+      else {
+        var selected = state.studioAccessIndex.find(function (item) { return item.id === result.sceneId; });
+        var savedScene = {number: selected.position, title: selected.title};
+        Object.keys(result.data).forEach(function (key) {
+          if (key !== 'id') savedScene[key] = result.data[key];
+        });
+        payload.scenes = [savedScene];
+      }
       var output = el('director-studio-access-data');
-      output.textContent = JSON.stringify(result.data, null, 2);
+      output.textContent = JSON.stringify(payload, null, 2);
       output.classList.remove('hidden');
-      return window.studioDirectorBridge.appendReadSnapshot({
-        projectId: result.storyId, sceneId: result.sceneId || null,
-        field: result.field, savedAt: result.storyUpdatedAt, content: result.data
-      }, readConversationId);
+      return window.studioDirectorBridge.appendReadSnapshot(payload, readConversationId, result.storyId);
     }).catch(function (error) {
       el('director-studio-access-status').textContent = 'Read failed: ' + String(error.message || error);
       if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Studio Story read', error);
@@ -4205,9 +4215,9 @@
       if (!conversationId || this.readConversationId() !== conversationId)
         throw new Error('Conversation changed during Read. Return to the originating conversation and Read again.');
     },
-    appendReadSnapshot: function (payload, conversationId) {
+    appendReadSnapshot: function (payload, conversationId, projectId) {
       this.assertReadConversation(conversationId);
-      if (!payload || !payload.projectId) throw new Error('Read requires a saved Project snapshot.');
+      if (!payload || !projectId) throw new Error('Read requires a saved Project snapshot.');
       var content = '[WEBCAP EXPLICIT READ — SAVED SNAPSHOT]\n' +
         JSON.stringify(payload, null, 2) + '\n[END WEBCAP READ]';
       var messages = state.modeMessages.storyboard;

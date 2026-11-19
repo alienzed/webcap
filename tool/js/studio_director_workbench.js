@@ -129,31 +129,43 @@
     updateReadSelection();
   }
   function readPayload(story, keys) {
-    return {
-      projectId: story.id, projectTitle: storyName(story), savedAt: story.updatedAt,
-      fields: keys.map(function (key) {
-        var parts = key.split(':'), value;
-        if (key.indexOf('project.') === 0) {
-          var field = key.slice(8);
-          if (projectFields.indexOf(field) === -1) throw new Error('Unknown Project field: ' + field);
-          value = story[field];
-        } else if (parts[0] === 'invariant' && parts.length === 3) {
-          var kind = decodeURIComponent(parts[1]), title = decodeURIComponent(parts[2]);
-          value = (story.invariants || []).find(function (item) {
-            return item.kind === kind && item.title === title;
-          });
-          if (!value) throw new Error('Selected Invariant is no longer in this Project: ' + key);
-        } else {
-          if (parts.length !== 3 || parts[0] !== 'scene' ||
-              ['title','prompt','durationSeconds'].indexOf(parts[2]) === -1 ||
-              !story.scenes || !story.scenes[parts[1]] ||
-              (story.sceneOrder || []).indexOf(parts[1]) === -1)
-            throw new Error('Selected Scene field is not in this Project: ' + key);
-          value = story.scenes[parts[1]][parts[2]];
-        }
-        return {id:key, value:value === undefined ? null : value};
-      })
-    };
+    var payload = {project: {title: storyName(story)}, savedAt: story.updatedAt};
+    var scenes = new Map();
+    keys.forEach(function (key) {
+      var parts = key.split(':'), value;
+      if (key.indexOf('project.') === 0) {
+        var field = key.slice(8);
+        if (projectFields.indexOf(field) === -1) throw new Error('Unknown Project field: ' + field);
+        value = story[field];
+        payload.project[field] = value === undefined ? null :
+          (field === 'invariants' && Array.isArray(value) ? value.slice() : value);
+      } else if (parts[0] === 'invariant' && parts.length === 3) {
+        var kind = decodeURIComponent(parts[1]), title = decodeURIComponent(parts[2]);
+        value = (story.invariants || []).find(function (item) {
+          return item.kind === kind && item.title === title;
+        });
+        if (!value) throw new Error('Selected Invariant is no longer in this Project: ' + key);
+        if (!payload.project.invariants) payload.project.invariants = [];
+        if (!payload.project.invariants.some(function (item) {
+          return item.kind === kind && item.title === title;
+        })) payload.project.invariants.push(value);
+      } else {
+        if (parts.length !== 3 || parts[0] !== 'scene' ||
+            ['title','prompt','durationSeconds'].indexOf(parts[2]) === -1 ||
+            !story.scenes || !story.scenes[parts[1]] ||
+            (story.sceneOrder || []).indexOf(parts[1]) === -1)
+          throw new Error('Selected Scene field is not in this Project: ' + key);
+        value = story.scenes[parts[1]][parts[2]];
+        if (!scenes.has(parts[1])) scenes.set(parts[1], {
+          number: story.sceneOrder.indexOf(parts[1]) + 1
+        });
+        scenes.get(parts[1])[parts[2]] = value === undefined ? null : value;
+      }
+    });
+    if (scenes.size) payload.scenes = story.sceneOrder.filter(function (id) {
+      return scenes.has(id);
+    }).map(function (id) { return scenes.get(id); });
+    return payload;
   }
   function updateReadSelection() {
     var keys = selectedPaths();
@@ -186,7 +198,7 @@
       window.studioDirectorBridge.assertReadConversation(readConversationId);
       var payload = readPayload(story, keys);
       el('studio-dw-read-preview-data').textContent = JSON.stringify(payload, null, 2);
-      return window.studioDirectorBridge.appendReadSnapshot(payload, readConversationId).then(function () {
+      return window.studioDirectorBridge.appendReadSnapshot(payload, readConversationId, story.id).then(function () {
         status('Read snapshot saved in conversation. No model request sent.', false, true);
         el('studio-dw-read-panel').classList.add('hidden');
         el('studio-dw-read').setAttribute('aria-expanded', 'false');

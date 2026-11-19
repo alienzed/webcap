@@ -54,9 +54,9 @@ test('a single character Invariant can be supplied without the rest of its Overv
       {kind:'character',title:'Mara',text:'Mara has a silver hairpin.'},
       {kind:'character',title:'Ari',text:'Ari wears a green jacket.'}
     ]};
-  const fields=scope.readPayload(story,['invariant:character:Mara']).fields;
+  const fields=scope.readPayload(story,['invariant:character:Mara']).project.invariants;
   assert.equal(fields.length,1);
-  assert.equal(fields[0].value.text,'Mara has a silver hairpin.');
+  assert.equal(fields[0].text,'Mara has a silver hairpin.');
   assert.doesNotMatch(JSON.stringify(fields),/Private unrelated|Ari wears/);
   assert.throws(()=>scope.readPayload(story,['invariant:character:Missing']),
     /no longer in this Project/);
@@ -65,7 +65,7 @@ test('a single character Invariant can be supplied without the rest of its Overv
 test('Read approvals and standing source controls have been removed',()=>{
   assert.doesNotMatch(chat,/removeApprovedRead|studioApprovedRead|approvedReadSources/);
   assert.doesNotMatch(workbench,/removeApprovedRead|approveRead\(/);
-  assert.match(workbench,/appendReadSnapshot\(payload, readConversationId\)/);
+  assert.match(workbench,/appendReadSnapshot\(payload, readConversationId, story.id\)/);
 });
 
 test('ordinary chat never converts returned Project fields into pending writes',()=>{

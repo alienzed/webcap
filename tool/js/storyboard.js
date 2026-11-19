@@ -6403,7 +6403,10 @@
         });
     }).then(function (record) {
       if (storyState.story && String(storyState.story.id) === String(storyId)) showProjectDeepQa(record);
-    }).catch(reportError).finally(function () {
+    }).catch(function (error) {
+      status.textContent = "Deep QA failed: " + String(error && error.message || error);
+      reportError(error);
+    }).finally(function () {
       setDirectorPending(target, false);
       button.disabled = false;
       finishDirectorActivity();

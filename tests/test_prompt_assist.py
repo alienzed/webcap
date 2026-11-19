@@ -1,6 +1,6 @@
 import pytest
 
-from tool.server.prompt_assist import (build_context, build_contract, review_context, source_fingerprint, scene_source_fingerprint, project_deep_qa_fingerprint, build_deep_qa_scene_contract, build_deep_qa_project_contract, validate_deep_qa_scene, validate_deep_qa_project)
+from tool.server.prompt_assist import (build_context, build_contract, review_context, source_fingerprint, scene_source_fingerprint, project_deep_qa_fingerprint, build_deep_qa_scene_contract, build_deep_qa_project_contract, validate_deep_qa_scene, validate_deep_qa_project, prompt_assist_review_fingerprint)
 
 
 def _story():
@@ -257,3 +257,14 @@ def test_deep_qa_fingerprints_change_when_selected_model_changes():
     scene_context = build_context(_story(), "scene", "scene-1")
     assert scene_source_fingerprint(scene_context, "scene-1", "model-a") != scene_source_fingerprint(scene_context, "scene-1", "model-b")
     assert project_deep_qa_fingerprint(context, "model-a") != project_deep_qa_fingerprint(context, "model-b")
+
+
+
+def test_prompt_assist_review_fingerprint_tracks_model_and_prepared_deep_qa():
+    context = build_context(_story(), "scene", "scene-1")
+    baseline = prompt_assist_review_fingerprint(context, "model-a")
+    scene_qa = {"sourceFingerprint": "scene-qa-fp", "preparedAt": "2026-11-19T12:00:00Z"}
+    project_qa = {"sourceFingerprint": "project-qa-fp", "preparedAt": "2026-11-19T12:05:00Z"}
+    assert prompt_assist_review_fingerprint(context, "model-b") != baseline
+    assert prompt_assist_review_fingerprint(context, "model-a", scene_qa) != baseline
+    assert prompt_assist_review_fingerprint(context, "model-a", None, project_qa) != baseline

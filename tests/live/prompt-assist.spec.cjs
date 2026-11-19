@@ -122,3 +122,90 @@ test('LIVE Prompt Assist runs independent specialists, discusses findings, and a
   expect(afterApply.scenes[second.id].prompt).toBe(promptTwo);
   await dialog.locator('#prompt-assist-done').click();
 });
+
+test('LIVE Prompt Assist Project scope reviews the ordered Scenes together without changing saved prompts',async({page},testInfo)=>{
+  const project=await seedProject(page,'Live Prompt Assist Project Scope '+Date.now(),{
+    concept:'A two-part visual sequence showing a courier arriving after a storm and meeting a colleague the next morning.',
+    style:'Grounded cinematic realism with natural light.'
+  });
+  const arrival=await seedScene(page,project.id,{
+    title:'Rainy Arrival',
+    prompt:[
+      'Subject:',
+      'A courier in a dark-blue raincoat carrying a canvas delivery bag.',
+      '',
+      'Scene Overview:',
+      'The courier arrives at an apartment lobby during a storm.',
+      '',
+      'Environment / Continuity Anchors:',
+      'The rain remains outside; the lobby floor is dry.',
+      '',
+      'Style / Visual Treatment:',
+      'Grounded cinematic realism.',
+      '',
+      'integrated_multimodal_description:',
+      '[Shot 1] Wide view of the courier entering through the glass doors, rain visible outside.',
+      '[Shot 2] Medium shot as the courier removes the wet coat and hangs it on a hook.'
+    ].join('\n'),
+    durationSeconds:8
+  });
+  const morning=await seedScene(page,project.id,{
+    title:'Morning Meeting',
+    prompt:[
+      'Subject:',
+      'The courier meets a colleague in the same apartment lobby the following morning.',
+      '',
+      'Scene Overview:',
+      'The colleague receives the delivery bag.',
+      '',
+      'Environment / Continuity Anchors:',
+      'Morning light enters through the same glass doors.',
+      '',
+      'Style / Visual Treatment:',
+      'Grounded cinematic realism.',
+      '',
+      'integrated_multimodal_description:',
+      '[Shot 1] The courier, now without the raincoat, approaches the colleague.',
+      '[Shot 2] The colleague accepts the canvas delivery bag and they exchange a greeting.'
+    ].join('\n'),
+    durationSeconds:7
+  });
+
+  const model=await openLiveDirector(page);
+  await openProject(page,project.id);
+  await chooseStoryboardModel(page,model);
+  await page.locator('#storyboard-prompt-assist-btn').click();
+  const dialog=page.locator('#prompt-assist-dialog');
+  await expect(dialog).toBeVisible();
+  await dialog.locator('#prompt-assist-scope').selectOption('project');
+  await dialog.locator('#prompt-assist-run').click();
+  await expect(dialog.locator('#prompt-assist-status'))
+    .toHaveText('All three independent reviews are complete.',{timeout:480000});
+  for(const role of ['visual','continuity','sequence']) {
+    await expect(dialog.locator('#prompt-assist-'+role+'-count')).not.toHaveText('Not run');
+  }
+  await dialog.locator('#prompt-assist-synthesize').click();
+  await expect(dialog.locator('#prompt-assist-status'))
+    .toHaveText('Recommendations are ready for your review.',{timeout:240000});
+
+  const before=await story(page,project.id);
+  expect(before.scenes[arrival.id].prompt).toBeTruthy();
+  expect(before.scenes[morning.id].prompt).toBeTruthy();
+  await testInfo.attach('prompt-assist-project-scope-live.json',{
+    body:Buffer.from(JSON.stringify({
+      model,projectId:project.id,sceneIds:[arrival.id,morning.id],
+      specialistCounts:{
+        visual:await dialog.locator('#prompt-assist-visual-count').textContent(),
+        continuity:await dialog.locator('#prompt-assist-continuity-count').textContent(),
+        sequence:await dialog.locator('#prompt-assist-sequence-count').textContent()
+      },
+      editorCount:await dialog.locator('#prompt-assist-editor-count').textContent(),
+      recommendations:await dialog.locator('#prompt-assist-recommendations').innerText()
+    },null,2)),contentType:'application/json'
+  });
+  const after=await story(page,project.id);
+  expect(after.scenes[arrival.id].prompt).toBe(before.scenes[arrival.id].prompt);
+  expect(after.scenes[morning.id].prompt).toBe(before.scenes[morning.id].prompt);
+  await dialog.locator('#prompt-assist-done').click();
+});
+

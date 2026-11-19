@@ -220,3 +220,10 @@ def test_scene_deep_qa_fingerprint_isolated_to_scene_and_project_context():
     assert scene_source_fingerprint(build_context(story, "scene", "scene-1"), "scene-1") == original
     story["invariants"].append({"kind": "character", "title": "Courier", "text": "Carries a canvas bag."})
     assert scene_source_fingerprint(build_context(story, "scene", "scene-1"), "scene-1") != original
+
+
+
+def test_deep_qa_scene_validator_requires_every_source_cut():
+    result = _deep_qa_scene_result("scene-1")
+    with pytest.raises(ValueError, match="every source cut"):
+        validate_deep_qa_scene(result, "scene-1", [0, 1, 2, 3])

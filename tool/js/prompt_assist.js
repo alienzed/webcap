@@ -156,7 +156,7 @@
   function prepareProjectDeepQa() {
     if (state.busy || state.deepQaRunning) return;
     state.deepQaRunning = true;
-    setBusy(true, 'Preparing reusable Project intelligence…');
+    setBusy(true, 'Project Deep QA · preparing reusable Project intelligence…');
     var scenes = (state.snapshot.story.sceneOrder || []).filter(function (id) {
       var scene = state.snapshot.story.scenes && state.snapshot.story.scenes[id];
       return scene && typeof scene.prompt === 'string' && scene.prompt.trim();

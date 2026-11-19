@@ -696,10 +696,12 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
     if style:
         blocks.append("[STORY VISUAL / ATMOSPHERE]\n" + style)
     if story_invariants:
-        blocks.append(
-            "[STORY INVARIANTS]\n" + story_invariants
-            + "\n\nTreat these as established constraints, not material to add to this Scene."
+        invariant_guidance = (
+            "\n\nUse these as established facts. Include relevant visible details in this Scene's prompt when needed for a complete standalone render; leave unrelated invariant details out."
+            if operation == "visual_direction"
+            else "\n\nTreat these as established constraints, not material to add to this Scene."
         )
+        blocks.append("[STORY INVARIANTS]\n" + story_invariants + invariant_guidance)
     if scene_context and operation != "visual_direction":
         blocks.append("[SCENE]\n" + scene_context)
     if vocabulary:

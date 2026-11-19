@@ -2524,7 +2524,7 @@ def storyboard_prompt_assist_deep_qa_route():
                 scene_context = build_context(story, scope="scene", scene_id=scene_id)
                 current_fp = scene_source_fingerprint(scene_context, scene_id)
                 entry = saved["scenes"].get(scene_id)
-                fresh = isinstance(entry, dict) and entry.get("sourceFingerprint") == current_fp
+                fresh = isinstance(entry, dict) and entry.get("version") == 1 and entry.get("sourceFingerprint") == current_fp
                 scene_status[scene_id] = {
                     "fresh": bool(fresh),
                     "preparedAt": entry.get("preparedAt") if isinstance(entry, dict) else None,
@@ -2537,6 +2537,7 @@ def storyboard_prompt_assist_deep_qa_route():
             project_entry = saved.get("project")
             project_fresh = (
                 isinstance(project_entry, dict)
+                and project_entry.get("version") == 1
                 and project_entry.get("sourceFingerprint") == current_project_fp
                 and len(fresh_results) == len(project_context["scenes"])
             )
@@ -2572,7 +2573,7 @@ def storyboard_prompt_assist_deep_qa_route():
             valid_shots = [0] + [int(item["shotNumber"]) for item in scene["shots"]]
             clean = validate_deep_qa_scene(result, scene_id, valid_shots, context["sourcePrompts"][scene_id])
             saved["scenes"][scene_id] = {
-                "sourceFingerprint": fingerprint, "preparedAt": now, "result": clean,
+                "version": 1, "sourceFingerprint": fingerprint, "preparedAt": now, "result": clean,
             }
         elif kind == "project":
             fingerprint = source_fingerprint(project_context)
@@ -2583,12 +2584,12 @@ def storyboard_prompt_assist_deep_qa_route():
                 entry = saved["scenes"].get(scene["sceneId"])
                 scene_context = build_context(story, scope="scene", scene_id=scene["sceneId"])
                 expected = scene_source_fingerprint(scene_context, scene["sceneId"])
-                if not isinstance(entry, dict) or entry.get("sourceFingerprint") != expected:
+                if not isinstance(entry, dict) or entry.get("version") != 1 or entry.get("sourceFingerprint") != expected:
                     raise ValueError("Prepare every current Scene before building the Project intelligence index.")
                 scene_results.append(entry["result"])
             clean = validate_deep_qa_project(result, [scene["sceneId"] for scene in project_context["scenes"]])
             saved["project"] = {
-                "sourceFingerprint": fingerprint, "preparedAt": now, "result": clean,
+                "version": 1, "sourceFingerprint": fingerprint, "preparedAt": now, "result": clean,
             }
         else:
             raise ValueError("Project Deep QA result kind must be scene or project.")
@@ -2648,14 +2649,14 @@ def storyboard_prompt_assist_route():
                 cached = _prompt_assist_deep_qa_read(story_id)
                 entry = cached["scenes"].get(scene_id)
                 expected = scene_source_fingerprint(context, scene_id)
-                if isinstance(entry, dict) and entry.get("sourceFingerprint") == expected:
+                if isinstance(entry, dict) and entry.get("version") == 1 and entry.get("sourceFingerprint") == expected:
                     contract["messages"][1]["content"] += "\n\n[CURRENT PROJECT DEEP QA SCENE INTELLIGENCE]\n" + json.dumps(entry.get("result") or {}, ensure_ascii=False)
                 project_entry = cached.get("project")
                 try:
                     project_context = build_context(story, scope="project")
                 except ValueError:
                     project_context = None
-                if (isinstance(project_entry, dict) and project_context
+                if (isinstance(project_entry, dict) and project_entry.get("version") == 1 and project_context
                         and project_entry.get("sourceFingerprint") == source_fingerprint(project_context)):
                     contract["messages"][1]["content"] += "\n\n[CURRENT PROJECT DEEP QA INDEX]\n" + json.dumps(project_entry.get("result") or {}, ensure_ascii=False)
             label = "Prompt Assist: " + role + " review"

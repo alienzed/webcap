@@ -745,6 +745,7 @@
     }).then(function (snapshot) {
       updateScene(snapshot, false);
       delete state.sessions[state.sceneId];
+      loadDeepQaStatus();
       setStatus('Scene prompt applied. Previous prompt is available through Restore Previous Prompt.');
     }).catch(function (error) {
       setStatus(error.message || String(error));

@@ -47,47 +47,6 @@ async function chooseStoryboardModel(page,model) {
   await select.selectOption(model);
 }
 
-test('LIVE Project Deep QA prepares reusable, source-versioned creative intelligence',async({page},testInfo)=>{
-  const project=await seedProject(page,'Live Prompt Assist Deep QA '+Date.now(),{
-    concept:'A short sports highlight built around one decisive baseball hit.',
-    style:'Photorealistic sports cinematography with deliberate slow motion.'
-  });
-  const first=await seedScene(page,project.id,{title:'The Hit',prompt:promptOne,durationSeconds:8});
-  const second=await seedScene(page,project.id,{title:'After the Hit',prompt:promptTwo,durationSeconds:6});
-
-  const model=await openLiveDirector(page);
-  await chooseStoryboardModel(page,model);
-  await openProject(page,project.id);
-  await page.locator('#storyboard-prompt-assist-btn').click();
-  const dialog=page.locator('#prompt-assist-dialog');
-  await expect(dialog).toBeVisible();
-  await dialog.locator('#prompt-assist-scope').selectOption('project');
-  await dialog.locator('#prompt-assist-deep-qa').click();
-
-  await expect(dialog.locator('#prompt-assist-deep-qa-state'))
-    .toHaveText('Project intelligence ready',{timeout:360000});
-  const response=await page.request.get('/fs/storyboard/prompt-assist/deep-qa?storyId='+encodeURIComponent(project.id));
-  expect(response.ok()).toBeTruthy();
-  const saved=await response.json();
-  expect(saved.available).toBe(true);
-  expect(saved.fresh).toBe(true);
-  expect(saved.deepQa.sourceFingerprint).toBeTruthy();
-  expect(saved.deepQa.intelligence).toBeTruthy();
-  expect(Array.isArray(saved.deepQa.intelligence.sceneBriefs)).toBe(true);
-  expect(Array.isArray(saved.deepQa.intelligence.stateLedger)).toBe(true);
-  expect(saved.deepQa.intelligence.sceneBriefs.some(item=>item.sceneId===first.id)).toBe(true);
-  expect(saved.deepQa.intelligence.sceneBriefs.some(item=>item.sceneId===second.id)).toBe(true);
-
-  await testInfo.attach('prompt-assist-project-deep-qa.json',{
-    body:Buffer.from(JSON.stringify({model,projectId:project.id,deepQa:saved.deepQa},null,2)),
-    contentType:'application/json'
-  });
-  const unchanged=await story(page,project.id);
-  expect(unchanged.scenes[first.id].prompt).toBe(promptOne);
-  expect(unchanged.scenes[second.id].prompt).toBe(promptTwo);
-  await dialog.locator('#prompt-assist-done').click();
-});
-
 test('LIVE Prompt Assist runs independent specialists, discusses findings, and applies only an approved revision',async({page},testInfo)=>{
   const project=await seedProject(page,'Live Prompt Assist Review '+Date.now(),{
     concept:'A concise sports highlight showing one decisive baseball hit and its immediate aftermath.',

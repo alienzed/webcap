@@ -12,14 +12,15 @@ function section(start,end) {
   return source.slice(from,to);
 }
 
-test('Scenes header keeps context left and three responsive actions right',()=>{
+test('Scenes header keeps context left and four responsive actions right',()=>{
   const heading=html.slice(html.indexOf('<div class="storyboard-scenes-heading">'),
     html.indexOf('id="storyboard-scene-progression"'));
   assert.match(heading,/id="storyboard-project-tool-bar"[^>]+role="group"/);
   const generate=heading.indexOf('id="storyboard-generate-scenes-btn"');
+  const cancel=heading.indexOf('id="storyboard-cancel-takes-btn"');
   const revise=heading.indexOf('id="storyboard-director-tools-btn"');
   const replace=heading.indexOf('id="storyboard-find-replace-btn"');
-  assert.ok(generate > 0 && generate < revise && revise < replace);
+  assert.ok(generate > 0 && generate < cancel && cancel < revise && revise < replace);
   assert.ok(heading.indexOf('id="storyboard-progress-summary"') < generate);
   assert.match(heading,/aria-label="Scene Revision"/);
   assert.match(heading,/aria-label="Find &amp; Replace"/);
@@ -28,7 +29,7 @@ test('Scenes header keeps context left and three responsive actions right',()=>{
   for(const id of ['storyboard-generate-scenes-btn','storyboard-director-tools-btn','storyboard-find-replace-btn','storyboard-cancel-takes-btn'])
     assert.equal((html.match(new RegExp('id="'+id+'"','g'))||[]).length,1);
   assert.match(css,/@container \(max-width: 760px\)/);
-  assert.match(css,/#storyboard-project-tool-bar \.storyboard-tool-label \{ display: none; \}/);
+  assert.match(css,/\.storyboard-tool-label \{\s*display:\s*inline;/);
   assert.match(html,/<button id="storyboard-scenes-sequence-btn"/);
 });
 
@@ -95,17 +96,18 @@ test('Scene title stays compact and wide Takes aligns with Generation without an
   assert.match(takes,/margin-top: 0/);
   assert.match(takes,/border: 0/);
   assert.match(takes,/background: transparent/);
-  assert.match(focus,/\.storyboard-scenes-list\.is-focus \.storyboard-scene:has\(> \.storyboard-takes\[open\]\) \.storyboard-takes-summary \{\s*padding: 0;/);
+  assert.match(focus,/\.storyboard-scenes-list\.is-focus \.storyboard-scene:has\(> \.storyboard-takes\[open\]\) \.storyboard-takes-summary \{\s*min-height: 0;\s*padding: 16px 14px 12px;/);
 });
 
-test('Scenes toolbar uses fixed icon actions without visible overlapping labels',()=>{
-  const rule=css.split('.storyboard-tool-label {').at(-1).split('}',1)[0];
-  assert.match(rule,/display:\s*none/);
-  const buttons=css.split('#storyboard-project-tool-bar > .storyboard-tool-icon {').at(-1).split('}',1)[0];
-  assert.match(buttons,/width:\s*36px/);
-  assert.match(buttons,/max-width:\s*36px/);
-  assert.match(buttons,/padding:\s*0/);
-  for(const id of ['storyboard-generate-scenes-btn','storyboard-director-tools-btn','storyboard-find-replace-btn'])
+test('Scenes toolbar keeps distinct labeled buttons visible with responsive wrapping',()=>{
+  const labelRule=css.split('.storyboard-tool-label {').at(-1).split('}',1)[0];
+  assert.match(labelRule,/display:\s*inline/);
+  const buttons=css.split('#storyboard-project-tool-bar > .storyboard-tool-icon,').at(-1).split('}',1)[0];
+  assert.match(buttons,/width:\s*auto/);
+  assert.match(buttons,/min-width:\s*36px/);
+  assert.match(buttons,/white-space:\s*nowrap/);
+  assert.match(css,/@container \(max-width: 760px\)\s*\{\s*#storyboard-project-tool-bar \{ flex-wrap: wrap; \}/);
+  for(const id of ['storyboard-generate-scenes-btn','storyboard-cancel-takes-btn','storyboard-director-tools-btn','storyboard-find-replace-btn'])
     assert.match(html,new RegExp('id="'+id+'"[^>]*aria-label="[^"]+"'));
 });
 

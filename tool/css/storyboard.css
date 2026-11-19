@@ -4597,7 +4597,7 @@ html[data-theme="dark"] .storyboard-prompt-take-status {
 .prompt-assist-context > div { max-height:260px; overflow:auto; padding:0 12px 10px; font-size:12px; line-height:1.45; }
 .prompt-assist-context p { margin:8px 0; white-space:pre-wrap; }
 .prompt-assist-context ul { margin:5px 0; padding-left:18px; }
-.prompt-assist-scene-facts { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; margin-bottom:16px; }
+.prompt-assist-scene-facts { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:10px; margin-bottom:16px; }
 .prompt-assist-scene-facts > div {
   min-width:0; padding:11px 12px; border:1px solid var(--border);
   border-radius:8px; background:var(--panel-soft);

@@ -3,6 +3,8 @@ const {test,expect}=require('./test.cjs');
 const {resetModel,queueModel,observedModels,openDirector,say,seedProject,
   openProject,openWrite,story,stories}=require('./helpers.cjs');
 
+test.use({advisorEnabled:true});
+
 const advice=page=>page.locator('#studio-action-advisor-actions');
 
 test('enabled-by-default advisor sends a separate same-model request with conversation context, not unread Project data',async({page,request})=>{
@@ -124,6 +126,19 @@ test('an inference-provider failure is local to advisor; existing manual Write r
   await expect(page.locator('#studio-dw-write-panel')).toBeVisible();
   expect((await story(page,project.id)).style).toBe('Original blue light.');
   expect((await observedModels(request)).calls).toHaveLength(2);
+});
+
+
+test('a failed Director chat does not dispatch the optional advisor',async({page,request})=>{
+  await resetModel(request);
+  await openDirector(page);
+  await queueModel(request,{httpError:503,message:'Controlled main chat failure'});
+  await say(page,'Discuss a quiet opening.');
+  await expect(page.locator('#director-chat-progress')).toBeHidden({timeout:30000});
+  await expect(page.locator('#director-chat-input')).toBeEnabled();
+  await expect(advice(page)).toBeHidden();
+  await expect(page.locator('#studio-action-advisor-status')).toBeHidden();
+  expect((await observedModels(request)).calls).toHaveLength(1);
 });
 
 test('a late advisor result cannot replace suggestions from a newer Director chat turn',async({page,request})=>{

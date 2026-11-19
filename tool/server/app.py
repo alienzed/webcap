@@ -2580,6 +2580,8 @@ def storyboard_prompt_assist_apply_route():
             prompt = item.get("prompt")
             if not scene_id or scene_id in seen:
                 raise ValueError("Prompt Assist revisions must have unique Scene targets.")
+            if scene_id not in current_context["sourcePrompts"]:
+                raise ValueError("Prompt Assist revision targets a Scene outside the reviewed scope.")
             if not isinstance(expected, str) or not isinstance(prompt, str) or not prompt.strip():
                 raise ValueError("Each Prompt Assist revision needs its original and complete replacement prompt.")
             seen.add(scene_id)

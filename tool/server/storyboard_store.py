@@ -1658,7 +1658,7 @@ def apply_studio_scene_fields_batch(story_id, revisions):
                 "prompt": str(current.get("prompt") or ""),
                 "durationSeconds": current.get("durationSeconds"),
             }
-            clean["refineComplete"] = True
+            clean["refineComplete"] = False
             clean["promptDirectorModel"] = ""
             clean["promptDirectorJobId"] = ""
         updated["scenes"][scene_id] = _normalize_scene(scene_id, clean, existing=current)

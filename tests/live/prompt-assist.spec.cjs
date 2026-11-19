@@ -240,7 +240,7 @@ test('LIVE Project Deep QA prepares reusable Scene and cross-Scene intelligence 
   await expect(dialog.locator('#prompt-assist-deep-qa-status'))
     .toHaveText('Project intelligence ready',{timeout:900000});
 
-  const statusResponse=await page.request.get('/fs/storyboard/prompt-assist/deep-qa?storyId='+encodeURIComponent(project.id));
+  const statusResponse=await page.request.get('/fs/storyboard/prompt-assist/deep-qa?storyId='+encodeURIComponent(project.id)+'&model='+encodeURIComponent(model));
   expect(statusResponse.ok()).toBeTruthy();
   const prepared=await statusResponse.json();
   expect(prepared.projectFresh).toBe(true);

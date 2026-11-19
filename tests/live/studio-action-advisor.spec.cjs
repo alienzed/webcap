@@ -76,8 +76,8 @@ async function chooseSuggestion(page,item,buttonText){
   expect(typeof item.label).toBe('string');
   expect(item.label.trim().length).toBeGreaterThan(0);
   const row=advice(page).locator('.studio-action-advisor-item')
-    .filter({hasText:item.label}).first();
-  await expect(row.locator('strong')).toHaveText(item.label,{timeout:30000});
+    .filter({hasText:item.label.trim()}).first();
+  await expect(row.locator('strong')).toHaveText(item.label.trim(),{timeout:30000});
   await expect(row.getByRole('button',{name:buttonText})).toBeVisible();
   await row.getByRole('button',{name:buttonText}).click();
 }
@@ -134,7 +134,7 @@ test('LIVE advisor — scopes a suggested Overview revision and saves only after
     const project=await seedProject(page,'Live Advisor Style '+Date.now(),{
       concept:'A violin maker works at a tiny night-time workshop.',
       style:'Cold cyan fluorescent light.',
-      invariants:[{kind:'prop',title:'Violin',text:'A wooden violin stays on the workbench.'}]
+      invariants:[{kind:'visual',title:'Violin',text:'A wooden violin stays on the workbench.'}]
     });
     const original=await story(page,project.id);
     const model=await openLiveDirector(page);
@@ -169,7 +169,7 @@ test('LIVE advisor — scopes a suggested Overview revision and saves only after
     for(const field of ['title','concept','invariants'])
       await expect(page.locator('#studio-dw-write-project-fields input[value="'+field+'"]'))
         .not.toBeChecked();
-    await expect(page.locator('#studio-dw-write-instruction')).toHaveValue(item.instruction);
+    await expect(page.locator('#studio-dw-write-instruction')).toHaveValue(item.instruction.trim());
     expect((await story(page,project.id)).style).toBe(original.style);
 
     await waitForLiveJob(page,()=>page.locator('#studio-dw-write-prepare').click());
@@ -226,7 +226,7 @@ test('LIVE advisor — proposes an opening Scene and author approval launches a 
     await expect(page.locator('#studio-dw-write-project')).toHaveValue(project.id);
     await expect(page.locator('#studio-dw-write-operation')).toHaveValue('scene-write');
     await expect(page.locator('#studio-dw-scene-mode')).toHaveValue('create');
-    await expect(page.locator('#studio-dw-write-instruction')).toHaveValue(item.instruction);
+    await expect(page.locator('#studio-dw-write-instruction')).toHaveValue(item.instruction.trim());
     expect((await story(page,project.id)).sceneOrder).toHaveLength(0);
 
     await waitForLiveJob(page,()=>page.locator('#studio-dw-write-prepare').click());

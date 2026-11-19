@@ -319,8 +319,68 @@
 
   var studioComposerMode = 'conversation';
   var studioRevisionRunning = false;
+  var studioRevisionSelectionProject = '';
   function studioRevisionActive() {
     return state.activeMode === 'storyboard' && studioComposerMode === 'revision';
+  }
+  function selectedStudioRevisionScenes() {
+    return Array.from(el('director-studio-revision-scenes').querySelectorAll('[data-revise-scene]:checked'))
+      .map(function (input) { return input.value; });
+  }
+  function syncStudioRevisionScenes(scope) {
+    var host = el('director-studio-revision-scenes');
+    var choices = scope.sceneChoices || [];
+    var ids = choices.map(function (choice) { return choice.id; });
+    var previous = studioRevisionSelectionProject === scope.projectId
+      ? new Set(selectedStudioRevisionScenes()) : new Set(ids);
+    var existing = Array.from(host.querySelectorAll('[data-revise-scene]')).map(function (item) {
+      return {id: item.value, title: item.dataset.sceneTitle};
+    });
+    var same = existing.length === choices.length && existing.every(function (item, index) {
+      return item.id === choices[index].id && item.title === choices[index].title;
+    });
+    if (!same || studioRevisionSelectionProject !== scope.projectId) {
+      host.replaceChildren();
+      var allLabel = document.createElement('label');
+      var all = document.createElement('input');
+      all.type = 'checkbox';
+      all.setAttribute('data-revise-scene-all', '');
+      allLabel.append(all, document.createTextNode('All Scenes'));
+      allLabel.className = 'storyboard-director-scene-select-all';
+      host.appendChild(allLabel);
+      choices.forEach(function (choice, index) {
+        var label = document.createElement('label');
+        var box = document.createElement('input');
+        box.type = 'checkbox';
+        box.value = choice.id;
+        box.dataset.reviseScene = '';
+        box.dataset.sceneTitle = choice.title;
+        box.checked = previous.has(choice.id);
+        label.append(box, document.createTextNode(' ' + (index + 1) + '. ' + choice.title));
+        host.appendChild(label);
+      });
+      all.onchange = function () {
+        host.querySelectorAll('[data-revise-scene]').forEach(function (box) {
+          box.checked = all.checked;
+        });
+        all.indeterminate = false;
+        syncControls();
+      };
+      host.querySelectorAll('[data-revise-scene]').forEach(function (box) {
+        box.onchange = function () { syncStudioRevisionSceneSelection(); syncControls(); };
+      });
+      studioRevisionSelectionProject = scope.projectId;
+    }
+    syncStudioRevisionSceneSelection();
+  }
+  function syncStudioRevisionSceneSelection() {
+    var host = el('director-studio-revision-scenes');
+    var all = host.querySelector('[data-revise-scene-all]');
+    if (!all) return;
+    var boxes = Array.from(host.querySelectorAll('[data-revise-scene]'));
+    var count = boxes.filter(function (box) { return box.checked; }).length;
+    all.checked = boxes.length > 0 && count === boxes.length;
+    all.indeterminate = count > 0 && count < boxes.length;
   }
   function syncStudioRevisionUi() {
     var studio = state.activeMode === 'storyboard';
@@ -344,16 +404,23 @@
     el('studio-director-inspect').classList.toggle('hidden', revision || !studio);
     var preset = el('director-studio-revision-preset').value;
     el('director-studio-revision-fresh-label').classList.toggle('hidden', !revision || preset === 'coherence');
+    el('director-studio-revision-selection').classList.toggle('hidden', !revision || preset === 'coherence');
     var input = el('director-studio-revision-input');
     input.readOnly = preset === 'coherence';
+    var instructionLabel = document.querySelector('label[for="director-studio-revision-input"]');
+    instructionLabel.textContent = preset === 'visual_direction' ? 'Additional direction (optional)' : 'Revision instruction';
+    input.placeholder = preset === 'visual_direction' ? 'Optional visual direction for the selected Scenes.' :
+      'Describe what should be revised across these Scenes.';
     el('director-chat-composer-hint').textContent = revision
       ? 'Ctrl+Enter to run' : 'Enter to send · Shift+Enter for newline';
     var target = el('director-studio-revision-target');
     target.classList.toggle('hidden', !revision);
     if (revision) {
       var scope = window.getStudioDirectorNavigation();
+      if (preset !== 'coherence') syncStudioRevisionScenes(scope);
+      var selected = preset === 'coherence' ? (scope.sceneOrder || []).length : selectedStudioRevisionScenes().length;
       target.textContent = (scope.projectTitle || 'Current Project') +
-      ' · all ' + (scope.sceneOrder || []).length + ' Scenes';
+        ' · ' + selected + ' of ' + (scope.sceneOrder || []).length + ' Scenes selected';
     }
   }
   function setStudioComposerMode(mode, preset) {
@@ -373,7 +440,7 @@
     var input = el('director-studio-revision-input');
     var instruction = input.value.trim();
     var status = el('director-studio-revision-status');
-    if (!instruction && preset !== 'coherence') {
+    if (!instruction && preset !== 'coherence' && preset !== 'visual_direction') {
       status.textContent = 'Enter a revision instruction or choose a preset.';
       input.focus();
       return;
@@ -383,12 +450,17 @@
       status.textContent = 'Choose a Project with Scenes first.';
       return;
     }
+    var sceneIds = preset === 'coherence' ? undefined : selectedStudioRevisionScenes();
+    if (sceneIds && !sceneIds.length) {
+      status.textContent = 'Select at least one Scene.';
+      return;
+    }
     studioRevisionRunning = true;
     status.textContent = 'Starting ' + (preset === 'coherence' ? 'coherence review' : 'revision') + '…';
     syncControls();
     Promise.resolve(window.startStudioRevision({
       instruction:instruction,preset:preset,modelId:state.modelId,
-      projectId:scope.projectId,
+      projectId:scope.projectId,sceneIds:sceneIds,
       generateFreshTakes:el('director-studio-revision-fresh').checked
     })).then(function () {
       status.textContent = preset === 'coherence'
@@ -1657,13 +1729,17 @@
     if (send) {
       send.disabled = revising
         ? studioRevisionRunning || !state.modelId ||
-          (!String(revisionInput.value || '').trim() && revisionPreset.value !== 'coherence')
+          (!String(revisionInput.value || '').trim() &&
+            revisionPreset.value !== 'coherence' && revisionPreset.value !== 'visual_direction') ||
+          (revisionPreset.value !== 'coherence' && selectedStudioRevisionScenes().length === 0)
         : state.pending || state.attachmentPending ||
           (persistentMode(state.activeMode) && !state.sessionReady) || !state.modelId ||
           !String(input && input.value || '').trim();
       send.textContent = revising
         ? (revisionPreset.value === 'coherence' ? 'Check Coherence' :
-          el('director-studio-revision-fresh').checked ? 'Revise & Generate' : 'Revise Scenes')
+          revisionPreset.value === 'visual_direction'
+            ? (el('director-studio-revision-fresh').checked ? 'Visual Direction & Generate' : 'Run Visual Direction')
+            : el('director-studio-revision-fresh').checked ? 'Revise & Generate' : 'Revise Scenes')
         : 'Send';
     }
     revisionInput.disabled = studioRevisionRunning;
@@ -3913,7 +3989,7 @@
     };
     el('director-studio-revision-preset').onchange = function () {
       var preset = this.value;
-      if (preset) el('director-studio-revision-input').value = window.storyboardRevisionPreset(preset);
+      el('director-studio-revision-input').value = preset ? window.storyboardRevisionPreset(preset) : '';
       el('director-studio-revision-status').textContent = '';
       syncStudioRevisionUi();
       syncControls();

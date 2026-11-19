@@ -119,6 +119,8 @@ test('LIVE Prompt Assist runs independent specialists, discusses findings, and a
   const afterApply=await story(page,project.id);
   expect(afterApply.scenes[first.id].previousPrompt).toBe(promptOne);
   expect(afterApply.scenes[first.id].previousRevision.prompt).toBe(promptOne);
+  expect(afterApply.scenes[first.id].refineComplete).toBe(false);
+  expect(afterApply.scenes[first.id].promptDirectorJobId).toBe('');
   expect(afterApply.scenes[first.id].takes).toEqual(beforeApply.scenes[first.id].takes);
   expect(afterApply.scenes[second.id].prompt).toBe(promptTwo);
   await dialog.locator('#prompt-assist-done').click();

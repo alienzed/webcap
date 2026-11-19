@@ -578,7 +578,7 @@ def test_visual_direction_uses_winning_complete_visual_exhaustiveness_system_pro
     assert "[H3 PROMPTING GUIDANCE]" in prompt
     assert "[SCENE DETAILS]" in prompt
     assert "[EXISTING H3 PROMPT]\nEXISTING SECOND PROMPT" in prompt
-    assert "[CURRENT TASK]\nImprove this Scene's existing H3 prompt using the supplied Project and Scene context." in prompt
+    assert "[CURRENT TASK]\nImprove this Scene's existing H3 prompt using the supplied context." in prompt
     assert "[OUTPUT]" not in prompt
     assert "changed=false" not in prompt
     assert "Return the complete revised H3 prompt" not in prompt

@@ -37,6 +37,19 @@ def _story():
     }
 
 
+def test_project_context_preserves_authored_project_guidelines():
+    story = _story()
+    story["guidelines"] = {
+        "visualFocus": "Keep the bat-ball contact visible.",
+        "creativeDirection": "Grounded sports cinematography.",
+        "variation": "Vary shot scale without losing the action.",
+        "pacing": "Build toward the decisive hit.",
+        "sceneRelationships": "The follow-up Scene occurs after the hit.",
+    }
+    project = build_context(story, "project")["project"]
+    assert project["guidelines"] == story["guidelines"]
+
+
 def test_scene_scope_extracts_timed_cuts_and_keeps_exact_source_prompt():
     story = _story()
     context = build_context(story, "scene", "scene-1")

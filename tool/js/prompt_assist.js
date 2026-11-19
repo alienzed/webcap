@@ -160,6 +160,7 @@
       });
       host.appendChild(section);
     }
+    syncActions();
   }
   function loadDeepQaStatus() {
     var requestedStoryId = state.storyId;

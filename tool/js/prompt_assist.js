@@ -291,6 +291,16 @@
     if (!labels[parts[0]] || parts.length < 4) return String(id || '');
     return labels[parts[0]] + (Number(parts[2]) > 0 ? ' · Cut ' + parts[2] : ' · Scene');
   }
+  function reviewedSceneCount() {
+    var reviewed = Object.create(null);
+    Object.keys(state.sessions).forEach(function (sceneId) {
+      var session = state.sessions[sceneId];
+      if (session && roles.every(function (role) { return !!(session.reviews && session.reviews[role]); }))
+        reviewed[sceneId] = true;
+    });
+    if (roles.every(function (role) { return !!state.reviews[role]; })) reviewed[state.sceneId] = true;
+    return Object.keys(reviewed).length;
+  }
   function renderTeam() {
     roles.forEach(function (role) {
       var review = state.reviews[role];
@@ -308,9 +318,11 @@
     var totalFindings = roles.reduce(function (sum, role) {
       return sum + (state.reviews[role] && state.reviews[role].findings || []).length;
     }, 0);
-    el('prompt-assist-scene-progress').textContent = completed === 3
-      ? totalFindings + ' observations · ' + (state.synthesis ? 'Editor ready' : 'Ready to consolidate')
-      : completed ? completed + ' of 3 specialists complete' : 'Not reviewed';
+    var reviewedScenes = reviewedSceneCount();
+    var sceneTotal = (state.snapshot.story.sceneOrder || []).length;
+    el('prompt-assist-scene-progress').textContent = reviewedScenes + ' of ' + sceneTotal + ' Scenes reviewed · ' +
+      (completed === 3 ? totalFindings + ' observations in this Scene · ' + (state.synthesis ? 'Editor ready' : 'Ready to consolidate')
+        : completed ? completed + ' of 3 specialists complete in this Scene' : 'This Scene has not been reviewed');
     el('prompt-assist-editor-count').textContent = state.synthesis
       ? (state.synthesis.recommendations || []).length + ' suggestions' : 'Waiting';
     el('prompt-assist-editor-summary').textContent = state.synthesis

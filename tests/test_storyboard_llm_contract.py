@@ -563,6 +563,7 @@ def test_visual_direction_uses_winning_complete_visual_exhaustiveness_system_pro
     assert request["response_schema"]["required"] == ["changed", "prompt"]
     assert request["response_schema"]["properties"]["changed"]["type"] == "boolean"
     assert request["system_prompt"] == (
+        "You are refining prompts for a text-to-video model. Your job is to describe the intended moving visuals so the model can render them accurately. "
         "Be exceptionally thorough and specific about the visuals that will actually be rendered. "
         "Explicitly establish relevant visual details that are implied by context or not yet specified. "
         "Prioritize details that materially affect what the viewer will see or how the intended actions will be rendered. "

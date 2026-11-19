@@ -268,3 +268,14 @@ def test_prompt_assist_review_fingerprint_tracks_model_and_prepared_deep_qa():
     assert prompt_assist_review_fingerprint(context, "model-b") != baseline
     assert prompt_assist_review_fingerprint(context, "model-a", scene_qa) != baseline
     assert prompt_assist_review_fingerprint(context, "model-a", None, project_qa) != baseline
+
+
+
+def test_deep_qa_rejects_source_evidence_not_found_in_the_saved_prompt():
+    context = build_context(_story(), "scene", "scene-1")
+    result = _deep_qa_scene_result("scene-1")
+    result["cuts"][0]["sourceEvidence"] = ["The courier wears a bright green uniform."]
+    with pytest.raises(ValueError, match="exact saved prompt"):
+        validate_deep_qa_scene(
+            result, "scene-1", [0, 1, 2, 3], context["sourcePrompts"]["scene-1"]
+        )

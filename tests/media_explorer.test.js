@@ -903,7 +903,7 @@ test('External Explorer requests bounded detail analysis without changing techni
   const before = f.pending.length;
   f.nodes['media-explorer-analyze-quality'].click();
   assert.equal(f.pending.length, before + 1);
-  assert.match(f.pending.at(-1).url, /external\\/metadata/);
+  assert.ok(f.pending.at(-1).url.includes('/external/metadata'));
   assert.equal(JSON.parse(f.pending.at(-1).options.body).mode, 'quality');
   assert.equal(JSON.parse(f.pending.at(-1).options.body).scope, 'filtered');
   f.nodes['media-explorer-generate-metadata'].click();

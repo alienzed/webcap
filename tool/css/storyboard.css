@@ -4521,3 +4521,11 @@ html[data-theme="dark"] .storyboard-prompt-take-status {
   .prompt-assist-rail button { min-width:175px; }
   .prompt-assist-main { padding:16px; }
 }
+
+
+.prompt-assist-source { margin-bottom:18px; border:1px solid var(--border); border-radius:9px; }
+.prompt-assist-source > summary { padding:12px 14px; cursor:pointer; font-size:15px; font-weight:650; }
+.prompt-assist-source > div { display:grid; gap:8px; padding:0 12px 12px; }
+.prompt-assist-source > div details { border:1px solid var(--border); border-radius:7px; }
+.prompt-assist-source > div details > summary { padding:9px 11px; cursor:pointer; font-size:14px; font-weight:600; }
+.prompt-assist-source pre { max-height:260px; overflow:auto; white-space:pre-wrap; overflow-wrap:anywhere; padding:10px 12px; margin:0; border-top:1px solid var(--border); font:13px/1.5 ui-monospace,monospace; color:var(--muted); }

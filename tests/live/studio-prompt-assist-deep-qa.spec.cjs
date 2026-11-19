@@ -30,6 +30,11 @@ test('LIVE Project Deep QA -> Prompt Assist: whole-project findings feed focused
   await expect(page.locator('#storyboard-project-deep-qa-btn')).toBeVisible();
   await page.locator('#storyboard-project-deep-qa-btn').click();
   await expect(page.locator('#storyboard-project-deep-qa-modal')).toBeVisible({timeout:300000});
+  await expect.poll(async()=>{
+    const response=await page.request.get('/fs/storyboard/deep-qa?storyId='+encodeURIComponent(project.id));
+    const body=await response.json();
+    return !!body.current;
+  },{timeout:300000,intervals:[600,1200,2500]}).toBe(true);
   const deepQa=await page.request.get('/fs/storyboard/deep-qa?storyId='+encodeURIComponent(project.id));
   expect(deepQa.ok()).toBeTruthy();
   const cached=await deepQa.json();

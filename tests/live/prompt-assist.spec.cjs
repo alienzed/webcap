@@ -72,7 +72,8 @@ test('LIVE Prompt Assist runs independent specialists, discusses findings, and a
   const counts={};
   for(const role of ['visual','continuity','sequence']) {
     counts[role]=await dialog.locator('#prompt-assist-'+role+'-count').textContent();
-    expect(counts[role]).not.toBe('Not run');
+    expect(counts[role]).not.toBe('Waiting');
+    expect(counts[role]).not.toBe('Failed');
   }
   await dialog.locator('#prompt-assist-synthesize').click();
   await expect(dialog.locator('#prompt-assist-status'))

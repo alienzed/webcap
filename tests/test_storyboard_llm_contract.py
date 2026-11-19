@@ -644,7 +644,8 @@ def test_project_deep_qa_scans_all_saved_scene_prompts_and_relationships_without
     assert "EXISTING SECOND PROMPT" in request["prompt"]
     assert "timed cuts individually" in request["prompt"]
     assert "continuity and progression across cuts and between Scenes" in request["prompt"]
-    assert "Do not inspect or claim to inspect generated Takes" in request["system_prompt"]
+    assert '"entryState"' in request["prompt"] and '"exitState"' in request["prompt"]
+    assert "Project text" in request["system_prompt"]
     assert "scene-1" in request["prompt"] and "scene-2" in request["prompt"]
 
 

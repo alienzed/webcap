@@ -583,6 +583,7 @@
     state.sceneId = sceneId;
     state.modelId = snapshot.modelId;
     state.sourcePrompt = scene.prompt;
+    state.deepQaStatus = null;
     if (!state.modelId) throw new Error('Choose a Director model before using Prompt Assist.');
     if (preserve) restoreSession();
     else resetSession();

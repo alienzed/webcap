@@ -53,11 +53,13 @@ Before implementation, trace the existing Deep QA implementation and its actual 
 
 Prompt Assist is a standalone, Scene-specific assistant. It focuses on one selected Scene per working session/modal and the text that defines that Scene's intended result, including its cut instructions. It does not inspect generated Takes, images, video, or visual references.
 
-Prompt Assist complements, rather than replaces, the standalone visual agent. The visual agent remains its own capability and is the primary route for visual assessment. Prompt Assist is a practical text-focused fallback when the visual agent misses an issue, cannot resolve it, or the author wants to improve the written instructions directly. The two capabilities must not be collapsed into one workflow or made dependent on each other.
+Prompt Assist complements, rather than replaces, the existing standalone **Visual Direction agent**. Visual Direction remains its own independent capability and the primary Scene-level visual-completeness pass. Prompt Assist is the practical text-focused fallback when Visual Direction misses an issue, cannot resolve it, or the author wants to improve the written instructions directly. The two capabilities must not be collapsed into one workflow or made dependent on each other. Prompt Assist should not become a parallel mandatory pass or automatically follow Visual Direction.
 
 Its purpose is practical improvement: detect a meaningful weakness, explain it briefly in terms of the expected result, and prepare a concrete, editable correction that the author can apply. Be generous with useful specificity, following the spirit of Enrich Sight: spell out the relevant details explicitly rather than relying on the generation model to infer them. Keep that specificity grounded in the author's intent and the supplied text. Avoid academic explanations, speculative theory, long lists of alternatives, or broad prompt rewrites.
 
-Use the interaction principles established by Caption Assist rather than inventing a new review paradigm:
+Use the interaction principles established by Caption Assist rather than inventing a new review paradigm. The earlier UX direction is a focused, roomy modal (roughly 80% of the available screen) that keeps the selected Scene and its relevant findings/proposed change visible together. It is opened only when requested, handles one Scene at a time, and should feel like a quick working aid—not a new workspace, checklist, or process the author must maintain. Reuse existing Scene prompt editing and History for applying/recovering changes.
+
+
 
 - present actionable findings in a clear, focused workspace;
 - show the proposed correction in an editable form;

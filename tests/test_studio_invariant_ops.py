@@ -54,8 +54,8 @@ def test_scoped_invariants_and_project_title_update_and_undo_atomically(project)
         {"kind": "character", "title": "Alicia"}
     ]
     assert updated["scenes"][scene["id"]]["prompt"] == scene["prompt"]
-    assert updated["scenes"][scene["id"]]["entryState"] == "Historically authored entry."
-    assert updated["scenes"][scene["id"]]["exitState"] == "Historically authored exit."
+    assert "entryState" not in updated["scenes"][scene["id"]]
+    assert "exitState" not in updated["scenes"][scene["id"]]
 
     undone = storyboard_store.undo_studio_brief(story["id"], revision)
     assert undone["title"] == story["title"]

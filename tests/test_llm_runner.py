@@ -2231,3 +2231,100 @@ def test_visual_direction_continues_after_scene_failure_and_reports_exact_outcom
     assert saved[scene_ids[1]]["prompt"] == "The model presents second look."
     assert saved[scene_ids[2]]["prompt"] == "The model presents third look."
     assert take_requests == [(story["id"], scene_ids[0])]
+
+
+def test_standard_revise_still_queues_fresh_takes_for_unchanged_scenes(llm_root, monkeypatch):
+    story = storyboard_store.create_story({
+        "title": "Standard Revision",
+        "concept": "A simple story.",
+        "style": "Naturalistic.",
+    })
+    story, scene = storyboard_store.add_scene(story["id"], {
+        "title": "Unchanged Scene",
+        "prompt": "The actor steps into the light.",
+        "durationSeconds": 8,
+    })
+    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda *_args: False)
+    take_requests = []
+
+    def fake_run(model_id, contract, gpu_reserved=False, thinking=False):
+        assert contract["operation"] == "refine_prompt"
+        return {
+            "text": '{"changed":false,"prompt":"The actor steps into the light."}',
+            "data": {"changed": False, "prompt": "The actor steps into the light."},
+            "model": model_id,
+            "usage": None,
+            "timings": None,
+        }
+
+    monkeypatch.setattr(storyboard_llm_runtime, "run_contract", fake_run)
+    monkeypatch.setattr(
+        "tool.server.storyboard_generation.start_generation",
+        lambda story_id, scene_id: take_requests.append((story_id, scene_id)),
+    )
+    job = llm_runner.enqueue(
+        "storyboard",
+        "qwen",
+        {"operation": "revise_scenes_sequence"},
+        context={
+            "storyId": story["id"],
+            "operation": "revise_scenes_sequence",
+            "sceneIds": [scene["id"]],
+            "sourceInstruction": "Preserve the existing prompt if already correct.",
+            "passType": "standard",
+            "generateFreshTakes": True,
+        },
+    )
+    llm_runner._advance_queue()
+    finished = llm_runner.job_status(job["jobId"])
+    assert finished["status"] == "completed"
+    assert finished["result"]["completedSceneCount"] == 1
+    assert finished["result"]["revisedSceneCount"] == 0
+    assert finished["result"]["freshTakesQueued"] == 1
+    assert take_requests == [(story["id"], scene["id"])]
+
+
+def test_visual_direction_all_failed_is_a_failed_job_with_named_scene_errors(llm_root, monkeypatch):
+    story = storyboard_store.create_story({
+        "title": "Failure Receipt",
+        "concept": "Two complete fashion looks.",
+        "style": "Editorial.",
+    })
+    ids = []
+    for title in ("First Look", "Second Look"):
+        story, scene = storyboard_store.add_scene(story["id"], {
+            "title": title,
+            "prompt": "Original prompt for " + title,
+            "durationSeconds": 8,
+        })
+        ids.append(scene["id"])
+    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda *_args: False)
+
+    def fail_run(model_id, contract, gpu_reserved=False, thinking=False):
+        raise RuntimeError("Director unavailable")
+
+    monkeypatch.setattr(storyboard_llm_runtime, "run_contract", fail_run)
+    job = llm_runner.enqueue(
+        "storyboard",
+        "qwen",
+        {"operation": "revise_scenes_sequence"},
+        context={
+            "storyId": story["id"],
+            "operation": "revise_scenes_sequence",
+            "sceneIds": ids,
+            "sourceInstruction": "",
+            "passType": "visual_direction",
+        },
+    )
+    llm_runner._advance_queue()
+    finished = llm_runner.job_status(job["jobId"])
+    assert finished["status"] == "failed"
+    assert "Director unavailable" in finished["error"]
+    assert finished["result"]["completedSceneCount"] == 0
+    assert [entry["title"] for entry in finished["result"]["failedScenes"]] == ["First Look", "Second Look"]
+    assert [entry["error"] for entry in finished["result"]["failedScenes"]] == [
+        "Director unavailable", "Director unavailable",
+    ]
+    saved = storyboard_store.load_story(story["id"])["scenes"]
+    for scene_id in ids:
+        assert saved[scene_id]["prompt"].startswith("Original prompt for ")

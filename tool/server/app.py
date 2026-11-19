@@ -2570,6 +2570,11 @@ def storyboard_director_route():
         development = data.get("development") if isinstance(data.get("development"), dict) else None
 
         story = storyboard_load_story(story_id)
+        if operation == "project_deep_qa":
+            from .storyboard_store import project_deep_qa_signature
+            deep_qa_source_signature = project_deep_qa_signature(story)
+        else:
+            deep_qa_source_signature = ""
         replace_existing = bool(data.get("replaceExisting"))
         if operation in {"develop_story", "develop_story_outline", "develop_scenes_sequence"}:
             if story.get("sceneOrder") and not replace_existing:
@@ -2796,8 +2801,7 @@ def storyboard_director_route():
                     "sourcePrompt": str(((story.get("scenes") or {}).get(scene_id) or {}).get("prompt") or "")
                 } if operation == "prompt_assist" else {}),
                 **({
-                    "sourceSignature": __import__("tool.server.storyboard_store", fromlist=["project_deep_qa_signature"])
-                        .project_deep_qa_signature(story)
+                    "sourceSignature": deep_qa_source_signature
                 } if operation == "project_deep_qa" else {}),
                 **({"refreshGuidelines": data.get("refreshGuidelines") is True} if operation == "define_invariants" else {}),
                 **({"sceneCount": data.get("sceneCount")} if operation == "extend_story" else {}),

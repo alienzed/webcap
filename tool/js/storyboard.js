@@ -2429,7 +2429,7 @@
     card.classList.toggle('hidden', !action);
     syncDirectorPendingControls();
     if (action) {
-      var firstCutSteps = ['Expanding Concept', 'Defining Continuity', 'Developing Scenes', 'Refining Scenes', 'Queuing First Takes'];
+      var firstCutSteps = ['Expanding Concept', 'Defining Continuity', 'Developing Scenes', 'Visual Direction', 'Queuing First Takes'];
       var stageIndex = firstCutSteps.indexOf(action.phase);
       var sceneStep = Number(String(action.detail || '').split('/')[0].trim());
       var sceneTotal = Number(action.sceneCount) || 0;

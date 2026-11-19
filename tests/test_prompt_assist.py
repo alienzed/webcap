@@ -11,6 +11,8 @@ def _story():
         "Scene Overview:\nThe courier enters the lobby after heavy rain.\n\n"
         "Environment / Continuity Anchors:\nThe lobby is dry; rain remains outside.\n\n"
         "Style / Visual Treatment:\nGrounded realism.\n\n"
+        "overall_soundscape:\nRain patters against the glass.\n\n"
+        "non_diegetic_music:\nA restrained piano motif.\n\n"
         "integrated_multimodal_description:\n"
         "[Shot 1] The courier enters, coat and bag soaked.\n"
         "[Shot 2] The courier pauses by the glass door, still dripping.\n"

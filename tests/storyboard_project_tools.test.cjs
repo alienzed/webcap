@@ -12,14 +12,15 @@ function section(start,end) {
   return source.slice(from,to);
 }
 
-test('Scenes header keeps context left and three responsive actions right',()=>{
+test('Scenes header keeps context left and four responsive actions right',()=>{
   const heading=html.slice(html.indexOf('<div class="storyboard-scenes-heading">'),
     html.indexOf('id="storyboard-scene-progression"'));
   assert.match(heading,/id="storyboard-project-tool-bar"[^>]+role="group"/);
   const generate=heading.indexOf('id="storyboard-generate-scenes-btn"');
+  const cancel=heading.indexOf('id="storyboard-cancel-takes-btn"');
   const revise=heading.indexOf('id="storyboard-director-tools-btn"');
   const replace=heading.indexOf('id="storyboard-find-replace-btn"');
-  assert.ok(generate > 0 && generate < revise && revise < replace);
+  assert.ok(generate > 0 && generate < cancel && cancel < revise && revise < replace);
   assert.ok(heading.indexOf('id="storyboard-progress-summary"') < generate);
   assert.match(heading,/aria-label="Scene Revision"/);
   assert.match(heading,/aria-label="Find &amp; Replace"/);
@@ -105,7 +106,7 @@ test('Scenes toolbar uses fixed icon actions without visible overlapping labels'
   assert.match(buttons,/width:\s*36px/);
   assert.match(buttons,/max-width:\s*36px/);
   assert.match(buttons,/padding:\s*0/);
-  for(const id of ['storyboard-generate-scenes-btn','storyboard-director-tools-btn','storyboard-find-replace-btn'])
+  for(const id of ['storyboard-generate-scenes-btn','storyboard-cancel-takes-btn','storyboard-director-tools-btn','storyboard-find-replace-btn'])
     assert.match(html,new RegExp('id="'+id+'"[^>]*aria-label="[^"]+"'));
 });
 

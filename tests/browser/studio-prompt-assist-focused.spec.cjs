@@ -64,6 +64,16 @@ test('Prompt Assist reviews one complete correction at a time and preserves edit
   await expect(cards.first()).toContainText(suggestions[0].problem);
   await expect(cards.first()).toContainText(suggestions[0].suggestedFix);
   await expect(cards.first()).not.toContainText(suggestions[1].problem);
+  const sizes=await cards.first().evaluate(node=>({
+    body:parseFloat(getComputedStyle(node.querySelector('.storyboard-assist-finding-main p')).fontSize),
+    label:parseFloat(getComputedStyle(node.querySelector('.storyboard-assist-patch label')).fontSize),
+    editor:parseFloat(getComputedStyle(node.querySelector('[data-assist-replacement]')).fontSize),
+    heading:parseFloat(getComputedStyle(node.querySelector('.storyboard-assist-location')).fontSize)
+  }));
+  expect(sizes.body).toBeGreaterThanOrEqual(16);
+  expect(sizes.label).toBeGreaterThanOrEqual(18);
+  expect(sizes.editor).toBeGreaterThanOrEqual(16);
+  expect(sizes.heading).toBeGreaterThanOrEqual(20);
 
   const fullPrompt=page.locator('#storyboard-prompt-assist-source-details');
   await expect(page.locator('#storyboard-prompt-assist-source')).toHaveText(source);
